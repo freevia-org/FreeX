@@ -23,14 +23,15 @@ public static class DocxWriter
     private const string HeaderContentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml";
     private const string FooterContentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml";
 
-    private const string HeaderRelationshipId = "rIdHeader1";
-    private const string FooterRelationshipId = "rIdFooter1";
+    // Header/footer part names + relationship ids are now generated per part (see CollectHeaderFooterParts):
+    // the legacy header1/footer1/header2/footer2 + rIdHeader1/rIdFooter1/rIdHeader2/rIdFooter2 are reproduced
+    // for the final section so single-section documents stay byte-equivalent.
     private const string FootnotesRelationshipId = "rIdFootnotes";
     private const string EndnotesRelationshipId = "rIdEndnotes";
     private const string CommentsRelationshipId = "rIdComments";
     private const string SettingsRelationshipId = "rIdSettings";
-    private const string HeaderPartName = "word/header1.xml";
-    private const string FooterPartName = "word/footer1.xml";
+    private const string FontTableRelationshipId = "rIdFontTable";
+    private const string ThemeRelationshipId = "rIdTheme1";
 
     // Minimal numbering scheme: one abstract num per list kind, mapped 1:1 to a w:num. Bullets use
     // abstractNumId 0 / numId 1; decimal numbering uses abstractNumId 1 / numId 2; multilevel (legal
@@ -52,14 +53,27 @@ public static class DocxWriter
         // Assign a relationship + media id to every inline image up front so document.xml, the
         // document relationships and the media parts all agree on rId/imageN.png.
         var images = CollectImages(document);
+        // Assign a relationship + part name to every inline chart the same way (charts are a separate XML
+        // part referenced from the run drawing by r:id, mirroring how images add a media part + r:embed).
+        var charts = CollectCharts(document);
+        // Assign a relationship + binary part name to every inline embedded OLE object the same way. Each
+        // object's presentation icon is collected as an extra ImagePart appended to `images`, so the icon
+        // media part + relationship + png content-type flow through the existing image plumbing untouched.
+        var embeddedObjects = CollectEmbeddedObjects(document, images);
+        // Assign four relationship ids + four part names to every inline SmartArt diagram the same way
+        // (a diagram is four separate XML parts referenced from the run drawing by dgm:relIds).
+        var smartArts = CollectSmartArts(document);
         // Assign an external relationship id to every distinct hyperlink target the same way.
         var hyperlinks = CollectHyperlinks(document);
         // Emit a numbering part only when at least one paragraph is decorated as a list.
         var hasLists = EnumerateParagraphs(document).Any(p => p.Formatting.ListKind != ListKind.None);
 
-        // A header/footer is only emitted as a part when it carries visible content.
-        var hasHeader = document.Header is { IsEmpty: false };
-        var hasFooter = document.Footer is { IsEmpty: false };
+        // Header/footer parts are now modelled per-section: one part per (section × header/footer × type)
+        // slot that carries visible content, each with its OWN image relationships. The final/body-level
+        // section owns the legacy header1/footer1/header2/footer2 names so single-section documents stay
+        // byte-equivalent (see CollectHeaderFooterParts). Even/first parts are only included when the owning
+        // section's page settings turn on different-odd/even or different-first-page respectively.
+        var headerFooterParts = CollectHeaderFooterParts(document);
 
         // A footnotes part is emitted only when the document actually carries footnotes.
         var hasFootnotes = document.Footnotes.Count > 0;
@@ -75,28 +89,66 @@ public static class DocxWriter
         var hasWatermark = !string.IsNullOrEmpty(document.Page.Watermark);
 
         // A word/settings.xml part is emitted only when something needs it — document protection
-        // (w:documentProtection) and/or automatic hyphenation (w:autoHyphenation) — so documents that
-        // need neither round-trip exactly as before (no settings part).
+        // (w:documentProtection), automatic hyphenation (w:autoHyphenation), the different-odd/even-headers
+        // toggle (w:evenAndOddHeaders) and/or a page background to display (w:displayBackgroundShape) — so
+        // documents that need none round-trip exactly as before (no settings part).
         var hasProtection = document.Protection.IsProtected;
-        var hasSettings = hasProtection || document.Page.AutoHyphenation;
+        var hasBackground = !string.IsNullOrEmpty(document.Page.BackgroundColorHex);
+
+        // Embedded fonts: each EmbeddedFont family contributes one obfuscated .odttf part per embedded style,
+        // collected up front so word/fontTable.xml, its rels and the font parts all agree on rId/fontN.odttf.
+        // When any font is embedded a settings part is forced (w:embedTrueTypeFonts must live in settings.xml).
+        var embeddedFonts = CollectEmbeddedFonts(document);
+        var hasEmbeddedFonts = embeddedFonts.Count > 0;
+
+        var hasSettings = hasProtection
+            || document.Page.AutoHyphenation
+            || document.Page.DifferentOddEvenPages
+            || hasBackground
+            || hasEmbeddedFonts;
+
+        // A word/theme/theme1.xml part is always emitted (real Word documents always carry one); it
+        // serialises the document's DocumentTheme as a real clrScheme/fontScheme/fmtScheme.
+        // The png Default content-type is needed when ANY part carries a png — body images or header/footer
+        // images.
+        var hasAnyPng = images.Count > 0 || headerFooterParts.Any(p => p.Images.Count > 0);
 
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true);
-        WritePart(archive, "[Content_Types].xml", BuildContentTypes(images.Count > 0, hasLists, hasHeader, hasFooter, hasFootnotes, hasEndnotes, hasComments, hasWatermark, hasSettings));
+        WritePart(archive, "[Content_Types].xml", BuildContentTypes(hasAnyPng, hasLists, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasWatermark, hasSettings, charts, embeddedObjects.Count > 0, smartArts, hasEmbeddedFonts));
         WritePart(archive, "_rels/.rels", BuildPackageRels(hasWatermark));
         WritePart(archive, "docProps/core.xml", BuildCoreProperties(document.Properties));
         if (hasWatermark)
             WritePart(archive, "docProps/custom.xml", BuildCustomProperties(document.Page.Watermark!));
-        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, hasLists, hasHeader, hasFooter, hasFootnotes, hasEndnotes, hasComments, hasSettings));
-        WritePart(archive, "word/document.xml", BuildDocument(document, images, hyperlinks, hasHeader, hasFooter));
+        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, hasLists, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasSettings, charts, embeddedObjects, smartArts, hasEmbeddedFonts));
+        WritePart(archive, "word/document.xml", BuildDocument(document, images, charts, embeddedObjects, smartArts, hyperlinks, headerFooterParts));
         WritePart(archive, "word/styles.xml", BuildStyles(document));
+        WritePart(archive, ThemePartName.TrimStart('/'), BuildTheme(document.Theme));
         if (hasSettings)
-            WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.Page.AutoHyphenation));
+            WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.Page.AutoHyphenation, document.Page.DifferentOddEvenPages, hasBackground, hasEmbeddedFonts));
+        // Embedded fonts: word/fontTable.xml + its rels + one obfuscated .odttf per embedded style.
+        if (hasEmbeddedFonts)
+        {
+            WritePart(archive, FontTablePartName.TrimStart('/'), BuildFontTable(embeddedFonts));
+            WritePart(archive, "word/_rels/fontTable.xml.rels", BuildFontTableRels(embeddedFonts));
+            foreach (var part in embeddedFonts.SelectMany(f => f.Parts))
+                WriteBinaryPart(archive, "word/fonts/" + part.FileName, ObfuscateFont(part.FontBytes, part.FontKey));
+        }
         if (hasLists)
             WritePart(archive, "word/numbering.xml", BuildNumbering());
-        if (hasHeader)
-            WritePart(archive, HeaderPartName, BuildHeaderFooter(W + "hdr", document.Header!));
-        if (hasFooter)
-            WritePart(archive, FooterPartName, BuildHeaderFooter(W + "ftr", document.Footer!));
+        // One part per (section × header/footer × type) slot with content. Each part XML carries its inline
+        // images via PART-LOCAL r:embed ids resolved against its own word/_rels/<part>.xml.rels, and its
+        // image media bytes go under word/media/.
+        foreach (var part in headerFooterParts)
+        {
+            WritePart(archive, "word/" + part.FileName,
+                BuildHeaderFooter(part.IsHeader ? W + "hdr" : W + "ftr", part));
+            if (part.Images.Count > 0)
+            {
+                WritePart(archive, "word/_rels/" + part.FileName + ".rels", BuildHeaderFooterRels(part));
+                foreach (var image in part.Images)
+                    WriteBinaryPart(archive, "word/media/" + image.FileName, image.Image.PngBytes);
+            }
+        }
         if (hasFootnotes)
             WritePart(archive, FootnotesPartName.TrimStart('/'), BuildFootnotes(document));
         if (hasEndnotes)
@@ -105,10 +157,193 @@ public static class DocxWriter
             WritePart(archive, CommentsPartName.TrimStart('/'), BuildComments(document));
         foreach (var image in images)
             WriteBinaryPart(archive, "word/media/" + image.FileName, image.Image.PngBytes);
+        foreach (var chart in charts)
+        {
+            WritePart(archive, "word/charts/" + chart.FileName, BuildChartSpace(chart));
+            // F1: each chart gets an editable companion workbook + a part-local _rels referencing it (the
+            // "package" relationship Word's "Edit Data" follows). The chart XML's c:externalData points here.
+            WriteBinaryPart(archive, "word/embeddings/" + chart.EmbeddingFileName, BuildChartWorkbook(chart.Chart));
+            WritePart(archive, "word/charts/_rels/" + chart.FileName + ".rels", BuildChartRels(chart));
+        }
+        // Each embedded OLE object's native payload is written verbatim as a binary part. Its presentation
+        // icon (if any) was appended to `images` by CollectEmbeddedObjects and is emitted in the media loop.
+        foreach (var embedded in embeddedObjects)
+            WriteBinaryPart(archive, "word/embeddings/" + embedded.FileName, embedded.EmbeddedObject.Payload);
+        foreach (var smartArt in smartArts)
+        {
+            // F2: the data part carries a dgm:dataModelExt pointing (via DrawingRelationshipId) at the
+            // rendered-geometry drawing part, whose relationship is declared in the data part's own .rels.
+            WritePart(archive, "word/diagrams/" + smartArt.DataFileName, BuildDiagramData(smartArt.SmartArt, smartArt.DrawingRelationshipId));
+            WritePart(archive, "word/diagrams/_rels/" + smartArt.DataFileName + ".rels", BuildDiagramDataRels(smartArt));
+            WritePart(archive, "word/diagrams/" + smartArt.LayoutFileName, BuildDiagramLayout(smartArt.SmartArt.Kind));
+            WritePart(archive, "word/diagrams/" + smartArt.QuickStyleFileName, BuildDiagramQuickStyle());
+            WritePart(archive, "word/diagrams/" + smartArt.ColorsFileName, BuildDiagramColors());
+            WritePart(archive, "word/diagrams/" + smartArt.DrawingFileName, BuildDiagramDrawing(smartArt.SmartArt));
+        }
     }
 
     /// <summary>An inline image paired with the relationship id, media file name and a unique drawing id.</summary>
     private sealed record ImagePart(InlineImage Image, string RelationshipId, string FileName, uint DrawingId);
+
+    /// <summary>
+    /// An inline chart paired with the document relationship id, chart part file name (relative to
+    /// <c>word/charts/</c>) and a unique drawing id, mirroring <see cref="ImagePart"/>. <see cref="EmbeddingFileName"/>
+    /// is the companion editable-data workbook (relative to <c>word/embeddings/</c>); the chart part's own
+    /// <c>_rels</c> references it under <see cref="ExternalDataRelId"/> (a part-local rId) so Word's "Edit Data"
+    /// can reopen it (F1).
+    /// </summary>
+    private sealed record ChartPart(Chart Chart, string RelationshipId, string FileName, uint DrawingId, string EmbeddingFileName, string ExternalDataRelId);
+
+    private static List<ChartPart> CollectCharts(TextDocument document)
+    {
+        var charts = new List<ChartPart>();
+        foreach (var paragraph in EnumerateParagraphs(document))
+            foreach (var run in paragraph.Runs)
+                if (run.Chart is { } chart)
+                {
+                    var index = charts.Count + 1;
+                    // The external-data rId is part-LOCAL (it lives in word/charts/_rels/chartN.xml.rels), so a
+                    // fixed "rId1" per chart is fine and never collides with the document-level ids above.
+                    charts.Add(new ChartPart(chart, $"rIdChart{index}", $"chart{index}.xml", (uint)index, $"Microsoft_Excel_Worksheet{index}.xlsx", "rId1"));
+                }
+        return charts;
+    }
+
+    /// <summary>
+    /// An inline embedded OLE object paired with its document relationship id (to the .bin part), the binary
+    /// part file name (relative to <c>word/embeddings/</c>), the VML shape id, and — when the object carries
+    /// a presentation icon — the <see cref="ImagePart"/> emitting that icon as a media part. Mirrors
+    /// <see cref="ChartPart"/>; the icon part is shared with the ordinary image plumbing.
+    /// </summary>
+    private sealed record EmbeddedObjectPart(
+        EmbeddedObject EmbeddedObject,
+        string RelationshipId,
+        string FileName,
+        string ShapeId,
+        ImagePart? IconPart);
+
+    /// <summary>
+    /// Assigns each inline embedded OLE object a relationship id (rIdOleN), a binary part name
+    /// (oleObjectN.bin) and a VML shape id. When the object has a presentation icon, an extra
+    /// <see cref="ImagePart"/> is appended to <paramref name="images"/> so the icon's media part, document
+    /// relationship and png content-type flow through the existing image plumbing unchanged. The walk order
+    /// matches <see cref="EnumerateParagraphs"/> so document.xml and the rels agree on which ids belong to
+    /// which run (replayed in <see cref="BuildDocument"/>).
+    /// </summary>
+    private static List<EmbeddedObjectPart> CollectEmbeddedObjects(TextDocument document, List<ImagePart> images)
+    {
+        var embedded = new List<EmbeddedObjectPart>();
+        foreach (var paragraph in EnumerateParagraphs(document))
+            foreach (var run in paragraph.Runs)
+                if (run.EmbeddedObject is { } obj)
+                {
+                    var index = embedded.Count + 1;
+                    ImagePart? iconPart = null;
+                    if (obj.Icon is { } icon)
+                    {
+                        // Continue the image numbering so the icon media file name never clashes with a body
+                        // image; the appended part is emitted by the ordinary media/rel/content-type loops.
+                        var imageIndex = images.Count + 1;
+                        iconPart = new ImagePart(icon, $"rIdImg{imageIndex}", $"image{imageIndex}.png", (uint)imageIndex);
+                        images.Add(iconPart);
+                    }
+                    embedded.Add(new EmbeddedObjectPart(obj, $"rIdOle{index}", $"oleObject{index}.bin", $"_oleObj{index}", iconPart));
+                }
+        return embedded;
+    }
+
+    /// <summary>
+    /// An inline SmartArt diagram paired with its four document relationship ids and four part file names
+    /// (relative to <c>word/diagrams/</c>) plus a unique drawing id. The diagram is four separate XML parts
+    /// — data (the node text/structure), layout, quickStyle and colors — referenced together from the run
+    /// drawing's <c>dgm:relIds</c>. Mirrors <see cref="ChartPart"/>.
+    /// F2: a FIFTH part — the rendered-geometry drawing (<c>drawingN.xml</c>, dsp:drawing) — is also emitted.
+    /// It is referenced from the DATA part (not the run drawing) via <see cref="DrawingRelationshipId"/> in
+    /// <c>word/diagrams/_rels/dataN.xml.rels</c> plus a <c>dgm:dataModelExt</c> inside the data part, so a
+    /// viewer can show positioned shapes without re-running SmartArt auto-layout.
+    /// </summary>
+    private sealed record SmartArtPart(
+        SmartArt SmartArt,
+        string DataRelationshipId,
+        string LayoutRelationshipId,
+        string QuickStyleRelationshipId,
+        string ColorsRelationshipId,
+        string DataFileName,
+        string LayoutFileName,
+        string QuickStyleFileName,
+        string ColorsFileName,
+        string DrawingRelationshipId,
+        string DrawingFileName,
+        uint DrawingId);
+
+    private static List<SmartArtPart> CollectSmartArts(TextDocument document)
+    {
+        var smartArts = new List<SmartArtPart>();
+        foreach (var paragraph in EnumerateParagraphs(document))
+            foreach (var run in paragraph.Runs)
+                if (run.SmartArt is { } smartArt)
+                {
+                    var index = smartArts.Count + 1;
+                    smartArts.Add(new SmartArtPart(
+                        smartArt,
+                        $"rIdDgmData{index}",
+                        $"rIdDgmLayout{index}",
+                        $"rIdDgmStyle{index}",
+                        $"rIdDgmColors{index}",
+                        $"data{index}.xml",
+                        $"layout{index}.xml",
+                        $"quickStyle{index}.xml",
+                        $"colors{index}.xml",
+                        // The drawing rel is data-part-relative (lives in word/diagrams/_rels/dataN.xml.rels),
+                        // so a plain "rId1" is fine and clash-free per data part.
+                        "rId1",
+                        $"drawing{index}.xml",
+                        (uint)index));
+                }
+        return smartArts;
+    }
+
+    /// <summary>
+    /// One obfuscated font part: the style slot (regular/bold/italic/boldItalic), its document-unique
+    /// relationship id (in the fontTable's rels), the file name (relative to <c>word/fonts/</c>), the
+    /// deterministically derived fontKey GUID, and the original (de-obfuscated) font bytes. The writer
+    /// obfuscates <see cref="FontBytes"/> with <see cref="FontKey"/> when emitting the .odttf part.
+    /// </summary>
+    private sealed record FontStylePart(string Slot, string RelationshipId, string FileName, string FontKey, byte[] FontBytes);
+
+    /// <summary>An embedded font family paired with the obfuscated parts for each embedded style.</summary>
+    private sealed record FontTablePart(EmbeddedFont Font, IReadOnlyList<FontStylePart> Parts);
+
+    /// <summary>
+    /// Assigns each embedded font style a relationship id (rIdFontN), a part name (fontN.odttf) and a
+    /// deterministic fontKey GUID (derived from family+style, never random). Styles are walked in a fixed
+    /// order (regular, bold, italic, boldItalic) so the ids are stable. Families carrying no embedded style
+    /// are skipped, so an empty/blank EmbeddedFonts list yields no parts (no fontTable emitted).
+    /// </summary>
+    private static List<FontTablePart> CollectEmbeddedFonts(TextDocument document)
+    {
+        var families = new List<FontTablePart>();
+        var index = 0;
+        foreach (var font in document.EmbeddedFonts)
+        {
+            var parts = new List<FontStylePart>();
+            void Add(string slot, byte[]? bytes)
+            {
+                if (bytes is not { Length: > 0 })
+                    return;
+                index++;
+                var key = DeterministicFontKey(font.Family + "/" + slot);
+                parts.Add(new FontStylePart(slot, $"rIdFont{index}", $"font{index}.odttf", key, bytes));
+            }
+            Add("embedRegular", font.Regular);
+            Add("embedBold", font.Bold);
+            Add("embedItalic", font.Italic);
+            Add("embedBoldItalic", font.BoldItalic);
+            if (parts.Count > 0)
+                families.Add(new FontTablePart(font, parts));
+        }
+        return families;
+    }
 
     private static List<ImagePart> CollectImages(TextDocument document)
     {
@@ -121,6 +356,152 @@ public static class DocxWriter
                     images.Add(new ImagePart(image, $"rIdImg{index}", $"image{index}.png", (uint)index));
                 }
         return images;
+    }
+
+    /// <summary>
+    /// The header/footer "type" a part fills (w:headerReference/w:footerReference @w:type), independent of
+    /// whether it is a header or a footer. <see cref="Default"/> is the all-pages (or odd-pages) header/footer;
+    /// <see cref="Even"/> is the even-page one (different odd/even pages); <see cref="First"/> is the first-page
+    /// one (different first page).
+    /// </summary>
+    private enum HeaderFooterType { Default, Even, First }
+
+    /// <summary>
+    /// One emitted header or footer part for one section: the part file name (e.g. <c>header3.xml</c>), the
+    /// document relationship id that the owning section's w:sectPr references, the root element name
+    /// (<c>w:hdr</c>/<c>w:ftr</c>), the reference element name (<c>headerReference</c>/<c>footerReference</c>),
+    /// the @w:type token, the model content, and the inline images the part's runs carry (each with a
+    /// PART-LOCAL relationship id resolved against this part's own <c>word/_rels/headerN.xml.rels</c>). The
+    /// <see cref="Section"/> the part belongs to (null for the final/body-level section) lets the per-section
+    /// w:sectPr emit the matching reference.
+    /// </summary>
+    private sealed record HeaderFooterPart(
+        Section? Section,
+        HeaderFooterType Type,
+        bool IsHeader,
+        HeaderFooter Content,
+        string FileName,
+        string RelationshipId,
+        IReadOnlyList<ImagePart> Images);
+
+    /// <summary>
+    /// Walks every section (the final/body-level section first, then each non-final section in document
+    /// order) and assigns one <see cref="HeaderFooterPart"/> per (section × header/footer × type) slot that
+    /// carries visible content. Part numbering preserves the legacy layout exactly so single-section
+    /// documents stay byte-equivalent: the final section's default header is <c>header1.xml</c>, its even
+    /// header <c>header2.xml</c>, default footer <c>footer1.xml</c>, even footer <c>footer2.xml</c> (the
+    /// historical names/ids), and all remaining parts (first-page, and every non-final section's parts)
+    /// continue the header/footer counters from there. Even parts are only emitted when the section's page
+    /// settings turn on different-odd/even; first parts only when different-first-page is on. Each part also
+    /// collects the inline images in its runs and assigns them part-local relationship ids.
+    /// </summary>
+    private static List<HeaderFooterPart> CollectHeaderFooterParts(TextDocument document)
+    {
+        var parts = new List<HeaderFooterPart>();
+        // Header/footer part-name counters. They are seeded so the legacy final-section parts reuse the exact
+        // historical names (header1/header2, footer1/footer2); see AddSectionParts for the seeding scheme.
+        var headerCount = 0;
+        var footerCount = 0;
+
+        void AddSlot(Section? section, SectionHeadersFooters hf, PageSettings page, bool legacyFinal)
+        {
+            // For the legacy final section we must reproduce header1=default, header2=even, footer1=default,
+            // footer2=even regardless of which exist, so the counters can't simply auto-increment in
+            // discovery order. We therefore reserve indices 1 (default) and 2 (even) for the final section.
+            void AddPart(bool isHeader, HeaderFooterType type, HeaderFooter? content)
+            {
+                if (content is null || content.IsEmpty)
+                    return;
+                int index;
+                if (legacyFinal && type == HeaderFooterType.Default)
+                    index = 1;
+                else if (legacyFinal && type == HeaderFooterType.Even)
+                    index = 2;
+                else
+                    index = (isHeader ? headerCount : footerCount) + 1;
+
+                if (isHeader)
+                    headerCount = Math.Max(headerCount, index);
+                else
+                    footerCount = Math.Max(footerCount, index);
+
+                var fileName = (isHeader ? "header" : "footer") + index + ".xml";
+                var relationshipId = (isHeader ? "rIdHeader" : "rIdFooter") + index;
+                var images = CollectHeaderFooterImages(content, fileName);
+                parts.Add(new HeaderFooterPart(
+                    section,
+                    type,
+                    isHeader,
+                    content,
+                    fileName,
+                    relationshipId,
+                    images));
+            }
+
+            // Parts are added header-then-footer per type (default, even, first) so the legacy single-section
+            // emission order — header1, footer1, header2(even), footer2(even) — is reproduced exactly,
+            // keeping content-type Overrides and document relationships byte-equivalent. Even parts only when
+            // different-odd/even is on; first parts only when different-first-page is on.
+            AddPart(isHeader: true, HeaderFooterType.Default, hf.Header);
+            AddPart(isHeader: false, HeaderFooterType.Default, hf.Footer);
+            if (page.DifferentOddEvenPages)
+            {
+                AddPart(isHeader: true, HeaderFooterType.Even, hf.EvenHeader);
+                AddPart(isHeader: false, HeaderFooterType.Even, hf.EvenFooter);
+            }
+            if (page.DifferentFirstPage)
+            {
+                AddPart(isHeader: true, HeaderFooterType.First, hf.FirstHeader);
+                AddPart(isHeader: false, HeaderFooterType.First, hf.FirstFooter);
+            }
+        }
+
+        // The final (body-level) section first, so it owns the legacy header1/footer1/header2/footer2 names.
+        AddSlot(null, document.FinalSectionHeadersFooters, document.Page, legacyFinal: true);
+        // Then each non-final section, in document order (the order their sectPr appear in the body).
+        foreach (var block in document.Blocks)
+            if (block is Paragraph { SectionBreak: { } section })
+                AddSlot(section, section.HeadersFooters, section.Page, legacyFinal: false);
+
+        return parts;
+    }
+
+    /// <summary>
+    /// Collects the inline images carried by a header/footer part's runs and assigns each a PART-LOCAL
+    /// relationship id (<c>rIdImgN</c>) plus a media file name unique to this part (derived from the part's
+    /// file name, e.g. <c>header3_image1.png</c>) so it never clashes with body media or another part's media.
+    /// The walk order matches <see cref="BuildHeaderFooterImagesByRun"/> so the part XML and its rels agree on
+    /// which rId belongs to which run.
+    /// </summary>
+    private static List<ImagePart> CollectHeaderFooterImages(HeaderFooter content, string partFileName)
+    {
+        var stem = partFileName.EndsWith(".xml", StringComparison.Ordinal)
+            ? partFileName[..^4]
+            : partFileName;
+        var images = new List<ImagePart>();
+        foreach (var paragraph in content.Paragraphs)
+            foreach (var run in paragraph.Runs)
+                if (run.Image is { } image)
+                {
+                    var index = images.Count + 1;
+                    // The rId is part-local (lives in word/_rels/<part>.xml.rels), so a plain rIdImgN never
+                    // collides with the document-level image ids. The media file name embeds the part stem so
+                    // each part's media files are unique within word/media/.
+                    images.Add(new ImagePart(image, $"rIdImg{index}", $"{stem}_image{index}.png", (uint)index));
+                }
+        return images;
+    }
+
+    /// <summary>Maps each image run in a header/footer part to its <see cref="ImagePart"/> (same walk as collection).</summary>
+    private static Dictionary<Run, ImagePart> BuildHeaderFooterImagesByRun(HeaderFooterPart part)
+    {
+        var map = new Dictionary<Run, ImagePart>();
+        var next = 0;
+        foreach (var paragraph in part.Content.Paragraphs)
+            foreach (var run in paragraph.Runs)
+                if (run.Image is not null && next < part.Images.Count)
+                    map[run] = part.Images[next++];
+        return map;
     }
 
     /// <summary>Maps each distinct hyperlink URL to one external relationship id (rIdLinkN).</summary>
@@ -163,7 +544,7 @@ public static class DocxWriter
         entryStream.Write(content, 0, content.Length);
     }
 
-    private static XDocument BuildContentTypes(bool includePng, bool includeNumbering, bool hasHeader, bool hasFooter, bool hasFootnotes, bool hasEndnotes, bool hasComments, bool hasWatermark, bool hasSettings) => new(
+    private static XDocument BuildContentTypes(bool includePng, bool includeNumbering, IReadOnlyList<HeaderFooterPart> headerFooterParts, bool hasFootnotes, bool hasEndnotes, bool hasComments, bool hasWatermark, bool hasSettings, IReadOnlyList<ChartPart> charts, bool hasEmbeddedObjects, IReadOnlyList<SmartArtPart> smartArts, bool hasEmbeddedFonts) => new(
         new XElement(Ct + "Types",
             new XElement(Ct + "Default", new XAttribute("Extension", "rels"),
                 new XAttribute("ContentType", "application/vnd.openxmlformats-package.relationships+xml")),
@@ -173,6 +554,21 @@ public static class DocxWriter
                 ? new XElement(Ct + "Default", new XAttribute("Extension", "png"),
                     new XAttribute("ContentType", "image/png"))
                 : null,
+            // A single Default for the bin extension covers every embedded OLE payload part.
+            hasEmbeddedObjects
+                ? new XElement(Ct + "Default", new XAttribute("Extension", "bin"),
+                    new XAttribute("ContentType", OleObjectContentType))
+                : null,
+            // A single Default for the xlsx extension covers every chart's embedded companion workbook (F1).
+            charts.Count > 0
+                ? new XElement(Ct + "Default", new XAttribute("Extension", "xlsx"),
+                    new XAttribute("ContentType", SpreadsheetContentType))
+                : null,
+            // A single Default for the odttf extension covers every obfuscated embedded-font part.
+            hasEmbeddedFonts
+                ? new XElement(Ct + "Default", new XAttribute("Extension", "odttf"),
+                    new XAttribute("ContentType", ObfuscatedFontContentType))
+                : null,
             new XElement(Ct + "Override", new XAttribute("PartName", "/word/document.xml"),
                 new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml")),
             new XElement(Ct + "Override", new XAttribute("PartName", "/word/styles.xml"),
@@ -181,14 +577,11 @@ public static class DocxWriter
                 ? new XElement(Ct + "Override", new XAttribute("PartName", NumberingPartName),
                     new XAttribute("ContentType", NumberingContentType))
                 : null,
-            hasHeader
-                ? new XElement(Ct + "Override", new XAttribute("PartName", "/" + HeaderPartName),
-                    new XAttribute("ContentType", HeaderContentType))
-                : null,
-            hasFooter
-                ? new XElement(Ct + "Override", new XAttribute("PartName", "/" + FooterPartName),
-                    new XAttribute("ContentType", FooterContentType))
-                : null,
+            // One Override per emitted header/footer part (in collection order, which reproduces the legacy
+            // header1, footer1, header2, footer2 ordering for single-section documents).
+            headerFooterParts.Select(part => new XElement(Ct + "Override",
+                new XAttribute("PartName", "/word/" + part.FileName),
+                new XAttribute("ContentType", part.IsHeader ? HeaderContentType : FooterContentType))),
             hasFootnotes
                 ? new XElement(Ct + "Override", new XAttribute("PartName", FootnotesPartName),
                     new XAttribute("ContentType", FootnotesContentType))
@@ -205,12 +598,44 @@ public static class DocxWriter
                 ? new XElement(Ct + "Override", new XAttribute("PartName", SettingsPartName),
                     new XAttribute("ContentType", SettingsContentType))
                 : null,
+            // word/fontTable.xml declares the embedded-font table (the .odttf parts use the odttf Default above).
+            hasEmbeddedFonts
+                ? new XElement(Ct + "Override", new XAttribute("PartName", FontTablePartName),
+                    new XAttribute("ContentType", FontTableContentType))
+                : null,
+            // The theme part is always present (one per document).
+            new XElement(Ct + "Override", new XAttribute("PartName", ThemePartName),
+                new XAttribute("ContentType", ThemeContentType)),
             new XElement(Ct + "Override", new XAttribute("PartName", CorePropertiesPartName),
                 new XAttribute("ContentType", CorePropertiesContentType)),
             hasWatermark
                 ? new XElement(Ct + "Override", new XAttribute("PartName", CustomPropertiesPartName),
                     new XAttribute("ContentType", CustomPropertiesContentType))
-                : null));
+                : null,
+            // One Override per chart part declares the DrawingML chart content type.
+            charts.Select(chart => new XElement(Ct + "Override",
+                new XAttribute("PartName", "/word/charts/" + chart.FileName),
+                new XAttribute("ContentType", ChartContentType))),
+            // Five Overrides per SmartArt diagram declare the data / layout / quickStyle / colors content
+            // types plus (F2) the rendered-geometry drawing part's content type.
+            smartArts.SelectMany(s => new[]
+            {
+                new XElement(Ct + "Override",
+                    new XAttribute("PartName", "/word/diagrams/" + s.DataFileName),
+                    new XAttribute("ContentType", DiagramDataContentType)),
+                new XElement(Ct + "Override",
+                    new XAttribute("PartName", "/word/diagrams/" + s.LayoutFileName),
+                    new XAttribute("ContentType", DiagramLayoutContentType)),
+                new XElement(Ct + "Override",
+                    new XAttribute("PartName", "/word/diagrams/" + s.QuickStyleFileName),
+                    new XAttribute("ContentType", DiagramStyleContentType)),
+                new XElement(Ct + "Override",
+                    new XAttribute("PartName", "/word/diagrams/" + s.ColorsFileName),
+                    new XAttribute("ContentType", DiagramColorsContentType)),
+                new XElement(Ct + "Override",
+                    new XAttribute("PartName", "/word/diagrams/" + s.DrawingFileName),
+                    new XAttribute("ContentType", DiagramDrawingContentType))
+            })));
 
     private static XDocument BuildPackageRels(bool hasWatermark) => new(
         new XElement(Rel + "Relationships",
@@ -283,12 +708,15 @@ public static class DocxWriter
         IReadOnlyList<ImagePart> images,
         IReadOnlyDictionary<string, string> hyperlinks,
         bool includeNumbering,
-        bool hasHeader,
-        bool hasFooter,
+        IReadOnlyList<HeaderFooterPart> headerFooterParts,
         bool hasFootnotes,
         bool hasEndnotes,
         bool hasComments,
-        bool hasSettings)
+        bool hasSettings,
+        IReadOnlyList<ChartPart> charts,
+        IReadOnlyList<EmbeddedObjectPart> embeddedObjects,
+        IReadOnlyList<SmartArtPart> smartArts,
+        bool hasEmbeddedFonts)
     {
         var relationships = new XElement(Rel + "Relationships",
             new XElement(Rel + "Relationship",
@@ -300,21 +728,30 @@ public static class DocxWriter
                 new XAttribute("Id", SettingsRelationshipId),
                 new XAttribute("Type", SettingsRelType),
                 new XAttribute("Target", "settings.xml")));
+        // The document→fontTable relationship (the fontTable's own rels reference the .odttf font parts).
+        if (hasEmbeddedFonts)
+            relationships.Add(new XElement(Rel + "Relationship",
+                new XAttribute("Id", FontTableRelationshipId),
+                new XAttribute("Type", FontTableRelType),
+                new XAttribute("Target", "fontTable.xml")));
+        // The theme part is always present, so its relationship is unconditional.
+        relationships.Add(new XElement(Rel + "Relationship",
+            new XAttribute("Id", ThemeRelationshipId),
+            new XAttribute("Type", ThemeRelType),
+            new XAttribute("Target", "theme/theme1.xml")));
         if (includeNumbering)
             relationships.Add(new XElement(Rel + "Relationship",
                 new XAttribute("Id", "rIdNumbering"),
                 new XAttribute("Type", NumberingRelType),
                 new XAttribute("Target", "numbering.xml")));
-        if (hasHeader)
+        // One document relationship per emitted header/footer part (in collection order — which reproduces
+        // the legacy header1, footer1, header2, footer2 ordering and rel ids for single-section documents).
+        // The owning section's w:sectPr references the part by this relationship id.
+        foreach (var part in headerFooterParts)
             relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", HeaderRelationshipId),
-                new XAttribute("Type", HeaderRel),
-                new XAttribute("Target", "header1.xml")));
-        if (hasFooter)
-            relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", FooterRelationshipId),
-                new XAttribute("Type", FooterRel),
-                new XAttribute("Target", "footer1.xml")));
+                new XAttribute("Id", part.RelationshipId),
+                new XAttribute("Type", part.IsHeader ? HeaderRel : FooterRel),
+                new XAttribute("Target", part.FileName)));
         if (hasFootnotes)
             relationships.Add(new XElement(Rel + "Relationship",
                 new XAttribute("Id", FootnotesRelationshipId),
@@ -335,6 +772,38 @@ public static class DocxWriter
                 new XAttribute("Id", image.RelationshipId),
                 new XAttribute("Type", ImageRel),
                 new XAttribute("Target", "media/" + image.FileName)));
+        foreach (var chart in charts)
+            relationships.Add(new XElement(Rel + "Relationship",
+                new XAttribute("Id", chart.RelationshipId),
+                new XAttribute("Type", ChartRelType),
+                new XAttribute("Target", "charts/" + chart.FileName)));
+        // The embedded OLE payload relationship (the icon's image relationship is emitted in the images loop).
+        foreach (var embedded in embeddedObjects)
+            relationships.Add(new XElement(Rel + "Relationship",
+                new XAttribute("Id", embedded.RelationshipId),
+                new XAttribute("Type", OleObjectRelType),
+                new XAttribute("Target", "embeddings/" + embedded.FileName)));
+        // Each SmartArt diagram contributes four relationships (data / layout / quickStyle / colors), all
+        // referenced together by the inline drawing's dgm:relIds.
+        foreach (var s in smartArts)
+        {
+            relationships.Add(new XElement(Rel + "Relationship",
+                new XAttribute("Id", s.DataRelationshipId),
+                new XAttribute("Type", DiagramDataRelType),
+                new XAttribute("Target", "diagrams/" + s.DataFileName)));
+            relationships.Add(new XElement(Rel + "Relationship",
+                new XAttribute("Id", s.LayoutRelationshipId),
+                new XAttribute("Type", DiagramLayoutRelType),
+                new XAttribute("Target", "diagrams/" + s.LayoutFileName)));
+            relationships.Add(new XElement(Rel + "Relationship",
+                new XAttribute("Id", s.QuickStyleRelationshipId),
+                new XAttribute("Type", DiagramStyleRelType),
+                new XAttribute("Target", "diagrams/" + s.QuickStyleFileName)));
+            relationships.Add(new XElement(Rel + "Relationship",
+                new XAttribute("Id", s.ColorsRelationshipId),
+                new XAttribute("Type", DiagramColorsRelType),
+                new XAttribute("Target", "diagrams/" + s.ColorsFileName)));
+        }
         foreach (var (url, relationshipId) in hyperlinks)
             relationships.Add(new XElement(Rel + "Relationship",
                 new XAttribute("Id", relationshipId),
@@ -347,26 +816,61 @@ public static class DocxWriter
     private static XDocument BuildDocument(
         TextDocument document,
         IReadOnlyList<ImagePart> images,
+        IReadOnlyList<ChartPart> charts,
+        IReadOnlyList<EmbeddedObjectPart> embeddedObjects,
+        IReadOnlyList<SmartArtPart> smartArts,
         IReadOnlyDictionary<string, string> hyperlinks,
-        bool hasHeader,
-        bool hasFooter)
+        IReadOnlyList<HeaderFooterPart> headerFooterParts)
     {
-        // Reset the document-scoped bookmark + revision id counters so ids start at 1 each write.
-        System.Threading.Interlocked.Exchange(ref _bookmarkId, 0);
-        System.Threading.Interlocked.Exchange(ref _revisionId, 0);
+        // Group header/footer parts by their owning section: the final/body-level section (Section == null)
+        // feeds the body-level w:sectPr; each non-final section feeds its paragraph-level w:sectPr.
+        var finalSectionParts = headerFooterParts.Where(p => p.Section is null).ToList();
+        var partsBySection = headerFooterParts
+            .Where(p => p.Section is not null)
+            .GroupBy(p => p.Section!)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<HeaderFooterPart>)g.ToList());
 
-        // Map each image run to its assigned relationship id by replaying the same walk order.
+        // Per-write id state, local to this BuildDocument invocation so concurrent writes never race.
+        // Bookmark + revision ids start at 1; the shape docPr counter is seeded just above the image
+        // drawing ids (1..imageCount) so the two id spaces never overlap. Each shape BuildRun emits takes
+        // the next id.
+        var ids = new IdAllocator(shapeDrawingSeed: images.Count);
+
+        // Map each image/chart run to its assigned part by replaying the same walk order CollectImages /
+        // CollectCharts used, so document.xml and the rels agree on which rId belongs to which run.
         var imagesByRun = new Dictionary<Run, ImagePart>();
-        var next = 0;
+        var chartsByRun = new Dictionary<Run, ChartPart>();
+        var embeddedByRun = new Dictionary<Run, EmbeddedObjectPart>();
+        var smartArtsByRun = new Dictionary<Run, SmartArtPart>();
+        var nextImage = 0;
+        var nextChart = 0;
+        var nextEmbedded = 0;
+        var nextSmartArt = 0;
         foreach (var paragraph in EnumerateParagraphs(document))
             foreach (var run in paragraph.Runs)
+            {
                 if (run.Image is not null)
-                    imagesByRun[run] = images[next++];
+                    imagesByRun[run] = images[nextImage++];
+                if (run.Chart is not null)
+                    chartsByRun[run] = charts[nextChart++];
+                if (run.EmbeddedObject is not null)
+                    embeddedByRun[run] = embeddedObjects[nextEmbedded++];
+                if (run.SmartArt is not null)
+                    smartArtsByRun[run] = smartArts[nextSmartArt++];
+            }
+
+        var drawings = new RunDrawings(imagesByRun, chartsByRun, embeddedByRun, smartArtsByRun, ids);
 
         var body = new XElement(W + "body");
         foreach (var block in document.Blocks)
-            body.Add(BuildBlock(block, imagesByRun, hyperlinks));
-        body.Add(BuildSectionProperties(document.Page, hasHeader, hasFooter));
+            body.Add(BuildBlock(block, drawings, hyperlinks, partsBySection));
+        body.Add(BuildSectionProperties(document.Page, finalSectionParts));
+
+        // Page background colour (w:background): it is positionally the FIRST child of w:document, before
+        // w:body. Emitted only when a background colour is set so existing documents are unaffected.
+        var background = document.Page.BackgroundColorHex is { Length: > 0 } bg
+            ? new XElement(W + "background", new XAttribute(W + "color", bg.TrimStart('#')))
+            : null;
 
         return new XDocument(
             new XElement(W + "document",
@@ -376,25 +880,97 @@ public static class DocxWriter
                 new XAttribute(XNamespace.Xmlns + "w14", W14.NamespaceName),
                 // m carries inline equations (m:oMath and its children).
                 new XAttribute(XNamespace.Xmlns + "m", M.NamespaceName),
+                // wp/a/wps carry inline DrawingML shapes & text boxes (w:drawing/wp:inline/.../wps:wsp).
+                new XAttribute(XNamespace.Xmlns + "wp", Wp.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "wps", Wps.NamespaceName),
+                // v/o carry a classic embedded OLE object's VML presentation (w:object/v:shape/o:OLEObject).
+                new XAttribute(XNamespace.Xmlns + "v", V.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "o", O.NamespaceName),
+                // dgm carries the SmartArt diagram reference (w:drawing/.../a:graphicData/dgm:relIds).
+                new XAttribute(XNamespace.Xmlns + "dgm", Dgm.NamespaceName),
+                // w:background (page background colour) must precede w:body in the document schema order.
+                background,
                 body));
     }
 
-    /// <summary>Builds a header (w:hdr) or footer (w:ftr) part from its model paragraphs.</summary>
-    private static XDocument BuildHeaderFooter(XName rootName, HeaderFooter content)
+    /// <summary>
+    /// Per-write id state, created once at the top of each <see cref="BuildDocument"/> (and once per
+    /// independent part such as a header/footer/footnote/text-box) so concurrent <see cref="Write(TextDocument, Stream)"/>
+    /// calls are fully isolated — there is NO shared mutable static counter state. Bookmark and revision
+    /// (w:ins/w:del) ids are document-scoped monotonic counters starting at 1; the inline-shape wp:docPr
+    /// counter is seeded just above the image drawing ids (1..imageCount) so shape ids never collide with
+    /// image ids. All three were previously static fields shared across writes (the concurrency defect).
+    /// </summary>
+    private sealed class IdAllocator
+    {
+        private int _bookmarkId;
+        private int _revisionId;
+        private int _shapeDrawingId;
+
+        public IdAllocator(int shapeDrawingSeed = 0) => _shapeDrawingId = shapeDrawingSeed;
+
+        public int NextBookmarkId() => ++_bookmarkId;
+        public int NextRevisionId() => ++_revisionId;
+        public int NextShapeDrawingId() => ++_shapeDrawingId;
+    }
+
+    /// <summary>
+    /// Bundles the per-run image and chart part maps plus the per-write <see cref="IdAllocator"/> so the
+    /// run builders can resolve any inline drawing and allocate document-scoped ids from one parameter
+    /// (rather than threading dictionaries and counters through every helper). <see cref="Empty"/> builds a
+    /// fresh instance — with its own allocator — for header/footer/footnote/text-box paragraphs whose runs
+    /// never carry body drawings; it is a factory (not a shared static) so those builds stay isolated too.
+    /// </summary>
+    private sealed record RunDrawings(
+        IReadOnlyDictionary<Run, ImagePart> Images,
+        IReadOnlyDictionary<Run, ChartPart> Charts,
+        IReadOnlyDictionary<Run, EmbeddedObjectPart> EmbeddedObjects,
+        IReadOnlyDictionary<Run, SmartArtPart> SmartArts,
+        IdAllocator Ids)
+    {
+        public static RunDrawings Empty() => new(
+            new Dictionary<Run, ImagePart>(),
+            new Dictionary<Run, ChartPart>(),
+            new Dictionary<Run, EmbeddedObjectPart>(),
+            new Dictionary<Run, SmartArtPart>(),
+            new IdAllocator());
+    }
+
+    /// <summary>
+    /// Builds a header (w:hdr) or footer (w:ftr) part from its model paragraphs. When the part carries inline
+    /// images, each image run emits a w:drawing whose r:embed references a PART-LOCAL relationship id (resolved
+    /// against the part's own word/_rels/&lt;part&gt;.xml.rels, see <see cref="BuildHeaderFooterRels"/>) and the
+    /// drawing namespaces (wp/a/pic) are declared on the root. An image-less header/footer declares only w/r
+    /// (so it stays byte-equivalent to the historical output).
+    /// </summary>
+    private static XDocument BuildHeaderFooter(XName rootName, HeaderFooterPart part)
     {
         var root = new XElement(rootName,
             new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName),
             new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName));
 
-        // Header/footer runs do not carry inline images (the body image walk does not reach them).
-        var noImages = new Dictionary<Run, ImagePart>();
+        // Header/footer runs may carry inline images; their part-local image parts are mapped here. They never
+        // carry charts/embedded objects/SmartArt/document hyperlinks (those walks target the body), so those
+        // maps stay empty. The IdAllocator is part-local so drawing ids are isolated from the body.
+        var hasImages = part.Images.Count > 0;
+        if (hasImages)
+        {
+            // The picture drawing uses the wp/a/pic namespaces; declare them on the root when images exist.
+            root.Add(new XAttribute(XNamespace.Xmlns + "wp", Wp.NamespaceName));
+            root.Add(new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName));
+            root.Add(new XAttribute(XNamespace.Xmlns + "pic", Pic.NamespaceName));
+        }
+
+        var imagesByRun = hasImages ? BuildHeaderFooterImagesByRun(part) : new Dictionary<Run, ImagePart>();
+        var drawings = RunDrawings.Empty() with { Images = imagesByRun };
         var noHyperlinks = new Dictionary<string, string>(StringComparer.Ordinal);
 
-        if (content.Paragraphs.Count == 0)
+        if (part.Content.Paragraphs.Count == 0)
             root.Add(new XElement(W + "p"));
         else
-            foreach (var paragraph in content.Paragraphs)
-                root.Add(BuildParagraph(paragraph, noImages, noHyperlinks));
+            foreach (var paragraph in part.Content.Paragraphs)
+                root.Add(BuildParagraph(paragraph, drawings, noHyperlinks));
 
         return new XDocument(root);
     }
@@ -421,7 +997,7 @@ public static class DocxWriter
         footnotes.Add(Separator(0, "continuationSeparator"));
 
         // Footnote paragraphs carry no inline images or hyperlinks (those walks target the body).
-        var noImages = new Dictionary<Run, ImagePart>();
+        var noDrawings = RunDrawings.Empty();
         var noHyperlinks = new Dictionary<string, string>(StringComparer.Ordinal);
 
         foreach (var footnote in document.Footnotes.Values.OrderBy(f => f.Id))
@@ -431,7 +1007,7 @@ public static class DocxWriter
                 element.Add(new XElement(W + "p"));
             else
                 foreach (var paragraph in footnote.Content)
-                    element.Add(BuildParagraph(paragraph, noImages, noHyperlinks));
+                    element.Add(BuildParagraph(paragraph, noDrawings, noHyperlinks));
             footnotes.Add(element);
         }
 
@@ -461,7 +1037,7 @@ public static class DocxWriter
         endnotes.Add(Separator(0, "continuationSeparator"));
 
         // Endnote paragraphs carry no inline images or hyperlinks (those walks target the body).
-        var noImages = new Dictionary<Run, ImagePart>();
+        var noDrawings = RunDrawings.Empty();
         var noHyperlinks = new Dictionary<string, string>(StringComparer.Ordinal);
 
         foreach (var endnote in document.Endnotes.Values.OrderBy(e => e.Id))
@@ -471,7 +1047,7 @@ public static class DocxWriter
                 element.Add(new XElement(W + "p"));
             else
                 foreach (var paragraph in endnote.Content)
-                    element.Add(BuildParagraph(paragraph, noImages, noHyperlinks));
+                    element.Add(BuildParagraph(paragraph, noDrawings, noHyperlinks));
             endnotes.Add(element);
         }
 
@@ -490,7 +1066,7 @@ public static class DocxWriter
             new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName));
 
         // Comment paragraphs carry no inline images or hyperlinks (those walks target the body).
-        var noImages = new Dictionary<Run, ImagePart>();
+        var noDrawings = RunDrawings.Empty();
         var noHyperlinks = new Dictionary<string, string>(StringComparer.Ordinal);
 
         foreach (var comment in document.Comments.Values.OrderBy(c => c.Id))
@@ -506,17 +1082,23 @@ public static class DocxWriter
                 element.Add(new XElement(W + "p"));
             else
                 foreach (var paragraph in comment.Content)
-                    element.Add(BuildParagraph(paragraph, noImages, noHyperlinks));
+                    element.Add(BuildParagraph(paragraph, noDrawings, noHyperlinks));
             comments.Add(element);
         }
 
         return new XDocument(comments);
     }
 
-    private static XElement BuildBlock(Block block, IReadOnlyDictionary<Run, ImagePart> imagesByRun, IReadOnlyDictionary<string, string> hyperlinks) => block switch
+    private static XElement BuildBlock(
+        Block block,
+        RunDrawings drawings,
+        IReadOnlyDictionary<string, string> hyperlinks,
+        IReadOnlyDictionary<Section, IReadOnlyList<HeaderFooterPart>> partsBySection) => block switch
     {
-        Table table => BuildTable(table, imagesByRun, hyperlinks),
-        Paragraph paragraph => BuildParagraph(paragraph, imagesByRun, hyperlinks),
+        Table table => BuildTable(table, drawings, hyperlinks),
+        // Only top-level body paragraphs can end a non-final section, so the per-section header/footer map
+        // is threaded here (and nowhere else); table-cell/header/footer/footnote paragraphs pass no map.
+        Paragraph paragraph => BuildParagraph(paragraph, drawings, hyperlinks, partsBySection),
         _ => new XElement(W + "p")
     };
 
@@ -526,7 +1108,7 @@ public static class DocxWriter
     private const string HeaderFill = "D9E2F3";
     private const string BandedFill = "F2F2F2";
 
-    private static XElement BuildTable(Table table, IReadOnlyDictionary<Run, ImagePart> imagesByRun, IReadOnlyDictionary<string, string> hyperlinks)
+    private static XElement BuildTable(Table table, RunDrawings drawings, IReadOnlyDictionary<string, string> hyperlinks)
     {
         var tbl = new XElement(W + "tbl", BuildTableProperties(table));
 
@@ -567,7 +1149,7 @@ public static class DocxWriter
                     tc.Add(new XElement(W + "p"));
                 else
                     foreach (var paragraph in cell.Paragraphs)
-                        tc.Add(BuildParagraph(isHeaderRow ? BoldHeaderParagraph(paragraph) : paragraph, imagesByRun, hyperlinks));
+                        tc.Add(BuildParagraph(isHeaderRow ? BoldHeaderParagraph(paragraph) : paragraph, drawings, hyperlinks));
                 tr.Add(tc);
             }
             tbl.Add(tr);
@@ -605,6 +1187,7 @@ public static class DocxWriter
             {
                 Image = run.Image,
                 Equation = run.Equation,
+                Chart = run.Chart,
                 HyperlinkUrl = run.HyperlinkUrl,
                 HyperlinkAnchor = run.HyperlinkAnchor,
                 HyperlinkTooltip = run.HyperlinkTooltip,
@@ -694,14 +1277,6 @@ public static class DocxWriter
         return tcPr.HasElements ? tcPr : null;
     }
 
-    // Bookmark ids are scoped to the whole document; one monotonically increasing counter keeps
-    // every w:bookmarkStart/w:bookmarkEnd pair's w:id unique across all paragraphs.
-    private static int _bookmarkId;
-
-    // Revision (w:ins/w:del) ids are scoped to the whole document; this counter keeps each wrapper's
-    // w:id unique across all paragraphs. Reset alongside _bookmarkId at the start of each document.
-    private static int _revisionId;
-
     /// <summary>True when two runs carry the same tracked-change kind, author and date (so they coalesce).</summary>
     private static bool SameRevision(Run a, Run b) =>
         a.Revision == b.Revision
@@ -713,11 +1288,11 @@ public static class DocxWriter
     /// run's author/date attributes. The caller fills it with the wrapped run/hyperlink elements. The
     /// run is assumed to carry a non-None revision.
     /// </summary>
-    private static XElement NewRevisionWrapper(Run run)
+    private static XElement NewRevisionWrapper(Run run, IdAllocator ids)
     {
         var name = run.Revision == RevisionKind.Deleted ? "del" : "ins";
         var wrapper = new XElement(W + name,
-            new XAttribute(W + "id", System.Threading.Interlocked.Increment(ref _revisionId)));
+            new XAttribute(W + "id", ids.NextRevisionId()));
         if (run.RevisionAuthor is { Length: > 0 } author)
             wrapper.Add(new XAttribute(W + "author", author));
         if (run.RevisionDateXml is { Length: > 0 } date)
@@ -746,10 +1321,14 @@ public static class DocxWriter
         return sdtPr;
     }
 
-    private static XElement BuildParagraph(Paragraph paragraph, IReadOnlyDictionary<Run, ImagePart> imagesByRun, IReadOnlyDictionary<string, string> hyperlinks)
+    private static XElement BuildParagraph(
+        Paragraph paragraph,
+        RunDrawings drawings,
+        IReadOnlyDictionary<string, string> hyperlinks,
+        IReadOnlyDictionary<Section, IReadOnlyList<HeaderFooterPart>>? partsBySection = null)
     {
         var p = new XElement(W + "p");
-        var pPr = BuildParagraphProperties(paragraph);
+        var pPr = BuildParagraphProperties(paragraph, partsBySection);
         if (pPr is not null)
             p.Add(pPr);
 
@@ -758,7 +1337,7 @@ public static class DocxWriter
         var bookmarkId = -1;
         if (paragraph.BookmarkName is { Length: > 0 } bookmarkName)
         {
-            bookmarkId = System.Threading.Interlocked.Increment(ref _bookmarkId);
+            bookmarkId = drawings.Ids.NextBookmarkId();
             p.Add(new XElement(W + "bookmarkStart",
                 new XAttribute(W + "id", bookmarkId),
                 new XAttribute(W + "name", bookmarkName)));
@@ -812,7 +1391,7 @@ public static class DocxWriter
             if (revisionKey is null || !SameRevision(revisionKey, run))
             {
                 FlushRevision();
-                revisionWrapper = NewRevisionWrapper(run);
+                revisionWrapper = NewRevisionWrapper(run, drawings.Ids);
                 revisionKey = run;
             }
             revisionWrapper!.Add(element);
@@ -846,7 +1425,7 @@ public static class DocxWriter
                 while (i < runs.Count && ReferenceEquals(runs[i].Control, control)
                     && (runs[i].IsCommentReference ? null : runs[i].CommentId) == openCommentId
                     && SameRevision(head, runs[i]))
-                    content.Add(BuildRun(runs[i++], imagesByRun));
+                    content.Add(BuildRun(runs[i++], drawings));
                 var sdt = new XElement(W + "sdt", BuildSdtProperties(control), content);
                 Content(head, sdt);
                 continue;
@@ -862,7 +1441,7 @@ public static class DocxWriter
                     hyperlink.Add(new XAttribute(W + "tooltip", tooltip));
                 var head = runs[i];
                 while (i < runs.Count && runs[i].HyperlinkUrl == url && runs[i].HyperlinkTooltip == tooltip && (runs[i].IsCommentReference ? null : runs[i].CommentId) == openCommentId && SameRevision(head, runs[i]))
-                    hyperlink.Add(BuildRun(runs[i++], imagesByRun));
+                    hyperlink.Add(BuildRun(runs[i++], drawings));
                 Content(head, hyperlink);
             }
             else if (anchor is { Length: > 0 })
@@ -872,13 +1451,13 @@ public static class DocxWriter
                     hyperlink.Add(new XAttribute(W + "tooltip", tooltip));
                 var head = runs[i];
                 while (i < runs.Count && runs[i].HyperlinkAnchor == anchor && runs[i].HyperlinkTooltip == tooltip && (runs[i].IsCommentReference ? null : runs[i].CommentId) == openCommentId && SameRevision(head, runs[i]))
-                    hyperlink.Add(BuildRun(runs[i++], imagesByRun));
+                    hyperlink.Add(BuildRun(runs[i++], drawings));
                 Content(head, hyperlink);
             }
             else
             {
                 var run = runs[i++];
-                Content(run, BuildRun(run, imagesByRun));
+                Content(run, BuildRun(run, drawings));
             }
         }
 
@@ -893,7 +1472,9 @@ public static class DocxWriter
         return p;
     }
 
-    private static XElement? BuildParagraphProperties(Paragraph paragraph)
+    private static XElement? BuildParagraphProperties(
+        Paragraph paragraph,
+        IReadOnlyDictionary<Section, IReadOnlyList<HeaderFooterPart>>? partsBySection = null)
     {
         var pPr = new XElement(W + "pPr");
         if (!string.IsNullOrEmpty(paragraph.StyleId))
@@ -970,6 +1551,19 @@ public static class DocxWriter
                 new XAttribute(W + "color", "auto"),
                 new XAttribute(W + "fill", shading.TrimStart('#'))));
 
+        // A section break carried by this paragraph: the section's w:sectPr is the LAST child of w:pPr
+        // (schema order), marking this paragraph as the end of a non-final section. Each non-final section
+        // now references its OWN header/footer parts (via partsBySection), so multi-section documents keep
+        // page-specific headers/footers. Reuses the shared sectPr builder so per-section properties are
+        // emitted from one code path.
+        if (paragraph.SectionBreak is { } section)
+        {
+            var sectionParts = partsBySection is not null && partsBySection.TryGetValue(section, out var p)
+                ? p
+                : (IReadOnlyList<HeaderFooterPart>)[];
+            pPr.Add(BuildSectionProperties(section.Page, sectionParts, breakKind: section.BreakKind));
+        }
+
         return pPr.HasElements ? pPr : null;
     }
 
@@ -1015,12 +1609,35 @@ public static class DocxWriter
         _ => null
     };
 
-    private static XElement BuildRun(Run run, IReadOnlyDictionary<Run, ImagePart> imagesByRun)
+    private static XElement BuildRun(Run run, RunDrawings drawings)
     {
         // An inline equation serialises as an m:oMath emitted in place of the run (a paragraph-level
         // sibling of w:r, never wrapped in one), carrying its math fragments as m:r/m:sSup/m:f.
         if (run.Equation is { } equation)
             return BuildOMath(equation);
+
+        // An inline shape / text box serialises as a w:r wrapping a w:drawing/wp:inline/.../wps:wsp.
+        if (run.Shape is { } shape)
+        {
+            var sr = new XElement(W + "r");
+            var rPr = BuildRunProperties(run.Formatting);
+            if (rPr is not null)
+                sr.Add(rPr);
+            sr.Add(BuildShapeDrawing(shape, drawings.Ids));
+            return sr;
+        }
+
+        // Inline WordArt serialises as a w:r wrapping a w:drawing/wp:inline/.../wps:wsp text box whose run
+        // carries DrawingML text effects (chosen by the style preset) on its a:rPr.
+        if (run.WordArt is { } wordArt)
+        {
+            var wr = new XElement(W + "r");
+            var rPr = BuildRunProperties(run.Formatting);
+            if (rPr is not null)
+                wr.Add(rPr);
+            wr.Add(BuildWordArtDrawing(wordArt, drawings.Ids));
+            return wr;
+        }
 
         // A document field emits a self-contained w:fldSimple wrapping a run; the wrapped run's w:t
         // carries the last-known/cached value as fallback text for field-unaware consumers. The
@@ -1028,7 +1645,7 @@ public static class DocxWriter
         if (FieldInstruction(run.FieldKind) is { } instruction)
             return new XElement(W + "fldSimple",
                 new XAttribute(W + "instr", instruction),
-                BuildTextRun(run, imagesByRun));
+                BuildTextRun(run, drawings));
 
         // A footnote reference is a superscript run carrying a w:footnoteReference (no literal text).
         // Carry the run's real formatting (forcing vertAlign=superscript) so a bold/coloured/sized
@@ -1045,7 +1662,7 @@ public static class DocxWriter
             return new XElement(W + "r",
                 new XElement(W + "commentReference", new XAttribute(W + "id", commentRefId)));
 
-        return BuildTextRun(run, imagesByRun);
+        return BuildTextRun(run, drawings);
     }
 
     // A textless marker run (footnote/endnote reference): carries the run's own formatting forced to
@@ -1060,14 +1677,20 @@ public static class DocxWriter
         return r;
     }
 
-    private static XElement BuildTextRun(Run run, IReadOnlyDictionary<Run, ImagePart> imagesByRun)
+    private static XElement BuildTextRun(Run run, RunDrawings drawings)
     {
         var r = new XElement(W + "r");
         var rPr = BuildRunProperties(run.Formatting);
         if (rPr is not null)
             r.Add(rPr);
-        if (run.Image is not null && imagesByRun.TryGetValue(run, out var part))
-            r.Add(BuildDrawing(part));
+        if (run.Image is not null && drawings.Images.TryGetValue(run, out var imagePart))
+            r.Add(BuildDrawing(imagePart));
+        else if (run.Chart is not null && drawings.Charts.TryGetValue(run, out var chartPart))
+            r.Add(BuildChartDrawing(chartPart));
+        else if (run.EmbeddedObject is not null && drawings.EmbeddedObjects.TryGetValue(run, out var embeddedPart))
+            r.Add(BuildEmbeddedObject(embeddedPart));
+        else if (run.SmartArt is not null && drawings.SmartArts.TryGetValue(run, out var smartArtPart))
+            r.Add(BuildSmartArtDrawing(smartArtPart));
         else
         {
             // A tracked deletion stores its text in w:delText (so Word renders it as deleted content);
@@ -1109,18 +1732,21 @@ public static class DocxWriter
         new(M + "r",
             new XElement(M + "t", new XAttribute(XNamespace.Xml + "space", "preserve"), text));
 
+    /// <summary>
+    /// Builds the picture drawing for an image part. An inline image (the default) emits
+    /// <c>w:drawing/wp:inline</c> exactly as before; a floating image (<see cref="InlineImage.Wrapping"/>
+    /// not <see cref="ImageWrapping.Inline"/>) emits <c>w:drawing/wp:anchor</c> with the position + the
+    /// matching wrap element. Both paths share the same <c>a:graphic/pic:pic</c> payload (see
+    /// <see cref="BuildPicGraphic"/>).
+    /// </summary>
+    private static XElement BuildDrawing(ImagePart part) =>
+        part.Image.IsFloating ? BuildAnchorDrawing(part) : BuildInlineDrawing(part);
+
     /// <summary>Builds an inline picture: w:drawing/wp:inline/a:graphic/pic:pic referencing the blip.</summary>
-    private static XElement BuildDrawing(ImagePart part)
+    private static XElement BuildInlineDrawing(ImagePart part)
     {
         var cx = PointsToEmu(part.Image.WidthPt);
         var cy = PointsToEmu(part.Image.HeightPt);
-        var docPrId = part.DrawingId;
-
-        // Carry accessibility alt text on wp:docPr/@descr when set; omitted entirely otherwise so
-        // images without alt text serialise exactly as before.
-        var docPr = new XElement(Wp + "docPr", new XAttribute("id", docPrId), new XAttribute("name", part.FileName));
-        if (!string.IsNullOrEmpty(part.Image.AltText))
-            docPr.Add(new XAttribute("descr", part.Image.AltText));
 
         return new XElement(W + "drawing",
             new XElement(Wp + "inline",
@@ -1131,32 +1757,1041 @@ public static class DocxWriter
                 new XElement(Wp + "effectExtent",
                     new XAttribute("l", 0), new XAttribute("t", 0),
                     new XAttribute("r", 0), new XAttribute("b", 0)),
-                docPr,
+                BuildDocPr(part),
+                BuildPicGraphic(part, cx, cy)));
+    }
+
+    /// <summary>
+    /// Builds a floating picture: w:drawing/wp:anchor with @behindDoc, wp:simplePos, wp:positionH/V
+    /// (relativeFrom + posOffset), wp:extent, the single wrap element matching
+    /// <see cref="InlineImage.Wrapping"/>, then the same wp:docPr + a:graphic/pic:pic payload as the inline
+    /// path. wp:wrapTight is emitted without a wrapPolygon (a deliberate simplification — Word fills one in).
+    /// </summary>
+    private static XElement BuildAnchorDrawing(ImagePart part)
+    {
+        var image = part.Image;
+        var cx = PointsToEmu(image.WidthPt);
+        var cy = PointsToEmu(image.HeightPt);
+        var behindDoc = image.Wrapping == ImageWrapping.Behind ? 1 : 0;
+
+        return new XElement(W + "drawing",
+            new XElement(Wp + "anchor",
+                new XAttribute(XNamespace.Xmlns + "wp", Wp.NamespaceName),
+                new XAttribute("distT", 0), new XAttribute("distB", 0),
+                new XAttribute("distL", 0), new XAttribute("distR", 0),
+                new XAttribute("simplePos", 0),
+                new XAttribute("relativeHeight", 0),
+                new XAttribute("behindDoc", behindDoc),
+                new XAttribute("locked", 0),
+                new XAttribute("layoutInCell", 1),
+                new XAttribute("allowOverlap", 1),
+                new XElement(Wp + "simplePos", new XAttribute("x", 0), new XAttribute("y", 0)),
+                new XElement(Wp + "positionH",
+                    new XAttribute("relativeFrom", HorizontalAnchorToken(image.HorizontalAnchor)),
+                    new XElement(Wp + "posOffset", PointsToEmu(image.HorizontalOffsetPt))),
+                new XElement(Wp + "positionV",
+                    new XAttribute("relativeFrom", VerticalAnchorToken(image.VerticalAnchor)),
+                    new XElement(Wp + "posOffset", PointsToEmu(image.VerticalOffsetPt))),
+                new XElement(Wp + "extent", new XAttribute("cx", cx), new XAttribute("cy", cy)),
+                new XElement(Wp + "effectExtent",
+                    new XAttribute("l", 0), new XAttribute("t", 0),
+                    new XAttribute("r", 0), new XAttribute("b", 0)),
+                BuildWrap(image.Wrapping),
+                BuildDocPr(part),
+                BuildPicGraphic(part, cx, cy)));
+    }
+
+    /// <summary>The wp:positionH/@relativeFrom token for a horizontal anchor.</summary>
+    private static string HorizontalAnchorToken(HorizontalAnchor anchor) => anchor switch
+    {
+        HorizontalAnchor.Margin => "margin",
+        HorizontalAnchor.Page => "page",
+        _ => "column",
+    };
+
+    /// <summary>The wp:positionV/@relativeFrom token for a vertical anchor.</summary>
+    private static string VerticalAnchorToken(VerticalAnchor anchor) => anchor switch
+    {
+        VerticalAnchor.Margin => "margin",
+        VerticalAnchor.Page => "page",
+        _ => "paragraph",
+    };
+
+    /// <summary>
+    /// The single wrap element for a floating wrapping mode: wp:wrapSquare (square), wp:wrapTight (tight,
+    /// no wrapPolygon — a simplification), wp:wrapTopAndBottom, or wp:wrapNone for the front/behind modes.
+    /// </summary>
+    private static XElement BuildWrap(ImageWrapping wrapping) => wrapping switch
+    {
+        ImageWrapping.Square => new XElement(Wp + "wrapSquare", new XAttribute("wrapText", "bothSides")),
+        ImageWrapping.Tight => new XElement(Wp + "wrapTight", new XAttribute("wrapText", "bothSides")),
+        ImageWrapping.TopAndBottom => new XElement(Wp + "wrapTopAndBottom"),
+        _ => new XElement(Wp + "wrapNone"), // Behind / InFront both wrap none (distinguished by @behindDoc).
+    };
+
+    /// <summary>
+    /// Builds the wp:docPr for an image, carrying accessibility alt text on @descr when set (omitted
+    /// otherwise so images without alt text serialise exactly as before). Shared by both drawing paths.
+    /// </summary>
+    private static XElement BuildDocPr(ImagePart part)
+    {
+        var docPr = new XElement(Wp + "docPr", new XAttribute("id", part.DrawingId), new XAttribute("name", part.FileName));
+        if (!string.IsNullOrEmpty(part.Image.AltText))
+            docPr.Add(new XAttribute("descr", part.Image.AltText));
+        return docPr;
+    }
+
+    /// <summary>
+    /// Builds the shared a:graphic/a:graphicData(uri=pic)/pic:pic payload referencing the blip, used by
+    /// both the inline (<see cref="BuildInlineDrawing"/>) and floating (<see cref="BuildAnchorDrawing"/>)
+    /// drawing paths so the picture markup is not duplicated.
+    /// </summary>
+    private static XElement BuildPicGraphic(ImagePart part, long cx, long cy) =>
+        new(A + "graphic",
+            new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+            new XElement(A + "graphicData",
+                new XAttribute("uri", Pic.NamespaceName),
+                new XElement(Pic + "pic",
+                    new XAttribute(XNamespace.Xmlns + "pic", Pic.NamespaceName),
+                    new XElement(Pic + "nvPicPr",
+                        new XElement(Pic + "cNvPr", new XAttribute("id", (uint)part.DrawingId), new XAttribute("name", part.FileName)),
+                        new XElement(Pic + "cNvPicPr")),
+                    new XElement(Pic + "blipFill",
+                        new XElement(A + "blip", new XAttribute(R + "embed", part.RelationshipId)),
+                        new XElement(A + "stretch", new XElement(A + "fillRect"))),
+                    new XElement(Pic + "spPr",
+                        new XElement(A + "xfrm",
+                            new XElement(A + "off", new XAttribute("x", 0), new XAttribute("y", 0)),
+                            new XElement(A + "ext", new XAttribute("cx", cx), new XAttribute("cy", cy))),
+                        new XElement(A + "prstGeom", new XAttribute("prst", "rect"),
+                            new XElement(A + "avLst"))))));
+
+    /// <summary>The DrawingML preset-geometry token (a:prstGeom/@prst) for a shape kind.</summary>
+    private static string PresetGeometry(ShapeKind kind) => kind switch
+    {
+        ShapeKind.RoundedRectangle => "roundRect",
+        ShapeKind.Ellipse => "ellipse",
+        _ => "rect", // Rectangle and TextBox both use a plain rectangle geometry.
+    };
+
+    /// <summary>
+    /// Builds an inline DrawingML shape / text box: w:drawing/wp:inline/a:graphic/a:graphicData[uri=wps]/
+    /// wps:wsp, carrying a wps:spPr (preset geometry + optional a:solidFill) and, for a text box, a
+    /// wps:txbx/w:txbxContent holding the body paragraphs. The shape's wp:docPr id comes from the
+    /// per-write shape docPr counter so it never collides with image drawing ids.
+    /// </summary>
+    private static XElement BuildShapeDrawing(Shape shape, IdAllocator ids)
+    {
+        var cx = PointsToEmu(shape.WidthPt);
+        var cy = PointsToEmu(shape.HeightPt);
+        var docPrId = ids.NextShapeDrawingId();
+        var name = $"{shape.Kind}{(uint)docPrId}";
+
+        // wps:spPr: position/size (a:xfrm), preset geometry, then optional solid fill.
+        var spPr = new XElement(Wps + "spPr",
+            new XElement(A + "xfrm",
+                new XElement(A + "off", new XAttribute("x", 0), new XAttribute("y", 0)),
+                new XElement(A + "ext", new XAttribute("cx", cx), new XAttribute("cy", cy))),
+            new XElement(A + "prstGeom", new XAttribute("prst", PresetGeometry(shape.Kind)),
+                new XElement(A + "avLst")));
+        if (shape.FillColorHex is { Length: > 0 } fill)
+            spPr.Add(new XElement(A + "solidFill",
+                new XElement(A + "srgbClr", new XAttribute("val", fill.TrimStart('#')))));
+
+        var wsp = new XElement(Wps + "wsp",
+            new XElement(Wps + "cNvSpPr"),
+            spPr);
+
+        // A text box carries its body paragraphs in wps:txbx/w:txbxContent. Body paragraphs do not carry
+        // inline images or document hyperlinks, so they build against empty maps — but they DO share the
+        // surrounding write's IdAllocator so nested bookmark/revision/shape ids continue the same sequence.
+        if (shape.HasText)
+        {
+            var txbxContent = new XElement(W + "txbxContent");
+            var nested = RunDrawings.Empty() with { Ids = ids };
+            foreach (var paragraph in shape.TextParagraphs)
+                txbxContent.Add(BuildParagraph(paragraph, nested, EmptyHyperlinks));
+            wsp.Add(new XElement(Wps + "txbx", txbxContent));
+        }
+
+        // wps:bodyPr is required by the schema for a valid wsp; defaults are fine.
+        wsp.Add(new XElement(Wps + "bodyPr"));
+
+        return new XElement(W + "drawing",
+            new XElement(Wp + "inline",
+                new XAttribute("distT", 0), new XAttribute("distB", 0),
+                new XAttribute("distL", 0), new XAttribute("distR", 0),
+                new XElement(Wp + "extent", new XAttribute("cx", cx), new XAttribute("cy", cy)),
+                new XElement(Wp + "effectExtent",
+                    new XAttribute("l", 0), new XAttribute("t", 0),
+                    new XAttribute("r", 0), new XAttribute("b", 0)),
+                new XElement(Wp + "docPr", new XAttribute("id", (uint)docPrId), new XAttribute("name", name)),
+                new XElement(A + "graphic",
+                    new XElement(A + "graphicData",
+                        new XAttribute("uri", Wps.NamespaceName),
+                        wsp))));
+    }
+
+    /// <summary>Empty hyperlink map for building text-box body paragraphs (they carry no document rels).</summary>
+    private static readonly Dictionary<string, string> EmptyHyperlinks = new();
+
+    // The fixed colours a WordArt preset paints with (kept simple and deterministic so the reader can infer
+    // the preset back from which effect elements are present, not from exact colour values).
+    private const string WordArtFillColor = "1F4E79";        // a deep blue text fill
+    private const string WordArtGradientStart = "4472C4";    // gradient stop 0
+    private const string WordArtGradientEnd = "ED7D31";      // gradient stop 1
+    private const string WordArtOutlineColor = "2E2E2E";     // outline / shadow colour
+
+    /// <summary>
+    /// Builds inline WordArt: a w:drawing/wp:inline/.../wps:wsp text box (exactly like a shape's text box)
+    /// whose single text run carries DrawingML text effects on its a:rPr. The effects are chosen by the
+    /// WordArt style preset: a solid or gradient text fill (a:solidFill/a:gradFill), an outline (a:ln),
+    /// and/or an outer shadow (a:effectLst/a:outerShdw). The wp:docPr id comes from the document-scoped
+    /// per-write shape docPr counter (shared with shapes) so it never collides with image ids.
+    /// </summary>
+    private static XElement BuildWordArtDrawing(WordArt wordArt, IdAllocator ids)
+    {
+        // WordArt has no intrinsic geometry size in the FreeW model; derive a sensible text-box extent from
+        // the font size and text length so the inline drawing has a non-zero extent (Word recomputes it).
+        var heightPt = wordArt.FontSizePt * 1.6;
+        var widthPt = Math.Max(1, wordArt.Text.Length) * wordArt.FontSizePt * 0.62;
+        var cx = PointsToEmu(widthPt);
+        var cy = PointsToEmu(heightPt);
+        var docPrId = ids.NextShapeDrawingId();
+        var name = $"WordArt{(uint)docPrId}";
+
+        // A plain text-box rect carries the WordArt; the decorative effects live on the run's a:rPr.
+        var spPr = new XElement(Wps + "spPr",
+            new XElement(A + "xfrm",
+                new XElement(A + "off", new XAttribute("x", 0), new XAttribute("y", 0)),
+                new XElement(A + "ext", new XAttribute("cx", cx), new XAttribute("cy", cy))),
+            new XElement(A + "prstGeom", new XAttribute("prst", "rect"),
+                new XElement(A + "avLst")));
+
+        var wsp = new XElement(Wps + "wsp",
+            new XElement(Wps + "cNvSpPr"),
+            spPr,
+            new XElement(Wps + "txbx",
+                new XElement(W + "txbxContent", BuildWordArtParagraph(wordArt))),
+            new XElement(Wps + "bodyPr"));
+
+        return new XElement(W + "drawing",
+            new XElement(Wp + "inline",
+                new XAttribute("distT", 0), new XAttribute("distB", 0),
+                new XAttribute("distL", 0), new XAttribute("distR", 0),
+                new XElement(Wp + "extent", new XAttribute("cx", cx), new XAttribute("cy", cy)),
+                new XElement(Wp + "effectExtent",
+                    new XAttribute("l", 0), new XAttribute("t", 0),
+                    new XAttribute("r", 0), new XAttribute("b", 0)),
+                new XElement(Wp + "docPr", new XAttribute("id", (uint)docPrId), new XAttribute("name", name)),
+                new XElement(A + "graphic",
+                    new XElement(A + "graphicData",
+                        new XAttribute("uri", Wps.NamespaceName),
+                        wsp))));
+    }
+
+    /// <summary>
+    /// Builds the single w:p inside a WordArt text box: a w:r whose w:rPr carries the font size (w:sz, in
+    /// half-points) plus the DrawingML text effects (a:solidFill/a:gradFill/a:ln/a:effectLst) selected by the
+    /// style preset, followed by the w:t text. The DrawingML effect elements sit directly under w:rPr exactly
+    /// as Word emits WordArt text properties.
+    /// </summary>
+    private static XElement BuildWordArtParagraph(WordArt wordArt)
+    {
+        var rPr = new XElement(W + "rPr",
+            new XElement(W + "sz", new XAttribute(W + "val", PointsToHalfPoints(wordArt.FontSizePt))),
+            new XElement(W + "szCs", new XAttribute(W + "val", PointsToHalfPoints(wordArt.FontSizePt))));
+        foreach (var effect in WordArtEffects(wordArt.Style))
+            rPr.Add(effect);
+
+        var run = new XElement(W + "r",
+            rPr,
+            new XElement(W + "t", new XAttribute(XNamespace.Xml + "space", "preserve"), wordArt.Text));
+
+        return new XElement(W + "p", run);
+    }
+
+    /// <summary>
+    /// Expands a <see cref="WordArtStyle"/> preset into the DrawingML text-effect elements placed on the
+    /// WordArt run's w:rPr. The reader infers the preset back from which of these are present:
+    /// gradient → GradientFill, outline (a:ln) → Outline, shadow (a:effectLst) → Shadow, else FillBlue.
+    /// </summary>
+    private static IEnumerable<XElement> WordArtEffects(WordArtStyle style)
+    {
+        switch (style)
+        {
+            case WordArtStyle.GradientFill:
+                yield return new XElement(A + "gradFill",
+                    new XElement(A + "gsLst",
+                        new XElement(A + "gs", new XAttribute("pos", 0),
+                            new XElement(A + "srgbClr", new XAttribute("val", WordArtGradientStart))),
+                        new XElement(A + "gs", new XAttribute("pos", 100000),
+                            new XElement(A + "srgbClr", new XAttribute("val", WordArtGradientEnd)))),
+                    new XElement(A + "lin", new XAttribute("ang", 5400000), new XAttribute("scaled", 1)));
+                break;
+
+            case WordArtStyle.Outline:
+                yield return SolidFill(WordArtFillColor);
+                yield return new XElement(A + "ln", new XAttribute("w", 9525),
+                    SolidFill(WordArtOutlineColor));
+                break;
+
+            case WordArtStyle.Shadow:
+                yield return SolidFill(WordArtFillColor);
+                yield return new XElement(A + "effectLst",
+                    new XElement(A + "outerShdw",
+                        new XAttribute("blurRad", 50800),
+                        new XAttribute("dist", 38100),
+                        new XAttribute("dir", 2700000),
+                        new XAttribute("algn", "tl"),
+                        new XElement(A + "srgbClr", new XAttribute("val", WordArtOutlineColor),
+                            new XElement(A + "alpha", new XAttribute("val", 40000)))));
+                break;
+
+            default: // FillBlue
+                yield return SolidFill(WordArtFillColor);
+                break;
+        }
+    }
+
+    /// <summary>Builds an a:solidFill wrapping an a:srgbClr of the given RRGGBB hex value.</summary>
+    private static XElement SolidFill(string hex) =>
+        new(A + "solidFill", new XElement(A + "srgbClr", new XAttribute("val", hex)));
+
+    /// <summary>
+    /// Builds the inline chart drawing: w:drawing/wp:inline/a:graphic/a:graphicData(uri=chart)/c:chart
+    /// referencing the chart part by relationship id (r:id). Mirrors <see cref="BuildDrawing"/> for images,
+    /// but the graphicData wraps a c:chart reference rather than a pic:pic. The c namespace is declared on
+    /// the c:chart element so the reference is self-describing.
+    /// </summary>
+    private static XElement BuildChartDrawing(ChartPart part)
+    {
+        var cx = PointsToEmu(part.Chart.WidthPt);
+        var cy = PointsToEmu(part.Chart.HeightPt);
+        var name = $"Chart {part.DrawingId}";
+
+        return new XElement(W + "drawing",
+            new XElement(Wp + "inline",
+                new XAttribute(XNamespace.Xmlns + "wp", Wp.NamespaceName),
+                new XAttribute("distT", 0), new XAttribute("distB", 0),
+                new XAttribute("distL", 0), new XAttribute("distR", 0),
+                new XElement(Wp + "extent", new XAttribute("cx", cx), new XAttribute("cy", cy)),
+                new XElement(Wp + "effectExtent",
+                    new XAttribute("l", 0), new XAttribute("t", 0),
+                    new XAttribute("r", 0), new XAttribute("b", 0)),
+                new XElement(Wp + "docPr", new XAttribute("id", part.DrawingId), new XAttribute("name", name)),
                 new XElement(A + "graphic",
                     new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
                     new XElement(A + "graphicData",
-                        new XAttribute("uri", Pic.NamespaceName),
-                        new XElement(Pic + "pic",
-                            new XAttribute(XNamespace.Xmlns + "pic", Pic.NamespaceName),
-                            new XElement(Pic + "nvPicPr",
-                                new XElement(Pic + "cNvPr", new XAttribute("id", (uint)part.DrawingId), new XAttribute("name", part.FileName)),
-                                new XElement(Pic + "cNvPicPr")),
-                            new XElement(Pic + "blipFill",
-                                new XElement(A + "blip", new XAttribute(R + "embed", part.RelationshipId)),
-                                new XElement(A + "stretch", new XElement(A + "fillRect"))),
-                            new XElement(Pic + "spPr",
-                                new XElement(A + "xfrm",
-                                    new XElement(A + "off", new XAttribute("x", 0), new XAttribute("y", 0)),
-                                    new XElement(A + "ext", new XAttribute("cx", cx), new XAttribute("cy", cy))),
-                                new XElement(A + "prstGeom", new XAttribute("prst", "rect"),
-                                    new XElement(A + "avLst"))))))));
+                        new XAttribute("uri", ChartGraphicDataUri),
+                        new XElement(C + "chart",
+                            new XAttribute(XNamespace.Xmlns + "c", C.NamespaceName),
+                            new XAttribute(R + "id", part.RelationshipId))))));
+    }
+
+    /// <summary>
+    /// Builds a classic embedded OLE object as a <c>w:object</c> wrapping the VML presentation: a
+    /// <c>v:shape</c> sized in points carrying an <c>o:OLEObject</c> (Type="Embed", the model's ProgID, the
+    /// shape id, and an <c>r:id</c> to the embedded <c>.bin</c> part) and — when the object has an icon — a
+    /// <c>v:imagedata</c> whose <c>r:id</c> points at the icon media part. The VML namespaces (v/o) are
+    /// declared on the document root (see <see cref="BuildDocument"/>).
+    /// SIMPLIFICATION (Y2): the VML presentation is minimised to a single v:shape (+ optional v:imagedata);
+    /// only embedded (not linked) objects are emitted, and no live OLE activation data is written.
+    /// </summary>
+    private static XElement BuildEmbeddedObject(EmbeddedObjectPart part)
+    {
+        // VML shapes size in points via a CSS-style @style; width/height map directly from the model.
+        var style = $"width:{FormatPt(part.EmbeddedObject.WidthPt)}pt;height:{FormatPt(part.EmbeddedObject.HeightPt)}pt";
+
+        var shape = new XElement(V + "shape",
+            new XAttribute("id", part.ShapeId),
+            new XAttribute("type", "#_oleObjType"),
+            new XAttribute("style", style));
+        // The on-page presentation: v:imagedata references the icon media part by relationship id.
+        if (part.IconPart is { } icon)
+            shape.Add(new XElement(V + "imagedata",
+                new XAttribute(R + "id", icon.RelationshipId),
+                new XAttribute(O + "title", "")));
+
+        var ole = new XElement(O + "OLEObject",
+            new XAttribute("Type", "Embed"),
+            new XAttribute("ProgID", part.EmbeddedObject.ProgId),
+            new XAttribute("ShapeID", part.ShapeId),
+            new XAttribute("DrawAspect", "Icon"),
+            new XAttribute("ObjectID", part.ShapeId),
+            new XAttribute(R + "id", part.RelationshipId));
+
+        return new XElement(W + "object", shape, ole);
+    }
+
+    /// <summary>Formats a point measure for a VML CSS @style value (invariant, trimmed of trailing zeros).</summary>
+    private static string FormatPt(double points) =>
+        points.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Builds the inline w:drawing for a SmartArt diagram: an a:graphicData[uri=diagram] whose body is a
+    /// dgm:relIds carrying the four relationship ids (r:dm=data, r:lo=layout, r:qs=quickStyle, r:cs=colors).
+    /// Mirrors <see cref="BuildChartDrawing"/> but references four parts instead of one.
+    /// </summary>
+    private static XElement BuildSmartArtDrawing(SmartArtPart part)
+    {
+        var cx = PointsToEmu(part.SmartArt.WidthPt);
+        var cy = PointsToEmu(part.SmartArt.HeightPt);
+        var name = $"Diagram {part.DrawingId}";
+
+        return new XElement(W + "drawing",
+            new XElement(Wp + "inline",
+                new XAttribute(XNamespace.Xmlns + "wp", Wp.NamespaceName),
+                new XAttribute("distT", 0), new XAttribute("distB", 0),
+                new XAttribute("distL", 0), new XAttribute("distR", 0),
+                new XElement(Wp + "extent", new XAttribute("cx", cx), new XAttribute("cy", cy)),
+                new XElement(Wp + "effectExtent",
+                    new XAttribute("l", 0), new XAttribute("t", 0),
+                    new XAttribute("r", 0), new XAttribute("b", 0)),
+                new XElement(Wp + "docPr", new XAttribute("id", part.DrawingId), new XAttribute("name", name)),
+                new XElement(A + "graphic",
+                    new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+                    new XElement(A + "graphicData",
+                        new XAttribute("uri", DiagramGraphicDataUri),
+                        new XElement(Dgm + "relIds",
+                            new XAttribute(XNamespace.Xmlns + "dgm", Dgm.NamespaceName),
+                            new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName),
+                            new XAttribute(R + "dm", part.DataRelationshipId),
+                            new XAttribute(R + "lo", part.LayoutRelationshipId),
+                            new XAttribute(R + "qs", part.QuickStyleRelationshipId),
+                            new XAttribute(R + "cs", part.ColorsRelationshipId))))));
+    }
+
+    /// <summary>
+    /// Builds the SmartArt DATA part (word/diagrams/dataN.xml — dgm:dataModel). This is the only diagram
+    /// part with real content: a dgm:ptLst holding one document point (type="doc") and one node point per
+    /// model node (each carrying its text in a dgm:t/a:p/a:r/a:t body), plus a dgm:cxnLst whose parOf
+    /// connections record the parent→child structure (used to recover the Hierarchy tree on read). Node ids
+    /// are deterministic ("node0", "node1", …) in a stable pre-order walk so write/read agree.
+    /// SIMPLIFICATION (Y1): no presentation-layer points (type="pres") are emitted. F2 adds a
+    /// <c>dgm:dataModelExt</c> at the end of the data model referencing (via <paramref name="drawingRelId"/>)
+    /// the rendered-geometry drawing part, so a viewer can show positioned shapes without re-running
+    /// auto-layout. The node text + structure here remains the round-trip unit (the reader ignores the ext).
+    /// </summary>
+    private static XDocument BuildDiagramData(SmartArt smartArt, string drawingRelId)
+    {
+        const string docId = "doc0";
+        var ptLst = new XElement(Dgm + "ptLst",
+            new XElement(Dgm + "pt",
+                new XAttribute("modelId", docId),
+                new XAttribute("type", "doc")));
+        var cxnLst = new XElement(Dgm + "cxnLst");
+
+        var nextId = 0;
+        var nextCxn = 0;
+        // Pre-order walk: emit a node point + a parOf connection from its parent, then recurse children.
+        void Emit(SmartArtNode node, string parentId)
+        {
+            var id = $"node{nextId++}";
+            ptLst.Add(new XElement(Dgm + "pt",
+                new XAttribute("modelId", id),
+                new XElement(Dgm + "t",
+                    new XElement(A + "bodyPr"),
+                    new XElement(A + "lstStyle"),
+                    new XElement(A + "p",
+                        new XElement(A + "r",
+                            new XElement(A + "t", node.Text))))));
+            cxnLst.Add(new XElement(Dgm + "cxn",
+                new XAttribute("modelId", $"cxn{nextCxn++}"),
+                new XAttribute("type", "parOf"),
+                new XAttribute("srcId", parentId),
+                new XAttribute("destId", id)));
+            foreach (var child in node.Children)
+                Emit(child, id);
+        }
+
+        foreach (var node in smartArt.Nodes)
+            Emit(node, docId);
+
+        return new XDocument(
+            new XElement(Dgm + "dataModel",
+                new XAttribute(XNamespace.Xmlns + "dgm", Dgm.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName),
+                ptLst,
+                cxnLst,
+                new XElement(Dgm + "bg"),
+                new XElement(Dgm + "whole"),
+                // F2: point the data model at the rendered-geometry drawing part. The reader reads only
+                // ptLst/cxnLst, so this trailing ext is ignored gracefully on round-trip.
+                new XElement(Dgm + "dataModelExt",
+                    new XAttribute("relId", drawingRelId),
+                    new XAttribute("minVer", "http://schemas.openxmlformats.org/drawingml/2006/diagram"))));
+    }
+
+    /// <summary>
+    /// Builds the SmartArt DATA part's relationships (word/diagrams/_rels/dataN.xml.rels). F2: a single
+    /// diagramDrawing relationship from the data part to its rendered-geometry drawing part (drawingN.xml),
+    /// which the data part's dgm:dataModelExt/@relId references. Targets are data-part-relative.
+    /// </summary>
+    private static XDocument BuildDiagramDataRels(SmartArtPart part) => new(
+        new XElement(Rel + "Relationships",
+            new XElement(Rel + "Relationship",
+                new XAttribute("Id", part.DrawingRelationshipId),
+                new XAttribute("Type", DiagramDrawingRelType),
+                new XAttribute("Target", part.DrawingFileName))));
+
+    /// <summary>
+    /// Builds the SmartArt rendered-geometry part (word/diagrams/drawingN.xml — dsp:drawing). F2: computes a
+    /// SIMPLE deterministic layout in EMU keyed off the diagram kind and emits one dsp:sp per node, each
+    /// carrying its text (dsp:txBody/a:p/a:r/a:t) and an a:xfrm (a:off x/y + a:ext cx/cy), all inside one
+    /// dsp:spTree. The layout is heuristic (fixed box size + spacing): List = vertical stack, Process =
+    /// horizontal row, Hierarchy = root row centered over a row of descendants. This is presentation only —
+    /// the model reconstructs from the data part, so the geometry is never read back.
+    /// </summary>
+    private static XDocument BuildDiagramDrawing(SmartArt smartArt)
+    {
+        // Flatten the node tree in pre-order so every node (incl. nested Hierarchy children) gets a shape.
+        var nodes = new List<(SmartArtNode Node, int Depth)>();
+        void Flatten(SmartArtNode node, int depth)
+        {
+            nodes.Add((node, depth));
+            foreach (var child in node.Children)
+                Flatten(child, depth + 1);
+        }
+        foreach (var node in smartArt.Nodes)
+            Flatten(node, 0);
+
+        // Fixed heuristic box geometry (EMU). 1 in = 914400 EMU.
+        const long boxW = 1828800;  // 2.0 in
+        const long boxH = 685800;   // 0.75 in
+        const long gap = 228600;    // 0.25 in
+
+        var spTree = new XElement(Dsp + "spTree");
+
+        for (var i = 0; i < nodes.Count; i++)
+        {
+            var (node, depth) = nodes[i];
+            long x, y;
+            switch (smartArt.Kind)
+            {
+                case SmartArtKind.Process:
+                    // Horizontal row of boxes (with a gap acting as the arrow space between steps).
+                    x = i * (boxW + gap);
+                    y = 0;
+                    break;
+                case SmartArtKind.Hierarchy:
+                    // Simple top-down tree: indent by depth (x) and stack by emission order (y) so children
+                    // sit below and to the right of their parent — deterministic and never overlapping.
+                    x = depth * (boxW + gap);
+                    y = i * (boxH + gap);
+                    break;
+                default: // List: vertical stack of boxes.
+                    x = 0;
+                    y = i * (boxH + gap);
+                    break;
+            }
+
+            spTree.Add(new XElement(Dsp + "sp",
+                new XElement(Dsp + "nvSpPr",
+                    new XElement(Dsp + "cNvPr",
+                        new XAttribute("id", i),
+                        new XAttribute("name", $"Node {i}")),
+                    new XElement(Dsp + "cNvSpPr"),
+                    new XElement(Dsp + "nvPr")),
+                new XElement(Dsp + "spPr",
+                    new XElement(A + "xfrm",
+                        new XElement(A + "off", new XAttribute("x", x), new XAttribute("y", y)),
+                        new XElement(A + "ext", new XAttribute("cx", boxW), new XAttribute("cy", boxH))),
+                    new XElement(A + "prstGeom", new XAttribute("prst", "rect"),
+                        new XElement(A + "avLst"))),
+                new XElement(Dsp + "txBody",
+                    new XElement(A + "bodyPr"),
+                    new XElement(A + "lstStyle"),
+                    new XElement(A + "p",
+                        new XElement(A + "r",
+                            new XElement(A + "t", node.Text))))));
+        }
+
+        return new XDocument(
+            new XElement(Dsp + "drawing",
+                new XAttribute(XNamespace.Xmlns + "dsp", Dsp.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName),
+                spTree));
+    }
+
+    /// <summary>
+    /// Builds a minimal-but-valid SmartArt LAYOUT part (word/diagrams/layoutN.xml — dgm:layoutDef). The
+    /// uniqueId records which stock layout the diagram intends (list / process / hierarchy); the layout body
+    /// is intentionally near-empty (Word substitutes the built-in layout for the known uniqueId). The node
+    /// text never lives here, so an empty layout does not lose data.
+    /// </summary>
+    private static XDocument BuildDiagramLayout(SmartArtKind kind)
+    {
+        var uniqueId = kind switch
+        {
+            SmartArtKind.Process => "urn:microsoft.com/office/officeart/2005/8/layout/process1",
+            SmartArtKind.Hierarchy => "urn:microsoft.com/office/officeart/2005/8/layout/hierarchy1",
+            _ => "urn:microsoft.com/office/officeart/2005/8/layout/list1"
+        };
+        return new XDocument(
+            new XElement(Dgm + "layoutDef",
+                new XAttribute(XNamespace.Xmlns + "dgm", Dgm.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+                new XAttribute("uniqueId", uniqueId),
+                new XElement(Dgm + "title", new XAttribute("val", string.Empty)),
+                new XElement(Dgm + "desc", new XAttribute("val", string.Empty)),
+                new XElement(Dgm + "catLst"),
+                new XElement(Dgm + "sampData"),
+                new XElement(Dgm + "styleData"),
+                new XElement(Dgm + "clrData"),
+                new XElement(Dgm + "layoutNode",
+                    new XAttribute("name", "diagram"))));
+    }
+
+    /// <summary>
+    /// Builds a minimal-but-valid SmartArt QUICKSTYLE part (word/diagrams/quickStyleN.xml — dgm:styleDef).
+    /// Stock/near-empty: carries no node data, so an empty style does not lose round-trip content.
+    /// </summary>
+    private static XDocument BuildDiagramQuickStyle() => new(
+        new XElement(Dgm + "styleDef",
+            new XAttribute(XNamespace.Xmlns + "dgm", Dgm.NamespaceName),
+            new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+            new XAttribute("uniqueId", "urn:microsoft.com/office/officeart/2005/8/quickstyle/simple1"),
+            new XElement(Dgm + "title", new XAttribute("val", string.Empty)),
+            new XElement(Dgm + "desc", new XAttribute("val", string.Empty)),
+            new XElement(Dgm + "catLst"),
+            new XElement(Dgm + "scene3d",
+                new XElement(A + "camera", new XAttribute("prst", "orthographicFront")),
+                new XElement(A + "lightRig", new XAttribute("rig", "threePt"), new XAttribute("dir", "t"))),
+            new XElement(Dgm + "style")));
+
+    /// <summary>
+    /// Builds a minimal-but-valid SmartArt COLORS part (word/diagrams/colorsN.xml — dgm:colorsDef).
+    /// Stock/near-empty: carries no node data, so an empty colour set does not lose round-trip content.
+    /// </summary>
+    private static XDocument BuildDiagramColors() => new(
+        new XElement(Dgm + "colorsDef",
+            new XAttribute(XNamespace.Xmlns + "dgm", Dgm.NamespaceName),
+            new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+            new XAttribute("uniqueId", "urn:microsoft.com/office/officeart/2005/8/colors/accent0_1"),
+            new XElement(Dgm + "title", new XAttribute("val", string.Empty)),
+            new XElement(Dgm + "desc", new XAttribute("val", string.Empty)),
+            new XElement(Dgm + "catLst"),
+            new XElement(Dgm + "styleLbl", new XAttribute("name", "node0"),
+                new XElement(Dgm + "fillClrLst", new XAttribute("meth", "repeat"),
+                    new XElement(A + "schemeClr", new XAttribute("val", "accent1"))),
+                new XElement(Dgm + "linClrLst", new XAttribute("meth", "repeat"),
+                    new XElement(A + "schemeClr", new XAttribute("val", "accent1"))),
+                new XElement(Dgm + "txFillClrLst", new XAttribute("meth", "repeat"),
+                    new XElement(A + "schemeClr", new XAttribute("val", "lt1"))),
+                new XElement(Dgm + "txLinClrLst", new XAttribute("meth", "repeat"),
+                    new XElement(A + "schemeClr", new XAttribute("val", "lt1"))))));
+
+    /// <summary>
+    /// Builds a DrawingML chart part (c:chartSpace) for <paramref name="part"/>. Emits one plot area holding a
+    /// single chart type (c:barChart for column/bar, c:lineChart for line, c:areaChart for area, c:pieChart for
+    /// pie, c:doughnutChart for doughnut, c:scatterChart for scatter) with the document's series, plus a
+    /// category-axis / value-axis pair for the cartesian kinds. Category labels and series values are embedded
+    /// as literal caches (c:strCache / c:numCache) so the chart renders without opening the workbook.
+    /// F1: the caches remain the display/round-trip source of truth, but a c:externalData r:id now references
+    /// the chart part's companion editable workbook (word/embeddings/…xlsx, wired via the part's own _rels) so
+    /// Word's "Edit Data" works. An optional c:legend and per-axis c:title are emitted when the model sets them.
+    /// </summary>
+    private static XDocument BuildChartSpace(ChartPart part)
+    {
+        var chart = part.Chart;
+        // Stable axis ids referenced by the plot's series-holding chart element (cartesian kinds only).
+        const long catAxisId = 111111111L;
+        const long valAxisId = 222222222L;
+
+        var hasAxes = chart.Kind is not (ChartKind.Pie or ChartKind.Doughnut);
+        var plotContent = chart.Kind switch
+        {
+            ChartKind.Pie => BuildPieChart(chart, doughnut: false),
+            ChartKind.Doughnut => BuildPieChart(chart, doughnut: true),
+            ChartKind.Scatter => BuildScatterChart(chart, catAxisId, valAxisId),
+            _ => BuildCartesianChart(chart, catAxisId, valAxisId),
+        };
+
+        var plotArea = new XElement(C + "plotArea",
+            new XElement(C + "layout"),
+            plotContent);
+        if (hasAxes)
+        {
+            // Scatter uses a value axis for x (so x-values plot numerically); the other cartesian kinds use a
+            // category axis for x. The category-axis title doubles as the scatter x-axis title.
+            plotArea.Add(chart.Kind == ChartKind.Scatter
+                ? BuildValueAxis(catAxisId, valAxisId, "b", chart.CategoryAxisTitle)
+                : BuildCategoryAxis(catAxisId, valAxisId, chart.CategoryAxisTitle));
+            plotArea.Add(BuildValueAxis(valAxisId, catAxisId, "l", chart.ValueAxisTitle));
+        }
+
+        var chartElement = new XElement(C + "chart");
+        if (chart.Title is { Length: > 0 } title)
+        {
+            chartElement.Add(BuildChartTitle(title));
+            chartElement.Add(new XElement(C + "autoTitleDeleted", new XAttribute(C + "val", "0")));
+        }
+        else
+        {
+            chartElement.Add(new XElement(C + "autoTitleDeleted", new XAttribute(C + "val", "1")));
+        }
+        chartElement.Add(plotArea);
+        if (chart.ShowLegend)
+            chartElement.Add(new XElement(C + "legend",
+                new XElement(C + "legendPos", new XAttribute(C + "val", "b")),
+                new XElement(C + "overlay", new XAttribute(C + "val", "0"))));
+        chartElement.Add(new XElement(C + "plotVisOnly", new XAttribute(C + "val", "1")));
+
+        return new XDocument(
+            new XElement(C + "chartSpace",
+                new XAttribute(XNamespace.Xmlns + "c", C.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName),
+                chartElement,
+                // c:externalData ties the chart to its editable companion workbook (resolved via the chart
+                // part's own _rels). autoUpdate=0 keeps the literal caches authoritative for display.
+                new XElement(C + "externalData",
+                    new XAttribute(R + "id", part.ExternalDataRelId),
+                    new XElement(C + "autoUpdate", new XAttribute(C + "val", "0")))));
+    }
+
+    /// <summary>
+    /// Builds the chart part's own relationships part (word/charts/_rels/chartN.xml.rels): a single "package"
+    /// relationship from the chart to its embedded editable workbook (../embeddings/…xlsx). This is what Word's
+    /// "Edit Data" follows from the chart, and it is what c:externalData/@r:id resolves against. F1.
+    /// </summary>
+    private static XDocument BuildChartRels(ChartPart part) => new(
+        new XElement(Rel + "Relationships",
+            new XElement(Rel + "Relationship",
+                new XAttribute("Id", part.ExternalDataRelId),
+                new XAttribute("Type", ExternalDataRelType),
+                new XAttribute("Target", "../embeddings/" + part.EmbeddingFileName))));
+
+    /// <summary>
+    /// Builds a minimal, self-contained xlsx (OPC ZIP) holding the chart's data so Word's "Edit Data" has a
+    /// workbook to open (F1). Layout matches the chart's c:f formula refs: row 1 is the header (A1 empty, then
+    /// one series name per column B, C, …), rows 2.. are the data (column A = category label, columns B+ = the
+    /// aligned series values). A tiny hand-built package — [Content_Types].xml, _rels/.rels, xl/workbook.xml,
+    /// xl/_rels/workbook.xml.rels and xl/worksheets/sheet1.xml — with NO dependency on FreeX's xlsx writer.
+    /// </summary>
+    private static byte[] BuildChartWorkbook(Chart chart)
+    {
+        XNamespace s = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace sr = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+
+        // sheetData: one header row (cell A1 blank, B1.. = series names) followed by one row per category.
+        var sheetData = new XElement(s + "sheetData");
+
+        var headerRow = new XElement(s + "row", new XAttribute("r", 1));
+        for (var c = 0; c < chart.Series.Count; c++)
+        {
+            var name = chart.Series[c].Name;
+            if (!string.IsNullOrEmpty(name))
+                headerRow.Add(InlineStringCell(s, $"{ColumnLetter(c + 1)}1", name));
+        }
+        if (headerRow.HasElements)
+            sheetData.Add(headerRow);
+
+        for (var rowIdx = 0; rowIdx < chart.Categories.Count; rowIdx++)
+        {
+            var rowNumber = rowIdx + 2; // data starts on row 2
+            var row = new XElement(s + "row", new XAttribute("r", rowNumber));
+            row.Add(InlineStringCell(s, $"A{rowNumber}", chart.Categories[rowIdx]));
+            for (var c = 0; c < chart.Series.Count; c++)
+            {
+                var values = chart.Series[c].Values;
+                if (rowIdx < values.Count)
+                    row.Add(new XElement(s + "c",
+                        new XAttribute("r", $"{ColumnLetter(c + 1)}{rowNumber}"),
+                        new XElement(s + "v", values[rowIdx].ToString(System.Globalization.CultureInfo.InvariantCulture))));
+            }
+            sheetData.Add(row);
+        }
+
+        var sheet = new XDocument(
+            new XElement(s + "worksheet",
+                new XAttribute(XNamespace.Xmlns + "r", sr.NamespaceName),
+                sheetData));
+
+        var workbook = new XDocument(
+            new XElement(s + "workbook",
+                new XAttribute(XNamespace.Xmlns + "r", sr.NamespaceName),
+                new XElement(s + "sheets",
+                    new XElement(s + "sheet",
+                        new XAttribute("name", "Sheet1"),
+                        new XAttribute("sheetId", "1"),
+                        new XAttribute(sr + "id", "rId1")))));
+
+        var workbookRels = new XDocument(
+            new XElement(Rel + "Relationships",
+                new XElement(Rel + "Relationship",
+                    new XAttribute("Id", "rId1"),
+                    new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet"),
+                    new XAttribute("Target", "worksheets/sheet1.xml"))));
+
+        var contentTypes = new XDocument(
+            new XElement(Ct + "Types",
+                new XElement(Ct + "Default", new XAttribute("Extension", "rels"),
+                    new XAttribute("ContentType", "application/vnd.openxmlformats-package.relationships+xml")),
+                new XElement(Ct + "Default", new XAttribute("Extension", "xml"),
+                    new XAttribute("ContentType", "application/xml")),
+                new XElement(Ct + "Override", new XAttribute("PartName", "/xl/workbook.xml"),
+                    new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml")),
+                new XElement(Ct + "Override", new XAttribute("PartName", "/xl/worksheets/sheet1.xml"),
+                    new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"))));
+
+        var packageRels = new XDocument(
+            new XElement(Rel + "Relationships",
+                new XElement(Rel + "Relationship",
+                    new XAttribute("Id", "rId1"),
+                    new XAttribute("Type", OfficeDocumentRel),
+                    new XAttribute("Target", "xl/workbook.xml"))));
+
+        using var buffer = new MemoryStream();
+        using (var zip = new ZipArchive(buffer, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            WritePart(zip, "[Content_Types].xml", contentTypes);
+            WritePart(zip, "_rels/.rels", packageRels);
+            WritePart(zip, "xl/workbook.xml", workbook);
+            WritePart(zip, "xl/_rels/workbook.xml.rels", workbookRels);
+            WritePart(zip, "xl/worksheets/sheet1.xml", sheet);
+        }
+        return buffer.ToArray();
+    }
+
+    /// <summary>Builds an inline-string worksheet cell (t="inlineStr") so the workbook needs no shared-strings part.</summary>
+    private static XElement InlineStringCell(XNamespace s, string reference, string text) =>
+        new(s + "c",
+            new XAttribute("r", reference),
+            new XAttribute("t", "inlineStr"),
+            new XElement(s + "is", new XElement(s + "t", text)));
+
+    /// <summary>Builds a c:title carrying a single rich-text run with the chart title text.</summary>
+    private static XElement BuildChartTitle(string title) =>
+        new(C + "title",
+            new XElement(C + "tx",
+                new XElement(C + "rich",
+                    new XElement(A + "bodyPr"),
+                    new XElement(A + "lstStyle"),
+                    new XElement(A + "p",
+                        new XElement(A + "r",
+                            new XElement(A + "t", title))))),
+            new XElement(C + "overlay", new XAttribute(C + "val", "0")));
+
+    /// <summary>
+    /// Builds the c:barChart (column or bar), c:lineChart or c:areaChart element holding the chart's series and
+    /// the axis-id back-references. barDir distinguishes column (vertical bars) from bar (horizontal).
+    /// </summary>
+    private static XElement BuildCartesianChart(Chart chart, long catAxisId, long valAxisId)
+    {
+        XElement root;
+        if (chart.Kind == ChartKind.Line)
+        {
+            root = new XElement(C + "lineChart",
+                new XElement(C + "grouping", new XAttribute(C + "val", "standard")));
+        }
+        else if (chart.Kind == ChartKind.Area)
+        {
+            root = new XElement(C + "areaChart",
+                new XElement(C + "grouping", new XAttribute(C + "val", "standard")));
+        }
+        else
+        {
+            root = new XElement(C + "barChart",
+                new XElement(C + "barDir", new XAttribute(C + "val", chart.Kind == ChartKind.Bar ? "bar" : "col")),
+                new XElement(C + "grouping", new XAttribute(C + "val", "clustered")));
+        }
+
+        for (var i = 0; i < chart.Series.Count; i++)
+            root.Add(BuildSeries(chart, chart.Series[i], i));
+
+        root.Add(new XElement(C + "axId", new XAttribute(C + "val", catAxisId)));
+        root.Add(new XElement(C + "axId", new XAttribute(C + "val", valAxisId)));
+        return root;
+    }
+
+    /// <summary>
+    /// Builds the c:scatterChart element: each series carries c:xVal (the shared categories parsed as numbers,
+    /// or their 1-based ordinal when non-numeric) and c:yVal (the series values). Scatter has axes (both value
+    /// axes), referenced by axId back-references like the other cartesian kinds.
+    /// </summary>
+    private static XElement BuildScatterChart(Chart chart, long xAxisId, long yAxisId)
+    {
+        var root = new XElement(C + "scatterChart",
+            new XElement(C + "scatterStyle", new XAttribute(C + "val", "lineMarker")));
+        for (var i = 0; i < chart.Series.Count; i++)
+            root.Add(BuildScatterSeries(chart, chart.Series[i], i));
+        root.Add(new XElement(C + "axId", new XAttribute(C + "val", xAxisId)));
+        root.Add(new XElement(C + "axId", new XAttribute(C + "val", yAxisId)));
+        return root;
+    }
+
+    /// <summary>Builds the c:pieChart / c:doughnutChart element holding the chart's first series (no axes).</summary>
+    private static XElement BuildPieChart(Chart chart, bool doughnut)
+    {
+        var pie = new XElement(C + (doughnut ? "doughnutChart" : "pieChart"),
+            new XElement(C + "varyColors", new XAttribute(C + "val", "1")));
+        if (chart.Series.Count > 0)
+            pie.Add(BuildSeries(chart, chart.Series[0], 0));
+        if (doughnut)
+            pie.Add(new XElement(C + "holeSize", new XAttribute(C + "val", "50")));
+        return pie;
+    }
+
+    /// <summary>
+    /// Builds one c:ser: its index/order, an optional c:tx (series name) string cache, the shared category
+    /// labels (c:cat → c:strRef/c:strCache) and the numeric values (c:val → c:numRef/c:numCache). The caches
+    /// embed the data literally for display/round-trip; the c:f formula refs (Sheet1!…) line up with the
+    /// companion workbook (data starts on row 2; series index i lives in column B+i) so Word's "Edit Data"
+    /// maps each series to the right column.
+    /// </summary>
+    private static XElement BuildSeries(Chart chart, ChartSeries series, int index)
+    {
+        var ser = new XElement(C + "ser",
+            new XElement(C + "idx", new XAttribute(C + "val", index)),
+            new XElement(C + "order", new XAttribute(C + "val", index)));
+
+        ser.Add(BuildSeriesName(series, index));
+        ser.Add(BuildCategoryCache(chart.Categories));
+        ser.Add(BuildValueCache(series.Values, index));
+        return ser;
+    }
+
+    /// <summary>
+    /// Builds one c:ser for a scatter chart: c:xVal carries the categories parsed as numbers (1-based ordinal
+    /// when a label is non-numeric, so the points still spread along x) and c:yVal carries the series values.
+    /// Formula refs line up with the companion workbook (x = column A, y = column B+i, data from row 2).
+    /// </summary>
+    private static XElement BuildScatterSeries(Chart chart, ChartSeries series, int index)
+    {
+        var ser = new XElement(C + "ser",
+            new XElement(C + "idx", new XAttribute(C + "val", index)),
+            new XElement(C + "order", new XAttribute(C + "val", index)));
+
+        ser.Add(BuildSeriesName(series, index));
+
+        var xValues = new List<double>(chart.Categories.Count);
+        for (var i = 0; i < chart.Categories.Count; i++)
+            xValues.Add(double.TryParse(chart.Categories[i], System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out var x) ? x : i + 1);
+
+        ser.Add(new XElement(C + "xVal",
+            new XElement(C + "numRef",
+                new XElement(C + "f", $"Sheet1!$A$2:$A${xValues.Count + 1}"),
+                BuildNumCache(xValues))));
+        ser.Add(new XElement(C + "yVal",
+            new XElement(C + "numRef",
+                new XElement(C + "f", $"Sheet1!${ColumnLetter(index + 1)}$2:${ColumnLetter(index + 1)}${series.Values.Count + 1}"),
+                BuildNumCache(series.Values))));
+        return ser;
+    }
+
+    /// <summary>Builds the optional c:tx (series display name) backed by a single-cell string cache + workbook ref.</summary>
+    private static XElement? BuildSeriesName(ChartSeries series, int index)
+    {
+        if (series.Name is not { Length: > 0 } name)
+            return null;
+        return new XElement(C + "tx",
+            new XElement(C + "strRef",
+                new XElement(C + "f", $"Sheet1!${ColumnLetter(index + 1)}$1"),
+                new XElement(C + "strCache",
+                    new XElement(C + "ptCount", new XAttribute(C + "val", 1)),
+                    new XElement(C + "pt", new XAttribute(C + "idx", 0),
+                        new XElement(C + "v", name)))));
+    }
+
+    /// <summary>Builds c:cat → c:strRef/c:strCache: the shared category labels as a literal string cache.</summary>
+    private static XElement BuildCategoryCache(IReadOnlyList<string> categories)
+    {
+        var cache = new XElement(C + "strCache",
+            new XElement(C + "ptCount", new XAttribute(C + "val", categories.Count)));
+        for (var i = 0; i < categories.Count; i++)
+            cache.Add(new XElement(C + "pt", new XAttribute(C + "idx", i),
+                new XElement(C + "v", categories[i])));
+
+        return new XElement(C + "cat",
+            new XElement(C + "strRef",
+                new XElement(C + "f", $"Sheet1!$A$2:$A${Math.Max(2, categories.Count + 1)}"),
+                cache));
+    }
+
+    /// <summary>Builds c:val → c:numRef/c:numCache: the series values as a literal number cache for column B+index.</summary>
+    private static XElement BuildValueCache(IReadOnlyList<double> values, int index)
+    {
+        var column = ColumnLetter(index + 1);
+        return new XElement(C + "val",
+            new XElement(C + "numRef",
+                new XElement(C + "f", $"Sheet1!${column}$2:${column}${Math.Max(2, values.Count + 1)}"),
+                BuildNumCache(values)));
+    }
+
+    /// <summary>Builds a bare c:numCache (formatCode + index-addressed c:pt values) shared by c:val/c:xVal/c:yVal.</summary>
+    private static XElement BuildNumCache(IReadOnlyList<double> values)
+    {
+        var cache = new XElement(C + "numCache",
+            new XElement(C + "formatCode", "General"),
+            new XElement(C + "ptCount", new XAttribute(C + "val", values.Count)));
+        for (var i = 0; i < values.Count; i++)
+            cache.Add(new XElement(C + "pt", new XAttribute(C + "idx", i),
+                new XElement(C + "v", values[i].ToString(System.Globalization.CultureInfo.InvariantCulture))));
+        return cache;
+    }
+
+    /// <summary>Maps a 0-based column index to its spreadsheet letter (0→A, 1→B, …, 26→AA) for c:f refs + the workbook.</summary>
+    private static string ColumnLetter(int index)
+    {
+        var letters = string.Empty;
+        for (var n = index; n >= 0; n = n / 26 - 1)
+            letters = (char)('A' + n % 26) + letters;
+        return letters;
+    }
+
+    /// <summary>
+    /// Builds the c:catAx (category axis) referencing its own id and cross-referencing the value axis, with an
+    /// optional axis <paramref name="title"/>.
+    /// </summary>
+    private static XElement BuildCategoryAxis(long axisId, long crossAxisId, string? title)
+    {
+        var ax = new XElement(C + "catAx",
+            new XElement(C + "axId", new XAttribute(C + "val", axisId)),
+            new XElement(C + "scaling", new XElement(C + "orientation", new XAttribute(C + "val", "minMax"))),
+            new XElement(C + "delete", new XAttribute(C + "val", "0")),
+            new XElement(C + "axPos", new XAttribute(C + "val", "b")));
+        if (title is { Length: > 0 } t)
+            ax.Add(BuildChartTitle(t));
+        ax.Add(new XElement(C + "crossAx", new XAttribute(C + "val", crossAxisId)));
+        return ax;
+    }
+
+    /// <summary>
+    /// Builds the c:valAx (value axis) at the given <paramref name="position"/> referencing its own id and
+    /// cross-referencing <paramref name="crossAxisId"/>, with an optional axis <paramref name="title"/>. Reused
+    /// for the scatter chart's numeric x-axis (position "b").
+    /// </summary>
+    private static XElement BuildValueAxis(long axisId, long crossAxisId, string position, string? title)
+    {
+        var ax = new XElement(C + "valAx",
+            new XElement(C + "axId", new XAttribute(C + "val", axisId)),
+            new XElement(C + "scaling", new XElement(C + "orientation", new XAttribute(C + "val", "minMax"))),
+            new XElement(C + "delete", new XAttribute(C + "val", "0")),
+            new XElement(C + "axPos", new XAttribute(C + "val", position)));
+        if (title is { Length: > 0 } t)
+            ax.Add(BuildChartTitle(t));
+        ax.Add(new XElement(C + "crossAx", new XAttribute(C + "val", crossAxisId)));
+        return ax;
     }
 
     private static XElement? BuildRunProperties(RunFormatting f)
     {
         // Children MUST follow the CT_RPr (EG_RPrBase) schema sequence, otherwise Word's strict
-        // validator rejects the run: rFonts, b, i, caps, smallCaps, strike, color, sz, szCs, u, shd,
-        // vertAlign. (FreeW's own reader is order-independent, so order bugs only surface in Word.)
+        // validator rejects the run. The relevant slots, in order, are:
+        //   rFonts, b, i, caps, smallCaps, strike, color, spacing, kern, position, sz, szCs, u, shd,
+        //   vertAlign, <w14 extension region>.
+        // The advanced-typography elements added for Z1 occupy these slots:
+        //   * w:spacing / w:kern / w:position are core EG_RPrBase elements that sit AFTER w:color and
+        //     BEFORE w:sz (this exact order — spacing, then kern, then position — is the schema sequence).
+        //   * w14:ligatures / w14:numForm / w14:numSpacing / w14:stylisticSets are Office-2010 extension
+        //     elements that have no slot in the base CT_RPr sequence; Word emits them at the END of the run
+        //     properties (after the core elements above). We follow that placement, emitting them last.
+        // (FreeW's own reader is order-independent, so order bugs only surface in Word's strict validator.)
         var rPr = new XElement(W + "rPr");
         if (f.FontFamily is { Length: > 0 } family)
             rPr.Add(new XElement(W + "rFonts", new XAttribute(W + "ascii", family), new XAttribute(W + "hAnsi", family)));
@@ -1172,6 +2807,18 @@ public static class DocxWriter
             rPr.Add(new XElement(W + "strike"));
         if (f.ColorHex is { Length: > 0 } color)
             rPr.Add(new XElement(W + "color", new XAttribute(W + "val", color.TrimStart('#'))));
+        // w:spacing (character spacing, expand/condense) — value in twentieths of a point (dxa), signed.
+        // Emitted only when non-zero so default runs round-trip byte-unchanged.
+        if (f.CharacterSpacingPt != 0)
+            rPr.Add(new XElement(W + "spacing", new XAttribute(W + "val", PointsToDxa(f.CharacterSpacingPt))));
+        // w:kern (kerning minimum font size) — value in half-points. Emitted only when a positive
+        // threshold is set.
+        if (f.KerningMinSizePt is { } kern && kern > 0)
+            rPr.Add(new XElement(W + "kern", new XAttribute(W + "val", PointsToHalfPoints(kern))));
+        // w:position (raised/lowered baseline) — value in half-points, signed (positive raised). Emitted
+        // only when non-zero.
+        if (f.PositionPt != 0)
+            rPr.Add(new XElement(W + "position", new XAttribute(W + "val", PointsToHalfPoints(f.PositionPt))));
         if (f.FontSizePt is { } size)
         {
             var halfPoints = PointsToHalfPoints(size);
@@ -1189,21 +2836,51 @@ public static class DocxWriter
             rPr.Add(new XElement(W + "vertAlign",
                 new XAttribute(W + "val", f.VerticalAlign == VerticalAlign.Superscript ? "superscript" : "subscript")));
 
+        // --- w14 OpenType extension region (after the core EG_RPrBase elements) ---
+        // w14:ligatures
+        if (LigaturesToken(f.Ligatures) is { } ligatures)
+            rPr.Add(new XElement(W14 + "ligatures", new XAttribute(W14 + "val", ligatures)));
+        // w14:numForm
+        if (NumberFormToken(f.NumberForm) is { } numForm)
+            rPr.Add(new XElement(W14 + "numForm", new XAttribute(W14 + "val", numForm)));
+        // w14:numSpacing
+        if (NumberSpacingToken(f.NumberSpacing) is { } numSpacing)
+            rPr.Add(new XElement(W14 + "numSpacing", new XAttribute(W14 + "val", numSpacing)));
+        // w14:stylisticSets — a container of w14:styleSet entries; we model a single optional set id.
+        if (f.StylisticSet is { } styleSetId)
+            rPr.Add(new XElement(W14 + "stylisticSets",
+                new XElement(W14 + "styleSet", new XAttribute(W14 + "id", styleSetId))));
+
         return rPr.HasElements ? rPr : null;
     }
 
-    private static XElement BuildSectionProperties(PageSettings page, bool hasHeader, bool hasFooter) =>
+    /// <summary>
+    /// Builds a w:sectPr for one section's <paramref name="page"/> settings. Used for both the final
+    /// (body-level) section and each non-final section (whose sectPr lives in its last paragraph's pPr),
+    /// so the per-section properties are emitted from one place rather than duplicated. The section's own
+    /// <paramref name="headerFooterParts"/> wire its w:headerReference/w:footerReference elements (default /
+    /// even / first), each referencing the part's relationship id — so multi-section and page-specific
+    /// (first-page) headers/footers round-trip. <paramref name="breakKind"/>, when non-null, emits the
+    /// section's w:type (the break kind that begins it); the body-level final section passes null.
+    /// </summary>
+    private static XElement BuildSectionProperties(
+        PageSettings page,
+        IReadOnlyList<HeaderFooterPart> headerFooterParts,
+        SectionBreakKind? breakKind = null) =>
         new(W + "sectPr",
-            // Header/footer references must precede pgSz/pgMar in the sectPr schema order.
-            hasHeader
-                ? new XElement(W + "headerReference",
-                    new XAttribute(W + "type", "default"),
-                    new XAttribute(R + "id", HeaderRelationshipId))
-                : null,
-            hasFooter
-                ? new XElement(W + "footerReference",
-                    new XAttribute(W + "type", "default"),
-                    new XAttribute(R + "id", FooterRelationshipId))
+            // Header/footer references must precede pgSz/pgMar in the sectPr schema order. Headers are emitted
+            // before footers, each in default→even→first order, reproducing the legacy single-section
+            // emission (default header, even header, default footer, even footer) byte-for-byte.
+            HeaderFooterReference(headerFooterParts, isHeader: true, HeaderFooterType.Default),
+            HeaderFooterReference(headerFooterParts, isHeader: true, HeaderFooterType.Even),
+            HeaderFooterReference(headerFooterParts, isHeader: true, HeaderFooterType.First),
+            HeaderFooterReference(headerFooterParts, isHeader: false, HeaderFooterType.Default),
+            HeaderFooterReference(headerFooterParts, isHeader: false, HeaderFooterType.Even),
+            HeaderFooterReference(headerFooterParts, isHeader: false, HeaderFooterType.First),
+            // The section break kind (w:type) precedes pgSz in the schema. "nextPage" is Word's default and
+            // is emitted explicitly only for non-final sections (the body-level final section passes null).
+            breakKind is { } kind
+                ? new XElement(W + "type", new XAttribute(W + "val", SectionBreakToken(kind)))
                 : null,
             new XElement(W + "pgSz",
                 new XAttribute(W + "w", PointsToDxa(page.WidthPt)),
@@ -1231,9 +2908,58 @@ public static class DocxWriter
             page.VerticalAlignment != PageVerticalAlignment.Top
                 ? new XElement(W + "vAlign", new XAttribute(W + "val", VerticalAlignmentToken(page.VerticalAlignment)))
                 : null,
-            // "Different first page" (w:titlePg): a toggle emitted only when set, after w:vAlign. FreeW
-            // still stores a single header/footer; the flag lets Word honour a distinct first-page header.
+            // "Different first page" (w:titlePg): a toggle emitted only when set, after w:vAlign. When set,
+            // the section may also carry a distinct first-page header/footer part (w:type="first" above).
             page.DifferentFirstPage ? new XElement(W + "titlePg") : null);
+
+    /// <summary>
+    /// Builds the w:headerReference/w:footerReference for the part of the requested kind+type in
+    /// <paramref name="parts"/>, or null when this section carries no such part. The @w:type token is
+    /// "default"/"even"/"first"; the @r:id references the part's document relationship id.
+    /// </summary>
+    private static XElement? HeaderFooterReference(
+        IReadOnlyList<HeaderFooterPart> parts,
+        bool isHeader,
+        HeaderFooterType type)
+    {
+        var part = parts.FirstOrDefault(p => p.IsHeader == isHeader && p.Type == type);
+        if (part is null)
+            return null;
+        var token = type switch
+        {
+            HeaderFooterType.Even => "even",
+            HeaderFooterType.First => "first",
+            _ => "default"
+        };
+        return new XElement(W + (isHeader ? "headerReference" : "footerReference"),
+            new XAttribute(W + "type", token),
+            new XAttribute(R + "id", part.RelationshipId));
+    }
+
+    /// <summary>
+    /// Builds a header/footer part's own relationships part (word/_rels/&lt;part&gt;.xml.rels), declaring one
+    /// image relationship per inline image the part carries. The image r:embed ids inside the part XML are
+    /// PART-LOCAL and resolve against THIS rels file (not document.xml.rels), so header/footer images survive.
+    /// </summary>
+    private static XDocument BuildHeaderFooterRels(HeaderFooterPart part)
+    {
+        var relationships = new XElement(Rel + "Relationships");
+        foreach (var image in part.Images)
+            relationships.Add(new XElement(Rel + "Relationship",
+                new XAttribute("Id", image.RelationshipId),
+                new XAttribute("Type", ImageRel),
+                new XAttribute("Target", "media/" + image.FileName)));
+        return new XDocument(relationships);
+    }
+
+    /// <summary>Maps a <see cref="SectionBreakKind"/> to its w:sectPr/w:type w:val token.</summary>
+    private static string SectionBreakToken(SectionBreakKind kind) => kind switch
+    {
+        SectionBreakKind.Continuous => "continuous",
+        SectionBreakKind.EvenPage => "evenPage",
+        SectionBreakKind.OddPage => "oddPage",
+        _ => "nextPage"
+    };
 
     /// <summary>Maps a <see cref="PageVerticalAlignment"/> to its w:vAlign w:val token (Justified→"both").</summary>
     private static string VerticalAlignmentToken(PageVerticalAlignment alignment) => alignment switch
@@ -1338,23 +3064,147 @@ public static class DocxWriter
     }
 
     /// <summary>
-    /// Builds word/settings.xml (w:settings) carrying the document-protection element and/or the
-    /// automatic-hyphenation toggle. The caller only emits this part when something needs it (a non-None
-    /// protection mode and/or <paramref name="autoHyphenation"/>). w:documentProtection records w:edit
-    /// (the mode token) and w:enforcement="1"; w:autoHyphenation is a bare toggle. Schema order places
-    /// w:documentProtection before w:autoHyphenation.
+    /// Builds word/settings.xml (w:settings) carrying any combination of: the page-background display
+    /// toggle (w:displayBackgroundShape, when <paramref name="displayBackground"/> so Word paints the
+    /// w:background), the automatic-hyphenation toggle (w:autoHyphenation), the different-odd/even-headers
+    /// toggle (w:evenAndOddHeaders, when <paramref name="differentOddEvenPages"/>) and the document-protection
+    /// element (w:documentProtection: w:edit + w:enforcement="1"). The caller only emits this part when at
+    /// least one is needed. Children are emitted in CT_Settings schema order
+    /// (displayBackgroundShape → autoHyphenation → evenAndOddHeaders → documentProtection).
     /// </summary>
-    private static XDocument BuildSettings(ProtectionSettings protection, bool autoHyphenation)
+    private static XDocument BuildSettings(ProtectionSettings protection, bool autoHyphenation, bool differentOddEvenPages, bool displayBackground, bool embedTrueTypeFonts)
     {
         var settings = new XElement(W + "settings",
             new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName));
+        // w:embedTrueTypeFonts precedes the other settings children in the CT_Settings schema sequence.
+        if (embedTrueTypeFonts)
+            settings.Add(new XElement(W + "embedTrueTypeFonts"));
+        if (displayBackground)
+            settings.Add(new XElement(W + "displayBackgroundShape"));
+        if (autoHyphenation)
+            settings.Add(new XElement(W + "autoHyphenation"));
+        if (differentOddEvenPages)
+            settings.Add(new XElement(W + "evenAndOddHeaders"));
         if (ProtectionEditToken(protection.Mode) is { } edit)
             settings.Add(new XElement(W + "documentProtection",
                 new XAttribute(W + "edit", edit),
                 new XAttribute(W + "enforcement", "1")));
-        if (autoHyphenation)
-            settings.Add(new XElement(W + "autoHyphenation"));
         return new XDocument(settings);
+    }
+
+    /// <summary>
+    /// Builds word/fontTable.xml (w:fonts): one w:font w:name="&lt;Family&gt;" per embedded family, each
+    /// carrying a w:embedRegular/w:embedBold/w:embedItalic/w:embedBoldItalic child per embedded style whose
+    /// r:id points at the obfuscated .odttf part (in the fontTable's own rels) and whose w:fontKey is the
+    /// deterministic GUID used to obfuscate that part.
+    /// </summary>
+    private static XDocument BuildFontTable(IReadOnlyList<FontTablePart> embeddedFonts)
+    {
+        var fonts = new XElement(W + "fonts",
+            new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName),
+            new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName));
+        foreach (var family in embeddedFonts)
+        {
+            var font = new XElement(W + "font", new XAttribute(W + "name", family.Font.Family));
+            foreach (var part in family.Parts)
+                font.Add(new XElement(W + part.Slot,
+                    new XAttribute(R + "id", part.RelationshipId),
+                    new XAttribute(W + "fontKey", part.FontKey)));
+            fonts.Add(font);
+        }
+        return new XDocument(fonts);
+    }
+
+    /// <summary>
+    /// Builds word/_rels/fontTable.xml.rels: one font relationship (rIdFontN → fonts/fontN.odttf) per
+    /// embedded font style, matching the r:id referenced from each w:embed* in word/fontTable.xml.
+    /// </summary>
+    private static XDocument BuildFontTableRels(IReadOnlyList<FontTablePart> embeddedFonts)
+    {
+        var relationships = new XElement(Rel + "Relationships");
+        foreach (var part in embeddedFonts.SelectMany(f => f.Parts))
+            relationships.Add(new XElement(Rel + "Relationship",
+                new XAttribute("Id", part.RelationshipId),
+                new XAttribute("Type", FontRelType),
+                new XAttribute("Target", "fonts/" + part.FileName)));
+        return new XDocument(relationships);
+    }
+
+    /// <summary>
+    /// Builds word/theme/theme1.xml (a:theme): the document's <see cref="DocumentTheme"/> serialised as a
+    /// real DrawingML theme — an a:clrScheme (the twelve <see cref="ThemeColorScheme"/> colour slots), an
+    /// a:fontScheme (major = the theme's heading font, minor = its body font) and a minimal-but-valid
+    /// a:fmtScheme (one fill/line/effect/bg-fill entry each, as Word requires at least one of each). The
+    /// reader recovers the colour + font scheme and infers the preset (see DocxReader.ReadTheme).
+    /// </summary>
+    private static XDocument BuildTheme(DocumentTheme theme)
+    {
+        var scheme = theme.ColorScheme;
+
+        XElement Srgb(string slot, string hex) =>
+            new(A + slot, new XElement(A + "srgbClr", new XAttribute("val", hex)));
+
+        var clrScheme = new XElement(A + "clrScheme",
+            new XAttribute("name", theme.Name),
+            // dk1/lt1 are conventionally emitted as window/windowText sysClr with an srgb lastClr; using a
+            // plain srgbClr is equally valid and keeps the reader's parse uniform across all twelve slots.
+            Srgb("dk1", scheme.Dark1),
+            Srgb("lt1", scheme.Light1),
+            Srgb("dk2", scheme.Dark2),
+            Srgb("lt2", scheme.Light2),
+            Srgb("accent1", scheme.Accent1),
+            Srgb("accent2", scheme.Accent2),
+            Srgb("accent3", scheme.Accent3),
+            Srgb("accent4", scheme.Accent4),
+            Srgb("accent5", scheme.Accent5),
+            Srgb("accent6", scheme.Accent6),
+            Srgb("hlink", scheme.Hyperlink),
+            Srgb("folHlink", scheme.FollowedHyperlink));
+
+        XElement Font(string element, string typeface) =>
+            new(A + element,
+                new XElement(A + "latin", new XAttribute("typeface", typeface)),
+                new XElement(A + "ea", new XAttribute("typeface", string.Empty)),
+                new XElement(A + "cs", new XAttribute("typeface", string.Empty)));
+
+        var fontScheme = new XElement(A + "fontScheme",
+            new XAttribute("name", theme.Name),
+            new XElement(A + "majorFont", Font("latin", theme.HeadingFont).Elements()),
+            new XElement(A + "minorFont", Font("latin", theme.BodyFont).Elements()));
+
+        // A minimal-but-valid format scheme: one of each style the schema requires at least one of
+        // (fill / line / effect / background fill). A flat solid fill keyed to phClr is the simplest
+        // shape Word accepts; the document never reads these back (only the clr/font schemes round-trip).
+        XElement SolidPhClr() => new(A + "solidFill", new XElement(A + "schemeClr", new XAttribute("val", "phClr")));
+
+        var fmtScheme = new XElement(A + "fmtScheme",
+            new XAttribute("name", theme.Name),
+            new XElement(A + "fillStyleLst", SolidPhClr(), SolidPhClr(), SolidPhClr()),
+            new XElement(A + "lnStyleLst",
+                Line(), Line(), Line()),
+            new XElement(A + "effectStyleLst",
+                new XElement(A + "effectStyle", new XElement(A + "effectLst")),
+                new XElement(A + "effectStyle", new XElement(A + "effectLst")),
+                new XElement(A + "effectStyle", new XElement(A + "effectLst"))),
+            new XElement(A + "bgFillStyleLst", SolidPhClr(), SolidPhClr(), SolidPhClr()));
+
+        var themeElements = new XElement(A + "themeElements", clrScheme, fontScheme, fmtScheme);
+
+        return new XDocument(
+            new XElement(A + "theme",
+                new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+                new XAttribute("name", theme.Name),
+                themeElements,
+                new XElement(A + "objectDefaults"),
+                new XElement(A + "extraClrSchemeLst")));
+
+        static XElement Line() => new(A + "ln",
+            new XAttribute("w", 6350),
+            new XAttribute("cap", "flat"),
+            new XAttribute("cmpd", "sng"),
+            new XAttribute("algn", "ctr"),
+            new XElement(A + "solidFill", new XElement(A + "schemeClr", new XAttribute("val", "phClr"))),
+            new XElement(A + "prstDash", new XAttribute("val", "solid")));
     }
 
     private static XDocument BuildStyles(TextDocument document)

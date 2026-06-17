@@ -5476,6 +5476,65 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void SetSelectedRangeFontName_AppliesFontFamilyToSelection()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(a1, new TextValue("value"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook, "Book.fxl", "Opened .fxl.", IsFallback: false));
+        session.SelectRange(new GridRange(a1, a1));
+
+        var result = session.SetSelectedRangeFontName("  Arial  ");
+
+        result.Success.Should().BeTrue();
+        session.IsDirty.Should().BeTrue();
+        workbook.GetStyle(sheet.GetCell(a1)!.StyleId).FontName.Should().Be("Arial");
+    }
+
+    [Fact]
+    public void SetSelectedRangeFontName_BlankIsNoOpSuccess()
+    {
+        var workbook = CreateWorkbook();
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook, "Book.fxl", "Opened .fxl.", IsFallback: false));
+
+        var result = session.SetSelectedRangeFontName("   ");
+
+        result.Success.Should().BeTrue();
+        session.IsDirty.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ToggleSelectedRangeAutoFilter_EnablesThenDisablesOverSelection()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        for (uint row = 2; row <= 4; row++)
+        {
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new TextValue($"R{row}"));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 2), new NumberValue(row * 10));
+        }
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook, "Book.fxl", "Opened .fxl.", IsFallback: false));
+        session.SelectRange(new GridRange(
+            new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 2)));
+
+        session.ActiveSheetHasAutoFilter.Should().BeFalse();
+
+        var enable = session.ToggleSelectedRangeAutoFilter();
+        enable.Success.Should().BeTrue();
+        session.ActiveSheetHasAutoFilter.Should().BeTrue();
+
+        var disable = session.ToggleSelectedRangeAutoFilter();
+        disable.Success.Should().BeTrue();
+        session.ActiveSheetHasAutoFilter.Should().BeFalse();
+    }
+
+    [Fact]
     public void SetSelectedRangeFillColor_UsesStyleOnlyFormattingForEmptyCell()
     {
         var workbook = CreateWorkbook();

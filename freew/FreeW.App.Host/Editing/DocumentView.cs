@@ -267,6 +267,14 @@ public sealed class DocumentView : RichTextBox
     public event EventHandler<double>? ZoomChanged;
 
     /// <summary>
+    /// Raised whenever the page chrome is (re)applied — i.e. when the page size/margins change, Print
+    /// Layout is toggled, or the document re-renders. Lets passive view chrome that mirrors the page
+    /// geometry (e.g. the <see cref="Ruler"/>) redraw without polling. Purely a view-layout signal; it
+    /// never implies a model change.
+    /// </summary>
+    public event EventHandler? LayoutChanged;
+
+    /// <summary>
     /// The editor zoom factor where 1.0 == 100%. Assignments are clamped to the supported range
     /// (<see cref="ZoomLevels.Min"/>..<see cref="ZoomLevels.Max"/>) and applied as a <see cref="ScaleTransform"/>
     /// on the editing surface. Purely visual: the model and saved document are unaffected.
@@ -419,6 +427,137 @@ public sealed class DocumentView : RichTextBox
     {
         CommitToModel();
         Render();
+    }
+
+    // --- Live preview (galleries) ---------------------------------------------------------------
+    //
+    // The Styles / Themes galleries preview a choice while the pointer hovers a swatch and revert it
+    // when the pointer leaves (unless the user clicks, which commits through the normal reversible
+    // path). Preview deliberately bypasses the undo/redo bus: it mutates the model in place and
+    // re-renders, snapshotting exactly what it changed so EndPreview can restore the document to its
+    // pre-hover state without touching undo history. Commit (the real apply) is a separate, reversible
+    // operation the gallery triggers on click — preview only ever shows, never persists.
+
+    // Snapshot of the paragraph StyleIds a style preview overwrote (model index -> prior style id).
+    private Dictionary<int, string?>? _styleStyleIdSnapshot;
+
+    // The model paragraph indices a style-preview session targets. Captured from the selection when the
+    // session starts (first hover) and reused for every subsequent hover, so re-rendering between hovers
+    // (which clears the editor selection) doesn't make later previews target nothing.
+    private IReadOnlyList<int>? _stylePreviewTargets;
+
+    // Snapshot of the document's pre-theme look (DefaultRun + each affected style's Run) for theme preview.
+    private (RunFormatting DefaultRun, Dictionary<string, RunFormatting> Runs)? _themeSnapshot;
+
+    /// <summary>
+    /// Preview a paragraph style on the current selection without committing: snapshot the selected
+    /// paragraphs' current <see cref="ModelParagraph.StyleId"/>, set the previewed id on each, and
+    /// re-render so the style's formatting shows. <see cref="EndStylePreview"/> restores them. A no-op
+    /// for an unknown style id. Used by the Styles gallery's hover live-preview.
+    /// </summary>
+    public void PreviewParagraphStyle(string? styleId)
+    {
+        if (styleId is { Length: > 0 } && !_model.Styles.ContainsKey(styleId))
+            return;
+
+        // Re-baseline against the committed model: on the first hover of a session commit pending edits
+        // and capture the target paragraphs from the selection; on a subsequent hover revert the prior
+        // preview and reuse the captured targets (the re-render between hovers clears the selection).
+        if (_styleStyleIdSnapshot is null)
+        {
+            CommitToModel();
+            _stylePreviewTargets = SelectedModelParagraphIndices();
+        }
+        else
+        {
+            RestoreStylePreview();
+        }
+
+        var snapshot = new Dictionary<int, string?>();
+        foreach (var index in _stylePreviewTargets ?? [])
+        {
+            if (index >= 0 && index < _model.Blocks.Count && _model.Blocks[index] is ModelParagraph paragraph)
+            {
+                snapshot[index] = paragraph.StyleId;
+                paragraph.StyleId = styleId;
+            }
+        }
+
+        _styleStyleIdSnapshot = snapshot;
+        Render();
+    }
+
+    /// <summary>Revert a style preview started by <see cref="PreviewParagraphStyle"/> and re-render. No-op if none is active.</summary>
+    public void EndStylePreview()
+    {
+        if (_styleStyleIdSnapshot is null)
+            return;
+        RestoreStylePreview();
+        _stylePreviewTargets = null;
+        Render();
+    }
+
+    // Restore previewed paragraph style ids from the snapshot (without re-rendering).
+    private void RestoreStylePreview()
+    {
+        if (_styleStyleIdSnapshot is null)
+            return;
+        foreach (var (index, styleId) in _styleStyleIdSnapshot)
+        {
+            if (index >= 0 && index < _model.Blocks.Count && _model.Blocks[index] is ModelParagraph paragraph)
+                paragraph.StyleId = styleId;
+        }
+        _styleStyleIdSnapshot = null;
+    }
+
+    /// <summary>
+    /// Preview a document <paramref name="theme"/> without committing: snapshot the document default run
+    /// and the run formatting of every style the theme rewrites, apply the theme to the catalog, and
+    /// re-render. <see cref="EndThemePreview"/> restores the snapshot. Used by the Themes gallery's hover
+    /// live-preview; the real apply goes through <see cref="ApplyTheme"/> on click.
+    /// </summary>
+    public void PreviewTheme(DocumentTheme theme)
+    {
+        ArgumentNullException.ThrowIfNull(theme);
+
+        if (_themeSnapshot is null)
+            CommitToModel();
+        else
+            RestoreThemePreview();
+
+        var runs = new Dictionary<string, RunFormatting>();
+        foreach (var id in new[] { "Normal", "Title", "Heading1", "Heading2", "Heading3" })
+        {
+            if (_model.Styles.TryGetValue(id, out var style))
+                runs[id] = style.Run;
+        }
+
+        _themeSnapshot = (_model.DefaultRun, runs);
+        DocumentTheme.Apply(_model, theme);
+        Render();
+    }
+
+    /// <summary>Revert a theme preview started by <see cref="PreviewTheme"/> and re-render. No-op if none is active.</summary>
+    public void EndThemePreview()
+    {
+        if (_themeSnapshot is null)
+            return;
+        RestoreThemePreview();
+        Render();
+    }
+
+    // Restore the pre-preview document default + style runs from the theme snapshot (without re-rendering).
+    private void RestoreThemePreview()
+    {
+        if (_themeSnapshot is not { } snapshot)
+            return;
+        _model.DefaultRun = snapshot.DefaultRun;
+        foreach (var (id, run) in snapshot.Runs)
+        {
+            if (_model.Styles.TryGetValue(id, out var style))
+                style.Run = run;
+        }
+        _themeSnapshot = null;
     }
 
     /// <summary>
@@ -913,6 +1052,53 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// The <see cref="ParagraphFormatting"/> of the first paragraph spanned by the current selection (the
+    /// caret's paragraph), or <see cref="ParagraphFormatting.Default"/> when none is selected. Read-only;
+    /// used by the <see cref="Ruler"/> to reflect the current paragraph's indents and tab stops. Does not
+    /// commit pending edits (cheap, called on selection change) — the indent/tab markers are advisory.
+    /// </summary>
+    public ParagraphFormatting CurrentParagraphFormatting =>
+        SelectedModelParagraphs().FirstOrDefault()?.Formatting ?? ParagraphFormatting.Default;
+
+    /// <summary>
+    /// An approximate "Page X of Y" for the status bar: the page the caret currently sits on, and the
+    /// total page count. Both are computed from the editable surface's single continuous flow against the
+    /// page's printable content height (<see cref="PageLayout.ContentAreaDip"/>) — the same approximation
+    /// the <see cref="PageBreakAdorner"/> uses (see its remarks), so the numbers track the on-screen
+    /// page-break markers. It does not model keep-together rules, explicit breaks, or straddling tables, so
+    /// it can differ by a page from the fully paginated Print Preview. Returns (1, 1) when geometry is not
+    /// yet available (e.g. before first layout) so callers always have a sane value.
+    /// </summary>
+    public (int Current, int Total) PageInfo()
+    {
+        if (Document is not { } doc)
+            return (1, 1);
+
+        var (_, contentHeight) = PageLayout.ContentAreaDip(_model.Page);
+        if (contentHeight <= 0)
+            return (1, 1);
+
+        try
+        {
+            var top = doc.ContentStart.GetCharacterRect(LogicalDirection.Forward).Top;
+
+            // Total: span from the first to the last content line, divided into page-height bands.
+            var bottom = doc.ContentEnd.GetCharacterRect(LogicalDirection.Backward).Bottom;
+            var total = Math.Max(1, (int)Math.Ceiling(Math.Max(0, bottom - top) / contentHeight));
+
+            // Current: which band the caret's line falls into (1-based), clamped into range.
+            var caret = (CaretPosition ?? doc.ContentStart).GetCharacterRect(LogicalDirection.Forward).Top;
+            var current = Math.Clamp((int)Math.Floor(Math.Max(0, caret - top) / contentHeight) + 1, 1, total);
+            return (current, total);
+        }
+        catch (InvalidOperationException)
+        {
+            // Layout momentarily unavailable during a relayout; report a safe default.
+            return (1, 1);
+        }
+    }
+
+    /// <summary>
     /// Apply a named paragraph style (its <paramref name="styleId"/>) to every model paragraph spanned
     /// by the selection, routing one reversible <see cref="SetParagraphStyleCommand"/> per paragraph
     /// through the undo/redo bus. The view re-renders so the style's run/paragraph formatting resolves.
@@ -924,9 +1110,45 @@ public sealed class DocumentView : RichTextBox
             return;
         Focus();
         CommitToModel();
-        foreach (var index in SelectedModelParagraphIndices())
+        ApplyParagraphStyleToIndices(styleId, SelectedModelParagraphIndices());
+    }
+
+    /// <summary>
+    /// Commit a style chosen from the Styles gallery: if a live-preview session is active (the user
+    /// hovered swatches), revert the preview and apply <paramref name="styleId"/> reversibly to the
+    /// paragraphs that session targeted — even though the intervening re-renders cleared the editor
+    /// selection. With no active session this is equivalent to <see cref="SetParagraphStyle"/>.
+    /// </summary>
+    public void CommitStylePreview(string? styleId)
+    {
+        if (styleId is { Length: > 0 } && !_model.Styles.ContainsKey(styleId))
+            return;
+
+        var targets = _stylePreviewTargets;
+        if (_styleStyleIdSnapshot is not null)
         {
-            if (_model.Blocks[index] is ModelParagraph)
+            RestoreStylePreview();
+            Render();
+        }
+        _stylePreviewTargets = null;
+
+        if (targets is null || targets.Count == 0)
+        {
+            SetParagraphStyle(styleId);
+            return;
+        }
+
+        Focus();
+        CommitToModel();
+        ApplyParagraphStyleToIndices(styleId, targets);
+    }
+
+    // Apply a paragraph style id to the given model paragraph indices, one reversible command each.
+    private void ApplyParagraphStyleToIndices(string? styleId, IReadOnlyList<int> indices)
+    {
+        foreach (var index in indices)
+        {
+            if (index >= 0 && index < _model.Blocks.Count && _model.Blocks[index] is ModelParagraph)
                 _commands.Execute(new SetParagraphStyleCommand(index, styleId));
         }
     }
@@ -1400,9 +1622,13 @@ public sealed class DocumentView : RichTextBox
         if (end is null || !indexOf.TryGetValue(end, out var endIndex))
             endIndex = startIndex;
 
+        // NumberLeafBlocks numbers the *visible* blocks; map each to its real _model.Blocks index so the
+        // returned indices stay correct when a heading is collapsed before the selection (hidden blocks
+        // are re-spliced into the model on commit — see ModelIndexFromVisible). Identity when nothing is
+        // collapsed.
         var result = new List<int>();
         for (var i = Math.Min(startIndex, endIndex); i <= Math.Max(startIndex, endIndex); i++)
-            result.Add(i);
+            result.Add(ModelIndexFromVisible(i));
         return result;
     }
 
@@ -1574,7 +1800,10 @@ public sealed class DocumentView : RichTextBox
             if (blocks[i] is ModelParagraph { Formatting.ListKind: not ListKind.None } first)
             {
                 var kind = first.Formatting.ListKind;
-                var list = new WpfList { MarkerStyle = ToMarkerStyle(kind) };
+                // Stash the exact model ListKind on the list's Tag: WPF renders Number and MultiLevel with
+                // the same Decimal marker, so ReadList recovers the kind from this Tag rather than inferring
+                // it from the marker (which can't tell MultiLevel from Number) — see ReadList/FromMarkerStyle.
+                var list = new WpfList { MarkerStyle = ToMarkerStyle(kind), Tag = kind };
                 while (i < blocks.Count
                     && !hidden.Contains(i)
                     && blocks[i] is ModelParagraph { Formatting.ListKind: var k } listParagraph
@@ -1778,6 +2007,9 @@ public sealed class DocumentView : RichTextBox
             Padding = PlainPadding;
             Effect = null;
         }
+
+        // Let passive page-geometry chrome (the ruler) redraw against the new width/margins/print-layout.
+        LayoutChanged?.Invoke(this, EventArgs.Empty);
     }
 
     // Add, remove, or refresh the page-break overlay to match PrintLayoutEnabled. Mirrors
@@ -1911,8 +2143,15 @@ public sealed class DocumentView : RichTextBox
     /// marker), and whether a page break is forced before the paragraph (rendered as a separator, but
     /// otherwise invisible in the FlowDocument). Any field may be empty/null/false; the Tag is only
     /// stamped when at least one is set.
+    /// <para>
+    /// Also carries the paragraph's <see cref="ModelParagraph.StyleId"/>: the FlowDocument resolves a
+    /// style's run/paragraph formatting at render but has no slot for the style <em>name</em>, so without
+    /// this the style id was dropped on every <see cref="CommitToModel"/> — which in turn broke outline
+    /// collapse (heading detection is by style id) after a commit. Stamping it here makes the style id
+    /// round-trip through an edit/commit cycle.
+    /// </para>
     /// </summary>
-    private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, string? BookmarkName, bool PageBreakBefore = false, bool WidowControl = false);
+    private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, string? BookmarkName, bool PageBreakBefore = false, bool WidowControl = false, string? StyleId = null);
 
     /// <summary>Read the edited FlowDocument back into the model (paragraphs + tables).</summary>
     public void CommitToModel()
@@ -1975,13 +2214,36 @@ public sealed class DocumentView : RichTextBox
             _model.Blocks.Add(_hiddenBlocks[hiddenIndex++].Block);
     }
 
+    // Map a *visible* block ordinal (as produced by NumberLeafBlocks / SelectedModelParagraphIndices,
+    // which only number the rendered FlowDocument blocks) to the matching index in _model.Blocks after a
+    // commit. With outline collapse active, MergeHiddenBlocks re-splices each hidden block back in front
+    // of the visible block at its VisibleOffset, so the i-th visible block sits at (i + the number of
+    // hidden blocks anchored at or before it). With nothing collapsed _hiddenBlocks is empty and this is
+    // the identity, leaving the non-collapsed path unchanged. Fixes the index drift where a paragraph
+    // command (style/format/comment/revision) mis-targeted when a heading was collapsed before the
+    // selection.
+    private int ModelIndexFromVisible(int visibleIndex)
+    {
+        if (_hiddenBlocks.Count == 0 || visibleIndex < 0)
+            return visibleIndex;
+        var shift = 0;
+        foreach (var (visibleOffset, _) in _hiddenBlocks)
+        {
+            if (visibleOffset <= visibleIndex)
+                shift++;
+        }
+        return visibleIndex + shift;
+    }
+
     private static ModelParagraph ReadParagraph(WpfParagraph wpfParagraph, TextDocument document)
     {
         var modelParagraph = new ModelParagraph
         {
             Formatting = ReadParagraphFormatting(wpfParagraph, document),
-            // The bookmark name (an invisible marker) is preserved across edits via the paragraph Tag.
-            BookmarkName = wpfParagraph.Tag is ParagraphTag { BookmarkName: { Length: > 0 } name } ? name : null
+            // The bookmark name and style id (invisible markers with no FlowDocument slot) are preserved
+            // across edits via the paragraph Tag (see ParagraphTag).
+            BookmarkName = wpfParagraph.Tag is ParagraphTag { BookmarkName: { Length: > 0 } name } ? name : null,
+            StyleId = wpfParagraph.Tag is ParagraphTag { StyleId: { Length: > 0 } styleId } ? styleId : null
         };
         foreach (var inline in wpfParagraph.Inlines)
             ReadInline(modelParagraph, inline, hyperlinkUrl: null, hyperlinkAnchor: null);
@@ -1992,7 +2254,10 @@ public sealed class DocumentView : RichTextBox
     // depth as ListLevel. ListItems may hold nested Lists (deeper levels) alongside paragraphs.
     private static void ReadList(IList<ModelBlock> target, WpfList wpfList, TextDocument document, int level = 0)
     {
-        var kind = FromMarkerStyle(wpfList.MarkerStyle);
+        // Prefer the exact ListKind stashed on the Tag at render (Render stamps it because WPF renders
+        // Number and MultiLevel with the same Decimal marker); fall back to inferring it from the marker
+        // for lists the user created fresh in the editor (which carry no Tag).
+        var kind = wpfList.Tag is ListKind tagged ? tagged : FromMarkerStyle(wpfList.MarkerStyle);
         foreach (var item in wpfList.ListItems)
         {
             foreach (var itemBlock in item.Blocks)
@@ -2015,10 +2280,10 @@ public sealed class DocumentView : RichTextBox
         }
     }
 
-    // Recover a ListKind from a WPF List's marker. Decimal markers map back to Number: multilevel lists
-    // also render with a Decimal marker (see ToMarkerStyle), so a MultiLevel list that is edited through
-    // the RichTextBox surface and re-read here degrades to Number. The docx model round-trip preserves
-    // MultiLevel; only an in-editor edit cycle loses the outline distinction (a known best-effort limit).
+    // Recover a ListKind from a WPF List's marker, used only as a fallback for lists with no stashed
+    // kind on their Tag (i.e. lists the user created fresh in the editor). A rendered model list carries
+    // its exact ListKind on the list Tag (see Render/ReadList), so a MultiLevel list survives an in-editor
+    // edit cycle; this marker-based inference can't tell MultiLevel from Number (both use Decimal).
     private static ListKind FromMarkerStyle(TextMarkerStyle marker) => marker switch
     {
         TextMarkerStyle.Decimal or TextMarkerStyle.LowerLatin or TextMarkerStyle.UpperLatin
@@ -2046,6 +2311,24 @@ public sealed class DocumentView : RichTextBox
             case InlineUIContainer { Child: Image { Tag: InlineImage modelImage } }:
                 modelParagraph.Runs.Add(new ModelRun(string.Empty) { Image = modelImage, HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip });
                 break;
+            case InlineUIContainer { Child: FrameworkElement { Tag: Shape modelShape } }:
+                modelParagraph.Runs.Add(ModelRun.FromShape(modelShape));
+                break;
+            case InlineUIContainer { Child: FrameworkElement { Tag: Chart modelChart } }:
+                modelParagraph.Runs.Add(ModelRun.FromChart(modelChart));
+                break;
+            case InlineUIContainer { Child: FrameworkElement { Tag: WordArt modelWordArt } }:
+                modelParagraph.Runs.Add(ModelRun.FromWordArt(modelWordArt));
+                break;
+            case InlineUIContainer { Child: FrameworkElement { Tag: Equation modelEquation } }:
+                modelParagraph.Runs.Add(ModelRun.FromEquation(modelEquation));
+                break;
+            case InlineUIContainer { Child: FrameworkElement { Tag: SmartArt modelSmartArt } }:
+                modelParagraph.Runs.Add(ModelRun.FromSmartArt(modelSmartArt));
+                break;
+            case InlineUIContainer { Child: FrameworkElement { Tag: EmbeddedObject modelEmbedded } }:
+                modelParagraph.Runs.Add(ModelRun.FromEmbeddedObject(modelEmbedded));
+                break;
             case WpfRun { Tag: FootnoteMarker marker }:
                 modelParagraph.Runs.Add(ModelRun.FootnoteReference(marker.FootnoteId));
                 break;
@@ -2065,48 +2348,42 @@ public sealed class DocumentView : RichTextBox
                     FieldKind = fieldMarker.Kind
                 });
                 break;
-            case WpfRun { Tag: CommentMarker { IsReference: true } reference }:
+            case WpfRun { Tag: RunMarkers { Comment: { IsReference: true } reference } }:
                 // The textless comment anchor: round-trips as a comment-reference run.
                 modelParagraph.Runs.Add(ModelRun.CommentReference(reference.CommentId));
                 break;
-            case WpfRun { Tag: CommentMarker { IsReference: false } covered } commentedRun when commentedRun.Text.Length > 0:
-                // A commented text run: recover its formatting but drop the injected review highlight
-                // (it is view-only chrome) and carry the comment id on the model run.
-                modelParagraph.Runs.Add(new ModelRun(commentedRun.Text, ReadRunFormatting(commentedRun) with { HighlightColorHex = null })
+            case WpfRun { Tag: RunMarkers markers } markedRun
+                when markedRun.Text.Length > 0 || markers.Comment is not null || markers.Control is not null:
+                // A run carrying any combination of comment / content-control / revision marks. Recover its
+                // formatting, strip the view-only chrome each facet injected (review highlight, control
+                // shade, revision colour/decoration), and carry every facet back onto the model run so a
+                // run that is, say, both commented and tracked-changed survives the round-trip intact. A run
+                // whose text was emptied but that still carries a comment or content-control marker is kept
+                // as a zero-length marked run rather than dropped, so the marker is not lost on commit.
+                var markedFmt = ReadRunFormatting(markedRun);
+                if (markers.Revision is { } rev)
+                    markedFmt = StripRevisionChrome(markedFmt, rev.Kind);
+                // Comment and content-control both inject a background; clear it so it isn't mistaken for a
+                // real highlight on commit (matching the prior per-facet behaviour).
+                if (markers.Comment is not null || markers.Control is not null)
+                    markedFmt = markedFmt with { HighlightColorHex = null };
+
+                // For a checkbox the run text holds the (possibly toggled) ☒/☐ glyph; keep the control's
+                // checked state in sync with the glyph so an in-place toggle round-trips.
+                var control = markers.Control?.Control;
+                if (control is { Kind: ContentControlKind.CheckBox })
+                    control = control with { Checked = markedRun.Text == ModelContentControl.CheckedGlyph };
+
+                modelParagraph.Runs.Add(new ModelRun(markedRun.Text, markedFmt)
                 {
                     HyperlinkUrl = hyperlinkUrl,
                     HyperlinkAnchor = hyperlinkAnchor,
                     HyperlinkTooltip = hyperlinkTooltip,
-                    CommentId = covered.CommentId
-                });
-                break;
-            case WpfRun { Tag: ContentControlMarker ccMarker } controlRun when controlRun.Text.Length > 0:
-                // A content-control run: recover its formatting but drop the injected control shade
-                // (view-only chrome) and carry the control back onto the model run. For a checkbox the
-                // run text already holds the (possibly toggled) ☒/☐ glyph; keep the marker's control in
-                // sync with that glyph so a click that toggled the glyph round-trips its checked state.
-                var control = ccMarker.Control;
-                if (control.Kind == ContentControlKind.CheckBox)
-                    control = control with { Checked = controlRun.Text == ModelContentControl.CheckedGlyph };
-                modelParagraph.Runs.Add(new ModelRun(controlRun.Text, ReadRunFormatting(controlRun) with { HighlightColorHex = null })
-                {
-                    HyperlinkUrl = hyperlinkUrl,
-                    HyperlinkAnchor = hyperlinkAnchor,
-                    HyperlinkTooltip = hyperlinkTooltip,
-                    Control = control
-                });
-                break;
-            case WpfRun { Tag: RevisionMarker marker } revisedRun when revisedRun.Text.Length > 0:
-                // A tracked-change run: recover its formatting but strip the injected revision colour and
-                // the kind's decoration (view-only chrome), carrying the revision mark back onto the model.
-                modelParagraph.Runs.Add(new ModelRun(revisedRun.Text, StripRevisionChrome(ReadRunFormatting(revisedRun), marker.Kind))
-                {
-                    HyperlinkUrl = hyperlinkUrl,
-                    HyperlinkAnchor = hyperlinkAnchor,
-                    HyperlinkTooltip = hyperlinkTooltip,
-                    Revision = marker.Kind,
-                    RevisionAuthor = marker.Author,
-                    RevisionDateXml = marker.DateXml
+                    CommentId = markers.Comment?.CommentId,
+                    Control = control,
+                    Revision = markers.Revision?.Kind ?? RevisionKind.None,
+                    RevisionAuthor = markers.Revision?.Author,
+                    RevisionDateXml = markers.Revision?.DateXml
                 });
                 break;
             case WpfRun run when run.Text.Length > 0:
@@ -2165,15 +2442,26 @@ public sealed class DocumentView : RichTextBox
                 foreach (var wpfCell in wpfRow.Cells)
                 {
                     var span = Math.Max(1, wpfCell.ColumnSpan);
-                    // The header/banded style fills are rendered chrome, not user shading: don't capture
-                    // them back as explicit cell shading (they re-derive from the toggles on render/save).
-                    string? cellShading = null;
-                    if (wpfCell.Background is SolidColorBrush shading)
+                    string? cellShading;
+                    if (wpfCell.Tag is TableCellTag tag)
                     {
+                        // A rendered cell carries its author-set shading verbatim on the Tag, so honour it
+                        // directly: this distinguishes real shading that happens to equal the header/banded
+                        // style fill (which the colour heuristic below would wrongly strip) from a style fill.
+                        cellShading = tag.ShadingColorHex is { Length: > 0 } stashedShading ? stashedShading : null;
+                    }
+                    else if (wpfCell.Background is SolidColorBrush shading)
+                    {
+                        // A cell the user created fresh in the editor has no Tag: fall back to inferring
+                        // shading from the background, excluding the header/banded style fills (rendered
+                        // chrome, not user shading — they re-derive from the toggles on render/save).
                         var isStyleFill = (isHeaderRow && ColorsEqual(shading.Color, HeaderRowFill))
                             || (isBandedRow && ColorsEqual(shading.Color, BandedRowFill));
-                        if (!isStyleFill)
-                            cellShading = ToHex(shading.Color);
+                        cellShading = isStyleFill ? null : ToHex(shading.Color);
+                    }
+                    else
+                    {
+                        cellShading = null;
                     }
                     var cell = new ModelTableCell
                     {
@@ -2260,6 +2548,14 @@ public sealed class DocumentView : RichTextBox
     private static readonly Color HeaderRowFill = Color.FromRgb(0xD9, 0xE2, 0xF3);
     private static readonly Color BandedRowFill = Color.FromRgb(0xF2, 0xF2, 0xF2);
 
+    /// <summary>
+    /// Carried on a rendered <see cref="WpfTableCell"/>'s Tag so <see cref="ReadTable"/> can recover the
+    /// cell's <em>author-set</em> shading on commit. The rendered background alone is ambiguous — real
+    /// shading can equal the header/banded style fill — so the model value is stashed verbatim here and the
+    /// colour-equality heuristic is used only for cells the user created fresh in the editor (no Tag).
+    /// </summary>
+    private sealed record TableCellTag(string? ShadingColorHex);
+
     private static WpfTable BuildTable(ModelTable table, TextDocument document)
     {
         // Stash the model's table formatting on the WPF table so the flags survive the view->model
@@ -2324,6 +2620,11 @@ public sealed class DocumentView : RichTextBox
                     wpfCell.BorderBrush = borderBrush;
                     wpfCell.BorderThickness = new Thickness(0.5);
                 }
+                // Stash the model's author-set shading on the cell Tag so ReadTable can tell it apart from
+                // a style-derived header/banded fill on commit — a colour-equality heuristic alone can't,
+                // and would strip real shading that happens to match the style fill (see ReadTable).
+                wpfCell.Tag = new TableCellTag(modelCell.ShadingColorHex);
+
                 // The cell's explicit shading wins; otherwise apply the header/banded style fill.
                 if (modelCell.ShadingColorHex is { Length: > 0 } cellShading)
                     wpfCell.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(cellShading));
@@ -2446,8 +2747,8 @@ public sealed class DocumentView : RichTextBox
         // paragraph's Tag (a ParagraphTag) and read them back verbatim on commit; the round-trip is exact.
         // WidowControl has no FlowDocument property either, so it joins the Tag alongside tab stops,
         // bookmark name and page-break-before; carried verbatim and recovered on commit.
-        if (paraFmt.TabStops.Count > 0 || paragraph.BookmarkName is { Length: > 0 } || paraFmt.PageBreakBefore || paraFmt.WidowControl)
-            wpf.Tag = new ParagraphTag(paraFmt.TabStops, paragraph.BookmarkName, paraFmt.PageBreakBefore, paraFmt.WidowControl);
+        if (paraFmt.TabStops.Count > 0 || paragraph.BookmarkName is { Length: > 0 } || paraFmt.PageBreakBefore || paraFmt.WidowControl || paragraph.StyleId is { Length: > 0 })
+            wpf.Tag = new ParagraphTag(paraFmt.TabStops, paragraph.BookmarkName, paraFmt.PageBreakBefore, paraFmt.WidowControl, paragraph.StyleId);
 
         foreach (var run in paragraph.Runs)
             wpf.Inlines.Add(BuildRun(run, paragraph, document));
@@ -2460,6 +2761,24 @@ public sealed class DocumentView : RichTextBox
         if (run.Image is { } image)
             return BuildImageRun(image);
 
+        if (run.Shape is { } shape)
+            return BuildShapeRun(shape);
+
+        if (run.Chart is { } chart)
+            return BuildChartRun(chart);
+
+        if (run.WordArt is { } wordArt)
+            return BuildWordArtRun(wordArt);
+
+        if (run.Equation is { } equation)
+            return BuildEquationRun(equation);
+
+        if (run.SmartArt is { } smartArt)
+            return BuildSmartArtRun(smartArt);
+
+        if (run.EmbeddedObject is { } embedded)
+            return BuildEmbeddedObjectRun(embedded);
+
         if (run.FootnoteId is { } footnoteId)
             return BuildFootnoteReference(footnoteId, document);
 
@@ -2467,11 +2786,21 @@ public sealed class DocumentView : RichTextBox
             return BuildEndnoteReference(endnoteId, document);
 
         if (run.FieldKind != RunFieldKind.None)
-            return BuildFieldRun(run, document);
+        {
+            // A field run can also carry a hyperlink (e.g. a PAGE/DATE field placed inside a link). Wrap
+            // the resolved field run in the same Hyperlink chrome ordinary runs get so its link survives
+            // the next CommitToModel (ReadInline's FieldMarker case carries the url/anchor back).
+            var fieldRun = BuildFieldRun(run, document);
+            if (run.HyperlinkUrl is { Length: > 0 } fieldUrl)
+                return BuildHyperlink(fieldRun, fieldUrl, run.HyperlinkTooltip);
+            if (run.HyperlinkAnchor is { Length: > 0 } fieldAnchor)
+                return BuildInternalHyperlink(fieldRun, fieldAnchor, run.HyperlinkTooltip);
+            return fieldRun;
+        }
 
         // The textless comment anchor round-trips as an empty, tagged run carrying its reference flag.
         if (run is { IsCommentReference: true, CommentId: { } refId })
-            return new WpfRun(string.Empty) { Tag = new CommentMarker(refId, IsReference: true) };
+            return new WpfRun(string.Empty) { Tag = new RunMarkers(Comment: new CommentMarker(refId, IsReference: true)) };
 
         var fmt = Resolve(run, paragraph, document);
         var wpf = new WpfRun(run.Text)
@@ -2523,7 +2852,7 @@ public sealed class DocumentView : RichTextBox
             decorations.Add(run.Revision == RevisionKind.Deleted
                 ? TextDecorations.Strikethrough[0]
                 : TextDecorations.Underline[0]);
-            wpf.Tag = new RevisionMarker(run.Revision, run.RevisionAuthor, run.RevisionDateXml);
+            AddMarker(wpf, m => m with { Revision = new RevisionMarker(run.Revision, run.RevisionAuthor, run.RevisionDateXml) });
         }
 
         if (decorations.Count > 0)
@@ -2562,8 +2891,30 @@ public sealed class DocumentView : RichTextBox
     private static readonly Color RevisionColor = Color.FromRgb(0xC0, 0x00, 0x40);
 
     /// <summary>
-    /// Carried on a tracked-change WPF run's Tag so CommitToModel can round-trip its revision kind,
-    /// author and date. Mirrors how CommentMarker/FootnoteMarker preserve their marks across an edit.
+    /// Composite review/control marker carried on a WPF run's <see cref="WpfRun.Tag"/>. A single run can
+    /// simultaneously be a tracked change, sit inside a comment range, and live inside a content control,
+    /// so each facet is held independently here rather than overwriting a single-purpose Tag (the prior
+    /// bug, where the last writer won and the other marks were lost on the next <see cref="CommitToModel"/>).
+    /// Every non-null facet is recovered in <see cref="ReadInline"/>. Facets that are mutually exclusive
+    /// with these marks (image/shape/field/footnote/endnote) keep using their own dedicated Tag types and
+    /// never share a run with these.
+    /// </summary>
+    private sealed record RunMarkers(
+        RevisionMarker? Revision = null,
+        CommentMarker? Comment = null,
+        ContentControlMarker? Control = null);
+
+    /// <summary>
+    /// Merge a marker facet into the run's composite <see cref="RunMarkers"/> Tag (creating it on first
+    /// use), so revision/comment/content-control marks accumulate on the same run instead of clobbering
+    /// each other. Any non-marker Tag is replaced (those run kinds never carry these marks).
+    /// </summary>
+    private static void AddMarker(WpfRun wpf, Func<RunMarkers, RunMarkers> merge) =>
+        wpf.Tag = merge(wpf.Tag as RunMarkers ?? new RunMarkers());
+
+    /// <summary>
+    /// Carried on a tracked-change run inside its <see cref="RunMarkers"/> so CommitToModel can round-trip
+    /// its revision kind, author and date. Mirrors how CommentMarker/FootnoteMarker preserve their marks.
     /// </summary>
     private sealed record RevisionMarker(RevisionKind Kind, string? Author, string? DateXml);
 
@@ -2575,7 +2926,7 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     private static void ApplyCommentMarker(WpfRun wpf, int commentId, TextDocument document)
     {
-        wpf.Tag = new CommentMarker(commentId, IsReference: false);
+        AddMarker(wpf, m => m with { Comment = new CommentMarker(commentId, IsReference: false) });
         if (wpf.Background is null)
             wpf.Background = new SolidColorBrush(CommentHighlight);
         if (document.Comments.TryGetValue(commentId, out var comment))
@@ -2610,7 +2961,7 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     private static void ApplyContentControlMarker(WpfRun wpf, ModelContentControl control)
     {
-        wpf.Tag = new ContentControlMarker(control);
+        AddMarker(wpf, m => m with { Control = new ContentControlMarker(control) });
         wpf.Background = new SolidColorBrush(ContentControlShade);
         wpf.ToolTip = control.Kind == ContentControlKind.CheckBox
             ? (control.Alias is { Length: > 0 } a ? $"Checkbox: {a}" : "Checkbox content control (click to toggle)")
@@ -2630,12 +2981,12 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     private static void OnCheckBoxControlClicked(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
-        if (sender is not WpfRun { Tag: ContentControlMarker marker } wpf
+        if (sender is not WpfRun { Tag: RunMarkers { Control: { } marker } } wpf
             || marker.Control.Kind != ContentControlKind.CheckBox)
             return;
 
         var toggled = marker.Control with { Checked = !marker.Control.Checked };
-        wpf.Tag = new ContentControlMarker(toggled);
+        AddMarker(wpf, m => m with { Control = new ContentControlMarker(toggled) });
         wpf.Text = toggled.Checked ? ModelContentControl.CheckedGlyph : ModelContentControl.UncheckedGlyph;
         e.Handled = true;
 
@@ -2868,6 +3219,195 @@ public sealed class DocumentView : RichTextBox
         return bitmap;
     }
 
+    /// <summary>
+    /// Renders an inline shape / text box as an InlineUIContainer hosting a WPF element that carries the
+    /// model <see cref="Shape"/> on its Tag, so CommitToModel round-trips it (mirroring images). Ellipses
+    /// render as a System.Windows.Shapes.Ellipse-backed border; rectangles / rounded rectangles / text
+    /// boxes render as a Border (with a corner radius for rounded). A text box shows its plain text.
+    /// </summary>
+    private static InlineUIContainer BuildShapeRun(Shape shape)
+    {
+        var widthPx = shape.WidthPt * PxPerPoint;
+        var heightPx = shape.HeightPt * PxPerPoint;
+
+        System.Windows.Media.Brush fill = TryParseColor(shape.FillColorHex, out var fillColor)
+            ? new SolidColorBrush(fillColor)
+            : System.Windows.Media.Brushes.Transparent;
+        var stroke = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x80, 0x80, 0x80));
+
+        FrameworkElement element;
+        if (shape.Kind == ShapeKind.Ellipse)
+        {
+            element = new System.Windows.Shapes.Ellipse
+            {
+                Width = widthPx,
+                Height = heightPx,
+                Fill = fill,
+                Stroke = stroke,
+                StrokeThickness = 1,
+            };
+        }
+        else
+        {
+            var border = new Border
+            {
+                Width = widthPx,
+                Height = heightPx,
+                Background = fill,
+                BorderBrush = stroke,
+                BorderThickness = new Thickness(1),
+                CornerRadius = shape.Kind == ShapeKind.RoundedRectangle ? new CornerRadius(6) : new CornerRadius(0),
+            };
+            if (shape.HasText)
+                border.Child = new TextBlock
+                {
+                    Text = shape.PlainText,
+                    Margin = new Thickness(4),
+                    TextWrapping = TextWrapping.Wrap,
+                    VerticalAlignment = VerticalAlignment.Top,
+                };
+            element = border;
+        }
+
+        element.Tag = shape; // carries the model shape so CommitToModel can round-trip it
+        return new InlineUIContainer(element) { BaselineAlignment = BaselineAlignment.Bottom };
+    }
+
+    /// <summary>
+    /// Renders an inline equation as an InlineUIContainer hosting a Border that carries the model
+    /// <see cref="Equation"/> on its Tag (so CommitToModel round-trips it, mirroring shapes). The border
+    /// shows the equation's linear form in a serif/italic face as a lightweight visual stand-in.
+    /// </summary>
+    private static InlineUIContainer BuildEquationRun(Equation equation)
+    {
+        var element = new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF6, 0xFB)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC8, 0xD8)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(3),
+            Padding = new Thickness(4, 1, 4, 1),
+            Child = new TextBlock
+            {
+                Text = equation.LinearText,
+                FontFamily = new FontFamily("Cambria, Times New Roman, serif"),
+                FontStyle = FontStyles.Italic
+            },
+            Tag = equation // carries the model equation so CommitToModel can round-trip it
+        };
+        return new InlineUIContainer(element) { BaselineAlignment = BaselineAlignment.Center };
+    }
+
+    /// <summary>
+    /// Renders inline WordArt as an InlineUIContainer hosting a TextBlock that carries the model
+    /// <see cref="WordArt"/> on its Tag (so CommitToModel round-trips it, mirroring shapes). The text is
+    /// drawn at the WordArt's font size with a style-derived fill/outline as a lightweight visual stand-in.
+    /// </summary>
+    private static InlineUIContainer BuildWordArtRun(WordArt wordArt)
+    {
+        var fill = wordArt.Style switch
+        {
+            WordArtStyle.Outline => System.Windows.Media.Brushes.Transparent,
+            WordArtStyle.GradientFill => new SolidColorBrush(Color.FromRgb(0x2E, 0x74, 0xB5)),
+            WordArtStyle.Shadow => new SolidColorBrush(Color.FromRgb(0x40, 0x40, 0x40)),
+            _ => new SolidColorBrush(Color.FromRgb(0x1F, 0x49, 0x7D)),
+        };
+        var element = new TextBlock
+        {
+            Text = wordArt.Text,
+            FontSize = wordArt.FontSizePt * PxPerPoint,
+            FontWeight = FontWeights.Bold,
+            Foreground = fill,
+            Tag = wordArt // carries the model WordArt so CommitToModel can round-trip it
+        };
+        if (wordArt.Style == WordArtStyle.Outline)
+        {
+            element.Foreground = System.Windows.Media.Brushes.White;
+            element.Effect = null;
+        }
+        return new InlineUIContainer(element) { BaselineAlignment = BaselineAlignment.Center };
+    }
+
+    /// <summary>
+    /// Renders an inline chart as an InlineUIContainer hosting a Border that carries the model
+    /// <see cref="Chart"/> on its Tag (so CommitToModel round-trips it, mirroring shapes). The border shows
+    /// a simple labelled bar sketch of the first series as a lightweight visual stand-in for the chart.
+    /// </summary>
+    private static InlineUIContainer BuildChartRun(Chart chart)
+    {
+        var widthPx = chart.WidthPt * PxPerPoint;
+        var heightPx = chart.HeightPt * PxPerPoint;
+
+        var stack = new StackPanel { Margin = new Thickness(6) };
+        if (!string.IsNullOrEmpty(chart.Title))
+            stack.Children.Add(new TextBlock
+            {
+                Text = chart.Title,
+                FontWeight = FontWeights.SemiBold,
+                Margin = new Thickness(0, 0, 0, 4),
+                HorizontalAlignment = HorizontalAlignment.Center
+            });
+
+        // Sketch the first series as a row of proportional bars beneath their category labels.
+        var series = chart.Series.Count > 0 ? chart.Series[0] : new ChartSeries();
+        var max = series.Values.Count > 0 ? Math.Max(1.0, series.Values.Max()) : 1.0;
+        var bars = new Grid { VerticalAlignment = VerticalAlignment.Bottom };
+        var barArea = Math.Max(24, heightPx - 48);
+        for (var i = 0; i < series.Values.Count; i++)
+        {
+            bars.ColumnDefinitions.Add(new ColumnDefinition());
+            var category = i < chart.Categories.Count ? chart.Categories[i] : string.Empty;
+            var column = new StackPanel { VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(3, 0, 3, 0) };
+            column.Children.Add(new Border
+            {
+                Background = new SolidColorBrush(Color.FromRgb(0x4E, 0x81, 0xBD)),
+                Height = Math.Max(2, barArea * (series.Values[i] / max)),
+                VerticalAlignment = VerticalAlignment.Bottom
+            });
+            column.Children.Add(new TextBlock
+            {
+                Text = category,
+                FontSize = 10,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin = new Thickness(0, 2, 0, 0)
+            });
+            Grid.SetColumn(column, i);
+            bars.Children.Add(column);
+        }
+        stack.Children.Add(bars);
+
+        var element = new Border
+        {
+            Width = widthPx,
+            Height = heightPx,
+            Background = System.Windows.Media.Brushes.White,
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
+            BorderThickness = new Thickness(1),
+            Child = stack,
+            Tag = chart // carries the model chart so CommitToModel can round-trip it
+        };
+        return new InlineUIContainer(element) { BaselineAlignment = BaselineAlignment.Bottom };
+    }
+
+    /// <summary>Inserts an inline shape / text box at the caret. Size in points; preserved on save.</summary>
+    public void InsertShape(Shape shape)
+    {
+        CommitToModel();
+        var container = BuildShapeRun(shape);
+        var caret = CaretPosition.GetInsertionPosition(LogicalDirection.Forward) ?? CaretPosition;
+        if (caret.Paragraph is { } paragraph)
+            paragraph.Inlines.Add(container);
+        else if (Document.Blocks.LastOrDefault() is WpfParagraph last)
+            last.Inlines.Add(container);
+        else
+        {
+            var p = new WpfParagraph(container);
+            Document.Blocks.Add(p);
+        }
+        CommitToModel();
+        Render();
+    }
+
     /// <summary>Inserts an inline image at the caret. Width/height in points; preserved on save.</summary>
     public void InsertImage(InlineImage image)
     {
@@ -2885,6 +3425,171 @@ public sealed class DocumentView : RichTextBox
         }
         CommitToModel();
         Render();
+    }
+
+    /// <summary>
+    /// Renders an inline SmartArt diagram as an InlineUIContainer hosting a Border that carries the model
+    /// <see cref="SmartArt"/> on its Tag (so CommitToModel round-trips it, mirroring shapes/charts). The
+    /// border sketches the diagram's top-level node texts as a simple labelled stack (a lightweight visual
+    /// stand-in — the diagram's real layout is recomputed by Word on open).
+    /// </summary>
+    private static InlineUIContainer BuildSmartArtRun(SmartArt smartArt)
+    {
+        var widthPx = smartArt.WidthPt * PxPerPoint;
+        var heightPx = smartArt.HeightPt * PxPerPoint;
+
+        // Lay top-level nodes out left-to-right for Process, top-to-bottom otherwise, as labelled boxes.
+        var horizontal = smartArt.Kind == SmartArtKind.Process;
+        var nodes = new StackPanel
+        {
+            Orientation = horizontal ? Orientation.Horizontal : Orientation.Vertical,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        foreach (var node in smartArt.Nodes)
+            nodes.Children.Add(new Border
+            {
+                Background = new SolidColorBrush(Color.FromRgb(0x4E, 0x81, 0xBD)),
+                CornerRadius = new CornerRadius(3),
+                Margin = new Thickness(4),
+                Padding = new Thickness(8, 4, 8, 4),
+                Child = new TextBlock
+                {
+                    Text = node.Text,
+                    Foreground = System.Windows.Media.Brushes.White,
+                    HorizontalAlignment = HorizontalAlignment.Center
+                }
+            });
+
+        var element = new Border
+        {
+            Width = widthPx,
+            Height = heightPx,
+            Background = System.Windows.Media.Brushes.White,
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
+            BorderThickness = new Thickness(1),
+            Child = nodes,
+            Tag = smartArt // carries the model SmartArt so CommitToModel can round-trip it
+        };
+        return new InlineUIContainer(element) { BaselineAlignment = BaselineAlignment.Bottom };
+    }
+
+    /// <summary>
+    /// Renders an inline embedded OLE object as an InlineUIContainer hosting a Border that carries the model
+    /// <see cref="EmbeddedObject"/> on its Tag (so CommitToModel round-trips it, mirroring shapes). Shows the
+    /// object's icon image when present, otherwise a labelled package placeholder with its ProgID.
+    /// </summary>
+    private static InlineUIContainer BuildEmbeddedObjectRun(EmbeddedObject embedded)
+    {
+        var widthPx = embedded.WidthPt * PxPerPoint;
+        var heightPx = embedded.HeightPt * PxPerPoint;
+
+        FrameworkElement content;
+        if (embedded.Icon is { } icon)
+        {
+            content = new Image
+            {
+                Source = DecodePng(icon.PngBytes),
+                Stretch = Stretch.Uniform
+            };
+        }
+        else
+        {
+            content = new TextBlock
+            {
+                Text = embedded.ProgId,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x40, 0x40, 0x40)),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(4)
+            };
+        }
+
+        var element = new Border
+        {
+            Width = widthPx,
+            Height = heightPx,
+            Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF6, 0xFB)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC8, 0xD8)),
+            BorderThickness = new Thickness(1),
+            Child = content,
+            Tag = embedded // carries the model object so CommitToModel can round-trip it
+        };
+        return new InlineUIContainer(element) { BaselineAlignment = BaselineAlignment.Bottom };
+    }
+
+    /// <summary>Inserts an inline equation at the caret. Round-trips through CommitToModel (mirrors InsertShape).</summary>
+    public void InsertEquation(Equation equation) => InsertInlineContainer(BuildEquationRun(equation));
+
+    /// <summary>Inserts an inline chart at the caret. Round-trips through CommitToModel (mirrors InsertShape).</summary>
+    public void InsertChart(Chart chart) => InsertInlineContainer(BuildChartRun(chart));
+
+    /// <summary>Inserts inline WordArt at the caret. Round-trips through CommitToModel (mirrors InsertShape).</summary>
+    public void InsertWordArt(WordArt wordArt) => InsertInlineContainer(BuildWordArtRun(wordArt));
+
+    /// <summary>Inserts an inline SmartArt diagram at the caret. Round-trips through CommitToModel (mirrors InsertShape).</summary>
+    public void InsertSmartArt(SmartArt smartArt) => InsertInlineContainer(BuildSmartArtRun(smartArt));
+
+    /// <summary>Inserts an inline embedded OLE object at the caret. Round-trips through CommitToModel (mirrors InsertShape).</summary>
+    public void InsertEmbeddedObject(EmbeddedObject embedded) => InsertInlineContainer(BuildEmbeddedObjectRun(embedded));
+
+    // Shared caret-insertion path for the tagged InlineUIContainers (shape/image/chart/wordart/equation):
+    // commit pending edits, drop the container at the caret's paragraph (or the last block), commit + render.
+    private void InsertInlineContainer(InlineUIContainer container)
+    {
+        CommitToModel();
+        var caret = CaretPosition.GetInsertionPosition(LogicalDirection.Forward) ?? CaretPosition;
+        if (caret.Paragraph is { } paragraph)
+            paragraph.Inlines.Add(container);
+        else if (Document.Blocks.LastOrDefault() is WpfParagraph last)
+            last.Inlines.Add(container);
+        else
+            Document.Blocks.Add(new WpfParagraph(container));
+        CommitToModel();
+        Render();
+    }
+
+    /// <summary>
+    /// Best-effort "Section X of N" for the status bar: the total comes from <see cref="TextDocument.Sections"/>
+    /// (reconstructed from <see cref="Paragraph.SectionBreak"/> markers plus the final body section); the current
+    /// index is which section the caret's block falls in, counting section-break markers at or before the caret's
+    /// top-level paragraph. A document with no section breaks reports "1 of 1". The mapping is approximate: in-editor
+    /// edits that have not been saved may not preserve every section marker, so the count can simplify to 1.
+    /// </summary>
+    public (int Current, int Total) SectionInfo()
+    {
+        CommitToModel();
+        var total = Math.Max(1, _model.Sections.Count);
+        if (total == 1)
+            return (1, 1);
+
+        // Find the caret's containing top-level WPF paragraph ordinal, then count model section breaks
+        // at or before the model block at that ordinal (model + WPF top-level blocks stay aligned for the
+        // simple paragraph/table flow these documents use).
+        var caretParagraph = CaretPosition?.Paragraph;
+        var caretOrdinal = -1;
+        if (caretParagraph is not null)
+        {
+            var ordinal = 0;
+            foreach (var block in Document.Blocks)
+            {
+                if (ReferenceEquals(block, caretParagraph))
+                {
+                    caretOrdinal = ordinal;
+                    break;
+                }
+                ordinal++;
+            }
+        }
+        if (caretOrdinal < 0)
+            return (total, total); // caret position unknown: report the last (body) section
+
+        var current = 1;
+        for (var i = 0; i < _model.Blocks.Count && i <= caretOrdinal; i++)
+            if (_model.Blocks[i] is FreeW.Core.Model.Paragraph { SectionBreak: not null } && i < caretOrdinal)
+                current++;
+        return (Math.Clamp(current, 1, total), total);
     }
 
     /// <summary>
@@ -3111,6 +3816,10 @@ public sealed class DocumentView : RichTextBox
             return;
 
         CommitToModel();
+        // Map the visible paragraph ordinal to its real model index (collapsed-heading drift): commit
+        // re-splices hidden blocks back in, so a raw visible index would mis-target with a heading
+        // collapsed before the selection. Identity when nothing is collapsed.
+        paragraphIndex = ModelIndexFromVisible(paragraphIndex);
         if (paragraphIndex < 0 || paragraphIndex >= _model.Blocks.Count || _model.Blocks[paragraphIndex] is not ModelParagraph modelParagraph)
             return;
 
@@ -3387,6 +4096,9 @@ public sealed class DocumentView : RichTextBox
             return;
 
         CommitToModel();
+        // Map the visible paragraph ordinal to its real model index (collapsed-heading drift), as in
+        // InsertComment. Identity when nothing is collapsed.
+        paragraphIndex = ModelIndexFromVisible(paragraphIndex);
         if (paragraphIndex < 0 || paragraphIndex >= _model.Blocks.Count || _model.Blocks[paragraphIndex] is not ModelParagraph modelParagraph)
             return;
 

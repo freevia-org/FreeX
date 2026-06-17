@@ -137,7 +137,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("launchservices_default_open_app_override=false");
         script.Should().Contain("launchservices_default_open_document_extension=fxl");
         script.Should().Contain("src\\FreeX.App.Services\\PortablePdfDocumentExporter.cs");
-        script.Should().Contain("src\\FreeX.App.Services\\WorkbookShareActionPlanner.cs");
+        script.Should().Contain("shared\\Free.Shared.AppServices\\WorkbookShareActionPlanner.cs");
         script.Should().Contain("public static WorkbookShareActionSurface MacOsPreview");
         script.Should().Contain("surface.CanShowShareSheet || surface.CanOpenContainingFolder");
         script.Should().Contain("src\\FreeX.App.Services\\WorkbookViewportScrollPlanner.cs");
@@ -145,7 +145,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("public static (uint TopRow, uint LeftCol) CalculateViewportOrigin(");
         script.Should().Contain("WorkbookViewportScrollPlanner.Create(_session.ActiveSheet, _session.Viewport)");
         script.Should().Contain("WorkbookViewportScrollPlanner.CalculateViewportOrigin(");
-        script.Should().Contain("src\\FreeX.App.Services\\LocalFilePath.cs");
+        script.Should().Contain("shared\\Free.Shared.AppServices\\LocalFilePath.cs");
         script.Should().Contain("public static bool TryNormalize(string? candidate, out string normalizedPath)");
         script.Should().Contain("TryCreateExplicitUri(path, out var uri)");
         script.Should().Contain("src\\FreeX.App.Services\\OpenRecentWorkbookMenuPlanner.cs");
@@ -1102,11 +1102,14 @@ public sealed class MacOsAppReadinessPreflightTests
             """
             <Project Sdk="Microsoft.NET.Sdk">
               <ItemGroup>
+                <ProjectReference Include="..\FreeX.App.Presentation\FreeX.App.Presentation.csproj" />
                 <ProjectReference Include="..\FreeX.App.Services\FreeX.App.Services.csproj" />
                 <ProjectReference Include="..\FreeX.Core.Calc\FreeX.Core.Calc.csproj" />
                 <ProjectReference Include="..\FreeX.Core.Commands\FreeX.Core.Commands.csproj" />
                 <ProjectReference Include="..\FreeX.Core.IO\FreeX.Core.IO.csproj" />
                 <ProjectReference Include="..\FreeX.Core.Model\FreeX.Core.Model.csproj" />
+                <ProjectReference Include="..\..\shared\Free.Shared.Ribbon\Free.Shared.Ribbon.csproj" />
+                <ProjectReference Include="..\FreeX.Ribbon.Avalonia\FreeX.Ribbon.Avalonia.csproj" />
               </ItemGroup>
               <ItemGroup>
                 <PackageReference Include="Avalonia" Version="12.0.4" />
@@ -1859,9 +1862,9 @@ public sealed class MacOsAppReadinessPreflightTests
 
         WriteFile(
             root,
-            "src/FreeX.App.Services/AppDiagnosticsFileStore.cs",
+            "shared/Free.Shared.AppServices/AppDiagnosticsFileStore.cs",
             """
-            namespace FreeX.App.Services;
+            namespace Free.Shared.AppServices;
 
             public sealed class AppDiagnosticsFileStore
             {
@@ -3479,9 +3482,9 @@ public sealed class MacOsAppReadinessPreflightTests
 
         WriteFile(
             root,
-            "src/FreeX.App.Services/RecentFilesStore.cs",
+            "shared/Free.Shared.AppServices/RecentFilesStore.cs",
             """
-            namespace FreeX.App.Services;
+            namespace Free.Shared.AppServices;
 
             public sealed class RecentFileEntry
             {
@@ -3512,9 +3515,9 @@ public sealed class MacOsAppReadinessPreflightTests
 
         WriteFile(
             root,
-            "src/FreeX.App.Services/AtomicFileWriter.cs",
+            "shared/Free.Shared.AppServices/AtomicFileWriter.cs",
             """
-            namespace FreeX.App.Services;
+            namespace Free.Shared.AppServices;
 
             public static class AtomicFileWriter
             {
@@ -3861,9 +3864,9 @@ public sealed class MacOsAppReadinessPreflightTests
 
         WriteFile(
             root,
-            "src/FreeX.App.Services/WorkbookShareActionPlanner.cs",
+            "shared/Free.Shared.AppServices/WorkbookShareActionPlanner.cs",
             """
-            namespace FreeX.App.Services;
+            namespace Free.Shared.AppServices;
 
             public enum WorkbookShareActionPlanKind
             {
@@ -3943,7 +3946,7 @@ public sealed class MacOsAppReadinessPreflightTests
 
         WriteFile(
             root,
-            "src/FreeX.App.Services/LocalFilePath.cs",
+            "shared/Free.Shared.AppServices/LocalFilePath.cs",
             """
             namespace FreeX.App.Services;
 
@@ -4236,6 +4239,42 @@ public sealed class MacOsAppReadinessPreflightTests
             {
                 public string Extension => ".fxl";
                 public string FormatName => "FreeX Workbook";
+            }
+            """);
+
+        WriteFile(
+            root,
+            "src/FreeX.App.Presentation/WorkbookPresentationModel.cs",
+            """
+            namespace FreeX.App.Presentation;
+
+            public sealed class WorkbookPresentationModel
+            {
+                public string Title { get; init; } = "FreeX";
+            }
+            """);
+
+        WriteFile(
+            root,
+            "src/FreeX.Ribbon.Avalonia/RibbonHost.cs",
+            """
+            namespace FreeX.Ribbon.Avalonia;
+
+            public sealed class RibbonHost
+            {
+                public string Name => "Ribbon";
+            }
+            """);
+
+        WriteFile(
+            root,
+            "shared/Free.Shared.Ribbon/RibbonCommandDescriptor.cs",
+            """
+            namespace Free.Shared.Ribbon;
+
+            public sealed class RibbonCommandDescriptor
+            {
+                public string Id { get; init; } = "home.open";
             }
             """);
 

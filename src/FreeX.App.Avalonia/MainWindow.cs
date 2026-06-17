@@ -302,6 +302,12 @@ public sealed partial class MainWindow : Window
     private static readonly IBrush HeaderForeground = Brush(73, 80, 93);
     private static readonly IBrush GridLine = Brush(218, 222, 228);
     private static readonly IBrush ToolbarBorder = Brush(218, 222, 228);
+
+    // Shell chrome surface — shared by the toolbar and the sheet-tabs/status bar so the window chrome reads
+    // as one cohesive light surface (the same #F5F6F7 the ribbon theme uses). Exposed for tests.
+    internal static readonly global::Avalonia.Media.Color ChromeSurfaceColor =
+        global::Avalonia.Media.Color.FromRgb(0xF5, 0xF6, 0xF7);
+    private static readonly IBrush ChromeSurface = new SolidColorBrush(ChromeSurfaceColor);
     private static readonly IBrush SelectionBorder = Brush(11, 112, 116);
     private static readonly IBrush SelectionHeaderBackground = Brush(225, 244, 242);
     private static readonly IBrush SelectionHeaderForeground = Brush(13, 86, 89);
@@ -428,10 +434,15 @@ public sealed partial class MainWindow : Window
     private readonly NativeMenuItem _insertAreaChartMenuItem = new();
     private readonly NativeMenuItem _insertScatterChartMenuItem = new();
     private readonly NativeMenuItem _insertTableMenuItem = new();
+    private readonly NativeMenuItem _insertPivotTableMenuItem = new();
+    private readonly NativeMenuItem _insertPictureMenuItem = new();
+    private readonly NativeMenuItem _insertShapeMenuItem = new();
+    private readonly NativeMenuItem _insertTextBoxMenuItem = new();
     private readonly NativeMenuItem _sortAscendingMenuItem = new();
     private readonly NativeMenuItem _sortDescendingMenuItem = new();
     private readonly NativeMenuItem _customSortMenuItem = new();
     private readonly NativeMenuItem _flashFillMenuItem = new();
+    private readonly NativeMenuItem _toggleFilterMenuItem = new();
     private readonly NativeMenuItem _advancedFilterMenuItem = new();
     private readonly NativeMenuItem _removeDuplicatesMenuItem = new();
     private readonly NativeMenuItem _subtotalMenuItem = new();
@@ -601,8 +612,16 @@ public sealed partial class MainWindow : Window
                 InsertTable = InsertTableFromSelection,
                 ConditionalFormatting = () => _ = ShowConditionalFormatNewRuleDialogAsync(),
                 QuickAnalysis = () => _ = ShowQuickAnalysisDialogAsync(),
+                InsertPivotTable = () => _ = ShowInsertPivotTableDialogAsync(),
+                InsertPicture = () => _ = InsertPictureFromFileAsync(),
+                InsertShape = () => InsertShapeAtActiveCell(InsertShapeCommandFactory.DefaultShape),
+                InsertTextBox = InsertTextBoxAtActiveCell,
+                FormatPainter = () => CaptureFormatPainterSource(persistent: false),
+                SetFontSize = ApplyRibbonFontSize,
+                SetFontName = ApplyRibbonFontName,
                 SortAscending = () => SortSelectedRange(ascending: true),
                 SortDescending = () => SortSelectedRange(ascending: false),
+                ToggleFilter = ToggleAutoFilter,
                 DataValidation = () => _ = ShowDataValidationDialogAsync(),
                 Cut = () => _ = CutSelectedRangeToClipboardAsync(),
                 Copy = () => _ = CopySelectedRangeToClipboardAsync(),
@@ -627,6 +646,35 @@ public sealed partial class MainWindow : Window
                     ["home.fillNone"] = ClearSelectedRangeFill,
                     ["home.fillYellow"] = () => ApplySelectedRangeFillColor(new CellColor(255, 235, 132)),
                     ["home.fillGreen"] = () => ApplySelectedRangeFillColor(new CellColor(198, 239, 206)),
+                    // Borders dropdown items.
+                    ["home.bordersAll"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.All),
+                    ["home.bordersOutside"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.Outside),
+                    ["home.bordersNone"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.NoBorder),
+                    // Paste split-button menu items.
+                    ["home.pasteValues"] = () => _ = PasteSpecialClipboardTextAsync(PasteCellsMode.Values, default, "Values"),
+                    ["home.pasteFormat"] = () => _ = PasteSpecialClipboardTextAsync(PasteCellsMode.Formats, default, "Formatting"),
+                    // Formulas tab.
+                    ["formulas.insertFunction"] = InsertFunction,
+                    ["formulas.autoSum"] = () => InsertAutoSumFormula("SUM"),
+                    ["formulas.nameManager"] = NameManager,
+                    ["formulas.defineName"] = DefineName,
+                    ["formulas.createFromSelection"] = CreateNamesFromSelection,
+                    // Review tab.
+                    ["review.checkAccessibility"] = () => _ = ShowReviewSummaryDialogAsync(focusAccessibility: true),
+                    ["review.protectSheet"] = () => _ = ShowProtectSheetDialogAsync(),
+                    ["review.protectWorkbook"] = () => _ = ShowProtectWorkbookDialogAsync(),
+                    // View tab.
+                    ["view.gridlines"] = ToggleShowGridlines,
+                    ["view.headings"] = ToggleShowHeadings,
+                    ["view.zoom"] = ZoomIn,
+                    ["view.zoom100"] = ZoomTo100Percent,
+                    ["view.zoomToSelection"] = ZoomToSelection,
+                    ["view.freezePanes"] = FreezePanesAtActiveCell,
+                    ["view.pageBreakPreview"] = TogglePageBreakPreview,
+                    // Page Layout tab (Page Setup dialog covers margins/orientation/size).
+                    ["pageLayout.margins"] = () => _ = ShowPageSetupDialogAsync(),
+                    ["pageLayout.orientation"] = () => _ = ShowPageSetupDialogAsync(),
+                    ["pageLayout.size"] = () => _ = ShowPageSetupDialogAsync(),
                 },
             });
         DockPanel.SetDock(ribbon, Dock.Top);
@@ -755,7 +803,7 @@ public sealed partial class MainWindow : Window
 
         return new Border
         {
-            Background = Brush(249, 250, 252),
+            Background = ChromeSurface,
             BorderBrush = ToolbarBorder,
             BorderThickness = new Thickness(0, 1, 0, 0),
             Padding = new Thickness(12, 6),
@@ -953,6 +1001,18 @@ public sealed partial class MainWindow : Window
         _insertTableMenuItem.Header = "Table...";
         _insertTableMenuItem.Click += (_, _) => InsertTableFromSelection();
 
+        _insertPivotTableMenuItem.Header = "PivotTable...";
+        _insertPivotTableMenuItem.Click += async (_, _) => await ShowInsertPivotTableDialogAsync();
+
+        _insertPictureMenuItem.Header = "Picture...";
+        _insertPictureMenuItem.Click += async (_, _) => await InsertPictureFromFileAsync();
+
+        _insertShapeMenuItem.Header = "Shape";
+        _insertShapeMenuItem.Menu = CreateNativeShapeMenu();
+
+        _insertTextBoxMenuItem.Header = "Text Box";
+        _insertTextBoxMenuItem.Click += (_, _) => InsertTextBoxAtActiveCell();
+
         _sortAscendingMenuItem.Header = "Sort A to Z";
         _sortAscendingMenuItem.Click += (_, _) => SortSelectedRange(ascending: true);
 
@@ -965,6 +1025,9 @@ public sealed partial class MainWindow : Window
         _flashFillMenuItem.Header = "Flash Fill";
         _flashFillMenuItem.Gesture = new KeyGesture(Key.E, KeyModifiers.Control);
         _flashFillMenuItem.Click += (_, _) => FlashFillSelectedRange();
+
+        _toggleFilterMenuItem.Header = "Filter";
+        _toggleFilterMenuItem.Click += (_, _) => ToggleAutoFilter();
 
         _advancedFilterMenuItem.Header = "Advanced Filter...";
         _advancedFilterMenuItem.Click += async (_, _) => await ShowAdvancedFilterDialogAsync();
@@ -1347,12 +1410,18 @@ public sealed partial class MainWindow : Window
         insertMenu.Items.Add(_insertScatterChartMenuItem);
         insertMenu.Items.Add(new NativeMenuItemSeparator());
         insertMenu.Items.Add(_insertTableMenuItem);
+        insertMenu.Items.Add(_insertPivotTableMenuItem);
+        insertMenu.Items.Add(new NativeMenuItemSeparator());
+        insertMenu.Items.Add(_insertPictureMenuItem);
+        insertMenu.Items.Add(_insertShapeMenuItem);
+        insertMenu.Items.Add(_insertTextBoxMenuItem);
 
         var dataMenu = new NativeMenu();
         dataMenu.Items.Add(_sortAscendingMenuItem);
         dataMenu.Items.Add(_sortDescendingMenuItem);
         dataMenu.Items.Add(_customSortMenuItem);
         dataMenu.Items.Add(_flashFillMenuItem);
+        dataMenu.Items.Add(_toggleFilterMenuItem);
         dataMenu.Items.Add(_advancedFilterMenuItem);
         dataMenu.Items.Add(_removeDuplicatesMenuItem);
         dataMenu.Items.Add(_subtotalMenuItem);
@@ -2161,10 +2230,15 @@ public sealed partial class MainWindow : Window
         _insertAreaChartMenuItem.IsEnabled = isIdle;
         _insertScatterChartMenuItem.IsEnabled = isIdle;
         _insertTableMenuItem.IsEnabled = isIdle && _session.SelectedRange.RowCount > 1;
+        _insertPivotTableMenuItem.IsEnabled = isIdle && _session.SelectedRange.RowCount > 1;
+        _insertPictureMenuItem.IsEnabled = isIdle && StorageProvider.CanOpen;
+        _insertShapeMenuItem.IsEnabled = isIdle;
+        _insertTextBoxMenuItem.IsEnabled = isIdle;
         _sortAscendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
         _sortDescendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
         _customSortMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
         _flashFillMenuItem.IsEnabled = isIdle;
+        _toggleFilterMenuItem.IsEnabled = isIdle;
         _advancedFilterMenuItem.IsEnabled = isIdle;
         _removeDuplicatesMenuItem.IsEnabled = isIdle && _session.SelectedRange.RowCount > 1;
         _subtotalMenuItem.IsEnabled = isIdle && _session.SelectedRange.RowCount > 1 && _session.SelectedRange.ColCount > 1;
@@ -3367,7 +3441,7 @@ public sealed partial class MainWindow : Window
             BeginFormulaEdit(address);
             args.Handled = true;
         };
-        return border;
+        return DecorateAutoFilterHeaderCell(border, address);
     }
 
     /// <summary>
@@ -7844,6 +7918,30 @@ public sealed partial class MainWindow : Window
         RefreshShell($"Sorted {rangeReference} {(ascending ? "A to Z" : "Z to A")}");
     }
 
+    /// <summary>
+    /// Toggles the active sheet's AutoFilter (filter dropdowns) over the selection / current region through
+    /// the shared session command path and the Core <see cref="FreeX.Core.Commands.ToggleWorksheetAutoFilterCommand"/>.
+    /// Surfaces the Core guard message (e.g. range must include a header row) on failure.
+    /// </summary>
+    private void ToggleAutoFilter()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var wasEnabled = _session.ActiveSheetHasAutoFilter;
+        var result = _session.ToggleSelectedRangeAutoFilter();
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Toggle Filter failed.");
+            return;
+        }
+
+        RefreshShell(wasEnabled ? "Removed filter" : "Added filter");
+    }
+
     private async Task ShowSortDialogAsync()
     {
         if (_isOpening || _isSaving)
@@ -11901,6 +11999,61 @@ public sealed partial class MainWindow : Window
         }
 
         RefreshShell($"{(enabled ? "Struck through" : "Removed strikethrough from")} {rangeReference}");
+    }
+
+    /// <summary>
+    /// Applies a font size chosen from the ribbon Font Size combo to the selection. The combo value is the
+    /// point size as text; unparseable or non-positive values are ignored.
+    /// </summary>
+    private void ApplyRibbonFontSize(string? sizeText)
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!double.TryParse(sizeText, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var size)
+            || !double.IsFinite(size) || size <= 0)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var rangeReference = FormatRangeReference(_session.SelectedRange);
+        var result = _session.SetSelectedRangeFontSize(size);
+        if (!result.Success)
+        {
+            RefreshShell(_statusText.Text ?? "Ready");
+            ShowEditIssue(result.ErrorMessage ?? "Set Font Size failed.");
+            return;
+        }
+
+        RefreshShell($"Set font size {size:0.##} for {rangeReference}");
+    }
+
+    /// <summary>
+    /// Applies a font family chosen from the ribbon Font Name combo to the selection. A blank/whitespace
+    /// value is ignored.
+    /// </summary>
+    private void ApplyRibbonFontName(string? fontName)
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (string.IsNullOrWhiteSpace(fontName))
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var rangeReference = FormatRangeReference(_session.SelectedRange);
+        var result = _session.SetSelectedRangeFontName(fontName);
+        if (!result.Success)
+        {
+            RefreshShell(_statusText.Text ?? "Ready");
+            ShowEditIssue(result.ErrorMessage ?? "Set Font failed.");
+            return;
+        }
+
+        RefreshShell($"Set font {fontName.Trim()} for {rangeReference}");
     }
 
     private void IncreaseSelectedRangeFontSize()

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 
 using FreeX.App.Avalonia.Ribbon;
 using Free.Shared.Ribbon;
@@ -26,6 +27,7 @@ public sealed class AvaloniaRibbonHostCallbackTests
     [InlineData("data.quickAnalysis")]
     [InlineData("data.sortAsc")]
     [InlineData("data.sortDesc")]
+    [InlineData("data.filter")]
     [InlineData("data.validation")]
     [InlineData("data.validationDialog")]
     [InlineData("home.cut")]
@@ -109,6 +111,8 @@ public sealed class AvaloniaRibbonHostCallbackTests
                 ["home.fmtGeneral"] = () => fired.Add("general"),
                 ["home.fmtDate"] = () => fired.Add("date"),
                 ["home.fillYellow"] = () => fired.Add("yellow"),
+                ["home.bordersAll"] = () => fired.Add("bordersAll"),
+                ["home.pasteValues"] = () => fired.Add("pasteValues"),
             },
         };
         var registry = SampleRibbon.BuildRegistry(() => null, _ => { }, callbacks);
@@ -119,8 +123,113 @@ public sealed class AvaloniaRibbonHostCallbackTests
         Execute(registry, "home.fmtGeneral");
         Execute(registry, "home.fmtDate");
         Execute(registry, "home.fillYellow");
+        Execute(registry, "home.bordersAll");
+        Execute(registry, "home.pasteValues");
 
-        Assert.Equal(new[] { "general", "date", "yellow" }, fired);
+        Assert.Equal(new[] { "general", "date", "yellow", "bordersAll", "pasteValues" }, fired);
+    }
+
+    [Fact]
+    public void BuildDefinition_HasWindowsTabStructure()
+    {
+        var headers = SampleRibbon.BuildDefinition().Tabs.Select(t => t.Header).ToList();
+
+        foreach (var expected in new[] { "Home", "Insert", "Data", "Page Layout", "Formulas", "Review", "View" })
+            Assert.Contains(expected, headers);
+    }
+
+    [Fact]
+    public void BuildDefinition_FormulasTab_HasExpectedGroups()
+    {
+        var formulas = SampleRibbon.BuildDefinition().Tabs.Single(t => t.Header == "Formulas");
+        var groups = formulas.Groups.Select(g => g.Header).ToList();
+
+        Assert.Contains("Function Library", groups);
+        Assert.Contains("Defined Names", groups);
+        Assert.Contains("Calculation", groups);
+    }
+
+    [Theory]
+    [InlineData("formulas.insertFunction")]
+    [InlineData("formulas.nameManager")]
+    [InlineData("formulas.autoSum")]
+    [InlineData("review.protectSheet")]
+    [InlineData("review.checkAccessibility")]
+    [InlineData("view.gridlines")]
+    [InlineData("view.freezePanes")]
+    [InlineData("view.zoom100")]
+    [InlineData("pageLayout.margins")]
+    public void NewTabCommands_AreRealCommandIds_AndBindViaExtraCommands(string commandId)
+    {
+        // The id exists in the ribbon definition (else it is not a NoOp default to begin with) ...
+        var defaults = SampleRibbon.BuildRegistry(() => null, _ => { });
+        Assert.True(defaults.TryGet(new RibbonCommandId(commandId), out var noOp));
+        Assert.IsType<NoOpRibbonCommand>(noOp);
+
+        // ... and ExtraCommands (how MainWindow wires the new tabs) overrides it with a real command.
+        var wired = SampleRibbon.BuildRegistry(() => null, _ => { }, new AvaloniaRibbonHostCallbacks
+        {
+            ExtraCommands = new Dictionary<string, Action> { [commandId] = () => { } },
+        });
+        Assert.True(wired.TryGet(new RibbonCommandId(commandId), out var command));
+        Assert.IsType<RelayRibbonCommand>(command);
+    }
+
+    [Fact]
+    public void BuildDefinition_ViewTab_HasShowZoomWindowGroups()
+    {
+        var view = SampleRibbon.BuildDefinition().Tabs.Single(t => t.Header == "View");
+        var groups = view.Groups.Select(g => g.Header).ToList();
+
+        Assert.Contains("Show", groups);
+        Assert.Contains("Zoom", groups);
+        Assert.Contains("Window", groups);
+    }
+
+    [Fact]
+    public void SetFontSize_BindsFontSizeCombo_AndPassesSelectedValue()
+    {
+        string? applied = null;
+        var registry = SampleRibbon.BuildRegistry(
+            () => null, _ => { }, new AvaloniaRibbonHostCallbacks { SetFontSize = v => applied = v });
+
+        Assert.True(registry.TryGet(new RibbonCommandId("home.fontSize"), out var command));
+        Assert.IsType<RelayValueRibbonCommand>(command);
+
+        command!.Execute(RibbonCommandContext.ForSelectedValue("14"));
+        Assert.Equal("14", applied);
+    }
+
+    [Fact]
+    public void WithoutSetFontSize_FontSizeComboStaysNoOp()
+    {
+        var registry = SampleRibbon.BuildRegistry(() => null, _ => { });
+
+        Assert.True(registry.TryGet(new RibbonCommandId("home.fontSize"), out var command));
+        Assert.IsType<NoOpRibbonCommand>(command);
+    }
+
+    [Fact]
+    public void SetFontName_BindsFontNameCombo_AndPassesSelectedValue()
+    {
+        string? applied = null;
+        var registry = SampleRibbon.BuildRegistry(
+            () => null, _ => { }, new AvaloniaRibbonHostCallbacks { SetFontName = v => applied = v });
+
+        Assert.True(registry.TryGet(new RibbonCommandId("home.fontName"), out var command));
+        Assert.IsType<RelayValueRibbonCommand>(command);
+
+        command!.Execute(RibbonCommandContext.ForSelectedValue("Arial"));
+        Assert.Equal("Arial", applied);
+    }
+
+    [Fact]
+    public void WithoutSetFontName_FontNameComboStaysNoOp()
+    {
+        var registry = SampleRibbon.BuildRegistry(() => null, _ => { });
+
+        Assert.True(registry.TryGet(new RibbonCommandId("home.fontName"), out var command));
+        Assert.IsType<NoOpRibbonCommand>(command);
     }
 
     [Fact]
@@ -145,6 +254,7 @@ public sealed class AvaloniaRibbonHostCallbackTests
         QuickAnalysis = () => { },
         SortAscending = () => { },
         SortDescending = () => { },
+        ToggleFilter = () => { },
         DataValidation = () => { },
         Cut = () => { },
         Copy = () => { },

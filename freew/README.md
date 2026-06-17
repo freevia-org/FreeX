@@ -95,7 +95,8 @@ docx reader/writer; unsupported renderings are noted under [Known limitations](#
 - Built-in style catalog: Normal, Title, Subtitle, Heading 1–3, Quote, Caption, TOC/Index styles, etc.
 - Styles gallery / combo applies a paragraph `StyleId` (round-trips via `pStyle` + `styles.xml`).
 - **Custom styles** (create/modify/delete with a built-in guard; safe unique-id generation) round-tripping run formatting.
-- **Document themes** (Office / Slate / Berlin / Ion) rewriting heading/body fonts + Title/Heading colours.
+- **Document themes** (Office / Slate / Berlin / Ion) with a live-preview gallery; persisted as a real
+  `word/theme/theme1.xml` part (`a:clrScheme` + `a:fontScheme`) and recovered on open.
 
 ### Page & section layout
 - Margins, orientation, page size; honoured by docx save and print.
@@ -104,6 +105,9 @@ docx reader/writer; unsupported renderings are noted under [Known limitations](#
 - Page borders + **watermark** (page border `w:pgBorders`; watermark stored as a `docProps/custom.xml` custom property).
 - **Line numbers** (continuous / restart-each-page, `sectPr/w:lnNumType`) drawn in print preview.
 - Auto-hyphenation (`w:autoHyphenation`), vertical page alignment (`sectPr/w:vAlign`), different-first-page (`w:titlePg`).
+- **Different odd & even page** headers/footers (`w:evenAndOddHeaders` + `header2.xml`/`footer2.xml`, `w:type="even"`).
+- **Page background colour** (`w:background` + `w:displayBackgroundShape`).
+- **Multiple sections** with per-section page setup and break kinds (continuous / next / even / odd page).
 - Cover page, horizontal rule, manual page break.
 
 ### Tables
@@ -116,6 +120,20 @@ docx reader/writer; unsupported renderings are noted under [Known limitations](#
 ### Images / illustrations
 - Insert inline picture (DrawingML `w:drawing`, PNG part under `word/media`, rels + content type).
 - Resize the selected image (undoable); image alignment; **alt text** (`wp:docPr @descr`).
+- **Floating images & text wrapping** — Inline / Square / Tight / Top-and-Bottom / Behind / In-Front
+  (`wp:anchor` with `wp:positionH/V` + the matching wrap element; inline images stay `wp:inline`).
+- **Shapes & text boxes** — Rectangle / Rounded Rectangle / Ellipse / Text Box (`wps:wsp`, preset geometry,
+  optional fill, `w:txbxContent` body).
+- **WordArt** — decorative text presets (fill / gradient / outline / shadow) via DrawingML text effects.
+- **Equations** — inline OMML (`m:oMath`; text, superscript, fractions).
+- **Charts** — column / bar / line / pie as a self-contained `word/charts/chartN.xml` part (data in literal caches).
+- **SmartArt** — List / Process / Hierarchy diagrams (four `word/diagrams/*` parts; node text + structure).
+- **OLE embedded objects** — embed a binary payload + ProgID with an icon (`w:object` / `o:OLEObject` +
+  `word/embeddings/oleObjectN.bin`).
+
+### Advanced typography
+- Character spacing (expanded/condensed), kerning, raised/lowered position (`w:spacing`/`w:kern`/`w:position`).
+- Ligatures, stylistic sets, number forms & number spacing (`w14:ligatures`/`w14:stylisticSets`/`w14:numForm`/`w14:numSpacing`).
 
 ### References
 - **Footnotes** (`word/footnotes.xml`, `w:footnoteReference`) and **endnotes** (`word/endnotes.xml`) — they coexist.
@@ -133,6 +151,7 @@ docx reader/writer; unsupported renderings are noted under [Known limitations](#
 - **Compare documents** — two-level (paragraph-anchor + word-level) LCS diff producing tracked changes.
 - **Restrict editing / protection** (read-only / comments-only / track-changes-only, `w:documentProtection` in `settings.xml`).
 - **Document Inspector** (count + selectively remove comments / revisions / properties / bookmarks).
+- **Check Accessibility** — alt-text, link-text, heading-order, table-header, and WCAG contrast rules with a grouped report.
 - Word count + live status bar; **Document Statistics** dialog (words/chars/sentences/syllables, reading time, Flesch reading ease).
 
 ### Mailings
@@ -146,6 +165,11 @@ docx reader/writer; unsupported renderings are noted under [Known limitations](#
 - Insert Field (DATE/TIME/FILENAME/AUTHOR/NUMPAGES as `w:fldSimple` with the right `w:instr`).
 
 ### View & reading
+- **Real Word-style ribbon** rendered by the shared `Free.Shared.Ribbon.Wpf.RibbonWpfRenderer` (Large/Medium/Small
+  controls, group dividers/labels, vector glyphs) with **live-preview Styles & Theme galleries** and an **Alt KeyTips** overlay.
+- **Backstage / File menu** — full-window New/Open/Save/Save As/Print/Export/Info/Recent/Options.
+- **Paginated Print-Layout view** (discrete pages, margins, page shadow) plus **horizontal/vertical rulers** and a
+  Word-style status bar (Page X of Y, Section X of N, word count, zoom, view switches).
 - **Zoom** 50–200% (slider / ± / Ctrl+wheel).
 - **Read mode** (hides chrome, centered reading column) + live selection word/char count.
 - **Show formatting marks** (¶ / · / →) drawn as a non-destructive adorner overlay.
@@ -167,11 +191,15 @@ OOXML parts FreeW reads and/or writes:
 | `word/document.xml` | Paragraphs, runs, `rPr`/`pPr`, tables (`w:tbl`), drawings, fields, sections (`sectPr`). |
 | `word/styles.xml` | Built-in + custom styles, document defaults. |
 | `word/numbering.xml` | Bullet / decimal / multilevel abstract nums. |
-| `word/settings.xml` | Document protection, auto-hyphenation. |
-| `word/header1.xml` / `footer1.xml` | Headers/footers + PAGE field, referenced from `sectPr`. |
+| `word/settings.xml` | Document protection, auto-hyphenation, odd/even headers, display-background. |
+| `word/theme/theme1.xml` | Document theme (`a:clrScheme` + `a:fontScheme`). |
+| `word/header1.xml` / `footer1.xml` / `header2.xml` / `footer2.xml` | Default + even-page headers/footers + PAGE field, referenced from `sectPr`. |
 | `word/footnotes.xml` / `endnotes.xml` | Footnotes and endnotes. |
 | `word/comments.xml` | Review comments. |
-| `word/media/*` | Inline PNG images. |
+| `word/charts/chartN.xml` | DrawingML charts (column/bar/line/pie, literal-cache data). |
+| `word/diagrams/*` | SmartArt diagrams (data / layout / quickStyle / colors). |
+| `word/embeddings/oleObjectN.bin` | OLE embedded-object payloads. |
+| `word/media/*` | Inline PNG images + shape/WordArt/OLE-icon presentation. |
 | `docProps/core.xml` | Dublin Core document properties. |
 | `docProps/custom.xml` | Watermark (stored as a custom property). |
 
@@ -218,8 +246,15 @@ print-layout detail. The model/IO still round-trip these faithfully; the live vi
 
 ### Not implemented
 
-FreeW deliberately does **not** implement: equations / OMML, charts, SmartArt, OLE-embedded objects,
-and macros/VBA. Cloud / Microsoft 365 account integration is out of scope — FreeW is local-file by default.
+FreeW targets the mainstream Word surface and deliberately excludes **cloud / Microsoft 365 integration**
+(online video, translate/research/editor services — FreeW is local-file by default) and **proprietary
+features** (macros/VBA, IRM, digital signatures, 3D models). Also out of scope by design: ink/handwriting,
+linked (overflowing) text boxes, and master/subdocuments.
+
+A few shipped features are **data-faithful but visually simplified**: charts embed their data as literal
+caches rather than an editable companion xlsx (Word's "Edit Data" is unavailable); SmartArt round-trips its
+node text/structure but no rendered `dsp` geometry (Word re-lays-out on open); `wp:wrapTight` carries no wrap
+polygon; the theme `a:fmtScheme` is stock-but-valid and not read back. Each is noted in code at its site.
 
 ---
 

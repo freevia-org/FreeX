@@ -77,11 +77,35 @@ internal sealed record AvaloniaRibbonHostCallbacks
     /// <summary>Data ▸ Quick Analysis — open the Quick Analysis popup for the selection.</summary>
     public Action? QuickAnalysis { get; init; }
 
+    /// <summary>Insert ▸ PivotTable — open the Insert PivotTable dialog for the selection.</summary>
+    public Action? InsertPivotTable { get; init; }
+
+    /// <summary>Insert ▸ Picture — choose an image file and place it on the sheet.</summary>
+    public Action? InsertPicture { get; init; }
+
+    /// <summary>Insert ▸ Shapes — insert the default drawing shape at the active cell.</summary>
+    public Action? InsertShape { get; init; }
+
+    /// <summary>Insert ▸ Text Box — insert a text box at the active cell.</summary>
+    public Action? InsertTextBox { get; init; }
+
+    /// <summary>Home ▸ Clipboard ▸ Format Painter — capture the selection's format for a one-shot apply.</summary>
+    public Action? FormatPainter { get; init; }
+
+    /// <summary>Home ▸ Font ▸ Size combo — apply the chosen font size (string) to the selection.</summary>
+    public Action<string?>? SetFontSize { get; init; }
+
+    /// <summary>Home ▸ Font ▸ Name combo — apply the chosen font family (string) to the selection.</summary>
+    public Action<string?>? SetFontName { get; init; }
+
     /// <summary>Data ▸ Sort A-Z.</summary>
     public Action? SortAscending { get; init; }
 
     /// <summary>Data ▸ Sort Z-A.</summary>
     public Action? SortDescending { get; init; }
+
+    /// <summary>Data ▸ Filter — toggle the sheet AutoFilter over the selection / current region.</summary>
+    public Action? ToggleFilter { get; init; }
 
     /// <summary>Data ▸ Data Validation (dropdown + dialog menu item).</summary>
     public Action? DataValidation { get; init; }
@@ -136,6 +160,20 @@ internal sealed class RelayRibbonCommand : IRibbonCommand
         => _execute = execute ?? throw new ArgumentNullException(nameof(execute));
 
     public void Execute(RibbonCommandContext context) => _execute();
+}
+
+/// <summary>
+/// An <see cref="IRibbonCommand"/> for value-bearing controls (combo boxes / galleries): invokes a
+/// host-supplied callback with the control's selected value (<see cref="RibbonCommandContext.SelectedValue"/>).
+/// </summary>
+internal sealed class RelayValueRibbonCommand : IRibbonCommand
+{
+    private readonly Action<string?> _execute;
+
+    public RelayValueRibbonCommand(Action<string?> execute)
+        => _execute = execute ?? throw new ArgumentNullException(nameof(execute));
+
+    public void Execute(RibbonCommandContext context) => _execute(context.SelectedValue);
 }
 
 /// <summary>A do-nothing command — enough to mark a control as registered/enabled.</summary>
@@ -413,6 +451,122 @@ internal static class SampleRibbon
                     });
                 });
             })
+            .Tab("pageLayout", "Page Layout", "P", page =>
+            {
+                page.Group("pageLayoutThemes", "Themes", "T", 100, g =>
+                {
+                    g.Button("pageLayout.themes", "Themes", c => c with
+                    {
+                        PreferredLayout = RibbonCommandLayoutKind.Large,
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Theme),
+                    });
+                });
+                page.Group("pageLayoutPageSetup", "Page Setup", "S", 90, g =>
+                {
+                    g.Button("pageLayout.margins", "Margins", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Margins) });
+                    g.Button("pageLayout.orientation", "Orientation", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Orientation) });
+                    g.Button("pageLayout.size", "Size", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Size) });
+                    g.Button("pageLayout.printArea", "Print Area", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Print) });
+                    g.Button("pageLayout.breaks", "Breaks", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.PageBreak) });
+                });
+                page.Group("pageLayoutScaleToFit", "Scale to Fit", "F", 80, g =>
+                {
+                    g.Button("pageLayout.width", "Width", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Scale) });
+                    g.Button("pageLayout.height", "Height", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Scale) });
+                    g.Button("pageLayout.scale", "Scale", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Scale) });
+                });
+                page.Group("pageLayoutSheetOptions", "Sheet Options", "O", 70, g =>
+                {
+                    g.Toggle("pageLayout.gridlines", "Gridlines", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Grid) });
+                    g.Toggle("pageLayout.headings", "Headings", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Grid) });
+                });
+            })
+            .Tab("formulas", "Formulas", "M", formulas =>
+            {
+                formulas.Group("formulasFunctionLibrary", "Function Library", "F", 100, g =>
+                {
+                    g.Button("formulas.insertFunction", "Insert Function", c => c with
+                    {
+                        PreferredLayout = RibbonCommandLayoutKind.Large,
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Function),
+                    });
+                    g.Button("formulas.autoSum", "AutoSum", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Sum) });
+                    g.Button("formulas.financial", "Financial", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Financial) });
+                    g.Button("formulas.logical", "Logical", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Logical) });
+                    g.Button("formulas.text", "Text", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.TextFunction) });
+                    g.Button("formulas.dateTime", "Date & Time", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Date) });
+                });
+                formulas.Group("formulasDefinedNames", "Defined Names", "N", 90, g =>
+                {
+                    g.Button("formulas.nameManager", "Name Manager", c => c with
+                    {
+                        PreferredLayout = RibbonCommandLayoutKind.Large,
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Label),
+                    });
+                    g.Button("formulas.defineName", "Define Name", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Label) });
+                    g.Button("formulas.createFromSelection", "Create from Selection", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Label) });
+                });
+                formulas.Group("formulasCalculation", "Calculation", "C", 80, g =>
+                {
+                    g.Button("formulas.calcOptions", "Calculation Options", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Refresh) });
+                    g.Button("formulas.calcNow", "Calculate Now", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Refresh) });
+                });
+            })
+            .Tab("review", "Review", "R", review =>
+            {
+                review.Group("reviewProofing", "Proofing", "P", 100, g =>
+                {
+                    g.Button("review.spelling", "Spelling", c => c with
+                    {
+                        PreferredLayout = RibbonCommandLayoutKind.Large,
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Spelling),
+                    });
+                });
+                review.Group("reviewAccessibility", "Accessibility", "A", 90, g =>
+                {
+                    g.Button("review.checkAccessibility", "Check Accessibility", c => c with
+                    {
+                        PreferredLayout = RibbonCommandLayoutKind.Large,
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Accessibility),
+                    });
+                });
+                review.Group("reviewComments", "Comments", "C", 80, g =>
+                {
+                    g.Button("review.newComment", "New Comment", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Comment) });
+                    g.Button("review.deleteComment", "Delete", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Delete) });
+                });
+                review.Group("reviewProtect", "Protect", "T", 70, g =>
+                {
+                    g.Button("review.protectSheet", "Protect Sheet", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Protect) });
+                    g.Button("review.protectWorkbook", "Protect Workbook", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Protect) });
+                });
+            })
+            .Tab("view", "View", "W", view =>
+            {
+                view.Group("viewWorkbookViews", "Workbook Views", "V", 100, g =>
+                {
+                    g.Button("view.normal", "Normal", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.View) });
+                    g.Button("view.pageBreakPreview", "Page Break Preview", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.PageBreak) });
+                    g.Button("view.pageLayoutView", "Page Layout", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Page) });
+                });
+                view.Group("viewShow", "Show", "H", 90, g =>
+                {
+                    g.Toggle("view.gridlines", "Gridlines", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Grid) });
+                    g.Toggle("view.headings", "Headings", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Grid) });
+                    g.Toggle("view.formulaBar", "Formula Bar", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Function) });
+                });
+                view.Group("viewZoom", "Zoom", "Z", 80, g =>
+                {
+                    g.Button("view.zoom", "Zoom", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Zoom) });
+                    g.Button("view.zoom100", "100%", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Zoom) });
+                    g.Button("view.zoomToSelection", "Zoom to Selection", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Zoom) });
+                });
+                view.Group("viewWindow", "Window", "N", 70, g =>
+                {
+                    g.Button("view.freezePanes", "Freeze Panes", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Freeze) });
+                    g.Button("view.newWindow", "New Window", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Window) });
+                });
+            })
             .Build();
     }
 
@@ -462,8 +616,19 @@ internal static class SampleRibbon
         Bind("home.formatAsTable", callbacks.InsertTable);
         Bind("home.conditional", callbacks.ConditionalFormatting);
         Bind("data.quickAnalysis", callbacks.QuickAnalysis);
+        Bind("insert.pivotTable", callbacks.InsertPivotTable);
+        Bind("insert.picture", callbacks.InsertPicture);
+        Bind("insert.shapes", callbacks.InsertShape);
+        Bind("insert.textBox", callbacks.InsertTextBox);
+        Bind("home.formatPainter", callbacks.FormatPainter);
+
+        if (callbacks.SetFontSize is { } setFontSize)
+            registry.Register(new RibbonCommandId("home.fontSize"), new RelayValueRibbonCommand(setFontSize));
+        if (callbacks.SetFontName is { } setFontName)
+            registry.Register(new RibbonCommandId("home.fontName"), new RelayValueRibbonCommand(setFontName));
         Bind("data.sortAsc", callbacks.SortAscending);
         Bind("data.sortDesc", callbacks.SortDescending);
+        Bind("data.filter", callbacks.ToggleFilter);
         Bind("data.validation", callbacks.DataValidation);
         Bind("data.validationDialog", callbacks.DataValidation);
 

@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -22,7 +23,11 @@ public sealed class MainWindow : Window
     private FileCommands _file = null!;
     private AutosaveCoordinator _autosave = null!;
     private DocumentView _editor = null!;
+    private Ruler _hRuler = null!;
+    private Ruler _vRuler = null!;
     private TextBlock _titleText = null!;
+    private TextBlock _pageText = null!;
+    private TextBlock _sectionText = null!;
     private TextBlock _countsText = null!;
     private Slider _zoomSlider = null!;
     private TextBlock _zoomLabel = null!;
@@ -47,8 +52,10 @@ public sealed class MainWindow : Window
     // Read mode (distraction-free view) chrome we hide/restore, plus the saved presentation we restore.
     private Border _titleBar = null!;
     private UIElement _ribbon = null!;
+    private TabControl _ribbonTabs = null!;
     private StatusBar _status = null!;
     private StatusBarItem _dataFolderItem = null!;
+    private StatusBarItem _viewSwitchItem = null!;
     private StatusBarItem _zoomItem = null!;
     private bool _readMode;
     private bool _navPaneVisibleBeforeReadMode;
@@ -91,18 +98,31 @@ public sealed class MainWindow : Window
         DockPanel.SetDock(titleBar, Dock.Top);
         root.Children.Add(titleBar);
 
-        var ribbon = BuildRibbon(FreeWRibbon.Build(), commands, stateStore);
+        var (ribbon, ribbonTabs) = BuildRibbon(FreeWRibbon.Build(), commands, stateStore);
         _ribbon = ribbon;
+        _ribbonTabs = ribbonTabs;
         DockPanel.SetDock(ribbon, Dock.Top);
         root.Children.Add(ribbon);
 
         var status = new StatusBar();
         _status = status;
+
+        // Word-style left cluster: "Page X of Y" then the live word/character counts.
+        _pageText = new TextBlock { VerticalAlignment = VerticalAlignment.Center };
+        status.Items.Add(new StatusBarItem { Content = _pageText });
+        status.Items.Add(new Separator());
+        _sectionText = new TextBlock { VerticalAlignment = VerticalAlignment.Center };
+        status.Items.Add(new StatusBarItem { Content = _sectionText });
+        status.Items.Add(new Separator());
         _countsText = new TextBlock { VerticalAlignment = VerticalAlignment.Center };
         status.Items.Add(new StatusBarItem { Content = _countsText });
         status.Items.Add(new Separator());
         _dataFolderItem = new StatusBarItem { Content = $"Data folder: {ResolveDataFolderLabel()}" };
         status.Items.Add(_dataFolderItem);
+
+        // Word-style right cluster: view-switch buttons (Read Mode / Print Layout) then the zoom control.
+        _viewSwitchItem = new StatusBarItem { HorizontalAlignment = HorizontalAlignment.Right, Content = BuildViewSwitchControl() };
+        status.Items.Add(_viewSwitchItem);
         _zoomItem = new StatusBarItem { HorizontalAlignment = HorizontalAlignment.Right, Content = BuildZoomControl() };
         status.Items.Add(_zoomItem);
         DockPanel.SetDock(status, Dock.Bottom);
@@ -116,12 +136,40 @@ public sealed class MainWindow : Window
         // desk. The editor sizes/centres itself to the page width in Print-Layout mode (see
         // DocumentView.ApplyPageChrome); the grey shows on either side. In plain/continuous mode the editor
         // stretches to fill, so the grey is fully covered and the look is unchanged. Purely host chrome.
+        // Word-style rulers (Print-Layout only): a horizontal tick scale above the page and a thinner
+        // vertical scale down its left edge. Both are passive, read-only chrome (see Ruler) that mirror the
+        // page geometry; the corner cell where they meet stays blank. The editor sits in the bottom-right
+        // cell so the page floats on the grey workspace exactly as before.
+        _hRuler = new Ruler(editor, Ruler.Orientation.Horizontal);
+        _vRuler = new Ruler(editor, Ruler.Orientation.Vertical);
+
+        var workspaceGrid = new Grid();
+        workspaceGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        workspaceGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        workspaceGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        workspaceGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
+        Grid.SetRow(_hRuler, 0);
+        Grid.SetColumn(_hRuler, 1);
+        workspaceGrid.Children.Add(_hRuler);
+
+        Grid.SetRow(_vRuler, 1);
+        Grid.SetColumn(_vRuler, 0);
+        workspaceGrid.Children.Add(_vRuler);
+
+        Grid.SetRow(editor, 1);
+        Grid.SetColumn(editor, 1);
+        workspaceGrid.Children.Add(editor);
+
         _workspace = new Border
         {
             Background = WorkspaceBrush,
-            Child = editor
+            Child = workspaceGrid
         };
         root.Children.Add(_workspace);
+
+        // Keep the indent/tab markers on the horizontal ruler following the caret/selection.
+        editor.SelectionChanged += (_, _) => _hRuler.Refresh();
 
         CommandBindings.Add(new CommandBinding(ApplicationCommands.New, (_, _) => _file.New()));
         CommandBindings.Add(new CommandBinding(ApplicationCommands.Open, (_, _) => _file.Open()));
@@ -166,6 +214,11 @@ public sealed class MainWindow : Window
         shell.Children.Add(root);
         shell.Children.Add(_backstage);
         Content = shell;
+
+        // V5 KeyTips: pressing Alt overlays Word-style letter badges over the ribbon tabs, then over the
+        // active tab's controls, so the ribbon is fully keyboard-navigable. The overlay walks the rendered
+        // ribbon and draws its badges on the shell grid (which spans the whole client area).
+        KeyTipsOverlay.Install(this, _ribbonTabs, shell);
     }
 
     // Show the Word-style Backstage (File screen) over the document.
@@ -237,6 +290,8 @@ public sealed class MainWindow : Window
     // (TextChanged), on selection change, and on document load.
     private void UpdateCounts()
     {
+        UpdatePageStatus();
+
         var selectionText = _editor.Selection.Text;
         if (!string.IsNullOrEmpty(selectionText))
         {
@@ -249,6 +304,39 @@ public sealed class MainWindow : Window
         _editor.CommitToModel();
         var stats = WordCount.Of(_editor.Model);
         _countsText.Text = $"Words: {stats.Words}   Characters: {stats.CharactersWithSpaces}   Paragraphs: {stats.Paragraphs}";
+    }
+
+    // Refresh the Word-style "Page X of Y" status: an approximate page position derived from the editor's
+    // single continuous flow against the page's printable height (see DocumentView.PageInfo). It tracks the
+    // on-screen page-break markers, which can differ by a page from the fully paginated Print Preview.
+    private void UpdatePageStatus()
+    {
+        var (current, total) = _editor.PageInfo();
+        _pageText.Text = $"Page {current} of {total}";
+
+        // Word-style current-section indicator next to the page count. Best-effort: which section the
+        // caret's block falls in, out of TextDocument.Sections (see DocumentView.SectionInfo).
+        var (section, sections) = _editor.SectionInfo();
+        _sectionText.Text = $"Section {section} of {sections}";
+    }
+
+    // The Word-style view-switch cluster on the right of the status bar: a Read Mode toggle and a Print
+    // Layout toggle. They reuse the existing MainWindow toggles (ToggleReadMode / TogglePrintLayout), so the
+    // ribbon View tab and these buttons drive the same state. No new view state is introduced here.
+    private UIElement BuildViewSwitchControl()
+    {
+        var panel = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+
+        Button ViewButton(string label, string tip, Action onClick)
+        {
+            var button = new Button { Content = label, Padding = new Thickness(8, 1, 8, 1), Margin = new Thickness(2, 0, 2, 0), ToolTip = tip };
+            button.Click += (_, _) => onClick();
+            return button;
+        }
+
+        panel.Children.Add(ViewButton("Read Mode", "Toggle distraction-free Read Mode", ToggleReadMode));
+        panel.Children.Add(ViewButton("Print Layout", "Toggle Print Layout page view", TogglePrintLayout));
+        return panel;
     }
 
     // The left navigation pane: a header plus a ListBox of heading outline entries (indented by level).
@@ -324,6 +412,7 @@ public sealed class MainWindow : Window
             _titleBar.Visibility = Visibility.Collapsed;
             _ribbon.Visibility = Visibility.Collapsed;
             _dataFolderItem.Visibility = Visibility.Collapsed;
+            _viewSwitchItem.Visibility = Visibility.Collapsed;
             _zoomItem.Visibility = Visibility.Collapsed;
 
             // Collapse the navigation pane while reading (without disturbing its remembered state).
@@ -342,6 +431,7 @@ public sealed class MainWindow : Window
             _titleBar.Visibility = Visibility.Visible;
             _ribbon.Visibility = Visibility.Visible;
             _dataFolderItem.Visibility = Visibility.Visible;
+            _viewSwitchItem.Visibility = Visibility.Visible;
             _zoomItem.Visibility = Visibility.Visible;
 
             // Restore the editor's original presentation (including any Print-Layout page sizing/shadow).
@@ -603,7 +693,7 @@ public sealed class MainWindow : Window
     // group-label borders and vector glyphs). Command behavior and live toggle state flow through the
     // FreeW command registry + IRibbonStateStore exactly as before.
 
-    private static UIElement BuildRibbon(RibbonDefinition definition, IRibbonCommandRegistry registry, IRibbonStateStore stateStore)
+    private (UIElement Ribbon, TabControl Tabs) BuildRibbon(RibbonDefinition definition, IRibbonCommandRegistry registry, IRibbonStateStore stateStore)
     {
         // Install FreeW's command-id → glyph mapping so the shared renderer draws meaningful icons for
         // freew.* ids (otherwise every button would fall back to the generic glyph).
@@ -626,23 +716,98 @@ public sealed class MainWindow : Window
 
         foreach (var tab in definition.Tabs)
         {
-            var item = new TabItem
-            {
-                Header = tab.Header,
-                Content = RibbonWpfRenderer.BuildTabContent(tab, tabs, registry, stateStore)
-            };
+            var content = RibbonWpfRenderer.BuildTabContent(tab, tabs, registry, stateStore);
+
+            // V5 galleries: inject the live-preview Word-style galleries into the rendered group content.
+            // The shared renderer stamps each group's grid with its catalog id (RibbonMetadata.CatalogId),
+            // so we find the target group and prepend a custom gallery control into its content lane. This
+            // keeps the galleries entirely app-side (custom WPF content) without a shared RibbonGallery type.
+            if (tab.Id == "home")
+                // Drop the placeholder Style combo (the gallery supersedes it) but keep the group's
+                // New Style / Manage Styles buttons, prepending the live-preview gallery before them.
+                InjectGallery(content, "styles", StylesGallery.Build(_editor), removeKind: RemoveKind.Combos);
+            if (tab.Id == "design")
+                // The Design > themes group's only control is the placeholder Themes combo; replace it
+                // wholesale with the Themes gallery plus the theme-colours gallery.
+                InjectGallery(content, "themes", ThemeGallery.BuildThemes(_editor), removeKind: RemoveKind.All,
+                    extra: ThemeGallery.BuildColours(_editor));
+
+            var item = new TabItem { Header = tab.Header, Content = content };
             tabs.Items.Add(item);
         }
 
         if (tabs.Items.Count > 0)
             tabs.SelectedIndex = 0;
 
-        return new Border
+        var border = new Border
         {
             Background = Brushes.White,
             BorderBrush = new SolidColorBrush(Color.FromRgb(0xD0, 0xD0, 0xD0)),
             BorderThickness = new Thickness(0, 0, 0, 1),
             Child = tabs
         };
+        return (border, tabs);
+    }
+
+    // What of a group's original rendered controls to drop before injecting a gallery.
+    private enum RemoveKind { None, Combos, All }
+
+    // Find the group grid carrying CatalogId == groupId in the freshly built tab content and prepend the
+    // gallery into its content lane (row 0). `removeKind` controls which of the group's original
+    // placeholder controls are removed first: All clears the lane (the gallery fully owns the group);
+    // Combos drops only ComboBox columns (so a placeholder combo the gallery supersedes goes away while
+    // command buttons like New Style / Manage Styles remain). An optional `extra` gallery is appended
+    // after the first (e.g. the Design theme-colours strip).
+    private static void InjectGallery(DependencyObject content, string groupId, FrameworkElement gallery, RemoveKind removeKind, FrameworkElement? extra = null)
+    {
+        var grid = FindGroupGrid(content, groupId);
+        if (grid is null)
+            return;
+
+        // Row 0 of the group grid holds the content lane (a horizontal StackPanel of columns/controls).
+        var lane = grid.Children.OfType<FrameworkElement>().FirstOrDefault(c => Grid.GetRow(c) == 0) as Panel;
+        if (lane is null)
+            return;
+
+        if (removeKind == RemoveKind.All)
+        {
+            lane.Children.Clear();
+        }
+        else if (removeKind == RemoveKind.Combos)
+        {
+            // Each lane column is its own StackPanel; the renderer packs combos into combo-only columns,
+            // so a column whose children are all ComboBoxes is a placeholder-combo column to drop.
+            var toRemove = lane.Children.OfType<Panel>()
+                .Where(col => col.Children.Count > 0 && col.Children.OfType<UIElement>().All(c => c is ComboBox))
+                .ToList();
+            foreach (var col in toRemove)
+                lane.Children.Remove(col);
+        }
+
+        var host = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(2, 2, 2, 0) };
+        host.Children.Add(gallery);
+        if (extra is not null)
+            host.Children.Add(extra);
+        lane.Children.Insert(0, host);
+    }
+
+    // Find the group content grid stamped with the given catalog id, walking the renderer's known
+    // structure: the tab content is a Border whose child is a RibbonAdaptivePanel whose children are
+    // RibbonGroupHosts. Each host's Content is the group grid (which carries the catalog id). This walks
+    // the logical structure the renderer built eagerly, so it works before the visual tree is realized
+    // (unlike VisualTreeHelper, which would see nothing until the ribbon is measured/rendered).
+    private static Grid? FindGroupGrid(DependencyObject root, string groupId)
+    {
+        var panel = (root as Border)?.Child as Panel;
+        if (panel is null)
+            return null;
+
+        foreach (var child in panel.Children)
+        {
+            if (child is RibbonGroupHost host && host.Content is Grid grid
+                && RibbonMetadata.GetCatalogId(grid) == groupId)
+                return grid;
+        }
+        return null;
     }
 }
