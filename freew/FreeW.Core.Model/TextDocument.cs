@@ -118,6 +118,41 @@ public sealed class Run(string text, RunFormatting? formatting = null)
         new("1", formatting) { FieldKind = RunFieldKind.PageNumber };
 
     /// <summary>
+    /// Creates a DATE field run. <paramref name="cached"/> is the last-computed display text, kept as a
+    /// fallback for field-unaware consumers; the app layer may resolve it to the current date at render.
+    /// </summary>
+    public static Run DateField(string cached = "", RunFormatting? formatting = null) =>
+        new(cached, formatting) { FieldKind = RunFieldKind.Date };
+
+    /// <summary>
+    /// Creates a TIME field run. <paramref name="cached"/> is the last-computed display text, kept as a
+    /// fallback for field-unaware consumers; the app layer may resolve it to the current time at render.
+    /// </summary>
+    public static Run TimeField(string cached = "", RunFormatting? formatting = null) =>
+        new(cached, formatting) { FieldKind = RunFieldKind.Time };
+
+    /// <summary>
+    /// Creates a FILENAME field run. <paramref name="cached"/> is the last-computed display text, kept as
+    /// a fallback; the app layer may resolve it to the current document's file name at render.
+    /// </summary>
+    public static Run FileNameField(string cached = "", RunFormatting? formatting = null) =>
+        new(cached, formatting) { FieldKind = RunFieldKind.FileName };
+
+    /// <summary>
+    /// Creates an AUTHOR field run. <paramref name="cached"/> is the last-computed display text, kept as a
+    /// fallback; the app layer may resolve it from <see cref="DocumentProperties.Author"/> at render.
+    /// </summary>
+    public static Run AuthorField(string cached = "", RunFormatting? formatting = null) =>
+        new(cached, formatting) { FieldKind = RunFieldKind.Author };
+
+    /// <summary>
+    /// Creates a NUMPAGES field run. <paramref name="cached"/> is the last-computed display text, kept as
+    /// a fallback; the app layer may resolve it to a best-effort page count at render.
+    /// </summary>
+    public static Run NumPagesField(string cached = "", RunFormatting? formatting = null) =>
+        new(cached, formatting) { FieldKind = RunFieldKind.NumPages };
+
+    /// <summary>
     /// Creates a footnote-reference run for the footnote with id <paramref name="footnoteId"/>. The
     /// run renders as a superscript marker; its <see cref="Text"/> mirrors the id for field-unaware
     /// consumers. The matching content lives in <see cref="TextDocument.Footnotes"/>.
@@ -305,12 +340,19 @@ public sealed class IndexEntry
 
 /// <summary>
 /// The kind of simple field a <see cref="Run"/> represents. <see cref="None"/> is an ordinary text
-/// run; <see cref="PageNumber"/> maps to a WordprocessingML PAGE field (w:fldSimple w:instr=" PAGE ").
+/// run; the others each map to a WordprocessingML simple field (w:fldSimple) whose w:instr is the
+/// matching keyword — e.g. <see cref="PageNumber"/> is " PAGE ", <see cref="Date"/> is " DATE ".
+/// The run's <see cref="Run.Text"/> doubles as the field's cached/last-computed display value.
 /// </summary>
 public enum RunFieldKind
 {
     None,
-    PageNumber
+    PageNumber,
+    Date,
+    Time,
+    FileName,
+    Author,
+    NumPages
 }
 
 /// <summary>

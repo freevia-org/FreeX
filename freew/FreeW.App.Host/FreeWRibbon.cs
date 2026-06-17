@@ -141,6 +141,7 @@ internal static class FreeWRibbon
                 {
                     g.Button("freew.symbol", "Symbol");
                     g.Button("freew.datetime", "Date & Time");
+                    g.Button("freew.field", "Field");
                 });
             })
             .Tab("layout", "Layout", "L", tab =>

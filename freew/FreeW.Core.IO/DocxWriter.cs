@@ -858,13 +858,29 @@ public static class DocxWriter
         return pPr.HasElements ? pPr : null;
     }
 
+    /// <summary>
+    /// Maps a field kind to the WordprocessingML w:fldSimple/@w:instr keyword (with the surrounding
+    /// spaces Word writes). Returns null for <see cref="RunFieldKind.None"/> (an ordinary text run).
+    /// </summary>
+    private static string? FieldInstruction(RunFieldKind kind) => kind switch
+    {
+        RunFieldKind.PageNumber => " PAGE ",
+        RunFieldKind.Date => " DATE ",
+        RunFieldKind.Time => " TIME ",
+        RunFieldKind.FileName => " FILENAME ",
+        RunFieldKind.Author => " AUTHOR ",
+        RunFieldKind.NumPages => " NUMPAGES ",
+        _ => null
+    };
+
     private static XElement BuildRun(Run run, IReadOnlyDictionary<Run, ImagePart> imagesByRun)
     {
-        // A page-number field emits a self-contained w:fldSimple wrapping a run; the wrapped run's
-        // w:t carries the last-known value as fallback text for field-unaware consumers.
-        if (run.FieldKind == RunFieldKind.PageNumber)
+        // A document field emits a self-contained w:fldSimple wrapping a run; the wrapped run's w:t
+        // carries the last-known/cached value as fallback text for field-unaware consumers. The
+        // w:instr keyword identifies the field kind (PAGE, DATE, TIME, FILENAME, AUTHOR, NUMPAGES).
+        if (FieldInstruction(run.FieldKind) is { } instruction)
             return new XElement(W + "fldSimple",
-                new XAttribute(W + "instr", " PAGE "),
+                new XAttribute(W + "instr", instruction),
                 BuildTextRun(run, imagesByRun));
 
         // A footnote reference is a superscript run carrying a w:footnoteReference (no literal text);
