@@ -35,7 +35,7 @@ public static class DocxReader
         ReadStyles(archive, document);
         var imageRelationships = ReadImageRelationships(archive);
         var hyperlinkRelationships = ReadHyperlinkRelationships(archive);
-        var numbering = ReadNumbering(archive);
+        var numbering = ReadNumbering(archive, document);
 
         var body = documentXml.Root?.Element(W + "body");
         if (body is not null)
@@ -43,7 +43,7 @@ public static class DocxReader
             foreach (var element in body.Elements())
             {
                 if (element.Name == W + "p")
-                    document.Blocks.Add(ReadParagraph(element, archive, imageRelationships, hyperlinkRelationships, numbering));
+                    document.Blocks.Add(ReadParagraph(element, archive, imageRelationships, hyperlinkRelationships, numbering, capturePreservedNumbering: true));
                 else if (element.Name == W + "tbl")
                     document.Blocks.Add(ReadTable(element, archive, imageRelationships, hyperlinkRelationships, numbering));
             }
@@ -769,7 +769,8 @@ public static class DocxReader
         ZipArchive archive,
         IReadOnlyDictionary<string, string> imageRelationships,
         IReadOnlyDictionary<string, string> hyperlinkRelationships,
-        IReadOnlyDictionary<int, ListKind> numbering)
+        IReadOnlyDictionary<int, ListKind> numbering,
+        bool capturePreservedNumbering = false)
     {
         var paragraph = new Paragraph();
         var pPr = p.Element(W + "pPr");
@@ -777,6 +778,11 @@ public static class DocxReader
         {
             paragraph.StyleId = pPr.Element(W + "pStyle")?.Attribute(W + "val")?.Value;
             paragraph.Formatting = ReadParagraphFormatting(pPr, numbering);
+            // When the paragraph carries a w:numPr that FreeW did NOT map to one of its own ListKinds, keep
+            // the original numId+ilvl so the writer can re-emit it against the preserved numbering.xml (only
+            // for body / table-cell paragraphs — header/footer/footnote numbering is not modelled).
+            if (capturePreservedNumbering && paragraph.Formatting.ListKind == ListKind.None)
+                paragraph.PreservedNumbering = ReadPreservedNumbering(pPr);
             // A paragraph carrying a w:pPr/w:sectPr ends a non-final section; recover that section's page
             // setup + break kind + own header/footer references onto the paragraph (the body-level final
             // section is read elsewhere).
@@ -1200,7 +1206,7 @@ public static class DocxReader
                     }
                 }
                 foreach (var p in tc.Elements(W + "p"))
-                    cell.Paragraphs.Add(ReadParagraph(p, archive, imageRelationships, hyperlinkRelationships, numbering));
+                    cell.Paragraphs.Add(ReadParagraph(p, archive, imageRelationships, hyperlinkRelationships, numbering, capturePreservedNumbering: true));
                 if (cell.Paragraphs.Count == 0)
                     cell.Paragraphs.Add(new Paragraph());
                 row.Cells.Add(cell);
@@ -2019,13 +2025,33 @@ public static class DocxReader
     /// definition (w:multiLevelType="multilevel", or whose level-1 lvlText accumulates ancestor
     /// counters like "%1.%2.") -> MultiLevel; anything else (decimal) -> Number.
     /// </summary>
-    private static Dictionary<int, ListKind> ReadNumbering(ZipArchive archive)
+    /// <summary>
+    /// Recovers a paragraph's original <c>w:numPr</c> (numId + ilvl) as a <see cref="PreservedNumbering"/>,
+    /// or null when the paragraph has no <c>w:numPr</c> (so a non-list paragraph preserves nothing). The ilvl
+    /// defaults to 0 when absent, matching how Word treats a level-less numPr.
+    /// </summary>
+    private static PreservedNumbering? ReadPreservedNumbering(XElement pPr)
+    {
+        var numPr = pPr.Element(W + "numPr");
+        if (numPr is null)
+            return null;
+        var numId = ParseInt(numPr.Element(W + "numId")?.Attribute(W + "val")?.Value);
+        var ilvl = ParseInt(numPr.Element(W + "ilvl")?.Attribute(W + "val")?.Value);
+        return new PreservedNumbering(numId, ilvl);
+    }
+
+    private static Dictionary<int, ListKind> ReadNumbering(ZipArchive archive, TextDocument document)
     {
         var map = new Dictionary<int, ListKind>();
         var numberingXml = LoadPart(archive, "word/numbering.xml");
         var root = numberingXml?.Root;
         if (root is null)
             return map;
+
+        // Preserve the ORIGINAL numbering element so the writer can merge its definitions alongside FreeW's
+        // own (under a disjoint numId range) and re-emit the paragraphs' w:numPr that FreeW does not model.
+        // Cloned so later edits can't leak back. A document with no numbering part preserves nothing here.
+        document.Preserved.OriginalNumbering = new XElement(root);
 
         // abstractNumId -> ListKind, taken from the format of its lowest level.
         var abstractKinds = new Dictionary<int, ListKind>();

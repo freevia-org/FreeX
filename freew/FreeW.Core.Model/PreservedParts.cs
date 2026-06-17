@@ -29,6 +29,17 @@ public sealed record PreservedPart(
     string? RelationshipType = null);
 
 /// <summary>
+/// The original <c>w:numPr</c> a paragraph carried on read that FreeW does not model as one of its own lists:
+/// the source <c>w:numId</c> and <c>w:ilvl</c>. Captured per paragraph (see
+/// <see cref="Paragraph.PreservedNumbering"/>) so the writer can re-emit the paragraph's numbering pointing at
+/// the preserved <see cref="PreservedParts.OriginalNumbering"/> definition (after a disjoint-id remap that keeps
+/// it clear of FreeW's own fixed list ids).
+/// </summary>
+/// <param name="NumId">The original <c>w:numPr/w:numId/@w:val</c>.</param>
+/// <param name="Ilvl">The original <c>w:numPr/w:ilvl/@w:val</c> (0 when absent).</param>
+public readonly record struct PreservedNumbering(int NumId, int Ilvl);
+
+/// <summary>
 /// The package parts FreeW preserves but does not model, captured on read so they survive a write
 /// (preserve-and-re-emit / pass-through). Empty (the default) for a document FreeW authored from scratch, so
 /// such a document emits no settings/customXml/webSettings parts and round-trips byte-equivalently to before.
@@ -58,11 +69,22 @@ public sealed class PreservedParts
     public XElement? OriginalSettings { get; set; }
 
     /// <summary>
+    /// The original <c>word/numbering.xml</c> root element (<c>w:numbering</c>) captured on read when the
+    /// source package had one. The writer merges its <c>w:abstractNum</c>/<c>w:num</c> definitions alongside
+    /// FreeW's own — under a disjoint <c>numId</c>/<c>abstractNumId</c> range so the two never collide — and
+    /// re-emits the paragraphs' preserved <see cref="Paragraph.PreservedNumbering"/> pointing at the
+    /// (remapped) original definitions. Null when the source had no numbering part (an authored-from-scratch
+    /// document), in which case the writer emits only FreeW's own numbering exactly as before — so such a
+    /// document round-trips byte-equivalently.
+    /// </summary>
+    public XElement? OriginalNumbering { get; set; }
+
+    /// <summary>
     /// The unmodelled parts preserved verbatim (customXml items / props / their rels, webSettings), in the
     /// order they were captured. Empty for an authored-from-scratch document so nothing extra is emitted.
     /// </summary>
     public List<PreservedPart> Parts { get; } = [];
 
     /// <summary>True when nothing is preserved — the authored-from-scratch case.</summary>
-    public bool IsEmpty => OriginalSettings is null && Parts.Count == 0;
+    public bool IsEmpty => OriginalSettings is null && OriginalNumbering is null && Parts.Count == 0;
 }
