@@ -82,6 +82,10 @@ jobs:
             --configuration Release \
             --logger "trx;LogFileName=freew-${{ matrix.runtime }}-io-tests.trx" \
             --results-directory artifacts
+          dotnet test freew/FreeW.App.Avalonia.Tests/FreeW.App.Avalonia.Tests.csproj \
+            --configuration Release \
+            --logger "trx;LogFileName=freew-${{ matrix.runtime }}-avalonia-tests.trx" \
+            --results-directory artifacts
 
       - name: Build FreeW Avalonia app
         shell: bash
