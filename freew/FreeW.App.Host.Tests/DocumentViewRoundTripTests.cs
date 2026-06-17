@@ -215,6 +215,49 @@ public sealed class DocumentViewRoundTripTests
         run.WordArt.Style.Should().Be(WordArtStyle.GradientFill);
     }
 
+    // Insert > Media > SmartArt: inserting a SmartArt via the view and committing recovers a run carrying
+    // the diagram (its kind + node texts survive the InsertSmartArt -> BuildSmartArtRun -> ReadInline path).
+    [StaFact]
+    public void InsertSmartArt_RoundTripsThroughView()
+    {
+        var view = new DocumentView();
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph());
+        view.LoadModel(doc);
+
+        view.InsertSmartArt(SmartArt.Create(SmartArtKind.Process, ["First", "Second", "Third"]));
+        view.CommitToModel();
+
+        var run = view.Model.Blocks.OfType<Paragraph>()
+            .SelectMany(p => p.Runs)
+            .Single(r => r.SmartArt is not null);
+        run.SmartArt!.Kind.Should().Be(SmartArtKind.Process);
+        run.SmartArt.Nodes.Select(n => n.Text).Should().Equal("First", "Second", "Third");
+    }
+
+    // Insert > Media > Object: inserting an embedded OLE object via the view and committing recovers a run
+    // carrying the object (its payload + ProgID survive the InsertEmbeddedObject -> ReadInline path).
+    [StaFact]
+    public void InsertEmbeddedObject_RoundTripsThroughView()
+    {
+        var view = new DocumentView();
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph());
+        view.LoadModel(doc);
+
+        var payload = System.Text.Encoding.UTF8.GetBytes("payload");
+        view.InsertEmbeddedObject(EmbeddedObject.Create(payload, progId: "Package"));
+        view.CommitToModel();
+
+        var run = view.Model.Blocks.OfType<Paragraph>()
+            .SelectMany(p => p.Runs)
+            .Single(r => r.EmbeddedObject is not null);
+        run.EmbeddedObject!.ProgId.Should().Be("Package");
+        run.EmbeddedObject.Payload.Should().Equal(payload);
+    }
+
     // A valid 1x1 PNG so the WPF image decoder in BuildImageRun succeeds under test.
     private static byte[] OnePixelPng() => System.Convert.FromBase64String(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");

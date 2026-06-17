@@ -2323,6 +2323,12 @@ public sealed class DocumentView : RichTextBox
             case InlineUIContainer { Child: FrameworkElement { Tag: Equation modelEquation } }:
                 modelParagraph.Runs.Add(ModelRun.FromEquation(modelEquation));
                 break;
+            case InlineUIContainer { Child: FrameworkElement { Tag: SmartArt modelSmartArt } }:
+                modelParagraph.Runs.Add(ModelRun.FromSmartArt(modelSmartArt));
+                break;
+            case InlineUIContainer { Child: FrameworkElement { Tag: EmbeddedObject modelEmbedded } }:
+                modelParagraph.Runs.Add(ModelRun.FromEmbeddedObject(modelEmbedded));
+                break;
             case WpfRun { Tag: FootnoteMarker marker }:
                 modelParagraph.Runs.Add(ModelRun.FootnoteReference(marker.FootnoteId));
                 break;
@@ -2766,6 +2772,12 @@ public sealed class DocumentView : RichTextBox
 
         if (run.Equation is { } equation)
             return BuildEquationRun(equation);
+
+        if (run.SmartArt is { } smartArt)
+            return BuildSmartArtRun(smartArt);
+
+        if (run.EmbeddedObject is { } embedded)
+            return BuildEmbeddedObjectRun(embedded);
 
         if (run.FootnoteId is { } footnoteId)
             return BuildFootnoteReference(footnoteId, document);
@@ -3415,6 +3427,98 @@ public sealed class DocumentView : RichTextBox
         Render();
     }
 
+    /// <summary>
+    /// Renders an inline SmartArt diagram as an InlineUIContainer hosting a Border that carries the model
+    /// <see cref="SmartArt"/> on its Tag (so CommitToModel round-trips it, mirroring shapes/charts). The
+    /// border sketches the diagram's top-level node texts as a simple labelled stack (a lightweight visual
+    /// stand-in — the diagram's real layout is recomputed by Word on open).
+    /// </summary>
+    private static InlineUIContainer BuildSmartArtRun(SmartArt smartArt)
+    {
+        var widthPx = smartArt.WidthPt * PxPerPoint;
+        var heightPx = smartArt.HeightPt * PxPerPoint;
+
+        // Lay top-level nodes out left-to-right for Process, top-to-bottom otherwise, as labelled boxes.
+        var horizontal = smartArt.Kind == SmartArtKind.Process;
+        var nodes = new StackPanel
+        {
+            Orientation = horizontal ? Orientation.Horizontal : Orientation.Vertical,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        foreach (var node in smartArt.Nodes)
+            nodes.Children.Add(new Border
+            {
+                Background = new SolidColorBrush(Color.FromRgb(0x4E, 0x81, 0xBD)),
+                CornerRadius = new CornerRadius(3),
+                Margin = new Thickness(4),
+                Padding = new Thickness(8, 4, 8, 4),
+                Child = new TextBlock
+                {
+                    Text = node.Text,
+                    Foreground = System.Windows.Media.Brushes.White,
+                    HorizontalAlignment = HorizontalAlignment.Center
+                }
+            });
+
+        var element = new Border
+        {
+            Width = widthPx,
+            Height = heightPx,
+            Background = System.Windows.Media.Brushes.White,
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
+            BorderThickness = new Thickness(1),
+            Child = nodes,
+            Tag = smartArt // carries the model SmartArt so CommitToModel can round-trip it
+        };
+        return new InlineUIContainer(element) { BaselineAlignment = BaselineAlignment.Bottom };
+    }
+
+    /// <summary>
+    /// Renders an inline embedded OLE object as an InlineUIContainer hosting a Border that carries the model
+    /// <see cref="EmbeddedObject"/> on its Tag (so CommitToModel round-trips it, mirroring shapes). Shows the
+    /// object's icon image when present, otherwise a labelled package placeholder with its ProgID.
+    /// </summary>
+    private static InlineUIContainer BuildEmbeddedObjectRun(EmbeddedObject embedded)
+    {
+        var widthPx = embedded.WidthPt * PxPerPoint;
+        var heightPx = embedded.HeightPt * PxPerPoint;
+
+        FrameworkElement content;
+        if (embedded.Icon is { } icon)
+        {
+            content = new Image
+            {
+                Source = DecodePng(icon.PngBytes),
+                Stretch = Stretch.Uniform
+            };
+        }
+        else
+        {
+            content = new TextBlock
+            {
+                Text = embedded.ProgId,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x40, 0x40, 0x40)),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(4)
+            };
+        }
+
+        var element = new Border
+        {
+            Width = widthPx,
+            Height = heightPx,
+            Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF6, 0xFB)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC8, 0xD8)),
+            BorderThickness = new Thickness(1),
+            Child = content,
+            Tag = embedded // carries the model object so CommitToModel can round-trip it
+        };
+        return new InlineUIContainer(element) { BaselineAlignment = BaselineAlignment.Bottom };
+    }
+
     /// <summary>Inserts an inline equation at the caret. Round-trips through CommitToModel (mirrors InsertShape).</summary>
     public void InsertEquation(Equation equation) => InsertInlineContainer(BuildEquationRun(equation));
 
@@ -3423,6 +3527,12 @@ public sealed class DocumentView : RichTextBox
 
     /// <summary>Inserts inline WordArt at the caret. Round-trips through CommitToModel (mirrors InsertShape).</summary>
     public void InsertWordArt(WordArt wordArt) => InsertInlineContainer(BuildWordArtRun(wordArt));
+
+    /// <summary>Inserts an inline SmartArt diagram at the caret. Round-trips through CommitToModel (mirrors InsertShape).</summary>
+    public void InsertSmartArt(SmartArt smartArt) => InsertInlineContainer(BuildSmartArtRun(smartArt));
+
+    /// <summary>Inserts an inline embedded OLE object at the caret. Round-trips through CommitToModel (mirrors InsertShape).</summary>
+    public void InsertEmbeddedObject(EmbeddedObject embedded) => InsertInlineContainer(BuildEmbeddedObjectRun(embedded));
 
     // Shared caret-insertion path for the tagged InlineUIContainers (shape/image/chart/wordart/equation):
     // commit pending edits, drop the container at the caret's paragraph (or the last block), commit + render.

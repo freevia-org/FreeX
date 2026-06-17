@@ -107,11 +107,17 @@ internal static class FreeWRibbonIcons
             ["freew.image-align-center"] = RibbonCommandIconKind.Align,
             ["freew.image-align-right"] = RibbonCommandIconKind.Align,
             ["freew.shapes"] = RibbonCommandIconKind.Rectangle,
+            ["freew.shape-rectangle"] = RibbonCommandIconKind.Rectangle,
+            ["freew.shape-rounded"] = RibbonCommandIconKind.Rectangle,
+            ["freew.shape-ellipse"] = RibbonCommandIconKind.Ellipse,
+            ["freew.shape-textbox"] = RibbonCommandIconKind.TextBox,
 
-            // Insert: media (equation / chart / WordArt)
+            // Insert: media (equation / chart / WordArt / SmartArt / OLE object)
             ["freew.equation"] = RibbonCommandIconKind.Function,
             ["freew.chart"] = RibbonCommandIconKind.Table,
             ["freew.wordart"] = RibbonCommandIconKind.TextBox,
+            ["freew.smartart"] = RibbonCommandIconKind.Group,
+            ["freew.object"] = RibbonCommandIconKind.Grid,
 
             // Insert: links
             ["freew.hyperlink"] = RibbonCommandIconKind.Link,
