@@ -574,6 +574,9 @@ internal static class SampleRibbon
                         PreferredLayout = RibbonCommandLayoutKind.Large,
                         Icon = new RibbonCommandIcon(RibbonCommandIconKind.Theme),
                     });
+                    g.Button("pageLayout.themeColors", "Colors", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Color) });
+                    g.Button("pageLayout.themeFonts", "Fonts", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Font) });
+                    g.Button("pageLayout.themeEffects", "Effects", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Effects) });
                 });
                 page.Group("pageLayoutPageSetup", "Page Setup", "S", 90, g =>
                 {
@@ -649,6 +652,8 @@ internal static class SampleRibbon
                         PreferredLayout = RibbonCommandLayoutKind.Large,
                         Icon = new RibbonCommandIcon(RibbonCommandIconKind.Spelling),
                     });
+                    g.Button("review.thesaurus", "Thesaurus", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Book) });
+                    g.Button("review.translate", "Translate", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Translate) });
                 });
                 review.Group("reviewAccessibility", "Accessibility", "A", 90, g =>
                 {
