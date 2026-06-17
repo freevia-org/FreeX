@@ -52,7 +52,7 @@ public static class DocxReader
         if (document.Blocks.Count == 0)
             document.Blocks.Add(new Paragraph());
 
-        ReadHeaderFooter(documentXml, archive, document, imageRelationships, hyperlinkRelationships);
+        ReadHeaderFooter(documentXml, archive, document, hyperlinkRelationships);
         ReadFootnotes(archive, document, imageRelationships, hyperlinkRelationships);
         ReadEndnotes(archive, document, imageRelationships, hyperlinkRelationships);
         ReadComments(archive, document, imageRelationships, hyperlinkRelationships);
@@ -387,14 +387,16 @@ public static class DocxReader
     }
 
     /// <summary>
-    /// Resolves the default header/footer references in w:sectPr (r:id → document rels → part path),
-    /// loads those parts (w:hdr / w:ftr) and reconstructs <see cref="TextDocument.Header"/> / Footer.
+    /// Resolves the body-level (final section) header/footer references in w:sectPr (r:id → document rels →
+    /// part path), loads those parts (w:hdr / w:ftr) and reconstructs the final section's
+    /// <see cref="TextDocument.Header"/> / Footer / EvenHeader / EvenFooter / FirstHeader / FirstFooter. The
+    /// non-final sections' header/footer references are read separately into each section's storage (see
+    /// <see cref="ReadSectionBreak"/>), so every section keeps its own page-specific headers/footers.
     /// </summary>
     private static void ReadHeaderFooter(
         XDocument documentXml,
         ZipArchive archive,
         TextDocument document,
-        IReadOnlyDictionary<string, string> imageRelationships,
         IReadOnlyDictionary<string, string> hyperlinkRelationships)
     {
         var sectPr = documentXml.Root?.Element(W + "body")?.Element(W + "sectPr");
@@ -410,19 +412,41 @@ public static class DocxReader
         var backgroundColor = documentXml.Root?.Element(W + "background")?.Attribute(W + "color")?.Value;
         document.Page.BackgroundColorHex = backgroundColor is { Length: > 0 } ? "#" + backgroundColor : null;
 
+        ReadSectionHeadersFooters(
+            sectPr, document.FinalSectionHeadersFooters, archive, hyperlinkRelationships);
+    }
+
+    /// <summary>
+    /// Resolves every header/footer reference (default/even/first) in one <paramref name="sectPr"/> and loads
+    /// the referenced parts into <paramref name="hf"/>. Shared by the body-level final section
+    /// (<see cref="ReadHeaderFooter"/>) and each non-final section break (<see cref="ReadSectionBreak"/>) so
+    /// all sections recover their own headers/footers from one code path. Each part's inline-image r:embed ids
+    /// resolve against THAT part's own _rels, so images inside headers/footers survive.
+    /// </summary>
+    private static void ReadSectionHeadersFooters(
+        XElement sectPr,
+        SectionHeadersFooters hf,
+        ZipArchive archive,
+        IReadOnlyDictionary<string, string> hyperlinkRelationships)
+    {
         var partsById = ReadHeaderFooterRelationships(archive);
 
-        document.Header = ReadHeaderFooterPart(
-            sectPr, "headerReference", "default", W + "hdr", partsById, archive, imageRelationships, hyperlinkRelationships);
-        document.Footer = ReadHeaderFooterPart(
-            sectPr, "footerReference", "default", W + "ftr", partsById, archive, imageRelationships, hyperlinkRelationships);
+        hf.Header = ReadHeaderFooterPart(
+            sectPr, "headerReference", "default", W + "hdr", partsById, archive, hyperlinkRelationships);
+        hf.Footer = ReadHeaderFooterPart(
+            sectPr, "footerReference", "default", W + "ftr", partsById, archive, hyperlinkRelationships);
         // Even-page header/footer (w:type="even") for "different odd/even pages". Present only when the
-        // document carried the even references + parts; null otherwise so single-header documents are
-        // unaffected.
-        document.EvenHeader = ReadHeaderFooterPart(
-            sectPr, "headerReference", "even", W + "hdr", partsById, archive, imageRelationships, hyperlinkRelationships);
-        document.EvenFooter = ReadHeaderFooterPart(
-            sectPr, "footerReference", "even", W + "ftr", partsById, archive, imageRelationships, hyperlinkRelationships);
+        // section carried the even references + parts; null otherwise so single-header sections are unaffected.
+        hf.EvenHeader = ReadHeaderFooterPart(
+            sectPr, "headerReference", "even", W + "hdr", partsById, archive, hyperlinkRelationships);
+        hf.EvenFooter = ReadHeaderFooterPart(
+            sectPr, "footerReference", "even", W + "ftr", partsById, archive, hyperlinkRelationships);
+        // First-page header/footer (w:type="first") for "different first page". Present only when the section
+        // carried the first references + parts.
+        hf.FirstHeader = ReadHeaderFooterPart(
+            sectPr, "headerReference", "first", W + "hdr", partsById, archive, hyperlinkRelationships);
+        hf.FirstFooter = ReadHeaderFooterPart(
+            sectPr, "footerReference", "first", W + "ftr", partsById, archive, hyperlinkRelationships);
     }
 
     /// <summary>
@@ -487,11 +511,16 @@ public static class DocxReader
 
     /// <summary>
     /// Reads a non-final section break from a paragraph's w:pPr/w:sectPr into a <see cref="Section"/>:
-    /// the section's page settings (via <see cref="ReadPageSettings"/>) plus its break kind (w:type),
-    /// or null when the paragraph carries no section break. The body-level final section is read
-    /// separately into <see cref="TextDocument.Page"/> (see <see cref="ReadHeaderFooter"/>).
+    /// the section's page settings (via <see cref="ReadPageSettings"/>), its break kind (w:type) and its own
+    /// header/footer references (default/even/first, via <see cref="ReadSectionHeadersFooters"/>), or null
+    /// when the paragraph carries no section break. The body-level final section is read separately into
+    /// <see cref="TextDocument.Page"/> + <see cref="TextDocument.FinalSectionHeadersFooters"/> (see
+    /// <see cref="ReadHeaderFooter"/>).
     /// </summary>
-    private static Section? ReadSectionBreak(XElement? pPr)
+    private static Section? ReadSectionBreak(
+        XElement? pPr,
+        ZipArchive archive,
+        IReadOnlyDictionary<string, string> hyperlinkRelationships)
     {
         var sectPr = pPr?.Element(W + "sectPr");
         if (sectPr is null)
@@ -500,7 +529,10 @@ public static class DocxReader
         var page = new PageSettings();
         ReadPageSettings(sectPr, page);
         var breakKind = SectionBreakFromToken(sectPr.Element(W + "type")?.Attribute(W + "val")?.Value);
-        return new Section(page, breakKind);
+        var section = new Section(page, breakKind);
+        // Each non-final section references its own header/footer parts; recover them into the section.
+        ReadSectionHeadersFooters(sectPr, section.HeadersFooters, archive, hyperlinkRelationships);
+        return section;
     }
 
     /// <summary>
@@ -522,12 +554,12 @@ public static class DocxReader
         XName rootName,
         IReadOnlyDictionary<string, string> partsById,
         ZipArchive archive,
-        IReadOnlyDictionary<string, string> imageRelationships,
         IReadOnlyDictionary<string, string> hyperlinkRelationships)
     {
-        // Select the reference of the requested type (e.g. "default" or "even"). For the default type a
-        // type-less reference also counts (Word treats an absent w:type as "default"); the "even" type must
-        // match explicitly so an odd-only document does not pick up the default header as its even header.
+        // Select the reference of the requested type ("default"/"even"/"first"). For the default type a
+        // type-less reference also counts (Word treats an absent w:type as "default"); the "even"/"first"
+        // types must match explicitly so a default-only document does not pick up the default header as its
+        // even/first header.
         var references = sectPr.Elements(W + referenceName).ToList();
         if (references.Count == 0)
             return null;
@@ -546,12 +578,50 @@ public static class DocxReader
         if (root is null || root.Name != rootName)
             return null;
 
+        // Images inside a header/footer resolve their r:embed against the PART's own _rels (e.g.
+        // word/_rels/header3.xml.rels), not document.xml.rels — so build a part-local image-relationship map.
+        var partImageRelationships = ReadPartImageRelationships(archive, partPath);
+
         var result = new HeaderFooter();
         // Header/footer paragraphs carry no list numbering context (numbering.xml targets the body).
         var noNumbering = new Dictionary<int, ListKind>();
         foreach (var p in root.Elements(W + "p"))
-            result.Paragraphs.Add(ReadParagraph(p, archive, imageRelationships, hyperlinkRelationships, noNumbering));
+            result.Paragraphs.Add(ReadParagraph(p, archive, partImageRelationships, hyperlinkRelationships, noNumbering));
         return result;
+    }
+
+    /// <summary>
+    /// Reads the image relationships of an arbitrary part (e.g. a header/footer part) from its own
+    /// <c>&lt;dir&gt;/_rels/&lt;file&gt;.rels</c>, mapping each image relationship id → media part path
+    /// (resolved relative to the part's directory). Returns an empty map when the part has no rels file (the
+    /// common case — an image-less header), so image-less headers/footers cost nothing extra.
+    /// </summary>
+    private static Dictionary<string, string> ReadPartImageRelationships(ZipArchive archive, string partPath)
+    {
+        var map = new Dictionary<string, string>();
+        var lastSlash = partPath.LastIndexOf('/');
+        var dir = lastSlash >= 0 ? partPath[..lastSlash] : string.Empty;
+        var file = lastSlash >= 0 ? partPath[(lastSlash + 1)..] : partPath;
+        var relsPath = (dir.Length > 0 ? dir + "/" : string.Empty) + "_rels/" + file + ".rels";
+
+        var relsXml = LoadPart(archive, relsPath);
+        var relationships = relsXml?.Root?.Elements(Rel + "Relationship");
+        if (relationships is null)
+            return map;
+
+        foreach (var rel in relationships)
+        {
+            var type = rel.Attribute("Type")?.Value;
+            if (type is null || !type.EndsWith("/image", StringComparison.Ordinal))
+                continue;
+            var id = rel.Attribute("Id")?.Value;
+            var target = rel.Attribute("Target")?.Value;
+            if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(target))
+                continue;
+            // Targets are relative to the part's directory (e.g. "media/header3_image1.png" under word/).
+            map[id] = (dir.Length > 0 ? dir + "/" : string.Empty) + target.TrimStart('/');
+        }
+        return map;
     }
 
     /// <summary>Maps relationship id → part path for header/footer relationships in document.xml.rels.</summary>
@@ -600,8 +670,9 @@ public static class DocxReader
             paragraph.StyleId = pPr.Element(W + "pStyle")?.Attribute(W + "val")?.Value;
             paragraph.Formatting = ReadParagraphFormatting(pPr, numbering);
             // A paragraph carrying a w:pPr/w:sectPr ends a non-final section; recover that section's page
-            // setup + break kind onto the paragraph (the body-level final section is read elsewhere).
-            paragraph.SectionBreak = ReadSectionBreak(pPr);
+            // setup + break kind + own header/footer references onto the paragraph (the body-level final
+            // section is read elsewhere).
+            paragraph.SectionBreak = ReadSectionBreak(pPr, archive, hyperlinkRelationships);
         }
 
         // Iterate in document order so runs nested inside a w:hyperlink keep their position, and so a

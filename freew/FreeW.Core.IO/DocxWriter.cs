@@ -23,20 +23,15 @@ public static class DocxWriter
     private const string HeaderContentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml";
     private const string FooterContentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml";
 
-    private const string HeaderRelationshipId = "rIdHeader1";
-    private const string FooterRelationshipId = "rIdFooter1";
-    private const string EvenHeaderRelationshipId = "rIdHeader2";
-    private const string EvenFooterRelationshipId = "rIdFooter2";
+    // Header/footer part names + relationship ids are now generated per part (see CollectHeaderFooterParts):
+    // the legacy header1/footer1/header2/footer2 + rIdHeader1/rIdFooter1/rIdHeader2/rIdFooter2 are reproduced
+    // for the final section so single-section documents stay byte-equivalent.
     private const string FootnotesRelationshipId = "rIdFootnotes";
     private const string EndnotesRelationshipId = "rIdEndnotes";
     private const string CommentsRelationshipId = "rIdComments";
     private const string SettingsRelationshipId = "rIdSettings";
     private const string FontTableRelationshipId = "rIdFontTable";
     private const string ThemeRelationshipId = "rIdTheme1";
-    private const string HeaderPartName = "word/header1.xml";
-    private const string FooterPartName = "word/footer1.xml";
-    private const string EvenHeaderPartName = "word/header2.xml";
-    private const string EvenFooterPartName = "word/footer2.xml";
 
     // Minimal numbering scheme: one abstract num per list kind, mapped 1:1 to a w:num. Bullets use
     // abstractNumId 0 / numId 1; decimal numbering uses abstractNumId 1 / numId 2; multilevel (legal
@@ -73,15 +68,12 @@ public static class DocxWriter
         // Emit a numbering part only when at least one paragraph is decorated as a list.
         var hasLists = EnumerateParagraphs(document).Any(p => p.Formatting.ListKind != ListKind.None);
 
-        // A header/footer is only emitted as a part when it carries visible content.
-        var hasHeader = document.Header is { IsEmpty: false };
-        var hasFooter = document.Footer is { IsEmpty: false };
-
-        // The even-page header/footer parts are emitted only when "different odd/even pages" is on AND the
-        // even content carries something visible, so a document that toggles the setting without distinct
-        // even content still round-trips minimally (the toggle alone is enough for Word).
-        var hasEvenHeader = document.Page.DifferentOddEvenPages && document.EvenHeader is { IsEmpty: false };
-        var hasEvenFooter = document.Page.DifferentOddEvenPages && document.EvenFooter is { IsEmpty: false };
+        // Header/footer parts are now modelled per-section: one part per (section × header/footer × type)
+        // slot that carries visible content, each with its OWN image relationships. The final/body-level
+        // section owns the legacy header1/footer1/header2/footer2 names so single-section documents stay
+        // byte-equivalent (see CollectHeaderFooterParts). Even/first parts are only included when the owning
+        // section's page settings turn on different-odd/even or different-first-page respectively.
+        var headerFooterParts = CollectHeaderFooterParts(document);
 
         // A footnotes part is emitted only when the document actually carries footnotes.
         var hasFootnotes = document.Footnotes.Count > 0;
@@ -117,14 +109,18 @@ public static class DocxWriter
 
         // A word/theme/theme1.xml part is always emitted (real Word documents always carry one); it
         // serialises the document's DocumentTheme as a real clrScheme/fontScheme/fmtScheme.
+        // The png Default content-type is needed when ANY part carries a png — body images or header/footer
+        // images.
+        var hasAnyPng = images.Count > 0 || headerFooterParts.Any(p => p.Images.Count > 0);
+
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true);
-        WritePart(archive, "[Content_Types].xml", BuildContentTypes(images.Count > 0, hasLists, hasHeader, hasFooter, hasEvenHeader, hasEvenFooter, hasFootnotes, hasEndnotes, hasComments, hasWatermark, hasSettings, charts, embeddedObjects.Count > 0, smartArts, hasEmbeddedFonts));
+        WritePart(archive, "[Content_Types].xml", BuildContentTypes(hasAnyPng, hasLists, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasWatermark, hasSettings, charts, embeddedObjects.Count > 0, smartArts, hasEmbeddedFonts));
         WritePart(archive, "_rels/.rels", BuildPackageRels(hasWatermark));
         WritePart(archive, "docProps/core.xml", BuildCoreProperties(document.Properties));
         if (hasWatermark)
             WritePart(archive, "docProps/custom.xml", BuildCustomProperties(document.Page.Watermark!));
-        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, hasLists, hasHeader, hasFooter, hasEvenHeader, hasEvenFooter, hasFootnotes, hasEndnotes, hasComments, hasSettings, charts, embeddedObjects, smartArts, hasEmbeddedFonts));
-        WritePart(archive, "word/document.xml", BuildDocument(document, images, charts, embeddedObjects, smartArts, hyperlinks, hasHeader, hasFooter, hasEvenHeader, hasEvenFooter));
+        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, hasLists, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasSettings, charts, embeddedObjects, smartArts, hasEmbeddedFonts));
+        WritePart(archive, "word/document.xml", BuildDocument(document, images, charts, embeddedObjects, smartArts, hyperlinks, headerFooterParts));
         WritePart(archive, "word/styles.xml", BuildStyles(document));
         WritePart(archive, ThemePartName.TrimStart('/'), BuildTheme(document.Theme));
         if (hasSettings)
@@ -139,14 +135,20 @@ public static class DocxWriter
         }
         if (hasLists)
             WritePart(archive, "word/numbering.xml", BuildNumbering());
-        if (hasHeader)
-            WritePart(archive, HeaderPartName, BuildHeaderFooter(W + "hdr", document.Header!));
-        if (hasFooter)
-            WritePart(archive, FooterPartName, BuildHeaderFooter(W + "ftr", document.Footer!));
-        if (hasEvenHeader)
-            WritePart(archive, EvenHeaderPartName, BuildHeaderFooter(W + "hdr", document.EvenHeader!));
-        if (hasEvenFooter)
-            WritePart(archive, EvenFooterPartName, BuildHeaderFooter(W + "ftr", document.EvenFooter!));
+        // One part per (section × header/footer × type) slot with content. Each part XML carries its inline
+        // images via PART-LOCAL r:embed ids resolved against its own word/_rels/<part>.xml.rels, and its
+        // image media bytes go under word/media/.
+        foreach (var part in headerFooterParts)
+        {
+            WritePart(archive, "word/" + part.FileName,
+                BuildHeaderFooter(part.IsHeader ? W + "hdr" : W + "ftr", part));
+            if (part.Images.Count > 0)
+            {
+                WritePart(archive, "word/_rels/" + part.FileName + ".rels", BuildHeaderFooterRels(part));
+                foreach (var image in part.Images)
+                    WriteBinaryPart(archive, "word/media/" + image.FileName, image.Image.PngBytes);
+            }
+        }
         if (hasFootnotes)
             WritePart(archive, FootnotesPartName.TrimStart('/'), BuildFootnotes(document));
         if (hasEndnotes)
@@ -356,6 +358,152 @@ public static class DocxWriter
         return images;
     }
 
+    /// <summary>
+    /// The header/footer "type" a part fills (w:headerReference/w:footerReference @w:type), independent of
+    /// whether it is a header or a footer. <see cref="Default"/> is the all-pages (or odd-pages) header/footer;
+    /// <see cref="Even"/> is the even-page one (different odd/even pages); <see cref="First"/> is the first-page
+    /// one (different first page).
+    /// </summary>
+    private enum HeaderFooterType { Default, Even, First }
+
+    /// <summary>
+    /// One emitted header or footer part for one section: the part file name (e.g. <c>header3.xml</c>), the
+    /// document relationship id that the owning section's w:sectPr references, the root element name
+    /// (<c>w:hdr</c>/<c>w:ftr</c>), the reference element name (<c>headerReference</c>/<c>footerReference</c>),
+    /// the @w:type token, the model content, and the inline images the part's runs carry (each with a
+    /// PART-LOCAL relationship id resolved against this part's own <c>word/_rels/headerN.xml.rels</c>). The
+    /// <see cref="Section"/> the part belongs to (null for the final/body-level section) lets the per-section
+    /// w:sectPr emit the matching reference.
+    /// </summary>
+    private sealed record HeaderFooterPart(
+        Section? Section,
+        HeaderFooterType Type,
+        bool IsHeader,
+        HeaderFooter Content,
+        string FileName,
+        string RelationshipId,
+        IReadOnlyList<ImagePart> Images);
+
+    /// <summary>
+    /// Walks every section (the final/body-level section first, then each non-final section in document
+    /// order) and assigns one <see cref="HeaderFooterPart"/> per (section × header/footer × type) slot that
+    /// carries visible content. Part numbering preserves the legacy layout exactly so single-section
+    /// documents stay byte-equivalent: the final section's default header is <c>header1.xml</c>, its even
+    /// header <c>header2.xml</c>, default footer <c>footer1.xml</c>, even footer <c>footer2.xml</c> (the
+    /// historical names/ids), and all remaining parts (first-page, and every non-final section's parts)
+    /// continue the header/footer counters from there. Even parts are only emitted when the section's page
+    /// settings turn on different-odd/even; first parts only when different-first-page is on. Each part also
+    /// collects the inline images in its runs and assigns them part-local relationship ids.
+    /// </summary>
+    private static List<HeaderFooterPart> CollectHeaderFooterParts(TextDocument document)
+    {
+        var parts = new List<HeaderFooterPart>();
+        // Header/footer part-name counters. They are seeded so the legacy final-section parts reuse the exact
+        // historical names (header1/header2, footer1/footer2); see AddSectionParts for the seeding scheme.
+        var headerCount = 0;
+        var footerCount = 0;
+
+        void AddSlot(Section? section, SectionHeadersFooters hf, PageSettings page, bool legacyFinal)
+        {
+            // For the legacy final section we must reproduce header1=default, header2=even, footer1=default,
+            // footer2=even regardless of which exist, so the counters can't simply auto-increment in
+            // discovery order. We therefore reserve indices 1 (default) and 2 (even) for the final section.
+            void AddPart(bool isHeader, HeaderFooterType type, HeaderFooter? content)
+            {
+                if (content is null || content.IsEmpty)
+                    return;
+                int index;
+                if (legacyFinal && type == HeaderFooterType.Default)
+                    index = 1;
+                else if (legacyFinal && type == HeaderFooterType.Even)
+                    index = 2;
+                else
+                    index = (isHeader ? headerCount : footerCount) + 1;
+
+                if (isHeader)
+                    headerCount = Math.Max(headerCount, index);
+                else
+                    footerCount = Math.Max(footerCount, index);
+
+                var fileName = (isHeader ? "header" : "footer") + index + ".xml";
+                var relationshipId = (isHeader ? "rIdHeader" : "rIdFooter") + index;
+                var images = CollectHeaderFooterImages(content, fileName);
+                parts.Add(new HeaderFooterPart(
+                    section,
+                    type,
+                    isHeader,
+                    content,
+                    fileName,
+                    relationshipId,
+                    images));
+            }
+
+            // Parts are added header-then-footer per type (default, even, first) so the legacy single-section
+            // emission order — header1, footer1, header2(even), footer2(even) — is reproduced exactly,
+            // keeping content-type Overrides and document relationships byte-equivalent. Even parts only when
+            // different-odd/even is on; first parts only when different-first-page is on.
+            AddPart(isHeader: true, HeaderFooterType.Default, hf.Header);
+            AddPart(isHeader: false, HeaderFooterType.Default, hf.Footer);
+            if (page.DifferentOddEvenPages)
+            {
+                AddPart(isHeader: true, HeaderFooterType.Even, hf.EvenHeader);
+                AddPart(isHeader: false, HeaderFooterType.Even, hf.EvenFooter);
+            }
+            if (page.DifferentFirstPage)
+            {
+                AddPart(isHeader: true, HeaderFooterType.First, hf.FirstHeader);
+                AddPart(isHeader: false, HeaderFooterType.First, hf.FirstFooter);
+            }
+        }
+
+        // The final (body-level) section first, so it owns the legacy header1/footer1/header2/footer2 names.
+        AddSlot(null, document.FinalSectionHeadersFooters, document.Page, legacyFinal: true);
+        // Then each non-final section, in document order (the order their sectPr appear in the body).
+        foreach (var block in document.Blocks)
+            if (block is Paragraph { SectionBreak: { } section })
+                AddSlot(section, section.HeadersFooters, section.Page, legacyFinal: false);
+
+        return parts;
+    }
+
+    /// <summary>
+    /// Collects the inline images carried by a header/footer part's runs and assigns each a PART-LOCAL
+    /// relationship id (<c>rIdImgN</c>) plus a media file name unique to this part (derived from the part's
+    /// file name, e.g. <c>header3_image1.png</c>) so it never clashes with body media or another part's media.
+    /// The walk order matches <see cref="BuildHeaderFooterImagesByRun"/> so the part XML and its rels agree on
+    /// which rId belongs to which run.
+    /// </summary>
+    private static List<ImagePart> CollectHeaderFooterImages(HeaderFooter content, string partFileName)
+    {
+        var stem = partFileName.EndsWith(".xml", StringComparison.Ordinal)
+            ? partFileName[..^4]
+            : partFileName;
+        var images = new List<ImagePart>();
+        foreach (var paragraph in content.Paragraphs)
+            foreach (var run in paragraph.Runs)
+                if (run.Image is { } image)
+                {
+                    var index = images.Count + 1;
+                    // The rId is part-local (lives in word/_rels/<part>.xml.rels), so a plain rIdImgN never
+                    // collides with the document-level image ids. The media file name embeds the part stem so
+                    // each part's media files are unique within word/media/.
+                    images.Add(new ImagePart(image, $"rIdImg{index}", $"{stem}_image{index}.png", (uint)index));
+                }
+        return images;
+    }
+
+    /// <summary>Maps each image run in a header/footer part to its <see cref="ImagePart"/> (same walk as collection).</summary>
+    private static Dictionary<Run, ImagePart> BuildHeaderFooterImagesByRun(HeaderFooterPart part)
+    {
+        var map = new Dictionary<Run, ImagePart>();
+        var next = 0;
+        foreach (var paragraph in part.Content.Paragraphs)
+            foreach (var run in paragraph.Runs)
+                if (run.Image is not null && next < part.Images.Count)
+                    map[run] = part.Images[next++];
+        return map;
+    }
+
     /// <summary>Maps each distinct hyperlink URL to one external relationship id (rIdLinkN).</summary>
     private static Dictionary<string, string> CollectHyperlinks(TextDocument document)
     {
@@ -396,7 +544,7 @@ public static class DocxWriter
         entryStream.Write(content, 0, content.Length);
     }
 
-    private static XDocument BuildContentTypes(bool includePng, bool includeNumbering, bool hasHeader, bool hasFooter, bool hasEvenHeader, bool hasEvenFooter, bool hasFootnotes, bool hasEndnotes, bool hasComments, bool hasWatermark, bool hasSettings, IReadOnlyList<ChartPart> charts, bool hasEmbeddedObjects, IReadOnlyList<SmartArtPart> smartArts, bool hasEmbeddedFonts) => new(
+    private static XDocument BuildContentTypes(bool includePng, bool includeNumbering, IReadOnlyList<HeaderFooterPart> headerFooterParts, bool hasFootnotes, bool hasEndnotes, bool hasComments, bool hasWatermark, bool hasSettings, IReadOnlyList<ChartPart> charts, bool hasEmbeddedObjects, IReadOnlyList<SmartArtPart> smartArts, bool hasEmbeddedFonts) => new(
         new XElement(Ct + "Types",
             new XElement(Ct + "Default", new XAttribute("Extension", "rels"),
                 new XAttribute("ContentType", "application/vnd.openxmlformats-package.relationships+xml")),
@@ -429,23 +577,11 @@ public static class DocxWriter
                 ? new XElement(Ct + "Override", new XAttribute("PartName", NumberingPartName),
                     new XAttribute("ContentType", NumberingContentType))
                 : null,
-            hasHeader
-                ? new XElement(Ct + "Override", new XAttribute("PartName", "/" + HeaderPartName),
-                    new XAttribute("ContentType", HeaderContentType))
-                : null,
-            hasFooter
-                ? new XElement(Ct + "Override", new XAttribute("PartName", "/" + FooterPartName),
-                    new XAttribute("ContentType", FooterContentType))
-                : null,
-            // Even-page header/footer parts (header2.xml / footer2.xml) for "different odd/even pages".
-            hasEvenHeader
-                ? new XElement(Ct + "Override", new XAttribute("PartName", "/" + EvenHeaderPartName),
-                    new XAttribute("ContentType", HeaderContentType))
-                : null,
-            hasEvenFooter
-                ? new XElement(Ct + "Override", new XAttribute("PartName", "/" + EvenFooterPartName),
-                    new XAttribute("ContentType", FooterContentType))
-                : null,
+            // One Override per emitted header/footer part (in collection order, which reproduces the legacy
+            // header1, footer1, header2, footer2 ordering for single-section documents).
+            headerFooterParts.Select(part => new XElement(Ct + "Override",
+                new XAttribute("PartName", "/word/" + part.FileName),
+                new XAttribute("ContentType", part.IsHeader ? HeaderContentType : FooterContentType))),
             hasFootnotes
                 ? new XElement(Ct + "Override", new XAttribute("PartName", FootnotesPartName),
                     new XAttribute("ContentType", FootnotesContentType))
@@ -572,10 +708,7 @@ public static class DocxWriter
         IReadOnlyList<ImagePart> images,
         IReadOnlyDictionary<string, string> hyperlinks,
         bool includeNumbering,
-        bool hasHeader,
-        bool hasFooter,
-        bool hasEvenHeader,
-        bool hasEvenFooter,
+        IReadOnlyList<HeaderFooterPart> headerFooterParts,
         bool hasFootnotes,
         bool hasEndnotes,
         bool hasComments,
@@ -611,27 +744,14 @@ public static class DocxWriter
                 new XAttribute("Id", "rIdNumbering"),
                 new XAttribute("Type", NumberingRelType),
                 new XAttribute("Target", "numbering.xml")));
-        if (hasHeader)
+        // One document relationship per emitted header/footer part (in collection order — which reproduces
+        // the legacy header1, footer1, header2, footer2 ordering and rel ids for single-section documents).
+        // The owning section's w:sectPr references the part by this relationship id.
+        foreach (var part in headerFooterParts)
             relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", HeaderRelationshipId),
-                new XAttribute("Type", HeaderRel),
-                new XAttribute("Target", "header1.xml")));
-        if (hasFooter)
-            relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", FooterRelationshipId),
-                new XAttribute("Type", FooterRel),
-                new XAttribute("Target", "footer1.xml")));
-        // Even-page header/footer relationships (header2.xml / footer2.xml) for "different odd/even pages".
-        if (hasEvenHeader)
-            relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", EvenHeaderRelationshipId),
-                new XAttribute("Type", HeaderRel),
-                new XAttribute("Target", "header2.xml")));
-        if (hasEvenFooter)
-            relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", EvenFooterRelationshipId),
-                new XAttribute("Type", FooterRel),
-                new XAttribute("Target", "footer2.xml")));
+                new XAttribute("Id", part.RelationshipId),
+                new XAttribute("Type", part.IsHeader ? HeaderRel : FooterRel),
+                new XAttribute("Target", part.FileName)));
         if (hasFootnotes)
             relationships.Add(new XElement(Rel + "Relationship",
                 new XAttribute("Id", FootnotesRelationshipId),
@@ -700,11 +820,16 @@ public static class DocxWriter
         IReadOnlyList<EmbeddedObjectPart> embeddedObjects,
         IReadOnlyList<SmartArtPart> smartArts,
         IReadOnlyDictionary<string, string> hyperlinks,
-        bool hasHeader,
-        bool hasFooter,
-        bool hasEvenHeader,
-        bool hasEvenFooter)
+        IReadOnlyList<HeaderFooterPart> headerFooterParts)
     {
+        // Group header/footer parts by their owning section: the final/body-level section (Section == null)
+        // feeds the body-level w:sectPr; each non-final section feeds its paragraph-level w:sectPr.
+        var finalSectionParts = headerFooterParts.Where(p => p.Section is null).ToList();
+        var partsBySection = headerFooterParts
+            .Where(p => p.Section is not null)
+            .GroupBy(p => p.Section!)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<HeaderFooterPart>)g.ToList());
+
         // Per-write id state, local to this BuildDocument invocation so concurrent writes never race.
         // Bookmark + revision ids start at 1; the shape docPr counter is seeded just above the image
         // drawing ids (1..imageCount) so the two id spaces never overlap. Each shape BuildRun emits takes
@@ -738,8 +863,8 @@ public static class DocxWriter
 
         var body = new XElement(W + "body");
         foreach (var block in document.Blocks)
-            body.Add(BuildBlock(block, drawings, hyperlinks));
-        body.Add(BuildSectionProperties(document.Page, hasHeader, hasFooter, hasEvenHeader, hasEvenFooter));
+            body.Add(BuildBlock(block, drawings, hyperlinks, partsBySection));
+        body.Add(BuildSectionProperties(document.Page, finalSectionParts));
 
         // Page background colour (w:background): it is positionally the FIRST child of w:document, before
         // w:body. Emitted only when a background colour is set so existing documents are unaffected.
@@ -812,22 +937,40 @@ public static class DocxWriter
             new IdAllocator());
     }
 
-    /// <summary>Builds a header (w:hdr) or footer (w:ftr) part from its model paragraphs.</summary>
-    private static XDocument BuildHeaderFooter(XName rootName, HeaderFooter content)
+    /// <summary>
+    /// Builds a header (w:hdr) or footer (w:ftr) part from its model paragraphs. When the part carries inline
+    /// images, each image run emits a w:drawing whose r:embed references a PART-LOCAL relationship id (resolved
+    /// against the part's own word/_rels/&lt;part&gt;.xml.rels, see <see cref="BuildHeaderFooterRels"/>) and the
+    /// drawing namespaces (wp/a/pic) are declared on the root. An image-less header/footer declares only w/r
+    /// (so it stays byte-equivalent to the historical output).
+    /// </summary>
+    private static XDocument BuildHeaderFooter(XName rootName, HeaderFooterPart part)
     {
         var root = new XElement(rootName,
             new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName),
             new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName));
 
-        // Header/footer runs do not carry inline images (the body image walk does not reach them).
-        var noDrawings = RunDrawings.Empty();
+        // Header/footer runs may carry inline images; their part-local image parts are mapped here. They never
+        // carry charts/embedded objects/SmartArt/document hyperlinks (those walks target the body), so those
+        // maps stay empty. The IdAllocator is part-local so drawing ids are isolated from the body.
+        var hasImages = part.Images.Count > 0;
+        if (hasImages)
+        {
+            // The picture drawing uses the wp/a/pic namespaces; declare them on the root when images exist.
+            root.Add(new XAttribute(XNamespace.Xmlns + "wp", Wp.NamespaceName));
+            root.Add(new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName));
+            root.Add(new XAttribute(XNamespace.Xmlns + "pic", Pic.NamespaceName));
+        }
+
+        var imagesByRun = hasImages ? BuildHeaderFooterImagesByRun(part) : new Dictionary<Run, ImagePart>();
+        var drawings = RunDrawings.Empty() with { Images = imagesByRun };
         var noHyperlinks = new Dictionary<string, string>(StringComparer.Ordinal);
 
-        if (content.Paragraphs.Count == 0)
+        if (part.Content.Paragraphs.Count == 0)
             root.Add(new XElement(W + "p"));
         else
-            foreach (var paragraph in content.Paragraphs)
-                root.Add(BuildParagraph(paragraph, noDrawings, noHyperlinks));
+            foreach (var paragraph in part.Content.Paragraphs)
+                root.Add(BuildParagraph(paragraph, drawings, noHyperlinks));
 
         return new XDocument(root);
     }
@@ -946,10 +1089,16 @@ public static class DocxWriter
         return new XDocument(comments);
     }
 
-    private static XElement BuildBlock(Block block, RunDrawings drawings, IReadOnlyDictionary<string, string> hyperlinks) => block switch
+    private static XElement BuildBlock(
+        Block block,
+        RunDrawings drawings,
+        IReadOnlyDictionary<string, string> hyperlinks,
+        IReadOnlyDictionary<Section, IReadOnlyList<HeaderFooterPart>> partsBySection) => block switch
     {
         Table table => BuildTable(table, drawings, hyperlinks),
-        Paragraph paragraph => BuildParagraph(paragraph, drawings, hyperlinks),
+        // Only top-level body paragraphs can end a non-final section, so the per-section header/footer map
+        // is threaded here (and nowhere else); table-cell/header/footer/footnote paragraphs pass no map.
+        Paragraph paragraph => BuildParagraph(paragraph, drawings, hyperlinks, partsBySection),
         _ => new XElement(W + "p")
     };
 
@@ -1172,10 +1321,14 @@ public static class DocxWriter
         return sdtPr;
     }
 
-    private static XElement BuildParagraph(Paragraph paragraph, RunDrawings drawings, IReadOnlyDictionary<string, string> hyperlinks)
+    private static XElement BuildParagraph(
+        Paragraph paragraph,
+        RunDrawings drawings,
+        IReadOnlyDictionary<string, string> hyperlinks,
+        IReadOnlyDictionary<Section, IReadOnlyList<HeaderFooterPart>>? partsBySection = null)
     {
         var p = new XElement(W + "p");
-        var pPr = BuildParagraphProperties(paragraph);
+        var pPr = BuildParagraphProperties(paragraph, partsBySection);
         if (pPr is not null)
             p.Add(pPr);
 
@@ -1319,7 +1472,9 @@ public static class DocxWriter
         return p;
     }
 
-    private static XElement? BuildParagraphProperties(Paragraph paragraph)
+    private static XElement? BuildParagraphProperties(
+        Paragraph paragraph,
+        IReadOnlyDictionary<Section, IReadOnlyList<HeaderFooterPart>>? partsBySection = null)
     {
         var pPr = new XElement(W + "pPr");
         if (!string.IsNullOrEmpty(paragraph.StyleId))
@@ -1397,11 +1552,17 @@ public static class DocxWriter
                 new XAttribute(W + "fill", shading.TrimStart('#'))));
 
         // A section break carried by this paragraph: the section's w:sectPr is the LAST child of w:pPr
-        // (schema order), marking this paragraph as the end of a non-final section. Non-final sections do
-        // not reference header/footer parts (only the body-level section does in FreeW). Reuses the shared
-        // sectPr builder so per-section properties are emitted from one code path.
+        // (schema order), marking this paragraph as the end of a non-final section. Each non-final section
+        // now references its OWN header/footer parts (via partsBySection), so multi-section documents keep
+        // page-specific headers/footers. Reuses the shared sectPr builder so per-section properties are
+        // emitted from one code path.
         if (paragraph.SectionBreak is { } section)
-            pPr.Add(BuildSectionProperties(section.Page, hasHeader: false, hasFooter: false, breakKind: section.BreakKind));
+        {
+            var sectionParts = partsBySection is not null && partsBySection.TryGetValue(section, out var p)
+                ? p
+                : (IReadOnlyList<HeaderFooterPart>)[];
+            pPr.Add(BuildSectionProperties(section.Page, sectionParts, breakKind: section.BreakKind));
+        }
 
         return pPr.HasElements ? pPr : null;
     }
@@ -2696,41 +2857,26 @@ public static class DocxWriter
     /// <summary>
     /// Builds a w:sectPr for one section's <paramref name="page"/> settings. Used for both the final
     /// (body-level) section and each non-final section (whose sectPr lives in its last paragraph's pPr),
-    /// so the per-section properties are emitted from one place rather than duplicated.
-    /// <paramref name="hasHeader"/>/<paramref name="hasFooter"/> wire the default header/footer references
-    /// (only the body-level section references them in FreeW). <paramref name="breakKind"/>, when non-null,
-    /// emits the section's w:type (the break kind that begins it); the body-level final section passes null.
+    /// so the per-section properties are emitted from one place rather than duplicated. The section's own
+    /// <paramref name="headerFooterParts"/> wire its w:headerReference/w:footerReference elements (default /
+    /// even / first), each referencing the part's relationship id — so multi-section and page-specific
+    /// (first-page) headers/footers round-trip. <paramref name="breakKind"/>, when non-null, emits the
+    /// section's w:type (the break kind that begins it); the body-level final section passes null.
     /// </summary>
     private static XElement BuildSectionProperties(
         PageSettings page,
-        bool hasHeader,
-        bool hasFooter,
-        bool hasEvenHeader = false,
-        bool hasEvenFooter = false,
+        IReadOnlyList<HeaderFooterPart> headerFooterParts,
         SectionBreakKind? breakKind = null) =>
         new(W + "sectPr",
-            // Header/footer references must precede pgSz/pgMar in the sectPr schema order. The "even"
-            // references (for "different odd/even pages") sit alongside the "default" ones.
-            hasHeader
-                ? new XElement(W + "headerReference",
-                    new XAttribute(W + "type", "default"),
-                    new XAttribute(R + "id", HeaderRelationshipId))
-                : null,
-            hasEvenHeader
-                ? new XElement(W + "headerReference",
-                    new XAttribute(W + "type", "even"),
-                    new XAttribute(R + "id", EvenHeaderRelationshipId))
-                : null,
-            hasFooter
-                ? new XElement(W + "footerReference",
-                    new XAttribute(W + "type", "default"),
-                    new XAttribute(R + "id", FooterRelationshipId))
-                : null,
-            hasEvenFooter
-                ? new XElement(W + "footerReference",
-                    new XAttribute(W + "type", "even"),
-                    new XAttribute(R + "id", EvenFooterRelationshipId))
-                : null,
+            // Header/footer references must precede pgSz/pgMar in the sectPr schema order. Headers are emitted
+            // before footers, each in default→even→first order, reproducing the legacy single-section
+            // emission (default header, even header, default footer, even footer) byte-for-byte.
+            HeaderFooterReference(headerFooterParts, isHeader: true, HeaderFooterType.Default),
+            HeaderFooterReference(headerFooterParts, isHeader: true, HeaderFooterType.Even),
+            HeaderFooterReference(headerFooterParts, isHeader: true, HeaderFooterType.First),
+            HeaderFooterReference(headerFooterParts, isHeader: false, HeaderFooterType.Default),
+            HeaderFooterReference(headerFooterParts, isHeader: false, HeaderFooterType.Even),
+            HeaderFooterReference(headerFooterParts, isHeader: false, HeaderFooterType.First),
             // The section break kind (w:type) precedes pgSz in the schema. "nextPage" is Word's default and
             // is emitted explicitly only for non-final sections (the body-level final section passes null).
             breakKind is { } kind
@@ -2762,9 +2908,49 @@ public static class DocxWriter
             page.VerticalAlignment != PageVerticalAlignment.Top
                 ? new XElement(W + "vAlign", new XAttribute(W + "val", VerticalAlignmentToken(page.VerticalAlignment)))
                 : null,
-            // "Different first page" (w:titlePg): a toggle emitted only when set, after w:vAlign. FreeW
-            // still stores a single header/footer; the flag lets Word honour a distinct first-page header.
+            // "Different first page" (w:titlePg): a toggle emitted only when set, after w:vAlign. When set,
+            // the section may also carry a distinct first-page header/footer part (w:type="first" above).
             page.DifferentFirstPage ? new XElement(W + "titlePg") : null);
+
+    /// <summary>
+    /// Builds the w:headerReference/w:footerReference for the part of the requested kind+type in
+    /// <paramref name="parts"/>, or null when this section carries no such part. The @w:type token is
+    /// "default"/"even"/"first"; the @r:id references the part's document relationship id.
+    /// </summary>
+    private static XElement? HeaderFooterReference(
+        IReadOnlyList<HeaderFooterPart> parts,
+        bool isHeader,
+        HeaderFooterType type)
+    {
+        var part = parts.FirstOrDefault(p => p.IsHeader == isHeader && p.Type == type);
+        if (part is null)
+            return null;
+        var token = type switch
+        {
+            HeaderFooterType.Even => "even",
+            HeaderFooterType.First => "first",
+            _ => "default"
+        };
+        return new XElement(W + (isHeader ? "headerReference" : "footerReference"),
+            new XAttribute(W + "type", token),
+            new XAttribute(R + "id", part.RelationshipId));
+    }
+
+    /// <summary>
+    /// Builds a header/footer part's own relationships part (word/_rels/&lt;part&gt;.xml.rels), declaring one
+    /// image relationship per inline image the part carries. The image r:embed ids inside the part XML are
+    /// PART-LOCAL and resolve against THIS rels file (not document.xml.rels), so header/footer images survive.
+    /// </summary>
+    private static XDocument BuildHeaderFooterRels(HeaderFooterPart part)
+    {
+        var relationships = new XElement(Rel + "Relationships");
+        foreach (var image in part.Images)
+            relationships.Add(new XElement(Rel + "Relationship",
+                new XAttribute("Id", image.RelationshipId),
+                new XAttribute("Type", ImageRel),
+                new XAttribute("Target", "media/" + image.FileName)));
+        return new XDocument(relationships);
+    }
 
     /// <summary>Maps a <see cref="SectionBreakKind"/> to its w:sectPr/w:type w:val token.</summary>
     private static string SectionBreakToken(SectionBreakKind kind) => kind switch

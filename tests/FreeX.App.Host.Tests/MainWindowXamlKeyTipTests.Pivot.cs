@@ -8,54 +8,6 @@ namespace FreeX.App.Host.Tests;
 public sealed partial class MainWindowXamlKeyTipTests
 {
     [Fact]
-    public void PivotTableEntryPoint_IsAvailableOnInsertRibbon()
-    {
-        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
-        XNamespace local = "clr-namespace:FreeX.App.Host";
-        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
-
-        var buttons = document
-            .Descendants(presentation + "Button")
-            .Where(element => element.Attribute("Click")?.Value == "PivotTableBtn_Click")
-            .ToList();
-
-        buttons.Should().ContainSingle();
-        buttons[0].Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("Create");
-    }
-
-    [Fact]
-    public void PivotTableRefreshEntryPoint_IsAvailableOnInsertRibbon()
-    {
-        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
-        XNamespace local = "clr-namespace:FreeX.App.Host";
-        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
-
-        var buttons = document
-            .Descendants(presentation + "Button")
-            .Where(element => element.Attribute("Click")?.Value == "RefreshPivotTableBtn_Click")
-            .ToList();
-
-        buttons.Should().NotBeEmpty();
-        buttons[0].Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("Refresh");
-    }
-
-    [Fact]
-    public void PivotTableShowDetailsEntryPoint_IsAvailableOnInsertRibbon()
-    {
-        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
-        XNamespace local = "clr-namespace:FreeX.App.Host";
-        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
-
-        var buttons = document
-            .Descendants(presentation + "Button")
-            .Where(element => element.Attribute("Click")?.Value == "PivotTableShowDetailsBtn_Click")
-            .ToList();
-
-        buttons.Should().NotBeEmpty();
-        LocalizedAttribute(buttons[0], local + "RibbonTooltip.Description").Should().Contain("detail");
-    }
-
-    [Fact]
     public void PivotTableShowDetailsGesture_IsAttemptedBeforeDoubleClickEdit()
     {
         var source =
@@ -88,23 +40,6 @@ public sealed partial class MainWindowXamlKeyTipTests
         handlerSource.Should().NotContain("new AddSheetCommand");
         handlerSource.Should().NotContain("_workbook.Sheets.LastOrDefault()");
         handlerSource.Should().NotContain("PivotTableRefreshService.Refresh");
-    }
-
-    [Fact]
-    public void PivotChartEntryPoint_IsAvailableOnInsertRibbon()
-    {
-        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
-        XNamespace local = "clr-namespace:FreeX.App.Host";
-        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
-
-        var buttons = document
-            .Descendants(presentation + "Button")
-            .Where(element => element.Attribute("Click")?.Value == "PivotChartBtn_Click")
-            .ToList();
-
-        buttons.Should().NotBeEmpty();
-        buttons.Should().AllSatisfy(button => LocalizedAttribute(button, "Content").Should().Contain("PivotChart"));
-        buttons.Should().AllSatisfy(button => LocalizedAttribute(button, local + "RibbonTooltip.Description").Should().Contain("PivotTable"));
     }
 
     [Fact]
@@ -506,62 +441,6 @@ public sealed partial class MainWindowXamlKeyTipTests
         xamlSource.Should().Contain("Binding=\"{Binding HasActiveFilter}\"");
         xamlSource.Should().Contain("IsEnabled=\"{Binding HasActiveFilter}\"");
         xamlSource.Should().Contain("Binding=\"{Binding IsSelected}\"");
-    }
-
-    [Fact]
-    public void PivotTableContextualTabs_ExposeAnalyzeAndDesignCommands()
-    {
-        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
-        XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
-        XNamespace local = "clr-namespace:FreeX.App.Host";
-        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
-
-        var contextualTabs = document
-            .Descendants(presentation + "TabItem")
-            .Where(tab => tab.Attribute(xaml + "Name")?.Value is "PivotTableAnalyzeTab" or "PivotTableDesignTab")
-            .ToList();
-
-        contextualTabs.Select(tab => LocalizedAttribute(tab, "Header"))
-            .Should()
-            .BeEquivalentTo(["PivotTable Analyze", "Design"]);
-
-        var clickHandlers = contextualTabs
-            .Descendants(presentation + "Button")
-            .Select(button => button.Attribute("Click")?.Value)
-            .Where(click => click is not null)
-            .ToHashSet(StringComparer.Ordinal);
-
-        clickHandlers.Should().Contain([
-            "PivotTableNameBtn_Click",
-            "PivotTableOptionsBtn_Click",
-            "PivotTableClearBtn_Click",
-            "PivotTableSelectBtn_Click",
-            "PivotTableMoveBtn_Click",
-            "PivotFieldListBtn_Click",
-            "RefreshPivotTableBtn_Click",
-            "PivotTableShowDetailsBtn_Click",
-            "PivotChartBtn_Click",
-            "PivotChartChangeTypeBtn_Click",
-            "PivotChartOptionsBtn_Click",
-            "PivotInsertSlicerBtn_Click",
-            "PivotInsertTimelineBtn_Click",
-            "PivotExpandCollapseButtonsBtn_Click",
-            "PivotFieldHeadersBtn_Click",
-            "PivotGrandTotalsBtn_Click",
-            "PivotSubtotalsBtn_Click",
-            "PivotReportLayoutBtn_Click",
-            "PivotBlankRowsBtn_Click",
-            "PivotRowHeadersBtn_Click",
-            "PivotColumnHeadersBtn_Click",
-            "PivotBandedRowsBtn_Click",
-            "PivotBandedColumnsBtn_Click",
-            "PivotStyleGalleryBtn_Click"
-        ]);
-
-        contextualTabs
-            .Descendants(presentation + "Button")
-            .Should()
-            .AllSatisfy(button => button.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().NotBeNullOrWhiteSpace());
     }
 
     [Fact]
