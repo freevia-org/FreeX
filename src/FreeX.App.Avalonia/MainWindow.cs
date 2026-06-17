@@ -680,6 +680,8 @@ public sealed partial class MainWindow : Window
                     ["view.zoomToSelection"] = ZoomToSelection,
                     ["view.freezePanes"] = FreezePanesAtActiveCell,
                     ["view.pageBreakPreview"] = TogglePageBreakPreview,
+                    // Insert tab (Links / Text groups).
+                    ["insert.hyperlink"] = () => _ = ShowInsertHyperlinkDialogAsync(),
                     // Page Layout tab (Page Setup dialog covers margins/orientation/size).
                     ["pageLayout.margins"] = () => _ = ShowPageSetupDialogAsync(),
                     ["pageLayout.orientation"] = () => _ = ShowPageSetupDialogAsync(),

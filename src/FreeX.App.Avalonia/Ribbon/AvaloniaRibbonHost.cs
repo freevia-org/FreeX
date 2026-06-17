@@ -399,6 +399,45 @@ internal static class SampleRibbon
                         Icon = new RibbonCommandIcon(RibbonCommandIconKind.TextBox),
                     });
                 });
+
+                insert.Group("sparklines", "Sparklines", "S", 70, g =>
+                {
+                    g.Button("insert.sparklineLine", "Line", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Sparkline) });
+                    g.Button("insert.sparklineColumn", "Column", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.ChartColumn) });
+                    g.Button("insert.sparklineWinLoss", "Win/Loss", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Sparkline) });
+                });
+
+                insert.Group("filters", "Filters", "F", 60, g =>
+                {
+                    g.Button("insert.slicer", "Slicer", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Filter) });
+                    g.Button("insert.timeline", "Timeline", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Date) });
+                });
+
+                insert.Group("links", "Links", "I", 50, g =>
+                {
+                    g.Button("insert.hyperlink", "Link", c => c with
+                    {
+                        PreferredLayout = RibbonCommandLayoutKind.Large,
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Link),
+                    });
+                });
+
+                insert.Group("comments", "Comments", "C", 40, g =>
+                {
+                    g.Button("insert.comment", "Comment", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Comment) });
+                });
+
+                insert.Group("text", "Text", "X", 30, g =>
+                {
+                    g.Button("insert.headerFooter", "Header & Footer", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.HeaderFooter) });
+                    g.Button("insert.object", "Object", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Insert) });
+                });
+
+                insert.Group("symbols", "Symbols", "Y", 20, g =>
+                {
+                    g.Button("insert.equation", "Equation", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Function) });
+                    g.Button("insert.symbol", "Symbol", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Symbol) });
+                });
             })
             .Tab("data", "Data", "D", data =>
             {

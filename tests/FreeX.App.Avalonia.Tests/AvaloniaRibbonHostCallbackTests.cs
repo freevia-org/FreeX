@@ -176,6 +176,16 @@ public sealed class AvaloniaRibbonHostCallbackTests
     }
 
     [Fact]
+    public void BuildDefinition_InsertTab_MatchesWindowsGroups()
+    {
+        var insert = SampleRibbon.BuildDefinition().Tabs.Single(t => t.Header == "Insert");
+        var groups = insert.Groups.Select(g => g.Header).ToList();
+
+        foreach (var expected in new[] { "Tables", "Charts", "Sparklines", "Filters", "Links", "Comments", "Text", "Symbols" })
+            Assert.Contains(expected, groups);
+    }
+
+    [Fact]
     public void BuildDefinition_ViewTab_HasShowZoomWindowGroups()
     {
         var view = SampleRibbon.BuildDefinition().Tabs.Single(t => t.Header == "View");
