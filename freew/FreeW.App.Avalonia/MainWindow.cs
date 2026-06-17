@@ -77,6 +77,12 @@ public sealed class MainWindow : Window
 
         _editor.DocumentChanged += UpdateStatus;
         _editor.ScrollToCaretRequested += ScrollCaretIntoView;
+        _editor.CellEditRequested += async req =>
+        {
+            var result = await new CellEditDialog(req.Text).ShowDialog<string?>(this);
+            if (result is not null)
+                _editor.SetCellText(req.Block, req.Row, req.Col, result);
+        };
         _editor.LoadDocument(LoadStartupDocument(startupArguments));
         KeyDown += MainWindow_KeyDown;
         Content = root;

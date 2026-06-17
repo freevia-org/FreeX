@@ -34,6 +34,7 @@ public sealed class DocumentView : Control
     private readonly List<(Rect Rect, IBrush? Fill, bool Border)> _rects = new();
     private readonly List<(Rect Rect, Bitmap? Image)> _images = new();
     private readonly Dictionary<InlineImage, Bitmap?> _bitmapCache = new();
+    private readonly List<(Rect Rect, int Block, int Row, int Col)> _cellHits = new();
 
     private TextDocument _doc = TextDocument.CreateEmpty();
     private DocumentCommandBus _bus;
@@ -54,6 +55,22 @@ public sealed class DocumentView : Control
 
     /// <summary>Raised when a Find result moves the caret, so the shell can scroll it into view.</summary>
     public event Action? ScrollToCaretRequested;
+
+    /// <summary>Raised when a table cell is double-clicked, so the shell can open a cell editor.</summary>
+    public event Action<CellEditRequest>? CellEditRequested;
+
+    public sealed record CellEditRequest(int Block, int Row, int Col, string Text);
+
+    public string GetCellText(int block, int row, int col)
+    {
+        if (block >= 0 && block < _doc.Blocks.Count && _doc.Blocks[block] is Table table
+            && row >= 0 && row < table.Rows.Count && col >= 0 && col < table.Rows[row].Cells.Count)
+            return table.Rows[row].Cells[col].PlainText;
+        return string.Empty;
+    }
+
+    public void SetCellText(int block, int row, int col, string text) =>
+        _bus.Execute(new CellTextCommand(block, row, col, text));
 
     public TextDocument Document => _doc;
     public bool CanUndo => _bus.CanUndo;
@@ -186,6 +203,7 @@ public sealed class DocumentView : Control
         _markers.Clear();
         _rects.Clear();
         _images.Clear();
+        _cellHits.Clear();
         var textWidth = Math.Max(120, width - LeftMargin - RightMargin);
         double y = TopMargin;
 
@@ -425,6 +443,7 @@ public sealed class DocumentView : Control
                 var rect = new Rect(columnLeft[startCol], y, cellWidth, rowHeight);
                 IBrush? fill = isHeader ? HeaderFill : isBand ? BandFill : null;
                 _rects.Add((rect, fill, borders));
+                _cellHits.Add((rect, blockIndex, r, startCol));
 
                 var ty = y + pad;
                 foreach (var (lineHeight, chars) in lines)
@@ -643,6 +662,21 @@ public sealed class DocumentView : Control
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         base.OnPointerPressed(e);
+
+        // Double-click a table cell opens the cell editor (tables are otherwise read-only).
+        if (e.ClickCount == 2)
+        {
+            var hit = e.GetPosition(this);
+            foreach (var cell in _cellHits)
+            {
+                if (cell.Rect.Contains(hit))
+                {
+                    CellEditRequested?.Invoke(new CellEditRequest(cell.Block, cell.Row, cell.Col, GetCellText(cell.Block, cell.Row, cell.Col)));
+                    return;
+                }
+            }
+        }
+
         Focus();
         var point = e.GetPosition(this);
         if (TryHitTest(point, out var pos))
