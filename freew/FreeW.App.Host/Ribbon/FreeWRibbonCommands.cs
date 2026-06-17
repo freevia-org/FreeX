@@ -164,6 +164,13 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.image-align-left", new ImageAlignCommand(editor, FreeW.Core.Model.TextAlignment.Left));
         registry.Register("freew.image-align-center", new ImageAlignCommand(editor, FreeW.Core.Model.TextAlignment.Center));
         registry.Register("freew.image-align-right", new ImageAlignCommand(editor, FreeW.Core.Model.TextAlignment.Right));
+        // Insert tab — Illustrations: insert a sample DrawingML text box (a preset-geometry shape carrying
+        // text) at the caret. Round-trips through docx as an inline w:drawing/wps:wsp (see DocxWriter/Reader).
+        registry.Register("freew.shapes", new ActionCommand(() =>
+        {
+            editor.Focus();
+            editor.InsertShape(FreeW.Core.Model.Shape.TextBoxWith("Text Box", widthPt: 180, heightPt: 90, fillColorHex: "#DCE6F1"));
+        }));
         // Insert tab — Links: prompt for a URL and apply it as a hyperlink over the selection.
         registry.Register("freew.hyperlink", new InsertHyperlinkCommand(editor));
         // Insert tab — Links: manage the hyperlink at the caret — change its URL, remove it, or set a ScreenTip.

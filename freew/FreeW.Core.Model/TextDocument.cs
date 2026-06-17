@@ -47,6 +47,23 @@ public sealed class Run(string text, RunFormatting? formatting = null)
         new(equation.LinearText) { Equation = equation };
 
     /// <summary>
+    /// Optional inline DrawingML shape or text box. When non-null this run serialises as an inline
+    /// <c>w:drawing</c> wrapping a <c>wps:wsp</c> (preset geometry + optional fill + optional text-box
+    /// content) rather than literal text, and the run carries no <see cref="Text"/> of its own (for a text
+    /// box, <see cref="Text"/> mirrors the box's plain text so shape-unaware consumers still render
+    /// something). Modelled at the run level — mirroring <see cref="Image"/> and <see cref="Equation"/> —
+    /// so shapes round-trip through the existing run flow without a new block type.
+    /// </summary>
+    public Shape? Shape { get; set; }
+
+    /// <summary>
+    /// Creates a run that carries an inline shape. For a text box the run's <see cref="Text"/> mirrors the
+    /// box's plain text; a plain (text-less) shape carries an empty <see cref="Text"/>.
+    /// </summary>
+    public static Run FromShape(Shape shape) =>
+        new(shape.HasText ? shape.PlainText : string.Empty) { Shape = shape };
+
+    /// <summary>
     /// Optional external hyperlink target (absolute URL). When non-null the run is wrapped in a
     /// w:hyperlink on save, with the URL stored as an external relationship, and rendered as a link.
     /// Mutually exclusive with <see cref="HyperlinkAnchor"/>: a run links either externally or

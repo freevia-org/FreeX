@@ -29,6 +29,13 @@ internal static class Ooxml
     public static readonly XNamespace A = "http://schemas.openxmlformats.org/drawingml/2006/main";
     public static readonly XNamespace Pic = "http://schemas.openxmlformats.org/drawingml/2006/picture";
 
+    /// <summary>
+    /// The Office 2010 WordprocessingShape namespace (wps), used for inline DrawingML shapes / text boxes
+    /// (w:drawing/wp:inline/a:graphic/a:graphicData[uri=wps]/wps:wsp). Declared on the document root so
+    /// shapes serialise and parse like the other inline run features.
+    /// </summary>
+    public static readonly XNamespace Wps = "http://schemas.microsoft.com/office/word/2010/wordprocessingShape";
+
     // OPC core properties (docProps/core.xml): Dublin Core + the cp / dcterms / xsi vocabularies.
     public static readonly XNamespace Cp = "http://schemas.openxmlformats.org/package/2006/metadata/core-properties";
     public static readonly XNamespace Dc = "http://purl.org/dc/elements/1.1/";

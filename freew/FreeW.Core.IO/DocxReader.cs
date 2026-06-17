@@ -663,6 +663,20 @@ public static class DocxReader
             return;
         }
 
+        // A w:drawing wrapping a wps:wsp (not a pic:pic) is an inline shape / text box.
+        var shape = ReadShape(r, archive, imageRelationships);
+        if (shape is not null)
+        {
+            var shapeRun = Run.FromShape(shape);
+            shapeRun.HyperlinkUrl = hyperlinkUrl;
+            shapeRun.HyperlinkAnchor = hyperlinkAnchor;
+            shapeRun.HyperlinkTooltip = hyperlinkTooltip;
+            shapeRun.CommentId = commentId;
+            ApplyRevision(shapeRun);
+            paragraph.Runs.Add(shapeRun);
+            return;
+        }
+
         // A run wrapping a w:footnoteReference is a footnote marker; recover its id into the model.
         var footnoteRef = r.Element(W + "footnoteReference");
         if (footnoteRef is not null && int.TryParse(footnoteRef.Attribute(W + "id")?.Value, out var footnoteId))
@@ -833,6 +847,62 @@ public static class DocxReader
             AltText = string.IsNullOrEmpty(descr) ? null : descr,
         };
     }
+
+    /// <summary>
+    /// Reads an inline DrawingML shape / text box (w:drawing → wp:inline → a:graphic/a:graphicData → wps:wsp)
+    /// from a run into a <see cref="Shape"/>, if present. Recovers the preset geometry kind (a:prstGeom/@prst),
+    /// the EMU extent (size in points), the optional solid fill (a:solidFill/a:srgbClr), and any text-box body
+    /// paragraphs (wps:txbx/w:txbxContent). Returns null for a non-shape drawing (e.g. a picture) so the image
+    /// path keeps working. Mirrors how the writer emits these (see <c>DocxWriter.BuildShapeDrawing</c>).
+    /// </summary>
+    private static Shape? ReadShape(XElement run, ZipArchive archive, IReadOnlyDictionary<string, string> imageRelationships)
+    {
+        var inline = run.Element(W + "drawing")?.Element(Wp + "inline");
+        var wsp = inline?.Descendants(Wps + "wsp").FirstOrDefault();
+        if (wsp is null)
+            return null;
+
+        var extent = inline!.Element(Wp + "extent");
+        var widthPt = EmuToPoints(extent?.Attribute("cx")?.Value);
+        var heightPt = EmuToPoints(extent?.Attribute("cy")?.Value);
+
+        var spPr = wsp.Element(Wps + "spPr");
+        var preset = spPr?.Element(A + "prstGeom")?.Attribute("prst")?.Value;
+        var hasTextBody = wsp.Element(Wps + "txbx")?.Element(W + "txbxContent") is not null;
+        var kind = ShapeKindFromPreset(preset, hasTextBody);
+
+        var shape = new Shape(kind, widthPt, heightPt);
+
+        var fill = spPr?.Element(A + "solidFill")?.Element(A + "srgbClr")?.Attribute("val")?.Value;
+        if (!string.IsNullOrEmpty(fill) && !string.Equals(fill, "auto", StringComparison.Ordinal))
+            shape.FillColorHex = "#" + fill.TrimStart('#');
+
+        // Text-box body: parse each w:p inside w:txbxContent with the ordinary paragraph reader. Bodies do
+        // not carry hyperlink relationships or list numbering, so build them against empty maps (mirrors the
+        // writer, which emits txbx paragraphs without those).
+        var txbxContent = wsp.Element(Wps + "txbx")?.Element(W + "txbxContent");
+        if (txbxContent is not null)
+        {
+            var noHyperlinks = new Dictionary<string, string>();
+            var noNumbering = new Dictionary<int, ListKind>();
+            foreach (var p in txbxContent.Elements(W + "p"))
+                shape.TextParagraphs.Add(ReadParagraph(p, archive, imageRelationships, noHyperlinks, noNumbering));
+        }
+
+        return shape;
+    }
+
+    /// <summary>
+    /// Maps an a:prstGeom/@prst token back to a <see cref="ShapeKind"/>. "roundRect" → RoundedRectangle,
+    /// "ellipse" → Ellipse; a plain "rect" (or unknown) is a TextBox when it has a text body, otherwise a
+    /// Rectangle — mirroring the writer, which serialises both Rectangle and TextBox as "rect".
+    /// </summary>
+    private static ShapeKind ShapeKindFromPreset(string? preset, bool hasTextBody) => preset switch
+    {
+        "roundRect" => ShapeKind.RoundedRectangle,
+        "ellipse" => ShapeKind.Ellipse,
+        _ => hasTextBody ? ShapeKind.TextBox : ShapeKind.Rectangle,
+    };
 
     /// <summary>Maps relationship id -> media part path from word/_rels/document.xml.rels.</summary>
     private static Dictionary<string, string> ReadImageRelationships(ZipArchive archive)

@@ -354,6 +354,9 @@ public static class DocxWriter
         // Reset the document-scoped bookmark + revision id counters so ids start at 1 each write.
         System.Threading.Interlocked.Exchange(ref _bookmarkId, 0);
         System.Threading.Interlocked.Exchange(ref _revisionId, 0);
+        // Seed the shape docPr counter just above the image drawing ids (1..imageCount) so the two id
+        // spaces never overlap. Each shape BuildRun emits takes the next id.
+        System.Threading.Interlocked.Exchange(ref _shapeDrawingId, images.Count);
 
         // Map each image run to its assigned relationship id by replaying the same walk order.
         var imagesByRun = new Dictionary<Run, ImagePart>();
@@ -376,6 +379,10 @@ public static class DocxWriter
                 new XAttribute(XNamespace.Xmlns + "w14", W14.NamespaceName),
                 // m carries inline equations (m:oMath and its children).
                 new XAttribute(XNamespace.Xmlns + "m", M.NamespaceName),
+                // wp/a/wps carry inline DrawingML shapes & text boxes (w:drawing/wp:inline/.../wps:wsp).
+                new XAttribute(XNamespace.Xmlns + "wp", Wp.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "wps", Wps.NamespaceName),
                 body));
     }
 
@@ -701,6 +708,12 @@ public static class DocxWriter
     // Revision (w:ins/w:del) ids are scoped to the whole document; this counter keeps each wrapper's
     // w:id unique across all paragraphs. Reset alongside _bookmarkId at the start of each document.
     private static int _revisionId;
+
+    // Inline-shape wp:docPr ids are scoped to the whole document. Shapes carry no relationship/media (so
+    // they are not in the image walk), and their docPr id must not collide with the image drawing ids
+    // (1..imageCount). This counter is seeded just above the image count at the start of each document and
+    // incremented once per shape as BuildRun emits it (the paragraph walk order is deterministic).
+    private static int _shapeDrawingId;
 
     /// <summary>True when two runs carry the same tracked-change kind, author and date (so they coalesce).</summary>
     private static bool SameRevision(Run a, Run b) =>
@@ -1029,6 +1042,17 @@ public static class DocxWriter
         if (run.Equation is { } equation)
             return BuildOMath(equation);
 
+        // An inline shape / text box serialises as a w:r wrapping a w:drawing/wp:inline/.../wps:wsp.
+        if (run.Shape is { } shape)
+        {
+            var sr = new XElement(W + "r");
+            var rPr = BuildRunProperties(run.Formatting);
+            if (rPr is not null)
+                sr.Add(rPr);
+            sr.Add(BuildShapeDrawing(shape));
+            return sr;
+        }
+
         // A document field emits a self-contained w:fldSimple wrapping a run; the wrapped run's w:t
         // carries the last-known/cached value as fallback text for field-unaware consumers. The
         // w:instr keyword identifies the field kind (PAGE, DATE, TIME, FILENAME, AUTHOR, NUMPAGES).
@@ -1158,6 +1182,74 @@ public static class DocxWriter
                                 new XElement(A + "prstGeom", new XAttribute("prst", "rect"),
                                     new XElement(A + "avLst"))))))));
     }
+
+    /// <summary>The DrawingML preset-geometry token (a:prstGeom/@prst) for a shape kind.</summary>
+    private static string PresetGeometry(ShapeKind kind) => kind switch
+    {
+        ShapeKind.RoundedRectangle => "roundRect",
+        ShapeKind.Ellipse => "ellipse",
+        _ => "rect", // Rectangle and TextBox both use a plain rectangle geometry.
+    };
+
+    /// <summary>
+    /// Builds an inline DrawingML shape / text box: w:drawing/wp:inline/a:graphic/a:graphicData[uri=wps]/
+    /// wps:wsp, carrying a wps:spPr (preset geometry + optional a:solidFill) and, for a text box, a
+    /// wps:txbx/w:txbxContent holding the body paragraphs. The shape's wp:docPr id comes from the
+    /// document-scoped <see cref="_shapeDrawingId"/> counter so it never collides with image drawing ids.
+    /// </summary>
+    private static XElement BuildShapeDrawing(Shape shape)
+    {
+        var cx = PointsToEmu(shape.WidthPt);
+        var cy = PointsToEmu(shape.HeightPt);
+        var docPrId = System.Threading.Interlocked.Increment(ref _shapeDrawingId);
+        var name = $"{shape.Kind}{(uint)docPrId}";
+
+        // wps:spPr: position/size (a:xfrm), preset geometry, then optional solid fill.
+        var spPr = new XElement(Wps + "spPr",
+            new XElement(A + "xfrm",
+                new XElement(A + "off", new XAttribute("x", 0), new XAttribute("y", 0)),
+                new XElement(A + "ext", new XAttribute("cx", cx), new XAttribute("cy", cy))),
+            new XElement(A + "prstGeom", new XAttribute("prst", PresetGeometry(shape.Kind)),
+                new XElement(A + "avLst")));
+        if (shape.FillColorHex is { Length: > 0 } fill)
+            spPr.Add(new XElement(A + "solidFill",
+                new XElement(A + "srgbClr", new XAttribute("val", fill.TrimStart('#')))));
+
+        var wsp = new XElement(Wps + "wsp",
+            new XElement(Wps + "cNvSpPr"),
+            spPr);
+
+        // A text box carries its body paragraphs in wps:txbx/w:txbxContent. Body paragraphs do not carry
+        // inline images or document hyperlinks, so they build against empty maps.
+        if (shape.HasText)
+        {
+            var txbxContent = new XElement(W + "txbxContent");
+            foreach (var paragraph in shape.TextParagraphs)
+                txbxContent.Add(BuildParagraph(paragraph, EmptyImages, EmptyHyperlinks));
+            wsp.Add(new XElement(Wps + "txbx", txbxContent));
+        }
+
+        // wps:bodyPr is required by the schema for a valid wsp; defaults are fine.
+        wsp.Add(new XElement(Wps + "bodyPr"));
+
+        return new XElement(W + "drawing",
+            new XElement(Wp + "inline",
+                new XAttribute("distT", 0), new XAttribute("distB", 0),
+                new XAttribute("distL", 0), new XAttribute("distR", 0),
+                new XElement(Wp + "extent", new XAttribute("cx", cx), new XAttribute("cy", cy)),
+                new XElement(Wp + "effectExtent",
+                    new XAttribute("l", 0), new XAttribute("t", 0),
+                    new XAttribute("r", 0), new XAttribute("b", 0)),
+                new XElement(Wp + "docPr", new XAttribute("id", (uint)docPrId), new XAttribute("name", name)),
+                new XElement(A + "graphic",
+                    new XElement(A + "graphicData",
+                        new XAttribute("uri", Wps.NamespaceName),
+                        wsp))));
+    }
+
+    /// <summary>Empty image/hyperlink maps for building text-box body paragraphs (they carry neither).</summary>
+    private static readonly Dictionary<Run, ImagePart> EmptyImages = new();
+    private static readonly Dictionary<string, string> EmptyHyperlinks = new();
 
     private static XElement? BuildRunProperties(RunFormatting f)
     {
