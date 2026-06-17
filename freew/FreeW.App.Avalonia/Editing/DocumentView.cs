@@ -52,6 +52,9 @@ public sealed class DocumentView : Control
     /// <summary>Raised after any change to the document (edit, undo/redo, load) so the shell can refresh chrome.</summary>
     public event Action? DocumentChanged;
 
+    /// <summary>Raised when a Find result moves the caret, so the shell can scroll it into view.</summary>
+    public event Action? ScrollToCaretRequested;
+
     public TextDocument Document => _doc;
     public bool CanUndo => _bus.CanUndo;
     public bool CanRedo => _bus.CanRedo;
@@ -80,6 +83,25 @@ public sealed class DocumentView : Control
         if (_bus.Redo())
             ClampCaret();
     }
+
+    /// <summary>Select the next occurrence of <paramref name="query"/> after the caret (wraps around).</summary>
+    public bool FindNext(string query)
+    {
+        if (string.IsNullOrEmpty(query))
+            return false;
+        if (DocumentSearch.FindNext(_doc, query, _caret.Block, _caret.Offset) is not { } hit)
+            return false;
+
+        _selectionAnchor = new DocPosition(hit.Block, hit.Start);
+        _caret = new DocPosition(hit.Block, hit.Start + hit.Length);
+        Focus();
+        InvalidateVisual();
+        ScrollToCaretRequested?.Invoke();
+        return true;
+    }
+
+    /// <summary>Top of the current caret in control coordinates (0 when not resolvable).</summary>
+    public double CaretTop => TryGetCaretRect(out var rect) ? rect.Y : 0;
 
     // ---- Snapshot for the launch smoke ----------------------------------------------------------
 

@@ -24,6 +24,9 @@ public sealed class MainWindow : Window
 
     private readonly DocumentView _editor = new();
     private readonly TextBlock _status = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0) };
+    private readonly TextBox _findBox = new() { Width = 220, VerticalAlignment = VerticalAlignment.Center };
+    private Border? _findBar;
+    private ScrollViewer? _scroller;
     private string? _currentPath;
 
     public MainWindow()
@@ -57,18 +60,24 @@ public sealed class MainWindow : Window
         DockPanel.SetDock(statusBar, Dock.Bottom);
         root.Children.Add(statusBar);
 
-        var scroller = new ScrollViewer
+        var findBar = BuildFindBar();
+        DockPanel.SetDock(findBar, Dock.Bottom);
+        root.Children.Add(findBar);
+
+        _scroller = new ScrollViewer
         {
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             Padding = new Thickness(48, 24),
             Content = _editor,
         };
-        var workspace = new Border { Background = new SolidColorBrush(Color.FromRgb(0xE6, 0xE6, 0xE6)), Child = scroller };
+        var workspace = new Border { Background = new SolidColorBrush(Color.FromRgb(0xE6, 0xE6, 0xE6)), Child = _scroller };
         root.Children.Add(workspace);
 
         _editor.DocumentChanged += UpdateStatus;
+        _editor.ScrollToCaretRequested += ScrollCaretIntoView;
         _editor.LoadDocument(LoadStartupDocument(startupArguments));
+        KeyDown += MainWindow_KeyDown;
         Content = root;
         UpdateStatus();
     }
@@ -114,6 +123,76 @@ public sealed class MainWindow : Window
 
     // OS clipboard via Avalonia's data-transfer API (same pattern as the FreeX shell):
     // TopLevel.Clipboard with SetTextAsync / TryGetTextAsync.
+    private Control BuildFindBar()
+    {
+        var next = new Button { Content = "Find Next", Padding = new Thickness(10, 4), Margin = new Thickness(6, 0, 0, 0) };
+        next.Click += (_, _) => DoFind();
+        _findBox.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter)
+            {
+                DoFind();
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Escape)
+            {
+                ToggleFindBar(show: false);
+                e.Handled = true;
+            }
+        };
+
+        var row = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Margin = new Thickness(8, 4),
+            Children = { new TextBlock { Text = "Find:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) }, _findBox, next },
+        };
+        _findBar = new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(0xF7, 0xF7, 0xF7)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD)),
+            BorderThickness = new Thickness(0, 1, 0, 0),
+            IsVisible = false,
+            Child = row,
+        };
+        return _findBar;
+    }
+
+    private void MainWindow_KeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.F && (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) != 0)
+        {
+            ToggleFindBar(show: true);
+            e.Handled = true;
+        }
+    }
+
+    private void ToggleFindBar(bool show)
+    {
+        if (_findBar is null)
+            return;
+        _findBar.IsVisible = show;
+        if (show)
+            _findBox.Focus();
+    }
+
+    private void DoFind()
+    {
+        var query = _findBox.Text;
+        if (string.IsNullOrEmpty(query))
+            return;
+        if (!_editor.FindNext(query))
+            _status.Text = $"No match for \"{query}\".";
+    }
+
+    private void ScrollCaretIntoView()
+    {
+        if (_scroller is null)
+            return;
+        var target = Math.Max(0, _editor.CaretTop - 40);
+        _scroller.Offset = new Vector(_scroller.Offset.X, target);
+    }
+
     private async Task CopyAsync()
     {
         var text = _editor.SelectedText;
