@@ -85,6 +85,20 @@ public static class XlsxDrawingColorReader
             return Math.Round(lumOff.Value, 6);
         if (lumMod is > 0 and < 1)
             return Math.Round(lumMod.Value - 1, 6);
+
+        // DrawingML <a:tint>/<a:shade> luminance modulation. Excel uses these on chart data-point
+        // and series fills (e.g. a pie's slices vary one accent color by tint/shade) where lumMod/lumOff
+        // are absent. Map them onto FreeX's signed tint convention (positive lightens toward white,
+        // negative darkens toward black) so distinct slices resolve to visibly distinct colors.
+        //   <a:tint val="N"/>  -> blend toward white by (1 - N)  -> +(1 - N)
+        //   <a:shade val="N"/> -> darken to N of original        -> -(1 - N)
+        var tint = ReadPercentage(schemeColor.Element(drawingNs + "tint")?.Attribute("val")?.Value);
+        if (tint is > 0 and < 1)
+            return Math.Round(1 - tint.Value, 6);
+        var shade = ReadPercentage(schemeColor.Element(drawingNs + "shade")?.Attribute("val")?.Value);
+        if (shade is > 0 and < 1)
+            return Math.Round(-(1 - shade.Value), 6);
+
         return 0;
     }
 
