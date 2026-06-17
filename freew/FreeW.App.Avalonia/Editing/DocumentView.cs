@@ -25,9 +25,11 @@ public sealed class DocumentView : Control
     private const double TopMargin = 40;
     private const double DefaultFontSizePt = 11;
     private const double FallbackWidth = 816; // 8.5in * 96dpi
+    private const double ListIndentStep = 24;
 
     private readonly Dictionary<string, IBrush> _brushCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<PlacedChar> _placed = new();
+    private readonly List<(double X, double Y, string Text, RunFormatting Fmt)> _markers = new();
 
     private TextDocument _doc = TextDocument.CreateEmpty();
     private DocumentCommandBus _bus;
@@ -96,27 +98,66 @@ public sealed class DocumentView : Control
     private void Relayout(double width)
     {
         _placed.Clear();
+        _markers.Clear();
         var textWidth = Math.Max(120, width - LeftMargin - RightMargin);
         double y = TopMargin;
 
+        var listNumber = 0;
+        var prevList = ListKind.None;
         for (var blockIndex = 0; blockIndex < _doc.Blocks.Count; blockIndex++)
         {
             var block = _doc.Blocks[blockIndex];
             if (block is Paragraph paragraph)
-                y = LayoutParagraph(blockIndex, paragraph, textWidth, y);
+            {
+                var kind = paragraph.Formatting.ListKind;
+                double inset = 0;
+                string? marker = null;
+                if (kind != ListKind.None)
+                {
+                    var level = Math.Max(0, paragraph.Formatting.ListLevel);
+                    inset = ListIndentStep * (level + 1);
+                    if (kind is ListKind.Number or ListKind.MultiLevel)
+                    {
+                        listNumber = prevList is ListKind.Number or ListKind.MultiLevel ? listNumber + 1 : 1;
+                        marker = $"{listNumber}.";
+                    }
+                    else
+                    {
+                        marker = "•"; // bullet
+                        listNumber = 0;
+                    }
+                }
+                else
+                {
+                    listNumber = 0;
+                }
+
+                prevList = kind;
+                y = LayoutParagraph(blockIndex, paragraph, textWidth, y, inset, marker);
+            }
             else
+            {
                 y = LayoutReadOnlyBlock(blockIndex, block, textWidth, y);
+            }
         }
 
         _contentHeight = y + TopMargin;
         _laidOutWidth = width;
     }
 
-    private double LayoutParagraph(int blockIndex, Paragraph paragraph, double textWidth, double y)
+    private double LayoutParagraph(int blockIndex, Paragraph paragraph, double textWidth, double y, double leftInset = 0, string? marker = null)
     {
         var cells = IsEditable(paragraph) ? ParaCells(paragraph) : FallbackCells(paragraph.PlainText);
         var alignment = paragraph.Formatting.Alignment;
         var spaceAfter = paragraph.Formatting.SpaceAfterPt * PxPerPoint;
+        var availableWidth = Math.Max(60, textWidth - leftInset);
+
+        if (marker is not null)
+        {
+            var markerFmt = paragraph.Runs.Count > 0 ? paragraph.Runs[0].Formatting : RunFormatting.Default;
+            var markerWidth = Build(marker, markerFmt).WidthIncludingTrailingWhitespace;
+            _markers.Add((LeftMargin + leftInset - markerWidth - 6, y, marker, markerFmt));
+        }
 
         // Break the cell stream into wrapped lines.
         var lineStart = 0;
@@ -137,10 +178,10 @@ public sealed class DocumentView : Control
             if (cells[i].Ch == ' ')
                 lastBreak = i;
 
-            if (lineWidth + measured[i] > textWidth && i > lineStart)
+            if (lineWidth + measured[i] > availableWidth && i > lineStart)
             {
                 var breakAt = lastBreak >= lineStart ? lastBreak + 1 : i;
-                y = EmitLine(blockIndex, cells, measured, heights, lineStart, breakAt, alignment, textWidth, y);
+                y = EmitLine(blockIndex, cells, measured, heights, lineStart, breakAt, alignment, availableWidth, y, leftInset);
                 lineStart = breakAt;
                 lineWidth = 0;
                 lastBreak = -1;
@@ -152,7 +193,7 @@ public sealed class DocumentView : Control
             i++;
         }
 
-        y = EmitLine(blockIndex, cells, measured, heights, lineStart, cells.Count, alignment, textWidth, y, isLast: true);
+        y = EmitLine(blockIndex, cells, measured, heights, lineStart, cells.Count, alignment, availableWidth, y, leftInset, isLast: true);
         return y + spaceAfter;
     }
 
@@ -164,8 +205,9 @@ public sealed class DocumentView : Control
         int from,
         int to,
         TextAlignment alignment,
-        double textWidth,
+        double availableWidth,
         double y,
+        double leftInset = 0,
         bool isLast = false)
     {
         double lineWidth = 0;
@@ -177,7 +219,7 @@ public sealed class DocumentView : Control
                 lineHeight = heights[c];
         }
 
-        var x = LeftMargin + AlignmentOffset(alignment, textWidth, lineWidth);
+        var x = LeftMargin + leftInset + AlignmentOffset(alignment, availableWidth, lineWidth);
         for (var c = from; c < to; c++)
         {
             _placed.Add(new PlacedChar(blockIndex, c, x, y, measured[c], lineHeight, cells[c].Fmt, cells[c].Ch, Sentinel: false));
@@ -243,6 +285,9 @@ public sealed class DocumentView : Control
             if (pc.Fmt.Strikethrough)
                 DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.5);
         }
+
+        foreach (var (mx, my, text, fmt) in _markers)
+            context.DrawText(Build(text, fmt), new Point(mx, my));
 
         if (IsFocused && NormalizedSelection() is null && TryGetCaretRect(out var caretRect))
             context.FillRectangle(Brushes.Black, caretRect);

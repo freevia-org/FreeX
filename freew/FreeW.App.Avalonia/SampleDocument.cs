@@ -32,6 +32,23 @@ internal static class SampleDocument
         tip.Runs.Add(new Run(". Undo and redo are wired through the shared command bus.", RunFormatting.Default with { FontSizePt = 12 }));
         doc.Blocks.Add(tip);
 
+        AddListItem(doc, "Bullet and numbered lists now render with markers.", ListKind.Bullet);
+        AddListItem(doc, "Open and save Word .docx files.", ListKind.Bullet);
+
+        AddListItem(doc, "Pick a font size from the ribbon.", ListKind.Number);
+        AddListItem(doc, "Toggle bold, italic, underline.", ListKind.Number);
+        AddListItem(doc, "Undo and redo every edit.", ListKind.Number);
+
         return doc;
+    }
+
+    private static void AddListItem(TextDocument doc, string text, ListKind kind)
+    {
+        var paragraph = new Paragraph
+        {
+            Formatting = ParagraphFormatting.Default with { ListKind = kind, SpaceAfterPt = 2 },
+        };
+        paragraph.Runs.Add(new Run(text, RunFormatting.Default with { FontSizePt = 12 }));
+        doc.Blocks.Add(paragraph);
     }
 }
