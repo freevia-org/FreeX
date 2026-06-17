@@ -180,6 +180,17 @@ public sealed class AvaloniaRibbonHostCallbackTests
     [InlineData("data.removeDuplicates")]
     [InlineData("data.advancedFilter")]
     [InlineData("data.whatIf")]
+    [InlineData("view.unhide")]
+    [InlineData("view.split")]
+    [InlineData("pageLayout.printTitles")]
+    [InlineData("formulas.mathTrig")]
+    [InlineData("formulas.lookupReference")]
+    [InlineData("insert.pivotChart")]
+    [InlineData("review.thesaurus")]
+    [InlineData("review.translate")]
+    [InlineData("pageLayout.themeColors")]
+    [InlineData("home.orientation")]
+    [InlineData("home.formatCells")]
     public void NewTabCommands_AreRealCommandIds_AndBindViaExtraCommands(string commandId)
     {
         // The id exists in the ribbon definition (else it is not a NoOp default to begin with) ...

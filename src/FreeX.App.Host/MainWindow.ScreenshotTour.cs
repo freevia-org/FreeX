@@ -5231,7 +5231,7 @@ public partial class MainWindow
                 "Trace Dependents adds a visible auditing arrow from A2 toward B2 without clearing the existing precedent arrows."));
 
             SetFormulaDiagnosticsTourSelection(context.ResultCell);
-            ShowFormulasBtn_Click(ShowFormulasButton, new RoutedEventArgs(ButtonBase.ClickEvent, ShowFormulasButton));
+            ShowFormulasBtn_Click(this, new RoutedEventArgs());
             captures.Add(await CaptureFormulaDiagnosticsWindowStateAsync(
                 outputDir,
                 "show-formulas-enabled",
@@ -5239,7 +5239,7 @@ public partial class MainWindow
                 "window-full",
                 "Show Formulas toggles the active sheet to display formula text such as =A2+A3 and =B2/0 in the grid."));
 
-            ShowFormulasBtn_Click(ShowFormulasButton, new RoutedEventArgs(ButtonBase.ClickEvent, ShowFormulasButton));
+            ShowFormulasBtn_Click(this, new RoutedEventArgs());
             RemoveTraceArrows(kind: null, "Remove Arrows");
             captures.Add(await CaptureFormulaDiagnosticsWindowStateAsync(
                 outputDir,
@@ -5971,7 +5971,7 @@ public partial class MainWindow
                 "Freeze Panes at C4, showing frozen rows and columns in the grid model and visible pane geometry."));
 
             SelectViewPanesZoomTourRange(sheet, new GridRange(new CellAddress(sheet.Id, 6, 5), new CellAddress(sheet.Id, 6, 5)));
-            SplitViewBtn_Click(SplitViewBtn, new RoutedEventArgs());
+            SplitViewBtn_Click(this, new RoutedEventArgs());
             captures.Add(await CaptureViewPanesZoomWindowStateAsync(
                 outputDir,
                 "split-panes-e6",
@@ -6095,8 +6095,7 @@ public partial class MainWindow
         _suppressAppViewOptionSync = true;
         try
         {
-            if (ViewFormulaBarChk is not null)
-                ViewFormulaBarChk.IsChecked = true;
+            _ribbonState.SetChecked("Formula Bar", true);
         }
         finally
         {
@@ -6109,7 +6108,7 @@ public partial class MainWindow
         SetViewPanesZoomTourShowToggles(showGridlines: true, showHeadings: true, showRulers: true);
         SetFreezePanes(0, 0);
         if (sheet.SplitRow is not null || sheet.SplitColumn is not null)
-            SplitViewBtn_Click(SplitViewBtn, new RoutedEventArgs());
+            SplitViewBtn_Click(this, new RoutedEventArgs());
         SyncZoomFromSheet(100);
         SelectViewRibbonTabForTour();
         UpdateViewport();
@@ -6154,8 +6153,7 @@ public partial class MainWindow
         _suppressAppViewOptionSync = true;
         try
         {
-            if (ViewFormulaBarChk is not null)
-                ViewFormulaBarChk.IsChecked = isVisible;
+            _ribbonState.SetChecked("Formula Bar", isVisible);
         }
         finally
         {
@@ -6190,9 +6188,9 @@ public partial class MainWindow
     private void SyncViewPanesZoomTourWorkbookViewButtons()
     {
         var viewMode = _workbook.GetSheet(_currentSheetId)?.ViewMode ?? WorksheetViewMode.Normal;
-        ViewNormalButton.IsChecked = viewMode == WorksheetViewMode.Normal;
-        ViewPageLayoutButton.IsChecked = viewMode == WorksheetViewMode.PageLayout;
-        ViewPageBreakPreviewButton.IsChecked = viewMode == WorksheetViewMode.PageBreakPreview;
+        _ribbonState.SetChecked("Normal", viewMode == WorksheetViewMode.Normal);
+        _ribbonState.SetChecked("Page Layout", viewMode == WorksheetViewMode.PageLayout);
+        _ribbonState.SetChecked("Page Break Preview", viewMode == WorksheetViewMode.PageBreakPreview);
     }
 
     private ViewPanesZoomTourManifestCapture CreateViewPanesZoomTourCapture(
@@ -6228,14 +6226,14 @@ public partial class MainWindow
             ZoomSliderValue: ZoomSlider.Value,
             WindowArrangement: _workbook.WindowArrangement.ToString(),
             CustomViewCount: _workbook.CustomViews.Count,
-            ViewNormalChecked: ViewNormalButton.IsChecked == true,
-            ViewPageLayoutChecked: ViewPageLayoutButton.IsChecked == true,
-            ViewPageBreakPreviewChecked: ViewPageBreakPreviewButton.IsChecked == true,
-            ViewGridlinesChecked: ViewGridlinesChk.IsChecked == true,
-            ViewHeadingsChecked: ViewHeadersChk.IsChecked == true,
-            ViewRulerChecked: ViewRulerChk.IsChecked == true,
-            ViewFormulaBarChecked: ViewFormulaBarChk.IsChecked == true,
-            SplitButtonChecked: SplitViewBtn.IsChecked == true);
+            ViewNormalChecked: IsRibbonCommandChecked("Normal"),
+            ViewPageLayoutChecked: IsRibbonCommandChecked("Page Layout"),
+            ViewPageBreakPreviewChecked: IsRibbonCommandChecked("Page Break Preview"),
+            ViewGridlinesChecked: IsRibbonCommandChecked("Gridlines"),
+            ViewHeadingsChecked: IsRibbonCommandChecked("Headings"),
+            ViewRulerChecked: IsRibbonCommandChecked("Ruler"),
+            ViewFormulaBarChecked: IsRibbonCommandChecked("Formula Bar"),
+            SplitButtonChecked: IsRibbonCommandChecked("Split"));
     }
 
     private static void DeleteViewPanesZoomTourEvidence(string outputDir)
@@ -6378,10 +6376,10 @@ public partial class MainWindow
                 "freex_page_layout_setup_scale_to_fit_state",
                 "Scale to Fit ribbon fields show fit-to-pages width/height and percent controls after applying the production scale command."));
 
-            PageLayoutViewGridlinesChk.IsChecked = false;
-            PageLayoutViewHeadingsChk.IsChecked = false;
-            PageLayoutPrintGridlinesChk.IsChecked = true;
-            PageLayoutPrintHeadingsChk.IsChecked = true;
+            _ribbonState.SetChecked("View Gridlines", false);
+            _ribbonState.SetChecked("View Headings", false);
+            _ribbonState.SetChecked("Print Gridlines", true);
+            _ribbonState.SetChecked("Print Headings", true);
             sheet.ShowGridlines = false;
             sheet.ShowHeadings = false;
             sheet.PrintGridlines = true;
@@ -6488,10 +6486,10 @@ public partial class MainWindow
             PageLayoutScaleWidthBox.Text = sheet.ScaleToFit.FitToPagesWide is { } wide ? $"{wide} page" : "Automatic";
             PageLayoutScaleHeightBox.Text = sheet.ScaleToFit.FitToPagesTall is { } tall ? $"{tall} page" : "Automatic";
             PageLayoutScalePercentBox.Text = $"{sheet.ScaleToFit.ScalePercent ?? 100}%";
-            PageLayoutViewGridlinesChk.IsChecked = sheet.ShowGridlines;
-            PageLayoutViewHeadingsChk.IsChecked = sheet.ShowHeadings;
-            PageLayoutPrintGridlinesChk.IsChecked = sheet.PrintGridlines;
-            PageLayoutPrintHeadingsChk.IsChecked = sheet.PrintHeadings;
+            _ribbonState.SetChecked("View Gridlines", sheet.ShowGridlines);
+            _ribbonState.SetChecked("View Headings", sheet.ShowHeadings);
+            _ribbonState.SetChecked("Print Gridlines", sheet.PrintGridlines);
+            _ribbonState.SetChecked("Print Headings", sheet.PrintHeadings);
         }
         finally
         {

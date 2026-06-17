@@ -358,30 +358,30 @@ public partial class MainWindow
 
     private void RefreshSheetProtectionUi()
     {
-        if (ProtectSheetButton is null)
-            return;
-
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null)
             return;
 
-        var uiText = SheetProtectionWorkflow.GetUiText(sheet);
-        SetRibbonCommandButtonLabel(ProtectSheetButton, uiText.ButtonContent);
-        RibbonTooltip.SetTitle(ProtectSheetButton, uiText.TooltipTitle);
-        RibbonTooltip.SetDescription(ProtectSheetButton, uiText.TooltipDescription);
+        // The Protect Sheet button toggles its label/tooltip between Protect and Unprotect. That
+        // dynamic content is not part of RibbonCommandState, so update the rendered ribbon button
+        // directly (no hidden backplane control). Skipped until the declarative ribbon is built.
+        if (FindRenderedRibbonControl("Protect Sheet") is not ButtonBase protectSheet)
+            return;
 
-        if (AllowEditRangesButton is not null)
-            AllowEditRangesButton.IsEnabled = true;
+        var uiText = SheetProtectionWorkflow.GetUiText(sheet);
+        SetRibbonCommandButtonLabel(protectSheet, uiText.ButtonContent);
+        RibbonTooltip.SetTitle(protectSheet, uiText.TooltipTitle);
+        RibbonTooltip.SetDescription(protectSheet, uiText.TooltipDescription);
     }
 
     private void RefreshWorkbookProtectionUi()
     {
         var uiText = WorkbookProtectionWorkflow.GetUiText(_workbook);
-        if (ProtectWorkbookButton is not null)
+        if (FindRenderedRibbonControl("Protect Workbook") is ButtonBase protectWorkbook)
         {
-            SetRibbonCommandButtonLabel(ProtectWorkbookButton, uiText.ButtonContent);
-            RibbonTooltip.SetTitle(ProtectWorkbookButton, uiText.TooltipTitle);
-            RibbonTooltip.SetDescription(ProtectWorkbookButton, uiText.TooltipDescription);
+            SetRibbonCommandButtonLabel(protectWorkbook, uiText.ButtonContent);
+            RibbonTooltip.SetTitle(protectWorkbook, uiText.TooltipTitle);
+            RibbonTooltip.SetDescription(protectWorkbook, uiText.TooltipDescription);
         }
 
         RefreshBackstageInfoProtectionButton();

@@ -31,6 +31,27 @@ public sealed class HomeFontCommandSourceTests
     }
 
     [Fact]
+    public void KeyboardFontToggleShortcut_UsesRibbonStateStoreNotBackplaneStub()
+    {
+        var cells = DialogSourceTestSupport.ReadHostSources("MainWindow.CellsCommands.cs");
+        var selection = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
+
+        // The Ctrl+B/I/U/S keyboard path reads and writes the neutral RibbonStateStore (keyed by
+        // CommandName) — the same source of truth the ribbon-click handlers use — instead of a hidden
+        // backplane ToggleButton, so the rendered ribbon and keyboard stay consistent and no WPF stub
+        // is needed.
+        var method = SourceMethodExtractor.ExtractMethodSource(cells, "private void ApplyFontToggleShortcut(");
+        method.Should().Contain("var enabled = !IsRibbonCommandChecked(commandName);");
+        method.Should().Contain("_ribbonState.SetChecked(commandName, enabled);");
+        method.Should().NotContain("button.IsChecked");
+        cells.Should().NotContain("ApplyFontToggleShortcut(FontToggleShortcut shortcut, ToggleButton button)");
+
+        // The caller no longer maps the shortcut to a backplane stub button.
+        selection.Should().Contain("ApplyFontToggleShortcut(fontToggleShortcut);");
+        selection.Should().NotContain("FontToggleShortcut.Bold => BoldButton");
+    }
+
+    [Fact]
     public void SharedComboBoxDropdownStyle_ProvidesWheelHoverAndSelectionBehavior()
     {
         var appXaml = DialogSourceTestSupport.ReadHostSources("App.xaml");

@@ -727,7 +727,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("SetViewPanesZoomTourShowToggles(showGridlines: false, showHeadings: false, showRulers: false)");
         source.Should().Contain("SetViewPanesZoomTourFormulaBarVisible(false)");
         source.Should().Contain("FreezeAtSelectionMenuItem_Click(this, new RoutedEventArgs())");
-        source.Should().Contain("SplitViewBtn_Click(SplitViewBtn, new RoutedEventArgs())");
+        source.Should().Contain("SplitViewBtn_Click(this, new RoutedEventArgs())");
         source.Should().Contain("new ZoomDialog(125) { Owner = this }");
         source.Should().Contain("Zoom100Btn_Click(this, new RoutedEventArgs())");
         source.Should().Contain("ZoomSelectionBtn_Click(this, new RoutedEventArgs())");
@@ -1060,7 +1060,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("sheet.SetFormula(new CellAddress(sheet.Id, 2, 4), \"B2/0\")");
         source.Should().Contain("TracePrecedentsForCell(context.ResultCell, \"Trace Precedents\")");
         source.Should().Contain("TraceDependentsBtn_Click(this, new RoutedEventArgs())");
-        source.Should().Contain("ShowFormulasBtn_Click(ShowFormulasButton");
+        source.Should().Contain("ShowFormulasBtn_Click(this, new RoutedEventArgs())");
         source.Should().Contain("RemoveTraceArrows(kind: null, \"Remove Arrows\")");
         source.Should().Contain("FormulaAuditingService.FindFormulaErrorIssues(_workbook, _currentSheetId)");
         source.Should().Contain("new ErrorCheckingDialog(");

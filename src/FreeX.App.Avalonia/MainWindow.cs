@@ -704,8 +704,17 @@ public sealed partial class MainWindow : Window
                     // Home Number group (added buttons).
                     ["home.increaseDecimal"] = IncreaseSelectedRangeDecimalPlaces,
                     ["home.decreaseDecimal"] = DecreaseSelectedRangeDecimalPlaces,
-                    // Formulas tab (Formula Auditing group).
+                    // Home Alignment Orientation + Cells Format → existing handlers.
+                    ["home.orientation"] = () => ApplySelectedRangeTextRotation(45, "Rotated text for", "Orientation failed."),
+                    ["home.formatCells"] = () => _ = ShowFormatCellsDialogAsync(),
+                    // View tab (Window group) + Formulas tab.
+                    ["view.unhide"] = () => _ = UnhideSheetAsync(),
                     ["formulas.showFormulas"] = ToggleShowFormulas,
+                    // Formulas Function Library category buttons open the function picker.
+                    ["formulas.lookupReference"] = InsertFunction,
+                    ["formulas.mathTrig"] = InsertFunction,
+                    ["formulas.moreFunctions"] = InsertFunction,
+                    ["formulas.recentlyUsed"] = InsertFunction,
                     // Data tab (Sort & Filter / Tools / Forecast / Outline groups).
                     ["data.advancedFilter"] = () => _ = ShowAdvancedFilterDialogAsync(),
                     ["data.flashFill"] = FlashFillSelectedRange,
@@ -2667,6 +2676,10 @@ public sealed partial class MainWindow : Window
         // (not projected into viewport.DrawingObjects), so paint them here — before the
         // drawing-object early-out — so they render even when no other objects exist.
         AddSlicerTimelineOverlays(overlay, viewport);
+
+        // Legacy form controls (checkbox/option/spinner/scrollbar/groupbox/label) live on the sheet,
+        // not in viewport.DrawingObjects — paint them before the early-out so they render standalone.
+        AddFormControlOverlays(overlay, viewport);
 
         if (viewport.DrawingObjects is not { Count: > 0 })
             return overlay;

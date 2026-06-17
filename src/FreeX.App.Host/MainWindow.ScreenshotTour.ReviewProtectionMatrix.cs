@@ -509,9 +509,9 @@ public partial class MainWindow
             FocusedElementAutomationId: focusedAutomationId,
             IsSheetProtected: sheet?.IsProtected ?? false,
             IsWorkbookStructureProtected: _workbook.IsStructureProtected,
-            AllowEditRangesEnabled: AllowEditRangesButton?.IsEnabled,
-            ProtectSheetContent: ProtectSheetButton?.Content?.ToString(),
-            ProtectWorkbookContent: ProtectWorkbookButton?.Content?.ToString(),
+            AllowEditRangesEnabled: FindRenderedRibbonControl("Allow Users to Edit Ranges")?.IsEnabled,
+            ProtectSheetContent: GetRenderedRibbonCommandLabel("Protect Sheet"),
+            ProtectWorkbookContent: GetRenderedRibbonCommandLabel("Protect Workbook"),
             SheetProtectionPermissions: sheet?.ProtectionPermissions.Select(permission => permission.ToString()).ToArray() ?? [],
             AllowEditRangeCount: sheet?.AllowEditRanges.Count ?? 0,
             EvidenceSummary: evidenceSummary);
