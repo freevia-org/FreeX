@@ -2721,13 +2721,18 @@ public sealed class DocumentView : RichTextBox
                 Math.Max(0, paraFmt.IndentRightPt * PxPerPoint),
                 Math.Max(0, paraFmt.SpaceAfterPt * PxPerPoint)),
             TextIndent = paraFmt.FirstLineIndentPt * PxPerPoint,
-            // Line spacing. For the Multiple rule, LineHeight = multiple x font size. For Exact/AtLeast the
-            // model carries an absolute height in points; WPF only does absolute LineHeight, so both map to
-            // that height — and Exact additionally forces BlockLineHeight so the height is honoured even for
-            // taller content (AtLeast is approximated as exact, the closest FlowDocument behaviour).
+            // Line spacing. For the Multiple rule, Word multiplies the font's *natural* line height (one
+            // "line" = ascent+descent+gap), NOT the raw em — so a 1.08/1.15-line paragraph is ~8–15% taller
+            // than the font size. WPF exposes that natural height as FontFamily.LineSpacing, so the multiple
+            // is applied to (em x ratio). Previously we multiplied the bare em, and MaxHeight then clamped the
+            // result back to a single natural line, rendering every multiple-spaced paragraph too short and
+            // letting FreeW pack more lines per page than Word. For Exact/AtLeast the model carries an absolute
+            // height in points; WPF only does absolute LineHeight, so both map to that height — and Exact
+            // additionally forces BlockLineHeight so the height is honoured even for taller content (AtLeast is
+            // approximated as exact, the closest FlowDocument behaviour).
             LineHeight = paraFmt.LineRule == LineSpacingRule.Multiple
                 ? (paraFmt.LineSpacing > 0
-                    ? paraFmt.LineSpacing * (document.DefaultRun.FontSizePt ?? 11) * PxPerPoint
+                    ? paraFmt.LineSpacing * DefaultLineHeightRatio(document) * (document.DefaultRun.FontSizePt ?? 11) * PxPerPoint
                     : double.NaN)
                 : (paraFmt.LineHeightPt > 0 ? paraFmt.LineHeightPt * PxPerPoint : double.NaN),
             LineStackingStrategy = paraFmt.LineRule == LineSpacingRule.Exact
@@ -5245,14 +5250,41 @@ public sealed class DocumentView : RichTextBox
     }
 
     // Recover the line-spacing multiplier from a WPF paragraph's LineHeight, inverting the formula used
-    // in BuildParagraph (LineHeight = LineSpacing * defaultFontSize * PxPerPoint). An unset LineHeight is
-    // NaN; fall back to the model default so editing text never silently flattens a paragraph's spacing.
+    // in BuildParagraph (LineHeight = LineSpacing * ratio * defaultFontSize * PxPerPoint, where ratio is the
+    // default font's natural line height). Must use the SAME ratio as the forward path or an edit/commit
+    // cycle would shift every paragraph's spacing. An unset LineHeight is NaN; fall back to the model default
+    // so editing text never silently flattens a paragraph's spacing.
     private static double ReadLineSpacing(double lineHeight, TextDocument document)
     {
         var fontPt = document.DefaultRun.FontSizePt ?? 11;
-        if (double.IsNaN(lineHeight) || lineHeight <= 0 || fontPt <= 0)
+        var ratio = DefaultLineHeightRatio(document);
+        if (double.IsNaN(lineHeight) || lineHeight <= 0 || fontPt <= 0 || ratio <= 0)
             return ParagraphFormatting.Default.LineSpacing;
-        return lineHeight / (fontPt * PxPerPoint);
+        return lineHeight / (fontPt * PxPerPoint * ratio);
+    }
+
+    // One "line" in Word's Multiple line rule is the font's natural line height (ascent+descent+line gap),
+    // which WPF surfaces as FontFamily.LineSpacing (Times ~1.15, Calibri ~1.22). Keyed on the document's
+    // default font and cached, since BuildParagraph runs this for every paragraph on load. Forward and
+    // inverse line-spacing math both call this so they stay exactly invertible.
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, double> LineHeightRatioCache = new();
+    private static double DefaultLineHeightRatio(TextDocument document)
+    {
+        var name = document.DefaultRun.FontFamily;
+        if (string.IsNullOrEmpty(name))
+            name = "Calibri";
+        return LineHeightRatioCache.GetOrAdd(name, static n =>
+        {
+            try
+            {
+                var ratio = new System.Windows.Media.FontFamily(n).LineSpacing;
+                return ratio > 0 ? ratio : 1.0;
+            }
+            catch
+            {
+                return 1.0;
+            }
+        });
     }
 
     // --- formatting resolution (run/paragraph -> style -> document default) ---
