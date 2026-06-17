@@ -14,5 +14,6 @@
     <Project Path="freew/FreeW.Core.IO.Tests/FreeW.Core.IO.Tests.csproj" />
     <Project Path="freew/FreeW.App.Host/FreeW.App.Host.csproj" />
     <Project Path="freew/FreeW.App.Host.Tests/FreeW.App.Host.Tests.csproj" />
+    <Project Path="freew/FreeW.App.Avalonia/FreeW.App.Avalonia.csproj" />
   </Folder>
 </Solution>
