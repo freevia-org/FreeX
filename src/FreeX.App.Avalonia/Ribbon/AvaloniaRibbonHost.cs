@@ -410,6 +410,10 @@ internal static class SampleRibbon
                         PreferredLayout = RibbonCommandLayoutKind.Large,
                         Icon = new RibbonCommandIcon(RibbonCommandIconKind.PivotTable),
                     });
+                    g.Button("insert.pivotChart", "PivotChart", c => c with
+                    {
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.ChartColumn),
+                    });
                     g.Button("insert.table", "Table", c => c with
                     {
                         PreferredLayout = RibbonCommandLayoutKind.Large,
@@ -570,6 +574,9 @@ internal static class SampleRibbon
                         PreferredLayout = RibbonCommandLayoutKind.Large,
                         Icon = new RibbonCommandIcon(RibbonCommandIconKind.Theme),
                     });
+                    g.Button("pageLayout.themeColors", "Colors", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Color) });
+                    g.Button("pageLayout.themeFonts", "Fonts", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Font) });
+                    g.Button("pageLayout.themeEffects", "Effects", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Effects) });
                 });
                 page.Group("pageLayoutPageSetup", "Page Setup", "S", 90, g =>
                 {
@@ -607,6 +614,10 @@ internal static class SampleRibbon
                     g.Button("formulas.logical", "Logical", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Logical) });
                     g.Button("formulas.text", "Text", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.TextFunction) });
                     g.Button("formulas.dateTime", "Date & Time", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Date) });
+                    g.Button("formulas.lookupReference", "Lookup & Reference", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Search) });
+                    g.Button("formulas.mathTrig", "Math & Trig", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Math) });
+                    g.Button("formulas.moreFunctions", "More Functions", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.More) });
+                    g.Button("formulas.recentlyUsed", "Recently Used", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Recent) });
                 });
                 formulas.Group("formulasDefinedNames", "Defined Names", "N", 90, g =>
                 {
@@ -641,6 +652,8 @@ internal static class SampleRibbon
                         PreferredLayout = RibbonCommandLayoutKind.Large,
                         Icon = new RibbonCommandIcon(RibbonCommandIconKind.Spelling),
                     });
+                    g.Button("review.thesaurus", "Thesaurus", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Book) });
+                    g.Button("review.translate", "Translate", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Translate) });
                 });
                 review.Group("reviewAccessibility", "Accessibility", "A", 90, g =>
                 {
