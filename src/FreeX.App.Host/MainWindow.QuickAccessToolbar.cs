@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Shell;
+using FreeX.App.Services.Ribbon;
 using FreeX.Core.Commands;
 
 namespace FreeX.App.Host;
@@ -188,20 +189,39 @@ public partial class MainWindow
         return false;
     }
 
+    // Builds the per-command QAT customization menu from the neutral QuickAccessToolbarContextMenuPlanner so
+    // its single Add/Remove item (header, enablement, automation id) is single-sourced with a future Avalonia
+    // port instead of hand-built here. Dispatch still routes through ApplyQuickAccessToolbarCustomization,
+    // preserving the persisted-options + rebuild behavior verbatim.
     private ContextMenu CreateQuickAccessToolbarCustomizationContextMenu(string commandId)
     {
-        var plan = QuickAccessToolbarCustomizationPlanner.CreatePlan(commandId, _options.QuickAccessToolbarCommands);
-        var item = new MenuItem
-        {
-            Header = UiText.Get(plan.HeaderResourceKey),
-            IsEnabled = plan.IsEnabled
-        };
-        AutomationProperties.SetAutomationId(item, plan.AutomationId);
-        item.Click += (_, _) => ApplyQuickAccessToolbarCustomization(plan.CommandId, plan.Action);
-
         var menu = new ContextMenu();
-        menu.Items.Add(item);
+        var state = new QuickAccessToolbarCustomizationMenuState(
+            commandId,
+            QuickAccessToolbarCatalog.NormalizeCommandIds(_options.QuickAccessToolbarCommands));
+        foreach (var command in QuickAccessToolbarContextMenuPlanner.BuildCustomizationCommands(state))
+            AddQuickAccessToolbarCustomizationMenuItem(menu.Items, command);
+
         return menu;
+    }
+
+    private void AddQuickAccessToolbarCustomizationMenuItem(
+        ItemCollection target,
+        QuickAccessToolbarMenuCommand command)
+    {
+        var menuItem = new MenuItem
+        {
+            Header = UiText.Get(command.ResourceKey),
+            IsEnabled = command.IsEnabled
+        };
+        AutomationProperties.SetAutomationId(menuItem, command.AutomationId);
+
+        var action = command.Action == QuickAccessToolbarMenuAction.Remove
+            ? QuickAccessToolbarCustomizationAction.Remove
+            : QuickAccessToolbarCustomizationAction.Add;
+        menuItem.Click += (_, _) => ApplyQuickAccessToolbarCustomization(command.CommandId, action);
+
+        target.Add(menuItem);
     }
 
     private void ApplyQuickAccessToolbarCustomization(
@@ -368,6 +388,10 @@ public partial class MainWindow
         menu.IsOpen = true;
     }
 
+    // Builds the Undo/Redo history dropdown from the neutral QuickAccessToolbarContextMenuPlanner so its
+    // structure (per-span entries vs. the disabled "No actions to …" placeholder, per-item automation ids) is
+    // single-sourced with a future Avalonia port. Dispatch still calls ExecuteQuickAccessHistory with the
+    // span's 1-based action count, preserving the existing behavior verbatim.
     private ContextMenu CreateQuickAccessHistoryMenu(string commandId, ButtonBase placementTarget)
     {
         var entries = GetQuickAccessHistoryEntries(commandId);
@@ -377,32 +401,35 @@ public partial class MainWindow
             Placement = PlacementMode.Bottom
         };
 
-        if (entries.Count == 0)
-        {
-            menu.Items.Add(new MenuItem
-            {
-                Header = string.Equals(commandId, QuickAccessToolbarCommandIds.Undo, StringComparison.OrdinalIgnoreCase)
-                    ? "No actions to undo"
-                    : "No actions to redo",
-                IsEnabled = false
-            });
-        }
-        else
-        {
-            for (var index = 0; index < entries.Count; index++)
-            {
-                var actionCount = index + 1;
-                var item = new MenuItem
-                {
-                    Header = entries[index].Label
-                };
-                AutomationProperties.SetAutomationId(item, $"{commandId}QatHistoryItem{actionCount}");
-                item.Click += (_, _) => ExecuteQuickAccessHistory(commandId, actionCount);
-                menu.Items.Add(item);
-            }
-        }
+        var isRedo = string.Equals(commandId, QuickAccessToolbarCommandIds.Redo, StringComparison.OrdinalIgnoreCase);
+        var state = new QuickAccessToolbarHistoryMenuState(
+            isRedo,
+            entries.Select(entry => entry.Label).ToList());
+        foreach (var command in QuickAccessToolbarContextMenuPlanner.BuildHistoryCommands(state))
+            AddQuickAccessHistoryMenuItem(menu.Items, commandId, command);
 
         return menu;
+    }
+
+    private void AddQuickAccessHistoryMenuItem(
+        ItemCollection target,
+        string commandId,
+        QuickAccessToolbarMenuCommand command)
+    {
+        var menuItem = new MenuItem
+        {
+            Header = command.Header,
+            IsEnabled = command.IsEnabled
+        };
+
+        if (command.Action == QuickAccessToolbarMenuAction.ExecuteHistory)
+        {
+            AutomationProperties.SetAutomationId(menuItem, command.AutomationId);
+            var actionCount = command.ActionCount;
+            menuItem.Click += (_, _) => ExecuteQuickAccessHistory(commandId, actionCount);
+        }
+
+        target.Add(menuItem);
     }
 
     private void ExecuteQuickAccessHistory(string commandId, int actionCount)

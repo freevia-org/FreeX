@@ -92,6 +92,9 @@ public sealed class QuickAccessToolbarCustomizationPlannerTests
         source.Should().Contain("TryFindQuickAccessToolbarCatalogCommand");
         source.Should().Contain("CreateQuickAccessToolbarCustomizationContextMenu(command.Id)");
         source.Should().Contain("QuickAccessToolbarCustomizationPlanner.Apply");
+        // Both QAT context menus now build their structure from the neutral planner.
+        source.Should().Contain("QuickAccessToolbarContextMenuPlanner.BuildCustomizationCommands");
+        source.Should().Contain("QuickAccessToolbarContextMenuPlanner.BuildHistoryCommands");
         source.Should().Contain("case QuickAccessToolbarCommandIds.CheckAccessibility:");
         source.Should().Contain("AccessibilityCheckerBtn_Click(sender, args);");
         source.Should().Contain("case QuickAccessToolbarCommandIds.ShareWorkbook:");
