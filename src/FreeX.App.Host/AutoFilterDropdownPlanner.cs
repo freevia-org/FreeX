@@ -109,25 +109,47 @@ public static class AutoFilterDropdownPlanner
     {
         ArgumentNullException.ThrowIfNull(sheet);
         range = default;
-        if (sheet.AutoFilter is not { Reference: { } reference } ||
-            string.IsNullOrWhiteSpace(reference))
+
+        // A worksheet-level <autoFilter> takes precedence (an explicit AutoFilter applied to a range).
+        if (sheet.AutoFilter is { Reference: { } reference } &&
+            !string.IsNullOrWhiteSpace(reference))
         {
-            return false;
+            try
+            {
+                range = GridRange.Parse(reference, sheet.Id);
+                return true;
+            }
+            catch (FormatException)
+            {
+                return false;
+            }
+            catch (ArgumentException)
+            {
+                return false;
+            }
         }
 
-        try
+        // Excel structured tables carry their AutoFilter inside the table definition rather than as a
+        // worksheet <autoFilter>; surface the first filtered table's range so the header still shows
+        // filter-arrow buttons exactly as Excel renders them.
+        foreach (var table in sheet.StructuredTables)
         {
-            range = GridRange.Parse(reference, sheet.Id);
+            if (!table.HasAutoFilter)
+                continue;
+
+            var tableRange = table.Range;
+            if (tableRange.Start.Sheet != sheet.Id ||
+                tableRange.End.Row < tableRange.Start.Row ||
+                tableRange.End.Col < tableRange.Start.Col)
+            {
+                continue;
+            }
+
+            range = tableRange;
             return true;
         }
-        catch (FormatException)
-        {
-            return false;
-        }
-        catch (ArgumentException)
-        {
-            return false;
-        }
+
+        return false;
     }
 
     public static bool TryPlan(GridRange currentRegion, CellAddress activeCell, out AutoFilterDropdownPlan plan)
