@@ -120,6 +120,10 @@ internal sealed class FindReplaceDialog : Window
             items.Add(new GoToItem(entry.BlockIndex, $"{indent}{text}"));
         }
 
+        // Then each bookmark by name (jumps to the bookmarked paragraph via BringBlockIntoView).
+        foreach (var bookmark in Bookmarks.List(_editor.Model))
+            items.Add(new GoToItem(bookmark.BlockIndex, $"Bookmark: {bookmark.Name}"));
+
         _goToTarget.ItemsSource = items;
         _goToTarget.SelectedIndex = selectedIndex >= 0 && selectedIndex < items.Count ? selectedIndex : 0;
     }

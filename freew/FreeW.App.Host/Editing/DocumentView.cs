@@ -3208,6 +3208,19 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Removes the bookmark named <paramref name="name"/> from the document (clears the matching
+    /// paragraph's <see cref="ModelParagraph.BookmarkName"/> via the pure <see cref="Bookmarks"/>
+    /// helper), then re-renders so the cleared marker round-trips on the next commit. Used by the
+    /// Bookmark Manager's Delete action. No-op for a null/empty name or an unknown bookmark.
+    /// </summary>
+    public void RemoveBookmark(string name)
+    {
+        CommitToModel();
+        Bookmarks.RemoveBookmark(_model, name);
+        Render();
+    }
+
+    /// <summary>
     /// Marks the model runs of <paramref name="paragraph"/> covering the character range
     /// [<paramref name="startOffset"/>, <paramref name="endOffset"/>) as a tracked change of
     /// <paramref name="kind"/>, splitting runs at the boundaries. Offsets are measured over the
