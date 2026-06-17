@@ -230,30 +230,37 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void PivotTableFieldListPane_ExposesFieldDropdownCommands()
     {
-        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
-        XNamespace local = "clr-namespace:FreeX.App.Host";
-        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        // The PivotTable field-area context menus are now single-sourced through the neutral
+        // PivotFieldContextMenuPlanner (rendered at runtime via PivotFieldList_Loaded) instead of five
+        // duplicated XAML ContextMenus. Assert the planner still exposes the sort/filter/settings commands and
+        // that the field lists wire the runtime builder.
+        var xamlSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
+        var contextMenuSource = DialogSourceTestSupport.ReadHostSources("MainWindow.ContextMenus.cs");
 
-        document
-            .Descendants(presentation + "MenuItem")
-            .Where(item => item.Attribute("Click")?.Value?.StartsWith("PivotField", StringComparison.Ordinal) == true)
-            .Select(item => item.Attribute("Click")!.Value)
-            .Should()
-            .Contain([
-                "PivotFieldSortAscendingMenuItem_Click",
-                "PivotFieldSortDescendingMenuItem_Click",
-                "PivotFieldSelectItemsMenuItem_Click",
-                "PivotFieldLabelFilterMenuItem_Click",
-                "PivotFieldValueFilterMenuItem_Click",
-                "PivotFieldClearFilterMenuItem_Click",
-                "PivotFieldValueSettingsMenuItem_Click"
-            ]);
+        var actions = PivotFieldContextMenuPlanner.BuildPivotFieldCommands(includeRemove: false)
+            .Where(command => !command.IsSeparator)
+            .Select(command => command.Action)
+            .ToList();
 
-        document
-            .Descendants(presentation + "MenuItem")
-            .Where(item => item.Attribute("Click")?.Value == "PivotFieldSortAscendingMenuItem_Click")
+        actions.Should().Contain([
+            PivotFieldContextMenuAction.SortAscending,
+            PivotFieldContextMenuAction.SortDescending,
+            PivotFieldContextMenuAction.SelectItems,
+            PivotFieldContextMenuAction.LabelFilter,
+            PivotFieldContextMenuAction.ValueFilter,
+            PivotFieldContextMenuAction.ClearFilter,
+            PivotFieldContextMenuAction.ValueFieldSettings
+        ]);
+
+        PivotFieldContextMenuPlanner.BuildPivotFieldCommands(includeRemove: false)
+            .Where(command => !command.IsSeparator)
             .Should()
-            .AllSatisfy(item => item.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().NotBeNullOrWhiteSpace());
+            .AllSatisfy(command => command.KeyTip.Should().NotBeNullOrWhiteSpace());
+
+        xamlSource.Should().Contain("Loaded=\"PivotFieldList_Loaded\"");
+        contextMenuSource.Should().Contain("PivotFieldSortAscendingMenuItem_Click");
+        contextMenuSource.Should().Contain("PivotFieldSelectItemsMenuItem_Click");
+        contextMenuSource.Should().Contain("PivotFieldValueSettingsMenuItem_Click");
     }
 
     [Fact]
@@ -354,26 +361,24 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void PivotTableFieldListPane_BucketContextMenusExposeRemoveField()
     {
-        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
-        XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
-        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        // The four bucket lists (Filters/Columns/Rows/Values) share one runtime-built menu that includes the
+        // trailing "Remove" command, while the available-fields list omits it. Assert the planner carries that
+        // distinction and routes Remove through the existing handler.
+        var contextMenuSource = DialogSourceTestSupport.ReadHostSources("MainWindow.ContextMenus.cs");
 
-        foreach (var listName in new[] { "PivotFiltersList", "PivotColumnsList", "PivotRowsList", "PivotValuesList" })
-        {
-            var list = document
-                .Descendants(presentation + "ListBox")
-                .Single(element => element.Attribute(xaml + "Name")?.Value == listName);
+        var bucketCommands = PivotFieldContextMenuPlanner.BuildPivotFieldCommands(includeRemove: true)
+            .Where(command => !command.IsSeparator)
+            .ToList();
+        var removeCommand = bucketCommands.Single(command => command.Action == PivotFieldContextMenuAction.Remove);
+        removeCommand.ResourceKey.Should().Be("MainWindow_Content_Remove");
 
-            list
-                .Descendants(presentation + "MenuItem")
-                .Where(item => item.Attribute("Click")?.Value == "PivotFieldRemoveBtn_Click")
-                .Should()
-                .ContainSingle()
-                .Which
-                .Attribute("Header")?.Value
-                .Should()
-                .Be("{local:Loc Key=MainWindow_Content_Remove}");
-        }
+        PivotFieldContextMenuPlanner.BuildPivotFieldCommands(includeRemove: false)
+            .Should()
+            .NotContain(command => command.Action == PivotFieldContextMenuAction.Remove);
+
+        // The available-fields list is the only one that omits Remove; the bucket lists include it.
+        contextMenuSource.Should().Contain("ReferenceEquals(list, PivotAvailableFieldsList)");
+        contextMenuSource.Should().Contain("PivotFieldContextMenuAction.Remove => PivotFieldRemoveBtn_Click");
     }
 
     [Fact]

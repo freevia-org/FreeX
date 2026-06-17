@@ -52,38 +52,26 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void StatusBarCustomizeMenu_ExposesCheckableAggregatePanes()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
-        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
-        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
-
-        var statusBarRoot = document
-            .Descendants(presentation + "Border")
-            .Single(border => border.Attribute(x + "Name")?.Value == "StatusBarRoot");
-
-        var menu = statusBarRoot
-            .Descendants(presentation + "ContextMenu")
-            .Single(contextMenu => contextMenu.Attribute(x + "Name")?.Value == "StatusBarCustomizeMenu");
-
-        menu.Attribute("Opened")?.Value.Should().Be("StatusBarCustomizeMenu_Opened");
-
-        var paneItems = menu
-            .Elements(presentation + "MenuItem")
-            .Where(item => item.Attribute("Click")?.Value == "StatusBarCustomizeMenuItem_Click")
-            .Where(item => item.Attribute("Tag")?.Value is "Average" or "Count" or "NumericalCount" or "Sum" or "Minimum" or "Maximum")
-            .Select(item => (
-                Name: item.Attribute(x + "Name")?.Value,
-                Header: LocalizedXamlTestSupport.ResolveLocalizedValue(item.Attribute("Header")?.Value),
-                Tag: item.Attribute("Tag")?.Value,
-                IsCheckable: item.Attribute("IsCheckable")?.Value))
+        // The status-bar customize menu is now single-sourced through the neutral
+        // StatusBarCustomizeContextMenuPlanner (rendered at runtime via StatusBarRoot_Loaded) instead of being
+        // hand-authored in XAML. Assert the planner still describes the checkable aggregate toggles with the
+        // persisted-option Tag, stable AutomationId, and localized header the previous XAML carried.
+        var paneItems = StatusBarCustomizeContextMenuPlanner.BuildStatusBarCustomizeCommands()
+            .Where(command => command.OptionTag is "Average" or "Count" or "NumericalCount" or "Sum" or "Minimum" or "Maximum")
+            .Select(command => (
+                Name: command.AutomationId,
+                Header: UiText.Get(command.ResourceKey),
+                Tag: command.OptionTag,
+                IsCheckable: command.IsCheckable))
             .ToArray();
 
         paneItems.Should().Equal(
-            ("StatusBarAverageMenuItem", UiText.Get("StatusBar_Average"), "Average", "True"),
-            ("StatusBarCountMenuItem", UiText.Get("StatusBar_Count"), "Count", "True"),
-            ("StatusBarNumericalCountMenuItem", UiText.Get("StatusBar_NumericalCount"), "NumericalCount", "True"),
-            ("StatusBarMinimumMenuItem", UiText.Get("StatusBar_Minimum"), "Minimum", "True"),
-            ("StatusBarMaximumMenuItem", UiText.Get("StatusBar_Maximum"), "Maximum", "True"),
-            ("StatusBarSumMenuItem", UiText.Get("StatusBar_Sum"), "Sum", "True"));
+            ("StatusBarAverageMenuItem", UiText.Get("StatusBar_Average"), "Average", true),
+            ("StatusBarCountMenuItem", UiText.Get("StatusBar_Count"), "Count", true),
+            ("StatusBarNumericalCountMenuItem", UiText.Get("StatusBar_NumericalCount"), "NumericalCount", true),
+            ("StatusBarMinimumMenuItem", UiText.Get("StatusBar_Minimum"), "Minimum", true),
+            ("StatusBarMaximumMenuItem", UiText.Get("StatusBar_Maximum"), "Maximum", true),
+            ("StatusBarSumMenuItem", UiText.Get("StatusBar_Sum"), "Sum", true));
     }
 
     [Fact]

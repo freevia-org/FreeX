@@ -467,6 +467,7 @@
                              MinHeight="96"
                              SelectionMode="Single"
                              AllowDrop="True"
+                             Loaded="PivotFieldList_Loaded"
                              PreviewMouseMove="PivotFieldList_PreviewMouseMove"
                              PreviewMouseRightButtonDown="PivotFieldList_PreviewMouseRightButtonDown"
                              GiveFeedback="PivotFieldList_GiveFeedback"
@@ -484,18 +485,6 @@
                                           AutomationProperties.Name="{Binding Caption}" local:RibbonMetadata.CommandName="{Binding Caption}"/>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
-                        <ListBox.ContextMenu>
-                            <ContextMenu>
-                                <MenuItem Header="{local:Loc Key=MainWindow_Header_SortAToZ}" local:RibbonTooltip.KeyTip="S" Click="PivotFieldSortAscendingMenuItem_Click" local:RibbonMetadata.CommandName="Sort A to Z"/>
-                                <MenuItem Header="{local:Loc Key=MainWindow_Header_SortZToA}" local:RibbonTooltip.KeyTip="O" Click="PivotFieldSortDescendingMenuItem_Click" local:RibbonMetadata.CommandName="Sort Z to A"/>
-                                <MenuItem Header="{local:Loc Key=MainWindow_Header_SelectItems}" local:RibbonTooltip.KeyTip="I" Click="PivotFieldSelectItemsMenuItem_Click" local:RibbonMetadata.CommandName="Select Items"/>
-                                <MenuItem Header="{local:Loc Key=MainWindow_Header_LabelFilter}" local:RibbonTooltip.KeyTip="L" Click="PivotFieldLabelFilterMenuItem_Click" local:RibbonMetadata.CommandName="Label Filter"/>
-                                <MenuItem Header="{local:Loc Key=MainWindow_Header_ValueFilter}" local:RibbonTooltip.KeyTip="F" Click="PivotFieldValueFilterMenuItem_Click" local:RibbonMetadata.CommandName="Value Filter"/>
-                                <MenuItem Header="{local:Loc Key=MainWindow_Header_ClearFilter}" local:RibbonTooltip.KeyTip="C" Click="PivotFieldClearFilterMenuItem_Click" local:RibbonMetadata.CommandName="Clear Filter"/>
-                                <Separator/>
-                                <MenuItem Header="{local:Loc Key=MainWindow_Header_ValueFieldSettings}" local:RibbonTooltip.KeyTip="V" Click="PivotFieldValueSettingsMenuItem_Click" local:RibbonMetadata.CommandName="Value Field Settings"/>
-                            </ContextMenu>
-                        </ListBox.ContextMenu>
                     </ListBox>
 
                     <StackPanel Grid.Row="4" Margin="0,6,0,6">
@@ -551,26 +540,13 @@
                                  MinHeight="80"
                                  SelectionMode="Single"
                                  AllowDrop="True"
+                                 Loaded="PivotFieldList_Loaded"
                                  PreviewMouseMove="PivotFieldList_PreviewMouseMove"
                                  PreviewMouseRightButtonDown="PivotFieldList_PreviewMouseRightButtonDown"
                                  GiveFeedback="PivotFieldList_GiveFeedback"
                                  DragOver="PivotFieldList_DragOver"
                                  Drop="PivotFieldList_Drop"
                                  AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_PivotTableFiltersArea}">
-                            <ListBox.ContextMenu>
-                                <ContextMenu>
-                                    <MenuItem Header="{local:Loc Key=MainWindow_Header_SortAToZ}" local:RibbonTooltip.KeyTip="S" Click="PivotFieldSortAscendingMenuItem_Click" local:RibbonMetadata.CommandName="Sort A to Z"/>
-                                    <MenuItem Header="{local:Loc Key=MainWindow_Header_SortZToA}" local:RibbonTooltip.KeyTip="O" Click="PivotFieldSortDescendingMenuItem_Click" local:RibbonMetadata.CommandName="Sort Z to A"/>
-                                    <MenuItem Header="{local:Loc Key=MainWindow_Header_SelectItems}" local:RibbonTooltip.KeyTip="I" Click="PivotFieldSelectItemsMenuItem_Click" local:RibbonMetadata.CommandName="Select Items"/>
-                                    <MenuItem Header="{local:Loc Key=MainWindow_Header_LabelFilter}" local:RibbonTooltip.KeyTip="L" Click="PivotFieldLabelFilterMenuItem_Click" local:RibbonMetadata.CommandName="Label Filter"/>
-                                    <MenuItem Header="{local:Loc Key=MainWindow_Header_ValueFilter}" local:RibbonTooltip.KeyTip="F" Click="PivotFieldValueFilterMenuItem_Click" local:RibbonMetadata.CommandName="Value Filter"/>
-                                    <MenuItem Header="{local:Loc Key=MainWindow_Header_ClearFilter}" local:RibbonTooltip.KeyTip="C" Click="PivotFieldClearFilterMenuItem_Click" local:RibbonMetadata.CommandName="Clear Filter"/>
-                                    <Separator/>
-                                    <MenuItem Header="{local:Loc Key=MainWindow_Header_ValueFieldSettings}" local:RibbonTooltip.KeyTip="V" Click="PivotFieldValueSettingsMenuItem_Click" local:RibbonMetadata.CommandName="Value Field Settings"/>
-                                    <Separator/>
-                                    <MenuItem Header="{local:Loc Key=MainWindow_Content_Remove}" local:RibbonTooltip.KeyTip="R" Click="PivotFieldRemoveBtn_Click" local:RibbonMetadata.CommandName="Remove"/>
-                                </ContextMenu>
-                            </ListBox.ContextMenu>
                         </ListBox>
                         <ListBox x:Name="PivotColumnsList"
                                  Grid.Row="1"
@@ -578,26 +554,13 @@
                                  MinHeight="80"
                                  SelectionMode="Single"
                                  AllowDrop="True"
+                                 Loaded="PivotFieldList_Loaded"
                                  PreviewMouseMove="PivotFieldList_PreviewMouseMove"
                                  PreviewMouseRightButtonDown="PivotFieldList_PreviewMouseRightButtonDown"
                                  GiveFeedback="PivotFieldList_GiveFeedback"
                                  DragOver="PivotFieldList_DragOver"
                                  Drop="PivotFieldList_Drop"
                                  AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_PivotTableColumnsArea}">
-                            <ListBox.ContextMenu>
-                                <ContextMenu>
-                                    <MenuItem Header="{local:Loc Key=MainWindow_Header_SortAToZ}" local:RibbonTooltip.KeyTip="S" Click="PivotFieldSortAscendingMenuItem_Click" local:RibbonMetadata.CommandName="Sort A to Z"/>
-                                    <MenuItem Header="{local:Loc Key=MainWindow_Header_SortZToA}" local:RibbonTooltip.KeyTip="O" Click="PivotFieldSortDescendingMenuItem_Click" local:RibbonMetadata.CommandName="Sort Z to A"/>
-                                    <MenuItem Header="{local:Loc Key=MainWindow_Header_SelectItems}" local:RibbonTooltip.KeyTip="I" Click="PivotFieldSelectItemsMenuItem_Click" local:RibbonMetadata.CommandName="Select Items"/>
-                                    <MenuItem Header="{local:Loc Key=MainWindow_Header_LabelFilter}" local:RibbonTooltip.KeyTip="L" Click="PivotFieldLabelFilterMenuItem_Click" local:RibbonMetadata.CommandName="Label Filter"/>
-                                    <MenuItem Header="{local:Loc Key=MainWindow_Header_ValueFilter}" local:RibbonTooltip.KeyTip="F" Click="PivotFieldValueFilterMenuItem_Click" local:RibbonMetadata.CommandName="Value Filter"/>
-                                    <MenuItem Header="{local:Loc Key=MainWindow_Header_ClearFilter}" local:RibbonTooltip.KeyTip="C" Click="PivotFieldClearFilterMenuItem_Click" local:RibbonMetadata.CommandName="Clear Filter"/>
-                                    <Separator/>
-                                    <MenuItem Header="{local:Loc Key=MainWindow_Header_ValueFieldSettings}" local:RibbonTooltip.KeyTip="V" Click="PivotFieldValueSettingsMenuItem_Click" local:RibbonMetadata.CommandName="Value Field Settings"/>
-                                    <Separator/>
-                                    <MenuItem Header="{local:Loc Key=MainWindow_Content_Remove}" local:RibbonTooltip.KeyTip="R" Click="PivotFieldRemoveBtn_Click" local:RibbonMetadata.CommandName="Remove"/>
-                                </ContextMenu>
-                            </ListBox.ContextMenu>
                         </ListBox>
 
                         <TextBlock Grid.Row="2" Grid.Column="0" Text="{local:Loc Key=MainWindow_Text_Rows}" FontWeight="SemiBold" Margin="0,8,0,3"/>
@@ -608,26 +571,13 @@
                                  MinHeight="80"
                                  SelectionMode="Single"
                                  AllowDrop="True"
+                                 Loaded="PivotFieldList_Loaded"
                                  PreviewMouseMove="PivotFieldList_PreviewMouseMove"
                                  PreviewMouseRightButtonDown="PivotFieldList_PreviewMouseRightButtonDown"
                                  GiveFeedback="PivotFieldList_GiveFeedback"
                                  DragOver="PivotFieldList_DragOver"
                                  Drop="PivotFieldList_Drop"
                                  AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_PivotTableRowsArea}">
-                            <ListBox.ContextMenu>
-                                <ContextMenu>
-                                    <MenuItem Header="{local:Loc Key=MainWindow_Header_SortAToZ}" local:RibbonTooltip.KeyTip="S" Click="PivotFieldSortAscendingMenuItem_Click" local:RibbonMetadata.CommandName="Sort A to Z"/>
-                                    <MenuItem Header="{local:Loc Key=MainWindow_Header_SortZToA}" local:RibbonTooltip.KeyTip="O" Click="PivotFieldSortDescendingMenuItem_Click" local:RibbonMetadata.CommandName="Sort Z to A"/>
-                                    <MenuItem Header="{local:Loc Key=MainWindow_Header_SelectItems}" local:RibbonTooltip.KeyTip="I" Click="PivotFieldSelectItemsMenuItem_Click" local:RibbonMetadata.CommandName="Select Items"/>
-                                    <MenuItem Header="{local:Loc Key=MainWindow_Header_LabelFilter}" local:RibbonTooltip.KeyTip="L" Click="PivotFieldLabelFilterMenuItem_Click" local:RibbonMetadata.CommandName="Label Filter"/>
-                                    <MenuItem Header="{local:Loc Key=MainWindow_Header_ValueFilter}" local:RibbonTooltip.KeyTip="F" Click="PivotFieldValueFilterMenuItem_Click" local:RibbonMetadata.CommandName="Value Filter"/>
-                                    <MenuItem Header="{local:Loc Key=MainWindow_Header_ClearFilter}" local:RibbonTooltip.KeyTip="C" Click="PivotFieldClearFilterMenuItem_Click" local:RibbonMetadata.CommandName="Clear Filter"/>
-                                    <Separator/>
-                                    <MenuItem Header="{local:Loc Key=MainWindow_Header_ValueFieldSettings}" local:RibbonTooltip.KeyTip="V" Click="PivotFieldValueSettingsMenuItem_Click" local:RibbonMetadata.CommandName="Value Field Settings"/>
-                                    <Separator/>
-                                    <MenuItem Header="{local:Loc Key=MainWindow_Content_Remove}" local:RibbonTooltip.KeyTip="R" Click="PivotFieldRemoveBtn_Click" local:RibbonMetadata.CommandName="Remove"/>
-                                </ContextMenu>
-                            </ListBox.ContextMenu>
                         </ListBox>
                         <ListBox x:Name="PivotValuesList"
                                  Grid.Row="3"
@@ -635,26 +585,13 @@
                                  MinHeight="80"
                                  SelectionMode="Single"
                                  AllowDrop="True"
+                                 Loaded="PivotFieldList_Loaded"
                                  PreviewMouseMove="PivotFieldList_PreviewMouseMove"
                                  PreviewMouseRightButtonDown="PivotFieldList_PreviewMouseRightButtonDown"
                                  GiveFeedback="PivotFieldList_GiveFeedback"
                                  DragOver="PivotFieldList_DragOver"
                                  Drop="PivotFieldList_Drop"
                                  AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_PivotTableValuesArea}">
-                            <ListBox.ContextMenu>
-                                <ContextMenu>
-                                    <MenuItem Header="{local:Loc Key=MainWindow_Header_SortAToZ}" local:RibbonTooltip.KeyTip="S" Click="PivotFieldSortAscendingMenuItem_Click" local:RibbonMetadata.CommandName="Sort A to Z"/>
-                                    <MenuItem Header="{local:Loc Key=MainWindow_Header_SortZToA}" local:RibbonTooltip.KeyTip="O" Click="PivotFieldSortDescendingMenuItem_Click" local:RibbonMetadata.CommandName="Sort Z to A"/>
-                                    <MenuItem Header="{local:Loc Key=MainWindow_Header_SelectItems}" local:RibbonTooltip.KeyTip="I" Click="PivotFieldSelectItemsMenuItem_Click" local:RibbonMetadata.CommandName="Select Items"/>
-                                    <MenuItem Header="{local:Loc Key=MainWindow_Header_LabelFilter}" local:RibbonTooltip.KeyTip="L" Click="PivotFieldLabelFilterMenuItem_Click" local:RibbonMetadata.CommandName="Label Filter"/>
-                                    <MenuItem Header="{local:Loc Key=MainWindow_Header_ValueFilter}" local:RibbonTooltip.KeyTip="F" Click="PivotFieldValueFilterMenuItem_Click" local:RibbonMetadata.CommandName="Value Filter"/>
-                                    <MenuItem Header="{local:Loc Key=MainWindow_Header_ClearFilter}" local:RibbonTooltip.KeyTip="C" Click="PivotFieldClearFilterMenuItem_Click" local:RibbonMetadata.CommandName="Clear Filter"/>
-                                    <Separator/>
-                                    <MenuItem Header="{local:Loc Key=MainWindow_Header_ValueFieldSettings}" local:RibbonTooltip.KeyTip="V" Click="PivotFieldValueSettingsMenuItem_Click" local:RibbonMetadata.CommandName="Value Field Settings"/>
-                                    <Separator/>
-                                    <MenuItem Header="{local:Loc Key=MainWindow_Content_Remove}" local:RibbonTooltip.KeyTip="R" Click="PivotFieldRemoveBtn_Click" local:RibbonMetadata.CommandName="Remove"/>
-                                </ContextMenu>
-                            </ListBox.ContextMenu>
                         </ListBox>
                     </Grid>
                 </Grid>
@@ -1171,111 +1108,8 @@
              ═══════════════════════════════════════════════════════════════ -->
         <Border x:Name="StatusBarRoot" Grid.Row="6" Panel.ZIndex="6" Background="{StaticResource FreeXStatusSurfaceBrush}" Padding="8,3"
                 AutomationProperties.AutomationId="StatusBarRoot"
+                Loaded="StatusBarRoot_Loaded"
                 ClipToBounds="True">
-            <Border.ContextMenu>
-                <ContextMenu x:Name="StatusBarCustomizeMenu"
-                             Opened="StatusBarCustomizeMenu_Opened"
-                             AutomationProperties.Name="{local:Loc Key=StatusBar_CustomizeStatusBar}">
-                    <MenuItem Header="{local:Loc Key=StatusBar_CustomizeStatusBar}"
-                              IsEnabled="False"
-                              local:RibbonTooltip.KeyTip="T"
-                              AutomationProperties.AutomationId="StatusBarCustomizeTitleMenuItem"/>
-                    <Separator/>
-                    <MenuItem x:Name="StatusBarCellModeMenuItem"
-                              Header="{local:Loc Key=StatusBar_CellMode}"
-                              local:RibbonTooltip.KeyTip="M"
-                              IsCheckable="True"
-                              Tag="CellMode"
-                              Click="StatusBarCustomizeMenuItem_Click"
-                              AutomationProperties.AutomationId="StatusBarCellModeMenuItem"/>
-                    <MenuItem x:Name="StatusBarEndModeMenuItem"
-                              Header="{local:Loc Key=StatusBar_EndMode}"
-                              local:RibbonTooltip.KeyTip="E"
-                              IsCheckable="True"
-                              Tag="EndMode"
-                              Click="StatusBarCustomizeMenuItem_Click"
-                              AutomationProperties.AutomationId="StatusBarEndModeMenuItem"/>
-                    <MenuItem x:Name="StatusBarSelectionModeMenuItem"
-                              Header="{local:Loc Key=StatusBar_SelectionMode}"
-                              local:RibbonTooltip.KeyTip="O"
-                              IsCheckable="True"
-                              Tag="SelectionMode"
-                              Click="StatusBarCustomizeMenuItem_Click"
-                              AutomationProperties.AutomationId="StatusBarSelectionModeMenuItem"/>
-                    <MenuItem x:Name="StatusBarPageNumberMenuItem"
-                              Header="{local:Loc Key=StatusBar_PageNumber}"
-                              local:RibbonTooltip.KeyTip="P"
-                              IsCheckable="True"
-                              Tag="PageNumber"
-                              Click="StatusBarCustomizeMenuItem_Click"
-                              AutomationProperties.AutomationId="StatusBarPageNumberMenuItem"/>
-                    <Separator/>
-                    <MenuItem x:Name="StatusBarAverageMenuItem"
-                              Header="{local:Loc Key=StatusBar_Average}"
-                              local:RibbonTooltip.KeyTip="A"
-                              IsCheckable="True"
-                              Tag="Average"
-                              Click="StatusBarCustomizeMenuItem_Click"
-                              AutomationProperties.AutomationId="StatusBarAverageMenuItem"/>
-                    <MenuItem x:Name="StatusBarCountMenuItem"
-                              Header="{local:Loc Key=StatusBar_Count}"
-                              local:RibbonTooltip.KeyTip="C"
-                              IsCheckable="True"
-                              Tag="Count"
-                              Click="StatusBarCustomizeMenuItem_Click"
-                              AutomationProperties.AutomationId="StatusBarCountMenuItem"/>
-                    <MenuItem x:Name="StatusBarNumericalCountMenuItem"
-                              Header="{local:Loc Key=StatusBar_NumericalCount}"
-                              local:RibbonTooltip.KeyTip="N"
-                              IsCheckable="True"
-                              Tag="NumericalCount"
-                              Click="StatusBarCustomizeMenuItem_Click"
-                              AutomationProperties.AutomationId="StatusBarNumericalCountMenuItem"/>
-                    <MenuItem x:Name="StatusBarMinimumMenuItem"
-                              Header="{local:Loc Key=StatusBar_Minimum}"
-                              local:RibbonTooltip.KeyTip="I"
-                              IsCheckable="True"
-                              Tag="Minimum"
-                              Click="StatusBarCustomizeMenuItem_Click"
-                              AutomationProperties.AutomationId="StatusBarMinimumMenuItem"/>
-                    <MenuItem x:Name="StatusBarMaximumMenuItem"
-                              Header="{local:Loc Key=StatusBar_Maximum}"
-                              local:RibbonTooltip.KeyTip="X"
-                              IsCheckable="True"
-                              Tag="Maximum"
-                              Click="StatusBarCustomizeMenuItem_Click"
-                              AutomationProperties.AutomationId="StatusBarMaximumMenuItem"/>
-                    <MenuItem x:Name="StatusBarSumMenuItem"
-                              Header="{local:Loc Key=StatusBar_Sum}"
-                              local:RibbonTooltip.KeyTip="S"
-                              IsCheckable="True"
-                              Tag="Sum"
-                              Click="StatusBarCustomizeMenuItem_Click"
-                              AutomationProperties.AutomationId="StatusBarSumMenuItem"/>
-                    <Separator/>
-                    <MenuItem x:Name="StatusBarViewShortcutsMenuItem"
-                              Header="{local:Loc Key=StatusBar_ViewShortcuts}"
-                              local:RibbonTooltip.KeyTip="V"
-                              IsCheckable="True"
-                              Tag="ViewShortcuts"
-                              Click="StatusBarCustomizeMenuItem_Click"
-                              AutomationProperties.AutomationId="StatusBarViewShortcutsMenuItem"/>
-                    <MenuItem x:Name="StatusBarZoomMenuItem"
-                              Header="{local:Loc Key=StatusBar_Zoom}"
-                              local:RibbonTooltip.KeyTip="Z"
-                              IsCheckable="True"
-                              Tag="Zoom"
-                              Click="StatusBarCustomizeMenuItem_Click"
-                              AutomationProperties.AutomationId="StatusBarZoomMenuItem"/>
-                    <MenuItem x:Name="StatusBarZoomSliderMenuItem"
-                              Header="{local:Loc Key=StatusBar_ZoomSlider}"
-                              local:RibbonTooltip.KeyTip="L"
-                              IsCheckable="True"
-                              Tag="ZoomSlider"
-                              Click="StatusBarCustomizeMenuItem_Click"
-                              AutomationProperties.AutomationId="StatusBarZoomSliderMenuItem"/>
-                </ContextMenu>
-            </Border.ContextMenu>
             <Grid x:Name="StatusBarGrid" ClipToBounds="True">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
@@ -1901,22 +1735,11 @@
                                     <Button HorizontalContentAlignment="Stretch"
                                             BorderThickness="0" Padding="0,7"
                                             Click="SsRecentItem_Click"
+                                            Loaded="SsRecentFileItem_Loaded"
                                             Cursor="Hand"
                                             AutomationProperties.AutomationId="BackstageRecentFileItem"
                                             AutomationProperties.Name="{Binding OpenAutomationName}"
                                             AutomationProperties.HelpText="{Binding OpenAutomationHelpText}">
-                                        <Button.ContextMenu>
-                                            <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
-                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_PinToList}" local:RibbonTooltip.KeyTip="P" Click="SsPinItem_Click"
-                                                          AutomationProperties.AutomationId="BackstageRecentPinMenuItem"
-                                                          AutomationProperties.Name="{Binding PinAutomationName}"
-                                                          AutomationProperties.HelpText="{Binding PinAutomationHelpText}" local:RibbonMetadata.CommandName="Pin to list"/>
-                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_RemoveFromList}" local:RibbonTooltip.KeyTip="R" Click="SsRemoveRecentItem_Click"
-                                                          AutomationProperties.AutomationId="BackstageRecentRemoveMenuItem"
-                                                          AutomationProperties.Name="{Binding RemoveAutomationName}"
-                                                          AutomationProperties.HelpText="{Binding RemoveAutomationHelpText}" local:RibbonMetadata.CommandName="Remove from list"/>
-                                            </ContextMenu>
-                                        </Button.ContextMenu>
                                         <Button.Template>
                                             <ControlTemplate TargetType="Button">
                                                 <Border x:Name="rowBg" Background="Transparent"
@@ -1985,22 +1808,11 @@
                                     <Button HorizontalContentAlignment="Stretch"
                                             BorderThickness="0" Padding="0,7"
                                             Click="SsRecentItem_Click"
+                                            Loaded="SsPinnedFileItem_Loaded"
                                             Cursor="Hand"
                                             AutomationProperties.AutomationId="BackstagePinnedFileItem"
                                             AutomationProperties.Name="{Binding OpenAutomationName}"
                                             AutomationProperties.HelpText="{Binding OpenAutomationHelpText}">
-                                        <Button.ContextMenu>
-                                            <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
-                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_UnpinFromList}" local:RibbonTooltip.KeyTip="U" Click="SsUnpinItem_Click"
-                                                          AutomationProperties.AutomationId="BackstagePinnedUnpinMenuItem"
-                                                          AutomationProperties.Name="{Binding PinAutomationName}"
-                                                          AutomationProperties.HelpText="{Binding PinAutomationHelpText}" local:RibbonMetadata.CommandName="Unpin from list"/>
-                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_RemoveFromList}" local:RibbonTooltip.KeyTip="R" Click="SsRemoveRecentItem_Click"
-                                                          AutomationProperties.AutomationId="BackstagePinnedRemoveMenuItem"
-                                                          AutomationProperties.Name="{Binding RemoveAutomationName}"
-                                                          AutomationProperties.HelpText="{Binding RemoveAutomationHelpText}" local:RibbonMetadata.CommandName="Remove from list"/>
-                                            </ContextMenu>
-                                        </Button.ContextMenu>
                                         <Button.Template>
                                             <ControlTemplate TargetType="Button">
                                                 <Border x:Name="rowBg" Background="Transparent"
