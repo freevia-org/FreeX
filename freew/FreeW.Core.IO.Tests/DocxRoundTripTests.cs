@@ -1064,6 +1064,105 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void Endnote_Reference_And_Content_RoundTrip()
+    {
+        var doc = new TextDocument();
+        var body = new Paragraph();
+        body.Runs.Add(new Run("See note"));
+        body.Runs.Add(Run.EndnoteReference(1));
+        doc.Blocks.Add(body);
+        doc.Endnotes[1] = new Endnote(1, "The endnote text.");
+
+        var result = RoundTrip(doc);
+
+        // The body reference run keeps its id and renders as a superscript marker.
+        var reference = result.Paragraphs.First().Runs.Single(r => r.EndnoteId is not null);
+        reference.EndnoteId.Should().Be(1);
+        reference.Formatting.VerticalAlign.Should().Be(VerticalAlign.Superscript);
+
+        // The endnote content is recovered intact.
+        result.Endnotes.Should().ContainKey(1);
+        result.Endnotes[1].PlainText.Should().Be("The endnote text.");
+    }
+
+    [Fact]
+    public void Endnotes_Package_HasPartContentTypeAndRelationship()
+    {
+        var doc = new TextDocument();
+        var body = new Paragraph();
+        body.Runs.Add(new Run("Body"));
+        body.Runs.Add(Run.EndnoteReference(1));
+        doc.Blocks.Add(body);
+        doc.Endnotes[1] = new Endnote(1, "An endnote.");
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        zip.GetEntry("word/endnotes.xml").Should().NotBeNull();
+
+        using var ctReader = new StreamReader(zip.GetEntry("[Content_Types].xml")!.Open());
+        var contentTypes = ctReader.ReadToEnd();
+        contentTypes.Should().Contain("/word/endnotes.xml");
+        contentTypes.Should().Contain("wordprocessingml.endnotes+xml");
+
+        using var relsReader = new StreamReader(zip.GetEntry("word/_rels/document.xml.rels")!.Open());
+        var rels = relsReader.ReadToEnd();
+        rels.Should().Contain("relationships/endnotes");
+        rels.Should().Contain("endnotes.xml");
+
+        using var docReader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
+        var documentXml = docReader.ReadToEnd();
+        documentXml.Should().Contain("endnoteReference");
+
+        using var endnotesReader = new StreamReader(zip.GetEntry("word/endnotes.xml")!.Open());
+        var endnotesXml = endnotesReader.ReadToEnd();
+        endnotesXml.Should().Contain("An endnote.");
+        endnotesXml.Should().Contain("w:id=\"1\"");
+    }
+
+    [Fact]
+    public void NoEndnotes_DoesNotEmitPart()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Body"));
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        zip.GetEntry("word/endnotes.xml").Should().BeNull();
+
+        DocxReader.Read(new MemoryStream(stream.ToArray())).Endnotes.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Footnotes_And_Endnotes_CoexistAndRoundTrip()
+    {
+        var doc = new TextDocument();
+        var body = new Paragraph();
+        body.Runs.Add(new Run("Text"));
+        body.Runs.Add(Run.FootnoteReference(1));
+        body.Runs.Add(Run.EndnoteReference(1));
+        doc.Blocks.Add(body);
+        doc.Footnotes[1] = new Footnote(1, "A footnote.");
+        doc.Endnotes[1] = new Endnote(1, "An endnote.");
+
+        var result = RoundTrip(doc);
+
+        result.Footnotes.Should().ContainKey(1);
+        result.Footnotes[1].PlainText.Should().Be("A footnote.");
+        result.Endnotes.Should().ContainKey(1);
+        result.Endnotes[1].PlainText.Should().Be("An endnote.");
+
+        var runs = result.Paragraphs.First().Runs;
+        runs.Should().ContainSingle(r => r.FootnoteId == 1);
+        runs.Should().ContainSingle(r => r.EndnoteId == 1);
+    }
+
+    [Fact]
     public void Comment_Range_And_Content_RoundTrip()
     {
         var doc = new TextDocument();

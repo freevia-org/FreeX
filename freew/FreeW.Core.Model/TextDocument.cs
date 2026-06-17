@@ -56,6 +56,14 @@ public sealed class Run(string text, RunFormatting? formatting = null)
     public int? FootnoteId { get; set; }
 
     /// <summary>
+    /// When set, this run is an endnote reference marker pointing at the endnote with this id in
+    /// <see cref="TextDocument.Endnotes"/>. It carries no literal text of its own; the marker number
+    /// is the id. Serialises as a superscript run wrapping a w:endnoteReference w:id="N". Mirrors
+    /// <see cref="FootnoteId"/> but collected at the document end (word/endnotes.xml).
+    /// </summary>
+    public int? EndnoteId { get; set; }
+
+    /// <summary>
     /// When set, this run is covered by the review comment with this id in
     /// <see cref="TextDocument.Comments"/>. The covered span serialises with a w:commentRangeStart /
     /// w:commentRangeEnd pair bracketing the run(s), and a trailing reference run (see
@@ -119,6 +127,18 @@ public sealed class Run(string text, RunFormatting? formatting = null)
             formatting ?? new RunFormatting { VerticalAlign = VerticalAlign.Superscript })
         {
             FootnoteId = footnoteId
+        };
+
+    /// <summary>
+    /// Creates an endnote-reference run for the endnote with id <paramref name="endnoteId"/>. The
+    /// run renders as a superscript marker; its <see cref="Text"/> mirrors the id for field-unaware
+    /// consumers. The matching content lives in <see cref="TextDocument.Endnotes"/>.
+    /// </summary>
+    public static Run EndnoteReference(int endnoteId, RunFormatting? formatting = null) =>
+        new(endnoteId.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            formatting ?? new RunFormatting { VerticalAlign = VerticalAlign.Superscript })
+        {
+            EndnoteId = endnoteId
         };
 
     /// <summary>
@@ -190,6 +210,21 @@ public sealed class Footnote(int id)
     public List<Paragraph> Content { get; } = [];
 
     public Footnote(int id, string text) : this(id) => Content.Add(new Paragraph(text));
+
+    public string PlainText => string.Join("\n", Content.Select(p => p.PlainText));
+}
+
+/// <summary>
+/// A single endnote: an id (matching a body <see cref="Run.EndnoteId"/>) and its block content,
+/// a list of paragraphs. Maps onto a w:endnote element inside word/endnotes.xml. Mirrors
+/// <see cref="Footnote"/> but collected at the document end.
+/// </summary>
+public sealed class Endnote(int id)
+{
+    public int Id { get; } = id;
+    public List<Paragraph> Content { get; } = [];
+
+    public Endnote(int id, string text) : this(id) => Content.Add(new Paragraph(text));
 
     public string PlainText => string.Join("\n", Content.Select(p => p.PlainText));
 }
@@ -554,6 +589,16 @@ public sealed class TextDocument
 
     /// <summary>The next unused footnote id (1-based; ignores the reserved separator ids -1 and 0).</summary>
     public int NextFootnoteId() => Footnotes.Count == 0 ? 1 : Math.Max(0, Footnotes.Keys.Max()) + 1;
+
+    /// <summary>
+    /// The document's endnotes, keyed by endnote id (matching <see cref="Run.EndnoteId"/> on the
+    /// body reference runs). Maps to word/endnotes.xml (w:endnotes / w:endnote w:id="N"). Empty
+    /// when the document has no endnotes, in which case no endnotes part is emitted.
+    /// </summary>
+    public Dictionary<int, Endnote> Endnotes { get; } = [];
+
+    /// <summary>The next unused endnote id (1-based; ignores the reserved separator ids -1 and 0).</summary>
+    public int NextEndnoteId() => Endnotes.Count == 0 ? 1 : Math.Max(0, Endnotes.Keys.Max()) + 1;
 
     /// <summary>
     /// The document's review comments, keyed by comment id (matching the body runs' <see cref="Run.CommentId"/>).
