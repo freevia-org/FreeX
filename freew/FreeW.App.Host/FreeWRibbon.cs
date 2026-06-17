@@ -155,6 +155,12 @@ internal static class FreeWRibbon
                 {
                     g.Button("freew.print-preview", "Print Preview");
                 });
+                tab.Group("data", "Data", "D", 88, g =>
+                {
+                    g.Button("freew.sort", "Sort");
+                    g.Button("freew.text-to-table", "Text to Table");
+                    g.Button("freew.table-to-text", "Table to Text");
+                });
             })
             .Tab("design", "Design", "G", tab =>
             {

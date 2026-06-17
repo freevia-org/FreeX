@@ -204,6 +204,15 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.para-border", new ActionCommand(() => editor.ToggleParagraphBorder()));
         registry.Register("freew.para-shading", new ParagraphShadingCommand(editor));
 
+        // Layout > Sort: open a small dialog (A→Z / Z→A + case-sensitive option) and sort the selected
+        // paragraphs in place through the view's undo/redo bus.
+        registry.Register("freew.sort", new SortCommand(editor));
+
+        // Layout > Table conversions: turn the selected paragraphs into a table (splitting on a chosen
+        // delimiter) and turn the caret's table back into delimited paragraphs. Both route through the bus.
+        registry.Register("freew.text-to-table", new TextToTableCommand(editor));
+        registry.Register("freew.table-to-text", new TableToTextCommand(editor));
+
         registry.Register("freew.style-normal", new ApplyStyleCommand(editor, 11, bold: false, colorHex: null));
         registry.Register("freew.style-heading1", new ApplyStyleCommand(editor, 16, bold: true, colorHex: "#2F5496"));
         registry.Register("freew.style-title", new ApplyStyleCommand(editor, 28, bold: true, colorHex: null));
@@ -1560,6 +1569,182 @@ internal static class FreeWRibbonCommands
 
             model.Footer = footer;
             editor.Focus();
+        }
+    }
+
+    // Layout > Sort: open the sort dialog (order + case option) and sort the selected paragraphs in
+    // place. The view reorders the paragraph blocks through its undo/redo bus and re-renders.
+    private sealed class SortCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var options = SortDialog.Ask(Window.GetWindow(editor));
+            if (options is null)
+                return; // cancelled
+            editor.Focus();
+            editor.SortSelectedParagraphs(options.Value.Ascending, options.Value.CaseSensitive);
+        }
+    }
+
+    // The options captured by the sort dialog: sort direction and whether the comparison is case-sensitive.
+    private readonly record struct SortOptions(bool Ascending, bool CaseSensitive);
+
+    // A small modal dialog for Sort: A→Z / Z→A radios plus a "Case sensitive" checkbox. Returns the
+    // chosen options, or null if cancelled.
+    private static class SortDialog
+    {
+        public static SortOptions? Ask(Window? owner)
+        {
+            var ascending = new System.Windows.Controls.RadioButton
+            {
+                Content = "Ascending (A → Z)",
+                IsChecked = true,
+                Margin = new Thickness(0, 0, 0, 4)
+            };
+            var descending = new System.Windows.Controls.RadioButton
+            {
+                Content = "Descending (Z → A)",
+                Margin = new Thickness(0, 0, 0, 8)
+            };
+            var caseSensitive = new System.Windows.Controls.CheckBox
+            {
+                Content = "Case sensitive",
+                Margin = new Thickness(0, 0, 0, 12)
+            };
+
+            SortOptions? result = null;
+            var dialog = new Window
+            {
+                Title = "Sort",
+                SizeToContent = SizeToContent.WidthAndHeight,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ShowInTaskbar = false
+            };
+
+            var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+            ok.Click += (_, _) =>
+            {
+                result = new SortOptions(ascending.IsChecked == true, caseSensitive.IsChecked == true);
+                dialog.DialogResult = true;
+            };
+
+            var buttons = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            buttons.Children.Add(ok);
+            buttons.Children.Add(cancel);
+
+            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16), MinWidth = 240 };
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Sort selected paragraphs by text:", Margin = new Thickness(0, 0, 0, 8) });
+            panel.Children.Add(ascending);
+            panel.Children.Add(descending);
+            panel.Children.Add(caseSensitive);
+            panel.Children.Add(buttons);
+            dialog.Content = panel;
+
+            return dialog.ShowDialog() == true ? result : null;
+        }
+    }
+
+    // Layout > Convert Text to Table: ask for a delimiter, then turn the selected paragraphs into a
+    // table (splitting each paragraph on that delimiter). The view routes the change through its bus.
+    private sealed class TextToTableCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            if (DelimiterDialog.Ask(Window.GetWindow(editor), "Convert Text to Table") is not { } delimiter)
+                return; // cancelled
+            editor.Focus();
+            editor.ConvertSelectionToTable(delimiter);
+        }
+    }
+
+    // Layout > Convert Table to Text: ask for a delimiter, then turn the caret's table into delimited
+    // paragraphs (one per row). The view routes the change through its bus.
+    private sealed class TableToTextCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            if (DelimiterDialog.Ask(Window.GetWindow(editor), "Convert Table to Text") is not { } delimiter)
+                return; // cancelled
+            editor.Focus();
+            editor.ConvertTableToText(delimiter);
+        }
+    }
+
+    // A small modal dialog choosing the cell delimiter for text/table conversion: Tab, Comma, or
+    // Semicolon. Returns the chosen delimiter character, or null if cancelled.
+    private static class DelimiterDialog
+    {
+        private sealed record Choice(string Label, char Delimiter);
+
+        public static char? Ask(Window? owner, string title)
+        {
+            var choices = new[]
+            {
+                new Choice("Tab", '\t'),
+                new Choice("Comma  ,", ','),
+                new Choice("Semicolon  ;", ';'),
+            };
+
+            var list = new System.Windows.Controls.ListBox
+            {
+                MinWidth = 240,
+                MinHeight = 90,
+                Margin = new Thickness(0, 0, 0, 12)
+            };
+            foreach (var choice in choices)
+                list.Items.Add(choice.Label);
+            list.SelectedIndex = 0;
+
+            char? result = null;
+            var dialog = new Window
+            {
+                Title = title,
+                SizeToContent = SizeToContent.WidthAndHeight,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ShowInTaskbar = false
+            };
+
+            var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+            void Commit()
+            {
+                var index = list.SelectedIndex;
+                if (index >= 0 && index < choices.Length)
+                {
+                    result = choices[index].Delimiter;
+                    dialog.DialogResult = true;
+                }
+            }
+            ok.Click += (_, _) => Commit();
+            list.MouseDoubleClick += (_, _) => Commit();
+
+            var buttons = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            buttons.Children.Add(ok);
+            buttons.Children.Add(cancel);
+
+            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Separate cells at:", Margin = new Thickness(0, 0, 0, 4) });
+            panel.Children.Add(list);
+            panel.Children.Add(buttons);
+            dialog.Content = panel;
+
+            return dialog.ShowDialog() == true ? result : null;
         }
     }
 
