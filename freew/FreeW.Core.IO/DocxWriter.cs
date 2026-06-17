@@ -31,6 +31,7 @@ public static class DocxWriter
     private const string EndnotesRelationshipId = "rIdEndnotes";
     private const string CommentsRelationshipId = "rIdComments";
     private const string SettingsRelationshipId = "rIdSettings";
+    private const string FontTableRelationshipId = "rIdFontTable";
     private const string ThemeRelationshipId = "rIdTheme1";
     private const string HeaderPartName = "word/header1.xml";
     private const string FooterPartName = "word/footer1.xml";
@@ -101,25 +102,41 @@ public static class DocxWriter
         // documents that need none round-trip exactly as before (no settings part).
         var hasProtection = document.Protection.IsProtected;
         var hasBackground = !string.IsNullOrEmpty(document.Page.BackgroundColorHex);
+
+        // Embedded fonts: each EmbeddedFont family contributes one obfuscated .odttf part per embedded style,
+        // collected up front so word/fontTable.xml, its rels and the font parts all agree on rId/fontN.odttf.
+        // When any font is embedded a settings part is forced (w:embedTrueTypeFonts must live in settings.xml).
+        var embeddedFonts = CollectEmbeddedFonts(document);
+        var hasEmbeddedFonts = embeddedFonts.Count > 0;
+
         var hasSettings = hasProtection
             || document.Page.AutoHyphenation
             || document.Page.DifferentOddEvenPages
-            || hasBackground;
+            || hasBackground
+            || hasEmbeddedFonts;
 
         // A word/theme/theme1.xml part is always emitted (real Word documents always carry one); it
         // serialises the document's DocumentTheme as a real clrScheme/fontScheme/fmtScheme.
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true);
-        WritePart(archive, "[Content_Types].xml", BuildContentTypes(images.Count > 0, hasLists, hasHeader, hasFooter, hasEvenHeader, hasEvenFooter, hasFootnotes, hasEndnotes, hasComments, hasWatermark, hasSettings, charts, embeddedObjects.Count > 0, smartArts));
+        WritePart(archive, "[Content_Types].xml", BuildContentTypes(images.Count > 0, hasLists, hasHeader, hasFooter, hasEvenHeader, hasEvenFooter, hasFootnotes, hasEndnotes, hasComments, hasWatermark, hasSettings, charts, embeddedObjects.Count > 0, smartArts, hasEmbeddedFonts));
         WritePart(archive, "_rels/.rels", BuildPackageRels(hasWatermark));
         WritePart(archive, "docProps/core.xml", BuildCoreProperties(document.Properties));
         if (hasWatermark)
             WritePart(archive, "docProps/custom.xml", BuildCustomProperties(document.Page.Watermark!));
-        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, hasLists, hasHeader, hasFooter, hasEvenHeader, hasEvenFooter, hasFootnotes, hasEndnotes, hasComments, hasSettings, charts, embeddedObjects, smartArts));
+        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, hasLists, hasHeader, hasFooter, hasEvenHeader, hasEvenFooter, hasFootnotes, hasEndnotes, hasComments, hasSettings, charts, embeddedObjects, smartArts, hasEmbeddedFonts));
         WritePart(archive, "word/document.xml", BuildDocument(document, images, charts, embeddedObjects, smartArts, hyperlinks, hasHeader, hasFooter, hasEvenHeader, hasEvenFooter));
         WritePart(archive, "word/styles.xml", BuildStyles(document));
         WritePart(archive, ThemePartName.TrimStart('/'), BuildTheme(document.Theme));
         if (hasSettings)
-            WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.Page.AutoHyphenation, document.Page.DifferentOddEvenPages, hasBackground));
+            WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.Page.AutoHyphenation, document.Page.DifferentOddEvenPages, hasBackground, hasEmbeddedFonts));
+        // Embedded fonts: word/fontTable.xml + its rels + one obfuscated .odttf per embedded style.
+        if (hasEmbeddedFonts)
+        {
+            WritePart(archive, FontTablePartName.TrimStart('/'), BuildFontTable(embeddedFonts));
+            WritePart(archive, "word/_rels/fontTable.xml.rels", BuildFontTableRels(embeddedFonts));
+            foreach (var part in embeddedFonts.SelectMany(f => f.Parts))
+                WriteBinaryPart(archive, "word/fonts/" + part.FileName, ObfuscateFont(part.FontBytes, part.FontKey));
+        }
         if (hasLists)
             WritePart(archive, "word/numbering.xml", BuildNumbering());
         if (hasHeader)
@@ -139,7 +156,13 @@ public static class DocxWriter
         foreach (var image in images)
             WriteBinaryPart(archive, "word/media/" + image.FileName, image.Image.PngBytes);
         foreach (var chart in charts)
-            WritePart(archive, "word/charts/" + chart.FileName, BuildChartSpace(chart.Chart));
+        {
+            WritePart(archive, "word/charts/" + chart.FileName, BuildChartSpace(chart));
+            // F1: each chart gets an editable companion workbook + a part-local _rels referencing it (the
+            // "package" relationship Word's "Edit Data" follows). The chart XML's c:externalData points here.
+            WriteBinaryPart(archive, "word/embeddings/" + chart.EmbeddingFileName, BuildChartWorkbook(chart.Chart));
+            WritePart(archive, "word/charts/_rels/" + chart.FileName + ".rels", BuildChartRels(chart));
+        }
         // Each embedded OLE object's native payload is written verbatim as a binary part. Its presentation
         // icon (if any) was appended to `images` by CollectEmbeddedObjects and is emitted in the media loop.
         foreach (var embedded in embeddedObjects)
@@ -162,9 +185,12 @@ public static class DocxWriter
 
     /// <summary>
     /// An inline chart paired with the document relationship id, chart part file name (relative to
-    /// <c>word/charts/</c>) and a unique drawing id, mirroring <see cref="ImagePart"/>.
+    /// <c>word/charts/</c>) and a unique drawing id, mirroring <see cref="ImagePart"/>. <see cref="EmbeddingFileName"/>
+    /// is the companion editable-data workbook (relative to <c>word/embeddings/</c>); the chart part's own
+    /// <c>_rels</c> references it under <see cref="ExternalDataRelId"/> (a part-local rId) so Word's "Edit Data"
+    /// can reopen it (F1).
     /// </summary>
-    private sealed record ChartPart(Chart Chart, string RelationshipId, string FileName, uint DrawingId);
+    private sealed record ChartPart(Chart Chart, string RelationshipId, string FileName, uint DrawingId, string EmbeddingFileName, string ExternalDataRelId);
 
     private static List<ChartPart> CollectCharts(TextDocument document)
     {
@@ -174,7 +200,9 @@ public static class DocxWriter
                 if (run.Chart is { } chart)
                 {
                     var index = charts.Count + 1;
-                    charts.Add(new ChartPart(chart, $"rIdChart{index}", $"chart{index}.xml", (uint)index));
+                    // The external-data rId is part-LOCAL (it lives in word/charts/_rels/chartN.xml.rels), so a
+                    // fixed "rId1" per chart is fine and never collides with the document-level ids above.
+                    charts.Add(new ChartPart(chart, $"rIdChart{index}", $"chart{index}.xml", (uint)index, $"Microsoft_Excel_Worksheet{index}.xlsx", "rId1"));
                 }
         return charts;
     }
@@ -273,6 +301,48 @@ public static class DocxWriter
         return smartArts;
     }
 
+    /// <summary>
+    /// One obfuscated font part: the style slot (regular/bold/italic/boldItalic), its document-unique
+    /// relationship id (in the fontTable's rels), the file name (relative to <c>word/fonts/</c>), the
+    /// deterministically derived fontKey GUID, and the original (de-obfuscated) font bytes. The writer
+    /// obfuscates <see cref="FontBytes"/> with <see cref="FontKey"/> when emitting the .odttf part.
+    /// </summary>
+    private sealed record FontStylePart(string Slot, string RelationshipId, string FileName, string FontKey, byte[] FontBytes);
+
+    /// <summary>An embedded font family paired with the obfuscated parts for each embedded style.</summary>
+    private sealed record FontTablePart(EmbeddedFont Font, IReadOnlyList<FontStylePart> Parts);
+
+    /// <summary>
+    /// Assigns each embedded font style a relationship id (rIdFontN), a part name (fontN.odttf) and a
+    /// deterministic fontKey GUID (derived from family+style, never random). Styles are walked in a fixed
+    /// order (regular, bold, italic, boldItalic) so the ids are stable. Families carrying no embedded style
+    /// are skipped, so an empty/blank EmbeddedFonts list yields no parts (no fontTable emitted).
+    /// </summary>
+    private static List<FontTablePart> CollectEmbeddedFonts(TextDocument document)
+    {
+        var families = new List<FontTablePart>();
+        var index = 0;
+        foreach (var font in document.EmbeddedFonts)
+        {
+            var parts = new List<FontStylePart>();
+            void Add(string slot, byte[]? bytes)
+            {
+                if (bytes is not { Length: > 0 })
+                    return;
+                index++;
+                var key = DeterministicFontKey(font.Family + "/" + slot);
+                parts.Add(new FontStylePart(slot, $"rIdFont{index}", $"font{index}.odttf", key, bytes));
+            }
+            Add("embedRegular", font.Regular);
+            Add("embedBold", font.Bold);
+            Add("embedItalic", font.Italic);
+            Add("embedBoldItalic", font.BoldItalic);
+            if (parts.Count > 0)
+                families.Add(new FontTablePart(font, parts));
+        }
+        return families;
+    }
+
     private static List<ImagePart> CollectImages(TextDocument document)
     {
         var images = new List<ImagePart>();
@@ -326,7 +396,7 @@ public static class DocxWriter
         entryStream.Write(content, 0, content.Length);
     }
 
-    private static XDocument BuildContentTypes(bool includePng, bool includeNumbering, bool hasHeader, bool hasFooter, bool hasEvenHeader, bool hasEvenFooter, bool hasFootnotes, bool hasEndnotes, bool hasComments, bool hasWatermark, bool hasSettings, IReadOnlyList<ChartPart> charts, bool hasEmbeddedObjects, IReadOnlyList<SmartArtPart> smartArts) => new(
+    private static XDocument BuildContentTypes(bool includePng, bool includeNumbering, bool hasHeader, bool hasFooter, bool hasEvenHeader, bool hasEvenFooter, bool hasFootnotes, bool hasEndnotes, bool hasComments, bool hasWatermark, bool hasSettings, IReadOnlyList<ChartPart> charts, bool hasEmbeddedObjects, IReadOnlyList<SmartArtPart> smartArts, bool hasEmbeddedFonts) => new(
         new XElement(Ct + "Types",
             new XElement(Ct + "Default", new XAttribute("Extension", "rels"),
                 new XAttribute("ContentType", "application/vnd.openxmlformats-package.relationships+xml")),
@@ -340,6 +410,16 @@ public static class DocxWriter
             hasEmbeddedObjects
                 ? new XElement(Ct + "Default", new XAttribute("Extension", "bin"),
                     new XAttribute("ContentType", OleObjectContentType))
+                : null,
+            // A single Default for the xlsx extension covers every chart's embedded companion workbook (F1).
+            charts.Count > 0
+                ? new XElement(Ct + "Default", new XAttribute("Extension", "xlsx"),
+                    new XAttribute("ContentType", SpreadsheetContentType))
+                : null,
+            // A single Default for the odttf extension covers every obfuscated embedded-font part.
+            hasEmbeddedFonts
+                ? new XElement(Ct + "Default", new XAttribute("Extension", "odttf"),
+                    new XAttribute("ContentType", ObfuscatedFontContentType))
                 : null,
             new XElement(Ct + "Override", new XAttribute("PartName", "/word/document.xml"),
                 new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml")),
@@ -381,6 +461,11 @@ public static class DocxWriter
             hasSettings
                 ? new XElement(Ct + "Override", new XAttribute("PartName", SettingsPartName),
                     new XAttribute("ContentType", SettingsContentType))
+                : null,
+            // word/fontTable.xml declares the embedded-font table (the .odttf parts use the odttf Default above).
+            hasEmbeddedFonts
+                ? new XElement(Ct + "Override", new XAttribute("PartName", FontTablePartName),
+                    new XAttribute("ContentType", FontTableContentType))
                 : null,
             // The theme part is always present (one per document).
             new XElement(Ct + "Override", new XAttribute("PartName", ThemePartName),
@@ -497,7 +582,8 @@ public static class DocxWriter
         bool hasSettings,
         IReadOnlyList<ChartPart> charts,
         IReadOnlyList<EmbeddedObjectPart> embeddedObjects,
-        IReadOnlyList<SmartArtPart> smartArts)
+        IReadOnlyList<SmartArtPart> smartArts,
+        bool hasEmbeddedFonts)
     {
         var relationships = new XElement(Rel + "Relationships",
             new XElement(Rel + "Relationship",
@@ -509,6 +595,12 @@ public static class DocxWriter
                 new XAttribute("Id", SettingsRelationshipId),
                 new XAttribute("Type", SettingsRelType),
                 new XAttribute("Target", "settings.xml")));
+        // The document→fontTable relationship (the fontTable's own rels reference the .odttf font parts).
+        if (hasEmbeddedFonts)
+            relationships.Add(new XElement(Rel + "Relationship",
+                new XAttribute("Id", FontTableRelationshipId),
+                new XAttribute("Type", FontTableRelType),
+                new XAttribute("Target", "fontTable.xml")));
         // The theme part is always present, so its relationship is unconditional.
         relationships.Add(new XElement(Rel + "Relationship",
             new XAttribute("Id", ThemeRelationshipId),
@@ -2120,31 +2212,42 @@ public static class DocxWriter
                     new XElement(A + "schemeClr", new XAttribute("val", "lt1"))))));
 
     /// <summary>
-    /// Builds a self-contained DrawingML chart part (c:chartSpace) for <paramref name="chart"/>. Emits one
-    /// plot area holding a single chart type (c:barChart for column/bar, c:lineChart for line,
-    /// c:pieChart for pie) with the document's series, plus a category-axis / value-axis pair for the
-    /// cartesian kinds. Category labels and series values are embedded as literal caches (c:strCache /
-    /// c:numCache) so the chart needs no companion workbook part.
-    /// SIMPLIFICATION (W3 milestone): no c:externalData / embedded xlsx is referenced — the caches are the
-    /// sole data source. Word renders and round-trips this fine; only "Edit Data" in Word is unavailable.
+    /// Builds a DrawingML chart part (c:chartSpace) for <paramref name="part"/>. Emits one plot area holding a
+    /// single chart type (c:barChart for column/bar, c:lineChart for line, c:areaChart for area, c:pieChart for
+    /// pie, c:doughnutChart for doughnut, c:scatterChart for scatter) with the document's series, plus a
+    /// category-axis / value-axis pair for the cartesian kinds. Category labels and series values are embedded
+    /// as literal caches (c:strCache / c:numCache) so the chart renders without opening the workbook.
+    /// F1: the caches remain the display/round-trip source of truth, but a c:externalData r:id now references
+    /// the chart part's companion editable workbook (word/embeddings/…xlsx, wired via the part's own _rels) so
+    /// Word's "Edit Data" works. An optional c:legend and per-axis c:title are emitted when the model sets them.
     /// </summary>
-    private static XDocument BuildChartSpace(Chart chart)
+    private static XDocument BuildChartSpace(ChartPart part)
     {
+        var chart = part.Chart;
         // Stable axis ids referenced by the plot's series-holding chart element (cartesian kinds only).
         const long catAxisId = 111111111L;
         const long valAxisId = 222222222L;
 
-        var plotContent = chart.Kind == ChartKind.Pie
-            ? BuildPieChart(chart)
-            : BuildCartesianChart(chart, catAxisId, valAxisId);
+        var hasAxes = chart.Kind is not (ChartKind.Pie or ChartKind.Doughnut);
+        var plotContent = chart.Kind switch
+        {
+            ChartKind.Pie => BuildPieChart(chart, doughnut: false),
+            ChartKind.Doughnut => BuildPieChart(chart, doughnut: true),
+            ChartKind.Scatter => BuildScatterChart(chart, catAxisId, valAxisId),
+            _ => BuildCartesianChart(chart, catAxisId, valAxisId),
+        };
 
         var plotArea = new XElement(C + "plotArea",
             new XElement(C + "layout"),
             plotContent);
-        if (chart.Kind != ChartKind.Pie)
+        if (hasAxes)
         {
-            plotArea.Add(BuildCategoryAxis(catAxisId, valAxisId));
-            plotArea.Add(BuildValueAxis(valAxisId, catAxisId));
+            // Scatter uses a value axis for x (so x-values plot numerically); the other cartesian kinds use a
+            // category axis for x. The category-axis title doubles as the scatter x-axis title.
+            plotArea.Add(chart.Kind == ChartKind.Scatter
+                ? BuildValueAxis(catAxisId, valAxisId, "b", chart.CategoryAxisTitle)
+                : BuildCategoryAxis(catAxisId, valAxisId, chart.CategoryAxisTitle));
+            plotArea.Add(BuildValueAxis(valAxisId, catAxisId, "l", chart.ValueAxisTitle));
         }
 
         var chartElement = new XElement(C + "chart");
@@ -2158,6 +2261,10 @@ public static class DocxWriter
             chartElement.Add(new XElement(C + "autoTitleDeleted", new XAttribute(C + "val", "1")));
         }
         chartElement.Add(plotArea);
+        if (chart.ShowLegend)
+            chartElement.Add(new XElement(C + "legend",
+                new XElement(C + "legendPos", new XAttribute(C + "val", "b")),
+                new XElement(C + "overlay", new XAttribute(C + "val", "0"))));
         chartElement.Add(new XElement(C + "plotVisOnly", new XAttribute(C + "val", "1")));
 
         return new XDocument(
@@ -2165,8 +2272,124 @@ public static class DocxWriter
                 new XAttribute(XNamespace.Xmlns + "c", C.NamespaceName),
                 new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
                 new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName),
-                chartElement));
+                chartElement,
+                // c:externalData ties the chart to its editable companion workbook (resolved via the chart
+                // part's own _rels). autoUpdate=0 keeps the literal caches authoritative for display.
+                new XElement(C + "externalData",
+                    new XAttribute(R + "id", part.ExternalDataRelId),
+                    new XElement(C + "autoUpdate", new XAttribute(C + "val", "0")))));
     }
+
+    /// <summary>
+    /// Builds the chart part's own relationships part (word/charts/_rels/chartN.xml.rels): a single "package"
+    /// relationship from the chart to its embedded editable workbook (../embeddings/…xlsx). This is what Word's
+    /// "Edit Data" follows from the chart, and it is what c:externalData/@r:id resolves against. F1.
+    /// </summary>
+    private static XDocument BuildChartRels(ChartPart part) => new(
+        new XElement(Rel + "Relationships",
+            new XElement(Rel + "Relationship",
+                new XAttribute("Id", part.ExternalDataRelId),
+                new XAttribute("Type", ExternalDataRelType),
+                new XAttribute("Target", "../embeddings/" + part.EmbeddingFileName))));
+
+    /// <summary>
+    /// Builds a minimal, self-contained xlsx (OPC ZIP) holding the chart's data so Word's "Edit Data" has a
+    /// workbook to open (F1). Layout matches the chart's c:f formula refs: row 1 is the header (A1 empty, then
+    /// one series name per column B, C, …), rows 2.. are the data (column A = category label, columns B+ = the
+    /// aligned series values). A tiny hand-built package — [Content_Types].xml, _rels/.rels, xl/workbook.xml,
+    /// xl/_rels/workbook.xml.rels and xl/worksheets/sheet1.xml — with NO dependency on FreeX's xlsx writer.
+    /// </summary>
+    private static byte[] BuildChartWorkbook(Chart chart)
+    {
+        XNamespace s = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace sr = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+
+        // sheetData: one header row (cell A1 blank, B1.. = series names) followed by one row per category.
+        var sheetData = new XElement(s + "sheetData");
+
+        var headerRow = new XElement(s + "row", new XAttribute("r", 1));
+        for (var c = 0; c < chart.Series.Count; c++)
+        {
+            var name = chart.Series[c].Name;
+            if (!string.IsNullOrEmpty(name))
+                headerRow.Add(InlineStringCell(s, $"{ColumnLetter(c + 1)}1", name));
+        }
+        if (headerRow.HasElements)
+            sheetData.Add(headerRow);
+
+        for (var rowIdx = 0; rowIdx < chart.Categories.Count; rowIdx++)
+        {
+            var rowNumber = rowIdx + 2; // data starts on row 2
+            var row = new XElement(s + "row", new XAttribute("r", rowNumber));
+            row.Add(InlineStringCell(s, $"A{rowNumber}", chart.Categories[rowIdx]));
+            for (var c = 0; c < chart.Series.Count; c++)
+            {
+                var values = chart.Series[c].Values;
+                if (rowIdx < values.Count)
+                    row.Add(new XElement(s + "c",
+                        new XAttribute("r", $"{ColumnLetter(c + 1)}{rowNumber}"),
+                        new XElement(s + "v", values[rowIdx].ToString(System.Globalization.CultureInfo.InvariantCulture))));
+            }
+            sheetData.Add(row);
+        }
+
+        var sheet = new XDocument(
+            new XElement(s + "worksheet",
+                new XAttribute(XNamespace.Xmlns + "r", sr.NamespaceName),
+                sheetData));
+
+        var workbook = new XDocument(
+            new XElement(s + "workbook",
+                new XAttribute(XNamespace.Xmlns + "r", sr.NamespaceName),
+                new XElement(s + "sheets",
+                    new XElement(s + "sheet",
+                        new XAttribute("name", "Sheet1"),
+                        new XAttribute("sheetId", "1"),
+                        new XAttribute(sr + "id", "rId1")))));
+
+        var workbookRels = new XDocument(
+            new XElement(Rel + "Relationships",
+                new XElement(Rel + "Relationship",
+                    new XAttribute("Id", "rId1"),
+                    new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet"),
+                    new XAttribute("Target", "worksheets/sheet1.xml"))));
+
+        var contentTypes = new XDocument(
+            new XElement(Ct + "Types",
+                new XElement(Ct + "Default", new XAttribute("Extension", "rels"),
+                    new XAttribute("ContentType", "application/vnd.openxmlformats-package.relationships+xml")),
+                new XElement(Ct + "Default", new XAttribute("Extension", "xml"),
+                    new XAttribute("ContentType", "application/xml")),
+                new XElement(Ct + "Override", new XAttribute("PartName", "/xl/workbook.xml"),
+                    new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml")),
+                new XElement(Ct + "Override", new XAttribute("PartName", "/xl/worksheets/sheet1.xml"),
+                    new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"))));
+
+        var packageRels = new XDocument(
+            new XElement(Rel + "Relationships",
+                new XElement(Rel + "Relationship",
+                    new XAttribute("Id", "rId1"),
+                    new XAttribute("Type", OfficeDocumentRel),
+                    new XAttribute("Target", "xl/workbook.xml"))));
+
+        using var buffer = new MemoryStream();
+        using (var zip = new ZipArchive(buffer, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            WritePart(zip, "[Content_Types].xml", contentTypes);
+            WritePart(zip, "_rels/.rels", packageRels);
+            WritePart(zip, "xl/workbook.xml", workbook);
+            WritePart(zip, "xl/_rels/workbook.xml.rels", workbookRels);
+            WritePart(zip, "xl/worksheets/sheet1.xml", sheet);
+        }
+        return buffer.ToArray();
+    }
+
+    /// <summary>Builds an inline-string worksheet cell (t="inlineStr") so the workbook needs no shared-strings part.</summary>
+    private static XElement InlineStringCell(XNamespace s, string reference, string text) =>
+        new(s + "c",
+            new XAttribute("r", reference),
+            new XAttribute("t", "inlineStr"),
+            new XElement(s + "is", new XElement(s + "t", text)));
 
     /// <summary>Builds a c:title carrying a single rich-text run with the chart title text.</summary>
     private static XElement BuildChartTitle(string title) =>
@@ -2181,8 +2404,8 @@ public static class DocxWriter
             new XElement(C + "overlay", new XAttribute(C + "val", "0")));
 
     /// <summary>
-    /// Builds the c:barChart (column or bar) or c:lineChart element holding the chart's series and the
-    /// axis-id back-references. barDir distinguishes column (vertical bars) from bar (horizontal).
+    /// Builds the c:barChart (column or bar), c:lineChart or c:areaChart element holding the chart's series and
+    /// the axis-id back-references. barDir distinguishes column (vertical bars) from bar (horizontal).
     /// </summary>
     private static XElement BuildCartesianChart(Chart chart, long catAxisId, long valAxisId)
     {
@@ -2190,6 +2413,11 @@ public static class DocxWriter
         if (chart.Kind == ChartKind.Line)
         {
             root = new XElement(C + "lineChart",
+                new XElement(C + "grouping", new XAttribute(C + "val", "standard")));
+        }
+        else if (chart.Kind == ChartKind.Area)
+        {
+            root = new XElement(C + "areaChart",
                 new XElement(C + "grouping", new XAttribute(C + "val", "standard")));
         }
         else
@@ -2207,20 +2435,40 @@ public static class DocxWriter
         return root;
     }
 
-    /// <summary>Builds the c:pieChart element holding the chart's first series (pie has no axes).</summary>
-    private static XElement BuildPieChart(Chart chart)
+    /// <summary>
+    /// Builds the c:scatterChart element: each series carries c:xVal (the shared categories parsed as numbers,
+    /// or their 1-based ordinal when non-numeric) and c:yVal (the series values). Scatter has axes (both value
+    /// axes), referenced by axId back-references like the other cartesian kinds.
+    /// </summary>
+    private static XElement BuildScatterChart(Chart chart, long xAxisId, long yAxisId)
     {
-        var pie = new XElement(C + "pieChart",
+        var root = new XElement(C + "scatterChart",
+            new XElement(C + "scatterStyle", new XAttribute(C + "val", "lineMarker")));
+        for (var i = 0; i < chart.Series.Count; i++)
+            root.Add(BuildScatterSeries(chart, chart.Series[i], i));
+        root.Add(new XElement(C + "axId", new XAttribute(C + "val", xAxisId)));
+        root.Add(new XElement(C + "axId", new XAttribute(C + "val", yAxisId)));
+        return root;
+    }
+
+    /// <summary>Builds the c:pieChart / c:doughnutChart element holding the chart's first series (no axes).</summary>
+    private static XElement BuildPieChart(Chart chart, bool doughnut)
+    {
+        var pie = new XElement(C + (doughnut ? "doughnutChart" : "pieChart"),
             new XElement(C + "varyColors", new XAttribute(C + "val", "1")));
         if (chart.Series.Count > 0)
             pie.Add(BuildSeries(chart, chart.Series[0], 0));
+        if (doughnut)
+            pie.Add(new XElement(C + "holeSize", new XAttribute(C + "val", "50")));
         return pie;
     }
 
     /// <summary>
     /// Builds one c:ser: its index/order, an optional c:tx (series name) string cache, the shared category
-    /// labels (c:cat → c:strRef/c:strCache) and the numeric values (c:val → c:numRef/c:numCache). The
-    /// caches embed the data literally so the chart is self-contained.
+    /// labels (c:cat → c:strRef/c:strCache) and the numeric values (c:val → c:numRef/c:numCache). The caches
+    /// embed the data literally for display/round-trip; the c:f formula refs (Sheet1!…) line up with the
+    /// companion workbook (data starts on row 2; series index i lives in column B+i) so Word's "Edit Data"
+    /// maps each series to the right column.
     /// </summary>
     private static XElement BuildSeries(Chart chart, ChartSeries series, int index)
     {
@@ -2228,18 +2476,53 @@ public static class DocxWriter
             new XElement(C + "idx", new XAttribute(C + "val", index)),
             new XElement(C + "order", new XAttribute(C + "val", index)));
 
-        if (series.Name is { Length: > 0 } name)
-            ser.Add(new XElement(C + "tx",
-                new XElement(C + "strRef",
-                    new XElement(C + "f", $"Sheet1!$B${index + 1}"),
-                    new XElement(C + "strCache",
-                        new XElement(C + "ptCount", new XAttribute(C + "val", 1)),
-                        new XElement(C + "pt", new XAttribute(C + "idx", 0),
-                            new XElement(C + "v", name))))));
-
+        ser.Add(BuildSeriesName(series, index));
         ser.Add(BuildCategoryCache(chart.Categories));
-        ser.Add(BuildValueCache(series.Values));
+        ser.Add(BuildValueCache(series.Values, index));
         return ser;
+    }
+
+    /// <summary>
+    /// Builds one c:ser for a scatter chart: c:xVal carries the categories parsed as numbers (1-based ordinal
+    /// when a label is non-numeric, so the points still spread along x) and c:yVal carries the series values.
+    /// Formula refs line up with the companion workbook (x = column A, y = column B+i, data from row 2).
+    /// </summary>
+    private static XElement BuildScatterSeries(Chart chart, ChartSeries series, int index)
+    {
+        var ser = new XElement(C + "ser",
+            new XElement(C + "idx", new XAttribute(C + "val", index)),
+            new XElement(C + "order", new XAttribute(C + "val", index)));
+
+        ser.Add(BuildSeriesName(series, index));
+
+        var xValues = new List<double>(chart.Categories.Count);
+        for (var i = 0; i < chart.Categories.Count; i++)
+            xValues.Add(double.TryParse(chart.Categories[i], System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out var x) ? x : i + 1);
+
+        ser.Add(new XElement(C + "xVal",
+            new XElement(C + "numRef",
+                new XElement(C + "f", $"Sheet1!$A$2:$A${xValues.Count + 1}"),
+                BuildNumCache(xValues))));
+        ser.Add(new XElement(C + "yVal",
+            new XElement(C + "numRef",
+                new XElement(C + "f", $"Sheet1!${ColumnLetter(index + 1)}$2:${ColumnLetter(index + 1)}${series.Values.Count + 1}"),
+                BuildNumCache(series.Values))));
+        return ser;
+    }
+
+    /// <summary>Builds the optional c:tx (series display name) backed by a single-cell string cache + workbook ref.</summary>
+    private static XElement? BuildSeriesName(ChartSeries series, int index)
+    {
+        if (series.Name is not { Length: > 0 } name)
+            return null;
+        return new XElement(C + "tx",
+            new XElement(C + "strRef",
+                new XElement(C + "f", $"Sheet1!${ColumnLetter(index + 1)}$1"),
+                new XElement(C + "strCache",
+                    new XElement(C + "ptCount", new XAttribute(C + "val", 1)),
+                    new XElement(C + "pt", new XAttribute(C + "idx", 0),
+                        new XElement(C + "v", name)))));
     }
 
     /// <summary>Builds c:cat → c:strRef/c:strCache: the shared category labels as a literal string cache.</summary>
@@ -2253,12 +2536,22 @@ public static class DocxWriter
 
         return new XElement(C + "cat",
             new XElement(C + "strRef",
-                new XElement(C + "f", $"Sheet1!$A$1:$A${Math.Max(1, categories.Count)}"),
+                new XElement(C + "f", $"Sheet1!$A$2:$A${Math.Max(2, categories.Count + 1)}"),
                 cache));
     }
 
-    /// <summary>Builds c:val → c:numRef/c:numCache: the series values as a literal number cache.</summary>
-    private static XElement BuildValueCache(IReadOnlyList<double> values)
+    /// <summary>Builds c:val → c:numRef/c:numCache: the series values as a literal number cache for column B+index.</summary>
+    private static XElement BuildValueCache(IReadOnlyList<double> values, int index)
+    {
+        var column = ColumnLetter(index + 1);
+        return new XElement(C + "val",
+            new XElement(C + "numRef",
+                new XElement(C + "f", $"Sheet1!${column}$2:${column}${Math.Max(2, values.Count + 1)}"),
+                BuildNumCache(values)));
+    }
+
+    /// <summary>Builds a bare c:numCache (formatCode + index-addressed c:pt values) shared by c:val/c:xVal/c:yVal.</summary>
+    private static XElement BuildNumCache(IReadOnlyList<double> values)
     {
         var cache = new XElement(C + "numCache",
             new XElement(C + "formatCode", "General"),
@@ -2266,30 +2559,52 @@ public static class DocxWriter
         for (var i = 0; i < values.Count; i++)
             cache.Add(new XElement(C + "pt", new XAttribute(C + "idx", i),
                 new XElement(C + "v", values[i].ToString(System.Globalization.CultureInfo.InvariantCulture))));
-
-        return new XElement(C + "val",
-            new XElement(C + "numRef",
-                new XElement(C + "f", $"Sheet1!$B$1:$B${Math.Max(1, values.Count)}"),
-                cache));
+        return cache;
     }
 
-    /// <summary>Builds the c:catAx (category axis) referencing its own id and cross-referencing the value axis.</summary>
-    private static XElement BuildCategoryAxis(long axisId, long crossAxisId) =>
-        new(C + "catAx",
-            new XElement(C + "axId", new XAttribute(C + "val", axisId)),
-            new XElement(C + "scaling", new XElement(C + "orientation", new XAttribute(C + "val", "minMax"))),
-            new XElement(C + "delete", new XAttribute(C + "val", "0")),
-            new XElement(C + "axPos", new XAttribute(C + "val", "b")),
-            new XElement(C + "crossAx", new XAttribute(C + "val", crossAxisId)));
+    /// <summary>Maps a 0-based column index to its spreadsheet letter (0→A, 1→B, …, 26→AA) for c:f refs + the workbook.</summary>
+    private static string ColumnLetter(int index)
+    {
+        var letters = string.Empty;
+        for (var n = index; n >= 0; n = n / 26 - 1)
+            letters = (char)('A' + n % 26) + letters;
+        return letters;
+    }
 
-    /// <summary>Builds the c:valAx (value axis) referencing its own id and cross-referencing the category axis.</summary>
-    private static XElement BuildValueAxis(long axisId, long crossAxisId) =>
-        new(C + "valAx",
+    /// <summary>
+    /// Builds the c:catAx (category axis) referencing its own id and cross-referencing the value axis, with an
+    /// optional axis <paramref name="title"/>.
+    /// </summary>
+    private static XElement BuildCategoryAxis(long axisId, long crossAxisId, string? title)
+    {
+        var ax = new XElement(C + "catAx",
             new XElement(C + "axId", new XAttribute(C + "val", axisId)),
             new XElement(C + "scaling", new XElement(C + "orientation", new XAttribute(C + "val", "minMax"))),
             new XElement(C + "delete", new XAttribute(C + "val", "0")),
-            new XElement(C + "axPos", new XAttribute(C + "val", "l")),
-            new XElement(C + "crossAx", new XAttribute(C + "val", crossAxisId)));
+            new XElement(C + "axPos", new XAttribute(C + "val", "b")));
+        if (title is { Length: > 0 } t)
+            ax.Add(BuildChartTitle(t));
+        ax.Add(new XElement(C + "crossAx", new XAttribute(C + "val", crossAxisId)));
+        return ax;
+    }
+
+    /// <summary>
+    /// Builds the c:valAx (value axis) at the given <paramref name="position"/> referencing its own id and
+    /// cross-referencing <paramref name="crossAxisId"/>, with an optional axis <paramref name="title"/>. Reused
+    /// for the scatter chart's numeric x-axis (position "b").
+    /// </summary>
+    private static XElement BuildValueAxis(long axisId, long crossAxisId, string position, string? title)
+    {
+        var ax = new XElement(C + "valAx",
+            new XElement(C + "axId", new XAttribute(C + "val", axisId)),
+            new XElement(C + "scaling", new XElement(C + "orientation", new XAttribute(C + "val", "minMax"))),
+            new XElement(C + "delete", new XAttribute(C + "val", "0")),
+            new XElement(C + "axPos", new XAttribute(C + "val", position)));
+        if (title is { Length: > 0 } t)
+            ax.Add(BuildChartTitle(t));
+        ax.Add(new XElement(C + "crossAx", new XAttribute(C + "val", crossAxisId)));
+        return ax;
+    }
 
     private static XElement? BuildRunProperties(RunFormatting f)
     {
@@ -2559,10 +2874,13 @@ public static class DocxWriter
     /// least one is needed. Children are emitted in CT_Settings schema order
     /// (displayBackgroundShape → autoHyphenation → evenAndOddHeaders → documentProtection).
     /// </summary>
-    private static XDocument BuildSettings(ProtectionSettings protection, bool autoHyphenation, bool differentOddEvenPages, bool displayBackground)
+    private static XDocument BuildSettings(ProtectionSettings protection, bool autoHyphenation, bool differentOddEvenPages, bool displayBackground, bool embedTrueTypeFonts)
     {
         var settings = new XElement(W + "settings",
             new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName));
+        // w:embedTrueTypeFonts precedes the other settings children in the CT_Settings schema sequence.
+        if (embedTrueTypeFonts)
+            settings.Add(new XElement(W + "embedTrueTypeFonts"));
         if (displayBackground)
             settings.Add(new XElement(W + "displayBackgroundShape"));
         if (autoHyphenation)
@@ -2574,6 +2892,44 @@ public static class DocxWriter
                 new XAttribute(W + "edit", edit),
                 new XAttribute(W + "enforcement", "1")));
         return new XDocument(settings);
+    }
+
+    /// <summary>
+    /// Builds word/fontTable.xml (w:fonts): one w:font w:name="&lt;Family&gt;" per embedded family, each
+    /// carrying a w:embedRegular/w:embedBold/w:embedItalic/w:embedBoldItalic child per embedded style whose
+    /// r:id points at the obfuscated .odttf part (in the fontTable's own rels) and whose w:fontKey is the
+    /// deterministic GUID used to obfuscate that part.
+    /// </summary>
+    private static XDocument BuildFontTable(IReadOnlyList<FontTablePart> embeddedFonts)
+    {
+        var fonts = new XElement(W + "fonts",
+            new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName),
+            new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName));
+        foreach (var family in embeddedFonts)
+        {
+            var font = new XElement(W + "font", new XAttribute(W + "name", family.Font.Family));
+            foreach (var part in family.Parts)
+                font.Add(new XElement(W + part.Slot,
+                    new XAttribute(R + "id", part.RelationshipId),
+                    new XAttribute(W + "fontKey", part.FontKey)));
+            fonts.Add(font);
+        }
+        return new XDocument(fonts);
+    }
+
+    /// <summary>
+    /// Builds word/_rels/fontTable.xml.rels: one font relationship (rIdFontN → fonts/fontN.odttf) per
+    /// embedded font style, matching the r:id referenced from each w:embed* in word/fontTable.xml.
+    /// </summary>
+    private static XDocument BuildFontTableRels(IReadOnlyList<FontTablePart> embeddedFonts)
+    {
+        var relationships = new XElement(Rel + "Relationships");
+        foreach (var part in embeddedFonts.SelectMany(f => f.Parts))
+            relationships.Add(new XElement(Rel + "Relationship",
+                new XAttribute("Id", part.RelationshipId),
+                new XAttribute("Type", FontRelType),
+                new XAttribute("Target", "fonts/" + part.FileName)));
+        return new XDocument(relationships);
     }
 
     /// <summary>

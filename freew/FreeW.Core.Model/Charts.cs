@@ -13,7 +13,9 @@ namespace FreeW.Core.Model;
 /// <summary>
 /// The kind of a <see cref="Chart"/>. <see cref="Bar"/> and <see cref="Column"/> both serialise as an OOXML
 /// <c>c:barChart</c> (differing only by <c>c:barDir</c> — bar = horizontal, col = vertical);
-/// <see cref="Line"/> is a <c>c:lineChart</c> and <see cref="Pie"/> a <c>c:pieChart</c>.
+/// <see cref="Line"/> is a <c>c:lineChart</c>, <see cref="Pie"/> a <c>c:pieChart</c>, <see cref="Area"/> a
+/// <c>c:areaChart</c>, <see cref="Doughnut"/> a <c>c:doughnutChart</c> and <see cref="Scatter"/> a
+/// <c>c:scatterChart</c> (whose series carry <c>c:xVal</c>/<c>c:yVal</c> instead of <c>c:cat</c>/<c>c:val</c>).
 /// </summary>
 public enum ChartKind
 {
@@ -27,7 +29,16 @@ public enum ChartKind
     Line,
 
     /// <summary>A pie chart (OOXML c:pieChart).</summary>
-    Pie
+    Pie,
+
+    /// <summary>An XY scatter chart (OOXML c:scatterChart; series carry c:xVal/c:yVal). Categories supply x-values.</summary>
+    Scatter,
+
+    /// <summary>An area chart (OOXML c:areaChart).</summary>
+    Area,
+
+    /// <summary>A doughnut chart (OOXML c:doughnutChart — a pie with a hole; uses the first series).</summary>
+    Doughnut
 }
 
 /// <summary>
@@ -74,8 +85,26 @@ public sealed class Chart
     /// <summary>The category (x-axis / slice) labels, shared by every series.</summary>
     public List<string> Categories { get; } = [];
 
-    /// <summary>The data series (at least one). Bar/column/line charts may carry several; a pie chart uses the first.</summary>
+    /// <summary>The data series (at least one). Bar/column/line/area charts may carry several; pie/doughnut use the first.</summary>
     public List<ChartSeries> Series { get; } = [];
+
+    /// <summary>
+    /// Whether the chart displays a legend (OOXML <c>c:legend</c>). Defaults to <c>false</c> so existing
+    /// output (no legend) is preserved byte-for-byte; set <c>true</c> to emit a bottom-positioned legend.
+    /// </summary>
+    public bool ShowLegend { get; set; }
+
+    /// <summary>
+    /// An optional title for the category (x) axis (OOXML <c>c:title</c> on <c>c:catAx</c>). Null — the
+    /// default — emits no axis title, preserving existing output. Ignored for pie/doughnut (axis-less) charts.
+    /// </summary>
+    public string? CategoryAxisTitle { get; set; }
+
+    /// <summary>
+    /// An optional title for the value (y) axis (OOXML <c>c:title</c> on <c>c:valAx</c>). Null — the
+    /// default — emits no axis title, preserving existing output. Ignored for pie/doughnut (axis-less) charts.
+    /// </summary>
+    public string? ValueAxisTitle { get; set; }
 
     /// <summary>The rendered width in points (converted to EMU on save). Defaults to a Word-typical 5in.</summary>
     public double WidthPt { get; set; } = 360;
