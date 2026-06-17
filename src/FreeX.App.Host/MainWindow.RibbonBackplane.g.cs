@@ -11,15 +11,10 @@ namespace FreeX.App.Host;
 public partial class MainWindow
 {
     private readonly System.Windows.Controls.StackPanel HomeRibbonPanel = new();
-    private readonly System.Windows.Controls.Primitives.ToggleButton UnderlineButton = new();
-    private readonly System.Windows.Controls.Button BordersMenuButton = new();
-    private readonly System.Windows.Controls.Button OrientationPickerButton = new();
     private readonly System.Windows.Controls.ContextMenu FormatTableGalleryMenu = new();
-    private readonly System.Windows.Controls.Button ShapesBtn = new();
     private readonly System.Windows.Controls.MenuItem PictureFormatCropMenuItem = new();
     private readonly System.Windows.Controls.MenuItem PictureFormatResetCropMenuItem = new();
     private readonly System.Windows.Controls.ContextMenu TableDesignStyleGalleryMenu = new();
-    private readonly AutomationInvokeButton HelpOnlineButton = new();
 
     /// <summary>Backplane controls that carry a ribbon CommandName, keyed by it.</summary>
     private readonly Dictionary<string, Control> RibbonBackplaneControls = new(System.StringComparer.Ordinal);
@@ -38,21 +33,12 @@ public partial class MainWindow
         RibbonBackplaneControlNames["Font Size"] = "FontSizeBox";
         RibbonBackplaneControlNames["Bold"] = "BoldButton";
         RibbonBackplaneControlNames["Italic"] = "ItalicButton";
-        try { RegisterName("UnderlineButton", UnderlineButton); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(UnderlineButton, "Underline");
-        RibbonBackplaneControls["Underline"] = UnderlineButton;
         RibbonBackplaneControlNames["Underline"] = "UnderlineButton";
         RibbonBackplaneControlNames["Strikethrough"] = "StrikeButton";
-        try { RegisterName("BordersMenuButton", BordersMenuButton); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(BordersMenuButton, "Borders");
-        RibbonBackplaneControls["Borders"] = BordersMenuButton;
         RibbonBackplaneControlNames["Borders"] = "BordersMenuButton";
         RibbonBackplaneControlNames["Top Align"] = "AlignTopBtn";
         RibbonBackplaneControlNames["Middle Align"] = "AlignMiddleBtn";
         RibbonBackplaneControlNames["Bottom Align"] = "AlignBottomBtn";
-        try { RegisterName("OrientationPickerButton", OrientationPickerButton); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(OrientationPickerButton, "Orientation");
-        RibbonBackplaneControls["Orientation"] = OrientationPickerButton;
         RibbonBackplaneControlNames["Orientation"] = "OrientationPickerButton";
         RibbonBackplaneControlNames["Wrap Text"] = "WrapTextBtn";
         RibbonBackplaneControlNames["Align Left"] = "AlignLeftBtn";
@@ -62,9 +48,6 @@ public partial class MainWindow
         // x:Name mapping for FindName resolution.
         RibbonBackplaneControlNames["Number Format"] = "NumberFormatBox";
         try { RegisterName("FormatTableGalleryMenu", FormatTableGalleryMenu); } catch (System.ArgumentException) { }
-        try { RegisterName("ShapesBtn", ShapesBtn); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(ShapesBtn, "Shapes");
-        RibbonBackplaneControls["Shapes"] = ShapesBtn;
         RibbonBackplaneControlNames["Shapes"] = "ShapesBtn";
         // Page Layout Scale-to-Fit combos are driven through the rendered declarative combos
         // (populated + wired by PopulateAndWireRenderedPageLayoutCombos); only the x:Name mapping
@@ -122,9 +105,6 @@ public partial class MainWindow
         RibbonBackplaneControlNames["Banded Columns"] = "TableDesignBandedColumnsBtn";
         RibbonBackplaneControlNames["Filter Button"] = "TableDesignFilterButtonBtn";
         try { RegisterName("TableDesignStyleGalleryMenu", TableDesignStyleGalleryMenu); } catch (System.ArgumentException) { }
-        try { RegisterName("HelpOnlineButton", HelpOnlineButton); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(HelpOnlineButton, "Help Online");
-        RibbonBackplaneControls["Help Online"] = HelpOnlineButton;
         RibbonBackplaneControlNames["Help Online"] = "HelpOnlineButton";
     }
 }

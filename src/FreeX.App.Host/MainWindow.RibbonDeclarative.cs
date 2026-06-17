@@ -73,6 +73,9 @@ public partial class MainWindow
             var renderedByName = CollectControlsByName();
             _renderedRibbonControls = renderedByName;
             WireDeclarativeStateSync(originals, renderedByName);
+            // The Insert Shapes gallery menu is built imperatively (InitializeInsertShapeGalleryContextMenu)
+            // before the ribbon exists, so attach it to the now-rendered "Shapes" button here.
+            AttachInsertShapeGalleryContextMenu();
             RepointBackplaneNamesToRenderedControls(renderedByName);
             WireRenderedMenuOpenedHandlers(renderedByName);
             PopulateAndWireRenderedHomeCombos(renderedByName);
