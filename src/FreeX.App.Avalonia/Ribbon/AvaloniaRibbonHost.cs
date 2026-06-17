@@ -86,6 +86,9 @@ internal sealed record AvaloniaRibbonHostCallbacks
     /// <summary>Home ▸ Clipboard ▸ Format Painter — capture the selection's format for a one-shot apply.</summary>
     public Action? FormatPainter { get; init; }
 
+    /// <summary>Home ▸ Font ▸ Size combo — apply the chosen font size (string) to the selection.</summary>
+    public Action<string?>? SetFontSize { get; init; }
+
     /// <summary>Data ▸ Sort A-Z.</summary>
     public Action? SortAscending { get; init; }
 
@@ -145,6 +148,20 @@ internal sealed class RelayRibbonCommand : IRibbonCommand
         => _execute = execute ?? throw new ArgumentNullException(nameof(execute));
 
     public void Execute(RibbonCommandContext context) => _execute();
+}
+
+/// <summary>
+/// An <see cref="IRibbonCommand"/> for value-bearing controls (combo boxes / galleries): invokes a
+/// host-supplied callback with the control's selected value (<see cref="RibbonCommandContext.SelectedValue"/>).
+/// </summary>
+internal sealed class RelayValueRibbonCommand : IRibbonCommand
+{
+    private readonly Action<string?> _execute;
+
+    public RelayValueRibbonCommand(Action<string?> execute)
+        => _execute = execute ?? throw new ArgumentNullException(nameof(execute));
+
+    public void Execute(RibbonCommandContext context) => _execute(context.SelectedValue);
 }
 
 /// <summary>A do-nothing command — enough to mark a control as registered/enabled.</summary>
@@ -474,6 +491,9 @@ internal static class SampleRibbon
         Bind("insert.pivotTable", callbacks.InsertPivotTable);
         Bind("insert.picture", callbacks.InsertPicture);
         Bind("home.formatPainter", callbacks.FormatPainter);
+
+        if (callbacks.SetFontSize is { } setFontSize)
+            registry.Register(new RibbonCommandId("home.fontSize"), new RelayValueRibbonCommand(setFontSize));
         Bind("data.sortAsc", callbacks.SortAscending);
         Bind("data.sortDesc", callbacks.SortDescending);
         Bind("data.validation", callbacks.DataValidation);

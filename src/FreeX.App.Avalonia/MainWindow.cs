@@ -606,6 +606,7 @@ public sealed partial class MainWindow : Window
                 InsertPivotTable = () => _ = ShowInsertPivotTableDialogAsync(),
                 InsertPicture = () => _ = InsertPictureFromFileAsync(),
                 FormatPainter = () => CaptureFormatPainterSource(persistent: false),
+                SetFontSize = ApplyRibbonFontSize,
                 SortAscending = () => SortSelectedRange(ascending: true),
                 SortDescending = () => SortSelectedRange(ascending: false),
                 DataValidation = () => _ = ShowDataValidationDialogAsync(),
@@ -11924,6 +11925,34 @@ public sealed partial class MainWindow : Window
         }
 
         RefreshShell($"{(enabled ? "Struck through" : "Removed strikethrough from")} {rangeReference}");
+    }
+
+    /// <summary>
+    /// Applies a font size chosen from the ribbon Font Size combo to the selection. The combo value is the
+    /// point size as text; unparseable or non-positive values are ignored.
+    /// </summary>
+    private void ApplyRibbonFontSize(string? sizeText)
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!double.TryParse(sizeText, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var size)
+            || !double.IsFinite(size) || size <= 0)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var rangeReference = FormatRangeReference(_session.SelectedRange);
+        var result = _session.SetSelectedRangeFontSize(size);
+        if (!result.Success)
+        {
+            RefreshShell(_statusText.Text ?? "Ready");
+            ShowEditIssue(result.ErrorMessage ?? "Set Font Size failed.");
+            return;
+        }
+
+        RefreshShell($"Set font size {size:0.##} for {rangeReference}");
     }
 
     private void IncreaseSelectedRangeFontSize()
