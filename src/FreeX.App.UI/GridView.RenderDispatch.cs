@@ -147,6 +147,7 @@ public partial class GridView
             NativeSlicers is { Count: > 0 } ||
             NativeTimelines is { Count: > 0 } ||
             Pictures is { Count: > 0 } ||
-            TextBoxes is { Count: > 0 };
+            TextBoxes is { Count: > 0 } ||
+            FormControls is { Count: > 0 };
     }
 }

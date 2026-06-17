@@ -179,6 +179,7 @@ public partial class MainWindow
             SheetGrid.DrawingObjectZOrder = null;
             SheetGrid.NativeSlicers = null;
             SheetGrid.NativeTimelines = null;
+            SheetGrid.FormControls = null;
             SheetGrid.WorksheetBackground = null;
             SheetGrid.PivotHeaderDropdowns = null;
             SheetGrid.Sparklines = null;
