@@ -139,6 +139,8 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.table-banded-rows", new ActionCommand(() => { editor.Focus(); editor.ToggleTableBandedRows(); }));
         registry.Register("freew.table-repeat-header", new ActionCommand(() => { editor.Focus(); editor.ToggleTableRepeatHeaderRow(); }));
 
+        // Insert tab — Text: pick a .docx file and insert its body content at the caret (block merge).
+        registry.Register("freew.insert-file", new InsertFileCommand(editor));
         // Insert tab — Illustrations: pick an image file and insert it as an inline image run.
         registry.Register("freew.picture", new InsertPictureCommand(editor));
         // Insert tab — Illustrations: resize the selected inline image (height scales proportionally).
@@ -941,6 +943,33 @@ internal static class FreeWRibbonCommands
         {
             editor.Focus();
             editor.InsertTable(rows, columns);
+        }
+    }
+
+    // Insert > Text > Text from File: pick a .docx, read it, and merge its body into the document at the caret.
+    private sealed class InsertFileCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            var dialog = new OpenFileDialog
+            {
+                Filter = "Word Documents (*.docx)|*.docx|All files (*.*)|*.*",
+                Title = "Insert Text from File"
+            };
+            if (dialog.ShowDialog(Window.GetWindow(editor)) != true)
+                return;
+
+            try
+            {
+                var source = DocxReader.Read(dialog.FileName);
+                editor.Focus();
+                editor.InsertDocument(source);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(Window.GetWindow(editor), $"Could not insert the file:\n{ex.Message}",
+                    "FreeW", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
     }
 
