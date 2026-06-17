@@ -45,6 +45,18 @@ public partial class XlsxFeatureInspectorTests
 
 
     [Fact]
+    public void Inspect_ChartsheetOnlyPackage_DoesNotReportUnsupportedSheetTypes()
+    {
+        using var package = CreatePackage("xl/chartsheets/sheet1.xml");
+
+        var report = XlsxFeatureInspector.Inspect(package);
+
+        report.Features.Select(f => f.Kind).Should().NotContain(
+            XlsxUnsupportedFeatureKind.UnsupportedSheetTypes,
+            "chartsheets are now loaded and modeled as chart-only sheets");
+    }
+
+    [Fact]
     public void Inspect_ThemePackage_DoesNotReportUnsupportedFeatures()
     {
         using var package = CreatePackage("xl/theme/theme1.xml");
