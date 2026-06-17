@@ -178,6 +178,25 @@ internal static class FreeWRibbon
                     g.Toggle("freew.read-mode", "Read Mode");
                 });
             })
+            .Tab("mailings", "Mailings", "M", tab =>
+            {
+                tab.Group("merge-data", "Start Mail Merge", "D", 100, g =>
+                {
+                    g.Button("freew.merge-data", "Set Data");
+                });
+                tab.Group("merge-write", "Write & Insert Fields", "W", 90, g =>
+                {
+                    g.Button("freew.merge-field", "Insert Merge Field");
+                });
+                tab.Group("merge-preview", "Preview Results", "P", 80, g =>
+                {
+                    g.Button("freew.merge-preview", "Preview Record");
+                });
+                tab.Group("merge-finish", "Finish", "F", 70, g =>
+                {
+                    g.Button("freew.merge-finish", "Finish & Merge");
+                });
+            })
             .Tab("review", "Review", "R", tab =>
             {
                 tab.Group("proofing", "Proofing", "P", 100, g =>
