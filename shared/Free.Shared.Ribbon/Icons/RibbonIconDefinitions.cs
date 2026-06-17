@@ -608,10 +608,303 @@ public static class RibbonIconDefinitions
         map[RibbonCommandIconKind.Book] = book;
         map[RibbonCommandIconKind.Translate] = book;
 
+        // ---- Word Insert/Layout/References/Mailings/Review/View glyphs (FreeW parity) ----
+
+        // Cover Page: a page with a big filled banner across the top.
+        Add(RibbonCommandIconKind.CoverPage,
+            Rectangle(6, 3, 12, 18, radius: 1),
+            FilledRectangle(8, 6, 8, 4),
+            Line(8, 13, 16, 13, 1.1),
+            Line(8, 16, 14, 16, 1.1));
+
+        // Drop Cap: a large "A" boxed at the left with text lines to its right.
+        Add(RibbonCommandIconKind.DropCap,
+            Rectangle(4, 5, 8, 9),
+            TextRun("A", 9, RibbonIconTextWeight.Bold, -4, -1),
+            Line(14, 7, 20, 7, 1.2),
+            Line(14, 11, 20, 11, 1.2),
+            Line(4, 17, 20, 17, 1.2),
+            Line(4, 20, 20, 20, 1.2));
+
+        // Equation: pi glyph (recognisable math).
+        Add(RibbonCommandIconKind.Equation, TextRun("π", 17, RibbonIconTextWeight.SemiBold));
+
+        // SmartArt: three connected nodes (one top, two bottom).
+        Add(RibbonCommandIconKind.SmartArt,
+            FilledRectangle(9.5, 4, 5, 4),
+            FilledRectangle(4, 15, 5, 4),
+            FilledRectangle(15, 15, 5, 4),
+            Line(12, 8, 6.5, 15, 1.2),
+            Line(12, 8, 17.5, 15, 1.2));
+
+        // WordArt: a stylised slanted "A".
+        Add(RibbonCommandIconKind.WordArt,
+            TextRun("A", 18, RibbonIconTextWeight.Bold, 0, 0),
+            Line(4, 20, 20, 20, 1.2));
+
+        // Object: a framed page with a smaller embedded box (an embedded object).
+        Add(RibbonCommandIconKind.Object,
+            Rectangle(4, 5, 16, 14),
+            Rectangle(10, 11, 8, 6),
+            Line(7, 9, 13, 9, 1.1));
+
+        // Shapes: overlapping square + circle (Word's Shapes gallery glyph).
+        Add(RibbonCommandIconKind.Shapes,
+            Rectangle(4, 5, 9, 9),
+            Ellipse(11, 11, 9, 9, 1.5));
+
+        // Footnote / Endnote: a page with a small superscript number marker.
+        Add(RibbonCommandIconKind.Footnote,
+            Path("M7,3 L15,3 L19,7 L19,21 L7,21 Z", 1.4),
+            Line(9, 16, 16, 16, 1.1),
+            Line(9, 19, 14, 19, 1.1),
+            TextRun("1", 8, RibbonIconTextWeight.Bold, -1, -5));
+        Add(RibbonCommandIconKind.Endnote,
+            Path("M7,3 L15,3 L19,7 L19,21 L7,21 Z", 1.4),
+            Line(9, 16, 16, 16, 1.1),
+            Line(9, 19, 14, 19, 1.1),
+            TextRun("i", 8, RibbonIconTextWeight.Bold, -1, -5));
+
+        // Bookmark: a classic ribbon bookmark.
+        Add(RibbonCommandIconKind.Bookmark,
+            Path("M7,4 L17,4 L17,20 L12,16 L7,20 Z", 1.5));
+
+        // Cross-reference: a page with a curved arrow pointing right.
+        Add(RibbonCommandIconKind.CrossReference,
+            Rectangle(4, 4, 10, 16),
+            Line(7, 8, 11, 8, 1.1),
+            Line(7, 12, 11, 12, 1.1),
+            Path("M14,12 L20,12 M17,9 L20,12 L17,15", 1.5));
+
+        // Caption: a small image frame with a label bar beneath it.
+        Add(RibbonCommandIconKind.Caption,
+            Rectangle(5, 4, 14, 10),
+            FilledCircle(9, 8, 2),
+            Path("M7,12 L10,9 L13,12 L15,10 L17,12", 1.2),
+            FilledRectangle(5, 17, 14, 3));
+
+        // Index: stacked entries with right-aligned page-number dots.
+        Add(RibbonCommandIconKind.Index,
+            Line(4, 6, 12, 6, 1.3), FilledCircle(18, 6, 1.6),
+            Line(4, 11, 14, 11, 1.3), FilledCircle(18, 11, 1.6),
+            Line(4, 16, 11, 16, 1.3), FilledCircle(18, 16, 1.6),
+            Line(4, 21, 13, 21, 1.3), FilledCircle(18, 21, 1.6));
+
+        // Table of Contents: heading + indented sub-entries.
+        Add(RibbonCommandIconKind.TableOfContents,
+            Line(4, 5, 18, 5, 1.6),
+            Line(8, 10, 18, 10, 1.2),
+            Line(8, 14, 18, 14, 1.2),
+            Line(8, 18, 18, 18, 1.2),
+            Line(4, 10, 5.5, 10, 1.2),
+            Line(4, 14, 5.5, 14, 1.2),
+            Line(4, 18, 5.5, 18, 1.2));
+
+        // Bibliography / Citation: an open book with a quote mark.
+        Add(RibbonCommandIconKind.Bibliography,
+            Path("M5,5 C8,4 10,5 12,7 L12,19 C10,17 8,16 5,17 Z", 1.4),
+            Path("M19,5 C16,4 14,5 12,7 L12,19 C14,17 16,16 19,17 Z", 1.4),
+            FilledCircle(12, 3.5, 1.6));
+        Add(RibbonCommandIconKind.Citation,
+            TextRun("”", 18, RibbonIconTextWeight.Bold, 0, 2),
+            Line(4, 19, 20, 19, 1.2));
+
+        // Header / Footer / Page Number: a page with the band at top / bottom / a number.
+        Add(RibbonCommandIconKind.Header,
+            Rectangle(5, 4, 14, 16),
+            FilledRectangle(7, 6, 10, 3),
+            Line(7, 12, 17, 12, 1.1),
+            Line(7, 15, 17, 15, 1.1));
+        Add(RibbonCommandIconKind.Footer,
+            Rectangle(5, 4, 14, 16),
+            Line(7, 8, 17, 8, 1.1),
+            Line(7, 11, 17, 11, 1.1),
+            FilledRectangle(7, 15, 10, 3));
+        Add(RibbonCommandIconKind.PageNumber,
+            Rectangle(5, 4, 14, 16),
+            Line(7, 8, 17, 8, 1.1),
+            Line(7, 11, 17, 11, 1.1),
+            TextRun("#", 8, RibbonIconTextWeight.Bold, 0, 6));
+
+        // Watermark: a page with faint diagonal "text".
+        Add(RibbonCommandIconKind.Watermark,
+            Rectangle(5, 4, 14, 16),
+            Line(7, 17, 17, 7, 1.4, dashed: true),
+            Line(8, 13, 14, 13, 1, dashed: true));
+
+        // Page Color: a page with a paint drop.
+        Add(RibbonCommandIconKind.PageColor,
+            Rectangle(5, 4, 14, 16),
+            Path("M12,8 C9,11 9,15 12,16 C15,15 15,11 12,8 Z", 1.3, fillOpacity: 0.18));
+
+        // Hyphenation: a hyphen between two text fragments.
+        Add(RibbonCommandIconKind.Hyphenation,
+            TextRun("a", 11, RibbonIconTextWeight.SemiBold, -6, 0),
+            Line(10, 12, 14, 12, 1.8),
+            TextRun("b", 11, RibbonIconTextWeight.SemiBold, 6, 0));
+
+        // Envelope: a sealed envelope.
+        Add(RibbonCommandIconKind.Envelope,
+            Rectangle(4, 6, 16, 12, radius: 1),
+            Path("M4,7 L12,13 L20,7", 1.3));
+
+        // Labels: a sheet split into label cells.
+        Add(RibbonCommandIconKind.Labels,
+            Rectangle(4, 4, 16, 16, radius: 1),
+            Line(12, 4, 12, 20, 1.2),
+            Line(4, 12, 20, 12, 1.2));
+
+        // Recipients: two people (mail-merge recipient list).
+        Add(RibbonCommandIconKind.Recipients,
+            FilledCircle(9, 8, 4),
+            Path("M4,20 C4,15 14,15 14,20 Z", 1.3),
+            FilledCircle(16, 9, 3),
+            Path("M13,19 C13,15 21,15 21,19", 1.2));
+
+        // Merge field: chevroned field markers «».
+        Add(RibbonCommandIconKind.MergeField,
+            Path("M9,7 L5,12 L9,17", 1.7),
+            Path("M15,7 L19,12 L15,17", 1.7),
+            Line(11, 7, 13, 17, 1.3));
+
+        // Greeting line: a hand-wave / signature line.
+        Add(RibbonCommandIconKind.GreetingLine,
+            Path("M4,12 C7,7 10,17 13,12 C15,9 18,9 20,12", 1.6),
+            Line(4, 18, 20, 18, 1.2));
+
+        // Preview results: an eye.
+        Add(RibbonCommandIconKind.PreviewResults,
+            Path("M3,12 C7,6 17,6 21,12 C17,18 7,18 3,12 Z", 1.5),
+            FilledCircle(12, 12, 3));
+
+        // Finish merge: a page with a check mark.
+        Add(RibbonCommandIconKind.FinishMerge,
+            Path("M7,3 L15,3 L19,7 L19,21 L7,21 Z", 1.4),
+            Path("M9,14 L11,17 L16,10", 1.7));
+
+        // Thesaurus: an open book with "Aa".
+        Add(RibbonCommandIconKind.Thesaurus,
+            Path("M5,5 C8,4 10,5 12,7 L12,19 C10,17 8,16 5,17 Z", 1.4),
+            Path("M19,5 C16,4 14,5 12,7 L12,19 C14,17 16,16 19,17 Z", 1.4));
+
+        // Word count: "123" over a baseline.
+        Add(RibbonCommandIconKind.WordCount,
+            TextRun("123", 9, RibbonIconTextWeight.Bold, 0, -2),
+            Line(4, 17, 20, 17, 1.3),
+            Line(4, 20, 16, 20, 1.3));
+
+        // Accept / Reject change: a check / cross with a small edit mark.
+        Add(RibbonCommandIconKind.AcceptChange,
+            Path("M5,13 L10,18 L20,6", 2.1));
+        Add(RibbonCommandIconKind.RejectChange,
+            Line(6, 6, 18, 18, 2.1),
+            Line(18, 6, 6, 18, 2.1));
+
+        // Previous / Next change: chevron with a vertical bar.
+        Add(RibbonCommandIconKind.PreviousChange,
+            Path("M14,6 L8,12 L14,18", 1.9),
+            Line(17, 6, 17, 18, 1.6));
+        Add(RibbonCommandIconKind.NextChange,
+            Path("M10,6 L16,12 L10,18", 1.9),
+            Line(7, 6, 7, 18, 1.6));
+
+        // Compare: two overlapping documents.
+        Add(RibbonCommandIconKind.Compare,
+            Rectangle(4, 4, 11, 14),
+            Rectangle(9, 7, 11, 14),
+            Line(11, 11, 17, 11, 1.1),
+            Line(11, 15, 17, 15, 1.1));
+
+        // Formatting marks: the pilcrow.
+        Add(RibbonCommandIconKind.FormattingMarks, TextRun("¶", 17, RibbonIconTextWeight.Bold));
+
+        // Navigation pane: a sidebar split layout.
+        Add(RibbonCommandIconKind.NavigationPane,
+            Rectangle(4, 5, 16, 14, radius: 1),
+            Line(10, 5, 10, 19, 1.4),
+            Line(5.5, 9, 8.5, 9, 1),
+            Line(5.5, 12, 8.5, 12, 1),
+            Line(5.5, 15, 8.5, 15, 1));
+
+        // Read mode: an open book (reading view).
+        Add(RibbonCommandIconKind.ReadMode,
+            Path("M12,6 C9,4 6,4 4,5 L4,18 C6,17 9,17 12,19 C15,17 18,17 20,18 L20,5 C18,4 15,4 12,6 Z", 1.5),
+            Line(12, 6, 12, 19, 1.2));
+
+        // Print layout: a page within a frame.
+        Add(RibbonCommandIconKind.PrintLayout,
+            Rectangle(4, 4, 16, 16, radius: 1),
+            Rectangle(7, 7, 10, 10),
+            Line(9, 10, 15, 10, 1),
+            Line(9, 13, 15, 13, 1));
+
+        // One page / page size: a single page outline.
+        Add(RibbonCommandIconKind.OnePage,
+            Rectangle(6, 3, 12, 18, radius: 1),
+            Line(9, 8, 15, 8, 1.1),
+            Line(9, 12, 15, 12, 1.1),
+            Line(9, 16, 13, 16, 1.1));
+
+        // Field: braces around a dot (a field code).
+        Add(RibbonCommandIconKind.Field,
+            Path("M9,5 C6,5 7,11 4,12 C7,13 6,19 9,19", 1.5),
+            Path("M15,5 C18,5 17,11 20,12 C17,13 18,19 15,19", 1.5),
+            FilledCircle(12, 12, 2));
+
+        // Quick parts: a building block (stacked bricks).
+        Add(RibbonCommandIconKind.QuickParts,
+            FilledRectangle(4, 6, 7, 5),
+            FilledRectangle(13, 6, 7, 5),
+            FilledRectangle(8.5, 13, 7, 5));
+
+        // Text from file: a page with an inbound arrow.
+        Add(RibbonCommandIconKind.TextFromFile,
+            Path("M11,3 L18,3 L20,5 L20,21 L11,21 Z", 1.4),
+            Line(13, 8, 18, 8, 1),
+            Line(13, 12, 18, 12, 1),
+            Path("M3,12 L9,12 M6,9 L9,12 L6,15", 1.5));
+
+        // Check box content control.
+        Add(RibbonCommandIconKind.CheckBox,
+            Rectangle(5, 5, 14, 14, radius: 1.5),
+            Path("M8,12 L11,15 L16,8", 1.8));
+
+        // Horizontal rule.
+        Add(RibbonCommandIconKind.HorizontalRule,
+            Line(4, 12, 20, 12, 2.2),
+            Line(6, 7, 18, 7, 1, dashed: true),
+            Line(6, 17, 18, 17, 1, dashed: true));
+
+        // Symbol: the Greek omega (Word's Symbol glyph).
+        Add(RibbonCommandIconKind.Symbol, TextRun("Ω", 16, RibbonIconTextWeight.SemiBold));
+
+        // History (Track Changes): a clock with a counter-clockwise arrow.
+        Add(RibbonCommandIconKind.History,
+            Ellipse(5, 5, 14, 14, 1.5),
+            Path("M12,8 L12,12 L15,14", 1.5),
+            Path("M5,5 L5,9 L9,9", 1.4));
+
+        // Orientation: a page with a rotate arrow (portrait/landscape toggle).
+        Add(RibbonCommandIconKind.Orientation,
+            Rectangle(6, 5, 9, 12, radius: 1),
+            Path("M16,9 C19,9 20,12 19,15", 1.4),
+            Path("M17,15 L19,15 L19,13", 1.4));
+
+        // Margins: a page with an inset dashed content frame.
+        Add(RibbonCommandIconKind.Margins,
+            Rectangle(5, 4, 14, 16),
+            Rectangle(8, 7, 8, 10, radius: 0.5));
+
+        // Number (line numbers): "1 2 3" stacked beside rule lines.
+        Add(RibbonCommandIconKind.Number,
+            TextRun("1", 7, RibbonIconTextWeight.SemiBold, -8, -5), Line(9, 7, 19, 7, 1.2),
+            TextRun("2", 7, RibbonIconTextWeight.SemiBold, -8, 0), Line(9, 12, 19, 12, 1.2),
+            TextRun("3", 7, RibbonIconTextWeight.SemiBold, -8, 5), Line(9, 17, 19, 17, 1.2));
+
         // The remaining kinds have no dedicated drawing in the WPF source-of-truth and render via
         // DrawGeneric there. They are intentionally NOT added here: Resolve() falls them back to the
         // shared Generic glyph, so WPF and Avalonia stay identical. These are:
-        //   Number, History, Recent, Watch, Orientation, Margins, More, Symbol, Logical, Math, List.
+        //   Recent, Watch, More, Logical, Math, List.
 
         return map;
     }
