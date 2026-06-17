@@ -775,8 +775,13 @@ public sealed partial class MainWindow : Window
                     ["pageLayout.themeEffects"] = () => _ = ShowThemesGalleryAsync(),
                     // Insert ▸ Symbol.
                     ["insert.symbol"] = () => _ = ShowSymbolPickerAsync(),
+                    // Insert ▸ Slicer / Timeline (field picker → AddSlicerCommand / AddTimelineCommand).
+                    ["insert.slicer"] = InsertSlicer,
+                    ["insert.timeline"] = InsertTimeline,
                     // Formulas ▸ Error Checking.
                     ["formulas.errorChecking"] = CheckFormulaErrors,
+                    // Formulas ▸ Evaluate Formula (read-only diagnostics dialog).
+                    ["formulas.evaluateFormula"] = () => _ = ShowEvaluateFormulaDialogAsync(),
                 },
             });
         DockPanel.SetDock(ribbon, Dock.Top);
