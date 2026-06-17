@@ -270,6 +270,15 @@ public sealed record ChartPointFillFormat(
         FillThemeColor?.Resolve(theme) ?? FillColor;
 }
 
+/// <summary>
+/// A literal data-label string supplied by a chart's "Value From Cells" feature
+/// (OOXML <c>c15:datalabelsRange</c> under a series' <c>extLst</c>). The cached text
+/// (e.g. <c>"👍 10%"</c>) is what Excel displays for the point, independent of the
+/// series' numeric value. The renderer draws this verbatim above the point instead of
+/// formatting the value.
+/// </summary>
+public sealed record ChartRangeDataLabel(int SeriesIndex, int PointIndex, string Text);
+
 public sealed record ChartSeriesFormat(
     int SeriesIndex,
     CellColor? FillColor = null,

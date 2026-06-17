@@ -307,6 +307,13 @@ public sealed class ChartModel
     public List<ChartPointDataLabelFormat> PointDataLabelFormats { get; set; } = [];
 
     /// <summary>
+    /// Literal per-point data-label strings from Excel's "Value From Cells" labels
+    /// (<c>c15:datalabelsRange</c>). When populated the renderer draws these strings
+    /// verbatim above the matching point instead of formatting the numeric value.
+    /// </summary>
+    public List<ChartRangeDataLabel> RangeDataLabels { get; set; } = [];
+
+    /// <summary>
     /// Per-data-point fill color overrides for pie/doughnut slices, read from
     /// <c>&lt;c:dPt&gt;</c> elements with explicit <c>&lt;c:spPr&gt;</c> fills.
     /// When a slice's index matches an entry here its fill color takes precedence

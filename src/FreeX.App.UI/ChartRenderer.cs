@@ -251,6 +251,10 @@ public static partial class ChartRenderer
             ? CountClusteredBarSeries(chart, dataStartCol, endCol)
             : 0;
         var clusteredColumnOrdinal = 0;
+        // Per-clustered-bar-series value lists (category index -> value), captured so a
+        // Budget-vs-Actual <c:upDownBars> deviation overlay can be drawn between the first two
+        // bar series after the main loop. Only collected for clustered column charts.
+        var clusteredBarValues = new List<List<double?>>();
         for (uint col = dataStartCol; col <= endCol; col++)
         {
             if (ShouldSkipScatterXColumn(chart, col, dataStartCol))
@@ -326,6 +330,7 @@ public static partial class ChartRenderer
                 var colHalfWidth = ColumnBarHalfWidth(chart);
                 var (clusterLeft, clusterRight) = ClusteredBarOffsets(colHalfWidth, clusteredColumnOrdinal, clusteredColumnCount);
                 clusteredColumnOrdinal++;
+                var barCategoryValues = new List<double?>();
                 var i = 0;
                 for (uint r = dataStartRow; r <= endRow; r++, i++)
                 {
@@ -334,6 +339,7 @@ public static partial class ChartRenderer
                     {
                         series.Items.Add(new RectangleBarItem(i + clusterLeft, Math.Min(0, v), i + clusterRight, Math.Max(0, v)));
                         trendPoints?.Add(new DataPoint(i, v));
+                        barCategoryValues.Add(v);
                         if (ShouldUseAnnotationLabels(chart))
                             AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), i, v, v);
                     }
@@ -343,12 +349,18 @@ public static partial class ChartRenderer
                     {
                         series.Items.Add(new RectangleBarItem(i + clusterLeft, 0, i + clusterRight, 0));
                         trendPoints?.Add(new DataPoint(i, 0));
+                        barCategoryValues.Add(0);
                         if (ShouldUseAnnotationLabels(chart))
                             AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), i, 0, 0);
+                    }
+                    else
+                    {
+                        barCategoryValues.Add(null);
                     }
                 }
                 if (firstSeriesPoints is null)
                     firstSeriesPoints = trendPoints;
+                clusteredBarValues.Add(barCategoryValues);
                 model.Series.Add(series);
             }
             else if (chart.Type is ChartType.Bar or ChartType.ThreeDBar)
@@ -510,6 +522,8 @@ public static partial class ChartRenderer
             }
         }
 
+        AddDeviationOverlay(model, chart, theme, clusteredBarValues);
+        AddRangeDataLabelAnnotations(model, chart, theme, clusteredBarValues, categories);
         AddTrendlineIfRequested(model, chart, theme, firstSeriesPoints, swapTrendlineAxes: chart.Type == ChartType.Bar);
         ApplyAxisBounds(model, chart, theme);
         AddChartDataTableAnnotations(model, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow);
