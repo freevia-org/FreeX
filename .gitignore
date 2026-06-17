@@ -32,6 +32,11 @@ test-corpus/local-private/
 fidelity-corpus/files/
 fidelity-corpus/runs/
 
+# On-demand real-world DOCX fidelity corpus for FreeW. Only the manifest + downloader
+# are committed; downloaded/local documents and generated run outputs stay private.
+freew-fidelity-corpus/files/
+freew-fidelity-corpus/runs/
+
 # Generated icon asset exports
 docs/assets/
 src/FreeX.App.Host/Resources/CommandIcons/

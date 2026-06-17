@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
 using FreeW.Core.Model;
 using System.Diagnostics;
@@ -57,6 +58,32 @@ public sealed class DocumentView : RichTextBox
     private readonly ScaleTransform _zoomTransform = new(ZoomLevels.Default, ZoomLevels.Default);
     private double _zoomLevel = ZoomLevels.Default;
 
+    /// <summary>The "plain"/continuous view padding (the original flat-text-box look) restored when Print Layout is off.</summary>
+    private static readonly Thickness PlainPadding = new(48);
+
+    /// <summary>The page drop shadow applied to the editing surface in Print-Layout mode (a soft, Word-like page lift).</summary>
+    private static readonly DropShadowEffect PageShadow = CreatePageShadow();
+
+    // The live overlay drawing faint "— Page N —" break markers down the surface in Print-Layout mode,
+    // or null while Print Layout is off. Added to / removed from this control's AdornerLayer so it never
+    // participates in the FlowDocument content (and so never round-trips through CommitToModel). It reads
+    // geometry from the current Document + model PageSettings and is recomputed cheaply on relayout.
+    private PageBreakAdorner? _pageBreakAdorner;
+
+    private static DropShadowEffect CreatePageShadow()
+    {
+        var shadow = new DropShadowEffect
+        {
+            Color = Color.FromRgb(0x80, 0x80, 0x80),
+            BlurRadius = 14,
+            ShadowDepth = 3,
+            Direction = 270,
+            Opacity = 0.55
+        };
+        shadow.Freeze();
+        return shadow;
+    }
+
     /// <summary>
     /// Holds the run + paragraph formatting captured when Format Painter is armed (null when the
     /// painter is idle). On the next selection the user makes, this is stamped onto that selection
@@ -101,6 +128,31 @@ public sealed class DocumentView : RichTextBox
     }
 
     public TextDocument Model => _model;
+
+    /// <summary>
+    /// Whether the editor presents a Word-style "Print Layout" page view: the editable surface is sized to
+    /// the model page width, the page margins (<see cref="PageSettings"/>) become the editor padding, the
+    /// page gets a soft drop shadow, and faint "— Page N —" break markers are drawn down the flow. When
+    /// off, the surface reverts to the original flat/continuous look (a comfortable fixed padding, no width
+    /// cap, no shadow, no markers). Default ON — the Word default and the showcase view. Purely visual:
+    /// the model, saved document, zoom, read mode and all editing commands are unaffected; the surface
+    /// stays a single live, fully editable <see cref="RichTextBox"/> either way (see the limitation note in
+    /// <see cref="ApplyPageChrome"/>). Re-applied on every <see cref="Render"/> and when page settings change.
+    /// </summary>
+    public bool PrintLayoutEnabled { get; private set; } = true;
+
+    /// <summary>
+    /// Turn Print-Layout page view on/off and return the new state. Used by the View ribbon's "Print
+    /// Layout" toggle. Re-applies the page chrome (padding/width/shadow) and the page-break overlay so the
+    /// change shows immediately; never mutates the model.
+    /// </summary>
+    public bool TogglePrintLayout()
+    {
+        PrintLayoutEnabled = !PrintLayoutEnabled;
+        ApplyPageChrome();
+        SyncPageBreakAdorner();
+        return PrintLayoutEnabled;
+    }
 
     /// <summary>
     /// The current document's file name (without path), used to resolve FILENAME field runs at render.
@@ -1546,6 +1598,7 @@ public sealed class DocumentView : RichTextBox
         ApplyPageChrome();
         ApplyProtection();
         SyncFormattingMarksAdorner();
+        SyncPageBreakAdorner();
     }
 
     /// <summary>
@@ -1664,12 +1717,27 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
-    /// Reflects the model's page border and watermark as editor chrome. The page border drives the
-    /// control's own <see cref="Control.BorderBrush"/>/<see cref="Control.BorderThickness"/> (drawn
-    /// around the editing surface), and the watermark is painted as faint, rotated tiled text behind
-    /// the content via the control <see cref="Control.Background"/>. Both are purely visual: the model
-    /// and saved document are untouched. Falls back to the default thin grey frame / white background
-    /// when neither is set, so existing documents look exactly as before.
+    /// Reflects the model's page border and watermark as editor chrome, and — in Print-Layout mode — gives
+    /// the editing surface a Word-style page presentation. The page border drives the control's own
+    /// <see cref="Control.BorderBrush"/>/<see cref="Control.BorderThickness"/> (drawn around the editing
+    /// surface), and the watermark is painted as faint, rotated tiled text behind the content via the
+    /// control <see cref="Control.Background"/>.
+    ///
+    /// When <see cref="PrintLayoutEnabled"/> is on (the default), the surface is sized to the model page
+    /// width (<see cref="PageLayout.PageSizeDip"/>), centred so the grey workspace its host paints shows on
+    /// either side, given the page's margins as <see cref="Control.Padding"/> (so the text column matches
+    /// the printed content area), and lifted with a soft <see cref="DropShadowEffect"/> so it reads as a
+    /// physical sheet. When off, the surface reverts to the original flat/continuous presentation (a fixed
+    /// comfortable padding, full width, no shadow), so existing behaviour is preserved exactly.
+    ///
+    /// LIMITATION: WPF's editable <see cref="RichTextBox"/>/<see cref="FlowDocument"/> is a single
+    /// continuous flow, so this is a Print-Layout *visual treatment* of one editable surface — not true
+    /// multi-page editable pagination (content flowing across discrete page objects). Page boundaries are
+    /// shown as the <see cref="PageBreakAdorner"/> markers (see its remarks for the approximation); the
+    /// fully paginated rendering remains the read-only Print Preview path.
+    ///
+    /// All of the above is purely visual: the model and saved document are untouched, and it cooperates
+    /// with zoom (the <see cref="LayoutTransform"/> scales the sized page too) and read mode.
     /// </summary>
     private void ApplyPageChrome()
     {
@@ -1687,6 +1755,68 @@ public sealed class DocumentView : RichTextBox
         Background = string.IsNullOrEmpty(_model.Page.Watermark)
             ? Brushes.White
             : BuildWatermarkBrush(_model.Page.Watermark!);
+
+        if (PrintLayoutEnabled)
+        {
+            // Size the surface to the model page width and reflect the page margins as the editor padding,
+            // so the text column sits inside the same printable area the print path uses. The host paints
+            // the grey workspace; centring the page lets that grey show on either side. The drop shadow
+            // lifts the sheet off the workspace.
+            var (pageWidthDip, _) = PageLayout.PageSizeDip(_model.Page);
+            var (left, top, right, bottom) = PageLayout.MarginsDip(_model.Page);
+            Width = pageWidthDip;
+            HorizontalAlignment = HorizontalAlignment.Center;
+            Padding = new Thickness(left, top, right, bottom);
+            Effect = PageShadow;
+        }
+        else
+        {
+            // Plain / continuous view: the original flat editable text box — full width, fixed padding,
+            // no page shadow.
+            Width = double.NaN; // auto: stretch to the host
+            HorizontalAlignment = HorizontalAlignment.Stretch;
+            Padding = PlainPadding;
+            Effect = null;
+        }
+    }
+
+    // Add, remove, or refresh the page-break overlay to match PrintLayoutEnabled. Mirrors
+    // SyncFormattingMarksAdorner: the adorner layer only exists once the control is in a visual tree, so
+    // when it is not yet available we defer via a one-shot Loaded handler. Turning Print Layout off removes
+    // the overlay; an already-present overlay is just invalidated so it repaints against the current page.
+    private void SyncPageBreakAdorner()
+    {
+        var layer = AdornerLayer.GetAdornerLayer(this);
+        if (layer is null)
+        {
+            if (PrintLayoutEnabled)
+            {
+                Loaded -= OnLoadedSyncPageBreaks;
+                Loaded += OnLoadedSyncPageBreaks;
+            }
+            return;
+        }
+
+        if (PrintLayoutEnabled)
+        {
+            if (_pageBreakAdorner is null)
+            {
+                _pageBreakAdorner = new PageBreakAdorner(this);
+                layer.Add(_pageBreakAdorner);
+            }
+            _pageBreakAdorner.InvalidateVisual();
+        }
+        else if (_pageBreakAdorner is not null)
+        {
+            layer.Remove(_pageBreakAdorner);
+            _pageBreakAdorner = null;
+        }
+    }
+
+    private void OnLoadedSyncPageBreaks(object sender, RoutedEventArgs e)
+    {
+        Loaded -= OnLoadedSyncPageBreaks;
+        SyncPageBreakAdorner();
     }
 
     /// <summary>
@@ -4164,6 +4294,139 @@ public sealed class DocumentView : RichTextBox
             var x = atEnd ? rect.Left : rect.Left + Math.Max(0, (rect.Width - formatted.Width) / 2);
             var y = rect.Top + Math.Max(0, (rect.Height - formatted.Height) / 2);
             dc.DrawText(formatted, new Point(x, y));
+        }
+    }
+
+    /// <summary>
+    /// Draws the faint "— Page N —" break markers down the Print-Layout editing surface, so the user
+    /// perceives where the single continuous flow would break across printed pages.
+    ///
+    /// APPROXIMATION: the editable surface is one continuous WPF flow (see the limitation note on
+    /// <see cref="ApplyPageChrome"/>), so there are no real per-page boxes to read. Instead we anchor at
+    /// the top of the first laid-out content line (its character rectangle) and step downward by the page's
+    /// printable content height (<see cref="PageLayout.ContentAreaDip"/>, the same page geometry the print
+    /// path uses), drawing a marker at each multiple. This assumes uniform content flow: it does not model
+    /// per-block keep-together rules, explicit page breaks, tables that straddle a boundary, or differing
+    /// first-page geometry, so a marker can land a line or two away from where the printed page would
+    /// actually break. It is a low-key visual cue, not an exact pagination — Print Preview remains the
+    /// authoritative paginated view. Markers past the end of the content are not drawn.
+    ///
+    /// Coordinates: the adorner shares the editor's content coordinate space (it adorns the same element),
+    /// and the editor's <see cref="DocumentView.LayoutTransform"/> zoom scales the adorner with it, so the
+    /// markers track the text under zoom without extra math. Painting is clipped to the visible surface.
+    /// </summary>
+    private sealed class PageBreakAdorner : Adorner
+    {
+        private static readonly Pen BreakPen = CreateBreakPen();
+        private static readonly Brush LabelBrush = CreateLabelBrush();
+
+        // Never draw more than this many markers, so a tiny page height (degenerate geometry) or an
+        // enormous document can't make the overlay expensive to paint.
+        private const int MaxMarkers = 2_000;
+
+        private readonly DocumentView _view;
+
+        public PageBreakAdorner(DocumentView view) : base(view)
+        {
+            _view = view;
+            IsHitTestVisible = false;
+            // Repaint when the surface scrolls or relayouts so the markers track the content.
+            _view.LayoutUpdated += (_, _) => InvalidateVisual();
+        }
+
+        private static Pen CreateBreakPen()
+        {
+            var pen = new Pen(new SolidColorBrush(Color.FromRgb(0xB0, 0xB0, 0xB0)), 1.0)
+            {
+                DashStyle = new DashStyle(new double[] { 4, 3 }, 0)
+            };
+            pen.Freeze();
+            return pen;
+        }
+
+        private static Brush CreateLabelBrush()
+        {
+            var brush = new SolidColorBrush(Color.FromRgb(0x90, 0x90, 0x90));
+            brush.Freeze();
+            return brush;
+        }
+
+        protected override void OnRender(DrawingContext drawingContext)
+        {
+            base.OnRender(drawingContext);
+
+            if (_view.Document is not { } doc)
+                return;
+
+            // The page's printable content height in DIP — the same geometry the print path paginates by.
+            var (_, contentHeight) = PageLayout.ContentAreaDip(_view._model.Page);
+            if (contentHeight <= 0)
+                return;
+
+            // Anchor at the top of the first laid-out content line. Without a first rectangle (empty/just
+            // re-rendered document) there is nothing to anchor to, so skip painting this pass.
+            var origin = FirstContentTop(doc);
+            if (origin is not { } topY)
+                return;
+
+            var bounds = new Rect(_view.RenderSize);
+            drawingContext.PushClip(new RectangleGeometry(bounds));
+            try
+            {
+                var pixelsPerDip = VisualTreeHelper.GetDpi(_view).PixelsPerDip;
+                for (var pageIndex = 1; pageIndex <= MaxMarkers; pageIndex++)
+                {
+                    var y = topY + pageIndex * contentHeight; // bottom of page `pageIndex`
+                    if (y > bounds.Bottom)
+                        break; // first boundary past the bottom of the viewport: nothing more is visible
+                    if (y < bounds.Top)
+                        continue; // boundary scrolled above the viewport — skip but keep counting pages
+
+                    // The rule sits at the foot of page `pageIndex`; the page beginning below it is the next.
+                    DrawMarker(drawingContext, y, pageIndex + 1, bounds, pixelsPerDip);
+                }
+            }
+            finally
+            {
+                drawingContext.Pop();
+            }
+        }
+
+        // The top Y (in the editor's content coordinates) of the first laid-out content line, or null when
+        // no rectangle is available yet. Used as the origin the page-height stepping counts from.
+        private static double? FirstContentTop(FlowDocument doc)
+        {
+            var start = doc.ContentStart;
+            try
+            {
+                var rect = start.GetCharacterRect(LogicalDirection.Forward);
+                return rect.IsEmpty ? null : rect.Top;
+            }
+            catch (InvalidOperationException)
+            {
+                // Layout momentarily unavailable during a relayout; skip this pass.
+                return null;
+            }
+        }
+
+        // Draw one page-break marker: a dashed rule spanning the page content width with a small centred
+        // "— Page N —" label, so it reads as a low-key boundary cue rather than real content.
+        private void DrawMarker(DrawingContext dc, double y, int pageNumber, Rect bounds, double pixelsPerDip)
+        {
+            dc.DrawLine(BreakPen, new Point(bounds.Left, y), new Point(bounds.Right, y));
+
+            var label = new FormattedText(
+                $"Page {pageNumber}",
+                System.Globalization.CultureInfo.CurrentCulture,
+                FlowDirection.LeftToRight,
+                new Typeface("Segoe UI"),
+                9.0,
+                LabelBrush,
+                pixelsPerDip);
+
+            // Sit the label just below the rule, centred across the visible width.
+            var x = bounds.Left + Math.Max(0, (bounds.Width - label.Width) / 2);
+            dc.DrawText(label, new Point(x, y + 1));
         }
     }
 }

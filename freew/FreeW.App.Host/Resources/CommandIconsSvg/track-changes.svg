@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Track Changes">
+  <rect width="32" height="32" fill="none"/>
+  <path d="M8 4.5h16v23H8z" fill="#ffffff" stroke="#242424" stroke-width="1.4"/>
+  <path d="M12 10h8M12 15h6M12 20h8" fill="none" stroke="#8a8a8a" stroke-width="1.1" stroke-linecap="round"/>
+  <path d="M9 10h-3M9 20h-3" fill="none" stroke="#c50f1f" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="M21 14l2 2 4-5" fill="none" stroke="#217346" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -44,7 +44,20 @@ internal static class FreeWRibbonCommands
         Action? onToggleNavPane,
         Func<bool>? isNavPaneVisible,
         Action? onToggleReadMode,
-        Func<bool>? isReadModeActive)
+        Func<bool>? isReadModeActive) =>
+        Build(editor, stateStore, onPrintPreview, onToggleNavPane, isNavPaneVisible,
+            onToggleReadMode, isReadModeActive, onTogglePrintLayout: null, isPrintLayoutActive: null);
+
+    public static RibbonCommandRegistry Build(
+        DocumentView editor,
+        RibbonStateStore stateStore,
+        Action? onPrintPreview,
+        Action? onToggleNavPane,
+        Func<bool>? isNavPaneVisible,
+        Action? onToggleReadMode,
+        Func<bool>? isReadModeActive,
+        Action? onTogglePrintLayout,
+        Func<bool>? isPrintLayoutActive)
     {
         var registry = new RibbonCommandRegistry();
         var stateful = new List<(RibbonCommandId Id, IRibbonStatefulCommand Command)>();
@@ -376,6 +389,12 @@ internal static class FreeWRibbonCommands
         // reflects whether the chrome-light reading column is currently active.
         if (onToggleReadMode is not null && isReadModeActive is not null)
             registry.Register("freew.read-mode", new ToggleActionCommand(onToggleReadMode, isReadModeActive));
+
+        // View tab — toggle Print Layout (Word-style page view) vs the plain/continuous view. Stateful so
+        // the ribbon's toggle button reflects whether the page presentation is currently active. Default
+        // on (the Word default); the host seeds the checked state to match.
+        if (onTogglePrintLayout is not null && isPrintLayoutActive is not null)
+            registry.Register("freew.print-layout", new ToggleActionCommand(onTogglePrintLayout, isPrintLayoutActive));
 
         // View tab — Show Formatting Marks: a stateful toggle over the editor's display-only pilcrow /
         // space-dot / tab-arrow overlay. The marks are drawn as a non-editable adorner computed from the
