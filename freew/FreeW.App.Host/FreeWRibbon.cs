@@ -204,6 +204,7 @@ internal static class FreeWRibbon
                 tab.Group("show", "Show", "S", 100, g =>
                 {
                     g.Toggle("freew.nav-pane", "Navigation Pane");
+                    g.Toggle("freew.formatting-marks", "Show ¶");
                 });
                 tab.Group("views", "Views", "V", 90, g =>
                 {
