@@ -2104,6 +2104,9 @@ public sealed class DocumentView : RichTextBox
             case InlineUIContainer { Child: Image { Tag: InlineImage modelImage } }:
                 modelParagraph.Runs.Add(new ModelRun(string.Empty) { Image = modelImage, HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip });
                 break;
+            case InlineUIContainer { Child: FrameworkElement { Tag: Shape modelShape } }:
+                modelParagraph.Runs.Add(ModelRun.FromShape(modelShape));
+                break;
             case WpfRun { Tag: FootnoteMarker marker }:
                 modelParagraph.Runs.Add(ModelRun.FootnoteReference(marker.FootnoteId));
                 break;
@@ -2518,6 +2521,9 @@ public sealed class DocumentView : RichTextBox
         if (run.Image is { } image)
             return BuildImageRun(image);
 
+        if (run.Shape is { } shape)
+            return BuildShapeRun(shape);
+
         if (run.FootnoteId is { } footnoteId)
             return BuildFootnoteReference(footnoteId, document);
 
@@ -2924,6 +2930,79 @@ public sealed class DocumentView : RichTextBox
         bitmap.EndInit();
         bitmap.Freeze();
         return bitmap;
+    }
+
+    /// <summary>
+    /// Renders an inline shape / text box as an InlineUIContainer hosting a WPF element that carries the
+    /// model <see cref="Shape"/> on its Tag, so CommitToModel round-trips it (mirroring images). Ellipses
+    /// render as a System.Windows.Shapes.Ellipse-backed border; rectangles / rounded rectangles / text
+    /// boxes render as a Border (with a corner radius for rounded). A text box shows its plain text.
+    /// </summary>
+    private static InlineUIContainer BuildShapeRun(Shape shape)
+    {
+        var widthPx = shape.WidthPt * PxPerPoint;
+        var heightPx = shape.HeightPt * PxPerPoint;
+
+        System.Windows.Media.Brush fill = TryParseColor(shape.FillColorHex, out var fillColor)
+            ? new SolidColorBrush(fillColor)
+            : System.Windows.Media.Brushes.Transparent;
+        var stroke = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x80, 0x80, 0x80));
+
+        FrameworkElement element;
+        if (shape.Kind == ShapeKind.Ellipse)
+        {
+            element = new System.Windows.Shapes.Ellipse
+            {
+                Width = widthPx,
+                Height = heightPx,
+                Fill = fill,
+                Stroke = stroke,
+                StrokeThickness = 1,
+            };
+        }
+        else
+        {
+            var border = new Border
+            {
+                Width = widthPx,
+                Height = heightPx,
+                Background = fill,
+                BorderBrush = stroke,
+                BorderThickness = new Thickness(1),
+                CornerRadius = shape.Kind == ShapeKind.RoundedRectangle ? new CornerRadius(6) : new CornerRadius(0),
+            };
+            if (shape.HasText)
+                border.Child = new TextBlock
+                {
+                    Text = shape.PlainText,
+                    Margin = new Thickness(4),
+                    TextWrapping = TextWrapping.Wrap,
+                    VerticalAlignment = VerticalAlignment.Top,
+                };
+            element = border;
+        }
+
+        element.Tag = shape; // carries the model shape so CommitToModel can round-trip it
+        return new InlineUIContainer(element) { BaselineAlignment = BaselineAlignment.Bottom };
+    }
+
+    /// <summary>Inserts an inline shape / text box at the caret. Size in points; preserved on save.</summary>
+    public void InsertShape(Shape shape)
+    {
+        CommitToModel();
+        var container = BuildShapeRun(shape);
+        var caret = CaretPosition.GetInsertionPosition(LogicalDirection.Forward) ?? CaretPosition;
+        if (caret.Paragraph is { } paragraph)
+            paragraph.Inlines.Add(container);
+        else if (Document.Blocks.LastOrDefault() is WpfParagraph last)
+            last.Inlines.Add(container);
+        else
+        {
+            var p = new WpfParagraph(container);
+            Document.Blocks.Add(p);
+        }
+        CommitToModel();
+        Render();
     }
 
     /// <summary>Inserts an inline image at the caret. Width/height in points; preserved on save.</summary>
