@@ -704,6 +704,9 @@ public sealed partial class MainWindow : Window
                     // Home Number group (added buttons).
                     ["home.increaseDecimal"] = IncreaseSelectedRangeDecimalPlaces,
                     ["home.decreaseDecimal"] = DecreaseSelectedRangeDecimalPlaces,
+                    // Home Alignment Orientation + Cells Format → existing handlers.
+                    ["home.orientation"] = () => ApplySelectedRangeTextRotation(45, "Rotated text for", "Orientation failed."),
+                    ["home.formatCells"] = () => _ = ShowFormatCellsDialogAsync(),
                     // View tab (Window group) + Formulas tab.
                     ["view.unhide"] = () => _ = UnhideSheetAsync(),
                     ["formulas.showFormulas"] = ToggleShowFormulas,

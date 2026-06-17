@@ -189,6 +189,8 @@ public sealed class AvaloniaRibbonHostCallbackTests
     [InlineData("review.thesaurus")]
     [InlineData("review.translate")]
     [InlineData("pageLayout.themeColors")]
+    [InlineData("home.orientation")]
+    [InlineData("home.formatCells")]
     public void NewTabCommands_AreRealCommandIds_AndBindViaExtraCommands(string commandId)
     {
         // The id exists in the ribbon definition (else it is not a NoOp default to begin with) ...
