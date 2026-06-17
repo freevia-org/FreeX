@@ -346,6 +346,25 @@ internal static class SampleRibbon
                         Icon = new RibbonCommandIcon(RibbonCommandIconKind.Color),
                     });
                 });
+
+                home.Group("cells", "Cells", "E", 50, g =>
+                {
+                    g.Button("home.insertCells", "Insert", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Insert) });
+                    g.Button("home.deleteCells", "Delete", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Delete) });
+                    g.Button("home.formatCells", "Format", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Size) });
+                });
+
+                home.Group("editing", "Editing", "G", 40, g =>
+                {
+                    g.Button("home.autoSum", "AutoSum", c => c with
+                    {
+                        PreferredLayout = RibbonCommandLayoutKind.Large,
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Sum),
+                    });
+                    g.Button("home.fillDown", "Fill", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Fill) });
+                    g.Button("home.clear", "Clear", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Clear) });
+                    g.Button("home.findSelect", "Find & Select", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Search) });
+                });
             })
             .Tab("insert", "Insert", "I", insert =>
             {
@@ -488,6 +507,19 @@ internal static class SampleRibbon
                     {
                         Icon = new RibbonCommandIcon(RibbonCommandIconKind.Logical),
                     });
+                });
+
+                data.Group("forecast", "Forecast", "C", 70, g =>
+                {
+                    g.Button("data.whatIf", "What-If Analysis", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Logical) });
+                    g.Button("data.forecastSheet", "Forecast Sheet", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.ChartLine) });
+                });
+
+                data.Group("outline", "Outline", "U", 60, g =>
+                {
+                    g.Button("data.group", "Group", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Group) });
+                    g.Button("data.ungroup", "Ungroup", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Ungroup) });
+                    g.Button("data.subtotal", "Subtotal", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Sum) });
                 });
             })
             .Tab("pageLayout", "Page Layout", "P", page =>

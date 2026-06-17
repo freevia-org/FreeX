@@ -176,6 +176,26 @@ public sealed class AvaloniaRibbonHostCallbackTests
     }
 
     [Fact]
+    public void BuildDefinition_HomeTab_MatchesWindowsGroups()
+    {
+        var home = SampleRibbon.BuildDefinition().Tabs.Single(t => t.Header == "Home");
+        var groups = home.Groups.Select(g => g.Header).ToList();
+
+        foreach (var expected in new[] { "Clipboard", "Font", "Alignment", "Number", "Styles", "Cells", "Editing" })
+            Assert.Contains(expected, groups);
+    }
+
+    [Fact]
+    public void BuildDefinition_DataTab_HasForecastAndOutlineGroups()
+    {
+        var data = SampleRibbon.BuildDefinition().Tabs.Single(t => t.Header == "Data");
+        var groups = data.Groups.Select(g => g.Header).ToList();
+
+        Assert.Contains("Forecast", groups);
+        Assert.Contains("Outline", groups);
+    }
+
+    [Fact]
     public void BuildDefinition_InsertTab_MatchesWindowsGroups()
     {
         var insert = SampleRibbon.BuildDefinition().Tabs.Single(t => t.Header == "Insert");
