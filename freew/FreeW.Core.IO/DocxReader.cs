@@ -596,6 +596,22 @@ public static class DocxReader
                         cell.WidthPt = DxaToPoints(width);
                     var shading = tcPr.Element(W + "shd")?.Attribute(W + "fill")?.Value;
                     cell.ShadingColorHex = shading is null or "auto" ? null : "#" + shading.TrimStart('#');
+
+                    // Horizontal merge: w:gridSpan w:val="N". Absent (or <2) means no span.
+                    var gridSpan = tcPr.Element(W + "gridSpan")?.Attribute(W + "val")?.Value;
+                    if (gridSpan is not null && int.TryParse(gridSpan, out var span) && span > 1)
+                        cell.GridSpan = span;
+
+                    // Vertical merge: w:vMerge with w:val="restart" starts a run; a w:vMerge with no
+                    // value (or "continue") is absorbed into the restart above it.
+                    var vMerge = tcPr.Element(W + "vMerge");
+                    if (vMerge is not null)
+                    {
+                        var vVal = vMerge.Attribute(W + "val")?.Value;
+                        cell.VerticalMerge = vVal == "restart"
+                            ? VerticalMergeState.Restart
+                            : VerticalMergeState.Continue;
+                    }
                 }
                 foreach (var p in tc.Elements(W + "p"))
                     cell.Paragraphs.Add(ReadParagraph(p, archive, imageRelationships, hyperlinkRelationships, numbering));
