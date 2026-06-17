@@ -26,6 +26,55 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void RunProperties_EmittedInCanonicalSchemaOrder()
+    {
+        // A run carrying many formatting facets at once must emit w:rPr children in CT_RPr schema
+        // order, else Word's strict validator rejects it (the order-independent reader hides this).
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("x", new RunFormatting
+        {
+            FontFamily = "Arial",
+            Bold = true,
+            Italic = true,
+            AllCaps = true,
+            SmallCaps = true,
+            Strikethrough = true,
+            ColorHex = "#112233",
+            FontSizePt = 14,
+            Underline = true,
+            HighlightColorHex = "#FFFF00",
+            VerticalAlign = VerticalAlign.Superscript
+        }));
+        doc.Blocks.Add(paragraph);
+
+        var ns = XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+        var rPr = WriteDocumentXml(doc).Descendants(ns + "rPr").First();
+        var names = rPr.Elements().Select(e => e.Name.LocalName).ToList();
+
+        // Canonical EG_RPrBase order for the elements FreeW emits.
+        var canonical = new[] { "rFonts", "b", "i", "caps", "smallCaps", "strike", "color", "sz", "szCs", "u", "shd", "vertAlign" };
+        var expected = canonical.Where(names.Contains).ToList();
+        names.Should().Equal(expected);
+    }
+
+    [Fact]
+    public void FootnoteMarker_PreservesRunFormatting()
+    {
+        var doc = new TextDocument();
+        doc.Footnotes[1] = new Footnote(1, "note");
+        var body = new Paragraph();
+        body.Runs.Add(new Run("see "));
+        body.Runs.Add(Run.FootnoteReference(1, new RunFormatting { Bold = true, ColorHex = "#C00000" }));
+        doc.Blocks.Add(body);
+
+        var marker = RoundTrip(doc).Paragraphs.First().Runs.Single(r => r.FootnoteId == 1);
+        marker.Formatting.Bold.Should().BeTrue();
+        marker.Formatting.ColorHex.Should().Be("#C00000");
+        marker.Formatting.VerticalAlign.Should().Be(VerticalAlign.Superscript);
+    }
+
+    [Fact]
     public void Paragraphs_And_Text_RoundTrip()
     {
         var doc = new TextDocument();

@@ -217,4 +217,25 @@ public class MailMergeTests
         docs[0].PlainText.Should().Be("Dear Ada Lovelace,");
         docs[1].PlainText.Should().Be("Dear Grace Hopper,");
     }
+
+    [Fact]
+    public void MergeRecord_PreservesEndnoteAndCellMergeMarks()
+    {
+        // Regression: the clone path used to drop EndnoteId/HyperlinkTooltip from runs and
+        // GridSpan/VerticalMerge from cells, orphaning endnotes and collapsing merged cells.
+        var template = new TextDocument();
+        var para = new Paragraph();
+        para.Runs.Add(Run.EndnoteReference(1));
+        template.Blocks.Add(para);
+        var table = Table.Create(1, 2);
+        table.Rows[0].Cells[0] = new TableCell("m") { GridSpan = 2, VerticalMerge = VerticalMergeState.Restart };
+        template.Blocks.Add(table);
+
+        var merged = MailMerge.MergeRecord(template, new Dictionary<string, string>());
+
+        merged.Paragraphs.First().Runs.Single().EndnoteId.Should().Be(1);
+        var mergedTable = merged.Blocks.OfType<Table>().Single();
+        mergedTable.Rows[0].Cells[0].GridSpan.Should().Be(2);
+        mergedTable.Rows[0].Cells[0].VerticalMerge.Should().Be(VerticalMergeState.Restart);
+    }
 }

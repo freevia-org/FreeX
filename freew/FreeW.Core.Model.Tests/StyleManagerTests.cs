@@ -186,4 +186,19 @@ public class StyleManagerTests
         StyleManager.IsBuiltIn("Normal").Should().BeTrue();
         StyleManager.IsBuiltIn(created.Id).Should().BeFalse();
     }
+
+    [Theory]
+    [InlineData("Normal")]
+    [InlineData("Caption")]
+    [InlineData("IndexEntry")]
+    [InlineData("TableOfFiguresEntry")]
+    [InlineData("TableOfFiguresHeading")]
+    public void DeleteStyle_RefusesEverySeededBuiltIn(string styleId)
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Styles.Should().ContainKey(styleId); // the style is actually seeded by AddBuiltInStyles
+
+        StyleManager.DeleteStyle(doc, styleId).Should().BeFalse();
+        doc.Styles.Should().ContainKey(styleId);
+    }
 }

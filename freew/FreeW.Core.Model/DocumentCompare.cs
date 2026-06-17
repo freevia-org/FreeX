@@ -305,6 +305,11 @@ public static class DocumentCompare
         target.Page.ColumnSpacingPt = source.Page.ColumnSpacingPt;
         target.Page.PageBorder = source.Page.PageBorder;
         target.Page.Watermark = source.Page.Watermark;
+        target.Page.LineNumberMode = source.Page.LineNumberMode;
+        target.Page.LineNumberCountBy = source.Page.LineNumberCountBy;
+        target.Page.AutoHyphenation = source.Page.AutoHyphenation;
+        target.Page.VerticalAlignment = source.Page.VerticalAlignment;
+        target.Page.DifferentFirstPage = source.Page.DifferentFirstPage;
     }
 
     // Clone a paragraph with its runs verbatim and no revision marks (used for unchanged paragraphs).
@@ -341,7 +346,9 @@ public static class DocumentCompare
                 var cellClone = new TableCell
                 {
                     ShadingColorHex = cell.ShadingColorHex,
-                    WidthPt = cell.WidthPt
+                    WidthPt = cell.WidthPt,
+                    GridSpan = cell.GridSpan,
+                    VerticalMerge = cell.VerticalMerge
                 };
                 foreach (var paragraph in cell.Paragraphs)
                     cellClone.Paragraphs.Add(ClonePlain(paragraph));
@@ -359,8 +366,10 @@ public static class DocumentCompare
         Image = source.Image,
         HyperlinkUrl = source.HyperlinkUrl,
         HyperlinkAnchor = source.HyperlinkAnchor,
+        HyperlinkTooltip = source.HyperlinkTooltip,
         FieldKind = source.FieldKind,
         FootnoteId = source.FootnoteId,
+        EndnoteId = source.EndnoteId,
         CommentId = source.CommentId,
         IsCommentReference = source.IsCommentReference,
         Control = source.Control
