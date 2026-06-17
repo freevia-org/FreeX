@@ -1,3 +1,4 @@
+using System.Windows;
 using FreeX.Core.Model;
 
 namespace FreeX.App.UI;
@@ -46,8 +47,8 @@ internal static class FormControlRenderPlanner
     public static bool HasSubCellOffsets(FormControlModel control) => control.AnchorOffsets is not null;
 
     /// <summary>
-    /// Whether this control kind has a static-chrome renderer. Interactive-only or
-    /// not-yet-drawn kinds (Button/DropDown/ListBox/Unknown) return false.
+    /// Whether this control kind has a static-chrome renderer. Only <see cref="FormControlKind.Unknown"/>
+    /// (no modeled appearance) returns false.
     /// </summary>
     public static bool IsRenderable(FormControlKind kind) =>
         kind is FormControlKind.CheckBox
@@ -55,7 +56,31 @@ internal static class FormControlRenderPlanner
             or FormControlKind.Spinner
             or FormControlKind.ScrollBar
             or FormControlKind.Label
-            or FormControlKind.GroupBox;
+            or FormControlKind.GroupBox
+            or FormControlKind.DropDown
+            or FormControlKind.ListBox
+            or FormControlKind.Button;
+
+    /// <summary>
+    /// The square grey drop-down button rect for a <see cref="FormControlKind.DropDown"/> control:
+    /// sized to the control height and flush against the right edge, but never wider than half the
+    /// control so a short/tall box still shows a text area. Mirrors Excel's drop-down chrome.
+    /// </summary>
+    public static Rect GetDropDownButtonRect(Rect rect)
+    {
+        var size = Math.Max(1, Math.Min(rect.Height, rect.Width / 2));
+        return new Rect(rect.Right - size, rect.Top, size, rect.Height);
+    }
+
+    /// <summary>
+    /// The text area of a drop-down (the white field to the left of the <paramref name="button"/>),
+    /// where the selected item text is drawn when resolvable.
+    /// </summary>
+    public static Rect GetDropDownTextRect(Rect rect, Rect button)
+    {
+        var width = Math.Max(0, button.Left - rect.Left);
+        return new Rect(rect.Left, rect.Top, width, rect.Height);
+    }
 
     /// <summary>
     /// Resolves the caption text drawn next to / inside the control: the control's authored display
