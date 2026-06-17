@@ -85,6 +85,39 @@ internal sealed record AvaloniaRibbonHostCallbacks
 
     /// <summary>Data ▸ Data Validation (dropdown + dialog menu item).</summary>
     public Action? DataValidation { get; init; }
+
+    /// <summary>Home ▸ Clipboard ▸ Cut.</summary>
+    public Action? Cut { get; init; }
+
+    /// <summary>Home ▸ Clipboard ▸ Copy.</summary>
+    public Action? Copy { get; init; }
+
+    /// <summary>Home ▸ Clipboard ▸ Paste (split-button primary + Paste menu item).</summary>
+    public Action? Paste { get; init; }
+
+    /// <summary>Home ▸ Alignment ▸ Align Left.</summary>
+    public Action? AlignLeft { get; init; }
+
+    /// <summary>Home ▸ Alignment ▸ Center.</summary>
+    public Action? AlignCenter { get; init; }
+
+    /// <summary>Home ▸ Alignment ▸ Align Right.</summary>
+    public Action? AlignRight { get; init; }
+
+    /// <summary>Home ▸ Alignment ▸ Wrap Text.</summary>
+    public Action? WrapText { get; init; }
+
+    /// <summary>Home ▸ Alignment ▸ Merge &amp; Center (split-button primary + menu item).</summary>
+    public Action? MergeAndCenter { get; init; }
+
+    /// <summary>Home ▸ Number ▸ Currency.</summary>
+    public Action? CurrencyFormat { get; init; }
+
+    /// <summary>Home ▸ Number ▸ Percent.</summary>
+    public Action? PercentFormat { get; init; }
+
+    /// <summary>Home ▸ Number ▸ Comma.</summary>
+    public Action? CommaStyle { get; init; }
 }
 
 /// <summary>An <see cref="IRibbonCommand"/> that invokes a host-supplied callback (e.g. opens a dialog).</summary>
@@ -426,6 +459,19 @@ internal static class SampleRibbon
         Bind("data.sortDesc", callbacks.SortDescending);
         Bind("data.validation", callbacks.DataValidation);
         Bind("data.validationDialog", callbacks.DataValidation);
+
+        Bind("home.cut", callbacks.Cut);
+        Bind("home.copy", callbacks.Copy);
+        Bind("home.paste", callbacks.Paste);
+        Bind("home.alignLeft", callbacks.AlignLeft);
+        Bind("home.alignCenter", callbacks.AlignCenter);
+        Bind("home.alignRight", callbacks.AlignRight);
+        Bind("home.wrapText", callbacks.WrapText);
+        Bind("home.merge", callbacks.MergeAndCenter);
+        Bind("home.mergeCenter", callbacks.MergeAndCenter);
+        Bind("home.currency", callbacks.CurrencyFormat);
+        Bind("home.percent", callbacks.PercentFormat);
+        Bind("home.comma", callbacks.CommaStyle);
     }
 
     /// <summary>

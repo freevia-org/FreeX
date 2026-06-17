@@ -28,6 +28,18 @@ public sealed class AvaloniaRibbonHostCallbackTests
     [InlineData("data.sortDesc")]
     [InlineData("data.validation")]
     [InlineData("data.validationDialog")]
+    [InlineData("home.cut")]
+    [InlineData("home.copy")]
+    [InlineData("home.paste")]
+    [InlineData("home.alignLeft")]
+    [InlineData("home.alignCenter")]
+    [InlineData("home.alignRight")]
+    [InlineData("home.wrapText")]
+    [InlineData("home.merge")]
+    [InlineData("home.mergeCenter")]
+    [InlineData("home.currency")]
+    [InlineData("home.percent")]
+    [InlineData("home.comma")]
     public void BuildRegistry_WithCallbacks_BindsRealCommand(string commandId)
     {
         var registry = SampleRibbon.BuildRegistry(() => null, _ => { }, AllWired());
@@ -63,6 +75,9 @@ public sealed class AvaloniaRibbonHostCallbackTests
             SortAscending = () => fired.Add("sortAsc"),
             SortDescending = () => fired.Add("sortDesc"),
             DataValidation = () => fired.Add("validation"),
+            Copy = () => fired.Add("copy"),
+            AlignCenter = () => fired.Add("alignCenter"),
+            PercentFormat = () => fired.Add("percent"),
         };
         var registry = SampleRibbon.BuildRegistry(() => null, _ => { }, callbacks);
 
@@ -70,11 +85,17 @@ public sealed class AvaloniaRibbonHostCallbackTests
         Execute(registry, "insert.table");
         Execute(registry, "home.conditional");
         Execute(registry, "data.sortDesc");
+        Execute(registry, "home.copy");
+        Execute(registry, "home.alignCenter");
+        Execute(registry, "home.percent");
 
         Assert.Contains("quickAnalysis", fired);
         Assert.Contains("table", fired);
         Assert.Contains("conditional", fired);
         Assert.Contains("sortDesc", fired);
+        Assert.Contains("copy", fired);
+        Assert.Contains("alignCenter", fired);
+        Assert.Contains("percent", fired);
     }
 
     [Fact]
@@ -100,6 +121,17 @@ public sealed class AvaloniaRibbonHostCallbackTests
         SortAscending = () => { },
         SortDescending = () => { },
         DataValidation = () => { },
+        Cut = () => { },
+        Copy = () => { },
+        Paste = () => { },
+        AlignLeft = () => { },
+        AlignCenter = () => { },
+        AlignRight = () => { },
+        WrapText = () => { },
+        MergeAndCenter = () => { },
+        CurrencyFormat = () => { },
+        PercentFormat = () => { },
+        CommaStyle = () => { },
     };
 
     private static void Execute(IRibbonCommandRegistry registry, string commandId)

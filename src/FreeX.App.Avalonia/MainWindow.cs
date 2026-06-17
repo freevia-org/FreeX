@@ -604,6 +604,17 @@ public sealed partial class MainWindow : Window
                 SortAscending = () => SortSelectedRange(ascending: true),
                 SortDescending = () => SortSelectedRange(ascending: false),
                 DataValidation = () => _ = ShowDataValidationDialogAsync(),
+                Cut = () => _ = CutSelectedRangeToClipboardAsync(),
+                Copy = () => _ = CopySelectedRangeToClipboardAsync(),
+                Paste = () => _ = PasteClipboardTextAsync(),
+                AlignLeft = () => ApplySelectedRangeHorizontalAlignment(CellHAlign.Left),
+                AlignCenter = () => ApplySelectedRangeHorizontalAlignment(CellHAlign.Center),
+                AlignRight = () => ApplySelectedRangeHorizontalAlignment(CellHAlign.Right),
+                WrapText = ToggleSelectedRangeWrapText,
+                MergeAndCenter = () => _ = MergeAndCenterSelectedRangeAsync(),
+                CurrencyFormat = ApplySelectedRangeCurrencyFormat,
+                PercentFormat = ApplySelectedRangePercentFormat,
+                CommaStyle = ApplySelectedRangeCommaStyle,
             });
         DockPanel.SetDock(ribbon, Dock.Top);
         root.Children.Add(ribbon);
