@@ -77,6 +77,9 @@ internal sealed record AvaloniaRibbonHostCallbacks
     /// <summary>Data ▸ Quick Analysis — open the Quick Analysis popup for the selection.</summary>
     public Action? QuickAnalysis { get; init; }
 
+    /// <summary>Insert ▸ PivotTable — open the Insert PivotTable dialog for the selection.</summary>
+    public Action? InsertPivotTable { get; init; }
+
     /// <summary>Data ▸ Sort A-Z.</summary>
     public Action? SortAscending { get; init; }
 
@@ -462,6 +465,7 @@ internal static class SampleRibbon
         Bind("home.formatAsTable", callbacks.InsertTable);
         Bind("home.conditional", callbacks.ConditionalFormatting);
         Bind("data.quickAnalysis", callbacks.QuickAnalysis);
+        Bind("insert.pivotTable", callbacks.InsertPivotTable);
         Bind("data.sortAsc", callbacks.SortAscending);
         Bind("data.sortDesc", callbacks.SortDescending);
         Bind("data.validation", callbacks.DataValidation);
