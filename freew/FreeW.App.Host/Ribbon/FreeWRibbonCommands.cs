@@ -318,6 +318,15 @@ internal static class FreeWRibbonCommands
         // Line Numbers: cycle None -> Continuous -> RestartEachPage -> None (shown in print preview).
         registry.Register("freew.line-numbers", new LineNumberCommand(editor));
 
+        // Page setup polish — all three mutate PageSettings via ApplyPageSettings (commit + re-render)
+        // and round-trip through docx save.
+        //  - Hyphenation: toggle automatic hyphenation (settings.xml w:autoHyphenation).
+        //  - Page Vertical Alignment: cycle Top -> Center -> Justified (-> Bottom) (sectPr w:vAlign).
+        //  - Different First Page: toggle a distinct first-page header/footer (sectPr w:titlePg).
+        registry.Register("freew.hyphenation", new HyphenationCommand(editor));
+        registry.Register("freew.page-valign", new PageVerticalAlignmentCommand(editor));
+        registry.Register("freew.different-first-page", new DifferentFirstPageCommand(editor));
+
         // Layout tab — Page Background: toggle a whole-page border (w:pgBorders) and set/clear the
         // page watermark. Both mutate PageSettings via ApplyPageSettings (commit + re-render) and
         // round-trip through docx save.
@@ -809,6 +818,35 @@ internal static class FreeWRibbonCommands
                 LineNumberMode.Continuous => LineNumberMode.RestartEachPage,
                 _ => LineNumberMode.None
             });
+    }
+
+    // Toggles automatic hyphenation (settings.xml w:autoHyphenation). Routes through ApplyPageSettings so
+    // the editor commits pending edits, mutates PageSettings.AutoHyphenation, and re-renders.
+    private sealed class HyphenationCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context) =>
+            editor.ApplyPageSettings(page => page.AutoHyphenation = !page.AutoHyphenation);
+    }
+
+    // Cycles page vertical alignment Top -> Center -> Justified -> Top (sectPr w:vAlign). Routes through
+    // ApplyPageSettings so the editor commits pending edits, mutates PageSettings, and re-renders.
+    private sealed class PageVerticalAlignmentCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context) =>
+            editor.ApplyPageSettings(page => page.VerticalAlignment = page.VerticalAlignment switch
+            {
+                PageVerticalAlignment.Top => PageVerticalAlignment.Center,
+                PageVerticalAlignment.Center => PageVerticalAlignment.Justified,
+                _ => PageVerticalAlignment.Top
+            });
+    }
+
+    // Toggles "different first page" (sectPr w:titlePg). Routes through ApplyPageSettings so the editor
+    // commits pending edits, mutates PageSettings.DifferentFirstPage, and re-renders.
+    private sealed class DifferentFirstPageCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context) =>
+            editor.ApplyPageSettings(page => page.DifferentFirstPage = !page.DifferentFirstPage);
     }
 
     // Inserts a table at the caret. Delegates to the view, which routes through the undo/redo bus.

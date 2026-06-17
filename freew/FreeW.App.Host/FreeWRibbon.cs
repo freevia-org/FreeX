@@ -171,6 +171,9 @@ internal static class FreeWRibbon
                     g.Button("freew.size", "Size");
                     g.Button("freew.columns", "Columns");
                     g.Button("freew.line-numbers", "Line Numbers");
+                    g.Button("freew.hyphenation", "Hyphenation");
+                    g.Button("freew.page-valign", "Vertical Align");
+                    g.Button("freew.different-first-page", "Different First Page");
                 });
                 tab.Group("page-background", "Page Background", "B", 95, g =>
                 {
