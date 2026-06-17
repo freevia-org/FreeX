@@ -27,6 +27,7 @@ public sealed class MainWindow : Window
     private Ruler _vRuler = null!;
     private TextBlock _titleText = null!;
     private TextBlock _pageText = null!;
+    private TextBlock _sectionText = null!;
     private TextBlock _countsText = null!;
     private Slider _zoomSlider = null!;
     private TextBlock _zoomLabel = null!;
@@ -109,6 +110,9 @@ public sealed class MainWindow : Window
         // Word-style left cluster: "Page X of Y" then the live word/character counts.
         _pageText = new TextBlock { VerticalAlignment = VerticalAlignment.Center };
         status.Items.Add(new StatusBarItem { Content = _pageText });
+        status.Items.Add(new Separator());
+        _sectionText = new TextBlock { VerticalAlignment = VerticalAlignment.Center };
+        status.Items.Add(new StatusBarItem { Content = _sectionText });
         status.Items.Add(new Separator());
         _countsText = new TextBlock { VerticalAlignment = VerticalAlignment.Center };
         status.Items.Add(new StatusBarItem { Content = _countsText });
@@ -309,6 +313,11 @@ public sealed class MainWindow : Window
     {
         var (current, total) = _editor.PageInfo();
         _pageText.Text = $"Page {current} of {total}";
+
+        // Word-style current-section indicator next to the page count. Best-effort: which section the
+        // caret's block falls in, out of TextDocument.Sections (see DocumentView.SectionInfo).
+        var (section, sections) = _editor.SectionInfo();
+        _sectionText.Text = $"Section {section} of {sections}";
     }
 
     // The Word-style view-switch cluster on the right of the status bar: a Read Mode toggle and a Print

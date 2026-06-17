@@ -164,6 +164,57 @@ public sealed class DocumentViewRoundTripTests
         ((Paragraph)result.Blocks[0]).StyleId.Should().Be("Heading1");
     }
 
+    [StaFact]
+    public void Equation_RoundTrips()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var para = new Paragraph();
+        para.Runs.Add(Run.FromEquation(Equation.FromText("a + b = c")));
+        doc.Blocks.Add(para);
+
+        var run = FirstRun(RoundTrip(doc));
+
+        run.Equation.Should().NotBeNull();
+        run.Equation!.LinearText.Should().Be("a + b = c");
+    }
+
+    [StaFact]
+    public void Chart_RoundTrips()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var para = new Paragraph();
+        para.Runs.Add(Run.FromChart(Chart.Create(
+            ChartKind.Column, ["Q1", "Q2"], [3.0, 5.0], seriesName: "Sales", title: "Quarterly")));
+        doc.Blocks.Add(para);
+
+        var run = FirstRun(RoundTrip(doc));
+
+        run.Chart.Should().NotBeNull();
+        run.Chart!.Kind.Should().Be(ChartKind.Column);
+        run.Chart.Title.Should().Be("Quarterly");
+        run.Chart.Categories.Should().Equal("Q1", "Q2");
+        run.Chart.Series.Should().ContainSingle();
+        run.Chart.Series[0].Values.Should().Equal(3.0, 5.0);
+    }
+
+    [StaFact]
+    public void WordArt_RoundTrips()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var para = new Paragraph();
+        para.Runs.Add(Run.FromWordArt(WordArt.Create("Banner", WordArtStyle.GradientFill)));
+        doc.Blocks.Add(para);
+
+        var run = FirstRun(RoundTrip(doc));
+
+        run.WordArt.Should().NotBeNull();
+        run.WordArt!.Text.Should().Be("Banner");
+        run.WordArt.Style.Should().Be(WordArtStyle.GradientFill);
+    }
+
     // A valid 1x1 PNG so the WPF image decoder in BuildImageRun succeeds under test.
     private static byte[] OnePixelPng() => System.Convert.FromBase64String(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");

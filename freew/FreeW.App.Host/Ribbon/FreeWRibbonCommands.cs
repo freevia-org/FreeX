@@ -171,6 +171,30 @@ internal static class FreeWRibbonCommands
             editor.Focus();
             editor.InsertShape(FreeW.Core.Model.Shape.TextBoxWith("Text Box", widthPt: 180, heightPt: 90, fillColorHex: "#DCE6F1"));
         }));
+        // Insert tab — Media: drop a sample equation / chart / WordArt object at the caret. Each routes
+        // through the editor's undoable insert path (mirroring freew.shapes) and round-trips through docx
+        // (the model + IO already exist; this surfaces them in the ribbon). Sample content is a starting
+        // point the user can replace.
+        registry.Register("freew.equation", new ActionCommand(() =>
+        {
+            editor.Focus();
+            editor.InsertEquation(SampleEquation());
+        }));
+        registry.Register("freew.chart", new ActionCommand(() =>
+        {
+            editor.Focus();
+            editor.InsertChart(Chart.Create(
+                ChartKind.Column,
+                categories: ["Q1", "Q2", "Q3", "Q4"],
+                values: [8.0, 5.0, 11.0, 7.0],
+                seriesName: "Sales",
+                title: "Quarterly Sales"));
+        }));
+        registry.Register("freew.wordart", new ActionCommand(() =>
+        {
+            editor.Focus();
+            editor.InsertWordArt(WordArt.Create("WordArt", WordArtStyle.GradientFill));
+        }));
         // Insert tab — Links: prompt for a URL and apply it as a hyperlink over the selection.
         registry.Register("freew.hyperlink", new InsertHyperlinkCommand(editor));
         // Insert tab — Links: manage the hyperlink at the caret — change its URL, remove it, or set a ScreenTip.
@@ -267,6 +291,10 @@ internal static class FreeWRibbonCommands
         // changes, document properties, bookmarks) via the pure DocumentInspector, and let the user
         // selectively remove categories. Applied removals mutate editor.Model in place and re-render.
         registry.Register("freew.inspect-document", new InspectDocumentCommand(editor));
+
+        // Review tab — Inspect > Check Accessibility: commit pending edits, run the pure AccessibilityChecker
+        // over the model, and show the report (issues grouped by severity) in a read-only modal. Read-only.
+        registry.Register("freew.check-accessibility", new CheckAccessibilityCommand(editor));
 
         // Insert tab — Header & Footer: prompt for header/footer text, or drop a page-number field
         // into the footer. These edit the model's Header/Footer directly (saved into docx + printed).
@@ -1473,6 +1501,29 @@ internal static class FreeWRibbonCommands
             var dialog = new StatisticsDialog(Window.GetWindow(editor)!, stats);
             dialog.ShowDialog();
         }
+    }
+
+    // Review > Inspect > Check Accessibility: commit pending edits, run the pure AccessibilityChecker over
+    // the model, and show the report in a read-only modal (issues grouped by severity). Read-only.
+    private sealed class CheckAccessibilityCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.CommitToModel();
+            var report = AccessibilityChecker.Check(editor.Model);
+            var dialog = new AccessibilityReportDialog(Window.GetWindow(editor)!, report);
+            dialog.ShowDialog();
+        }
+    }
+
+    // A sample equation ("E = mc^2") built from explicit math fragments so its linear form renders the
+    // superscript. Used by the Insert > Media > Equation ribbon button as a starting point.
+    private static Equation SampleEquation()
+    {
+        var equation = new Equation();
+        equation.Runs.Add(MathRun.PlainText("E = m"));
+        equation.Runs.Add(MathRun.Superscript("c", "2"));
+        return equation;
     }
 
     // Review > Proofing > Add to Dictionary: take the misspelled word the caret currently sits on, add
