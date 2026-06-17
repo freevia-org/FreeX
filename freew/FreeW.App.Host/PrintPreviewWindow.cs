@@ -303,7 +303,11 @@ internal sealed class HeaderFooterPaginator(
     private static DrawingVisual BuildOverlay(string text, double x, double y, double width)
     {
         var visual = new DrawingVisual();
-        if (string.IsNullOrEmpty(text))
+        // No text, or no usable content width (margins meet/exceed the page width): nothing to draw.
+        // MaxTextWidth must stay finite — WPF's text formatter throws ArgumentOutOfRangeException
+        // ("paragraphWidth '∞'") if it is set to PositiveInfinity, which previously crashed the whole
+        // print/preview paginator for narrow-content header/footer pages.
+        if (string.IsNullOrEmpty(text) || width <= 0)
             return visual;
 
         var formatted = new FormattedText(
@@ -315,7 +319,7 @@ internal sealed class HeaderFooterPaginator(
             Brushes.Black,
             1.0)
         {
-            MaxTextWidth = width > 0 ? width : double.PositiveInfinity,
+            MaxTextWidth = width,
             MaxLineCount = 1,
             Trimming = TextTrimming.CharacterEllipsis
         };

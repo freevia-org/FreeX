@@ -61,6 +61,7 @@ internal static class Program
             {
                 status = "fail";
                 error = ex.GetType().Name + ": " + ex.Message.Replace('\n', ' ').Replace('\r', ' ').Replace(',', ';');
+                Console.Error.WriteLine($"--- {Path.GetFileName(path)} ---\n{ex}");
             }
 
             Console.WriteLine($"[{status,-4}] {Path.GetFileName(path),-28} pages={pages}");

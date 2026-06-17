@@ -13,6 +13,8 @@
     <!-- The on-demand DOCX visual-fidelity harness (tools/FreeW.RenderCompare) renders pages through the
          real print path (internal PrintLayout.BuildPaginator). Tooling-only; the shipped app is unchanged. -->
     <InternalsVisibleTo Include="FreeW.RenderCompare" />
+    <!-- Tests reach the internal print paginator (HeaderFooterPaginator) directly. -->
+    <InternalsVisibleTo Include="FreeW.App.Host.Tests" />
   </ItemGroup>
 
   <ItemGroup>
