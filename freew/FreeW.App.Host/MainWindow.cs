@@ -5,6 +5,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
 using Free.Shared.Ribbon.Wpf;
+using FreeW.App.Host.Backstage;
 using FreeW.App.Host.Editing;
 using FreeW.Core.Model;
 
@@ -27,6 +28,7 @@ public sealed class MainWindow : Window
     private TextBlock _zoomLabel = null!;
     private FindReplaceDialog? _findDialog;
     private RibbonStateStore _stateStore = null!;
+    private BackstageView _backstage = null!;
     private Border _navPane = null!;
     private ListBox _navList = null!;
     private bool _navPaneVisible;
@@ -146,8 +148,28 @@ public sealed class MainWindow : Window
         // checked to match the editor's initial PrintLayoutEnabled state.
         _stateStore.SetChecked("freew.print-layout", _editor.PrintLayoutEnabled);
 
-        Content = root;
+        // The Word-style Backstage (File screen) is a full-window overlay above the document. It is
+        // hidden by default; the File button (title bar) shows it, a back arrow / Esc hides it. It reuses
+        // the host's existing File commands — no file IO is reimplemented in the backstage.
+        _backstage = new BackstageView(_editor, _file, new BackstageActions(
+            New: () => _file.New(),
+            Open: () => _file.Open(),
+            OpenPath: path => _file.OpenPath(path),
+            Save: () => _file.Save(),
+            SaveAs: () => _file.SaveAs(),
+            Print: Print,
+            EditProperties: OpenProperties,
+            OnClosed: () => { },
+            DataFolder: ResolveDataFolderLabel));
+
+        var shell = new Grid();
+        shell.Children.Add(root);
+        shell.Children.Add(_backstage);
+        Content = shell;
     }
+
+    // Show the Word-style Backstage (File screen) over the document.
+    private void ShowBackstage() => _backstage.Show();
 
     private Border BuildTitleBar()
     {
@@ -160,6 +182,18 @@ public sealed class MainWindow : Window
         };
 
         var bar = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+
+        // The Backstage entry point: opens the full-window Word-style File screen.
+        var fileButton = new Button
+        {
+            Content = "File",
+            Margin = new Thickness(0, 0, 12, 0),
+            Padding = new Thickness(12, 2, 12, 2),
+            FontWeight = FontWeights.SemiBold
+        };
+        fileButton.Click += (_, _) => ShowBackstage();
+        bar.Children.Add(fileButton);
+
         bar.Children.Add(FileButton("New", ApplicationCommands.New));
         bar.Children.Add(FileButton("Open", ApplicationCommands.Open));
         bar.Children.Add(FileButton("Save", ApplicationCommands.Save));
