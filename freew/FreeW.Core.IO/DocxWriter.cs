@@ -516,6 +516,12 @@ public static class DocxWriter
         _ => new XElement(W + "p")
     };
 
+    // Light fills used by the table-style toggles: a blue-grey header fill and a grey banded-row fill.
+    // These are emitted as cell shading on write so the styled docx renders correctly in Word; the
+    // HeaderRow/BandedRows flags themselves round-trip via w:tblLook (see BuildTableProperties).
+    private const string HeaderFill = "D9E2F3";
+    private const string BandedFill = "F2F2F2";
+
     private static XElement BuildTable(Table table, IReadOnlyDictionary<Run, ImagePart> imagesByRun, IReadOnlyDictionary<string, string> hyperlinks)
     {
         var tbl = new XElement(W + "tbl", BuildTableProperties(table));
@@ -529,25 +535,85 @@ public static class DocxWriter
             tbl.Add(grid);
         }
 
-        foreach (var row in table.Rows)
+        var fmt = table.Formatting;
+        for (var rowIndex = 0; rowIndex < table.Rows.Count; rowIndex++)
         {
+            var row = table.Rows[rowIndex];
+            var isHeaderRow = fmt.HeaderRow && rowIndex == 0;
+            // Banded rows shade alternate body rows. With a header, body banding starts below the header,
+            // so we band every other body row (the second body row, fourth, ...).
+            var bandedShade = fmt.BandedRows && !isHeaderRow && IsBandedBodyRow(rowIndex, fmt.HeaderRow);
+
             var tr = new XElement(W + "tr");
+            // Repeat the header row across page breaks (w:trPr/w:tblHeader) when requested.
+            if (isHeaderRow && fmt.RepeatHeaderRow)
+                tr.Add(new XElement(W + "trPr", new XElement(W + "tblHeader")));
+
             foreach (var cell in row.Cells)
             {
                 var tc = new XElement(W + "tc");
-                var tcPr = BuildCellProperties(cell);
+                // The cell's own shading wins; header/banded fills only apply to otherwise-unshaded cells.
+                var effectiveShade = cell.ShadingColorHex is { Length: > 0 }
+                    ? null
+                    : isHeaderRow ? HeaderFill : bandedShade ? BandedFill : null;
+                var tcPr = BuildCellProperties(cell, effectiveShade);
                 if (tcPr is not null)
                     tc.Add(tcPr);
                 if (cell.Paragraphs.Count == 0)
                     tc.Add(new XElement(W + "p"));
                 else
                     foreach (var paragraph in cell.Paragraphs)
-                        tc.Add(BuildParagraph(paragraph, imagesByRun, hyperlinks));
+                        tc.Add(BuildParagraph(isHeaderRow ? BoldHeaderParagraph(paragraph) : paragraph, imagesByRun, hyperlinks));
                 tr.Add(tc);
             }
             tbl.Add(tr);
         }
         return tbl;
+    }
+
+    /// <summary>
+    /// True when the body row at <paramref name="rowIndex"/> should be banded (shaded). Body rows are
+    /// counted from the first non-header row; every other body row (the 2nd, 4th, ...) is shaded, so the
+    /// header (or first row) stays unshaded and banding alternates beneath it.
+    /// </summary>
+    private static bool IsBandedBodyRow(int rowIndex, bool hasHeader)
+    {
+        var bodyIndex = hasHeader ? rowIndex - 1 : rowIndex;
+        return bodyIndex >= 0 && bodyIndex % 2 == 1;
+    }
+
+    /// <summary>
+    /// Returns a copy of <paramref name="paragraph"/> with every run forced bold, used to render a
+    /// header-row cell's text bold without mutating the model. Non-text runs (images/fields) are copied
+    /// with their marks preserved; only the run formatting's Bold flag is overridden.
+    /// </summary>
+    private static Paragraph BoldHeaderParagraph(Paragraph paragraph)
+    {
+        var copy = new Paragraph
+        {
+            Formatting = paragraph.Formatting,
+            StyleId = paragraph.StyleId,
+            BookmarkName = paragraph.BookmarkName
+        };
+        foreach (var run in paragraph.Runs)
+        {
+            copy.Runs.Add(new Run(run.Text, run.Formatting with { Bold = true })
+            {
+                Image = run.Image,
+                HyperlinkUrl = run.HyperlinkUrl,
+                HyperlinkAnchor = run.HyperlinkAnchor,
+                FieldKind = run.FieldKind,
+                FootnoteId = run.FootnoteId,
+                EndnoteId = run.EndnoteId,
+                CommentId = run.CommentId,
+                IsCommentReference = run.IsCommentReference,
+                Revision = run.Revision,
+                RevisionAuthor = run.RevisionAuthor,
+                RevisionDateXml = run.RevisionDateXml,
+                Control = run.Control
+            });
+        }
+        return copy;
     }
 
     private static XElement BuildTableProperties(Table table)
@@ -575,23 +641,42 @@ public static class DocxWriter
                 new XElement(W + "insideH", new XAttribute(W + "val", "none")),
                 new XElement(W + "insideV", new XAttribute(W + "val", "none"))));
         }
+
+        // w:tblLook carries the table-style toggles so they round-trip without a full table-style part:
+        // w:firstRow="1" persists HeaderRow; w:noHBand="0" persists BandedRows (banding on). The flags are
+        // recovered on read from these attributes (see DocxReader.ReadTable). Only emitted when a toggle
+        // is set, so plain tables stay unchanged.
+        var fmt = table.Formatting;
+        if (fmt.HeaderRow || fmt.BandedRows)
+        {
+            tblPr.Add(new XElement(W + "tblLook",
+                new XAttribute(W + "firstRow", fmt.HeaderRow ? "1" : "0"),
+                new XAttribute(W + "lastRow", "0"),
+                new XAttribute(W + "firstColumn", "0"),
+                new XAttribute(W + "lastColumn", "0"),
+                new XAttribute(W + "noHBand", fmt.BandedRows ? "0" : "1"),
+                new XAttribute(W + "noVBand", "1")));
+        }
         return tblPr;
     }
 
     // Cell properties (w:tcPr): emitted only when the cell has an explicit width and/or shading, so
     // plain cells stay unchanged. Width is w:tcW (dxa); shading mirrors paragraph w:shd (fill colour).
-    private static XElement? BuildCellProperties(TableCell cell)
+    // <paramref name="overrideShade"/> is a header/banded fill (RRGGBB, no '#') applied when the cell has
+    // no shading of its own; the cell's explicit ShadingColorHex always takes precedence.
+    private static XElement? BuildCellProperties(TableCell cell, string? overrideShade = null)
     {
         var tcPr = new XElement(W + "tcPr");
         if (cell.WidthPt is { } widthPt)
             tcPr.Add(new XElement(W + "tcW",
                 new XAttribute(W + "w", PointsToDxa(widthPt)),
                 new XAttribute(W + "type", "dxa")));
-        if (cell.ShadingColorHex is { Length: > 0 } shading)
+        var fill = cell.ShadingColorHex is { Length: > 0 } shading ? shading.TrimStart('#') : overrideShade;
+        if (fill is { Length: > 0 })
             tcPr.Add(new XElement(W + "shd",
                 new XAttribute(W + "val", "clear"),
                 new XAttribute(W + "color", "auto"),
-                new XAttribute(W + "fill", shading.TrimStart('#'))));
+                new XAttribute(W + "fill", fill)));
         return tcPr.HasElements ? tcPr : null;
     }
 
