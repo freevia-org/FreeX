@@ -165,7 +165,11 @@ public sealed class DocumentView : Control
 
     private double LayoutParagraph(int blockIndex, Paragraph paragraph, double textWidth, double y, double leftInset = 0, string? marker = null)
     {
-        var cells = IsEditable(paragraph) ? ParaCells(paragraph) : FallbackCells(paragraph.PlainText);
+        var rawCells = IsEditable(paragraph) ? ParaCells(paragraph) : FallbackCells(paragraph.PlainText);
+        // Resolve named-style formatting for display only; editing re-derives raw cells from the model.
+        var cells = paragraph.StyleId is null
+            ? rawCells
+            : rawCells.Select(c => c with { Fmt = ResolveRunFmt(c.Fmt, paragraph) }).ToList();
         var alignment = paragraph.Formatting.Alignment;
         var spaceAfter = paragraph.Formatting.SpaceAfterPt * PxPerPoint;
         var availableWidth = Math.Max(60, textWidth - leftInset);
@@ -1063,6 +1067,32 @@ public sealed class DocumentView : Control
             var text = new string(cells.Skip(start).Take(i - start).Select(c => c.Ch).ToArray());
             paragraph.Runs.Add(new Run(text, fmt));
         }
+    }
+
+    /// <summary>
+    /// Resolve a run's effective display formatting by cascading the paragraph's named style under it
+    /// (run override wins; then the style's Run; then the document default size). Display-only — the
+    /// model runs stay raw so the StyleId link round-trips on save. BasedOn chains are not followed (MVP).
+    /// </summary>
+    private RunFormatting ResolveRunFmt(RunFormatting raw, Paragraph paragraph)
+    {
+        var s = paragraph.StyleId is { } id && _doc.Styles.TryGetValue(id, out var style) ? style.Run : null;
+        if (s is null)
+            return raw;
+
+        return raw with
+        {
+            FontFamily = raw.FontFamily ?? s.FontFamily,
+            FontSizePt = raw.FontSizePt ?? s.FontSizePt ?? _doc.DefaultRun.FontSizePt,
+            ColorHex = raw.ColorHex ?? s.ColorHex,
+            HighlightColorHex = raw.HighlightColorHex ?? s.HighlightColorHex,
+            Bold = raw.Bold || s.Bold,
+            Italic = raw.Italic || s.Italic,
+            Underline = raw.Underline || s.Underline,
+            Strikethrough = raw.Strikethrough || s.Strikethrough,
+            SmallCaps = raw.SmallCaps || s.SmallCaps,
+            AllCaps = raw.AllCaps || s.AllCaps,
+        };
     }
 
     private static RunFormatting ActiveFormatting(Paragraph paragraph, int offset)

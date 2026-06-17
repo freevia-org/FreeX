@@ -32,6 +32,16 @@ internal static class SampleDocument
         tip.Runs.Add(new Run(". Undo and redo are wired through the shared command bus.", RunFormatting.Default with { FontSizePt = 12 }));
         doc.Blocks.Add(tip);
 
+        doc.Styles["Heading1"] = new DocumentStyle
+        {
+            Id = "Heading1",
+            Name = "Heading 1",
+            Run = RunFormatting.Default with { Bold = true, FontSizePt = 16, ColorHex = "#2B5797" },
+        };
+        var heading = new Paragraph { StyleId = "Heading1" };
+        heading.Runs.Add(new Run("This heading is styled by the document style (resolved at render)."));
+        doc.Blocks.Add(heading);
+
         AddListItem(doc, "Bullet and numbered lists now render with markers.", ListKind.Bullet);
         AddListItem(doc, "Open and save Word .docx files.", ListKind.Bullet);
 
