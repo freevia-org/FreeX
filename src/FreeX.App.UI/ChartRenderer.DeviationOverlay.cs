@@ -102,6 +102,7 @@ public static partial class ChartRenderer
 
         var textColor = chart.ResolveDataLabelTextColor(theme);
         var oxyTextColor = textColor is { } c ? OxyColor.FromRgb(c.R, c.G, c.B) : OxyColors.Black;
+        var fontSize = chart.DataLabelFontSize > 0 ? chart.DataLabelFontSize : 11;
 
         foreach (var (pointIndex, text) in byPoint)
         {
@@ -109,20 +110,110 @@ public static partial class ChartRenderer
             if (top is not { } y)
                 continue;
 
-            model.Annotations.Add(new TextAnnotation
-            {
-                Text = text,
-                TextPosition = new DataPoint(pointIndex, y),
-                TextHorizontalAlignment = OxyPlot.HorizontalAlignment.Center,
-                TextVerticalAlignment = OxyPlot.VerticalAlignment.Bottom,
-                TextColor = oxyTextColor,
-                FontSize = chart.DataLabelFontSize > 0 ? chart.DataLabelFontSize : 11,
-                Stroke = OxyColors.Transparent,
-                Background = OxyColors.Transparent,
-                Padding = new OxyThickness(2)
-            });
+            AddRangeDataLabel(model, new DataPoint(pointIndex, y), text, oxyTextColor, fontSize);
         }
     }
+
+    /// <summary>
+    /// Adds a single "Value From Cells" label at <paramref name="position"/>. When the label leads with a
+    /// drawable emoji (👍 👎 👌) the emoji is drawn as a COLOR image annotation and the remaining percent
+    /// text as a text annotation just to its right; otherwise the whole label is one text annotation.
+    /// OxyPlot.Wpf renders annotation TEXT through a monochrome glyph path, so emoji on that path come out
+    /// flat black/gray — splitting them onto the image path restores Excel's colored thumbs.
+    /// </summary>
+    private static void AddRangeDataLabel(
+        PlotModel model,
+        DataPoint position,
+        string label,
+        OxyColor textColor,
+        double fontSize)
+    {
+        var (emoji, rest) = ChartEmojiGlyphs.SplitLeadingDrawableEmoji(label);
+
+        if (emoji.Length == 0)
+        {
+            // No drawable emoji: keep the existing single-annotation behavior unchanged.
+            model.Annotations.Add(CreateLabelTextAnnotation(label, position, textColor, fontSize,
+                OxyPlot.HorizontalAlignment.Center, offsetX: 0));
+            return;
+        }
+
+        // Render the emoji to a colored PNG. The exporter renders at 2x+ scale, so request a crisp glyph.
+        var emojiBitmap = ChartEmojiGlyphs.RenderEmojiPng(emoji, fontSize, renderScale: 4.0);
+        if (emojiBitmap is not { } bmp)
+        {
+            // Rendering failed: fall back to the full original label on the text path.
+            model.Annotations.Add(CreateLabelTextAnnotation(label, position, textColor, fontSize,
+                OxyPlot.HorizontalAlignment.Center, offsetX: 0));
+            return;
+        }
+
+        // Display the emoji glyph at ~font height. Width follows the glyph's aspect ratio.
+        var glyphHeight = fontSize * 1.15;
+        var glyphWidth = glyphHeight * (bmp.PixelWidth / (double)bmp.PixelHeight);
+        const double gap = 2.0; // px between emoji and text
+
+        // Center the (emoji + gap + text) group over the category: shift the emoji left of center and
+        // the text right of center by roughly half the emoji-block width. We don't know the text's pixel
+        // width here, so we bias the emoji left by half its own width plus the gap and let the text sit
+        // just to its right — visually matching Excel's "👍 30%" layout.
+        if (string.IsNullOrEmpty(rest))
+        {
+            // Emoji only — center it.
+            model.Annotations.Add(new ImageAnnotation
+            {
+                ImageSource = new OxyImage(bmp.Png),
+                X = new PlotLength(position.X, PlotLengthUnit.Data),
+                Y = new PlotLength(position.Y, PlotLengthUnit.Data),
+                Width = new PlotLength(glyphWidth, PlotLengthUnit.ScreenUnits),
+                Height = new PlotLength(glyphHeight, PlotLengthUnit.ScreenUnits),
+                HorizontalAlignment = OxyPlot.HorizontalAlignment.Center,
+                VerticalAlignment = OxyPlot.VerticalAlignment.Bottom,
+                Interpolate = true
+            });
+            return;
+        }
+
+        var emojiOffsetX = -(glyphWidth / 2.0 + gap / 2.0);
+        var textOffsetX = glyphWidth / 2.0 + gap / 2.0;
+
+        model.Annotations.Add(new ImageAnnotation
+        {
+            ImageSource = new OxyImage(bmp.Png),
+            X = new PlotLength(position.X, PlotLengthUnit.Data),
+            Y = new PlotLength(position.Y, PlotLengthUnit.Data),
+            OffsetX = new PlotLength(emojiOffsetX, PlotLengthUnit.ScreenUnits),
+            Width = new PlotLength(glyphWidth, PlotLengthUnit.ScreenUnits),
+            Height = new PlotLength(glyphHeight, PlotLengthUnit.ScreenUnits),
+            HorizontalAlignment = OxyPlot.HorizontalAlignment.Center,
+            VerticalAlignment = OxyPlot.VerticalAlignment.Bottom,
+            Interpolate = true
+        });
+
+        // Percent text just to the right of the emoji, left-aligned at the gap boundary.
+        model.Annotations.Add(CreateLabelTextAnnotation(rest, position, textColor, fontSize,
+            OxyPlot.HorizontalAlignment.Left, offsetX: textOffsetX));
+    }
+
+    private static TextAnnotation CreateLabelTextAnnotation(
+        string text,
+        DataPoint position,
+        OxyColor textColor,
+        double fontSize,
+        OxyPlot.HorizontalAlignment horizontalAlignment,
+        double offsetX) => new()
+    {
+        Text = text,
+        TextPosition = new DataPoint(position.X, position.Y),
+        Offset = new ScreenVector(offsetX, 0),
+        TextHorizontalAlignment = horizontalAlignment,
+        TextVerticalAlignment = OxyPlot.VerticalAlignment.Bottom,
+        TextColor = textColor,
+        FontSize = fontSize,
+        Stroke = OxyColors.Transparent,
+        Background = OxyColors.Transparent,
+        Padding = new OxyThickness(2)
+    };
 
     /// <summary>Returns the tallest value across clustered bar series at <paramref name="pointIndex"/>.</summary>
     private static double? CategoryTopValue(IReadOnlyList<List<double?>> clusteredBarValues, int pointIndex)
