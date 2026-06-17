@@ -1,6 +1,8 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Input.Platform;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
@@ -94,9 +96,9 @@ public sealed class MainWindow : Window
         var callbacks = new RibbonHostCallbacks(
             Open: () => _ = OpenAsync(),
             Save: () => _ = SaveAsync(),
-            Cut: Cut,
-            Copy: Copy,
-            Paste: Paste);
+            Cut: () => _ = CutAsync(),
+            Copy: () => _ = CopyAsync(),
+            Paste: () => _ = PasteAsync());
 
         var registry = FreeWRibbon.BuildRegistry(_editor, callbacks);
         var ribbon = AvaloniaRibbonRenderer.Build(FreeWRibbon.BuildDefinition(), registry, afterExecute: () => _editor.Focus());
@@ -110,27 +112,30 @@ public sealed class MainWindow : Window
         };
     }
 
-    // In-process clipboard. Avalonia 12 reworked IClipboard (text helpers removed in favor of the
-    // data-transfer API); OS clipboard integration is a follow-up. Within FreeW this is fully functional.
-    private static string _clipboardText = string.Empty;
-
-    private void Copy()
+    // OS clipboard via Avalonia's data-transfer API (same pattern as the FreeX shell):
+    // TopLevel.Clipboard with SetTextAsync / TryGetTextAsync.
+    private async Task CopyAsync()
     {
         var text = _editor.SelectedText;
-        if (text.Length > 0)
-            _clipboardText = text;
+        if (text.Length == 0)
+            return;
+        if (TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard)
+            await clipboard.SetTextAsync(text);
     }
 
-    private void Cut()
+    private async Task CutAsync()
     {
-        Copy();
+        await CopyAsync();
         _editor.TryDeleteSelection();
     }
 
-    private void Paste()
+    private async Task PasteAsync()
     {
-        if (_clipboardText.Length > 0)
-            _editor.InsertText(_clipboardText.Replace('\r', ' ').Replace('\n', ' ').Replace('\t', ' '));
+        if (TopLevel.GetTopLevel(this)?.Clipboard is not { } clipboard)
+            return;
+        var text = await clipboard.TryGetTextAsync();
+        if (!string.IsNullOrEmpty(text))
+            _editor.InsertText(text.Replace('\r', ' ').Replace('\n', ' ').Replace('\t', ' '));
     }
 
     private async Task OpenAsync()
