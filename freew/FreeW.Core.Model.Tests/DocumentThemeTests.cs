@@ -132,4 +132,53 @@ public class DocumentThemeTests
         reloaded.Styles["Title"].Run.ColorHex.Should().Be(ion.PrimaryColorHex);
         reloaded.DefaultRun.FontFamily.Should().Be(ion.BodyFont);
     }
+
+    [Fact]
+    public void ColorScheme_DrivesAccents1To3FromThePalette_AndNormalisesHex()
+    {
+        var berlin = DocumentTheme.FindByName("Berlin")!;
+        var scheme = berlin.ColorScheme;
+
+        // accent1..3 are the theme's palette colours, normalised to bare uppercase RRGGBB (no '#').
+        scheme.Accent1.Should().Be("C00000");
+        scheme.Accent2.Should().Be("D2691E");
+        scheme.Accent3.Should().Be("8B2500");
+
+        // The dark/light pair and link colours are deterministic stock values.
+        scheme.Dark1.Should().Be("000000");
+        scheme.Light1.Should().Be("FFFFFF");
+        scheme.Hyperlink.Should().Be("0563C1");
+        scheme.FollowedHyperlink.Should().Be("954F72");
+    }
+
+    [Fact]
+    public void TextDocument_DefaultsToOfficeTheme()
+    {
+        new TextDocument().Theme.Should().BeSameAs(DocumentTheme.Default);
+    }
+
+    [Theory]
+    [InlineData("Office")]
+    [InlineData("Slate")]
+    [InlineData("Berlin")]
+    [InlineData("Ion")]
+    public void InferPreset_RecoversEachCatalogTheme_FromItsOwnSchemeAndFonts(string name)
+    {
+        var theme = DocumentTheme.FindByName(name)!;
+
+        var inferred = DocumentTheme.InferPreset(theme.ColorScheme, theme.HeadingFont, theme.BodyFont);
+
+        inferred.Should().BeSameAs(theme);
+    }
+
+    [Fact]
+    public void InferPreset_FallsBackToOffice_ForAnUnrecognisedScheme()
+    {
+        var foreign = new ThemeColorScheme(
+            "000000", "FFFFFF", "111111", "EEEEEE",
+            "123456", "234567", "345678", "456789", "56789A", "6789AB",
+            "0563C1", "954F72");
+
+        DocumentTheme.InferPreset(foreign, "Arial", "Arial").Should().BeSameAs(DocumentTheme.Default);
+    }
 }

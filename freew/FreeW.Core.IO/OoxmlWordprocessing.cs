@@ -127,6 +127,10 @@ internal static class Ooxml
     public const string SettingsRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings";
     public const string SettingsPartName = "/word/settings.xml";
 
+    public const string ThemeContentType = "application/vnd.openxmlformats-officedocument.theme+xml";
+    public const string ThemeRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme";
+    public const string ThemePartName = "/word/theme/theme1.xml";
+
     /// <summary>W3CDTF as used by dcterms:created/modified (UTC, second precision, trailing 'Z').</summary>
     public static string ToW3CDtf(DateTimeOffset value) =>
         value.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);

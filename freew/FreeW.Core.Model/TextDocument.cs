@@ -1038,6 +1038,16 @@ public sealed class TextDocument
     public ProtectionSettings Protection { get; set; } = ProtectionSettings.Unprotected;
 
     /// <summary>
+    /// The document's persisted theme — the colour/font scheme that maps to <c>word/theme/theme1.xml</c>.
+    /// Defaults to <see cref="DocumentTheme.Default"/> ("Office"), so existing documents are unchanged.
+    /// The writer always emits a theme part (mirroring real Word documents, which always carry one); the
+    /// reader infers the closest preset from the theme's accent colours and major/minor fonts, falling
+    /// back to "Office" when no preset matches. Applying a theme to the document's styles is separate
+    /// (<see cref="DocumentTheme.Apply"/>); this property records which theme is in effect.
+    /// </summary>
+    public DocumentTheme Theme { get; set; } = DocumentTheme.Default;
+
+    /// <summary>
     /// The document's footnotes, keyed by footnote id (matching <see cref="Run.FootnoteId"/> on the
     /// body reference runs). Maps to word/footnotes.xml (w:footnotes / w:footnote w:id="N"). Empty
     /// when the document has no footnotes, in which case no footnotes part is emitted.
