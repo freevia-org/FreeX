@@ -77,14 +77,23 @@ out.append("    /// <summary>Original x:Name of each backplane control keyed by 
 out.append("    /// declarative wiring can re-point that name to the visible rendered control (FindName).</summary>")
 out.append("    private readonly Dictionary<string, string> RibbonBackplaneControlNames = new(System.StringComparer.Ordinal);")
 out.append("")
+CMD_TYPES = ("ToggleButton", "Button", "ComboBox", "CheckBox", "MenuItem", "AutomationInvokeButton")
+referenced_names = {n for n, t, c in referenced}
 out.append("    private void InitializeRibbonControlBackplane()")
 out.append("    {")
 for n, t, c in referenced:
     # Register under the original x:Name so FindName-based code/tests resolve the control.
     out.append(f"        try {{ RegisterName(\"{n}\", {n}); }} catch (System.ArgumentException) {{ }}")
-    if c and t in ("ToggleButton", "Button", "ComboBox", "CheckBox", "MenuItem", "AutomationInvokeButton"):
+    if c and t in CMD_TYPES:
         out.append(f'        RibbonMetadata.SetCommandName({n}, "{c}");')
         out.append(f'        RibbonBackplaneControls["{c}"] = {n};')
+        out.append(f'        RibbonBackplaneControlNames["{c}"] = "{n}";')
+# Name-map entries for named ribbon commands whose stub control is NOT referenced by any C#
+# code: no stub field/sender is emitted (the command dispatches natively and its handler is
+# sender-independent), but the CommandName->x:Name mapping is kept so RepointBackplaneNames-
+# ToRenderedControls re-points FindName(x:Name) to the visible rendered control after the swap.
+for n, t, c in named:
+    if c and t in CMD_TYPES and n not in referenced_names:
         out.append(f'        RibbonBackplaneControlNames["{c}"] = "{n}";')
 out.append("    }")
 out.append("}")

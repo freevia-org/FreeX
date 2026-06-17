@@ -294,15 +294,14 @@ public partial class MainWindow
             if (!rendered.TryGetValue(commandName, out var target))
                 continue;
 
-            try
-            {
-                UnregisterName(xName);
-                RegisterName(xName, target);
-            }
-            catch (System.ArgumentException)
-            {
-                // Name not currently registered (or already re-pointed) — leave the existing binding.
-            }
+            // Unregister any prior binding (a stub-backed control, or none for commands whose stub
+            // was retired) then point the x:Name at the visible rendered control. These are split so
+            // that when no prior name is registered, UnregisterName throwing does not skip RegisterName.
+            try { UnregisterName(xName); }
+            catch (System.ArgumentException) { /* name was not registered (retired stub) — fine */ }
+
+            try { RegisterName(xName, target); }
+            catch (System.ArgumentException) { /* already registered to this target — fine */ }
         }
     }
 
