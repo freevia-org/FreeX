@@ -145,6 +145,7 @@ internal static class FreeWRibbon
                     g.Button("freew.orientation", "Orientation");
                     g.Button("freew.size", "Size");
                     g.Button("freew.columns", "Columns");
+                    g.Button("freew.line-numbers", "Line Numbers");
                 });
                 tab.Group("page-background", "Page Background", "B", 95, g =>
                 {
