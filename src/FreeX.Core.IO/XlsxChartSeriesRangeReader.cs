@@ -137,6 +137,28 @@ internal static class XlsxChartSeriesRangeReader
         return true;
     }
 
+    /// <summary>
+    /// Reads the worksheet value column for a series from its <c>&lt;c:val&gt;</c> range formula
+    /// (e.g. <c>Chart_Target!$D$4:$D$9</c> -> column D). Returns null when the val formula is absent,
+    /// unparseable, a named range, a cross-sheet ref, or spans multiple columns (in which case the
+    /// caller should not record a single-column mapping).
+    /// </summary>
+    public static uint? TryReadSeriesValueColumn(
+        XElement series,
+        SheetId sheetId,
+        IReadOnlyDictionary<string, SheetId>? sheetNameResolver,
+        string valueContainerName = "val")
+    {
+        var formula = ReadFirstFormula(series, valueContainerName);
+        if (string.IsNullOrWhiteSpace(formula))
+            return null;
+        if (!TryParseFormulaRange(formula, sheetId, sheetNameResolver, out var range))
+            return null;
+        if (range.Start.Sheet != sheetId || range.Start.Col != range.End.Col)
+            return null;
+        return range.Start.Col;
+    }
+
     public static GridRange UnionRanges(IReadOnlyList<GridRange> ranges)
     {
         var sheetId = ranges[0].Start.Sheet;
