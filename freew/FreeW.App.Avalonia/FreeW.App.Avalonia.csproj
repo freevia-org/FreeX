@@ -23,6 +23,7 @@
     <ProjectReference Include="..\FreeW.Core.Model\FreeW.Core.Model.csproj" />
     <ProjectReference Include="..\FreeW.Core.IO\FreeW.Core.IO.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Ribbon\Free.Shared.Ribbon.csproj" />
   </ItemGroup>
 
   <ItemGroup>

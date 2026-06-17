@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -474,6 +475,70 @@ public sealed class DocumentView : Control
         if (CurrentParagraph() is not { } paragraph)
             return;
         _bus.Execute(new SetParagraphFormattingCommand(_caret.Block, paragraph.Formatting with { Alignment = alignment }));
+    }
+
+    public void SetSelectionFontSize(double points) => ApplyRunFormatting(f => f with { FontSizePt = points });
+
+    public void SetSelectionFontFamily(string family) =>
+        ApplyRunFormatting(f => f with { FontFamily = string.IsNullOrWhiteSpace(family) ? null : family });
+
+    /// <summary>Text spanning the current selection (empty when there is no selection).</summary>
+    public string SelectedText
+    {
+        get
+        {
+            if (NormalizedSelection() is not { } sel)
+                return string.Empty;
+            if (sel.Start.Block == sel.End.Block && _doc.Blocks[sel.Start.Block] is Paragraph p && IsEditable(p))
+            {
+                var cells = ParaCells(p);
+                var a = Math.Clamp(sel.Start.Offset, 0, cells.Count);
+                var b = Math.Clamp(sel.End.Offset, 0, cells.Count);
+                return new string(cells.Skip(a).Take(b - a).Select(c => c.Ch).ToArray());
+            }
+
+            var sb = new StringBuilder();
+            for (var bi = sel.Start.Block; bi <= sel.End.Block && bi < _doc.Blocks.Count; bi++)
+            {
+                if (bi > sel.Start.Block)
+                    sb.Append('\n');
+                sb.Append(_doc.Blocks[bi] is Paragraph para ? para.PlainText : string.Empty);
+            }
+
+            return sb.ToString();
+        }
+    }
+
+    public bool TryDeleteSelection()
+    {
+        if (NormalizedSelection() is null)
+            return false;
+        DeleteSelection();
+        return true;
+    }
+
+    private void ApplyRunFormatting(Func<RunFormatting, RunFormatting> transform)
+    {
+        var sel = NormalizedSelection();
+        if (sel is { } s && s.Start.Block == s.End.Block)
+        {
+            var block = s.Start.Block;
+            if (_doc.Blocks[block] is not Paragraph p0 || !IsEditable(p0))
+                return;
+            var a = s.Start.Offset;
+            var b = s.End.Offset;
+            _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+            {
+                var live = ParaCells(p);
+                for (var i = Math.Clamp(a, 0, live.Count); i < Math.Clamp(b, 0, live.Count); i++)
+                    live[i] = live[i] with { Fmt = transform(live[i].Fmt) };
+                SetRuns(p, live);
+            }));
+        }
+        else if (CurrentParagraph() is { } paragraph && IsEditable(paragraph))
+        {
+            _bus.Execute(new FormatParagraphRunsCommand(_caret.Block, transform));
+        }
     }
 
     private void ToggleRunFlag(Func<RunFormatting, bool> get, Func<RunFormatting, bool, RunFormatting> set)

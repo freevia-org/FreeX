@@ -5,6 +5,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using FreeW.App.Avalonia.Editing;
+using FreeW.App.Avalonia.Ribbon;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
 using TextAlignment = FreeW.Core.Model.TextAlignment;
@@ -39,9 +40,9 @@ public sealed class MainWindow : Window
 
         var root = new DockPanel();
 
-        var toolbar = BuildToolbar();
-        DockPanel.SetDock(toolbar, Dock.Top);
-        root.Children.Add(toolbar);
+        var ribbon = BuildRibbon();
+        DockPanel.SetDock(ribbon, Dock.Top);
+        root.Children.Add(ribbon);
 
         var statusBar = new Border
         {
@@ -88,62 +89,48 @@ public sealed class MainWindow : Window
         }
     }
 
-    private Control BuildToolbar()
+    private Control BuildRibbon()
     {
-        var bar = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Margin = new Thickness(8, 6),
-            Spacing = 4,
-        };
+        var callbacks = new RibbonHostCallbacks(
+            Open: () => _ = OpenAsync(),
+            Save: () => _ = SaveAsync(),
+            Cut: Cut,
+            Copy: Copy,
+            Paste: Paste);
 
-        bar.Children.Add(MakeButton("Open", async () => await OpenAsync()));
-        bar.Children.Add(MakeButton("Save", async () => await SaveAsync()));
-        bar.Children.Add(Separator());
-        bar.Children.Add(MakeButton("B", _editor.ToggleBold, bold: true));
-        bar.Children.Add(MakeButton("I", _editor.ToggleItalic, italic: true));
-        bar.Children.Add(MakeButton("U", _editor.ToggleUnderline, underline: true));
-        bar.Children.Add(Separator());
-        bar.Children.Add(MakeButton("Left", () => _editor.SetAlignment(TextAlignment.Left)));
-        bar.Children.Add(MakeButton("Center", () => _editor.SetAlignment(TextAlignment.Center)));
-        bar.Children.Add(MakeButton("Right", () => _editor.SetAlignment(TextAlignment.Right)));
-        bar.Children.Add(Separator());
-        bar.Children.Add(MakeButton("Undo", _editor.Undo));
-        bar.Children.Add(MakeButton("Redo", _editor.Redo));
-
+        var registry = FreeWRibbon.BuildRegistry(_editor, callbacks);
+        var ribbon = AvaloniaRibbonRenderer.Build(FreeWRibbon.BuildDefinition(), registry, afterExecute: () => _editor.Focus());
         HasToolbar = true;
         return new Border
         {
             Background = Brushes.White,
             BorderBrush = new SolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD)),
             BorderThickness = new Thickness(0, 0, 0, 1),
-            Child = bar,
+            Child = ribbon,
         };
     }
 
-    private static Control Separator() => new Border
-    {
-        Width = 1,
-        Margin = new Thickness(4, 2),
-        Background = new SolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD)),
-    };
+    // In-process clipboard. Avalonia 12 reworked IClipboard (text helpers removed in favor of the
+    // data-transfer API); OS clipboard integration is a follow-up. Within FreeW this is fully functional.
+    private static string _clipboardText = string.Empty;
 
-    private Button MakeButton(string text, Action onClick, bool bold = false, bool italic = false, bool underline = false)
+    private void Copy()
     {
-        var label = new TextBlock
-        {
-            Text = text,
-            FontWeight = bold ? FontWeight.Bold : FontWeight.Normal,
-            FontStyle = italic ? FontStyle.Italic : FontStyle.Normal,
-            TextDecorations = underline ? TextDecorations.Underline : null,
-        };
-        var button = new Button { Content = label, Padding = new Thickness(10, 4), MinWidth = 34 };
-        button.Click += (_, _) =>
-        {
-            onClick();
-            _editor.Focus();
-        };
-        return button;
+        var text = _editor.SelectedText;
+        if (text.Length > 0)
+            _clipboardText = text;
+    }
+
+    private void Cut()
+    {
+        Copy();
+        _editor.TryDeleteSelection();
+    }
+
+    private void Paste()
+    {
+        if (_clipboardText.Length > 0)
+            _editor.InsertText(_clipboardText.Replace('\r', ' ').Replace('\n', ' ').Replace('\t', ' '));
     }
 
     private async Task OpenAsync()
