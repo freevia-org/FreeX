@@ -1,0 +1,212 @@
+name: FreeW Linux App Preview
+
+# Manual trigger only — this lane is intentionally not run on push/PR.
+# Dispatch with: gh workflow run freew-linux.yml --ref <branch>
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  FREEW_APP_VERSION: 0.1.0
+
+jobs:
+  freew-linux-app:
+    name: FreeW Linux app bundle (${{ matrix.runtime }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runtime: linux-x64
+            arch: x86_64
+            runner: ubuntu-latest
+          - runtime: linux-arm64
+            arch: aarch64
+            runner: ubuntu-24.04-arm
+
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+      FREEW_RUNTIME: ${{ matrix.runtime }}
+      FREEW_ARCH: ${{ matrix.arch }}
+      LIBGL_ALWAYS_SOFTWARE: "1"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install Linux desktop dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            xvfb \
+            libfontconfig1 \
+            libice6 \
+            libsm6 \
+            libx11-6 \
+            libx11-xcb1 \
+            libxext6 \
+            libxrender1 \
+            libgl1 \
+            libglu1-mesa \
+            libegl1 \
+            desktop-file-utils \
+            shared-mime-info \
+            appstream \
+            fonts-noto-core \
+            imagemagick
+
+      - name: Test FreeW core (portable) on Linux
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet test freew/FreeW.Core.Model.Tests/FreeW.Core.Model.Tests.csproj \
+            --configuration Release \
+            --logger "trx;LogFileName=freew-${{ matrix.runtime }}-model-tests.trx" \
+            --results-directory artifacts
+          dotnet test freew/FreeW.Core.IO.Tests/FreeW.Core.IO.Tests.csproj \
+            --configuration Release \
+            --logger "trx;LogFileName=freew-${{ matrix.runtime }}-io-tests.trx" \
+            --results-directory artifacts
+
+      - name: Build FreeW Avalonia app
+        shell: bash
+        run: dotnet build freew/FreeW.App.Avalonia/FreeW.App.Avalonia.csproj --configuration Release
+
+      - name: Publish, package, and smoke-test
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          runtime="$FREEW_RUNTIME"
+          version="$FREEW_APP_VERSION"
+          artifact_root="$GITHUB_WORKSPACE/artifacts"
+          evidence_path="$artifact_root/freew-$runtime-linux-evidence.txt"
+          smoke_log="$artifact_root/freew-$runtime-linux-packaging-smoke.log"
+          launch_smoke_report="$artifact_root/freew-$runtime-linux-launch-smoke.txt"
+          published="$RUNNER_TEMP/freew-$runtime-publish"
+          dist="$artifact_root"
+
+          mkdir -p "$published" "$artifact_root"
+
+          {
+            echo "runtime=$runtime"
+            echo "arch=$FREEW_ARCH"
+            echo "app_version=$version"
+            uname -a
+          } | tee "$evidence_path"
+
+          dotnet publish freew/FreeW.App.Avalonia/FreeW.App.Avalonia.csproj \
+            --configuration Release \
+            --framework net10.0 \
+            --runtime "$runtime" \
+            --self-contained true \
+            -p:UseAppHost=true \
+            --output "$published"
+
+          test -x "$published/FreeW"
+          test -f "$published/FreeW.dll"
+          file "$published/FreeW" | tee -a "$evidence_path"
+
+          # Validate desktop integration assets.
+          packaging_dir="freew/FreeW.App.Avalonia/Packaging/linux"
+          desktop_file="$packaging_dir/io.github.tony-xmelon.freew.desktop"
+          icon_file="$packaging_dir/io.github.tony-xmelon.freew.svg"
+          metainfo_file="$packaging_dir/io.github.tony-xmelon.freew.metainfo.xml"
+          desktop-file-validate "$desktop_file"
+          test -f "$icon_file"
+          test -f "$metainfo_file"
+          grep -q "wordprocessingml.document" "$desktop_file"
+          {
+            echo "desktop_entry_valid=true"
+            echo "icon_present=true"
+            echo "metainfo_present=true"
+          } >> "$evidence_path"
+
+          metainfo_status="skipped"
+          if command -v appstreamcli >/dev/null 2>&1; then
+            if appstreamcli validate --no-net "$metainfo_file"; then
+              metainfo_status="valid"
+            else
+              metainfo_status="warnings"
+            fi
+          fi
+          echo "metainfo_validation=$metainfo_status" >> "$evidence_path"
+
+          # Tarball with installer.
+          chmod +x "$packaging_dir/package-linux-app.sh"
+          tarball="$("$packaging_dir/package-linux-app.sh" \
+            --runtime "$runtime" --published "$published" --version "$version" --output "$dist")"
+          test -f "$tarball"
+          tarball_name="$(basename "$tarball")"
+          (cd "$dist" && sha256sum "$tarball_name" > "$tarball_name.sha256")
+          (cd "$dist" && sha256sum -c "$tarball_name.sha256")
+          echo "tarball_name=$tarball_name" >> "$evidence_path"
+
+          # Headless packaging smoke (no display).
+          "$published/FreeW" --packaging-smoke | tee "$smoke_log"
+          grep -q "freew_packaging_smoke=passed" "$smoke_log"
+          grep -q "text_preserved=true" "$smoke_log"
+          grep -q "blocks_preserved=true" "$smoke_log"
+          echo "packaging_smoke_status=passed" >> "$evidence_path"
+
+          # GUI launch smoke under a virtual X server (software rendering).
+          xvfb-run -a "$published/FreeW" --launch-smoke "$launch_smoke_report"
+          grep -q "freew_launch_smoke=passed" "$launch_smoke_report"
+          grep -q "window_shown=true" "$launch_smoke_report"
+          grep -q "has_toolbar=true" "$launch_smoke_report"
+          grep -q "placed_glyphs=[1-9]" "$launch_smoke_report"
+          echo "launch_smoke_status=passed" >> "$evidence_path"
+
+          # Capture a screenshot of the live UI as visual evidence (non-fatal).
+          screenshot="$artifact_root/freew-$runtime-linux-screenshot.png"
+          cat > "$RUNNER_TEMP/freew-capture.sh" <<CAP
+          #!/usr/bin/env bash
+          set -u
+          "$published/FreeW" >/tmp/freew-ui.log 2>&1 &
+          app_pid=\$!
+          sleep 10
+          import -window root "$screenshot" 2>/tmp/freew-import.log || true
+          kill "\$app_pid" 2>/dev/null || true
+          CAP
+          screenshot_status="failed"
+          if xvfb-run -a --server-args="-screen 0 1280x820x24" bash "$RUNNER_TEMP/freew-capture.sh" && [[ -f "$screenshot" ]]; then
+            screenshot_status="captured"
+          fi
+          echo "ui_screenshot_status=$screenshot_status" >> "$evidence_path"
+
+      - name: Require smoke evidence before artifact upload
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence_path="$GITHUB_WORKSPACE/artifacts/freew-$FREEW_RUNTIME-linux-evidence.txt"
+          grep -q "^packaging_smoke_status=passed$" "$evidence_path"
+          grep -q "^launch_smoke_status=passed$" "$evidence_path"
+
+      - name: Upload FreeW app artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: freew-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.runtime }}-linux-app
+          path: |
+            artifacts/freew-${{ env.FREEW_APP_VERSION }}-${{ matrix.runtime }}.tar.gz
+            artifacts/freew-${{ env.FREEW_APP_VERSION }}-${{ matrix.runtime }}.tar.gz.sha256
+            artifacts/freew-${{ matrix.runtime }}-linux-evidence.txt
+            artifacts/freew-${{ matrix.runtime }}-linux-packaging-smoke.log
+            artifacts/freew-${{ matrix.runtime }}-linux-launch-smoke.txt
+            artifacts/freew-${{ matrix.runtime }}-linux-screenshot.png
+          if-no-files-found: warn
+          retention-days: 14
