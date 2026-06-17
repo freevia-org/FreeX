@@ -847,6 +847,47 @@ public class DocxRoundTripTests
         imageRun.Image!.PngBytes.Should().Equal(png);
         imageRun.Image.WidthPt.Should().BeApproximately(120, 0.01);
         imageRun.Image.HeightPt.Should().BeApproximately(90, 0.01);
+
+        // An image without alt text round-trips with AltText still null (no wp:docPr/@descr emitted).
+        imageRun.Image.AltText.Should().BeNull();
+    }
+
+    [Fact]
+    public void InlineImage_AltText_RoundTrips()
+    {
+        var png = MinimalPng();
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromImage(new InlineImage(png, widthPt: 120, heightPt: 90)
+        {
+            AltText = "A red square logo",
+        }));
+        doc.Blocks.Add(paragraph);
+
+        var imageRun = RoundTrip(doc).Paragraphs.First().Runs.Single(r => r.Image is not null);
+
+        // Bytes + size + alt text all survive the docx round-trip (alt text via wp:docPr/@descr).
+        imageRun.Image!.PngBytes.Should().Equal(png);
+        imageRun.Image.WidthPt.Should().BeApproximately(120, 0.01);
+        imageRun.Image.HeightPt.Should().BeApproximately(90, 0.01);
+        imageRun.Image.AltText.Should().Be("A red square logo");
+    }
+
+    [Fact]
+    public void InlineImage_AltText_EmittedAsDocPrDescr()
+    {
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromImage(new InlineImage(MinimalPng(), 50, 50) { AltText = "Accessible caption" }));
+        doc.Blocks.Add(paragraph);
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        using var docReader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
+        docReader.ReadToEnd().Should().Contain("descr=\"Accessible caption\"");
     }
 
     [Fact]

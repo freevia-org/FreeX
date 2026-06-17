@@ -665,6 +665,37 @@ public sealed class DocumentView : RichTextBox
     public InlineImage? SelectedImage() => SelectedImageLocation().Image;
 
     /// <summary>
+    /// Set (or clear, when null/empty) the accessibility alt text on the currently selected inline image.
+    /// Mutates the model image in place — the alt text is carried by the image instance, so it survives
+    /// the next <see cref="CommitToModel"/> — then re-renders so the tooltip/automation name refresh.
+    /// No-op without an image selection.
+    /// </summary>
+    public void SetSelectedImageAltText(string? altText)
+    {
+        CommitToModel();
+        var image = SelectedImageLocation().Image;
+        if (image is null)
+            return;
+        image.AltText = string.IsNullOrWhiteSpace(altText) ? null : altText.Trim();
+        Render();
+    }
+
+    /// <summary>
+    /// Align the paragraph that contains the currently selected inline image. "Image alignment" is the
+    /// alignment of its (image-only) paragraph, which round-trips through the existing
+    /// <see cref="ParagraphFormatting.Alignment"/> infrastructure. No-op without an image selection.
+    /// </summary>
+    public void SetSelectedImageAlignment(ModelTextAlignment alignment)
+    {
+        CommitToModel();
+        var (blockIndex, _, image) = SelectedImageLocation();
+        if (image is null || blockIndex < 0 || _model.Blocks[blockIndex] is not ModelParagraph paragraph)
+            return;
+        paragraph.Formatting = paragraph.Formatting with { Alignment = alignment };
+        Render();
+    }
+
+    /// <summary>
     /// Toggle a box border on every paragraph touched by the current selection/caret. If any selected
     /// paragraph lacks a border, all get one (<paramref name="colorHex"/>/<paramref name="widthPt"/>);
     /// otherwise the border is cleared. Re-renders so it round-trips through the model on the next commit.
@@ -2687,6 +2718,12 @@ public sealed class DocumentView : RichTextBox
             Stretch = Stretch.Fill,
             Tag = image // carries the model image so CommitToModel can round-trip it
         };
+        // Surface alt text as the hover tooltip and the accessibility (automation) name when present.
+        if (!string.IsNullOrEmpty(image.AltText))
+        {
+            element.ToolTip = image.AltText;
+            System.Windows.Automation.AutomationProperties.SetName(element, image.AltText);
+        }
         return new InlineUIContainer(element) { BaselineAlignment = BaselineAlignment.Bottom };
     }
 

@@ -711,7 +711,13 @@ public static class DocxReader
         var extent = inline.Element(Wp + "extent");
         var widthPt = EmuToPoints(extent?.Attribute("cx")?.Value);
         var heightPt = EmuToPoints(extent?.Attribute("cy")?.Value);
-        return new InlineImage(bytes, widthPt, heightPt);
+
+        // Restore accessibility alt text from wp:docPr/@descr; absent attribute leaves AltText null.
+        var descr = inline.Element(Wp + "docPr")?.Attribute("descr")?.Value;
+        return new InlineImage(bytes, widthPt, heightPt)
+        {
+            AltText = string.IsNullOrEmpty(descr) ? null : descr,
+        };
     }
 
     /// <summary>Maps relationship id -> media part path from word/_rels/document.xml.rels.</summary>
