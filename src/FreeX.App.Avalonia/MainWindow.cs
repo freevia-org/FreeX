@@ -681,6 +681,37 @@ public sealed partial class MainWindow : Window
                     ["view.zoomToSelection"] = ZoomToSelection,
                     ["view.freezePanes"] = FreezePanesAtActiveCell,
                     ["view.pageBreakPreview"] = TogglePageBreakPreview,
+                    ["view.formulaBar"] = ToggleFormulaBarVisibility,
+                    ["view.pageLayoutView"] = SetPageLayoutView,
+                    // Home tab merge variants + Paste Special.
+                    ["home.mergeCells"] = () => _ = MergeSelectedRangeAsync(),
+                    ["home.mergeAcross"] = () => _ = MergeAcrossSelectedRangeAsync(),
+                    ["home.unmerge"] = UnmergeSelectedRange,
+                    ["home.pasteSpecial"] = () => _ = ShowPasteSpecialDialogAsync(),
+                    // Home tab "More Colors..." pickers.
+                    ["home.fillMore"] = ShowMoreFillColorDialog,
+                    ["home.fontColorMore"] = ShowMoreFontColorDialog,
+                    // Data tab tools.
+                    ["data.reapply"] = ReapplyCurrentFilterSort,
+                    ["data.circleInvalid"] = CircleInvalidData,
+                    ["data.clearCircles"] = ClearValidationCircles,
+                    ["data.getData"] = GetDataNotSupported,
+                    ["data.refresh"] = RefreshAllNotSupported,
+                    // Page Layout sheet options (view + print) and Review ▸ Show Notes.
+                    ["pageLayout.gridlines"] = () => _ = ShowGridlinesSheetOptionsAsync(),
+                    ["pageLayout.headings"] = () => _ = ShowHeadingsSheetOptionsAsync(),
+                    ["review.showNotes"] = () => _ = ShowNotesListAsync(),
+                    // Insert ▸ PivotChart (charts the active pivot's result range).
+                    ["insert.pivotChart"] = InsertPivotChart,
+                    // View ▸ Window group (multi-window).
+                    ["view.newWindow"] = NewWindow,
+                    ["view.arrangeAll"] = ArrangeAllWindows,
+                    ["view.hide"] = HideActiveWindow,
+                    // Review proofing (built-in thesaurus / offline-honest translate) + Insert equation/object.
+                    ["review.thesaurus"] = () => _ = ShowThesaurusDialogAsync(),
+                    ["review.translate"] = () => _ = ShowTranslateDialogAsync(),
+                    ["insert.equation"] = () => _ = ShowEquationDialogAsync(),
+                    ["insert.object"] = ShowInsertObjectUnsupported,
                     // Home tab (Editing group).
                     ["home.autoSum"] = () => InsertAutoSumFormula("SUM"),
                     ["home.fillDown"] = () => FillSelectedRange(FillCellsDirection.Down),
@@ -787,6 +818,9 @@ public sealed partial class MainWindow : Window
                     ["formulas.tracePrecedents"] = TraceFormulaPrecedents,
                     ["formulas.traceDependents"] = TraceFormulaDependents,
                     ["formulas.removeArrows"] = RemoveFormulaTraceArrows,
+                    // Formulas ▸ Calculation group.
+                    ["formulas.calcOptions"] = ToggleCalculationMode,
+                    ["formulas.calcNow"] = CalculateNow,
                 },
             });
         DockPanel.SetDock(ribbon, Dock.Top);
@@ -2745,6 +2779,9 @@ public sealed partial class MainWindow : Window
         // Formula-auditing trace arrows live in an app-side set, not in viewport.DrawingObjects —
         // paint them before the early-out so they render even with no other drawing objects.
         AddFormulaTraceArrowOverlay(overlay, viewport);
+
+        // Data ▸ Circle Invalid Data overlay is also app-side — paint before the early-out.
+        AddValidationCircleOverlay(overlay, viewport);
 
         if (viewport.DrawingObjects is not { Count: > 0 })
             return overlay;

@@ -54,6 +54,13 @@ public sealed class WorkbookCellEditService
             : null;
     }
 
+    /// <summary>Forces a full recalculation of every formula in the workbook (F9 / Calculate Now).</summary>
+    public RecalcReport RecalculateAll(Workbook workbook)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+        return _recalcEngine.RecalculateAllFormulas(workbook);
+    }
+
     public WorkbookGoalSeekResult ExecuteGoalSeek(Workbook workbook, GoalSeekRequest request)
     {
         ArgumentNullException.ThrowIfNull(workbook);
