@@ -62,6 +62,13 @@ public sealed class AvaloniaRibbonThemeTests
     });
 
     [Fact]
+    public Task ShellChromeSurface_MatchesRibbonSurface_ForCohesiveChrome() => RunOnUiThread(() =>
+    {
+        // The window chrome (sheet-tabs / status bar) reads as one surface with the ribbon.
+        Assert.Equal(AvaloniaRibbonRenderer.SurfaceColor, MainWindow.ChromeSurfaceColor);
+    });
+
+    [Fact]
     public Task FontSizeCombo_Selection_ExecutesCommandWithChosenValue() => RunOnUiThread(() =>
     {
         string? applied = null;

@@ -302,6 +302,12 @@ public sealed partial class MainWindow : Window
     private static readonly IBrush HeaderForeground = Brush(73, 80, 93);
     private static readonly IBrush GridLine = Brush(218, 222, 228);
     private static readonly IBrush ToolbarBorder = Brush(218, 222, 228);
+
+    // Shell chrome surface — shared by the toolbar and the sheet-tabs/status bar so the window chrome reads
+    // as one cohesive light surface (the same #F5F6F7 the ribbon theme uses). Exposed for tests.
+    internal static readonly global::Avalonia.Media.Color ChromeSurfaceColor =
+        global::Avalonia.Media.Color.FromRgb(0xF5, 0xF6, 0xF7);
+    private static readonly IBrush ChromeSurface = new SolidColorBrush(ChromeSurfaceColor);
     private static readonly IBrush SelectionBorder = Brush(11, 112, 116);
     private static readonly IBrush SelectionHeaderBackground = Brush(225, 244, 242);
     private static readonly IBrush SelectionHeaderForeground = Brush(13, 86, 89);
@@ -797,7 +803,7 @@ public sealed partial class MainWindow : Window
 
         return new Border
         {
-            Background = Brush(249, 250, 252),
+            Background = ChromeSurface,
             BorderBrush = ToolbarBorder,
             BorderThickness = new Thickness(0, 1, 0, 0),
             Padding = new Thickness(12, 6),
