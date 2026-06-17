@@ -726,6 +726,26 @@ public sealed partial class MainWindow : Window
                     ["pageLayout.margins"] = () => _ = ShowPageSetupDialogAsync(),
                     ["pageLayout.orientation"] = () => _ = ShowPageSetupDialogAsync(),
                     ["pageLayout.size"] = () => _ = ShowPageSetupDialogAsync(),
+                    // --- Parity pass: wire remaining no-op ribbon buttons to existing handlers ---
+                    // Formula Library category buttons open the function picker (like the others).
+                    ["formulas.financial"] = InsertFunction,
+                    ["formulas.logical"] = InsertFunction,
+                    ["formulas.text"] = InsertFunction,
+                    ["formulas.dateTime"] = InsertFunction,
+                    // Dropdown parent buttons apply a sensible default (their menu items remain individually wired).
+                    ["home.borders"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.All),
+                    ["home.accounting"] = ApplySelectedRangeCurrencyFormat,
+                    ["home.fontColor"] = () => ApplySelectedRangeFontColor(new CellColor(0, 0, 0)),
+                    ["home.fillColor"] = () => ApplySelectedRangeFillColor(new CellColor(255, 235, 132)),
+                    ["home.numberFormat"] = () => _ = ShowFormatCellsDialogAsync(),
+                    // Page Layout buttons covered by the Page Setup dialog.
+                    ["pageLayout.printArea"] = () => _ = ShowPageSetupDialogAsync(),
+                    ["pageLayout.printTitles"] = () => _ = ShowPageSetupDialogAsync(),
+                    ["pageLayout.breaks"] = () => _ = ShowPageSetupDialogAsync(),
+                    ["pageLayout.background"] = () => _ = ShowPageSetupDialogAsync(),
+                    ["pageLayout.scale"] = () => _ = ShowPageSetupDialogAsync(),
+                    ["pageLayout.width"] = () => _ = ShowPageSetupDialogAsync(),
+                    ["pageLayout.height"] = () => _ = ShowPageSetupDialogAsync(),
                 },
             });
         DockPanel.SetDock(ribbon, Dock.Top);
@@ -2676,6 +2696,10 @@ public sealed partial class MainWindow : Window
         // (not projected into viewport.DrawingObjects), so paint them here — before the
         // drawing-object early-out — so they render even when no other objects exist.
         AddSlicerTimelineOverlays(overlay, viewport);
+
+        // Legacy form controls (checkbox/option/spinner/scrollbar/groupbox/label) live on the sheet,
+        // not in viewport.DrawingObjects — paint them before the early-out so they render standalone.
+        AddFormControlOverlays(overlay, viewport);
 
         if (viewport.DrawingObjects is not { Count: > 0 })
             return overlay;
