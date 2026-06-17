@@ -213,6 +213,12 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.space-before-toggle", new ActionCommand(() => editor.ToggleSpaceBefore()));
         registry.Register("freew.space-after-toggle", new ActionCommand(() => editor.ToggleSpaceAfter()));
 
+        // Home > Paragraph: increase/decrease the left indent by one 0.5in step over the selection, and
+        // open the Paragraph dialog to set left/right/first-line (incl. hanging) indents. All reversible.
+        registry.Register("freew.indent-increase", new ActionCommand(() => { editor.Focus(); editor.IncreaseIndent(); }));
+        registry.Register("freew.indent-decrease", new ActionCommand(() => { editor.Focus(); editor.DecreaseIndent(); }));
+        registry.Register("freew.paragraph-dialog", new ParagraphIndentCommand(editor));
+
         // Home > Paragraph: toggle a box border on the selected paragraph(s), and pick/clear shading.
         registry.Register("freew.para-border", new ActionCommand(() => editor.ToggleParagraphBorder()));
         registry.Register("freew.para-shading", new ParagraphShadingCommand(editor));
@@ -402,6 +408,23 @@ internal static class FreeWRibbonCommands
             {
                 editor.Focus();
                 editor.SetLineSpacing(multiplier);
+            }
+        }
+    }
+
+    // Home > Paragraph > Paragraph…: open the indent dialog seeded with the first selected paragraph's
+    // current left/right/first-line indents, and apply the chosen values to every selected paragraph
+    // through the view (reversible via the bus). A negative first-line value is a hanging indent.
+    private sealed class ParagraphIndentCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var (left, right, firstLine) = editor.CurrentParagraphIndents();
+            if (ParagraphIndentDialog.Prompt(Window.GetWindow(editor), left, right, firstLine) is { } chosen)
+            {
+                editor.Focus();
+                editor.SetParagraphIndents(chosen.Left, chosen.Right, chosen.FirstLine);
             }
         }
     }

@@ -59,6 +59,9 @@ internal static class FreeWRibbon
                     });
                     g.Button("freew.space-before-toggle", "Space Before");
                     g.Button("freew.space-after-toggle", "Space After");
+                    g.Button("freew.indent-increase", "Increase Indent");
+                    g.Button("freew.indent-decrease", "Decrease Indent");
+                    g.Button("freew.paragraph-dialog", "Paragraph…");
                     g.Button("freew.para-border", "Border");
                     g.Button("freew.para-shading", "Shading");
                 });

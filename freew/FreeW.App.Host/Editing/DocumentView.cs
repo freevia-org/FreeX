@@ -479,6 +479,44 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Increase the left indent of every paragraph spanned by the selection by one step
+    /// (<paramref name="stepPt"/> points, default 36pt = 0.5in), via the pure
+    /// <see cref="Indentation.IncreaseIndent"/> helper. Reversible through the undo/redo bus, then re-rendered.
+    /// </summary>
+    public void IncreaseIndent(double stepPt = Indentation.DefaultStepPt) =>
+        FormatSelectedModelParagraphs(f => Indentation.IncreaseIndent(f, stepPt));
+
+    /// <summary>
+    /// Decrease the left indent of every paragraph spanned by the selection by one step
+    /// (<paramref name="stepPt"/> points, default 36pt = 0.5in), clamped at zero, via the pure
+    /// <see cref="Indentation.DecreaseIndent"/> helper. Reversible through the undo/redo bus, then re-rendered.
+    /// </summary>
+    public void DecreaseIndent(double stepPt = Indentation.DefaultStepPt) =>
+        FormatSelectedModelParagraphs(f => Indentation.DecreaseIndent(f, stepPt));
+
+    /// <summary>
+    /// Set the left, right, and first-line indents (points) on every paragraph spanned by the selection,
+    /// via the pure <see cref="Indentation.SetIndents"/> helper. A negative <paramref name="firstLine"/>
+    /// is a hanging indent (see the convention on <see cref="Indentation"/>); it maps straight to the
+    /// rendered paragraph's <see cref="System.Windows.Documents.Paragraph.TextIndent"/>. Reversible via
+    /// the bus, then re-rendered.
+    /// </summary>
+    public void SetParagraphIndents(double left, double right, double firstLine) =>
+        FormatSelectedModelParagraphs(f => Indentation.SetIndents(f, left, right, firstLine));
+
+    /// <summary>
+    /// The left/right/first-line indents (points) of the first paragraph spanned by the current
+    /// selection, or <see cref="ParagraphFormatting.Default"/>'s indents if there is none. Used to seed
+    /// the Paragraph dialog with the current values.
+    /// </summary>
+    public (double Left, double Right, double FirstLine) CurrentParagraphIndents()
+    {
+        var first = SelectedModelParagraphs().FirstOrDefault();
+        var f = first?.Formatting ?? ParagraphFormatting.Default;
+        return (f.IndentLeftPt, f.IndentRightPt, f.FirstLineIndentPt);
+    }
+
+    /// <summary>
     /// Apply a named paragraph style (its <paramref name="styleId"/>) to every model paragraph spanned
     /// by the selection, routing one reversible <see cref="SetParagraphStyleCommand"/> per paragraph
     /// through the undo/redo bus. The view re-renders so the style's run/paragraph formatting resolves.
