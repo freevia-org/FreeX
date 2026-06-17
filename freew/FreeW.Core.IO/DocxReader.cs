@@ -832,14 +832,21 @@ public static class DocxReader
         return edges.Any(e => (e.Attribute(W + "val")?.Value ?? "single") is not ("none" or "nil"));
     }
 
-    /// <summary>Reads an inline picture (w:drawing) from a run into an <see cref="InlineImage"/>, if present.</summary>
+    /// <summary>
+    /// Reads a picture (w:drawing) from a run into an <see cref="InlineImage"/>, if present. Handles both
+    /// the inline form (wp:inline, read back as <see cref="ImageWrapping.Inline"/>) and the floating form
+    /// (wp:anchor), recovering the wrapping mode, the position offsets, and the horizontal/vertical anchors.
+    /// Returns null when the drawing is not a picture (e.g. a shape or chart) so those paths keep working —
+    /// a picture is identified by an a:blip whose r:embed resolves to a media part.
+    /// </summary>
     private static InlineImage? ReadImage(XElement run, ZipArchive archive, IReadOnlyDictionary<string, string> imageRelationships)
     {
-        var inline = run.Element(W + "drawing")?.Element(Wp + "inline");
-        if (inline is null)
+        var drawing = run.Element(W + "drawing");
+        var container = drawing?.Element(Wp + "inline") ?? drawing?.Element(Wp + "anchor");
+        if (container is null)
             return null;
 
-        var blip = inline.Descendants(A + "blip").FirstOrDefault();
+        var blip = container.Descendants(A + "blip").FirstOrDefault();
         var relationshipId = blip?.Attribute(R + "embed")?.Value;
         if (relationshipId is null || !imageRelationships.TryGetValue(relationshipId, out var target))
             return null;
@@ -848,17 +855,72 @@ public static class DocxReader
         if (bytes is null)
             return null;
 
-        var extent = inline.Element(Wp + "extent");
+        var extent = container.Element(Wp + "extent");
         var widthPt = EmuToPoints(extent?.Attribute("cx")?.Value);
         var heightPt = EmuToPoints(extent?.Attribute("cy")?.Value);
 
         // Restore accessibility alt text from wp:docPr/@descr; absent attribute leaves AltText null.
-        var descr = inline.Element(Wp + "docPr")?.Attribute("descr")?.Value;
-        return new InlineImage(bytes, widthPt, heightPt)
+        var descr = container.Element(Wp + "docPr")?.Attribute("descr")?.Value;
+        var image = new InlineImage(bytes, widthPt, heightPt)
         {
             AltText = string.IsNullOrEmpty(descr) ? null : descr,
         };
+
+        // A wp:anchor is a floating image: recover wrapping mode, offsets and anchors. A wp:inline reads
+        // back as ImageWrapping.Inline with default position fields, exactly as before.
+        if (container.Name == Wp + "anchor")
+            ApplyFloatingPosition(container, image);
+
+        return image;
     }
+
+    /// <summary>
+    /// Recovers a floating image's wrapping mode + position from a wp:anchor: the wrap element selects the
+    /// <see cref="ImageWrapping"/> (wp:wrapNone disambiguated by @behindDoc into Behind / InFront), and
+    /// wp:positionH/V supply the anchors (@relativeFrom) and offsets (wp:posOffset, EMU → points).
+    /// </summary>
+    private static void ApplyFloatingPosition(XElement anchor, InlineImage image)
+    {
+        image.Wrapping = ReadWrapping(anchor);
+
+        var positionH = anchor.Element(Wp + "positionH");
+        image.HorizontalAnchor = ReadHorizontalAnchor(positionH?.Attribute("relativeFrom")?.Value);
+        image.HorizontalOffsetPt = EmuToPoints(positionH?.Element(Wp + "posOffset")?.Value);
+
+        var positionV = anchor.Element(Wp + "positionV");
+        image.VerticalAnchor = ReadVerticalAnchor(positionV?.Attribute("relativeFrom")?.Value);
+        image.VerticalOffsetPt = EmuToPoints(positionV?.Element(Wp + "posOffset")?.Value);
+    }
+
+    /// <summary>Maps a wp:anchor's wrap element back to an <see cref="ImageWrapping"/> mode.</summary>
+    private static ImageWrapping ReadWrapping(XElement anchor)
+    {
+        if (anchor.Element(Wp + "wrapSquare") is not null)
+            return ImageWrapping.Square;
+        if (anchor.Element(Wp + "wrapTight") is not null)
+            return ImageWrapping.Tight;
+        if (anchor.Element(Wp + "wrapTopAndBottom") is not null)
+            return ImageWrapping.TopAndBottom;
+        // wp:wrapNone (or an unexpected/missing wrap) is a front/behind image, disambiguated by @behindDoc.
+        var behindDoc = anchor.Attribute("behindDoc")?.Value;
+        return behindDoc is "1" or "true" ? ImageWrapping.Behind : ImageWrapping.InFront;
+    }
+
+    /// <summary>Maps a wp:positionH/@relativeFrom token to a <see cref="HorizontalAnchor"/> (default Column).</summary>
+    private static HorizontalAnchor ReadHorizontalAnchor(string? relativeFrom) => relativeFrom switch
+    {
+        "margin" => HorizontalAnchor.Margin,
+        "page" => HorizontalAnchor.Page,
+        _ => HorizontalAnchor.Column,
+    };
+
+    /// <summary>Maps a wp:positionV/@relativeFrom token to a <see cref="VerticalAnchor"/> (default Paragraph).</summary>
+    private static VerticalAnchor ReadVerticalAnchor(string? relativeFrom) => relativeFrom switch
+    {
+        "margin" => VerticalAnchor.Margin,
+        "page" => VerticalAnchor.Page,
+        _ => VerticalAnchor.Paragraph,
+    };
 
     /// <summary>
     /// Reads an inline DrawingML shape / text box (w:drawing → wp:inline → a:graphic/a:graphicData → wps:wsp)

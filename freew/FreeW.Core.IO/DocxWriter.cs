@@ -1201,18 +1201,21 @@ public static class DocxWriter
         new(M + "r",
             new XElement(M + "t", new XAttribute(XNamespace.Xml + "space", "preserve"), text));
 
+    /// <summary>
+    /// Builds the picture drawing for an image part. An inline image (the default) emits
+    /// <c>w:drawing/wp:inline</c> exactly as before; a floating image (<see cref="InlineImage.Wrapping"/>
+    /// not <see cref="ImageWrapping.Inline"/>) emits <c>w:drawing/wp:anchor</c> with the position + the
+    /// matching wrap element. Both paths share the same <c>a:graphic/pic:pic</c> payload (see
+    /// <see cref="BuildPicGraphic"/>).
+    /// </summary>
+    private static XElement BuildDrawing(ImagePart part) =>
+        part.Image.IsFloating ? BuildAnchorDrawing(part) : BuildInlineDrawing(part);
+
     /// <summary>Builds an inline picture: w:drawing/wp:inline/a:graphic/pic:pic referencing the blip.</summary>
-    private static XElement BuildDrawing(ImagePart part)
+    private static XElement BuildInlineDrawing(ImagePart part)
     {
         var cx = PointsToEmu(part.Image.WidthPt);
         var cy = PointsToEmu(part.Image.HeightPt);
-        var docPrId = part.DrawingId;
-
-        // Carry accessibility alt text on wp:docPr/@descr when set; omitted entirely otherwise so
-        // images without alt text serialise exactly as before.
-        var docPr = new XElement(Wp + "docPr", new XAttribute("id", docPrId), new XAttribute("name", part.FileName));
-        if (!string.IsNullOrEmpty(part.Image.AltText))
-            docPr.Add(new XAttribute("descr", part.Image.AltText));
 
         return new XElement(W + "drawing",
             new XElement(Wp + "inline",
@@ -1223,26 +1226,114 @@ public static class DocxWriter
                 new XElement(Wp + "effectExtent",
                     new XAttribute("l", 0), new XAttribute("t", 0),
                     new XAttribute("r", 0), new XAttribute("b", 0)),
-                docPr,
-                new XElement(A + "graphic",
-                    new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
-                    new XElement(A + "graphicData",
-                        new XAttribute("uri", Pic.NamespaceName),
-                        new XElement(Pic + "pic",
-                            new XAttribute(XNamespace.Xmlns + "pic", Pic.NamespaceName),
-                            new XElement(Pic + "nvPicPr",
-                                new XElement(Pic + "cNvPr", new XAttribute("id", (uint)part.DrawingId), new XAttribute("name", part.FileName)),
-                                new XElement(Pic + "cNvPicPr")),
-                            new XElement(Pic + "blipFill",
-                                new XElement(A + "blip", new XAttribute(R + "embed", part.RelationshipId)),
-                                new XElement(A + "stretch", new XElement(A + "fillRect"))),
-                            new XElement(Pic + "spPr",
-                                new XElement(A + "xfrm",
-                                    new XElement(A + "off", new XAttribute("x", 0), new XAttribute("y", 0)),
-                                    new XElement(A + "ext", new XAttribute("cx", cx), new XAttribute("cy", cy))),
-                                new XElement(A + "prstGeom", new XAttribute("prst", "rect"),
-                                    new XElement(A + "avLst"))))))));
+                BuildDocPr(part),
+                BuildPicGraphic(part, cx, cy)));
     }
+
+    /// <summary>
+    /// Builds a floating picture: w:drawing/wp:anchor with @behindDoc, wp:simplePos, wp:positionH/V
+    /// (relativeFrom + posOffset), wp:extent, the single wrap element matching
+    /// <see cref="InlineImage.Wrapping"/>, then the same wp:docPr + a:graphic/pic:pic payload as the inline
+    /// path. wp:wrapTight is emitted without a wrapPolygon (a deliberate simplification — Word fills one in).
+    /// </summary>
+    private static XElement BuildAnchorDrawing(ImagePart part)
+    {
+        var image = part.Image;
+        var cx = PointsToEmu(image.WidthPt);
+        var cy = PointsToEmu(image.HeightPt);
+        var behindDoc = image.Wrapping == ImageWrapping.Behind ? 1 : 0;
+
+        return new XElement(W + "drawing",
+            new XElement(Wp + "anchor",
+                new XAttribute(XNamespace.Xmlns + "wp", Wp.NamespaceName),
+                new XAttribute("distT", 0), new XAttribute("distB", 0),
+                new XAttribute("distL", 0), new XAttribute("distR", 0),
+                new XAttribute("simplePos", 0),
+                new XAttribute("relativeHeight", 0),
+                new XAttribute("behindDoc", behindDoc),
+                new XAttribute("locked", 0),
+                new XAttribute("layoutInCell", 1),
+                new XAttribute("allowOverlap", 1),
+                new XElement(Wp + "simplePos", new XAttribute("x", 0), new XAttribute("y", 0)),
+                new XElement(Wp + "positionH",
+                    new XAttribute("relativeFrom", HorizontalAnchorToken(image.HorizontalAnchor)),
+                    new XElement(Wp + "posOffset", PointsToEmu(image.HorizontalOffsetPt))),
+                new XElement(Wp + "positionV",
+                    new XAttribute("relativeFrom", VerticalAnchorToken(image.VerticalAnchor)),
+                    new XElement(Wp + "posOffset", PointsToEmu(image.VerticalOffsetPt))),
+                new XElement(Wp + "extent", new XAttribute("cx", cx), new XAttribute("cy", cy)),
+                new XElement(Wp + "effectExtent",
+                    new XAttribute("l", 0), new XAttribute("t", 0),
+                    new XAttribute("r", 0), new XAttribute("b", 0)),
+                BuildWrap(image.Wrapping),
+                BuildDocPr(part),
+                BuildPicGraphic(part, cx, cy)));
+    }
+
+    /// <summary>The wp:positionH/@relativeFrom token for a horizontal anchor.</summary>
+    private static string HorizontalAnchorToken(HorizontalAnchor anchor) => anchor switch
+    {
+        HorizontalAnchor.Margin => "margin",
+        HorizontalAnchor.Page => "page",
+        _ => "column",
+    };
+
+    /// <summary>The wp:positionV/@relativeFrom token for a vertical anchor.</summary>
+    private static string VerticalAnchorToken(VerticalAnchor anchor) => anchor switch
+    {
+        VerticalAnchor.Margin => "margin",
+        VerticalAnchor.Page => "page",
+        _ => "paragraph",
+    };
+
+    /// <summary>
+    /// The single wrap element for a floating wrapping mode: wp:wrapSquare (square), wp:wrapTight (tight,
+    /// no wrapPolygon — a simplification), wp:wrapTopAndBottom, or wp:wrapNone for the front/behind modes.
+    /// </summary>
+    private static XElement BuildWrap(ImageWrapping wrapping) => wrapping switch
+    {
+        ImageWrapping.Square => new XElement(Wp + "wrapSquare", new XAttribute("wrapText", "bothSides")),
+        ImageWrapping.Tight => new XElement(Wp + "wrapTight", new XAttribute("wrapText", "bothSides")),
+        ImageWrapping.TopAndBottom => new XElement(Wp + "wrapTopAndBottom"),
+        _ => new XElement(Wp + "wrapNone"), // Behind / InFront both wrap none (distinguished by @behindDoc).
+    };
+
+    /// <summary>
+    /// Builds the wp:docPr for an image, carrying accessibility alt text on @descr when set (omitted
+    /// otherwise so images without alt text serialise exactly as before). Shared by both drawing paths.
+    /// </summary>
+    private static XElement BuildDocPr(ImagePart part)
+    {
+        var docPr = new XElement(Wp + "docPr", new XAttribute("id", part.DrawingId), new XAttribute("name", part.FileName));
+        if (!string.IsNullOrEmpty(part.Image.AltText))
+            docPr.Add(new XAttribute("descr", part.Image.AltText));
+        return docPr;
+    }
+
+    /// <summary>
+    /// Builds the shared a:graphic/a:graphicData(uri=pic)/pic:pic payload referencing the blip, used by
+    /// both the inline (<see cref="BuildInlineDrawing"/>) and floating (<see cref="BuildAnchorDrawing"/>)
+    /// drawing paths so the picture markup is not duplicated.
+    /// </summary>
+    private static XElement BuildPicGraphic(ImagePart part, long cx, long cy) =>
+        new(A + "graphic",
+            new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+            new XElement(A + "graphicData",
+                new XAttribute("uri", Pic.NamespaceName),
+                new XElement(Pic + "pic",
+                    new XAttribute(XNamespace.Xmlns + "pic", Pic.NamespaceName),
+                    new XElement(Pic + "nvPicPr",
+                        new XElement(Pic + "cNvPr", new XAttribute("id", (uint)part.DrawingId), new XAttribute("name", part.FileName)),
+                        new XElement(Pic + "cNvPicPr")),
+                    new XElement(Pic + "blipFill",
+                        new XElement(A + "blip", new XAttribute(R + "embed", part.RelationshipId)),
+                        new XElement(A + "stretch", new XElement(A + "fillRect"))),
+                    new XElement(Pic + "spPr",
+                        new XElement(A + "xfrm",
+                            new XElement(A + "off", new XAttribute("x", 0), new XAttribute("y", 0)),
+                            new XElement(A + "ext", new XAttribute("cx", cx), new XAttribute("cy", cy))),
+                        new XElement(A + "prstGeom", new XAttribute("prst", "rect"),
+                            new XElement(A + "avLst"))))));
 
     /// <summary>The DrawingML preset-geometry token (a:prstGeom/@prst) for a shape kind.</summary>
     private static string PresetGeometry(ShapeKind kind) => kind switch
