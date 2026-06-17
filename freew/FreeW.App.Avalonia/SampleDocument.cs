@@ -46,8 +46,18 @@ internal static class SampleDocument
         SetCell(table, 2, 0, "Ribbon"); SetCell(table, 2, 1, "Yes"); SetCell(table, 2, 2, "Yes");
         doc.Blocks.Add(table);
 
+        var imagePara = new Paragraph { Formatting = ParagraphFormatting.Default with { Alignment = TextAlignment.Center } };
+        imagePara.Runs.Add(Run.FromImage(new InlineImage(SamplePngBytes(), widthPt: 180, heightPt: 54) { AltText = "FreeW sample image" }));
+        doc.Blocks.Add(imagePara);
+
         return doc;
     }
+
+    // A 1x1 PNG (stretched to the run's point size when drawn). Embedded as bytes so the headless
+    // packaging-smoke path needs no rendering platform; DocumentView decoding is crash-proof and
+    // falls back to a placeholder box if the bytes ever fail to decode.
+    private static byte[] SamplePngBytes() => Convert.FromBase64String(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==");
 
     private static void SetCell(Table table, int row, int column, string text) =>
         table.Rows[row].Cells[column] = new TableCell(text);

@@ -4,6 +4,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using FreeW.Core.Model;
 using TextAlignment = FreeW.Core.Model.TextAlignment;
 
@@ -31,6 +32,8 @@ public sealed class DocumentView : Control
     private readonly List<PlacedChar> _placed = new();
     private readonly List<(double X, double Y, string Text, RunFormatting Fmt)> _markers = new();
     private readonly List<(Rect Rect, IBrush? Fill, bool Border)> _rects = new();
+    private readonly List<(Rect Rect, Bitmap? Image)> _images = new();
+    private readonly Dictionary<InlineImage, Bitmap?> _bitmapCache = new();
 
     private TextDocument _doc = TextDocument.CreateEmpty();
     private DocumentCommandBus _bus;
@@ -101,6 +104,7 @@ public sealed class DocumentView : Control
         _placed.Clear();
         _markers.Clear();
         _rects.Clear();
+        _images.Clear();
         var textWidth = Math.Max(120, width - LeftMargin - RightMargin);
         double y = TopMargin;
 
@@ -111,6 +115,14 @@ public sealed class DocumentView : Control
             var block = _doc.Blocks[blockIndex];
             if (block is Paragraph paragraph)
             {
+                if (paragraph.Runs.Any(r => r.Image is not null))
+                {
+                    listNumber = 0;
+                    prevList = ListKind.None;
+                    y = LayoutImageParagraph(blockIndex, paragraph, textWidth, y);
+                    continue;
+                }
+
                 var kind = paragraph.Formatting.ListKind;
                 double inset = 0;
                 string? marker = null;
@@ -347,6 +359,55 @@ public sealed class DocumentView : Control
         return y + 8;
     }
 
+    private double LayoutImageParagraph(int blockIndex, Paragraph paragraph, double textWidth, double y)
+    {
+        const double gap = 6;
+        var alignment = paragraph.Formatting.Alignment;
+        foreach (var run in paragraph.Runs)
+        {
+            if (run.Image is not { } image)
+                continue;
+
+            var width = image.WidthPt > 0 ? image.WidthPt * PxPerPoint : 120;
+            var height = image.HeightPt > 0 ? image.HeightPt * PxPerPoint : 80;
+            if (width > textWidth)
+            {
+                var scale = textWidth / width;
+                width = textWidth;
+                height *= scale;
+            }
+
+            var x = LeftMargin + AlignmentOffset(alignment, textWidth, width);
+            _images.Add((new Rect(x, y, width, height), DecodeBitmap(image)));
+            y += height + gap;
+        }
+
+        return y;
+    }
+
+    private Bitmap? DecodeBitmap(InlineImage image)
+    {
+        if (_bitmapCache.TryGetValue(image, out var cached))
+            return cached;
+
+        Bitmap? bitmap = null;
+        try
+        {
+            if (image.PngBytes.Length > 0)
+            {
+                using var stream = new MemoryStream(image.PngBytes);
+                bitmap = new Bitmap(stream);
+            }
+        }
+        catch (Exception)
+        {
+            bitmap = null; // undecodable -> placeholder rendered instead
+        }
+
+        _bitmapCache[image] = bitmap;
+        return bitmap;
+    }
+
     private static double[] ComputeColumnWidths(Table table, int cols, double textWidth)
     {
         var widths = new double[cols];
@@ -431,6 +492,17 @@ public sealed class DocumentView : Control
                 context.FillRectangle(fill, rect);
             if (border)
                 context.DrawRectangle(null, TableBorderPen, rect);
+        }
+
+        foreach (var (rect, bitmap) in _images)
+        {
+            if (bitmap is not null)
+                context.DrawImage(bitmap, rect);
+            else
+            {
+                context.FillRectangle(BandFill, rect);
+                context.DrawRectangle(null, TableBorderPen, rect);
+            }
         }
 
         var selection = NormalizedSelection();
