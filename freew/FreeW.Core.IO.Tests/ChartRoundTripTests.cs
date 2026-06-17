@@ -204,6 +204,142 @@ public class ChartRoundTripTests
         roundTripped.Series.Single().Values.Should().Equal(9.0, 12.0);
     }
 
+    // --- F1: editable chart data (embedded companion workbook + c:externalData) ---
+
+    [Fact]
+    public void Chart_EmbeddedWorkbookExternalDataAndChartPartRels_ArePresentInZip()
+    {
+        var docx = WriteBytes(SingleColumnChartDocument());
+
+        using (var zip = new ZipArchive(new MemoryStream(docx), ZipArchiveMode.Read))
+        {
+            // The embedded companion workbook part exists.
+            zip.GetEntry("word/embeddings/Microsoft_Excel_Worksheet1.xlsx")
+                .Should().NotBeNull("the chart must carry an editable companion workbook");
+            // The chart part has its own _rels referencing that workbook via a "package" relationship.
+            zip.GetEntry("word/charts/_rels/chart1.xml.rels")
+                .Should().NotBeNull("the chart part must own a _rels pointing at its workbook");
+        }
+
+        // [Content_Types].xml declares the xlsx Default so the workbook part is typed.
+        var types = EntryXml(docx, "[Content_Types].xml");
+        types.Root!.Elements(Ct + "Default")
+            .Should().Contain(d =>
+                d.Attribute("Extension")!.Value == "xlsx"
+                && d.Attribute("ContentType")!.Value == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+
+        // The chart-part relationship targets the workbook with the "package" relationship type.
+        var chartRels = EntryXml(docx, "word/charts/_rels/chart1.xml.rels");
+        var pkgRel = chartRels.Root!.Elements(Rel + "Relationship")
+            .Single(r => r.Attribute("Type")!.Value.EndsWith("/package", System.StringComparison.Ordinal));
+        pkgRel.Attribute("Target")!.Value.Should().Be("../embeddings/Microsoft_Excel_Worksheet1.xlsx");
+
+        // The chart XML carries c:externalData wired to that relationship id.
+        var chartXml = EntryXml(docx, "word/charts/chart1.xml");
+        var externalData = chartXml.Descendants(C + "externalData").Should().ContainSingle().Subject;
+        externalData.Attribute(R + "id")!.Value.Should().Be(pkgRel.Attribute("Id")!.Value);
+    }
+
+    [Fact]
+    public void EmbeddedWorkbook_ContainsCategoriesAndSeriesData()
+    {
+        var docx = WriteBytes(SingleColumnChartDocument());
+
+        // The embedded part is itself a ZIP (OPC); open it and read the worksheet's inline-string cells.
+        byte[] xlsxBytes;
+        using (var zip = new ZipArchive(new MemoryStream(docx), ZipArchiveMode.Read))
+        using (var entry = zip.GetEntry("word/embeddings/Microsoft_Excel_Worksheet1.xlsx")!.Open())
+        using (var buffer = new MemoryStream())
+        {
+            entry.CopyTo(buffer);
+            xlsxBytes = buffer.ToArray();
+        }
+
+        XNamespace s = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XDocument sheet;
+        using (var xlsx = new ZipArchive(new MemoryStream(xlsxBytes), ZipArchiveMode.Read))
+        using (var sheetStream = xlsx.GetEntry("xl/worksheets/sheet1.xml")!.Open())
+            sheet = XDocument.Load(sheetStream);
+
+        var texts = sheet.Descendants(s + "t").Select(t => t.Value).ToList();
+        var numbers = sheet.Descendants(s + "v").Select(v => v.Value).ToList();
+
+        // Series name header + category labels are inline strings; the values are numeric cells.
+        texts.Should().Contain("Revenue");
+        texts.Should().Contain(new[] { "Q1", "Q2", "Q3" });
+        numbers.Should().Contain(new[] { "10", "25.5", "17" });
+    }
+
+    [Theory]
+    [InlineData(ChartKind.Scatter)]
+    [InlineData(ChartKind.Area)]
+    [InlineData(ChartKind.Doughnut)]
+    public void RicherChartKinds_RoundTripTheirKindAndData(ChartKind kind)
+    {
+        var chart = Chart.Create(kind, ["1", "2", "3"], [4.0, 5.0, 6.0], seriesName: "S", title: "T");
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromChart(chart));
+        doc.Blocks.Add(paragraph);
+
+        var read = RoundTrip(doc);
+
+        var roundTripped = read.Paragraphs.Single().Runs.Single(r => r.Chart is not null).Chart!;
+        roundTripped.Kind.Should().Be(kind);
+        roundTripped.Title.Should().Be("T");
+        roundTripped.Categories.Should().Equal("1", "2", "3");
+        roundTripped.Series.Single().Values.Should().Equal(4.0, 5.0, 6.0);
+    }
+
+    [Fact]
+    public void ScatterChart_EmitsScatterChartWithXValAndYVal()
+    {
+        var chart = Chart.Create(ChartKind.Scatter, ["1", "2"], [3.0, 4.0], seriesName: "S");
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromChart(chart));
+        doc.Blocks.Add(paragraph);
+
+        var docx = WriteBytes(doc);
+        var chartXml = EntryXml(docx, "word/charts/chart1.xml");
+
+        var scatter = chartXml.Descendants(C + "scatterChart").Should().ContainSingle().Subject;
+        var ser = scatter.Elements(C + "ser").Should().ContainSingle().Subject;
+        ser.Element(C + "xVal")!.Descendants(C + "numCache").Should().ContainSingle();
+        ser.Element(C + "yVal")!.Descendants(C + "numCache").Should().ContainSingle();
+    }
+
+    [Fact]
+    public void LegendAndAxisTitles_RoundTrip()
+    {
+        var chart = Chart.Create(ChartKind.Column, ["A", "B"], [1.0, 2.0], title: "T");
+        chart.ShowLegend = true;
+        chart.CategoryAxisTitle = "Quarter";
+        chart.ValueAxisTitle = "USD";
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromChart(chart));
+        doc.Blocks.Add(paragraph);
+
+        var read = RoundTrip(doc);
+
+        var roundTripped = read.Paragraphs.Single().Runs.Single(r => r.Chart is not null).Chart!;
+        roundTripped.ShowLegend.Should().BeTrue();
+        roundTripped.CategoryAxisTitle.Should().Be("Quarter");
+        roundTripped.ValueAxisTitle.Should().Be("USD");
+    }
+
+    [Fact]
+    public void ChartWithoutLegendOrAxisTitles_RoundTripsWithDefaultsOff()
+    {
+        var read = RoundTrip(SingleColumnChartDocument());
+
+        var chart = read.Paragraphs.Single().Runs.Single(r => r.Chart is not null).Chart!;
+        chart.ShowLegend.Should().BeFalse();
+        chart.CategoryAxisTitle.Should().BeNull();
+        chart.ValueAxisTitle.Should().BeNull();
+    }
+
     [Fact]
     public void TwoCharts_GetDistinctPartsAndRelationships()
     {
@@ -220,6 +356,11 @@ public class ChartRoundTripTests
         {
             zip.GetEntry("word/charts/chart1.xml").Should().NotBeNull();
             zip.GetEntry("word/charts/chart2.xml").Should().NotBeNull();
+            // Each chart gets its own companion workbook + part rels (F1).
+            zip.GetEntry("word/embeddings/Microsoft_Excel_Worksheet1.xlsx").Should().NotBeNull();
+            zip.GetEntry("word/embeddings/Microsoft_Excel_Worksheet2.xlsx").Should().NotBeNull();
+            zip.GetEntry("word/charts/_rels/chart1.xml.rels").Should().NotBeNull();
+            zip.GetEntry("word/charts/_rels/chart2.xml.rels").Should().NotBeNull();
         }
 
         var read = DocxReader.Read(new MemoryStream(docx));
