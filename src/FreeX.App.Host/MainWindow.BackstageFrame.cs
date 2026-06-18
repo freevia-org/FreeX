@@ -37,6 +37,10 @@ public partial class MainWindow
             selected: System.Windows.Media.Color.FromRgb(0x24, 0x44, 0x5E),
             separator: System.Windows.Media.Color.FromRgb(0x24, 0x44, 0x5E));
 
+        // FreeX's panes (SsHomeView/SsInfoView/SsPrintView) carry their own internal padding, so drop the
+        // frame's default content inset to land them exactly where the hand-rolled rail did (no double-inset).
+        frame.SetContentPadding(new Thickness(0));
+
         frame.ConfigureBackButton(
             automationId: "BackstageBackButton",
             automationName: UiText.Get("MainWindow_TooltipTitle_Back"),

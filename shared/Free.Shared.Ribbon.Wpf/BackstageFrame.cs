@@ -262,6 +262,14 @@ public sealed class BackstageFrame : UserControl
         Resources["ChromeBackstageSidebarSeparatorBrush"] = Freeze(separator);
     }
 
+    /// <summary>
+    /// Override the padding around the content host. The frame defaults to <c>(40,28,40,28)</c> — right for
+    /// FreeW's code-built panes that carry no padding of their own. A host whose pane elements already supply
+    /// their own insets (e.g. FreeX hosting its existing XAML panes) can set this to <c>0</c> so the content
+    /// lands exactly where it did before the migration, instead of being double-inset.
+    /// </summary>
+    public void SetContentPadding(Thickness padding) => _content.Margin = padding;
+
     /// <summary>Replace the rail's entries. The first pane entry becomes the default landing pane.</summary>
     public void SetEntries(IEnumerable<BackstageEntry> entries)
     {
