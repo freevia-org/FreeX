@@ -84,7 +84,7 @@ public sealed class BackstageRecentFileListPlannerTests
     [Fact]
     public void Build_AvoidsLinqPipelinesForRecentFileHotPath()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("BackstageRecentFileListPlanner.cs");
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("shared", "Free.Shared.Shell", "BackstageRecentFileListPlanner.cs"));
 
         source.Should().NotContain(".Where(");
         source.Should().NotContain(".OrderByDescending(");

@@ -8,6 +8,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- BackstageRecentFileListPlanner consumes the neutral RecentFileEntry record. -->
+    <ProjectReference Include="..\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Generic WPF shell helpers extracted from FreeX.App.Host. Kept internal-visible
          to their existing FreeX consumers until promoted to the public shared API. -->
     <InternalsVisibleTo Include="FreeX.App.Host" />

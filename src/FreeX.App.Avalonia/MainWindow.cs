@@ -1803,6 +1803,13 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetName(_zoomText, "Zoom");
         AutomationProperties.SetHelpText(_zoomText, "Shows the active worksheet zoom.");
 
+        // The status-bar readouts share one "Customize Status Bar" right-click menu, attached to each of
+        // the three status controls so right-clicking anywhere in the footer readout opens it.
+        var statusBarCustomizeMenu = BuildStatusBarCustomizeContextMenu();
+        _statusText.ContextMenu = statusBarCustomizeMenu;
+        _selectionStatsText.ContextMenu = statusBarCustomizeMenu;
+        _zoomText.ContextMenu = statusBarCustomizeMenu;
+
         _openButton.Content = "Open";
         _openButton.Padding = new Thickness(10, 4);
         _openButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
@@ -2233,9 +2240,13 @@ public sealed partial class MainWindow : Window
             _formulaBox.SelectionEnd = Math.Min(formulaSelectionEnd, _formulaBox.Text?.Length ?? 0);
         }
 
+        // Render the footer from the shared neutral StatusBarViewModel (see ApplyStatusBarModel). These
+        // direct assignments are the unfiltered baseline drawn from the same WorkbookSession data the
+        // shared model is built from; ApplyStatusBarModel then refines them with the customize toggles.
         _statusText.Text = status;
         _selectionStatsText.Text = _session.SelectionStatsText;
         _zoomText.Text = FormatZoomPercent(_session.ZoomPercent);
+        ApplyStatusBarModel(status);
         _statusText.Foreground = ShouldUseWarningStatusColor(status)
             ? Brush(143, 74, 18)
             : Brush(67, 113, 83);
