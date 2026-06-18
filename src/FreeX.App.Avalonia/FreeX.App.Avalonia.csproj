@@ -7,6 +7,9 @@
     <ProjectReference Include="..\FreeX.Core.IO\FreeX.Core.IO.csproj" />
     <ProjectReference Include="..\FreeX.Core.Model\FreeX.Core.Model.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Ribbon\Free.Shared.Ribbon.csproj" />
+    <!-- Portable (net10.0) shell planners are now reusable by the Avalonia/Linux/macOS port
+         after P3 split Free.Shared.Shell.Wpf out; referenced here to prove portability. -->
+    <ProjectReference Include="..\..\shared\Free.Shared.Shell\Free.Shared.Shell.csproj" />
     <ProjectReference Include="..\FreeX.Ribbon.Definitions\FreeX.Ribbon.Definitions.csproj" />
     <ProjectReference Include="..\FreeX.Ribbon.Avalonia\FreeX.Ribbon.Avalonia.csproj" />
   </ItemGroup>

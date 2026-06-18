@@ -12,6 +12,7 @@
     <ProjectReference Include="..\FreeX.App.Services\FreeX.App.Services.csproj" />
     <ProjectReference Include="..\FreeX.App.UI\FreeX.App.UI.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Shell\Free.Shared.Shell.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Shell.Wpf\Free.Shared.Shell.Wpf.csproj" />
   </ItemGroup>
 
   <ItemGroup>
