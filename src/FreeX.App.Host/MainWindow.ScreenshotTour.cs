@@ -17,6 +17,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using Free.Shared.Ribbon.Wpf;
 using FreeX.Core.Calc;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
@@ -9770,23 +9771,11 @@ public partial class MainWindow
     {
         await EnsureWindowForegroundForScreenshotTourAsync($"capturing {fileName}.png");
 
-        var source = PresentationSource.FromVisual(this);
-        var dpiX = source?.CompositionTarget.TransformToDevice.M11 ?? 1.0;
-        var dpiY = source?.CompositionTarget.TransformToDevice.M22 ?? 1.0;
-        int pw = Math.Max(1, (int)(ActualWidth * dpiX));
-        int ph = Math.Max(1, (int)(Math.Min(ActualHeight, logicalHeight) * dpiY));
-
-        var rtb = new RenderTargetBitmap(pw, ph, 96 * dpiX, 96 * dpiY, PixelFormats.Pbgra32);
+        // Render/crop/encode/write are the shared, app-neutral primitives
+        // (Free.Shared.Ribbon.Wpf.ScreenshotCapture); the foreground-focus guards stay FreeX-specific.
         AssertWindowForegroundForScreenshotTour($"rendering {fileName}.png");
-        rtb.Render(this);
         AssertWindowForegroundForScreenshotTour($"saving {fileName}.png");
-        var bitmap = new CroppedBitmap(rtb, new Int32Rect(0, 0, pw, ph));
-
-        var encoder = new PngBitmapEncoder();
-        encoder.Frames.Add(BitmapFrame.Create(bitmap));
-        var path = Path.Combine(outputDir, $"{fileName}.png");
-        await using var stream = File.Create(path);
-        encoder.Save(stream);
+        await ScreenshotCapture.CaptureVisualToPngAsync(this, outputDir, fileName, logicalHeight);
     }
 
     private async Task EnsureWindowForegroundForScreenshotTourAsync(string operation)
@@ -13215,31 +13204,8 @@ public partial class MainWindow
         await CaptureElementAsync(captureTarget, outputDir, fileName);
     }
 
-    private static async Task CaptureElementAsync(FrameworkElement element, string outputDir, string fileName)
-    {
-        element.UpdateLayout();
-
-        var source = PresentationSource.FromVisual(element);
-        var dpiX = source?.CompositionTarget.TransformToDevice.M11 ?? 1.0;
-        var dpiY = source?.CompositionTarget.TransformToDevice.M22 ?? 1.0;
-        int pw = Math.Max(1, (int)(element.ActualWidth * dpiX));
-        int ph = Math.Max(1, (int)(element.ActualHeight * dpiY));
-
-        var rtb = new RenderTargetBitmap(pw, ph, 96 * dpiX, 96 * dpiY, PixelFormats.Pbgra32);
-        var visual = new DrawingVisual();
-        using (var context = visual.RenderOpen())
-        {
-            var brush = new VisualBrush(element) { Stretch = Stretch.Fill };
-            context.DrawRectangle(brush, null, new Rect(0, 0, element.ActualWidth, element.ActualHeight));
-        }
-        rtb.Render(visual);
-
-        var encoder = new PngBitmapEncoder();
-        encoder.Frames.Add(BitmapFrame.Create(rtb));
-        var path = Path.Combine(outputDir, $"{fileName}.png");
-        await using var stream = File.Create(path);
-        encoder.Save(stream);
-    }
+    private static Task CaptureElementAsync(FrameworkElement element, string outputDir, string fileName) =>
+        ScreenshotCapture.CaptureElementToPngAsync(element, outputDir, fileName);
 
     // Activated by FREEX_SHEET_TAB_TOUR=1 env var. Output lands in <repo-root>/screenshots/sheet-tabs-tour/.
     private void TryStartSheetTabVisualTour()
