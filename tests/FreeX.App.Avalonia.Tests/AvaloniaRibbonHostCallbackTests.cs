@@ -203,6 +203,61 @@ public sealed class AvaloniaRibbonHostCallbackTests
     [InlineData("formulas.mathTrig")]
     [InlineData("formulas.lookupReference")]
     [InlineData("home.formatCells")]
+    // Home ▸ Editing ▸ Fill / Clear dropdown items are wired under their raw canonical menu ids.
+    [InlineData("Down")]
+    [InlineData("Right")]
+    [InlineData("Up")]
+    [InlineData("Left")]
+    [InlineData("Series")]
+    [InlineData("Clear All")]
+    [InlineData("Clear Formats")]
+    [InlineData("Clear Contents")]
+    [InlineData("Clear Comments and Notes")]
+    [InlineData("Clear Hyperlinks")]
+    // Home ▸ Editing ▸ AutoSum / Find & Select dropdown items (raw canonical menu ids).
+    [InlineData("Sum")]
+    [InlineData("Average")]
+    [InlineData("Count Numbers")]
+    [InlineData("Count All")]
+    [InlineData("Max")]
+    [InlineData("Min")]
+    [InlineData("More Functions")]
+    [InlineData("Find")]
+    [InlineData("Replace")]
+    [InlineData("Go To")]
+    [InlineData("Go To Special")]
+    [InlineData("Formulas")]
+    [InlineData("Notes")]
+    [InlineData("Constants")]
+    [InlineData("Data Validation")]
+    [InlineData("Select Objects")]
+    [InlineData("Selection Pane")]
+    // Home ▸ Font ▸ Borders / Underline / Orientation dropdown items (raw canonical menu ids).
+    [InlineData("Inside Borders")]
+    [InlineData("Top Border")]
+    [InlineData("Bottom Border")]
+    [InlineData("Left Border")]
+    [InlineData("Right Border")]
+    [InlineData("More Borders")]
+    [InlineData("Horizontal")]
+    [InlineData("Angle Counterclockwise")]
+    [InlineData("Angle Clockwise")]
+    [InlineData("Vertical Text")]
+    [InlineData("Rotate Text Up")]
+    [InlineData("Rotate Text Down")]
+    // Home ▸ Cells (Insert/Delete/Format) + Conditional Formatting preset dropdown items.
+    [InlineData("Insert Cells")]
+    [InlineData("Insert Sheet")]
+    [InlineData("Delete Cells")]
+    [InlineData("Format Cells")]
+    [InlineData("Protect Sheet")]
+    [InlineData("Unhide Sheet")]
+    [InlineData("New Rule")]
+    [InlineData("Clear Rules")]
+    [InlineData("Data Bars")]
+    [InlineData("Color Scales")]
+    [InlineData("Greater Than")]
+    [InlineData("Top 10 Items")]
     public void NewTabCommands_AreRealCommandIds_AndBindViaExtraCommands(string commandId)
     {
         // The canonical id exists in the shared definition (so it seeds a NoOp default to begin with) ...
@@ -217,6 +272,29 @@ public sealed class AvaloniaRibbonHostCallbackTests
         });
         Assert.True(wired.TryGet(Canonical(commandId), out var command));
         Assert.IsType<RelayRibbonCommand>(command);
+    }
+
+    [Fact]
+    public void EveryCellStylePreset_DisplayNameIsARealMenuId_AndBindsViaExtraCommands()
+    {
+        // MainWindow wires the Home ▸ Styles ▸ Cell Styles gallery items by looping CellStylePreset and using
+        // each preset's display name as the canonical ribbon menu id. Verify every display name is a real id
+        // the shared definition emits (seeded NoOp) and that wiring it via ExtraCommands overrides the NoOp.
+        foreach (var preset in System.Enum.GetValues<FreeX.App.Services.CellStylePreset>())
+        {
+            var id = FreeX.App.Services.CellStyleDiffPlanner.GetCellStylePresetDisplayName(preset);
+
+            var defaults = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { });
+            Assert.True(defaults.TryGet(Canonical(id), out var noOp), $"Cell-style id '{id}' is not in the shared definition.");
+            Assert.IsType<NoOpRibbonCommand>(noOp);
+
+            var wired = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { }, new AvaloniaRibbonHostCallbacks
+            {
+                ExtraCommands = new Dictionary<string, Action> { [id] = () => { } },
+            });
+            Assert.True(wired.TryGet(Canonical(id), out var command));
+            Assert.IsType<RelayRibbonCommand>(command);
+        }
     }
 
     [Fact]

@@ -719,6 +719,80 @@ public sealed partial class MainWindow : Window
                     ["home.fillDown"] = () => FillSelectedRange(FillCellsDirection.Down),
                     ["home.clear"] = ClearSelectedRangeContents,
                     ["home.findSelect"] = () => _ = ShowFindDialogAsync(),
+                    // Home ▸ Editing ▸ Fill dropdown items (canonical menu ids from HomeRibbonMenus.Fill).
+                    // The split-button face is wired above (home.fillDown); these are its menu entries, which
+                    // otherwise stay on the NoOp seed. "Flash Fill" shares its canonical id with data.flashFill
+                    // (already wired), so it is not repeated here.
+                    ["Down"] = () => FillSelectedRange(FillCellsDirection.Down),
+                    ["Right"] = () => FillSelectedRange(FillCellsDirection.Right),
+                    ["Up"] = () => FillSelectedRange(FillCellsDirection.Up),
+                    ["Left"] = () => FillSelectedRange(FillCellsDirection.Left),
+                    ["Series"] = () => RefreshShell("Fill Series isn't supported yet; use Fill Down/Right/Up/Left to copy."),
+                    // Home ▸ Editing ▸ Clear dropdown items (canonical menu ids from HomeRibbonMenus.Clear).
+                    ["Clear All"] = ClearSelectedRangeAll,
+                    ["Clear Formats"] = ClearSelectedRangeFormats,
+                    ["Clear Contents"] = ClearSelectedRangeContents,
+                    ["Clear Comments and Notes"] = ClearSelectedRangeComments,
+                    ["Clear Hyperlinks"] = ClearSelectedRangeHyperlinks,
+                    // Home ▸ Editing ▸ AutoSum dropdown items (canonical ids from HomeRibbonMenus.AutoSum; the
+                    // Formulas-tab AutoSum picker shares these ids, so this covers both). Split-button face is
+                    // wired above (home.autoSum). Mirrors the native AutoSum submenu handlers.
+                    ["Sum"] = () => InsertAutoSumFormula("SUM"),
+                    ["Average"] = () => InsertAutoSumFormula("AVERAGE"),
+                    ["Count Numbers"] = () => InsertAutoSumFormula("COUNT"),
+                    ["Count All"] = () => InsertAutoSumFormula("COUNTA"),
+                    ["Max"] = () => InsertAutoSumFormula("MAX"),
+                    ["Min"] = () => InsertAutoSumFormula("MIN"),
+                    ["More Functions"] = InsertFunction,
+                    // Home ▸ Editing ▸ Find & Select dropdown items (canonical ids from HomeRibbonMenus.FindSelect).
+                    // Split-button face is wired above (home.findSelect). "Conditional Formatting" is intentionally
+                    // omitted: its canonical id is shared with the already-wired Home ▸ Conditional button.
+                    ["Find"] = () => _ = ShowFindDialogAsync(),
+                    ["Replace"] = () => _ = ShowReplaceDialogAsync(),
+                    ["Go To"] = () => _ = ShowGoToDialogAsync(),
+                    ["Go To Special"] = () => _ = ShowGoToSpecialDialogAsync(),
+                    ["Formulas"] = () => SelectGoToSpecial(GoToSpecialKind.Formulas),
+                    ["Notes"] = () => SelectGoToSpecial(GoToSpecialKind.Comments),
+                    ["Constants"] = () => SelectGoToSpecial(GoToSpecialKind.Constants),
+                    ["Data Validation"] = () => SelectGoToSpecial(GoToSpecialKind.DataValidation),
+                    ["Select Objects"] = () => SelectGoToSpecial(GoToSpecialKind.Objects),
+                    ["Selection Pane"] = () => RefreshShell("The Selection Pane isn't available in this build yet."),
+                    // Home ▸ Font ▸ Borders dropdown items (canonical ids from HomeRibbonMenus.Borders). The
+                    // single-edge/inside presets map to CellBorderPreset; "More Borders" opens Format Cells
+                    // (Borders tab). All/Outside/No Border are wired above. Exotic thick/double/draw variants
+                    // stay on the NoOp seed until they have modeled presets.
+                    ["Inside Borders"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.Inside),
+                    ["Top Border"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.Top),
+                    ["Bottom Border"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.Bottom),
+                    ["Left Border"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.Left),
+                    ["Right Border"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.Right),
+                    ["More Borders"] = () => _ = ShowFormatCellsDialogAsync(),
+                    // Home ▸ Font ▸ Orientation dropdown items (canonical ids from HomeRibbonMenus.Orientation).
+                    // Same rotation values as the native Format ▸ Orientation flyout.
+                    ["Horizontal"] = () => ApplySelectedRangeTextRotation(0, "Set horizontal text for", "Horizontal Text failed."),
+                    ["Angle Counterclockwise"] = () => ApplySelectedRangeTextRotation(45, "Angled text counterclockwise for", "Angle Counterclockwise failed."),
+                    ["Angle Clockwise"] = () => ApplySelectedRangeTextRotation(-45, "Angled text clockwise for", "Angle Clockwise failed."),
+                    ["Vertical Text"] = () => ApplySelectedRangeTextRotation(255, "Set vertical text for", "Vertical Text failed."),
+                    ["Rotate Text Up"] = () => ApplySelectedRangeTextRotation(90, "Rotated text up for", "Rotate Text Up failed."),
+                    ["Rotate Text Down"] = () => ApplySelectedRangeTextRotation(-90, "Rotated text down for", "Rotate Text Down failed."),
+                    // Home ▸ Cells ▸ Insert / Delete / Format dropdown items that map to existing handlers
+                    // (canonical ids from HomeRibbonMenus.Insert/Delete/Format). Row-height/column-width/AutoFit/
+                    // hide-row-column/lock-cell items stay NoOp until those operations exist in the shell.
+                    ["Insert Cells"] = () => _ = ShowInsertCellsDialogAsync(),
+                    ["Insert Sheet"] = AddNewSheet,
+                    ["Delete Cells"] = () => _ = ShowDeleteCellsDialogAsync(),
+                    ["Format Cells"] = () => _ = ShowFormatCellsDialogAsync(),
+                    ["Protect Sheet"] = () => _ = ShowProtectSheetDialogAsync(),
+                    ["Unhide Sheet"] = () => _ = UnhideSheetAsync(),
+                    // Home ▸ Styles ▸ Conditional Formatting dropdown items backed by existing presets/handlers
+                    // (canonical ids from HomeRibbonMenus.ConditionalFormatting). The remaining Highlight/Top-Bottom/
+                    // Icon-Set variants stay NoOp until their presets exist.
+                    ["New Rule"] = () => _ = ShowConditionalFormatNewRuleDialogAsync(),
+                    ["Clear Rules"] = ClearConditionalFormatsFromSelection,
+                    ["Data Bars"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.DataBar),
+                    ["Color Scales"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.ColorScale),
+                    ["Greater Than"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.HighlightGreaterThan),
+                    ["Top 10 Items"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.Top10),
                     // Insert tab (Links / Text groups).
                     ["insert.hyperlink"] = () => _ = ShowInsertHyperlinkDialogAsync(),
                     // Home Font group (added buttons).
@@ -831,6 +905,14 @@ public sealed partial class MainWindow : Window
             ribbonCallbacks.ExtraCommands!, StringComparer.Ordinal);
         foreach (var (id, action) in BuildContextualTabCommands())
             ribbonExtraCommands[id] = action;
+        // Home ▸ Styles ▸ Cell Styles gallery items: each built-in preset's display name is its canonical
+        // ribbon menu id, so wire every one to apply that style to the selection.
+        foreach (var stylePreset in Enum.GetValues<CellStylePreset>())
+        {
+            var preset = stylePreset;
+            ribbonExtraCommands[CellStyleDiffPlanner.GetCellStylePresetDisplayName(preset)] =
+                () => ApplyCellStylePreset(preset);
+        }
         ribbonCallbacks = ribbonCallbacks with { ExtraCommands = ribbonExtraCommands };
 
         var ribbon = FreeX.App.Avalonia.Ribbon.AvaloniaRibbonHost.Build(
