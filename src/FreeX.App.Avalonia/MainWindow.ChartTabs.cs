@@ -86,7 +86,7 @@ public sealed partial class MainWindow
 
     // ---- Chart Design: Change Chart Type (real, ChangeChartTypeCommand) -------------------------------
 
-    private async void ShowChangeChartTypeDialog()
+    private async Task ShowChangeChartTypeDialog()
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
@@ -168,7 +168,7 @@ public sealed partial class MainWindow
 
     // ---- Chart Design: Select Data Source (real, ChangeChartSourceCommand) ----------------------------
 
-    private async void ShowSelectChartDataDialog()
+    private async Task ShowSelectChartDataDialog()
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
@@ -261,7 +261,7 @@ public sealed partial class MainWindow
 
     // ---- Chart Design: layout toggles (real, SetChartLayoutCommand) -----------------------------------
 
-    private async void ShowChartTitlesDialog()
+    private async Task ShowChartTitlesDialog()
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
@@ -426,7 +426,7 @@ public sealed partial class MainWindow
 
     // ---- Chart Format: shape fill / outline + formatting toggles (real, SetChartLayoutCommand) --------
 
-    private async void ShowChartShapeFillDialog()
+    private async Task ShowChartShapeFillDialog()
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
@@ -438,7 +438,7 @@ public sealed partial class MainWindow
             ApplyChartLayout("Chart Area Fill", chart, new ChartLayoutOptions(ChartAreaFillColor: chosen));
     }
 
-    private async void ShowChartShapeOutlineDialog()
+    private async Task ShowChartShapeOutlineDialog()
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
@@ -455,7 +455,7 @@ public sealed partial class MainWindow
         }
     }
 
-    private async void ShowChartPlotAreaFillDialog()
+    private async Task ShowChartPlotAreaFillDialog()
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
@@ -467,7 +467,7 @@ public sealed partial class MainWindow
             ApplyChartLayout("Plot Area Fill", chart, new ChartLayoutOptions(PlotAreaFillColor: chosen));
     }
 
-    private async void ShowChartSeriesColorDialog()
+    private async Task ShowChartSeriesColorDialog()
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
