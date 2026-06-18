@@ -225,6 +225,19 @@ public sealed partial class NativeJsonAdapter
             .OrderBy(format => format.SeriesIndex)
             .ThenBy(format => format.PointIndex)
             .ToList();
+        chart.SeriesRangeDataLabels = chart.SeriesRangeDataLabels
+            .Where(labels => labels.SeriesIndex >= 0 && labels.SeriesIndex < seriesCount)
+            .GroupBy(labels => labels.SeriesIndex)
+            .Select(group => group.Last())
+            .OrderBy(labels => labels.SeriesIndex)
+            .ToList();
+        // The flat RangeDataLabels list (consumed by the renderer) is derived from the
+        // per-series definitions and is not persisted in the DTO — rebuild it on load.
+        chart.RangeDataLabels = chart.SeriesRangeDataLabels
+            .SelectMany(labels => (labels.Points ?? [])
+                .Where(point => point.PointIndex >= 0 && !string.IsNullOrEmpty(point.Text))
+                .Select(point => new ChartRangeDataLabel(labels.SeriesIndex, point.PointIndex, point.Text)))
+            .ToList();
     }
 
     private static double? ClampPositiveAxisUnit(double? value) =>

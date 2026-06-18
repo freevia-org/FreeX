@@ -17,27 +17,58 @@ internal static class XlsxChartDataLabelReader
     /// </summary>
     public static void ApplyRangeDataLabels(XElement series, int seriesIndex, ChartModel chart)
     {
-        var rangeCache = series
+        var dataLabelsRange = series
             .Element(ChartNs + "extLst")?
             .Elements(ChartNs + "ext")
             .Select(ext => ext.Element(Chart2012Ns + "datalabelsRange"))
-            .FirstOrDefault(range => range is not null)?
-            .Element(Chart2012Ns + "dlblRangeCache");
-        if (rangeCache is null)
+            .FirstOrDefault(range => range is not null);
+        if (dataLabelsRange is null)
             return;
 
-        foreach (var point in rangeCache.Elements(ChartNs + "pt"))
+        // c15:f holds the worksheet formula the labels are sourced from; preserve it verbatim.
+        var formula = dataLabelsRange.Element(Chart2012Ns + "f")?.Value;
+        if (string.IsNullOrEmpty(formula))
+            formula = null;
+
+        var rangeCache = dataLabelsRange.Element(Chart2012Ns + "dlblRangeCache");
+
+        int? pointCount = null;
+        if (int.TryParse(rangeCache?.Element(Chart2012Ns + "ptCount")?.Attribute("val")?.Value, out var parsedCount)
+            && parsedCount >= 0)
         {
-            if (!int.TryParse(point.Attribute("idx")?.Value, out var pointIndex) || pointIndex < 0)
-                continue;
+            pointCount = parsedCount;
+        }
 
-            var text = point.Element(ChartNs + "v")?.Value;
-            if (string.IsNullOrEmpty(text))
-                continue;
+        var points = new List<ChartRangeDataLabelPoint>();
+        if (rangeCache is not null)
+        {
+            // Excel emits cached points in the c15 namespace, but tolerate the bare c (ChartNs)
+            // namespace too, which some producers (and the legacy reader) used.
+            foreach (var point in rangeCache.Elements(Chart2012Ns + "pt").Concat(rangeCache.Elements(ChartNs + "pt")))
+            {
+                if (!int.TryParse(point.Attribute("idx")?.Value, out var pointIndex) || pointIndex < 0)
+                    continue;
 
+                var text = (point.Element(Chart2012Ns + "v") ?? point.Element(ChartNs + "v"))?.Value;
+                if (string.IsNullOrEmpty(text))
+                    continue;
+
+                points.Add(new ChartRangeDataLabelPoint(pointIndex, text));
+            }
+        }
+
+        if (formula is null && pointCount is null && points.Count == 0)
+            return;
+
+        chart.SeriesRangeDataLabels.RemoveAll(existing => existing.SeriesIndex == seriesIndex);
+        chart.SeriesRangeDataLabels.Add(new ChartSeriesRangeDataLabels(seriesIndex, formula, pointCount, points));
+
+        // Keep the flat list the renderer consumes in sync.
+        foreach (var point in points)
+        {
             chart.RangeDataLabels.RemoveAll(existing =>
-                existing.SeriesIndex == seriesIndex && existing.PointIndex == pointIndex);
-            chart.RangeDataLabels.Add(new ChartRangeDataLabel(seriesIndex, pointIndex, text));
+                existing.SeriesIndex == seriesIndex && existing.PointIndex == point.PointIndex);
+            chart.RangeDataLabels.Add(new ChartRangeDataLabel(seriesIndex, point.PointIndex, point.Text));
         }
     }
 

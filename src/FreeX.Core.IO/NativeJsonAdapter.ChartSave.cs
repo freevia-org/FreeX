@@ -263,6 +263,7 @@ public sealed partial class NativeJsonAdapter
         SeriesFormats = NonNullChartList(chart.SeriesFormats),
         SeriesDataLabelFormats = NonNullChartList(chart.SeriesDataLabelFormats),
         PointDataLabelFormats = NonNullChartList(chart.PointDataLabelFormats),
+        SeriesRangeDataLabels = NonNullChartList(chart.SeriesRangeDataLabels),
         UseComboLineForSecondarySeries = chart.UseComboLineForSecondarySeries,
         Left = chart.Left,
         Top = chart.Top,
