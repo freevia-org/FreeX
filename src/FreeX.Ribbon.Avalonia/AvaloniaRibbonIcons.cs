@@ -103,7 +103,7 @@ internal static class AvaloniaRibbonIcons
         if (string.IsNullOrWhiteSpace(commandName))
             return null;
 
-        var slug = ToCommandIconSlug(commandName);
+        var slug = ToCommandIconSlug(NormalizeCommandIconName(commandName));
         if (slug.Length == 0)
             return null;
 
@@ -172,7 +172,17 @@ internal static class AvaloniaRibbonIcons
             "merge-and-center" => "merge-center",
             "sort-and-filter" => "sort",
             "find-and-select" => "find",
+            "insert-link" => "hyperlink",
+            "header-and-footer" => "header-footer",
+            "pictures" => "picture",
             "percent-style" => "percent-style",
+            "advanced" => "advanced-filter",
+            "clear-filter" => "clear-filter",
+            "page-setup-dialog" => "page-setup",
+            "view-gridlines" => "gridlines",
+            "print-gridlines" => "print-gridlines",
+            "view-headings" => "headings",
+            "print-headings" => "print-headings",
             "object-fill" => "fill",
             "object-outline" => "outline-color",
             "object-size" => "size",
@@ -219,6 +229,8 @@ internal static class AvaloniaRibbonIcons
             "delete-watch" => "watch-delete",
             "reapply" => "reapply-filter",
             "reapply-filter" => "reapply-filter",
+            "sort-a-to-z" => "sort-ascending",
+            "sort-z-to-a" => "sort-descending",
             "pick-from-drop-down-list" => "pick-from-dropdown",
             "macros" => "macros",
             "macro" => "macros",
@@ -229,11 +241,27 @@ internal static class AvaloniaRibbonIcons
             "remove-from-list" => "remove-from-list",
             "rename" => "rename-sheet",
             "duplicate" => "duplicate-sheet",
+            "plus-minus-buttons" => "show-detail",
+            "buttons" => "show-detail",
             _ => ""
         };
 
         if (alias.Length > 0 && !string.Equals(alias, slug, StringComparison.Ordinal))
             yield return alias;
+    }
+
+    private static string NormalizeCommandIconName(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return string.Empty;
+
+        var handlerIndex = text.IndexOf('#', StringComparison.Ordinal);
+        if (handlerIndex >= 0 && text.Equals("Clear#ClearFilterButton_Click", StringComparison.OrdinalIgnoreCase))
+            return "Clear Filter";
+
+        return handlerIndex >= 0
+            ? text[..handlerIndex]
+            : text;
     }
 
     // Mirrors RibbonIconFactory.Svg.cs ToCommandIconSlug: lower-case, "&"→"and", then collapse every
