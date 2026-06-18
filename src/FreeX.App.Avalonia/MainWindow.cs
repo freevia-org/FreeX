@@ -2264,6 +2264,8 @@ public sealed partial class MainWindow : Window
         Title = $"FreeX - {FormatWindowWorkbookTitle()}{(_session.IsDirty ? " *" : "")}";
         UpdateViewportScrollBars();
         RefreshPivotFieldPane();
+        _ribbonContextSource.OnPivotActive(
+            FreeX.App.Avalonia.Pivot.PivotSourceContext.FindActivePivot(_session.ActiveSheet, _session.ActiveCell) is not null);
         UpdateSaveButton();
     }
 
@@ -4593,6 +4595,7 @@ public sealed partial class MainWindow : Window
 
         ClearSelectedDrawingObject();
         _session.SelectCell(address);
+        RefreshTableContextualTab();
         ApplyFormatPainterAfterTargetSelection();
     }
 
@@ -4603,6 +4606,7 @@ public sealed partial class MainWindow : Window
 
         ClearSelectedDrawingObject();
         _session.SelectRange(new GridRange(_session.ActiveCell, address));
+        RefreshTableContextualTab();
         ApplyFormatPainterAfterTargetSelection();
     }
 

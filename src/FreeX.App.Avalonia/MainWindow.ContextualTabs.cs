@@ -19,7 +19,7 @@ public sealed partial class MainWindow
     /// </summary>
     private IReadOnlyDictionary<string, Action> BuildContextualTabCommands()
     {
-        return new Dictionary<string, Action>(StringComparer.Ordinal)
+        var dict = new Dictionary<string, Action>(StringComparer.Ordinal)
         {
             // --- Help tab (always visible): About is real; the rest report honestly. ---
             ["help.about"] = () => _ = ShowAboutDialogAsync(),
@@ -27,32 +27,87 @@ public sealed partial class MainWindow
             ["help.feedback"] = () => _ = OpenExternalHelpLinkAsync(AppHelpInfo.FeedbackUrl, "Send Feedback"),
             ["help.checkUpdates"] = () => _ = OpenExternalHelpLinkAsync(AppHelpInfo.LatestReleaseUrl, "Check for Updates"),
 
-            // --- Chart Design / Chart Format (chart.selected) — Phase 1 shells. ---
-            ["chartDesign.changeType"] = () => ReportContextualNotYetAvailable("Change Chart Type"),
-            ["chartDesign.selectData"] = () => ReportContextualNotYetAvailable("Select Data"),
-            ["chartFormat.shapeFill"] = () => ReportContextualNotYetAvailable("Chart Shape Fill"),
-            ["chartFormat.shapeOutline"] = () => ReportContextualNotYetAvailable("Chart Shape Outline"),
+            // --- Chart Design (chart.selected) — real handlers via SetChartLayoutCommand /
+            // ChangeChartTypeCommand / ChangeChartSourceCommand / SetChartStyleCommand (MainWindow.ChartTabs). ---
+            ["chartDesign.titles"] = ShowChartTitlesDialog,
+            ["chartDesign.dataLabels"] = ToggleChartDataLabels,
+            ["chartDesign.dataLabelPosition"] = CycleChartDataLabelPosition,
+            ["chartDesign.trendline"] = ToggleChartTrendline,
+            ["chartDesign.errorBars"] = ToggleChartErrorBars,
+            ["chartDesign.secondaryAxis"] = CycleChartSecondaryAxis,
+            ["chartDesign.chartStyles"] = CycleChartStyle,
+            ["chartDesign.selectData"] = ShowSelectChartDataDialog,
+            ["chartDesign.changeType"] = ShowChangeChartTypeDialog,
+            // No Core support yet (combo overlays, move-chart sheet target dialog) — honest stubs.
+            ["chartDesign.comboChart"] = () => ReportChartCommandNotYetAvailable("Combo Chart"),
+            ["chartDesign.moveChart"] = () => ReportChartCommandNotYetAvailable("Move Chart"),
 
-            // --- Picture Format (picture.selected) — Phase 1 shells. ---
-            ["pictureFormat.bringForward"] = () => ReportContextualNotYetAvailable("Bring Forward"),
-            ["pictureFormat.sendBackward"] = () => ReportContextualNotYetAvailable("Send Backward"),
-            ["pictureFormat.altText"] = () => ReportContextualNotYetAvailable("Alt Text"),
+            // --- Chart Format (chart.selected) — real handlers via SetChartLayoutCommand. ---
+            ["chartFormat.chartAreaFill"] = ShowChartShapeFillDialog,
+            ["chartFormat.plotAreaFill"] = ShowChartPlotAreaFillDialog,
+            ["chartFormat.plotAreaBorder"] = ShowChartShapeOutlineDialog,
+            ["chartFormat.seriesColor"] = ShowChartSeriesColorDialog,
+            ["chartFormat.legendText"] = CycleChartLegendTextColor,
+            ["chartFormat.xGridlines"] = CycleChartXAxisGridlines,
+            ["chartFormat.yGridlines"] = CycleChartYAxisGridlines,
+            ["chartFormat.xLabels"] = ToggleChartXAxisLabels,
+            ["chartFormat.yLabels"] = ToggleChartYAxisLabels,
+            // Type-specific format dialogs have no Core support yet — honest stub.
+            ["chartFormat.formatChartArea"] = () => ReportChartCommandNotYetAvailable("Format Chart Area"),
 
-            // --- Shape Format (shape.selected) — Phase 1 shells. ---
-            ["shapeFormat.shapeFill"] = () => ReportContextualNotYetAvailable("Shape Fill"),
-            ["shapeFormat.shapeOutline"] = () => ReportContextualNotYetAvailable("Shape Outline"),
-            ["shapeFormat.bringForward"] = () => ReportContextualNotYetAvailable("Bring Forward"),
-            ["shapeFormat.sendBackward"] = () => ReportContextualNotYetAvailable("Send Backward"),
-
-            // --- Table Design (table.active) — Phase 1 shells. ---
-            ["tableDesign.convertToRange"] = () => ReportContextualNotYetAvailable("Convert to Range"),
+            // --- Table Design (table.active) — real handlers via the structured-table Core commands
+            // (MainWindow.TableDesignTab). ---
+            ["tableDesign.totalRow"] = ToggleActiveTableTotalRow,
+            ["tableDesign.firstColumn"] = ToggleActiveTableFirstColumn,
+            ["tableDesign.lastColumn"] = ToggleActiveTableLastColumn,
+            ["tableDesign.bandedRows"] = ToggleActiveTableBandedRows,
+            ["tableDesign.bandedColumns"] = ToggleActiveTableBandedColumns,
+            ["tableDesign.filterButton"] = ToggleActiveTableFilterButton,
+            ["tableDesign.convertToRange"] = ConvertActiveTableToRange,
             ["tableDesign.removeDuplicates"] = () => _ = ShowRemoveDuplicatesDialogAsync(),
+            // No Core support yet (table name / resize / styles gallery) — honest stubs.
+            ["tableDesign.tableName"] = () => ReportContextualNotYetAvailable("Table Name"),
+            ["tableDesign.resize"] = () => ReportContextualNotYetAvailable("Resize Table"),
+            ["tableDesign.tableStyles"] = () => ReportContextualNotYetAvailable("Table Styles"),
 
-            // --- PivotTable Analyze / Design (pivot.active) — Phase 1 shells. ---
-            ["pivotAnalyze.refresh"] = () => ReportContextualNotYetAvailable("Refresh PivotTable"),
-            ["pivotDesign.grandTotals"] = () => ReportContextualNotYetAvailable("Grand Totals"),
-            ["pivotDesign.reportLayout"] = () => ReportContextualNotYetAvailable("Report Layout"),
+            // --- PivotTable Analyze / Design (pivot.active) — real handlers via
+            // ConfigurePivotTableOptionsCommand / RefreshPivotTableCommand (MainWindow.PivotTabs). ---
+            ["pivotAnalyze.refresh"] = RefreshActivePivotTable,
+            ["pivotAnalyze.insertSlicer"] = InsertSlicerForActivePivot,
+            ["pivotAnalyze.insertTimeline"] = InsertTimelineForActivePivot,
+            ["pivotAnalyze.fieldList"] = TogglePivotFieldList,
+            ["pivotAnalyze.fieldHeaders"] = TogglePivotFieldHeaders,
+            ["pivotDesign.grandTotals"] = TogglePivotGrandTotals,
+            ["pivotDesign.subtotals"] = TogglePivotSubtotals,
+            ["pivotDesign.reportLayout"] = CyclePivotReportLayout,
+            ["pivotDesign.blankRows"] = TogglePivotBlankRows,
+            ["pivotDesign.bandedRows"] = TogglePivotBandedRows,
+            ["pivotDesign.bandedColumns"] = TogglePivotBandedColumns,
+            ["pivotDesign.rowHeaders"] = TogglePivotRowHeaders,
+            ["pivotDesign.columnHeaders"] = TogglePivotColumnHeaders,
+            // No Core support yet (name/options dialog, field settings, group/ungroup, change data source,
+            // calculated field, pivot styles gallery) — honest stubs.
+            ["pivotAnalyze.name"] = () => ReportPivotNotYetAvailable("PivotTable Name"),
+            ["pivotAnalyze.options"] = () => ReportPivotNotYetAvailable("PivotTable Options"),
+            ["pivotAnalyze.fieldSettings"] = () => ReportPivotNotYetAvailable("Field Settings"),
+            ["pivotAnalyze.groupField"] = () => ReportPivotNotYetAvailable("Group Field"),
+            ["pivotAnalyze.ungroup"] = () => ReportPivotNotYetAvailable("Ungroup"),
+            ["pivotAnalyze.changeDataSource"] = () => ReportPivotNotYetAvailable("Change Data Source"),
+            ["pivotAnalyze.calculatedField"] = () => ReportPivotNotYetAvailable("Calculated Field"),
+            ["pivotDesign.pivotStyles"] = () => ReportPivotNotYetAvailable("PivotTable Styles"),
+
+            // Shape Effects is a dropdown: clicking the parent opens its menu (No Effect / Shadow, wired via
+            // BuildPictureShapeTabCommands). Register the parent id too so the renderer keeps it enabled
+            // rather than disabling it for an unregistered command.
+            ["shapeFormat.shapeEffects"] = () => RefreshShell("Choose a shape effect from the menu."),
         };
+
+        // Merge the Picture/Shape Format handlers (Arrange / Shape Styles / Accessibility), which also
+        // provide the picture & shape z-order/fill/outline/gradient/effect/rotate/size/alt-text commands.
+        foreach (var (id, action) in BuildPictureShapeTabCommands())
+            dict[id] = action;
+
+        return dict;
     }
 
     /// <summary>Reports that a contextual-tab command is a Phase-1 shell, on the status bar.</summary>
