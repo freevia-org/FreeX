@@ -73,12 +73,15 @@ public sealed class FidelityCorpusManifestTests
             "bar-charts",
             "budget-actual",
             "cached-results",
+            "chartex",
             "charts",
+            "chartsheets",
             "color-scales",
             "combo-charts",
             "comments",
             "conditional-formatting",
             "ctrlprops",
+            "cx-charts",
             "data-bars",
             "data-labels",
             "data-validation",
@@ -90,9 +93,11 @@ public sealed class FidelityCorpusManifestTests
             "formulas",
             "freeze-panes",
             "full-column-references",
+            "funnel-charts",
             "headers-footers",
             "hidden-columns",
             "hidden-rows",
+            "histogram-charts",
             "hyperlinks",
             "icon-sets",
             "images",
@@ -103,19 +108,38 @@ public sealed class FidelityCorpusManifestTests
             "merged-cells",
             "outline-groups",
             "page-setup",
+            "pareto-charts",
             "pie-charts",
             "pivot-caches",
+            "pivot-filters",
             "pivottables",
             "print-titles",
             "protection",
             "shared-formulas",
             "sparklines",
             "structured-references",
+            "sunburst-charts",
             "tables",
             "text-boxes",
             "themes",
+            "treemap-charts",
             "vml"
         ]);
+    }
+
+    [Fact]
+    public void FidelityManifestIncludesRichChartExAndPivotHeavyRows()
+    {
+        var rows = ReadManifestRows();
+
+        rows
+            .Where(row => row.FeatureTags.Contains("chartex"))
+            .Should().HaveCountGreaterThanOrEqualTo(3);
+
+        rows
+            .Where(row => row.FeatureTags.Contains("pivottables") &&
+                          row.FeatureTags.Contains("pivot-caches"))
+            .Should().HaveCountGreaterThanOrEqualTo(6);
     }
 
     private static IReadOnlyList<FidelityRow> ReadManifestRows()

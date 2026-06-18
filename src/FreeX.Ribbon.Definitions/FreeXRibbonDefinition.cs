@@ -1,7 +1,7 @@
 using Free.Shared.Ribbon;
 using Ico = Free.Shared.Ribbon.RibbonCommandIconKind;
 
-namespace FreeX.App.Host;
+namespace FreeX.Ribbon.Definitions;
 
 /// <summary>
 /// The complete FreeX ribbon authored declaratively, generated from the catalog structure of

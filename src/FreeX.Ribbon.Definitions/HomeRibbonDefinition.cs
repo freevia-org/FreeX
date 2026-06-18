@@ -1,7 +1,7 @@
 using Free.Shared.Ribbon;
 using Ico = Free.Shared.Ribbon.RibbonCommandIconKind;
 
-namespace FreeX.App.Host;
+namespace FreeX.Ribbon.Definitions;
 
 /// <summary>
 /// The Home tab authored declaratively to match the original FreeX/Excel layout: per-command preferred

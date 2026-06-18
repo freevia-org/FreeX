@@ -1,6 +1,6 @@
 using Free.Shared.Ribbon;
 
-namespace FreeX.App.Host;
+namespace FreeX.Ribbon.Definitions;
 
 /// <summary>
 /// The complete FreeX ribbon: the hand-authored, high-fidelity <see cref="HomeRibbonDefinition"/> Home tab

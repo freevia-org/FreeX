@@ -63,9 +63,17 @@ public sealed class RibbonGroupHost : ContentControl
 
     private FrameworkElement BuildCollapsedButton()
     {
-        var firstIcon = _group.Controls.FirstOrDefault(c => c.Icon is not null)?.Icon?.Kind ?? RibbonCommandIconKind.Generic;
+        // Use the group's first real command icon (kind + command name so the actual SVG resolves, not a
+        // generic glyph) at a prominent size — a collapsed group reads as one big representative button.
+        var iconControl = _group.Controls.FirstOrDefault(c => c.Icon is not null);
         var stack = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
-        stack.Children.Add(new RibbonIcon { Kind = firstIcon, IconSize = 22, HorizontalAlignment = HorizontalAlignment.Center });
+        stack.Children.Add(new RibbonIcon
+        {
+            Kind = iconControl?.Icon?.Kind ?? RibbonCommandIconKind.Generic,
+            CommandName = iconControl?.CommandId.Value ?? string.Empty,
+            IconSize = 28,
+            HorizontalAlignment = HorizontalAlignment.Center
+        });
         var caption = new TextBlock
         {
             Text = _group.Header,
@@ -73,13 +81,23 @@ public sealed class RibbonGroupHost : ContentControl
             TextAlignment = TextAlignment.Center,
             TextWrapping = TextWrapping.Wrap,
             HorizontalAlignment = HorizontalAlignment.Center,
-            MaxWidth = 56,
+            MaxWidth = 58,
             Margin = new Thickness(0, 2, 0, 0)
         };
-        caption.Inlines.Add(new System.Windows.Documents.Run(" ▾") { FontSize = 8 });
         stack.Children.Add(caption);
+        // Dropdown chevron on its own centered row at the bottom (consistent with large split buttons).
+        stack.Children.Add(new TextBlock
+        {
+            Text = "▾",
+            FontSize = 9,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            TextAlignment = TextAlignment.Center,
+            Opacity = 0.85
+        });
 
-        var button = new Button { Width = 60, Content = stack };
+        // Keep the rendered width just under RibbonGroupHost.CollapsedWidth (the value the fit decision
+        // budgets per collapsed group) so the strip never edges over the viewport.
+        var button = new Button { Width = 58, Content = stack };
         if (_resourceHost.TryFindResource("RibbonBtn") is Style style)
             button.Style = style;
 

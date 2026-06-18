@@ -1805,7 +1805,7 @@ function Test-SourceWiring {
                 "private NativeMenu CreateNativeOpenRecentMenu(bool isIdle)",
                 "Header = `"(No Recent Workbooks)`"",
                 "OpenRecentWorkbookMenuPlanner.Create(",
-                "_recentFiles.Entries",
+                "_recentFiles.Snapshot()",
                 "File.Exists",
                 "path => _session.TryResolveOpenTarget(path, out var target, out _) ? target!.Path : null",
                 "plan.ItemCount == 0",

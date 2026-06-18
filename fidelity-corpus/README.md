@@ -23,11 +23,12 @@ pwsh tools/Fetch-FidelityCorpus.ps1 -Force # re-download everything
 `id,file,source,license,retrieved_on,url,feature_tags,notes`
 
 - `license` is **required** for every downloaded row and must be permissive or public-domain. The current
-  catalogue uses Apache POI test data (Apache-2.0) plus targeted MIT-licensed library fixtures for form
-  controls, ActiveX controls, dropdown validation, Budget-vs-Actual chart data, and emoji/unicode strings.
-  Together those rows cover charts, pivots, conditional formatting, tables, data validation,
-  formatting/themes, comments, merges, formulas, sparklines, drawings, images, text boxes, embedded
-  objects, hyperlinks, protection, page setup, and sizeable worksheet data.
+  catalogue uses Apache POI test data (Apache-2.0), OfficeCLI chart/pivot workbooks (Apache-2.0), plus
+  targeted MIT-licensed library fixtures for form controls, ActiveX controls, dropdown validation,
+  Budget-vs-Actual chart data, chart overlays, PivotTables, chartsheets, and emoji/unicode strings.
+  Together those rows cover charts, ChartEx/cx charts, pivots, conditional formatting, tables, data
+  validation, formatting/themes, comments, merges, formulas, sparklines, drawings, images, text boxes,
+  embedded objects, hyperlinks, protection, page setup, and sizeable worksheet data.
 - `feature_tags` is space-separated (same convention as `test-corpus/manifest.csv`).
 
 ## Adding your own complex local workbooks
