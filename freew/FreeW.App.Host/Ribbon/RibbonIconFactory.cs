@@ -127,48 +127,103 @@ internal static class RibbonIconFactory
 
     private static IEnumerable<string> GetCommandIconSlugCandidates(string slug)
     {
-        yield return slug;
-
-        var alias = slug switch
-        {
-            "align-center" => "center",
-            "orientation" => "page-orientation",
-            "size" => "paper-size",
-            "paper-size" => "paper-size",
-            "style-normal" => "normal",
-            "normal-style" => "normal",
-            "style-heading1" => "heading-1",
-            "heading-1-style" => "heading-1",
-            "style-heading2" => "heading-2",
-            "heading-2-style" => "heading-2",
-            "style-title" => "title",
-            "title-style" => "title",
-            "bullet-list" => "bullets",
-            "bulleted-list" => "bullets",
-            "numbered-list" => "numbering",
-            "page-break-insert" => "page-break",
-            "blank-page-insert" => "blank-page",
-            "cover-page-insert" => "cover-page",
-            "pictures" => "picture",
-            "table-insert" => "table",
-            "table-of-contents-gallery" => "table-of-contents",
-            "footnote-insert" => "footnote",
-            "endnote-insert" => "endnote",
-            "citation-insert" => "citation",
-            "bibliography-gallery" => "bibliography",
-            "caption-insert" => "caption",
-            "index-insert" => "index",
-            "mail-merge" => "mail-merge",
-            "track-changes" => "track-changes",
-            "accept-change" => "accept-change",
-            "reject-change" => "reject-change",
-            "word-count" => "word-count",
-            _ => ""
-        };
-
-        if (alias.Length > 0 && !string.Equals(alias, slug, StringComparison.Ordinal))
+        // Prefer the alias FIRST: where FreeW maps a command to an existing FreeX/Word icon, we want that
+        // icon to win even when a same-named (but different-meaning) file is also present — e.g. "size"
+        // (page size) must resolve to paper-size, not FreeX's cell-size "size". The bare slug is the
+        // fallback, so direct FreeX names (bold, paste, …) still resolve straight through.
+        if (CommandIconAliases.TryGetValue(slug, out var alias) &&
+            !string.Equals(alias, slug, StringComparison.Ordinal))
             yield return alias;
+
+        yield return slug;
     }
+
+    /// <summary>
+    /// Maps a FreeW ribbon command slug to the slug of an existing FreeX/Word icon, so commands that have
+    /// a FreeX equivalent render FreeX's actual artwork (linked into the build) rather than a redrawn copy.
+    /// Word-specific commands with no FreeX equivalent are absent here and resolve to their own bundled SVG.
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, string> CommandIconAliases =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            // Page setup concepts that collide with a different-meaning FreeX icon (alias must win).
+            ["orientation"] = "page-orientation",
+            ["size"] = "paper-size",
+            // Font
+            ["font-family"] = "fonts",
+            ["font-size"] = "fonts",
+            ["highlight"] = "highlighter",
+            ["clear-formatting"] = "clear",
+            // Paragraph
+            ["align-center"] = "center",
+            ["align-justify"] = "distributed-justify",
+            ["indent-increase"] = "increase-indent",
+            ["indent-decrease"] = "decrease-indent",
+            ["multilevel-list"] = "numbering",
+            ["merge-cells"] = "merge-center",
+            ["para-border"] = "borders",
+            ["para-shading"] = "fill-color",
+            ["page-valign"] = "middle-align",
+            // Styles
+            ["style"] = "styles",
+            ["manage-styles"] = "styles",
+            ["style-normal"] = "normal",
+            ["style-heading1"] = "heading-1",
+            ["style-heading2"] = "heading-2",
+            ["style-title"] = "title",
+            // Insert
+            ["horizontal-rule"] = "line",
+            ["cell-shading"] = "fill-color",
+            ["shape-ellipse"] = "ellipse",
+            ["shape-rectangle"] = "rectangle",
+            ["shape-rounded"] = "rectangle",
+            ["shape-textbox"] = "text-box",
+            ["chart"] = "column-chart",
+            ["datetime"] = "date-time",
+            ["index-mark"] = "index",
+            ["toc-refresh"] = "refresh-all",
+            ["tof-refresh"] = "refresh-all",
+            ["citation-style"] = "citation",
+            ["insert-file"] = "insert",
+            ["insert-quickpart"] = "insert",
+            ["save-quickpart"] = "save",
+            ["field"] = "insert-function",
+            ["object"] = "insert",
+            ["image-align-left"] = "align-left",
+            ["image-align-center"] = "center",
+            ["image-align-right"] = "align-right",
+            ["image-alt-text"] = "alt-text",
+            ["image-size"] = "size",
+            ["hyperlink-tooltip"] = "comment-note",
+            ["edit-hyperlink"] = "hyperlink",
+            ["remove-hyperlink"] = "hyperlink",
+            ["link-bookmark"] = "hyperlink",
+            // Layout
+            ["print-layout"] = "page-layout",
+            ["print-preview"] = "print",
+            ["page-border"] = "borders",
+            ["restrict-editing"] = "protect-sheet",
+            // Mailings
+            ["merge-data"] = "mail-merge",
+            ["merge-field"] = "mail-merge",
+            ["merge-finish"] = "mail-merge",
+            ["merge-preview"] = "mail-merge",
+            // Design / View / Review
+            ["theme"] = "themes",
+            ["spellcheck-toggle"] = "spelling",
+            ["accept-all"] = "accept-change",
+            ["reject-all"] = "reject-change",
+            // Clipboard
+            ["paste-plain"] = "paste-special",
+            ["paste-merge"] = "paste-special",
+            // Alternate id spellings carried over from the original map.
+            ["bullet-list"] = "bullets",
+            ["bulleted-list"] = "bullets",
+            ["numbered-list"] = "numbering",
+            ["pictures"] = "picture",
+            ["table-insert"] = "table",
+            ["table-of-contents-gallery"] = "table-of-contents",
+        };
 
     private static string ToCommandIconSlug(string text)
     {
