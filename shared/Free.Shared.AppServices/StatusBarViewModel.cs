@@ -5,7 +5,7 @@ namespace Free.Shared.AppServices;
 /// <summary>
 /// Platform-neutral model of the spreadsheet status bar / footer. Carries the active
 /// view mode, the zoom percent, and the selection-aggregate readout as a list of
-/// <see cref="StatusBarReadoutItem"/>s with <c>bool</c> visibility (no <c>System.Windows</c>
+/// <see cref="StatusBarReadoutItem"/>s with <c>bool</c> visibility (no WPF-only
 /// types), so it can be rendered by any shell (WPF today, Avalonia / FreeW later).
 /// </summary>
 /// <param name="ViewMode">Active worksheet view mode for the view-shortcut toggles.</param>

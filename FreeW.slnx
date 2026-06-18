@@ -18,5 +18,6 @@
     <Project Path="freew/FreeW.App.Avalonia.Tests/FreeW.App.Avalonia.Tests.csproj" />
     <Project Path="freew/tools/FreeW.FidelityRender/FreeW.FidelityRender.csproj" />
     <Project Path="freew/tools/FreeW.RibbonShot/FreeW.RibbonShot.csproj" />
+    <Project Path="tools/FreeW.RenderCompare/FreeW.RenderCompare.csproj" />
   </Folder>
 </Solution>
