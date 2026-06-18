@@ -212,7 +212,19 @@ public enum RibbonCommandIconKind
     QuickParts,
     TextFromFile,
     CheckBox,
-    HorizontalRule
+    HorizontalRule,
+
+    // Chart contextual-tab glyphs (added so Chart Design / Chart Format commands are visually distinct
+    // instead of all sharing the generic column-chart glyph).
+    ChartTitle,
+    Trendline,
+    ErrorBars,
+    SecondaryAxis,
+    Legend,
+    Marker,
+    ComboChart,
+    MoveChart,
+    AxisBounds
 }
 
 public enum RibbonCommandIconAccent

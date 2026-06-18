@@ -908,10 +908,93 @@ public static class RibbonIconDefinitions
             TextRun("2", 7, RibbonIconTextWeight.SemiBold, -8, 0), Line(9, 12, 19, 12, 1.2),
             TextRun("3", 7, RibbonIconTextWeight.SemiBold, -8, 5), Line(9, 17, 19, 17, 1.2));
 
+        // List: leading marker dash + content line per row (a plain list / details view).
+        Add(RibbonCommandIconKind.List,
+            Line(4, 7, 6, 7, 1.7), Line(8, 7, 20, 7, 1.4),
+            Line(4, 12, 6, 12, 1.7), Line(8, 12, 20, 12, 1.4),
+            Line(4, 17, 6, 17, 1.7), Line(8, 17, 20, 17, 1.4));
+
+        // Bring Forward: a filled (front) tile overlapping an outlined (back) tile, with an up arrow.
+        Add(RibbonCommandIconKind.BringForward,
+            Rectangle(11, 11, 8, 8, radius: 1),
+            FilledRectangle(5, 5, 9, 9),
+            Path("M20,12 L20,5 M17.6,7.4 L20,5 L22.4,7.4", 1.5));
+
+        // Send Backward: an outlined (front) tile overlapping a filled (back) tile, with a down arrow.
+        Add(RibbonCommandIconKind.SendBackward,
+            FilledRectangle(11, 11, 8, 8),
+            Rectangle(5, 5, 9, 9, radius: 1),
+            Path("M20,5 L20,12 M17.6,9.6 L20,12 L22.4,9.6", 1.5));
+
+        // ---- Chart contextual-tab glyphs ----
+
+        // Chart Title: a column chart carrying a filled title bar across the top.
+        Add(RibbonCommandIconKind.ChartTitle,
+            FilledRectangle(7, 4, 10, 2),
+            Line(5, 20, 20, 20, 1.3),
+            Line(5, 20, 5, 10, 1.3),
+            FilledRectangle(8, 14, 3, 6),
+            FilledRectangle(13, 10, 3, 10));
+
+        // Trendline: scattered points with a straight fitted line rising through them.
+        Add(RibbonCommandIconKind.Trendline,
+            Line(4, 20, 20, 20, 1.3),
+            Line(4, 20, 4, 5, 1.3),
+            Line(5, 18, 20, 7, 1.7),
+            FilledCircle(8, 15, 1.8),
+            FilledCircle(12, 13, 1.8),
+            FilledCircle(16, 9, 1.8));
+
+        // Error Bars: a baseline with two I-beam whiskers (value ± error).
+        Add(RibbonCommandIconKind.ErrorBars,
+            Line(4, 20, 20, 20, 1.3),
+            Line(8, 16, 8, 6, 1.5), Line(6, 6, 10, 6, 1.5), Line(6, 16, 10, 16, 1.5),
+            Line(15, 18, 15, 9, 1.5), Line(13, 9, 17, 9, 1.5), Line(13, 18, 17, 18, 1.5));
+
+        // Secondary Axis: a plot with a value axis on BOTH the left and right edges.
+        Add(RibbonCommandIconKind.SecondaryAxis,
+            Line(5, 20, 19, 20, 1.3),
+            Line(5, 20, 5, 5, 1.6),
+            Line(19, 20, 19, 5, 1.6),
+            Path("M6,16 L10,12 L13,14 L18,8", 1.6));
+
+        // Legend: two swatch keys, each with a label line.
+        Add(RibbonCommandIconKind.Legend,
+            FilledRectangle(5, 7, 4, 2.5), Line(11, 8.2, 19, 8.2, 1.4),
+            FilledRectangle(5, 13, 4, 2.5), Line(11, 14.2, 19, 14.2, 1.4));
+
+        // Marker: a single data-point marker (diamond) — series/marker styling.
+        Add(RibbonCommandIconKind.Marker,
+            ShapePath("M12,5 L18,12 L12,19 L6,12 Z"));
+
+        // Combo Chart: columns overlaid with a line series.
+        Add(RibbonCommandIconKind.ComboChart,
+            Line(5, 20, 20, 20, 1.3),
+            Line(5, 20, 5, 5, 1.3),
+            FilledRectangle(7, 13, 3, 7),
+            FilledRectangle(12, 15, 3, 5),
+            FilledRectangle(17, 11, 3, 9),
+            Path("M7,12 L13,9 L18,6", 1.7));
+
+        // Move Chart: a small chart tile with a move arrow to a new location.
+        Add(RibbonCommandIconKind.MoveChart,
+            Rectangle(4, 4, 12, 12, radius: 1),
+            FilledRectangle(6, 11, 2, 4),
+            FilledRectangle(9, 9, 2, 6),
+            FilledRectangle(12, 7, 2, 8),
+            Path("M15,15 L21,21 M21,16.5 L21,21 L16.5,21", 1.6));
+
+        // Axis Bounds: x/y axes with min–max range arrows.
+        Add(RibbonCommandIconKind.AxisBounds,
+            Line(5, 20, 20, 20, 1.5),
+            Line(5, 20, 5, 5, 1.5),
+            Path("M3,8 L5,5 L7,8", 1.3),
+            Path("M17,18 L20,20 L17,22", 1.3));
+
         // The remaining kinds have no dedicated drawing in the WPF source-of-truth and render via
         // DrawGeneric there. They are intentionally NOT added here: Resolve() falls them back to the
         // shared Generic glyph, so WPF and Avalonia stay identical. These are:
-        //   Recent, Watch, More, Logical, Math, List.
+        //   Recent, Watch, More, Logical, Math.
 
         return map;
     }

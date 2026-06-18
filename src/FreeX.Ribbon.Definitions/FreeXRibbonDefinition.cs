@@ -15,7 +15,7 @@ public static class FreeXRibbonDefinition
             .Group("InsertTablesGroup", "Tables", null, priority: 200,
                 g => g
                 .Large("PivotTable", "PivotTable", Ico.PivotTable, "PT")
-                .Large("Table", "Table", Ico.Generic, "TB"))
+                .Large("Table", "Table", Ico.Table, "TB"))
             .Group("InsertChartsGroup", "Charts", null, priority: 60,
                 g => g
                 .Large("Recommended Charts", "Recommended Charts", Ico.ChartColumn, "RC")
@@ -111,7 +111,7 @@ public static class FreeXRibbonDefinition
             .Group("FormulasFunctionLibraryGroup", "Function Library", null, priority: 200,
                 g => g
                 .Large("AutoSum#FormulasAutoSumPickerBtn_Click", "AutoSum", Ico.Sum, "U", menu: m => m.Item("Sum", "Sum", "S").Item("Average", "Average", "A").Item("Count Numbers", "Count Numbers", "C").Item("Count All", "Count All", "T").Item("Max", "Max", "X").Item("Min", "Min", "M").Item("More Functions#AutoSumMoreMenuItem_Click", "More Functions...", "F"))
-                .Medium("Recently Used", "Recently Used", Ico.Generic, "RU")
+                .Medium("Recently Used", "Recently Used", Ico.Function, "RU")
                 .Medium("Financial", "Financial", Ico.Financial, "Y")
                 .Medium("Logical Functions", "Logical Functions", Ico.Logical, "L")
                 .Medium("Text Functions", "Text Functions", Ico.TextFunction, "TF")
@@ -203,7 +203,7 @@ public static class FreeXRibbonDefinition
                 g => g
                 .Large("Protect Sheet#ProtectSheetBtn_Click", "Protect Sheet", Ico.Protect, "PS")
                 .Large("Protect Workbook", "Protect Workbook", Ico.Protect, "PW")
-                .Medium("Allow Users to Edit Ranges", "Allow Users to Edit Ranges", Ico.Generic, "AR")
+                .Medium("Allow Users to Edit Ranges", "Allow Users to Edit Ranges", Ico.Protect, "AR")
                 .Medium("Share", "Share", Ico.Share, "SH"))
         )
         .Tab("ViewTab", "View", "W", tab => tab
@@ -222,7 +222,7 @@ public static class FreeXRibbonDefinition
             .Group("ViewZoomGroup", "Zoom", null, priority: 110,
                 g => g
                 .Large("Zoom", "Zoom", Ico.Zoom, "Q", menu: m => m.Item("200%", "200%", "2").Item("100%#ZoomPresetMenuItem_Click", "100%", "1").Item("75%", "75%", "7").Item("50%", "50%", "5").Item("25%", "25%", "3").Separator().Item("More", "Custom...", "C"))
-                .Large("100%#Zoom100Btn_Click", "100%", Ico.Generic, "Z1")
+                .Large("100%#Zoom100Btn_Click", "100%", Ico.Zoom, "Z1")
                 .Large("Zoom to Selection", "Zoom to Selection", Ico.Zoom, "ZS"))
             .Group("ViewWindowGroup", "Window", null, priority: 90,
                 g => g
@@ -240,74 +240,74 @@ public static class FreeXRibbonDefinition
         .Tab("HelpTab", "Help", "Y", tab => tab
             .Group("HelpHelpGroup", "Help", null, priority: 200,
                 g => g
-                .Large("Help Online#HelpOnlineBtn_Click", "Help Online", Ico.Generic, "H")
+                .Large("Help Online#HelpOnlineBtn_Click", "Help Online", Ico.Help, "H")
                 .Large("Feedback#FeedbackBtn_Click", "Feedback", Ico.Comment, "F")
                 .Large("Copy Diagnostics#CopyDiagnosticsBtn_Click", "Copy Diagnostics", Ico.List, "D")
-                .Large("Check for Updates#CheckForUpdatesBtn_Click", "Check for Updates", Ico.Generic, "U")
-                .Large("About FreeX#AboutBtn_Click", "About FreeX", Ico.Generic, "A")
-                .Large("Legal Notices#LegalNoticesBtn_Click", "Legal Notices", Ico.Generic, "L"))
+                .Large("Check for Updates#CheckForUpdatesBtn_Click", "Check for Updates", Ico.Refresh, "U")
+                .Large("About FreeX#AboutBtn_Click", "About FreeX", Ico.Info, "A")
+                .Large("Legal Notices#LegalNoticesBtn_Click", "Legal Notices", Ico.Book, "L"))
         )
         .ContextualTab("ChartDesignTab", "Chart Design", new RibbonTabContext("chart.selected", "Chart Design", RibbonContextColor.Green), tab => tab
             .Group("ChartDesignLayoutsGroup", "Layouts", null, priority: 180,
                 g => g
-                .Medium("Chart Titles", "Chart Titles", Ico.ChartColumn, "T")
+                .Medium("Chart Titles", "Chart Titles", Ico.ChartTitle, "T")
                 .Medium("Data Labels", "Data Labels", Ico.Label, "D")
-                .Medium("Data Label Position", "Data Label Position", Ico.Label, "P")
-                .Medium("Trendline", "Trendline", Ico.ChartLine, "R")
-                .Medium("Error Bars", "Error Bars", Ico.ChartLine, "E")
-                .Medium("Secondary Axis", "Secondary Axis", Ico.ChartLine, "S"))
+                .Medium("Data Label Position", "Data Label Position", Ico.Align, "P")
+                .Medium("Trendline", "Trendline", Ico.Trendline, "R")
+                .Medium("Error Bars", "Error Bars", Ico.ErrorBars, "E")
+                .Medium("Secondary Axis", "Secondary Axis", Ico.SecondaryAxis, "S"))
             .Group("ChartDesignStylesGroup", "Styles", null, priority: 170,
                 g => g
-                .Medium("Chart Styles", "Chart Styles", Ico.ChartColumn, "Y"))
+                .Medium("Chart Styles", "Chart Styles", Ico.Theme, "Y"))
             .Group("ChartDesignDataGroup", "Data", null, priority: 160,
                 g => g
                 .Medium("Select Data Source", "Select Data Source", Ico.Search, "A"))
             .Group("ChartDesignTypeGroup", "Type", null, priority: 150,
                 g => g
                 .Medium("Change Chart Type#ChangeChartTypeBtn_Click", "Change Chart Type", Ico.ChartColumn, "CT")
-                .Medium("Combo Chart", "Combo Chart", Ico.ChartColumn, "CO")
-                .Medium("Combo Chart Series", "Combo Chart Series", Ico.ChartColumn, "CS"))
+                .Medium("Combo Chart", "Combo Chart", Ico.ComboChart, "CO")
+                .Medium("Combo Chart Series", "Combo Chart Series", Ico.ComboChart, "CS"))
             .Group("ChartDesignLocationGroup", "Location", null, priority: 140,
                 g => g
-                .Medium("Move Chart", "Move Chart", Ico.ChartColumn, "M"))
+                .Medium("Move Chart", "Move Chart", Ico.MoveChart, "M"))
         )
         .ContextualTab("ChartFormatTab", "Chart Format", new RibbonTabContext("chart.selected", "Chart Format", RibbonContextColor.Green), tab => tab
             .Group("ChartFormatCurrentSelectionGroup", "Current Selection", null, priority: 180,
                 g => g
                 .Medium("Format Chart Area", "Format Chart Area", Ico.ChartColumn, "F")
-                .Medium("Format Bar/Column", "Format Bar/Column", Ico.Size, "B")
+                .Medium("Format Bar/Column", "Format Bar/Column", Ico.ChartColumn, "B")
                 .Medium("Format Pie/Doughnut", "Format Pie/Doughnut", Ico.ChartPie, "P")
                 .Medium("Format Bubble Chart", "Format Bubble Chart", Ico.ChartScatter, "U")
                 .Medium("Format Stock Chart", "Format Stock Chart", Ico.ChartLine, "S"))
             .Group("ChartFormatShapeStylesGroup", "Shape Styles", null, priority: 170,
                 g => g
-                .Medium("Chart Area Fill", "Chart Area Fill", Ico.ChartColumn, "AF")
-                .Medium("Plot Area Fill", "Plot Area Fill", Ico.ChartArea, "V")
+                .Medium("Chart Area Fill", "Chart Area Fill", Ico.Fill, "AF")
+                .Medium("Plot Area Fill", "Plot Area Fill", Ico.Fill, "V")
                 .Medium("Plot Area Border", "Plot Area Border", Ico.Border, "O")
-                .Medium("Series Color", "Series Color", Ico.ChartColumn, "C")
-                .Medium("Series Width", "Series Width", Ico.ChartColumn, "W")
-                .Medium("Series Dash", "Series Dash", Ico.ChartColumn, "R")
-                .Medium("Series Marker", "Series Marker", Ico.ChartColumn, "K")
-                .Medium("Marker Size", "Marker Size", Ico.ChartScatter, "Z"))
+                .Medium("Series Color", "Series Color", Ico.Color, "C")
+                .Medium("Series Width", "Series Width", Ico.Size, "W")
+                .Medium("Series Dash", "Series Dash", Ico.Line, "R")
+                .Medium("Series Marker", "Series Marker", Ico.Marker, "K")
+                .Medium("Marker Size", "Marker Size", Ico.Marker, "Z"))
             .Group("ChartFormatTextGroup", "Text", null, priority: 80,
                 g => g
-                .Medium("Chart Title Color", "Chart Title Color", Ico.ChartColumn, "TC")
-                .Medium("Chart Title Size", "Chart Title Size", Ico.ChartColumn, "TS")
-                .Medium("Axis Title Color", "Axis Title Color", Ico.ChartLine, "AC")
-                .Medium("Axis Title Size", "Axis Title Size", Ico.ChartLine, "AS")
-                .Medium("Legend Text", "Legend Text", Ico.Label, "LT")
-                .Medium("Legend Font Size", "Legend Font Size", Ico.Font, "LS")
+                .Medium("Chart Title Color", "Chart Title Color", Ico.FontColor, "TC")
+                .Medium("Chart Title Size", "Chart Title Size", Ico.Font, "TS")
+                .Medium("Axis Title Color", "Axis Title Color", Ico.FontColor, "AC")
+                .Medium("Axis Title Size", "Axis Title Size", Ico.Font, "AS")
+                .Medium("Legend Text", "Legend Text", Ico.Legend, "LT")
+                .Medium("Legend Font Size", "Legend Font Size", Ico.Legend, "LS")
                 .Medium("Data Label Text", "Data Label Text", Ico.Label, "DT")
-                .Medium("Data Label Fill", "Data Label Fill", Ico.Label, "DF")
+                .Medium("Data Label Fill", "Data Label Fill", Ico.Fill, "DF")
                 .Medium("Data Label Border", "Data Label Border", Ico.Border, "DB"))
             .Group("ChartFormatAxesGroup", "Axes", null, priority: 150,
                 g => g
-                .Medium("X Axis Bounds", "X Axis Bounds", Ico.ChartLine, "XB")
-                .Medium("Y Axis Bounds", "Y Axis Bounds", Ico.ChartLine, "YB")
+                .Medium("X Axis Bounds", "X Axis Bounds", Ico.AxisBounds, "XB")
+                .Medium("Y Axis Bounds", "Y Axis Bounds", Ico.AxisBounds, "YB")
                 .Medium("X Axis Gridlines", "X Axis Gridlines", Ico.Grid, "XG")
                 .Medium("Y Axis Gridlines", "Y Axis Gridlines", Ico.Grid, "YG")
-                .Medium("X Axis Labels", "X Axis Labels", Ico.ChartLine, "XA")
-                .Medium("Y Axis Labels", "Y Axis Labels", Ico.ChartLine, "YA"))
+                .Medium("X Axis Labels", "X Axis Labels", Ico.Label, "XA")
+                .Medium("Y Axis Labels", "Y Axis Labels", Ico.Label, "YA"))
         )
         .ContextualTab("PictureFormatTab", "Picture Format", new RibbonTabContext("picture.selected", "Picture Format", RibbonContextColor.Teal), tab => tab
             .Group("PictureFormatFormatGroup", "Format", null, priority: 180,
@@ -346,7 +346,7 @@ public static class FreeXRibbonDefinition
         .ContextualTab("TableDesignTab", "Table Design", new RibbonTabContext("table.active", "Table Design", RibbonContextColor.Blue), tab => tab
             .Group("TableDesignPropertiesGroup", "Properties", null, priority: 180,
                 g => g
-                .Medium("Table Name", "Table Name", Ico.Generic, "N")
+                .Medium("Table Name", "Table Name", Ico.Table, "N")
                 .Medium("Resize Table", "Resize Table", Ico.Scale, "Z"))
             .Group("TableDesignToolsGroup", "Tools", null, priority: 170,
                 g => g
@@ -385,7 +385,7 @@ public static class FreeXRibbonDefinition
             .Group("PivotTableAnalyzeDataGroup", "Data", null, priority: 140,
                 g => g
                 .Medium("Refresh", "Refresh", Ico.Refresh, "R")
-                .Medium("Change Data Source", "Change Data Source", Ico.Generic, "CD"))
+                .Medium("Change Data Source", "Change Data Source", Ico.GetData, "CD"))
             .Group("PivotTableAnalyzeActionsGroup", "Actions", null, priority: 130,
                 g => g
                 .Medium("Clear#PivotTableClearBtn_Click", "Clear", Ico.Clear, "CL")
@@ -403,7 +403,7 @@ public static class FreeXRibbonDefinition
             .Group("PivotTableAnalyzeShowGroup", "Show", null, priority: 180,
                 g => g
                 .Medium("Field List", "Field List", Ico.Label, "FL")
-                .Medium("+/- Buttons", "+/- Buttons", Ico.Generic, "PB")
+                .Medium("+/- Buttons", "+/- Buttons", Ico.Expand, "PB")
                 .Large("Field Headers", "Field Headers", Ico.HeaderFooter, "FH"))
         )
         .ContextualTab("PivotTableDesignTab", "PivotTable Design", new RibbonTabContext("pivot.active", "PivotTable Design", RibbonContextColor.Orange), tab => tab
