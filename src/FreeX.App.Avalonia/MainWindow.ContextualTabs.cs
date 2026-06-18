@@ -102,15 +102,18 @@ public sealed partial class MainWindow
             // PivotTable Options dialog — totals & layout-display options via ConfigurePivotTableOptionsCommand
             // (MainWindow.PivotOptions).
             ["pivotAnalyze.options"] = OpenPivotTableOptions,
-            // No Core support yet (name dialog, field settings, group/ungroup, change data source,
-            // calculated field, pivot styles gallery) — honest stubs.
+            // Change Data Source dialog — validates/resolves a new source range via PivotDataSourcePlanner and
+            // applies it through ChangePivotTableSourceCommand (MainWindow.PivotDataSource).
+            ["pivotAnalyze.changeDataSource"] = OpenPivotDataSource,
+            // PivotTable Styles gallery — picks a built-in style via PivotStyleGalleryPlanner and applies it
+            // through ConfigurePivotTableOptionsCommand (MainWindow.PivotStyleGallery).
+            ["pivotDesign.pivotStyles"] = OpenPivotStyleGallery,
+            // No Core support yet (name dialog, field settings, group/ungroup, calculated field) — honest stubs.
             ["pivotAnalyze.name"] = () => ReportPivotNotYetAvailable("PivotTable Name"),
             ["pivotAnalyze.fieldSettings"] = () => ReportPivotNotYetAvailable("Field Settings"),
             ["pivotAnalyze.groupField"] = () => ReportPivotNotYetAvailable("Group Field"),
             ["pivotAnalyze.ungroup"] = () => ReportPivotNotYetAvailable("Ungroup"),
-            ["pivotAnalyze.changeDataSource"] = () => ReportPivotNotYetAvailable("Change Data Source"),
             ["pivotAnalyze.calculatedField"] = () => ReportPivotNotYetAvailable("Calculated Field"),
-            ["pivotDesign.pivotStyles"] = () => ReportPivotNotYetAvailable("PivotTable Styles"),
 
             // Shape Effects is a dropdown: clicking the parent opens its menu (No Effect / Shadow, wired via
             // BuildPictureShapeTabCommands). Register the parent id too so the renderer keeps it enabled
