@@ -14842,22 +14842,15 @@ public sealed partial class MainWindow : Window
                     return;
                 }
 
-                PortablePdfDocumentExportResult result;
-                try
-                {
-                    // Skia shapes and automatically embeds/subsets fonts, so Unicode (non-WinAnsi)
-                    // text exports correctly. Fall back to the dependency-free WinAnsi writer if Skia
-                    // is unavailable so export still works for ASCII/WinAnsi content.
-                    using var pdfBuffer = new MemoryStream();
-                    result = Pdf.SkiaPdfDocumentExporter.Save(_session.Workbook, exportPlan, pdfBuffer);
-                    await File.WriteAllBytesAsync(path, pdfBuffer.ToArray());
-                }
-                catch (Exception)
-                {
-                    result = PortablePdfDocumentExporter.Save(_session.Workbook, exportPlan, path);
-                }
+                // Prefer the Unicode-capable Skia writer (shapes + auto-embeds/subsets fonts), and
+                // fall back to the dependency-free WinAnsi writer when Skia is unavailable
+                // (headless/no-Skia). The routing decision lives in AvaloniaPdfDocumentExporter so it
+                // is exercised by tests.
+                using var pdfBuffer = new MemoryStream();
+                var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, exportPlan, pdfBuffer);
+                await File.WriteAllBytesAsync(path, pdfBuffer.ToArray());
 
-                RefreshShell($"{result.StatusText} {Path.GetFileName(path)}");
+                RefreshShell($"{outcome.Result.StatusText} {Path.GetFileName(path)}");
             }
             catch (Exception ex)
             {
