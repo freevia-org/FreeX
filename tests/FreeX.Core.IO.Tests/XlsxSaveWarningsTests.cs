@@ -68,6 +68,41 @@ public sealed class XlsxSaveWarningsTests
         reloadedA.Sheets.Count.Should().Be(reloadedB.Sheets.Count);
     }
 
+    [Fact]
+    public void SaveWithWarnings_InvalidComment_ReturnsWarning()
+    {
+        var adapter = new XlsxFileAdapter();
+        var workbook = CreateSimpleWorkbook();
+        var sheet = workbook.Sheets.First();
+        var invalidAddress = new CellAddress(sheet.Id, CellAddress.MaxRow + 1, 1);
+        sheet.Comments[invalidAddress] = "Cannot be written to XLSX.";
+
+        var result = SaveWithWarnings(adapter, workbook);
+
+        result.HasWarnings.Should().BeTrue();
+        result.Warnings.Should().Contain(w =>
+            w.Contains("[comment]", StringComparison.OrdinalIgnoreCase) &&
+            w.Contains("Sheet1!A1048577", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void SaveWithWarnings_InvalidHyperlink_ReturnsWarning()
+    {
+        var adapter = new XlsxFileAdapter();
+        var workbook = CreateSimpleWorkbook();
+        var sheet = workbook.Sheets.First();
+        var invalidAddress = new CellAddress(sheet.Id, CellAddress.MaxRow + 1, 1);
+        sheet.Hyperlinks[invalidAddress] = "https://example.invalid/";
+
+        var result = SaveWithWarnings(adapter, workbook);
+
+        result.HasWarnings.Should().BeTrue();
+        result.Warnings.Should().Contain(w =>
+            w.Contains("[hyperlink]", StringComparison.OrdinalIgnoreCase) &&
+            w.Contains("Sheet1!A1048577", StringComparison.OrdinalIgnoreCase) &&
+            w.Contains("https://example.invalid/", StringComparison.OrdinalIgnoreCase));
+    }
+
     // ── XlsxNamedRangeMapper.Save — per-item isolation ───────────────────────
 
     [Fact]

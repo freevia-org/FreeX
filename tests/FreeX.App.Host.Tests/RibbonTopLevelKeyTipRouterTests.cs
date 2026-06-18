@@ -112,10 +112,10 @@ public sealed class RibbonTopLevelKeyTipRouterTests
     }
 
     private static IReadOnlyList<RibbonTopLevelKeyTipEntry> VisibleCatalogEntries() =>
-        EntriesFrom(RibbonXamlCatalogSnapshotReader.ReadMainWindow().VisibleTabs);
+        EntriesFrom(RibbonXamlCatalogSnapshotReader.ReadMainWindowTabShells().Where(tab => !tab.IsContextual));
 
     private static IReadOnlyList<RibbonTopLevelKeyTipEntry> AllCatalogEntries() =>
-        EntriesFrom(RibbonXamlCatalogSnapshotReader.ReadMainWindow().Tabs);
+        EntriesFrom(RibbonXamlCatalogSnapshotReader.ReadMainWindowTabShells());
 
     private static IReadOnlyList<RibbonTopLevelKeyTipEntry> EntriesFrom(IEnumerable<RibbonTabDefinition> tabs) =>
         tabs

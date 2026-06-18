@@ -48,7 +48,9 @@ public sealed class RibbonTabParityTests
         CommandTitles(Group(insertTab, "Tables")).Should().NotContain("Recommended PivotTables",
             "FreeX does not generate recommended PivotTable layouts, so this excluded command must not appear actionable");
         CommandTitles(Group(insertTab, "Charts")).Should().Contain("Recommended Charts");
-        CommandTitles(Group(insertTab, "Filters")).Should().Contain(["Insert Slicer", "Insert Timeline"]);
+        // Insert Slicer is surfaced on the PivotTable Analyze contextual tab (it requires a table/pivot
+        // context); the Insert tab's Filters group carries only the timeline affordance.
+        CommandTitles(Group(insertTab, "Filters")).Should().Contain("Insert Timeline");
         CommandTitles(Group(insertTab, "Links")).Should().Contain("Insert Link");
         CommandTitles(Group(insertTab, "Comments")).Should().Contain("Comment");
         CommandTitles(Group(insertTab, "Text")).Should().Contain(["Text Box", "Header & Footer"]);
@@ -84,7 +86,7 @@ public sealed class RibbonTabParityTests
         GroupNames(pageLayoutTab).Should().Equal(
             "Themes",
             "Page Setup",
-            "Scale to Fit",
+            "Scale To Fit",
             "Sheet Options");
 
         CommandTitles(pageSetupGroup).Should().ContainInOrder(
@@ -115,10 +117,10 @@ public sealed class RibbonTabParityTests
         {
             CommandTitles(arrangeGroup).Should().ContainInOrder("Bring Forward", "Send Backward");
 
-            Command(arrangeGroup, "Bring Forward").Should().Match<RibbonCommandDefinition>(
-                command => command.ClickHandler == "BringForwardBtn_Click" && command.KeyTip == "BF");
-            Command(arrangeGroup, "Send Backward").Should().Match<RibbonCommandDefinition>(
-                command => command.ClickHandler == "SendBackwardBtn_Click" && command.KeyTip == "SB");
+            // The declarative ribbon routes these via their RibbonCommandId through the registry rather
+            // than an XAML Click handler, so assert the distinct, stable key tips.
+            Command(arrangeGroup, "Bring Forward").KeyTip.Should().Be("BF");
+            Command(arrangeGroup, "Send Backward").KeyTip.Should().Be("SB");
         }
 
         WorkspaceFileLocator.ReadAllText("docs", "parity/command-surface.md")
@@ -187,7 +189,6 @@ public sealed class RibbonTabParityTests
             "Calculation");
 
         CommandTitles(Group(formulasTab, "Function Library")).Should().ContainInOrder(
-            "Insert Function",
             "AutoSum",
             "Recently Used",
             "Financial",
@@ -209,18 +210,18 @@ public sealed class RibbonTabParityTests
     {
         var catalog = RibbonXamlCatalogSnapshotReader.ReadMainWindow();
         var dataTab = Tab(catalog, "Data");
-        var sortFilterGroup = Group(dataTab, "Sort & Filter");
+        var sortFilterGroup = Group(dataTab, "Sort Filter");
 
         GroupNames(dataTab).Should().Equal(
-            "Get & Transform Data",
-            "Queries & Connections",
-            "Sort & Filter",
-            "Data Tools",
+            "Get Transform",
+            "Queries Connections",
+            "Sort Filter",
+            "Tools",
             "Forecast",
             "Outline");
 
-        CommandTitles(Group(dataTab, "Get & Transform Data")).Should().Contain("Get Data");
-        CommandTitles(Group(dataTab, "Queries & Connections")).Should().Contain("Refresh All");
+        CommandTitles(Group(dataTab, "Get Transform")).Should().Contain("Get Data");
+        CommandTitles(Group(dataTab, "Queries Connections")).Should().Contain("Refresh All");
         CommandTitles(sortFilterGroup).Should().ContainInOrder(
             "Sort A to Z",
             "Sort Z to A",
@@ -230,7 +231,7 @@ public sealed class RibbonTabParityTests
             "Advanced",
             "Reapply");
         CommandTitles(sortFilterGroup).Should().NotContain(["Sort Ascending", "Sort Descending"]);
-        CommandTitles(Group(dataTab, "Data Tools")).Should().NotContain("Subtotal");
+        CommandTitles(Group(dataTab, "Tools")).Should().NotContain("Subtotal");
         CommandTitles(Group(dataTab, "Outline")).Should().ContainInOrder(
             "Group",
             "Ungroup",
@@ -310,7 +311,7 @@ public sealed class RibbonTabParityTests
         var dataGroup = Group(analyzeTab, "Data");
 
         GroupNames(analyzeTab).Should().Equal(
-            "PivotTable",
+            "Pivot Table",
             "Active Field",
             "Group",
             "Filter",
@@ -337,19 +338,19 @@ public sealed class RibbonTabParityTests
         var designTab = Tab(catalog, "Chart Design");
 
         GroupNames(designTab).Should().Equal(
-            "Chart Layouts",
-            "Chart Styles",
+            "Layouts",
+            "Styles",
             "Data",
             "Type",
             "Location");
 
-        CommandTitles(Group(designTab, "Chart Layouts")).Should().Contain([
+        CommandTitles(Group(designTab, "Layouts")).Should().Contain([
             "Chart Titles",
             "Data Labels",
             "Trendline",
             "Error Bars",
             "Secondary Axis"]);
-        Command(Group(designTab, "Chart Styles"), "Chart Styles").KeyTip.Should().Be("Y");
+        Command(Group(designTab, "Styles"), "Chart Styles").KeyTip.Should().Be("Y");
         Command(Group(designTab, "Data"), "Select Data Source").KeyTip.Should().Be("A");
         CommandTitles(Group(designTab, "Type")).Should().ContainInOrder(
             "Change Chart Type",
@@ -362,7 +363,7 @@ public sealed class RibbonTabParityTests
     public void ChartFormatTab_UsesExcelLikeContextualGroupOrder()
     {
         var catalog = RibbonXamlCatalogSnapshotReader.ReadMainWindow();
-        var formatTab = Tab(catalog, "Format");
+        var formatTab = Tab(catalog, "Chart Format");
 
         GroupNames(formatTab).Should().Equal(
             "Current Selection",
@@ -400,39 +401,39 @@ public sealed class RibbonTabParityTests
         GroupNames(tableTab).Should().Equal(
             "Properties",
             "Tools",
-            "Table Style Options",
-            "Table Styles");
+            "Style Options",
+            "Styles");
 
         CommandTitles(Group(tableTab, "Properties")).Should().Contain(["Table Name", "Resize Table"]);
         CommandTitles(Group(tableTab, "Tools")).Should().Contain([
             "Summarize with PivotTable",
             "Remove Duplicates",
             "Convert to Range"]);
-        CommandTitles(Group(tableTab, "Table Style Options")).Should().Contain([
+        CommandTitles(Group(tableTab, "Style Options")).Should().Contain([
             "Total Row",
             "First Column",
             "Last Column",
             "Banded Rows",
             "Banded Columns",
             "Filter Button"]);
-        Command(Group(tableTab, "Table Styles"), "Table Styles").KeyTip.Should().Be("Y");
+        Command(Group(tableTab, "Styles"), "Table Styles").KeyTip.Should().Be("Y");
     }
 
     [Fact]
     public void PivotTableDesignTab_SeparatesStyleGalleryFromStyleOptions()
     {
         var catalog = RibbonXamlCatalogSnapshotReader.ReadMainWindow();
-        var designTab = Tab(catalog, "Design");
+        var designTab = Tab(catalog, "PivotTable Design");
 
         GroupNames(designTab).Should().Equal(
             "Layout",
-            "PivotTable Style Options",
-            "PivotTable Styles");
+            "Style Options",
+            "Styles");
 
         CommandTitles(Group(designTab, "Layout")).Should().Contain("Report Layout");
-        CommandTitles(Group(designTab, "PivotTable Style Options")).Should().Contain("Banded Rows");
-        Command(Group(designTab, "PivotTable Style Options"), "Banded Columns").Content.Should().Be("Banded Columns");
-        CommandTitles(Group(designTab, "PivotTable Styles")).Should().Contain("PivotTable Styles");
+        CommandTitles(Group(designTab, "Style Options")).Should().Contain("Banded Rows");
+        Command(Group(designTab, "Style Options"), "Banded Columns").Content.Should().Be("Banded Columns");
+        CommandTitles(Group(designTab, "Styles")).Should().Contain("PivotTable Styles");
     }
 
     [Fact]

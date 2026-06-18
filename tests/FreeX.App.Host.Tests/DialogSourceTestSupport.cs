@@ -130,6 +130,12 @@ internal static class DialogSourceTestSupport
     private static string ReadAppUiSource(string fileName) =>
         WorkspaceFileLocator.ReadAllText("src", "FreeX.App.UI", fileName);
 
+    public static string ReadShellSources(params string[] fileNames) =>
+        string.Join(Environment.NewLine, fileNames.Select(ReadShellSource));
+
+    private static string ReadShellSource(string fileName) =>
+        WorkspaceFileLocator.ReadAllText("shared", "Free.Shared.Shell", fileName);
+
     public static string ReadAppServicesSource(string fileName) =>
         WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Services", fileName);
 
@@ -138,4 +144,16 @@ internal static class DialogSourceTestSupport
 
     public static string ReadRibbonDefinitionSource(string fileName) =>
         WorkspaceFileLocator.ReadAllText("src", "FreeX.Ribbon.Definitions", fileName);
+
+    public static string ReadRibbonDefinitionFile(params string[] relativeParts) =>
+        WorkspaceFileLocator.ReadAllText(
+            new[] { "src", "FreeX.Ribbon.Definitions" }.Concat(relativeParts).ToArray());
+
+    public static string FindRibbonDefinitionFile(params string[] relativeParts) =>
+        WorkspaceFileLocator.Find(
+            new[] { "src", "FreeX.Ribbon.Definitions" }.Concat(relativeParts).ToArray());
+
+    public static string FindRibbonDefinitionDirectory(params string[] relativeParts) =>
+        Path.GetDirectoryName(FindRibbonDefinitionFile(relativeParts))
+        ?? throw new DirectoryNotFoundException("Could not locate FreeX.Ribbon.Definitions source directory.");
 }

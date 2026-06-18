@@ -10,7 +10,7 @@ license text and package-provided license text found in the restored packages.
 ## Audit Status
 
 - Audit command: `dotnet restore FreeX.slnx --disable-parallel -v:minimal`.
-- Restored package inventory: 66 unique NuGet packages across 18
+- Restored package inventory: 67 unique NuGet packages across 18
   `project.assets.json` files.
 - Coverage: every restored package is listed below.
 - Runtime package posture: the publishable app dependency set is covered by
@@ -84,6 +84,7 @@ replace this dependency or confirm the project has the required Xceed license.
 | SkiaSharp.NativeAssets.Win32 | 3.119.4 | MIT | https://go.microsoft.com/fwlink/?linkid=868515 |
 | System.IO.Packaging | 8.0.1 | MIT | https://dot.net/ |
 | Tmds.DBus.Protocol | 0.92.0 | MIT |  |
+| Velopack | 1.2.0 | MIT | https://github.com/velopack/velopack |
 
 ## Test And Development Packages
 

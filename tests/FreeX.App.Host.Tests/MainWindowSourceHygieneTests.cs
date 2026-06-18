@@ -102,11 +102,16 @@ public sealed partial class MainWindowSourceHygieneTests
             })
             .ToList();
 
+        // The live-UI E2E harness is the only place that *launches* FreeX.App.Host.exe as a process.
+        // WindowsFileAssociationServiceTests names the exe purely as a registry-command argument (it
+        // never spawns the app), so it is a legitimate non-launch reference rather than a parallel
+        // process-launch path.
         testSources
             .Where(file => file.Source.Contains("FreeX.App.Host.exe", StringComparison.Ordinal))
             .Select(file => file.RelativePath)
+            .OrderBy(path => path, StringComparer.Ordinal)
             .Should()
-            .Equal(["FormulaEditingUiE2eTests.cs"]);
+            .Equal(["FileAssociations/WindowsFileAssociationServiceTests.cs", "FormulaEditingUiE2eTests.cs"]);
         testSources
             .Where(file => file.Source.Contains("FreeXUiRun.Start()", StringComparison.Ordinal))
             .Select(file => file.RelativePath)
@@ -312,12 +317,18 @@ public sealed partial class MainWindowSourceHygieneTests
 
         File.Exists(startupSourcePath).Should().BeTrue();
         var startupSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Startup.cs");
+        // After the ribbon XAML→declarative cutover the Home Number Format combo is populated on the
+        // *rendered* declarative ribbon by PopulateAndWireRenderedHomeCombos (MainWindow.RibbonDeclarative.cs),
+        // which startup reaches via TryApplyDeclarativeRibbon(). The planner no longer feeds a startup stub.
+        var declarativeSource = DialogSourceTestSupport.ReadHostSources("MainWindow.RibbonDeclarative.cs");
 
         mainSource.Should().NotContain("private void MainWindow_Loaded(");
         mainSource.Should().NotContain("HomeNumberFormatDropdownPlanner");
 
         startupSource.Should().Contain("private void MainWindow_Loaded(");
-        startupSource.Should().Contain("HomeNumberFormatDropdownPlanner.Options");
+        startupSource.Should().NotContain("HomeNumberFormatDropdownPlanner");
+        startupSource.Should().Contain("TryApplyDeclarativeRibbon();");
+        declarativeSource.Should().Contain("HomeNumberFormatDropdownPlanner.Options");
         startupSource.Should().Contain("CreateNewWorkbook();");
         startupSource.Should().Contain("NormalizeRibbonSurface(forceCompact: true);");
     }

@@ -27,7 +27,8 @@ public sealed class DialogFocusTests
     [Fact]
     public void FocusAndSelect_PreservesKeyboardFocusCall()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("DialogFocus.cs");
+        // DialogFocus was extracted into the shared shell helpers project.
+        var source = DialogSourceTestSupport.ReadShellSources("DialogFocus.cs");
 
         source.Should().Contain("target.Focus();");
         source.Should().Contain("target.SelectAll();");
