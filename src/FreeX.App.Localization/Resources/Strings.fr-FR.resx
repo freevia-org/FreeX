@@ -97,4 +97,37 @@
   <data name="PivotFilter_LabelHeading" xml:space="preserve"><value>Afficher les éléments dont l'étiquette :</value></data>
   <data name="PivotFilter_SummarizeBy" xml:space="preserve"><value>Synthétiser par :</value></data>
   <data name="PivotFilter_WhereValueIs" xml:space="preserve"><value>où la valeur est :</value></data>
+  <data name="ChartDataLabels_Title" xml:space="preserve"><value>Étiquettes de données</value></data>
+  <data name="ChartDataLabels_Show" xml:space="preserve"><value>Afficher les étiquettes de données</value></data>
+  <data name="ChartDataLabels_PositionLabel" xml:space="preserve"><value>Position de l'étiquette :</value></data>
+  <data name="ChartDataLabels_ContainsLabel" xml:space="preserve"><value>L'étiquette contient :</value></data>
+  <data name="ChartDataLabels_Value" xml:space="preserve"><value>Valeur</value></data>
+  <data name="ChartDataLabels_CategoryName" xml:space="preserve"><value>Nom de catégorie</value></data>
+  <data name="ChartDataLabels_SeriesName" xml:space="preserve"><value>Nom de série</value></data>
+  <data name="ChartDataLabels_Percentage" xml:space="preserve"><value>Pourcentage</value></data>
+  <data name="ChartDataLabels_LegendKey" xml:space="preserve"><value>Symbole de légende</value></data>
+  <data name="ChartAxis_MinimumLabel" xml:space="preserve"><value>Minimum (vide = auto) :</value></data>
+  <data name="ChartAxis_MaximumLabel" xml:space="preserve"><value>Maximum (vide = auto) :</value></data>
+  <data name="ChartAxis_MajorUnitLabel" xml:space="preserve"><value>Unité principale (vide = auto) :</value></data>
+  <data name="ChartAxis_LogScale" xml:space="preserve"><value>Échelle logarithmique</value></data>
+  <data name="ChartAxis_NumberFormatLabel" xml:space="preserve"><value>Format de nombre :</value></data>
+  <data name="ChartAxis_ShowMajorGridlines" xml:space="preserve"><value>Afficher le quadrillage principal</value></data>
+  <data name="ChartAxis_ShowMinorGridlines" xml:space="preserve"><value>Afficher le quadrillage secondaire</value></data>
+  <data name="ChartSeries_Title" xml:space="preserve"><value>Mettre en forme la série</value></data>
+  <data name="ChartSeries_SeriesLabel" xml:space="preserve"><value>Série :</value></data>
+  <data name="ChartSeries_FillAndLineLabel" xml:space="preserve"><value>Remplissage et ligne :</value></data>
+  <data name="ChartSeries_LineWidthLabel" xml:space="preserve"><value>Largeur de ligne (vide = auto) :</value></data>
+  <data name="ChartSeries_MarkerLabel" xml:space="preserve"><value>Marqueur :</value></data>
+  <data name="ChartSeries_MarkerSizeLabel" xml:space="preserve"><value>Taille du marqueur (vide = auto) :</value></data>
+  <data name="ChartSeries_FillColor" xml:space="preserve"><value>Couleur de remplissage</value></data>
+  <data name="ChartSeries_LineColor" xml:space="preserve"><value>Couleur de ligne</value></data>
+  <data name="ChartSeries_FillColorDialogTitle" xml:space="preserve"><value>Couleur de remplissage de la série</value></data>
+  <data name="ChartSeries_LineColorDialogTitle" xml:space="preserve"><value>Couleur de ligne de la série</value></data>
+  <data name="ChartTrendline_Title" xml:space="preserve"><value>Courbe de tendance</value></data>
+  <data name="ChartTrendline_Show" xml:space="preserve"><value>Afficher la courbe de tendance</value></data>
+  <data name="ChartTrendline_TypeLabel" xml:space="preserve"><value>Type de courbe de tendance :</value></data>
+  <data name="ChartTrendline_PeriodLabel" xml:space="preserve"><value>Période de moyenne mobile (moyenne mobile uniquement) :</value></data>
+  <data name="ChartTrendline_OrderLabel" xml:space="preserve"><value>Ordre polynomial (polynomial uniquement) :</value></data>
+  <data name="ChartTrendline_ShowEquation" xml:space="preserve"><value>Afficher l'équation sur le graphique</value></data>
+  <data name="ChartTrendline_ShowRSquared" xml:space="preserve"><value>Afficher le coefficient de détermination (R²)</value></data>
 </root>

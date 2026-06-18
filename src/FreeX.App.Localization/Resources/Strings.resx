@@ -102,4 +102,41 @@
   <data name="PivotFilter_LabelHeading" xml:space="preserve"><value>Show items where the label:</value></data>
   <data name="PivotFilter_SummarizeBy" xml:space="preserve"><value>Summarize by:</value></data>
   <data name="PivotFilter_WhereValueIs" xml:space="preserve"><value>where the value is:</value></data>
+  <!-- Chart: Data Labels dialog -->
+  <data name="ChartDataLabels_Title" xml:space="preserve"><value>Data Labels</value></data>
+  <data name="ChartDataLabels_Show" xml:space="preserve"><value>Show data labels</value></data>
+  <data name="ChartDataLabels_PositionLabel" xml:space="preserve"><value>Label position:</value></data>
+  <data name="ChartDataLabels_ContainsLabel" xml:space="preserve"><value>Label contains:</value></data>
+  <data name="ChartDataLabels_Value" xml:space="preserve"><value>Value</value></data>
+  <data name="ChartDataLabels_CategoryName" xml:space="preserve"><value>Category name</value></data>
+  <data name="ChartDataLabels_SeriesName" xml:space="preserve"><value>Series name</value></data>
+  <data name="ChartDataLabels_Percentage" xml:space="preserve"><value>Percentage</value></data>
+  <data name="ChartDataLabels_LegendKey" xml:space="preserve"><value>Legend key</value></data>
+  <!-- Chart: Format Axis dialog -->
+  <data name="ChartAxis_MinimumLabel" xml:space="preserve"><value>Minimum (blank = auto):</value></data>
+  <data name="ChartAxis_MaximumLabel" xml:space="preserve"><value>Maximum (blank = auto):</value></data>
+  <data name="ChartAxis_MajorUnitLabel" xml:space="preserve"><value>Major unit (blank = auto):</value></data>
+  <data name="ChartAxis_LogScale" xml:space="preserve"><value>Logarithmic scale</value></data>
+  <data name="ChartAxis_NumberFormatLabel" xml:space="preserve"><value>Number format:</value></data>
+  <data name="ChartAxis_ShowMajorGridlines" xml:space="preserve"><value>Show major gridlines</value></data>
+  <data name="ChartAxis_ShowMinorGridlines" xml:space="preserve"><value>Show minor gridlines</value></data>
+  <!-- Chart: Format Series dialog -->
+  <data name="ChartSeries_Title" xml:space="preserve"><value>Format Series</value></data>
+  <data name="ChartSeries_SeriesLabel" xml:space="preserve"><value>Series:</value></data>
+  <data name="ChartSeries_FillAndLineLabel" xml:space="preserve"><value>Fill and line:</value></data>
+  <data name="ChartSeries_LineWidthLabel" xml:space="preserve"><value>Line width (blank = auto):</value></data>
+  <data name="ChartSeries_MarkerLabel" xml:space="preserve"><value>Marker:</value></data>
+  <data name="ChartSeries_MarkerSizeLabel" xml:space="preserve"><value>Marker size (blank = auto):</value></data>
+  <data name="ChartSeries_FillColor" xml:space="preserve"><value>Fill color</value></data>
+  <data name="ChartSeries_LineColor" xml:space="preserve"><value>Line color</value></data>
+  <data name="ChartSeries_FillColorDialogTitle" xml:space="preserve"><value>Series Fill Color</value></data>
+  <data name="ChartSeries_LineColorDialogTitle" xml:space="preserve"><value>Series Line Color</value></data>
+  <!-- Chart: Trendline dialog -->
+  <data name="ChartTrendline_Title" xml:space="preserve"><value>Trendline</value></data>
+  <data name="ChartTrendline_Show" xml:space="preserve"><value>Show trendline</value></data>
+  <data name="ChartTrendline_TypeLabel" xml:space="preserve"><value>Trendline type:</value></data>
+  <data name="ChartTrendline_PeriodLabel" xml:space="preserve"><value>Moving average period (moving-average only):</value></data>
+  <data name="ChartTrendline_OrderLabel" xml:space="preserve"><value>Polynomial order (polynomial only):</value></data>
+  <data name="ChartTrendline_ShowEquation" xml:space="preserve"><value>Display equation on chart</value></data>
+  <data name="ChartTrendline_ShowRSquared" xml:space="preserve"><value>Display R-squared value</value></data>
 </root>
