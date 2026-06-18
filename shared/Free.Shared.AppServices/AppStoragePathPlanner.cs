@@ -6,6 +6,7 @@ public static class AppStoragePathPlanner
     public static string ProductDirectoryName => AppProduct.Current.ProductDirectoryName;
     public const string DiagnosticsDirectoryName = "Diagnostics";
     public const string OptionsFileName = "options.json";
+    public const string RecentColorsFileName = "recent-colors.json";
 
     /// <summary>App-specific env var that disables local diagnostics, from the ambient <see cref="AppProduct"/>.</summary>
     public static string DisableDiagnosticsEnvironmentVariable => AppProduct.Current.DiagnosticsEnvironmentVariable;
@@ -35,6 +36,26 @@ public static class AppStoragePathPlanner
             return overridePath;
 
         return GetOptionsFilePath(pathProvider);
+    }
+
+    public static string GetRecentColorsFilePath(IApplicationDataPathProvider pathProvider)
+    {
+        ArgumentNullException.ThrowIfNull(pathProvider);
+
+        return Path.Combine(
+            pathProvider.GetApplicationDataDirectory(),
+            ProductDirectoryName,
+            RecentColorsFileName);
+    }
+
+    public static string ResolveRecentColorsFilePath(
+        IApplicationDataPathProvider pathProvider,
+        string? overridePath)
+    {
+        if (!string.IsNullOrWhiteSpace(overridePath))
+            return overridePath;
+
+        return GetRecentColorsFilePath(pathProvider);
     }
 
     public static string BuildLocalDiagnosticsNotice(IAppDiagnosticsPathProvider pathProvider) =>

@@ -757,6 +757,8 @@ jobs:
             grep -q "replace_dialog_result_closed_without_accept=true" "$launch_smoke_report"
             grep -q "go_to_dialog=true" "$launch_smoke_report"
             grep -q "go_to_dialog_reference_controls=true" "$launch_smoke_report"
+            grep -q "go_to_dialog_history_controls=true" "$launch_smoke_report"
+            grep -q "go_to_dialog_special_control=true" "$launch_smoke_report"
             grep -q "go_to_dialog_compact_layout=true" "$launch_smoke_report"
             grep -q "go_to_dialog_result_closed_without_accept=true" "$launch_smoke_report"
             grep -q "go_to_special_dialog=true" "$launch_smoke_report"

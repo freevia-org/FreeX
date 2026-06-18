@@ -1,4 +1,3 @@
-using System.Globalization;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
@@ -193,30 +192,11 @@ public sealed partial class MainWindow
         return await dialog.ShowDialog<CellColor?>(this);
     }
 
+    // Hex formatting/parsing is single-sourced in CellColorPalettePlanner so the WPF,
+    // Avalonia and (future) macOS pickers share one implementation.
     private static string FormatHex(CellColor color) =>
-        $"#{color.R:X2}{color.G:X2}{color.B:X2}";
+        CellColorPalettePlanner.FormatHexColor(color);
 
-    private static bool TryParseHex(string? text, out CellColor color)
-    {
-        color = default;
-        if (string.IsNullOrWhiteSpace(text))
-            return false;
-
-        var normalized = text.Trim();
-        if (normalized.StartsWith('#'))
-            normalized = normalized[1..];
-
-        if (normalized.Length != 6)
-            return false;
-
-        if (!byte.TryParse(normalized.AsSpan(0, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var r) ||
-            !byte.TryParse(normalized.AsSpan(2, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var g) ||
-            !byte.TryParse(normalized.AsSpan(4, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var b))
-        {
-            return false;
-        }
-
-        color = new CellColor(r, g, b);
-        return true;
-    }
+    private static bool TryParseHex(string? text, out CellColor color) =>
+        CellColorPalettePlanner.TryParseHexColor(text, out color);
 }

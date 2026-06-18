@@ -160,6 +160,17 @@ public sealed partial class MainWindow : Window
         TextBox InputBox,
         Button AcceptButton,
         Button CancelButton);
+    private sealed record GoToDialogSmokeProbe(
+        Window Dialog,
+        ListBox HistoryList,
+        TextBox InputBox,
+        Button SpecialButton,
+        Button AcceptButton,
+        Button CancelButton);
+    private sealed record GoToDialogResult(
+        string? Reference,
+        GoToSpecialKind? SpecialKind,
+        GoToSpecialOptions? SpecialOptions);
     private sealed record GoToSpecialDialogSmokeProbe(
         Window Dialog,
         ComboBox KindBox,
@@ -242,10 +253,6 @@ public sealed partial class MainWindow : Window
         CellColor? BorderColor);
     private sealed record FormatCellsNullableChoice<T>(string Label, T? Value)
         where T : struct
-    {
-        public override string ToString() => Label;
-    }
-    private sealed record FormatCellsColorChoice(string Label, CellColor? Color, bool Clear)
     {
         public override string ToString() => Label;
     }
@@ -553,6 +560,7 @@ public sealed partial class MainWindow : Window
     private readonly NativeMenuItem _quitMenuItem = new();
     private NativeMenu? _nativeMenu;
     private WorkbookSession _session;
+    private readonly RecentColorsStore _recentColors = new();
     private MacOsLaunchSmokeDialogSnapshot _launchSmokeDialogEvidence = MacOsLaunchSmokeDialogSnapshot.Empty;
     private ComboBox? _activeDataValidationDropdown;
     private IReadOnlyDictionary<(uint Row, uint Col), (IReadOnlyList<double> Values, SparklineKind Kind)> _sparklinesByCell =
@@ -5874,12 +5882,17 @@ public sealed partial class MainWindow : Window
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var reference = await ShowSingleInputDialogAsync(
-            "Go To",
-            "Reference",
-            FormatRangeReference(_session.SelectedRange),
-            "Go",
-            "GoToReferenceBox");
+        var goTo = await ShowGoToInputDialogAsync();
+        if (goTo is null)
+            return;
+
+        if (goTo.SpecialKind is { } specialKind)
+        {
+            SelectGoToSpecial(specialKind, goTo.SpecialOptions);
+            return;
+        }
+
+        var reference = goTo.Reference;
         if (reference is null)
             return;
 
@@ -5891,6 +5904,166 @@ public sealed partial class MainWindow : Window
         }
 
         RefreshShell($"Selected {FormatRangeReference(result.SelectedRange!.Value)}");
+    }
+
+    private IReadOnlyList<string> BuildGoToReferenceChoices(string defaultReference) =>
+        WorkbookReferenceNavigator.BuildReferenceChoices(
+            defaultReference,
+            recentReferences: null,
+            definedNames: _session.Workbook.NamedRanges.Keys);
+
+    private async Task<GoToDialogResult?> ShowGoToInputDialogAsync(
+        Action<GoToDialogSmokeProbe>? launchSmokeProbe = null)
+    {
+        GoToDialogResult? result = null;
+        var dialog = new Window
+        {
+            Title = "Go To",
+            Width = 380,
+            Height = 320,
+            MinWidth = 340,
+            MinHeight = 280,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+
+        var defaultReference = FormatRangeReference(_session.SelectedRange);
+
+        var historyList = new ListBox
+        {
+            ItemsSource = BuildGoToReferenceChoices(defaultReference),
+            MinHeight = 120,
+        };
+        AutomationProperties.SetName(historyList, "Go to");
+        AutomationProperties.SetHelpText(historyList, "Recent references and defined names");
+        AutomationProperties.SetAutomationId(historyList, "GoToHistoryList");
+
+        var inputBox = new TextBox
+        {
+            Text = defaultReference,
+            MinWidth = 280,
+        };
+        AutomationProperties.SetName(inputBox, "Reference");
+        AutomationProperties.SetAutomationId(inputBox, "GoToReferenceBox");
+
+        var specialButton = new Button
+        {
+            Content = "Special...",
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(specialButton, "GoToSpecialButton");
+
+        var acceptButton = new Button
+        {
+            Content = "Go",
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(acceptButton, "GoToReferenceBoxAcceptButton");
+
+        var cancelButton = new Button
+        {
+            Content = "Cancel",
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(cancelButton, "GoToReferenceBoxCancelButton");
+
+        historyList.SelectionChanged += (_, _) =>
+        {
+            if (historyList.SelectedItem is string reference)
+                inputBox.Text = reference;
+        };
+        historyList.DoubleTapped += (_, _) =>
+        {
+            if (historyList.SelectedItem is string reference)
+            {
+                inputBox.Text = reference;
+                AcceptReference();
+            }
+        };
+
+        void AcceptReference()
+        {
+            result = new GoToDialogResult(inputBox.Text ?? "", SpecialKind: null, SpecialOptions: null);
+            dialog.Close();
+        }
+
+        acceptButton.Click += (_, _) => AcceptReference();
+        cancelButton.Click += (_, _) => dialog.Close();
+        specialButton.Click += async (_, _) =>
+        {
+            var special = await ShowGoToSpecialInputDialogAsync();
+            if (special is null)
+                return;
+
+            result = new GoToDialogResult(Reference: null, special.Kind, special.Options);
+            dialog.Close();
+        };
+        inputBox.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter)
+            {
+                e.Handled = true;
+                AcceptReference();
+            }
+            else if (e.Key == Key.Escape)
+            {
+                e.Handled = true;
+                dialog.Close();
+            }
+        };
+
+        var buttonRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Children =
+            {
+                specialButton,
+                cancelButton,
+                acceptButton,
+            },
+        };
+
+        dialog.Content = new StackPanel
+        {
+            Margin = new Thickness(16),
+            Spacing = 8,
+            Children =
+            {
+                new TextBlock { Text = "Go to" },
+                historyList,
+                new TextBlock { Text = "Reference" },
+                inputBox,
+                buttonRow,
+            },
+        };
+        dialog.Opened += (_, _) =>
+        {
+            inputBox.Focus();
+            inputBox.SelectAll();
+        };
+        if (launchSmokeProbe is not null)
+        {
+            dialog.Opened += (_, _) =>
+            {
+                RunLaunchSmokeDialogProbe(
+                    dialog,
+                    () => launchSmokeProbe(new GoToDialogSmokeProbe(
+                        dialog,
+                        historyList,
+                        inputBox,
+                        specialButton,
+                        acceptButton,
+                        cancelButton)));
+            };
+        }
+
+        await dialog.ShowDialog(this);
+        return result;
     }
 
     private async Task OpenSelectedHyperlinkAsync()
@@ -7092,12 +7265,7 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetName(fontSizeBox, "Size");
         AutomationProperties.SetAutomationId(fontSizeBox, "FormatCellsFontSizeBox");
 
-        var fontColorBox = new ComboBox
-        {
-            ItemsSource = CreateFormatCellsColorChoices(includeClear: false),
-            SelectedIndex = 0,
-            MinWidth = 180,
-        };
+        var fontColorBox = CreateFormatCellsColorPicker("No change", includeClear: false, "More Font Colors");
         AutomationProperties.SetName(fontColorBox, "Font color");
         AutomationProperties.SetAutomationId(fontColorBox, "FormatCellsFontColorBox");
         var normalFontBox = CreateFormatCellsCheckBox("Normal font", "FormatCellsNormalFontBox", false);
@@ -7119,24 +7287,14 @@ public sealed partial class MainWindow : Window
             SelectFormatCellsColor(fontColorBox, normal.FontColor);
         };
 
-        var fillColorBox = new ComboBox
-        {
-            ItemsSource = CreateFormatCellsColorChoices(includeClear: true),
-            SelectedIndex = 0,
-            MinWidth = 180,
-        };
+        var fillColorBox = CreateFormatCellsColorPicker("No change", includeClear: true, "More Fill Colors");
         AutomationProperties.SetName(fillColorBox, "Fill color");
         AutomationProperties.SetAutomationId(fillColorBox, "FormatCellsFillColorBox");
         var fillPatternStyleBox = CreateFormatCellsComboBox(
             "FormatCellsFillPatternStyleBox",
             CreateFormatCellsFillPatternStyleChoices(),
             currentFillPatternStyle);
-        var fillPatternColorBox = new ComboBox
-        {
-            ItemsSource = CreateFormatCellsColorChoices(includeClear: false),
-            SelectedIndex = 0,
-            MinWidth = 180,
-        };
+        var fillPatternColorBox = CreateFormatCellsColorPicker("No change", includeClear: false, "More Pattern Colors");
         AutomationProperties.SetName(fillPatternColorBox, "Pattern color");
         AutomationProperties.SetAutomationId(fillPatternColorBox, "FormatCellsFillPatternColorBox");
 
@@ -7152,12 +7310,7 @@ public sealed partial class MainWindow : Window
             "FormatCellsBorderStyleBox",
             CreateFormatCellsBorderStyleChoices(),
             BorderStyle.Thin);
-        var borderColorBox = new ComboBox
-        {
-            ItemsSource = CreateFormatCellsColorChoices(includeClear: false),
-            SelectedIndex = 0,
-            MinWidth = 180,
-        };
+        var borderColorBox = CreateFormatCellsColorPicker("No change", includeClear: false, "More Border Colors");
         AutomationProperties.SetName(borderColorBox, "Border color");
         AutomationProperties.SetAutomationId(borderColorBox, "FormatCellsBorderColorBox");
 
@@ -7558,20 +7711,8 @@ public sealed partial class MainWindow : Window
         new("Distributed", CellVAlign.Distributed),
     ];
 
-    private static IReadOnlyList<FormatCellsColorChoice> CreateFormatCellsColorChoices(bool includeClear)
-    {
-        var choices = new List<FormatCellsColorChoice>
-        {
-            new("No change", null, Clear: false),
-        };
-        if (includeClear)
-            choices.Add(new FormatCellsColorChoice("No fill", null, Clear: true));
-
-        choices.AddRange(CellColorPalettePlanner.BuildDefaultSwatches()
-            .Take(16)
-            .Select(swatch => new FormatCellsColorChoice(swatch.Hex, swatch.Color, Clear: false)));
-        return choices;
-    }
+    private FormatCellsColorPicker CreateFormatCellsColorPicker(string noColorLabel, bool includeClear, string moreColorsTitle) =>
+        new(_recentColors, ShowMoreColorsDialogAsync, noColorLabel, includeClear, moreColorsTitle);
 
     private static IReadOnlyList<FormatCellsNullableChoice<CellFillPatternStyle>> CreateFormatCellsFillPatternStyleChoices() =>
     [
@@ -7619,20 +7760,8 @@ public sealed partial class MainWindow : Window
         return value == currentValue ? null : value;
     }
 
-    private static void SelectFormatCellsColor(ComboBox comboBox, CellColor color)
-    {
-        if (comboBox.ItemsSource is not IEnumerable<FormatCellsColorChoice> choices)
-            return;
-
-        foreach (var choice in choices)
-        {
-            if (choice.Color == color)
-            {
-                comboBox.SelectedItem = choice;
-                return;
-            }
-        }
-    }
+    private static void SelectFormatCellsColor(FormatCellsColorPicker picker, CellColor color) =>
+        picker.SelectColor(color);
 
     private static T? ReadChangedFormatCellsValue<T>(T currentValue, ComboBox comboBox)
         where T : struct
@@ -12959,13 +13088,10 @@ public sealed partial class MainWindow : Window
 
         var hasGoToDialog = false;
         var hasGoToDialogReferenceControls = false;
+        var hasGoToDialogHistoryControls = false;
+        var hasGoToDialogSpecialControl = false;
         var hasGoToDialogCompactLayout = false;
-        var goToDialogResult = await ShowSingleInputDialogAsync(
-            "Go To",
-            "Reference",
-            FormatRangeReference(_session.SelectedRange),
-            "Go",
-            "GoToReferenceBox",
+        var goToDialogResult = await ShowGoToInputDialogAsync(
             probe =>
             {
                 hasGoToDialog = HasLaunchSmokeDialog(probe.Dialog, "Go To");
@@ -12973,7 +13099,13 @@ public sealed partial class MainWindow : Window
                     HasLaunchSmokeAutomationId(probe.InputBox, "GoToReferenceBox") &&
                     HasLaunchSmokeButton(probe.AcceptButton, "GoToReferenceBoxAcceptButton", "Go") &&
                     HasLaunchSmokeButton(probe.CancelButton, "GoToReferenceBoxCancelButton", "Cancel");
-                hasGoToDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 380, height: 165, minWidth: 340, minHeight: 155);
+                hasGoToDialogHistoryControls =
+                    HasLaunchSmokeAutomationId(probe.HistoryList, "GoToHistoryList") &&
+                    string.Equals(AutomationProperties.GetName(probe.HistoryList), "Go to", StringComparison.Ordinal) &&
+                    probe.HistoryList.ItemCount > 0;
+                hasGoToDialogSpecialControl =
+                    HasLaunchSmokeButton(probe.SpecialButton, "GoToSpecialButton", "Special...");
+                hasGoToDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 380, height: 320, minWidth: 340, minHeight: 280);
             });
 
         var hasGoToSpecialDialog = false;
@@ -13123,6 +13255,8 @@ public sealed partial class MainWindow : Window
             hasReplaceDialogCompactLayout,
             hasGoToDialog,
             hasGoToDialogReferenceControls,
+            hasGoToDialogHistoryControls,
+            hasGoToDialogSpecialControl,
             hasGoToDialogCompactLayout,
             hasGoToSpecialDialog,
             hasGoToSpecialKindControls,
@@ -14842,22 +14976,15 @@ public sealed partial class MainWindow : Window
                     return;
                 }
 
-                PortablePdfDocumentExportResult result;
-                try
-                {
-                    // Skia shapes and automatically embeds/subsets fonts, so Unicode (non-WinAnsi)
-                    // text exports correctly. Fall back to the dependency-free WinAnsi writer if Skia
-                    // is unavailable so export still works for ASCII/WinAnsi content.
-                    using var pdfBuffer = new MemoryStream();
-                    result = Pdf.SkiaPdfDocumentExporter.Save(_session.Workbook, exportPlan, pdfBuffer);
-                    await File.WriteAllBytesAsync(path, pdfBuffer.ToArray());
-                }
-                catch (Exception)
-                {
-                    result = PortablePdfDocumentExporter.Save(_session.Workbook, exportPlan, path);
-                }
+                // Prefer the Unicode-capable Skia writer (shapes + auto-embeds/subsets fonts), and
+                // fall back to the dependency-free WinAnsi writer when Skia is unavailable
+                // (headless/no-Skia). The routing decision lives in AvaloniaPdfDocumentExporter so it
+                // is exercised by tests.
+                using var pdfBuffer = new MemoryStream();
+                var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, exportPlan, pdfBuffer);
+                await File.WriteAllBytesAsync(path, pdfBuffer.ToArray());
 
-                RefreshShell($"{result.StatusText} {Path.GetFileName(path)}");
+                RefreshShell($"{outcome.Result.StatusText} {Path.GetFileName(path)}");
             }
             catch (Exception ex)
             {

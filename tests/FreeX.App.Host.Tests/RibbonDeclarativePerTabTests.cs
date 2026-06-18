@@ -70,7 +70,13 @@ public class RibbonDeclarativePerTabTests
                 root.Arrange(new Rect(0, 0, width, total));
                 root.UpdateLayout();
 
-                var bitmap = new RenderTargetBitmap((int)width, (int)total, 96, 96, PixelFormats.Pbgra32);
+                // Capture at 3x device density (288 DPI) so the review PNGs show the icons at native
+                // resolution instead of a soft 96-DPI raster. The visual is vector (Viewbox/Canvas of
+                // Shapes), so rendering into a 3x pixel buffer rasterizes the strokes crisply.
+                const double captureScale = 3.0;
+                var bitmap = new RenderTargetBitmap(
+                    (int)(width * captureScale), (int)(total * captureScale),
+                    96 * captureScale, 96 * captureScale, PixelFormats.Pbgra32);
                 bitmap.Render(root);
 
                 var safe = tab.Id;

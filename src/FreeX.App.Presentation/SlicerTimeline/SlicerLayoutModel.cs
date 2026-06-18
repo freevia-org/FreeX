@@ -108,6 +108,103 @@ public static class SlicerLayoutBuilder
     }
 
     /// <summary>
+    /// Builds the FULL faithful button-grid for <paramref name="slicer"/>: every available item gets a
+    /// tile (no four-item preview cap), laid out in <see cref="SlicerModel.ColumnCount"/> columns, with
+    /// each tile flagged selected/unselected. An empty selection renders every tile as selected ("all"),
+    /// matching Excel's unfiltered state. The caption band is omitted when
+    /// <see cref="SlicerModel.ShowCaption"/> is false, and the tiles start from the top of the box.
+    /// This is what the WPF/headless renderer draws; the Avalonia overlay uses it for parity.
+    /// </summary>
+    public static SlicerLayoutModel BuildFull(
+        SlicerModel slicer,
+        IEnumerable<string> availableItems,
+        LayoutRect bounds)
+    {
+        ArgumentNullException.ThrowIfNull(slicer);
+        ArgumentNullException.ThrowIfNull(availableItems);
+
+        var items = OrderAvailableItems(slicer, availableItems);
+        var selected = new HashSet<string>(slicer.SelectedItems, StringComparer.CurrentCultureIgnoreCase);
+        var hasActiveFilter = slicer.SelectedItems.Count > 0;
+        var showCaption = slicer.ShowCaption;
+
+        var headerHeight = showCaption ? Math.Min(HeaderMaxHeight, bounds.Height) : 0;
+        var headerRect = new LayoutRect(bounds.X, bounds.Y, bounds.Width, headerHeight);
+        var bodyRect = bounds;
+
+        var tiles = BuildFullTiles(slicer, items, selected, bounds, showCaption);
+        var visibleCount = tiles.Count;
+
+        return new SlicerLayoutModel(
+            Name: slicer.Name,
+            Caption: ResolveCaption(slicer),
+            SourceFieldName: slicer.SourceFieldName,
+            HasActiveFilter: hasActiveFilter,
+            Bounds: bounds,
+            HeaderRect: headerRect,
+            BodyRect: bodyRect,
+            Tiles: tiles,
+            TotalItemCount: items.Count,
+            VisibleItemCount: visibleCount,
+            HasOverflow: items.Count > visibleCount);
+    }
+
+    // Lays out every available item across slicer.ColumnCount columns, capping the visible ROWS to what
+    // fits the box (overflow flagged via HasOverflow). Mirrors GridView.DrawNativeSlicerControl's math.
+    private static IReadOnlyList<SlicerTileLayout> BuildFullTiles(
+        SlicerModel slicer,
+        IReadOnlyList<string> items,
+        HashSet<string> selected,
+        LayoutRect bounds,
+        bool showCaption)
+    {
+        if (items.Count == 0)
+            return [];
+
+        var columnCount = Math.Max(1, slicer.ColumnCount);
+        var tileTop = bounds.Top + (showCaption ? TileGridTopInset : 4);
+        var availableHeight = bounds.Bottom - tileTop - TileBottomPadding;
+        if (availableHeight <= 0)
+            return [];
+
+        var rowCount = (int)Math.Ceiling(items.Count / (double)columnCount);
+        var rowsThatFit = Math.Max(1, (int)(availableHeight / (TileMinHeight + TileGap)));
+        var visibleRows = Math.Min(rowCount, rowsThatFit);
+        var tileHeight = Math.Max(
+            TileMinHeight,
+            Math.Min(TileMaxHeight, (availableHeight - (visibleRows - 1) * TileGap) / visibleRows));
+
+        var totalGap = TileGap * (columnCount - 1);
+        var tileWidth = Math.Max(1, (bounds.Width - TileHorizontalInset * 2 - totalGap) / columnCount);
+
+        // No active filter => everything is "selected" (the unfiltered/all state).
+        var allSelected = selected.Count == 0;
+        var visibleTileCount = Math.Min(items.Count, visibleRows * columnCount);
+        var tiles = new List<SlicerTileLayout>(visibleTileCount);
+        for (var index = 0; index < visibleTileCount; index++)
+        {
+            var row = index / columnCount;
+            var col = index % columnCount;
+            var rect = new LayoutRect(
+                bounds.Left + TileHorizontalInset + col * (tileWidth + TileGap),
+                tileTop + row * (tileHeight + TileGap),
+                tileWidth,
+                tileHeight);
+
+            var caption = items[index];
+            tiles.Add(new SlicerTileLayout(
+                rect,
+                caption,
+                IsSelected: allSelected || selected.Contains(caption),
+                IsEnabled: true,
+                IsAllPreview: false,
+                ItemIndex: index));
+        }
+
+        return tiles;
+    }
+
+    /// <summary>
     /// Returns the tile at <paramref name="point"/>, or <c>null</c> when the point falls outside every
     /// tile rectangle. Tiles are non-overlapping so the first containing tile is returned.
     /// </summary>
