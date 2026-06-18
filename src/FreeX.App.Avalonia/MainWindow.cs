@@ -256,10 +256,6 @@ public sealed partial class MainWindow : Window
     {
         public override string ToString() => Label;
     }
-    private sealed record FormatCellsColorChoice(string Label, CellColor? Color, bool Clear)
-    {
-        public override string ToString() => Label;
-    }
     private sealed record FormatCellsDialogSmokeProbe(
         Window Dialog,
         TabControl TabStrip,
@@ -564,6 +560,7 @@ public sealed partial class MainWindow : Window
     private readonly NativeMenuItem _quitMenuItem = new();
     private NativeMenu? _nativeMenu;
     private WorkbookSession _session;
+    private readonly RecentColorsStore _recentColors = new();
     private MacOsLaunchSmokeDialogSnapshot _launchSmokeDialogEvidence = MacOsLaunchSmokeDialogSnapshot.Empty;
     private ComboBox? _activeDataValidationDropdown;
     private IReadOnlyDictionary<(uint Row, uint Col), (IReadOnlyList<double> Values, SparklineKind Kind)> _sparklinesByCell =
@@ -7268,12 +7265,7 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetName(fontSizeBox, "Size");
         AutomationProperties.SetAutomationId(fontSizeBox, "FormatCellsFontSizeBox");
 
-        var fontColorBox = new ComboBox
-        {
-            ItemsSource = CreateFormatCellsColorChoices(includeClear: false),
-            SelectedIndex = 0,
-            MinWidth = 180,
-        };
+        var fontColorBox = CreateFormatCellsColorPicker("No change", includeClear: false, "More Font Colors");
         AutomationProperties.SetName(fontColorBox, "Font color");
         AutomationProperties.SetAutomationId(fontColorBox, "FormatCellsFontColorBox");
         var normalFontBox = CreateFormatCellsCheckBox("Normal font", "FormatCellsNormalFontBox", false);
@@ -7295,24 +7287,14 @@ public sealed partial class MainWindow : Window
             SelectFormatCellsColor(fontColorBox, normal.FontColor);
         };
 
-        var fillColorBox = new ComboBox
-        {
-            ItemsSource = CreateFormatCellsColorChoices(includeClear: true),
-            SelectedIndex = 0,
-            MinWidth = 180,
-        };
+        var fillColorBox = CreateFormatCellsColorPicker("No change", includeClear: true, "More Fill Colors");
         AutomationProperties.SetName(fillColorBox, "Fill color");
         AutomationProperties.SetAutomationId(fillColorBox, "FormatCellsFillColorBox");
         var fillPatternStyleBox = CreateFormatCellsComboBox(
             "FormatCellsFillPatternStyleBox",
             CreateFormatCellsFillPatternStyleChoices(),
             currentFillPatternStyle);
-        var fillPatternColorBox = new ComboBox
-        {
-            ItemsSource = CreateFormatCellsColorChoices(includeClear: false),
-            SelectedIndex = 0,
-            MinWidth = 180,
-        };
+        var fillPatternColorBox = CreateFormatCellsColorPicker("No change", includeClear: false, "More Pattern Colors");
         AutomationProperties.SetName(fillPatternColorBox, "Pattern color");
         AutomationProperties.SetAutomationId(fillPatternColorBox, "FormatCellsFillPatternColorBox");
 
@@ -7328,12 +7310,7 @@ public sealed partial class MainWindow : Window
             "FormatCellsBorderStyleBox",
             CreateFormatCellsBorderStyleChoices(),
             BorderStyle.Thin);
-        var borderColorBox = new ComboBox
-        {
-            ItemsSource = CreateFormatCellsColorChoices(includeClear: false),
-            SelectedIndex = 0,
-            MinWidth = 180,
-        };
+        var borderColorBox = CreateFormatCellsColorPicker("No change", includeClear: false, "More Border Colors");
         AutomationProperties.SetName(borderColorBox, "Border color");
         AutomationProperties.SetAutomationId(borderColorBox, "FormatCellsBorderColorBox");
 
@@ -7734,20 +7711,8 @@ public sealed partial class MainWindow : Window
         new("Distributed", CellVAlign.Distributed),
     ];
 
-    private static IReadOnlyList<FormatCellsColorChoice> CreateFormatCellsColorChoices(bool includeClear)
-    {
-        var choices = new List<FormatCellsColorChoice>
-        {
-            new("No change", null, Clear: false),
-        };
-        if (includeClear)
-            choices.Add(new FormatCellsColorChoice("No fill", null, Clear: true));
-
-        choices.AddRange(CellColorPalettePlanner.BuildDefaultSwatches()
-            .Take(16)
-            .Select(swatch => new FormatCellsColorChoice(swatch.Hex, swatch.Color, Clear: false)));
-        return choices;
-    }
+    private FormatCellsColorPicker CreateFormatCellsColorPicker(string noColorLabel, bool includeClear, string moreColorsTitle) =>
+        new(_recentColors, ShowMoreColorsDialogAsync, noColorLabel, includeClear, moreColorsTitle);
 
     private static IReadOnlyList<FormatCellsNullableChoice<CellFillPatternStyle>> CreateFormatCellsFillPatternStyleChoices() =>
     [
@@ -7795,20 +7760,8 @@ public sealed partial class MainWindow : Window
         return value == currentValue ? null : value;
     }
 
-    private static void SelectFormatCellsColor(ComboBox comboBox, CellColor color)
-    {
-        if (comboBox.ItemsSource is not IEnumerable<FormatCellsColorChoice> choices)
-            return;
-
-        foreach (var choice in choices)
-        {
-            if (choice.Color == color)
-            {
-                comboBox.SelectedItem = choice;
-                return;
-            }
-        }
-    }
+    private static void SelectFormatCellsColor(FormatCellsColorPicker picker, CellColor color) =>
+        picker.SelectColor(color);
 
     private static T? ReadChangedFormatCellsValue<T>(T currentValue, ComboBox comboBox)
         where T : struct
