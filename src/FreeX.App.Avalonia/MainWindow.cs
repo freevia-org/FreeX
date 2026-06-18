@@ -715,6 +715,21 @@ public sealed partial class MainWindow : Window
                     ["home.fillDown"] = () => FillSelectedRange(FillCellsDirection.Down),
                     ["home.clear"] = ClearSelectedRangeContents,
                     ["home.findSelect"] = () => _ = ShowFindDialogAsync(),
+                    // Home ▸ Editing ▸ Fill dropdown items (canonical menu ids from HomeRibbonMenus.Fill).
+                    // The split-button face is wired above (home.fillDown); these are its menu entries, which
+                    // otherwise stay on the NoOp seed. "Flash Fill" shares its canonical id with data.flashFill
+                    // (already wired), so it is not repeated here.
+                    ["Down"] = () => FillSelectedRange(FillCellsDirection.Down),
+                    ["Right"] = () => FillSelectedRange(FillCellsDirection.Right),
+                    ["Up"] = () => FillSelectedRange(FillCellsDirection.Up),
+                    ["Left"] = () => FillSelectedRange(FillCellsDirection.Left),
+                    ["Series"] = () => RefreshShell("Fill Series isn't supported yet; use Fill Down/Right/Up/Left to copy."),
+                    // Home ▸ Editing ▸ Clear dropdown items (canonical menu ids from HomeRibbonMenus.Clear).
+                    ["Clear All"] = ClearSelectedRangeAll,
+                    ["Clear Formats"] = ClearSelectedRangeFormats,
+                    ["Clear Contents"] = ClearSelectedRangeContents,
+                    ["Clear Comments and Notes"] = ClearSelectedRangeComments,
+                    ["Clear Hyperlinks"] = ClearSelectedRangeHyperlinks,
                     // Insert tab (Links / Text groups).
                     ["insert.hyperlink"] = () => _ = ShowInsertHyperlinkDialogAsync(),
                     // Home Font group (added buttons).

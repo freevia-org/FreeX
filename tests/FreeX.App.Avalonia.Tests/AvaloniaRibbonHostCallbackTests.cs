@@ -203,6 +203,17 @@ public sealed class AvaloniaRibbonHostCallbackTests
     [InlineData("formulas.mathTrig")]
     [InlineData("formulas.lookupReference")]
     [InlineData("home.formatCells")]
+    // Home ▸ Editing ▸ Fill / Clear dropdown items are wired under their raw canonical menu ids.
+    [InlineData("Down")]
+    [InlineData("Right")]
+    [InlineData("Up")]
+    [InlineData("Left")]
+    [InlineData("Series")]
+    [InlineData("Clear All")]
+    [InlineData("Clear Formats")]
+    [InlineData("Clear Contents")]
+    [InlineData("Clear Comments and Notes")]
+    [InlineData("Clear Hyperlinks")]
     public void NewTabCommands_AreRealCommandIds_AndBindViaExtraCommands(string commandId)
     {
         // The canonical id exists in the shared definition (so it seeds a NoOp default to begin with) ...
