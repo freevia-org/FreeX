@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Merge Finish">
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Finish &amp; Merge">
   <rect width="32" height="32" fill="none"/>
-  <path d="M5.5 9.5h21v14H5.5z" fill="#ffffff" stroke="#242424" stroke-width="1.3"/>
-  <path d="M6 10l10 8 10-8" fill="none" stroke="#0F6D8C" stroke-width="1.4" stroke-linejoin="round"/>
-  <text x="16" y="24" font-size="7" fill="#0F6D8C" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle" dominant-baseline="central">MF</text>
+  <path d="M9 5h9l5 5v17H9z" fill="#ffffff" stroke="#242424" stroke-width="1.3" stroke-linejoin="round"/>
+  <path d="M18 5v5h5" fill="none" stroke="#242424" stroke-width="1.3" stroke-linejoin="round"/>
+  <path d="M11.6 18.5l3 3 6-6.4" fill="none" stroke="#0F6D8C" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

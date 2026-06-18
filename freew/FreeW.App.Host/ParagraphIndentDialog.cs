@@ -15,7 +15,7 @@ namespace FreeW.App.Host;
 /// returns zero. The amount box holds the magnitude; the special drop-down picks the sign.
 /// </para>
 /// </summary>
-internal sealed class ParagraphIndentDialog : Window
+internal sealed class ParagraphIndentDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     private enum Special { None, FirstLine, Hanging }
 

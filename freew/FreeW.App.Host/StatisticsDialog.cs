@@ -12,7 +12,7 @@ namespace FreeW.App.Host;
 /// computed by the pure <see cref="DocumentStatistics"/> helper. Code-only to match the rest of the
 /// FreeW window style; purely informational, so it has a single Close button.
 /// </summary>
-internal sealed class StatisticsDialog : Window
+internal sealed class StatisticsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     public StatisticsDialog(Window owner, DocumentStatistics stats)
     {

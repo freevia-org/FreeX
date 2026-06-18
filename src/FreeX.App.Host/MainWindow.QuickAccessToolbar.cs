@@ -6,6 +6,9 @@ using System.Windows.Media;
 using System.Windows.Shell;
 using FreeX.App.Services.Ribbon;
 using FreeX.Core.Commands;
+using SharedQat = Free.Shared.Ribbon.Wpf.QuickAccessToolbarRenderer;
+using SharedQatItem = Free.Shared.Ribbon.Wpf.QuickAccessToolbarItem;
+using SharedQatOptions = Free.Shared.Ribbon.Wpf.QuickAccessToolbarRenderOptions;
 
 namespace FreeX.App.Host;
 
@@ -60,37 +63,34 @@ public partial class MainWindow
         RefreshQuickAccessToolbarCommandStates(force: true);
     }
 
+    // Builds a QAT button from a neutral descriptor through the shared Free.Shared.Ribbon.Wpf QAT renderer
+    // (style, glyph, size, hit-test-in-chrome, automation id/name — the construction FreeX and FreeW shared),
+    // then layers FreeX-only decorations the renderer leaves to the host: the RibbonTooltip title/key-tip/
+    // description, RibbonMetadata, the per-command customization context menu, and the sender/args click that
+    // forwards to ExecuteQuickAccessToolbarCommand. The QuickAccessToolbarCatalog (which commands + state)
+    // stays FreeX-side; only the button rendering goes through the shared helper.
     private Button CreateQuickAccessToolbarButton(
         QuickAccessToolbarCommandDefinition command,
         int visibleIndex,
         bool showBelowRibbon,
         bool hasHistoryFlyout)
     {
-        var iconBrush = (Brush)FindResource(showBelowRibbon
-            ? "FreeXTextBrush"
-            : "FreeXWhiteBrush");
-        var button = new Button
+        var title = UiText.Get(command.TitleResourceKey);
+        var item = new SharedQatItem(command.Id, title, command.IconKind)
         {
-            Name = command.AutomationId,
-            Width = hasHistoryFlyout ? 24 : 26,
-            Height = 22,
-            Margin = hasHistoryFlyout ? new Thickness(0) : new Thickness(0, 0, 2, 0),
-            Style = (Style)FindResource(showBelowRibbon ? "RibbonBtn" : "TitleBarQatButton"),
-            FontSize = 13,
-            Content = new RibbonIcon
-            {
-                Kind = command.IconKind,
-                IconSize = 16,
-                Foreground = iconBrush,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
-            }
+            AutomationId = command.AutomationId
         };
 
-        WindowChrome.SetIsHitTestVisibleInChrome(button, !showBelowRibbon);
-        AutomationProperties.SetAutomationId(button, command.AutomationId);
-        AutomationProperties.SetName(button, UiText.Get(command.TitleResourceKey));
-        RibbonTooltip.SetTitle(button, UiText.Get(command.TitleResourceKey));
+        var button = SharedQat.BuildButton(
+            this,
+            item,
+            onClick: null,
+            QuickAccessToolbarRenderOptions(
+                showBelowRibbon,
+                width: hasHistoryFlyout ? 24 : 26,
+                margin: hasHistoryFlyout ? new Thickness(0) : new Thickness(0, 0, 2, 0)));
+
+        RibbonTooltip.SetTitle(button, title);
         RibbonTooltip.SetKeyTip(button, FormatQuickAccessToolbarKeyTip(visibleIndex));
         RibbonTooltip.SetDescription(button, UiText.Get(command.DescriptionResourceKey));
         RibbonMetadata.SetCommandName(button, command.CommandName);
@@ -100,36 +100,55 @@ public partial class MainWindow
         return button;
     }
 
-    private Button CreateQuickAccessToolbarHistoryButton(
-        QuickAccessToolbarCommandDefinition command,
-        bool showBelowRibbon)
+    // FreeX-side QAT render options: the shared renderer draws the button (TitleBarQatButton on the navy
+    // caption, or RibbonBtn when shown below the ribbon) with FreeX's own RibbonIcon glyph factory so the
+    // icons match the rest of the app. FreeX keeps its own RibbonTooltip (not the WPF ToolTip), name
+    // registration (tracked for rebuild) and click (sender/args), so those shared hooks are turned off.
+    private SharedQatOptions QuickAccessToolbarRenderOptions(
+        bool showBelowRibbon,
+        double width,
+        Thickness margin)
     {
-        var iconBrush = (Brush)FindResource(showBelowRibbon
-            ? "FreeXTextBrush"
-            : "FreeXWhiteBrush");
-        var title = UiText.Get(command.TitleResourceKey);
-        var button = new Button
+        var iconBrush = (Brush)FindResource(showBelowRibbon ? "FreeXTextBrush" : "FreeXWhiteBrush");
+        return new SharedQatOptions
         {
-            Name = GetQuickAccessHistoryButtonName(command.Id),
-            Width = 12,
-            Height = 22,
-            Margin = new Thickness(0, 0, 2, 0),
-            Padding = new Thickness(0),
-            Style = (Style)FindResource(showBelowRibbon ? "RibbonBtn" : "TitleBarQatButton"),
-            Content = new RibbonIcon
+            ButtonStyleKey = showBelowRibbon ? "RibbonBtn" : "TitleBarQatButton",
+            Foreground = iconBrush,
+            ButtonWidth = width,
+            ButtonHeight = 22,
+            IconSize = 16,
+            ButtonMargin = margin,
+            FontSize = 13,
+            HitTestVisibleInChrome = !showBelowRibbon,
+            SetWpfToolTip = false,
+            WireClick = false,
+            SetElementName = false,
+            IconFactory = (kind, size, brush) => new RibbonIcon
             {
-                Kind = RibbonCommandIconKind.ChevronDown,
-                IconSize = 9,
-                Foreground = iconBrush,
+                Kind = kind,
+                IconSize = size,
+                Foreground = brush,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
             }
         };
+    }
 
-        WindowChrome.SetIsHitTestVisibleInChrome(button, !showBelowRibbon);
+    private Button CreateQuickAccessToolbarHistoryButton(
+        QuickAccessToolbarCommandDefinition command,
+        bool showBelowRibbon)
+    {
+        var title = UiText.Get(command.TitleResourceKey);
         var historyTitle = UiText.Format("QuickAccessToolbar_HistoryAutomationNameFormat", title);
-        AutomationProperties.SetAutomationId(button, button.Name);
-        AutomationProperties.SetName(button, historyTitle);
+        var buttonName = GetQuickAccessHistoryButtonName(command.Id);
+        var item = new SharedQatItem(command.Id, historyTitle, RibbonCommandIconKind.ChevronDown)
+        {
+            AutomationId = buttonName
+        };
+
+        var options = QuickAccessToolbarRenderOptions(showBelowRibbon, width: 12, margin: new Thickness(0, 0, 2, 0));
+        var button = SharedQat.BuildButton(this, item, onClick: null, options with { IconSize = 9 });
+
         RibbonTooltip.SetTitle(button, historyTitle);
         RibbonTooltip.SetDescription(
             button,

@@ -16,7 +16,7 @@ namespace FreeW.App.Host;
 /// list. View-only: it touches no docx I/O and changes no model shapes — only the existing
 /// <see cref="Paragraph.BookmarkName"/> marker.
 /// </summary>
-internal sealed class BookmarkManagerDialog : Window
+internal sealed class BookmarkManagerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     private readonly DocumentView _editor;
     private readonly ListBox _list = new() { MinWidth = 300, MinHeight = 180 };

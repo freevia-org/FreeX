@@ -757,8 +757,12 @@ public sealed partial class MainWindowSourceHygieneTests
         var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
         var iconResources = DialogSourceTestSupport.ReadHostSources("Resources\\IconResources.xaml");
 
-        source.Should().Contain("Content = new RibbonIcon");
-        source.Should().Contain("Kind = command.IconKind");
+        // The QAT button glyph is a vector RibbonIcon driven by the catalog's IconKind, built through the
+        // shared renderer's icon factory (FreeX's own RibbonIcon, so the icons match the rest of the app)
+        // from a neutral descriptor that carries command.IconKind. No text/font-glyph content.
+        source.Should().Contain("new RibbonIcon");
+        source.Should().Contain("Kind = kind");
+        source.Should().Contain("command.IconKind");
         source.Should().NotContain("Content = \"");
         source.Should().NotContain("FreeXQatOnAccentIcon");
         iconResources.Should().NotContain("FreeXQatIcon");

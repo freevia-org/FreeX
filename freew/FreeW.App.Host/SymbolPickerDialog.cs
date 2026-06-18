@@ -9,7 +9,7 @@ namespace FreeW.App.Host;
 /// Clicking a glyph closes the dialog and returns it; the caller inserts it at the caret as plain text.
 /// Returns the chosen glyph, or null if the user cancels.
 /// </summary>
-internal sealed class SymbolPickerDialog : Window
+internal sealed class SymbolPickerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     // A reasonable spread of frequently-needed glyphs: legal/typographic marks, dashes/ellipsis,
     // math/comparison operators, arrows, currency, fractions, and a few Greek letters.

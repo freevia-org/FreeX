@@ -8,7 +8,7 @@ namespace FreeW.App.Host;
 /// A tiny modal prompt for an inline image's width (points). Height scales proportionally at the
 /// call site, so only width is collected. Returns the entered width, or null if the user cancels.
 /// </summary>
-internal sealed class ImageSizeDialog : Window
+internal sealed class ImageSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     private readonly TextBox _widthBox;
     private double? _result;

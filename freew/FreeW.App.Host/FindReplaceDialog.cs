@@ -17,7 +17,7 @@ namespace FreeW.App.Host;
 /// <see cref="TextSearch"/> helper. Includes a Go To section that jumps to a heading (via
 /// <see cref="DocumentOutline"/>) or to the document start/end. Opened with Ctrl+F / Ctrl+H.
 /// </summary>
-internal sealed class FindReplaceDialog : Window
+internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     private readonly DocumentView _editor;
     private readonly TextBox _findBox = new() { MinWidth = 220 };
