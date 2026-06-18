@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="Common_Ok" xml:space="preserve"><value>OK</value></data>
+  <data name="Common_Cancel" xml:space="preserve"><value>Annuler</value></data>
+  <data name="Common_Apply" xml:space="preserve"><value>Appliquer</value></data>
+  <data name="Common_Close" xml:space="preserve"><value>Fermer</value></data>
+  <data name="Common_Clear" xml:space="preserve"><value>Effacer</value></data>
+  <data name="Common_None" xml:space="preserve"><value>Aucun</value></data>
+  <data name="Common_Auto" xml:space="preserve"><value>Auto</value></data>
+  <data name="PivotOptions_Title" xml:space="preserve"><value>Options du tableau croisé dynamique ({0})</value></data>
+  <data name="PivotOptions_ShowRowGrandTotals" xml:space="preserve"><value>Afficher les totaux généraux des lignes</value></data>
+  <data name="PivotOptions_ShowColumnGrandTotals" xml:space="preserve"><value>Afficher les totaux généraux des colonnes</value></data>
+  <data name="PivotOptions_ShowSubtotals" xml:space="preserve"><value>Afficher les sous-totaux</value></data>
+  <data name="PivotOptions_RepeatItemLabels" xml:space="preserve"><value>Répéter les étiquettes d'éléments</value></data>
+  <data name="PivotOptions_InsertBlankRow" xml:space="preserve"><value>Insérer une ligne vide après chaque élément</value></data>
+  <data name="PivotOptions_MergeAndCenterLabels" xml:space="preserve"><value>Fusionner et centrer les cellules avec étiquettes</value></data>
+  <data name="PivotOptions_GrandTotalsHeader" xml:space="preserve"><value>Totaux généraux</value></data>
+  <data name="PivotOptions_LayoutHeader" xml:space="preserve"><value>Disposition</value></data>
+  <data name="PivotOptions_SubtotalsHeader" xml:space="preserve"><value>Sous-totaux</value></data>
+  <data name="PivotOptions_ReportLayoutLabel" xml:space="preserve"><value>Disposition du rapport :</value></data>
+  <data name="PivotOptions_CompactIndentLabel" xml:space="preserve"><value>Retrait des étiquettes de ligne en forme compacte :</value></data>
+</root>
