@@ -237,4 +237,48 @@
   <data name="FormatCells_MoreFillColors" xml:space="preserve"><value>More Fill Colors</value></data>
   <data name="FormatCells_MorePatternColors" xml:space="preserve"><value>More Pattern Colors</value></data>
   <data name="FormatCells_MoreBorderColors" xml:space="preserve"><value>More Border Colors</value></data>
+  <data name="PasteNames_Title" xml:space="preserve"><value>Paste Name</value></data>
+  <data name="PasteNames_NamesLabel" xml:space="preserve"><value>Paste name</value></data>
+  <data name="PasteNames_PasteList" xml:space="preserve"><value>Paste List</value></data>
+  <data name="PasteNames_NameColumn" xml:space="preserve"><value>Name</value></data>
+  <data name="PasteNames_RefersToColumn" xml:space="preserve"><value>Refers To</value></data>
+  <data name="PasteNames_NoNames" xml:space="preserve"><value>There are no defined names to paste.</value></data>
+  <data name="PasteNames_NotEnoughColumns" xml:space="preserve"><value>There are not enough columns to paste the list of names.</value></data>
+  <data name="PasteNames_NotEnoughRows" xml:space="preserve"><value>There are not enough rows to paste the list of names.</value></data>
+  <data name="PasteNames_Pasted" xml:space="preserve"><value>Pasted name '{0}'</value></data>
+  <data name="PasteNames_PastedList" xml:space="preserve"><value>Pasted list of {0} name(s)</value></data>
+  <data name="AllowEditRange_Title" xml:space="preserve"><value>Allow Users to Edit Ranges</value></data>
+  <data name="AllowEditRange_Intro" xml:space="preserve"><value>Ranges unlocked by a password when the sheet is protected:</value></data>
+  <data name="AllowEditRange_ExistingRangesLabel" xml:space="preserve"><value>Ranges</value></data>
+  <data name="AllowEditRange_RangeLabel" xml:space="preserve"><value>Refers to cells:</value></data>
+  <data name="AllowEditRange_Example" xml:space="preserve"><value>For example, A1:B5 or Sheet1!A1.</value></data>
+  <data name="AllowEditRange_NewButton" xml:space="preserve"><value>New...</value></data>
+  <data name="AllowEditRange_ModifyButton" xml:space="preserve"><value>Modify...</value></data>
+  <data name="AllowEditRange_DeleteButton" xml:space="preserve"><value>Delete</value></data>
+  <data name="AllowEditRange_InvalidRange" xml:space="preserve"><value>Enter a valid cell range (for example, A1:B5).</value></data>
+  <data name="AllowEditRange_Added" xml:space="preserve"><value>Added edit range {0}</value></data>
+  <data name="AllowEditRange_Modified" xml:space="preserve"><value>Modified edit range {0}</value></data>
+  <data name="AllowEditRange_Removed" xml:space="preserve"><value>Removed edit range {0}</value></data>
+  <data name="FillSeries_Title" xml:space="preserve"><value>Series</value></data>
+  <data name="FillSeries_SeriesInHeader" xml:space="preserve"><value>Series in</value></data>
+  <data name="FillSeries_Rows" xml:space="preserve"><value>Rows</value></data>
+  <data name="FillSeries_Columns" xml:space="preserve"><value>Columns</value></data>
+  <data name="FillSeries_TypeHeader" xml:space="preserve"><value>Type</value></data>
+  <data name="FillSeries_Linear" xml:space="preserve"><value>Linear</value></data>
+  <data name="FillSeries_Growth" xml:space="preserve"><value>Growth</value></data>
+  <data name="FillSeries_Date" xml:space="preserve"><value>Date</value></data>
+  <data name="FillSeries_AutoFill" xml:space="preserve"><value>AutoFill</value></data>
+  <data name="FillSeries_DateUnitHeader" xml:space="preserve"><value>Date unit</value></data>
+  <data name="FillSeries_Day" xml:space="preserve"><value>Day</value></data>
+  <data name="FillSeries_Weekday" xml:space="preserve"><value>Weekday</value></data>
+  <data name="FillSeries_Month" xml:space="preserve"><value>Month</value></data>
+  <data name="FillSeries_Year" xml:space="preserve"><value>Year</value></data>
+  <data name="FillSeries_StepValueLabel" xml:space="preserve"><value>Step value:</value></data>
+  <data name="FillSeries_StopValueLabel" xml:space="preserve"><value>Stop value:</value></data>
+  <data name="FillSeries_InvalidStep" xml:space="preserve"><value>Enter a valid step value.</value></data>
+  <data name="FillSeries_InvalidStop" xml:space="preserve"><value>Enter a valid stop value, or leave it blank.</value></data>
+  <data name="FillSeries_NeedsSelection" xml:space="preserve"><value>Select two or more cells in a row or column to fill a series.</value></data>
+  <data name="FillSeries_NoSeed" xml:space="preserve"><value>The first cell of the selection must contain a number (or a date for a date series).</value></data>
+  <data name="FillSeries_Filled" xml:space="preserve"><value>Filled series in {0}</value></data>
+  <data name="FillSeries_Failed" xml:space="preserve"><value>Fill Series failed.</value></data>
 </root>
