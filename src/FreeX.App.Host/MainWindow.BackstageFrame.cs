@@ -47,6 +47,20 @@ public partial class MainWindow
 
         frame.SetEntries(BuildBackstageEntries());
 
+        // The shared frame stamps the *shared* RibbonTooltip attached properties on each nav button, but
+        // FreeX's Alt-keytip overlay (MainWindow.KeyTips.cs) reads FreeX's own RibbonTooltip attached
+        // properties. Mirror key-tip/title/description onto the FreeX properties so the rail still lights up
+        // under Alt and shows the Excel-style hover card, exactly as the hand-rolled rail did.
+        frame.DecorateNavButtons((entry, button) =>
+        {
+            var keyTip = entry?.KeyTip ?? "B"; // null entry == back arrow
+            var title = entry?.TooltipTitle ?? UiText.Get("MainWindow_TooltipTitle_Back");
+            RibbonTooltip.SetKeyTip(button, keyTip);
+            RibbonTooltip.SetTitle(button, title);
+            if (entry?.TooltipDescription is { } description)
+                RibbonTooltip.SetDescription(button, description);
+        });
+
         // The frame closes itself (Esc / back arrow / an action entry). Funnel that through HideStartScreen
         // so the overlay collapses and worksheet focus is restored, exactly as the old rail did.
         frame.Closed += () =>

@@ -19,9 +19,14 @@ public partial class MainWindow
     {
         StartScreenOverlay.Visibility = Visibility.Visible;
         // The shared frame builds the Home pane (greeting + recent list refresh runs in its ContentFactory)
-        // and lands focus on the Home rail entry.
+        // and lands focus on the Home rail entry. The overlay/frame become visible on the next layout pass,
+        // so post the focus at Loaded priority (the rail buttons aren't focusable until they are visible) —
+        // mirroring how the Print pane focuses Print Now.
         _backstageFrame?.Show(BackstageHomePaneId);
         FocusBackstageHomeNavigation();
+        Dispatcher.BeginInvoke(
+            new Action(FocusBackstageHomeNavigation),
+            System.Windows.Threading.DispatcherPriority.Loaded);
     }
 
     private void HideStartScreen()

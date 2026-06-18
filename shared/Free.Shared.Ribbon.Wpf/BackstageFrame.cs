@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -182,16 +183,56 @@ public sealed class BackstageFrame : UserControl
             return;
         }
 
-        var direction = e.Key switch
+        // Home/End jump to the rail's first/last button deterministically (rather than a generic
+        // First/Last MoveFocus, which would traverse into the content pane's focusable children). Up/Down
+        // move relative to the focused rail entry.
+        switch (e.Key)
         {
-            Key.Up => FocusNavigationDirection.Previous,
-            Key.Down => FocusNavigationDirection.Next,
-            Key.Home => FocusNavigationDirection.First,
-            Key.End => FocusNavigationDirection.Last,
-            _ => FocusNavigationDirection.Next
-        };
-        focused.MoveFocus(new TraversalRequest(direction));
+            case Key.Home:
+                FocusButton(_back);
+                break;
+            case Key.End:
+                var last = LastRailButton();
+                if (last is not null)
+                    FocusButton(last);
+                break;
+            case Key.Up:
+                focused.MoveFocus(new TraversalRequest(FocusNavigationDirection.Previous));
+                break;
+            case Key.Down:
+                focused.MoveFocus(new TraversalRequest(FocusNavigationDirection.Next));
+                break;
+        }
         e.Handled = true;
+    }
+
+    // The last focusable rail entry: the last bottom-docked button, or the last top button when no entries
+    // are bottom-docked.
+    private Button? LastRailButton()
+    {
+        var bottom = _bottomNav.Children.OfType<Button>().LastOrDefault();
+        return bottom ?? _topNav.Children.OfType<Button>().LastOrDefault();
+    }
+
+    private static void FocusButton(Button button)
+    {
+        // Set logical focus in the enclosing focus scope as well as keyboard focus, so focus lands
+        // deterministically even when the host window is not the OS foreground window (e.g. in tests).
+        var scope = FindFocusScope(button);
+        if (scope is not null)
+            FocusManager.SetFocusedElement(scope, button);
+        button.Focus();
+        Keyboard.Focus(button);
+    }
+
+    private static DependencyObject? FindFocusScope(DependencyObject node)
+    {
+        for (DependencyObject? current = node; current is not null; current = VisualTreeHelper.GetParent(current))
+        {
+            if (FocusManager.GetIsFocusScope(current))
+                return current;
+        }
+        return null;
     }
 
     // True when the element lives under the nav rail (the coloured sidebar), so arrow navigation only
@@ -252,6 +293,21 @@ public sealed class BackstageFrame : UserControl
             if (entry.ContentFactory is not null && _defaultPaneLabel is null)
                 _defaultPaneLabel = entry.Label;
         }
+    }
+
+    /// <summary>
+    /// Run a host-supplied decorator over every rail nav button (the back arrow plus each entry's button),
+    /// pairing each with its <see cref="BackstageEntry"/> (the back arrow is passed with a <c>null</c>
+    /// entry). Lets an app stamp its own attached properties on the buttons — e.g. FreeX mirrors the
+    /// key-tip/title/description onto its own <c>RibbonTooltip</c> attached properties so its existing
+    /// Alt-keytip overlay (which reads the app's attached property, not the shared one) lights up the rail.
+    /// Neutral: the frame stays ignorant of the app's property types.
+    /// </summary>
+    public void DecorateNavButtons(Action<BackstageEntry?, Button> decorator)
+    {
+        decorator(null, _back);
+        foreach (var (entry, button) in _navButtons)
+            decorator(entry, button);
     }
 
     /// <summary>
@@ -317,8 +373,7 @@ public sealed class BackstageFrame : UserControl
         if (button is null)
             return false;
 
-        button.Focus();
-        Keyboard.Focus(button);
+        FocusButton(button);
         return true;
     }
 
