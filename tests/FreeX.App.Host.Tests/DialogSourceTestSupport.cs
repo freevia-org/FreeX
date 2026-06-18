@@ -132,4 +132,7 @@ internal static class DialogSourceTestSupport
 
     public static string ReadAppServicesRibbonSource(string fileName) =>
         WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Services", "Ribbon", fileName);
+
+    public static string ReadRibbonDefinitionSource(string fileName) =>
+        WorkspaceFileLocator.ReadAllText("src", "FreeX.Ribbon.Definitions", fileName);
 }

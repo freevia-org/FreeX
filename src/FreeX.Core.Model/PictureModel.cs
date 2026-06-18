@@ -11,6 +11,17 @@ public sealed class PictureModel
     public Guid Id { get; init; } = Guid.NewGuid();
     public string? Name { get; set; }
     public CellAddress Anchor { get; set; }
+
+    /// <summary>Horizontal sub-cell offset (in DIP pixels, EMU/9525) from the left edge of the
+    /// <see cref="Anchor"/> cell to the picture's left edge, preserved from the authored anchor's
+    /// <c>from/colOff</c> so the render reflects the true sub-cell position.</summary>
+    public double AnchorOffsetX { get; set; }
+
+    /// <summary>Vertical sub-cell offset (in DIP pixels, EMU/9525) from the top edge of the
+    /// <see cref="Anchor"/> cell to the picture's top edge, preserved from the authored anchor's
+    /// <c>from/rowOff</c>.</summary>
+    public double AnchorOffsetY { get; set; }
+
     public PictureKind Kind { get; set; } = PictureKind.CellRangeSnapshot;
     public uint SourceRowCount { get; set; }
     public uint SourceColumnCount { get; set; }

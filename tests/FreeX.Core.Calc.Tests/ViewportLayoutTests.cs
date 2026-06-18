@@ -665,6 +665,54 @@ public class ViewportLayoutTests
     }
 
     [Fact]
+    public void GetViewport_AnchoredObjectsAddSubCellOffsetsToBounds()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+
+        // Two shapes authored side-by-side within the SAME anchor cell (col 1) via their sub-cell
+        // offsets. Without consuming the offsets they would both snap to the cell's left edge and
+        // overlap; with the offsets they sit at distinct left positions.
+        var first = new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            Name = "First",
+            Width = 20,
+            Height = 12,
+            AnchorOffsetX = 5,
+            AnchorOffsetY = 7
+        };
+        var second = new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            Name = "Second",
+            Width = 20,
+            Height = 12,
+            AnchorOffsetX = 30,
+            AnchorOffsetY = 7
+        };
+        sheet.DrawingShapes.Add(first);
+        sheet.DrawingShapes.Add(second);
+        sheet.DrawingObjectZOrder.Add(new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, first.Id));
+        sheet.DrawingObjectZOrder.Add(new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, second.Id));
+
+        var viewport = new ViewportService().GetViewport(
+            workbook,
+            sheet.Id,
+            new ViewportRequest(1, 1, 100, 300));
+
+        var firstBounds = viewport.DrawingObjects.Single(d => d.DisplayName == "First");
+        var secondBounds = viewport.DrawingObjects.Single(d => d.DisplayName == "Second");
+
+        // Column 1 left edge is 0, so Left == AnchorOffsetX and Top == AnchorOffsetY.
+        firstBounds.Left.Should().Be(5);
+        firstBounds.Top.Should().Be(7);
+        secondBounds.Left.Should().Be(30);
+        secondBounds.Top.Should().Be(7);
+        secondBounds.Left.Should().NotBe(firstBounds.Left, "the offsets keep same-cell objects side-by-side");
+    }
+
+    [Fact]
     public void GetViewport_DrawingObjectsExposeRenderablePayloads()
     {
         var workbook = new Workbook("test");

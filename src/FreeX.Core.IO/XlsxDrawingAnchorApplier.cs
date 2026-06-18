@@ -37,6 +37,8 @@ internal static class XlsxDrawingAnchorApplier
             picture.Width = width;
         if (height > 0)
             picture.Height = height;
+        picture.AnchorOffsetX = anchor.FromColumnOffset;
+        picture.AnchorOffsetY = anchor.FromRowOffset;
     }
 
     public static void ApplyToTextBox(TextBoxModel textBox, XlsxDrawingAnchor? anchor, Sheet sheet)
@@ -49,6 +51,8 @@ internal static class XlsxDrawingAnchorApplier
             textBox.Width = width;
         if (height > 0)
             textBox.Height = height;
+        textBox.AnchorOffsetX = anchor.FromColumnOffset;
+        textBox.AnchorOffsetY = anchor.FromRowOffset;
     }
 
     public static void ApplyToShape(DrawingShapeModel shape, XlsxDrawingAnchor? anchor, Sheet sheet)
@@ -61,6 +65,8 @@ internal static class XlsxDrawingAnchorApplier
             shape.Width = width;
         if (height > 0)
             shape.Height = height;
+        shape.AnchorOffsetX = anchor.FromColumnOffset;
+        shape.AnchorOffsetY = anchor.FromRowOffset;
     }
 
     private static (double Width, double Height) GetAnchorSize(XlsxDrawingAnchor anchor, Sheet sheet)

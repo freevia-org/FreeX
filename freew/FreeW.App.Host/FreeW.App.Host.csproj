@@ -44,14 +44,15 @@
 
   <ItemGroup>
     <Content Include="Resources\FreeW.ico" CopyToOutputDirectory="PreserveNewest" />
-    <!-- Reuse FreeX's command-icon SVG library as the single source of truth: every command FreeX has an
-         icon for renders FreeX's identical icon. Linked (not copied) from FreeX's Resources\CommandIconsSvg. -->
+    <!-- FreeW's own icons: Word-specific artwork plus a few Word-unique glyphs. -->
+    <Content Include="Resources\CommandIconsSvg\**\*.svg" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Reuse FreeX's actual Office-quality icons wherever a command has a FreeX equivalent, so e.g.
+         Paste is byte-identical to FreeX. Linked (single source of truth), not copied; FreeW's folder
+         above holds only the Word-specific icons and must not contain any filename that also exists in
+         FreeX's set (that would double-emit to the same output path). -->
     <Content Include="..\..\src\FreeX.App.Host\Resources\CommandIconsSvg\**\*.svg"
              Link="Resources\CommandIconsSvg\%(RecursiveDir)%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest" />
-    <!-- FreeW-only command icons (footnotes, tracked changes, mail-merge, TOC, … — commands FreeX lacks).
-         Disjoint from the FreeX set above, so no duplicate output paths. -->
-    <Content Include="Resources\CommandIconsSvg\**\*.svg" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <PropertyGroup>

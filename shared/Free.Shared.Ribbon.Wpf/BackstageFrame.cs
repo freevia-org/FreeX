@@ -37,11 +37,43 @@ public sealed class BackstageEntry
     /// <summary>When true the entry docks to the bottom of the rail (e.g. Options / Close).</summary>
     public bool DockBottom { get; init; }
 
-    public static BackstageEntry Pane(string label, RibbonCommandIconKind? icon, Func<UIElement> content, bool dockBottom = false) =>
-        new() { Label = label, Icon = icon, ContentFactory = content, DockBottom = dockBottom };
+    /// <summary>Optional ribbon key-tip (Alt-access) badge applied to the nav button (FreeX parity).</summary>
+    public string? KeyTip { get; init; }
 
-    public static BackstageEntry Command(string label, RibbonCommandIconKind? icon, Action action, bool dockBottom = false) =>
-        new() { Label = label, Icon = icon, Action = action, DockBottom = dockBottom };
+    /// <summary>Optional automation id for the nav button (UI tests / accessibility tree).</summary>
+    public string? AutomationId { get; init; }
+
+    /// <summary>Optional automation name for the nav button; falls back to the label when unset.</summary>
+    public string? AutomationName { get; init; }
+
+    /// <summary>Optional automation help-text for the nav button (screen-reader description).</summary>
+    public string? AutomationHelpText { get; init; }
+
+    /// <summary>Optional rich-tooltip title (the bold first line of the FreeX hover card).</summary>
+    public string? TooltipTitle { get; init; }
+
+    /// <summary>Optional rich-tooltip description (the body line under the title).</summary>
+    public string? TooltipDescription { get; init; }
+
+    public static BackstageEntry Pane(string label, RibbonCommandIconKind? icon, Func<UIElement> content, bool dockBottom = false,
+        string? keyTip = null, string? automationId = null, string? automationName = null, string? automationHelpText = null,
+        string? tooltipTitle = null, string? tooltipDescription = null) =>
+        new()
+        {
+            Label = label, Icon = icon, ContentFactory = content, DockBottom = dockBottom,
+            KeyTip = keyTip, AutomationId = automationId, AutomationName = automationName, AutomationHelpText = automationHelpText,
+            TooltipTitle = tooltipTitle, TooltipDescription = tooltipDescription
+        };
+
+    public static BackstageEntry Command(string label, RibbonCommandIconKind? icon, Action action, bool dockBottom = false,
+        string? keyTip = null, string? automationId = null, string? automationName = null, string? automationHelpText = null,
+        string? tooltipTitle = null, string? tooltipDescription = null) =>
+        new()
+        {
+            Label = label, Icon = icon, Action = action, DockBottom = dockBottom,
+            KeyTip = keyTip, AutomationId = automationId, AutomationName = automationName, AutomationHelpText = automationHelpText,
+            TooltipTitle = tooltipTitle, TooltipDescription = tooltipDescription
+        };
 
     public static BackstageEntry Divider() => new() { Separator = true };
 }
@@ -119,14 +151,54 @@ public sealed class BackstageFrame : UserControl
 
         Content = layout;
 
-        KeyDown += (_, e) =>
+        KeyDown += OnKeyDown;
+    }
+
+    // Esc closes; Up/Down/Home/End move focus among the rail nav buttons, mirroring FreeX's start-screen
+    // rail (Up=Previous, Down=Next, Home=First, End=Last). Only fires while focus sits on the rail so the
+    // arrow keys still scroll / navigate inside content panes.
+    private void OnKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape)
         {
-            if (e.Key == Key.Escape)
-            {
-                Hide();
-                e.Handled = true;
-            }
+            Hide();
+            e.Handled = true;
+            return;
+        }
+
+        if (Keyboard.Modifiers != ModifierKeys.None ||
+            Keyboard.FocusedElement is not UIElement focused ||
+            !IsInsideRail(focused) ||
+            e.Key is not (Key.Up or Key.Down or Key.Home or Key.End))
+        {
+            return;
+        }
+
+        var direction = e.Key switch
+        {
+            Key.Up => FocusNavigationDirection.Previous,
+            Key.Down => FocusNavigationDirection.Next,
+            Key.Home => FocusNavigationDirection.First,
+            Key.End => FocusNavigationDirection.Last,
+            _ => FocusNavigationDirection.Next
         };
+        focused.MoveFocus(new TraversalRequest(direction));
+        e.Handled = true;
+    }
+
+    // True when the element lives under the nav rail (the coloured sidebar), so arrow navigation only
+    // hijacks the keys there and leaves the content host alone.
+    private bool IsInsideRail(DependencyObject? node)
+    {
+        while (node is not null)
+        {
+            if (ReferenceEquals(node, _rail))
+                return true;
+            node = node is Visual or System.Windows.Media.Media3D.Visual3D
+                ? VisualTreeHelper.GetParent(node)
+                : LogicalTreeHelper.GetParent(node);
+        }
+        return false;
     }
 
     /// <summary>
@@ -220,6 +292,26 @@ public sealed class BackstageFrame : UserControl
         {
             button.Content = entry.Label;
         }
+
+        // FreeX parity metadata — key-tip badge, rich-tooltip card and the accessibility tree. All
+        // optional: FreeW's entries set none of these, so the guards keep its rail byte-for-byte the same.
+        if (entry.KeyTip is { } keyTip)
+            RibbonTooltip.SetKeyTip(button, keyTip);
+        if (entry.TooltipTitle is { } title)
+            RibbonTooltip.SetTitle(button, title);
+        if (entry.TooltipDescription is { } description)
+            RibbonTooltip.SetDescription(button, description);
+        if (entry.AutomationId is { } automationId)
+            System.Windows.Automation.AutomationProperties.SetAutomationId(button, automationId);
+        if (entry.AutomationName is { } automationName)
+            System.Windows.Automation.AutomationProperties.SetName(button, automationName);
+        if (entry.AutomationHelpText is { } automationHelpText)
+            System.Windows.Automation.AutomationProperties.SetHelpText(button, automationHelpText);
+
+        // Rail nav buttons are focusable tab-stops so Up/Down/Home/End arrow navigation can move focus
+        // among them (see the KeyDown handler) the way FreeX's start-screen rail does.
+        button.Focusable = true;
+        KeyboardNavigation.SetTabNavigation(button, KeyboardNavigationMode.Continue);
 
         button.Click += (_, _) => Activate(entry, button);
         return button;

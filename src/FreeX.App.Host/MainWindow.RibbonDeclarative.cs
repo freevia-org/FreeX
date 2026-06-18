@@ -177,9 +177,11 @@ public partial class MainWindow
                      .OfType<ButtonBase>()
                      .Distinct())
         {
-            if (RibbonMetadata.IsCollapsedGroupButton(button) || button.ContextMenu is null)
+            if (RibbonMetadata.IsCollapsedGroupButton(button) ||
+                (button.ContextMenu is null && !RibbonMetadata.IsDropdownMenuButton(button)))
                 continue;
 
+            EnsureRibbonDropdownChevron(button);
             EnsureRibbonDropdownZoneHandler(button);
             EnsureRibbonDropdownZoneHighlight(button);
         }
