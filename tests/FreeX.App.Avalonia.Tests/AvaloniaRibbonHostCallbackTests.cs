@@ -232,6 +232,19 @@ public sealed class AvaloniaRibbonHostCallbackTests
     [InlineData("Data Validation")]
     [InlineData("Select Objects")]
     [InlineData("Selection Pane")]
+    // Home ▸ Font ▸ Borders / Underline / Orientation dropdown items (raw canonical menu ids).
+    [InlineData("Inside Borders")]
+    [InlineData("Top Border")]
+    [InlineData("Bottom Border")]
+    [InlineData("Left Border")]
+    [InlineData("Right Border")]
+    [InlineData("More Borders")]
+    [InlineData("Horizontal")]
+    [InlineData("Angle Counterclockwise")]
+    [InlineData("Angle Clockwise")]
+    [InlineData("Vertical Text")]
+    [InlineData("Rotate Text Up")]
+    [InlineData("Rotate Text Down")]
     public void NewTabCommands_AreRealCommandIds_AndBindViaExtraCommands(string commandId)
     {
         // The canonical id exists in the shared definition (so it seeds a NoOp default to begin with) ...

@@ -753,6 +753,24 @@ public sealed partial class MainWindow : Window
                     ["Data Validation"] = () => SelectGoToSpecial(GoToSpecialKind.DataValidation),
                     ["Select Objects"] = () => SelectGoToSpecial(GoToSpecialKind.Objects),
                     ["Selection Pane"] = () => RefreshShell("The Selection Pane isn't available in this build yet."),
+                    // Home ▸ Font ▸ Borders dropdown items (canonical ids from HomeRibbonMenus.Borders). The
+                    // single-edge/inside presets map to CellBorderPreset; "More Borders" opens Format Cells
+                    // (Borders tab). All/Outside/No Border are wired above. Exotic thick/double/draw variants
+                    // stay on the NoOp seed until they have modeled presets.
+                    ["Inside Borders"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.Inside),
+                    ["Top Border"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.Top),
+                    ["Bottom Border"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.Bottom),
+                    ["Left Border"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.Left),
+                    ["Right Border"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.Right),
+                    ["More Borders"] = () => _ = ShowFormatCellsDialogAsync(),
+                    // Home ▸ Font ▸ Orientation dropdown items (canonical ids from HomeRibbonMenus.Orientation).
+                    // Same rotation values as the native Format ▸ Orientation flyout.
+                    ["Horizontal"] = () => ApplySelectedRangeTextRotation(0, "Set horizontal text for", "Horizontal Text failed."),
+                    ["Angle Counterclockwise"] = () => ApplySelectedRangeTextRotation(45, "Angled text counterclockwise for", "Angle Counterclockwise failed."),
+                    ["Angle Clockwise"] = () => ApplySelectedRangeTextRotation(-45, "Angled text clockwise for", "Angle Clockwise failed."),
+                    ["Vertical Text"] = () => ApplySelectedRangeTextRotation(255, "Set vertical text for", "Vertical Text failed."),
+                    ["Rotate Text Up"] = () => ApplySelectedRangeTextRotation(90, "Rotated text up for", "Rotate Text Up failed."),
+                    ["Rotate Text Down"] = () => ApplySelectedRangeTextRotation(-90, "Rotated text down for", "Rotate Text Down failed."),
                     // Insert tab (Links / Text groups).
                     ["insert.hyperlink"] = () => _ = ShowInsertHyperlinkDialogAsync(),
                     // Home Font group (added buttons).
