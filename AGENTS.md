@@ -45,6 +45,7 @@
   - `dotnet test FreeX.DefaultTests.slnx --configuration Release --no-build --logger "trx;LogFileName=default-tests.trx"`
 - Do not run `dotnet test FreeX.slnx` or `dotnet test FreeX.UiTests.slnx` as routine/default verification.
 - Run the UI lane (`dotnet test FreeX.UiTests.slnx --configuration Release --no-build --logger "trx;LogFileName=ui-tests.trx"`) only when the user explicitly requests UI tests, the task touches WPF app/host behavior or UI test infrastructure, or the branch is preparing a tester-release/public-preview candidate.
+- For ribbon rendering/adaptive-layout/resize work, the focused ribbon lane is `dotnet test FreeX.RibbonTests.slnx --configuration Release --filter Category=RibbonUiLane` (see `docs/ribbon-ui-test-lane.md`).
 - If a build fails because another process locks output files, identify and clear the stale process before rerunning.
 - If a build or test command still fails because of stale build-server or shared-compiler state after clearing locks, rerun that command once with `--disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1` before treating it as a product failure.
 - Report exact verification commands and outcomes in the final response.

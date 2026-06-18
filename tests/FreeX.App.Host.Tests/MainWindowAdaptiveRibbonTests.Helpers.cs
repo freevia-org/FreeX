@@ -52,7 +52,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
         return (Rect)args[1];
     }
 
-    private sealed class MainWindowHarness : IDisposable
+    private sealed partial class MainWindowHarness : IDisposable
     {
         private static MainWindow? SharedWindow;
 

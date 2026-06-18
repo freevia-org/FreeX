@@ -1,0 +1,5 @@
+<Solution>
+  <Folder Name="/tests/">
+    <Project Path="tests/FreeX.App.Host.Tests/FreeX.App.Host.Tests.csproj" />
+  </Folder>
+</Solution>
