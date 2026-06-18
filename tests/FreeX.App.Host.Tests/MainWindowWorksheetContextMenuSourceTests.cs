@@ -125,12 +125,14 @@ public sealed class MainWindowWorksheetContextMenuSourceTests
     [Fact]
     public void WorksheetContextMenuItemsExposeStableAutomationNamesAndIds()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
+        // The worksheet context menu now renders from the shared ribbon-menu model via
+        // WorksheetContextMenuRenderer, which preserves the prior automation contract.
+        var source = DialogSourceTestSupport.ReadHostSources("WorksheetContextMenuRenderer.cs");
 
-        source.Should().Contain("AutomationProperties.SetName(item, command.Header);");
+        source.Should().Contain("AutomationProperties.SetName(menuItem, cleanHeader);");
         source.Should().Contain("AutomationProperties.SetAutomationId(");
-        source.Should().Contain("WorksheetContextMenu_{command.Action}");
-        source.Should().Contain("NormalizeWorksheetContextMenuAutomationId(command.Header)");
+        source.Should().Contain("WorksheetContextMenu_{action}");
+        source.Should().Contain("WorksheetContextMenu_{NormalizeAutomationId(cleanHeader)}");
     }
 
     [Fact]

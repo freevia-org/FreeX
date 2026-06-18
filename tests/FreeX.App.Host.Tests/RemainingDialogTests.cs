@@ -30,8 +30,10 @@ public sealed partial class RemainingDialogTests
         DialogSourceTestSupport.ReadHostSources(
             "GoalSeekStatusDialog.cs",
             "WorkbookStatisticsDialog.cs",
-            "AccessibilityCheckerDialog.cs",
-            "StatusDialogKeyboardFocus.cs");
+            "AccessibilityCheckerDialog.cs")
+        + Environment.NewLine
+        // StatusDialogKeyboardFocus was extracted into the shared shell helpers project.
+        + DialogSourceTestSupport.ReadShellSources("StatusDialogKeyboardFocus.cs");
 
     private static string ReadPrintPreviewDialogSources() =>
         DialogSourceTestSupport.ReadHostSources(

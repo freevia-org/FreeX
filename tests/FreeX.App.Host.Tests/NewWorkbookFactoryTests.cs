@@ -69,7 +69,9 @@ public sealed class NewWorkbookFactoryTests
         var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
 
         appSource.Should().Contain("NewWorkbookFactory.Create(options)");
-        backstageSource.Should().Contain("NewWorkbookFactory.Create(_options)");
+        // File > New now also threads the chosen workbook name through the factory, but still routes
+        // the full options object (font, sheet count, user name) rather than only DefaultSheetCount.
+        backstageSource.Should().Contain("NewWorkbookFactory.Create(_options, workbookName)");
         appSource.Should().NotContain("NewWorkbookFactory.Create(options.DefaultSheetCount)");
         backstageSource.Should().NotContain("NewWorkbookFactory.Create(_options.DefaultSheetCount)");
     }

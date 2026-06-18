@@ -21,6 +21,15 @@ public sealed class RibbonGroupHost : ContentControl
     public int Priority { get; }
     public double FullWidth { get; set; }
 
+    /// <summary>The group's display name (header). Exposed so group-discovery queries and the test
+    /// harness can identify the host without reaching into its private group model.</summary>
+    public string GroupName => _group.Header;
+
+    /// <summary>The full (expanded) group grid this host renders. Always the same instance regardless
+    /// of whether the host is currently showing the collapsed button, so discovery can find the group
+    /// even while collapsed.</summary>
+    public FrameworkElement GroupContent => _full;
+
     private readonly RibbonGroup _group;
     private readonly FrameworkElement _full;
     private readonly System.Func<FrameworkElement> _popupContentFactory;

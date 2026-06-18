@@ -176,7 +176,7 @@ public sealed class ReleaseAutomationWorkflowTests
     {
         var script = WorkspaceFileLocator.ReadAllText("tools", "Publish-UserTestBuild.ps1");
 
-        script.Should().Contain("[ValidateSet(\"SingleFile\", \"Folder\", \"Msix\")]");
+        script.Should().Contain("[ValidateSet(\"SingleFile\", \"Folder\", \"Msix\", \"Velopack\")]");
         script.Should().Contain("[string]$MsixCertificatePath = $env:FREEX_MSIX_CERTIFICATE_PATH");
         script.Should().Contain("[string]$MsixCertificatePassword = $env:FREEX_MSIX_CERTIFICATE_PASSWORD");
         script.Should().Contain("[string]$MsixTimestampUrl = $env:FREEX_MSIX_TIMESTAMP_URL");

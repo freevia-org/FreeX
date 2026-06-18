@@ -46,13 +46,15 @@ public sealed class AppDiagnosticsActivitySourceTests
     public void MainWindow_RecordsManualUpdateCheckUsageEvent()
     {
         var reviewSource = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
-        var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
 
         reviewSource.Should().Contain("private async void CheckForUpdatesBtn_Click(");
         reviewSource.Should().Contain("RecordDiagnosticEvent(\"update_check_opened\"");
         reviewSource.Should().Contain("[\"source\"] = \"help\"");
         reviewSource.Should().Contain("OpenExternalHelpLink(updates.ReleasesPageUrl, UiText.Get(\"MainWindowMessage_CheckForUpdatesTitle\"))");
-        xaml.Should().Contain("Click=\"CheckForUpdatesBtn_Click\"");
-        xaml.Should().Contain("AutomationProperties.AutomationId=\"HelpCheckForUpdatesButton\"");
+
+        // The ribbon "Check for Updates" command moved out of MainWindow.xaml into the single-source
+        // declarative ribbon model; it wires CheckForUpdatesBtn_Click via the "Title#Handler" convention.
+        var ribbonDefinition = DialogSourceTestSupport.ReadRibbonDefinitionSource("FreeXRibbonDefinition.cs");
+        ribbonDefinition.Should().Contain("Check for Updates#CheckForUpdatesBtn_Click");
     }
 }

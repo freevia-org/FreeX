@@ -378,13 +378,17 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void PivotTableDesignCommands_OpenOptionsDialogInsteadOfCyclingLayoutState()
     {
-        var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
+        var ribbon = DialogSourceTestSupport.ReadRibbonDefinitionSource("FreeXRibbonDefinition.cs");
         var source = ReadPivotCommandSource();
 
-        xaml.ShouldContainLocalizedAttribute("local:RibbonTooltip.Description", "Open PivotTable layout and style options.");
-        xaml.Should().NotContain("Cycle grand totals");
-        xaml.Should().NotContain("Cycle subtotals");
-        xaml.Should().NotContain("Cycle PivotTable style gallery choices.");
+        // After the ribbon XAML→declarative cutover the PivotTable options entry point is declared in the
+        // single-source ribbon as the "PivotTable Options" command (PivotTable Analyze tab) rather than a
+        // hand-authored MainWindow.xaml button. The command still opens the options dialog (asserted below)
+        // instead of cycling layout/style state.
+        ribbon.Should().Contain(".Medium(\"PivotTable Options\", \"PivotTable Options\"");
+        ribbon.Should().NotContain("Cycle grand totals");
+        ribbon.Should().NotContain("Cycle subtotals");
+        ribbon.Should().NotContain("Cycle PivotTable style gallery choices.");
         source.Should().Contain("PivotCacheModel? cache = null;");
         source.Should().Contain("foreach (var item in _workbook.PivotCaches)");
         source.Should().Contain("if (item.CacheId != pivotTable.CacheId)");

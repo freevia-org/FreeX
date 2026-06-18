@@ -48,10 +48,10 @@ public sealed class HomeNumberFormatCommandSourceTests
     [Fact]
     public void HomeNumberFormatDropdown_SourceUsesPlannerAndOpensFormatCellsNumberTab()
     {
-        var startupSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Startup.cs");
+        var declarativeSource = DialogSourceTestSupport.ReadHostSources("MainWindow.RibbonDeclarative.cs");
         var formattingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
 
-        startupSource.Should().Contain("HomeNumberFormatDropdownPlanner.Options.Select(option => option.Label)");
+        declarativeSource.Should().Contain("HomeNumberFormatDropdownPlanner.Options.Select(option => option.Label)");
         formattingSource.Should().Contain("HomeNumberFormatDropdownPlanner.Options[selectedIndex]");
         formattingSource.Should().Contain("OpenFormatCellsDialog(FormatCellsDialogTab.Number)");
     }

@@ -2968,9 +2968,9 @@ public sealed partial class MainWindow : Window
     {
         _selectedDrawingObjectKind = null;
         _selectedDrawingObjectId = null;
-        // TODO: table/pivot active context is not yet signaled — no shell accessor exists for
-        // "active cell is inside a table/pivot" in the Avalonia shell. Chart/picture/shape
-        // selection (above) drives the contextual tabs for now; clearing drops them.
+        // TODO(avalonia-shell): signal table/pivot active context once a shell accessor exists (ref: docs/parity/subagent-contextual-table-pivot-ribbons-2026-06-07.md#remaining-gaps)
+        // No "active cell is inside a table/pivot" accessor exists in the Avalonia shell yet.
+        // Chart/picture/shape selection (above) drives the contextual tabs for now; clearing drops them.
         _ribbonContextSource.OnSelectionCleared();
     }
 
@@ -3763,9 +3763,9 @@ public sealed partial class MainWindow : Window
                 ClearSelectedRangeHyperlinks();
                 break;
             default:
-                // TODO: no Avalonia equivalent yet (insert/delete cells, sort/filter, comments,
-                // notes, data tools, format cells, etc.). Menu structure is present; wire as the
-                // corresponding Avalonia document commands land.
+                // TODO(avalonia-shell): wire remaining context-menu actions as Avalonia document commands land (ref: docs/parity/command-surface.md#deferred-architectural-features)
+                // No Avalonia equivalent yet (insert/delete cells, sort/filter, comments,
+                // notes, data tools, format cells, etc.). Menu structure is present.
                 break;
         }
     }

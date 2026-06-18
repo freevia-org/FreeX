@@ -137,6 +137,12 @@ public static class RibbonWpfRenderer
         var grid = new Grid();
         ApplyStyle(grid, resourceHost, "RibbonGroupPanel");
         RibbonMetadata.SetCatalogId(grid, group.Id);
+        // Seed the group role + name so the host's group-discovery queries (and the test harness) can
+        // identify this grid as a ribbon group. These are pure metadata tags — they attach no visuals and
+        // do not influence the RibbonAdaptivePanel layout.
+        RibbonMetadata.SetRole(grid, RibbonMetadataRole.RibbonGroup);
+        if (!string.IsNullOrEmpty(group.Header))
+            RibbonMetadata.SetGroupName(grid, group.Header);
         grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(18) });
 
