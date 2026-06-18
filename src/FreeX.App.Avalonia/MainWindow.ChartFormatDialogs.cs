@@ -51,7 +51,7 @@ public sealed partial class MainWindow
 
     private async Task<ChartDataLabelsInput?> ShowChartDataLabelsDialogAsync(ChartDataLabelsInput current)
     {
-        var showCheck = new CheckBox { Content = "Show data labels", IsChecked = current.ShowDataLabels };
+        var showCheck = new CheckBox { Content = UiText.Get("ChartDataLabels_Show"), IsChecked = current.ShowDataLabels };
         AutomationProperties.SetAutomationId(showCheck, "ChartDataLabelsShowCheck");
 
         var positionChoices = ChartDataLabelsPlanner.GetPositionChoices();
@@ -67,18 +67,18 @@ public sealed partial class MainWindow
             positionChoices.FirstOrDefault(c => c.Position == current.Position)
             ?? (positionChoices.Count > 0 ? positionChoices[0] : null);
 
-        var valueCheck = new CheckBox { Content = "Value", IsChecked = current.ShowValue };
+        var valueCheck = new CheckBox { Content = UiText.Get("ChartDataLabels_Value"), IsChecked = current.ShowValue };
         AutomationProperties.SetAutomationId(valueCheck, "ChartDataLabelsValueCheck");
-        var categoryCheck = new CheckBox { Content = "Category name", IsChecked = current.ShowCategoryName };
+        var categoryCheck = new CheckBox { Content = UiText.Get("ChartDataLabels_CategoryName"), IsChecked = current.ShowCategoryName };
         AutomationProperties.SetAutomationId(categoryCheck, "ChartDataLabelsCategoryCheck");
-        var seriesCheck = new CheckBox { Content = "Series name", IsChecked = current.ShowSeriesName };
+        var seriesCheck = new CheckBox { Content = UiText.Get("ChartDataLabels_SeriesName"), IsChecked = current.ShowSeriesName };
         AutomationProperties.SetAutomationId(seriesCheck, "ChartDataLabelsSeriesCheck");
-        var percentCheck = new CheckBox { Content = "Percentage", IsChecked = current.ShowPercentage };
+        var percentCheck = new CheckBox { Content = UiText.Get("ChartDataLabels_Percentage"), IsChecked = current.ShowPercentage };
         AutomationProperties.SetAutomationId(percentCheck, "ChartDataLabelsPercentageCheck");
-        var legendKeyCheck = new CheckBox { Content = "Legend key", IsChecked = current.ShowLegendKey };
+        var legendKeyCheck = new CheckBox { Content = UiText.Get("ChartDataLabels_LegendKey"), IsChecked = current.ShowLegendKey };
         AutomationProperties.SetAutomationId(legendKeyCheck, "ChartDataLabelsLegendKeyCheck");
 
-        var dialog = NewChartDialog("Data Labels", "ChartDataLabelsDialog");
+        var dialog = NewChartDialog(UiText.Get("ChartDataLabels_Title"), "ChartDataLabelsDialog");
 
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("ChartDataLabels");
         okButton.Click += (_, _) =>
@@ -105,9 +105,9 @@ public sealed partial class MainWindow
             Children =
             {
                 showCheck,
-                new TextBlock { Text = "Label position:" },
+                new TextBlock { Text = UiText.Get("ChartDataLabels_PositionLabel") },
                 positionCombo,
-                new TextBlock { Text = "Label contains:", Margin = new Thickness(0, 6, 0, 0) },
+                new TextBlock { Text = UiText.Get("ChartDataLabels_ContainsLabel"), Margin = new Thickness(0, 6, 0, 0) },
                 valueCheck,
                 categoryCheck,
                 seriesCheck,
@@ -169,7 +169,7 @@ public sealed partial class MainWindow
         AutomationProperties.SetName(majorUnitBox, "Axis major unit");
         AutomationProperties.SetAutomationId(majorUnitBox, "ChartAxisMajorUnitBox");
 
-        var logCheck = new CheckBox { Content = "Logarithmic scale", IsChecked = current.LogScale };
+        var logCheck = new CheckBox { Content = UiText.Get("ChartAxis_LogScale"), IsChecked = current.LogScale };
         AutomationProperties.SetAutomationId(logCheck, "ChartAxisLogScaleCheck");
 
         var numberFormatChoices = ChartAxisPlanner.GetNumberFormatChoices();
@@ -185,9 +185,9 @@ public sealed partial class MainWindow
             numberFormatChoices.FirstOrDefault(c => c.NumberFormat == current.NumberFormat)
             ?? (numberFormatChoices.Count > 0 ? numberFormatChoices[0] : null);
 
-        var majorGridCheck = new CheckBox { Content = "Show major gridlines", IsChecked = current.ShowMajorGridlines };
+        var majorGridCheck = new CheckBox { Content = UiText.Get("ChartAxis_ShowMajorGridlines"), IsChecked = current.ShowMajorGridlines };
         AutomationProperties.SetAutomationId(majorGridCheck, "ChartAxisMajorGridlinesCheck");
-        var minorGridCheck = new CheckBox { Content = "Show minor gridlines", IsChecked = current.ShowMinorGridlines };
+        var minorGridCheck = new CheckBox { Content = UiText.Get("ChartAxis_ShowMinorGridlines"), IsChecked = current.ShowMinorGridlines };
         AutomationProperties.SetAutomationId(minorGridCheck, "ChartAxisMinorGridlinesCheck");
 
         var dialog = NewChartDialog($"Format {commandLabel}", "ChartAxisFormatDialog");
@@ -225,14 +225,14 @@ public sealed partial class MainWindow
             MinWidth = 300,
             Children =
             {
-                new TextBlock { Text = "Minimum (blank = auto):" },
+                new TextBlock { Text = UiText.Get("ChartAxis_MinimumLabel") },
                 minimumBox,
-                new TextBlock { Text = "Maximum (blank = auto):" },
+                new TextBlock { Text = UiText.Get("ChartAxis_MaximumLabel") },
                 maximumBox,
-                new TextBlock { Text = "Major unit (blank = auto):" },
+                new TextBlock { Text = UiText.Get("ChartAxis_MajorUnitLabel") },
                 majorUnitBox,
                 logCheck,
-                new TextBlock { Text = "Number format:", Margin = new Thickness(0, 6, 0, 0) },
+                new TextBlock { Text = UiText.Get("ChartAxis_NumberFormatLabel"), Margin = new Thickness(0, 6, 0, 0) },
                 numberFormatCombo,
                 majorGridCheck,
                 minorGridCheck,
@@ -292,9 +292,9 @@ public sealed partial class MainWindow
         // shows each series' own format. Color buttons open the shared More Colors picker.
         var state = current;
 
-        var fillButton = new Button { Content = DescribeColor("Fill color", current.FillColor), Width = 260 };
+        var fillButton = new Button { Content = DescribeColor(UiText.Get("ChartSeries_FillColor"),current.FillColor), Width = 260 };
         AutomationProperties.SetAutomationId(fillButton, "ChartSeriesFormatFillButton");
-        var strokeButton = new Button { Content = DescribeColor("Line color", current.StrokeColor), Width = 260 };
+        var strokeButton = new Button { Content = DescribeColor(UiText.Get("ChartSeries_LineColor"),current.StrokeColor), Width = 260 };
         AutomationProperties.SetAutomationId(strokeButton, "ChartSeriesFormatLineButton");
 
         var strokeThicknessBox = new TextBox { Text = FormatNullableDouble(current.StrokeThickness), Width = 260, PlaceholderText = "Auto" };
@@ -314,8 +314,8 @@ public sealed partial class MainWindow
         void LoadState(ChartSeriesFormatInput value)
         {
             state = value;
-            fillButton.Content = DescribeColor("Fill color", value.FillColor);
-            strokeButton.Content = DescribeColor("Line color", value.StrokeColor);
+            fillButton.Content = DescribeColor(UiText.Get("ChartSeries_FillColor"),value.FillColor);
+            strokeButton.Content = DescribeColor(UiText.Get("ChartSeries_LineColor"),value.StrokeColor);
             strokeThicknessBox.Text = FormatNullableDouble(value.StrokeThickness);
             markerCombo.SelectedItem = value.MarkerStyle is { } m ? m.ToString() : "(None)";
             markerSizeBox.Text = FormatNullableDouble(value.MarkerSize);
@@ -331,24 +331,24 @@ public sealed partial class MainWindow
 
         fillButton.Click += async (_, _) =>
         {
-            var chosen = await ShowMoreColorsDialogAsync("Series Fill Color", state.FillColor ?? ChartCycleBlue);
+            var chosen = await ShowMoreColorsDialogAsync(UiText.Get("ChartSeries_FillColorDialogTitle"), state.FillColor ?? ChartCycleBlue);
             if (chosen is { } color)
             {
                 state = state with { FillColor = color };
-                fillButton.Content = DescribeColor("Fill color", color);
+                fillButton.Content = DescribeColor(UiText.Get("ChartSeries_FillColor"),color);
             }
         };
         strokeButton.Click += async (_, _) =>
         {
-            var chosen = await ShowMoreColorsDialogAsync("Series Line Color", state.StrokeColor ?? ChartCycleBlue);
+            var chosen = await ShowMoreColorsDialogAsync(UiText.Get("ChartSeries_LineColorDialogTitle"), state.StrokeColor ?? ChartCycleBlue);
             if (chosen is { } color)
             {
                 state = state with { StrokeColor = color };
-                strokeButton.Content = DescribeColor("Line color", color);
+                strokeButton.Content = DescribeColor(UiText.Get("ChartSeries_LineColor"),color);
             }
         };
 
-        var dialog = NewChartDialog("Format Series", "ChartSeriesFormatDialog");
+        var dialog = NewChartDialog(UiText.Get("ChartSeries_Title"), "ChartSeriesFormatDialog");
 
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("ChartSeriesFormat");
         okButton.Click += (_, _) =>
@@ -381,16 +381,16 @@ public sealed partial class MainWindow
             MinWidth = 300,
             Children =
             {
-                new TextBlock { Text = "Series:" },
+                new TextBlock { Text = UiText.Get("ChartSeries_SeriesLabel") },
                 seriesCombo,
-                new TextBlock { Text = "Fill and line:", Margin = new Thickness(0, 6, 0, 0) },
+                new TextBlock { Text = UiText.Get("ChartSeries_FillAndLineLabel"), Margin = new Thickness(0, 6, 0, 0) },
                 fillButton,
                 strokeButton,
-                new TextBlock { Text = "Line width (blank = auto):" },
+                new TextBlock { Text = UiText.Get("ChartSeries_LineWidthLabel") },
                 strokeThicknessBox,
-                new TextBlock { Text = "Marker:" },
+                new TextBlock { Text = UiText.Get("ChartSeries_MarkerLabel") },
                 markerCombo,
-                new TextBlock { Text = "Marker size (blank = auto):" },
+                new TextBlock { Text = UiText.Get("ChartSeries_MarkerSizeLabel") },
                 markerSizeBox,
                 buttonRow,
             },
@@ -427,7 +427,7 @@ public sealed partial class MainWindow
 
     private async Task<ChartTrendlineInput?> ShowChartTrendlineDialogAsync(ChartTrendlineInput current)
     {
-        var showCheck = new CheckBox { Content = "Show trendline", IsChecked = current.ShowTrendline };
+        var showCheck = new CheckBox { Content = UiText.Get("ChartTrendline_Show"), IsChecked = current.ShowTrendline };
         AutomationProperties.SetAutomationId(showCheck, "ChartTrendlineShowCheck");
 
         var typeChoices = ChartTrendlinePlanner.GetTypeChoices();
@@ -450,12 +450,12 @@ public sealed partial class MainWindow
         AutomationProperties.SetName(orderBox, "Polynomial order");
         AutomationProperties.SetAutomationId(orderBox, "ChartTrendlineOrderBox");
 
-        var equationCheck = new CheckBox { Content = "Display equation on chart", IsChecked = current.ShowEquation };
+        var equationCheck = new CheckBox { Content = UiText.Get("ChartTrendline_ShowEquation"), IsChecked = current.ShowEquation };
         AutomationProperties.SetAutomationId(equationCheck, "ChartTrendlineEquationCheck");
-        var rSquaredCheck = new CheckBox { Content = "Display R-squared value", IsChecked = current.ShowRSquared };
+        var rSquaredCheck = new CheckBox { Content = UiText.Get("ChartTrendline_ShowRSquared"), IsChecked = current.ShowRSquared };
         AutomationProperties.SetAutomationId(rSquaredCheck, "ChartTrendlineRSquaredCheck");
 
-        var dialog = NewChartDialog("Trendline", "ChartTrendlineDialog");
+        var dialog = NewChartDialog(UiText.Get("ChartTrendline_Title"), "ChartTrendlineDialog");
 
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("ChartTrendline");
         okButton.Click += (_, _) =>
@@ -491,11 +491,11 @@ public sealed partial class MainWindow
             Children =
             {
                 showCheck,
-                new TextBlock { Text = "Trendline type:" },
+                new TextBlock { Text = UiText.Get("ChartTrendline_TypeLabel") },
                 typeCombo,
-                new TextBlock { Text = "Moving average period (moving-average only):" },
+                new TextBlock { Text = UiText.Get("ChartTrendline_PeriodLabel") },
                 periodBox,
-                new TextBlock { Text = "Polynomial order (polynomial only):" },
+                new TextBlock { Text = UiText.Get("ChartTrendline_OrderLabel") },
                 orderBox,
                 equationCheck,
                 rSquaredCheck,
@@ -524,9 +524,9 @@ public sealed partial class MainWindow
 
     private static (Button Ok, Button Cancel, StackPanel Row) CreateChartDialogButtons(string idPrefix)
     {
-        var okButton = new Button { Content = "OK", Width = 80, IsDefault = true };
+        var okButton = new Button { Content = UiText.Get("Common_Ok"), Width = 80, IsDefault = true };
         AutomationProperties.SetAutomationId(okButton, $"{idPrefix}OkButton");
-        var cancelButton = new Button { Content = "Cancel", Width = 80, IsCancel = true };
+        var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), Width = 80, IsCancel = true };
         AutomationProperties.SetAutomationId(cancelButton, $"{idPrefix}CancelButton");
         var row = new StackPanel
         {

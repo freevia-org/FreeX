@@ -115,7 +115,7 @@ public sealed partial class MainWindow
         var content = new StackPanel { Spacing = 8, Margin = new Thickness(12) };
         content.Children.Add(new TextBlock
         {
-            Text = $"Filter “{caption}”",
+            Text = UiText.Format("PivotFilter_ItemsHeading", caption),
             FontWeight = FontWeight.SemiBold,
             Foreground = HeaderForeground,
         });
@@ -128,7 +128,7 @@ public sealed partial class MainWindow
 
         var dialog = new Window
         {
-            Title = "Filter Items",
+            Title = UiText.Get("PivotFilter_ItemsTitle"),
             Width = 300,
             SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -136,9 +136,9 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(dialog, "PivotItemFilterDialog");
 
-        var ok = new Button { Content = "OK", IsDefault = true, MinWidth = 80 };
+        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 80 };
         AutomationProperties.SetAutomationId(ok, "PivotItemFilterOkButton");
-        var cancel = new Button { Content = "Cancel", IsCancel = true, MinWidth = 80 };
+        var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 80 };
         AutomationProperties.SetAutomationId(cancel, "PivotItemFilterCancelButton");
         cancel.Click += (_, _) => dialog.Close(false);
         ok.Click += (_, _) => dialog.Close(true);
@@ -250,7 +250,7 @@ public sealed partial class MainWindow
 
         var dialog = new Window
         {
-            Title = $"Label Filter ({target.FieldCaption})",
+            Title = UiText.Format("PivotFilter_LabelTitle", target.FieldCaption),
             Width = 320,
             SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -258,11 +258,11 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(dialog, "PivotLabelFilterDialog");
 
-        var ok = new Button { Content = "OK", IsDefault = true, MinWidth = 80 };
+        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 80 };
         AutomationProperties.SetAutomationId(ok, "PivotLabelFilterOkButton");
-        var clear = new Button { Content = "Clear", MinWidth = 80, IsEnabled = existing is not null };
+        var clear = new Button { Content = UiText.Get("Common_Clear"), MinWidth = 80, IsEnabled = existing is not null };
         AutomationProperties.SetAutomationId(clear, "PivotLabelFilterClearButton");
-        var cancel = new Button { Content = "Cancel", IsCancel = true, MinWidth = 80 };
+        var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 80 };
         AutomationProperties.SetAutomationId(cancel, "PivotLabelFilterCancelButton");
         cancel.Click += (_, _) => dialog.Close(0);
         ok.Click += (_, _) =>
@@ -282,7 +282,7 @@ public sealed partial class MainWindow
         var content = new StackPanel { Spacing = 8, Margin = new Thickness(12) };
         content.Children.Add(new TextBlock
         {
-            Text = $"Show items where the label:",
+            Text = UiText.Get("PivotFilter_LabelHeading"),
             Foreground = HeaderForeground,
         });
         content.Children.Add(kindBox);
@@ -383,7 +383,7 @@ public sealed partial class MainWindow
 
         var dialog = new Window
         {
-            Title = $"Value Filter ({target.FieldCaption})",
+            Title = UiText.Format("PivotFilter_ValueTitle", target.FieldCaption),
             Width = 320,
             SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -391,11 +391,11 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(dialog, "PivotValueFilterDialog");
 
-        var ok = new Button { Content = "OK", IsDefault = true, MinWidth = 80 };
+        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 80 };
         AutomationProperties.SetAutomationId(ok, "PivotValueFilterOkButton");
-        var clear = new Button { Content = "Clear", MinWidth = 80, IsEnabled = existing is not null };
+        var clear = new Button { Content = UiText.Get("Common_Clear"), MinWidth = 80, IsEnabled = existing is not null };
         AutomationProperties.SetAutomationId(clear, "PivotValueFilterClearButton");
-        var cancel = new Button { Content = "Cancel", IsCancel = true, MinWidth = 80 };
+        var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 80 };
         AutomationProperties.SetAutomationId(cancel, "PivotValueFilterCancelButton");
         cancel.Click += (_, _) => dialog.Close(0);
         ok.Click += (_, _) =>
@@ -419,9 +419,9 @@ public sealed partial class MainWindow
         clear.Click += (_, _) => dialog.Close(2);
 
         var content = new StackPanel { Spacing = 8, Margin = new Thickness(12) };
-        content.Children.Add(new TextBlock { Text = "Summarize by:", Foreground = HeaderForeground });
+        content.Children.Add(new TextBlock { Text = UiText.Get("PivotFilter_SummarizeBy"), Foreground = HeaderForeground });
         content.Children.Add(dataFieldBox);
-        content.Children.Add(new TextBlock { Text = "where the value is:", Foreground = HeaderForeground });
+        content.Children.Add(new TextBlock { Text = UiText.Get("PivotFilter_WhereValueIs"), Foreground = HeaderForeground });
         content.Children.Add(kindBox);
         content.Children.Add(primary);
         content.Children.Add(secondary);
