@@ -36,15 +36,27 @@ public sealed class RecalcEngine
     /// Recalculate all cells affected by changes to the given cells.
     /// Returns a report of what was recalculated.
     /// </summary>
-    public RecalcReport Recalculate(Workbook workbook, IReadOnlyList<CellAddress> changedCells)
+    public RecalcReport Recalculate(Workbook workbook, IReadOnlyList<CellAddress> changedCells) =>
+        Recalculate(workbook, changedCells, resolveSpillDependents: true);
+
+    private RecalcReport Recalculate(
+        Workbook workbook,
+        IReadOnlyList<CellAddress> changedCells,
+        bool resolveSpillDependents)
     {
         if (changedCells.Count == 0 && _volatileCells.Count == 0)
             return EmptyReport;
 
+        var changedFormulaCells = CollectChangedFormulaCells(workbook, changedCells);
+
+        // Register dependencies for freshly-edited formula cells before computing the recalc
+        // order. Otherwise a formula that now references another cell dirtied in the same batch
+        // has no edge in the graph yet, and the topological sort can run it before that precedent.
+        EnsureChangedFormulaDependenciesRegistered(workbook, changedFormulaCells);
+
         // Include volatile cells in the dependency traversal so their dependents appear in the plan
         var changedForTraversal = BuildChangedSetForTraversal(changedCells);
         var plan = _graph.GetRecalcOrder(changedForTraversal);
-        var changedFormulaCells = CollectChangedFormulaCells(workbook, changedCells);
         if (plan.OrderedCells.Count == 0 &&
             plan.CyclicCells.Count == 0 &&
             _volatileCells.Count == 0 &&
@@ -59,6 +71,10 @@ public sealed class RecalcEngine
         List<(CellAddress Cell, string Error)>? errors = null;
         List<CellAddress>? cyclicCells = null;
         HashSet<CellAddress>? seenCyclicCells = null;
+        // Set whenever a spill range is created, resized, or cleared this pass, so formula cells
+        // that read spill-target cells get a follow-up re-evaluation (those targets are not formula
+        // cells and have no node in the dependency graph, so the topo sort cannot order them).
+        var spillTargetsMayHaveChanged = false;
 
         // Mark cyclic cells with error
         foreach (var cyclic in plan.CyclicCells)
@@ -108,6 +124,10 @@ public sealed class RecalcEngine
             var cell = sheet.GetCell(addr);
             if (cell is null || !cell.HasFormula) continue;
 
+            // Did this cell own a spill before re-evaluation? If so, any outcome that does not
+            // re-establish the same spill clears its target cells and downstream readers go stale.
+            var hadSpill = sheet.HasSpillValues && sheet.TryGetSpillExtent(addr, out _, out _);
+
             try
             {
                 // Use cached AST to avoid re-running Lexer+Parser on every recalc pass.
@@ -129,6 +149,7 @@ public sealed class RecalcEngine
                     // Legacy implicit intersection (@): resolve the range to the single cell that shares
                     // this formula's row/column instead of spilling.
                     sheet.ClearSpillRange(addr);
+                    if (hadSpill) spillTargetsMayHaveChanged = true;
                     cell.Value = ImplicitIntersection.Resolve(implicitRange, addr.Row, addr.Col);
                     AddRecalculatedCell(ref recalculatedCount, ref singleRecalculated, ref recalculated, addr);
                 }
@@ -138,18 +159,21 @@ public sealed class RecalcEngine
                     if (sheet.IsSpillBlocked(addr, rv.RowCount, rv.ColCount))
                     {
                         cell.Value = ErrorValue.Spill;
+                        if (hadSpill) spillTargetsMayHaveChanged = true;
                         AddError(ref errors, addr, "#SPILL!");
                     }
                     else
                     {
                         cell.Value = rv.Cells[0, 0];
                         sheet.SetSpillRange(addr, rv);
+                        spillTargetsMayHaveChanged = true;
                         AddRecalculatedCell(ref recalculatedCount, ref singleRecalculated, ref recalculated, addr);
                     }
                 }
                 else
                 {
                     sheet.ClearSpillRange(addr);
+                    if (hadSpill) spillTargetsMayHaveChanged = true;
                     cell.Value = result;
                     AddRecalculatedCell(ref recalculatedCount, ref singleRecalculated, ref recalculated, addr);
                 }
@@ -158,6 +182,7 @@ public sealed class RecalcEngine
             {
                 cell.CachedAst = null;
                 sheet.ClearSpillRange(addr);
+                if (hadSpill) spillTargetsMayHaveChanged = true;
                 ClearFormulaDependencies(addr);
                 cell.Value = ErrorValue.Value;
                 AddError(ref errors, addr, "#VALUE!");
@@ -182,10 +207,58 @@ public sealed class RecalcEngine
             }
         }
 
-        return new RecalcReport(
+        var report = new RecalcReport(
             BuildRecalculatedCells(recalculatedCount, singleRecalculated, recalculated),
             errors ?? EmptyErrors,
             cyclicCells ?? EmptyCells);
+
+        // Second pass: formula cells that read spill-target cells could not be ordered relative to
+        // the spill anchor (the targets have no graph node), so re-evaluate them now that all spill
+        // ranges are populated. Guarded by resolveSpillDependents so this recurses at most once.
+        if (resolveSpillDependents && spillTargetsMayHaveChanged)
+        {
+            var spillDependents = CollectSpillTargetDependentFormulaCells(workbook);
+            if (spillDependents.Count > 0)
+            {
+                var spillReport = Recalculate(workbook, spillDependents, resolveSpillDependents: false);
+                return MergeRecalcReports(report, spillReport);
+            }
+        }
+
+        return report;
+    }
+
+    /// <summary>
+    /// Parse and register dependencies for freshly-edited formula cells (those whose AST has not
+    /// been cached yet) so the dependency graph reflects their current precedents before the
+    /// recalc order is computed.
+    /// </summary>
+    private void EnsureChangedFormulaDependenciesRegistered(
+        Workbook workbook,
+        IReadOnlyList<CellAddress>? changedFormulaCells)
+    {
+        if (changedFormulaCells is null)
+            return;
+
+        for (var i = 0; i < changedFormulaCells.Count; i++)
+        {
+            var addr = changedFormulaCells[i];
+            var sheet = workbook.GetSheet(addr.Sheet);
+            var cell = sheet?.GetCell(addr);
+            if (cell is null || !cell.HasFormula || cell.CachedAst is FormulaNode)
+                continue;
+
+            try
+            {
+                var ast = FormulaEvaluator.ParseFormula(cell.FormulaText!);
+                cell.CachedAst = ast;
+                RegisterFormulaDependencies(addr, ast, addr.Sheet, workbook);
+            }
+            catch (FormulaParseException)
+            {
+                // Invalid text is surfaced as #VALUE! by the evaluation loop; it has no dependencies.
+            }
+        }
     }
 
     private IEnumerable<CellAddress> BuildChangedSetForTraversal(IReadOnlyList<CellAddress> changedCells)
@@ -426,23 +499,9 @@ public sealed class RecalcEngine
         RebuildFormulaDependencies(workbook);
         var formulaCells = CollectFormulaCells(workbook);
 
-        var report = Recalculate(workbook, formulaCells);
-
-        // Second pass: some formula cells reference spill-target cells (cells whose value is
-        // written by a sibling formula's spill, not by a direct formula on that cell).  The
-        // first-pass topological sort cannot know about this dependency — spill targets are not
-        // formula cells and therefore have no slot in the evaluation order — so such readers may
-        // have executed before the spill anchor and observed a blank value.  After the first pass
-        // all spill ranges are populated; re-evaluate the affected dependents so they pick up the
-        // correct spilled values.
-        var spillTargetDependents = CollectSpillTargetDependentFormulaCells(workbook);
-        if (spillTargetDependents.Count > 0)
-        {
-            var report2 = Recalculate(workbook, spillTargetDependents);
-            return MergeRecalcReports(report, report2);
-        }
-
-        return report;
+        // Recalculate runs the spill-target dependent follow-up pass itself (see the
+        // spillTargetsMayHaveChanged path), so no separate second pass is needed here.
+        return Recalculate(workbook, formulaCells);
     }
 
     /// <summary>

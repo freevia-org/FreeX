@@ -33,6 +33,10 @@
   <PropertyGroup>
     <AssemblyName>FreeX</AssemblyName>
     <ApplicationTitle>FreeX</ApplicationTitle>
+    <!-- Keep in sync with FreeX.App.Host. Without this the assembly defaults to 1.0.0, which
+         crash analytics and the Velopack update check would report instead of the real version. -->
+    <Version>0.5.0</Version>
+    <InformationalVersion>0.5.0</InformationalVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <OutputType>Exe</OutputType>

@@ -139,6 +139,15 @@ public sealed partial class MainWindow : Window
         // windows can recover it via View ▸ Arrange All.
     }
 
+    protected override void OnClosed(EventArgs e)
+    {
+        // A window hidden via View ▸ Hide must drop out of the static registry when it closes;
+        // otherwise the closed window (and its whole WorkbookSession/document graph) leaks for the
+        // rest of the session.
+        HiddenWindows.Remove(this);
+        base.OnClosed(e);
+    }
+
     private PixelRect GetPrimaryWorkArea()
     {
         var screens = Screens;

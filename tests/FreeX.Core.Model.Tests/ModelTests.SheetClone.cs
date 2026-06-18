@@ -23,6 +23,28 @@ public partial class SheetCloneTests
     }
 
     [Fact]
+    public void Sheet_Clone_CopiesSpillState()
+    {
+        var wb = new Workbook("T");
+        var src = wb.AddSheet("S");
+        var anchor = new CellAddress(src.Id, 1, 1);
+        src.SetCell(anchor, new NumberValue(1));
+        src.SetSpillRange(anchor, new RangeValue(new ScalarValue[,]
+        {
+            { new NumberValue(1), new NumberValue(2) },
+            { new NumberValue(3), new NumberValue(4) }
+        }));
+
+        var copy = src.Clone(SheetId.New(), "Copy");
+
+        // Spill extent and the spilled target values must survive the clone (no recalc required).
+        copy.TryGetSpillExtent(new CellAddress(copy.Id, 1, 1), out var rows, out var cols).Should().BeTrue();
+        rows.Should().Be(2u);
+        cols.Should().Be(2u);
+        copy.GetValue(2, 2).Should().Be(new NumberValue(4));
+    }
+
+    [Fact]
     public void Sheet_Clone_CopiesOutlineLevels()
     {
         var wb = new Workbook("T");

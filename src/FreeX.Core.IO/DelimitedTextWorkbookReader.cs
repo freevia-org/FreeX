@@ -264,6 +264,11 @@ internal static partial class DelimitedTextWorkbookReader
 
     private sealed class DelimitedTextRecord
     {
+        // Fields beyond the sheet column limit can never be stored (consumers break at MaxCol), so
+        // cap growth here too: a single line with millions of delimiters would otherwise drive
+        // unbounded array growth — a cheap denial-of-service vector for an untrusted file.
+        private static readonly int MaxFields = (int)CellAddress.MaxCol;
+
         private DelimitedTextField[] fields = new DelimitedTextField[16];
 
         public int Count { get; private set; }
@@ -274,8 +279,11 @@ internal static partial class DelimitedTextWorkbookReader
 
         public void Add(DelimitedTextField field)
         {
+            if (Count >= MaxFields)
+                return; // columns past the sheet limit are discarded by consumers anyway
+
             if (Count == fields.Length)
-                Array.Resize(ref fields, fields.Length * 2);
+                Array.Resize(ref fields, Math.Min(fields.Length * 2, MaxFields));
 
             fields[Count++] = field;
         }

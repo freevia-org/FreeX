@@ -25,7 +25,20 @@ public sealed class CompositeWorkbookCommand : IWorkbookCommand
 
         foreach (var command in _commands)
         {
-            var outcome = command.Apply(ctx);
+            CommandOutcome outcome;
+            try
+            {
+                outcome = command.Apply(ctx);
+            }
+            catch (Exception ex)
+            {
+                // An inner command threw mid-apply: roll back the sub-commands that
+                // already succeeded so the composite stays atomic, then surface a
+                // failure outcome rather than leaving the operation half-applied.
+                RevertApplied(ctx);
+                return new CommandOutcome(false, $"{Label}: {ex.Message}");
+            }
+
             if (!outcome.Success)
             {
                 RevertApplied(ctx);
@@ -47,8 +60,24 @@ public sealed class CompositeWorkbookCommand : IWorkbookCommand
 
     private void RevertApplied(ICommandContext ctx)
     {
-        for (var i = _applied.Count - 1; i >= 0; i--)
-            _applied[i].Revert(ctx);
-        _applied.Clear();
+        try
+        {
+            for (var i = _applied.Count - 1; i >= 0; i--)
+            {
+                try
+                {
+                    _applied[i].Revert(ctx);
+                }
+                catch
+                {
+                    // Best-effort rollback: a failing sub-command revert must not abort the rest of
+                    // the rollback, nor leave _applied populated for a second (double) revert pass.
+                }
+            }
+        }
+        finally
+        {
+            _applied.Clear();
+        }
     }
 }

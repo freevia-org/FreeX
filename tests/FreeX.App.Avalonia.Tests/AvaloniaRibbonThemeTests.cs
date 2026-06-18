@@ -30,12 +30,13 @@ public sealed class AvaloniaRibbonThemeTests
         Session.Dispatch(action, CancellationToken.None);
 
     [Fact]
-    public void Palette_UsesPolishedSurfaceAndBrandAccent()
+    public void Palette_MatchesWpfRibbonSurfaceAndAccent()
     {
-        // Light, low-contrast ribbon surface (not pure white) with the workbook brand-green accent.
-        Assert.Equal(Color.FromRgb(0xF5, 0xF6, 0xF7), AvaloniaRibbonRenderer.SurfaceColor);
-        Assert.Equal(Color.FromRgb(0x21, 0x73, 0x46), AvaloniaRibbonRenderer.AccentColor);
-        Assert.NotEqual(Colors.White, AvaloniaRibbonRenderer.SurfaceColor);
+        // Visual parity with WPF: the ribbon surface is the white FreeXRibbonSurfaceBrush (#FFFFFF) and
+        // the accent is FreeXAccentBrush (#0F6D8C) — not the former macOS-adapted gray/green palette.
+        Assert.Equal(Color.FromRgb(0xFF, 0xFF, 0xFF), AvaloniaRibbonRenderer.SurfaceColor);
+        Assert.Equal(Color.FromRgb(0x0F, 0x6D, 0x8C), AvaloniaRibbonRenderer.AccentColor);
+        Assert.Equal(Colors.White, AvaloniaRibbonRenderer.SurfaceColor);
     }
 
     [Fact]
@@ -62,10 +63,12 @@ public sealed class AvaloniaRibbonThemeTests
     });
 
     [Fact]
-    public Task ShellChromeSurface_MatchesRibbonSurface_ForCohesiveChrome() => RunOnUiThread(() =>
+    public Task ShellChromeSurface_IsDistinctLightSurface_FromWhiteRibbon() => RunOnUiThread(() =>
     {
-        // The window chrome (sheet-tabs / status bar) reads as one surface with the ribbon.
-        Assert.Equal(AvaloniaRibbonRenderer.SurfaceColor, MainWindow.ChromeSurfaceColor);
+        // WPF parity: the ribbon body is the white FreeXRibbonSurfaceBrush while the window chrome
+        // (sheet-tabs / status bar) is a separate light surface (the WPF FreeXChromeSurfaceBrush analog),
+        // so they are intentionally distinct — not the former single shared gray surface.
+        Assert.NotEqual(AvaloniaRibbonRenderer.SurfaceColor, MainWindow.ChromeSurfaceColor);
     });
 
     [Fact]

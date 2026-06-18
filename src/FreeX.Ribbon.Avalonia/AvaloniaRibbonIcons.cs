@@ -12,14 +12,49 @@ using AvaloniaEllipse = Avalonia.Controls.Shapes.Ellipse;
 namespace FreeX.Ribbon.Avalonia;
 
 /// <summary>
-/// Avalonia ribbon icon renderer. Draws the SAME shapes as the WPF renderer by consuming the
-/// shared, platform-neutral <see cref="RibbonIconDefinitions"/> (the cross-platform source of truth)
-/// and translating each <see cref="RibbonIconElement"/> into native Avalonia shapes laid out on a
-/// 24×24 <see cref="Canvas"/>, scaled to the requested size by a <see cref="Viewbox"/>.
+/// Avalonia ribbon icon renderer. Draws the SAME glyph as the WPF <c>RibbonIconFactory</c> for every
+/// <see cref="RibbonCommandIconKind"/>.
 /// </summary>
+/// <remarks>
+/// <para>
+/// Both the WPF renderer and this Avalonia renderer consume the single platform-neutral source of
+/// truth, <see cref="RibbonIconDefinitions"/>, which transcribes each WPF glyph 1:1 (the same SVG
+/// path strings, the same line/rectangle/ellipse/text primitives, the same accent colours). This
+/// renderer therefore reuses the WPF path-data verbatim (via <see cref="Geometry.Parse"/>, which
+/// accepts the identical SVG path mini-language WPF's <c>Geometry.Parse</c> uses) and replicates the
+/// WPF primitive composition shape-for-shape so the two platforms paint identical icons.
+/// </para>
+/// <para>
+/// <b>Coordinate space / scaling.</b> Every element is authored on a
+/// <see cref="RibbonIconGeometry.Artboard"/>-by-<see cref="RibbonIconGeometry.Artboard"/> (24×24)
+/// design square — the same artboard the WPF factory draws on. The elements are laid out on a 24×24
+/// <see cref="Canvas"/> and a <see cref="Viewbox"/> uniformly scales that artboard into the requested
+/// pixel <c>size</c>, exactly mirroring WPF's <c>Viewbox</c> wrapper in <c>RibbonIconFactory.CreateIcon</c>.
+/// </para>
+/// <para>
+/// <b>Translation fidelity.</b> Each native-shape mapping is matched to the corresponding WPF helper
+/// in <c>RibbonIconFactory.Primitives.cs</c>: lines get round end caps; paths get round caps + round
+/// joins; stroked rectangles use WPF's fixed 1.5 stroke; a filled shape path is stroked and faintly
+/// filled with the whole element dimmed by its fill opacity.
+/// </para>
+/// <para>
+/// <b>Text glyphs.</b> WPF letter glyphs (Bold "B", Italic "I", "$", "%", "fx", "π", "Ω", "¶", …) are
+/// authored in "Segoe UI". Avalonia honours a comma-separated family fallback, so we request Segoe UI
+/// first and then the closest cross-platform equivalents (so the same glyph renders on Linux/macOS
+/// where Segoe UI is absent), keeping the letter shapes as faithful to Windows as the host fonts allow.
+/// </para>
+/// </remarks>
 internal static class AvaloniaRibbonIcons
 {
     private const double Artboard = RibbonIconGeometry.Artboard;
+
+    /// <summary>
+    /// Letter-glyph font. WPF authors these in "Segoe UI"; Avalonia resolves the first available
+    /// family in this comma-separated chain, so Windows still uses Segoe UI while Linux/macOS fall
+    /// back to the closest metrically/visually similar neutral sans, keeping the glyph faithful.
+    /// </summary>
+    private static readonly FontFamily GlyphFontFamily =
+        new("Segoe UI, Selawik, Liberation Sans, DejaVu Sans, Arial, Helvetica, sans-serif");
 
     /// <summary>Builds an icon control for the given kind at the requested pixel size.</summary>
     public static Control Build(RibbonCommandIconKind kind, double size) =>
@@ -57,6 +92,12 @@ internal static class AvaloniaRibbonIcons
         };
     }
 
+    /// <summary>
+    /// Resolves the brush an icon should be drawn with. Mirrors WPF
+    /// <c>RibbonIconFactory.ResolveAccentBrush</c>: any accent other than
+    /// <see cref="RibbonCommandIconAccent.None"/> maps to its neutral accent colour; otherwise the
+    /// caller-supplied foreground (or black) wins.
+    /// </summary>
     private static IBrush ResolveAccentBrush(RibbonCommandIconAccent accent, IBrush? foreground)
     {
         if (RibbonIconAccents.Resolve(accent) is { } color)
@@ -77,6 +118,9 @@ internal static class AvaloniaRibbonIcons
         _ => null,
     };
 
+    // Mirrors WPF RibbonIconFactory.AddPath: stroked with round caps + round joins; when a fill
+    // opacity is present the path is also filled with the glyph brush and the whole element is dimmed
+    // by that opacity (so both the stroke and the fill read as a faint, semi-transparent shape).
     private static Control BuildPath(RibbonIconElement element, IBrush brush)
     {
         var path = new AvaloniaPath
@@ -90,15 +134,18 @@ internal static class AvaloniaRibbonIcons
 
         if (element.FillOpacity > 0)
         {
-            // Mirror the WPF behaviour: a filled shape path is stroked + faintly filled, with the
-            // whole element dimmed by the fill opacity.
             path.Fill = brush;
             path.Opacity = element.FillOpacity;
+        }
+        else
+        {
+            path.Fill = Brushes.Transparent;
         }
 
         return path;
     }
 
+    // Mirrors WPF RibbonIconFactory.AddLine: straight stroke with round end caps; optional 2,2 dash.
     private static Control BuildLine(RibbonIconElement element, IBrush brush)
     {
         var line = new AvaloniaLine
@@ -114,6 +161,9 @@ internal static class AvaloniaRibbonIcons
         return line;
     }
 
+    // Mirrors WPF RibbonIconFactory.AddRectangle: a transparent-filled, stroked rounded rect. WPF
+    // hard-codes the 1.5 stroke there, and every Rectangle element is authored with a 1.5 stroke, so
+    // we use the same fixed 1.5 to stay pixel-faithful.
     private static Control BuildRectangle(RibbonIconElement element, IBrush brush)
     {
         var rect = new AvaloniaRectangle
@@ -123,7 +173,7 @@ internal static class AvaloniaRibbonIcons
             RadiusX = element.Radius,
             RadiusY = element.Radius,
             Stroke = brush,
-            StrokeThickness = element.StrokeThickness,
+            StrokeThickness = 1.5,
             Fill = Brushes.Transparent,
         };
         Canvas.SetLeft(rect, element.X1);
@@ -131,6 +181,7 @@ internal static class AvaloniaRibbonIcons
         return rect;
     }
 
+    // Mirrors WPF RibbonIconFactory.AddFilledRectangle: a solid-filled rect placed at (X,Y).
     private static Control BuildFilledRectangle(RibbonIconElement element, IBrush brush)
     {
         var rect = new AvaloniaRectangle
@@ -144,6 +195,7 @@ internal static class AvaloniaRibbonIcons
         return rect;
     }
 
+    // Mirrors WPF RibbonIconFactory.DrawEllipse: a transparent-filled, stroked ellipse placed at (X,Y).
     private static Control BuildEllipse(RibbonIconElement element, IBrush brush)
     {
         var ellipse = new AvaloniaEllipse
@@ -159,6 +211,8 @@ internal static class AvaloniaRibbonIcons
         return ellipse;
     }
 
+    // Mirrors WPF RibbonIconFactory.AddFilledCircle: a solid disc of the given diameter centred at
+    // (cx,cy) — i.e. positioned at the centre minus half the diameter.
     private static Control BuildFilledCircle(RibbonIconElement element, IBrush brush)
     {
         var diameter = element.Width;
@@ -173,13 +227,16 @@ internal static class AvaloniaRibbonIcons
         return ellipse;
     }
 
+    // Mirrors WPF RibbonIconFactory.DrawText: a centred TextBlock filling the remaining artboard from
+    // (X,Y), with the glyph's font size (carried in Width) and weight. The family is the Segoe-UI-first
+    // fallback chain so the same letter shape renders cross-platform.
     private static Control BuildText(RibbonIconElement element, IBrush brush)
     {
         var block = new TextBlock
         {
             Text = element.Text,
             Foreground = brush,
-            FontFamily = new FontFamily("Segoe UI"),
+            FontFamily = GlyphFontFamily,
             FontSize = element.Width,
             FontWeight = ToFontWeight(element.TextWeight),
             Width = Artboard - element.X1,
