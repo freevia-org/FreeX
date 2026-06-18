@@ -7498,7 +7498,7 @@ public partial class MainWindow
             ?? throw new InvalidOperationException("Formula authoring/names tour could not find Insert Function function list.");
         foreach (var item in functionList.Items)
         {
-            if (item is InsertFunctionCatalogEntry { Name: "XLOOKUP" })
+            if (item is FreeX.App.Presentation.Dialogs.InsertFunctionCatalogEntry { Name: "XLOOKUP" })
             {
                 functionList.SelectedItem = item;
                 functionList.ScrollIntoView(item);
