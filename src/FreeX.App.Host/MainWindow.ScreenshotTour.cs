@@ -19,6 +19,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Free.Shared.Ribbon.Wpf;
 using FreeX.Core.Calc;
+using FreeX.App.Presentation.Filtering;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.IO;
