@@ -726,8 +726,11 @@ public sealed partial class GridViewDrawingObjectThemeTests
             source.IndexOf("private void DrawNativeSlicerControl", StringComparison.Ordinal)..
             source.IndexOf("private void DrawNativeTimelineControl", StringComparison.Ordinal)];
 
-        drawSlicer.Should().Contain("var tileCount = selectedItemCount == 0 ? 1 : Math.Min(4, selectedItemCount);");
-        drawSlicer.Should().Contain("slicer.SelectedItems[index]");
+        // The renderer draws the slicer's resolved available items (table-column distinct values / pivot
+        // cache shared items) with per-tile selected/unselected styling, honoring the slicer's columnCount.
+        drawSlicer.Should().Contain("ResolveSlicerTileItems(slicer, out var fallbackAllTile)");
+        drawSlicer.Should().Contain("var columnCount = Math.Max(1, slicer.ColumnCount);");
+        drawSlicer.Should().Contain("isSelected ? NativeControlSelectedTileBrush : NativeControlTileBrush");
         drawSlicer.Should().NotContain(".Take(4)");
         drawSlicer.Should().NotContain(".ToArray()");
         drawSlicer.Should().NotContain("new[]");

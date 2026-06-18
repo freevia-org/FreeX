@@ -438,6 +438,12 @@ public partial class MainWindow
         var nativeVisualFilters = keepObjectData && sheet is not null
             ? SlicerTimelinePlanner.GetNativeVisualFilters(_workbook, sheet)
             : null;
+        if (nativeVisualFilters is { Slicers.Count: > 0 })
+        {
+            // Resolve each slicer's available items (table-column distinct values or pivot cache shared
+            // items) into AvailableItems just before render, mirroring the form-control selected-text pass.
+            FreeX.Core.Commands.SlicerItemResolver.PopulateAvailableItems(_workbook);
+        }
         SheetGrid.NativeSlicers = nativeVisualFilters?.Slicers;
         SheetGrid.NativeTimelines = nativeVisualFilters?.Timelines;
         if (keepObjectData && sheet is not null && sheet.FormControls.Count > 0)

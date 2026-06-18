@@ -32,30 +32,44 @@ internal static class XlsxSlicerTimelineMetadataReader
                 .Select(item => (item.Path, Cache: ReadSlicerCache(item.Xml)))
                 .Where(item => !string.IsNullOrWhiteSpace(item.Cache.Name))
                 .ToDictionary(item => item.Cache.Name, item => item.Cache, StringComparer.OrdinalIgnoreCase);
-            var drawingMetadataByPart = ReadDrawingMetadata(archive);
+            // Excel does not declare a slicer/timeline relationship in the drawing's rels; the slicer drawing
+            // lives in an mc:AlternateContent → mc:Choice → graphicFrame linked to the slicer BY NAME
+            // (<sle:slicer name="..."/>). So anchors are keyed by control name, not by package part.
+            var drawingMetadataByName = ReadDrawingMetadata(archive);
 
             foreach (var slicerEntry in archive.Entries.Where(entry =>
                          XlsxPackagePath.IsXmlEntryInDirectory(entry, "xl/slicers/")))
             {
                 var slicerXml = LoadXml(slicerEntry);
-                var slicerElement = RootOrFirstChild(slicerXml.Root, "slicer");
-                var cacheName = slicerElement?.Attribute("cache")?.Value ?? "";
-                slicerCaches.TryGetValue(cacheName, out var cache);
                 var packagePart = XlsxPackagePath.NormalizeEntryPath(slicerEntry);
-                drawingMetadataByPart.TryGetValue(packagePart, out var drawingMetadata);
-                slicers.Add(new SlicerModel
+                // A single xl/slicers/slicerN.xml part can declare multiple <slicer> elements
+                // (e.g. file 03 carries both "Category" and "Who"). Read them all.
+                foreach (var slicerElement in EnumerateChildren(slicerXml.Root, "slicer"))
                 {
-                    Name = slicerElement?.Attribute("name")?.Value ?? "",
-                    Caption = slicerElement?.Attribute("caption")?.Value,
-                    CacheName = cacheName,
-                    SourcePivotTableName = cache?.PivotTableName,
-                    SourceFieldName = cache?.SourceFieldName,
-                    StyleName = slicerElement?.Attribute("style")?.Value,
-                    PackagePart = packagePart,
-                    DrawingAnchor = drawingMetadata?.Anchor,
-                    DrawingShapeName = drawingMetadata?.ShapeName
-                });
-                slicers[^1].SelectedItems.AddRange(cache?.SelectedItems ?? []);
+                    var name = slicerElement.Attribute("name")?.Value ?? "";
+                    var cacheName = slicerElement.Attribute("cache")?.Value ?? "";
+                    slicerCaches.TryGetValue(cacheName, out var cache);
+                    var hasDrawing = drawingMetadataByName.TryGetValue(name, out var drawingMetadata);
+                    var slicer = new SlicerModel
+                    {
+                        Name = name,
+                        Caption = slicerElement.Attribute("caption")?.Value,
+                        CacheName = cacheName,
+                        SourcePivotTableName = cache?.PivotTableName,
+                        SourceFieldName = cache?.SourceFieldName,
+                        StyleName = slicerElement.Attribute("style")?.Value,
+                        ColumnCount = ParseColumnCount(slicerElement.Attribute("columnCount")?.Value),
+                        PackagePart = packagePart,
+                        DrawingAnchor = hasDrawing ? drawingMetadata.Anchor : null,
+                        DrawingShapeName = hasDrawing ? drawingMetadata.ShapeName : null,
+                        SourceSheetName = hasDrawing ? drawingMetadata.SheetName : null,
+                        SourceTableId = cache?.TableId,
+                        SourceTableColumnId = cache?.TableColumnId,
+                        CacheItems = cache?.CacheItems ?? []
+                    };
+                    slicer.SelectedItems.AddRange(cache?.SelectedItems ?? []);
+                    slicers.Add(slicer);
+                }
             }
 
             var timelineCaches = archive.Entries
@@ -73,10 +87,11 @@ internal static class XlsxSlicerTimelineMetadataReader
                 var cacheName = timelineElement?.Attribute("cache")?.Value ?? "";
                 timelineCaches.TryGetValue(cacheName, out var cache);
                 var packagePart = XlsxPackagePath.NormalizeEntryPath(timelineEntry);
-                drawingMetadataByPart.TryGetValue(packagePart, out var drawingMetadata);
+                var timelineName = timelineElement?.Attribute("name")?.Value ?? "";
+                var hasDrawing = drawingMetadataByName.TryGetValue(timelineName, out var drawingMetadata);
                 timelines.Add(new TimelineModel
                 {
-                    Name = timelineElement?.Attribute("name")?.Value ?? "",
+                    Name = timelineName,
                     Caption = timelineElement?.Attribute("caption")?.Value,
                     CacheName = cacheName,
                     SourcePivotTableName = cache?.PivotTableName,
@@ -87,8 +102,8 @@ internal static class XlsxSlicerTimelineMetadataReader
                     SelectedStartDate = cache?.SelectedStartDate,
                     SelectedEndDate = cache?.SelectedEndDate,
                     PackagePart = packagePart,
-                    DrawingAnchor = drawingMetadata?.Anchor,
-                    DrawingShapeName = drawingMetadata?.ShapeName
+                    DrawingAnchor = hasDrawing ? drawingMetadata.Anchor : null,
+                    DrawingShapeName = hasDrawing ? drawingMetadata.ShapeName : null
                 });
             }
         }
@@ -150,6 +165,10 @@ internal static class XlsxSlicerTimelineMetadataReader
     private static SlicerCacheMetadata ReadSlicerCache(XDocument xml)
     {
         var root = xml.Root;
+        var tableSlicerCache = FirstDescendantByLocalName(root, "tableSlicerCache");
+        int? tableId = TryReadInt(tableSlicerCache?.Attribute("tableId")?.Value, out var tid) ? tid : null;
+        int? tableColumn = TryReadInt(tableSlicerCache?.Attribute("column")?.Value, out var tcol) ? tcol : null;
+
         return new SlicerCacheMetadata(
             root?.Attribute("name")?.Value ?? "",
             root?.Attribute("sourceName")?.Value,
@@ -159,7 +178,32 @@ internal static class XlsxSlicerTimelineMetadataReader
                 .Select(e => e.Attribute("value")?.Value)
                 .Where(value => !string.IsNullOrWhiteSpace(value))
                 .Select(value => value!)
-                .ToList() ?? []);
+                .ToList() ?? [],
+            tableId,
+            tableColumn,
+            ReadSlicerCacheItems(root));
+    }
+
+    // Pivot slicers carry their available items as <data><tabular><items><i x="N" s="1"/>...> — the
+    // x is the 0-based index into the pivot cache field's shared items and s="1" marks a selected item.
+    private static IReadOnlyList<SlicerCacheItem> ReadSlicerCacheItems(XElement? root)
+    {
+        var itemsElement = FirstDescendantByLocalName(root, "items");
+        if (itemsElement is null)
+            return [];
+
+        var items = new List<SlicerCacheItem>();
+        foreach (var item in itemsElement.Elements())
+        {
+            if (!HasLocalName(item, "i"))
+                continue;
+            if (!TryReadInt(item.Attribute("x")?.Value, out var index))
+                continue;
+            var selected = string.Equals(item.Attribute("s")?.Value, "1", StringComparison.Ordinal);
+            items.Add(new SlicerCacheItem(index, selected));
+        }
+
+        return items;
     }
 
     private static TimelineCacheMetadata ReadTimelineCache(XDocument xml)
@@ -175,67 +219,175 @@ internal static class XlsxSlicerTimelineMetadataReader
             root?.Attribute("selectedEndDate")?.Value);
     }
 
+    /// <summary>
+    /// Resolves the drawing anchor + host-sheet name for every slicer/timeline in the package, keyed by the
+    /// control's NAME. Excel emits the slicer drawing inside an mc:AlternateContent → mc:Choice →
+    /// graphicFrame whose graphicData links to the slicer by name (<c>&lt;sle:slicer name="..."/&gt;</c>),
+    /// with empty/absent drawing rels — so name matching (not a slicer relationship, not part index) is the
+    /// only reliable association. The mc:Fallback (a placeholder "not supported" shape) is deliberately
+    /// ignored so it is never read as the real anchor.
+    /// </summary>
     private static IReadOnlyDictionary<string, DrawingControlMetadata> ReadDrawingMetadata(ZipArchive archive)
     {
         var result = new Dictionary<string, DrawingControlMetadata>(StringComparer.OrdinalIgnoreCase);
-        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
         XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+        var sheetNamesByDrawingPath = BuildSheetNamesByDrawingPath(archive);
 
         foreach (var drawingEntry in archive.Entries.Where(entry =>
                      XlsxPackagePath.IsXmlEntryInDirectory(entry, "xl/drawings/")))
         {
             var drawingPath = XlsxPackagePath.NormalizeEntryPath(drawingEntry);
-            var relsPath = XlsxPackagePath.GetRelationshipPartPath(drawingPath);
-            var relsEntry = archive.GetEntry(relsPath);
-            if (relsEntry is null)
-                continue;
-
-            var relatedTargets = LoadXml(relsEntry)
-                .Root?
-                .Elements(packageRelNs + "Relationship")
-                .Select(element => new
-                {
-                    Type = element.Attribute("Type")?.Value ?? "",
-                    Target = element.Attribute("Target")?.Value ?? ""
-                })
-                .Where(rel => rel.Type.Contains("slicer", StringComparison.OrdinalIgnoreCase) ||
-                              rel.Type.Contains("timeline", StringComparison.OrdinalIgnoreCase))
-                .Select(rel => NormalizePartPath(drawingPath, rel.Target))
-                .Where(path => !string.IsNullOrWhiteSpace(path))
-                .ToList() ?? [];
-            if (relatedTargets.Count == 0)
-                continue;
-
+            sheetNamesByDrawingPath.TryGetValue(drawingPath, out var sheetName);
             var drawingXml = LoadXml(drawingEntry);
-            var anchors = drawingXml
-                .Descendants(spreadsheetDrawingNs + "twoCellAnchor")
-                .Select(anchor => ReadTwoCellAnchor(anchor, spreadsheetDrawingNs))
-                .Where(metadata => metadata is not null)
-                .Select(metadata => metadata!)
-                .ToList();
 
-            for (var index = 0; index < anchors.Count && index < relatedTargets.Count; index++)
-                result[relatedTargets[index]] = anchors[index];
+            foreach (var anchor in drawingXml.Descendants(spreadsheetDrawingNs + "twoCellAnchor"))
+            {
+                var metadata = ReadSlicerTimelineAnchor(anchor, spreadsheetDrawingNs, sheetName);
+                if (metadata is null || string.IsNullOrEmpty(metadata.Value.Name))
+                    continue;
+
+                // First writer wins per name (defensive against duplicate names across drawings).
+                result.TryAdd(metadata.Value.Name, metadata.Value.Metadata);
+            }
         }
 
         return result;
     }
 
-    private static DrawingControlMetadata? ReadTwoCellAnchor(XElement anchor, XNamespace spreadsheetDrawingNs)
+    /// <summary>
+    /// If <paramref name="anchor"/> hosts a slicer/timeline graphicFrame (inside the mc:Choice of an
+    /// mc:AlternateContent), returns its name + anchor metadata. Returns null for ordinary drawings and for
+    /// the mc:Fallback placeholder.
+    /// </summary>
+    private static (string Name, DrawingControlMetadata Metadata)? ReadSlicerTimelineAnchor(
+        XElement anchor,
+        XNamespace spreadsheetDrawingNs,
+        string? sheetName)
     {
         var from = ReadAnchorPoint(anchor.Element(spreadsheetDrawingNs + "from"), spreadsheetDrawingNs);
         var to = ReadAnchorPoint(anchor.Element(spreadsheetDrawingNs + "to"), spreadsheetDrawingNs);
         if (from is null || to is null)
             return null;
 
-        var shapeName = ReadFirstShapeName(anchor, spreadsheetDrawingNs);
-        return new DrawingControlMetadata(new DrawingAnchorRange(from, to), shapeName);
+        // Only consider the mc:Choice branch (the real slicer/timeline); never the mc:Fallback placeholder.
+        var choice = FindAlternateContentChoice(anchor);
+        var searchRoot = choice ?? anchor;
+        var controlName = ReadSlicerTimelineLinkName(searchRoot);
+        if (controlName is null)
+            return null;
+
+        // Prefer the graphicFrame's cNvPr name (the on-sheet shape name) for display; fall back to the link.
+        var shapeName = ReadFirstShapeName(searchRoot, spreadsheetDrawingNs) ?? controlName;
+        var metadata = new DrawingControlMetadata(new DrawingAnchorRange(from, to), shapeName, sheetName);
+        return (controlName, metadata);
     }
 
-    private static string? ReadFirstShapeName(XElement anchor, XNamespace spreadsheetDrawingNs)
+    // The slicer/timeline link is <sle:slicer name="..."/> (drawing/2010 or 2012 slicer) or
+    // <tle:timeline name="..."/> inside a:graphicData. Match by local name to stay namespace-tolerant.
+    private static string? ReadSlicerTimelineLinkName(XElement root)
     {
-        foreach (var element in anchor.Descendants(spreadsheetDrawingNs + "cNvPr"))
-            return element.Attribute("name")?.Value;
+        foreach (var element in root.Descendants())
+        {
+            if ((HasLocalName(element, "slicer") || HasLocalName(element, "timeline")) &&
+                element.Attribute("name")?.Value is { Length: > 0 } name)
+            {
+                return name;
+            }
+        }
+
+        return null;
+    }
+
+    private static XElement? FindAlternateContentChoice(XElement anchor)
+    {
+        foreach (var alternateContent in anchor.Elements())
+        {
+            if (!HasLocalName(alternateContent, "AlternateContent"))
+                continue;
+            foreach (var child in alternateContent.Elements())
+            {
+                if (HasLocalName(child, "Choice"))
+                    return child;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Maps each drawing part path (e.g. <c>xl/drawings/drawing3.xml</c>) to the display name of the
+    /// worksheet that references it, by walking workbook.xml (name + r:id) → workbook.xml.rels (r:id →
+    /// worksheet part) → worksheets/_rels/sheetN.xml.rels (drawing r:id → drawing part).
+    /// </summary>
+    private static IReadOnlyDictionary<string, string> BuildSheetNamesByDrawingPath(ZipArchive archive)
+    {
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var workbookEntry = archive.GetEntry("xl/workbook.xml");
+        var workbookRelsEntry = archive.GetEntry("xl/_rels/workbook.xml.rels");
+        if (workbookEntry is null || workbookRelsEntry is null)
+            return result;
+
+        // r:id -> worksheet part path
+        var sheetTargetByRelId = LoadXml(workbookRelsEntry)
+            .Root?
+            .Elements(packageRelNs + "Relationship")
+            .Where(r => (r.Attribute("Type")?.Value ?? "").Contains("worksheet", StringComparison.OrdinalIgnoreCase))
+            .ToDictionary(
+                r => r.Attribute("Id")?.Value ?? "",
+                r => NormalizePartPath("xl/workbook.xml", r.Attribute("Target")?.Value ?? ""),
+                StringComparer.OrdinalIgnoreCase)
+            ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        foreach (var sheet in EnumerateDescendantsByLocalName(LoadXml(workbookEntry).Root, "sheet"))
+        {
+            var name = sheet.Attribute("name")?.Value;
+            var relId = sheet.Attribute(relNs + "id")?.Value;
+            if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(relId) ||
+                !sheetTargetByRelId.TryGetValue(relId, out var sheetPath))
+            {
+                continue;
+            }
+
+            var drawingPath = ResolveSheetDrawingPath(archive, sheetPath);
+            if (drawingPath is not null)
+                result[drawingPath] = name;
+        }
+
+        return result;
+    }
+
+    private static string? ResolveSheetDrawingPath(ZipArchive archive, string sheetPath)
+    {
+        var relsPath = XlsxPackagePath.GetRelationshipPartPath(sheetPath);
+        var relsEntry = archive.GetEntry(relsPath);
+        if (relsEntry is null)
+            return null;
+
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        foreach (var rel in LoadXml(relsEntry).Root?.Elements(packageRelNs + "Relationship") ?? [])
+        {
+            if (!(rel.Attribute("Type")?.Value ?? "").Contains("drawing", StringComparison.OrdinalIgnoreCase))
+                continue;
+            var target = rel.Attribute("Target")?.Value ?? "";
+            // Skip non-drawing "drawing"-typed rels defensively (e.g. ctrlProp); only xl/drawings/* parts.
+            var resolved = NormalizePartPath(sheetPath, target);
+            if (resolved.Contains("/drawings/", StringComparison.OrdinalIgnoreCase))
+                return resolved;
+        }
+
+        return null;
+    }
+
+    private static string? ReadFirstShapeName(XElement root, XNamespace spreadsheetDrawingNs)
+    {
+        foreach (var element in root.Descendants(spreadsheetDrawingNs + "cNvPr"))
+        {
+            if (element.Attribute("name")?.Value is { Length: > 0 } name)
+                return name;
+        }
 
         return null;
     }
@@ -256,6 +408,43 @@ internal static class XlsxSlicerTimelineMetadataReader
 
     private static bool TryReadUInt(string? text, out uint value) =>
         uint.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
+
+    private static bool TryReadInt(string? text, out int value) =>
+        int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
+
+    private static int ParseColumnCount(string? text) =>
+        TryReadInt(text, out var value) && value > 0 ? value : 1;
+
+    private static IEnumerable<XElement> EnumerateChildren(XElement? root, string localName)
+    {
+        if (root is null)
+            yield break;
+
+        // The slicer/timeline root may itself be the element, or its children may be the elements.
+        if (HasLocalName(root, localName))
+        {
+            yield return root;
+            yield break;
+        }
+
+        foreach (var element in root.Elements())
+        {
+            if (HasLocalName(element, localName))
+                yield return element;
+        }
+    }
+
+    private static IEnumerable<XElement> EnumerateDescendantsByLocalName(XElement? root, string localName)
+    {
+        if (root is null)
+            yield break;
+
+        foreach (var element in root.Descendants())
+        {
+            if (HasLocalName(element, localName))
+                yield return element;
+        }
+    }
 
     private static string NormalizePartPath(string sourcePart, string target)
     {
@@ -298,7 +487,10 @@ internal sealed record SlicerCacheMetadata(
     string Name,
     string? SourceFieldName,
     string? PivotTableName,
-    IReadOnlyList<string> SelectedItems);
+    IReadOnlyList<string> SelectedItems,
+    int? TableId,
+    int? TableColumnId,
+    IReadOnlyList<SlicerCacheItem> CacheItems);
 
 internal sealed record TimelineCacheMetadata(
     string Name,
@@ -309,6 +501,7 @@ internal sealed record TimelineCacheMetadata(
     string? SelectedStartDate,
     string? SelectedEndDate);
 
-internal sealed record DrawingControlMetadata(
+internal readonly record struct DrawingControlMetadata(
     DrawingAnchorRange Anchor,
-    string? ShapeName);
+    string? ShapeName,
+    string? SheetName);

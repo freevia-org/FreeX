@@ -607,24 +607,69 @@ public partial class GridView
     {
         DrawNativeControlFrame(dc, rect, GetNativeControlCaption(slicer.Caption, slicer.Name, slicer.DrawingShapeName), pixelsPerDip);
 
-        var selectedItemCount = slicer.SelectedItems.Count;
-        var tileCount = selectedItemCount == 0 ? 1 : Math.Min(4, selectedItemCount);
+        // Lay out the slicer's item buttons: prefer the resolved available items (table-column distinct
+        // values / pivot cache shared items); fall back to the slicer's selected items, then a single
+        // field-name tile, matching the source desktop renderer. Honor the slicer's columnCount.
+        var items = ResolveSlicerTileItems(slicer, out var fallbackAllTile);
+        var selected = new HashSet<string>(slicer.SelectedItems, StringComparer.CurrentCultureIgnoreCase);
+        var columnCount = Math.Max(1, slicer.ColumnCount);
+
         var tileTop = rect.Top + 26;
-        var tileHeight = Math.Max(14, Math.Min(22, (rect.Bottom - tileTop - 6) / tileCount));
-        for (var index = 0; index < tileCount; index++)
+        var availableHeight = rect.Bottom - tileTop - 6;
+        if (availableHeight <= 0 || items.Count == 0)
+            return;
+
+        // Cap the previewed rows so a long list still fits the box.
+        var rowCount = (int)Math.Ceiling(items.Count / (double)columnCount);
+        var rowsThatFit = Math.Max(1, (int)(availableHeight / (14 + 3)));
+        var visibleRows = Math.Min(rowCount, rowsThatFit);
+        var tileHeight = Math.Max(14, Math.Min(22, (availableHeight - (visibleRows - 1) * 3) / visibleRows));
+
+        const double horizontalInset = 6;
+        const double columnGap = 3;
+        var totalGap = columnGap * (columnCount - 1);
+        var tileWidth = Math.Max(1, (rect.Width - horizontalInset * 2 - totalGap) / columnCount);
+
+        var visibleTileCount = Math.Min(items.Count, visibleRows * columnCount);
+        for (var index = 0; index < visibleTileCount; index++)
         {
-            var tileRect = new Rect(rect.Left + 6, tileTop + index * (tileHeight + 3), Math.Max(1, rect.Width - 12), tileHeight);
+            var row = index / columnCount;
+            var col = index % columnCount;
+            var tileRect = new Rect(
+                rect.Left + horizontalInset + col * (tileWidth + columnGap),
+                tileTop + row * (tileHeight + 3),
+                tileWidth,
+                tileHeight);
+
+            var caption = items[index];
+            // Empty selection means "all selected" (no active filter) in Excel.
+            var isSelected = fallbackAllTile || selected.Count == 0 || selected.Contains(caption);
             dc.DrawRoundedRectangle(
-                slicer.SelectedItems.Count == 0 ? NativeControlSelectedTileBrush : NativeControlTileBrush,
+                isSelected ? NativeControlSelectedTileBrush : NativeControlTileBrush,
                 null,
                 tileRect,
                 2,
                 2);
-            var tileText = selectedItemCount == 0
-                ? slicer.SourceFieldName ?? slicer.CacheName ?? "All"
-                : slicer.SelectedItems[index];
-            DrawClippedText(dc, tileText, tileRect, NativeControlMutedTextBrush, 10, verticalPadding: 1, pixelsPerDip);
+            DrawClippedText(dc, caption, tileRect, NativeControlMutedTextBrush, 10, verticalPadding: 1, pixelsPerDip);
         }
+    }
+
+    // Resolves the ordered tile captions for a slicer: resolved available items first, then selected items,
+    // then a single synthetic field-name tile (the legacy preview) when neither is present.
+    private static IReadOnlyList<string> ResolveSlicerTileItems(SlicerModel slicer, out bool fallbackAllTile)
+    {
+        fallbackAllTile = false;
+        if (slicer.AvailableItems.Count > 0)
+            return slicer.AvailableItems;
+
+        if (slicer.SelectedItems.Count > 0)
+            return slicer.SelectedItems;
+
+        fallbackAllTile = true;
+        var caption = !string.IsNullOrWhiteSpace(slicer.SourceFieldName)
+            ? slicer.SourceFieldName!
+            : !string.IsNullOrWhiteSpace(slicer.CacheName) ? slicer.CacheName : "All";
+        return [caption];
     }
 
     private void DrawNativeTimelineControl(DrawingContext dc, Rect rect, TimelineModel timeline, double pixelsPerDip)

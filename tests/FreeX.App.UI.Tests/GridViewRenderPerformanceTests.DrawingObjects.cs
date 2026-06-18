@@ -162,7 +162,7 @@ public sealed partial class GridViewRenderPerformanceTests
         renderNativeControls.Should().Contain("DrawNativeSlicerControl(dc, controlRect, slicer, pixelsPerDip);");
         renderNativeControls.Should().Contain("DrawNativeTimelineControl(dc, controlRect, timeline, pixelsPerDip);");
         drawNativeSlicer.Should().Contain("DrawNativeControlFrame(dc, rect, GetNativeControlCaption(slicer.Caption, slicer.Name, slicer.DrawingShapeName), pixelsPerDip);");
-        drawNativeSlicer.Should().Contain("DrawClippedText(dc, tileText, tileRect, NativeControlMutedTextBrush, 10, verticalPadding: 1, pixelsPerDip);");
+        drawNativeSlicer.Should().Contain("DrawClippedText(dc, caption, tileRect, NativeControlMutedTextBrush, 10, verticalPadding: 1, pixelsPerDip);");
         drawNativeTimeline.Should().Contain("DrawNativeControlFrame(dc, rect, GetNativeControlCaption(timeline.Caption, timeline.Name, timeline.DrawingShapeName), pixelsPerDip);");
         drawNativeTimeline.Should().Contain("DrawClippedText(dc, label, new Rect");
         drawNativeTimeline.Should().Contain("pixelsPerDip);");

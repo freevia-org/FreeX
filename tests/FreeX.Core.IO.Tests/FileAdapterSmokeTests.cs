@@ -21181,6 +21181,130 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_MatchesMultipleTableSlicersByNameAndIgnoresFallback()
+    {
+        var workbook = new Workbook("MultiTableSlicerTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("x"));
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using (var archive = new ZipArchive(source, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            // Two table slicers ("Category" columnCount=2, "Who") declared in ONE slicer part.
+            ReplacePackageXml(archive, "xl/slicers/slicer1.xml", XDocument.Parse("""
+                <slicers xmlns="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main">
+                  <slicer name="Category" cache="Slicer_Category" caption="Category" columnCount="2"/>
+                  <slicer name="Who" cache="Slicer_Who" caption="Who"/>
+                </slicers>
+                """));
+            ReplacePackageXml(archive, "xl/slicerCaches/slicerCache1.xml", XDocument.Parse("""
+                <slicerCacheDefinition xmlns="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main"
+                                       xmlns:x15="http://schemas.microsoft.com/office/spreadsheetml/2010/11/main"
+                                       name="Slicer_Category" sourceName="Category">
+                  <extLst><ext xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                               uri="{2F2917AC-EB37-4324-AD4E-5DD8C200BD13}">
+                    <x15:tableSlicerCache tableId="1" column="5"/></ext></extLst>
+                </slicerCacheDefinition>
+                """));
+            ReplacePackageXml(archive, "xl/slicerCaches/slicerCache2.xml", XDocument.Parse("""
+                <slicerCacheDefinition xmlns="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main"
+                                       xmlns:x15="http://schemas.microsoft.com/office/spreadsheetml/2010/11/main"
+                                       name="Slicer_Who" sourceName="Who">
+                  <extLst><ext xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                               uri="{2F2917AC-EB37-4324-AD4E-5DD8C200BD13}">
+                    <x15:tableSlicerCache tableId="1" column="6"/></ext></extLst>
+                </slicerCacheDefinition>
+                """));
+
+            var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
+            AddContentTypeOverride(contentTypesXml, contentTypeNs, "/xl/slicers/slicer1.xml", "application/vnd.ms-excel.slicer+xml");
+            AddContentTypeOverride(contentTypesXml, contentTypeNs, "/xl/slicerCaches/slicerCache1.xml", "application/vnd.ms-excel.slicerCache+xml");
+            AddContentTypeOverride(contentTypesXml, contentTypeNs, "/xl/slicerCaches/slicerCache2.xml", "application/vnd.ms-excel.slicerCache+xml");
+            AddContentTypeOverride(contentTypesXml, contentTypeNs, "/xl/drawings/drawing1.xml", "application/vnd.openxmlformats-officedocument.drawing+xml");
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
+
+            // Wire the worksheet to drawing1.xml.
+            var worksheetEntry = archive.GetEntry("xl/worksheets/sheet1.xml")!;
+            var worksheetXml = LoadPackageXml(worksheetEntry);
+            worksheetXml.Root!.Elements(worksheetNs + "drawing").Remove();
+            worksheetXml.Root!.Add(new XElement(worksheetNs + "drawing", new XAttribute(relNs + "id", "rIdDrawing1")));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+
+            var worksheetRelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
+            var worksheetRelsXml = archive.GetEntry(worksheetRelsPath) is { } wre
+                ? LoadPackageXml(wre)
+                : new XDocument(new XElement(packageRelNs + "Relationships"));
+            worksheetRelsXml.Root!.Add(new XElement(packageRelNs + "Relationship",
+                new XAttribute("Id", "rIdDrawing1"),
+                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing"),
+                new XAttribute("Target", "../drawings/drawing1.xml")));
+            ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
+
+            // Drawing: the "Who" graphicFrame appears FIRST (out of order vs the slicer part) to prove the
+            // anchor↔slicer association is by NAME, not by index. The mc:Fallback carries a different anchor.
+            ReplacePackageXml(archive, "xl/drawings/drawing1.xml", XDocument.Parse("""
+                <xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"
+                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                          xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006">
+                  <xdr:twoCellAnchor>
+                    <xdr:from><xdr:col>8</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>
+                    <xdr:to><xdr:col>10</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>4</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to>
+                    <mc:AlternateContent><mc:Choice Requires="sle15">
+                      <xdr:graphicFrame><xdr:nvGraphicFramePr><xdr:cNvPr id="3" name="Who"/><xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr>
+                        <a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/drawing/2010/slicer">
+                          <sle:slicer xmlns:sle="http://schemas.microsoft.com/office/drawing/2010/slicer" name="Who"/></a:graphicData></a:graphic></xdr:graphicFrame>
+                    </mc:Choice><mc:Fallback><xdr:sp><xdr:nvSpPr><xdr:cNvPr id="0" name="Fallback"/><xdr:cNvSpPr/></xdr:nvSpPr>
+                      <xdr:spPr><a:xfrm><a:off x="9" y="9"/><a:ext cx="1" cy="1"/></a:xfrm></xdr:spPr></xdr:sp></mc:Fallback></mc:AlternateContent>
+                    <xdr:clientData/>
+                  </xdr:twoCellAnchor>
+                  <xdr:twoCellAnchor>
+                    <xdr:from><xdr:col>6</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>
+                    <xdr:to><xdr:col>8</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>4</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to>
+                    <mc:AlternateContent><mc:Choice Requires="sle15">
+                      <xdr:graphicFrame><xdr:nvGraphicFramePr><xdr:cNvPr id="2" name="Category"/><xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr>
+                        <a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/drawing/2010/slicer">
+                          <sle:slicer xmlns:sle="http://schemas.microsoft.com/office/drawing/2010/slicer" name="Category"/></a:graphicData></a:graphic></xdr:graphicFrame>
+                    </mc:Choice></mc:AlternateContent>
+                    <xdr:clientData/>
+                  </xdr:twoCellAnchor>
+                </xdr:wsDr>
+                """));
+            ReplacePackageXml(archive, "xl/drawings/_rels/drawing1.xml.rels",
+                new XDocument(new XElement(packageRelNs + "Relationships")));
+        }
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+
+        loaded.Slicers.Should().HaveCount(2);
+        var category = loaded.Slicers.Single(s => s.Name == "Category");
+        var who = loaded.Slicers.Single(s => s.Name == "Who");
+
+        // Anchors matched BY NAME (the "Who" frame came first in the drawing).
+        category.DrawingAnchor.Should().Be(new DrawingAnchorRange(
+            new DrawingAnchorPoint(6, 0, 0, 0), new DrawingAnchorPoint(8, 0, 4, 0)));
+        who.DrawingAnchor.Should().Be(new DrawingAnchorRange(
+            new DrawingAnchorPoint(8, 0, 0, 0), new DrawingAnchorPoint(10, 0, 4, 0)));
+
+        category.SourceSheetName.Should().Be("Data");
+        category.ColumnCount.Should().Be(2);
+        who.ColumnCount.Should().Be(1);
+        category.SourceTableId.Should().Be(1);
+        category.SourceTableColumnId.Should().Be(5);
+        who.SourceTableColumnId.Should().Be(6);
+        // Table slicers carry no pivot connection.
+        category.SourcePivotTableName.Should().BeNull();
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadsSlicerTimelineDrawingAnchorsAndShapeNames()
     {
         var workbook = new Workbook("SlicerTimelineDrawingMetadataTest");
@@ -25172,68 +25296,87 @@ public partial class FileAdapterSmokeTests
                     new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing"),
                     new XAttribute("Target", "../drawings/drawing1.xml")));
 
+                // Mirror how real Excel emits slicer/timeline drawings: an mc:AlternateContent whose
+                // mc:Choice carries a graphicFrame linked to the control BY NAME (<sle:slicer name="...">),
+                // with the on-sheet shape name on the graphicFrame's cNvPr. The drawing rels carry NO
+                // slicer/timeline relationship. A mc:Fallback placeholder shape is included to prove it is
+                // ignored (its anchor/name must never be read as the control's).
+                XNamespace sleNs = "http://schemas.microsoft.com/office/drawing/2010/slicer";
+                XNamespace tleNs = "http://schemas.microsoft.com/office/drawing/2013/timelineRef";
+
+                static XElement BuildAlternateContentAnchor(
+                    XNamespace xdr,
+                    XNamespace a,
+                    XNamespace mc,
+                    XNamespace linkNs,
+                    string linkLocalName,
+                    string linkName,
+                    string graphicDataUri,
+                    string shapeName,
+                    (string Col, string Row) from,
+                    (string Col, string Row) to) =>
+                    new(xdr + "twoCellAnchor",
+                        new XElement(xdr + "from",
+                            new XElement(xdr + "col", from.Col),
+                            new XElement(xdr + "colOff", "0"),
+                            new XElement(xdr + "row", from.Row),
+                            new XElement(xdr + "rowOff", "0")),
+                        new XElement(xdr + "to",
+                            new XElement(xdr + "col", to.Col),
+                            new XElement(xdr + "colOff", "0"),
+                            new XElement(xdr + "row", to.Row),
+                            new XElement(xdr + "rowOff", "0")),
+                        new XElement(mc + "AlternateContent",
+                            new XElement(mc + "Choice",
+                                new XAttribute("Requires", "sle15"),
+                                new XElement(xdr + "graphicFrame",
+                                    new XElement(xdr + "nvGraphicFramePr",
+                                        new XElement(xdr + "cNvPr",
+                                            new XAttribute("id", "2"),
+                                            new XAttribute("name", shapeName)),
+                                        new XElement(xdr + "cNvGraphicFramePr")),
+                                    new XElement(xdr + "xfrm",
+                                        new XElement(a + "off", new XAttribute("x", "0"), new XAttribute("y", "0")),
+                                        new XElement(a + "ext", new XAttribute("cx", "0"), new XAttribute("cy", "0"))),
+                                    new XElement(a + "graphic",
+                                        new XElement(a + "graphicData",
+                                            new XAttribute("uri", graphicDataUri),
+                                            new XElement(linkNs + linkLocalName,
+                                                new XAttribute("name", linkName)))))),
+                            new XElement(mc + "Fallback",
+                                new XElement(xdr + "sp",
+                                    new XElement(xdr + "nvSpPr",
+                                        new XElement(xdr + "cNvPr",
+                                            new XAttribute("id", "0"),
+                                            new XAttribute("name", "Fallback Placeholder")),
+                                        new XElement(xdr + "cNvSpPr")),
+                                    new XElement(xdr + "spPr",
+                                        new XElement(a + "xfrm",
+                                            new XElement(a + "off", new XAttribute("x", "99"), new XAttribute("y", "99")),
+                                            new XElement(a + "ext", new XAttribute("cx", "1"), new XAttribute("cy", "1")))),
+                                    new XElement(xdr + "txBody",
+                                        new XElement(a + "bodyPr"),
+                                        new XElement(a + "lstStyle"),
+                                        new XElement(a + "p"))))),
+                        new XElement(xdr + "clientData"));
+
                 var drawingXml = new XDocument(
                     new XElement(spreadsheetDrawingNs + "wsDr",
                         new XAttribute(XNamespace.Xmlns + "xdr", spreadsheetDrawingNs),
                         new XAttribute(XNamespace.Xmlns + "a", drawingNs),
                         new XAttribute(XNamespace.Xmlns + "r", relNs),
-                            new XElement(spreadsheetDrawingNs + "twoCellAnchor",
-                                new XElement(spreadsheetDrawingNs + "from",
-                                    new XElement(spreadsheetDrawingNs + "col", "2"),
-                                new XElement(spreadsheetDrawingNs + "colOff", "0"),
-                                new XElement(spreadsheetDrawingNs + "row", "2"),
-                                new XElement(spreadsheetDrawingNs + "rowOff", "0")),
-                            new XElement(spreadsheetDrawingNs + "to",
-                                new XElement(spreadsheetDrawingNs + "col", "5"),
-                                new XElement(spreadsheetDrawingNs + "colOff", "0"),
-                                new XElement(spreadsheetDrawingNs + "row", "10"),
-                                new XElement(spreadsheetDrawingNs + "rowOff", "0")),
-                            new XElement(spreadsheetDrawingNs + "sp",
-                                new XElement(spreadsheetDrawingNs + "nvSpPr",
-                                    new XElement(spreadsheetDrawingNs + "cNvPr",
-                                        new XAttribute("id", "100"),
-                                        new XAttribute("name", "Native Slicer Shape")),
-                                    new XElement(spreadsheetDrawingNs + "cNvSpPr")),
-                                new XElement(spreadsheetDrawingNs + "spPr"),
-                                new XElement(spreadsheetDrawingNs + "txBody",
-                                    new XElement(drawingNs + "bodyPr"),
-                                    new XElement(drawingNs + "lstStyle"),
-                                    new XElement(drawingNs + "p"))),
-                            new XElement(spreadsheetDrawingNs + "clientData")),
-                        new XElement(spreadsheetDrawingNs + "twoCellAnchor",
-                            new XElement(spreadsheetDrawingNs + "from",
-                                new XElement(spreadsheetDrawingNs + "col", "7"),
-                                new XElement(spreadsheetDrawingNs + "colOff", "0"),
-                                new XElement(spreadsheetDrawingNs + "row", "2"),
-                                new XElement(spreadsheetDrawingNs + "rowOff", "0")),
-                            new XElement(spreadsheetDrawingNs + "to",
-                                new XElement(spreadsheetDrawingNs + "col", "10"),
-                                new XElement(spreadsheetDrawingNs + "colOff", "0"),
-                                new XElement(spreadsheetDrawingNs + "row", "10"),
-                                new XElement(spreadsheetDrawingNs + "rowOff", "0")),
-                            new XElement(spreadsheetDrawingNs + "sp",
-                                new XElement(spreadsheetDrawingNs + "nvSpPr",
-                                    new XElement(spreadsheetDrawingNs + "cNvPr",
-                                        new XAttribute("id", "101"),
-                                        new XAttribute("name", "Native Timeline Shape")),
-                                    new XElement(spreadsheetDrawingNs + "cNvSpPr")),
-                                new XElement(spreadsheetDrawingNs + "spPr"),
-                                new XElement(spreadsheetDrawingNs + "txBody",
-                                    new XElement(drawingNs + "bodyPr"),
-                                    new XElement(drawingNs + "lstStyle"),
-                                    new XElement(drawingNs + "p"))),
-                            new XElement(spreadsheetDrawingNs + "clientData"))));
+                        BuildAlternateContentAnchor(
+                            spreadsheetDrawingNs, drawingNs, markupCompatNs, sleNs, "slicer",
+                            "Region Slicer", "http://schemas.microsoft.com/office/drawing/2010/slicer",
+                            "Native Slicer Shape", ("2", "2"), ("5", "10")),
+                        BuildAlternateContentAnchor(
+                            spreadsheetDrawingNs, drawingNs, markupCompatNs, tleNs, "timeline",
+                            "Date Timeline", "http://schemas.microsoft.com/office/drawing/2012/timelineRef",
+                            "Native Timeline Shape", ("7", "2"), ("10", "10"))));
                 ReplacePackageXml(archive, "xl/drawings/drawing1.xml", drawingXml);
+                // Excel's slicer drawing rels are empty/absent — no slicer/timeline relationship.
                 ReplacePackageXml(archive, "xl/drawings/_rels/drawing1.xml.rels", new XDocument(
-                    new XElement(packageRelNs + "Relationships",
-                        new XElement(packageRelNs + "Relationship",
-                            new XAttribute("Id", "rIdNativeSlicerControl"),
-                            new XAttribute("Type", "http://schemas.microsoft.com/office/2007/relationships/slicer"),
-                            new XAttribute("Target", "../slicers/slicer1.xml")),
-                        new XElement(packageRelNs + "Relationship",
-                            new XAttribute("Id", "rIdNativeTimelineControl"),
-                            new XAttribute("Type", "http://schemas.microsoft.com/office/2010/relationships/Timeline"),
-                            new XAttribute("Target", "../timelines/timeline1.xml")))));
+                    new XElement(packageRelNs + "Relationships")));
             }
 
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);

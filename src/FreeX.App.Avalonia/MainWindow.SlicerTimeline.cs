@@ -311,6 +311,12 @@ public sealed partial class MainWindow
     /// </summary>
     private IReadOnlyList<string> ReadSlicerSourceItems(SlicerModel slicer)
     {
+        // Table slicers (and pivot slicers whose items live in the slicer cache) resolve through the
+        // shared SlicerItemResolver — table-column distinct values or pivot cache shared items.
+        var resolved = FreeX.Core.Commands.SlicerItemResolver.ResolveAvailableItems(slicer, _session.Workbook);
+        if (resolved.Count > 0)
+            return resolved;
+
         if (string.IsNullOrWhiteSpace(slicer.SourcePivotTableName) ||
             string.IsNullOrWhiteSpace(slicer.SourceFieldName))
         {

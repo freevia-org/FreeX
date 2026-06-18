@@ -90,10 +90,10 @@ public static class SlicerTimelinePlanner
 
     public static IReadOnlyList<SlicerModel> GetNativeVisualSlicers(Workbook workbook, Sheet activeSheet)
     {
-        if (workbook.Slicers.Count == 0 || activeSheet.PivotTables.Count == 0)
+        if (workbook.Slicers.Count == 0)
             return Array.Empty<SlicerModel>();
 
-        return GetNativeVisualSlicers(workbook.Slicers, BuildActivePivotNameSet(activeSheet));
+        return GetNativeVisualSlicers(workbook.Slicers, BuildActivePivotNameSet(activeSheet), activeSheet.Name);
     }
 
     public static IReadOnlyList<TimelineModel> GetNativeVisualTimelines(Workbook workbook, Sheet activeSheet)
@@ -106,25 +106,28 @@ public static class SlicerTimelinePlanner
 
     public static NativeVisualFilters GetNativeVisualFilters(Workbook workbook, Sheet activeSheet)
     {
-        if ((workbook.Slicers.Count == 0 && workbook.Timelines.Count == 0) ||
-            activeSheet.PivotTables.Count == 0)
-        {
+        if (workbook.Slicers.Count == 0 && workbook.Timelines.Count == 0)
             return EmptyNativeVisualFilters;
-        }
 
         var activePivotNames = BuildActivePivotNameSet(activeSheet);
         var cache = NativeVisualFilterCaches.GetValue(activeSheet, static _ => new NativeVisualFilterCache());
-        return cache.GetOrCreate(workbook, activePivotNames);
+        return cache.GetOrCreate(workbook, activePivotNames, activeSheet.Name);
     }
 
     private static IReadOnlyList<SlicerModel> GetNativeVisualSlicers(
         IReadOnlyList<SlicerModel> slicers,
-        IReadOnlySet<string> activePivotNames)
+        IReadOnlySet<string> activePivotNames,
+        string activeSheetName)
     {
         List<SlicerModel>? visible = null;
         foreach (var slicer in slicers)
         {
-            if (slicer.DrawingAnchor is not null && IsConnectedToPivotOnSheet(slicer.SourcePivotTableName, activePivotNames))
+            // A slicer renders on the active sheet when it has a drawing anchor AND either it is connected
+            // to a pivot on this sheet (pivot slicers) OR its drawing is hosted on this sheet (table
+            // slicers, which carry no SourcePivotTableName).
+            if (slicer.DrawingAnchor is not null &&
+                (IsConnectedToPivotOnSheet(slicer.SourcePivotTableName, activePivotNames) ||
+                 IsAnchoredOnSheet(slicer.SourceSheetName, activeSheetName)))
             {
                 visible ??= new List<SlicerModel>(slicers.Count);
                 visible.Add(slicer);
@@ -159,6 +162,10 @@ public static class SlicerTimelinePlanner
 
     private static bool IsConnectedToPivotOnSheet(string? pivotTableName, IReadOnlySet<string> activePivotNames) =>
         !string.IsNullOrWhiteSpace(pivotTableName) && activePivotNames.Contains(pivotTableName);
+
+    private static bool IsAnchoredOnSheet(string? sourceSheetName, string activeSheetName) =>
+        !string.IsNullOrWhiteSpace(sourceSheetName) &&
+        string.Equals(sourceSheetName, activeSheetName, StringComparison.Ordinal);
 
     private sealed class ActivePivotNameSetCache
     {
@@ -209,16 +216,18 @@ public static class SlicerTimelinePlanner
         private readonly object _sync = new();
         private Workbook? _workbook;
         private IReadOnlySet<string>? _activePivotNames;
+        private string? _activeSheetName;
         private SlicerSnapshot[] _slicerSnapshots = [];
         private TimelineSnapshot[] _timelineSnapshots = [];
         private NativeVisualFilters _filters = EmptyNativeVisualFilters;
 
-        public NativeVisualFilters GetOrCreate(Workbook workbook, IReadOnlySet<string> activePivotNames)
+        public NativeVisualFilters GetOrCreate(Workbook workbook, IReadOnlySet<string> activePivotNames, string activeSheetName)
         {
             lock (_sync)
             {
                 if (ReferenceEquals(_workbook, workbook) &&
                     ReferenceEquals(_activePivotNames, activePivotNames) &&
+                    string.Equals(_activeSheetName, activeSheetName, StringComparison.Ordinal) &&
                     SlicersMatch(workbook.Slicers) &&
                     TimelinesMatch(workbook.Timelines))
                 {
@@ -227,13 +236,14 @@ public static class SlicerTimelinePlanner
 
                 var slicers = workbook.Slicers.Count == 0
                     ? Array.Empty<SlicerModel>()
-                    : GetNativeVisualSlicers(workbook.Slicers, activePivotNames);
+                    : GetNativeVisualSlicers(workbook.Slicers, activePivotNames, activeSheetName);
                 var timelines = workbook.Timelines.Count == 0
                     ? Array.Empty<TimelineModel>()
                     : GetNativeVisualTimelines(workbook.Timelines, activePivotNames);
 
                 _workbook = workbook;
                 _activePivotNames = activePivotNames;
+                _activeSheetName = activeSheetName;
                 _slicerSnapshots = CaptureSlicers(workbook.Slicers);
                 _timelineSnapshots = CaptureTimelines(workbook.Timelines);
                 _filters = slicers.Count == 0 && timelines.Count == 0
@@ -254,6 +264,7 @@ public static class SlicerTimelinePlanner
                 var slicer = slicers[index];
                 if (!ReferenceEquals(snapshot.Model, slicer) ||
                     !string.Equals(snapshot.SourcePivotTableName, slicer.SourcePivotTableName, StringComparison.Ordinal) ||
+                    !string.Equals(snapshot.SourceSheetName, slicer.SourceSheetName, StringComparison.Ordinal) ||
                     snapshot.HasDrawingAnchor != (slicer.DrawingAnchor is not null))
                 {
                     return false;
@@ -295,6 +306,7 @@ public static class SlicerTimelinePlanner
                 snapshots[index] = new SlicerSnapshot(
                     slicer,
                     slicer.SourcePivotTableName,
+                    slicer.SourceSheetName,
                     slicer.DrawingAnchor is not null);
             }
 
@@ -322,6 +334,7 @@ public static class SlicerTimelinePlanner
         private readonly record struct SlicerSnapshot(
             SlicerModel Model,
             string? SourcePivotTableName,
+            string? SourceSheetName,
             bool HasDrawingAnchor);
 
         private readonly record struct TimelineSnapshot(
