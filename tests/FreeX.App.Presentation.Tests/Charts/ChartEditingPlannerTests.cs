@@ -167,6 +167,316 @@ public sealed class ChartEditingPlannerTests
         chart.LegendPosition.Should().Be(ChartLegendPosition.Top);
     }
 
+    // ---- ChartDataLabelsPlanner ----------------------------------------------------------------------
+
+    [Fact]
+    public void DataLabels_PositionChoices_CoverTheFourPlacements()
+    {
+        var positions = ChartDataLabelsPlanner.GetPositionChoices().Select(c => c.Position).ToList();
+
+        positions.Should().BeEquivalentTo(new[]
+        {
+            ChartDataLabelPosition.BestFit, ChartDataLabelPosition.OutsideEnd,
+            ChartDataLabelPosition.InsideEnd, ChartDataLabelPosition.Center
+        });
+        ChartDataLabelsPlanner.GetPositionChoices().Should().OnlyContain(c => !string.IsNullOrWhiteSpace(c.DisplayName));
+    }
+
+    [Fact]
+    public void DataLabels_Read_ProjectsModelState()
+    {
+        var chart = new ChartModel
+        {
+            ShowDataLabels = true,
+            DataLabelPosition = ChartDataLabelPosition.OutsideEnd,
+            ShowDataLabelValue = false,
+            ShowDataLabelCategoryName = true,
+            ShowDataLabelPercentage = true,
+        };
+        var input = ChartDataLabelsPlanner.Read(chart);
+
+        input.ShowDataLabels.Should().BeTrue();
+        input.Position.Should().Be(ChartDataLabelPosition.OutsideEnd);
+        input.ShowValue.Should().BeFalse();
+        input.ShowCategoryName.Should().BeTrue();
+        input.ShowPercentage.Should().BeTrue();
+    }
+
+    [Fact]
+    public void DataLabels_Plan_ForcesValueWhenShownWithoutAnyToggle()
+    {
+        var input = new ChartDataLabelsInput(
+            ShowDataLabels: true, ChartDataLabelPosition.Center,
+            ShowValue: false, ShowCategoryName: false, ShowSeriesName: false,
+            ShowPercentage: false, ShowLegendKey: false);
+        var options = ChartDataLabelsPlanner.Plan(input);
+
+        options.ShowDataLabels.Should().BeTrue();
+        options.ShowDataLabelValue.Should().BeTrue();
+        options.DataLabelPosition.Should().Be(ChartDataLabelPosition.Center);
+    }
+
+    [Fact]
+    public void DataLabels_Plan_KeepsConfiguration_EvenWhenHidden()
+    {
+        var input = new ChartDataLabelsInput(
+            ShowDataLabels: false, ChartDataLabelPosition.InsideEnd,
+            ShowValue: false, ShowCategoryName: true, ShowSeriesName: false,
+            ShowPercentage: false, ShowLegendKey: false);
+        var options = ChartDataLabelsPlanner.Plan(input);
+
+        options.ShowDataLabels.Should().BeFalse();
+        options.DataLabelPosition.Should().Be(ChartDataLabelPosition.InsideEnd);
+        options.ShowDataLabelCategoryName.Should().BeTrue();
+        // Hidden labels must not force a value toggle on.
+        options.ShowDataLabelValue.Should().BeFalse();
+    }
+
+    [Fact]
+    public void DataLabels_Plan_RoundTripsThroughSetChartLayoutCommand()
+    {
+        var chart = new ChartModel { Type = ChartType.Column };
+        var options = ChartDataLabelsPlanner.Plan(new ChartDataLabelsInput(
+            ShowDataLabels: true, ChartDataLabelPosition.OutsideEnd,
+            ShowValue: true, ShowCategoryName: true, ShowSeriesName: false,
+            ShowPercentage: false, ShowLegendKey: false));
+
+        ApplyLayout(chart, options);
+
+        chart.ShowDataLabels.Should().BeTrue();
+        chart.DataLabelPosition.Should().Be(ChartDataLabelPosition.OutsideEnd);
+        chart.ShowDataLabelValue.Should().BeTrue();
+        chart.ShowDataLabelCategoryName.Should().BeTrue();
+    }
+
+    // ---- ChartAxisPlanner ----------------------------------------------------------------------------
+
+    [Fact]
+    public void Axis_Read_ProjectsChosenAxisState()
+    {
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            YAxisMinimum = 0,
+            YAxisMaximum = 100,
+            YAxisMajorUnit = 25,
+            YAxisNumberFormat = ChartDataLabelNumberFormat.Currency,
+            ShowYAxisMajorGridlines = true,
+        };
+        var input = ChartAxisPlanner.Read(chart, useXAxis: false);
+
+        input.UseXAxis.Should().BeFalse();
+        input.Minimum.Should().Be(0);
+        input.Maximum.Should().Be(100);
+        input.MajorUnit.Should().Be(25);
+        input.NumberFormat.Should().Be(ChartDataLabelNumberFormat.Currency);
+        input.ShowMajorGridlines.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Axis_Validate_RejectsMinimumNotBelowMaximum()
+    {
+        var input = new ChartAxisInput(true, Minimum: 10, Maximum: 5, MajorUnit: null,
+            LogScale: false, ChartDataLabelNumberFormat.General, ShowMajorGridlines: false, ShowMinorGridlines: false);
+
+        ChartAxisPlanner.Validate(input).Should().NotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
+    public void Axis_Validate_RejectsNonPositiveMajorUnit()
+    {
+        var input = new ChartAxisInput(true, Minimum: null, Maximum: null, MajorUnit: 0,
+            LogScale: false, ChartDataLabelNumberFormat.General, ShowMajorGridlines: false, ShowMinorGridlines: false);
+
+        ChartAxisPlanner.Validate(input).Should().NotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
+    public void Axis_Validate_AllowsAutoBounds()
+    {
+        var input = new ChartAxisInput(true, Minimum: null, Maximum: null, MajorUnit: null,
+            LogScale: false, ChartDataLabelNumberFormat.General, ShowMajorGridlines: true, ShowMinorGridlines: false);
+
+        ChartAxisPlanner.Validate(input).Should().BeNull();
+    }
+
+    [Fact]
+    public void Axis_Plan_SetsClearBoundsFlag_WhenBothBoundsAuto()
+    {
+        var input = new ChartAxisInput(true, Minimum: null, Maximum: null, MajorUnit: null,
+            LogScale: false, ChartDataLabelNumberFormat.General, ShowMajorGridlines: false, ShowMinorGridlines: false);
+
+        var xOptions = ChartAxisPlanner.Plan(input);
+        xOptions.ClearXAxisBounds.Should().BeTrue();
+
+        var yOptions = ChartAxisPlanner.Plan(input with { UseXAxis = false });
+        yOptions.ClearYAxisBounds.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Axis_Plan_RoundTripsThroughSetChartLayoutCommand()
+    {
+        var chart = new ChartModel { Type = ChartType.Column };
+        var input = new ChartAxisInput(false, Minimum: 0, Maximum: 50, MajorUnit: 10,
+            LogScale: false, ChartDataLabelNumberFormat.Number, ShowMajorGridlines: true, ShowMinorGridlines: true);
+
+        ApplyLayout(chart, ChartAxisPlanner.Plan(input));
+
+        chart.YAxisMinimum.Should().Be(0);
+        chart.YAxisMaximum.Should().Be(50);
+        chart.YAxisMajorUnit.Should().Be(10);
+        chart.YAxisNumberFormat.Should().Be(ChartDataLabelNumberFormat.Number);
+        chart.ShowYAxisMajorGridlines.Should().BeTrue();
+        chart.ShowYAxisMinorGridlines.Should().BeTrue();
+    }
+
+    // ---- ChartSeriesFormatPlanner --------------------------------------------------------------------
+
+    [Fact]
+    public void SeriesFormat_Read_ReturnsStoredFormat_ForChosenSeries()
+    {
+        // A 3-column range (category + two value columns) yields >= 2 data series so index 1 is valid.
+        var chart = MultiSeriesChart();
+        chart.SeriesFormats.Add(new ChartSeriesFormat(1, FillColor: new CellColor(10, 20, 30), StrokeThickness: 2.5));
+        var input = ChartSeriesFormatPlanner.Read(chart, 1);
+
+        input.SeriesIndex.Should().Be(1);
+        input.FillColor.Should().Be(new CellColor(10, 20, 30));
+        input.StrokeThickness.Should().Be(2.5);
+    }
+
+    [Fact]
+    public void SeriesFormat_Read_ClampsRequestedIndexIntoSeriesRange()
+    {
+        // An empty data range has at most one series, so an out-of-range request clamps to 0.
+        var chart = new ChartModel { Type = ChartType.Line };
+        ChartSeriesFormatPlanner.Read(chart, 5).SeriesIndex.Should().Be(0);
+    }
+
+    private static ChartModel MultiSeriesChart()
+    {
+        var sheet = new SheetId(Guid.NewGuid());
+        return new ChartModel
+        {
+            Type = ChartType.Line,
+            FirstColIsCategories = true,
+            DataRange = new GridRange(
+                new CellAddress(sheet, 1, 1),
+                new CellAddress(sheet, 4, 3)),
+        };
+    }
+
+    [Fact]
+    public void SeriesFormat_Validate_RejectsNonPositiveLineWidthAndMarkerSize()
+    {
+        ChartSeriesFormatPlanner.Validate(new ChartSeriesFormatInput(0, null, null, StrokeThickness: 0, null, null))
+            .Should().NotBeNullOrWhiteSpace();
+        ChartSeriesFormatPlanner.Validate(new ChartSeriesFormatInput(0, null, null, null, null, MarkerSize: -1))
+            .Should().NotBeNullOrWhiteSpace();
+        ChartSeriesFormatPlanner.Validate(new ChartSeriesFormatInput(0, null, null, null, null, null))
+            .Should().BeNull();
+    }
+
+    [Fact]
+    public void SeriesFormat_Plan_ReplacesMatchingSeries_AndPreservesOthers()
+    {
+        var chart = new ChartModel { Type = ChartType.Line };
+        chart.SeriesFormats.Add(new ChartSeriesFormat(0, FillColor: new CellColor(1, 1, 1)));
+        chart.SeriesFormats.Add(new ChartSeriesFormat(1, FillColor: new CellColor(2, 2, 2)));
+
+        var options = ChartSeriesFormatPlanner.Plan(chart, new ChartSeriesFormatInput(
+            1, FillColor: new CellColor(9, 9, 9), StrokeColor: null, StrokeThickness: null,
+            MarkerStyle: ChartMarkerStyle.Circle, MarkerSize: 6));
+
+        options.SeriesFormats.Should().HaveCount(2);
+        options.SeriesFormats!.Single(f => f.SeriesIndex == 0).FillColor.Should().Be(new CellColor(1, 1, 1));
+        var updated = options.SeriesFormats!.Single(f => f.SeriesIndex == 1);
+        updated.FillColor.Should().Be(new CellColor(9, 9, 9));
+        updated.MarkerStyle.Should().Be(ChartMarkerStyle.Circle);
+        updated.MarkerSize.Should().Be(6);
+    }
+
+    [Fact]
+    public void SeriesFormat_Plan_AppendsWhenSeriesHasNoExistingFormat()
+    {
+        var chart = new ChartModel { Type = ChartType.Line };
+        var options = ChartSeriesFormatPlanner.Plan(chart, new ChartSeriesFormatInput(
+            2, FillColor: new CellColor(5, 5, 5), null, null, null, null));
+
+        options.SeriesFormats.Should().ContainSingle(f => f.SeriesIndex == 2 && f.FillColor == new CellColor(5, 5, 5));
+    }
+
+    [Fact]
+    public void SeriesFormat_Plan_RoundTripsThroughSetChartLayoutCommand()
+    {
+        var chart = new ChartModel { Type = ChartType.Line };
+        var options = ChartSeriesFormatPlanner.Plan(chart, new ChartSeriesFormatInput(
+            0, FillColor: new CellColor(7, 8, 9), StrokeColor: new CellColor(1, 2, 3),
+            StrokeThickness: 3, MarkerStyle: ChartMarkerStyle.Square, MarkerSize: 8));
+
+        ApplyLayout(chart, options);
+
+        var format = chart.SeriesFormats.Single(f => f.SeriesIndex == 0);
+        format.FillColor.Should().Be(new CellColor(7, 8, 9));
+        format.StrokeColor.Should().Be(new CellColor(1, 2, 3));
+        format.StrokeThickness.Should().Be(3);
+        format.MarkerStyle.Should().Be(ChartMarkerStyle.Square);
+        format.MarkerSize.Should().Be(8);
+    }
+
+    // ---- ChartTrendlinePlanner -----------------------------------------------------------------------
+
+    [Fact]
+    public void Trendline_TypeChoices_CoverAllSixTypes()
+    {
+        var types = ChartTrendlinePlanner.GetTypeChoices().Select(c => c.Type).ToList();
+
+        types.Should().BeEquivalentTo(new[]
+        {
+            ChartTrendlineType.Linear, ChartTrendlineType.Exponential, ChartTrendlineType.Logarithmic,
+            ChartTrendlineType.Power, ChartTrendlineType.MovingAverage, ChartTrendlineType.Polynomial
+        });
+    }
+
+    [Fact]
+    public void Trendline_Supports_OnlyTrendlineCapableTypes()
+    {
+        ChartTrendlinePlanner.SupportsTrendlines(ChartType.Line).Should().BeTrue();
+        ChartTrendlinePlanner.SupportsTrendlines(ChartType.Scatter).Should().BeTrue();
+        ChartTrendlinePlanner.SupportsTrendlines(ChartType.Pie).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Trendline_Plan_ClampsPeriodAndOrder()
+    {
+        var options = ChartTrendlinePlanner.Plan(new ChartTrendlineInput(
+            ShowTrendline: true, ChartTrendlineType.MovingAverage,
+            Period: 1000, Order: 99, ShowEquation: true, ShowRSquared: true));
+
+        options.ShowLinearTrendline.Should().BeTrue();
+        options.TrendlineType.Should().Be(ChartTrendlineType.MovingAverage);
+        options.TrendlinePeriod.Should().Be(ChartTrendlinePlanner.MaxPeriod);
+        options.TrendlineOrder.Should().Be(ChartTrendlinePlanner.MaxOrder);
+        options.ShowTrendlineEquation.Should().BeTrue();
+        options.ShowTrendlineRSquared.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Trendline_Plan_RoundTripsThroughSetChartLayoutCommand()
+    {
+        var chart = new ChartModel { Type = ChartType.Scatter };
+        var options = ChartTrendlinePlanner.Plan(new ChartTrendlineInput(
+            ShowTrendline: true, ChartTrendlineType.Exponential,
+            Period: 3, Order: 2, ShowEquation: true, ShowRSquared: false));
+
+        ApplyLayout(chart, options);
+
+        chart.ShowLinearTrendline.Should().BeTrue();
+        chart.TrendlineType.Should().Be(ChartTrendlineType.Exponential);
+        chart.ShowTrendlineEquation.Should().BeTrue();
+        chart.ShowTrendlineRSquared.Should().BeFalse();
+    }
+
     private static void ApplyLayout(ChartModel chart, ChartLayoutOptions options)
     {
         var workbook = new Workbook("test");

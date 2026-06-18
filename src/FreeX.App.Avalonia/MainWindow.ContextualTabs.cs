@@ -30,9 +30,13 @@ public sealed partial class MainWindow
             // --- Chart Design (chart.selected) — real handlers via SetChartLayoutCommand /
             // ChangeChartTypeCommand / ChangeChartSourceCommand / SetChartStyleCommand (MainWindow.ChartTabs). ---
             ["chartDesign.titles"] = () => RunGuarded(ShowChartTitlesDialog),
-            ["chartDesign.dataLabels"] = ToggleChartDataLabels,
+            // The Data Labels button opens the full show/hide + position + which-values dialog
+            // (ChartDataLabelsPlanner); Data Label Position keeps its quick cycle.
+            ["chartDesign.dataLabels"] = () => RunGuarded(ShowChartDataLabelsDialog),
             ["chartDesign.dataLabelPosition"] = CycleChartDataLabelPosition,
-            ["chartDesign.trendline"] = ToggleChartTrendline,
+            // The Trendline button opens the type/period/order + equation/R-squared dialog
+            // (ChartTrendlinePlanner).
+            ["chartDesign.trendline"] = () => RunGuarded(ShowChartTrendlineDialog),
             ["chartDesign.errorBars"] = ToggleChartErrorBars,
             ["chartDesign.secondaryAxis"] = CycleChartSecondaryAxis,
             ["chartDesign.chartStyles"] = CycleChartStyle,
@@ -47,8 +51,15 @@ public sealed partial class MainWindow
             ["chartFormat.plotAreaFill"] = () => RunGuarded(ShowChartPlotAreaFillDialog),
             ["chartFormat.plotAreaBorder"] = () => RunGuarded(ShowChartShapeOutlineDialog),
             ["chartFormat.seriesColor"] = () => RunGuarded(ShowChartSeriesColorDialog),
+            // The Series Width button opens the full per-series fill/line/marker dialog
+            // (ChartSeriesFormatPlanner); Series Color keeps its quick picker.
+            ["chartFormat.seriesWidth"] = () => RunGuarded(ShowChartSeriesFormatDialog),
             // The Legend button opens the show/hide + position options dialog (ChartLegendPlanner).
             ["chartFormat.legendText"] = () => RunGuarded(ShowChartLegendDialog),
+            // The Axis Bounds buttons open the per-axis min/max/format/gridlines dialog (ChartAxisPlanner);
+            // the Gridlines buttons keep their quick cycle.
+            ["chartFormat.xAxisBounds"] = () => RunGuarded(ShowChartXAxisFormatDialog),
+            ["chartFormat.yAxisBounds"] = () => RunGuarded(ShowChartYAxisFormatDialog),
             ["chartFormat.xGridlines"] = CycleChartXAxisGridlines,
             ["chartFormat.yGridlines"] = CycleChartYAxisGridlines,
             ["chartFormat.xLabels"] = ToggleChartXAxisLabels,
