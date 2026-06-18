@@ -49,8 +49,12 @@ public sealed partial class MainWindowSourceHygieneTests
         var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
 
         backstageSource.Should().Contain("private async void SaveAsButton_Click(object sender, RoutedEventArgs e)");
-        backstageSource.Should().Contain("await SaveWorkbookWithDialogAsync();");
-        backstageSource.Should().Contain("HideStartScreen();");
+        // Save As forces the Save-As dialog directly (it does NOT route through the shared
+        // SaveResolvedAsync existing-path resolution that Save uses), then closes the backstage.
+        var saveAsMethod = ExtractMethodSource(backstageSource, "private async void SaveAsButton_Click(");
+        saveAsMethod.Should().Contain("await SaveWorkbookWithDialogAsync()");
+        saveAsMethod.Should().NotContain("SaveResolvedAsync");
+        saveAsMethod.Should().Contain("HideStartScreen();");
 
         StaTestRunner.Run(() =>
         {
@@ -108,7 +112,10 @@ public sealed partial class MainWindowSourceHygieneTests
         var newMethod = ExtractMethodSource(backstageSource, "private async Task RequestNewWorkbookAsync()");
         newMethod.Should().Contain("ConfirmSaveBeforeDestructiveActionAsync(UiText.Get(\"MainWindowMessage_SaveChangesBeforeCreatingWorkbook\"))");
         newMethod.Should().Contain("== SaveChangesConfirmation.Cancel");
-        newMethod.Should().Contain("CreateNewWorkbook();");
+        // File > New creates the next session-named workbook (Book2, Book3, …) via InitializeNewWorkbook;
+        // the parameterless CreateNewWorkbook() wrapper is the startup/Book1 path. (Corrected from a stale
+        // "CreateNewWorkbook();" pin while de-brittling this dirty-gate test for P2b.)
+        newMethod.Should().Contain("InitializeNewWorkbook(_newWorkbookNameSequence.Next());");
         newMethod.Should().Contain("HideStartScreen();");
 
         var openMethod = ExtractMethodSource(backstageSource, "private async Task OpenFileAsync(");
@@ -121,10 +128,11 @@ public sealed partial class MainWindowSourceHygieneTests
             .Should()
             .BeLessThan(openMethod.IndexOf("_workbook = result.Workbook;", StringComparison.Ordinal));
 
+        // P2b: SaveButton_Click defers the Save-vs-Save-As resolution to the shared SaveResolvedAsync
+        // helper (asserted below against MainWindow.WorkbookLifecycle.cs) — the same single resolution path
+        // the dirty-gate uses — then hides the backstage on a successful save.
         var saveButtonMethod = ExtractMethodSource(backstageSource, "private async void SaveButton_Click(");
-        saveButtonMethod.Should().Contain("FileSavePlanner.TryResolveExistingPath(_currentFilePath, _fileAdapters, out var target)");
-        saveButtonMethod.Should().Contain("await SaveWorkbookToTargetAsync(target!)");
-        saveButtonMethod.Should().Contain("await SaveWorkbookWithDialogAsync();");
+        saveButtonMethod.Should().Contain("var saved = await SaveResolvedAsync();");
         saveButtonMethod.Should().Contain("if (saved && IsStartScreenVisible())");
         saveButtonMethod.Should().Contain("HideStartScreen();");
 
@@ -149,8 +157,24 @@ public sealed partial class MainWindowSourceHygieneTests
         var confirmMethod = ExtractMethodSource(lifecycleSource, "private async Task<SaveChangesConfirmation> ConfirmSaveBeforeDestructiveActionAsync(");
         confirmMethod.Should().Contain("ShowOwnedMessage(");
         confirmMethod.Should().Contain("SaveChangesConfirmation.DiscardWithoutSaving");
-        confirmMethod.Should().Contain("FileSavePlanner.TryResolveExistingPath(_currentFilePath, _fileAdapters, out var target)");
-        confirmMethod.Should().Contain("return await SaveWorkbookWithDialogAsync()");
+        // P2b: the dirty-gate DECISION now routes through the shared FileLifecyclePlanner. The dirty
+        // check and the Save/Don't-Save/Cancel answer mapping are the planner's PlanDirtyGate /
+        // ResolveDirtyGate; the WPF prompt + the FreeX-specific save mechanics stay host-side.
+        confirmMethod.Should().Contain("FileLifecyclePlanner.PlanDirtyGate(_workbookDirty)");
+        confirmMethod.Should().Contain("FileLifecyclePlanner.ResolveDirtyGate(prompt)");
+        confirmMethod.Should().Contain("DirtyGateAction.ProceedDiscardingChanges => SaveChangesConfirmation.DiscardWithoutSaving");
+        // The "Save then proceed" branch defers Save-vs-Save-As to the shared SaveResolvedAsync helper.
+        confirmMethod.Should().Contain("DirtyGateAction.SaveThenProceed => await SaveResolvedAsync()");
+
+        // Save-vs-Save-As resolution: the high-level branch is the shared planner's PlanSave decision;
+        // FreeX's adapter-resolving FileSavePlanner.TryResolveExistingPath realizes the concrete target,
+        // and the no-usable-path case falls through to the Save-As dialog. (Moved verbatim out of the
+        // dirty-gate into SaveResolvedAsync so both the gate and SaveButton share one resolution path.)
+        var saveResolvedMethod = ExtractMethodSource(lifecycleSource, "private async Task<bool> SaveResolvedAsync()");
+        saveResolvedMethod.Should().Contain("FileLifecyclePlanner.PlanSave(_workbookDirty, _currentFilePath) == FileSaveIntent.PromptSaveAs");
+        saveResolvedMethod.Should().Contain("FileSavePlanner.TryResolveExistingPath(_currentFilePath, _fileAdapters, out var target)");
+        saveResolvedMethod.Should().Contain("return await SaveWorkbookWithDialogAsync();");
+        saveResolvedMethod.Should().Contain("return await SaveWorkbookToTargetAsync(target!);");
 
         var closingMethod = ExtractMethodSource(lifecycleSource, "private async void MainWindow_Closing(");
         closingMethod.Should().Contain("ConfirmSaveBeforeDestructiveActionAsync(UiText.Get(\"MainWindowMessage_SaveChangesBeforeClosingWorkbook\"))");

@@ -480,7 +480,9 @@ public partial class MainWindow
             // resolves the new one — their mutations would target the wrong workbook.
             NotifyOtherWindowsOfWorkbookChange();
 
-            if (!suppressRecentFiles)
+            // P2b: the recent-files registration DECISION routes through the shared planner
+            // (skip suppressed snapshots/transient paths); the MRU store write stays FreeX-specific.
+            if (FileLifecyclePlanner.PlanRecentRegistration(path, suppressRecentFiles) == RecentFileRegistration.Register)
                 _recentFiles.AddOrUpdate(path);
             ShowOpenProgress(
                 OpenWorkbookProgressPlanner.ProgressTitle(),
@@ -815,15 +817,10 @@ public partial class MainWindow
 
     private async void SaveButton_Click(object sender, RoutedEventArgs e)
     {
-        bool saved;
-        if (FileSavePlanner.TryResolveExistingPath(_currentFilePath, _fileAdapters, out var target))
-        {
-            saved = await SaveWorkbookToTargetAsync(target!);
-        }
-        else
-        {
-            saved = await SaveWorkbookWithDialogAsync();
-        }
+        // P2b: Save resolves Save-vs-Save-As through the shared SaveResolvedAsync helper (which routes the
+        // existing-path-vs-dialog DECISION through FileLifecyclePlanner.PlanSave), the same path the
+        // dirty-gate's "Save then proceed" branch takes — one resolution, shared decision truth.
+        var saved = await SaveResolvedAsync();
 
         if (saved && IsStartScreenVisible())
             HideStartScreen();
@@ -915,7 +912,10 @@ public partial class MainWindow
             {
                 _currentFilePath = target.Path;
                 _workbook.Name = WorkbookTitleFormatter.DisplayNameFromPath(target.Path);
-                _recentFiles.AddOrUpdate(target.Path);
+                // P2b: recent-files registration DECISION via the shared planner (a saved target is
+                // always a real, non-suppressed path); the MRU store write stays FreeX-specific.
+                if (FileLifecyclePlanner.PlanRecentRegistration(target.Path, suppressRecentFiles: false) == RecentFileRegistration.Register)
+                    _recentFiles.AddOrUpdate(target.Path);
             }
 
             if (plan.MarkSaved)
