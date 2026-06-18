@@ -300,23 +300,10 @@ public static class RibbonWpfRenderer
         RibbonMetadata.SetRole(caption, RibbonMetadataRole.CommandLabel);
         stack.Children.Add(caption);
 
-        if (HasMenu(control))
-        {
-            // Excel-style large split button: the dropdown chevron sits on its own centered row at the
-            // bottom of the button. Appending it inline to the label put it on the label's line for short
-            // captions ("Paste  ▾") and below for wrapped ones ("Cell Styles" / "▾") — inconsistent.
-            var largeChevron = new TextBlock
-            {
-                Text = "▾",
-                FontSize = 10,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                TextAlignment = TextAlignment.Center,
-                Margin = new Thickness(0, 1, 0, 0),
-                Opacity = 0.85
-            };
-            RibbonMetadata.SetRole(largeChevron, RibbonMetadataRole.DropdownChevron);
-            stack.Children.Add(largeChevron);
-        }
+        // Tag the content layout so the shared dropdown-zone logic (WireDeclarativeDropdownZones) draws the
+        // Excel split-button chevron + hover zone correctly: a large split button folds a centered chevron
+        // into a band below the icon/label. We no longer draw a manual "▾" — the runtime owns it.
+        RibbonMetadata.SetCommandContentLayout(stack, RibbonCommandContentLayout.Large);
 
         var button = NewButton(control, resourceHost, "RibbonLargeButton");
         ((ContentControl)button).Content = stack;
@@ -328,15 +315,19 @@ public static class RibbonWpfRenderer
     {
         var content = new StackPanel { Orientation = Orientation.Horizontal };
         content.Children.Add(NewIcon(control, MediumIconSize, HorizontalAlignment.Center, VerticalAlignment.Center));
-        content.Children.Add(new TextBlock
+        var label = new TextBlock
         {
             Text = control.Label,
             FontSize = 12,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(4, 0, 2, 0)
-        });
-        if (HasMenu(control))
-            content.Children.Add(Chevron());
+        };
+        RibbonMetadata.SetRole(label, RibbonMetadataRole.CommandLabel);
+        content.Children.Add(label);
+
+        // Medium split button: the runtime wraps this in a [content | spacer | dropdown-column] grid so the
+        // chevron gets its own zone and never overlaps the label.
+        RibbonMetadata.SetCommandContentLayout(content, RibbonCommandContentLayout.Medium);
 
         var button = NewButton(control, resourceHost, "RibbonBtn");
         button.Height = SmallRowHeight;
@@ -349,25 +340,15 @@ public static class RibbonWpfRenderer
 
     private static FrameworkElement BuildIconControl(RibbonControl control, FrameworkElement resourceHost, IRibbonCommandRegistry? registry, IRibbonStateStore? stateStore)
     {
-        var hasMenu = HasMenu(control);
-        FrameworkElement content;
-        if (hasMenu)
-        {
-            var stack = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
-            stack.Children.Add(NewIcon(control, SmallIconSize, HorizontalAlignment.Center, VerticalAlignment.Center));
-            stack.Children.Add(Chevron());
-            content = stack;
-        }
-        else
-        {
-            content = NewIcon(control, SmallIconSize, HorizontalAlignment.Center, VerticalAlignment.Center);
-        }
+        // Host the icon in a single-cell grid (icon at column 0). For menu buttons the runtime dropdown-zone
+        // logic appends a dropdown column + chevron with uniform margins so the split never touches the icon.
+        var grid = new Grid { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        grid.Children.Add(NewIcon(control, SmallIconSize, HorizontalAlignment.Center, VerticalAlignment.Center));
+        RibbonMetadata.SetCommandContentLayout(grid, RibbonCommandContentLayout.IconOnly);
 
         var isToggle = control is RibbonToggleButton or RibbonCheckBox;
         var button = NewButton(control, resourceHost, isToggle ? "RibbonIconToggleButton" : "RibbonIconButton");
-        if (hasMenu)
-            button.Width = 34;
-        ((ContentControl)button).Content = content;
+        ((ContentControl)button).Content = grid;
         WireMetadata(button, control, registry, stateStore);
         return button;
     }
@@ -390,26 +371,20 @@ public static class RibbonWpfRenderer
         return box;
     }
 
-    private static RibbonIcon NewIcon(RibbonControl control, double size, HorizontalAlignment h, VerticalAlignment v = VerticalAlignment.Center) => new()
+    private static RibbonIcon NewIcon(RibbonControl control, double size, HorizontalAlignment h, VerticalAlignment v = VerticalAlignment.Center)
     {
-        Kind = control.Icon?.Kind ?? RibbonCommandIconKind.Generic,
-        CommandName = control.CommandId.Value,
-        IconSize = size,
-        HorizontalAlignment = h,
-        VerticalAlignment = v
-    };
-
-    private static TextBlock Chevron()
-    {
-        var chevron = new TextBlock
+        var icon = new RibbonIcon
         {
-            Text = "▾",
-            FontSize = 9,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(1, 0, 1, 0)
+            Kind = control.Icon?.Kind ?? RibbonCommandIconKind.Generic,
+            CommandName = control.CommandId.Value,
+            IconSize = size,
+            HorizontalAlignment = h,
+            VerticalAlignment = v
         };
-        RibbonMetadata.SetRole(chevron, RibbonMetadataRole.DropdownChevron);
-        return chevron;
+        // Tag as the command icon so the dropdown-zone split logic (which tightens the icon margin for the
+        // split band and aligns columns) can find it.
+        RibbonMetadata.SetRole(icon, RibbonMetadataRole.CommandIcon);
+        return icon;
     }
 
     private static Control NewButton(RibbonControl control, FrameworkElement resourceHost, string styleKey)
@@ -456,6 +431,13 @@ public static class RibbonWpfRenderer
 
         if (element is not ButtonBase buttonBase)
             return;
+
+        // A dropdown/split control is always a split button — even when its menu is built imperatively at
+        // runtime and so the declarative menu is empty (e.g. Fill Color / Font Color open a color picker).
+        // Mark it so the split chevron + hover zone render; the zone click falls back to a dropdown/click
+        // event when there is no ContextMenu, so it stays safe.
+        if (HasMenu(control))
+            RibbonMetadata.SetDropdownMenuButton(buttonBase, true);
 
         if (hasMenuItems)
         {
