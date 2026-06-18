@@ -2087,6 +2087,18 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
+            # File > Export to PDF prefers Skia (Unicode) but MUST keep the dependency-free WinAnsi
+            # PortablePdfDocumentExporter as the fallback so the macOS bundle can export without Skia.
+            Path = "src\FreeX.App.Avalonia\Pdf\AvaloniaPdfDocumentExporter.cs"
+            Markers = @(
+                "public static class AvaloniaPdfDocumentExporter",
+                "var result = SkiaPdfDocumentExporter.Save(workbook, exportPlan, stream, options);",
+                "catch (Exception ex) when (IsSkiaUnavailable(ex))",
+                "var result = PortablePdfDocumentExporter.Save(workbook, exportPlan, stream, options);"
+            )
+            OrderedPairs = @()
+        },
+        @{
             Path = "src\FreeX.Core.Calc\CellTextOrientationLayoutPlanner.cs"
             Markers = @(
                 "public readonly record struct CellTextLayoutPoint",
