@@ -1219,9 +1219,10 @@
                             Background="Transparent" BorderThickness="0" Padding="6,0"
                             Margin="0,0,10,0"
                             VerticalAlignment="Center" Cursor="Hand"
-                            ToolTip="A new version of FreeX has been downloaded. Click to restart and update."
-                            AutomationProperties.AutomationId="UpdateReadyIndicator">
-                        <TextBlock Text="&#x21BB; Update ready" Foreground="White" Opacity="0.75" FontSize="11"/>
+                            ToolTip="{local:Loc Key=MainWindow_ToolTip_UpdateReady}"
+                            AutomationProperties.AutomationId="UpdateReadyIndicator"
+                            AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_UpdateReady}">
+                        <TextBlock Text="{local:Loc Key=MainWindow_Content_UpdateReady}" Foreground="White" Opacity="0.75" FontSize="11"/>
                     </Button>
                     <StackPanel x:Name="StatusViewShortcutControls"
                                 Orientation="Horizontal"
