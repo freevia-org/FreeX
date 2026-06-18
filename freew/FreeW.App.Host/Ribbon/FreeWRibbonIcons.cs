@@ -59,6 +59,10 @@ internal static class FreeWRibbonIcons
             ["freew.bullets"] = RibbonCommandIconKind.Bullets,
             ["freew.numbering"] = RibbonCommandIconKind.NumberedList,
             ["freew.multilevel-list"] = RibbonCommandIconKind.MultilevelList,
+            // Multilevel promote/demote are registered commands (not ribbon buttons today); map them so a
+            // menu surfacing them never falls back to the generic glyph. Demote = deeper level (more indent).
+            ["freew.multilevel-demote"] = RibbonCommandIconKind.IndentIncrease,
+            ["freew.multilevel-promote"] = RibbonCommandIconKind.IndentDecrease,
             ["freew.align-left"] = RibbonCommandIconKind.AlignLeft,
             ["freew.align-center"] = RibbonCommandIconKind.AlignCenter,
             ["freew.align-right"] = RibbonCommandIconKind.AlignRight,
