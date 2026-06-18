@@ -1,10 +1,9 @@
 using System.Globalization;
 
-using FreeX.App.Presentation.Charts;
 using FreeX.App.Presentation.Text;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Avalonia.Charts;
+namespace FreeX.App.Presentation.Charts;
 
 /// <summary>
 /// Resolves a sheet-hosted <see cref="ChartModel"/> into a portable <see cref="ChartLayoutRequest"/>
@@ -12,7 +11,7 @@ namespace FreeX.App.Avalonia.Charts;
 /// series/category extraction but reads cell values through a small <see cref="ChartCellAccessor"/>
 /// delegate so the logic stays UI-free and unit-testable.
 /// </summary>
-public static class AvaloniaChartRequestBuilder
+public static class ChartLayoutRequestBuilder
 {
     /// <summary>
     /// Resolves the numeric value and display text of a single cell in the chart's data range.
