@@ -192,7 +192,21 @@ internal sealed record MacOsLaunchSmokeDialogSnapshot(
     bool HasDataValidationDialogMessageControls = false,
     bool HasDataValidationDialogActionButtons = false,
     bool HasDataValidationDialogCompactLayout = false,
-    bool HasDataValidationDialogClosedWithoutAccept = false)
+    bool HasDataValidationDialogClosedWithoutAccept = false,
+    bool HasConditionalFormatRuleDialog = false,
+    bool HasConditionalFormatRuleTypeControls = false,
+    bool HasConditionalFormatRulePresetControls = false,
+    bool HasConditionalFormatRuleValueControls = false,
+    bool HasConditionalFormatRuleActionButtons = false,
+    bool HasConditionalFormatRuleCompactLayout = false,
+    bool HasConditionalFormatRuleDialogClosedWithoutAccept = false,
+    bool HasManageConditionalFormatsDialog = false,
+    bool HasManageConditionalFormatsListControls = false,
+    bool HasManageConditionalFormatsReorderControls = false,
+    bool HasManageConditionalFormatsAppliesToControls = false,
+    bool HasManageConditionalFormatsActionButtons = false,
+    bool HasManageConditionalFormatsCompactLayout = false,
+    bool HasManageConditionalFormatsDialogClosedWithoutAccept = false)
 {
     public static MacOsLaunchSmokeDialogSnapshot Empty { get; } = new(
         HasFindDialog: false,
@@ -240,7 +254,21 @@ internal sealed record MacOsLaunchSmokeDialogSnapshot(
         HasDataValidationDialogMessageControls: false,
         HasDataValidationDialogActionButtons: false,
         HasDataValidationDialogCompactLayout: false,
-        HasDataValidationDialogClosedWithoutAccept: false);
+        HasDataValidationDialogClosedWithoutAccept: false,
+        HasConditionalFormatRuleDialog: false,
+        HasConditionalFormatRuleTypeControls: false,
+        HasConditionalFormatRulePresetControls: false,
+        HasConditionalFormatRuleValueControls: false,
+        HasConditionalFormatRuleActionButtons: false,
+        HasConditionalFormatRuleCompactLayout: false,
+        HasConditionalFormatRuleDialogClosedWithoutAccept: false,
+        HasManageConditionalFormatsDialog: false,
+        HasManageConditionalFormatsListControls: false,
+        HasManageConditionalFormatsReorderControls: false,
+        HasManageConditionalFormatsAppliesToControls: false,
+        HasManageConditionalFormatsActionButtons: false,
+        HasManageConditionalFormatsCompactLayout: false,
+        HasManageConditionalFormatsDialogClosedWithoutAccept: false);
 
     public bool IsPassed =>
         HasFindDialog &&
@@ -288,7 +316,21 @@ internal sealed record MacOsLaunchSmokeDialogSnapshot(
         HasGoToSpecialDialogClosedWithoutAccept &&
         HasFormatCellsDialogClosedWithoutAccept &&
         HasSortDialogClosedWithoutAccept &&
-        HasDataValidationDialogClosedWithoutAccept;
+        HasDataValidationDialogClosedWithoutAccept &&
+        HasConditionalFormatRuleDialog &&
+        HasConditionalFormatRuleTypeControls &&
+        HasConditionalFormatRulePresetControls &&
+        HasConditionalFormatRuleValueControls &&
+        HasConditionalFormatRuleActionButtons &&
+        HasConditionalFormatRuleCompactLayout &&
+        HasConditionalFormatRuleDialogClosedWithoutAccept &&
+        HasManageConditionalFormatsDialog &&
+        HasManageConditionalFormatsListControls &&
+        HasManageConditionalFormatsReorderControls &&
+        HasManageConditionalFormatsAppliesToControls &&
+        HasManageConditionalFormatsActionButtons &&
+        HasManageConditionalFormatsCompactLayout &&
+        HasManageConditionalFormatsDialogClosedWithoutAccept;
 }
 
 internal sealed record MacOsLaunchSmokeCommandKeySnapshot(
@@ -1193,6 +1235,20 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"data_validation_dialog_action_buttons={FormatBool(snapshot.DialogEvidence.HasDataValidationDialogActionButtons)}",
                 $"data_validation_dialog_compact_layout={FormatBool(snapshot.DialogEvidence.HasDataValidationDialogCompactLayout)}",
                 $"data_validation_dialog_result_closed_without_accept={FormatBool(snapshot.DialogEvidence.HasDataValidationDialogClosedWithoutAccept)}",
+                $"conditional_format_rule_dialog={FormatBool(snapshot.DialogEvidence.HasConditionalFormatRuleDialog)}",
+                $"conditional_format_rule_dialog_type_controls={FormatBool(snapshot.DialogEvidence.HasConditionalFormatRuleTypeControls)}",
+                $"conditional_format_rule_dialog_preset_controls={FormatBool(snapshot.DialogEvidence.HasConditionalFormatRulePresetControls)}",
+                $"conditional_format_rule_dialog_value_controls={FormatBool(snapshot.DialogEvidence.HasConditionalFormatRuleValueControls)}",
+                $"conditional_format_rule_dialog_action_buttons={FormatBool(snapshot.DialogEvidence.HasConditionalFormatRuleActionButtons)}",
+                $"conditional_format_rule_dialog_compact_layout={FormatBool(snapshot.DialogEvidence.HasConditionalFormatRuleCompactLayout)}",
+                $"conditional_format_rule_dialog_result_closed_without_accept={FormatBool(snapshot.DialogEvidence.HasConditionalFormatRuleDialogClosedWithoutAccept)}",
+                $"manage_conditional_formats_dialog={FormatBool(snapshot.DialogEvidence.HasManageConditionalFormatsDialog)}",
+                $"manage_conditional_formats_dialog_list_controls={FormatBool(snapshot.DialogEvidence.HasManageConditionalFormatsListControls)}",
+                $"manage_conditional_formats_dialog_reorder_controls={FormatBool(snapshot.DialogEvidence.HasManageConditionalFormatsReorderControls)}",
+                $"manage_conditional_formats_dialog_applies_to_controls={FormatBool(snapshot.DialogEvidence.HasManageConditionalFormatsAppliesToControls)}",
+                $"manage_conditional_formats_dialog_action_buttons={FormatBool(snapshot.DialogEvidence.HasManageConditionalFormatsActionButtons)}",
+                $"manage_conditional_formats_dialog_compact_layout={FormatBool(snapshot.DialogEvidence.HasManageConditionalFormatsCompactLayout)}",
+                $"manage_conditional_formats_dialog_result_closed_without_accept={FormatBool(snapshot.DialogEvidence.HasManageConditionalFormatsDialogClosedWithoutAccept)}",
                 $"opened_source_path={snapshot.OpenedSourcePath ?? ""}",
                 $"is_opening={FormatBool(snapshot.IsOpening)}",
                 $"new_sheet_button={FormatBool(snapshot.HasNewSheetButton)}",

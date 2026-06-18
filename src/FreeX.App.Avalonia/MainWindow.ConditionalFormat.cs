@@ -20,10 +20,11 @@ public sealed partial class MainWindow
     [
         (CfRuleType.CellValue, "Cell Value"),
         (CfRuleType.Formula, "Formula"),
-        (CfRuleType.Top10, "Top 10"),
+        (CfRuleType.Top10, "Top / Bottom"),
         (CfRuleType.IconSet, "Icon Set"),
         (CfRuleType.DataBar, "Data Bar"),
         (CfRuleType.ColorScale, "Color Scale"),
+        (CfRuleType.ContainsText, "Text Contains"),
         (CfRuleType.DuplicateValues, "Duplicate Values"),
         (CfRuleType.UniqueValues, "Unique Values"),
         (CfRuleType.AboveAverage, "Above Average"),
@@ -40,6 +41,43 @@ public sealed partial class MainWindow
         (CfOperator.Between, "between"),
         (CfOperator.NotBetween, "not between"),
     ];
+
+    /// <summary>The quick presets the New Rule editor offers as a starting point, in dropdown order.</summary>
+    private static readonly IReadOnlyList<(ConditionalFormatPreset Preset, string Label)> ConditionalFormatPresetChoices =
+        Enum.GetValues<ConditionalFormatPreset>()
+            .Select(preset => (preset, ConditionalFormatPresetFactory.DisplayName(preset)))
+            .ToList();
+
+    /// <summary>Controls the rule editor exposes to the launch-smoke probe.</summary>
+    private sealed record ConditionalFormatRuleDialogSmokeProbe(
+        Window Dialog,
+        ComboBox RuleTypeBox,
+        ComboBox PresetBox,
+        ComboBox OperatorBox,
+        TextBox Value1Box,
+        TextBox FormulaBox,
+        TextBox TextBox,
+        TextBox RankBox,
+        ComboBox TopBottomBox,
+        ComboBox IconSetBox,
+        TextBox MinColorBox,
+        TextBox MaxColorBox,
+        ComboBox HighlightBox,
+        Button OkButton,
+        Button CancelButton);
+
+    /// <summary>Controls the Manage Rules dialog exposes to the launch-smoke probe.</summary>
+    private sealed record ManageConditionalFormatsDialogSmokeProbe(
+        Window Dialog,
+        ListBox ListBox,
+        TextBox AppliesToBox,
+        Button NewButton,
+        Button EditButton,
+        Button DeleteButton,
+        Button MoveUpButton,
+        Button MoveDownButton,
+        Button ApplyAppliesToButton,
+        Button CloseButton);
 
     /// <summary>The native Format-menu "Conditional Formatting" submenu: New Rule, quick presets, Manage.</summary>
     private NativeMenu CreateNativeConditionalFormatMenu()
@@ -155,18 +193,24 @@ public sealed partial class MainWindow
         if (built is null)
             return;
 
-        var range = _session.SelectedRange;
+        var range = built.AppliesTo;
         RunConditionalFormatCommand(
             ConditionalFormatRuleBuilder.ToApplyCommand(_session.ActiveSheet.Id, built),
             $"Applied conditional formatting to {FormatRangeReference(range)}");
     }
 
+    private Task<ConditionalFormat?> ShowConditionalFormatRuleEditorAsync(ConditionalFormat? existingRule) =>
+        ShowConditionalFormatRuleEditorAsync(existingRule, launchSmokeProbe: null);
+
     /// <summary>
     /// The compact rule editor: a rule-type dropdown plus per-type fields shown/hidden from
-    /// <see cref="ConditionalFormatRuleSchema"/>, with inline validation from <c>Validate</c>. On OK,
+    /// <see cref="ConditionalFormatRuleSchema"/>, with inline validation from <c>Validate</c>. A preset
+    /// dropdown seeds the value/visual families from <see cref="ConditionalFormatPresetFactory"/>. On OK,
     /// builds the Core rule (reusing the existing rule's id when editing). Returns null on cancel.
     /// </summary>
-    private async Task<ConditionalFormat?> ShowConditionalFormatRuleEditorAsync(ConditionalFormat? existingRule)
+    private async Task<ConditionalFormat?> ShowConditionalFormatRuleEditorAsync(
+        ConditionalFormat? existingRule,
+        Action<ConditionalFormatRuleDialogSmokeProbe>? launchSmokeProbe)
     {
         ConditionalFormat? result = null;
         var range = existingRule?.AppliesTo ?? _session.SelectedRange;
@@ -175,9 +219,9 @@ public sealed partial class MainWindow
         {
             Title = existingRule is null ? "New Formatting Rule" : "Edit Formatting Rule",
             Width = 460,
-            Height = 420,
+            Height = 470,
             MinWidth = 420,
-            MinHeight = 360,
+            MinHeight = 400,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -189,6 +233,15 @@ public sealed partial class MainWindow
             MinWidth = 220,
         };
         AutomationProperties.SetAutomationId(ruleTypeBox, "ConditionalFormatRuleTypeBox");
+        AutomationProperties.SetName(ruleTypeBox, "Rule type");
+
+        var presetBox = new ComboBox
+        {
+            ItemsSource = ConditionalFormatPresetChoices.Select(c => c.Label).ToList(),
+            MinWidth = 220,
+        };
+        AutomationProperties.SetAutomationId(presetBox, "ConditionalFormatPresetBox");
+        AutomationProperties.SetName(presetBox, "Preset");
 
         var operatorBox = new ComboBox
         {
@@ -210,6 +263,14 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(rankBox, "ConditionalFormatRankBox");
         var percentBox = new CheckBox { Content = "% of range" };
         AutomationProperties.SetAutomationId(percentBox, "ConditionalFormatPercentBox");
+        var topBottomBox = new ComboBox
+        {
+            ItemsSource = new[] { "Top", "Bottom" },
+            SelectedIndex = 0,
+            MinWidth = 220,
+        };
+        AutomationProperties.SetAutomationId(topBottomBox, "ConditionalFormatTopBottomBox");
+        AutomationProperties.SetName(topBottomBox, "Top or bottom");
         var iconSetBox = new ComboBox
         {
             ItemsSource = ConditionalFormatIconSetCatalog.Styles.Select(s => s.Style).ToList(),
@@ -219,6 +280,13 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(iconSetBox, "ConditionalFormatIconSetBox");
         var threeColorBox = new CheckBox { Content = "Use three-color scale", IsChecked = true };
         AutomationProperties.SetAutomationId(threeColorBox, "ConditionalFormatThreeColorBox");
+
+        var minColorBox = new TextBox { MinWidth = 220, Text = "99,190,123" };
+        AutomationProperties.SetAutomationId(minColorBox, "ConditionalFormatMinColorBox");
+        var midColorBox = new TextBox { MinWidth = 220, Text = "255,235,132" };
+        AutomationProperties.SetAutomationId(midColorBox, "ConditionalFormatMidColorBox");
+        var maxColorBox = new TextBox { MinWidth = 220, Text = "248,105,107" };
+        AutomationProperties.SetAutomationId(maxColorBox, "ConditionalFormatMaxColorBox");
 
         var highlightBox = new ComboBox
         {
@@ -234,8 +302,13 @@ public sealed partial class MainWindow
         var formulaField = CreateDataValidationField("Formula (e.g. =A1>10)", formulaBox);
         var textField = CreateDataValidationField("Text", textBox);
         var rankField = CreateDataValidationField("Rank or percent", rankBox);
+        var topBottomField = CreateDataValidationField("Top or bottom", topBottomBox);
         var iconSetField = CreateDataValidationField("Icon set style", iconSetBox);
+        var minColorField = CreateDataValidationField("Minimum color (r,g,b)", minColorBox);
+        var midColorField = CreateDataValidationField("Midpoint color (r,g,b)", midColorBox);
+        var maxColorField = CreateDataValidationField("Maximum color (r,g,b)", maxColorBox);
         var highlightField = CreateDataValidationField("Format", highlightBox);
+        var presetField = CreateDataValidationField("Preset", presetBox);
 
         var errorText = new TextBlock
         {
@@ -261,17 +334,19 @@ public sealed partial class MainWindow
                 Text = textBox.Text,
                 Rank = rankBox.Text,
                 IsPercent = percentBox.IsChecked == true,
+                IsTop = topBottomBox.SelectedIndex <= 0,
                 IconSetStyle = iconSetBox.SelectedItem as string,
                 UseThreeColorScale = threeColorBox.IsChecked == true,
-                MinColor = "99,190,123",
-                MidColor = "255,235,132",
-                MaxColor = "248,105,107",
+                MinColor = minColorBox.Text,
+                MidColor = midColorBox.Text,
+                MaxColor = maxColorBox.Text,
             };
         }
 
         void UpdateFieldVisibility()
         {
-            var schema = ConditionalFormatRuleSchema.ForRuleType(SelectedRuleType());
+            var ruleType = SelectedRuleType();
+            var schema = ConditionalFormatRuleSchema.ForRuleType(ruleType);
             operatorField.IsVisible = schema.HasField(CfInputField.Operator);
             value1Field.IsVisible = schema.HasField(CfInputField.Value1);
             var op = ConditionalFormatOperatorChoices[Math.Max(0, operatorBox.SelectedIndex)].Op;
@@ -281,20 +356,40 @@ public sealed partial class MainWindow
             textField.IsVisible = schema.HasField(CfInputField.Text);
             rankField.IsVisible = schema.HasField(CfInputField.Rank);
             percentBox.IsVisible = schema.HasField(CfInputField.Percent);
+            topBottomField.IsVisible = schema.HasField(CfInputField.TopBottom);
             iconSetField.IsVisible = schema.HasField(CfInputField.IconSetStyle);
             threeColorBox.IsVisible = schema.HasField(CfInputField.UseThreeColorScale);
+            var isColorScale = ruleType is CfRuleType.ColorScale;
+            minColorField.IsVisible = isColorScale;
+            midColorField.IsVisible = isColorScale && threeColorBox.IsChecked == true;
+            maxColorField.IsVisible = isColorScale;
             // The highlight format only applies to the non-visual rule families.
-            highlightField.IsVisible = SelectedRuleType()
+            highlightField.IsVisible = ruleType
                 is not (CfRuleType.IconSet or CfRuleType.DataBar or CfRuleType.ColorScale);
             errorText.IsVisible = false;
         }
 
         ruleTypeBox.SelectionChanged += (_, _) => UpdateFieldVisibility();
         operatorBox.SelectionChanged += (_, _) => UpdateFieldVisibility();
+        threeColorBox.IsCheckedChanged += (_, _) => UpdateFieldVisibility();
+
+        presetBox.SelectionChanged += (_, _) =>
+        {
+            if (presetBox.SelectedIndex < 0)
+                return;
+
+            var preset = ConditionalFormatPresetChoices[presetBox.SelectedIndex].Preset;
+            ApplyConditionalFormatPresetToEditor(
+                ConditionalFormatPresetFactory.BuildInput(preset),
+                ruleTypeBox, operatorBox, value1Box, rankBox, percentBox, topBottomBox,
+                iconSetBox, threeColorBox, minColorBox, midColorBox, maxColorBox);
+            UpdateFieldVisibility();
+        };
 
         SeedConditionalFormatEditor(
             existingRule, ruleTypeBox, operatorBox, value1Box, value2Box,
-            formulaBox, textBox, rankBox, percentBox, iconSetBox, threeColorBox, highlightBox);
+            formulaBox, textBox, rankBox, percentBox, topBottomBox, iconSetBox, threeColorBox,
+            minColorBox, midColorBox, maxColorBox, highlightBox);
         UpdateFieldVisibility();
 
         var okButton = new Button { Content = "OK", IsDefault = true, MinWidth = 84 };
@@ -350,6 +445,7 @@ public sealed partial class MainWindow
                                 TextWrapping = TextWrapping.Wrap,
                             },
                             CreateDataValidationField("Rule type", ruleTypeBox),
+                            presetField,
                             operatorField,
                             value1Field,
                             value2Field,
@@ -357,8 +453,12 @@ public sealed partial class MainWindow
                             textField,
                             rankField,
                             percentBox,
+                            topBottomField,
                             iconSetField,
                             threeColorBox,
+                            minColorField,
+                            midColorField,
+                            maxColorField,
                             highlightField,
                             errorText,
                         },
@@ -366,6 +466,31 @@ public sealed partial class MainWindow
                 },
             },
         };
+
+        if (launchSmokeProbe is not null)
+        {
+            dialog.Opened += (_, _) =>
+            {
+                RunLaunchSmokeDialogProbe(
+                    dialog,
+                    () => launchSmokeProbe(new ConditionalFormatRuleDialogSmokeProbe(
+                        dialog,
+                        ruleTypeBox,
+                        presetBox,
+                        operatorBox,
+                        value1Box,
+                        formulaBox,
+                        textBox,
+                        rankBox,
+                        topBottomBox,
+                        iconSetBox,
+                        minColorBox,
+                        maxColorBox,
+                        highlightBox,
+                        okButton,
+                        cancelButton)));
+            };
+        }
 
         await dialog.ShowDialog(this);
         return result;
@@ -382,8 +507,12 @@ public sealed partial class MainWindow
         TextBox textBox,
         TextBox rankBox,
         CheckBox percentBox,
+        ComboBox topBottomBox,
         ComboBox iconSetBox,
         CheckBox threeColorBox,
+        TextBox minColorBox,
+        TextBox midColorBox,
+        TextBox maxColorBox,
         ComboBox highlightBox)
     {
         if (rule is null)
@@ -415,11 +544,64 @@ public sealed partial class MainWindow
         textBox.Text = rule.TextRuleText ?? rule.DateOccurringPeriod ?? string.Empty;
         rankBox.Text = rule.TopBottomRank.ToString(System.Globalization.CultureInfo.InvariantCulture);
         percentBox.IsChecked = rule.TopBottomPercent;
+        topBottomBox.SelectedIndex = rule.AboveAverage ? 0 : 1;
         if (!string.IsNullOrEmpty(rule.IconSetStyle))
             iconSetBox.SelectedItem = rule.IconSetStyle;
         threeColorBox.IsChecked = rule.UseThreeColorScale;
+        minColorBox.Text = FormatRgb(rule.MinColor);
+        midColorBox.Text = FormatRgb(rule.MidColor);
+        maxColorBox.Text = FormatRgb(rule.MaxColor);
         highlightBox.SelectedIndex = 0;
     }
+
+    /// <summary>Seeds the editor's value/visual controls from a quick-preset input.</summary>
+    private static void ApplyConditionalFormatPresetToEditor(
+        CfRuleInput preset,
+        ComboBox ruleTypeBox,
+        ComboBox operatorBox,
+        TextBox value1Box,
+        TextBox rankBox,
+        CheckBox percentBox,
+        ComboBox topBottomBox,
+        ComboBox iconSetBox,
+        CheckBox threeColorBox,
+        TextBox minColorBox,
+        TextBox midColorBox,
+        TextBox maxColorBox)
+    {
+        for (var i = 0; i < ConditionalFormatRuleTypeChoices.Count; i++)
+            if (ConditionalFormatRuleTypeChoices[i].Type == preset.RuleType)
+            {
+                ruleTypeBox.SelectedIndex = i;
+                break;
+            }
+
+        for (var i = 0; i < ConditionalFormatOperatorChoices.Count; i++)
+            if (ConditionalFormatOperatorChoices[i].Op == preset.Operator)
+            {
+                operatorBox.SelectedIndex = i;
+                break;
+            }
+
+        if (!string.IsNullOrWhiteSpace(preset.Value1))
+            value1Box.Text = preset.Value1;
+        if (!string.IsNullOrWhiteSpace(preset.Rank))
+            rankBox.Text = preset.Rank;
+        percentBox.IsChecked = preset.IsPercent;
+        topBottomBox.SelectedIndex = preset.IsTop ? 0 : 1;
+        if (!string.IsNullOrWhiteSpace(preset.IconSetStyle))
+            iconSetBox.SelectedItem = preset.IconSetStyle;
+        threeColorBox.IsChecked = preset.UseThreeColorScale;
+        if (!string.IsNullOrWhiteSpace(preset.MinColor))
+            minColorBox.Text = preset.MinColor;
+        if (!string.IsNullOrWhiteSpace(preset.MidColor))
+            midColorBox.Text = preset.MidColor;
+        if (!string.IsNullOrWhiteSpace(preset.MaxColor))
+            maxColorBox.Text = preset.MaxColor;
+    }
+
+    private static string FormatRgb(RgbColor color) =>
+        $"{color.R},{color.G},{color.B}";
 
     /// <summary>A tiny single-value prompt used by the Highlight &gt; Greater Than preset.</summary>
     private async Task<string?> ShowConditionalFormatValuePromptAsync(string title, string prompt, string initial)
@@ -480,12 +662,17 @@ public sealed partial class MainWindow
         return result;
     }
 
+    private Task ShowManageConditionalFormatsDialogAsync() =>
+        ShowManageConditionalFormatsDialogAsync(launchSmokeProbe: null);
+
     /// <summary>
     /// The Manage Rules dialog: lists the selection's overlapping rules (or every sheet rule when the
-    /// selection is a single cell) with Edit and Delete. Edit re-runs the editor and replaces the rule;
-    /// Delete drops it. Both commit through the atomic replace-all command for one undo step.
+    /// selection is a single cell) with New, Edit, Delete, reorder (move up/down), and change applies-to.
+    /// Edit re-runs the editor and replaces the rule; New runs the editor and adds it. All edits commit
+    /// through the atomic replace-all / apply commands for a single undo step.
     /// </summary>
-    private async Task ShowManageConditionalFormatsDialogAsync()
+    private async Task ShowManageConditionalFormatsDialogAsync(
+        Action<ManageConditionalFormatsDialogSmokeProbe>? launchSmokeProbe)
     {
         if (!TryCommitPendingFormulaEdit())
             return;
@@ -494,16 +681,17 @@ public sealed partial class MainWindow
         {
             Title = "Manage Conditional Formatting Rules",
             Width = 560,
-            Height = 420,
+            Height = 460,
             MinWidth = 480,
-            MinHeight = 320,
+            MinHeight = 360,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
         AutomationProperties.SetAutomationId(dialog, "ManageConditionalFormatsDialog");
 
-        var listBox = new ListBox { MinHeight = 220 };
+        var listBox = new ListBox { MinHeight = 200 };
         AutomationProperties.SetAutomationId(listBox, "ManageConditionalFormatsListBox");
+        AutomationProperties.SetName(listBox, "Conditional formatting rules");
 
         var emptyText = new TextBlock
         {
@@ -512,7 +700,11 @@ public sealed partial class MainWindow
             IsVisible = false,
         };
 
-        void Reload()
+        var appliesToBox = new TextBox { MinWidth = 200 };
+        AutomationProperties.SetAutomationId(appliesToBox, "ManageConditionalFormatsAppliesToBox");
+        AutomationProperties.SetName(appliesToBox, "Applies to");
+
+        void Reload(Guid? selectId = null)
         {
             // A single-cell selection lists the whole sheet; a wider selection scopes to overlap.
             var selection = _session.SelectedRange;
@@ -521,15 +713,57 @@ public sealed partial class MainWindow
             listBox.ItemsSource = items;
             emptyText.IsVisible = items.Count == 0;
             if (items.Count > 0)
-                listBox.SelectedIndex = 0;
+            {
+                var index = 0;
+                if (selectId is { } id)
+                    for (var i = 0; i < items.Count; i++)
+                        if (items[i].Id == id)
+                        {
+                            index = i;
+                            break;
+                        }
+
+                listBox.SelectedIndex = index;
+            }
         }
 
+        void SyncAppliesTo()
+        {
+            appliesToBox.Text = listBox.SelectedItem is ConditionalFormatRuleListItem item
+                ? FormatRangeReference(item.Rule.AppliesTo)
+                : string.Empty;
+        }
+
+        var newButton = new Button { Content = "New…", MinWidth = 84 };
+        AutomationProperties.SetAutomationId(newButton, "ManageConditionalFormatsNewButton");
         var editButton = new Button { Content = "Edit…", MinWidth = 84 };
         AutomationProperties.SetAutomationId(editButton, "ManageConditionalFormatsEditButton");
         var deleteButton = new Button { Content = "Delete", MinWidth = 84 };
         AutomationProperties.SetAutomationId(deleteButton, "ManageConditionalFormatsDeleteButton");
+        var moveUpButton = new Button { Content = "Move Up", MinWidth = 84 };
+        AutomationProperties.SetAutomationId(moveUpButton, "ManageConditionalFormatsMoveUpButton");
+        AutomationProperties.SetName(moveUpButton, "Move rule up");
+        var moveDownButton = new Button { Content = "Move Down", MinWidth = 84 };
+        AutomationProperties.SetAutomationId(moveDownButton, "ManageConditionalFormatsMoveDownButton");
+        AutomationProperties.SetName(moveDownButton, "Move rule down");
+        var applyAppliesToButton = new Button { Content = "Apply Range", MinWidth = 84 };
+        AutomationProperties.SetAutomationId(applyAppliesToButton, "ManageConditionalFormatsApplyAppliesToButton");
         var closeButton = new Button { Content = "Close", IsCancel = true, MinWidth = 84 };
         AutomationProperties.SetAutomationId(closeButton, "ManageConditionalFormatsCloseButton");
+
+        listBox.SelectionChanged += (_, _) => SyncAppliesTo();
+
+        newButton.Click += async (_, _) =>
+        {
+            var built = await ShowConditionalFormatRuleEditorAsync(existingRule: null);
+            if (built is null)
+                return;
+
+            RunConditionalFormatCommand(
+                ConditionalFormatRuleBuilder.ToApplyCommand(_session.ActiveSheet.Id, built),
+                "Added conditional formatting rule");
+            Reload(built.Id);
+        };
 
         editButton.Click += async (_, _) =>
         {
@@ -546,7 +780,7 @@ public sealed partial class MainWindow
                 return;
 
             RunConditionalFormatCommand(command, "Edited conditional formatting rule");
-            Reload();
+            Reload(edited.Id);
         };
 
         deleteButton.Click += (_, _) =>
@@ -562,7 +796,71 @@ public sealed partial class MainWindow
             RunConditionalFormatCommand(command, "Deleted conditional formatting rule");
             Reload();
         };
+
+        void Move(ConditionalFormatRuleMoveDirection direction)
+        {
+            if (listBox.SelectedItem is not ConditionalFormatRuleListItem item)
+                return;
+
+            var command = ConditionalFormatManageModel.BuildMoveCommand(
+                _session.ActiveSheet.Id, _session.ActiveSheet.ConditionalFormats, item.Id, direction);
+            if (command is null)
+                return;
+
+            RunConditionalFormatCommand(command, "Reordered conditional formatting rules");
+            Reload(item.Id);
+        }
+
+        moveUpButton.Click += (_, _) => Move(ConditionalFormatRuleMoveDirection.Up);
+        moveDownButton.Click += (_, _) => Move(ConditionalFormatRuleMoveDirection.Down);
+
+        applyAppliesToButton.Click += (_, _) =>
+        {
+            if (listBox.SelectedItem is not ConditionalFormatRuleListItem item)
+                return;
+
+            var reference = appliesToBox.Text;
+            if (string.IsNullOrWhiteSpace(reference)
+                || !_session.TryResolveReferenceRange(reference, out var range))
+            {
+                ShowEditIssue("Applies-to range is not valid.");
+                return;
+            }
+
+            var command = ConditionalFormatManageModel.BuildAppliesToCommand(
+                _session.ActiveSheet.Id, _session.ActiveSheet.ConditionalFormats, item.Id, range);
+            if (command is null)
+                return;
+
+            RunConditionalFormatCommand(command, $"Changed rule range to {FormatRangeReference(range)}");
+            Reload(item.Id);
+        };
+
         closeButton.Click += (_, _) => dialog.Close();
+
+        var toolbarRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            Margin = new Thickness(0, 0, 0, 8),
+            Children = { newButton, editButton, deleteButton, moveUpButton, moveDownButton },
+        };
+        DockPanel.SetDock(toolbarRow, Dock.Top);
+
+        var appliesToRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center,
+            Margin = new Thickness(0, 8, 0, 0),
+            Children =
+            {
+                new TextBlock { Text = "Applies to", VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center, Foreground = HeaderForeground },
+                appliesToBox,
+                applyAppliesToButton,
+            },
+        };
+        DockPanel.SetDock(appliesToRow, Dock.Bottom);
 
         var buttonRow = new StackPanel
         {
@@ -570,17 +868,20 @@ public sealed partial class MainWindow
             Spacing = 8,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
             Margin = new Thickness(0, 10, 0, 0),
-            Children = { editButton, deleteButton, closeButton },
+            Children = { closeButton },
         };
         DockPanel.SetDock(buttonRow, Dock.Bottom);
 
         Reload();
+        SyncAppliesTo();
         dialog.Content = new DockPanel
         {
             Margin = new Thickness(16),
             Children =
             {
+                toolbarRow,
                 buttonRow,
+                appliesToRow,
                 new StackPanel
                 {
                     Spacing = 8,
@@ -588,6 +889,26 @@ public sealed partial class MainWindow
                 },
             },
         };
+
+        if (launchSmokeProbe is not null)
+        {
+            dialog.Opened += (_, _) =>
+            {
+                RunLaunchSmokeDialogProbe(
+                    dialog,
+                    () => launchSmokeProbe(new ManageConditionalFormatsDialogSmokeProbe(
+                        dialog,
+                        listBox,
+                        appliesToBox,
+                        newButton,
+                        editButton,
+                        deleteButton,
+                        moveUpButton,
+                        moveDownButton,
+                        applyAppliesToButton,
+                        closeButton)));
+            };
+        }
 
         await dialog.ShowDialog(this);
     }
