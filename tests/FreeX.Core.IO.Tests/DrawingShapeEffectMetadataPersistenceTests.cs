@@ -161,6 +161,52 @@ public sealed class DrawingShapeEffectMetadataPersistenceTests
         shape.EffectPreset.Should().Be(DrawingShapeEffectPreset.None);
     }
 
+    [Fact]
+    public void XlsxDrawingPartReader_ResolvesTwoCellAnchorWhenFromAndToShareColumn()
+    {
+        // Regression: a shape narrower than one column has from/to in the SAME column, with the
+        // sub-cell colOff EMU values expressing its width. The from/to row differs. Such an anchor is
+        // valid and must NOT be dropped — dropping it snapped the object to A1 (over the sheet title).
+        var drawingXml = XDocument.Parse("""
+            <xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"
+                      xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <xdr:twoCellAnchor>
+                <xdr:from>
+                  <xdr:col>3</xdr:col><xdr:colOff>438151</xdr:colOff>
+                  <xdr:row>0</xdr:row><xdr:rowOff>228600</xdr:rowOff>
+                </xdr:from>
+                <xdr:to>
+                  <xdr:col>3</xdr:col><xdr:colOff>1733551</xdr:colOff>
+                  <xdr:row>1</xdr:row><xdr:rowOff>0</xdr:rowOff>
+                </xdr:to>
+                <xdr:sp>
+                  <xdr:nvSpPr>
+                    <xdr:cNvPr id="2" name="Rounded Rectangle 3"/>
+                    <xdr:cNvSpPr/>
+                  </xdr:nvSpPr>
+                  <xdr:spPr>
+                    <a:xfrm><a:off x="2266951" y="184150"/><a:ext cx="171450" cy="0"/></a:xfrm>
+                    <a:prstGeom prst="roundRect"><a:avLst/></a:prstGeom>
+                  </xdr:spPr>
+                  <xdr:txBody><a:bodyPr/><a:p><a:r><a:t>Visit Chandoo.org</a:t></a:r></a:p></xdr:txBody>
+                </xdr:sp>
+                <xdr:clientData/>
+              </xdr:twoCellAnchor>
+            </xdr:wsDr>
+            """);
+
+        var textBox = XlsxWorksheetDrawingPartReader.ReadShapeParts(drawingXml)
+            .TextBoxes
+            .Should()
+            .ContainSingle()
+            .Subject;
+
+        textBox.Anchor.Should().NotBeNull();
+        textBox.Anchor!.Kind.Should().Be(ChartDrawingAnchorKind.TwoCell);
+        textBox.Anchor.FromColumnZeroBased.Should().Be(3, "the box anchors to column D, not A");
+        textBox.Anchor.FromRowZeroBased.Should().Be(0);
+    }
+
     [Theory]
     [InlineData(DrawingShapeGradientDirection.Horizontal)]
     [InlineData(DrawingShapeGradientDirection.Vertical)]
