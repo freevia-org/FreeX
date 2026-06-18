@@ -1,23 +1,12 @@
 using System.Windows;
 using System.Windows.Media;
 
+using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.Core.Model;
 
 namespace FreeX.App.UI;
 
 public sealed record ConditionalIconCellLayout(Rect IconRect, Rect TextRect, bool ShouldDrawText);
-
-public enum ConditionalIconGlyphKind
-{
-    Arrow,
-    TrafficLight,
-    Sign,
-    Symbol,
-    Flag,
-    Rating,
-    Quarter,
-    Box
-}
 
 public partial class GridView
 {

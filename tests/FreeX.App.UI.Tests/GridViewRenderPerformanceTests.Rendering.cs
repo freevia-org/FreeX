@@ -921,20 +921,16 @@ public sealed partial class GridViewRenderPerformanceTests
     }
 
     [Fact]
-    public void ConditionalIconLayoutPlanner_CachesStyleTraitClassification()
+    public void ConditionalIconLayoutPlanner_ForwardsClassificationToSharedResolver()
     {
+        // The style-traits cache + palette mapping now live in the portable
+        // ConditionalIconGlyphResolver (FreeX.App.Presentation). The WPF planner must forward to it
+        // rather than re-inline the classification, so both hosts share one source of truth.
         var source = AppUiSourceTestSupport.ReadAppUiSources("ConditionalIconLayoutPlanner.cs");
-        var resolveGlyphKind = source[
-            source.IndexOf("public static ConditionalIconGlyphKind ResolveGlyphKind", StringComparison.Ordinal)..
-            source.IndexOf("private static ConditionalIconStyleTraits ResolveStyleTraits", StringComparison.Ordinal)];
-        var resolveColor = source[
-            source.IndexOf("public static string ResolveColor", StringComparison.Ordinal)..];
 
-        source.Should().Contain("private static readonly ConcurrentDictionary<string, ConditionalIconStyleTraits> StyleTraitCache");
-        source.Should().Contain("new(StringComparer.OrdinalIgnoreCase)");
-        resolveGlyphKind.Should().Contain("ResolveStyleTraits(icon.Style)");
-        resolveGlyphKind.Should().NotContain("Contains(");
-        resolveColor.Should().Contain("ResolveStyleTraits(icon.Style).IsGray");
-        resolveColor.Should().NotContain("icon.Style.Contains");
+        source.Should().Contain("ConditionalIconGlyphResolver.ResolveGlyphKind(icon.Style)");
+        source.Should().Contain("ConditionalIconGlyphResolver.ResolveIconColor(icon.Style, icon.IconIndex, icon.IconCount)");
+        source.Should().NotContain("StyleTraitCache");
+        source.Should().NotContain("Contains(");
     }
 }
