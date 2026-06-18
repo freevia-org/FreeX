@@ -18,7 +18,7 @@ public enum PasteNamesListError
 /// Portable (no UI) backing logic for the Paste Names dialog (Formulas ▸ Use in Formula ▸ Paste Names).
 /// It projects the workbook's defined names into the dialog rows (sorted by name) and, for the "Paste List"
 /// option, plans the two-column block of name/refers-to cell edits anchored at a start address. Kept UI-free
-/// so any shell (WPF, Avalonia) can reuse it and so it is unit-testable without a window.
+/// so any desktop or cross-platform shell can reuse it and so it is unit-testable without a window.
 /// </summary>
 public static class PasteNamesPlanner
 {

@@ -30,7 +30,7 @@ public sealed record AllowEditRangeButtonState(
 /// Portable (no UI) backing logic for the Allow Users to Edit Ranges dialog (Review ▸ Protect). It parses a
 /// typed range against the active sheet, projects the sheet's stored allowed-edit ranges into display rows,
 /// derives the list-button enablement, and builds the dialog result records the shell maps onto the Core
-/// allow-edit-range commands. Kept UI-free so any shell (WPF, Avalonia) can reuse it and so it is
+/// allow-edit-range commands. Kept UI-free so any desktop or cross-platform shell can reuse it and so it is
 /// unit-testable without a window.
 /// </summary>
 public static class AllowEditRangePlanner
@@ -43,7 +43,7 @@ public static class AllowEditRangePlanner
     {
         try
         {
-            range = GridRange.Parse((text ?? string.Empty).Trim(), sheetId);
+            range = GridRange.ParseCellOrRange((text ?? string.Empty).Trim(), sheetId);
             return true;
         }
         catch

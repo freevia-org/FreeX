@@ -48,7 +48,7 @@ public enum FillSeriesInputError
 /// <summary>
 /// Portable (no UI) backing logic for the Fill ▸ Series dialog (Home ▸ Fill ▸ Series). It parses and
 /// validates the step/stop inputs and builds the linear / growth / date cell edits over a range, reading the
-/// seed value from the active sheet. Kept UI-free so any shell (WPF, Avalonia) can reuse it and so it is
+/// seed value from the active sheet. Kept UI-free so any desktop or cross-platform shell can reuse it and so it is
 /// unit-testable without a window.
 /// </summary>
 public static class FillSeriesPlanner
