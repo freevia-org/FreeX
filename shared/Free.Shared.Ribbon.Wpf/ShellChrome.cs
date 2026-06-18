@@ -83,10 +83,11 @@ public static class ShellChrome
         if (LoadIcon(options.IconUri) is { } icon)
             window.Icon = icon;
 
-        window.StateChanged += (_, _) => ApplyMaximizedInset(window);
         window.SourceInitialized += (_, _) =>
         {
-            ApplyMaximizedInset(window);
+            // Clamp the maximized size to the monitor work area so a borderless window doesn't cover the
+            // taskbar or push the footer off-screen, then apply Win11 rounded corners.
+            MaximizedWindowFix.Install(window);
             WindowCornerHelper.ApplyRoundedCorners(window);
         };
     }
@@ -179,12 +180,6 @@ public static class ShellChrome
         {
             Source = new Uri("/Free.Shared.Ribbon.Wpf;component/SharedChromeResources.xaml", UriKind.Relative)
         });
-    }
-
-    private static void ApplyMaximizedInset(Window window)
-    {
-        if (window.Content is FrameworkElement content)
-            content.Margin = window.WindowState == WindowState.Maximized ? new Thickness(7) : new Thickness(0);
     }
 
     // The title-bar app badge: the real application icon (no tile) when an IconUri resolves, else a small
