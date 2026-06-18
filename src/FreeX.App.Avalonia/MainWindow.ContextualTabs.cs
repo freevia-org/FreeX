@@ -30,10 +30,16 @@ public sealed partial class MainWindow
             // --- Chart Design (chart.selected) — real handlers via SetChartLayoutCommand /
             // ChangeChartTypeCommand / ChangeChartSourceCommand / SetChartStyleCommand (MainWindow.ChartTabs). ---
             ["chartDesign.titles"] = () => RunGuarded(ShowChartTitlesDialog),
-            ["chartDesign.dataLabels"] = ToggleChartDataLabels,
+            // The Data Labels button opens the full show/hide + position + which-values dialog
+            // (ChartDataLabelsPlanner); Data Label Position keeps its quick cycle.
+            ["chartDesign.dataLabels"] = () => RunGuarded(ShowChartDataLabelsDialog),
             ["chartDesign.dataLabelPosition"] = CycleChartDataLabelPosition,
-            ["chartDesign.trendline"] = ToggleChartTrendline,
-            ["chartDesign.errorBars"] = ToggleChartErrorBars,
+            // The Trendline button opens the type/period/order + equation/R-squared dialog
+            // (ChartTrendlinePlanner).
+            ["chartDesign.trendline"] = () => RunGuarded(ShowChartTrendlineDialog),
+            // The Error Bars button opens the show/kind/direction + amount/end-caps dialog
+            // (ChartErrorBarsPlanner).
+            ["chartDesign.errorBars"] = () => RunGuarded(ShowChartErrorBarsDialog),
             ["chartDesign.secondaryAxis"] = CycleChartSecondaryAxis,
             ["chartDesign.chartStyles"] = CycleChartStyle,
             ["chartDesign.selectData"] = () => RunGuarded(ShowSelectChartDataDialog),
@@ -47,7 +53,15 @@ public sealed partial class MainWindow
             ["chartFormat.plotAreaFill"] = () => RunGuarded(ShowChartPlotAreaFillDialog),
             ["chartFormat.plotAreaBorder"] = () => RunGuarded(ShowChartShapeOutlineDialog),
             ["chartFormat.seriesColor"] = () => RunGuarded(ShowChartSeriesColorDialog),
-            ["chartFormat.legendText"] = CycleChartLegendTextColor,
+            // The Series Width button opens the full per-series fill/line/marker dialog
+            // (ChartSeriesFormatPlanner); Series Color keeps its quick picker.
+            ["chartFormat.seriesWidth"] = () => RunGuarded(ShowChartSeriesFormatDialog),
+            // The Legend button opens the show/hide + position options dialog (ChartLegendPlanner).
+            ["chartFormat.legendText"] = () => RunGuarded(ShowChartLegendDialog),
+            // The Axis Bounds buttons open the per-axis min/max/format/gridlines dialog (ChartAxisPlanner);
+            // the Gridlines buttons keep their quick cycle.
+            ["chartFormat.xAxisBounds"] = () => RunGuarded(ShowChartXAxisFormatDialog),
+            ["chartFormat.yAxisBounds"] = () => RunGuarded(ShowChartYAxisFormatDialog),
             ["chartFormat.xGridlines"] = CycleChartXAxisGridlines,
             ["chartFormat.yGridlines"] = CycleChartYAxisGridlines,
             ["chartFormat.xLabels"] = ToggleChartXAxisLabels,
@@ -85,16 +99,21 @@ public sealed partial class MainWindow
             ["pivotDesign.bandedColumns"] = TogglePivotBandedColumns,
             ["pivotDesign.rowHeaders"] = TogglePivotRowHeaders,
             ["pivotDesign.columnHeaders"] = TogglePivotColumnHeaders,
-            // No Core support yet (name/options dialog, field settings, group/ungroup, change data source,
-            // calculated field, pivot styles gallery) — honest stubs.
+            // PivotTable Options dialog — totals & layout-display options via ConfigurePivotTableOptionsCommand
+            // (MainWindow.PivotOptions).
+            ["pivotAnalyze.options"] = OpenPivotTableOptions,
+            // Change Data Source dialog — validates/resolves a new source range via PivotDataSourcePlanner and
+            // applies it through ChangePivotTableSourceCommand (MainWindow.PivotDataSource).
+            ["pivotAnalyze.changeDataSource"] = OpenPivotDataSource,
+            // PivotTable Styles gallery — picks a built-in style via PivotStyleGalleryPlanner and applies it
+            // through ConfigurePivotTableOptionsCommand (MainWindow.PivotStyleGallery).
+            ["pivotDesign.pivotStyles"] = OpenPivotStyleGallery,
+            // No Core support yet (name dialog, field settings, group/ungroup, calculated field) — honest stubs.
             ["pivotAnalyze.name"] = () => ReportPivotNotYetAvailable("PivotTable Name"),
-            ["pivotAnalyze.options"] = () => ReportPivotNotYetAvailable("PivotTable Options"),
             ["pivotAnalyze.fieldSettings"] = () => ReportPivotNotYetAvailable("Field Settings"),
             ["pivotAnalyze.groupField"] = () => ReportPivotNotYetAvailable("Group Field"),
             ["pivotAnalyze.ungroup"] = () => ReportPivotNotYetAvailable("Ungroup"),
-            ["pivotAnalyze.changeDataSource"] = () => ReportPivotNotYetAvailable("Change Data Source"),
             ["pivotAnalyze.calculatedField"] = () => ReportPivotNotYetAvailable("Calculated Field"),
-            ["pivotDesign.pivotStyles"] = () => ReportPivotNotYetAvailable("PivotTable Styles"),
 
             // Shape Effects is a dropdown: clicking the parent opens its menu (No Effect / Shadow, wired via
             // BuildPictureShapeTabCommands). Register the parent id too so the renderer keeps it enabled

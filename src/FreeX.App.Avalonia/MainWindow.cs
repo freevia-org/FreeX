@@ -7125,7 +7125,7 @@ public sealed partial class MainWindow : Window
 
         var dialog = new Window
         {
-            Title = "Format Cells",
+            Title = UiText.Get("FormatCells_Title"),
             Width = 560,
             Height = 560,
             MinWidth = 480,
@@ -7294,9 +7294,9 @@ public sealed partial class MainWindow : Window
             "FormatCellsVerticalAlignmentBox",
             CreateFormatCellsVerticalAlignmentChoices(),
             currentVerticalAlignment);
-        var wrapTextBox = CreateFormatCellsCheckBox("Wrap text", "FormatCellsWrapTextBox", _session.IsSelectedRangeStartWrapText);
-        var shrinkToFitBox = CreateFormatCellsCheckBox("Shrink to fit", "FormatCellsShrinkToFitBox", currentShrinkToFit);
-        var mergeCellsBox = CreateFormatCellsCheckBox("Merge cells", "FormatCellsMergeCellsBox", currentMergeCells);
+        var wrapTextBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_WrapText"), "FormatCellsWrapTextBox", _session.IsSelectedRangeStartWrapText);
+        var shrinkToFitBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_ShrinkToFit"), "FormatCellsShrinkToFitBox", currentShrinkToFit);
+        var mergeCellsBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_MergeCells"), "FormatCellsMergeCellsBox", currentMergeCells);
         var indentLevelBox = new TextBox
         {
             Text = currentIndentLevel.ToString(CultureInfo.InvariantCulture),
@@ -7313,13 +7313,13 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetName(textRotationBox, "Text rotation");
         AutomationProperties.SetAutomationId(textRotationBox, "FormatCellsTextRotationBox");
 
-        var boldBox = CreateFormatCellsCheckBox("Bold", "FormatCellsBoldBox", _session.IsSelectedRangeStartBold);
-        var italicBox = CreateFormatCellsCheckBox("Italic", "FormatCellsItalicBox", _session.IsSelectedRangeStartItalic);
-        var underlineBox = CreateFormatCellsCheckBox("Underline", "FormatCellsUnderlineBox", currentUnderline);
-        var doubleUnderlineBox = CreateFormatCellsCheckBox("Double underline", "FormatCellsDoubleUnderlineBox", currentDoubleUnderline);
-        var strikethroughBox = CreateFormatCellsCheckBox("Strikethrough", "FormatCellsStrikethroughBox", _session.IsSelectedRangeStartStrikethrough);
-        var superscriptBox = CreateFormatCellsCheckBox("Superscript", "FormatCellsSuperscriptBox", currentSuperscript);
-        var subscriptBox = CreateFormatCellsCheckBox("Subscript", "FormatCellsSubscriptBox", currentSubscript);
+        var boldBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_Bold"), "FormatCellsBoldBox", _session.IsSelectedRangeStartBold);
+        var italicBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_Italic"), "FormatCellsItalicBox", _session.IsSelectedRangeStartItalic);
+        var underlineBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_Underline"), "FormatCellsUnderlineBox", currentUnderline);
+        var doubleUnderlineBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_DoubleUnderline"), "FormatCellsDoubleUnderlineBox", currentDoubleUnderline);
+        var strikethroughBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_Strikethrough"), "FormatCellsStrikethroughBox", _session.IsSelectedRangeStartStrikethrough);
+        var superscriptBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_Superscript"), "FormatCellsSuperscriptBox", currentSuperscript);
+        var subscriptBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_Subscript"), "FormatCellsSubscriptBox", currentSubscript);
         superscriptBox.PropertyChanged += (_, e) =>
         {
             if (e.Property == ToggleButton.IsCheckedProperty && superscriptBox.IsChecked == true)
@@ -7347,10 +7347,10 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetName(fontSizeBox, "Size");
         AutomationProperties.SetAutomationId(fontSizeBox, "FormatCellsFontSizeBox");
 
-        var fontColorBox = CreateFormatCellsColorPicker("No change", includeClear: false, "More Font Colors");
+        var fontColorBox = CreateFormatCellsColorPicker(UiText.Get("FormatCells_NoChange"), includeClear: false, UiText.Get("FormatCells_MoreFontColors"));
         AutomationProperties.SetName(fontColorBox, "Font color");
         AutomationProperties.SetAutomationId(fontColorBox, "FormatCellsFontColorBox");
-        var normalFontBox = CreateFormatCellsCheckBox("Normal font", "FormatCellsNormalFontBox", false);
+        var normalFontBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_NormalFont"), "FormatCellsNormalFontBox", false);
         normalFontBox.PropertyChanged += (_, e) =>
         {
             if (e.Property != ToggleButton.IsCheckedProperty || normalFontBox.IsChecked != true)
@@ -7429,14 +7429,14 @@ public sealed partial class MainWindow : Window
         fontColorBox.SelectionChanged += (_, _) => RefreshFontPreview();
         RefreshFontPreview();
 
-        var fillColorBox = CreateFormatCellsColorPicker("No change", includeClear: true, "More Fill Colors");
+        var fillColorBox = CreateFormatCellsColorPicker(UiText.Get("FormatCells_NoChange"), includeClear: true, UiText.Get("FormatCells_MoreFillColors"));
         AutomationProperties.SetName(fillColorBox, "Fill color");
         AutomationProperties.SetAutomationId(fillColorBox, "FormatCellsFillColorBox");
         var fillPatternStyleBox = CreateFormatCellsComboBox(
             "FormatCellsFillPatternStyleBox",
             CreateFormatCellsFillPatternStyleChoices(),
             currentFillPatternStyle);
-        var fillPatternColorBox = CreateFormatCellsColorPicker("No change", includeClear: false, "More Pattern Colors");
+        var fillPatternColorBox = CreateFormatCellsColorPicker(UiText.Get("FormatCells_NoChange"), includeClear: false, UiText.Get("FormatCells_MorePatternColors"));
         AutomationProperties.SetName(fillPatternColorBox, "Pattern color");
         AutomationProperties.SetAutomationId(fillPatternColorBox, "FormatCellsFillPatternColorBox");
 
@@ -7503,7 +7503,7 @@ public sealed partial class MainWindow : Window
             "FormatCellsBorderStyleBox",
             CreateFormatCellsBorderStyleChoices(),
             BorderStyle.Thin);
-        var borderColorBox = CreateFormatCellsColorPicker("No change", includeClear: false, "More Border Colors");
+        var borderColorBox = CreateFormatCellsColorPicker(UiText.Get("FormatCells_NoChange"), includeClear: false, UiText.Get("FormatCells_MoreBorderColors"));
         AutomationProperties.SetName(borderColorBox, "Border color");
         AutomationProperties.SetAutomationId(borderColorBox, "FormatCellsBorderColorBox");
 
@@ -7614,13 +7614,13 @@ public sealed partial class MainWindow : Window
             RenderBorderPreview();
         }
 
-        var borderNoneButton = new Button { Content = "None", MinWidth = 70 };
+        var borderNoneButton = new Button { Content = UiText.Get("FormatCells_BorderPresetNone"), MinWidth = 70 };
         AutomationProperties.SetAutomationId(borderNoneButton, "FormatCellsBorderPresetNoneButton");
         borderNoneButton.Click += (_, _) => SetBorderSidesChecked(false, false, false, false, false, false);
-        var borderOutlineButton = new Button { Content = "Outline", MinWidth = 70 };
+        var borderOutlineButton = new Button { Content = UiText.Get("FormatCells_BorderPresetOutline"), MinWidth = 70 };
         AutomationProperties.SetAutomationId(borderOutlineButton, "FormatCellsBorderPresetOutlineButton");
         borderOutlineButton.Click += (_, _) => SetBorderSidesChecked(true, true, true, true, false, false);
-        var borderInsideButton = new Button { Content = "Inside", MinWidth = 70 };
+        var borderInsideButton = new Button { Content = UiText.Get("FormatCells_BorderPresetInside"), MinWidth = 70 };
         AutomationProperties.SetAutomationId(borderInsideButton, "FormatCellsBorderPresetInsideButton");
         borderInsideButton.Click += (_, _) => SetBorderSidesChecked(false, false, false, false, true, true);
 
@@ -7641,11 +7641,11 @@ public sealed partial class MainWindow : Window
                 ? SelectedBorderLine()
                 : null;
 
-        var lockedBox = CreateFormatCellsCheckBox("Locked", "FormatCellsLockedBox", currentLocked);
-        var hiddenBox = CreateFormatCellsCheckBox("Hidden", "FormatCellsHiddenBox", currentHidden);
+        var lockedBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_Locked"), "FormatCellsLockedBox", currentLocked);
+        var hiddenBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_Hidden"), "FormatCellsHiddenBox", currentHidden);
         var protectionExplanationText = new TextBlock
         {
-            Text = "Locking cells or hiding formulas has no effect until you protect the worksheet.",
+            Text = UiText.Get("FormatCells_ProtectionExplanation"),
             Foreground = HeaderForeground,
             TextWrapping = TextWrapping.Wrap,
         };
@@ -7653,7 +7653,7 @@ public sealed partial class MainWindow : Window
 
         var okButton = new Button
         {
-            Content = "OK",
+            Content = UiText.Get("Common_Ok"),
             MinWidth = 84,
             Padding = new Thickness(10, 4),
         };
@@ -7661,7 +7661,7 @@ public sealed partial class MainWindow : Window
 
         var cancelButton = new Button
         {
-            Content = "Cancel",
+            Content = UiText.Get("Common_Cancel"),
             MinWidth = 84,
             Padding = new Thickness(10, 4),
         };
@@ -7781,7 +7781,7 @@ public sealed partial class MainWindow : Window
         };
 
         var numberTab = CreateFormatCellsTab(
-            "Number",
+            UiText.Get("FormatCells_TabNumber"),
             "FormatCellsNumberTab",
             new StackPanel
             {
@@ -7794,42 +7794,42 @@ public sealed partial class MainWindow : Window
                         Spacing = 12,
                         Children =
                         {
-                            CreateFormatCellsField("Category", numberCategoryList),
+                            CreateFormatCellsField(UiText.Get("FormatCells_Category"), numberCategoryList),
                             new StackPanel
                             {
                                 Spacing = 10,
                                 Children =
                                 {
-                                    CreateFormatCellsField("Type", numberFormatBox),
-                                    CreateFormatCellsField("Decimal places", numberDecimalPlacesBox),
-                                    CreateFormatCellsField("Symbol", numberSymbolBox),
-                                    CreateFormatCellsField("Negative numbers", numberNegativeBox),
+                                    CreateFormatCellsField(UiText.Get("FormatCells_Type"), numberFormatBox),
+                                    CreateFormatCellsField(UiText.Get("FormatCells_DecimalPlaces"), numberDecimalPlacesBox),
+                                    CreateFormatCellsField(UiText.Get("FormatCells_Symbol"), numberSymbolBox),
+                                    CreateFormatCellsField(UiText.Get("FormatCells_NegativeNumbers"), numberNegativeBox),
                                 },
                             },
                         },
                     },
-                    CreateFormatCellsField("Sample", numberPreview),
+                    CreateFormatCellsField(UiText.Get("FormatCells_Sample"), numberPreview),
                 },
             });
         var alignmentTab = CreateFormatCellsTab(
-            "Alignment",
+            UiText.Get("FormatCells_TabAlignment"),
             "FormatCellsAlignmentTab",
             new StackPanel
             {
                 Spacing = 10,
                 Children =
                 {
-                    CreateFormatCellsField("Horizontal", horizontalAlignmentBox),
-                    CreateFormatCellsField("Vertical", verticalAlignmentBox),
+                    CreateFormatCellsField(UiText.Get("FormatCells_Horizontal"), horizontalAlignmentBox),
+                    CreateFormatCellsField(UiText.Get("FormatCells_Vertical"), verticalAlignmentBox),
                     wrapTextBox,
                     shrinkToFitBox,
                     mergeCellsBox,
-                    CreateFormatCellsField("Indent", indentLevelBox),
-                    CreateFormatCellsField("Text rotation", textRotationBox),
+                    CreateFormatCellsField(UiText.Get("FormatCells_Indent"), indentLevelBox),
+                    CreateFormatCellsField(UiText.Get("FormatCells_TextRotation"), textRotationBox),
                 },
             });
         var fontTab = CreateFormatCellsTab(
-            "Font",
+            UiText.Get("FormatCells_TabFont"),
             "FormatCellsFontTab",
             new StackPanel
             {
@@ -7859,38 +7859,38 @@ public sealed partial class MainWindow : Window
                             subscriptBox,
                         },
                     },
-                    CreateFormatCellsField("Font", fontNameBox),
-                    CreateFormatCellsField("Size", fontSizeBox),
-                    CreateFormatCellsField("Color", fontColorBox),
+                    CreateFormatCellsField(UiText.Get("FormatCells_Font"), fontNameBox),
+                    CreateFormatCellsField(UiText.Get("FormatCells_Size"), fontSizeBox),
+                    CreateFormatCellsField(UiText.Get("FormatCells_Color"), fontColorBox),
                     normalFontBox,
-                    CreateFormatCellsField("Preview", fontPreview),
+                    CreateFormatCellsField(UiText.Get("FormatCells_Preview"), fontPreview),
                 },
             });
         var fillTab = CreateFormatCellsTab(
-            "Fill",
+            UiText.Get("FormatCells_TabFill"),
             "FormatCellsFillTab",
             new StackPanel
             {
                 Spacing = 10,
                 Children =
                 {
-                    CreateFormatCellsField("Fill color", fillColorBox),
-                    CreateFormatCellsField("Pattern style", fillPatternStyleBox),
-                    CreateFormatCellsField("Pattern color", fillPatternColorBox),
-                    CreateFormatCellsField("Preview", fillPreview),
+                    CreateFormatCellsField(UiText.Get("FormatCells_FillColor"), fillColorBox),
+                    CreateFormatCellsField(UiText.Get("FormatCells_PatternStyle"), fillPatternStyleBox),
+                    CreateFormatCellsField(UiText.Get("FormatCells_PatternColor"), fillPatternColorBox),
+                    CreateFormatCellsField(UiText.Get("FormatCells_Preview"), fillPreview),
                 },
             });
         var borderTab = CreateFormatCellsTab(
-            "Border",
+            UiText.Get("FormatCells_TabBorder"),
             "FormatCellsBorderTab",
             new StackPanel
             {
                 Spacing = 10,
                 Children =
                 {
-                    CreateFormatCellsField("Preset", borderPresetBox),
-                    CreateFormatCellsField("Line style", borderStyleBox),
-                    CreateFormatCellsField("Line color", borderColorBox),
+                    CreateFormatCellsField(UiText.Get("FormatCells_Preset"), borderPresetBox),
+                    CreateFormatCellsField(UiText.Get("FormatCells_LineStyle"), borderStyleBox),
+                    CreateFormatCellsField(UiText.Get("FormatCells_LineColor"), borderColorBox),
                     new StackPanel
                     {
                         Orientation = Orientation.Horizontal,
@@ -7898,7 +7898,7 @@ public sealed partial class MainWindow : Window
                         Children = { borderNoneButton, borderOutlineButton, borderInsideButton },
                     },
                     CreateFormatCellsField(
-                        "Borders",
+                        UiText.Get("FormatCells_Borders"),
                         new StackPanel
                         {
                             Spacing = 6,
@@ -7918,11 +7918,11 @@ public sealed partial class MainWindow : Window
                                 },
                             },
                         }),
-                    CreateFormatCellsField("Preview", borderPreview),
+                    CreateFormatCellsField(UiText.Get("FormatCells_Preview"), borderPreview),
                 },
             });
         var protectionTab = CreateFormatCellsTab(
-            "Protection",
+            UiText.Get("FormatCells_TabProtection"),
             "FormatCellsProtectionTab",
             new StackPanel
             {
@@ -11618,22 +11618,29 @@ public sealed partial class MainWindow : Window
             var op = SelectedOperator();
             var showSecondFormula = DataValidationPresetPlanner.RequiresSecondFormula(type, op);
             var isList = type == DvType.List;
+            var isCustom = type == DvType.Custom;
+            var isAny = type == DvType.Any;
 
             formula1Label.Text = isList
                 ? "Source"
-                : showSecondFormula
-                    ? "Minimum"
-                    : "Value";
+                : isCustom
+                    ? "Formula"
+                    : showSecondFormula
+                        ? "Minimum"
+                        : "Value";
             AutomationProperties.SetName(formula1Box, formula1Label.Text);
             AutomationProperties.SetHelpText(
                 formula1Box,
                 isList
                     ? "List source range or comma-separated values."
-                    : showSecondFormula
-                        ? "Minimum value for the validation rule."
-                        : "Value for the validation rule.");
+                    : isCustom
+                        ? "Formula that must evaluate to TRUE (e.g. =A1>0)."
+                        : showSecondFormula
+                            ? "Minimum value for the validation rule."
+                            : "Value for the validation rule.");
             formula2Label.Text = "Maximum";
-            operatorField.IsVisible = !isList;
+            operatorField.IsVisible = !isList && !isCustom && !isAny;
+            formula1Field.IsVisible = !isAny;
             formula2Field.IsVisible = showSecondFormula;
             showDropdownBox.IsVisible = isList;
         }
@@ -11827,7 +11834,7 @@ public sealed partial class MainWindow : Window
 
     private static IReadOnlyList<DataValidationTypeChoice> CreateDataValidationTypeChoices() =>
         DataValidationPresetPlanner.GetRuleTypeMetadata()
-            .Where(metadata => metadata.Type is DvType.WholeNumber or DvType.List or DvType.TextLength)
+            .Where(metadata => metadata.Type is DvType.WholeNumber or DvType.Decimal or DvType.List or DvType.Date or DvType.Time or DvType.TextLength or DvType.Custom or DvType.Any)
             .Select(metadata => new DataValidationTypeChoice(metadata.Type, metadata.DisplayName))
             .ToArray();
 
@@ -11897,9 +11904,21 @@ public sealed partial class MainWindow : Window
         {
             DvType.List => "Yes,No",
             DvType.TextLength => "50",
+            DvType.Decimal => "0",
+            DvType.Date => "2024-01-01",
+            DvType.Time => "09:00",
+            DvType.Custom => "=A1>0",
+            DvType.Any => "",
             _ => "1",
         };
-        rule.Formula2 = type == DvType.WholeNumber ? "100" : "";
+        rule.Formula2 = type switch
+        {
+            DvType.WholeNumber => "100",
+            DvType.Decimal => "100",
+            DvType.Date => "2024-12-31",
+            DvType.Time => "17:00",
+            _ => "",
+        };
         rule.ShowDropdown = type == DvType.List;
         return rule;
     }
@@ -11918,11 +11937,21 @@ public sealed partial class MainWindow : Window
     {
         var first = formula1?.Trim() ?? "";
         var second = formula2?.Trim() ?? "";
+
+        if (type == DvType.Any)
+        {
+            errorMessage = "";
+            return true;
+        }
+
         if (string.IsNullOrWhiteSpace(first))
         {
-            errorMessage = type == DvType.List
-                ? "List source is required."
-                : "Value is required.";
+            errorMessage = type switch
+            {
+                DvType.List => "List source is required.",
+                DvType.Custom => "Formula is required.",
+                _ => "Value is required.",
+            };
             return false;
         }
 
@@ -11959,6 +11988,13 @@ public sealed partial class MainWindow : Window
                     TryValidateIntegralDataValidationCriterion(second, allowNegative: false, out errorMessage));
         }
 
+        if (type == DvType.Decimal)
+        {
+            return TryValidateNumericDataValidationCriterion(first, out errorMessage) &&
+                (!DataValidationPresetPlanner.RequiresSecondFormula(type, op) ||
+                    TryValidateNumericDataValidationCriterion(second, out errorMessage));
+        }
+
         errorMessage = "";
         return true;
     }
@@ -11988,6 +12024,33 @@ public sealed partial class MainWindow : Window
         if (!allowNegative && value < 0)
         {
             errorMessage = "Text length must be zero or greater.";
+            return false;
+        }
+
+        errorMessage = "";
+        return true;
+    }
+
+    private static bool TryValidateNumericDataValidationCriterion(
+        string text,
+        out string errorMessage)
+    {
+        if (text.TrimStart().StartsWith('='))
+        {
+            errorMessage = "";
+            return true;
+        }
+
+        if (!double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out var value) &&
+            !double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value))
+        {
+            errorMessage = "Value must be a number or formula.";
+            return false;
+        }
+
+        if (!double.IsFinite(value))
+        {
+            errorMessage = "Value must be a finite number.";
             return false;
         }
 

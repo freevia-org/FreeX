@@ -34,6 +34,13 @@ public partial class App : Application
         BackstageStrings.Current = new FreeXBackstageStrings();
         DialogSizing.RegisterAppDialogSizing();
 
+        // Let the SHARED ribbon-icon factory (used by shared chrome — the BackstageFrame rail, QAT, …)
+        // resolve FreeX's branded Office SVGs, falling back to shared geometry when FreeX has no art. Without
+        // this the shared BackstageFrame rendered generic RibbonCommandIconKind glyphs instead of FreeX's
+        // command icons once the backstage rail moved onto the shared frame (unification P1).
+        Free.Shared.Ribbon.Wpf.RibbonIconFactory.CommandIconElementResolver =
+            RibbonIconFactory.TryCreateCommandIconElement;
+
         // Configure Serilog — resolve the log directory under LocalApplicationData so that
         // file-association launches (which may use System32 or a read-only install dir as cwd)
         // always write to a stable, writable location.  PlatformApplicationDataPathProvider.LocalInstance

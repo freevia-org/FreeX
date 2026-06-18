@@ -63,25 +63,15 @@ internal sealed class ParagraphIndentDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         AddRow(grid, 2, "Special:", _specialBox);
         AddRow(grid, 3, "By (pt):", _specialAmountBox);
 
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 12, 0, 0)
-        };
-        var ok = new Button { Content = "OK", MinWidth = 72, Margin = new Thickness(6, 0, 0, 0), IsDefault = true };
-        ok.Click += (_, _) => Accept();
-        var cancel = new Button { Content = "Cancel", MinWidth = 72, Margin = new Thickness(6, 0, 0, 0), IsCancel = true };
-        cancel.Click += (_, _) => Close();
-        buttons.Children.Add(ok);
-        buttons.Children.Add(cancel);
+        // Reuse the shared OK/Cancel button row (accelerators, automation names, shell strings; Cancel is
+        // IsCancel so Esc/Cancel closes). Single source of truth shared with FreeX's dialogs.
+        var buttons = DialogButtonRowFactory.Create(Accept, buttonWidth: 72, rowMargin: new Thickness(0, 12, 0, 0));
         Grid.SetRow(buttons, 4);
         Grid.SetColumn(buttons, 1);
         grid.Children.Add(buttons);
 
         Content = grid;
-        _leftBox.Focus();
-        _leftBox.SelectAll();
+        DialogFocus.FocusAndSelect(_leftBox);
     }
 
     private static TextBox NumberBox(double value) => new()
@@ -115,8 +105,7 @@ internal sealed class ParagraphIndentDialog : Free.Shared.Ribbon.Wpf.DialogWindo
             || !TryParse(_rightBox.Text, out var right) || right < 0
             || !TryParse(_specialAmountBox.Text, out var amount) || amount < 0)
         {
-            MessageBox.Show(this, "Enter non-negative indent values in points.", "FreeW",
-                MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogMessageHelper.ShowWarning(this, "Enter non-negative indent values in points.");
             return;
         }
 

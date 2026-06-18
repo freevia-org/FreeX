@@ -17,25 +17,34 @@ public partial class MainWindow
 
     private void ShowStartScreen()
     {
-        UpdateSsGreeting();
-        SwitchToRecentTab();
-        UpdateSsRecentList();
-        ShowHomeView();
         StartScreenOverlay.Visibility = Visibility.Visible;
+        // The shared frame builds the Home pane (greeting + recent list refresh runs in its ContentFactory)
+        // and lands focus on the Home rail entry. The overlay/frame become visible on the next layout pass,
+        // so post the focus at Loaded priority (the rail buttons aren't focusable until they are visible) —
+        // mirroring how the Print pane focuses Print Now.
+        _backstageFrame?.Show(BackstageHomePaneId);
         FocusBackstageHomeNavigation();
+        Dispatcher.BeginInvoke(
+            new Action(FocusBackstageHomeNavigation),
+            System.Windows.Threading.DispatcherPriority.Loaded);
     }
 
     private void HideStartScreen()
     {
+        // Hide() funnels through the frame's Closed event, which collapses the overlay and restores
+        // SheetGrid focus. Guard for the (test) case where the frame was never built.
+        if (_backstageFrame is not null)
+        {
+            _backstageFrame.Hide();
+            return;
+        }
+
         StartScreenOverlay.Visibility = Visibility.Collapsed;
         SheetGrid.Focus();
     }
 
-    private void FocusBackstageHomeNavigation()
-    {
-        SsHomeNavBtn.Focus();
-        Keyboard.Focus(SsHomeNavBtn);
-    }
+    private void FocusBackstageHomeNavigation() =>
+        _backstageFrame?.FocusEntry(BackstageHomePaneId);
 
     private void ConfigureBackstageInfoActionButtons()
     {
@@ -116,27 +125,9 @@ public partial class MainWindow
         return true;
     }
 
-    private void StartScreenOverlay_PreviewKeyDown(object sender, KeyEventArgs e)
-    {
-        if (Keyboard.Modifiers != ModifierKeys.None ||
-            Keyboard.FocusedElement is not UIElement focusedElement ||
-            !IsDescendantOf(focusedElement, StartScreenSidebar) ||
-            e.Key is not (Key.Up or Key.Down or Key.Home or Key.End))
-        {
-            return;
-        }
-
-        var direction = e.Key switch
-        {
-            Key.Up => FocusNavigationDirection.Previous,
-            Key.Down => FocusNavigationDirection.Next,
-            Key.Home => FocusNavigationDirection.First,
-            Key.End => FocusNavigationDirection.Last,
-            _ => FocusNavigationDirection.Next
-        };
-        focusedElement.MoveFocus(new TraversalRequest(direction));
-        e.Handled = true;
-    }
+    // The Up/Down/Home/End rail navigation that used to live here is now owned by the shared
+    // BackstageFrame (see Free.Shared.Ribbon.Wpf.BackstageFrame.OnKeyDown), so the overlay no longer
+    // hooks PreviewKeyDown for it.
 
     private bool TryOpenFocusedBackstageContextMenu()
     {
@@ -183,42 +174,14 @@ public partial class MainWindow
         ShowPrintView();
     }
 
-    private void ShowHomeView()
-    {
-        SsHomeView.Visibility = Visibility.Visible;
-        SsInfoView.Visibility = Visibility.Collapsed;
-        SsPrintView.Visibility = Visibility.Collapsed;
-        SsHomeNavBtn.Style = (Style)FindResource("SsNavBtnActive");
-        SsInfoNavBtn.Style = (Style)FindResource("SsNavBtn");
-        SsPrintNavBtn.Style = (Style)FindResource("SsNavBtn");
-    }
+    // The three Show*View methods now drive the shared frame: selecting a pane entry highlights the rail
+    // button and runs that pane's ContentFactory (which does the live refresh + reparents the pane element).
+    // They are addressed by language-invariant automation id so they work in any UI language.
+    private void ShowHomeView() => _backstageFrame?.Show(BackstageHomePaneId);
 
-    private void ShowInfoView()
-    {
-        SsHomeView.Visibility = Visibility.Collapsed;
-        SsInfoView.Visibility = Visibility.Visible;
-        SsPrintView.Visibility = Visibility.Collapsed;
-        SsHomeNavBtn.Style = (Style)FindResource("SsNavBtn");
-        SsInfoNavBtn.Style = (Style)FindResource("SsNavBtnActive");
-        SsPrintNavBtn.Style = (Style)FindResource("SsNavBtn");
-        UpdateInfoView();
-    }
+    private void ShowInfoView() => _backstageFrame?.Show(BackstageInfoPaneId);
 
-    private void ShowPrintView()
-    {
-        SsHomeView.Visibility = Visibility.Collapsed;
-        SsInfoView.Visibility = Visibility.Collapsed;
-        SsPrintView.Visibility = Visibility.Visible;
-        SsHomeNavBtn.Style = (Style)FindResource("SsNavBtn");
-        SsInfoNavBtn.Style = (Style)FindResource("SsNavBtn");
-        SsPrintNavBtn.Style = (Style)FindResource("SsNavBtnActive");
-        var activeSheet = _workbook.GetSheet(_currentSheetId);
-        _backstagePrintPreviewSettings = new PrintPreviewSettings();
-        ConfigureBackstagePrintOptions(activeSheet);
-        RefreshBackstagePrintPreview();
-        SsBackstagePrintNowButton.Focus();
-        Keyboard.Focus(SsBackstagePrintNowButton);
-    }
+    private void ShowPrintView() => _backstageFrame?.Show(BackstagePrintPaneId);
 
     private void ConfigureBackstagePrintOptions(Sheet? activeSheet)
     {
@@ -517,7 +480,9 @@ public partial class MainWindow
             // resolves the new one — their mutations would target the wrong workbook.
             NotifyOtherWindowsOfWorkbookChange();
 
-            if (!suppressRecentFiles)
+            // P2b: the recent-files registration DECISION routes through the shared planner
+            // (skip suppressed snapshots/transient paths); the MRU store write stays FreeX-specific.
+            if (FileLifecyclePlanner.PlanRecentRegistration(path, suppressRecentFiles) == RecentFileRegistration.Register)
                 _recentFiles.AddOrUpdate(path);
             ShowOpenProgress(
                 OpenWorkbookProgressPlanner.ProgressTitle(),
@@ -627,13 +592,13 @@ public partial class MainWindow
         _operationProgressFileName = null;
     }
 
-    // Start screen button handlers
-    private void SsBackBtn_Click(object sender, RoutedEventArgs e)       => HideStartScreen();
-    private async void SsNewBtn_Click(object sender, RoutedEventArgs e)        => await RequestNewWorkbookAsync();
+    // Start screen button handlers. The former rail-button forwarders (SsBackBtn_Click, SsNewBtn_Click,
+    // SsOpenBtn_Click, SsCloseBtn_Click, SsHomeRibbonBtn_Click, SsShareBtn_Click, SsHomeNavBtn_Click,
+    // SsInfoBtn_Click, SsPrintNavBtn_Click) were removed when the rail moved to the shared BackstageFrame —
+    // its entries now invoke the underlying commands (RequestNewWorkbookAsync / OpenButton_Click / Close /
+    // ShareWorkbookAsync) and pane shows (Show*View) directly. The Blank-workbook tile inside the Home pane
+    // still uses this handler.
     private async void SsBlankWorkbook_Click(object sender, RoutedEventArgs e) => await RequestNewWorkbookAsync();
-    private void SsOpenBtn_Click(object sender, RoutedEventArgs e)       => OpenButton_Click(sender, e);
-    private void SsCloseBtn_Click(object sender, RoutedEventArgs e)      => Close();
-    private void SsHomeRibbonBtn_Click(object sender, RoutedEventArgs e) => ShowStartScreen();
 
     private void RibbonTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -651,11 +616,6 @@ public partial class MainWindow
 
         NormalizeRibbonSurfaceAfterTabSelection();
     }
-    private async void SsShareBtn_Click(object sender, RoutedEventArgs e)
-    {
-        await ShareWorkbookAsync();
-    }
-
     private void InfoProtectWorkbookBtn_Click(object sender, RoutedEventArgs e)
     {
         ProtectWorkbookBtn_Click(sender, e);
@@ -693,10 +653,6 @@ public partial class MainWindow
             MessageBoxButton.OK,
             MessageBoxImage.Information);
     }
-
-    private void SsHomeNavBtn_Click(object sender, RoutedEventArgs e)    => ShowHomeView();
-    private void SsInfoBtn_Click(object sender, RoutedEventArgs e)       => ShowInfoView();
-    private void SsPrintNavBtn_Click(object sender, RoutedEventArgs e)   => ShowPrintView();
 
     private void SsMoreTemplatesBtn_Click(object sender, RoutedEventArgs e)
     {
@@ -861,15 +817,10 @@ public partial class MainWindow
 
     private async void SaveButton_Click(object sender, RoutedEventArgs e)
     {
-        bool saved;
-        if (FileSavePlanner.TryResolveExistingPath(_currentFilePath, _fileAdapters, out var target))
-        {
-            saved = await SaveWorkbookToTargetAsync(target!);
-        }
-        else
-        {
-            saved = await SaveWorkbookWithDialogAsync();
-        }
+        // P2b: Save resolves Save-vs-Save-As through the shared SaveResolvedAsync helper (which routes the
+        // existing-path-vs-dialog DECISION through FileLifecyclePlanner.PlanSave), the same path the
+        // dirty-gate's "Save then proceed" branch takes — one resolution, shared decision truth.
+        var saved = await SaveResolvedAsync();
 
         if (saved && IsStartScreenVisible())
             HideStartScreen();
@@ -961,7 +912,10 @@ public partial class MainWindow
             {
                 _currentFilePath = target.Path;
                 _workbook.Name = WorkbookTitleFormatter.DisplayNameFromPath(target.Path);
-                _recentFiles.AddOrUpdate(target.Path);
+                // P2b: recent-files registration DECISION via the shared planner (a saved target is
+                // always a real, non-suppressed path); the MRU store write stays FreeX-specific.
+                if (FileLifecyclePlanner.PlanRecentRegistration(target.Path, suppressRecentFiles: false) == RecentFileRegistration.Register)
+                    _recentFiles.AddOrUpdate(target.Path);
             }
 
             if (plan.MarkSaved)

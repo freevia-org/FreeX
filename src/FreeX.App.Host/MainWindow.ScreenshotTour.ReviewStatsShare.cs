@@ -61,8 +61,7 @@ public partial class MainWindow
 
             ShowStartScreen();
             ShowInfoView();
-            SsShareNavBtn.Focus();
-            Keyboard.Focus(SsShareNavBtn);
+            _backstageFrame?.FocusEntry("BackstageShareButton");
             captures.Add(await CaptureReviewStatsShareWindowStateAsync(
                 outputDir,
                 "review-share-unsaved-guard-status",
@@ -74,8 +73,7 @@ public partial class MainWindow
             context = await SaveReviewStatsShareTourWorkbookAsync(outputDir, context);
             ShowStartScreen();
             ShowInfoView();
-            SsShareNavBtn.Focus();
-            Keyboard.Focus(SsShareNavBtn);
+            _backstageFrame?.FocusEntry("BackstageShareButton");
             captures.Add(await CaptureReviewStatsShareWindowStateAsync(
                 outputDir,
                 "review-share-saved-ready-status",

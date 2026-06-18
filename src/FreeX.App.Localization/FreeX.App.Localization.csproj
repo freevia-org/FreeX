@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- Portable, UI-framework-agnostic localization catalog owned by the shared layer.
+         Self-contained: does not reference the WPF host catalog (FreeX.App.Host.Resources.Strings),
+         which is under heavy concurrent change. -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="FreeX.App.Localization.Tests" />
+  </ItemGroup>
+
+</Project>

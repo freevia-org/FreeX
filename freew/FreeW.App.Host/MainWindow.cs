@@ -94,8 +94,17 @@ public sealed class MainWindow : Window
     private double _editorWidthBeforeReadMode = double.NaN;
     private Effect? _editorEffectBeforeReadMode;
 
-    public MainWindow()
+    // FreeW's persisted settings (shared JsonSettingsStore). Defaults are used when none are supplied,
+    // so the window stays constructible in isolation; Program.Main passes the loaded options.
+    private readonly FreeWOptions _options;
+
+    public MainWindow() : this(new FreeWOptions())
     {
+    }
+
+    public MainWindow(FreeWOptions options)
+    {
+        _options = options ?? new FreeWOptions();
         Title = "FreeW";
         Width = 1280;
         Height = 760;
@@ -135,7 +144,7 @@ public sealed class MainWindow : Window
         var commands = FreeWRibbonCommands.Build(
             editor, stateStore, OpenPrintPreview, ToggleNavPane, () => _navPaneVisible, ToggleReadMode, () => _readMode,
             TogglePrintLayout, () => _editor.PrintLayoutEnabled);
-        _file = new FileCommands(this, editor, UpdateTitle);
+        _file = new FileCommands(this, editor, UpdateTitle, _options);
         editor.TextChanged += (_, _) => { _file.MarkDirty(); UpdateCounts(); RefreshOutline(); RefreshContextualTabs(); };
         // Live selection stats: when the caret/selection moves, refresh the status-bar counts so a
         // non-empty selection shows its own word/character totals (and reverts when nothing is selected).
@@ -143,7 +152,18 @@ public sealed class MainWindow : Window
         editor.SelectionChanged += (_, _) => { UpdateCounts(); RefreshContextualTabs(); };
         _autosave = new AutosaveCoordinator(editor, _file);
         Loaded += (_, _) => { _autosave.OfferRecovery(this); _autosave.Start(); };
-        Closing += (_, _) => _autosave.Stop();
+        Closing += (_, e) =>
+        {
+            // Save-before-close gate (shared FileLifecyclePlanner). Cancel the close if the user
+            // backs out; only stop autosave (which deletes the recovery snapshot) once we commit to
+            // closing. Previously FreeW closed without prompting and silently lost unsaved work.
+            if (!_file.ConfirmCloseAllowed())
+            {
+                e.Cancel = true;
+                return;
+            }
+            _autosave.Stop();
+        };
 
         // The title bar comes from the shared shell; the host fills its QAT slot and keeps the title text.
         // It is composed into the OUTER grid (below), in its own top row ABOVE the Backstage overlay, so

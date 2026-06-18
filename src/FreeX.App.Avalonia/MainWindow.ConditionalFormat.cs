@@ -217,7 +217,7 @@ public sealed partial class MainWindow
 
         var dialog = new Window
         {
-            Title = existingRule is null ? "New Formatting Rule" : "Edit Formatting Rule",
+            Title = existingRule is null ? UiText.Get("ConditionalFormat_NewRuleTitle") : UiText.Get("ConditionalFormat_EditRuleTitle"),
             Width = 460,
             Height = 470,
             MinWidth = 420,
@@ -261,7 +261,7 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(textBox, "ConditionalFormatTextBox");
         var rankBox = new TextBox { MinWidth = 220, Text = "10" };
         AutomationProperties.SetAutomationId(rankBox, "ConditionalFormatRankBox");
-        var percentBox = new CheckBox { Content = "% of range" };
+        var percentBox = new CheckBox { Content = UiText.Get("ConditionalFormat_PercentOfRange") };
         AutomationProperties.SetAutomationId(percentBox, "ConditionalFormatPercentBox");
         var topBottomBox = new ComboBox
         {
@@ -278,7 +278,7 @@ public sealed partial class MainWindow
             MinWidth = 220,
         };
         AutomationProperties.SetAutomationId(iconSetBox, "ConditionalFormatIconSetBox");
-        var threeColorBox = new CheckBox { Content = "Use three-color scale", IsChecked = true };
+        var threeColorBox = new CheckBox { Content = UiText.Get("ConditionalFormat_UseThreeColorScale"), IsChecked = true };
         AutomationProperties.SetAutomationId(threeColorBox, "ConditionalFormatThreeColorBox");
 
         var minColorBox = new TextBox { MinWidth = 220, Text = "99,190,123" };
@@ -296,19 +296,19 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(highlightBox, "ConditionalFormatHighlightBox");
 
-        var operatorField = CreateDataValidationField("Operator", operatorBox);
-        var value1Field = CreateDataValidationField("Value", value1Box);
-        var value2Field = CreateDataValidationField("Maximum", value2Box);
-        var formulaField = CreateDataValidationField("Formula (e.g. =A1>10)", formulaBox);
-        var textField = CreateDataValidationField("Text", textBox);
-        var rankField = CreateDataValidationField("Rank or percent", rankBox);
-        var topBottomField = CreateDataValidationField("Top or bottom", topBottomBox);
-        var iconSetField = CreateDataValidationField("Icon set style", iconSetBox);
-        var minColorField = CreateDataValidationField("Minimum color (r,g,b)", minColorBox);
-        var midColorField = CreateDataValidationField("Midpoint color (r,g,b)", midColorBox);
-        var maxColorField = CreateDataValidationField("Maximum color (r,g,b)", maxColorBox);
-        var highlightField = CreateDataValidationField("Format", highlightBox);
-        var presetField = CreateDataValidationField("Preset", presetBox);
+        var operatorField = CreateDataValidationField(UiText.Get("ConditionalFormat_OperatorLabel"), operatorBox);
+        var value1Field = CreateDataValidationField(UiText.Get("ConditionalFormat_ValueLabel"), value1Box);
+        var value2Field = CreateDataValidationField(UiText.Get("ConditionalFormat_MaximumLabel"), value2Box);
+        var formulaField = CreateDataValidationField(UiText.Get("ConditionalFormat_FormulaLabel"), formulaBox);
+        var textField = CreateDataValidationField(UiText.Get("ConditionalFormat_TextLabel"), textBox);
+        var rankField = CreateDataValidationField(UiText.Get("ConditionalFormat_RankOrPercentLabel"), rankBox);
+        var topBottomField = CreateDataValidationField(UiText.Get("ConditionalFormat_TopOrBottomLabel"), topBottomBox);
+        var iconSetField = CreateDataValidationField(UiText.Get("ConditionalFormat_IconSetStyleLabel"), iconSetBox);
+        var minColorField = CreateDataValidationField(UiText.Get("ConditionalFormat_MinColorLabel"), minColorBox);
+        var midColorField = CreateDataValidationField(UiText.Get("ConditionalFormat_MidColorLabel"), midColorBox);
+        var maxColorField = CreateDataValidationField(UiText.Get("ConditionalFormat_MaxColorLabel"), maxColorBox);
+        var highlightField = CreateDataValidationField(UiText.Get("ConditionalFormat_FormatLabel"), highlightBox);
+        var presetField = CreateDataValidationField(UiText.Get("ConditionalFormat_PresetLabel"), presetBox);
 
         var errorText = new TextBlock
         {
@@ -392,9 +392,9 @@ public sealed partial class MainWindow
             minColorBox, midColorBox, maxColorBox, highlightBox);
         UpdateFieldVisibility();
 
-        var okButton = new Button { Content = "OK", IsDefault = true, MinWidth = 84 };
+        var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 84 };
         AutomationProperties.SetAutomationId(okButton, "ConditionalFormatOkButton");
-        var cancelButton = new Button { Content = "Cancel", IsCancel = true, MinWidth = 84 };
+        var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 84 };
         AutomationProperties.SetAutomationId(cancelButton, "ConditionalFormatCancelButton");
 
         okButton.Click += (_, _) =>
@@ -440,11 +440,11 @@ public sealed partial class MainWindow
                         {
                             new TextBlock
                             {
-                                Text = $"Applies to {FormatRangeReference(range)}",
+                                Text = UiText.Format("ConditionalFormat_AppliesToFormat", FormatRangeReference(range)),
                                 Foreground = HeaderForeground,
                                 TextWrapping = TextWrapping.Wrap,
                             },
-                            CreateDataValidationField("Rule type", ruleTypeBox),
+                            CreateDataValidationField(UiText.Get("ConditionalFormat_RuleTypeLabel"), ruleTypeBox),
                             presetField,
                             operatorField,
                             value1Field,
@@ -679,7 +679,7 @@ public sealed partial class MainWindow
 
         var dialog = new Window
         {
-            Title = "Manage Conditional Formatting Rules",
+            Title = UiText.Get("ConditionalFormat_ManageTitle"),
             Width = 560,
             Height = 460,
             MinWidth = 480,
@@ -695,7 +695,7 @@ public sealed partial class MainWindow
 
         var emptyText = new TextBlock
         {
-            Text = "No conditional formatting rules for this selection.",
+            Text = UiText.Get("ConditionalFormat_NoRules"),
             Foreground = HeaderForeground,
             IsVisible = false,
         };
@@ -734,21 +734,21 @@ public sealed partial class MainWindow
                 : string.Empty;
         }
 
-        var newButton = new Button { Content = "New…", MinWidth = 84 };
+        var newButton = new Button { Content = UiText.Get("ConditionalFormat_ManageNew"), MinWidth = 84 };
         AutomationProperties.SetAutomationId(newButton, "ManageConditionalFormatsNewButton");
-        var editButton = new Button { Content = "Edit…", MinWidth = 84 };
+        var editButton = new Button { Content = UiText.Get("ConditionalFormat_ManageEdit"), MinWidth = 84 };
         AutomationProperties.SetAutomationId(editButton, "ManageConditionalFormatsEditButton");
-        var deleteButton = new Button { Content = "Delete", MinWidth = 84 };
+        var deleteButton = new Button { Content = UiText.Get("ConditionalFormat_ManageDelete"), MinWidth = 84 };
         AutomationProperties.SetAutomationId(deleteButton, "ManageConditionalFormatsDeleteButton");
-        var moveUpButton = new Button { Content = "Move Up", MinWidth = 84 };
+        var moveUpButton = new Button { Content = UiText.Get("ConditionalFormat_ManageMoveUp"), MinWidth = 84 };
         AutomationProperties.SetAutomationId(moveUpButton, "ManageConditionalFormatsMoveUpButton");
         AutomationProperties.SetName(moveUpButton, "Move rule up");
-        var moveDownButton = new Button { Content = "Move Down", MinWidth = 84 };
+        var moveDownButton = new Button { Content = UiText.Get("ConditionalFormat_ManageMoveDown"), MinWidth = 84 };
         AutomationProperties.SetAutomationId(moveDownButton, "ManageConditionalFormatsMoveDownButton");
         AutomationProperties.SetName(moveDownButton, "Move rule down");
-        var applyAppliesToButton = new Button { Content = "Apply Range", MinWidth = 84 };
+        var applyAppliesToButton = new Button { Content = UiText.Get("ConditionalFormat_ManageApplyRange"), MinWidth = 84 };
         AutomationProperties.SetAutomationId(applyAppliesToButton, "ManageConditionalFormatsApplyAppliesToButton");
-        var closeButton = new Button { Content = "Close", IsCancel = true, MinWidth = 84 };
+        var closeButton = new Button { Content = UiText.Get("Common_Close"), IsCancel = true, MinWidth = 84 };
         AutomationProperties.SetAutomationId(closeButton, "ManageConditionalFormatsCloseButton");
 
         listBox.SelectionChanged += (_, _) => SyncAppliesTo();
@@ -855,7 +855,7 @@ public sealed partial class MainWindow
             Margin = new Thickness(0, 8, 0, 0),
             Children =
             {
-                new TextBlock { Text = "Applies to", VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center, Foreground = HeaderForeground },
+                new TextBlock { Text = UiText.Get("ConditionalFormat_AppliesToLabel"), VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center, Foreground = HeaderForeground },
                 appliesToBox,
                 applyAppliesToButton,
             },

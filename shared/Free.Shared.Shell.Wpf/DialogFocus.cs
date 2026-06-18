@@ -3,7 +3,7 @@ using System.Windows.Input;
 
 namespace Free.Shared.Shell;
 
-internal static class DialogFocus
+public static class DialogFocus
 {
     public static void FocusAndSelect(TextBox target)
     {

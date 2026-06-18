@@ -292,6 +292,7 @@ public partial class MainWindow : Window, IWorkbookWindow
         RebuildQuickAccessToolbar();
         InitializeQuickAccessToolbarCustomizationContextMenus();
         ConfigureBackstageInfoActionButtons();
+        InitializeBackstageFrame();
         RegisterKeyboardCommandShortcuts();
 
         _currentSheetId = _workbook.Sheets[0].Id;

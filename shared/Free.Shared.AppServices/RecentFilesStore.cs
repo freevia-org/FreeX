@@ -114,7 +114,15 @@ public sealed class RecentFilesStore
             "recent.json");
     }
 
-    public void AddOrUpdate(string path, WorkbookFileAccessIdentity? fileAccessIdentity = null)
+    public void AddOrUpdate(string path, WorkbookFileAccessIdentity? fileAccessIdentity = null) =>
+        AddOrUpdate(path, MaxRecentEntries, fileAccessIdentity);
+
+    /// <summary>
+    /// As <see cref="AddOrUpdate(string, WorkbookFileAccessIdentity?)"/>, but caps the retained unpinned
+    /// entries at <paramref name="maxRecentEntries"/> instead of the default <see cref="MaxRecentEntries"/>,
+    /// so a host can honour an app-configured recent-files cap. Pinned entries are always retained.
+    /// </summary>
+    public void AddOrUpdate(string path, int maxRecentEntries, WorkbookFileAccessIdentity? fileAccessIdentity = null)
     {
         if (string.IsNullOrWhiteSpace(path))
             return;
@@ -133,7 +141,7 @@ public sealed class RecentFilesStore
                 IsPinned = wasPinned,
                 FileAccessIdentity = identity,
             });
-            Entries = LimitForPersistence(Entries);
+            Entries = LimitForPersistence(Entries, maxRecentEntries);
 
             Save();
         }

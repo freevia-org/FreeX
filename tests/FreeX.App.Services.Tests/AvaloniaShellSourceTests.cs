@@ -1754,7 +1754,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_session.SelectedRange");
         source.Should().Contain("CreateDataValidationTypeChoices()");
         source.Should().Contain("DataValidationPresetPlanner.GetRuleTypeMetadata()");
-        source.Should().Contain(".Where(metadata => metadata.Type is DvType.WholeNumber or DvType.List or DvType.TextLength)");
+        source.Should().Contain(".Where(metadata => metadata.Type is DvType.WholeNumber or DvType.Decimal or DvType.List or DvType.Date or DvType.Time or DvType.TextLength or DvType.Custom or DvType.Any)");
         source.Should().Contain("CreateDefaultDataValidationRule(initialType, _session.SelectedRange)");
         source.Should().Contain("DataValidationPresetPlanner.CreateDefaultRule(type, _session.SelectedRange)");
         source.Should().Contain("DataValidationPresetPlanner.RequiresSecondFormula(type, op)");
@@ -3552,7 +3552,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("\"FormatCellsLockedBox\"");
         source.Should().Contain("\"FormatCellsHiddenBox\"");
         source.Should().Contain("\"FormatCellsProtectionExplanationText\"");
-        source.Should().Contain("Locking cells or hiding formulas has no effect until you protect the worksheet.");
+        // The protection-explanation text is now localized: it lives in the shared Strings.resx
+        // catalog and is routed through UiText, so the source references the key, not the literal.
+        source.Should().Contain("UiText.Get(\"FormatCells_ProtectionExplanation\")");
         source.Should().Contain("var currentMergeCells = _session.IsSelectedRangeMerged;");
         source.Should().Contain("var currentUnderline = currentStyle.Underline ?? CellStyle.Default.Underline;");
         source.Should().Contain("Underline: normalFont ? normalStyle.Underline : ReadChangedFormatCellsBool(currentUnderline, underlineBox)");

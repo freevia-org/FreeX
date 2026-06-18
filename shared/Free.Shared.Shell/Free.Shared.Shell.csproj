@@ -1,10 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <UseWPF>true</UseWPF>
   </PropertyGroup>
 
   <ItemGroup>
@@ -13,7 +12,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Generic WPF shell helpers extracted from FreeX.App.Host. Kept internal-visible
+    <!-- Portable shell helpers (ExportAtomicWriter is internal). Kept internal-visible
          to their existing FreeX consumers until promoted to the public shared API. -->
     <InternalsVisibleTo Include="FreeX.App.Host" />
     <InternalsVisibleTo Include="FreeX.App.Host.Tests" />
