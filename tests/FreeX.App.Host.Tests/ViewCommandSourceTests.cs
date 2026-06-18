@@ -34,7 +34,7 @@ public sealed class ViewCommandSourceTests
         source.Should().Contain("RefreshViewWindowCommandState()");
         source.Should().Contain("ApplyLiveWindowCommandState()");
         source.Should().Contain("MainWindow_TooltipDescription_UnavailableSwitchWindowsRequiresSecondVisibleWindow");
-        source.Should().Contain("AutomationProperties.SetHelpText(button, description)");
+        source.Should().Contain("AutomationProperties.SetHelpText(control, description)");
         source.Should().NotContain("ViewWindowCommandPlanner");
         source.Should().NotContain("ViewWindowCommandBtn_Click");
         SourceMethodExtractor.ExtractMethodSource(source, "private void FreezePanesPickerBtn_Click(")

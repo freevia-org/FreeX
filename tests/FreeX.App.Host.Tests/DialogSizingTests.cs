@@ -65,7 +65,11 @@ public sealed class DialogSizingTests
     [Fact]
     public void AppStartup_RegistersAutomaticDialogSizing()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("App.xaml.cs", "DialogSizing.cs");
+        // DialogSizing was extracted into the shared shell helpers project; App.xaml.cs
+        // (still in the host) registers it at startup.
+        var source = DialogSourceTestSupport.ReadHostSources("App.xaml.cs")
+            + Environment.NewLine
+            + DialogSourceTestSupport.ReadShellSources("DialogSizing.cs");
 
         source.Should().Contain("DialogSizing.RegisterAppDialogSizing();");
         source.Should().Contain("FrameworkElement.LoadedEvent");

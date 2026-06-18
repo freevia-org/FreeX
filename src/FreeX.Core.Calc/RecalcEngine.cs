@@ -189,6 +189,8 @@ public sealed class RecalcEngine
             }
             catch (FormulaEvalException ex)
             {
+                sheet.ClearSpillRange(addr);
+                if (hadSpill) spillTargetsMayHaveChanged = true;
                 cell.Value = new ErrorValue(ex.ErrorCode);
                 AddError(ref errors, addr, ex.ErrorCode);
             }
@@ -201,6 +203,8 @@ public sealed class RecalcEngine
 #else
                 // Release: any unhandled exception from the evaluator (e.g. inverted range,
                 // overflow) must not crash the app — surface it as #VALUE! instead.
+                sheet.ClearSpillRange(addr);
+                if (hadSpill) spillTargetsMayHaveChanged = true;
                 cell.Value = ErrorValue.Value;
                 AddError(ref errors, addr, "#VALUE!");
 #endif

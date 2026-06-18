@@ -55,9 +55,19 @@ public sealed partial class MainWindow
         if (picked is not { } preset2)
             return;
 
-        var result = _session.SetSelectedRangeCellStylePreset(preset2);
+        ApplyCellStylePreset(preset2);
+    }
+
+    /// <summary>
+    /// Applies a built-in cell-style preset to the selection (undo/redo) and reports the outcome. Shared by
+    /// the Cell Styles gallery and the individual ribbon Cell Styles gallery menu items, which are wired by
+    /// their canonical id (the preset's display name).
+    /// </summary>
+    private void ApplyCellStylePreset(CellStylePreset preset)
+    {
+        var result = _session.SetSelectedRangeCellStylePreset(preset);
         RefreshShell(result.Success
-            ? $"Applied {PrettyStyleName(preset2)} style"
+            ? $"Applied {PrettyStyleName(preset)} style"
             : result.ErrorMessage ?? "Could not apply cell style.");
     }
 

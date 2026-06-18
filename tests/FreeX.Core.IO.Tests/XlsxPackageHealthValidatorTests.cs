@@ -90,6 +90,29 @@ public sealed class XlsxPackageHealthValidatorTests
     }
 
     [Fact]
+    public void Validate_FlagsXmlPartWithProhibitedDtd()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            extraEntries:
+            [
+                ("xl/sharedStrings.xml", """
+                    <!DOCTYPE sst [
+                      <!ELEMENT sst ANY>
+                    ]>
+                    <sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" />
+                    """)
+            ],
+            contentTypeOverrides:
+            [
+                $"""<Override PartName="/xl/sharedStrings.xml" ContentType="{SharedStringsContentType}" />"""
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains("xl/sharedStrings.xml is not parseable XML", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void Validate_FlagsMissingSharedStringTableForSharedStringCell()
     {
         using var package = CreateMinimalWorkbookPackage(
