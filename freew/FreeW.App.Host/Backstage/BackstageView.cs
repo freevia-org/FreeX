@@ -78,18 +78,20 @@ internal sealed class BackstageView : UserControl
     {
         // Pane entries show content and stay highlighted; action entries fire a host callback and close.
         // The frame closes itself before invoking an action, so each callback just runs the command.
-        yield return BackstageEntry.Pane("Info", RibbonCommandIconKind.Info, BuildInfoPane);
-        yield return BackstageEntry.Command("New", RibbonCommandIconKind.Insert, () => _actions.New());
-        yield return BackstageEntry.Command("Open", RibbonCommandIconKind.GetData, () => _actions.Open());
+        // iconName routes each rail glyph to FreeX's Office SVG of that name (recoloured white for the navy
+        // rail), so the File overlay reuses FreeX's backstage icons; the kind is the geometry fallback.
+        yield return BackstageEntry.Pane("Info", RibbonCommandIconKind.Info, BuildInfoPane, iconName: "info");
+        yield return BackstageEntry.Command("New", RibbonCommandIconKind.Insert, () => _actions.New(), iconName: "new");
+        yield return BackstageEntry.Command("Open", RibbonCommandIconKind.GetData, () => _actions.Open(), iconName: "open");
         yield return BackstageEntry.Divider();
-        yield return BackstageEntry.Command("Save", RibbonCommandIconKind.Save, () => _actions.Save());
-        yield return BackstageEntry.Command("Save As", RibbonCommandIconKind.Save, () => _actions.SaveAs());
-        yield return BackstageEntry.Command("Print", RibbonCommandIconKind.Print, () => _actions.Print());
-        yield return BackstageEntry.Pane("Export", RibbonCommandIconKind.Share, BuildExportPane);
-        yield return BackstageEntry.Pane("Recent", RibbonCommandIconKind.GetData, BuildRecentPane);
-        yield return BackstageEntry.Pane("New from template", RibbonCommandIconKind.Grid, BuildNewPane);
-        yield return BackstageEntry.Pane("Options", RibbonCommandIconKind.View, BuildOptionsPane, dockBottom: true);
-        yield return BackstageEntry.Command("Close", RibbonCommandIconKind.Previous, () => { }, dockBottom: true);
+        yield return BackstageEntry.Command("Save", RibbonCommandIconKind.Save, () => _actions.Save(), iconName: "save");
+        yield return BackstageEntry.Command("Save As", RibbonCommandIconKind.Save, () => _actions.SaveAs(), iconName: "save-as");
+        yield return BackstageEntry.Command("Print", RibbonCommandIconKind.Print, () => _actions.Print(), iconName: "print");
+        yield return BackstageEntry.Pane("Export", RibbonCommandIconKind.Share, BuildExportPane, iconName: "export");
+        yield return BackstageEntry.Pane("Recent", RibbonCommandIconKind.GetData, BuildRecentPane, iconName: "recent");
+        yield return BackstageEntry.Pane("New from template", RibbonCommandIconKind.Grid, BuildNewPane, iconName: "new");
+        yield return BackstageEntry.Pane("Options", RibbonCommandIconKind.View, BuildOptionsPane, dockBottom: true, iconName: "options");
+        yield return BackstageEntry.Command("Close", RibbonCommandIconKind.Previous, () => { }, dockBottom: true, iconName: "close");
     }
 
     // ── Info pane ──────────────────────────────────────────────────────────────

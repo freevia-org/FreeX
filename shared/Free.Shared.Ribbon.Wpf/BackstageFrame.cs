@@ -25,6 +25,13 @@ public sealed class BackstageEntry
     /// <summary>Optional leading glyph drawn left of the label.</summary>
     public RibbonCommandIconKind? Icon { get; init; }
 
+    /// <summary>
+    /// Optional command-icon slug (e.g. <c>"save-as"</c>) used to resolve a host-supplied rich icon (the
+    /// FreeX/Word SVG for that name) for the rail glyph, falling back to <see cref="Icon"/>'s geometry when
+    /// the host has no artwork. Lets the backstage reuse the same Office icons the ribbon does.
+    /// </summary>
+    public string? IconCommandName { get; init; }
+
     /// <summary>For a pane entry: builds the content shown when this entry is selected.</summary>
     public Func<UIElement>? ContentFactory { get; init; }
 
@@ -57,20 +64,20 @@ public sealed class BackstageEntry
 
     public static BackstageEntry Pane(string label, RibbonCommandIconKind? icon, Func<UIElement> content, bool dockBottom = false,
         string? keyTip = null, string? automationId = null, string? automationName = null, string? automationHelpText = null,
-        string? tooltipTitle = null, string? tooltipDescription = null) =>
+        string? tooltipTitle = null, string? tooltipDescription = null, string? iconName = null) =>
         new()
         {
-            Label = label, Icon = icon, ContentFactory = content, DockBottom = dockBottom,
+            Label = label, Icon = icon, IconCommandName = iconName, ContentFactory = content, DockBottom = dockBottom,
             KeyTip = keyTip, AutomationId = automationId, AutomationName = automationName, AutomationHelpText = automationHelpText,
             TooltipTitle = tooltipTitle, TooltipDescription = tooltipDescription
         };
 
     public static BackstageEntry Command(string label, RibbonCommandIconKind? icon, Action action, bool dockBottom = false,
         string? keyTip = null, string? automationId = null, string? automationName = null, string? automationHelpText = null,
-        string? tooltipTitle = null, string? tooltipDescription = null) =>
+        string? tooltipTitle = null, string? tooltipDescription = null, string? iconName = null) =>
         new()
         {
-            Label = label, Icon = icon, Action = action, DockBottom = dockBottom,
+            Label = label, Icon = icon, IconCommandName = iconName, Action = action, DockBottom = dockBottom,
             KeyTip = keyTip, AutomationId = automationId, AutomationName = automationName, AutomationHelpText = automationHelpText,
             TooltipTitle = tooltipTitle, TooltipDescription = tooltipDescription
         };
@@ -284,7 +291,7 @@ public sealed class BackstageFrame : UserControl
         if (entry.Icon is { } kind)
         {
             var row = new StackPanel { Orientation = Orientation.Horizontal };
-            row.Children.Add(BuildIcon(kind, size: 22));
+            row.Children.Add(BuildIcon(kind, size: 22, commandName: entry.IconCommandName));
             row.Children.Add(new TextBlock { Text = entry.Label, VerticalAlignment = VerticalAlignment.Center });
             button.Content = row;
         }
@@ -345,9 +352,13 @@ public sealed class BackstageFrame : UserControl
         _selectedButton = button;
     }
 
-    private RibbonIcon BuildIcon(RibbonCommandIconKind kind, double size) => new()
+    // Builds a rail glyph. When a commandName is supplied, RibbonIcon routes through the host's command-icon
+    // provider (the FreeX/Word SVG library) and recolours it white for the dark rail, falling back to the
+    // kind geometry when the host has no artwork — so the backstage reuses the same Office icons the ribbon does.
+    private RibbonIcon BuildIcon(RibbonCommandIconKind kind, double size, string? commandName = null) => new()
     {
         Kind = kind,
+        CommandName = commandName ?? string.Empty,
         IconSize = size,
         Foreground = Brushes.White,
         VerticalAlignment = VerticalAlignment.Center,
