@@ -68,7 +68,7 @@ public sealed partial class MainWindow
             return;
         }
 
-        if (!PageSetupRangeParser.TryParsePrintArea(fields.PrintAreaText, sheet.Id, out var printArea))
+        if (!PageSetupDialogModel.TryParsePrintArea(fields.PrintAreaText, sheet.Id, out var printArea))
         {
             ShowEditIssue("Print area must be a cell range like A1:D20.");
             return;
@@ -382,7 +382,7 @@ public sealed partial class MainWindow
                 return;
             }
 
-            if (!PageSetupRangeParser.TryParsePrintArea(fields.PrintAreaText, _session.ActiveSheet.Id, out _))
+            if (!PageSetupDialogModel.TryParsePrintArea(fields.PrintAreaText, _session.ActiveSheet.Id, out _))
             {
                 validationText.Text = "Print area must be a cell range like A1:D20.";
                 validationText.IsVisible = true;

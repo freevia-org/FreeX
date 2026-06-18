@@ -1,6 +1,8 @@
 using System.Globalization;
 using System.Windows.Controls;
 
+using FreeX.App.Presentation.PageLayout;
+
 namespace FreeX.App.Host;
 
 public partial class PageSetupDialog

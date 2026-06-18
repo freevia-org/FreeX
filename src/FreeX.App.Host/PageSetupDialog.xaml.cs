@@ -1,16 +1,10 @@
 using System.Windows;
 using System.Windows.Controls;
+using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
-
-public enum PageSetupRangeSelectionTarget
-{
-    PrintArea,
-    RepeatRows,
-    RepeatColumns
-}
 
 public enum PageSetupInitialFocusTarget
 {

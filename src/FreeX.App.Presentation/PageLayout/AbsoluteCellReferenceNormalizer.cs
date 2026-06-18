@@ -1,6 +1,6 @@
-namespace FreeX.App.Host;
+namespace FreeX.App.Presentation.PageLayout;
 
-internal static class AbsoluteCellReferenceNormalizer
+public static class AbsoluteCellReferenceNormalizer
 {
     public static string? Normalize(string input)
     {

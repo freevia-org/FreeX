@@ -7,6 +7,8 @@ using FreeX.Core.Commands;
 using FluentAssertions;
 using FreeX.Core.Model;
 
+using FreeX.App.Presentation.PageLayout;
+
 namespace FreeX.App.Host.Tests;
 
 public sealed class PageSetupDialogXamlTests
@@ -499,7 +501,6 @@ public sealed class PageSetupDialogXamlTests
             "PageSetupDialog.Population.cs",
             "PageSetupDialog.RangeSelection.cs",
             "PageSetupDialog.ValidationFocus.cs",
-            "PageSetupRangeSelectionFormatter.cs",
             "PageSetupCommandBuilder.cs");
 
     private static void SelectComboItemByTag(ComboBox comboBox, string tag)

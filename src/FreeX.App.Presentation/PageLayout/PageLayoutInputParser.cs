@@ -1,7 +1,7 @@
 using System.Globalization;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Presentation.PageLayout;
 
 public enum PageBreakInputKind
 {
