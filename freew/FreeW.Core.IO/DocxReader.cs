@@ -2355,6 +2355,10 @@ public static class DocxReader
             LineSpacingIsSet = lineVal is not null,
             SpaceBeforePt = spaceBeforePt,
             SpaceAfterPt = spaceAfterPt,
+            // As for line spacing: explicit only when this pPr sets its own before/after (or an autospacing
+            // toggle). Otherwise the render cascade inherits the paragraph's style rather than 0/docDefault.
+            SpaceBeforeIsSet = beforeAuto || spacing?.Attribute(W + "before") is not null,
+            SpaceAfterIsSet = afterAuto || spacing?.Attribute(W + "after") is not null,
             ShadingColorHex = shading is null or "auto" ? null : "#" + shading.TrimStart('#'),
             Alignment = jc switch
             {

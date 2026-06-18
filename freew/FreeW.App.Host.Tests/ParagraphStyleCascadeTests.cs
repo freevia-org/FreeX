@@ -24,10 +24,10 @@ public sealed class ParagraphStyleCascadeTests
             Id = "Quote",
             Name = "Quote",
             Type = StyleType.Paragraph,
-            Paragraph = ParagraphFormatting.Default with { SpaceAfterPt = 24 },
+            Paragraph = ParagraphFormatting.Default with { SpaceAfterPt = 24, SpaceAfterIsSet = true },
         };
         // The paragraph sets alignment (non-default) but leaves space-after at the model default — under the
-        // old all-or-nothing rule it would render at 8pt; the cascade inherits the style's 24pt.
+        // old all-or-nothing rule it would render at 8pt; the cascade inherits the style's explicit 24pt.
         doc.Blocks.Add(new Paragraph("styled text")
         {
             StyleId = "Quote",
@@ -87,12 +87,12 @@ public sealed class ParagraphStyleCascadeTests
             Id = "Quote",
             Name = "Quote",
             Type = StyleType.Paragraph,
-            Paragraph = ParagraphFormatting.Default with { SpaceAfterPt = 24 },
+            Paragraph = ParagraphFormatting.Default with { SpaceAfterPt = 24, SpaceAfterIsSet = true },
         };
         doc.Blocks.Add(new Paragraph("styled text")
         {
             StyleId = "Quote",
-            Formatting = ParagraphFormatting.Default with { SpaceAfterPt = 4 }, // explicit, non-default
+            Formatting = ParagraphFormatting.Default with { SpaceAfterPt = 4, SpaceAfterIsSet = true }, // explicit
         });
 
         var view = new DocumentView();

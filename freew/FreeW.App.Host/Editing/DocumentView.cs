@@ -5337,8 +5337,13 @@ public sealed class DocumentView : RichTextBox
             return p with
             {
                 Alignment = p.Alignment != d.Alignment ? p.Alignment : sp.Alignment,
-                SpaceBeforePt = p.SpaceBeforePt != d.SpaceBeforePt ? p.SpaceBeforePt : sp.SpaceBeforePt,
-                SpaceAfterPt = p.SpaceAfterPt != d.SpaceAfterPt ? p.SpaceAfterPt : sp.SpaceAfterPt,
+                // Space before/after cascade on the explicit flag, not value-vs-default: a read paragraph
+                // carries 0pt-after when it sets none, and 0 != the model's 8pt default would otherwise keep
+                // the 0 and never inherit the style's spacing (packing styled list items tighter than Word).
+                SpaceBeforePt = p.SpaceBeforeIsSet ? p.SpaceBeforePt : sp.SpaceBeforeIsSet ? sp.SpaceBeforePt : p.SpaceBeforePt,
+                SpaceAfterPt = p.SpaceAfterIsSet ? p.SpaceAfterPt : sp.SpaceAfterIsSet ? sp.SpaceAfterPt : p.SpaceAfterPt,
+                SpaceBeforeIsSet = p.SpaceBeforeIsSet || sp.SpaceBeforeIsSet,
+                SpaceAfterIsSet = p.SpaceAfterIsSet || sp.SpaceAfterIsSet,
                 LineSpacing = lineFrom.LineSpacing,
                 LineRule = lineFrom.LineRule,
                 LineHeightPt = lineFrom.LineHeightPt,

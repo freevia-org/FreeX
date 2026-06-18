@@ -232,6 +232,19 @@ public sealed record ParagraphFormatting
     public double SpaceAfterPt { get; init; } = 8;
 
     /// <summary>
+    /// Whether <see cref="SpaceBeforePt"/> / <see cref="SpaceAfterPt"/> were set *explicitly* on this
+    /// paragraph or style (a direct <c>w:spacing/@w:before</c>/<c>@w:after</c> or an autospacing toggle), as
+    /// opposed to an inherited document-default/built-in value. Lets the render-time cascade inherit the
+    /// paragraph's style spacing when the paragraph sets none, instead of FreeW's 0/8pt default. Render-only
+    /// (mirrors <see cref="LineSpacingIsSet"/>); the writer emits from the value fields, so round-trip is
+    /// unaffected.
+    /// </summary>
+    public bool SpaceBeforeIsSet { get; init; }
+
+    /// <summary><inheritdoc cref="SpaceBeforeIsSet"/></summary>
+    public bool SpaceAfterIsSet { get; init; }
+
+    /// <summary>
     /// Line spacing as a multiple of the natural line height (pPr/w:spacing/@w:line with
     /// <c>lineRule="auto"</c>): 1 = single, 1.15 (the default), 1.5, 2 = double. Used only when
     /// <see cref="LineRule"/> is <see cref="LineSpacingRule.Multiple"/>; for the exact/at-least rules the
