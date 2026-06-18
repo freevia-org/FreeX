@@ -67,6 +67,29 @@ public sealed partial class MainWindowAdaptiveRibbonTests
         public int SelectedTabGroupHostCount =>
             WpfTestTree.FindVisualSelfAndDescendants<RibbonGroupHost>(SelectedRibbonContentRoot).Count();
 
+        // Pixels by which the selected tab's ribbon content overflows the right edge of its adaptive panel
+        // — i.e. how much is clipped. <= ~0 means every group fits (or folded into an overflow button).
+        public double SelectedTabRibbonRightOverflowPx
+        {
+            get
+            {
+                var panel = WpfTestTree.FindVisualSelfAndDescendants<RibbonAdaptivePanel>(SelectedRibbonContentRoot).FirstOrDefault();
+                if (panel is null || panel.ActualWidth <= 0)
+                    return 0;
+
+                double maxRight = 0;
+                foreach (var child in panel.Children.OfType<System.Windows.FrameworkElement>())
+                {
+                    if (!IsEffectivelyVisible(child))
+                        continue;
+                    var x = child.TransformToAncestor(panel).Transform(new System.Windows.Point(0, 0)).X;
+                    maxRight = System.Math.Max(maxRight, x + child.ActualWidth);
+                }
+
+                return maxRight - panel.ActualWidth;
+            }
+        }
+
         // Counts the command controls currently shown (expanded) in the selected tab — visible buttons
         // that are not the single collapsed-group overflow button. Robust for the declarative ribbon,
         // unlike VisibleRibbonCommandLabels which depends on the legacy label-extraction path.
