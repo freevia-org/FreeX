@@ -160,6 +160,17 @@ public sealed partial class MainWindow : Window
         TextBox InputBox,
         Button AcceptButton,
         Button CancelButton);
+    private sealed record GoToDialogSmokeProbe(
+        Window Dialog,
+        ListBox HistoryList,
+        TextBox InputBox,
+        Button SpecialButton,
+        Button AcceptButton,
+        Button CancelButton);
+    private sealed record GoToDialogResult(
+        string? Reference,
+        GoToSpecialKind? SpecialKind,
+        GoToSpecialOptions? SpecialOptions);
     private sealed record GoToSpecialDialogSmokeProbe(
         Window Dialog,
         ComboBox KindBox,
@@ -5874,12 +5885,17 @@ public sealed partial class MainWindow : Window
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var reference = await ShowSingleInputDialogAsync(
-            "Go To",
-            "Reference",
-            FormatRangeReference(_session.SelectedRange),
-            "Go",
-            "GoToReferenceBox");
+        var goTo = await ShowGoToInputDialogAsync();
+        if (goTo is null)
+            return;
+
+        if (goTo.SpecialKind is { } specialKind)
+        {
+            SelectGoToSpecial(specialKind, goTo.SpecialOptions);
+            return;
+        }
+
+        var reference = goTo.Reference;
         if (reference is null)
             return;
 
@@ -5891,6 +5907,166 @@ public sealed partial class MainWindow : Window
         }
 
         RefreshShell($"Selected {FormatRangeReference(result.SelectedRange!.Value)}");
+    }
+
+    private IReadOnlyList<string> BuildGoToReferenceChoices(string defaultReference) =>
+        WorkbookReferenceNavigator.BuildReferenceChoices(
+            defaultReference,
+            recentReferences: null,
+            definedNames: _session.Workbook.NamedRanges.Keys);
+
+    private async Task<GoToDialogResult?> ShowGoToInputDialogAsync(
+        Action<GoToDialogSmokeProbe>? launchSmokeProbe = null)
+    {
+        GoToDialogResult? result = null;
+        var dialog = new Window
+        {
+            Title = "Go To",
+            Width = 380,
+            Height = 320,
+            MinWidth = 340,
+            MinHeight = 280,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+
+        var defaultReference = FormatRangeReference(_session.SelectedRange);
+
+        var historyList = new ListBox
+        {
+            ItemsSource = BuildGoToReferenceChoices(defaultReference),
+            MinHeight = 120,
+        };
+        AutomationProperties.SetName(historyList, "Go to");
+        AutomationProperties.SetHelpText(historyList, "Recent references and defined names");
+        AutomationProperties.SetAutomationId(historyList, "GoToHistoryList");
+
+        var inputBox = new TextBox
+        {
+            Text = defaultReference,
+            MinWidth = 280,
+        };
+        AutomationProperties.SetName(inputBox, "Reference");
+        AutomationProperties.SetAutomationId(inputBox, "GoToReferenceBox");
+
+        var specialButton = new Button
+        {
+            Content = "Special...",
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(specialButton, "GoToSpecialButton");
+
+        var acceptButton = new Button
+        {
+            Content = "Go",
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(acceptButton, "GoToReferenceBoxAcceptButton");
+
+        var cancelButton = new Button
+        {
+            Content = "Cancel",
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(cancelButton, "GoToReferenceBoxCancelButton");
+
+        historyList.SelectionChanged += (_, _) =>
+        {
+            if (historyList.SelectedItem is string reference)
+                inputBox.Text = reference;
+        };
+        historyList.DoubleTapped += (_, _) =>
+        {
+            if (historyList.SelectedItem is string reference)
+            {
+                inputBox.Text = reference;
+                AcceptReference();
+            }
+        };
+
+        void AcceptReference()
+        {
+            result = new GoToDialogResult(inputBox.Text ?? "", SpecialKind: null, SpecialOptions: null);
+            dialog.Close();
+        }
+
+        acceptButton.Click += (_, _) => AcceptReference();
+        cancelButton.Click += (_, _) => dialog.Close();
+        specialButton.Click += async (_, _) =>
+        {
+            var special = await ShowGoToSpecialInputDialogAsync();
+            if (special is null)
+                return;
+
+            result = new GoToDialogResult(Reference: null, special.Kind, special.Options);
+            dialog.Close();
+        };
+        inputBox.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter)
+            {
+                e.Handled = true;
+                AcceptReference();
+            }
+            else if (e.Key == Key.Escape)
+            {
+                e.Handled = true;
+                dialog.Close();
+            }
+        };
+
+        var buttonRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Children =
+            {
+                specialButton,
+                cancelButton,
+                acceptButton,
+            },
+        };
+
+        dialog.Content = new StackPanel
+        {
+            Margin = new Thickness(16),
+            Spacing = 8,
+            Children =
+            {
+                new TextBlock { Text = "Go to" },
+                historyList,
+                new TextBlock { Text = "Reference" },
+                inputBox,
+                buttonRow,
+            },
+        };
+        dialog.Opened += (_, _) =>
+        {
+            inputBox.Focus();
+            inputBox.SelectAll();
+        };
+        if (launchSmokeProbe is not null)
+        {
+            dialog.Opened += (_, _) =>
+            {
+                RunLaunchSmokeDialogProbe(
+                    dialog,
+                    () => launchSmokeProbe(new GoToDialogSmokeProbe(
+                        dialog,
+                        historyList,
+                        inputBox,
+                        specialButton,
+                        acceptButton,
+                        cancelButton)));
+            };
+        }
+
+        await dialog.ShowDialog(this);
+        return result;
     }
 
     private async Task OpenSelectedHyperlinkAsync()
@@ -12959,13 +13135,10 @@ public sealed partial class MainWindow : Window
 
         var hasGoToDialog = false;
         var hasGoToDialogReferenceControls = false;
+        var hasGoToDialogHistoryControls = false;
+        var hasGoToDialogSpecialControl = false;
         var hasGoToDialogCompactLayout = false;
-        var goToDialogResult = await ShowSingleInputDialogAsync(
-            "Go To",
-            "Reference",
-            FormatRangeReference(_session.SelectedRange),
-            "Go",
-            "GoToReferenceBox",
+        var goToDialogResult = await ShowGoToInputDialogAsync(
             probe =>
             {
                 hasGoToDialog = HasLaunchSmokeDialog(probe.Dialog, "Go To");
@@ -12973,7 +13146,13 @@ public sealed partial class MainWindow : Window
                     HasLaunchSmokeAutomationId(probe.InputBox, "GoToReferenceBox") &&
                     HasLaunchSmokeButton(probe.AcceptButton, "GoToReferenceBoxAcceptButton", "Go") &&
                     HasLaunchSmokeButton(probe.CancelButton, "GoToReferenceBoxCancelButton", "Cancel");
-                hasGoToDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 380, height: 165, minWidth: 340, minHeight: 155);
+                hasGoToDialogHistoryControls =
+                    HasLaunchSmokeAutomationId(probe.HistoryList, "GoToHistoryList") &&
+                    string.Equals(AutomationProperties.GetName(probe.HistoryList), "Go to", StringComparison.Ordinal) &&
+                    probe.HistoryList.ItemCount > 0;
+                hasGoToDialogSpecialControl =
+                    HasLaunchSmokeButton(probe.SpecialButton, "GoToSpecialButton", "Special...");
+                hasGoToDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 380, height: 320, minWidth: 340, minHeight: 280);
             });
 
         var hasGoToSpecialDialog = false;
@@ -13123,6 +13302,8 @@ public sealed partial class MainWindow : Window
             hasReplaceDialogCompactLayout,
             hasGoToDialog,
             hasGoToDialogReferenceControls,
+            hasGoToDialogHistoryControls,
+            hasGoToDialogSpecialControl,
             hasGoToDialogCompactLayout,
             hasGoToSpecialDialog,
             hasGoToSpecialKindControls,
