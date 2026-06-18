@@ -1,9 +1,10 @@
 using FluentAssertions;
 
-using FreeX.App.Avalonia.Dialogs;
+using FreeX.App.Presentation.PageLayout;
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Avalonia.Tests;
+namespace FreeX.App.Presentation.Tests;
 
 /// <summary>
 /// Unit tests for the non-UI glue backing the Avalonia Page Setup dialog: mapping the sheet's
@@ -221,5 +222,161 @@ public sealed class PageSetupDialogModelTests
         printArea.Should().NotBeNull();
         printArea!.Value.Start.Col.Should().Be(2u);
         printArea.Value.End.Row.Should().Be(9u);
+    }
+
+    [Fact]
+    public void FromSheet_MapsAdvancedFields()
+    {
+        var sheet = CreateSheet();
+        sheet.HeaderMargin = 0.4;
+        sheet.FooterMargin = 0.45;
+        sheet.CenterHorizontallyOnPage = true;
+        sheet.CenterVerticallyOnPage = true;
+        sheet.FirstPageNumber = 7;
+        sheet.PrintQualityDpi = 600;
+        sheet.PrintBlackAndWhite = true;
+        sheet.PrintDraftQuality = true;
+        sheet.PrintErrorValue = WorksheetPrintErrorValue.Dash;
+        sheet.PrintComments = WorksheetPrintComments.AtEnd;
+        sheet.PageHeader = new WorksheetHeaderFooter("L", "&[Page]", "R");
+        sheet.DifferentFirstPageHeaderFooter = true;
+        sheet.HeaderFooterScaleWithDocument = false;
+
+        var fields = PageSetupDialogModel.FromSheet(sheet);
+
+        fields.HeaderMarginText.Should().Be("0.4");
+        fields.FooterMarginText.Should().Be("0.45");
+        fields.CenterHorizontally.Should().BeTrue();
+        fields.CenterVertically.Should().BeTrue();
+        fields.FirstPageNumberText.Should().Be("7");
+        fields.PrintQualityDpiText.Should().Be("600");
+        fields.PrintBlackAndWhite.Should().BeTrue();
+        fields.PrintDraftQuality.Should().BeTrue();
+        fields.PrintErrorValue.Should().Be(WorksheetPrintErrorValue.Dash);
+        fields.PrintComments.Should().Be(WorksheetPrintComments.AtEnd);
+        fields.Header.Center.Should().Be("&[Page]");
+        fields.DifferentFirstPage.Should().BeTrue();
+        fields.ScaleHeaderFooterWithDocument.Should().BeFalse();
+    }
+
+    [Fact]
+    public void BuildCommand_AppliedAndRevertedRoundTripsAdvancedFields()
+    {
+        var workbook = new Workbook("Book");
+        var sheet = workbook.AddSheet("Sheet1");
+        var ctx = new PageSetupTestCommandContext(workbook);
+
+        var fields = PageSetupDialogModel.FromSheet(sheet) with
+        {
+            HeaderMarginText = "0.6",
+            FooterMarginText = "0.7",
+            CenterHorizontally = true,
+            CenterVertically = true,
+            FirstPageNumberText = "5",
+            PrintQualityDpiText = "300",
+            PrintBlackAndWhite = true,
+            PrintDraftQuality = true,
+            PrintErrorValue = WorksheetPrintErrorValue.NotAvailable,
+            PrintComments = WorksheetPrintComments.AsDisplayed,
+        };
+
+        var build = PageSetupDialogModel.TryBuildCommand(sheet, fields);
+        build.Success.Should().BeTrue();
+
+        build.Command!.Apply(ctx).Success.Should().BeTrue();
+        sheet.HeaderMargin.Should().Be(0.6);
+        sheet.FooterMargin.Should().Be(0.7);
+        sheet.CenterHorizontallyOnPage.Should().BeTrue();
+        sheet.CenterVerticallyOnPage.Should().BeTrue();
+        sheet.FirstPageNumber.Should().Be(5);
+        sheet.PrintQualityDpi.Should().Be(300);
+        sheet.PrintBlackAndWhite.Should().BeTrue();
+        sheet.PrintDraftQuality.Should().BeTrue();
+        sheet.PrintErrorValue.Should().Be(WorksheetPrintErrorValue.NotAvailable);
+        sheet.PrintComments.Should().Be(WorksheetPrintComments.AsDisplayed);
+
+        build.Command.Revert(ctx);
+        sheet.CenterHorizontallyOnPage.Should().BeFalse();
+        sheet.PrintBlackAndWhite.Should().BeFalse();
+        sheet.FirstPageNumber.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("-2")]
+    [InlineData("x")]
+    public void TryBuildCommand_RejectsInvalidFirstPageNumber(string text)
+    {
+        var sheet = CreateSheet();
+        var fields = PageSetupDialogModel.FromSheet(sheet) with { FirstPageNumberText = text };
+
+        var result = PageSetupDialogModel.TryBuildCommand(sheet, fields);
+
+        result.Success.Should().BeFalse();
+        result.Error.Should().NotBeNullOrEmpty();
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("-50")]
+    [InlineData("abc")]
+    public void TryBuildCommand_RejectsInvalidPrintQuality(string text)
+    {
+        var sheet = CreateSheet();
+        var fields = PageSetupDialogModel.FromSheet(sheet) with { PrintQualityDpiText = text };
+
+        var result = PageSetupDialogModel.TryBuildCommand(sheet, fields);
+
+        result.Success.Should().BeFalse();
+        result.Error.Should().NotBeNullOrEmpty();
+    }
+
+    [Fact]
+    public void TryBuildCommand_RejectsNegativeHeaderMargin()
+    {
+        var sheet = CreateSheet();
+        var fields = PageSetupDialogModel.FromSheet(sheet) with { HeaderMarginText = "-1" };
+
+        var result = PageSetupDialogModel.TryBuildCommand(sheet, fields);
+
+        result.Success.Should().BeFalse();
+        result.Error.Should().NotBeNullOrEmpty();
+    }
+
+    [Fact]
+    public void BuildHeaderFooterCommand_AppliesHeaderFooterText()
+    {
+        var workbook = new Workbook("Book");
+        var sheet = workbook.AddSheet("Sheet1");
+        var ctx = new PageSetupTestCommandContext(workbook);
+
+        var fields = PageSetupDialogModel.FromSheet(sheet) with
+        {
+            Header = new WorksheetHeaderFooter("", "Page &[Page] of &[Pages]", ""),
+            Footer = new WorksheetHeaderFooter("&[File]", "", "&[Date]"),
+            DifferentOddEvenPages = true,
+            AlignHeaderFooterWithMargins = false,
+        };
+
+        var command = PageSetupDialogModel.BuildHeaderFooterCommand(sheet, fields);
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.PageHeader.Center.Should().Be("Page &[Page] of &[Pages]");
+        sheet.PageFooter.Left.Should().Be("&[File]");
+        sheet.PageFooter.Right.Should().Be("&[Date]");
+        sheet.DifferentOddEvenHeaderFooter.Should().BeTrue();
+        sheet.HeaderFooterAlignWithMargins.Should().BeFalse();
+
+        command.Revert(ctx);
+        sheet.PageHeader.Center.Should().BeEmpty();
+        sheet.DifferentOddEvenHeaderFooter.Should().BeFalse();
+    }
+
+    private sealed class PageSetupTestCommandContext(Workbook workbook) : ICommandContext
+    {
+        public Workbook Workbook { get; } = workbook;
+
+        public Sheet GetSheet(SheetId sheetId) =>
+            Workbook.GetSheet(sheetId) ?? throw new KeyNotFoundException($"Sheet {sheetId} not found");
     }
 }
