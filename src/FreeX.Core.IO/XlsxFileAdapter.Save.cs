@@ -216,9 +216,10 @@ public sealed partial class XlsxFileAdapter
                         .CreateComment()
                         .AddText(commentText);
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Skip comments ClosedXML cannot serialize.
+                    System.Diagnostics.Debug.WriteLine($"[XlsxFileAdapter] Skipping comment save for sheet '{sheet.Name}' cell '{address}': {ex.Message}");
+                    warnings?.Add($"[comment] Comment at '{sheet.Name}!{address}' could not be saved and was skipped.");
                 }
             }
 
@@ -240,9 +241,10 @@ public sealed partial class XlsxFileAdapter
                             XlsxClosedXmlCellMapper.ApplyHyperlinkFontOverride(xlCell, style);
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Skip hyperlinks ClosedXML cannot serialize.
+                    System.Diagnostics.Debug.WriteLine($"[XlsxFileAdapter] Skipping hyperlink save for sheet '{sheet.Name}' cell '{address}' target '{target}': {ex.Message}");
+                    warnings?.Add($"[hyperlink] Hyperlink at '{sheet.Name}!{address}' to '{target}' could not be saved and was skipped.");
                 }
             }
 

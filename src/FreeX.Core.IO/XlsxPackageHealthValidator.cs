@@ -2617,8 +2617,7 @@ public static class XlsxPackageHealthValidator
 
     private static XDocument LoadPackageXml(ZipArchiveEntry entry)
     {
-        using var stream = entry.Open();
-        return XDocument.Load(stream);
+        return XlsxPackageXmlEditor.LoadXml(entry);
     }
 
     private sealed record SharedStringCellReference(
