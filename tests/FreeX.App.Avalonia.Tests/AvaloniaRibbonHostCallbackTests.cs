@@ -275,6 +275,29 @@ public sealed class AvaloniaRibbonHostCallbackTests
     }
 
     [Fact]
+    public void EveryCellStylePreset_DisplayNameIsARealMenuId_AndBindsViaExtraCommands()
+    {
+        // MainWindow wires the Home ▸ Styles ▸ Cell Styles gallery items by looping CellStylePreset and using
+        // each preset's display name as the canonical ribbon menu id. Verify every display name is a real id
+        // the shared definition emits (seeded NoOp) and that wiring it via ExtraCommands overrides the NoOp.
+        foreach (var preset in System.Enum.GetValues<FreeX.App.Services.CellStylePreset>())
+        {
+            var id = FreeX.App.Services.CellStyleDiffPlanner.GetCellStylePresetDisplayName(preset);
+
+            var defaults = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { });
+            Assert.True(defaults.TryGet(Canonical(id), out var noOp), $"Cell-style id '{id}' is not in the shared definition.");
+            Assert.IsType<NoOpRibbonCommand>(noOp);
+
+            var wired = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { }, new AvaloniaRibbonHostCallbacks
+            {
+                ExtraCommands = new Dictionary<string, Action> { [id] = () => { } },
+            });
+            Assert.True(wired.TryGet(Canonical(id), out var command));
+            Assert.IsType<RelayRibbonCommand>(command);
+        }
+    }
+
+    [Fact]
     public void BuildDefinition_HomeTab_MatchesWindowsGroups()
     {
         var home = AvaloniaRibbonComposition.BuildDefinition().Tabs.Single(t => t.Header == "Home");

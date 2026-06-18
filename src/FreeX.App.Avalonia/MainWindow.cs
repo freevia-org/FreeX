@@ -901,6 +901,14 @@ public sealed partial class MainWindow : Window
             ribbonCallbacks.ExtraCommands!, StringComparer.Ordinal);
         foreach (var (id, action) in BuildContextualTabCommands())
             ribbonExtraCommands[id] = action;
+        // Home ▸ Styles ▸ Cell Styles gallery items: each built-in preset's display name is its canonical
+        // ribbon menu id, so wire every one to apply that style to the selection.
+        foreach (var stylePreset in Enum.GetValues<CellStylePreset>())
+        {
+            var preset = stylePreset;
+            ribbonExtraCommands[CellStyleDiffPlanner.GetCellStylePresetDisplayName(preset)] =
+                () => ApplyCellStylePreset(preset);
+        }
         ribbonCallbacks = ribbonCallbacks with { ExtraCommands = ribbonExtraCommands };
 
         var ribbon = FreeX.App.Avalonia.Ribbon.AvaloniaRibbonHost.Build(
