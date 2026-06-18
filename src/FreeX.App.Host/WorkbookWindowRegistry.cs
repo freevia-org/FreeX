@@ -260,8 +260,8 @@ public sealed class WorkbookWindowRegistry
             return false;
 
         var (primaryBounds, partnerBounds) = SideBySideLayoutPlanner.Tile(workAreaWidth, workAreaHeight);
-        primary.TileToWorkArea(primaryBounds);
-        partner.TileToWorkArea(partnerBounds);
+        primary.TileToWorkArea(new Rect(primaryBounds.X, primaryBounds.Y, primaryBounds.Width, primaryBounds.Height));
+        partner.TileToWorkArea(new Rect(partnerBounds.X, partnerBounds.Y, partnerBounds.Width, partnerBounds.Height));
 
         _sideBySidePrimary = primary;
         _sideBySidePartner = partner;
