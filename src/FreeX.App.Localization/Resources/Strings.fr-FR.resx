@@ -158,4 +158,54 @@
   <data name="ConditionalFormat_ManageMoveUp" xml:space="preserve"><value>Monter</value></data>
   <data name="ConditionalFormat_ManageMoveDown" xml:space="preserve"><value>Descendre</value></data>
   <data name="ConditionalFormat_ManageApplyRange" xml:space="preserve"><value>Appliquer la plage</value></data>
+  <data name="FormatCells_Title" xml:space="preserve"><value>Format de cellule</value></data>
+  <data name="FormatCells_TabNumber" xml:space="preserve"><value>Nombre</value></data>
+  <data name="FormatCells_TabAlignment" xml:space="preserve"><value>Alignement</value></data>
+  <data name="FormatCells_TabFont" xml:space="preserve"><value>Police</value></data>
+  <data name="FormatCells_TabFill" xml:space="preserve"><value>Remplissage</value></data>
+  <data name="FormatCells_TabBorder" xml:space="preserve"><value>Bordure</value></data>
+  <data name="FormatCells_TabProtection" xml:space="preserve"><value>Protection</value></data>
+  <data name="FormatCells_Category" xml:space="preserve"><value>Catégorie</value></data>
+  <data name="FormatCells_Type" xml:space="preserve"><value>Type</value></data>
+  <data name="FormatCells_DecimalPlaces" xml:space="preserve"><value>Nombre de décimales</value></data>
+  <data name="FormatCells_Symbol" xml:space="preserve"><value>Symbole</value></data>
+  <data name="FormatCells_NegativeNumbers" xml:space="preserve"><value>Nombres négatifs</value></data>
+  <data name="FormatCells_Sample" xml:space="preserve"><value>Exemple</value></data>
+  <data name="FormatCells_Horizontal" xml:space="preserve"><value>Horizontal</value></data>
+  <data name="FormatCells_Vertical" xml:space="preserve"><value>Vertical</value></data>
+  <data name="FormatCells_Indent" xml:space="preserve"><value>Retrait</value></data>
+  <data name="FormatCells_TextRotation" xml:space="preserve"><value>Rotation du texte</value></data>
+  <data name="FormatCells_Font" xml:space="preserve"><value>Police</value></data>
+  <data name="FormatCells_Size" xml:space="preserve"><value>Taille</value></data>
+  <data name="FormatCells_Color" xml:space="preserve"><value>Couleur</value></data>
+  <data name="FormatCells_Preview" xml:space="preserve"><value>Aperçu</value></data>
+  <data name="FormatCells_FillColor" xml:space="preserve"><value>Couleur de remplissage</value></data>
+  <data name="FormatCells_PatternStyle" xml:space="preserve"><value>Style de motif</value></data>
+  <data name="FormatCells_PatternColor" xml:space="preserve"><value>Couleur de motif</value></data>
+  <data name="FormatCells_Preset" xml:space="preserve"><value>Préréglage</value></data>
+  <data name="FormatCells_LineStyle" xml:space="preserve"><value>Style de ligne</value></data>
+  <data name="FormatCells_LineColor" xml:space="preserve"><value>Couleur de ligne</value></data>
+  <data name="FormatCells_Borders" xml:space="preserve"><value>Bordures</value></data>
+  <data name="FormatCells_WrapText" xml:space="preserve"><value>Renvoyer à la ligne automatiquement</value></data>
+  <data name="FormatCells_ShrinkToFit" xml:space="preserve"><value>Ajuster</value></data>
+  <data name="FormatCells_MergeCells" xml:space="preserve"><value>Fusionner les cellules</value></data>
+  <data name="FormatCells_Bold" xml:space="preserve"><value>Gras</value></data>
+  <data name="FormatCells_Italic" xml:space="preserve"><value>Italique</value></data>
+  <data name="FormatCells_Underline" xml:space="preserve"><value>Souligné</value></data>
+  <data name="FormatCells_DoubleUnderline" xml:space="preserve"><value>Souligné double</value></data>
+  <data name="FormatCells_Strikethrough" xml:space="preserve"><value>Barré</value></data>
+  <data name="FormatCells_Superscript" xml:space="preserve"><value>Exposant</value></data>
+  <data name="FormatCells_Subscript" xml:space="preserve"><value>Indice</value></data>
+  <data name="FormatCells_NormalFont" xml:space="preserve"><value>Police normale</value></data>
+  <data name="FormatCells_Locked" xml:space="preserve"><value>Verrouillé</value></data>
+  <data name="FormatCells_Hidden" xml:space="preserve"><value>Masqué</value></data>
+  <data name="FormatCells_ProtectionExplanation" xml:space="preserve"><value>Le verrouillage des cellules ou le masquage des formules n'a aucun effet tant que vous ne protégez pas la feuille de calcul.</value></data>
+  <data name="FormatCells_BorderPresetNone" xml:space="preserve"><value>Aucune</value></data>
+  <data name="FormatCells_BorderPresetOutline" xml:space="preserve"><value>Contour</value></data>
+  <data name="FormatCells_BorderPresetInside" xml:space="preserve"><value>Intérieur</value></data>
+  <data name="FormatCells_NoChange" xml:space="preserve"><value>Aucune modification</value></data>
+  <data name="FormatCells_MoreFontColors" xml:space="preserve"><value>Autres couleurs de police</value></data>
+  <data name="FormatCells_MoreFillColors" xml:space="preserve"><value>Autres couleurs de remplissage</value></data>
+  <data name="FormatCells_MorePatternColors" xml:space="preserve"><value>Autres couleurs de motif</value></data>
+  <data name="FormatCells_MoreBorderColors" xml:space="preserve"><value>Autres couleurs de bordure</value></data>
 </root>
