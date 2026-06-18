@@ -77,4 +77,24 @@
   <data name="PivotOptions_SubtotalsHeader" xml:space="preserve"><value>Sous-totaux</value></data>
   <data name="PivotOptions_ReportLayoutLabel" xml:space="preserve"><value>Disposition du rapport :</value></data>
   <data name="PivotOptions_CompactIndentLabel" xml:space="preserve"><value>Retrait des étiquettes de ligne en forme compacte :</value></data>
+  <data name="PivotValueField_Title" xml:space="preserve"><value>Paramètres des champs de valeurs ({0})</value></data>
+  <data name="PivotValueField_CustomName" xml:space="preserve"><value>Nom personnalisé :</value></data>
+  <data name="PivotValueField_SummarizeBy" xml:space="preserve"><value>Synthétiser le champ de valeurs par :</value></data>
+  <data name="PivotValueField_ShowValuesAs" xml:space="preserve"><value>Afficher les valeurs sous la forme :</value></data>
+  <data name="PivotValueField_BaseField" xml:space="preserve"><value>Champ de base :</value></data>
+  <data name="PivotValueField_BaseItem" xml:space="preserve"><value>Élément de base :</value></data>
+  <data name="PivotSort_Title" xml:space="preserve"><value>Autres options de tri ({0})</value></data>
+  <data name="PivotSort_Heading" xml:space="preserve"><value>Trier {0}</value></data>
+  <data name="PivotSort_AscendingByLabels" xml:space="preserve"><value>Croissant (de A à Z) par étiquettes</value></data>
+  <data name="PivotSort_DescendingByLabels" xml:space="preserve"><value>Décroissant (de Z à A) par étiquettes</value></data>
+  <data name="PivotSort_AscendingByValues" xml:space="preserve"><value>Croissant par valeurs</value></data>
+  <data name="PivotSort_DescendingByValues" xml:space="preserve"><value>Décroissant par valeurs</value></data>
+  <data name="PivotSort_ValueField" xml:space="preserve"><value>Champ de valeurs :</value></data>
+  <data name="PivotFilter_ItemsTitle" xml:space="preserve"><value>Filtrer les éléments</value></data>
+  <data name="PivotFilter_ItemsHeading" xml:space="preserve"><value>Filtrer « {0} »</value></data>
+  <data name="PivotFilter_LabelTitle" xml:space="preserve"><value>Filtre d'étiquette ({0})</value></data>
+  <data name="PivotFilter_ValueTitle" xml:space="preserve"><value>Filtre de valeur ({0})</value></data>
+  <data name="PivotFilter_LabelHeading" xml:space="preserve"><value>Afficher les éléments dont l'étiquette :</value></data>
+  <data name="PivotFilter_SummarizeBy" xml:space="preserve"><value>Synthétiser par :</value></data>
+  <data name="PivotFilter_WhereValueIs" xml:space="preserve"><value>où la valeur est :</value></data>
 </root>

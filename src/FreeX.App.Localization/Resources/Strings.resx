@@ -79,4 +79,27 @@
   <data name="PivotOptions_SubtotalsHeader" xml:space="preserve"><value>Subtotals</value></data>
   <data name="PivotOptions_ReportLayoutLabel" xml:space="preserve"><value>Report layout:</value></data>
   <data name="PivotOptions_CompactIndentLabel" xml:space="preserve"><value>Compact form row label indent:</value></data>
+  <!-- Value Field Settings dialog -->
+  <data name="PivotValueField_Title" xml:space="preserve"><value>Value Field Settings ({0})</value></data>
+  <data name="PivotValueField_CustomName" xml:space="preserve"><value>Custom Name:</value></data>
+  <data name="PivotValueField_SummarizeBy" xml:space="preserve"><value>Summarize value field by:</value></data>
+  <data name="PivotValueField_ShowValuesAs" xml:space="preserve"><value>Show values as:</value></data>
+  <data name="PivotValueField_BaseField" xml:space="preserve"><value>Base field:</value></data>
+  <data name="PivotValueField_BaseItem" xml:space="preserve"><value>Base item:</value></data>
+  <!-- More Sort Options dialog -->
+  <data name="PivotSort_Title" xml:space="preserve"><value>More Sort Options ({0})</value></data>
+  <data name="PivotSort_Heading" xml:space="preserve"><value>Sort {0}</value></data>
+  <data name="PivotSort_AscendingByLabels" xml:space="preserve"><value>Ascending (A to Z) by labels</value></data>
+  <data name="PivotSort_DescendingByLabels" xml:space="preserve"><value>Descending (Z to A) by labels</value></data>
+  <data name="PivotSort_AscendingByValues" xml:space="preserve"><value>Ascending by values</value></data>
+  <data name="PivotSort_DescendingByValues" xml:space="preserve"><value>Descending by values</value></data>
+  <data name="PivotSort_ValueField" xml:space="preserve"><value>Value field:</value></data>
+  <!-- Pivot Filter dialogs -->
+  <data name="PivotFilter_ItemsTitle" xml:space="preserve"><value>Filter Items</value></data>
+  <data name="PivotFilter_ItemsHeading" xml:space="preserve"><value>Filter “{0}”</value></data>
+  <data name="PivotFilter_LabelTitle" xml:space="preserve"><value>Label Filter ({0})</value></data>
+  <data name="PivotFilter_ValueTitle" xml:space="preserve"><value>Value Filter ({0})</value></data>
+  <data name="PivotFilter_LabelHeading" xml:space="preserve"><value>Show items where the label:</value></data>
+  <data name="PivotFilter_SummarizeBy" xml:space="preserve"><value>Summarize by:</value></data>
+  <data name="PivotFilter_WhereValueIs" xml:space="preserve"><value>where the value is:</value></data>
 </root>

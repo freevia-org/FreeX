@@ -99,9 +99,9 @@ public sealed partial class MainWindow
         AutomationProperties.SetName(baseItemBox, "Base item");
 
         var basePanel = new StackPanel { Spacing = 8 };
-        basePanel.Children.Add(new TextBlock { Text = "Base field:", Foreground = HeaderForeground });
+        basePanel.Children.Add(new TextBlock { Text = UiText.Get("PivotValueField_BaseField"), Foreground = HeaderForeground });
         basePanel.Children.Add(baseFieldBox);
-        basePanel.Children.Add(new TextBlock { Text = "Base item:", Foreground = HeaderForeground });
+        basePanel.Children.Add(new TextBlock { Text = UiText.Get("PivotValueField_BaseItem"), Foreground = HeaderForeground });
         basePanel.Children.Add(baseItemBox);
 
         void SyncBaseFieldState()
@@ -115,7 +115,7 @@ public sealed partial class MainWindow
 
         var dialog = new Window
         {
-            Title = $"Value Field Settings ({target.FieldCaption})",
+            Title = UiText.Format("PivotValueField_Title", target.FieldCaption),
             Width = 340,
             SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -123,9 +123,9 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(dialog, "PivotValueFieldSettingsDialog");
 
-        var ok = new Button { Content = "OK", IsDefault = true, MinWidth = 80 };
+        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 80 };
         AutomationProperties.SetAutomationId(ok, "PivotValueFieldSettingsOkButton");
-        var cancel = new Button { Content = "Cancel", IsCancel = true, MinWidth = 80 };
+        var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 80 };
         AutomationProperties.SetAutomationId(cancel, "PivotValueFieldSettingsCancelButton");
         cancel.Click += (_, _) => dialog.Close(false);
         ok.Click += (_, _) =>
@@ -143,11 +143,11 @@ public sealed partial class MainWindow
         };
 
         var content = new StackPanel { Spacing = 8, Margin = new Thickness(12) };
-        content.Children.Add(new TextBlock { Text = "Custom Name:", Foreground = HeaderForeground });
+        content.Children.Add(new TextBlock { Text = UiText.Get("PivotValueField_CustomName"), Foreground = HeaderForeground });
         content.Children.Add(nameBox);
-        content.Children.Add(new TextBlock { Text = "Summarize value field by:", Foreground = HeaderForeground });
+        content.Children.Add(new TextBlock { Text = UiText.Get("PivotValueField_SummarizeBy"), Foreground = HeaderForeground });
         content.Children.Add(summaryBox);
-        content.Children.Add(new TextBlock { Text = "Show values as:", Foreground = HeaderForeground });
+        content.Children.Add(new TextBlock { Text = UiText.Get("PivotValueField_ShowValuesAs"), Foreground = HeaderForeground });
         content.Children.Add(showValuesAsBox);
         content.Children.Add(basePanel);
         content.Children.Add(new StackPanel
@@ -198,10 +198,10 @@ public sealed partial class MainWindow
         var currentSort = pivot.Sorts.FirstOrDefault(sort => sort.FieldIndex == target.SourceFieldIndex);
         var dataFieldCount = pivot.DataFields.Count;
 
-        var labelAscending = new RadioButton { Content = "Ascending (A to Z) by labels", GroupName = "PivotSortOptions" };
-        var labelDescending = new RadioButton { Content = "Descending (Z to A) by labels", GroupName = "PivotSortOptions" };
-        var valueAscending = new RadioButton { Content = "Ascending by values", GroupName = "PivotSortOptions" };
-        var valueDescending = new RadioButton { Content = "Descending by values", GroupName = "PivotSortOptions" };
+        var labelAscending = new RadioButton { Content = UiText.Get("PivotSort_AscendingByLabels"), GroupName = "PivotSortOptions" };
+        var labelDescending = new RadioButton { Content = UiText.Get("PivotSort_DescendingByLabels"), GroupName = "PivotSortOptions" };
+        var valueAscending = new RadioButton { Content = UiText.Get("PivotSort_AscendingByValues"), GroupName = "PivotSortOptions" };
+        var valueDescending = new RadioButton { Content = UiText.Get("PivotSort_DescendingByValues"), GroupName = "PivotSortOptions" };
         AutomationProperties.SetAutomationId(labelAscending, "PivotSortOptionsLabelAscending");
         AutomationProperties.SetAutomationId(labelDescending, "PivotSortOptionsLabelDescending");
         AutomationProperties.SetAutomationId(valueAscending, "PivotSortOptionsValueAscending");
@@ -247,7 +247,7 @@ public sealed partial class MainWindow
 
         var dialog = new Window
         {
-            Title = $"More Sort Options ({caption})",
+            Title = UiText.Format("PivotSort_Title", caption),
             Width = 340,
             SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -255,9 +255,9 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(dialog, "PivotSortOptionsDialog");
 
-        var ok = new Button { Content = "OK", IsDefault = true, MinWidth = 80 };
+        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 80 };
         AutomationProperties.SetAutomationId(ok, "PivotSortOptionsOkButton");
-        var cancel = new Button { Content = "Cancel", IsCancel = true, MinWidth = 80 };
+        var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 80 };
         AutomationProperties.SetAutomationId(cancel, "PivotSortOptionsCancelButton");
         cancel.Click += (_, _) => dialog.Close(false);
         ok.Click += (_, _) =>
@@ -274,7 +274,7 @@ public sealed partial class MainWindow
         var content = new StackPanel { Spacing = 6, Margin = new Thickness(12) };
         content.Children.Add(new TextBlock
         {
-            Text = $"Sort {caption}",
+            Text = UiText.Format("PivotSort_Heading", caption),
             FontWeight = FontWeight.SemiBold,
             Foreground = HeaderForeground,
             Margin = new Thickness(0, 0, 0, 4),
@@ -283,7 +283,7 @@ public sealed partial class MainWindow
         content.Children.Add(labelDescending);
         content.Children.Add(valueAscending);
         content.Children.Add(valueDescending);
-        content.Children.Add(new TextBlock { Text = "Value field:", Foreground = HeaderForeground, Margin = new Thickness(18, 4, 0, 0) });
+        content.Children.Add(new TextBlock { Text = UiText.Get("PivotSort_ValueField"), Foreground = HeaderForeground, Margin = new Thickness(18, 4, 0, 0) });
         content.Children.Add(new StackPanel { Margin = new Thickness(18, 0, 0, 0), Children = { valueFieldBox } });
         content.Children.Add(new StackPanel
         {
