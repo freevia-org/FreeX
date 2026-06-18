@@ -24,7 +24,7 @@ public readonly record struct ChartTypeChangePlan(ChartType? AppliedType, string
 /// Portable (no UI) planner for the "Change Chart Type" editing dialog. Single-sources the list of
 /// authorable chart types (the families the renderer can paint — <see cref="ChartTypeSupport.IsAuthorable"/>)
 /// and their English labels, and validates a requested type change before the shell dispatches the Core
-/// <see cref="ChangeChartTypeCommand"/>. Reused across WPF/Avalonia/macOS so the supported set and the
+/// <see cref="ChangeChartTypeCommand"/>. Reused across every shell so the supported set and the
 /// validation rules live in one place. Core still re-validates inside the command (data-range fit, pivot
 /// guard); this planner just keeps the picker honest and avoids a pointless command for an unchanged type.
 /// </summary>

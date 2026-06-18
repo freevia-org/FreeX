@@ -15,7 +15,7 @@ public readonly record struct ChartTitlesInput(string ChartTitle, string XAxisTi
 /// <see cref="ChartLayoutOptions"/> the shell hands to the Core <see cref="SetChartLayoutCommand"/>. Axis
 /// titles are dropped for chart types that have no axes (pie/doughnut), mirroring Core's
 /// <c>EnforceAxisTitleSupport</c> so the dialog never offers axis titles that the command would clear.
-/// Reused across WPF/Avalonia/macOS.
+/// Reused across every shell.
 /// </summary>
 public static class ChartTitlesPlanner
 {

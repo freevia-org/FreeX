@@ -14,7 +14,7 @@ public readonly record struct ChartLegendInput(bool ShowLegend, ChartLegendPosit
 /// Single-sources the offered placements and projects an edited <see cref="ChartLegendInput"/> into the
 /// <see cref="ChartLayoutOptions"/> the shell hands to the Core <see cref="SetChartLayoutCommand"/>. When
 /// the legend is hidden the position is held at its prior value so re-showing restores the last placement
-/// (Core keeps <c>LegendPosition</c> independent of <c>ShowLegend</c>). Reused across WPF/Avalonia/macOS.
+/// (Core keeps <c>LegendPosition</c> independent of <c>ShowLegend</c>). Reused across every shell.
 /// </summary>
 public static class ChartLegendPlanner
 {
