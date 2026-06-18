@@ -13,7 +13,7 @@ namespace FreeW.App.Host;
 /// human-readable message listed under its group. Code-only to match the rest of the FreeW window style;
 /// purely informational, so it has a single Close button. Mirrors <see cref="StatisticsDialog"/>.
 /// </summary>
-internal sealed class AccessibilityReportDialog : Window
+internal sealed class AccessibilityReportDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     public AccessibilityReportDialog(Window owner, AccessibilityReport report)
     {

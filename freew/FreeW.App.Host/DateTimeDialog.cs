@@ -12,7 +12,7 @@ namespace FreeW.App.Host;
 /// The moment is captured as <c>DateTime.Now</c> when the dialog opens; the actual formatting is done
 /// by the pure, testable <see cref="DateTimeFormats"/> helper in the model project.
 /// </summary>
-internal sealed class DateTimeDialog : Window
+internal sealed class DateTimeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     private string? _result;
 

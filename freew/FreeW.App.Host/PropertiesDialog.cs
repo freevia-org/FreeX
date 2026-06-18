@@ -10,7 +10,7 @@ namespace FreeW.App.Host;
 /// <see cref="DocumentProperties"/> so the next save round-trips them. Code-only to match the rest
 /// of the FreeW window style.
 /// </summary>
-internal sealed class PropertiesDialog : Window
+internal sealed class PropertiesDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     private readonly DocumentProperties _properties;
     private readonly TextBox _title = new() { MinWidth = 280 };

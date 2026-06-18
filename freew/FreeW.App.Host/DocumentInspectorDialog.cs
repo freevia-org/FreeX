@@ -23,7 +23,7 @@ internal sealed record InspectorRemovalChoice(bool Comments, bool Revisions, boo
 /// match the rest of the FreeW window style. Categories with nothing found are shown disabled (unchecked)
 /// so the report still tells the user the document is clean in that respect.
 /// </summary>
-internal sealed class DocumentInspectorDialog : Window
+internal sealed class DocumentInspectorDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     private readonly CheckBox _comments;
     private readonly CheckBox _revisions;
