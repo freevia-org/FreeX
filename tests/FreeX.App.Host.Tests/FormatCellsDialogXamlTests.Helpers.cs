@@ -27,14 +27,17 @@ public sealed partial class FormatCellsDialogXamlTests
 
     private static string ReadFormatCellsDialogSource()
     {
-        return DialogSourceTestSupport.ReadHostSources(
-            "FormatCellsDialog.xaml.cs",
-            "FormatCellsDialog.Number.cs",
-            "FormatCellsNumberControlPlanner.cs",
-            "FormatCellsNumberFormatPlanner.cs",
-            "FormatCellsDialog.Font.cs",
-            "FormatCellsDialog.Fill.cs",
-            "FormatCellsDialog.Border.cs");
+        return string.Join(
+            Environment.NewLine,
+            DialogSourceTestSupport.ReadHostSources(
+                "FormatCellsDialog.xaml.cs",
+                "FormatCellsDialog.Number.cs",
+                "FormatCellsDialog.Font.cs",
+                "FormatCellsDialog.Fill.cs",
+                "FormatCellsDialog.Border.cs"),
+            // The number-format/control planners are now portable types in FreeX.App.Services.
+            DialogSourceTestSupport.ReadAppServicesSource("FormatCellsNumberControlPlanner.cs"),
+            DialogSourceTestSupport.ReadAppServicesSource("FormatCellsNumberFormatPlanner.cs"));
     }
 
     private static T GetControl<T>(FormatCellsDialog dialog, string name)

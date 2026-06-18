@@ -713,8 +713,8 @@ public sealed partial class MainWindowSourceHygieneTests
             "",
             "MainWindow.Startup.cs",
             "MainWindow.HomeFormatting.cs",
-            "HomeNumberFormatDropdownPlanner.cs",
-            "FormatCellsNumberFormatPlanner.cs");
+            "HomeNumberFormatDropdownPlanner.cs")
+            + DialogSourceTestSupport.ReadAppServicesSource("FormatCellsNumberFormatPlanner.cs");
 
         source.Should().Contain("HomeNumberFormatDropdownPlanner.Options.Select(option => option.Label)");
         source.Should().Contain("HomeNumberFormatDropdownPlanner.Options[selectedIndex]");

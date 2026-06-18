@@ -1,12 +1,12 @@
-namespace FreeX.App.Host;
+namespace FreeX.App.Services;
 
-internal sealed record FormatCellsNumberControlAvailability(
+public sealed record FormatCellsNumberControlAvailability(
     bool UsesDecimals,
     bool UsesSymbol,
     bool UsesNegativeOptions,
     bool GeneratesFormat);
 
-internal static class FormatCellsNumberControlPlanner
+public static class FormatCellsNumberControlPlanner
 {
     public static FormatCellsNumberControlAvailability Plan(string? category)
     {

@@ -314,6 +314,14 @@ public sealed class ChartModel
     public List<ChartRangeDataLabel> RangeDataLabels { get; set; } = [];
 
     /// <summary>
+    /// Per-series "Value From Cells" data-label definitions (<c>c15:datalabelsRange</c>),
+    /// preserving the source formula + cached point count/strings so the feature round-trips
+    /// on XLSX and native (.fxl) save. The flat <see cref="RangeDataLabels"/> list is derived
+    /// from this for rendering.
+    /// </summary>
+    public List<ChartSeriesRangeDataLabels> SeriesRangeDataLabels { get; set; } = [];
+
+    /// <summary>
     /// Per-data-point fill color overrides for pie/doughnut slices, read from
     /// <c>&lt;c:dPt&gt;</c> elements with explicit <c>&lt;c:spPr&gt;</c> fills.
     /// When a slice's index matches an entry here its fill color takes precedence

@@ -263,6 +263,7 @@ public sealed partial class NativeJsonAdapter
         public List<ChartSeriesFormat>? SeriesFormats { get; set; }
         public List<ChartSeriesDataLabelFormat>? SeriesDataLabelFormats { get; set; }
         public List<ChartPointDataLabelFormat>? PointDataLabelFormats { get; set; }
+        public List<ChartSeriesRangeDataLabels>? SeriesRangeDataLabels { get; set; }
         public bool UseComboLineForSecondarySeries { get; set; }
         public double Left { get; set; } = 50;
         public double Top { get; set; } = 50;

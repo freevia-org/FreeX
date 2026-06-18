@@ -5,6 +5,50 @@ namespace FreeX.Core.IO;
 
 internal static partial class XlsxChartXmlWriter
 {
+    private static readonly XNamespace Chart2012Ns = "http://schemas.microsoft.com/office/drawing/2012/chart";
+    private const string DataLabelsRangeExtUri = "{02D57815-91ED-43cb-92C2-25804820EDAC}";
+
+    /// <summary>
+    /// Re-emits a series' "Value From Cells" data labels (<c>c15:datalabelsRange</c>) under the
+    /// series <c>c:extLst</c>, round-tripping the source formula and cached point strings. Returns
+    /// null when the series has no captured definition or the definition is empty.
+    /// </summary>
+    private static XElement? ToRangeDataLabelsExtXml(ChartModel chart, int seriesIndex, XNamespace chartNs)
+    {
+        var definition = chart.SeriesRangeDataLabels?.LastOrDefault(item => item.SeriesIndex == seriesIndex);
+        if (definition is null)
+            return null;
+
+        var points = (definition.Points ?? [])
+            .Where(point => point.PointIndex >= 0)
+            .OrderBy(point => point.PointIndex)
+            .ToList();
+        if (string.IsNullOrEmpty(definition.Formula) && definition.PointCount is null && points.Count == 0)
+            return null;
+
+        var pointCount = definition.PointCount ?? points.Count;
+
+        var dlblRangeCache = new XElement(Chart2012Ns + "dlblRangeCache",
+            new XElement(Chart2012Ns + "ptCount", new XAttribute("val", pointCount)));
+        foreach (var point in points)
+        {
+            dlblRangeCache.Add(new XElement(Chart2012Ns + "pt",
+                new XAttribute("idx", point.PointIndex),
+                new XElement(Chart2012Ns + "v", point.Text)));
+        }
+
+        var dataLabelsRange = new XElement(Chart2012Ns + "datalabelsRange");
+        if (!string.IsNullOrEmpty(definition.Formula))
+            dataLabelsRange.Add(new XElement(Chart2012Ns + "f", definition.Formula));
+        dataLabelsRange.Add(dlblRangeCache);
+
+        return new XElement(chartNs + "extLst",
+            new XElement(chartNs + "ext",
+                new XAttribute("uri", DataLabelsRangeExtUri),
+                new XAttribute(XNamespace.Xmlns + "c15", Chart2012Ns.NamespaceName),
+                dataLabelsRange));
+    }
+
     private static IEnumerable<XElement> BuildChartSeries(
         ChartModel chart,
         Sheet sheet,
@@ -68,7 +112,8 @@ internal static partial class XlsxChartXmlWriter
                         new XElement(chartNs + "f", valueRange))),
                 chart.Type is ChartType.Line or ChartType.ThreeDLine || forceLineShapeProperties
                     ? ToSeriesSmoothXml(chart, seriesIndex, chartNs)
-                    : null);
+                    : null,
+                ToRangeDataLabelsExtXml(chart, seriesIndex, chartNs));
             seriesIndex++;
         }
     }
@@ -169,7 +214,8 @@ internal static partial class XlsxChartXmlWriter
                 new XElement(chartNs + "yVal",
                     new XElement(chartNs + "numRef",
                         new XElement(chartNs + "f", yValueRange))),
-                ToSeriesSmoothXml(chart, seriesIndex, chartNs));
+                ToSeriesSmoothXml(chart, seriesIndex, chartNs),
+                ToRangeDataLabelsExtXml(chart, seriesIndex, chartNs));
             seriesIndex++;
         }
     }
@@ -269,7 +315,8 @@ internal static partial class XlsxChartXmlWriter
                         new XElement(chartNs + "f", yValueRange))),
                 new XElement(chartNs + "bubbleSize",
                     new XElement(chartNs + "numRef",
-                        new XElement(chartNs + "f", sizeRange))));
+                        new XElement(chartNs + "f", sizeRange))),
+                ToRangeDataLabelsExtXml(chart, seriesIndex, chartNs));
             seriesIndex++;
         }
     }
@@ -314,7 +361,8 @@ internal static partial class XlsxChartXmlWriter
                 ToCategoryRangeXml(effectiveCategoryRange, effectiveCategoryIsNumeric, chartNs),
                 new XElement(chartNs + "val",
                     new XElement(chartNs + "numRef",
-                        new XElement(chartNs + "f", valueRange))));
+                        new XElement(chartNs + "f", valueRange))),
+                ToRangeDataLabelsExtXml(chart, seriesIndex, chartNs));
             seriesIndex++;
         }
     }

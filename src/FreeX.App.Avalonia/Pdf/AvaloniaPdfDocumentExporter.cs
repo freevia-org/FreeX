@@ -1,0 +1,84 @@
+using System.IO;
+using FreeX.App.Services;
+using FreeX.Core.Model;
+
+namespace FreeX.App.Avalonia.Pdf;
+
+/// <summary>
+/// Routes the Avalonia shell's <em>File → Export to PDF</em> through the Unicode-capable
+/// <see cref="SkiaPdfDocumentExporter"/> when Skia can run, and falls back to the dependency-free
+/// WinAnsi <see cref="PortablePdfDocumentExporter"/> when it cannot (headless/no-Skia environments).
+/// Both writers consume the same shared <see cref="PortablePdfExportPlan"/>, so the only difference
+/// is text fidelity (Skia embeds/subsets fonts; portable is WinAnsi-only) — geometry is identical.
+/// <para>
+/// This keeps a single decision point so the menu handler and tests exercise the same routing.
+/// </para>
+/// </summary>
+public static class AvaloniaPdfDocumentExporter
+{
+    /// <summary>
+    /// Renders <paramref name="exportPlan"/> to <paramref name="stream"/>, preferring Skia (Unicode)
+    /// and falling back to the portable WinAnsi writer if Skia is unavailable or throws while
+    /// initializing. Returns the result plus which backend produced the bytes.
+    /// </summary>
+    public static AvaloniaPdfDocumentExportOutcome Save(
+        Workbook workbook,
+        PortablePdfExportPlan exportPlan,
+        Stream stream,
+        PortablePdfDocumentOptions? options = null)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+        ArgumentNullException.ThrowIfNull(exportPlan);
+        ArgumentNullException.ThrowIfNull(stream);
+        if (!stream.CanWrite)
+            throw new ArgumentException("PDF export requires a writable stream.", nameof(stream));
+
+        // Skia shapes (HarfBuzz) and automatically embeds/subsets the fonts it draws, so non-WinAnsi
+        // text (Cyrillic, Greek, CJK, accented Latin) exports correctly without bundling a font. When
+        // the Skia native asset is missing (headless/no-Skia), it throws on first use; we then fall
+        // back to the dependency-free WinAnsi writer so export still works for ASCII/WinAnsi content.
+        try
+        {
+            var result = SkiaPdfDocumentExporter.Save(workbook, exportPlan, stream, options);
+            return new AvaloniaPdfDocumentExportOutcome(result, AvaloniaPdfExportBackend.Skia);
+        }
+        catch (Exception ex) when (IsSkiaUnavailable(ex))
+        {
+            if (stream.CanSeek)
+            {
+                stream.Position = 0;
+                stream.SetLength(0);
+            }
+
+            var result = PortablePdfDocumentExporter.Save(workbook, exportPlan, stream, options);
+            return new AvaloniaPdfDocumentExportOutcome(result, AvaloniaPdfExportBackend.PortableWinAnsi);
+        }
+    }
+
+    /// <summary>
+    /// True when <paramref name="ex"/> indicates Skia (or its native asset) could not initialize, so
+    /// the portable fallback should be used. Argument/usage errors and plan/state errors are rethrown
+    /// — those are real failures, not a "Skia unavailable" signal.
+    /// </summary>
+    private static bool IsSkiaUnavailable(Exception ex) =>
+        ex is DllNotFoundException
+            or TypeInitializationException
+            or PlatformNotSupportedException
+            or EntryPointNotFoundException
+            or BadImageFormatException;
+}
+
+/// <summary>Which backend produced the exported PDF bytes.</summary>
+public enum AvaloniaPdfExportBackend
+{
+    /// <summary>Unicode-capable Skia/HarfBuzz writer with automatically embedded/subset fonts.</summary>
+    Skia,
+
+    /// <summary>Dependency-free WinAnsi (Helvetica) writer used when Skia is unavailable.</summary>
+    PortableWinAnsi,
+}
+
+/// <summary>Result of <see cref="AvaloniaPdfDocumentExporter.Save"/>: the export result plus the backend used.</summary>
+public sealed record AvaloniaPdfDocumentExportOutcome(
+    PortablePdfDocumentExportResult Result,
+    AvaloniaPdfExportBackend Backend);

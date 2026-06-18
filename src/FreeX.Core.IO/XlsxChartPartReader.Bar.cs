@@ -67,6 +67,7 @@ public static partial class XlsxChartPartReader
                     result.SecondaryAxisSeriesIndexes.Add(seriesIndex);
 
                 XlsxChartDataLabelReader.ApplyPointDataLabels(series, seriesIndex, result);
+                XlsxChartDataLabelReader.ApplyRangeDataLabels(series, seriesIndex, result);
                 XlsxChartTrendlineErrorBarReader.ApplyTrendline(series, result);
                 XlsxChartTrendlineErrorBarReader.ApplyErrorBars(series, result);
                 fallbackSeriesIndex++;
@@ -265,6 +266,7 @@ public static partial class XlsxChartPartReader
                     result.SeriesColumnMappings.Add(new ChartSeriesColumnMapping(seriesIndex, valueColumn));
 
                 XlsxChartDataLabelReader.ApplyPointDataLabels(series, seriesIndex, result);
+                XlsxChartDataLabelReader.ApplyRangeDataLabels(series, seriesIndex, result);
                 XlsxChartTrendlineErrorBarReader.ApplyTrendline(series, result);
                 XlsxChartTrendlineErrorBarReader.ApplyErrorBars(series, result);
                 fallbackSeriesIndex++;

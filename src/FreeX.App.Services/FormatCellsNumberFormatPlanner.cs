@@ -3,11 +3,11 @@ using FreeX.Core.Formula;
 using FreeX.Core.Model;
 using System.Globalization;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Services;
 
-internal sealed record FormatCellsNumberFormatOption(string Category, string Label, string Code, string Preview);
+public sealed record FormatCellsNumberFormatOption(string Category, string Label, string Code, string Preview);
 
-internal static class FormatCellsNumberFormatPlanner
+public static class FormatCellsNumberFormatPlanner
 {
     private const int NumberPreviewAccountingWidth = 14;
 
