@@ -22,31 +22,31 @@ public sealed partial class MainWindow
         var dict = new Dictionary<string, Action>(StringComparer.Ordinal)
         {
             // --- Help tab (always visible): About is real; the rest report honestly. ---
-            ["help.about"] = () => _ = ShowAboutDialogAsync(),
-            ["help.helpOnline"] = () => _ = OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, "Help Online"),
-            ["help.feedback"] = () => _ = OpenExternalHelpLinkAsync(AppHelpInfo.FeedbackUrl, "Send Feedback"),
-            ["help.checkUpdates"] = () => _ = OpenExternalHelpLinkAsync(AppHelpInfo.LatestReleaseUrl, "Check for Updates"),
+            ["help.about"] = () => RunGuarded(ShowAboutDialogAsync),
+            ["help.helpOnline"] = () => RunGuarded(() => OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, "Help Online")),
+            ["help.feedback"] = () => RunGuarded(() => OpenExternalHelpLinkAsync(AppHelpInfo.FeedbackUrl, "Send Feedback")),
+            ["help.checkUpdates"] = () => RunGuarded(() => OpenExternalHelpLinkAsync(AppHelpInfo.LatestReleaseUrl, "Check for Updates")),
 
             // --- Chart Design (chart.selected) — real handlers via SetChartLayoutCommand /
             // ChangeChartTypeCommand / ChangeChartSourceCommand / SetChartStyleCommand (MainWindow.ChartTabs). ---
-            ["chartDesign.titles"] = ShowChartTitlesDialog,
+            ["chartDesign.titles"] = () => RunGuarded(ShowChartTitlesDialog),
             ["chartDesign.dataLabels"] = ToggleChartDataLabels,
             ["chartDesign.dataLabelPosition"] = CycleChartDataLabelPosition,
             ["chartDesign.trendline"] = ToggleChartTrendline,
             ["chartDesign.errorBars"] = ToggleChartErrorBars,
             ["chartDesign.secondaryAxis"] = CycleChartSecondaryAxis,
             ["chartDesign.chartStyles"] = CycleChartStyle,
-            ["chartDesign.selectData"] = ShowSelectChartDataDialog,
-            ["chartDesign.changeType"] = ShowChangeChartTypeDialog,
+            ["chartDesign.selectData"] = () => RunGuarded(ShowSelectChartDataDialog),
+            ["chartDesign.changeType"] = () => RunGuarded(ShowChangeChartTypeDialog),
             // No Core support yet (combo overlays, move-chart sheet target dialog) — honest stubs.
             ["chartDesign.comboChart"] = () => ReportChartCommandNotYetAvailable("Combo Chart"),
             ["chartDesign.moveChart"] = () => ReportChartCommandNotYetAvailable("Move Chart"),
 
             // --- Chart Format (chart.selected) — real handlers via SetChartLayoutCommand. ---
-            ["chartFormat.chartAreaFill"] = ShowChartShapeFillDialog,
-            ["chartFormat.plotAreaFill"] = ShowChartPlotAreaFillDialog,
-            ["chartFormat.plotAreaBorder"] = ShowChartShapeOutlineDialog,
-            ["chartFormat.seriesColor"] = ShowChartSeriesColorDialog,
+            ["chartFormat.chartAreaFill"] = () => RunGuarded(ShowChartShapeFillDialog),
+            ["chartFormat.plotAreaFill"] = () => RunGuarded(ShowChartPlotAreaFillDialog),
+            ["chartFormat.plotAreaBorder"] = () => RunGuarded(ShowChartShapeOutlineDialog),
+            ["chartFormat.seriesColor"] = () => RunGuarded(ShowChartSeriesColorDialog),
             ["chartFormat.legendText"] = CycleChartLegendTextColor,
             ["chartFormat.xGridlines"] = CycleChartXAxisGridlines,
             ["chartFormat.yGridlines"] = CycleChartYAxisGridlines,
@@ -64,7 +64,7 @@ public sealed partial class MainWindow
             ["tableDesign.bandedColumns"] = ToggleActiveTableBandedColumns,
             ["tableDesign.filterButton"] = ToggleActiveTableFilterButton,
             ["tableDesign.convertToRange"] = ConvertActiveTableToRange,
-            ["tableDesign.removeDuplicates"] = () => _ = ShowRemoveDuplicatesDialogAsync(),
+            ["tableDesign.removeDuplicates"] = () => RunGuarded(ShowRemoveDuplicatesDialogAsync),
             // No Core support yet (table name / resize / styles gallery) — honest stubs.
             ["tableDesign.tableName"] = () => ReportContextualNotYetAvailable("Table Name"),
             ["tableDesign.resize"] = () => ReportContextualNotYetAvailable("Resize Table"),
@@ -113,4 +113,21 @@ public sealed partial class MainWindow
     /// <summary>Reports that a contextual-tab command is a Phase-1 shell, on the status bar.</summary>
     private void ReportContextualNotYetAvailable(string commandLabel)
         => RefreshShell($"{commandLabel} is not yet available.");
+
+    /// <summary>
+    /// Launches a fire-and-forget async UI handler so a thrown exception is surfaced on the status
+    /// bar instead of escaping an async-void handler to the dispatcher (which crashes the app) or
+    /// being silently swallowed as an unobserved task exception.
+    /// </summary>
+    private async void RunGuarded(Func<Task> handler)
+    {
+        try
+        {
+            await handler();
+        }
+        catch (Exception ex)
+        {
+            RefreshShell($"Command failed: {ex.Message}");
+        }
+    }
 }
