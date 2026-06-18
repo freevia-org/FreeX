@@ -1,4 +1,4 @@
-namespace FreeX.App.Host;
+namespace FreeX.Ribbon.Definitions;
 
 /// <summary>Generated Home-tab dropdown menus (extracted from the original ribbon XAML).</summary>
 public static class HomeRibbonMenus

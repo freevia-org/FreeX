@@ -18,6 +18,7 @@
     <Project Path="src/FreeX.Core.IO/FreeX.Core.IO.csproj" />
     <Project Path="src/FreeX.Core.Model/FreeX.Core.Model.csproj" />
     <Project Path="src/FreeX.Ribbon.Avalonia/FreeX.Ribbon.Avalonia.csproj" />
+    <Project Path="src/FreeX.Ribbon.Definitions/FreeX.Ribbon.Definitions.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/FreeX.Core.Calc.Tests/FreeX.Core.Calc.Tests.csproj" />
