@@ -55,9 +55,10 @@ public sealed partial class MainWindow
         var readouts = AvaloniaStatusBarSource.FormatVisibleReadouts(model, _statusBarOptionVisibility);
         _selectionStatsText.Text = readouts;
         _selectionStatsText.IsVisible = readouts.Length > 0;
-        AutomationProperties.SetName(
-            _selectionStatsText,
-            readouts.Length > 0 ? readouts : "Selection statistics");
+        // Keep the accessible NAME a stable label ("Selection statistics"); the dynamic readouts are the
+        // element's Text (value/content). Overwriting Name with the readouts broke the launch-smoke /
+        // accessibility contract (GetName must equal "Selection statistics") whenever a selection had stats.
+        AutomationProperties.SetName(_selectionStatsText, "Selection statistics");
 
         _zoomText.IsVisible = GetStatusBarOption("Zoom");
         _zoomText.Text = FormatZoomPercent(model.ZoomPercent);
