@@ -161,6 +161,8 @@ internal sealed record MacOsLaunchSmokeDialogSnapshot(
     bool HasReplaceDialogCompactLayout,
     bool HasGoToDialog,
     bool HasGoToDialogReferenceControls,
+    bool HasGoToDialogHistoryControls,
+    bool HasGoToDialogSpecialControl,
     bool HasGoToDialogCompactLayout,
     bool HasGoToSpecialDialog,
     bool HasGoToSpecialKindControls,
@@ -207,6 +209,8 @@ internal sealed record MacOsLaunchSmokeDialogSnapshot(
         HasReplaceDialogCompactLayout: false,
         HasGoToDialog: false,
         HasGoToDialogReferenceControls: false,
+        HasGoToDialogHistoryControls: false,
+        HasGoToDialogSpecialControl: false,
         HasGoToDialogCompactLayout: false,
         HasGoToSpecialDialog: false,
         HasGoToSpecialKindControls: false,
@@ -253,6 +257,8 @@ internal sealed record MacOsLaunchSmokeDialogSnapshot(
         HasReplaceDialogCompactLayout &&
         HasGoToDialog &&
         HasGoToDialogReferenceControls &&
+        HasGoToDialogHistoryControls &&
+        HasGoToDialogSpecialControl &&
         HasGoToDialogCompactLayout &&
         HasGoToSpecialDialog &&
         HasGoToSpecialKindControls &&
@@ -1157,6 +1163,8 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"replace_dialog_result_closed_without_accept={FormatBool(snapshot.DialogEvidence.HasReplaceDialogClosedWithoutAccept)}",
                 $"go_to_dialog={FormatBool(snapshot.DialogEvidence.HasGoToDialog)}",
                 $"go_to_dialog_reference_controls={FormatBool(snapshot.DialogEvidence.HasGoToDialogReferenceControls)}",
+                $"go_to_dialog_history_controls={FormatBool(snapshot.DialogEvidence.HasGoToDialogHistoryControls)}",
+                $"go_to_dialog_special_control={FormatBool(snapshot.DialogEvidence.HasGoToDialogSpecialControl)}",
                 $"go_to_dialog_compact_layout={FormatBool(snapshot.DialogEvidence.HasGoToDialogCompactLayout)}",
                 $"go_to_dialog_result_closed_without_accept={FormatBool(snapshot.DialogEvidence.HasGoToDialogClosedWithoutAccept)}",
                 $"go_to_special_dialog={FormatBool(snapshot.DialogEvidence.HasGoToSpecialDialog)}",

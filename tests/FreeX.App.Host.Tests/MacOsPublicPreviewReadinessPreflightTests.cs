@@ -1006,6 +1006,8 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
                 "replace_dialog_result_closed_without_accept=true",
                 "go_to_dialog=true",
                 "go_to_dialog_reference_controls=true",
+                "go_to_dialog_history_controls=true",
+                "go_to_dialog_special_control=true",
                 "go_to_dialog_compact_layout=true",
                 "go_to_dialog_result_closed_without_accept=true",
                 "go_to_special_dialog=true",

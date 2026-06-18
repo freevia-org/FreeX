@@ -4171,6 +4171,8 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("bool HasReplaceDialogCompactLayout,");
         smokeSource.Should().Contain("bool HasGoToDialog,");
         smokeSource.Should().Contain("bool HasGoToDialogReferenceControls,");
+        smokeSource.Should().Contain("bool HasGoToDialogHistoryControls,");
+        smokeSource.Should().Contain("bool HasGoToDialogSpecialControl,");
         smokeSource.Should().Contain("bool HasGoToDialogCompactLayout,");
         smokeSource.Should().Contain("bool HasGoToSpecialDialog,");
         smokeSource.Should().Contain("bool HasGoToSpecialKindControls,");
@@ -4196,11 +4198,14 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("Dispatcher.UIThread.Post(() => dialog.Close());");
         source.Should().Contain("HasLaunchSmokeCompactDialog(probe.Dialog, width: 420, height: 430, minWidth: 360, minHeight: 390)");
         source.Should().Contain("HasLaunchSmokeCompactDialog(probe.Dialog, width: 420, height: 520, minWidth: 360, minHeight: 480)");
-        source.Should().Contain("HasLaunchSmokeCompactDialog(probe.Dialog, width: 380, height: 165, minWidth: 340, minHeight: 155)");
+        source.Should().Contain("HasLaunchSmokeCompactDialog(probe.Dialog, width: 380, height: 320, minWidth: 340, minHeight: 280)");
         source.Should().Contain("HasLaunchSmokeCompactDialog(probe.Dialog, width: 420, height: 310, minWidth: 360, minHeight: 280)");
         source.Should().Contain("HasLaunchSmokeButton(probe.ChooseFormatButton, \"FindChooseFormatFromCellButton\", \"Choose From Cell\")");
         source.Should().Contain("HasLaunchSmokeButton(probe.ChooseFindFormatButton, \"ReplaceFindChooseFormatFromCellButton\", \"Choose From Cell\")");
+        source.Should().Contain("ShowGoToInputDialogAsync(");
         source.Should().Contain("HasLaunchSmokeAutomationId(probe.InputBox, \"GoToReferenceBox\")");
+        source.Should().Contain("HasLaunchSmokeAutomationId(probe.HistoryList, \"GoToHistoryList\")");
+        source.Should().Contain("HasLaunchSmokeButton(probe.SpecialButton, \"GoToSpecialButton\", \"Special...\")");
         source.Should().Contain("HasLaunchSmokeCheckBox(probe.NumbersBox, \"GoToSpecialNumbersBox\", \"Numbers\")");
         smokeSource.Should().Contain("native_find_menu_item={FormatBool(snapshot.HasNativeFindMenuItem)}");
         smokeSource.Should().Contain("native_find_next_menu_item={FormatBool(snapshot.HasNativeFindNextMenuItem)}");
@@ -4222,6 +4227,8 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("replace_dialog_compact_layout={FormatBool(snapshot.DialogEvidence.HasReplaceDialogCompactLayout)}");
         smokeSource.Should().Contain("go_to_dialog={FormatBool(snapshot.DialogEvidence.HasGoToDialog)}");
         smokeSource.Should().Contain("go_to_dialog_reference_controls={FormatBool(snapshot.DialogEvidence.HasGoToDialogReferenceControls)}");
+        smokeSource.Should().Contain("go_to_dialog_history_controls={FormatBool(snapshot.DialogEvidence.HasGoToDialogHistoryControls)}");
+        smokeSource.Should().Contain("go_to_dialog_special_control={FormatBool(snapshot.DialogEvidence.HasGoToDialogSpecialControl)}");
         smokeSource.Should().Contain("go_to_dialog_compact_layout={FormatBool(snapshot.DialogEvidence.HasGoToDialogCompactLayout)}");
         smokeSource.Should().Contain("go_to_special_dialog={FormatBool(snapshot.DialogEvidence.HasGoToSpecialDialog)}");
         smokeSource.Should().Contain("go_to_special_dialog_kind_controls={FormatBool(snapshot.DialogEvidence.HasGoToSpecialKindControls)}");
