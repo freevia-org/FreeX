@@ -28,7 +28,10 @@ public static partial class RibbonIconFactory
         foreach (var candidateSlug in GetCommandIconSlugCandidates(slug))
         {
             var monochromeBrush = IsWhiteBrush(glyphBrush) ? glyphBrush : null;
-            var sizeKey = size <= 22 ? "s" : "l";
+            // Key the cache by the EXACT rendered size, not a coarse small/large bucket. The vector is
+            // re-wrapped per size (WrapDrawingInSvgViewBox scales stroke widths to the target), so sharing
+            // one drawing across e.g. 18/20/22px left strokes mis-scaled and the glyph looked soft/blurry.
+            var sizeKey = ((int)Math.Round(size)).ToString(System.Globalization.CultureInfo.InvariantCulture);
             foreach (var fileSlug in GetSizeSpecificSlugCandidates(candidateSlug, size, monochromeBrush is not null))
             {
                 var cacheKey = monochromeBrush is null

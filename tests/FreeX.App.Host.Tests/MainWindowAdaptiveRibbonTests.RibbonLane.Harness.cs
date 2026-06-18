@@ -93,6 +93,23 @@ public sealed partial class MainWindowAdaptiveRibbonTests
         // Counts the command controls currently shown (expanded) in the selected tab — visible buttons
         // that are not the single collapsed-group overflow button. Robust for the declarative ribbon,
         // unlike VisibleRibbonCommandLabels which depends on the legacy label-extraction path.
+        // Count of visible command buttons in the selected tab that are disabled (greyed). Used to verify
+        // the Help tab's commands bind to live handlers instead of rendering disabled.
+        public int SelectedTabDisabledCommandButtonCount =>
+            WpfTestTree.FindVisualSelfAndDescendants<System.Windows.Controls.Primitives.ButtonBase>(SelectedRibbonContentRoot)
+                .Where(IsEffectivelyVisible)
+                .Where(button => !RibbonMetadata.IsCollapsedGroupButton(button))
+                .Count(button => !button.IsEnabled);
+
+        public IReadOnlyList<string> SelectedTabDisabledCommandTitles =>
+            WpfTestTree.FindVisualSelfAndDescendants<System.Windows.Controls.Primitives.ButtonBase>(SelectedRibbonContentRoot)
+                .Where(IsEffectivelyVisible)
+                .Where(button => !RibbonMetadata.IsCollapsedGroupButton(button))
+                .Where(button => !button.IsEnabled)
+                .Select(button => RibbonTooltip.GetTitle(button) ?? button.Name)
+                .Where(t => !string.IsNullOrWhiteSpace(t))
+                .ToList();
+
         public int SelectedTabVisibleCommandControlCount =>
             WpfTestTree.FindVisualSelfAndDescendants<System.Windows.Controls.Primitives.ButtonBase>(SelectedRibbonContentRoot)
                 .Where(IsEffectivelyVisible)
