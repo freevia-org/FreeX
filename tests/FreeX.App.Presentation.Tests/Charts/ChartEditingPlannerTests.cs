@@ -477,6 +477,81 @@ public sealed class ChartEditingPlannerTests
         chart.ShowTrendlineRSquared.Should().BeFalse();
     }
 
+    // ---- ChartErrorBarsPlanner -----------------------------------------------------------------------
+
+    [Fact]
+    public void ErrorBars_KindChoices_CoverAllFourKinds()
+    {
+        var kinds = ChartErrorBarsPlanner.GetKindChoices().Select(c => c.Kind).ToList();
+
+        kinds.Should().BeEquivalentTo(new[]
+        {
+            ChartErrorBarKind.StandardError, ChartErrorBarKind.Percentage,
+            ChartErrorBarKind.FixedValue, ChartErrorBarKind.Custom
+        });
+    }
+
+    [Fact]
+    public void ErrorBars_DirectionChoices_CoverAllThreeDirections()
+    {
+        var directions = ChartErrorBarsPlanner.GetDirectionChoices().Select(c => c.Direction).ToList();
+
+        directions.Should().BeEquivalentTo(new[]
+        {
+            ChartErrorBarDirection.Both, ChartErrorBarDirection.Plus, ChartErrorBarDirection.Minus
+        });
+    }
+
+    [Fact]
+    public void ErrorBars_Supports_OnlyErrorBarCapableTypes()
+    {
+        ChartErrorBarsPlanner.SupportsErrorBars(ChartType.Column).Should().BeTrue();
+        ChartErrorBarsPlanner.SupportsErrorBars(ChartType.Scatter).Should().BeTrue();
+        ChartErrorBarsPlanner.SupportsErrorBars(ChartType.Pie).Should().BeFalse();
+    }
+
+    [Fact]
+    public void ErrorBars_Plan_ClampsValue()
+    {
+        var options = ChartErrorBarsPlanner.Plan(new ChartErrorBarsInput(
+            ShowErrorBars: true, ChartErrorBarKind.FixedValue,
+            ChartErrorBarDirection.Plus, Value: 99999, EndCaps: true));
+
+        options.ShowErrorBars.Should().BeTrue();
+        options.ErrorBarKind.Should().Be(ChartErrorBarKind.FixedValue);
+        options.ErrorBarDirection.Should().Be(ChartErrorBarDirection.Plus);
+        options.ErrorBarValue.Should().Be(ChartErrorBarsPlanner.MaxValue);
+        options.ErrorBarEndCaps.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ErrorBars_Read_FallsBackForNonFiniteValue()
+    {
+        var chart = new ChartModel { Type = ChartType.Line, ErrorBarValue = double.NaN };
+
+        var input = ChartErrorBarsPlanner.Read(chart);
+
+        double.IsFinite(input.Value).Should().BeTrue();
+        input.Value.Should().BeInRange(ChartErrorBarsPlanner.MinValue, ChartErrorBarsPlanner.MaxValue);
+    }
+
+    [Fact]
+    public void ErrorBars_Plan_RoundTripsThroughSetChartLayoutCommand()
+    {
+        var chart = new ChartModel { Type = ChartType.Column };
+        var options = ChartErrorBarsPlanner.Plan(new ChartErrorBarsInput(
+            ShowErrorBars: true, ChartErrorBarKind.Percentage,
+            ChartErrorBarDirection.Minus, Value: 12.5, EndCaps: false));
+
+        ApplyLayout(chart, options);
+
+        chart.ShowErrorBars.Should().BeTrue();
+        chart.ErrorBarKind.Should().Be(ChartErrorBarKind.Percentage);
+        chart.ErrorBarDirection.Should().Be(ChartErrorBarDirection.Minus);
+        chart.ErrorBarValue.Should().Be(12.5);
+        chart.ErrorBarEndCaps.Should().BeFalse();
+    }
+
     private static void ApplyLayout(ChartModel chart, ChartLayoutOptions options)
     {
         var workbook = new Workbook("test");

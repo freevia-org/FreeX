@@ -130,6 +130,12 @@
   <data name="ChartTrendline_OrderLabel" xml:space="preserve"><value>Ordre polynomial (polynomial uniquement) :</value></data>
   <data name="ChartTrendline_ShowEquation" xml:space="preserve"><value>Afficher l'équation sur le graphique</value></data>
   <data name="ChartTrendline_ShowRSquared" xml:space="preserve"><value>Afficher le coefficient de détermination (R²)</value></data>
+  <data name="ChartErrorBars_Title" xml:space="preserve"><value>Barres d'erreur</value></data>
+  <data name="ChartErrorBars_Show" xml:space="preserve"><value>Afficher les barres d'erreur</value></data>
+  <data name="ChartErrorBars_KindLabel" xml:space="preserve"><value>Marge d'erreur :</value></data>
+  <data name="ChartErrorBars_DirectionLabel" xml:space="preserve"><value>Direction :</value></data>
+  <data name="ChartErrorBars_ValueLabel" xml:space="preserve"><value>Valeur fixe ou pourcentage :</value></data>
+  <data name="ChartErrorBars_EndCaps" xml:space="preserve"><value>Afficher les extrémités</value></data>
   <data name="ConditionalFormat_NewRuleTitle" xml:space="preserve"><value>Nouvelle règle de mise en forme</value></data>
   <data name="ConditionalFormat_EditRuleTitle" xml:space="preserve"><value>Modifier la règle de mise en forme</value></data>
   <data name="ConditionalFormat_AppliesToFormat" xml:space="preserve"><value>S'applique à {0}</value></data>

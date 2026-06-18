@@ -1754,7 +1754,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_session.SelectedRange");
         source.Should().Contain("CreateDataValidationTypeChoices()");
         source.Should().Contain("DataValidationPresetPlanner.GetRuleTypeMetadata()");
-        source.Should().Contain(".Where(metadata => metadata.Type is DvType.WholeNumber or DvType.List or DvType.TextLength)");
+        source.Should().Contain(".Where(metadata => metadata.Type is DvType.WholeNumber or DvType.Decimal or DvType.List or DvType.Date or DvType.Time or DvType.TextLength or DvType.Custom or DvType.Any)");
         source.Should().Contain("CreateDefaultDataValidationRule(initialType, _session.SelectedRange)");
         source.Should().Contain("DataValidationPresetPlanner.CreateDefaultRule(type, _session.SelectedRange)");
         source.Should().Contain("DataValidationPresetPlanner.RequiresSecondFormula(type, op)");
