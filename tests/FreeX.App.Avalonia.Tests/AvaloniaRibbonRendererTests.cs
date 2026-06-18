@@ -137,8 +137,8 @@ public sealed class AvaloniaRibbonRendererTests
     [Fact]
     public Task BuildRibbon_ProducesTabPerVisibleTab() => RunOnUiThread(() =>
     {
-        var definition = SampleRibbon.BuildDefinition();
-        var registry = SampleRibbon.BuildRegistry(() => null, _ => { });
+        var definition = AvaloniaRibbonComposition.BuildDefinition();
+        var registry = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { });
         var ribbon = AvaloniaRibbonRenderer.BuildRibbon(definition, registry);
 
         var tabControl = Assert.IsType<TabControl>(ribbon);
