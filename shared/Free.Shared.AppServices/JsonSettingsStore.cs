@@ -112,7 +112,14 @@ public sealed class JsonSettingsStore<T>
     /// Stateless safe load from an explicit path. Returns the deserialized value (or a fresh default) and
     /// a non-null error message when the file existed but could not be read/parsed. Never throws.
     /// </summary>
-    public static (T Value, string? Error) LoadFromPath(string storePath, JsonSerializerOptions? jsonOptions = null)
+    /// <param name="noun">
+    /// The user-facing word for what is being persisted in the error message (default <c>"settings"</c>),
+    /// e.g. an app can pass <c>"options"</c> to read <c>"Failed to load options from '…'"</c>.
+    /// </param>
+    public static (T Value, string? Error) LoadFromPath(
+        string storePath,
+        JsonSerializerOptions? jsonOptions = null,
+        string noun = "settings")
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(storePath);
 
@@ -127,7 +134,7 @@ public sealed class JsonSettingsStore<T>
         }
         catch (Exception ex)
         {
-            return (new T(), $"Failed to load settings from '{storePath}': {ex.Message}");
+            return (new T(), $"Failed to load {noun} from '{storePath}': {ex.Message}");
         }
 
         return (new T(), null);
@@ -137,7 +144,15 @@ public sealed class JsonSettingsStore<T>
     /// Stateless atomic save to an explicit path. Returns null on success or an error message on failure
     /// (never throws). The directory is created if missing; the write goes through a sibling temp file.
     /// </summary>
-    public static string? SaveToPath(T settings, string storePath, JsonSerializerOptions? jsonOptions = null)
+    /// <param name="noun">
+    /// The user-facing word for what is being persisted in the error message (default <c>"settings"</c>),
+    /// e.g. an app can pass <c>"options"</c> to read <c>"Failed to save options to '…'"</c>.
+    /// </param>
+    public static string? SaveToPath(
+        T settings,
+        string storePath,
+        JsonSerializerOptions? jsonOptions = null,
+        string noun = "settings")
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentException.ThrowIfNullOrWhiteSpace(storePath);
@@ -151,7 +166,7 @@ public sealed class JsonSettingsStore<T>
         }
         catch (Exception ex)
         {
-            return $"Failed to save settings to '{storePath}': {ex.Message}";
+            return $"Failed to save {noun} to '{storePath}': {ex.Message}";
         }
     }
 }
