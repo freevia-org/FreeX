@@ -1,6 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Equation">
   <rect width="32" height="32" fill="none"/>
-  <text x="12" y="17" font-size="13" fill="#0F6D8C" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle" dominant-baseline="central">EQ</text>
-  <text x="23" y="17" font-size="18" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle" dominant-baseline="central">=</text>
-  <path d="M19 22h8" stroke="#242424" stroke-width="1.4"/>
+  <!-- Pi: the Insert Equation glyph -->
+  <path d="M6.5 11.5H25.5" fill="none" stroke="#0F6D8C" stroke-width="2.3" stroke-linecap="round"/>
+  <path d="M11.5 12V24.5" fill="none" stroke="#242424" stroke-width="2" stroke-linecap="round"/>
+  <path d="M20.5 12V22q0 2.5 2.6 2.5" fill="none" stroke="#242424" stroke-width="2" stroke-linecap="round"/>
 </svg>
