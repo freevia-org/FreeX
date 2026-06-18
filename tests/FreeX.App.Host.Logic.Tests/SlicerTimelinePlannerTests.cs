@@ -152,6 +152,59 @@ public sealed class SlicerTimelinePlannerTests
     }
 
     [Fact]
+    public void NativeVisualSlicers_IncludeTableSlicersAnchoredOnActiveSheetWithoutPivot()
+    {
+        var workbook = new Workbook("TableSlicerGate");
+        var activeSheet = workbook.AddSheet("Tasks");
+        var otherSheet = workbook.AddSheet("Other");
+        var anchor = new DrawingAnchorRange(
+            new DrawingAnchorPoint(6, 0, 0, 0),
+            new DrawingAnchorPoint(8, 0, 4, 0));
+
+        // Table slicer: no SourcePivotTableName, anchored on the active sheet => visible.
+        workbook.Slicers.Add(new SlicerModel
+        {
+            Name = "Category",
+            DrawingAnchor = anchor,
+            SourceSheetName = "Tasks",
+            SourceTableId = 1,
+            SourceTableColumnId = 5,
+        });
+        // Table slicer anchored on a different sheet => hidden on the active sheet.
+        workbook.Slicers.Add(new SlicerModel
+        {
+            Name = "OtherTableSlicer",
+            DrawingAnchor = anchor,
+            SourceSheetName = "Other",
+        });
+
+        SlicerTimelinePlanner.GetNativeVisualSlicers(workbook, activeSheet)
+            .Select(slicer => slicer.Name)
+            .Should()
+            .Equal("Category");
+
+        SlicerTimelinePlanner.GetNativeVisualSlicers(workbook, otherSheet)
+            .Select(slicer => slicer.Name)
+            .Should()
+            .Equal("OtherTableSlicer");
+    }
+
+    [Fact]
+    public void NativeVisualSlicers_ExcludeTableSlicerWithoutDrawingAnchor()
+    {
+        var workbook = new Workbook("TableSlicerNoAnchor");
+        var activeSheet = workbook.AddSheet("Tasks");
+        workbook.Slicers.Add(new SlicerModel
+        {
+            Name = "Category",
+            SourceSheetName = "Tasks",
+            SourceTableId = 1,
+        });
+
+        SlicerTimelinePlanner.GetNativeVisualSlicers(workbook, activeSheet).Should().BeEmpty();
+    }
+
+    [Fact]
     public void NativeVisualFilters_ReturnSharedEmptyCollectionsForFastPaths()
     {
         var workbook = new Workbook("NativeVisualFiltersEmpty");

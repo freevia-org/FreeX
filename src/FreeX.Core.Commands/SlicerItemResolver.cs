@@ -1,0 +1,196 @@
+using System.Globalization;
+using FreeX.Core.Model;
+
+namespace FreeX.Core.Commands;
+
+/// <summary>
+/// Resolves the available item captions a slicer offers, for rendering. There are two source paths,
+/// mirroring how Excel wires slicers:
+///
+/// <list type="bullet">
+/// <item><b>Table slicer</b> — the slicer cache carries a <c>&lt;x15:tableSlicerCache tableId column&gt;</c>
+/// with NO item cache; the items are the distinct values of the referenced structured-table column
+/// (resolved from <see cref="SlicerModel.SourceTableId"/> / <see cref="SlicerModel.SourceTableColumnId"/>).</item>
+/// <item><b>Pivot slicer</b> — the slicer cache carries <c>&lt;data&gt;&lt;tabular&gt;&lt;items&gt;</c> whose
+/// <c>x</c> indices point into the pivot cache field's shared items; the captions come from those
+/// shared items and selection comes from the <c>s</c> flag.</item>
+/// </list>
+///
+/// This runs in the host (where the workbook is available) and projects the resolved captions onto
+/// <see cref="SlicerModel.AvailableItems"/> (and, for pivot slicers whose selection is encoded only as
+/// cache <c>s</c> flags, onto <see cref="SlicerModel.SelectedItems"/>) so the UI layer renders item
+/// buttons without raw workbook access. Mirrors <see cref="FormControlListResolver"/>'s late-resolution
+/// pattern. Anything that cannot be resolved leaves <see cref="SlicerModel.AvailableItems"/> empty, so
+/// the renderer falls back to the slicer's selected items (or a single caption tile).
+/// </summary>
+public static class SlicerItemResolver
+{
+    /// <summary>
+    /// Populates <see cref="SlicerModel.AvailableItems"/> for every slicer in the workbook, resolving each
+    /// against its source table column or pivot cache field. Safe to call repeatedly.
+    /// </summary>
+    public static void PopulateAvailableItems(Workbook workbook)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+
+        foreach (var slicer in workbook.Slicers)
+            slicer.AvailableItems = ResolveAvailableItems(slicer, workbook);
+    }
+
+    /// <summary>
+    /// Resolves the ordered, distinct available-item captions for a single slicer, or an empty list when
+    /// neither source path applies. For pivot slicers this also fills the slicer's
+    /// <see cref="SlicerModel.SelectedItems"/> from the cache items' selection flags when it was empty.
+    /// </summary>
+    public static IReadOnlyList<string> ResolveAvailableItems(SlicerModel slicer, Workbook workbook)
+    {
+        ArgumentNullException.ThrowIfNull(slicer);
+        ArgumentNullException.ThrowIfNull(workbook);
+
+        // Table path: distinct values of the referenced structured-table column.
+        if (slicer.SourceTableId is { } tableId && slicer.SourceTableColumnId is { } columnId)
+        {
+            var tableItems = ResolveTableColumnItems(workbook, slicer, tableId, columnId);
+            if (tableItems.Count > 0)
+                return tableItems;
+        }
+
+        // Pivot path: captions from the pivot cache field's shared items, indexed by the cache items.
+        if (slicer.CacheItems.Count > 0)
+        {
+            var pivotItems = ResolvePivotCacheItems(workbook, slicer);
+            if (pivotItems.Count > 0)
+                return pivotItems;
+        }
+
+        return [];
+    }
+
+    private static IReadOnlyList<string> ResolveTableColumnItems(
+        Workbook workbook,
+        SlicerModel slicer,
+        int tableId,
+        int columnId)
+    {
+        foreach (var sheet in workbook.Sheets)
+        {
+            foreach (var table in sheet.StructuredTables)
+            {
+                if (table.Id != tableId)
+                    continue;
+
+                var columnOffset = ColumnOffsetForId(table, columnId);
+                if (columnOffset < 0)
+                    return [];
+
+                return DistinctColumnValues(sheet, table.Range, columnOffset);
+            }
+        }
+
+        return [];
+    }
+
+    // The tableSlicerCache @column is the table column id; map it to the 0-based position within the
+    // table range (column order in the table, not the worksheet column letter).
+    private static int ColumnOffsetForId(StructuredTableModel table, int columnId)
+    {
+        for (var index = 0; index < table.Columns.Count; index++)
+        {
+            if (table.Columns[index].Id == columnId)
+                return index;
+        }
+
+        return -1;
+    }
+
+    private static IReadOnlyList<string> DistinctColumnValues(Sheet sheet, GridRange range, int columnOffset)
+    {
+        var col = range.Start.Col + (uint)columnOffset;
+        if (col > range.End.Col)
+            return [];
+
+        // Skip the header row (the table's first row is the header).
+        var firstDataRow = range.Start.Row + 1;
+        var seen = new HashSet<string>(StringComparer.CurrentCultureIgnoreCase);
+        var items = new List<string>();
+        for (var row = firstDataRow; row <= range.End.Row; row++)
+        {
+            var text = ToDisplayText(sheet.GetCell(row, col)?.Value ?? BlankValue.Instance);
+            if (string.IsNullOrEmpty(text))
+                continue;
+            if (seen.Add(text))
+                items.Add(text);
+        }
+
+        return items;
+    }
+
+    private static IReadOnlyList<string> ResolvePivotCacheItems(Workbook workbook, SlicerModel slicer)
+    {
+        var sharedItems = ResolveSharedItems(workbook, slicer);
+        if (sharedItems is null || sharedItems.Count == 0)
+            return [];
+
+        var available = new List<string>(slicer.CacheItems.Count);
+        var selectedFromCache = new List<string>();
+        foreach (var item in slicer.CacheItems)
+        {
+            if (item.Index < 0 || item.Index >= sharedItems.Count)
+                continue;
+            var caption = sharedItems[item.Index];
+            if (string.IsNullOrEmpty(caption))
+                continue;
+            available.Add(caption);
+            if (item.IsSelected)
+                selectedFromCache.Add(caption);
+        }
+
+        // Excel stores a pivot slicer's selection as the s="1" flag on the cache items (not as
+        // <selectedItem>). Project it onto SelectedItems when the slicer didn't already carry one,
+        // and only when the selection is a real subset (all-selected => unfiltered/cleared state).
+        if (slicer.SelectedItems.Count == 0 &&
+            selectedFromCache.Count > 0 &&
+            selectedFromCache.Count < available.Count)
+        {
+            slicer.SelectedItems.AddRange(selectedFromCache);
+        }
+
+        return available;
+    }
+
+    private static IReadOnlyList<string>? ResolveSharedItems(Workbook workbook, SlicerModel slicer)
+    {
+        var fieldName = slicer.SourceFieldName;
+        if (string.IsNullOrWhiteSpace(fieldName))
+            return null;
+
+        // Find the pivot cache field by name across the workbook's pivot caches. Slicer caches don't
+        // always carry a stable cache id reachable here, so a name match on the source field is the
+        // reliable association (slicer sourceName == pivot cache field name).
+        foreach (var cache in workbook.PivotCaches)
+        {
+            foreach (var field in cache.Fields)
+            {
+                if (string.Equals(field.Name, fieldName, StringComparison.OrdinalIgnoreCase) &&
+                    field.SharedItems is { Count: > 0 })
+                {
+                    return field.SharedItems;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static string ToDisplayText(ScalarValue value) =>
+        value switch
+        {
+            TextValue t => t.Value,
+            NumberValue n => n.Value.ToString(CultureInfo.CurrentCulture),
+            BoolValue b => b.Value ? "TRUE" : "FALSE",
+            DateTimeValue d => d.ToDateTime().ToString(CultureInfo.CurrentCulture),
+            BlankValue => string.Empty,
+            ErrorValue => string.Empty,
+            _ => value.ToString() ?? string.Empty,
+        };
+}

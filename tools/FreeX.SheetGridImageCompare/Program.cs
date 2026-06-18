@@ -255,6 +255,13 @@ internal static class Program
         if (sheet.FormControls.Count > 0)
             FreeX.Core.Commands.FormControlListResolver.PopulateSelectedText(sheet, workbook);
 
+        // Surface native slicers/timelines anchored on this sheet, mirroring MainWindow.Viewport: resolve
+        // each slicer's available items (table-column distinct values / pivot cache shared items) into
+        // AvailableItems, then hand the visible set to the GridView so it draws the slicer boxes.
+        var nativeVisualFilters = FreeX.App.Host.SlicerTimelinePlanner.GetNativeVisualFilters(workbook, sheet);
+        if (nativeVisualFilters.Slicers.Count > 0)
+            FreeX.Core.Commands.SlicerItemResolver.PopulateAvailableItems(workbook);
+
         // Step 3: Configure GridView
         var grid = new GridView
         {
@@ -267,6 +274,8 @@ internal static class Program
             DrawingShapes   = sheet.DrawingShapes,
             TextBoxes       = sheet.TextBoxes,
             FormControls    = sheet.FormControls,
+            NativeSlicers   = nativeVisualFilters.Slicers,
+            NativeTimelines = nativeVisualFilters.Timelines,
             Sparklines      = sheet.Sparklines,
             MergedRegions   = sheet.MergedRegions,
             WorksheetBackground = null,
