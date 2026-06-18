@@ -1,4 +1,5 @@
 using System;
+using FreeX.App.Presentation.Editing;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -54,12 +55,4 @@ public static class ClipboardPastePlanner
                 targetStart.Row + pastedRows - 1,
                 targetStart.Col + pastedCols - 1));
     }
-}
-
-public enum PasteMode
-{
-    All,
-    Values,
-    Formulas,
-    Formats
 }
