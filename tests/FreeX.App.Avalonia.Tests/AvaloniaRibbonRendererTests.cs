@@ -272,4 +272,33 @@ public sealed class AvaloniaRibbonRendererTests
         var shapes = content.GetVisualDescendants().OfType<Shape>().ToList();
         Assert.NotEmpty(shapes);
     });
+
+    [Theory]
+    [InlineData("Paste")]
+    [InlineData("Format Painter")]
+    [InlineData("Conditional Formatting")]
+    public Task IconBuild_KnownCommand_LoadsSharedSvg(string commandName) => RunOnUiThread(() =>
+    {
+        // A command with a matching CommandIconsSvg/<slug>.svg must render the SAME shared SVG the WPF
+        // host loads, parsed natively into an Avalonia Image backed by a DrawingImage (no external SVG
+        // library), not the fallback kind glyph.
+        var icon = AvaloniaRibbonIcons.Build(RibbonCommandIconKind.Generic, 32, commandName);
+
+        var image = Assert.IsType<Image>(icon);
+        var drawingImage = Assert.IsType<DrawingImage>(image.Source);
+        var group = Assert.IsType<DrawingGroup>(drawingImage.Drawing);
+        Assert.NotEmpty(group.Children);
+        Assert.Equal(32, image.Width);
+    });
+
+    [Fact]
+    public Task IconBuild_UnknownCommand_FallsBackToKindGlyph() => RunOnUiThread(() =>
+    {
+        // A command name with no SVG file falls back to the neutral kind glyph (a Viewbox over a Canvas),
+        // exactly like the WPF host.
+        var icon = AvaloniaRibbonIcons.Build(RibbonCommandIconKind.Save, 24, "No Such Command Xyzzy");
+
+        var viewbox = Assert.IsType<Viewbox>(icon);
+        Assert.IsType<Canvas>(viewbox.Child);
+    });
 }

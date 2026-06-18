@@ -581,7 +581,12 @@ public static class AvaloniaRibbonRenderer
 
     private static Control NewIcon(RibbonControl control, double size, HorizontalAlignment h)
     {
-        var icon = AvaloniaRibbonIcons.Build(control.Icon?.Kind ?? RibbonCommandIconKind.Generic, size);
+        // Pass the command id so the icon builder can resolve the per-command SVG glyph (the SAME file
+        // the WPF host loads); it falls back to the kind glyph when no SVG matches.
+        var icon = AvaloniaRibbonIcons.Build(
+            control.Icon?.Kind ?? RibbonCommandIconKind.Generic,
+            size,
+            control.CommandId.Value);
         icon.HorizontalAlignment = h;
         icon.VerticalAlignment = VerticalAlignment.Center;
         return icon;

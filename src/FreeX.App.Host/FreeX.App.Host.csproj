@@ -60,7 +60,9 @@
 
   <ItemGroup>
     <Content Include="Resources\FreeX.ico" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="Resources\CommandIconsSvg\**\*.svg" CopyToOutputDirectory="PreserveNewest" />
+    <!-- CommandIconsSvg now live in FreeX.Ribbon.Definitions (shared with the Avalonia app) and are
+         copied to this app's output transitively at Resources\CommandIconsSvg\ — the same path
+         RibbonIconFactory.Svg.cs loads from. -->
   </ItemGroup>
 
   <PropertyGroup>
