@@ -89,5 +89,7 @@
     <Using Include="Free.Shared.Commands" />
     <Using Include="Free.Shared.AppServices" />
     <Using Include="Free.Shared.Shell" />
+    <Using Include="FreeX.App.Presentation" />
+    <Using Include="FreeX.App.Presentation.DrawingInteraction" />
   </ItemGroup>
 </Project>

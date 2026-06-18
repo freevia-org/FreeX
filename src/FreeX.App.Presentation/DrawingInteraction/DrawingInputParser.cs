@@ -2,7 +2,7 @@ using System.Globalization;
 using FreeX.Core.Model;
 using IOPath = System.IO.Path;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Presentation.DrawingInteraction;
 
 public static class DrawingInputParser
 {
@@ -130,5 +130,4 @@ public static class DrawingInputParser
             ErrorValue error => error.Code,
             _ => value.ToString() ?? ""
         };
-
 }
