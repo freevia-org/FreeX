@@ -86,10 +86,12 @@ public sealed partial class MainWindow
             ["pivotDesign.bandedColumns"] = TogglePivotBandedColumns,
             ["pivotDesign.rowHeaders"] = TogglePivotRowHeaders,
             ["pivotDesign.columnHeaders"] = TogglePivotColumnHeaders,
-            // No Core support yet (name/options dialog, field settings, group/ungroup, change data source,
+            // PivotTable Options dialog — totals & layout-display options via ConfigurePivotTableOptionsCommand
+            // (MainWindow.PivotOptions).
+            ["pivotAnalyze.options"] = OpenPivotTableOptions,
+            // No Core support yet (name dialog, field settings, group/ungroup, change data source,
             // calculated field, pivot styles gallery) — honest stubs.
             ["pivotAnalyze.name"] = () => ReportPivotNotYetAvailable("PivotTable Name"),
-            ["pivotAnalyze.options"] = () => ReportPivotNotYetAvailable("PivotTable Options"),
             ["pivotAnalyze.fieldSettings"] = () => ReportPivotNotYetAvailable("Field Settings"),
             ["pivotAnalyze.groupField"] = () => ReportPivotNotYetAvailable("Group Field"),
             ["pivotAnalyze.ungroup"] = () => ReportPivotNotYetAvailable("Ungroup"),
