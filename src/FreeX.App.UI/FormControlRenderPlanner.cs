@@ -83,6 +83,16 @@ internal static class FormControlRenderPlanner
     }
 
     /// <summary>
+    /// The selected-item text drawn inside a list-style control's field: the host-resolved
+    /// <see cref="FormControlModel.SelectedText"/> (the <see cref="FormControlModel.SelectedIndex"/>-th
+    /// item of <see cref="FormControlModel.ListFillRange"/>). Returns an empty string when nothing is
+    /// selected or the source range could not be resolved — the caller then draws a blank field,
+    /// matching the prior behavior.
+    /// </summary>
+    public static string GetSelectedText(FormControlModel control)
+        => string.IsNullOrWhiteSpace(control.SelectedText) ? string.Empty : control.SelectedText.Trim();
+
+    /// <summary>
     /// Resolves the caption text drawn next to / inside the control: the control's authored display
     /// text (<see cref="FormControlModel.Caption"/>, read from its VML textbox). Returns an empty
     /// string when the control has no authored caption — Excel draws no label in that case, so the

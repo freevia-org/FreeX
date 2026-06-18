@@ -204,6 +204,38 @@ public sealed class FormControlRenderPlannerTests
     }
 
     [Fact]
+    public void GetSelectedText_ReturnsHostResolvedSelection()
+    {
+        var control = new FormControlModel { Kind = FormControlKind.DropDown, SelectedText = "Due in next 14 days" };
+
+        FormControlRenderPlanner.GetSelectedText(control).Should().Be("Due in next 14 days");
+    }
+
+    [Fact]
+    public void GetSelectedText_ReturnsEmptyWhenUnresolved()
+    {
+        // SelectedText is null when the source range / defined name could not be resolved — the
+        // renderer then draws a blank field (prior behavior), never the caption or the shape Name.
+        var control = new FormControlModel
+        {
+            Kind = FormControlKind.DropDown,
+            Caption = "should not show",
+            Name = "Drop Down 1",
+            SelectedText = null,
+        };
+
+        FormControlRenderPlanner.GetSelectedText(control).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void GetSelectedText_TrimsWhitespace()
+    {
+        var control = new FormControlModel { Kind = FormControlKind.DropDown, SelectedText = "  Last 7 days  " };
+
+        FormControlRenderPlanner.GetSelectedText(control).Should().Be("Last 7 days");
+    }
+
+    [Fact]
     public void GetCaption_ReturnsAuthoredCaption()
     {
         var control = new FormControlModel { Kind = FormControlKind.CheckBox, Caption = "Include weekends" };

@@ -258,6 +258,8 @@ public partial class GridView
             hash.Add(control.Name);
             hash.Add(control.IsChecked);
             hash.Add(control.Value);
+            hash.Add(control.SelectedIndex);
+            hash.Add(control.SelectedText);
         }
 
         return hash.ToHashCode();
