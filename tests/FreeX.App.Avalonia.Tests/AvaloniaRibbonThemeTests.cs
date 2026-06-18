@@ -42,8 +42,8 @@ public sealed class AvaloniaRibbonThemeTests
     [Fact]
     public Task BuildRibbon_AppliesThemeStyles() => RunOnUiThread(() =>
     {
-        var definition = SampleRibbon.BuildDefinition();
-        var registry = SampleRibbon.BuildRegistry(() => null, _ => { });
+        var definition = AvaloniaRibbonComposition.BuildDefinition();
+        var registry = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { });
 
         var control = AvaloniaRibbonRenderer.BuildRibbon(definition, registry);
 
@@ -75,15 +75,17 @@ public sealed class AvaloniaRibbonThemeTests
     public Task FontSizeCombo_Selection_ExecutesCommandWithChosenValue() => RunOnUiThread(() =>
     {
         string? applied = null;
-        var definition = SampleRibbon.BuildDefinition();
-        var registry = SampleRibbon.BuildRegistry(
+        var definition = AvaloniaRibbonComposition.BuildDefinition();
+        var registry = AvaloniaRibbonComposition.BuildRegistry(
             () => null, _ => { }, new AvaloniaRibbonHostCallbacks { SetFontSize = v => applied = v });
 
         var ribbon = AvaloniaRibbonRenderer.BuildRibbon(definition, registry);
 
+        // The combo carries the canonical (shared-definition) command id as its Tag now that the ribbon is
+        // built from the single-source FreeXRibbon definition.
         var combo = ribbon.GetLogicalDescendants()
             .OfType<ComboBox>()
-            .First(c => (string?)c.Tag == "home.fontSize");
+            .First(c => (string?)c.Tag == AvaloniaCommandIdAdapter.ToCanonical("home.fontSize"));
 
         // Initial index 0 was suppressed at build; a user pick (index change) applies the chosen size.
         combo.SelectedIndex = combo.SelectedIndex + 1;
