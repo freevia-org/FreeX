@@ -1,0 +1,116 @@
+using FreeX.Core.Commands;
+using FreeX.Core.Model;
+
+namespace FreeX.App.Presentation.Charts.Editing;
+
+/// <summary>The per-series fill/stroke/marker state read from a chart and edited back through the dialog.</summary>
+public readonly record struct ChartSeriesFormatInput(
+    int SeriesIndex,
+    CellColor? FillColor,
+    CellColor? StrokeColor,
+    double? StrokeThickness,
+    ChartMarkerStyle? MarkerStyle,
+    double? MarkerSize);
+
+/// <summary>
+/// Portable (no UI) planner for the "Format Series" editing dialog: per-series fill color, line (stroke)
+/// color and width, and marker style/size. Reads the chosen series' current
+/// <see cref="ChartSeriesFormat"/> and merges an edited <see cref="ChartSeriesFormatInput"/> back into the
+/// chart's series-format list (replacing the matching entry or appending a new one), producing the
+/// <see cref="ChartLayoutOptions"/> the shell hands to the Core <see cref="SetChartLayoutCommand"/>. Setting
+/// an explicit fill color clears any theme-color reference so the explicit color wins. Reused across every
+/// shell.
+/// </summary>
+public static class ChartSeriesFormatPlanner
+{
+    /// <summary>The number of data series the series picker should offer (at least one).</summary>
+    public static int GetSeriesCount(ChartModel chart) => Math.Max(1, ChartTypeSupport.GetDataSeriesCount(chart));
+
+    /// <summary>
+    /// Reads the chosen series' current format into the dialog input shape. <paramref name="seriesIndex"/> is
+    /// clamped into <c>[0, seriesCount)</c>; a series with no stored format reads as all-null (inherits the
+    /// palette default).
+    /// </summary>
+    public static ChartSeriesFormatInput Read(ChartModel chart, int seriesIndex)
+    {
+        var count = GetSeriesCount(chart);
+        var index = Math.Clamp(seriesIndex, 0, count - 1);
+        var format = FindSeriesFormat(chart, index);
+        return new ChartSeriesFormatInput(
+            index,
+            format?.FillColor,
+            format?.StrokeColor,
+            format?.StrokeThickness,
+            format?.MarkerStyle,
+            format?.MarkerSize);
+    }
+
+    /// <summary>
+    /// Validates the edited series format. Returns null when valid, otherwise an English reason it is
+    /// rejected (a non-positive line width or marker size). Null thickness/size means "inherit" and is valid.
+    /// </summary>
+    public static string? Validate(ChartSeriesFormatInput input)
+    {
+        if (input.StrokeThickness is { } thickness && thickness <= 0)
+            return "The line width must be greater than zero.";
+
+        if (input.MarkerSize is { } size && size <= 0)
+            return "The marker size must be greater than zero.";
+
+        return null;
+    }
+
+    /// <summary>
+    /// Merges the edited series format into the chart's series-format list and returns the
+    /// <see cref="ChartLayoutOptions"/> delta. The entry for <see cref="ChartSeriesFormatInput.SeriesIndex"/>
+    /// is replaced (or appended when absent); other series are preserved. An explicit fill color clears the
+    /// fill theme-color reference so it takes effect.
+    /// </summary>
+    public static ChartLayoutOptions Plan(ChartModel chart, ChartSeriesFormatInput input)
+    {
+        var seriesIndex = Math.Max(0, input.SeriesIndex);
+        var formats = new List<ChartSeriesFormat>(chart.SeriesFormats);
+        var existingIndex = IndexOfSeriesFormat(formats, seriesIndex);
+        var current = existingIndex >= 0 ? formats[existingIndex] : new ChartSeriesFormat(seriesIndex);
+
+        var updated = current with
+        {
+            FillColor = input.FillColor,
+            FillThemeColor = input.FillColor is null ? current.FillThemeColor : null,
+            StrokeColor = input.StrokeColor,
+            StrokeThemeColor = input.StrokeColor is null ? current.StrokeThemeColor : null,
+            StrokeThickness = input.StrokeThickness,
+            MarkerStyle = input.MarkerStyle,
+            MarkerSize = input.MarkerSize,
+        };
+
+        if (existingIndex >= 0)
+            formats[existingIndex] = updated;
+        else
+            formats.Add(updated);
+
+        return new ChartLayoutOptions(SeriesFormats: formats);
+    }
+
+    private static ChartSeriesFormat? FindSeriesFormat(ChartModel chart, int seriesIndex)
+    {
+        foreach (var format in chart.SeriesFormats)
+        {
+            if (format.SeriesIndex == seriesIndex)
+                return format;
+        }
+
+        return null;
+    }
+
+    private static int IndexOfSeriesFormat(IReadOnlyList<ChartSeriesFormat> formats, int seriesIndex)
+    {
+        for (var index = 0; index < formats.Count; index++)
+        {
+            if (formats[index].SeriesIndex == seriesIndex)
+                return index;
+        }
+
+        return -1;
+    }
+}
