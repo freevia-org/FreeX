@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Insert Slicer">
+  <rect width="32" height="32" fill="none"/>
+  <rect x="5.5" y="7.5" width="17" height="18" rx="1" fill="#ffffff" stroke="#242424" stroke-width="1.4"/>
+  <path d="M8.5 12.5h10M8.5 16.5h10M8.5 20.5h7" fill="none" stroke="#242424" stroke-width="1.2" stroke-linecap="round"/>
+  <path d="M21.5 7.5h5l-2 3v4l-1.6 1v-5z" fill="#ffffff" stroke="#4472c4" stroke-width="1.2" stroke-linejoin="round"/>
+  <path d="M24.5 20.5h5M27 18v5" fill="none" stroke="#217346" stroke-width="1.7" stroke-linecap="round"/>
+</svg>
