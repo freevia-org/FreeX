@@ -16,6 +16,15 @@ public sealed class DocumentStyle
     public ParagraphFormatting Paragraph { get; set; } = ParagraphFormatting.Default;
 
     /// <summary>
+    /// Whether this (table) style defines visible cell borders in its <c>w:tblPr/w:tblBorders</c> — e.g. the
+    /// built-in <c>TableGrid</c> style Word applies to a default bordered table. A table that references such
+    /// a style via <c>w:tblStyle</c> but sets no explicit <c>tblBorders</c> of its own still draws borders;
+    /// the reader ORs this into the table's resolved <see cref="TableFormatting.Borders"/>. False for styles
+    /// with no table borders (the common case), so non-table styles are unaffected.
+    /// </summary>
+    public bool TableBorders { get; init; }
+
+    /// <summary>
     /// The original <c>w:pPr/w:numPr</c> (numId + ilvl) this style's definition carried on read that FreeW
     /// does not model as one of its own lists. Captured so the writer can re-emit the style's numbering
     /// pointing at the preserved <see cref="PreservedParts.OriginalNumbering"/> definition (after the same

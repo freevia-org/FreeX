@@ -1226,6 +1226,13 @@ public static class DocxReader
 
         var tblPr = tbl.Element(W + "tblPr");
         var borders = tblPr?.Element(W + "tblBorders");
+        // Borders can come from the referenced table style (w:tblStyle, e.g. the default TableGrid) rather
+        // than an explicit tblBorders; resolve that so styled-but-not-explicitly-bordered tables still draw.
+        var tblStyleId = tblPr?.Element(W + "tblStyle")?.Attribute(W + "val")?.Value;
+        var styleBorders = tblStyleId is not null
+            && preservedDrawingTarget is not null
+            && preservedDrawingTarget.Styles.TryGetValue(tblStyleId, out var tblStyleDef)
+            && tblStyleDef.TableBorders;
 
         // The table-style toggles round-trip via w:tblLook (HeaderRow=firstRow, BandedRows=noHBand="0")
         // and, for RepeatHeaderRow, via w:trPr/w:tblHeader on the first row. See DocxWriter.BuildTable.
@@ -1237,7 +1244,7 @@ public static class DocxReader
 
         table.Formatting = TableFormatting.Default with
         {
-            Borders = ReadBorders(borders),
+            Borders = ReadBorders(borders) || styleBorders,
             HeaderRow = headerRow,
             BandedRows = bandedRows,
             RepeatHeaderRow = repeatHeader
@@ -2691,6 +2698,10 @@ public static class DocxReader
                 BasedOnStyleId = s.Element(W + "basedOn")?.Attribute(W + "val")?.Value,
                 Run = rPr is null ? RunFormatting.Default : ReadRunFormatting(rPr),
                 Paragraph = pPr is null ? ParagraphFormatting.Default : ReadParagraphFormatting(pPr),
+                // A table style (e.g. the built-in TableGrid) defines its cell borders in w:tblPr/w:tblBorders;
+                // capture whether they are visible so a table referencing this style draws them even without
+                // its own tblBorders.
+                TableBorders = ReadBorders(s.Element(W + "tblPr")?.Element(W + "tblBorders")),
                 // A style definition can carry numbering via w:pPr/w:numPr (numId + ilvl). FreeW does not model
                 // numbering on a style, so capture the original numPr so the writer can re-emit it against the
                 // preserved numbering.xml (under the same disjoint-id remap as paragraph-level preserved
