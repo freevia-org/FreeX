@@ -75,21 +75,21 @@ public partial class GridView
                 TryGetObjectRect(
                     Pictures,
                     p => p.Id == SelectedObjectId && p.IsVisible,
-                    p => (p.Anchor, p.Width, p.Height),
+                    p => (p.Anchor, p.Width, p.Height, p.AnchorOffsetX, p.AnchorOffsetY),
                     MinimumPictureObjectWidth,
                     MinimumPictureObjectHeight),
             ObjectKind.Shape when DrawingShapes is not null =>
                 TryGetObjectRect(
                     DrawingShapes,
                     s => s.Id == SelectedObjectId && s.IsVisible,
-                    s => (s.Anchor, s.Width, s.Height),
+                    s => (s.Anchor, s.Width, s.Height, s.AnchorOffsetX, s.AnchorOffsetY),
                     MinimumShapeObjectWidth,
                     MinimumShapeObjectHeight),
             ObjectKind.TextBox when TextBoxes is not null =>
                 TryGetObjectRect(
                     TextBoxes,
                     t => t.Id == SelectedObjectId && t.IsVisible,
-                    t => (t.Anchor, t.Width, t.Height),
+                    t => (t.Anchor, t.Width, t.Height, t.AnchorOffsetX, t.AnchorOffsetY),
                     MinimumTextBoxObjectWidth,
                     MinimumTextBoxObjectHeight),
             ObjectKind.Chart when Charts is not null =>
@@ -168,15 +168,15 @@ public partial class GridView
     private Rect TryGetObjectRect<T>(
         IEnumerable<T> items,
         Func<T, bool> match,
-        Func<T, (CellAddress Anchor, double Width, double Height)> props,
+        Func<T, (CellAddress Anchor, double Width, double Height, double OffsetX, double OffsetY)> props,
         double minimumWidth,
         double minimumHeight)
     {
         foreach (var item in items)
         {
             if (!match(item)) continue;
-            var (anchor, width, height) = props(item);
-            if (TryCreateAnchoredObjectRect(anchor, width, height, minimumWidth, minimumHeight, out var rect))
+            var (anchor, width, height, offsetX, offsetY) = props(item);
+            if (TryCreateAnchoredObjectRect(anchor, width, height, minimumWidth, minimumHeight, out var rect, offsetX, offsetY))
                 return rect;
         }
         return Rect.Empty;
@@ -704,7 +704,9 @@ public partial class GridView
                 textBox.Height,
                 MinimumTextBoxObjectWidth,
                 MinimumTextBoxObjectHeight,
-                out var rect) &&
+                out var rect,
+                textBox.AnchorOffsetX,
+                textBox.AnchorOffsetY) &&
             ContainsRotatedInclusive(rect, pos, textBox.RotationDegrees))
         {
             hit = (textBox.Id, ObjectKind.TextBox, rect, textBox.Anchor);
@@ -729,7 +731,9 @@ public partial class GridView
                 picture.Height,
                 MinimumPictureObjectWidth,
                 MinimumPictureObjectHeight,
-                out var rect) &&
+                out var rect,
+                picture.AnchorOffsetX,
+                picture.AnchorOffsetY) &&
             ContainsRotatedInclusive(rect, pos, picture.RotationDegrees))
         {
             hit = (picture.Id, ObjectKind.Picture, rect, picture.Anchor);
@@ -754,7 +758,9 @@ public partial class GridView
                 shape.Height,
                 MinimumShapeObjectWidth,
                 MinimumShapeObjectHeight,
-                out var rect) &&
+                out var rect,
+                shape.AnchorOffsetX,
+                shape.AnchorOffsetY) &&
             ContainsRotatedInclusive(rect, pos, shape.RotationDegrees))
         {
             hit = (shape.Id, ObjectKind.Shape, rect, shape.Anchor);

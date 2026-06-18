@@ -140,7 +140,9 @@ internal static class GridDrawingObjectPlanner
         double height,
         double minimumWidth,
         double minimumHeight,
-        out Rect rect)
+        out Rect rect,
+        double anchorOffsetX = 0,
+        double anchorOffsetY = 0)
     {
         rect = default;
         if (viewport is null)
@@ -151,8 +153,8 @@ internal static class GridDrawingObjectPlanner
             return false;
 
         rect = new Rect(
-            col.LeftOffset + rowHeaderWidth,
-            row.TopOffset + columnHeaderHeight,
+            col.LeftOffset + rowHeaderWidth + anchorOffsetX,
+            row.TopOffset + columnHeaderHeight + anchorOffsetY,
             Math.Max(minimumWidth, width),
             Math.Max(minimumHeight, height));
         return true;
@@ -168,7 +170,9 @@ internal static class GridDrawingObjectPlanner
         double height,
         double minimumWidth,
         double minimumHeight,
-        out Rect rect)
+        out Rect rect,
+        double anchorOffsetX = 0,
+        double anchorOffsetY = 0)
     {
         rect = default;
         if (!rows.TryGetValue(anchor.Row, out var row) ||
@@ -176,8 +180,8 @@ internal static class GridDrawingObjectPlanner
             return false;
 
         rect = new Rect(
-            col.LeftOffset + rowHeaderWidth,
-            row.TopOffset + columnHeaderHeight,
+            col.LeftOffset + rowHeaderWidth + anchorOffsetX,
+            row.TopOffset + columnHeaderHeight + anchorOffsetY,
             Math.Max(minimumWidth, width),
             Math.Max(minimumHeight, height));
         return true;

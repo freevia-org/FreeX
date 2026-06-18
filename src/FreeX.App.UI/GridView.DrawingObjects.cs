@@ -276,7 +276,9 @@ public partial class GridView
                 textBox.Height,
                 MinimumTextBoxObjectWidth,
                 MinimumTextBoxObjectHeight,
-                out var rect))
+                out var rect,
+                textBox.AnchorOffsetX,
+                textBox.AnchorOffsetY))
             return;
 
         var rotationDegrees = textBox.RotationDegrees;
@@ -361,7 +363,9 @@ public partial class GridView
                 shape.Height,
                 MinimumShapeObjectWidth,
                 MinimumShapeObjectHeight,
-                out var rect))
+                out var rect,
+                shape.AnchorOffsetX,
+                shape.AnchorOffsetY))
             return;
 
         var rotationDegrees = shape.RotationDegrees;
@@ -1097,7 +1101,9 @@ public partial class GridView
                         shape.Height,
                         MinimumShapeObjectWidth,
                         MinimumShapeObjectHeight,
-                        out var rect) &&
+                        out var rect,
+                        shape.AnchorOffsetX,
+                        shape.AnchorOffsetY) &&
                     (!NeedsDrawingViewportCull(rect, shape.RotationDegrees, visibleRight, visibleBottom) ||
                         IntersectsDrawingViewport(rect, shape.RotationDegrees, visibleRight, visibleBottom)))
                     DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderLabel("Shape", shape.Name, index), pixelsPerDip);
@@ -1119,7 +1125,9 @@ public partial class GridView
                         picture.Height,
                         MinimumPictureObjectWidth,
                         MinimumPictureObjectHeight,
-                        out var rect) &&
+                        out var rect,
+                        picture.AnchorOffsetX,
+                        picture.AnchorOffsetY) &&
                     (!NeedsDrawingViewportCull(rect, picture.RotationDegrees, visibleRight, visibleBottom) ||
                         IntersectsDrawingViewport(rect, picture.RotationDegrees, visibleRight, visibleBottom)))
                     DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderLabel("Picture", picture.Name, index), pixelsPerDip);
@@ -1141,7 +1149,9 @@ public partial class GridView
                         textBox.Height,
                         MinimumTextBoxObjectWidth,
                         MinimumTextBoxObjectHeight,
-                        out var rect) &&
+                        out var rect,
+                        textBox.AnchorOffsetX,
+                        textBox.AnchorOffsetY) &&
                     (!NeedsDrawingViewportCull(rect, textBox.RotationDegrees, visibleRight, visibleBottom) ||
                         IntersectsDrawingViewport(rect, textBox.RotationDegrees, visibleRight, visibleBottom)))
                     DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderLabel("Text Box", textBox.Name, index), pixelsPerDip);
@@ -1193,7 +1203,9 @@ public partial class GridView
         double height,
         double minimumWidth,
         double minimumHeight,
-        out Rect rect) =>
+        out Rect rect,
+        double anchorOffsetX = 0,
+        double anchorOffsetY = 0) =>
         GridDrawingObjectPlanner.TryCreateAnchoredObjectRect(
             Viewport,
             anchor,
@@ -1203,7 +1215,9 @@ public partial class GridView
             height,
             minimumWidth,
             minimumHeight,
-            out rect);
+            out rect,
+            anchorOffsetX,
+            anchorOffsetY);
 
     private bool TryCreateAnchoredObjectRect(
         RenderMetricLookupCache metricLookups,
@@ -1212,7 +1226,9 @@ public partial class GridView
         double height,
         double minimumWidth,
         double minimumHeight,
-        out Rect rect) =>
+        out Rect rect,
+        double anchorOffsetX = 0,
+        double anchorOffsetY = 0) =>
         GridDrawingObjectPlanner.TryCreateAnchoredObjectRect(
             metricLookups.Rows,
             metricLookups.Columns,
@@ -1223,7 +1239,9 @@ public partial class GridView
             height,
             minimumWidth,
             minimumHeight,
-            out rect);
+            out rect,
+            anchorOffsetX,
+            anchorOffsetY);
 
     private bool TryCreateDrawingAnchorRect(
         RenderMetricLookupCache metricLookups,

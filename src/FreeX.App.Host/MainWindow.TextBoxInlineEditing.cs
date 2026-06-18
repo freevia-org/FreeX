@@ -118,7 +118,9 @@ public partial class MainWindow
                 textBox.Height,
                 TextBoxInlineEditorMinimumWidth,
                 TextBoxInlineEditorMinimumHeight,
-                out var unscaledRect))
+                out var unscaledRect,
+                textBox.AnchorOffsetX,
+                textBox.AnchorOffsetY))
         {
             return false;
         }
