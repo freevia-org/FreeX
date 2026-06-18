@@ -20,7 +20,7 @@ public static class RibbonWpfRenderer
 {
     private const double SmallRowHeight = 22;
     private const double LargeIconSize = 32;
-    private const double MediumIconSize = 16;
+    private const double MediumIconSize = 18;
     private const double SmallIconSize = 18;
     private const int MaxRowsPerColumn = 3;
 
@@ -284,7 +284,7 @@ public static class RibbonWpfRenderer
 
     private static FrameworkElement BuildLargeControl(RibbonControl control, FrameworkElement resourceHost, IRibbonCommandRegistry? registry, IRibbonStateStore? stateStore)
     {
-        var stack = new StackPanel();
+        var stack = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
         stack.Children.Add(NewIcon(control, LargeIconSize, HorizontalAlignment.Center));
 
         var caption = new TextBlock
@@ -297,9 +297,26 @@ public static class RibbonWpfRenderer
             Margin = new Thickness(0, 2, 0, 0),
             MaxWidth = 64
         };
-        if (HasMenu(control))
-            caption.Inlines.Add(new System.Windows.Documents.Run("  ▾") { FontSize = 9 });
+        RibbonMetadata.SetRole(caption, RibbonMetadataRole.CommandLabel);
         stack.Children.Add(caption);
+
+        if (HasMenu(control))
+        {
+            // Excel-style large split button: the dropdown chevron sits on its own centered row at the
+            // bottom of the button. Appending it inline to the label put it on the label's line for short
+            // captions ("Paste  ▾") and below for wrapped ones ("Cell Styles" / "▾") — inconsistent.
+            var largeChevron = new TextBlock
+            {
+                Text = "▾",
+                FontSize = 10,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                TextAlignment = TextAlignment.Center,
+                Margin = new Thickness(0, 1, 0, 0),
+                Opacity = 0.85
+            };
+            RibbonMetadata.SetRole(largeChevron, RibbonMetadataRole.DropdownChevron);
+            stack.Children.Add(largeChevron);
+        }
 
         var button = NewButton(control, resourceHost, "RibbonLargeButton");
         ((ContentControl)button).Content = stack;
@@ -382,13 +399,18 @@ public static class RibbonWpfRenderer
         VerticalAlignment = v
     };
 
-    private static TextBlock Chevron() => new()
+    private static TextBlock Chevron()
     {
-        Text = "▾",
-        FontSize = 9,
-        VerticalAlignment = VerticalAlignment.Center,
-        Margin = new Thickness(1, 0, 1, 0)
-    };
+        var chevron = new TextBlock
+        {
+            Text = "▾",
+            FontSize = 9,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(1, 0, 1, 0)
+        };
+        RibbonMetadata.SetRole(chevron, RibbonMetadataRole.DropdownChevron);
+        return chevron;
+    }
 
     private static Control NewButton(RibbonControl control, FrameworkElement resourceHost, string styleKey)
     {
