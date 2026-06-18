@@ -142,36 +142,29 @@ public sealed class RibbonAdaptivePanel : Panel
         var children = Children.Cast<UIElement>().ToList();
         var hosts = children.OfType<RibbonGroupHost>().ToList();
         var infinite = new Size(double.PositiveInfinity, availableSize.Height);
+        var spacing = GroupSpacing * Math.Max(0, children.Count - 1);
 
-        // Cache each group's full (uncollapsed) width once. Group content is static after the ribbon is
-        // built, so this natural-width measure happens on the first pass and is reused on every later
-        // resize tick.
+        // Measure every child in its CURRENT state first, then record each expanded group's real width as
+        // its full (uncollapsed) width — grow-only.
         //
-        // The previous algorithm reset EVERY host to full and re-measured the whole strip on EVERY pass,
-        // swapping each collapsed host's Content back and forth (full <-> collapsed button) every time.
-        // Mutating a child's Content during MeasureOverride re-dirties layout, so at narrow widths the
-        // measure pass never reached a stable result and WPF aborted it with "an infinite loop appears to
-        // have resulted from cross-dependent views" (manifesting as a blank/unresponsive ribbon and
-        // crashes during live resize). Caching the full widths and flipping only the hosts whose state
-        // actually changes means a steady-state resize swaps no Content at all, so the pass converges and
-        // reflow stays realtime.
+        // Why measure-then-record instead of a one-time seed: a group's rendered width grows after the
+        // first measure as its icons/fonts realize (e.g. Page Setup seeds at 641 but arranges at 786).
+        // The earlier code cached the small seed once and trusted it forever, so the collapse decision
+        // under-counted and the right-hand groups CLIPPED instead of folding into overflow buttons.
+        // Reading the live measured width of whatever is currently expanded keeps the decision honest; a
+        // collapsed group keeps the accurate width recorded the last time it was expanded.
+        //
+        // Why this does NOT reintroduce the "cross-dependent views" infinite loop the original had: we
+        // never reset groups to full or swap Content speculatively — we only flip the groups whose state
+        // actually changes, so a steady-state resize swaps nothing and the pass converges.
+        foreach (var child in children)
+            child.Measure(infinite);
         foreach (var host in hosts)
         {
-            if (host.FullWidth > 0)
-                continue;
-            var wasCollapsed = host.Collapsed;
-            host.Collapsed = false;
-            host.Measure(infinite);
-            host.FullWidth = host.DesiredSize.Width;
-            host.Collapsed = wasCollapsed;
-        }
-
-        // Non-host children (group dividers) are static; measure them once so their width counts toward
-        // the fit decision. These never swap content, so re-measuring is a cheap no-op after the first pass.
-        foreach (var child in children)
-        {
-            if (child is not RibbonGroupHost)
-                child.Measure(infinite);
+            if (!host.Collapsed && host.DesiredSize.Width > host.FullWidth)
+                host.FullWidth = host.DesiredSize.Width;
+            else if (host.FullWidth <= 0)
+                host.FullWidth = host.DesiredSize.Width;
         }
 
         var nonHostWidth = children
@@ -179,11 +172,10 @@ public sealed class RibbonAdaptivePanel : Panel
             .Sum(c => c.DesiredSize.Width);
         var available = double.IsInfinity(availableSize.Width) ? double.MaxValue : availableSize.Width;
 
-        // Decide the collapse set from the cached widths (lowest priority collapses first — Office
-        // behaviour) WITHOUT touching Content yet, then apply only the hosts whose state actually flips.
-        // The Collapsed setter no-ops when unchanged, so resizing within one band swaps nothing.
+        // Decide the collapse set from the (now-refreshed) full widths — lowest priority collapses first
+        // (Office behaviour) — without touching Content yet, then apply only the groups whose state flips.
         var collapsed = new HashSet<RibbonGroupHost>();
-        var total = hosts.Sum(h => h.FullWidth) + nonHostWidth + GroupSpacing * Math.Max(0, children.Count - 1);
+        var total = hosts.Sum(h => h.FullWidth) + nonHostWidth + spacing;
         foreach (var host in hosts.OrderBy(h => h.Priority))
         {
             if (total <= available)
@@ -195,14 +187,13 @@ public sealed class RibbonAdaptivePanel : Panel
         foreach (var host in hosts)
             host.Collapsed = collapsed.Contains(host);
 
-        // Measure children in their final (post-flip) state. Hosts whose state did not change are already
-        // measure-valid, so WPF short-circuits these — only the flipped ones do real work.
+        // Re-measure the groups whose state just flipped (unchanged ones short-circuit).
         foreach (var child in children)
             child.Measure(infinite);
 
-        var width = children.Sum(c => c.DesiredSize.Width) + GroupSpacing * Math.Max(0, children.Count - 1);
+        var width = children.Sum(c => c.DesiredSize.Width) + spacing;
         var height = children.Count > 0 ? children.Max(c => c.DesiredSize.Height) : 0;
-        return new Size(double.IsInfinity(availableSize.Width) ? width : Math.Min(width, availableSize.Width), height);
+        return new Size(double.IsInfinity(availableSize.Width) ? width : Math.Min(width, available), height);
     }
 
     protected override Size ArrangeOverride(Size finalSize)
