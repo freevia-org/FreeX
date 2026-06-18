@@ -262,9 +262,12 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("WorkbookExportPrintPlanner.CreatePlan(");
         source.Should().Contain("WorkbookExportPrintSurface.MacOs");
         source.Should().Contain("PortablePdfExportPlanner.CreatePlan(exportPrintPlan)");
-        source.Should().Contain("PortablePdfDocumentExporter.Save(_session.Workbook, exportPlan, path)");
+        // The menu handler routes through a single PDF export seam; the Skia-vs-portable decision lives there.
+        source.Should().Contain("Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, exportPlan, pdfBuffer)");
+        var pdfRouterSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "Pdf", "AvaloniaPdfDocumentExporter.cs"));
         // Unicode-capable export goes through Skia (auto font embedding); portable WinAnsi is the fallback.
-        source.Should().Contain("Pdf.SkiaPdfDocumentExporter.Save(_session.Workbook, exportPlan, pdfBuffer)");
+        pdfRouterSource.Should().Contain("SkiaPdfDocumentExporter.Save(workbook, exportPlan, stream");
+        pdfRouterSource.Should().Contain("PortablePdfDocumentExporter.Save(workbook, exportPlan, stream");
         source.Should().Contain("HasNativeExportPdfMenuItem: HasNativeMenuItem(_exportPdfMenuItem, \"Export to PDF...\", requireGesture: false)");
 
         smokeSource.Should().Contain("bool HasNativeExportPdfMenuItem,");
