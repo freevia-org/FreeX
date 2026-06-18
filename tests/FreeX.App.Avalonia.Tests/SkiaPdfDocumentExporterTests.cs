@@ -59,6 +59,35 @@ public sealed class SkiaPdfDocumentExporterTests
     }
 
     [Fact]
+    public void AvaloniaExportRoute_UsesSkiaAndEmbedsUnicodeFont_WhenSkiaAvailable()
+    {
+        // Exercises the same routing seam MainWindow's File → Export to PDF uses: when Skia can run,
+        // the export must go through Skia and produce a Unicode-capable PDF (embedded font + /Type0
+        // composite) for non-WinAnsi text (Cyrillic + Greek) that the portable WinAnsi writer cannot.
+        var workbook = new Workbook("Юникод");
+        var sheet = workbook.AddSheet("Лист");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Привет"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Ελληνικά"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Σ"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(42));
+
+        var exportPlan = CreateExportPlan(workbook, sheet, GridRange.Parse("A1:B2", sheet.Id));
+
+        using var stream = new MemoryStream();
+        var outcome = AvaloniaPdfDocumentExporter.Save(workbook, exportPlan, stream);
+
+        // The CI lanes (Windows dev host + linux-app with the Skia native asset present) all have Skia,
+        // so the route must select it; the portable fallback is for environments without the asset.
+        outcome.Backend.Should().Be(AvaloniaPdfExportBackend.Skia);
+        outcome.Result.PageCount.Should().BeGreaterThan(0);
+
+        var content = Encoding.Latin1.GetString(stream.ToArray());
+        content.Should().StartWith("%PDF-", "output must be a valid PDF");
+        content.Should().Contain("FontFile", "Skia must embed the font program (FontFile2/FontFile3)");
+        content.Should().Contain("/Type0", "Unicode text in PDF uses a composite (Type0) font");
+    }
+
+    [Fact]
     public void Save_RejectsNonWritableStream()
     {
         var workbook = new Workbook("Book");
