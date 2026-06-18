@@ -1,6 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="New Style">
   <rect width="32" height="32" fill="none"/>
-  <text x="13" y="16" font-size="21" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle" dominant-baseline="central">NS</text>
-
-  <path d="M7 25h18" stroke="#0F6D8C" stroke-width="2" stroke-linecap="round"/>
+  <!-- A styled paragraph mark with a + badge (create a new style) -->
+  <text x="12" y="17" font-size="19" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle" dominant-baseline="central">A</text>
+  <path d="M7 25h10" fill="none" stroke="#9a9a9a" stroke-width="1.8" stroke-linecap="round"/>
+  <circle cx="23.5" cy="9.5" r="5" fill="#0F6D8C"/>
+  <path d="M23.5 6.8v5.4M20.8 9.5h5.4" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round"/>
 </svg>

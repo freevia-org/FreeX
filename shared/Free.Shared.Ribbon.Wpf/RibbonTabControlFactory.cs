@@ -29,9 +29,6 @@ public static class RibbonTabControlFactory
     private static readonly Brush AccentSoftBrush = Freeze(Color.FromRgb(0xE6, 0xF6, 0xFA));
     private static readonly Brush BorderBrush = Freeze(Color.FromRgb(0xDA, 0xDC, 0xE0));
     private static readonly Brush TextBrush = Freeze(Color.FromRgb(0x1A, 0x1A, 0x1A));
-    // Selected-tab highlight: a visible light-teal "card" fill so the active tab pops against the white
-    // strip (white-on-white left only the underline visible), plus accent-coloured text.
-    private static readonly Brush SelectedFillBrush = Freeze(Color.FromRgb(0xDD, 0xF0, 0xF6));
 
     /// <summary>
     /// Creates a ribbon <see cref="TabControl"/> with the flat Word/FreeX tab style applied. Tabs added
@@ -59,7 +56,7 @@ public static class RibbonTabControlFactory
     private static Style BuildTabItemStyle()
     {
         var style = new Style(typeof(TabItem));
-        style.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(12, 6, 12, 6)));
+        style.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(5, 4, 5, 4)));
         style.Setters.Add(new Setter(Control.FontSizeProperty, 12.0));
         style.Setters.Add(new Setter(Control.ForegroundProperty, TextBrush));
         style.Setters.Add(new Setter(Control.BackgroundProperty, Brushes.Transparent));
@@ -90,13 +87,11 @@ public static class RibbonTabControlFactory
 
         var template = new ControlTemplate(typeof(TabItem)) { VisualTree = border };
 
-        // Selected: light-teal card fill + accent underline + accent-coloured semibold text (the active-tab
-        // highlight, clearly distinct from the white strip).
+        // Selected: white ribbon-surface fill + a 3px accent underline (exactly FreeX's TabItem style —
+        // no card fill, no accent/bold text; the underline is the active-tab indicator).
         var selected = new Trigger { Property = Selector.IsSelectedProperty, Value = true };
         selected.Setters.Add(new Setter(Border.BorderBrushProperty, AccentBrush, "TabBorder"));
-        selected.Setters.Add(new Setter(Border.BackgroundProperty, SelectedFillBrush, "TabBorder"));
-        selected.Setters.Add(new Setter(Control.ForegroundProperty, AccentBrush));
-        selected.Setters.Add(new Setter(Control.FontWeightProperty, FontWeights.SemiBold));
+        selected.Setters.Add(new Setter(Border.BackgroundProperty, SurfaceBrush, "TabBorder"));
         template.Triggers.Add(selected);
 
         // Hover (unselected): soft accent wash.
@@ -104,11 +99,11 @@ public static class RibbonTabControlFactory
         hover.Setters.Add(new Setter(Border.BackgroundProperty, AccentSoftBrush, "TabBorder"));
         template.Triggers.Add(hover);
 
-        // Selected + hover keeps the selected card fill (don't let the soft wash override the active fill).
+        // Selected + hover keeps the white surface fill (don't let the soft wash override the active fill).
         var selectedHover = new MultiTrigger();
         selectedHover.Conditions.Add(new Condition(Selector.IsSelectedProperty, true));
         selectedHover.Conditions.Add(new Condition(UIElement.IsMouseOverProperty, true));
-        selectedHover.Setters.Add(new Setter(Border.BackgroundProperty, SelectedFillBrush, "TabBorder"));
+        selectedHover.Setters.Add(new Setter(Border.BackgroundProperty, SurfaceBrush, "TabBorder"));
         template.Triggers.Add(selectedHover);
 
         return template;
