@@ -605,7 +605,26 @@ public partial class GridView
 
     private void DrawNativeSlicerControl(DrawingContext dc, Rect rect, SlicerModel slicer, double pixelsPerDip)
     {
-        DrawNativeControlFrame(dc, rect, GetNativeControlCaption(slicer.Caption, slicer.Name, slicer.DrawingShapeName), pixelsPerDip);
+        // Theme the box from the slicer's built-in style (SlicerStyleLight1..6) against the workbook theme.
+        var style = SlicerStyleColors.Resolve(slicer.StyleName, WorkbookTheme);
+        var bodyBrush = GetDrawingObjectBrush(255, style.Body);
+        var borderPen = GetDrawingObjectPen(255, style.Border, 1);
+        var tileBrush = GetDrawingObjectBrush(255, style.Tile);
+        var selectedTileBrush = GetDrawingObjectBrush(255, style.SelectedTile);
+        var itemTextBrush = GetDrawingObjectBrush(255, style.ItemText);
+
+        // showCaption="0" => omit the caption header band and start the tiles at the top of the box.
+        var hasHeader = slicer.ShowCaption;
+        DrawNativeControlFrame(
+            dc,
+            rect,
+            GetNativeControlCaption(slicer.Caption, slicer.Name, slicer.DrawingShapeName),
+            pixelsPerDip,
+            bodyBrush,
+            borderPen,
+            GetDrawingObjectBrush(255, style.Header),
+            GetDrawingObjectBrush(255, style.HeaderText),
+            hasHeader);
 
         // Lay out the slicer's item buttons: prefer the resolved available items (table-column distinct
         // values / pivot cache shared items); fall back to the slicer's selected items, then a single
@@ -616,7 +635,8 @@ public partial class GridView
         var selected = new HashSet<string>(slicer.SelectedItems, StringComparer.OrdinalIgnoreCase);
         var columnCount = Math.Max(1, slicer.ColumnCount);
 
-        var tileTop = rect.Top + 26;
+        // With no caption band the tiles start near the top (small inset); with one they clear the 22px band.
+        var tileTop = rect.Top + (hasHeader ? 26 : 4);
         var availableHeight = rect.Bottom - tileTop - 6;
         if (availableHeight <= 0 || items.Count == 0)
             return;
@@ -647,12 +667,12 @@ public partial class GridView
             // Empty selection means "all selected" (no active filter) in Excel.
             var isSelected = fallbackAllTile || selected.Count == 0 || selected.Contains(caption);
             dc.DrawRoundedRectangle(
-                isSelected ? NativeControlSelectedTileBrush : NativeControlTileBrush,
+                isSelected ? selectedTileBrush : tileBrush,
                 null,
                 tileRect,
                 2,
                 2);
-            DrawClippedText(dc, caption, tileRect, NativeControlMutedTextBrush, 10, verticalPadding: 1, pixelsPerDip);
+            DrawClippedText(dc, caption, tileRect, itemTextBrush, 10, verticalPadding: 1, pixelsPerDip);
         }
     }
 
@@ -690,12 +710,37 @@ public partial class GridView
         DrawClippedText(dc, label, new Rect(rect.Left + 6, rect.Top + 22, Math.Max(1, rect.Width - 12), 12), NativeControlMutedTextBrush, 9, verticalPadding: 0, pixelsPerDip);
     }
 
-    private void DrawNativeControlFrame(DrawingContext dc, Rect rect, string caption, double pixelsPerDip)
+    // Timeline path: default-themed frame, always with a caption band.
+    private void DrawNativeControlFrame(DrawingContext dc, Rect rect, string caption, double pixelsPerDip) =>
+        DrawNativeControlFrame(
+            dc,
+            rect,
+            caption,
+            pixelsPerDip,
+            NativeControlBodyBrush,
+            NativeControlBorderPen,
+            NativeControlHeaderBrush,
+            Brushes.White,
+            hasHeader: true);
+
+    private void DrawNativeControlFrame(
+        DrawingContext dc,
+        Rect rect,
+        string caption,
+        double pixelsPerDip,
+        Brush bodyBrush,
+        Pen borderPen,
+        Brush headerBrush,
+        Brush headerTextBrush,
+        bool hasHeader)
     {
-        dc.DrawRectangle(NativeControlBodyBrush, NativeControlBorderPen, rect);
+        dc.DrawRectangle(bodyBrush, borderPen, rect);
+        if (!hasHeader)
+            return;
+
         var headerRect = new Rect(rect.Left, rect.Top, rect.Width, Math.Min(22, rect.Height));
-        dc.DrawRectangle(NativeControlHeaderBrush, null, headerRect);
-        DrawClippedText(dc, caption, new Rect(headerRect.Left + 5, headerRect.Top + 2, Math.Max(1, headerRect.Width - 10), Math.Max(1, headerRect.Height - 4)), Brushes.White, 11, verticalPadding: 0, pixelsPerDip);
+        dc.DrawRectangle(headerBrush, null, headerRect);
+        DrawClippedText(dc, caption, new Rect(headerRect.Left + 5, headerRect.Top + 2, Math.Max(1, headerRect.Width - 10), Math.Max(1, headerRect.Height - 4)), headerTextBrush, 11, verticalPadding: 0, pixelsPerDip);
     }
 
     private void DrawClippedText(DrawingContext dc, string textValue, Rect rect, Brush brush, double fontSize, double verticalPadding, double pixelsPerDip)

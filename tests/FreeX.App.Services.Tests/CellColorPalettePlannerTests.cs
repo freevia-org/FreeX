@@ -187,4 +187,38 @@ public sealed class CellColorPalettePlannerTests
             .Should()
             .Be("#0AB0FF");
     }
+
+    [Theory]
+    [InlineData("#0AB0FF", 0x0A, 0xB0, 0xFF)]
+    [InlineData("0ab0ff", 0x0A, 0xB0, 0xFF)]
+    [InlineData("  #000000  ", 0x00, 0x00, 0x00)]
+    public void TryParseHexColor_ParsesSixDigitRgbWithOrWithoutHashAndWhitespace(
+        string text, byte red, byte green, byte blue)
+    {
+        CellColorPalettePlanner.TryParseHexColor(text, out var color).Should().BeTrue();
+        color.Should().Be(new CellColor(red, green, blue));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("#12345")]
+    [InlineData("#1234567")]
+    [InlineData("#GGHHII")]
+    public void TryParseHexColor_RejectsInvalidInput(string? text)
+    {
+        CellColorPalettePlanner.TryParseHexColor(text, out var color).Should().BeFalse();
+        color.Should().Be(default(CellColor));
+    }
+
+    [Fact]
+    public void TryParseHexColor_RoundTripsFormatHexColor()
+    {
+        var original = new CellColor(0x12, 0x34, 0x56);
+        CellColorPalettePlanner.TryParseHexColor(CellColorPalettePlanner.FormatHexColor(original), out var parsed)
+            .Should()
+            .BeTrue();
+        parsed.Should().Be(original);
+    }
 }

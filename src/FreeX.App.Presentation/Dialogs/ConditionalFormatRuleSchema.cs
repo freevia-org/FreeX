@@ -91,6 +91,12 @@ public sealed record CfRuleInput
     /// <summary>True when a Top 10 rule's threshold is a percent rather than an item count.</summary>
     public bool IsPercent { get; init; }
 
+    /// <summary>
+    /// True when a Top 10 rule selects the TOP of the range; false selects the BOTTOM. Mirrors the
+    /// model's <see cref="ConditionalFormat.AboveAverage"/> convention for Top 10 rules.
+    /// </summary>
+    public bool IsTop { get; init; } = true;
+
     public string? IconSetStyle { get; init; }
 
     public CfThresholdType DataBarMinType { get; init; } = CfThresholdType.Min;

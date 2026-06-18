@@ -28,6 +28,29 @@ public sealed class AppStoragePathPlannerTests
     }
 
     [Fact]
+    public void GetRecentColorsFilePath_UsesApplicationDataPathProvider()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var provider = new TestApplicationDataPathProvider(temp.Path);
+
+        var path = AppStoragePathPlanner.GetRecentColorsFilePath(provider);
+
+        path.Should().Be(Path.Combine(temp.Path, "FreeX", "recent-colors.json"));
+    }
+
+    [Fact]
+    public void ResolveRecentColorsFilePath_UsesExplicitOverrideWhenProvided()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var provider = new TestApplicationDataPathProvider(Path.Combine(temp.Path, "ignored"));
+        var overridePath = Path.Combine(temp.Path, "custom-recent-colors.json");
+
+        var path = AppStoragePathPlanner.ResolveRecentColorsFilePath(provider, overridePath);
+
+        path.Should().Be(overridePath);
+    }
+
+    [Fact]
     public void ResolveOptionsFilePath_UsesExplicitOverrideWhenProvided()
     {
         using var temp = new TestTemporaryDirectory();

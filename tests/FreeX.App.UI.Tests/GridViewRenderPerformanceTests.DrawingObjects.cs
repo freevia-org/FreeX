@@ -161,8 +161,11 @@ public sealed partial class GridViewRenderPerformanceTests
         renderNativeControls.Should().Contain("var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;");
         renderNativeControls.Should().Contain("DrawNativeSlicerControl(dc, controlRect, slicer, pixelsPerDip);");
         renderNativeControls.Should().Contain("DrawNativeTimelineControl(dc, controlRect, timeline, pixelsPerDip);");
-        drawNativeSlicer.Should().Contain("DrawNativeControlFrame(dc, rect, GetNativeControlCaption(slicer.Caption, slicer.Name, slicer.DrawingShapeName), pixelsPerDip);");
-        drawNativeSlicer.Should().Contain("DrawClippedText(dc, caption, tileRect, NativeControlMutedTextBrush, 10, verticalPadding: 1, pixelsPerDip);");
+        // The slicer frame is drawn via the themed DrawNativeControlFrame overload (style colors +
+        // showCaption), still threading the cached pixelsPerDip into its clipped-text calls.
+        drawNativeSlicer.Should().Contain("GetNativeControlCaption(slicer.Caption, slicer.Name, slicer.DrawingShapeName),");
+        drawNativeSlicer.Should().Contain("hasHeader);");
+        drawNativeSlicer.Should().Contain("DrawClippedText(dc, caption, tileRect, itemTextBrush, 10, verticalPadding: 1, pixelsPerDip);");
         drawNativeTimeline.Should().Contain("DrawNativeControlFrame(dc, rect, GetNativeControlCaption(timeline.Caption, timeline.Name, timeline.DrawingShapeName), pixelsPerDip);");
         drawNativeTimeline.Should().Contain("DrawClippedText(dc, label, new Rect");
         drawNativeTimeline.Should().Contain("pixelsPerDip);");

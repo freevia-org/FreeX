@@ -168,6 +168,33 @@ public static class CellColorPalettePlanner
     public static string FormatHexColor(CellColor color) =>
         $"#{color.R:X2}{color.G:X2}{color.B:X2}";
 
+    /// <summary>
+    /// Parses a 6-digit RGB hex string (with or without a leading '#') into a
+    /// <see cref="CellColor"/>. Shared by the WPF and Avalonia color pickers so hex
+    /// parsing lives in exactly one place.
+    /// </summary>
+    public static bool TryParseHexColor(string? text, out CellColor color)
+    {
+        color = default;
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+
+        var normalized = text.Trim();
+        if (normalized.StartsWith('#'))
+            normalized = normalized[1..];
+
+        if (normalized.Length != 6 ||
+            !byte.TryParse(normalized.AsSpan(0, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var red) ||
+            !byte.TryParse(normalized.AsSpan(2, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var green) ||
+            !byte.TryParse(normalized.AsSpan(4, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var blue))
+        {
+            return false;
+        }
+
+        color = new CellColor(red, green, blue);
+        return true;
+    }
+
     private static CellColorSwatch Swatch(string hex)
     {
         if (!TryParseHexColor(hex, out var color))
@@ -202,25 +229,6 @@ public static class CellColorPalettePlanner
             ToByte(blue + match));
 
         return new CellColorSwatch(FormatHexColor(color), color);
-    }
-
-    private static bool TryParseHexColor(string text, out CellColor color)
-    {
-        color = default;
-        var normalized = text.Trim();
-        if (normalized.StartsWith('#'))
-            normalized = normalized[1..];
-
-        if (normalized.Length != 6 ||
-            !byte.TryParse(normalized[..2], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var red) ||
-            !byte.TryParse(normalized[2..4], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var green) ||
-            !byte.TryParse(normalized[4..6], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var blue))
-        {
-            return false;
-        }
-
-        color = new CellColor(red, green, blue);
-        return true;
     }
 
     private static byte ScaleColorComponent(byte component, double factor) =>

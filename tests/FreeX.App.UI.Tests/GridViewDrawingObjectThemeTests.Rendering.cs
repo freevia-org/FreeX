@@ -730,7 +730,10 @@ public sealed partial class GridViewDrawingObjectThemeTests
         // cache shared items) with per-tile selected/unselected styling, honoring the slicer's columnCount.
         drawSlicer.Should().Contain("ResolveSlicerTileItems(slicer, out var fallbackAllTile)");
         drawSlicer.Should().Contain("var columnCount = Math.Max(1, slicer.ColumnCount);");
-        drawSlicer.Should().Contain("isSelected ? NativeControlSelectedTileBrush : NativeControlTileBrush");
+        // Tile fills/text now come from the resolved slicer-style colors (SlicerStyleColors.Resolve), not
+        // hardcoded brushes, so slicers theme like Excel's built-in styles.
+        drawSlicer.Should().Contain("SlicerStyleColors.Resolve(slicer.StyleName, WorkbookTheme)");
+        drawSlicer.Should().Contain("isSelected ? selectedTileBrush : tileBrush");
         drawSlicer.Should().NotContain(".Take(4)");
         drawSlicer.Should().NotContain(".ToArray()");
         drawSlicer.Should().NotContain("new[]");

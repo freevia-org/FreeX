@@ -262,9 +262,12 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("WorkbookExportPrintPlanner.CreatePlan(");
         source.Should().Contain("WorkbookExportPrintSurface.MacOs");
         source.Should().Contain("PortablePdfExportPlanner.CreatePlan(exportPrintPlan)");
-        source.Should().Contain("PortablePdfDocumentExporter.Save(_session.Workbook, exportPlan, path)");
+        // The menu handler routes through a single PDF export seam; the Skia-vs-portable decision lives there.
+        source.Should().Contain("Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, exportPlan, pdfBuffer)");
+        var pdfRouterSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "Pdf", "AvaloniaPdfDocumentExporter.cs"));
         // Unicode-capable export goes through Skia (auto font embedding); portable WinAnsi is the fallback.
-        source.Should().Contain("Pdf.SkiaPdfDocumentExporter.Save(_session.Workbook, exportPlan, pdfBuffer)");
+        pdfRouterSource.Should().Contain("SkiaPdfDocumentExporter.Save(workbook, exportPlan, stream");
+        pdfRouterSource.Should().Contain("PortablePdfDocumentExporter.Save(workbook, exportPlan, stream");
         source.Should().Contain("HasNativeExportPdfMenuItem: HasNativeMenuItem(_exportPdfMenuItem, \"Export to PDF...\", requireGesture: false)");
 
         smokeSource.Should().Contain("bool HasNativeExportPdfMenuItem,");
@@ -3522,6 +3525,22 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("\"FormatCellsBorderPresetBox\"");
         source.Should().Contain("\"FormatCellsBorderStyleBox\"");
         source.Should().Contain("\"FormatCellsBorderColorBox\"");
+        source.Should().Contain("\"FormatCellsBorderTopToggle\"");
+        source.Should().Contain("\"FormatCellsBorderBottomToggle\"");
+        source.Should().Contain("\"FormatCellsBorderLeftToggle\"");
+        source.Should().Contain("\"FormatCellsBorderRightToggle\"");
+        source.Should().Contain("\"FormatCellsBorderInsideHorizontalToggle\"");
+        source.Should().Contain("\"FormatCellsBorderInsideVerticalToggle\"");
+        source.Should().Contain("\"FormatCellsBorderPreview\"");
+        source.Should().Contain("\"FormatCellsFontPreview\"");
+        source.Should().Contain("\"FormatCellsFillPreview\"");
+        source.Should().Contain("\"FormatCellsBorderPresetNoneButton\"");
+        source.Should().Contain("\"FormatCellsBorderPresetOutlineButton\"");
+        source.Should().Contain("\"FormatCellsBorderPresetInsideButton\"");
+        source.Should().Contain("BorderTop: borderTopSide");
+        source.Should().Contain("BorderRight: borderRightSide");
+        source.Should().Contain("BorderBottom: borderBottomSide");
+        source.Should().Contain("BorderLeft: borderLeftSide");
         source.Should().Contain("\"FormatCellsDoubleUnderlineBox\"");
         source.Should().Contain("\"FormatCellsShrinkToFitBox\"");
         source.Should().Contain("\"FormatCellsIndentLevelBox\"");
@@ -3586,6 +3605,14 @@ public sealed class AvaloniaShellSourceTests
         plannerSource.Should().Contain("Hidden: request.Hidden");
         plannerSource.Should().Contain("FillPatternStyle: request.ClearFill ? null : request.FillPatternStyle");
         plannerSource.Should().Contain("FillPatternColor: request.ClearFill ? null : request.FillPatternColor");
+        plannerSource.Should().Contain("CellBorder? BorderTop = null");
+        plannerSource.Should().Contain("CellBorder? BorderRight = null");
+        plannerSource.Should().Contain("CellBorder? BorderBottom = null");
+        plannerSource.Should().Contain("CellBorder? BorderLeft = null");
+        plannerSource.Should().Contain("var borderTop = request.BorderTop ?? borderDiff?.BorderTop");
+        plannerSource.Should().Contain("var borderRight = request.BorderRight ?? borderDiff?.BorderRight");
+        plannerSource.Should().Contain("var borderBottom = request.BorderBottom ?? borderDiff?.BorderBottom");
+        plannerSource.Should().Contain("var borderLeft = request.BorderLeft ?? borderDiff?.BorderLeft");
     }
 
     [Fact]
@@ -4171,6 +4198,8 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("bool HasReplaceDialogCompactLayout,");
         smokeSource.Should().Contain("bool HasGoToDialog,");
         smokeSource.Should().Contain("bool HasGoToDialogReferenceControls,");
+        smokeSource.Should().Contain("bool HasGoToDialogHistoryControls,");
+        smokeSource.Should().Contain("bool HasGoToDialogSpecialControl,");
         smokeSource.Should().Contain("bool HasGoToDialogCompactLayout,");
         smokeSource.Should().Contain("bool HasGoToSpecialDialog,");
         smokeSource.Should().Contain("bool HasGoToSpecialKindControls,");
@@ -4196,11 +4225,14 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("Dispatcher.UIThread.Post(() => dialog.Close());");
         source.Should().Contain("HasLaunchSmokeCompactDialog(probe.Dialog, width: 420, height: 430, minWidth: 360, minHeight: 390)");
         source.Should().Contain("HasLaunchSmokeCompactDialog(probe.Dialog, width: 420, height: 520, minWidth: 360, minHeight: 480)");
-        source.Should().Contain("HasLaunchSmokeCompactDialog(probe.Dialog, width: 380, height: 165, minWidth: 340, minHeight: 155)");
+        source.Should().Contain("HasLaunchSmokeCompactDialog(probe.Dialog, width: 380, height: 320, minWidth: 340, minHeight: 280)");
         source.Should().Contain("HasLaunchSmokeCompactDialog(probe.Dialog, width: 420, height: 310, minWidth: 360, minHeight: 280)");
         source.Should().Contain("HasLaunchSmokeButton(probe.ChooseFormatButton, \"FindChooseFormatFromCellButton\", \"Choose From Cell\")");
         source.Should().Contain("HasLaunchSmokeButton(probe.ChooseFindFormatButton, \"ReplaceFindChooseFormatFromCellButton\", \"Choose From Cell\")");
+        source.Should().Contain("ShowGoToInputDialogAsync(");
         source.Should().Contain("HasLaunchSmokeAutomationId(probe.InputBox, \"GoToReferenceBox\")");
+        source.Should().Contain("HasLaunchSmokeAutomationId(probe.HistoryList, \"GoToHistoryList\")");
+        source.Should().Contain("HasLaunchSmokeButton(probe.SpecialButton, \"GoToSpecialButton\", \"Special...\")");
         source.Should().Contain("HasLaunchSmokeCheckBox(probe.NumbersBox, \"GoToSpecialNumbersBox\", \"Numbers\")");
         smokeSource.Should().Contain("native_find_menu_item={FormatBool(snapshot.HasNativeFindMenuItem)}");
         smokeSource.Should().Contain("native_find_next_menu_item={FormatBool(snapshot.HasNativeFindNextMenuItem)}");
@@ -4222,6 +4254,8 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("replace_dialog_compact_layout={FormatBool(snapshot.DialogEvidence.HasReplaceDialogCompactLayout)}");
         smokeSource.Should().Contain("go_to_dialog={FormatBool(snapshot.DialogEvidence.HasGoToDialog)}");
         smokeSource.Should().Contain("go_to_dialog_reference_controls={FormatBool(snapshot.DialogEvidence.HasGoToDialogReferenceControls)}");
+        smokeSource.Should().Contain("go_to_dialog_history_controls={FormatBool(snapshot.DialogEvidence.HasGoToDialogHistoryControls)}");
+        smokeSource.Should().Contain("go_to_dialog_special_control={FormatBool(snapshot.DialogEvidence.HasGoToDialogSpecialControl)}");
         smokeSource.Should().Contain("go_to_dialog_compact_layout={FormatBool(snapshot.DialogEvidence.HasGoToDialogCompactLayout)}");
         smokeSource.Should().Contain("go_to_special_dialog={FormatBool(snapshot.DialogEvidence.HasGoToSpecialDialog)}");
         smokeSource.Should().Contain("go_to_special_dialog_kind_controls={FormatBool(snapshot.DialogEvidence.HasGoToSpecialKindControls)}");
@@ -4358,6 +4392,49 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("native_minimize_window_menu_item={FormatBool(snapshot.HasNativeMinimizeWindowMenuItem)}");
         smokeSource.Should().Contain("native_zoom_window_menu_item={FormatBool(snapshot.HasNativeZoomWindowMenuItem)}");
         smokeSource.Should().Contain("native_bring_all_to_front_menu_item={FormatBool(snapshot.HasNativeBringAllToFrontMenuItem)}");
+    }
+
+    [Fact]
+    public void MainWindow_WiresConditionalFormatRuleAndManageDialogsToLaunchSmoke()
+    {
+        var cfSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.ConditionalFormat.cs"));
+        var windowSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+
+        // New Formatting Rule editor: rule-type picker, presets, per-type controls, automation ids.
+        cfSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"ConditionalFormatRuleDialog\");");
+        cfSource.Should().Contain("AutomationProperties.SetAutomationId(ruleTypeBox, \"ConditionalFormatRuleTypeBox\");");
+        cfSource.Should().Contain("AutomationProperties.SetAutomationId(presetBox, \"ConditionalFormatPresetBox\");");
+        cfSource.Should().Contain("AutomationProperties.SetAutomationId(topBottomBox, \"ConditionalFormatTopBottomBox\");");
+        cfSource.Should().Contain("AutomationProperties.SetAutomationId(minColorBox, \"ConditionalFormatMinColorBox\");");
+        cfSource.Should().Contain("AutomationProperties.SetAutomationId(maxColorBox, \"ConditionalFormatMaxColorBox\");");
+        cfSource.Should().Contain("ConditionalFormatPresetFactory.BuildInput(preset)");
+        cfSource.Should().Contain("ConditionalFormatRuleBuilder.TryBuildApplyCommand(");
+
+        // Manage Rules dialog: New / reorder / change applies-to, automation ids.
+        cfSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"ManageConditionalFormatsDialog\");");
+        cfSource.Should().Contain("AutomationProperties.SetAutomationId(moveUpButton, \"ManageConditionalFormatsMoveUpButton\");");
+        cfSource.Should().Contain("AutomationProperties.SetAutomationId(moveDownButton, \"ManageConditionalFormatsMoveDownButton\");");
+        cfSource.Should().Contain("AutomationProperties.SetAutomationId(appliesToBox, \"ManageConditionalFormatsAppliesToBox\");");
+        cfSource.Should().Contain("AutomationProperties.SetAutomationId(applyAppliesToButton, \"ManageConditionalFormatsApplyAppliesToButton\");");
+        cfSource.Should().Contain("ConditionalFormatManageModel.BuildMoveCommand(");
+        cfSource.Should().Contain("ConditionalFormatManageModel.BuildAppliesToCommand(");
+        cfSource.Should().Contain("_session.TryResolveReferenceRange(reference, out var range)");
+
+        // Launch-smoke probe wiring for both dialogs.
+        cfSource.Should().Contain("private sealed record ConditionalFormatRuleDialogSmokeProbe(");
+        cfSource.Should().Contain("private sealed record ManageConditionalFormatsDialogSmokeProbe(");
+        windowSource.Should().Contain("HasLaunchSmokeDialog(probe.Dialog, \"New Formatting Rule\")");
+        windowSource.Should().Contain("HasLaunchSmokeDialog(probe.Dialog, \"Manage Conditional Formatting Rules\")");
+
+        // Snapshot fields, IsPassed gating, and report lines for the two CF dialogs.
+        smokeSource.Should().Contain("bool HasConditionalFormatRuleDialog = false,");
+        smokeSource.Should().Contain("bool HasManageConditionalFormatsDialog = false,");
+        smokeSource.Should().Contain("HasConditionalFormatRuleDialog &&");
+        smokeSource.Should().Contain("HasManageConditionalFormatsReorderControls &&");
+        smokeSource.Should().Contain("HasManageConditionalFormatsAppliesToControls &&");
+        smokeSource.Should().Contain("conditional_format_rule_dialog={FormatBool(snapshot.DialogEvidence.HasConditionalFormatRuleDialog)}");
+        smokeSource.Should().Contain("manage_conditional_formats_dialog={FormatBool(snapshot.DialogEvidence.HasManageConditionalFormatsDialog)}");
     }
 
     private static string ExtractSourceBlock(string source, string startMarker, string endMarker)

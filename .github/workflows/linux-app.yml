@@ -123,6 +123,15 @@ jobs:
             --logger "trx;LogFileName=freex-${{ matrix.runtime }}-export-path-tests.trx" \
             --results-directory artifacts
 
+          # Unicode PDF export route (Skia-backed) — validate explicitly on Linux alongside the
+          # portable WinAnsi slices above. Proves the Avalonia File → Export to PDF path embeds/subsets
+          # fonts and emits a /Type0 composite for non-WinAnsi text using the fonts-noto-cjk faces.
+          dotnet test tests/FreeX.App.Avalonia.Tests/FreeX.App.Avalonia.Tests.csproj \
+            --configuration Release \
+            --filter 'FullyQualifiedName~Pdf' \
+            --logger "trx;LogFileName=freex-${{ matrix.runtime }}-pdf-tests.trx" \
+            --results-directory artifacts
+
           # Run the full Avalonia shell test suite on Linux. This is the cross-platform validator
           # for the shared Avalonia surface (Skia PDF today; charts/conditional-formatting/ribbon/
           # dialogs etc. as the macOS feature-parity work lands on the shared shell) — coverage the
@@ -403,6 +412,7 @@ jobs:
             artifacts/freex-${{ matrix.runtime }}-linux-screenshot.png
             artifacts/freex-${{ matrix.runtime }}-portable-tests.trx
             artifacts/freex-${{ matrix.runtime }}-export-path-tests.trx
+            artifacts/freex-${{ matrix.runtime }}-pdf-tests.trx
             artifacts/freex-${{ matrix.runtime }}-linux-app-diagnostics/**
           if-no-files-found: warn
           retention-days: 14

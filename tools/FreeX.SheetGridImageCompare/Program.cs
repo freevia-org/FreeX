@@ -214,7 +214,7 @@ internal static class Program
         // (b) the bounding box of every anchored drawing object on the sheet (charts/pictures/
         // shapes/text boxes). Without this the capture stops at the data table and clips out charts/
         // pictures positioned BELOW or BESIDE it, so the harness can't validate them.
-        ExpandRegionForDrawingObjects(sheet, ref maxRow, ref maxCol, ref totalColWidth, ref totalRowHeight);
+        ExpandRegionForDrawingObjects(workbook, sheet, ref maxRow, ref maxCol, ref totalColWidth, ref totalRowHeight);
 
         // Estimate row-header width (uses GridView's static helper with a placeholder viewport)
         // We need an approximate lastVisibleRow for the header width calc.
@@ -341,17 +341,21 @@ internal static class Program
     /// prevents a stray far-flung object from blowing the image up absurdly; clamps are logged.
     /// </summary>
     private static void ExpandRegionForDrawingObjects(
+        Workbook workbook,
         Sheet sheet,
         ref uint maxRow,
         ref uint maxCol,
         ref double totalColWidth,
         ref double totalRowHeight)
     {
+        var nativeFilters = FreeX.App.Host.SlicerTimelinePlanner.GetNativeVisualFilters(workbook, sheet);
         bool hasObjects =
             sheet.Charts.Count > 0 ||
             sheet.Pictures.Count > 0 ||
             sheet.DrawingShapes.Count > 0 ||
-            sheet.TextBoxes.Count > 0;
+            sheet.TextBoxes.Count > 0 ||
+            nativeFilters.Slicers.Count > 0 ||
+            nativeFilters.Timelines.Count > 0;
         if (!hasObjects)
             return;
 
@@ -398,6 +402,17 @@ internal static class Program
             if (box.IsVisible)
                 IncludeAnchoredObject(sheet, box.Anchor.Row, box.Anchor.Col, box.Width, box.Height, IncludeRect);
 
+        // Native slicers/timelines anchor by a From/To cell range (0-based + EMU corner offsets) rather than
+        // a single anchor cell + extent, and often sit BESIDE the data table (e.g. file 03's "Category"/"Who"
+        // slicers at G1:I5). Include the To corner so the captured region covers them.
+        foreach (var slicer in nativeFilters.Slicers)
+            if (slicer.DrawingAnchor is { } anchor)
+                IncludeDrawingAnchor(sheet, anchor, IncludeRect);
+
+        foreach (var timeline in nativeFilters.Timelines)
+            if (timeline.DrawingAnchor is { } anchor)
+                IncludeDrawingAnchor(sheet, anchor, IncludeRect);
+
         totalColWidth  = Math.Min(MaxDrawingContentWidth,  Math.Max(totalColWidth,  maxRightPx));
         totalRowHeight = Math.Min(MaxDrawingContentHeight, Math.Max(totalRowHeight, maxBottomPx));
         maxRow = Math.Max(maxRow, reachRow);
@@ -406,6 +421,23 @@ internal static class Program
         if (clamped)
             Console.Write("[drawing-bounds clamped] ");
     }
+
+    private static void IncludeDrawingAnchor(
+        Sheet sheet,
+        DrawingAnchorRange anchor,
+        Action<double, double, uint, uint> include)
+    {
+        if (anchor.To.Column == uint.MaxValue || anchor.To.Row == uint.MaxValue)
+            return;
+
+        // To.Column/Row are 0-based; the pixel helpers are 1-based and measure the cell's LEFT/TOP edge.
+        // The right/bottom edge of the To corner is that edge plus the EMU corner offset.
+        var right  = ColumnLeftPixels(sheet, anchor.To.Column + 1) + EmusToDip(anchor.To.ColumnOffsetEmu);
+        var bottom = RowTopPixels(sheet, anchor.To.Row + 1) + EmusToDip(anchor.To.RowOffsetEmu);
+        include(right, bottom, PixelTopToRow(sheet, bottom), PixelLeftToCol(sheet, right));
+    }
+
+    private static double EmusToDip(long emus) => emus / 9525.0;
 
     private static void IncludeAnchoredObject(
         Sheet sheet,

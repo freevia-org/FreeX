@@ -1389,6 +1389,8 @@ function Test-LaunchSmoke {
             "replace_dialog_result_closed_without_accept",
             "go_to_dialog",
             "go_to_dialog_reference_controls",
+            "go_to_dialog_history_controls",
+            "go_to_dialog_special_control",
             "go_to_dialog_compact_layout",
             "go_to_dialog_result_closed_without_accept",
             "go_to_special_dialog",
