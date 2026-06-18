@@ -2639,12 +2639,12 @@ public sealed class DocumentView : RichTextBox
                     wpfCell.FontWeight = FontWeights.Bold;
                 if (modelCell.Paragraphs.Count == 0)
                 {
-                    wpfCell.Blocks.Add(BuildParagraph(new ModelParagraph(), document));
+                    wpfCell.Blocks.Add(BuildParagraph(new ModelParagraph(), document, inTableCell: true));
                 }
                 else
                 {
                     foreach (var cellParagraph in modelCell.Paragraphs)
-                        wpfCell.Blocks.Add(BuildParagraph(cellParagraph, document));
+                        wpfCell.Blocks.Add(BuildParagraph(cellParagraph, document, inTableCell: true));
                 }
                 wpfRow.Cells.Add(wpfCell);
                 gridColumn += span;
@@ -2694,9 +2694,24 @@ public sealed class DocumentView : RichTextBox
         return bodyIndex >= 0 && bodyIndex % 2 == 1;
     }
 
-    private static WpfParagraph BuildParagraph(ModelParagraph paragraph, TextDocument document)
+    private static WpfParagraph BuildParagraph(ModelParagraph paragraph, TextDocument document, bool inTableCell = false)
     {
         var paraFmt = Resolve(paragraph, document);
+        // Inside a table cell, paragraphs that don't set their own spacing follow the table style rather than
+        // the document default. Word's built-in TableNormal style (the base of every table style) uses 0pt
+        // before/after and single line spacing, so its cells render compact — FreeW otherwise applied the
+        // body docDefault (e.g. 10pt-after, 1.15-line), making rows visibly taller than Word's. Compact only
+        // the fields the paragraph/its style didn't explicitly set (the IsSet flags), so an explicitly-spaced
+        // cell paragraph is untouched.
+        if (inTableCell)
+        {
+            if (!paraFmt.SpaceBeforeIsSet)
+                paraFmt = paraFmt with { SpaceBeforePt = 0 };
+            if (!paraFmt.SpaceAfterIsSet)
+                paraFmt = paraFmt with { SpaceAfterPt = 0 };
+            if (!paraFmt.LineSpacingIsSet)
+                paraFmt = paraFmt with { LineSpacing = 1.0, LineRule = LineSpacingRule.Multiple, LineHeightPt = 0 };
+        }
         var wpf = new WpfParagraph
         {
             // Right-to-left paragraph direction (w:bidi). WPF lays the inline content out RTL and, because
