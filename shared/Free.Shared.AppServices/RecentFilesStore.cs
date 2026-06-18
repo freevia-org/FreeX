@@ -20,8 +20,9 @@ public sealed class RecentFilesStore
     private readonly Func<DateTimeOffset> _clock;
     private readonly PlatformPathIdentityComparer _pathIdentityComparer;
     private readonly string _storePath;
-    // Mutators can be invoked from background threads (async open/save flows); serialize the
-    // list mutation + file rewrite so concurrent callers don't lose updates or interleave writes.
+    // Serializes the list mutation + file rewrite in the mutators so concurrent callers can't lose
+    // updates or interleave writes. Readers that may run concurrently should use Snapshot(), which
+    // copies under this same lock (enumerating the live Entries directly is not synchronized).
     private readonly object _sync = new();
 
     public RecentFilesStore(
@@ -49,6 +50,17 @@ public sealed class RecentFilesStore
 
     public IEnumerable<RecentFileEntry> PinnedEntries =>
         Entries.Where(entry => entry.IsPinned);
+
+    /// <summary>
+    /// A point-in-time copy of the entries taken under the lock. Use this (rather than enumerating
+    /// <see cref="Entries"/> directly) from any reader that may run concurrently with a mutator, so
+    /// the enumeration cannot observe a half-applied mutation or throw "collection was modified".
+    /// </summary>
+    public IReadOnlyList<RecentFileEntry> Snapshot()
+    {
+        lock (_sync)
+            return Entries.ToList();
+    }
 
     public static RecentFilesStore Load() => Load(DefaultStorePath);
 

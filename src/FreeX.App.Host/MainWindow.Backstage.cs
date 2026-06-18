@@ -347,7 +347,7 @@ public partial class MainWindow
     private void UpdateSsRecentList(string filter = "")
     {
         var plan = BackstageRecentFileListPlanner.Build(
-            _recentFiles.Entries,
+            _recentFiles.Snapshot(),
             filter,
             System.IO.File.Exists);
         _allRecentItems = plan.AllItems.ToList();

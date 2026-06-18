@@ -60,8 +60,24 @@ public sealed class CompositeWorkbookCommand : IWorkbookCommand
 
     private void RevertApplied(ICommandContext ctx)
     {
-        for (var i = _applied.Count - 1; i >= 0; i--)
-            _applied[i].Revert(ctx);
-        _applied.Clear();
+        try
+        {
+            for (var i = _applied.Count - 1; i >= 0; i--)
+            {
+                try
+                {
+                    _applied[i].Revert(ctx);
+                }
+                catch
+                {
+                    // Best-effort rollback: a failing sub-command revert must not abort the rest of
+                    // the rollback, nor leave _applied populated for a second (double) revert pass.
+                }
+            }
+        }
+        finally
+        {
+            _applied.Clear();
+        }
     }
 }

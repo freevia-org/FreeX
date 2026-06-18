@@ -13457,7 +13457,7 @@ public sealed partial class MainWindow : Window
     {
         var menu = new NativeMenu();
         var plan = OpenRecentWorkbookMenuPlanner.Create(
-            _recentFiles.Entries,
+            _recentFiles.Snapshot(),
             File.Exists,
             path => _session.TryResolveOpenTarget(path, out var target, out _) ? target!.Path : null);
         if (plan.ItemCount == 0)

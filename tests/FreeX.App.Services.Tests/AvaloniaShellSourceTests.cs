@@ -705,7 +705,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private NativeMenu CreateNativeOpenRecentMenu(bool isIdle)");
         source.Should().Contain("Header = \"(No Recent Workbooks)\"");
         source.Should().Contain("OpenRecentWorkbookMenuPlanner.Create(");
-        source.Should().Contain("_recentFiles.Entries");
+        // Snapshot() (a copy taken under the store lock) rather than enumerating the live Entries.
+        source.Should().Contain("_recentFiles.Snapshot()");
         source.Should().Contain("File.Exists");
         source.Should().Contain("path => _session.TryResolveOpenTarget(path, out var target, out _) ? target!.Path : null");
         source.Should().Contain("plan.ItemCount == 0");
