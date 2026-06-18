@@ -34,6 +34,11 @@ internal sealed class FileCommands
     private readonly Action _onChanged;
     private readonly WorkbookDocumentState _state = new();
 
+    // FreeW's persisted settings (shared JsonSettingsStore under %APPDATA%\FreeW). The recent-files cap
+    // is read from here when registering a saved/opened file — a real read site that proves the options
+    // mechanism end-to-end. Defaults are used when no store is supplied (e.g. tests).
+    private readonly FreeWOptions _options;
+
     // FreeW ships a single .docx format; the filter/default-extension are composed by the shared
     // FileDialogFilter so any future format additions stay a data change, not a string edit.
     private static readonly IReadOnlyList<FileFormatChoice> Formats =
@@ -42,11 +47,12 @@ internal sealed class FileCommands
     private static readonly string Filter = FileDialogFilter.Build(Formats);
     private static readonly string DefaultExtension = FileDialogFilter.DefaultExtension(Formats);
 
-    public FileCommands(Window window, DocumentView editor, Action onChanged)
+    public FileCommands(Window window, DocumentView editor, Action onChanged, FreeWOptions? options = null)
     {
         _window = window;
         _editor = editor;
         _onChanged = onChanged;
+        _options = options ?? new FreeWOptions();
     }
 
     public bool IsDirty => _state.IsDirty;
@@ -229,7 +235,9 @@ internal sealed class FileCommands
         {
             try
             {
-                RecentFilesStore.Load().AddOrUpdate(path);
+                // Honour the user-configured recent-files cap (FreeWOptions.RecentFilesCap) — a real read
+                // site for the shared options mechanism. The shared store still always retains pinned items.
+                RecentFilesStore.Load().AddOrUpdate(path, _options.RecentFilesCap);
             }
             catch
             {
