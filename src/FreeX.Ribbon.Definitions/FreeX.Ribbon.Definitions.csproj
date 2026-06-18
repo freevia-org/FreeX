@@ -10,6 +10,21 @@
     <ProjectReference Include="..\..\shared\Free.Shared.Ribbon\Free.Shared.Ribbon.csproj" />
   </ItemGroup>
 
+  <!--
+    Per-command ribbon SVG glyphs, shared by BOTH the WPF host (RibbonIconFactory.Svg.cs) and the
+    Avalonia renderer (AvaloniaRibbonIcons). Both loaders resolve files at
+    <AppBaseDir>/Resources/CommandIconsSvg/<slug>.svg, so the assets copy to every consuming app's
+    output (and publish) dir under that exact relative path. Keeping a single copy here is what makes
+    Linux/macOS show the identical glyphs as Windows.
+  -->
+  <ItemGroup>
+    <Content Include="Resources\CommandIconsSvg\**\*.svg">
+      <Link>Resources\CommandIconsSvg\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
   <ItemGroup>
     <Using Include="Free.Shared.Ribbon" />
   </ItemGroup>

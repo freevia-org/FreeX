@@ -32,6 +32,16 @@ internal static class Program
     private const double MaxViewportWidth  = 3000.0;
     private const double MaxViewportHeight = 2000.0;
 
+    // When expanding the captured region to also include anchored drawing objects
+    // (charts/pictures/shapes/text boxes) that sit below or beside the data, a stray
+    // far-flung object must not blow the image up absurdly. Cap the drawing-driven
+    // content extent (in DIPs, relative to the A1 grid origin) to these maximums and
+    // log when the expansion is clamped. These are deliberately larger than
+    // MaxViewportWidth/Height (which still caps the final rendered viewport) so that
+    // normally-placed on-page objects are reliably captured.
+    private const double MaxDrawingContentWidth  = 8000.0;
+    private const double MaxDrawingContentHeight = 8000.0;
+
     [STAThread]
     public static int Main(string[] args)
     {
@@ -200,13 +210,27 @@ internal static class Program
             totalRowHeight += sheet.RowHeights.GetValueOrDefault(r, sheet.DefaultRowHeight);
         }
 
+        // Expand the captured region to the UNION of (a) the cell used-range (computed above) and
+        // (b) the bounding box of every anchored drawing object on the sheet (charts/pictures/
+        // shapes/text boxes). Without this the capture stops at the data table and clips out charts/
+        // pictures positioned BELOW or BESIDE it, so the harness can't validate them.
+        ExpandRegionForDrawingObjects(sheet, ref maxRow, ref maxCol, ref totalColWidth, ref totalRowHeight);
+
         // Estimate row-header width (uses GridView's static helper with a placeholder viewport)
         // We need an approximate lastVisibleRow for the header width calc.
         const double RowHeaderWidth = GridView.RowHeaderWidth; // 30
         const double ColHeaderHeight = GridView.ColHeaderHeight; // 18
 
-        double viewW = Math.Min(MaxViewportWidth,  totalColWidth  + RowHeaderWidth  + 20);
-        double viewH = Math.Min(MaxViewportHeight, totalRowHeight + ColHeaderHeight + 20);
+        // The viewport is capped so huge sheets don't explode. The cap must be at least as large as
+        // the drawing-content cap; otherwise an object that sits just past MaxViewportWidth/Height
+        // (e.g. a chart below a tall table) would be clipped again here even though the region above
+        // already accounted for it. ExpandRegionForDrawingObjects bounds totalColWidth/totalRowHeight
+        // to MaxDrawingContentWidth/Height, so these effective caps stay bounded.
+        double maxViewW = Math.Max(MaxViewportWidth,  MaxDrawingContentWidth  + RowHeaderWidth  + 20);
+        double maxViewH = Math.Max(MaxViewportHeight, MaxDrawingContentHeight + ColHeaderHeight + 20);
+
+        double viewW = Math.Min(maxViewW, totalColWidth  + RowHeaderWidth  + 20);
+        double viewH = Math.Min(maxViewH, totalRowHeight + ColHeaderHeight + 20);
 
         // Ensure minimum size
         viewW = Math.Max(viewW, 200);
@@ -291,6 +315,162 @@ internal static class Program
         encoder.Frames.Add(BitmapFrame.Create(rtb));
         using var fileStream = File.Create(outPath);
         encoder.Save(fileStream);
+    }
+
+    // -----------------------------------------------------------------------
+    // Drawing-object region union
+    // -----------------------------------------------------------------------
+    /// <summary>
+    /// Grows the captured region (in cell coords <paramref name="maxRow"/>/<paramref name="maxCol"/>
+    /// and in DIP content extents <paramref name="totalColWidth"/>/<paramref name="totalRowHeight"/>)
+    /// to also cover every visible anchored drawing object on the sheet. The DIP extents are measured
+    /// from the A1 grid origin and use the SAME column-width/row-height mapping the viewport uses
+    /// (<see cref="ColumnWidthPixelMapper"/> for columns, raw DIP row heights for rows), so the unioned
+    /// extents line up with the GridView's metrics.
+    ///
+    /// A per-object cap (<see cref="MaxDrawingContentWidth"/>/<see cref="MaxDrawingContentHeight"/>)
+    /// prevents a stray far-flung object from blowing the image up absurdly; clamps are logged.
+    /// </summary>
+    private static void ExpandRegionForDrawingObjects(
+        Sheet sheet,
+        ref uint maxRow,
+        ref uint maxCol,
+        ref double totalColWidth,
+        ref double totalRowHeight)
+    {
+        bool hasObjects =
+            sheet.Charts.Count > 0 ||
+            sheet.Pictures.Count > 0 ||
+            sheet.DrawingShapes.Count > 0 ||
+            sheet.TextBoxes.Count > 0;
+        if (!hasObjects)
+            return;
+
+        // Track the farthest pixel right/bottom edge (relative to the A1 grid origin) reached by any
+        // object, and the farthest cell row/col it spans, so we can extend both the DIP content extents
+        // (which size the render surface) and the cell range (which seeds the viewport metrics).
+        double maxRightPx  = totalColWidth;
+        double maxBottomPx = totalRowHeight;
+        uint   reachRow    = maxRow;
+        uint   reachCol    = maxCol;
+        bool   clamped     = false;
+
+        void IncludeRect(double rightPx, double bottomPx, uint lastRow, uint lastCol)
+        {
+            if (rightPx > MaxDrawingContentWidth)  { rightPx = MaxDrawingContentWidth;  clamped = true; }
+            if (bottomPx > MaxDrawingContentHeight) { bottomPx = MaxDrawingContentHeight; clamped = true; }
+            if (rightPx  > maxRightPx)  maxRightPx  = rightPx;
+            if (bottomPx > maxBottomPx) maxBottomPx = bottomPx;
+            if (lastRow  > reachRow)    reachRow    = lastRow;
+            if (lastCol  > reachCol)    reachCol    = lastCol;
+        }
+
+        // Charts: Left/Top/Width/Height are absolute DIPs from the A1 grid origin (see CreateChartRect).
+        foreach (var chart in sheet.Charts)
+        {
+            if (!chart.IsVisible) continue;
+            var right  = chart.Left + Math.Max(0, chart.Width);
+            var bottom = chart.Top  + Math.Max(0, chart.Height);
+            IncludeRect(right, bottom, PixelTopToRow(sheet, bottom), PixelLeftToCol(sheet, right));
+        }
+
+        // Pictures / shapes / text boxes: anchored to a cell (1-based) with Width/Height in DIPs.
+        // The object's top-left is the anchor cell's top-left (matches TryCreateAnchoredObjectRect),
+        // so its right/bottom edge = anchor-cell offset + extent.
+        foreach (var pic in sheet.Pictures)
+            if (pic.IsVisible)
+                IncludeAnchoredObject(sheet, pic.Anchor.Row, pic.Anchor.Col, pic.Width, pic.Height, IncludeRect);
+
+        foreach (var shape in sheet.DrawingShapes)
+            if (shape.IsVisible)
+                IncludeAnchoredObject(sheet, shape.Anchor.Row, shape.Anchor.Col, shape.Width, shape.Height, IncludeRect);
+
+        foreach (var box in sheet.TextBoxes)
+            if (box.IsVisible)
+                IncludeAnchoredObject(sheet, box.Anchor.Row, box.Anchor.Col, box.Width, box.Height, IncludeRect);
+
+        totalColWidth  = Math.Min(MaxDrawingContentWidth,  Math.Max(totalColWidth,  maxRightPx));
+        totalRowHeight = Math.Min(MaxDrawingContentHeight, Math.Max(totalRowHeight, maxBottomPx));
+        maxRow = Math.Max(maxRow, reachRow);
+        maxCol = Math.Max(maxCol, reachCol);
+
+        if (clamped)
+            Console.Write("[drawing-bounds clamped] ");
+    }
+
+    private static void IncludeAnchoredObject(
+        Sheet sheet,
+        uint anchorRow,
+        uint anchorCol,
+        double width,
+        double height,
+        Action<double, double, uint, uint> include)
+    {
+        if (anchorRow == 0 || anchorCol == 0)
+            return;
+        var left = ColumnLeftPixels(sheet, anchorCol);
+        var top  = RowTopPixels(sheet, anchorRow);
+        var right  = left + Math.Max(0, width);
+        var bottom = top  + Math.Max(0, height);
+        include(right, bottom, PixelTopToRow(sheet, bottom), PixelLeftToCol(sheet, right));
+    }
+
+    /// <summary>DIP offset of the LEFT edge of <paramref name="col"/> (1-based) from the A1 origin.</summary>
+    private static double ColumnLeftPixels(Sheet sheet, uint col)
+    {
+        double x = 0;
+        for (uint c = 1; c < col; c++)
+        {
+            if (sheet.IsColEffectivelyHidden(c)) continue;
+            x += ColumnWidthPixelMapper.ColumnWidthToPixels(
+                sheet.ColumnWidths.GetValueOrDefault(c, sheet.DefaultColumnWidth));
+        }
+        return x;
+    }
+
+    /// <summary>DIP offset of the TOP edge of <paramref name="row"/> (1-based) from the A1 origin.</summary>
+    private static double RowTopPixels(Sheet sheet, uint row)
+    {
+        double y = 0;
+        for (uint r = 1; r < row; r++)
+        {
+            if (sheet.IsRowEffectivelyHidden(r)) continue;
+            y += sheet.RowHeights.GetValueOrDefault(r, sheet.DefaultRowHeight);
+        }
+        return y;
+    }
+
+    /// <summary>First 1-based column whose right edge reaches <paramref name="xPixels"/> from the A1 origin.</summary>
+    private static uint PixelLeftToCol(Sheet sheet, double xPixels)
+    {
+        if (xPixels <= 0)
+            return 1;
+        double x = 0;
+        for (uint c = 1; c <= CellAddress.MaxCol; c++)
+        {
+            if (sheet.IsColEffectivelyHidden(c)) continue;
+            x += ColumnWidthPixelMapper.ColumnWidthToPixels(
+                sheet.ColumnWidths.GetValueOrDefault(c, sheet.DefaultColumnWidth));
+            if (x >= xPixels)
+                return c;
+        }
+        return CellAddress.MaxCol;
+    }
+
+    /// <summary>First 1-based row whose bottom edge reaches <paramref name="yPixels"/> from the A1 origin.</summary>
+    private static uint PixelTopToRow(Sheet sheet, double yPixels)
+    {
+        if (yPixels <= 0)
+            return 1;
+        double y = 0;
+        for (uint r = 1; r <= CellAddress.MaxRow; r++)
+        {
+            if (sheet.IsRowEffectivelyHidden(r)) continue;
+            y += sheet.RowHeights.GetValueOrDefault(r, sheet.DefaultRowHeight);
+            if (y >= yPixels)
+                return r;
+        }
+        return CellAddress.MaxRow;
     }
 
     // -----------------------------------------------------------------------

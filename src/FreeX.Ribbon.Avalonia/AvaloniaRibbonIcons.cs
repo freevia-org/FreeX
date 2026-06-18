@@ -1,3 +1,6 @@
+using System.Collections.Generic;
+using System.IO;
+using System.Text;
 using Avalonia;
 using Avalonia.Collections;
 using Avalonia.Controls;
@@ -8,6 +11,7 @@ using AvaloniaPath = Avalonia.Controls.Shapes.Path;
 using AvaloniaLine = Avalonia.Controls.Shapes.Line;
 using AvaloniaRectangle = Avalonia.Controls.Shapes.Rectangle;
 using AvaloniaEllipse = Avalonia.Controls.Shapes.Ellipse;
+using AvaloniaImage = Avalonia.Controls.Image;
 
 namespace FreeX.Ribbon.Avalonia;
 
@@ -56,9 +60,214 @@ internal static class AvaloniaRibbonIcons
     private static readonly FontFamily GlyphFontFamily =
         new("Segoe UI, Selawik, Liberation Sans, DejaVu Sans, Arial, Helvetica, sans-serif");
 
+    /// <summary>
+    /// Per-command SVG glyphs live next to the app under <c>Resources/CommandIconsSvg/&lt;slug&gt;.svg</c>
+    /// — the SAME copy the WPF host loads (shared via the FreeX.Ribbon.Definitions project). Parsed
+    /// <see cref="DrawingImage"/>s are cached by file slug because SVG parse is not free.
+    /// </summary>
+    private static readonly string CommandIconsDirectory =
+        Path.Combine(AppContext.BaseDirectory, "Resources", "CommandIconsSvg");
+
+    private static readonly object CommandIconCacheGate = new();
+    private static readonly Dictionary<string, DrawingImage?> CommandIconCache = new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>Builds an icon control for the given kind at the requested pixel size.</summary>
     public static Control Build(RibbonCommandIconKind kind, double size) =>
-        Build(new RibbonCommandIcon(kind), size, foreground: null);
+        Build(kind, size, commandName: null);
+
+    /// <summary>
+    /// Builds an icon for the given kind at the requested pixel size, preferring the per-command SVG
+    /// glyph resolved from <paramref name="commandName"/> (matching the WPF host's
+    /// <c>RibbonIconFactory.CreateCommandIcon</c>). When no command name is supplied, or no SVG file
+    /// resolves for it, falls back to the platform-neutral kind glyph — identical to WPF's fallback.
+    /// The SVGs are full-colour Excel-style glyphs, so they render as-authored (no tinting), exactly as
+    /// WPF renders them on the white ribbon surface.
+    /// </summary>
+    public static Control Build(RibbonCommandIconKind kind, double size, string? commandName)
+    {
+        if (TryBuildCommandSvg(commandName, size) is { } svg)
+            return svg;
+
+        return Build(new RibbonCommandIcon(kind), size, foreground: null);
+    }
+
+    /// <summary>
+    /// Resolves and renders the per-command SVG for <paramref name="commandName"/> at the requested
+    /// size, or returns <see langword="null"/> when the command has no matching SVG file (so the caller
+    /// falls back to the kind glyph). Slug derivation and the candidate order (size-specific
+    /// <c>-small</c>/<c>-large</c> variants, then the bare slug, then known aliases) mirror the WPF host
+    /// in <c>RibbonIconFactory.Svg.cs</c> byte-for-byte so the filenames resolve identically.
+    /// </summary>
+    private static Control? TryBuildCommandSvg(string? commandName, double size)
+    {
+        if (string.IsNullOrWhiteSpace(commandName))
+            return null;
+
+        var slug = ToCommandIconSlug(commandName);
+        if (slug.Length == 0)
+            return null;
+
+        foreach (var candidateSlug in GetCommandIconSlugCandidates(slug))
+        {
+            foreach (var fileSlug in GetSizeSpecificSlugCandidates(candidateSlug, size))
+            {
+                if (LoadCommandSvg(fileSlug) is { } image)
+                {
+                    return new AvaloniaImage
+                    {
+                        Source = image,
+                        Width = size,
+                        Height = size,
+                        Stretch = Stretch.Uniform,
+                    };
+                }
+            }
+        }
+
+        return null;
+    }
+
+    // Parses (and caches by file slug) the per-command SVG into a native Avalonia DrawingImage via the
+    // in-house SvgIconParser — no external SVG library, so it renders through Avalonia's own software-safe
+    // pipeline. A missing file or a parse failure caches null so the caller falls back to the kind glyph.
+    private static DrawingImage? LoadCommandSvg(string fileSlug)
+    {
+        lock (CommandIconCacheGate)
+        {
+            if (CommandIconCache.TryGetValue(fileSlug, out var cached))
+                return cached;
+        }
+
+        var filePath = Path.Combine(CommandIconsDirectory, fileSlug + ".svg");
+        DrawingImage? image = null;
+        if (File.Exists(filePath))
+            image = SvgIconParser.TryParseFile(filePath);
+
+        lock (CommandIconCacheGate)
+            CommandIconCache[fileSlug] = image;
+        return image;
+    }
+
+    // Mirrors RibbonIconFactory.Svg.cs GetSizeSpecificSlugCandidates: prefer a size-specific variant
+    // (small ≤ 22px, otherwise large), then fall back to the bare slug.
+    private static IEnumerable<string> GetSizeSpecificSlugCandidates(string slug, double size)
+    {
+        yield return size <= 22 ? slug + "-small" : slug + "-large";
+        yield return slug;
+    }
+
+    // Mirrors RibbonIconFactory.Svg.cs GetCommandIconSlugCandidates: the slug itself, then a known
+    // alias for command names whose canonical icon file is named differently.
+    private static IEnumerable<string> GetCommandIconSlugCandidates(string slug)
+    {
+        yield return slug;
+
+        var alias = slug switch
+        {
+            "increase-font-size" => "grow-font",
+            "decrease-font-size" => "shrink-font",
+            "accounting-number-format" => "accounting-currency",
+            "increase-decimal-places" => "increase-decimal",
+            "decrease-decimal-places" => "decrease-decimal",
+            "merge-and-center" => "merge-center",
+            "sort-and-filter" => "sort",
+            "find-and-select" => "find",
+            "percent-style" => "percent-style",
+            "object-fill" => "fill",
+            "object-outline" => "outline-color",
+            "object-size" => "size",
+            "object-rotate" => "rotate",
+            "shape-gradient" => "gradient",
+            "shape-fill" => "fill",
+            "shape-outline" => "outline-color",
+            "shape-effects" => "effects",
+            "object-effects" => "effects",
+            "selection-pane" => "selection-pane",
+            "ink-to-shape" => "shapes",
+            "ink-to-math" => "math-trig",
+            "math" => "math-trig",
+            "recently-used" => "recent",
+            "date" => "date-time",
+            "lookup" => "lookup-reference",
+            "formula-auditing" => "evaluate-formula",
+            "calculation" => "calculate-now",
+            "workbook-stats" => "statistics",
+            "workbook-statistics" => "statistics",
+            "accessibility" => "accessibility-checker",
+            "refresh-pivot" => "refresh-all",
+            "show-details" => "show-detail",
+            "links-and-objects" => "hyperlink",
+            "help-online" => "help",
+            "contact-support" => "contact-support",
+            "what-s-new" => "what-s-new",
+            "whats-new" => "what-s-new",
+            "about-freex" => "about",
+            "side-by-side" => "view-side-by-side",
+            "sync-scrolling" => "synchronous-scrolling",
+            "reset-position" => "reset-window-position",
+            "100" => "zoom-to-100",
+            "save-as" => "save-as",
+            "export-pdf-xps" => "export",
+            "page-orientation" => "page-orientation",
+            "hide" => "hide-sheet",
+            "unhide" => "unhide-sheet",
+            "show-detail" => "show-detail",
+            "hide-detail" => "hide-detail",
+            "collapse-group" => "hide-detail",
+            "expand-group" => "show-detail",
+            "add-watch" => "watch-add",
+            "delete-watch" => "watch-delete",
+            "reapply" => "reapply-filter",
+            "reapply-filter" => "reapply-filter",
+            "pick-from-drop-down-list" => "pick-from-dropdown",
+            "macros" => "macros",
+            "macro" => "macros",
+            "queries-connections" => "queries-connections",
+            "check-for-updates" => "check-for-updates",
+            "pin-to-list" => "pin-to-list",
+            "unpin-from-list" => "unpin-from-list",
+            "remove-from-list" => "remove-from-list",
+            "rename" => "rename-sheet",
+            "duplicate" => "duplicate-sheet",
+            _ => ""
+        };
+
+        if (alias.Length > 0 && !string.Equals(alias, slug, StringComparison.Ordinal))
+            yield return alias;
+    }
+
+    // Mirrors RibbonIconFactory.Svg.cs ToCommandIconSlug: lower-case, "&"→"and", then collapse every
+    // run of non-alphanumeric characters to a single hyphen and trim leading/trailing hyphens.
+    private static string ToCommandIconSlug(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return string.Empty;
+
+        var lower = text
+            .Trim()
+            .ToLowerInvariant()
+            .Replace("&amp;", "and", StringComparison.Ordinal)
+            .Replace("&", "and", StringComparison.Ordinal);
+        var builder = new StringBuilder(lower.Length);
+        var pendingDash = false;
+
+        foreach (var ch in lower)
+        {
+            if (ch is >= 'a' and <= 'z' or >= '0' and <= '9')
+            {
+                if (pendingDash && builder.Length > 0)
+                    builder.Append('-');
+                builder.Append(ch);
+                pendingDash = false;
+            }
+            else
+            {
+                pendingDash = builder.Length > 0;
+            }
+        }
+
+        return builder.ToString().Trim('-');
+    }
 
     /// <summary>
     /// Builds an icon control for the given command icon (kind + accent) at the requested pixel size.
