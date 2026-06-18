@@ -213,6 +213,10 @@ public partial class MainWindow : Window, IWorkbookWindow
     private string? _textBoxInlineOriginalText;
     private bool _syncingFormulaEditorText;
     private System.Windows.Controls.ComboBox? _validationDropdown;
+    // The modeless AutoFilter dropdown flyout (a separate window) and the sheet it was opened on,
+    // so a sheet switch can dismiss it instead of leaving it floating over the new sheet.
+    private AutoFilterDialog? _autoFilterDropdown;
+    private SheetId _autoFilterDropdownSheetId;
     private CellAddress? _formulaEditCell;
     private CellAddress? _formulaRangeSelectionAnchor;
     private int? _formulaReferenceStart;
