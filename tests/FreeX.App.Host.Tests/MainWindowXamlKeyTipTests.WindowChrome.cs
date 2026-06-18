@@ -60,7 +60,11 @@ public sealed partial class MainWindowXamlKeyTipTests
         catalogSource.Should().Contain("QuickAccessToolbarCommandIds.NameManager");
         qatSource.Should().Contain("RebuildQuickAccessToolbar()");
         qatSource.Should().Contain("RibbonTooltip.SetKeyTip(button, FormatQuickAccessToolbarKeyTip(visibleIndex));");
-        qatSource.Should().Contain("AutomationProperties.SetAutomationId(button, command.AutomationId);");
+        // The QAT button (style, glyph, hit-test, automation id/name) is built through the shared
+        // Free.Shared.Ribbon.Wpf QAT renderer from a neutral descriptor carrying the catalog automation id;
+        // FreeX keeps its RibbonTooltip / RibbonMetadata / context-menu / click decorations on top.
+        qatSource.Should().Contain("SharedQat.BuildButton(");
+        qatSource.Should().Contain("AutomationId = command.AutomationId");
         qatSource.Should().Contain("RegisterQuickAccessToolbarName(command.AutomationId, button);");
         qatSource.Should().Contain("RegisterQuickAccessToolbarName(historyButton.Name, historyButton);");
         qatSource.Should().Contain("ExecuteQuickAccessToolbarCommand(command.Id, button, args)");
