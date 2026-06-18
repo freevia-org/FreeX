@@ -143,7 +143,18 @@ public sealed class MainWindow : Window
         editor.SelectionChanged += (_, _) => { UpdateCounts(); RefreshContextualTabs(); };
         _autosave = new AutosaveCoordinator(editor, _file);
         Loaded += (_, _) => { _autosave.OfferRecovery(this); _autosave.Start(); };
-        Closing += (_, _) => _autosave.Stop();
+        Closing += (_, e) =>
+        {
+            // Save-before-close gate (shared FileLifecyclePlanner). Cancel the close if the user
+            // backs out; only stop autosave (which deletes the recovery snapshot) once we commit to
+            // closing. Previously FreeW closed without prompting and silently lost unsaved work.
+            if (!_file.ConfirmCloseAllowed())
+            {
+                e.Cancel = true;
+                return;
+            }
+            _autosave.Stop();
+        };
 
         // The title bar comes from the shared shell; the host fills its QAT slot and keeps the title text.
         // It is composed into the OUTER grid (below), in its own top row ABOVE the Backstage overlay, so
