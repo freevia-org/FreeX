@@ -47,13 +47,13 @@ public sealed partial class MainWindow
 
         var rowGrandTotalsBox = new CheckBox
         {
-            Content = "Show grand totals for rows",
+            Content = UiText.Get("PivotOptions_ShowRowGrandTotals"),
             IsChecked = values.ShowRowGrandTotals,
         };
         AutomationProperties.SetAutomationId(rowGrandTotalsBox, "PivotOptionsRowGrandTotalsBox");
         var columnGrandTotalsBox = new CheckBox
         {
-            Content = "Show grand totals for columns",
+            Content = UiText.Get("PivotOptions_ShowColumnGrandTotals"),
             IsChecked = values.ShowColumnGrandTotals,
         };
         AutomationProperties.SetAutomationId(columnGrandTotalsBox, "PivotOptionsColumnGrandTotalsBox");
@@ -75,7 +75,7 @@ public sealed partial class MainWindow
 
         var subtotalsBox = new CheckBox
         {
-            Content = "Show subtotals",
+            Content = UiText.Get("PivotOptions_ShowSubtotals"),
             IsChecked = values.ShowSubtotals,
         };
         AutomationProperties.SetAutomationId(subtotalsBox, "PivotOptionsSubtotalsBox");
@@ -90,21 +90,21 @@ public sealed partial class MainWindow
 
         var repeatLabelsBox = new CheckBox
         {
-            Content = "Repeat item labels",
+            Content = UiText.Get("PivotOptions_RepeatItemLabels"),
             IsChecked = values.RepeatItemLabels,
         };
         AutomationProperties.SetAutomationId(repeatLabelsBox, "PivotOptionsRepeatLabelsBox");
 
         var blankRowBox = new CheckBox
         {
-            Content = "Insert blank row after each item",
+            Content = UiText.Get("PivotOptions_InsertBlankRow"),
             IsChecked = values.BlankLineAfterItems,
         };
         AutomationProperties.SetAutomationId(blankRowBox, "PivotOptionsBlankRowBox");
 
         var mergeLabelsBox = new CheckBox
         {
-            Content = "Merge and center cells with labels",
+            Content = UiText.Get("PivotOptions_MergeAndCenterLabels"),
             IsChecked = values.MergeAndCenterLabels,
         };
         AutomationProperties.SetAutomationId(mergeLabelsBox, "PivotOptionsMergeLabelsBox");
@@ -119,7 +119,7 @@ public sealed partial class MainWindow
 
         var dialog = new Window
         {
-            Title = $"PivotTable Options ({pivot.Name})",
+            Title = UiText.Format("PivotOptions_Title", pivot.Name),
             Width = 360,
             SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -127,9 +127,9 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(dialog, "PivotTableOptionsDialog");
 
-        var ok = new Button { Content = "OK", IsDefault = true, MinWidth = 80 };
+        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 80 };
         AutomationProperties.SetAutomationId(ok, "PivotTableOptionsOkButton");
-        var cancel = new Button { Content = "Cancel", IsCancel = true, MinWidth = 80 };
+        var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 80 };
         AutomationProperties.SetAutomationId(cancel, "PivotTableOptionsCancelButton");
         cancel.Click += (_, _) => dialog.Close(false);
         ok.Click += (_, _) =>
@@ -144,18 +144,18 @@ public sealed partial class MainWindow
         };
 
         var content = new StackPanel { Spacing = 8, Margin = new Thickness(12) };
-        content.Children.Add(SectionHeader("Grand Totals"));
+        content.Children.Add(SectionHeader(UiText.Get("PivotOptions_GrandTotalsHeader")));
         content.Children.Add(rowGrandTotalsBox);
         content.Children.Add(columnGrandTotalsBox);
-        content.Children.Add(SectionHeader("Layout"));
-        content.Children.Add(new TextBlock { Text = "Report layout:", Foreground = HeaderForeground });
+        content.Children.Add(SectionHeader(UiText.Get("PivotOptions_LayoutHeader")));
+        content.Children.Add(new TextBlock { Text = UiText.Get("PivotOptions_ReportLayoutLabel"), Foreground = HeaderForeground });
         content.Children.Add(reportLayoutBox);
-        content.Children.Add(new TextBlock { Text = "Compact form row label indent:", Foreground = HeaderForeground });
+        content.Children.Add(new TextBlock { Text = UiText.Get("PivotOptions_CompactIndentLabel"), Foreground = HeaderForeground });
         content.Children.Add(compactIndentBox);
         content.Children.Add(repeatLabelsBox);
         content.Children.Add(blankRowBox);
         content.Children.Add(mergeLabelsBox);
-        content.Children.Add(SectionHeader("Subtotals"));
+        content.Children.Add(SectionHeader(UiText.Get("PivotOptions_SubtotalsHeader")));
         content.Children.Add(subtotalsBox);
         content.Children.Add(subtotalPlacementBox);
         content.Children.Add(new StackPanel
