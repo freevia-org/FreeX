@@ -20,8 +20,8 @@ public static class RibbonWpfRenderer
 {
     private const double SmallRowHeight = 22;
     private const double LargeIconSize = 32;
-    private const double MediumIconSize = 18;
-    private const double SmallIconSize = 18;
+    private const double MediumIconSize = 20;
+    private const double SmallIconSize = 20;
     private const int MaxRowsPerColumn = 3;
 
     public static FrameworkElement BuildTabContent(

@@ -71,7 +71,8 @@ public sealed class RibbonGroupHost : ContentControl
         {
             Kind = iconControl?.Icon?.Kind ?? RibbonCommandIconKind.Generic,
             CommandName = iconControl?.CommandId.Value ?? string.Empty,
-            IconSize = 28,
+            // Large icon that fills most of the collapsed button (it is the group's whole visual identity).
+            IconSize = 36,
             HorizontalAlignment = HorizontalAlignment.Center
         });
         var caption = new TextBlock

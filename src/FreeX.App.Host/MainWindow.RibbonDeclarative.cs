@@ -42,6 +42,7 @@ public partial class MainWindow
             }
 
             var definition = FreeXRibbon.Build();
+            RegisterDefinitionHandlerQualifiedCommands(registry, definition);
             foreach (var item in RibbonTabs.Items)
             {
                 if (item is not TabItem tabItem)
@@ -63,6 +64,7 @@ public partial class MainWindow
                 }
 
                 tabItem.Content = content;
+                WireDeclarativeDropdownZones(content);
             }
 
             // Toggle/combo/enablement state now flows from the neutral RibbonStateStore to the rendered
@@ -82,6 +84,13 @@ public partial class MainWindow
             // (FormatTableBtn_Click / TableDesignStylesBtn_Click) open the attached menu.
             AttachFormatTableGalleryContextMenu();
             AttachTableDesignStyleGalleryContextMenu();
+            // The gallery buttons (Shapes / Format as Table / Table Styles) only get their ContextMenu in
+            // the Attach* calls above, after the per-tab pass ran — wire the dropdown split zone for them now.
+            foreach (var item in RibbonTabs.Items)
+            {
+                if (item is TabItem { Content: DependencyObject tabContent })
+                    WireDeclarativeDropdownZones(tabContent);
+            }
             RepointBackplaneNamesToRenderedControls(renderedByName);
             WireRenderedMenuOpenedHandlers(renderedByName);
             PopulateAndWireRenderedHomeCombos(renderedByName);
@@ -154,6 +163,28 @@ public partial class MainWindow
     /// Click-handler method (via the generated <see cref="FreeXRibbonHandlerMap"/>), so command
     /// execution no longer depends on the XAML control tree.
     /// </summary>
+    /// <summary>
+    /// Attaches the Excel-style split-button dropdown zone (hover highlight + click-zone handler) to every
+    /// rendered menu button in a tab. The renderer already gives menu buttons a ContextMenu and a tagged
+    /// dropdown chevron; this wires the same runtime zone treatment the XAML ribbon used, directly on the
+    /// rendered controls so it does not depend on the static-surface normalization pass. The Ensure* calls
+    /// are idempotent (guarded by attached flags) and the highlight recomputes lazily on hover/resize.
+    /// </summary>
+    private void WireDeclarativeDropdownZones(DependencyObject content)
+    {
+        foreach (var button in EnumerateLogicalDescendants(content)
+                     .Concat(EnumerateVisualDescendants(content))
+                     .OfType<ButtonBase>()
+                     .Distinct())
+        {
+            if (RibbonMetadata.IsCollapsedGroupButton(button) || button.ContextMenu is null)
+                continue;
+
+            EnsureRibbonDropdownZoneHandler(button);
+            EnsureRibbonDropdownZoneHighlight(button);
+        }
+    }
+
     private RibbonCommandRegistry BuildNativeRibbonRegistry()
     {
         var registry = new RibbonCommandRegistry();
@@ -174,6 +205,38 @@ public partial class MainWindow
         }
 
         return registry;
+    }
+
+    /// <summary>
+    /// Registers commands whose CommandId is "Title#HandlerMethod" but are NOT in the generated
+    /// <see cref="FreeXRibbonHandlerMap"/> (it is generated from the old XAML and so omits hand-authored
+    /// declarative additions like the Help tab). Without this their buttons render disabled because the
+    /// renderer disables any command the registry cannot resolve. The handler method name after '#' is
+    /// bound by reflection, mirroring how the generated map's ambiguous ids are bound.
+    /// </summary>
+    private void RegisterDefinitionHandlerQualifiedCommands(RibbonCommandRegistry registry, RibbonDefinition definition)
+    {
+        var type = typeof(MainWindow);
+        const System.Reflection.BindingFlags flags =
+            System.Reflection.BindingFlags.Instance |
+            System.Reflection.BindingFlags.NonPublic |
+            System.Reflection.BindingFlags.Public;
+
+        foreach (var control in definition.Tabs.SelectMany(tab => tab.Groups).SelectMany(group => group.Controls))
+        {
+            var id = control.CommandId.Value;
+            var hash = id.IndexOf('#');
+            if (hash <= 0 || hash >= id.Length - 1 || registry.TryGet(control.CommandId, out _))
+                continue;
+
+            var methodName = id[(hash + 1)..];
+            var method = type.GetMethod(methodName, flags, binder: null,
+                    types: new[] { typeof(object), typeof(RoutedEventArgs) }, modifiers: null)
+                ?? type.GetMethod(methodName, flags, binder: null, types: System.Type.EmptyTypes, modifiers: null);
+            if (method is not null)
+                registry.Register(id, new ReflectiveHandlerCommand(this, method,
+                    RibbonBackplaneControls.GetValueOrDefault(id)));
+        }
     }
 
     /// <summary>Invokes a MainWindow handler method (object,RoutedEventArgs) or parameterless.</summary>
