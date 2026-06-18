@@ -771,6 +771,24 @@ public sealed partial class MainWindow : Window
                     ["Vertical Text"] = () => ApplySelectedRangeTextRotation(255, "Set vertical text for", "Vertical Text failed."),
                     ["Rotate Text Up"] = () => ApplySelectedRangeTextRotation(90, "Rotated text up for", "Rotate Text Up failed."),
                     ["Rotate Text Down"] = () => ApplySelectedRangeTextRotation(-90, "Rotated text down for", "Rotate Text Down failed."),
+                    // Home ▸ Cells ▸ Insert / Delete / Format dropdown items that map to existing handlers
+                    // (canonical ids from HomeRibbonMenus.Insert/Delete/Format). Row-height/column-width/AutoFit/
+                    // hide-row-column/lock-cell items stay NoOp until those operations exist in the shell.
+                    ["Insert Cells"] = () => _ = ShowInsertCellsDialogAsync(),
+                    ["Insert Sheet"] = AddNewSheet,
+                    ["Delete Cells"] = () => _ = ShowDeleteCellsDialogAsync(),
+                    ["Format Cells"] = () => _ = ShowFormatCellsDialogAsync(),
+                    ["Protect Sheet"] = () => _ = ShowProtectSheetDialogAsync(),
+                    ["Unhide Sheet"] = () => _ = UnhideSheetAsync(),
+                    // Home ▸ Styles ▸ Conditional Formatting dropdown items backed by existing presets/handlers
+                    // (canonical ids from HomeRibbonMenus.ConditionalFormatting). The remaining Highlight/Top-Bottom/
+                    // Icon-Set variants stay NoOp until their presets exist.
+                    ["New Rule"] = () => _ = ShowConditionalFormatNewRuleDialogAsync(),
+                    ["Clear Rules"] = ClearConditionalFormatsFromSelection,
+                    ["Data Bars"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.DataBar),
+                    ["Color Scales"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.ColorScale),
+                    ["Greater Than"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.HighlightGreaterThan),
+                    ["Top 10 Items"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.Top10),
                     // Insert tab (Links / Text groups).
                     ["insert.hyperlink"] = () => _ = ShowInsertHyperlinkDialogAsync(),
                     // Home Font group (added buttons).

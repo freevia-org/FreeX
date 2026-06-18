@@ -245,6 +245,19 @@ public sealed class AvaloniaRibbonHostCallbackTests
     [InlineData("Vertical Text")]
     [InlineData("Rotate Text Up")]
     [InlineData("Rotate Text Down")]
+    // Home ▸ Cells (Insert/Delete/Format) + Conditional Formatting preset dropdown items.
+    [InlineData("Insert Cells")]
+    [InlineData("Insert Sheet")]
+    [InlineData("Delete Cells")]
+    [InlineData("Format Cells")]
+    [InlineData("Protect Sheet")]
+    [InlineData("Unhide Sheet")]
+    [InlineData("New Rule")]
+    [InlineData("Clear Rules")]
+    [InlineData("Data Bars")]
+    [InlineData("Color Scales")]
+    [InlineData("Greater Than")]
+    [InlineData("Top 10 Items")]
     public void NewTabCommands_AreRealCommandIds_AndBindViaExtraCommands(string commandId)
     {
         // The canonical id exists in the shared definition (so it seeds a NoOp default to begin with) ...
