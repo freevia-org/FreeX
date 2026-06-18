@@ -1,3 +1,4 @@
+using FreeX.App.Presentation.AutoFilter;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -105,52 +106,8 @@ public static class AutoFilterDropdownPlanner
 {
     public static string BlankDisplayText => UiText.Get("AutoFilter_BlankDisplayText");
 
-    public static bool TryGetAutoFilterRange(Sheet sheet, out GridRange range)
-    {
-        ArgumentNullException.ThrowIfNull(sheet);
-        range = default;
-
-        // A worksheet-level <autoFilter> takes precedence (an explicit AutoFilter applied to a range).
-        if (sheet.AutoFilter is { Reference: { } reference } &&
-            !string.IsNullOrWhiteSpace(reference))
-        {
-            try
-            {
-                range = GridRange.Parse(reference, sheet.Id);
-                return true;
-            }
-            catch (FormatException)
-            {
-                return false;
-            }
-            catch (ArgumentException)
-            {
-                return false;
-            }
-        }
-
-        // Excel structured tables carry their AutoFilter inside the table definition rather than as a
-        // worksheet <autoFilter>; surface the first filtered table's range so the header still shows
-        // filter-arrow buttons exactly as Excel renders them.
-        foreach (var table in sheet.StructuredTables)
-        {
-            if (!table.HasAutoFilter)
-                continue;
-
-            var tableRange = table.Range;
-            if (tableRange.Start.Sheet != sheet.Id ||
-                tableRange.End.Row < tableRange.Start.Row ||
-                tableRange.End.Col < tableRange.Start.Col)
-            {
-                continue;
-            }
-
-            range = tableRange;
-            return true;
-        }
-
-        return false;
-    }
+    public static bool TryGetAutoFilterRange(Sheet sheet, out GridRange range) =>
+        AutoFilterRangeResolver.TryGetAutoFilterRange(sheet, out range);
 
     public static bool TryPlan(GridRange currentRegion, CellAddress activeCell, out AutoFilterDropdownPlan plan)
     {

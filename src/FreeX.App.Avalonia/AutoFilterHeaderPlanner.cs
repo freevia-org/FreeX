@@ -1,3 +1,4 @@
+using FreeX.App.Presentation.AutoFilter;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia;
@@ -16,42 +17,8 @@ internal static class AutoFilterHeaderPlanner
     /// AutoFilter takes precedence; otherwise the first structured table whose <see cref="StructuredTableModel.HasAutoFilter"/>
     /// is set supplies the range so its header still shows filter arrows.
     /// </summary>
-    internal static GridRange? TryGetAutoFilterRange(Sheet sheet)
-    {
-        ArgumentNullException.ThrowIfNull(sheet);
-
-        if (sheet.AutoFilter is { Reference: { } reference } && !string.IsNullOrWhiteSpace(reference))
-        {
-            try
-            {
-                return GridRange.Parse(reference, sheet.Id);
-            }
-            catch (FormatException)
-            {
-                return null;
-            }
-            catch (ArgumentException)
-            {
-                return null;
-            }
-        }
-
-        foreach (var table in sheet.StructuredTables)
-        {
-            if (!table.HasAutoFilter)
-                continue;
-
-            var range = table.Range;
-            if (range.Start.Sheet == sheet.Id &&
-                range.End.Row >= range.Start.Row &&
-                range.End.Col >= range.Start.Col)
-            {
-                return range;
-            }
-        }
-
-        return null;
-    }
+    internal static GridRange? TryGetAutoFilterRange(Sheet sheet) =>
+        AutoFilterRangeResolver.TryGetAutoFilterRange(sheet);
 
     /// <summary>
     /// The header cells that should show a filter-dropdown button — one per column across the AutoFilter
