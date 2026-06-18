@@ -419,6 +419,7 @@ function Test-AvaloniaProject {
         "FreeX.Core.Commands",
         "FreeX.Core.IO",
         "FreeX.Core.Model",
+        "FreeX.Ribbon.Definitions",
         "FreeX.Ribbon.Avalonia"
     )
     $projectReferences = @(Get-ProjectItems -Project $project -Name "ProjectReference")
