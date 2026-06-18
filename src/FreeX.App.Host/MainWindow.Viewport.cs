@@ -372,6 +372,9 @@ public partial class MainWindow
     {
         if (SheetGrid == null || _viewportService == null) return;
 
+        // Dismiss the AutoFilter dropdown flyout if we've moved to a different sheet.
+        CloseAutoFilterDropdownOnSheetChange();
+
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is not null)
         {

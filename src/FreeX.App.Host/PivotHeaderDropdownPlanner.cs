@@ -178,20 +178,23 @@ public static class PivotHeaderDropdownPlanner
 
     private static IReadOnlyList<string> ReadHeaders(Workbook workbook, PivotTableModel pivotTable)
     {
-        var sourceSheet = workbook.GetSheet(pivotTable.SourceRange.Start.Sheet);
-        if (sourceSheet is null)
-            return [];
-
         var headers = new List<string>();
-        for (var col = pivotTable.SourceRange.Start.Col; col <= pivotTable.SourceRange.End.Col; col++)
+        var sourceSheet = workbook.GetSheet(pivotTable.SourceRange.Start.Sheet);
+        if (sourceSheet is not null)
         {
-            var value = sourceSheet.GetCell(pivotTable.SourceRange.Start.Row, col)?.Value;
-            headers.Add(value is TextValue text && !string.IsNullOrWhiteSpace(text.Value)
-                ? text.Value
-                : $"Field{headers.Count + 1}");
+            for (var col = pivotTable.SourceRange.Start.Col; col <= pivotTable.SourceRange.End.Col; col++)
+            {
+                var value = sourceSheet.GetCell(pivotTable.SourceRange.Start.Row, col)?.Value;
+                headers.Add(value is TextValue text && !string.IsNullOrWhiteSpace(text.Value)
+                    ? text.Value
+                    : $"Field{headers.Count + 1}");
+            }
         }
 
-        return headers;
+        // Cache-based pivots loaded from xlsx have no SourceRange (the source sheet does not resolve),
+        // which previously produced zero dropdown targets; fall back to the cache field names so the
+        // row/column header dropdowns render (Issue 123).
+        return PivotSourceHeaderResolver.Resolve(workbook, pivotTable, headers);
     }
 
     private static int RowFieldOutputColumnCount(PivotTableModel pivotTable) =>
