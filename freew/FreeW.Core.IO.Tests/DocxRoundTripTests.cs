@@ -864,6 +864,36 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void Table_HeaderRowCell_InlineImage_RoundTrips()
+    {
+        // Regression: a header-row cell's runs are re-rendered bold via BoldHeaderParagraph, which clones
+        // each run. BuildRun resolves a run's image media part from a per-write map keyed by run reference,
+        // so a cloned image run missed the lookup and the w:drawing was silently dropped (image 1 -> 0).
+        var png = MinimalPng();
+        var doc = new TextDocument();
+        var table = Table.Create(2, 2);
+        table.Rows[0].Cells[0] = new TableCell("Head");
+        var imageCell = new TableCell();
+        var imagePara = new Paragraph();
+        imagePara.Runs.Add(Run.FromImage(new InlineImage(png, widthPt: 120, heightPt: 90)));
+        imageCell.Paragraphs.Add(imagePara);
+        table.Rows[0].Cells[1] = imageCell;
+        table.Rows[1].Cells[0] = new TableCell("a");
+        table.Rows[1].Cells[1] = new TableCell("b");
+        table.Formatting = TableFormatting.Default with { HeaderRow = true };
+        doc.Blocks.Add(table);
+
+        var readTable = RoundTrip(doc).Blocks.OfType<Table>().Single();
+        var imageRun = readTable.Rows[0].Cells[1].Paragraphs
+            .SelectMany(p => p.Runs)
+            .Single(r => r.Image is not null);
+
+        imageRun.Image!.PngBytes.Should().Equal(png);
+        imageRun.Image.WidthPt.Should().BeApproximately(120, 0.01);
+        imageRun.Image.HeightPt.Should().BeApproximately(90, 0.01);
+    }
+
+    [Fact]
     public void Table_PlainTable_StyleTogglesAllFalse()
     {
         var doc = new TextDocument();

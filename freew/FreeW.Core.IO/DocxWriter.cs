@@ -1350,6 +1350,12 @@ public static class DocxWriter
     /// Returns a copy of <paramref name="paragraph"/> with every run forced bold, used to render a
     /// header-row cell's text bold without mutating the model. Non-text runs (images/fields) are copied
     /// with their marks preserved; only the run formatting's Bold flag is overridden.
+    ///
+    /// Runs that carry an inline drawing (image/chart/embedded object/SmartArt/preserved drawing) are kept
+    /// as the ORIGINAL instance, not cloned: <see cref="BuildRun"/> resolves a drawing's media part from the
+    /// per-write maps (imagesByRun/chartsByRun/…) keyed by run REFERENCE, so a clone would miss the lookup
+    /// and the drawing would be silently dropped. Bolding is meaningless for a drawing-only run anyway, so
+    /// preserving identity here costs nothing and keeps a header-row cell image (etc.) round-tripping.
     /// </summary>
     private static Paragraph BoldHeaderParagraph(Paragraph paragraph)
     {
@@ -1361,6 +1367,12 @@ public static class DocxWriter
         };
         foreach (var run in paragraph.Runs)
         {
+            if (run.Image is not null || run.Chart is not null || run.EmbeddedObject is not null
+                || run.SmartArt is not null || run.PreservedDrawing is not null)
+            {
+                copy.Runs.Add(run);
+                continue;
+            }
             copy.Runs.Add(new Run(run.Text, run.Formatting with { Bold = true })
             {
                 Image = run.Image,
