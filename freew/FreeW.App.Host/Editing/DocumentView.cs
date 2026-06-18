@@ -572,6 +572,11 @@ public sealed class DocumentView : RichTextBox
         if (index < 0 || index > _model.Blocks.Count)
             index = _model.Blocks.Count;
         _commands.Execute(new InsertBlockCommand(index, ModelTable.Create(rows, columns)));
+
+        // Word places the caret in the new table's first cell, so the Table Design contextual tab appears
+        // immediately and the user can type straight into the table. BringBlockIntoView moves the caret to
+        // the table leaf's first insertion position (inside cell 1).
+        BringBlockIntoView(index);
     }
 
     /// <summary>
