@@ -37,6 +37,12 @@ public sealed class AvaloniaRibbonThemeTests
         Assert.Equal(Color.FromRgb(0xFF, 0xFF, 0xFF), AvaloniaRibbonRenderer.SurfaceColor);
         Assert.Equal(Color.FromRgb(0x0F, 0x6D, 0x8C), AvaloniaRibbonRenderer.AccentColor);
         Assert.Equal(Colors.White, AvaloniaRibbonRenderer.SurfaceColor);
+
+        // Tab strip parity with WPF: the tabs sit on a light-gray chrome surround (#F5F6F7, the
+        // FreeXChromeSurfaceBrush analog) with near-black labels (FreeXTextBrush #1F1F1F,
+        // ThemeResources.xaml:13) — the white selected tab pops out of the gray strip.
+        Assert.Equal(Color.FromRgb(0xF5, 0xF6, 0xF7), AvaloniaRibbonRenderer.TabStripColor);
+        Assert.Equal(Color.FromRgb(0x1F, 0x1F, 0x1F), AvaloniaRibbonRenderer.TabTextColor);
     }
 
     [Fact]

@@ -39,6 +39,9 @@ public static class AvaloniaRibbonRenderer
     //   HoverBorder     = FreeXBorderStrongBrush       (#C8CCD0) — ThemeResources.xaml:21
     //   CheckedColor    = FreeXAccentPressedBrush      (#CCEAF2) — ThemeResources.xaml:11 (toggle IsChecked fill)
     //   TabHoverColor   = FreeXAccentSoftBrush         (#E6F6FA) — ThemeResources.xaml:10
+    //   TabStripColor   = chrome surface               (#F5F6F7) — the light-gray surround behind the tabs
+    //                     (FreeXChromeSurfaceBrush analog) so the white selected tab pops out of a gray strip.
+    //   TabTextColor    = FreeXTextBrush               (#1F1F1F) — ThemeResources.xaml:13 (near-black tab labels)
     internal static readonly Color SurfaceColor = Color.FromRgb(0xFF, 0xFF, 0xFF);
     internal static readonly Color AccentColor = Color.FromRgb(0x0F, 0x6D, 0x8C);
     internal static readonly Color DividerColor = Color.FromRgb(0xDA, 0xDC, 0xE0);
@@ -48,6 +51,8 @@ public static class AvaloniaRibbonRenderer
     internal static readonly Color HoverBorderColor = Color.FromRgb(0xC8, 0xCC, 0xD0);
     internal static readonly Color CheckedColor = Color.FromRgb(0xCC, 0xEA, 0xF2);
     internal static readonly Color TabHoverColor = Color.FromRgb(0xE6, 0xF6, 0xFA);
+    internal static readonly Color TabStripColor = Color.FromRgb(0xF5, 0xF6, 0xF7);
+    internal static readonly Color TabTextColor = Color.FromRgb(0x1F, 0x1F, 0x1F);
 
     private static readonly IBrush SurfaceBrush = new SolidColorBrush(SurfaceColor);
     private static readonly IBrush AccentBrush = new SolidColorBrush(AccentColor);
@@ -58,6 +63,8 @@ public static class AvaloniaRibbonRenderer
     private static readonly IBrush HoverBorderBrush = new SolidColorBrush(HoverBorderColor);
     private static readonly IBrush CheckedBrush = new SolidColorBrush(CheckedColor);
     private static readonly IBrush TabHoverBrush = new SolidColorBrush(TabHoverColor);
+    private static readonly IBrush TabStripBrush = new SolidColorBrush(TabStripColor);
+    private static readonly IBrush TabTextBrush = new SolidColorBrush(TabTextColor);
 
     /// <summary>Builds the content panel for one tab (the body shown under the tab header).</summary>
     public static Control BuildTabContent(RibbonTab tab, IRibbonCommandRegistry? registry = null)
@@ -119,9 +126,15 @@ public static class AvaloniaRibbonRenderer
     {
         ArgumentNullException.ThrowIfNull(definition);
 
+        // The WPF host's TabControl is a white body with a 1px FreeXBorderBrush bottom rule
+        // (MainWindow: Background=FreeXRibbonSurfaceBrush, BorderThickness="0,0,0,1"). That bottom rule is
+        // the SECOND line the user sees under the selected tab — the first being the accent underline the
+        // selected tab draws. Reproduce both: white body + a 1px divider bottom border on the control.
         var tabControl = new TabControl
         {
             Background = SurfaceBrush,
+            BorderBrush = DividerBrush,
+            BorderThickness = new Thickness(0, 0, 0, 1),
         };
         ApplyRibbonTheme(tabControl);
 
@@ -202,33 +215,53 @@ public static class AvaloniaRibbonRenderer
     {
         ArgumentNullException.ThrowIfNull(tabControl);
 
-        // ── Tab headers (flat; selected = white body + accent underline; hover = soft accent tint) ──
+        // ── Tab headers (gray strip, near-black labels; selected = white body + accent underline;
+        // hover = soft accent tint). Matches the WPF TabItem ControlTemplate (MainWindowResources.xaml:
+        // transparent template Border with BorderThickness 0,0,0,3; IsSelected -> accent border + white
+        // body; IsMouseOver -> FreeXAccentSoftBrush). Foreground is the near-black FreeXTextBrush. ──
         var tabBase = new Style(x => x.OfType<TabItem>())
         {
             Setters =
             {
-                new Setter(TemplatedControl.BackgroundProperty, Brushes.Transparent),
+                new Setter(TemplatedControl.BackgroundProperty, TabStripBrush),
                 new Setter(TemplatedControl.BorderBrushProperty, Brushes.Transparent),
                 new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0, 0, 0, 3)),
                 new Setter(TemplatedControl.FontSizeProperty, 12d),
-                new Setter(TemplatedControl.PaddingProperty, new Thickness(8, 4, 8, 4)),
+                new Setter(TemplatedControl.ForegroundProperty, TabTextBrush),
+                new Setter(TemplatedControl.PaddingProperty, new Thickness(10, 4, 10, 4)),
+                new Setter(Layoutable.MarginProperty, new Thickness(0, 0, 1, 0)),
                 new Setter(InputElement.CursorProperty, new Cursor(StandardCursorType.Hand)),
             },
         };
 
         var tabHover = new Style(x => x.OfType<TabItem>().Class(":pointerover"))
         {
-            Setters = { new Setter(TemplatedControl.BackgroundProperty, TabHoverBrush) },
+            Setters =
+            {
+                new Setter(TemplatedControl.BackgroundProperty, TabHoverBrush),
+                new Setter(TemplatedControl.ForegroundProperty, TabTextBrush),
+            },
         };
 
         var tabSelected = new Style(x => x.OfType<TabItem>().Class(":selected"))
         {
             Setters =
             {
-                // WPF selected tab: white body + accent bottom border. Neutral foreground (no green text).
+                // WPF selected tab: white body + accent bottom border, near-black label (no green text).
                 new Setter(TemplatedControl.BackgroundProperty, SurfaceBrush),
+                new Setter(TemplatedControl.ForegroundProperty, TabTextBrush),
                 new Setter(TemplatedControl.BorderBrushProperty, AccentBrush),
                 new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0, 0, 0, 3)),
+            },
+        };
+
+        // Selected + hovered keeps the white body (don't let the hover tint repaint a selected tab).
+        var tabSelectedHover = new Style(x => x.OfType<TabItem>().Class(":selected").Class(":pointerover"))
+        {
+            Setters =
+            {
+                new Setter(TemplatedControl.BackgroundProperty, SurfaceBrush),
+                new Setter(TemplatedControl.ForegroundProperty, TabTextBrush),
             },
         };
 
@@ -281,6 +314,7 @@ public static class AvaloniaRibbonRenderer
         tabControl.Styles.Add(tabBase);
         tabControl.Styles.Add(tabHover);
         tabControl.Styles.Add(tabSelected);
+        tabControl.Styles.Add(tabSelectedHover);
         tabControl.Styles.Add(buttonBase);
         tabControl.Styles.Add(buttonHover);
         tabControl.Styles.Add(toggleBase);
@@ -465,26 +499,45 @@ public static class AvaloniaRibbonRenderer
         return box;
     }
 
-    // WPF BuildLargeControl: a hero button — big icon (~32px) above a centered (wrapping) caption.
+    // WPF BuildLargeControl: a hero button — big icon (~32px) above a centered (wrapping) caption. For a
+    // split/dropdown control, WPF folds a centered chevron into a band BELOW the label (a distinct dropdown
+    // affordance) rather than running "▾" into the caption text.
     private static Control BuildLargeControl(RibbonControl control, IRibbonCommandRegistry? registry)
     {
         var stack = new StackPanel { Orientation = Orientation.Vertical };
         stack.Children.Add(NewIcon(control, LargeIconSize, HorizontalAlignment.Center));
 
-        var captionText = control.Label;
-        if (HasMenu(control))
-            captionText += "  ▾";
-
+        // The hero button is Width 70 / Padding 3 (≈64 content). WPF's caption wraps on WORD boundaries
+        // (so "Conditional Formatting" lays out as "Conditional" / "Formatting"); Avalonia's plain Wrap
+        // would break the long word mid-character ("Conditiona\nl"). WrapWithOverflow wraps at word
+        // boundaries and never splits a word, and a MaxWidth matching the button content keeps the two
+        // words on their own lines exactly like WPF.
         stack.Children.Add(new TextBlock
         {
-            Text = captionText,
+            Text = control.Label,
             FontSize = 12,
             TextAlignment = TextAlignment.Center,
-            TextWrapping = TextWrapping.Wrap,
+            TextWrapping = TextWrapping.WrapWithOverflow,
             HorizontalAlignment = HorizontalAlignment.Center,
             Margin = new Thickness(0, 2, 0, 0),
             MaxWidth = 64,
         });
+
+        // Large split/dropdown affordance: a centered chevron on its OWN line under the label, so the
+        // hero button reads as visually split (icon + label = primary, the chevron band = open the menu) —
+        // matching the WPF hero split-button layout. The flyout is still attached to the whole button by
+        // WireControl, so the primary click opens the menu as before; only the visual changes.
+        if (HasMenu(control))
+        {
+            stack.Children.Add(new TextBlock
+            {
+                Text = "▾",
+                FontSize = 10,
+                TextAlignment = TextAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin = new Thickness(0, 1, 0, 0),
+            });
+        }
 
         // WPF RibbonLargeButton: Width 70, Height 76, Padding 3,2.
         var button = NewButtonLike(control);
