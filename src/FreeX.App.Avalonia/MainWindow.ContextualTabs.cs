@@ -47,7 +47,8 @@ public sealed partial class MainWindow
             ["chartFormat.plotAreaFill"] = () => RunGuarded(ShowChartPlotAreaFillDialog),
             ["chartFormat.plotAreaBorder"] = () => RunGuarded(ShowChartShapeOutlineDialog),
             ["chartFormat.seriesColor"] = () => RunGuarded(ShowChartSeriesColorDialog),
-            ["chartFormat.legendText"] = CycleChartLegendTextColor,
+            // The Legend button opens the show/hide + position options dialog (ChartLegendPlanner).
+            ["chartFormat.legendText"] = () => RunGuarded(ShowChartLegendDialog),
             ["chartFormat.xGridlines"] = CycleChartXAxisGridlines,
             ["chartFormat.yGridlines"] = CycleChartYAxisGridlines,
             ["chartFormat.xLabels"] = ToggleChartXAxisLabels,
