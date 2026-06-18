@@ -50,7 +50,7 @@
          Paste is byte-identical to FreeX. Linked (single source of truth), not copied; FreeW's folder
          above holds only the Word-specific icons and must not contain any filename that also exists in
          FreeX's set (that would double-emit to the same output path). -->
-    <Content Include="..\..\src\FreeX.App.Host\Resources\CommandIconsSvg\**\*.svg"
+    <Content Include="..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\**\*.svg"
              Link="Resources\CommandIconsSvg\%(RecursiveDir)%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
