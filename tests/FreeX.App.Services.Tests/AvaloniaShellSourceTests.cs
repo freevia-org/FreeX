@@ -3525,6 +3525,22 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("\"FormatCellsBorderPresetBox\"");
         source.Should().Contain("\"FormatCellsBorderStyleBox\"");
         source.Should().Contain("\"FormatCellsBorderColorBox\"");
+        source.Should().Contain("\"FormatCellsBorderTopToggle\"");
+        source.Should().Contain("\"FormatCellsBorderBottomToggle\"");
+        source.Should().Contain("\"FormatCellsBorderLeftToggle\"");
+        source.Should().Contain("\"FormatCellsBorderRightToggle\"");
+        source.Should().Contain("\"FormatCellsBorderInsideHorizontalToggle\"");
+        source.Should().Contain("\"FormatCellsBorderInsideVerticalToggle\"");
+        source.Should().Contain("\"FormatCellsBorderPreview\"");
+        source.Should().Contain("\"FormatCellsFontPreview\"");
+        source.Should().Contain("\"FormatCellsFillPreview\"");
+        source.Should().Contain("\"FormatCellsBorderPresetNoneButton\"");
+        source.Should().Contain("\"FormatCellsBorderPresetOutlineButton\"");
+        source.Should().Contain("\"FormatCellsBorderPresetInsideButton\"");
+        source.Should().Contain("BorderTop: borderTopSide");
+        source.Should().Contain("BorderRight: borderRightSide");
+        source.Should().Contain("BorderBottom: borderBottomSide");
+        source.Should().Contain("BorderLeft: borderLeftSide");
         source.Should().Contain("\"FormatCellsDoubleUnderlineBox\"");
         source.Should().Contain("\"FormatCellsShrinkToFitBox\"");
         source.Should().Contain("\"FormatCellsIndentLevelBox\"");
@@ -3589,6 +3605,14 @@ public sealed class AvaloniaShellSourceTests
         plannerSource.Should().Contain("Hidden: request.Hidden");
         plannerSource.Should().Contain("FillPatternStyle: request.ClearFill ? null : request.FillPatternStyle");
         plannerSource.Should().Contain("FillPatternColor: request.ClearFill ? null : request.FillPatternColor");
+        plannerSource.Should().Contain("CellBorder? BorderTop = null");
+        plannerSource.Should().Contain("CellBorder? BorderRight = null");
+        plannerSource.Should().Contain("CellBorder? BorderBottom = null");
+        plannerSource.Should().Contain("CellBorder? BorderLeft = null");
+        plannerSource.Should().Contain("var borderTop = request.BorderTop ?? borderDiff?.BorderTop");
+        plannerSource.Should().Contain("var borderRight = request.BorderRight ?? borderDiff?.BorderRight");
+        plannerSource.Should().Contain("var borderBottom = request.BorderBottom ?? borderDiff?.BorderBottom");
+        plannerSource.Should().Contain("var borderLeft = request.BorderLeft ?? borderDiff?.BorderLeft");
     }
 
     [Fact]
