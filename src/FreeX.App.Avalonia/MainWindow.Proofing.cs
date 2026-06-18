@@ -36,6 +36,11 @@ public sealed partial class MainWindow
 
     private bool CommitProofingText(string text, string successStatus)
     {
+        // The proofing dialogs await before reaching here; an open/save may have started in the
+        // meantime. Don't mutate the workbook mid-operation (parity with the chart/pivot handlers).
+        if (_isOpening || _isSaving)
+            return false;
+
         var address = _session.ActiveCell;
         _session.SelectCell(address);
         var result = _session.CommitCellText(text);
@@ -191,19 +196,22 @@ public sealed partial class MainWindow
         };
         var ok = new Button { Content = "Insert", Width = 90 };
         var cancel = new Button { Content = "Cancel", Width = 90 };
+        // Captured below once the dialog exists. layout is the Window's Content, so the previous
+        // layout.Parent.Parent walked one level too far (Parent is the Window, Parent.Parent null).
+        Window? dialog = null;
         ok.Click += (_, _) =>
         {
             var text = input.Text ?? string.Empty;
             CommitProofingText(text, "Inserted equation as cell text.");
             input.Tag = "ok";
-            ((Window)layout.Parent!.Parent!).Close();
+            dialog?.Close();
         };
-        cancel.Click += (_, _) => ((Window)layout.Parent!.Parent!).Close();
+        cancel.Click += (_, _) => dialog?.Close();
         buttons.Children.Add(ok);
         buttons.Children.Add(cancel);
         layout.Children.Add(buttons);
 
-        var dialog = new Window
+        dialog = new Window
         {
             Title = "Insert Equation",
             Width = 410,
