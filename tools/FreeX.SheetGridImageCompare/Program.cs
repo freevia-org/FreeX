@@ -226,6 +226,11 @@ internal static class Program
 
         var viewport = viewportService.GetViewport(workbook, sheet.Id, request);
 
+        // Resolve list-control selected-item text (ListFillRange[SelectedIndex]) into SelectedText,
+        // mirroring the real app's open/viewport pipeline so drop-downs render their selection.
+        if (sheet.FormControls.Count > 0)
+            FreeX.Core.Commands.FormControlListResolver.PopulateSelectedText(sheet, workbook);
+
         // Step 3: Configure GridView
         var grid = new GridView
         {

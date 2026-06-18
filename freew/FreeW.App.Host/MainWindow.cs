@@ -260,41 +260,38 @@ public sealed class MainWindow : Window
     // Show the Word-style Backstage (File screen) over the document.
     private void ShowBackstage() => _backstage.Show();
 
-    // Fill the shared title bar's Quick Access Toolbar slot with Save / Undo / Redo. Small flat icon
-    // buttons (white vector glyphs on the navy caption) using the shared chrome flat-button style; each is
-    // hit-test-visible so clicks land while WindowChrome owns the caption. Save routes to the file command;
-    // Undo/Redo run the editor's built-in (RichTextBox) history — the same inline undo the keyboard drives.
+    // Fill the shared title bar's Quick Access Toolbar slot with Save / Undo / Redo via the shared QAT
+    // renderer (Free.Shared.Ribbon.Wpf): neutral descriptors (command id + tooltip + ribbon glyph) rendered
+    // as small flat icon buttons (white vector glyphs on the navy caption, shared ChromeFlatButtonStyle,
+    // hit-test-visible so clicks land while WindowChrome owns the caption). The click callback routes by
+    // command id: Save → the file command; Undo/Redo → the editor's built-in (RichTextBox) history, the same
+    // inline history the keyboard drives.
     private void AddQuickAccessButtons(StackPanel host)
     {
-        Button QatButton(RibbonCommandIconKind kind, string tip, Action onClick)
+        var items = new[]
         {
-            var button = new Button
-            {
-                Style = (Style)FindResource("ChromeFlatButtonStyle"),
-                VerticalAlignment = VerticalAlignment.Center,
-                Width = 26,
-                Height = 22,
-                Padding = new Thickness(0),
-                Margin = new Thickness(0, 0, 1, 0),
-                ToolTip = tip,
-                Content = new RibbonIcon
-                {
-                    Kind = kind,
-                    IconSize = 16,
-                    Foreground = Brushes.White,
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center
-                }
-            };
-            AutomationProperties.SetName(button, tip);
-            WindowChrome.SetIsHitTestVisibleInChrome(button, true);
-            button.Click += (_, _) => onClick();
-            return button;
-        }
+            new QuickAccessToolbarItem("Save", "Save (Ctrl+S)", RibbonCommandIconKind.Save),
+            new QuickAccessToolbarItem("Undo", "Undo (Ctrl+Z)", RibbonCommandIconKind.Undo),
+            new QuickAccessToolbarItem("Redo", "Redo (Ctrl+Y)", RibbonCommandIconKind.Redo)
+        };
 
-        host.Children.Add(QatButton(RibbonCommandIconKind.Save, "Save (Ctrl+S)", () => _file.Save()));
-        host.Children.Add(QatButton(RibbonCommandIconKind.Undo, "Undo (Ctrl+Z)", Undo));
-        host.Children.Add(QatButton(RibbonCommandIconKind.Redo, "Redo (Ctrl+Y)", Redo));
+        QuickAccessToolbarRenderer.Render(host, this, items, OnQuickAccessCommand);
+    }
+
+    private void OnQuickAccessCommand(string commandId)
+    {
+        switch (commandId)
+        {
+            case "Save":
+                _file.Save();
+                break;
+            case "Undo":
+                Undo();
+                break;
+            case "Redo":
+                Redo();
+                break;
+        }
     }
 
     private void UpdateTitle()

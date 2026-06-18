@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Shapes;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
@@ -10,31 +11,53 @@ namespace FreeX.Ribbon.Avalonia;
 
 /// <summary>
 /// Avalonia (cross-platform) realization of a declarative <see cref="RibbonTab"/>.
-/// Mirrors the WPF renderer's visual vocabulary: a horizontal strip of groups, each a content
-/// row over a header label, controls laid out by <see cref="RibbonControl.PreferredLayout"/>
-/// (Large = icon-above-label hero, Medium/Small = compact icon+label rows packed into columns),
-/// dropdown/split buttons opening a <see cref="MenuFlyout"/> built from the control's
-/// <see cref="RibbonMenu"/>, separators as vertical rules, and combos as <see cref="ComboBox"/>.
+/// Visually replicates the WPF ribbon (RibbonWpfRenderer + the WPF style resources): a flat white
+/// surface with a horizontal strip of groups, each a content row over a header label, controls laid out
+/// by <see cref="RibbonControl.PreferredLayout"/> exactly as WPF does — Large = hero (big icon above
+/// label), Medium = small icon + label in a row, Small = icon-only — groups that declare a
+/// <see cref="RibbonRowBreak"/> stacking into explicit horizontal rows. Buttons are flat (transparent
+/// idle, a light hover tint, a subtle checked fill for toggles), tabs use WPF's flat header with an
+/// accent underline on the selected tab, and <see cref="RibbonCheckBox"/> renders as a real check box.
 /// Behavior is resolved through an <see cref="IRibbonCommandRegistry"/> keyed by command id.
 /// </summary>
 public static class AvaloniaRibbonRenderer
 {
     private const double SmallRowHeight = 22;
-    private const int MaxSmallRowsPerColumn = 3;
+    private const double LargeIconSize = 32;
+    private const double MediumIconSize = 16;
+    private const double SmallIconSize = 18;
+    private const int MaxRowsPerColumn = 3;
 
-    // Ribbon palette — a polished, Excel-like surface adapted to macOS conventions (light, low-contrast
-    // chrome with a single brand accent on the active tab). Exposed internally so the theme is unit-testable.
-    internal static readonly Color SurfaceColor = Color.FromRgb(0xF5, 0xF6, 0xF7);
-    internal static readonly Color AccentColor = Color.FromRgb(0x21, 0x73, 0x46);   // workbook brand green
-    internal static readonly Color DividerColor = Color.FromRgb(0xDA, 0xDC, 0xDF);
-    internal static readonly Color GroupLabelColor = Color.FromRgb(0x60, 0x60, 0x60);
-    internal static readonly Color HoverColor = Color.FromRgb(0xE6, 0xF2, 0xEC);     // light accent tint
+    // Ribbon palette — matched 1:1 to the WPF resources so the Avalonia ribbon visually replicates
+    // Windows. Exposed internally so the theme is unit-testable.
+    //   SurfaceColor    = FreeXRibbonSurfaceBrush      (#FFFFFF) — ThemeResources.xaml:16
+    //   AccentColor     = FreeXAccentBrush             (#0F6D8C) — ThemeResources.xaml:3
+    //   DividerColor    = FreeXBorderBrush             (#DADCE0) — ThemeResources.xaml:20 (group divider + label rule)
+    //   InlineDivider   = hardcoded #CCCCCC                       — RibbonWpfRenderer.BuildInlineDivider
+    //   GroupLabelColor = FreeXMutedTextBrush          (#5F6368) — ThemeResources.xaml:14 (GroupLbl)
+    //   HoverColor      = FreeXRibbonButtonHoverBrush  (#BEE6FD) — ThemeResources.xaml:12
+    //   HoverBorder     = FreeXBorderStrongBrush       (#C8CCD0) — ThemeResources.xaml:21
+    //   CheckedColor    = FreeXAccentPressedBrush      (#CCEAF2) — ThemeResources.xaml:11 (toggle IsChecked fill)
+    //   TabHoverColor   = FreeXAccentSoftBrush         (#E6F6FA) — ThemeResources.xaml:10
+    internal static readonly Color SurfaceColor = Color.FromRgb(0xFF, 0xFF, 0xFF);
+    internal static readonly Color AccentColor = Color.FromRgb(0x0F, 0x6D, 0x8C);
+    internal static readonly Color DividerColor = Color.FromRgb(0xDA, 0xDC, 0xE0);
+    internal static readonly Color InlineDividerColor = Color.FromRgb(0xCC, 0xCC, 0xCC);
+    internal static readonly Color GroupLabelColor = Color.FromRgb(0x5F, 0x63, 0x68);
+    internal static readonly Color HoverColor = Color.FromRgb(0xBE, 0xE6, 0xFD);
+    internal static readonly Color HoverBorderColor = Color.FromRgb(0xC8, 0xCC, 0xD0);
+    internal static readonly Color CheckedColor = Color.FromRgb(0xCC, 0xEA, 0xF2);
+    internal static readonly Color TabHoverColor = Color.FromRgb(0xE6, 0xF6, 0xFA);
 
     private static readonly IBrush SurfaceBrush = new SolidColorBrush(SurfaceColor);
     private static readonly IBrush AccentBrush = new SolidColorBrush(AccentColor);
     private static readonly IBrush DividerBrush = new SolidColorBrush(DividerColor);
+    private static readonly IBrush InlineDividerBrush = new SolidColorBrush(InlineDividerColor);
     private static readonly IBrush GroupLabelBrush = new SolidColorBrush(GroupLabelColor);
     private static readonly IBrush HoverBrush = new SolidColorBrush(HoverColor);
+    private static readonly IBrush HoverBorderBrush = new SolidColorBrush(HoverBorderColor);
+    private static readonly IBrush CheckedBrush = new SolidColorBrush(CheckedColor);
+    private static readonly IBrush TabHoverBrush = new SolidColorBrush(TabHoverColor);
 
     /// <summary>Builds the content panel for one tab (the body shown under the tab header).</summary>
     public static Control BuildTabContent(RibbonTab tab, IRibbonCommandRegistry? registry = null)
@@ -51,7 +74,7 @@ public static class AvaloniaRibbonRenderer
         foreach (var group in tab.Groups)
         {
             if (!first)
-                panel.Children.Add(BuildDivider());
+                panel.Children.Add(BuildGroupDivider());
             panel.Children.Add(BuildGroup(group, registry));
             first = false;
         }
@@ -63,12 +86,10 @@ public static class AvaloniaRibbonRenderer
             Content = panel,
         };
 
+        // WPF: Border { Background=FreeXRibbonSurfaceBrush (white); Padding 0,4,0,0 } — no accent rule.
         return new Border
         {
             Background = SurfaceBrush,
-            // A thin brand-accent rule under the tab strip, mirroring the desktop ribbon's active band.
-            BorderBrush = AccentBrush,
-            BorderThickness = new Thickness(0, 2, 0, 0),
             Padding = new Thickness(0, 4, 0, 0),
             Child = scroller,
         };
@@ -168,36 +189,103 @@ public static class AvaloniaRibbonRenderer
     }
 
     /// <summary>
-    /// Applies the ribbon theme styles to the tab control: the active tab takes the brand accent and a
-    /// semibold header, and ribbon buttons get a subtle accent-tinted hover — matching the desktop ribbon's
-    /// feedback while staying within the platform theme. Returns the styles applied (for tests/inspection).
+    /// Applies the ribbon theme styles to the tab control, replicating the WPF look:
+    /// <list type="bullet">
+    /// <item>Tabs are flat (transparent, neutral foreground); the selected tab gets a white body and an
+    /// accent underline — NOT green text/semibold (matches the WPF TabItem template).</item>
+    /// <item>Ribbon buttons/toggles are flat: transparent idle, a light hover tint + subtle border on
+    /// pointer-over, and a subtle accent-tinted fill when a toggle is checked (matches RibbonBtn /
+    /// RibbonIconButton / RibbonToggleBtn).</item>
+    /// </list>
     /// </summary>
     internal static void ApplyRibbonTheme(TabControl tabControl)
     {
         ArgumentNullException.ThrowIfNull(tabControl);
 
-        var selectedTab = new Style(x => x.OfType<TabItem>().Class(":selected"))
+        // ── Tab headers (flat; selected = white body + accent underline; hover = soft accent tint) ──
+        var tabBase = new Style(x => x.OfType<TabItem>())
         {
             Setters =
             {
-                new Setter(TemplatedControl.ForegroundProperty, AccentBrush),
-                new Setter(TemplatedControl.FontWeightProperty, FontWeight.SemiBold),
+                new Setter(TemplatedControl.BackgroundProperty, Brushes.Transparent),
+                new Setter(TemplatedControl.BorderBrushProperty, Brushes.Transparent),
+                new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0, 0, 0, 3)),
+                new Setter(TemplatedControl.FontSizeProperty, 12d),
+                new Setter(TemplatedControl.PaddingProperty, new Thickness(8, 4, 8, 4)),
+                new Setter(InputElement.CursorProperty, new Cursor(StandardCursorType.Hand)),
             },
         };
 
+        var tabHover = new Style(x => x.OfType<TabItem>().Class(":pointerover"))
+        {
+            Setters = { new Setter(TemplatedControl.BackgroundProperty, TabHoverBrush) },
+        };
+
+        var tabSelected = new Style(x => x.OfType<TabItem>().Class(":selected"))
+        {
+            Setters =
+            {
+                // WPF selected tab: white body + accent bottom border. Neutral foreground (no green text).
+                new Setter(TemplatedControl.BackgroundProperty, SurfaceBrush),
+                new Setter(TemplatedControl.BorderBrushProperty, AccentBrush),
+                new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0, 0, 0, 3)),
+            },
+        };
+
+        // ── Buttons: flat, transparent idle; light hover tint + subtle border on pointer-over. ──
+        var buttonBase = new Style(x => x.OfType<Button>())
+        {
+            Setters =
+            {
+                new Setter(TemplatedControl.BackgroundProperty, Brushes.Transparent),
+                new Setter(TemplatedControl.BorderBrushProperty, Brushes.Transparent),
+                new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(1)),
+            },
+        };
         var buttonHover = new Style(x => x.OfType<Button>().Class(":pointerover"))
         {
-            Setters = { new Setter(TemplatedControl.BackgroundProperty, HoverBrush) },
+            Setters =
+            {
+                new Setter(TemplatedControl.BackgroundProperty, HoverBrush),
+                new Setter(TemplatedControl.BorderBrushProperty, HoverBorderBrush),
+            },
         };
 
+        // ── Toggle buttons: flat idle; hover tint; subtle accent fill when checked. ──
+        var toggleBase = new Style(x => x.OfType<ToggleButton>())
+        {
+            Setters =
+            {
+                new Setter(TemplatedControl.BackgroundProperty, Brushes.Transparent),
+                new Setter(TemplatedControl.BorderBrushProperty, Brushes.Transparent),
+                new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(1)),
+            },
+        };
         var toggleHover = new Style(x => x.OfType<ToggleButton>().Class(":pointerover"))
         {
-            Setters = { new Setter(TemplatedControl.BackgroundProperty, HoverBrush) },
+            Setters =
+            {
+                new Setter(TemplatedControl.BackgroundProperty, HoverBrush),
+                new Setter(TemplatedControl.BorderBrushProperty, HoverBorderBrush),
+            },
+        };
+        var toggleChecked = new Style(x => x.OfType<ToggleButton>().Class(":checked"))
+        {
+            Setters =
+            {
+                new Setter(TemplatedControl.BackgroundProperty, CheckedBrush),
+                new Setter(TemplatedControl.BorderBrushProperty, AccentBrush),
+            },
         };
 
-        tabControl.Styles.Add(selectedTab);
+        tabControl.Styles.Add(tabBase);
+        tabControl.Styles.Add(tabHover);
+        tabControl.Styles.Add(tabSelected);
+        tabControl.Styles.Add(buttonBase);
         tabControl.Styles.Add(buttonHover);
+        tabControl.Styles.Add(toggleBase);
         tabControl.Styles.Add(toggleHover);
+        tabControl.Styles.Add(toggleChecked);
     }
 
     private static Control BuildGroup(RibbonGroup group, IRibbonCommandRegistry? registry)
@@ -216,15 +304,19 @@ public static class AvaloniaRibbonRenderer
         Grid.SetRow(content, 0);
         grid.Children.Add(content);
 
+        // WPF RibbonGroupLabelBorder: a 1px top rule in FreeXBorderBrush over the centered muted label.
         var labelBorder = new Border
         {
-            Padding = new Thickness(4, 0, 4, 2),
+            BorderBrush = DividerBrush,
+            BorderThickness = new Thickness(0, 1, 0, 0),
+            MinHeight = 18,
             Child = new TextBlock
             {
                 Text = group.Header,
-                FontSize = 11,
+                FontSize = 12,
                 Foreground = GroupLabelBrush,
                 HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
                 TextAlignment = TextAlignment.Center,
             },
         };
@@ -236,70 +328,148 @@ public static class AvaloniaRibbonRenderer
 
     private static Control BuildGroupContent(RibbonGroup group, IRibbonCommandRegistry? registry)
     {
-        var row = new StackPanel
+        var lane = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             VerticalAlignment = VerticalAlignment.Top,
             Margin = new Thickness(2, 2, 2, 0),
         };
 
-        StackPanel? smallColumn = null;
+        var controls = group.Controls;
+        var index = 0;
+
+        // Leading large "hero" buttons each occupy their own full-height column (mirrors WPF).
+        while (index < controls.Count && controls[index].PreferredLayout == RibbonCommandLayoutKind.Large)
+        {
+            lane.Children.Add(BuildLargeControl(controls[index], registry));
+            index++;
+        }
+
+        var rest = controls.Skip(index).ToList();
+        if (rest.Count == 0)
+            return lane;
+
+        if (rest.Any(c => c is RibbonRowBreak))
+            lane.Children.Add(BuildExplicitRows(rest, registry));
+        else
+            BuildAutoColumns(rest, lane, registry);
+
+        return lane;
+    }
+
+    // Groups that declare RowBreaks lay out as stacked horizontal rows (e.g. Font: combos row, then B/I/U row).
+    private static Control BuildExplicitRows(IReadOnlyList<RibbonControl> controls, IRibbonCommandRegistry? registry)
+    {
+        var rows = new StackPanel { Orientation = Orientation.Vertical, VerticalAlignment = VerticalAlignment.Top };
+        var current = NewRow(isFirst: true);
+
+        foreach (var control in controls)
+        {
+            if (control is RibbonRowBreak)
+            {
+                rows.Children.Add(current);
+                current = NewRow(isFirst: false);
+                continue;
+            }
+
+            current.Children.Add(BuildInlineControl(control, registry));
+        }
+
+        rows.Children.Add(current);
+        return rows;
+    }
+
+    private static StackPanel NewRow(bool isFirst) => new()
+    {
+        Orientation = Orientation.Horizontal,
+        Margin = new Thickness(0, isFirst ? 0 : 2, 0, 0),
+    };
+
+    // Groups without explicit rows pack medium/small/combo controls into columns of up to three.
+    private static void BuildAutoColumns(IReadOnlyList<RibbonControl> controls, StackPanel lane, IRibbonCommandRegistry? registry)
+    {
+        StackPanel? column = null;
         var columnIsCombo = false;
 
-        void FlushColumn()
+        void Flush()
         {
-            if (smallColumn is not null)
+            if (column is not null)
             {
-                row.Children.Add(smallColumn);
-                smallColumn = null;
+                lane.Children.Add(column);
+                column = null;
             }
         }
 
-        foreach (var control in group.Controls)
+        foreach (var control in controls)
         {
             switch (control)
             {
                 case RibbonSeparator:
-                    FlushColumn();
-                    row.Children.Add(BuildVerticalSeparator());
+                    Flush();
+                    lane.Children.Add(BuildInlineDivider());
                     break;
-
                 case { PreferredLayout: RibbonCommandLayoutKind.Large }:
-                    FlushColumn();
-                    row.Children.Add(BuildLargeControl(control, registry));
+                    Flush();
+                    lane.Children.Add(BuildLargeControl(control, registry));
                     break;
-
                 default:
+                    // Keep comboboxes and buttons in separate columns so a group reads like WPF's.
                     var isCombo = control is RibbonComboBox;
-                    // Keep comboboxes and buttons in separate columns so a group reads like
-                    // Excel's (e.g. Font: name+size stacked, then the format buttons beside them).
-                    if (smallColumn is not null && columnIsCombo != isCombo)
-                        FlushColumn();
-
-                    smallColumn ??= NewSmallColumn();
+                    if (column is not null && columnIsCombo != isCombo)
+                        Flush();
+                    column ??= NewColumn();
                     columnIsCombo = isCombo;
-                    smallColumn.Children.Add(BuildSmallControl(control, registry));
-                    if (smallColumn.Children.Count >= MaxSmallRowsPerColumn)
-                        FlushColumn();
+                    column.Children.Add(BuildInlineControl(control, registry));
+                    if (column.Children.Count >= MaxRowsPerColumn)
+                        Flush();
                     break;
             }
         }
 
-        FlushColumn();
-        return row;
+        Flush();
     }
 
-    private static StackPanel NewSmallColumn() => new()
+    private static StackPanel NewColumn() => new()
     {
         Orientation = Orientation.Vertical,
         VerticalAlignment = VerticalAlignment.Top,
         Margin = new Thickness(1, 1, 1, 0),
     };
 
+    // Dispatches a single non-large control to its WPF-matching form: combo, checkbox, icon-only (Small),
+    // or icon+label (Medium / default).
+    private static Control BuildInlineControl(RibbonControl control, IRibbonCommandRegistry? registry) => control switch
+    {
+        RibbonSeparator => BuildInlineDivider(),
+        RibbonComboBox combo => BuildComboControl(combo, registry),
+        RibbonCheckBox check => BuildCheckControl(check, registry),
+        { PreferredLayout: RibbonCommandLayoutKind.Large } => BuildLargeControl(control, registry),
+        { PreferredLayout: RibbonCommandLayoutKind.Small } => BuildIconControl(control, registry),
+        _ => BuildMediumControl(control, registry),
+    };
+
+    // WPF BuildCheckControl: a real CheckBox carrying the label.
+    private static Control BuildCheckControl(RibbonCheckBox check, IRibbonCommandRegistry? registry)
+    {
+        var box = new CheckBox
+        {
+            Content = check.Label,
+            FontSize = 12,
+            Height = SmallRowHeight,
+            VerticalContentAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(2, 1, 2, 1),
+            Tag = check.CommandId.Value,
+        };
+        box.IsCheckedChanged += (_, _) => Execute(check.CommandId, registry);
+        ApplyEnablement(box, check, registry);
+        return box;
+    }
+
+    // WPF BuildLargeControl: a hero button — big icon (~32px) above a centered (wrapping) caption.
     private static Control BuildLargeControl(RibbonControl control, IRibbonCommandRegistry? registry)
     {
         var stack = new StackPanel { Orientation = Orientation.Vertical };
-        stack.Children.Add(AvaloniaRibbonIcons.Build(control.Icon?.Kind ?? RibbonCommandIconKind.Generic, 22));
+        stack.Children.Add(NewIcon(control, LargeIconSize, HorizontalAlignment.Center));
 
         var captionText = control.Label;
         if (HasMenu(control))
@@ -316,76 +486,114 @@ public static class AvaloniaRibbonRenderer
             MaxWidth = 64,
         });
 
+        // WPF RibbonLargeButton: Width 70, Height 76, Padding 3,2.
         var button = NewButtonLike(control);
-        button.Padding = new Thickness(6, 4);
+        button.Width = 70;
+        button.Height = 76;
+        button.Padding = new Thickness(3, 2);
         ((ContentControl)button).Content = stack;
         WireControl(button, control, registry);
         return button;
     }
 
-    private static Control BuildSmallControl(RibbonControl control, IRibbonCommandRegistry? registry)
+    // WPF BuildMediumControl: small icon (16px) + label in a horizontal row.
+    private static Control BuildMediumControl(RibbonControl control, IRibbonCommandRegistry? registry)
     {
-        if (control is RibbonComboBox combo)
+        var content = new StackPanel { Orientation = Orientation.Horizontal };
+        content.Children.Add(NewIcon(control, MediumIconSize, HorizontalAlignment.Center));
+        content.Children.Add(new TextBlock
         {
-            var box = new ComboBox
-            {
-                MinWidth = 110,
-                Height = SmallRowHeight,
-                Margin = new Thickness(1, 0, 1, 1),
-                Tag = control.CommandId.Value,
-            };
-            foreach (var item in combo.Items)
-                box.Items.Add(item);
-            if (combo.Items.Count > 0)
-                box.SelectedIndex = 0;
-
-            // A user pick executes the control's command, passing the chosen value so the host applies it
-            // (e.g. font size). The initial programmatic SelectedIndex is suppressed by a ready flag.
-            var ready = false;
-            box.SelectionChanged += (_, _) =>
-            {
-                if (ready)
-                    ExecuteWithValue(control.CommandId, registry, box.SelectedItem as string);
-            };
-            ready = true;
-
-            ApplyEnablement(box, control, registry);
-            return box;
-        }
-
-        var contentStack = new StackPanel { Orientation = Orientation.Horizontal };
-        contentStack.Children.Add(AvaloniaRibbonIcons.Build(control.Icon?.Kind ?? RibbonCommandIconKind.Generic, 16));
-
-        if (!string.IsNullOrEmpty(control.Label))
-        {
-            contentStack.Children.Add(new TextBlock
-            {
-                Text = control.Label,
-                FontSize = 12,
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(4, 0, 2, 0),
-            });
-        }
-
+            Text = control.Label,
+            FontSize = 12,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(4, 0, 2, 0),
+        });
         if (HasMenu(control))
-        {
-            contentStack.Children.Add(new TextBlock
-            {
-                Text = "▾",
-                FontSize = 9,
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(1, 0, 2, 0),
-            });
-        }
+            content.Children.Add(Chevron());
 
+        // WPF RibbonBtn: Height 22, MinWidth 84, left-aligned content, Padding 4,2.
         var button = NewButtonLike(control);
         button.Height = SmallRowHeight;
-        button.Padding = new Thickness(4, 0);
+        button.MinWidth = 84;
+        button.Padding = new Thickness(4, 2);
         button.HorizontalContentAlignment = HorizontalAlignment.Left;
-        ((ContentControl)button).Content = contentStack;
+        ((ContentControl)button).Content = content;
         WireControl(button, control, registry);
         return button;
     }
+
+    // WPF BuildIconControl: Small layout is ICON-ONLY (~18px) — no label. With a menu, append a chevron.
+    private static Control BuildIconControl(RibbonControl control, IRibbonCommandRegistry? registry)
+    {
+        var hasMenu = HasMenu(control);
+        Control content;
+        if (hasMenu)
+        {
+            var stack = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
+            stack.Children.Add(NewIcon(control, SmallIconSize, HorizontalAlignment.Center));
+            stack.Children.Add(Chevron());
+            content = stack;
+        }
+        else
+        {
+            content = NewIcon(control, SmallIconSize, HorizontalAlignment.Center);
+        }
+
+        // WPF RibbonIconButton / RibbonIconToggleButton: Width 24 (34 with menu), Height 22, Padding 2.
+        var button = NewButtonLike(control);
+        button.Width = hasMenu ? 34 : 24;
+        button.Height = SmallRowHeight;
+        button.Padding = new Thickness(2);
+        button.HorizontalContentAlignment = HorizontalAlignment.Center;
+        ((ContentControl)button).Content = content;
+        WireControl(button, control, registry);
+        return button;
+    }
+
+    private static Control BuildComboControl(RibbonComboBox combo, IRibbonCommandRegistry? registry)
+    {
+        var box = new ComboBox
+        {
+            Width = combo.Width ?? 110,
+            Height = SmallRowHeight,
+            Margin = new Thickness(1, 0, 1, 0),
+            Background = Brushes.White,
+            Tag = combo.CommandId.Value,
+        };
+        foreach (var item in combo.Items)
+            box.Items.Add(item);
+        if (combo.Items.Count > 0)
+            box.SelectedIndex = 0;
+
+        // A user pick executes the control's command, passing the chosen value so the host applies it
+        // (e.g. font size). The initial programmatic SelectedIndex is suppressed by a ready flag.
+        var ready = false;
+        box.SelectionChanged += (_, _) =>
+        {
+            if (ready)
+                ExecuteWithValue(combo.CommandId, registry, box.SelectedItem as string);
+        };
+        ready = true;
+
+        ApplyEnablement(box, combo, registry);
+        return box;
+    }
+
+    private static Control NewIcon(RibbonControl control, double size, HorizontalAlignment h)
+    {
+        var icon = AvaloniaRibbonIcons.Build(control.Icon?.Kind ?? RibbonCommandIconKind.Generic, size);
+        icon.HorizontalAlignment = h;
+        icon.VerticalAlignment = VerticalAlignment.Center;
+        return icon;
+    }
+
+    private static TextBlock Chevron() => new()
+    {
+        Text = "▾",
+        FontSize = 9,
+        VerticalAlignment = VerticalAlignment.Center,
+        Margin = new Thickness(1, 0, 1, 0),
+    };
 
     private static ContentControl NewButtonLike(RibbonControl control)
     {
@@ -509,18 +717,20 @@ public static class AvaloniaRibbonRenderer
     private static bool HasMenu(RibbonControl control) =>
         control is RibbonSplitButton or RibbonDropdown;
 
-    private static Control BuildVerticalSeparator() => new Rectangle
+    // WPF BuildInlineDivider: a 1px hardcoded #CCCCCC rule, stretched, margin 3.
+    private static Control BuildInlineDivider() => new Rectangle
     {
         Width = 1,
-        Margin = new Thickness(4),
-        Fill = DividerBrush,
+        Margin = new Thickness(3),
+        Fill = InlineDividerBrush,
         VerticalAlignment = VerticalAlignment.Stretch,
     };
 
-    private static Control BuildDivider() => new Rectangle
+    // WPF RibbonGroupDivider: a 1px FreeXBorderBrush rule between groups, margin 2,5,3,18.
+    private static Control BuildGroupDivider() => new Rectangle
     {
         Width = 1,
-        Margin = new Thickness(3, 4, 3, 4),
+        Margin = new Thickness(2, 5, 3, 18),
         Fill = DividerBrush,
         VerticalAlignment = VerticalAlignment.Stretch,
     };

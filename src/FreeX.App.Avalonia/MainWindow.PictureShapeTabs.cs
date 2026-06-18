@@ -40,22 +40,22 @@ public sealed partial class MainWindow
             ["pictureFormat.bringForward"] = () => ReportContextualNotYetAvailable("Bring Forward (pictures)"),
             ["pictureFormat.sendBackward"] = () => ReportContextualNotYetAvailable("Send Backward (pictures)"),
             ["pictureFormat.selectionPane"] = () => ReportContextualNotYetAvailable("Selection Pane"),
-            ["pictureFormat.rotate"] = () => _ = RotateSelectedDrawingObjectAsync(),
-            ["pictureFormat.size"] = () => _ = ResizeSelectedDrawingObjectAsync(),
-            ["pictureFormat.altText"] = () => _ = EditSelectedDrawingObjectAltTextAsync(),
+            ["pictureFormat.rotate"] = () => RunGuarded(RotateSelectedDrawingObjectAsync),
+            ["pictureFormat.size"] = () => RunGuarded(ResizeSelectedDrawingObjectAsync),
+            ["pictureFormat.altText"] = () => RunGuarded(EditSelectedDrawingObjectAltTextAsync),
 
             // --- Shape Format (shape.selected). ---
-            ["shapeFormat.shapeFill"] = () => _ = SetSelectedShapeFillColorAsync(),
-            ["shapeFormat.shapeOutline"] = () => _ = SetSelectedShapeOutlineColorAsync(),
-            ["shapeFormat.shapeGradient"] = () => _ = SetSelectedShapeGradientAsync(),
+            ["shapeFormat.shapeFill"] = () => RunGuarded(SetSelectedShapeFillColorAsync),
+            ["shapeFormat.shapeOutline"] = () => RunGuarded(SetSelectedShapeOutlineColorAsync),
+            ["shapeFormat.shapeGradient"] = () => RunGuarded(SetSelectedShapeGradientAsync),
             ["shapeFormat.shapeEffectNone"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.None),
             ["shapeFormat.shapeEffectShadow"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.Shadow),
             ["shapeFormat.bringForward"] = () => BringSelectedShapeForward(),
             ["shapeFormat.sendBackward"] = () => SendSelectedShapeBackward(),
             ["shapeFormat.selectionPane"] = () => ReportContextualNotYetAvailable("Selection Pane"),
-            ["shapeFormat.rotate"] = () => _ = RotateSelectedDrawingObjectAsync(),
-            ["shapeFormat.size"] = () => _ = ResizeSelectedDrawingObjectAsync(),
-            ["shapeFormat.altText"] = () => _ = EditSelectedDrawingObjectAltTextAsync(),
+            ["shapeFormat.rotate"] = () => RunGuarded(RotateSelectedDrawingObjectAsync),
+            ["shapeFormat.size"] = () => RunGuarded(ResizeSelectedDrawingObjectAsync),
+            ["shapeFormat.altText"] = () => RunGuarded(EditSelectedDrawingObjectAltTextAsync),
         };
     }
 

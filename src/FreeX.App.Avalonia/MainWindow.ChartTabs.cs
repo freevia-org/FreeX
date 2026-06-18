@@ -86,7 +86,7 @@ public sealed partial class MainWindow
 
     // ---- Chart Design: Change Chart Type (real, ChangeChartTypeCommand) -------------------------------
 
-    private async void ShowChangeChartTypeDialog()
+    private async Task ShowChangeChartTypeDialog()
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
@@ -95,6 +95,11 @@ public sealed partial class MainWindow
 
         var chosen = await ShowChartTypePickerAsync(chart.Type);
         if (chosen is not { } type || type == chart.Type)
+            return;
+
+        // Re-resolve after the dialog: the selection may have changed (or the chart been deleted)
+        // while it was open, so act on what is selected now rather than the captured reference.
+        if (!TryGetSelectedChart("Change Chart Type", out chart))
             return;
 
         var result = _session.ExecuteReviewCommand(new ChangeChartTypeCommand(_session.ActiveSheet.Id, chart.Id, type));
@@ -168,7 +173,7 @@ public sealed partial class MainWindow
 
     // ---- Chart Design: Select Data Source (real, ChangeChartSourceCommand) ----------------------------
 
-    private async void ShowSelectChartDataDialog()
+    private async Task ShowSelectChartDataDialog()
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
@@ -186,6 +191,10 @@ public sealed partial class MainWindow
             RefreshShell("Enter a valid chart data range (e.g. A1:C10).");
             return;
         }
+
+        // Re-resolve after the dialog in case the selection changed while it was open.
+        if (!TryGetSelectedChart("Select Data", out chart))
+            return;
 
         var commandResult = _session.ExecuteReviewCommand(new ChangeChartSourceCommand(
             _session.ActiveSheet.Id,
@@ -261,7 +270,7 @@ public sealed partial class MainWindow
 
     // ---- Chart Design: layout toggles (real, SetChartLayoutCommand) -----------------------------------
 
-    private async void ShowChartTitlesDialog()
+    private async Task ShowChartTitlesDialog()
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
@@ -270,6 +279,9 @@ public sealed partial class MainWindow
 
         var result = await ShowChartTitlesDialogAsync(chart.Title ?? string.Empty, chart.XAxisTitle ?? string.Empty, chart.YAxisTitle ?? string.Empty);
         if (result is not { } titles)
+            return;
+
+        if (!TryGetSelectedChart("Chart Titles", out chart))
             return;
 
         ApplyChartLayout("Chart Titles", chart, new ChartLayoutOptions(
@@ -426,7 +438,7 @@ public sealed partial class MainWindow
 
     // ---- Chart Format: shape fill / outline + formatting toggles (real, SetChartLayoutCommand) --------
 
-    private async void ShowChartShapeFillDialog()
+    private async Task ShowChartShapeFillDialog()
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
@@ -434,11 +446,11 @@ public sealed partial class MainWindow
             return;
 
         var color = await ShowMoreColorsDialogAsync("Chart Area Fill", chart.ChartAreaFillColor ?? ChartCycleBlue);
-        if (color is { } chosen)
+        if (color is { } chosen && TryGetSelectedChart("Chart Area Fill", out chart))
             ApplyChartLayout("Chart Area Fill", chart, new ChartLayoutOptions(ChartAreaFillColor: chosen));
     }
 
-    private async void ShowChartShapeOutlineDialog()
+    private async Task ShowChartShapeOutlineDialog()
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
@@ -446,7 +458,7 @@ public sealed partial class MainWindow
             return;
 
         var color = await ShowMoreColorsDialogAsync("Plot Area Border", chart.PlotAreaBorderColor ?? ChartCycleBlue);
-        if (color is { } chosen)
+        if (color is { } chosen && TryGetSelectedChart("Plot Area Border", out chart))
         {
             var thickness = chart.PlotAreaBorderThickness >= 3 ? 0.75 : chart.PlotAreaBorderThickness + 0.75;
             ApplyChartLayout("Plot Area Border", chart, new ChartLayoutOptions(
@@ -455,7 +467,7 @@ public sealed partial class MainWindow
         }
     }
 
-    private async void ShowChartPlotAreaFillDialog()
+    private async Task ShowChartPlotAreaFillDialog()
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
@@ -463,11 +475,11 @@ public sealed partial class MainWindow
             return;
 
         var color = await ShowMoreColorsDialogAsync("Plot Area Fill", chart.PlotAreaFillColor ?? ChartCycleBlue);
-        if (color is { } chosen)
+        if (color is { } chosen && TryGetSelectedChart("Plot Area Fill", out chart))
             ApplyChartLayout("Plot Area Fill", chart, new ChartLayoutOptions(PlotAreaFillColor: chosen));
     }
 
-    private async void ShowChartSeriesColorDialog()
+    private async Task ShowChartSeriesColorDialog()
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
@@ -483,6 +495,10 @@ public sealed partial class MainWindow
         var existing = ResolveFirstSeriesFillColor(chart);
         var color = await ShowMoreColorsDialogAsync("Series Color", existing ?? ChartCycleBlue);
         if (color is not { } chosen)
+            return;
+
+        // Re-resolve after the dialog in case the selection changed while it was open.
+        if (!TryGetSelectedChart("Series Color", out chart))
             return;
 
         var formats = new List<ChartSeriesFormat>(chart.SeriesFormats);

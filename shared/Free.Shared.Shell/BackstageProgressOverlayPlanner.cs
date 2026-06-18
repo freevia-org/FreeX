@@ -40,5 +40,7 @@ public static class BackstageProgressOverlayPlanner
         new(
             FormatStatusText(title, detail),
             !percent.HasValue,
-            percent.HasValue ? Math.Clamp(percent.Value, minimum, maximum) : minimum);
+            // Math.Clamp throws when min > max; guard a misconfigured bar (Min > Max) by raising the
+            // upper bound to the lower one so a degenerate range clamps to minimum rather than throwing.
+            percent.HasValue ? Math.Clamp(percent.Value, minimum, Math.Max(minimum, maximum)) : minimum);
 }

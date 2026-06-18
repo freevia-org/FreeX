@@ -440,6 +440,12 @@ public partial class MainWindow
             : null;
         SheetGrid.NativeSlicers = nativeVisualFilters?.Slicers;
         SheetGrid.NativeTimelines = nativeVisualFilters?.Timelines;
+        if (keepObjectData && sheet is not null && sheet.FormControls.Count > 0)
+        {
+            // Resolve each list control's selected-item text (ListFillRange[SelectedIndex]) into the
+            // render-model's SelectedText so the GridView draws the selection without raw workbook access.
+            FreeX.Core.Commands.FormControlListResolver.PopulateSelectedText(sheet, _workbook);
+        }
         SheetGrid.FormControls = keepObjectData ? sheet?.FormControls : null;
         SheetGrid.WorksheetBackground = sheet?.BackgroundImage;
         SheetGrid.Sparklines = sheet?.Sparklines;
