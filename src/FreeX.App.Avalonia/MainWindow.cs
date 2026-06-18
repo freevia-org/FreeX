@@ -11618,22 +11618,29 @@ public sealed partial class MainWindow : Window
             var op = SelectedOperator();
             var showSecondFormula = DataValidationPresetPlanner.RequiresSecondFormula(type, op);
             var isList = type == DvType.List;
+            var isCustom = type == DvType.Custom;
+            var isAny = type == DvType.Any;
 
             formula1Label.Text = isList
                 ? "Source"
-                : showSecondFormula
-                    ? "Minimum"
-                    : "Value";
+                : isCustom
+                    ? "Formula"
+                    : showSecondFormula
+                        ? "Minimum"
+                        : "Value";
             AutomationProperties.SetName(formula1Box, formula1Label.Text);
             AutomationProperties.SetHelpText(
                 formula1Box,
                 isList
                     ? "List source range or comma-separated values."
-                    : showSecondFormula
-                        ? "Minimum value for the validation rule."
-                        : "Value for the validation rule.");
+                    : isCustom
+                        ? "Formula that must evaluate to TRUE (e.g. =A1>0)."
+                        : showSecondFormula
+                            ? "Minimum value for the validation rule."
+                            : "Value for the validation rule.");
             formula2Label.Text = "Maximum";
-            operatorField.IsVisible = !isList;
+            operatorField.IsVisible = !isList && !isCustom && !isAny;
+            formula1Field.IsVisible = !isAny;
             formula2Field.IsVisible = showSecondFormula;
             showDropdownBox.IsVisible = isList;
         }
@@ -11827,7 +11834,7 @@ public sealed partial class MainWindow : Window
 
     private static IReadOnlyList<DataValidationTypeChoice> CreateDataValidationTypeChoices() =>
         DataValidationPresetPlanner.GetRuleTypeMetadata()
-            .Where(metadata => metadata.Type is DvType.WholeNumber or DvType.List or DvType.TextLength)
+            .Where(metadata => metadata.Type is DvType.WholeNumber or DvType.Decimal or DvType.List or DvType.Date or DvType.Time or DvType.TextLength or DvType.Custom or DvType.Any)
             .Select(metadata => new DataValidationTypeChoice(metadata.Type, metadata.DisplayName))
             .ToArray();
 
@@ -11897,9 +11904,21 @@ public sealed partial class MainWindow : Window
         {
             DvType.List => "Yes,No",
             DvType.TextLength => "50",
+            DvType.Decimal => "0",
+            DvType.Date => "2024-01-01",
+            DvType.Time => "09:00",
+            DvType.Custom => "=A1>0",
+            DvType.Any => "",
             _ => "1",
         };
-        rule.Formula2 = type == DvType.WholeNumber ? "100" : "";
+        rule.Formula2 = type switch
+        {
+            DvType.WholeNumber => "100",
+            DvType.Decimal => "100",
+            DvType.Date => "2024-12-31",
+            DvType.Time => "17:00",
+            _ => "",
+        };
         rule.ShowDropdown = type == DvType.List;
         return rule;
     }
@@ -11918,11 +11937,21 @@ public sealed partial class MainWindow : Window
     {
         var first = formula1?.Trim() ?? "";
         var second = formula2?.Trim() ?? "";
+
+        if (type == DvType.Any)
+        {
+            errorMessage = "";
+            return true;
+        }
+
         if (string.IsNullOrWhiteSpace(first))
         {
-            errorMessage = type == DvType.List
-                ? "List source is required."
-                : "Value is required.";
+            errorMessage = type switch
+            {
+                DvType.List => "List source is required.",
+                DvType.Custom => "Formula is required.",
+                _ => "Value is required.",
+            };
             return false;
         }
 
@@ -11959,6 +11988,13 @@ public sealed partial class MainWindow : Window
                     TryValidateIntegralDataValidationCriterion(second, allowNegative: false, out errorMessage));
         }
 
+        if (type == DvType.Decimal)
+        {
+            return TryValidateNumericDataValidationCriterion(first, out errorMessage) &&
+                (!DataValidationPresetPlanner.RequiresSecondFormula(type, op) ||
+                    TryValidateNumericDataValidationCriterion(second, out errorMessage));
+        }
+
         errorMessage = "";
         return true;
     }
@@ -11988,6 +12024,33 @@ public sealed partial class MainWindow : Window
         if (!allowNegative && value < 0)
         {
             errorMessage = "Text length must be zero or greater.";
+            return false;
+        }
+
+        errorMessage = "";
+        return true;
+    }
+
+    private static bool TryValidateNumericDataValidationCriterion(
+        string text,
+        out string errorMessage)
+    {
+        if (text.TrimStart().StartsWith('='))
+        {
+            errorMessage = "";
+            return true;
+        }
+
+        if (!double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out var value) &&
+            !double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value))
+        {
+            errorMessage = "Value must be a number or formula.";
+            return false;
+        }
+
+        if (!double.IsFinite(value))
+        {
+            errorMessage = "Value must be a finite number.";
             return false;
         }
 

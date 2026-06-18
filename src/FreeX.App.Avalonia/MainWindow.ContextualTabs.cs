@@ -37,7 +37,9 @@ public sealed partial class MainWindow
             // The Trendline button opens the type/period/order + equation/R-squared dialog
             // (ChartTrendlinePlanner).
             ["chartDesign.trendline"] = () => RunGuarded(ShowChartTrendlineDialog),
-            ["chartDesign.errorBars"] = ToggleChartErrorBars,
+            // The Error Bars button opens the show/kind/direction + amount/end-caps dialog
+            // (ChartErrorBarsPlanner).
+            ["chartDesign.errorBars"] = () => RunGuarded(ShowChartErrorBarsDialog),
             ["chartDesign.secondaryAxis"] = CycleChartSecondaryAxis,
             ["chartDesign.chartStyles"] = CycleChartStyle,
             ["chartDesign.selectData"] = () => RunGuarded(ShowSelectChartDataDialog),

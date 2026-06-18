@@ -466,16 +466,6 @@ public sealed partial class MainWindow
             DataLabelPosition: NextDataLabelPosition(chart.DataLabelPosition)));
     }
 
-    private void ToggleChartErrorBars()
-    {
-        if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
-            return;
-        if (!TryGetSelectedChart("Error Bars", out var chart))
-            return;
-
-        ApplyChartLayout("Error Bars", chart, new ChartLayoutOptions(ShowErrorBars: !chart.ShowErrorBars));
-    }
-
     private void CycleChartStyle()
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())

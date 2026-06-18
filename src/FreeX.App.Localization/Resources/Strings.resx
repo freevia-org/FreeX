@@ -139,6 +139,13 @@
   <data name="ChartTrendline_OrderLabel" xml:space="preserve"><value>Polynomial order (polynomial only):</value></data>
   <data name="ChartTrendline_ShowEquation" xml:space="preserve"><value>Display equation on chart</value></data>
   <data name="ChartTrendline_ShowRSquared" xml:space="preserve"><value>Display R-squared value</value></data>
+  <!-- Chart: Error Bars dialog -->
+  <data name="ChartErrorBars_Title" xml:space="preserve"><value>Error Bars</value></data>
+  <data name="ChartErrorBars_Show" xml:space="preserve"><value>Show error bars</value></data>
+  <data name="ChartErrorBars_KindLabel" xml:space="preserve"><value>Error amount:</value></data>
+  <data name="ChartErrorBars_DirectionLabel" xml:space="preserve"><value>Direction:</value></data>
+  <data name="ChartErrorBars_ValueLabel" xml:space="preserve"><value>Fixed value or percentage:</value></data>
+  <data name="ChartErrorBars_EndCaps" xml:space="preserve"><value>Show end caps</value></data>
   <!-- Conditional Formatting: New/Edit Rule dialog -->
   <data name="ConditionalFormat_NewRuleTitle" xml:space="preserve"><value>New Formatting Rule</value></data>
   <data name="ConditionalFormat_EditRuleTitle" xml:space="preserve"><value>Edit Formatting Rule</value></data>
