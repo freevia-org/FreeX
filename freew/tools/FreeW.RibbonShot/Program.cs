@@ -90,6 +90,10 @@ static int Run(string outDir, string tabArg, double w, double h)
         {
             if (tabs is not null && i < tabs.Items.Count)
             {
+                // Force the target tab visible so contextual "Tools" tabs (collapsed until their selection
+                // context is active) can be captured for verification.
+                if (tabs.Items[i] is TabItem forced)
+                    forced.Visibility = Visibility.Visible;
                 tabs.SelectedIndex = i;
                 win.UpdateLayout();
                 win.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.Loaded);

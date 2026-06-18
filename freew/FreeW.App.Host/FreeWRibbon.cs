@@ -335,6 +335,51 @@ internal static class FreeWRibbon
                     g.Medium("freew.check-accessibility", "Check Accessibility", RibbonCommandIconKind.Accessibility);
                 });
             })
+            // ── Contextual tabs (Word "Tools" tabs) ───────────────────────────────────────────────────
+            // Declared individually here, but shown/hidden by the shared RibbonContextualTabController only
+            // while their selection context is active: "picture" when an image is selected, "table" when the
+            // caret is in a table. Same command ids as the Insert tab — the contextual tab just surfaces them
+            // in one place when relevant, exactly like Word's Picture Format / Table Design tabs.
+            .ContextualTab("picture-format", "Picture Format",
+                new RibbonTabContext("picture", "Picture Tools", RibbonContextColor.Orange), tab =>
+            {
+                tab.Group("picture-arrange", "Arrange", "A", 100, g =>
+                {
+                    g.Medium("freew.image-align-left", "Align Left", RibbonCommandIconKind.AlignLeft);
+                    g.Medium("freew.image-align-center", "Align Center", RibbonCommandIconKind.AlignCenter);
+                    g.Medium("freew.image-align-right", "Align Right", RibbonCommandIconKind.AlignRight);
+                });
+                tab.Group("picture-size", "Size", "S", 90, g =>
+                {
+                    g.Medium("freew.image-size", "Size", RibbonCommandIconKind.Size);
+                    g.Medium("freew.image-alt-text", "Alt Text", RibbonCommandIconKind.Info);
+                });
+            })
+            .ContextualTab("table-design", "Table Design",
+                new RibbonTabContext("table", "Table Tools", RibbonContextColor.Teal), tab =>
+            {
+                tab.Group("table-rows-cols", "Rows & Columns", "R", 100, g =>
+                {
+                    g.Medium("freew.table-insert-row", "Insert Row", RibbonCommandIconKind.Insert, accent: RibbonCommandIconAccent.Green);
+                    g.Medium("freew.table-delete-row", "Delete Row", RibbonCommandIconKind.Delete);
+                    g.RowBreak();
+                    g.Medium("freew.table-insert-col", "Insert Column", RibbonCommandIconKind.Insert, accent: RibbonCommandIconAccent.Green);
+                    g.Medium("freew.table-delete-col", "Delete Column", RibbonCommandIconKind.Delete);
+                });
+                tab.Group("table-merge", "Merge", "M", 90, g =>
+                {
+                    g.Medium("freew.merge-cells", "Merge Cells", RibbonCommandIconKind.Merge);
+                    g.Medium("freew.split-cell", "Split Cell", RibbonCommandIconKind.Grid);
+                });
+                tab.Group("table-style", "Table Style", "Y", 80, g =>
+                {
+                    g.Medium("freew.cell-shading", "Shading", RibbonCommandIconKind.Fill, accent: RibbonCommandIconAccent.Fill);
+                    g.Medium("freew.table-header-row", "Header Row", RibbonCommandIconKind.Table, accent: RibbonCommandIconAccent.Green);
+                    g.RowBreak();
+                    g.Medium("freew.table-banded-rows", "Banded Rows", RibbonCommandIconKind.Table, accent: RibbonCommandIconAccent.Green);
+                    g.Medium("freew.table-repeat-header", "Repeat Header Row", RibbonCommandIconKind.Table, accent: RibbonCommandIconAccent.Green);
+                });
+            })
             .Build();
     }
 }

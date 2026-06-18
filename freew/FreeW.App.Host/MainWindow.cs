@@ -67,6 +67,10 @@ public sealed class MainWindow : Window
     private UIElement _ribbon = null!;
     private TabControl _ribbonTabs = null!;
 
+    // Manages the Word-style contextual "Tools" tabs (Picture Format / Table Design): the shared controller
+    // shows them only while their selection context is active (an image selected, the caret in a table).
+    private RibbonContextualTabController _contextualTabs = null!;
+
     // File ribbon tab (Word-style Backstage entry): the first tab, which opens the Backstage on selection
     // and reverts to the previously-active content tab. _lastRibbonTabIndex tracks that tab; the suppress
     // flag guards the programmatic revert from re-entering the SelectionChanged handler.
@@ -127,10 +131,11 @@ public sealed class MainWindow : Window
             editor, stateStore, OpenPrintPreview, ToggleNavPane, () => _navPaneVisible, ToggleReadMode, () => _readMode,
             TogglePrintLayout, () => _editor.PrintLayoutEnabled);
         _file = new FileCommands(this, editor, UpdateTitle);
-        editor.TextChanged += (_, _) => { _file.MarkDirty(); UpdateCounts(); RefreshOutline(); };
+        editor.TextChanged += (_, _) => { _file.MarkDirty(); UpdateCounts(); RefreshOutline(); RefreshContextualTabs(); };
         // Live selection stats: when the caret/selection moves, refresh the status-bar counts so a
         // non-empty selection shows its own word/character totals (and reverts when nothing is selected).
-        editor.SelectionChanged += (_, _) => UpdateCounts();
+        // Also re-evaluate which contextual "Tools" tabs apply to the new selection.
+        editor.SelectionChanged += (_, _) => { UpdateCounts(); RefreshContextualTabs(); };
         _autosave = new AutosaveCoordinator(editor, _file);
         Loaded += (_, _) => { _autosave.OfferRecovery(this); _autosave.Start(); };
         Closing += (_, _) => _autosave.Stop();
@@ -259,6 +264,23 @@ public sealed class MainWindow : Window
 
     // Show the Word-style Backstage (File screen) over the document.
     private void ShowBackstage() => _backstage.Show();
+
+    // Recompute which contextual "Tools" tabs apply to the current selection and let the shared controller
+    // show/hide them: Picture Format when an image is selected, Table Design when the caret is in a table.
+    // The activation keys ("picture"/"table") match the RibbonTabContext keys declared in FreeWRibbon.
+    private void RefreshContextualTabs()
+    {
+        if (_contextualTabs is null)
+            return;
+
+        var state = RibbonContextState.None;
+        if (_editor.SelectedImage() is not null)
+            state = state.With("picture");
+        if (_editor.IsCaretInTable())
+            state = state.With("table");
+
+        _contextualTabs.Apply(state);
+    }
 
     // Fill the shared title bar's Quick Access Toolbar slot with Save / Undo / Redo via the shared QAT
     // renderer (Free.Shared.Ribbon.Wpf): neutral descriptors (command id + tooltip + ribbon glyph) rendered
@@ -832,6 +854,11 @@ public sealed class MainWindow : Window
         };
         tabs.Items.Add(_fileTab);
 
+        // Contextual "Tools" tabs (Picture Format / Table Design) are declared in the ribbon model and
+        // managed by the shared controller — hidden until their selection context is active. Default revert
+        // tab is Home (index 1; index 0 is the File pill).
+        _contextualTabs = new RibbonContextualTabController(tabs, defaultTabIndex: 1);
+
         foreach (var tab in definition.Tabs)
         {
             var content = RibbonWpfRenderer.BuildTabContent(tab, tabs, registry, stateStore);
@@ -852,6 +879,10 @@ public sealed class MainWindow : Window
 
             var item = new TabItem { Header = tab.Header, Content = content };
             tabs.Items.Add(item);
+
+            // Contextual tabs render like any other tab but the controller owns their visibility.
+            if (tab.Context is { } context)
+                _contextualTabs.Register(item, context.ActivationKey, context.Color);
         }
 
         // Start on Home (index 1; index 0 is the File tab). Remember it as the last "real" tab so File
