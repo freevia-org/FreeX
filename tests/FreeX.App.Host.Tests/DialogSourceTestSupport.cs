@@ -130,6 +130,9 @@ internal static class DialogSourceTestSupport
     private static string ReadAppUiSource(string fileName) =>
         WorkspaceFileLocator.ReadAllText("src", "FreeX.App.UI", fileName);
 
+    public static string ReadAppServicesSource(string fileName) =>
+        WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Services", fileName);
+
     public static string ReadAppServicesRibbonSource(string fileName) =>
         WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Services", "Ribbon", fileName);
 

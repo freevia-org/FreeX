@@ -240,10 +240,6 @@ public sealed partial class MainWindow : Window
         CellBorderPreset? BorderPreset,
         BorderStyle BorderStyle,
         CellColor? BorderColor);
-    private sealed record FormatCellsNumberFormatChoice(string Category, string FormatCode, string Preview)
-    {
-        public override string ToString() => FormatCode;
-    }
     private sealed record FormatCellsNullableChoice<T>(string Label, T? Value)
         where T : struct
     {
@@ -6884,15 +6880,25 @@ public sealed partial class MainWindow : Window
         };
         AutomationProperties.SetAutomationId(dialog, "FormatCellsCompactDialog");
 
-        var numberChoices = CreateFormatCellsNumberFormatChoices(currentNumberFormat);
-        var currentNumberChoice =
-            FindFormatCellsNumberFormatChoice(numberChoices, currentNumberFormat) ?? numberChoices[0];
+        // The number-format catalog + format-code composition is the shared, portable
+        // FormatCellsNumberFormatPlanner (same source the WPF dialog uses), so the Avalonia
+        // Number tab composes Excel-style codes from decimal places / currency symbol /
+        // negative-number style rather than a narrow fixed list.
+        var numberCategories = FormatCellsNumberFormatPlanner.Categories;
+        var currentNumberOption = FormatCellsNumberFormatPlanner.FindOption(currentNumberFormat);
+        var currentNumberCategory = currentNumberOption?.Category
+            ?? (string.IsNullOrWhiteSpace(currentNumberFormat)
+                || string.Equals(currentNumberFormat, "General", StringComparison.OrdinalIgnoreCase)
+                    ? "General"
+                    : "Custom");
         var numberCategoryList = new ListBox
         {
-            ItemsSource = numberChoices.Select(choice => choice.Category).Distinct().ToArray(),
-            SelectedItem = currentNumberChoice.Category,
+            ItemsSource = numberCategories,
+            SelectedItem = numberCategories.Contains(currentNumberCategory)
+                ? currentNumberCategory
+                : numberCategories[0],
             MinWidth = 150,
-            MaxHeight = 180,
+            MaxHeight = 200,
         };
         AutomationProperties.SetName(numberCategoryList, "Category");
         AutomationProperties.SetAutomationId(numberCategoryList, "FormatCellsNumberCategoryList");
@@ -6902,37 +6908,128 @@ public sealed partial class MainWindow : Window
             MinWidth = 260,
         };
         AutomationProperties.SetName(numberFormatBox, "Type");
-        AutomationProperties.SetAutomationId(numberFormatBox, "FormatCellsNumberFormatCombo");
         AutomationProperties.SetAutomationId(numberFormatBox, "FormatCellsNumberFormatBox");
+
+        var numberDecimalPlacesBox = new TextBox
+        {
+            Text = FormatCellsNumberFormatPlanner.DecimalPlacesForFormat(currentNumberFormat)
+                .ToString(CultureInfo.InvariantCulture),
+            MinWidth = 100,
+        };
+        AutomationProperties.SetName(numberDecimalPlacesBox, "Decimal places");
+        AutomationProperties.SetAutomationId(numberDecimalPlacesBox, "FormatCellsNumberDecimalPlacesBox");
+
+        var numberSymbols = FormatCellsNumberFormatPlanner.Symbols;
+        var numberSymbolBox = new ComboBox
+        {
+            ItemsSource = numberSymbols,
+            SelectedItem = numberSymbols.Contains("$")
+                ? "$"
+                : (numberSymbols.Count > 0 ? numberSymbols[0] : null),
+            MinWidth = 220,
+        };
+        AutomationProperties.SetName(numberSymbolBox, "Symbol");
+        AutomationProperties.SetAutomationId(numberSymbolBox, "FormatCellsNumberSymbolBox");
+
+        var numberNegativeBox = new ComboBox
+        {
+            ItemsSource = FormatCellsNumberFormatPlanner.NegativeOptions,
+            SelectedIndex = 0,
+            MinWidth = 200,
+        };
+        AutomationProperties.SetName(numberNegativeBox, "Negative numbers");
+        AutomationProperties.SetAutomationId(numberNegativeBox, "FormatCellsNumberNegativeBox");
 
         var numberPreview = new TextBlock
         {
-            Text = currentNumberChoice.Preview,
+            Text = FormatCellsNumberFormatPlanner.PreviewForFormat(currentNumberFormat),
             MinHeight = 28,
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
         };
         AutomationProperties.SetAutomationId(numberPreview, "FormatCellsNumberPreview");
 
-        void RefreshNumberChoices()
+        var syncingNumberControls = false;
+
+        string? ResolveSelectedNumberFormatCode()
         {
-            var category = numberCategoryList.SelectedItem?.ToString() ?? currentNumberChoice.Category;
-            var filteredChoices = FilterFormatCellsNumberFormatChoices(numberChoices, category);
-            numberFormatBox.ItemsSource = filteredChoices;
-            if (numberFormatBox.SelectedItem is not FormatCellsNumberFormatChoice selected ||
-                !ContainsFormatCellsNumberFormatChoice(filteredChoices, selected))
-            {
-                numberFormatBox.SelectedItem = filteredChoices.Count > 0 ? filteredChoices[0] : currentNumberChoice;
-            }
+            return FormatCellsNumberFormatPlanner.ResolveSelectedNumberFormat(
+                numberCategoryList.SelectedItem as string,
+                numberFormatBox.SelectedItem as string ?? string.Empty,
+                numberFormatBox.SelectedIndex,
+                numberDecimalPlacesBox.Text,
+                numberSymbolBox.SelectedItem as string ?? numberSymbolBox.Text,
+                numberNegativeBox.SelectedIndex);
         }
 
-        numberCategoryList.SelectionChanged += (_, _) => RefreshNumberChoices();
+        void RefreshNumberPreview()
+        {
+            var typeText = numberFormatBox.SelectedItem as string ?? string.Empty;
+            var resolved = ResolveSelectedNumberFormatCode();
+            numberPreview.Text = FormatCellsNumberFormatPlanner.PreviewForFormat(
+                resolved ?? (string.IsNullOrEmpty(typeText) ? currentNumberFormat : typeText));
+        }
+
+        void ApplyNumberControlAvailability()
+        {
+            var availability = FormatCellsNumberControlPlanner.Plan(numberCategoryList.SelectedItem as string);
+            numberDecimalPlacesBox.IsEnabled = availability.UsesDecimals;
+            numberSymbolBox.IsEnabled = availability.UsesSymbol;
+            numberNegativeBox.IsEnabled = availability.UsesNegativeOptions;
+        }
+
+        void RefreshNumberTypeChoices()
+        {
+            var category = numberCategoryList.SelectedItem as string ?? currentNumberCategory;
+            var labels = FormatCellsNumberFormatPlanner.LabelsForCategory(category);
+            var previous = numberFormatBox.SelectedItem as string;
+            numberFormatBox.ItemsSource = labels;
+            numberFormatBox.SelectedItem = previous is not null && labels.Contains(previous)
+                ? previous
+                : (labels.Count > 0 ? labels[0] : null);
+        }
+
+        void SyncDecimalPlacesFromType()
+        {
+            if (syncingNumberControls || numberFormatBox.SelectedItem is not string label)
+                return;
+            if (!FormatCellsNumberControlPlanner.Plan(numberCategoryList.SelectedItem as string).UsesDecimals)
+                return;
+            var code = FormatCellsNumberFormatPlanner.ResolveNumberFormat(label, numberFormatBox.SelectedIndex);
+            if (code is null)
+                return;
+            syncingNumberControls = true;
+            numberDecimalPlacesBox.Text = FormatCellsNumberFormatPlanner.DecimalPlacesForFormat(code)
+                .ToString(CultureInfo.InvariantCulture);
+            syncingNumberControls = false;
+        }
+
+        numberCategoryList.SelectionChanged += (_, _) =>
+        {
+            RefreshNumberTypeChoices();
+            ApplyNumberControlAvailability();
+            RefreshNumberPreview();
+        };
         numberFormatBox.SelectionChanged += (_, _) =>
         {
-            if (numberFormatBox.SelectedItem is FormatCellsNumberFormatChoice choice)
-                numberPreview.Text = choice.Preview;
+            SyncDecimalPlacesFromType();
+            RefreshNumberPreview();
         };
-        RefreshNumberChoices();
-        numberFormatBox.SelectedItem = currentNumberChoice;
+        numberDecimalPlacesBox.TextChanged += (_, _) =>
+        {
+            if (!syncingNumberControls)
+                RefreshNumberPreview();
+        };
+        numberSymbolBox.SelectionChanged += (_, _) => RefreshNumberPreview();
+        numberNegativeBox.SelectionChanged += (_, _) => RefreshNumberPreview();
+
+        RefreshNumberTypeChoices();
+        if (currentNumberOption is { } currentOption
+            && FormatCellsNumberFormatPlanner.LabelsForCategory(currentNumberCategory).Contains(currentOption.Label))
+        {
+            numberFormatBox.SelectedItem = currentOption.Label;
+        }
+        ApplyNumberControlAvailability();
+        RefreshNumberPreview();
 
         var horizontalAlignmentBox = CreateFormatCellsComboBox(
             "FormatCellsHorizontalAlignmentBox",
@@ -7122,9 +7219,19 @@ public sealed partial class MainWindow : Window
                 return;
             }
 
-            var numberFormat = numberFormatBox.SelectedItem is FormatCellsNumberFormatChoice numberChoice &&
-                !string.Equals(numberChoice.FormatCode, currentNumberFormat, StringComparison.Ordinal)
-                    ? numberChoice.FormatCode
+            var numberAvailability = FormatCellsNumberControlPlanner.Plan(numberCategoryList.SelectedItem as string);
+            if (numberAvailability.UsesDecimals
+                && (!int.TryParse(numberDecimalPlacesBox.Text?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var decimalPlaces)
+                    || decimalPlaces is < 0 or > 30))
+            {
+                errorText.Text = "Decimal places must be a whole number between 0 and 30.";
+                return;
+            }
+
+            var resolvedNumberFormat = ResolveSelectedNumberFormatCode();
+            var numberFormat = resolvedNumberFormat is { } resolvedFormat &&
+                !string.Equals(resolvedFormat, currentNumberFormat, StringComparison.Ordinal)
+                    ? resolvedFormat
                     : null;
             var fillChoice = fillColorBox.SelectedItem as FormatCellsColorChoice;
             var clearFill = fillChoice?.Clear == true;
@@ -7193,7 +7300,17 @@ public sealed partial class MainWindow : Window
                         Children =
                         {
                             CreateFormatCellsField("Category", numberCategoryList),
-                            CreateFormatCellsField("Type", numberFormatBox),
+                            new StackPanel
+                            {
+                                Spacing = 10,
+                                Children =
+                                {
+                                    CreateFormatCellsField("Type", numberFormatBox),
+                                    CreateFormatCellsField("Decimal places", numberDecimalPlacesBox),
+                                    CreateFormatCellsField("Symbol", numberSymbolBox),
+                                    CreateFormatCellsField("Negative numbers", numberNegativeBox),
+                                },
+                            },
                         },
                     },
                     CreateFormatCellsField("Sample", numberPreview),
@@ -7420,67 +7537,6 @@ public sealed partial class MainWindow : Window
         };
         AutomationProperties.SetAutomationId(checkBox, automationId);
         return checkBox;
-    }
-
-    private static IReadOnlyList<FormatCellsNumberFormatChoice> CreateFormatCellsNumberFormatChoices(string currentNumberFormat)
-    {
-        var choices = new List<FormatCellsNumberFormatChoice>
-        {
-            new("General", GeneralNumberFormat, "Sample"),
-            new("Number", "0", "1234"),
-            new("Number", "0.00", "1234.00"),
-            new("Number", "#,##0", "1,234"),
-            new("Number", CommaNumberFormat, "1,234.00"),
-            new("Currency", CurrencyNumberFormat, "$1,234.00"),
-            new("Percentage", PercentNumberFormat, "12%"),
-            new("Percentage", "0.00%", "12.34%"),
-            new("Date", "m/d/yyyy", "1/1/2026"),
-            new("Time", "h:mm AM/PM", "9:30 AM"),
-        };
-        if (FindFormatCellsNumberFormatChoice(choices, currentNumberFormat) is null)
-            choices.Add(new FormatCellsNumberFormatChoice("Custom", currentNumberFormat, "Custom"));
-
-        return choices;
-    }
-
-    private static FormatCellsNumberFormatChoice? FindFormatCellsNumberFormatChoice(
-        IEnumerable<FormatCellsNumberFormatChoice> choices,
-        string formatCode)
-    {
-        foreach (var choice in choices)
-        {
-            if (string.Equals(choice.FormatCode, formatCode, StringComparison.Ordinal))
-                return choice;
-        }
-
-        return null;
-    }
-
-    private static IReadOnlyList<FormatCellsNumberFormatChoice> FilterFormatCellsNumberFormatChoices(
-        IEnumerable<FormatCellsNumberFormatChoice> choices,
-        string category)
-    {
-        var matchingChoices = new List<FormatCellsNumberFormatChoice>();
-        foreach (var choice in choices)
-        {
-            if (string.Equals(choice.Category, category, StringComparison.Ordinal))
-                matchingChoices.Add(choice);
-        }
-
-        return matchingChoices;
-    }
-
-    private static bool ContainsFormatCellsNumberFormatChoice(
-        IEnumerable<FormatCellsNumberFormatChoice> choices,
-        FormatCellsNumberFormatChoice selected)
-    {
-        foreach (var choice in choices)
-        {
-            if (EqualityComparer<FormatCellsNumberFormatChoice>.Default.Equals(choice, selected))
-                return true;
-        }
-
-        return false;
     }
 
     private static IReadOnlyList<FormatCellsNullableChoice<CellHAlign>> CreateFormatCellsHorizontalAlignmentChoices() =>
