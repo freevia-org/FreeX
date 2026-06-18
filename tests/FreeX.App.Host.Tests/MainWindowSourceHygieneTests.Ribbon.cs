@@ -742,12 +742,15 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void SplitRibbonCommand_ReflectsActiveSplitState()
     {
-        var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
+        // The ribbon is now declared in the single-source FreeXRibbonDefinition (FreeX.Ribbon.Definitions
+        // project) rather than MainWindow.xaml. Split is an IconToggle whose control name "Split" maps to
+        // the SplitViewBtn backplane control, and its checked state is driven through the neutral ribbon
+        // state in MainWindow.Viewport.cs.
+        var ribbon = DialogSourceTestSupport.ReadRibbonDefinitionSource("FreeXRibbonDefinition.cs");
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Viewport.cs");
 
-        xaml.Should().Contain("<ToggleButton x:Name=\"SplitViewBtn\"");
-        xaml.Should().Contain("Style=\"{StaticResource RibbonToggleBtn}\"");
-        source.Should().Contain("SplitViewBtn.IsChecked = sheet?.SplitRow is not null || sheet?.SplitColumn is not null");
+        ribbon.Should().Contain(".IconToggle(\"Split\", \"Split\"");
+        source.Should().Contain("_ribbonState.SetChecked(\"Split\", sheet?.SplitRow is not null || sheet?.SplitColumn is not null)");
     }
 
     [Fact]

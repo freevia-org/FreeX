@@ -415,17 +415,16 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void PictureCropRibbon_OffersCropAndResetCropMenuActions()
     {
-        var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
+        // The ribbon moved to the single-source FreeXRibbonDefinition (FreeX.Ribbon.Definitions project);
+        // the "Crop Picture" split button exposes "Crop..." and "Reset Crop" menu items, which the
+        // generated handler map wires to the dialog/reset handlers in MainWindow.Drawing.cs.
+        var ribbon = DialogSourceTestSupport.ReadRibbonDefinitionSource("FreeXRibbonDefinition.cs");
+        var handlers = DialogSourceTestSupport.ReadHostSources("Ribbon\\FreeXRibbonHandlerMap.g.cs");
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Drawing.cs");
 
-        xaml.Should().Contain("AutomationProperties.AutomationId=\"DrawCropPictureButton\"");
-        xaml.ShouldContainLocalizedAttribute("AutomationProperties.HelpText", "Open crop controls for the selected or most recent inserted picture.");
-        xaml.ShouldContainLocalizedAttribute("Header", "Crop...");
-        xaml.Should().Contain("AutomationProperties.AutomationId=\"DrawCropPictureMenuItem\"");
-        xaml.ShouldContainLocalizedAttribute("Header", "Reset Crop");
-        xaml.Should().Contain("AutomationProperties.AutomationId=\"DrawResetPictureCropMenuItem\"");
-        xaml.Should().Contain("Click=\"PictureCropDialogMenuItem_Click\"");
-        xaml.Should().Contain("Click=\"PictureResetCropMenuItem_Click\"");
+        ribbon.Should().Contain("menu: m => m.Item(\"Crop\", \"Crop...\", \"C\").Item(\"Reset Crop\", \"Reset Crop\", \"R\")");
+        handlers.Should().Contain("[\"Crop\"] = \"PictureCropDialogMenuItem_Click\"");
+        handlers.Should().Contain("[\"Reset Crop\"] = \"PictureResetCropMenuItem_Click\"");
         source.Should().Contain("PictureResetCropMenuItem_Click");
         source.Should().Contain("new SetPictureCropCommand(");
         source.Should().Contain("0, 0, 0, 0");
