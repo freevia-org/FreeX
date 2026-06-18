@@ -611,7 +611,9 @@ public partial class GridView
         // values / pivot cache shared items); fall back to the slicer's selected items, then a single
         // field-name tile, matching the source desktop renderer. Honor the slicer's columnCount.
         var items = ResolveSlicerTileItems(slicer, out var fallbackAllTile);
-        var selected = new HashSet<string>(slicer.SelectedItems, StringComparer.CurrentCultureIgnoreCase);
+        // Slicer captions are workbook data, not UI text — compare ordinally so a tile's selected
+        // state doesn't depend on the user's locale (e.g. Turkish I/i case-folding).
+        var selected = new HashSet<string>(slicer.SelectedItems, StringComparer.OrdinalIgnoreCase);
         var columnCount = Math.Max(1, slicer.ColumnCount);
 
         var tileTop = rect.Top + 26;

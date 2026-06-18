@@ -164,6 +164,8 @@ public partial class GridView
         {
             hash.Add(shape.Id);
             hash.Add(shape.Anchor);
+            hash.Add(shape.AnchorOffsetX);
+            hash.Add(shape.AnchorOffsetY);
             hash.Add(shape.Kind);
             hash.Add(shape.Width);
             hash.Add(shape.Height);
@@ -196,6 +198,8 @@ public partial class GridView
         {
             hash.Add(picture.Id);
             hash.Add(picture.Anchor);
+            hash.Add(picture.AnchorOffsetX);
+            hash.Add(picture.AnchorOffsetY);
             hash.Add(picture.Kind);
             hash.Add(picture.Width);
             hash.Add(picture.Height);
@@ -227,6 +231,8 @@ public partial class GridView
         {
             hash.Add(textBox.Id);
             hash.Add(textBox.Anchor);
+            hash.Add(textBox.AnchorOffsetX);
+            hash.Add(textBox.AnchorOffsetY);
             hash.Add(textBox.Text);
             hash.Add(textBox.Width);
             hash.Add(textBox.Height);
