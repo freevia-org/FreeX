@@ -54,6 +54,8 @@ public static class ConditionalFormatRuleBuilder
 
             case CfRuleType.Top10:
                 cf.TopBottomPercent = input.IsPercent;
+                // For Top 10 rules the model reuses AboveAverage to record top (true) vs bottom (false).
+                cf.AboveAverage = input.IsTop;
                 if (int.TryParse((input.Rank ?? string.Empty).Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var rank))
                     cf.TopBottomRank = rank;
                 break;

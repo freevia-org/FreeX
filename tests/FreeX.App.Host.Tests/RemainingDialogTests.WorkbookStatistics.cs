@@ -32,9 +32,10 @@ public sealed partial class RemainingDialogTests
     [Fact]
     public void WorkbookStatisticsDialogOpenedFromKeyboard_FocusesOkButton()
     {
-        var source = DialogSourceTestSupport.ReadHostSources(
-            "WorkbookStatisticsDialog.cs",
-            "StatusDialogKeyboardFocus.cs");
+        var source = DialogSourceTestSupport.ReadHostSources("WorkbookStatisticsDialog.cs")
+            + Environment.NewLine
+            // StatusDialogKeyboardFocus was extracted into the shared shell helpers project.
+            + DialogSourceTestSupport.ReadShellSources("StatusDialogKeyboardFocus.cs");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");

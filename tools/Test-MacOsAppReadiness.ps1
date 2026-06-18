@@ -879,6 +879,8 @@ function Test-MacOsWorkflow {
         "replace_dialog_result_closed_without_accept=true",
         "go_to_dialog=true",
         "go_to_dialog_reference_controls=true",
+        "go_to_dialog_history_controls=true",
+        "go_to_dialog_special_control=true",
         "go_to_dialog_compact_layout=true",
         "go_to_dialog_result_closed_without_accept=true",
         "go_to_special_dialog=true",
@@ -1175,7 +1177,8 @@ function Test-SourceWiring {
                 "dialog.Opened += (_, _) => cancelButton.Focus();",
                 "AutomationProperties.SetAutomationId(replaceButton, `"PdfExportOverwriteReplaceButton`")",
                 "AutomationProperties.SetAutomationId(cancelButton, `"PdfExportOverwriteCancelButton`")",
-                "PortablePdfDocumentExporter.Save(_session.Workbook, exportPlan, path)",
+                "var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, exportPlan, pdfBuffer);",
+                "await File.WriteAllBytesAsync(path, pdfBuffer.ToArray());",
                 "_workbookStatisticsMenuItem.Header = `"Workbook Statistics...`";",
                 "_workbookStatisticsMenuItem.Gesture = new KeyGesture(Key.G, KeyModifiers.Control | KeyModifiers.Shift);",
                 "_workbookStatisticsMenuItem.Click += async (_, _) => await ShowWorkbookStatisticsDialogAsync();",
@@ -2084,6 +2087,18 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
+            # File > Export to PDF prefers Skia (Unicode) but MUST keep the dependency-free WinAnsi
+            # PortablePdfDocumentExporter as the fallback so the macOS bundle can export without Skia.
+            Path = "src\FreeX.App.Avalonia\Pdf\AvaloniaPdfDocumentExporter.cs"
+            Markers = @(
+                "public static class AvaloniaPdfDocumentExporter",
+                "var result = SkiaPdfDocumentExporter.Save(workbook, exportPlan, stream, options);",
+                "catch (Exception ex) when (IsSkiaUnavailable(ex))",
+                "var result = PortablePdfDocumentExporter.Save(workbook, exportPlan, stream, options);"
+            )
+            OrderedPairs = @()
+        },
+        @{
             Path = "src\FreeX.Core.Calc\CellTextOrientationLayoutPlanner.cs"
             Markers = @(
                 "public readonly record struct CellTextLayoutPoint",
@@ -2433,6 +2448,8 @@ function Test-SourceWiring {
                 "replace_dialog_result_closed_without_accept=",
                 "go_to_dialog=",
                 "go_to_dialog_reference_controls=",
+                "go_to_dialog_history_controls=",
+                "go_to_dialog_special_control=",
                 "go_to_dialog_compact_layout=",
                 "go_to_dialog_result_closed_without_accept=",
                 "go_to_special_dialog=",

@@ -49,11 +49,16 @@ public sealed class ErrorCheckingDialogSourceTests
     [Fact]
     public void ErrorCheckingOptionsCommand_FocusesFormulaErrorCheckingOptions()
     {
-        var xamlSource = LocalizedXamlTestSupport.ReadMainWindowXaml();
+        // After the declarative-ribbon cutover the "Error Checking Options" command lives as a menu
+        // item under the Formulas tab "Error Checking" dropdown (key tip "O"), routed through the
+        // generated handler map to ErrorCheckingOptionsBtn_Click rather than a hand-authored Click=.
         var optionsSource = DialogSourceTestSupport.ReadHostSources("OptionsDialog.xaml.cs");
 
-        xamlSource.Should().Contain("Click=\"ErrorCheckingOptionsBtn_Click\"");
-        xamlSource.Should().NotContain("MainWindow_Header_ErrorCheckingOptions\" local:RibbonTooltip.KeyTip=\"O\" Click=\"SsOptionsBtn_Click\"");
+        var errorCheckingItem = FindErrorCheckingOptionsMenuItem();
+        errorCheckingItem.KeyTip.Should().Be("O");
+        FreeXRibbonHandlerMap.Handlers.Should().ContainKey("Error Checking Options")
+            .WhoseValue.Should().Be("ErrorCheckingOptionsBtn_Click");
+
         optionsSource.Should().Contain("public enum OptionsDialogInitialSection");
         optionsSource.Should().Contain("FormulaErrorChecking");
         optionsSource.Should().Contain("TabList.SelectedIndex = _initialSection == OptionsDialogInitialSection.FormulaErrorChecking ? 1 : 0;");
@@ -252,6 +257,23 @@ public sealed class ErrorCheckingDialogSourceTests
             ErrorValue.Value.Code,
             "=A1",
             "Formula uses an incompatible value.");
+
+    private static RibbonMenuItem FindErrorCheckingOptionsMenuItem()
+    {
+        var tab = FreeXRibbon.Build().FindTab("FormulasTab");
+        tab.Should().NotBeNull("the declarative ribbon must expose the Formulas tab");
+
+        var errorChecking = tab!.Groups
+            .SelectMany(group => group.Controls)
+            .OfType<RibbonDropdown>()
+            .FirstOrDefault(control => string.Equals(control.CommandId.Value, "Error Checking", StringComparison.Ordinal));
+        errorChecking.Should().NotBeNull("the Formulas tab must expose the Error Checking dropdown");
+
+        var optionsItem = errorChecking!.Menu.Items
+            .FirstOrDefault(item => string.Equals(item.CommandId?.Value, "Error Checking Options", StringComparison.Ordinal));
+        optionsItem.Should().NotBeNull("the Error Checking dropdown must expose the Options command");
+        return optionsItem!;
+    }
 
     private static string ReadErrorCheckingDialogSource() =>
         DialogSourceTestSupport.ReadHostSources("ErrorCheckingDialog.cs");

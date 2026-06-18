@@ -250,6 +250,25 @@ public class SpillEngineTests
         sheet.GetValue(3, 1).Should().Be(BlankValue.Instance);
     }
 
+    [Fact]
+    public void Recalc_FormulaChangedFromSpillToFormulaError_ClearsOldSpillValues()
+    {
+        var (engine, wb) = MakeEngine();
+        var sheet = wb.Sheets.First();
+        var anchor = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetFormula(anchor, "SEQUENCE(3)");
+        engine.RebuildFormulaDependencies(wb);
+        engine.Recalculate(wb, [anchor]);
+
+        sheet.SetFormula(anchor, "0^(-1)");
+        engine.RebuildFormulaDependencies(wb);
+        engine.Recalculate(wb, [anchor]);
+
+        sheet.GetValue(1, 1).Should().Be(ErrorValue.DivByZero);
+        sheet.GetValue(2, 1).Should().Be(BlankValue.Instance);
+        sheet.GetValue(3, 1).Should().Be(BlankValue.Instance);
+    }
+
     // ── Spill-target dependency (the cross-anchor ordering bug) ───────────────
     // Regression test for: formula cell B references a spill-target cell T that is populated
     // by a different formula anchor A.  In a full RecalculateAllFormulas call, A and B may be

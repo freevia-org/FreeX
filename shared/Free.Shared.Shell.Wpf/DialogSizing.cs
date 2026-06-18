@@ -55,10 +55,17 @@ internal static class DialogSizing
     internal static bool ShouldApplyAutomaticSizing(Window window)
     {
         var type = window.GetType();
+        // Target the application's own custom "*Dialog" windows. These helpers were extracted into
+        // Free.Shared.Shell, but the concrete dialogs still live in the host application's namespace,
+        // so we can no longer compare against this helper's own namespace. Instead, exclude framework
+        // (System.*) windows — a bare System.Windows.Window's type name is "Window", which already
+        // fails the "Dialog" suffix check.
+        var typeNamespace = type.Namespace;
         return window.SizeToContent == SizeToContent.Manual
             && window.ResizeMode == ResizeMode.NoResize
-            && string.Equals(type.Namespace, typeof(DialogSizing).Namespace, StringComparison.Ordinal)
-            && type.Name.EndsWith("Dialog", StringComparison.Ordinal);
+            && type.Name.EndsWith("Dialog", StringComparison.Ordinal)
+            && typeNamespace is not null
+            && !typeNamespace.StartsWith("System", StringComparison.Ordinal);
     }
 
     private static void ApplyAutomaticDialogSizing(object sender, RoutedEventArgs args)
