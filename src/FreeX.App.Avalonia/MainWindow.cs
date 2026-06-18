@@ -7287,6 +7287,66 @@ public sealed partial class MainWindow : Window
             SelectFormatCellsColor(fontColorBox, normal.FontColor);
         };
 
+        // Live font preview: a sample TextBlock reflecting bold/italic/underline/size/color as the
+        // user edits, mirroring the WPF preview.
+        var fontPreview = new TextBlock
+        {
+            Text = "AaBbCcYyZz",
+            MinHeight = 36,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+        };
+        AutomationProperties.SetAutomationId(fontPreview, "FormatCellsFontPreview");
+
+        void RefreshFontPreview()
+        {
+            if (normalFontBox.IsChecked == true)
+            {
+                var normal = CellStyle.Default;
+                fontPreview.FontWeight = FontWeight.Normal;
+                fontPreview.FontStyle = FontStyle.Normal;
+                fontPreview.TextDecorations = null;
+                fontPreview.FontSize = normal.FontSize;
+                fontPreview.FontFamily = FontFamily.Default;
+                fontPreview.Foreground = Brush(normal.FontColor);
+                return;
+            }
+
+            fontPreview.FontWeight = boldBox.IsChecked == true ? FontWeight.Bold : FontWeight.Normal;
+            fontPreview.FontStyle = italicBox.IsChecked == true ? FontStyle.Italic : FontStyle.Normal;
+
+            var decorations = new TextDecorationCollection();
+            if (underlineBox.IsChecked == true || doubleUnderlineBox.IsChecked == true)
+                decorations.Add(new TextDecoration { Location = TextDecorationLocation.Underline });
+            if (strikethroughBox.IsChecked == true)
+                decorations.Add(new TextDecoration { Location = TextDecorationLocation.Strikethrough });
+            fontPreview.TextDecorations = decorations.Count > 0 ? decorations : null;
+
+            if (double.TryParse(fontSizeBox.Text?.Trim(), NumberStyles.Float, CultureInfo.CurrentCulture, out var size)
+                && double.IsFinite(size) && size > 0)
+            {
+                fontPreview.FontSize = Math.Clamp(size, 6, 72);
+            }
+
+            var fontName = fontNameBox.Text?.Trim();
+            fontPreview.FontFamily = string.IsNullOrWhiteSpace(fontName)
+                ? FontFamily.Default
+                : new FontFamily(fontName);
+
+            var color = (fontColorBox.SelectedItem as FormatCellsColorChoice)?.Color;
+            fontPreview.Foreground = color is { } chosen ? Brush(chosen) : PrimaryInk;
+        }
+
+        boldBox.IsCheckedChanged += (_, _) => RefreshFontPreview();
+        italicBox.IsCheckedChanged += (_, _) => RefreshFontPreview();
+        underlineBox.IsCheckedChanged += (_, _) => RefreshFontPreview();
+        doubleUnderlineBox.IsCheckedChanged += (_, _) => RefreshFontPreview();
+        strikethroughBox.IsCheckedChanged += (_, _) => RefreshFontPreview();
+        normalFontBox.IsCheckedChanged += (_, _) => RefreshFontPreview();
+        fontSizeBox.TextChanged += (_, _) => RefreshFontPreview();
+        fontNameBox.TextChanged += (_, _) => RefreshFontPreview();
+        fontColorBox.SelectionChanged += (_, _) => RefreshFontPreview();
+        RefreshFontPreview();
+
         var fillColorBox = CreateFormatCellsColorPicker("No change", includeClear: true, "More Fill Colors");
         AutomationProperties.SetName(fillColorBox, "Fill color");
         AutomationProperties.SetAutomationId(fillColorBox, "FormatCellsFillColorBox");
@@ -7297,6 +7357,57 @@ public sealed partial class MainWindow : Window
         var fillPatternColorBox = CreateFormatCellsColorPicker("No change", includeClear: false, "More Pattern Colors");
         AutomationProperties.SetName(fillPatternColorBox, "Pattern color");
         AutomationProperties.SetAutomationId(fillPatternColorBox, "FormatCellsFillPatternColorBox");
+
+        // Live fill preview: a swatch reflecting the chosen fill color + pattern color, or a
+        // "No fill" hatch when the clear sentinel is selected.
+        var fillPreview = new Border
+        {
+            Height = 36,
+            Width = 120,
+            Background = Brushes.White,
+            BorderBrush = Brushes.Gray,
+            BorderThickness = new Thickness(1),
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+        };
+        AutomationProperties.SetAutomationId(fillPreview, "FormatCellsFillPreview");
+        var fillPreviewLabel = new TextBlock
+        {
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+        };
+        fillPreview.Child = fillPreviewLabel;
+
+        void RefreshFillPreview()
+        {
+            var fillChoice = fillColorBox.SelectedItem as FormatCellsColorChoice;
+            if (fillChoice?.Clear == true)
+            {
+                fillPreview.Background = Brushes.White;
+                fillPreviewLabel.Text = "No fill";
+                return;
+            }
+
+            var patternStyle = (fillPatternStyleBox.SelectedItem as FormatCellsNullableChoice<CellFillPatternStyle>)?.Value
+                ?? CellFillPatternStyle.None;
+            var patternColor = (fillPatternColorBox.SelectedItem as FormatCellsColorChoice)?.Color;
+            if (fillChoice?.Color is { } fill)
+            {
+                fillPreview.Background = Brush(fill);
+                fillPreviewLabel.Text = patternStyle != CellFillPatternStyle.None && patternColor is { } pc
+                    ? $"{CellColorPalettePlanner.FormatHexColor(fill)} / {CellColorPalettePlanner.FormatHexColor(pc)}"
+                    : CellColorPalettePlanner.FormatHexColor(fill);
+            }
+            else
+            {
+                fillPreview.Background = Brushes.White;
+                fillPreviewLabel.Text = "No change";
+            }
+        }
+
+        fillColorBox.SelectionChanged += (_, _) => RefreshFillPreview();
+        fillPatternStyleBox.SelectionChanged += (_, _) => RefreshFillPreview();
+        fillPatternColorBox.SelectionChanged += (_, _) => RefreshFillPreview();
+        RefreshFillPreview();
 
         var borderPresetBox = new ComboBox
         {
@@ -7670,6 +7781,7 @@ public sealed partial class MainWindow : Window
                     CreateFormatCellsField("Size", fontSizeBox),
                     CreateFormatCellsField("Color", fontColorBox),
                     normalFontBox,
+                    CreateFormatCellsField("Preview", fontPreview),
                 },
             });
         var fillTab = CreateFormatCellsTab(
@@ -7683,6 +7795,7 @@ public sealed partial class MainWindow : Window
                     CreateFormatCellsField("Fill color", fillColorBox),
                     CreateFormatCellsField("Pattern style", fillPatternStyleBox),
                     CreateFormatCellsField("Pattern color", fillPatternColorBox),
+                    CreateFormatCellsField("Preview", fillPreview),
                 },
             });
         var borderTab = CreateFormatCellsTab(

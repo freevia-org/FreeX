@@ -3532,6 +3532,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("\"FormatCellsBorderInsideHorizontalToggle\"");
         source.Should().Contain("\"FormatCellsBorderInsideVerticalToggle\"");
         source.Should().Contain("\"FormatCellsBorderPreview\"");
+        source.Should().Contain("\"FormatCellsFontPreview\"");
+        source.Should().Contain("\"FormatCellsFillPreview\"");
         source.Should().Contain("\"FormatCellsBorderPresetNoneButton\"");
         source.Should().Contain("\"FormatCellsBorderPresetOutlineButton\"");
         source.Should().Contain("\"FormatCellsBorderPresetInsideButton\"");
