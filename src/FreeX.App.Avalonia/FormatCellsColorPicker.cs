@@ -96,6 +96,10 @@ internal sealed class FormatCellsColorPicker : Button
         UpdatePreview();
     }
 
+    /// <summary>Raised whenever the selection changes (swatch, recent, text choice, or a custom
+    /// "More colors…" pick). Lets the Format Cells dialog drive live previews off the picker.</summary>
+    public event EventHandler? SelectionChanged;
+
     /// <summary>The selected choice. Typed as <see cref="object"/> so callers mirror the old
     /// ComboBox idiom <c>(picker.SelectedItem as FormatCellsColorChoice)?.Color</c>.</summary>
     public object? SelectedItem => _selected;
@@ -118,6 +122,7 @@ internal sealed class FormatCellsColorPicker : Button
         UpdatePreview();
         RebuildFlyoutRecentRow();
         Flyout?.Hide();
+        SelectionChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void UpdatePreview()
