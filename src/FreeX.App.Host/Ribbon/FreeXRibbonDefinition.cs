@@ -237,6 +237,16 @@ public static class FreeXRibbonDefinition
                 .Medium("Unhide", "Unhide", Ico.View, "U")
                 .Medium("Reset Window Position", "Reset Window Position", Ico.Window, "RP"))
         )
+        .Tab("HelpTab", "Help", "Y", tab => tab
+            .Group("HelpHelpGroup", "Help", null, priority: 200,
+                g => g
+                .Large("Help Online#HelpOnlineBtn_Click", "Help Online", Ico.Generic, "H")
+                .Large("Feedback#FeedbackBtn_Click", "Feedback", Ico.Comment, "F")
+                .Large("Copy Diagnostics#CopyDiagnosticsBtn_Click", "Copy Diagnostics", Ico.List, "D")
+                .Large("Check for Updates#CheckForUpdatesBtn_Click", "Check for Updates", Ico.Generic, "U")
+                .Large("About FreeX#AboutBtn_Click", "About FreeX", Ico.Generic, "A")
+                .Large("Legal Notices#LegalNoticesBtn_Click", "Legal Notices", Ico.Generic, "L"))
+        )
         .ContextualTab("ChartDesignTab", "Chart Design", new RibbonTabContext("chart.selected", "Chart Design", RibbonContextColor.Green), tab => tab
             .Group("ChartDesignLayoutsGroup", "Layouts", null, priority: 180,
                 g => g

@@ -61,12 +61,10 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             harness.ShowTableDesignContextualTab();
             harness.ShowDrawingObjectContextualTabs();
 
-            // Contextual tabs = selectable tabs that are neither a main content tab nor a non-content
-            // leftover ("Help" has no declarative groups; "File" is the backstage).
-            var nonContentTabs = new[] { "Help", "File" };
+            // Contextual tabs = selectable tabs that are neither a main content tab nor the backstage.
             var contextualHeaders = harness.SelectableRibbonTabHeaders
                 .Where(header => !MainRibbonTabHeaders.Contains(header))
-                .Where(header => !nonContentTabs.Contains(header))
+                .Where(header => !string.Equals(header, "File", StringComparison.Ordinal))
                 .Distinct()
                 .ToList();
 

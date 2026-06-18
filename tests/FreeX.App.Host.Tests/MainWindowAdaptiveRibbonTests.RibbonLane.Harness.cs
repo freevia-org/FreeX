@@ -12,11 +12,10 @@ namespace FreeX.App.Host.Tests;
 public sealed partial class MainWindowAdaptiveRibbonTests
 {
     // The non-contextual ribbon tabs the declarative model renders content for. "File" is the backstage
-    // (opens the start screen, no ribbon body) and "Help" has no declarative tab definition (it is a
-    // leftover empty TabItem header that renders no groups), so both are excluded here.
+    // (opens the start screen, no ribbon body) and is excluded.
     private static readonly string[] MainRibbonTabHeaders =
     {
-        "Home", "Insert", "Draw", "Page Layout", "Formulas", "Data", "Review", "View"
+        "Home", "Insert", "Draw", "Page Layout", "Formulas", "Data", "Review", "View", "Help"
     };
 
     // A representative ladder of window widths, widest first, covering the adaptive range from a
