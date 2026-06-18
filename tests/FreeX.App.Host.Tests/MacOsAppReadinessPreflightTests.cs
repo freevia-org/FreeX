@@ -2463,7 +2463,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     else if (e.Key == Key.R && HasOnlyControlModifier(e.KeyModifiers)) { }
                     Header = "(No Recent Workbooks)";
                     OpenRecentWorkbookMenuPlanner.Create(
-                    _recentFiles.Entries
+                    _recentFiles.Snapshot()
                     File.Exists
                     path => _session.TryResolveOpenTarget(path, out var target, out _) ? target!.Path : null
                     plan.ItemCount == 0
