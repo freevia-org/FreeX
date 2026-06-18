@@ -1,38 +1,18 @@
 using System.Globalization;
 
-using FreeX.App.Presentation.TextToColumns;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Avalonia;
+namespace FreeX.App.Presentation.TextToColumns;
 
 /// <summary>
-/// The dialog state captured from the Avalonia Text-to-Columns dialog, in a form the portable shell
-/// planner can consume without any Avalonia UI types. Mirrors the controls the dialog exposes:
-/// the split mode, the delimiter checkboxes (plus the "Other" character), treat-consecutive, the
-/// text qualifier, the fixed-width break positions, and the per-output-column format hints.
-/// </summary>
-internal sealed record TextToColumnsDialogState(
-    TextToColumnsSplitMode SplitMode,
-    bool Tab,
-    bool Semicolon,
-    bool Comma,
-    bool Space,
-    bool Other,
-    char? OtherDelimiter,
-    bool TreatConsecutiveDelimitersAsOne,
-    TextToColumnsTextQualifier TextQualifier,
-    IReadOnlyList<int> FixedWidthBreakPositions,
-    IReadOnlyList<TextToColumnsColumnFormat> ColumnFormats);
-
-/// <summary>
-/// Portable, UI-free glue between the Avalonia Text-to-Columns dialog and the cell-write command path.
-/// It turns dialog state into <see cref="TextToColumnsOptions"/>, maps a planned
+/// Portable, UI-free glue between a Text-to-Columns dialog and the cell-write command path. It turns
+/// <see cref="TextToColumnsDialogState"/> into <see cref="TextToColumnsOptions"/>, maps a planned
 /// <see cref="TextToColumnsResult"/> over the source column into the concrete set of cell edits (honoring
 /// <see cref="TextToColumnsColumnFormat.Skip"/> columns and the per-column format hints), and reports
-/// which non-empty cells to the right of the source column an apply would overwrite. No Avalonia types,
-/// so it is unit-testable without a running window.
+/// which non-empty cells to the right of the source column an apply would overwrite. No UI types, so it is
+/// unit-testable without a running window and shareable across shells.
 /// </summary>
-internal static class TextToColumnsShellPlanner
+public static class TextToColumnsDialogPlanner
 {
     /// <summary>True when the dialog state names at least one delimiter the splitter can act on.</summary>
     public static bool HasAnyDelimiter(TextToColumnsDialogState state)
