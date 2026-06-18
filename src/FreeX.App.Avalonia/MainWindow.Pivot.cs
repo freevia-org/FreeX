@@ -459,6 +459,10 @@ public sealed partial class MainWindow
         if (TryOpenPivotFieldFilter(pivot, headers, target, action))
             return;
 
+        // Value Field Settings + More Sort Options open per-field dialogs (also deferred by the factory).
+        if (TryOpenPivotFieldSettings(pivot, headers, target, action))
+            return;
+
         var result = PivotHeaderMenuCommandFactory.Create(
             _session.ActiveSheet.Id, pivot, headers, target, action, validator);
 
