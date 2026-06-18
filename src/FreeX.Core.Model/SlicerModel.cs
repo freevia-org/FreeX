@@ -17,6 +17,13 @@ public sealed class SlicerModel
     public int ColumnCount { get; init; } = 1;
 
     /// <summary>
+    /// Whether the slicer draws its caption header band (Excel's <c>showCaption</c>; default true). When
+    /// false the renderer omits the blue caption band and lays the item tiles out from the top of the box,
+    /// matching Excel.
+    /// </summary>
+    public bool ShowCaption { get; init; } = true;
+
+    /// <summary>
     /// Name of the worksheet whose drawing hosts this slicer's anchor. Table slicers have no
     /// <see cref="SourcePivotTableName"/>, so the visibility gate uses this to decide whether the slicer
     /// belongs on the active sheet. Resolved from the worksheet → drawing relationship chain on load.

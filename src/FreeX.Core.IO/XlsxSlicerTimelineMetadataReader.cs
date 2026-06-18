@@ -59,6 +59,7 @@ internal static class XlsxSlicerTimelineMetadataReader
                         SourceFieldName = cache?.SourceFieldName,
                         StyleName = slicerElement.Attribute("style")?.Value,
                         ColumnCount = ParseColumnCount(slicerElement.Attribute("columnCount")?.Value),
+                        ShowCaption = ParseBool(slicerElement.Attribute("showCaption")?.Value, defaultValue: true),
                         PackagePart = packagePart,
                         DrawingAnchor = hasDrawing ? drawingMetadata.Anchor : null,
                         DrawingShapeName = hasDrawing ? drawingMetadata.ShapeName : null,
@@ -414,6 +415,21 @@ internal static class XlsxSlicerTimelineMetadataReader
 
     private static int ParseColumnCount(string? text) =>
         TryReadInt(text, out var value) && value > 0 ? value : 1;
+
+    // OOXML boolean attribute: "0"/"false" => false, "1"/"true" => true, absent/unknown => default.
+    private static bool ParseBool(string? text, bool defaultValue)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return defaultValue;
+        return text.Trim() switch
+        {
+            "0" => false,
+            "1" => true,
+            var t when string.Equals(t, "false", StringComparison.OrdinalIgnoreCase) => false,
+            var t when string.Equals(t, "true", StringComparison.OrdinalIgnoreCase) => true,
+            _ => defaultValue,
+        };
+    }
 
     private static IEnumerable<XElement> EnumerateChildren(XElement? root, string localName)
     {

@@ -165,4 +165,94 @@ public sealed class SlicerLayoutBuilderTests
         SlicerLayoutBuilder.HasActiveFilter(Slicer("Region")).Should().BeFalse();
         SlicerLayoutBuilder.HasActiveFilter(Slicer("Region", "North")).Should().BeTrue();
     }
+
+    // --- BuildFull (multi-column, all items, showCaption) -------------------------------------------
+
+    private static readonly LayoutRect TallBounds = new(100, 50, 200, 300);
+
+    [Fact]
+    public void BuildFull_RendersEveryAvailableItem_NotJustAPreview()
+    {
+        var slicer = new SlicerModel { Name = "S", Caption = "Region" };
+
+        var layout = SlicerLayoutBuilder.BuildFull(slicer, ["A", "B", "C", "D", "E", "F"], TallBounds);
+
+        // No four-item preview cap: all six items get tiles (the box is tall enough here).
+        layout.Tiles.Should().HaveCount(6);
+        layout.Tiles.Should().NotContain(static t => t.IsAllPreview);
+        layout.TotalItemCount.Should().Be(6);
+        layout.VisibleItemCount.Should().Be(6);
+    }
+
+    [Fact]
+    public void BuildFull_TwoColumns_LaysTilesInAGrid()
+    {
+        // columnCount=2 (file 03's "Category"): item 0/1 on row 0, item 2/3 on row 1.
+        var slicer = new SlicerModel { Name = "S", Caption = "Category", ColumnCount = 2 };
+
+        var layout = SlicerLayoutBuilder.BuildFull(slicer, ["Marketing", "Admin", "Sales", "Content"], TallBounds);
+
+        layout.Tiles.Should().HaveCount(4);
+        var t0 = layout.Tiles[0];
+        var t1 = layout.Tiles[1];
+        var t2 = layout.Tiles[2];
+
+        // Two columns: tile 1 sits to the RIGHT of tile 0 on the same row.
+        t1.Rect.Top.Should().Be(t0.Rect.Top);
+        t1.Rect.Left.Should().BeGreaterThan(t0.Rect.Left);
+        // Tile 2 wraps to the next ROW, back at the left column.
+        t2.Rect.Left.Should().Be(t0.Rect.Left);
+        t2.Rect.Top.Should().BeGreaterThan(t0.Rect.Top);
+        // Two columns fit side by side within the body width.
+        (t0.Rect.Width + t1.Rect.Width).Should().BeLessThan(TallBounds.Width);
+    }
+
+    [Fact]
+    public void BuildFull_NoSelection_MarksEveryTileSelected()
+    {
+        var slicer = new SlicerModel { Name = "S", Caption = "Region" };
+
+        var layout = SlicerLayoutBuilder.BuildFull(slicer, ["A", "B", "C"], TallBounds);
+
+        layout.Tiles.Should().OnlyContain(t => t.IsSelected, "an empty selection is Excel's unfiltered 'all' state");
+        layout.HasActiveFilter.Should().BeFalse();
+    }
+
+    [Fact]
+    public void BuildFull_PartialSelection_FlagsOnlySelectedTiles()
+    {
+        var slicer = new SlicerModel { Name = "S", Caption = "Region" };
+        slicer.SelectedItems.Add("B");
+
+        var layout = SlicerLayoutBuilder.BuildFull(slicer, ["A", "B", "C"], TallBounds);
+
+        layout.Tiles.Single(t => t.Caption == "B").IsSelected.Should().BeTrue();
+        layout.Tiles.Single(t => t.Caption == "A").IsSelected.Should().BeFalse();
+        layout.Tiles.Single(t => t.Caption == "C").IsSelected.Should().BeFalse();
+        layout.HasActiveFilter.Should().BeTrue();
+    }
+
+    [Fact]
+    public void BuildFull_ShowCaptionTrue_HasHeaderBand_TilesClearIt()
+    {
+        var slicer = new SlicerModel { Name = "S", Caption = "Region", ShowCaption = true };
+
+        var layout = SlicerLayoutBuilder.BuildFull(slicer, ["A"], TallBounds);
+
+        layout.HeaderRect.Height.Should().Be(22);
+        // Tiles start below the 22px caption band.
+        layout.Tiles[0].Rect.Top.Should().BeGreaterThan(TallBounds.Top + 22);
+    }
+
+    [Fact]
+    public void BuildFull_ShowCaptionFalse_OmitsHeaderBand_TilesStartNearTop()
+    {
+        var slicer = new SlicerModel { Name = "S", Caption = "Region", ShowCaption = false };
+
+        var layout = SlicerLayoutBuilder.BuildFull(slicer, ["A"], TallBounds);
+
+        layout.HeaderRect.Height.Should().Be(0, "showCaption=false drops the caption band");
+        // Tiles start near the very top of the box, not below a 22px band.
+        layout.Tiles[0].Rect.Top.Should().BeLessThan(TallBounds.Top + 22);
+    }
 }

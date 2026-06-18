@@ -47,7 +47,9 @@ public sealed partial class MainWindow
             }
 
             var availableItems = ReadSlicerSourceItems(slicer);
-            var layout = SlicerLayoutBuilder.Build(slicer, availableItems, ToModelBounds(bounds, zoomFactor));
+            // Full multi-column item rendering (every available item, honoring columnCount + showCaption),
+            // matching the WPF/headless renderer — not the single-column four-tile preview.
+            var layout = SlicerLayoutBuilder.BuildFull(slicer, availableItems, ToModelBounds(bounds, zoomFactor));
             var visual = CreateSlicerVisual(slicer, layout, availableItems, bounds.Width, bounds.Height, zoomFactor);
             Canvas.SetLeft(visual, bounds.Left);
             Canvas.SetTop(visual, bounds.Top);
@@ -79,20 +81,33 @@ public sealed partial class MainWindow
         double height,
         double zoomFactor)
     {
+        // Theme the slicer from its built-in style (SlicerStyleLight1..6) against the workbook theme.
+        var style = SlicerStyleColors.Resolve(slicer.StyleName, _session.Workbook.Theme);
+        var bodyBrush = ToBrush(style.Body);
+        var borderBrush = ToBrush(style.Border);
+        var headerBrush = ToBrush(style.Header);
+        var headerTextBrush = ToBrush(style.HeaderText);
+        var tileBrush = ToBrush(style.Tile);
+        var selectedTileBrush = ToBrush(style.SelectedTile);
+        var itemTextBrush = ToBrush(style.ItemText);
+
         var canvas = new Canvas
         {
             Width = Math.Max(1, width),
             Height = Math.Max(1, height),
-            Background = SlicerBodyBrush,
+            Background = bodyBrush,
             ClipToBounds = true,
         };
 
-        AddFramedBackground(canvas, width, height, layout.HeaderRect.Height * zoomFactor);
-        AddHeaderCaption(canvas, layout.Caption, width, layout.HeaderRect.Height * zoomFactor);
+        var headerHeight = layout.HeaderRect.Height * zoomFactor;
+        AddFramedBackground(canvas, width, height, headerHeight, borderBrush, headerBrush);
+        // showCaption="0" => no caption band (HeaderRect collapses to zero height in BuildFull).
+        if (slicer.ShowCaption)
+            AddHeaderCaption(canvas, layout.Caption, width, headerHeight, headerTextBrush);
 
         foreach (var tile in layout.Tiles)
         {
-            var tileControl = CreateTileControl(tile, zoomFactor);
+            var tileControl = CreateTileControl(tile, zoomFactor, tileBrush, selectedTileBrush, itemTextBrush);
             canvas.Children.Add(tileControl);
         }
 
@@ -109,26 +124,34 @@ public sealed partial class MainWindow
         return canvas;
     }
 
-    private Border CreateTileControl(SlicerTileLayout tile, double zoomFactor)
+    private Border CreateTileControl(
+        SlicerTileLayout tile,
+        double zoomFactor,
+        IBrush tileBrush,
+        IBrush selectedTileBrush,
+        IBrush itemTextBrush)
     {
         return new Border
         {
             Width = Math.Max(1, tile.Rect.Width * zoomFactor),
             Height = Math.Max(1, tile.Rect.Height * zoomFactor),
-            Background = tile.IsSelected ? SlicerSelectedTileBrush : SlicerTileBrush,
+            Background = tile.IsSelected ? selectedTileBrush : tileBrush,
             CornerRadius = new CornerRadius(2),
             Margin = new Thickness(tile.Rect.Left * zoomFactor, tile.Rect.Top * zoomFactor, 0, 0),
             Child = new TextBlock
             {
                 Text = tile.Caption,
                 FontSize = Math.Max(1, 10 * zoomFactor),
-                Foreground = SlicerMutedTextBrush,
+                Foreground = itemTextBrush,
                 Margin = new Thickness(4 * zoomFactor, 0, 4 * zoomFactor, 0),
                 VerticalAlignment = AvaloniaVerticalAlignment.Center,
                 TextTrimming = TextTrimming.CharacterEllipsis,
             },
         };
     }
+
+    private static IBrush ToBrush(CellColor color) =>
+        new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B));
 
     private Control CreateTimelineVisual(
         TimelineModel timeline,
@@ -145,8 +168,8 @@ public sealed partial class MainWindow
             ClipToBounds = true,
         };
 
-        AddFramedBackground(canvas, width, height, layout.HeaderRect.Height * zoomFactor);
-        AddHeaderCaption(canvas, layout.Caption, width, layout.HeaderRect.Height * zoomFactor);
+        AddFramedBackground(canvas, width, height, layout.HeaderRect.Height * zoomFactor, SlicerBorderBrush, SlicerHeaderBrush);
+        AddHeaderCaption(canvas, layout.Caption, width, layout.HeaderRect.Height * zoomFactor, Brushes.White);
 
         canvas.Children.Add(new TextBlock
         {
@@ -184,32 +207,35 @@ public sealed partial class MainWindow
             IsHitTestVisible = false,
         };
 
-    private static void AddFramedBackground(Canvas canvas, double width, double height, double headerHeight)
+    private static void AddFramedBackground(Canvas canvas, double width, double height, double headerHeight, IBrush borderBrush, IBrush headerBrush)
     {
         canvas.Children.Add(new Border
         {
             Width = Math.Max(1, width),
             Height = Math.Max(1, height),
-            BorderBrush = SlicerBorderBrush,
+            BorderBrush = borderBrush,
             BorderThickness = new Thickness(1),
             IsHitTestVisible = false,
         });
+        if (headerHeight <= 0)
+            return;
+
         canvas.Children.Add(new Border
         {
             Width = Math.Max(1, width),
             Height = Math.Max(1, headerHeight),
-            Background = SlicerHeaderBrush,
+            Background = headerBrush,
             IsHitTestVisible = false,
         });
     }
 
-    private static void AddHeaderCaption(Canvas canvas, string caption, double width, double headerHeight)
+    private static void AddHeaderCaption(Canvas canvas, string caption, double width, double headerHeight, IBrush textBrush)
     {
         canvas.Children.Add(new TextBlock
         {
             Text = caption,
             FontSize = 11,
-            Foreground = Brushes.White,
+            Foreground = textBrush,
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
             Width = Math.Max(1, width - 10),
