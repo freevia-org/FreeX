@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 using System.Windows.Shell;
 
@@ -19,6 +20,13 @@ public sealed class ShellChromeOptions
     public Color TitleBarColor { get; init; } = Color.FromRgb(0x17, 0x32, 0x4D);
     public Color BadgeColor { get; init; } = Color.FromRgb(0x0F, 0x6D, 0x8C);
     public double CaptionHeight { get; init; } = 34;
+
+    /// <summary>
+    /// Optional pack URI of the application icon (e.g. <c>"pack://application:,,,/Resources/FreeW.ico"</c>).
+    /// When set, it becomes the window icon (taskbar / Alt-Tab) AND the title-bar badge shows the real icon
+    /// instead of the drawn <see cref="BadgeLetter"/> tile — matching how FreeX carries its app identity.
+    /// </summary>
+    public string? IconUri { get; init; }
 }
 
 /// <summary>
@@ -72,6 +80,9 @@ public static class ShellChrome
 
         EnsureChromeResources(window);
 
+        if (LoadIcon(options.IconUri) is { } icon)
+            window.Icon = icon;
+
         window.StateChanged += (_, _) => ApplyMaximizedInset(window);
         window.SourceInitialized += (_, _) =>
         {
@@ -92,28 +103,9 @@ public static class ShellChrome
 
         var bar = new DockPanel { LastChildFill = true };
 
-        // App badge (a small letter tile), mirroring FreeX's title-bar app icon.
-        var badge = new Border
-        {
-            Width = 22,
-            Height = 22,
-            Margin = new Thickness(2, 0, 8, 0),
-            VerticalAlignment = VerticalAlignment.Center,
-            Background = Freeze(options.BadgeColor),
-            BorderBrush = new SolidColorBrush(Color.FromArgb(0x66, 0xFF, 0xFF, 0xFF)),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(2),
-            Child = new TextBlock
-            {
-                Text = options.BadgeLetter,
-                Foreground = Brushes.White,
-                FontFamily = new FontFamily("Segoe UI"),
-                FontWeight = FontWeights.Bold,
-                FontSize = 13,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
-            }
-        };
+        // App badge: the real application icon when one is supplied (matching FreeX carrying its identity),
+        // otherwise a small drawn letter tile as the app-neutral default.
+        var badge = BuildBadge(options);
         DockPanel.SetDock(badge, Dock.Left);
         bar.Children.Add(badge);
 
@@ -193,6 +185,66 @@ public static class ShellChrome
     {
         if (window.Content is FrameworkElement content)
             content.Margin = window.WindowState == WindowState.Maximized ? new Thickness(7) : new Thickness(0);
+    }
+
+    // The title-bar app badge: the real application icon (no tile) when an IconUri resolves, else a small
+    // drawn letter tile in the badge colour.
+    private static FrameworkElement BuildBadge(ShellChromeOptions options)
+    {
+        if (LoadIcon(options.IconUri) is { } icon)
+        {
+            return new Image
+            {
+                Source = icon,
+                Width = 22,
+                Height = 22,
+                Margin = new Thickness(2, 0, 8, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+                Stretch = Stretch.Uniform,
+                SnapsToDevicePixels = true,
+                UseLayoutRounding = true
+            };
+        }
+
+        return new Border
+        {
+            Width = 22,
+            Height = 22,
+            Margin = new Thickness(2, 0, 8, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            Background = Freeze(options.BadgeColor),
+            BorderBrush = new SolidColorBrush(Color.FromArgb(0x66, 0xFF, 0xFF, 0xFF)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(2),
+            Child = new TextBlock
+            {
+                Text = options.BadgeLetter,
+                Foreground = Brushes.White,
+                FontFamily = new FontFamily("Segoe UI"),
+                FontWeight = FontWeights.Bold,
+                FontSize = 13,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            }
+        };
+    }
+
+    // Load an icon from a pack URI for the window icon / title-bar badge. Returns null (caller falls back)
+    // when no URI is given or it cannot be resolved — a missing icon must never crash window construction.
+    private static BitmapFrame? LoadIcon(string? iconUri)
+    {
+        if (string.IsNullOrWhiteSpace(iconUri))
+            return null;
+        try
+        {
+            var frame = BitmapFrame.Create(new Uri(iconUri, UriKind.RelativeOrAbsolute));
+            frame.Freeze();
+            return frame;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
     }
 
     private static Button CaptionButton(Window window, Path glyph, string automationName, bool isClose)

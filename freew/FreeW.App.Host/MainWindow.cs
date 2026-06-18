@@ -42,13 +42,15 @@ public sealed class MainWindow : Window
     private ListBox _navList = null!;
     private bool _navPaneVisible;
 
-    // Identity/palette for the shared window shell (FreeX navy title bar, teal "W" badge).
+    // Identity/palette for the shared window shell (FreeX navy title bar; the real FreeW app icon as the
+    // title-bar badge + window/taskbar icon).
     private static readonly ShellChromeOptions ChromeOptions = new()
     {
         BadgeLetter = "W",
         TitleBarColor = Color.FromRgb(0x17, 0x32, 0x4D),
         BadgeColor = Color.FromRgb(0x0F, 0x6D, 0x8C),
-        CaptionHeight = 34
+        CaptionHeight = 34,
+        IconUri = "pack://application:,,,/Resources/FreeW.ico"
     };
 
     // The grey "desk" the Print-Layout page floats on. Frozen so it can back the editor cheaply.
@@ -95,8 +97,11 @@ public sealed class MainWindow : Window
     public MainWindow()
     {
         Title = "FreeW";
-        Width = 1040;
-        Height = 720;
+        Width = 1280;
+        Height = 760;
+        // Open maximized like FreeX, so the ribbon shows its groups in full rather than collapsing the
+        // dense tabs to overflow dropdowns at a small default size.
+        WindowState = WindowState.Maximized;
         Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
 
         // Build the borderless WindowChrome shell — custom integrated title bar with embedded window
@@ -237,7 +242,7 @@ public sealed class MainWindow : Window
             SaveAs: () => _file.SaveAs(),
             Print: Print,
             EditProperties: OpenProperties,
-            OnClosed: () => { },
+            OnClosed: () => SetEditorAdornersVisible(true),
             DataFolder: ResolveDataFolderLabel));
 
         // Compose the window. The title bar occupies its own top row of the OUTER grid, always above the
@@ -263,7 +268,21 @@ public sealed class MainWindow : Window
     }
 
     // Show the Word-style Backstage (File screen) over the document.
-    private void ShowBackstage() => _backstage.Show();
+    private void ShowBackstage()
+    {
+        // The backstage is an opaque overlay, but the editor's page-break markers live in the window
+        // AdornerLayer, which draws ABOVE sibling content — so they bleed through the File screen unless the
+        // layer is hidden. Collapse it here and restore it in the backstage OnClosed callback.
+        SetEditorAdornersVisible(false);
+        _backstage.Show();
+    }
+
+    // Toggle the editor's AdornerLayer (page-break markers, etc.) so they don't draw over the backstage.
+    private void SetEditorAdornersVisible(bool visible)
+    {
+        if (System.Windows.Documents.AdornerLayer.GetAdornerLayer(_editor) is { } layer)
+            layer.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+    }
 
     // Recompute which contextual "Tools" tabs apply to the current selection and let the shared controller
     // show/hide them: Picture Format when an image is selected, Table Design when the caret is in a table.
