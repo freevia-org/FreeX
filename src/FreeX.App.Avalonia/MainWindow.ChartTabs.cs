@@ -454,16 +454,6 @@ public sealed partial class MainWindow
         return await dialog.ShowDialog<ChartLegendInput?>(this);
     }
 
-    private void ToggleChartDataLabels()
-    {
-        if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
-            return;
-        if (!TryGetSelectedChart("Data Labels", out var chart))
-            return;
-
-        ApplyChartLayout("Data Labels", chart, new ChartLayoutOptions(ShowDataLabels: !chart.ShowDataLabels));
-    }
-
     private void CycleChartDataLabelPosition()
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
@@ -474,24 +464,6 @@ public sealed partial class MainWindow
         ApplyChartLayout("Data Label Position", chart, new ChartLayoutOptions(
             ShowDataLabels: true,
             DataLabelPosition: NextDataLabelPosition(chart.DataLabelPosition)));
-    }
-
-    private void ToggleChartTrendline()
-    {
-        if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
-            return;
-        if (!TryGetSelectedChart("Trendline", out var chart))
-            return;
-
-        if (!ChartTypeSupport.SupportsTrendlines(chart.Type))
-        {
-            RefreshShell("Trendlines are available on column, line, bar, scatter, bubble and area charts.");
-            return;
-        }
-
-        ApplyChartLayout("Trendline", chart, new ChartLayoutOptions(
-            ShowLinearTrendline: !chart.ShowLinearTrendline,
-            TrendlineType: ChartTrendlineType.Linear));
     }
 
     private void ToggleChartErrorBars()
