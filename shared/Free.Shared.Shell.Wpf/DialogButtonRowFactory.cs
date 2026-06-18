@@ -4,7 +4,7 @@ using System.Windows.Controls;
 
 namespace Free.Shared.Shell;
 
-internal static class DialogButtonRowFactory
+public static class DialogButtonRowFactory
 {
     private const string DefaultOkContent = "_OK";
 

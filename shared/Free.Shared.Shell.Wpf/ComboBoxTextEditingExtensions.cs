@@ -2,7 +2,7 @@ using System.Windows.Controls;
 
 namespace Free.Shared.Shell;
 
-internal static class ComboBoxTextEditingExtensions
+public static class ComboBoxTextEditingExtensions
 {
     public static void SelectAll(this ComboBox comboBox)
     {

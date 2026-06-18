@@ -8,7 +8,7 @@ namespace Free.Shared.Shell;
 /// the dialog's own window as owner so messages appear centred on it.
 /// This is the only legitimate call site for <see cref="MessageBox.Show"/> in dialog classes.
 /// </summary>
-internal static class DialogMessageHelper
+public static class DialogMessageHelper
 {
     private const string DefaultErrorTitle = "Error";
     private const string DefaultWarningTitle = "Warning";

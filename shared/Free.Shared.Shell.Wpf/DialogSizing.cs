@@ -2,7 +2,7 @@ using System.Windows;
 
 namespace Free.Shared.Shell;
 
-internal static class DialogSizing
+public static class DialogSizing
 {
     private const double DefaultWorkAreaFillRatio = 0.92d;
     private static bool _isRegistered;

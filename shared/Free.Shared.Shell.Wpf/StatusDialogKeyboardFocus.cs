@@ -4,7 +4,7 @@ using System.Windows.Input;
 
 namespace Free.Shared.Shell;
 
-internal static class StatusDialogKeyboardFocus
+public static class StatusDialogKeyboardFocus
 {
     public static void FocusDefaultButton(DependencyObject parent)
     {
