@@ -19,6 +19,10 @@ public sealed record FormatCellsCompactRequest(
     CellBorderPreset? BorderPreset = null,
     BorderStyle BorderStyle = BorderStyle.Thin,
     CellColor? BorderColor = null,
+    CellBorder? BorderTop = null,
+    CellBorder? BorderRight = null,
+    CellBorder? BorderBottom = null,
+    CellBorder? BorderLeft = null,
     bool? DoubleUnderline = null,
     bool? ShrinkToFit = null,
     int? IndentLevel = null,
@@ -66,6 +70,14 @@ public static class FormatCellsCompactPlanner
                 request.BorderStyle,
                 request.BorderColor);
 
+        // Per-side overrides win over (and compose with) the preset: a chosen edge replaces
+        // whatever the preset produced for that edge, while untouched edges fall back to the
+        // preset's value. This keeps the single shared model so WPF/macOS map identically.
+        var borderTop = request.BorderTop ?? borderDiff?.BorderTop;
+        var borderRight = request.BorderRight ?? borderDiff?.BorderRight;
+        var borderBottom = request.BorderBottom ?? borderDiff?.BorderBottom;
+        var borderLeft = request.BorderLeft ?? borderDiff?.BorderLeft;
+
         return new StyleDiff(
             Bold: request.Bold,
             Italic: request.Italic,
@@ -87,10 +99,10 @@ public static class FormatCellsCompactPlanner
             DoubleUnderline: request.DoubleUnderline,
             IndentLevel: NormalizeIndentLevel(request.IndentLevel),
             TextRotation: NormalizeTextRotation(request.TextRotation),
-            BorderTop: borderDiff?.BorderTop,
-            BorderRight: borderDiff?.BorderRight,
-            BorderBottom: borderDiff?.BorderBottom,
-            BorderLeft: borderDiff?.BorderLeft,
+            BorderTop: borderTop,
+            BorderRight: borderRight,
+            BorderBottom: borderBottom,
+            BorderLeft: borderLeft,
             Locked: request.Locked,
             Hidden: request.Hidden,
             ClearFill: request.ClearFill ? true : null);

@@ -7287,6 +7287,66 @@ public sealed partial class MainWindow : Window
             SelectFormatCellsColor(fontColorBox, normal.FontColor);
         };
 
+        // Live font preview: a sample TextBlock reflecting bold/italic/underline/size/color as the
+        // user edits, mirroring the WPF preview.
+        var fontPreview = new TextBlock
+        {
+            Text = "AaBbCcYyZz",
+            MinHeight = 36,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+        };
+        AutomationProperties.SetAutomationId(fontPreview, "FormatCellsFontPreview");
+
+        void RefreshFontPreview()
+        {
+            if (normalFontBox.IsChecked == true)
+            {
+                var normal = CellStyle.Default;
+                fontPreview.FontWeight = FontWeight.Normal;
+                fontPreview.FontStyle = FontStyle.Normal;
+                fontPreview.TextDecorations = null;
+                fontPreview.FontSize = normal.FontSize;
+                fontPreview.FontFamily = FontFamily.Default;
+                fontPreview.Foreground = Brush(normal.FontColor);
+                return;
+            }
+
+            fontPreview.FontWeight = boldBox.IsChecked == true ? FontWeight.Bold : FontWeight.Normal;
+            fontPreview.FontStyle = italicBox.IsChecked == true ? FontStyle.Italic : FontStyle.Normal;
+
+            var decorations = new TextDecorationCollection();
+            if (underlineBox.IsChecked == true || doubleUnderlineBox.IsChecked == true)
+                decorations.Add(new TextDecoration { Location = TextDecorationLocation.Underline });
+            if (strikethroughBox.IsChecked == true)
+                decorations.Add(new TextDecoration { Location = TextDecorationLocation.Strikethrough });
+            fontPreview.TextDecorations = decorations.Count > 0 ? decorations : null;
+
+            if (double.TryParse(fontSizeBox.Text?.Trim(), NumberStyles.Float, CultureInfo.CurrentCulture, out var size)
+                && double.IsFinite(size) && size > 0)
+            {
+                fontPreview.FontSize = Math.Clamp(size, 6, 72);
+            }
+
+            var fontName = fontNameBox.Text?.Trim();
+            fontPreview.FontFamily = string.IsNullOrWhiteSpace(fontName)
+                ? FontFamily.Default
+                : new FontFamily(fontName);
+
+            var color = (fontColorBox.SelectedItem as FormatCellsColorChoice)?.Color;
+            fontPreview.Foreground = color is { } chosen ? Brush(chosen) : PrimaryInk;
+        }
+
+        boldBox.IsCheckedChanged += (_, _) => RefreshFontPreview();
+        italicBox.IsCheckedChanged += (_, _) => RefreshFontPreview();
+        underlineBox.IsCheckedChanged += (_, _) => RefreshFontPreview();
+        doubleUnderlineBox.IsCheckedChanged += (_, _) => RefreshFontPreview();
+        strikethroughBox.IsCheckedChanged += (_, _) => RefreshFontPreview();
+        normalFontBox.IsCheckedChanged += (_, _) => RefreshFontPreview();
+        fontSizeBox.TextChanged += (_, _) => RefreshFontPreview();
+        fontNameBox.TextChanged += (_, _) => RefreshFontPreview();
+        fontColorBox.SelectionChanged += (_, _) => RefreshFontPreview();
+        RefreshFontPreview();
+
         var fillColorBox = CreateFormatCellsColorPicker("No change", includeClear: true, "More Fill Colors");
         AutomationProperties.SetName(fillColorBox, "Fill color");
         AutomationProperties.SetAutomationId(fillColorBox, "FormatCellsFillColorBox");
@@ -7297,6 +7357,57 @@ public sealed partial class MainWindow : Window
         var fillPatternColorBox = CreateFormatCellsColorPicker("No change", includeClear: false, "More Pattern Colors");
         AutomationProperties.SetName(fillPatternColorBox, "Pattern color");
         AutomationProperties.SetAutomationId(fillPatternColorBox, "FormatCellsFillPatternColorBox");
+
+        // Live fill preview: a swatch reflecting the chosen fill color + pattern color, or a
+        // "No fill" hatch when the clear sentinel is selected.
+        var fillPreview = new Border
+        {
+            Height = 36,
+            Width = 120,
+            Background = Brushes.White,
+            BorderBrush = Brushes.Gray,
+            BorderThickness = new Thickness(1),
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+        };
+        AutomationProperties.SetAutomationId(fillPreview, "FormatCellsFillPreview");
+        var fillPreviewLabel = new TextBlock
+        {
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+        };
+        fillPreview.Child = fillPreviewLabel;
+
+        void RefreshFillPreview()
+        {
+            var fillChoice = fillColorBox.SelectedItem as FormatCellsColorChoice;
+            if (fillChoice?.Clear == true)
+            {
+                fillPreview.Background = Brushes.White;
+                fillPreviewLabel.Text = "No fill";
+                return;
+            }
+
+            var patternStyle = (fillPatternStyleBox.SelectedItem as FormatCellsNullableChoice<CellFillPatternStyle>)?.Value
+                ?? CellFillPatternStyle.None;
+            var patternColor = (fillPatternColorBox.SelectedItem as FormatCellsColorChoice)?.Color;
+            if (fillChoice?.Color is { } fill)
+            {
+                fillPreview.Background = Brush(fill);
+                fillPreviewLabel.Text = patternStyle != CellFillPatternStyle.None && patternColor is { } pc
+                    ? $"{CellColorPalettePlanner.FormatHexColor(fill)} / {CellColorPalettePlanner.FormatHexColor(pc)}"
+                    : CellColorPalettePlanner.FormatHexColor(fill);
+            }
+            else
+            {
+                fillPreview.Background = Brushes.White;
+                fillPreviewLabel.Text = "No change";
+            }
+        }
+
+        fillColorBox.SelectionChanged += (_, _) => RefreshFillPreview();
+        fillPatternStyleBox.SelectionChanged += (_, _) => RefreshFillPreview();
+        fillPatternColorBox.SelectionChanged += (_, _) => RefreshFillPreview();
+        RefreshFillPreview();
 
         var borderPresetBox = new ComboBox
         {
@@ -7313,6 +7424,140 @@ public sealed partial class MainWindow : Window
         var borderColorBox = CreateFormatCellsColorPicker("No change", includeClear: false, "More Border Colors");
         AutomationProperties.SetName(borderColorBox, "Border color");
         AutomationProperties.SetAutomationId(borderColorBox, "FormatCellsBorderColorBox");
+
+        // Per-side border controls mirror WPF: each edge is a toggle honoring the selected line
+        // style + color, composed alongside the whole-cell preset buttons (None/Outline/Inside).
+        // The toggle state and the chosen line style/color flow into the shared
+        // FormatCellsCompactRequest per-side fields so WPF/macOS map identically.
+        var borderTopToggle = CreateFormatCellsBorderSideToggle("Top", "FormatCellsBorderTopToggle");
+        var borderBottomToggle = CreateFormatCellsBorderSideToggle("Bottom", "FormatCellsBorderBottomToggle");
+        var borderLeftToggle = CreateFormatCellsBorderSideToggle("Left", "FormatCellsBorderLeftToggle");
+        var borderRightToggle = CreateFormatCellsBorderSideToggle("Right", "FormatCellsBorderRightToggle");
+        var borderInsideHorizontalToggle = CreateFormatCellsBorderSideToggle("Inside horizontal", "FormatCellsBorderInsideHorizontalToggle");
+        var borderInsideVerticalToggle = CreateFormatCellsBorderSideToggle("Inside vertical", "FormatCellsBorderInsideVerticalToggle");
+
+        var borderPreview = new Border
+        {
+            Width = 96,
+            Height = 64,
+            Background = Brushes.White,
+            BorderBrush = Brushes.Gray,
+            BorderThickness = new Thickness(1),
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+        };
+        AutomationProperties.SetAutomationId(borderPreview, "FormatCellsBorderPreview");
+        var borderPreviewGrid = new AvaloniaGrid
+        {
+            Width = 96,
+            Height = 64,
+            ColumnDefinitions = new ColumnDefinitions("*,*"),
+            RowDefinitions = new RowDefinitions("*,*"),
+        };
+        borderPreview.Child = borderPreviewGrid;
+
+        CellColor SelectedBorderLineColor() =>
+            (borderColorBox.SelectedItem as FormatCellsColorChoice)?.Color ?? CellColor.Black;
+        BorderStyle SelectedBorderLineStyle() =>
+            borderStyleBox.SelectedItem is FormatCellsNullableChoice<BorderStyle> { Value: { } style }
+                ? style
+                : BorderStyle.Thin;
+        CellBorder SelectedBorderLine() => new(SelectedBorderLineStyle(), SelectedBorderLineColor());
+
+        void RenderBorderPreview()
+        {
+            borderPreviewGrid.Children.Clear();
+            var line = SelectedBorderLine();
+            var brush = Brush(line.Color);
+            var thickness = FormatCellsBorderPreviewThickness(line.Style);
+
+            void AddEdge(double left, double top, double right, double bottom)
+            {
+                var edge = new Border
+                {
+                    BorderBrush = brush,
+                    BorderThickness = new Thickness(left, top, right, bottom),
+                    IsHitTestVisible = false,
+                    [AvaloniaGrid.RowProperty] = 0,
+                    [AvaloniaGrid.ColumnProperty] = 0,
+                    [AvaloniaGrid.RowSpanProperty] = 2,
+                    [AvaloniaGrid.ColumnSpanProperty] = 2,
+                };
+                borderPreviewGrid.Children.Add(edge);
+            }
+
+            if (borderTopToggle.IsChecked == true)
+                AddEdge(0, thickness, 0, 0);
+            if (borderBottomToggle.IsChecked == true)
+                AddEdge(0, 0, 0, thickness);
+            if (borderLeftToggle.IsChecked == true)
+                AddEdge(thickness, 0, 0, 0);
+            if (borderRightToggle.IsChecked == true)
+                AddEdge(0, 0, thickness, 0);
+            if (borderInsideVerticalToggle.IsChecked == true)
+            {
+                borderPreviewGrid.Children.Add(new Border
+                {
+                    BorderBrush = brush,
+                    BorderThickness = new Thickness(thickness, 0, 0, 0),
+                    HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
+                    IsHitTestVisible = false,
+                    [AvaloniaGrid.RowProperty] = 0,
+                    [AvaloniaGrid.ColumnProperty] = 1,
+                    [AvaloniaGrid.RowSpanProperty] = 2,
+                });
+            }
+            if (borderInsideHorizontalToggle.IsChecked == true)
+            {
+                borderPreviewGrid.Children.Add(new Border
+                {
+                    BorderBrush = brush,
+                    BorderThickness = new Thickness(0, thickness, 0, 0),
+                    VerticalAlignment = AvaloniaVerticalAlignment.Center,
+                    IsHitTestVisible = false,
+                    [AvaloniaGrid.RowProperty] = 1,
+                    [AvaloniaGrid.ColumnProperty] = 0,
+                    [AvaloniaGrid.ColumnSpanProperty] = 2,
+                });
+            }
+        }
+
+        void SetBorderSidesChecked(bool top, bool bottom, bool left, bool right, bool insideHorizontal, bool insideVertical)
+        {
+            borderTopToggle.IsChecked = top;
+            borderBottomToggle.IsChecked = bottom;
+            borderLeftToggle.IsChecked = left;
+            borderRightToggle.IsChecked = right;
+            borderInsideHorizontalToggle.IsChecked = insideHorizontal;
+            borderInsideVerticalToggle.IsChecked = insideVertical;
+            RenderBorderPreview();
+        }
+
+        var borderNoneButton = new Button { Content = "None", MinWidth = 70 };
+        AutomationProperties.SetAutomationId(borderNoneButton, "FormatCellsBorderPresetNoneButton");
+        borderNoneButton.Click += (_, _) => SetBorderSidesChecked(false, false, false, false, false, false);
+        var borderOutlineButton = new Button { Content = "Outline", MinWidth = 70 };
+        AutomationProperties.SetAutomationId(borderOutlineButton, "FormatCellsBorderPresetOutlineButton");
+        borderOutlineButton.Click += (_, _) => SetBorderSidesChecked(true, true, true, true, false, false);
+        var borderInsideButton = new Button { Content = "Inside", MinWidth = 70 };
+        AutomationProperties.SetAutomationId(borderInsideButton, "FormatCellsBorderPresetInsideButton");
+        borderInsideButton.Click += (_, _) => SetBorderSidesChecked(false, false, false, false, true, true);
+
+        foreach (var toggle in new[]
+        {
+            borderTopToggle, borderBottomToggle, borderLeftToggle, borderRightToggle,
+            borderInsideHorizontalToggle, borderInsideVerticalToggle,
+        })
+        {
+            toggle.IsCheckedChanged += (_, _) => RenderBorderPreview();
+        }
+        borderStyleBox.SelectionChanged += (_, _) => RenderBorderPreview();
+        borderColorBox.SelectionChanged += (_, _) => RenderBorderPreview();
+        RenderBorderPreview();
+
+        CellBorder? ReadBorderSide(ToggleButton toggle) =>
+            toggle.IsChecked == true
+                ? SelectedBorderLine()
+                : null;
 
         var lockedBox = CreateFormatCellsCheckBox("Locked", "FormatCellsLockedBox", currentLocked);
         var hiddenBox = CreateFormatCellsCheckBox("Hidden", "FormatCellsHiddenBox", currentHidden);
@@ -7393,6 +7638,17 @@ public sealed partial class MainWindow : Window
                 ? selectedBorderStyle
                 : BorderStyle.Thin;
             var borderColor = (borderColorBox.SelectedItem as FormatCellsColorChoice)?.Color;
+            var borderTopSide = ReadBorderSide(borderTopToggle);
+            var borderBottomSide = ReadBorderSide(borderBottomToggle);
+            var borderLeftSide = ReadBorderSide(borderLeftToggle);
+            var borderRightSide = ReadBorderSide(borderRightToggle);
+            // Inner horizontal/vertical edges aren't single-cell StyleDiff edges; carry them via
+            // the shared Inside preset (applied per-cell by the session) when no explicit preset
+            // was chosen in the preset combo.
+            var hasInsideToggle = borderInsideHorizontalToggle.IsChecked == true
+                || borderInsideVerticalToggle.IsChecked == true;
+            var borderPreset = borderChoice?.Value
+                ?? (hasInsideToggle ? CellBorderPreset.Inside : (CellBorderPreset?)null);
             var request = new FormatCellsCompactRequest(
                 NumberFormat: numberFormat,
                 HorizontalAlignment: ReadChangedFormatCellsValue(currentHorizontalAlignment, horizontalAlignmentBox),
@@ -7417,8 +7673,12 @@ public sealed partial class MainWindow : Window
                 IndentLevel: indentLevel,
                 TextRotation: textRotation,
                 Locked: ReadChangedFormatCellsBool(currentLocked, lockedBox),
-                Hidden: ReadChangedFormatCellsBool(currentHidden, hiddenBox));
-            result = new FormatCellsDialogResult(request, borderChoice?.Value, borderStyle, borderColor);
+                Hidden: ReadChangedFormatCellsBool(currentHidden, hiddenBox),
+                BorderTop: borderTopSide,
+                BorderRight: borderRightSide,
+                BorderBottom: borderBottomSide,
+                BorderLeft: borderLeftSide);
+            result = new FormatCellsDialogResult(request, borderPreset, borderStyle, borderColor);
             dialog.Close();
         }
 
@@ -7521,6 +7781,7 @@ public sealed partial class MainWindow : Window
                     CreateFormatCellsField("Size", fontSizeBox),
                     CreateFormatCellsField("Color", fontColorBox),
                     normalFontBox,
+                    CreateFormatCellsField("Preview", fontPreview),
                 },
             });
         var fillTab = CreateFormatCellsTab(
@@ -7534,6 +7795,7 @@ public sealed partial class MainWindow : Window
                     CreateFormatCellsField("Fill color", fillColorBox),
                     CreateFormatCellsField("Pattern style", fillPatternStyleBox),
                     CreateFormatCellsField("Pattern color", fillPatternColorBox),
+                    CreateFormatCellsField("Preview", fillPreview),
                 },
             });
         var borderTab = CreateFormatCellsTab(
@@ -7547,6 +7809,34 @@ public sealed partial class MainWindow : Window
                     CreateFormatCellsField("Preset", borderPresetBox),
                     CreateFormatCellsField("Line style", borderStyleBox),
                     CreateFormatCellsField("Line color", borderColorBox),
+                    new StackPanel
+                    {
+                        Orientation = Orientation.Horizontal,
+                        Spacing = 6,
+                        Children = { borderNoneButton, borderOutlineButton, borderInsideButton },
+                    },
+                    CreateFormatCellsField(
+                        "Borders",
+                        new StackPanel
+                        {
+                            Spacing = 6,
+                            Children =
+                            {
+                                new StackPanel
+                                {
+                                    Orientation = Orientation.Horizontal,
+                                    Spacing = 6,
+                                    Children = { borderTopToggle, borderBottomToggle, borderLeftToggle, borderRightToggle },
+                                },
+                                new StackPanel
+                                {
+                                    Orientation = Orientation.Horizontal,
+                                    Spacing = 6,
+                                    Children = { borderInsideHorizontalToggle, borderInsideVerticalToggle },
+                                },
+                            },
+                        }),
+                    CreateFormatCellsField("Preview", borderPreview),
                 },
             });
         var protectionTab = CreateFormatCellsTab(
@@ -7680,6 +7970,28 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetAutomationId(comboBox, automationId);
         return comboBox;
     }
+
+    private static ToggleButton CreateFormatCellsBorderSideToggle(string label, string automationId)
+    {
+        var toggle = new ToggleButton
+        {
+            Content = label,
+            MinWidth = 70,
+        };
+        AutomationProperties.SetName(toggle, label);
+        AutomationProperties.SetAutomationId(toggle, automationId);
+        return toggle;
+    }
+
+    private static double FormatCellsBorderPreviewThickness(BorderStyle style) =>
+        style switch
+        {
+            BorderStyle.None => 0,
+            BorderStyle.Medium => 2,
+            BorderStyle.Thick => 3,
+            BorderStyle.Double => 3,
+            _ => 1,
+        };
 
     private static CheckBox CreateFormatCellsCheckBox(string label, string automationId, bool isChecked)
     {

@@ -113,7 +113,7 @@ public static class SlicerLayoutBuilder
     /// each tile flagged selected/unselected. An empty selection renders every tile as selected ("all"),
     /// matching Excel's unfiltered state. The caption band is omitted when
     /// <see cref="SlicerModel.ShowCaption"/> is false, and the tiles start from the top of the box.
-    /// This is what the WPF/headless renderer draws; the Avalonia overlay uses it for parity.
+    /// This is what the WPF/headless renderer draws; the cross-platform overlay uses it for parity.
     /// </summary>
     public static SlicerLayoutModel BuildFull(
         SlicerModel slicer,

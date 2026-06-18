@@ -216,6 +216,72 @@ public sealed class FormatCellsCompactPlannerTests
     }
 
     [Fact]
+    public void Plan_PerSideBorderFieldsMapToStyleDiffEdges()
+    {
+        var top = new CellBorder(BorderStyle.Thin, new CellColor(10, 20, 30));
+        var right = new CellBorder(BorderStyle.Medium, new CellColor(40, 50, 60));
+        var bottom = new CellBorder(BorderStyle.Double, new CellColor(70, 80, 90));
+        var left = new CellBorder(BorderStyle.Dashed, new CellColor(100, 110, 120));
+
+        var diff = FormatCellsCompactPlanner.Plan(new FormatCellsCompactRequest(
+            BorderTop: top,
+            BorderRight: right,
+            BorderBottom: bottom,
+            BorderLeft: left));
+
+        diff.BorderTop.Should().Be(top);
+        diff.BorderRight.Should().Be(right);
+        diff.BorderBottom.Should().Be(bottom);
+        diff.BorderLeft.Should().Be(left);
+    }
+
+    [Fact]
+    public void Plan_PerSideBorderFieldsAreIndependentAndLeaveUnsetEdgesNull()
+    {
+        var bottom = new CellBorder(BorderStyle.Thick, Accent);
+
+        var diff = FormatCellsCompactPlanner.Plan(new FormatCellsCompactRequest(BorderBottom: bottom));
+
+        diff.BorderBottom.Should().Be(bottom);
+        diff.BorderTop.Should().BeNull();
+        diff.BorderRight.Should().BeNull();
+        diff.BorderLeft.Should().BeNull();
+    }
+
+    [Fact]
+    public void Plan_PerSideBorderOverridesWinOverPreset()
+    {
+        var topOverride = new CellBorder(BorderStyle.Double, new CellColor(200, 100, 50));
+
+        var diff = FormatCellsCompactPlanner.Plan(new FormatCellsCompactRequest(
+            BorderPreset: CellBorderPreset.All,
+            BorderColor: Accent,
+            BorderTop: topOverride));
+
+        // The chosen top edge wins; the other three edges still come from the preset.
+        diff.BorderTop.Should().Be(topOverride);
+        diff.BorderRight.Should().Be(new CellBorder(BorderStyle.Thin, Accent));
+        diff.BorderBottom.Should().Be(new CellBorder(BorderStyle.Thin, Accent));
+        diff.BorderLeft.Should().Be(new CellBorder(BorderStyle.Thin, Accent));
+    }
+
+    [Fact]
+    public void Plan_PerSideClearBorderRemovesEdge()
+    {
+        var baseStyle = new CellStyle
+        {
+            BorderTop = new CellBorder(BorderStyle.Thick, new CellColor(1, 2, 3))
+        };
+
+        var diff = FormatCellsCompactPlanner.Plan(new FormatCellsCompactRequest(
+            BorderTop: new CellBorder(BorderStyle.None, CellColor.Black)));
+        var result = diff.ApplyTo(baseStyle);
+
+        diff.BorderTop.Should().Be(new CellBorder(BorderStyle.None, CellColor.Black));
+        result.BorderTop.Style.Should().Be(BorderStyle.None);
+    }
+
+    [Fact]
     public void GetBorderPresetMetadata_ExposesDisplayNameAndRangeRelativeFlag()
     {
         var metadata = FormatCellsCompactPlanner.GetBorderPresetMetadata();
