@@ -24,6 +24,22 @@ internal static class AvaloniaRibbonHost
         => Build(session, setStatus, new AvaloniaRibbonHostCallbacks());
 
     /// <summary>
+    /// Builds the ribbon control, wiring all host callbacks and an optional
+    /// <paramref name="contextSource"/> so contextual tabs (Chart/Picture/Shape/Table/Pivot) appear and
+    /// disappear with the selection. A null source falls back to the static tab strip.
+    /// </summary>
+    public static Control Build(
+        Func<WorkbookSession?> session,
+        Action<string> setStatus,
+        AvaloniaRibbonHostCallbacks callbacks,
+        IRibbonContextSource? contextSource)
+    {
+        var registry = SampleRibbon.BuildRegistry(session, setStatus, callbacks);
+        var definition = SampleRibbon.BuildDefinition();
+        return AvaloniaRibbonRenderer.BuildRibbon(definition, registry, contextSource);
+    }
+
+    /// <summary>
     /// Builds the ribbon control, additionally wiring the Data-tab <c>Text to Columns</c> and
     /// <c>Consolidate</c> buttons to host callbacks that open the corresponding dialogs. A null callback
     /// leaves its button on the no-op registration (so the smoke harness can still build the ribbon).
@@ -707,6 +723,88 @@ internal static class SampleRibbon
                     g.Button("view.hide", "Hide", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.View) });
                     g.Button("view.unhide", "Unhide", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.View) });
                     g.Button("view.newWindow", "New Window", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Window) });
+                });
+            })
+            .Tab("help", "Help", "Y", help =>
+            {
+                help.Group("helpHelp", "Help", "H", 100, g =>
+                {
+                    g.Button("help.about", "About FreeX", c => c with
+                    {
+                        PreferredLayout = RibbonCommandLayoutKind.Large,
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Info),
+                    });
+                    g.Button("help.helpOnline", "Help Online", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Book) });
+                    g.Button("help.feedback", "Send Feedback", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Comment) });
+                    g.Button("help.checkUpdates", "Check for Updates", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Refresh) });
+                });
+            })
+            // --- Contextual tab shells (Phase 1) — shown via IRibbonContextSource on selection ---
+            .ContextualTab("chartDesign", "Chart Design", new RibbonTabContext("chart.selected", "Chart Design", RibbonContextColor.Green), tab =>
+            {
+                tab.Group("chartDesignType", "Type", "T", 100, g =>
+                {
+                    g.Button("chartDesign.changeType", "Change Chart Type", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.ChartColumn) });
+                });
+                tab.Group("chartDesignData", "Data", "D", 90, g =>
+                {
+                    g.Button("chartDesign.selectData", "Select Data", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Search) });
+                });
+            })
+            .ContextualTab("chartFormat", "Chart Format", new RibbonTabContext("chart.selected", "Chart Format", RibbonContextColor.Green), tab =>
+            {
+                tab.Group("chartFormatStyles", "Shape Styles", "S", 100, g =>
+                {
+                    g.Button("chartFormat.shapeFill", "Shape Fill", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Fill) });
+                    g.Button("chartFormat.shapeOutline", "Shape Outline", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Border) });
+                });
+            })
+            .ContextualTab("pictureFormat", "Picture Format", new RibbonTabContext("picture.selected", "Picture Format", RibbonContextColor.Teal), tab =>
+            {
+                tab.Group("pictureFormatArrange", "Arrange", "A", 100, g =>
+                {
+                    g.Button("pictureFormat.bringForward", "Bring Forward", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.BringForward) });
+                    g.Button("pictureFormat.sendBackward", "Send Backward", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.SendBackward) });
+                });
+                tab.Group("pictureFormatAccessibility", "Accessibility", "Y", 90, g =>
+                {
+                    g.Button("pictureFormat.altText", "Alt Text", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Label) });
+                });
+            })
+            .ContextualTab("shapeFormat", "Shape Format", new RibbonTabContext("shape.selected", "Shape Format", RibbonContextColor.Purple), tab =>
+            {
+                tab.Group("shapeFormatStyles", "Shape Styles", "S", 100, g =>
+                {
+                    g.Button("shapeFormat.shapeFill", "Shape Fill", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.RibbonShape) });
+                    g.Button("shapeFormat.shapeOutline", "Shape Outline", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Border) });
+                });
+                tab.Group("shapeFormatArrange", "Arrange", "A", 90, g =>
+                {
+                    g.Button("shapeFormat.bringForward", "Bring Forward", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.BringForward) });
+                    g.Button("shapeFormat.sendBackward", "Send Backward", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.SendBackward) });
+                });
+            })
+            .ContextualTab("tableDesign", "Table Design", new RibbonTabContext("table.active", "Table Design", RibbonContextColor.Blue), tab =>
+            {
+                tab.Group("tableDesignTools", "Tools", "T", 100, g =>
+                {
+                    g.Button("tableDesign.convertToRange", "Convert to Range", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Refresh) });
+                    g.Button("tableDesign.removeDuplicates", "Remove Duplicates", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Delete) });
+                });
+            })
+            .ContextualTab("pivotAnalyze", "PivotTable Analyze", new RibbonTabContext("pivot.active", "PivotTable Analyze", RibbonContextColor.Orange), tab =>
+            {
+                tab.Group("pivotAnalyzeData", "Data", "D", 100, g =>
+                {
+                    g.Button("pivotAnalyze.refresh", "Refresh", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Refresh) });
+                });
+            })
+            .ContextualTab("pivotDesign", "PivotTable Design", new RibbonTabContext("pivot.active", "PivotTable Design", RibbonContextColor.Orange), tab =>
+            {
+                tab.Group("pivotDesignLayout", "Layout", "L", 100, g =>
+                {
+                    g.Button("pivotDesign.grandTotals", "Grand Totals", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Sum) });
+                    g.Button("pivotDesign.reportLayout", "Report Layout", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.List) });
                 });
             })
             .Build();

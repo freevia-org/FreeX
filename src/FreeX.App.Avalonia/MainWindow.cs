@@ -569,6 +569,7 @@ public sealed partial class MainWindow : Window
     private bool _isUpdatingWorksheetScrollBars;
     private SelectionPaneObjectKind? _selectedDrawingObjectKind;
     private Guid? _selectedDrawingObjectId;
+    private readonly AvaloniaRibbonContextSource _ribbonContextSource = new();
 
     public MainWindow(IReadOnlyList<string> startupArguments)
         : this(
@@ -611,10 +612,7 @@ public sealed partial class MainWindow : Window
     {
         var root = new DockPanel();
 
-        var ribbon = FreeX.App.Avalonia.Ribbon.AvaloniaRibbonHost.Build(
-            () => _session,
-            RefreshShell,
-            new FreeX.App.Avalonia.Ribbon.AvaloniaRibbonHostCallbacks
+        var ribbonCallbacks = new FreeX.App.Avalonia.Ribbon.AvaloniaRibbonHostCallbacks
             {
                 OpenTextToColumns = TextToColumns,
                 OpenConsolidate = Consolidate,
@@ -822,7 +820,20 @@ public sealed partial class MainWindow : Window
                     ["formulas.calcOptions"] = ToggleCalculationMode,
                     ["formulas.calcNow"] = CalculateNow,
                 },
-            });
+            };
+
+        // Merge in the Help-tab + contextual-tab (Chart/Picture/Shape/Table/Pivot) command handlers.
+        var ribbonExtraCommands = new Dictionary<string, Action>(
+            ribbonCallbacks.ExtraCommands!, StringComparer.Ordinal);
+        foreach (var (id, action) in BuildContextualTabCommands())
+            ribbonExtraCommands[id] = action;
+        ribbonCallbacks = ribbonCallbacks with { ExtraCommands = ribbonExtraCommands };
+
+        var ribbon = FreeX.App.Avalonia.Ribbon.AvaloniaRibbonHost.Build(
+            () => _session,
+            RefreshShell,
+            ribbonCallbacks,
+            _ribbonContextSource);
         DockPanel.SetDock(ribbon, Dock.Top);
         root.Children.Add(ribbon);
 
@@ -2939,6 +2950,7 @@ public sealed partial class MainWindow : Window
 
         _selectedDrawingObjectKind = drawingObject.Kind;
         _selectedDrawingObjectId = drawingObject.Id;
+        _ribbonContextSource.OnDrawingObjectSelected(drawingObject.Kind);
         RefreshShell($"Selected {FormatDrawingObjectKind(drawingObject.Kind)}: {drawingObject.DisplayName}");
     }
 
@@ -2950,6 +2962,10 @@ public sealed partial class MainWindow : Window
     {
         _selectedDrawingObjectKind = null;
         _selectedDrawingObjectId = null;
+        // TODO: table/pivot active context is not yet signaled — no shell accessor exists for
+        // "active cell is inside a table/pivot" in the Avalonia shell. Chart/picture/shape
+        // selection (above) drives the contextual tabs for now; clearing drops them.
+        _ribbonContextSource.OnSelectionCleared();
     }
 
     private static Border CreateSelectedDrawingObjectAdorner() =>

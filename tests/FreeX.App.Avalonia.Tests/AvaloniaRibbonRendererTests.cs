@@ -147,6 +147,47 @@ public sealed class AvaloniaRibbonRendererTests
     });
 
     [Fact]
+    public Task BuildRibbon_ContextSource_ShowsAndHidesContextualTabs() => RunOnUiThread(() =>
+    {
+        var definition = new RibbonDefinitionBuilder()
+            .Tab("home", "Home", "H", t => t.Group("g", "G", "G", 1, g => g.Button("b", "B")))
+            .ContextualTab("chart", "Chart Design", new RibbonTabContext("chart.selected", "Chart Design", RibbonContextColor.Green),
+                t => t.Group("cg", "CG", "C", 1, g => g.Button("cb", "CB")))
+            .Build();
+
+        var source = new FakeContextSource();
+        var ribbon = AvaloniaRibbonRenderer.BuildRibbon(definition, registry: null, source);
+        var tabControl = Assert.IsType<TabControl>(ribbon);
+
+        static IEnumerable<string> TabIds(TabControl tc) =>
+            tc.Items.OfType<TabItem>().Select(i => (string)i.Tag!);
+
+        // Only the static tab initially.
+        Assert.Equal(new[] { "home" }, TabIds(tabControl).ToArray());
+
+        // Activating the chart context inserts the contextual tab.
+        source.Raise(RibbonContextState.None.With("chart.selected"));
+        Assert.Equal(new[] { "home", "chart" }, TabIds(tabControl).ToArray());
+
+        // Selecting it, then clearing context, removes it and falls back to the first tab.
+        tabControl.SelectedIndex = 1;
+        source.Raise(RibbonContextState.None);
+        Assert.Equal(new[] { "home" }, TabIds(tabControl).ToArray());
+        Assert.Equal(0, tabControl.SelectedIndex);
+    });
+
+    private sealed class FakeContextSource : IRibbonContextSource
+    {
+        public RibbonContextState Current { get; private set; } = RibbonContextState.None;
+        public event EventHandler? ContextChanged;
+        public void Raise(RibbonContextState state)
+        {
+            Current = state;
+            ContextChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    [Fact]
     public Task UnregisteredCommand_RendersDisabled() => RunOnUiThread(() =>
     {
         var tab = BuildHomeTab();
