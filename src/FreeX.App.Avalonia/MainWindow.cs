@@ -12819,9 +12819,18 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        e.DragEffects = DragDropEffects.Copy;
-        var fileAccessIdentity = await _workbookFileAccessService.CreateIdentityAsync(path!, storageItem);
-        await OpenWorkbookPathAsync(path!, fileAccessIdentity);
+        // async void: CreateIdentityAsync (and any failure outside OpenWorkbookPathAsync's filtered
+        // catch) would otherwise escape to the dispatcher and crash the app.
+        try
+        {
+            e.DragEffects = DragDropEffects.Copy;
+            var fileAccessIdentity = await _workbookFileAccessService.CreateIdentityAsync(path!, storageItem);
+            await OpenWorkbookPathAsync(path!, fileAccessIdentity);
+        }
+        catch (Exception ex)
+        {
+            ShowOpenIssue($"Open failed: {ex.Message}");
+        }
     }
 
     public async Task OpenActivatedFilesAsync(IReadOnlyList<IStorageItem> files)
@@ -13554,7 +13563,7 @@ public sealed partial class MainWindow : Window
     {
         var menu = new NativeMenu();
         var plan = OpenRecentWorkbookMenuPlanner.Create(
-            _recentFiles.Entries,
+            _recentFiles.Snapshot(),
             File.Exists,
             path => _session.TryResolveOpenTarget(path, out var target, out _) ? target!.Path : null);
         if (plan.ItemCount == 0)
@@ -14095,10 +14104,19 @@ public sealed partial class MainWindow : Window
         if (_isDirtyCloseDialogOpen)
             return;
 
-        if (await ConfirmDirtyWorkbookCloseAsync("Close FreeX", "Discard and Close"))
+        // async void: the close stays cancelled above, so a thrown dialog leaves the window open
+        // rather than escaping to the dispatcher and crashing the app mid-close.
+        try
         {
-            _allowCloseWithoutDirtyPrompt = true;
-            Close();
+            if (await ConfirmDirtyWorkbookCloseAsync("Close FreeX", "Discard and Close"))
+            {
+                _allowCloseWithoutDirtyPrompt = true;
+                Close();
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowOpenIssue($"Close failed: {ex.Message}");
         }
     }
 

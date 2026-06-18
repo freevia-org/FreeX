@@ -39,13 +39,33 @@ public sealed class App : Application
             mainWindow.AttachUpdateService(updateService);
 
             if (this.TryGetFeature<IActivatableLifetime>() is { } activatableLifetime)
-                activatableLifetime.Activated += async (_, args) => await MainWindow_ActivatedAsync(mainWindow, args);
+                activatableLifetime.Activated += (_, args) => _ = OnActivatedAsync(mainWindow, args);
 
             if (LaunchSmokeOptions is { } launchSmokeOptions)
                 MacOsLaunchSmokeCoordinator.Start(mainWindow, launchSmokeOptions, Diagnostics);
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    // Wraps the fire-and-forget activation handler so an exception cannot escape an async-void
+    // event handler and tear the process down; failures are routed to diagnostics instead.
+    private static async Task OnActivatedAsync(MainWindow mainWindow, ActivatedEventArgs args)
+    {
+        try
+        {
+            await MainWindow_ActivatedAsync(mainWindow, args);
+        }
+        catch (Exception ex)
+        {
+            Diagnostics?.RecordEvent("activation_failed", new Dictionary<string, string?>
+            {
+                ["source"] = "avalonia",
+                ["scope"] = "activation",
+                ["status"] = "error",
+                ["reason"] = ex.GetType().Name
+            });
+        }
     }
 
     private static async Task MainWindow_ActivatedAsync(MainWindow mainWindow, ActivatedEventArgs args)

@@ -321,6 +321,28 @@ public class FormulaRewriteCommandTests
     }
 
     [Fact]
+    public void RemoveSheet_RewritesNamedFormulasReferencingDeletedSheetAndUndoRestores()
+    {
+        var wb = new Workbook("test");
+        wb.AddSheet("Keep");
+        var removed = wb.AddSheet("Data");
+        var ctx = new TestCommandContext(wb);
+        wb.NamedFormulas["DataRef"] = "Data!A1";
+        wb.NamedFormulas["KeepRef"] = "Keep!A1";
+
+        var cmd = new RemoveSheetCommand(removed.Id);
+        cmd.Apply(ctx);
+
+        wb.NamedFormulas["DataRef"].Should().Be("#REF!");
+        wb.NamedFormulas["KeepRef"].Should().Be("Keep!A1");
+
+        cmd.Revert(ctx);
+
+        wb.NamedFormulas["DataRef"].Should().Be("Data!A1");
+        wb.NamedFormulas["KeepRef"].Should().Be("Keep!A1");
+    }
+
+    [Fact]
     public void RemoveSheet_OnlySheet_FailsWithoutRemovingSheet()
     {
         var wb = new Workbook("test");

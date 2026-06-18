@@ -87,6 +87,7 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
     private Sheet? _removedSheet;
     private int _removedIndex;
     private Dictionary<string, NamedRangeSnapshot>? _namedRangeSnapshot;
+    private Dictionary<string, string>? _namedFormulaSnapshot;
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
 
     public string Label => "Delete Sheet";
@@ -117,6 +118,9 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
         _formulaSnapshot.Clear();
         RowColumnShiftHelpers.RewriteAllFormulas(
             ctx.Workbook, new DeleteSheetOp(deletedSheetName), _formulaSnapshot);
+        // Defined names whose refers-to is a formula expression are not covered by the named-range
+        // pass above; rewrite their sheet-qualified references to the deleted sheet to #REF! too.
+        _namedFormulaSnapshot = RewriteNamedFormulasForDeletedSheet(ctx.Workbook, deletedSheetName);
         return new CommandOutcome(true);
     }
 
@@ -127,7 +131,39 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
             RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
             ctx.Workbook.InsertSheet(_removedIndex, _removedSheet);
             RowColumnShiftHelpers.RestoreNamedRanges(ctx.Workbook, _namedRangeSnapshot);
+            RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot);
         }
+    }
+
+    private static Dictionary<string, string> RewriteNamedFormulasForDeletedSheet(
+        Workbook workbook, string deletedSheetName)
+    {
+        Dictionary<string, string>? snapshot = null;
+        // DeleteSheetOp only matches sheet-qualified references, so the host sheet name is
+        // irrelevant here — any surviving sheet name (or the deleted one) is fine.
+        var hostSheetName = workbook.Sheets.Count > 0 ? workbook.Sheets[0].Name : deletedSheetName;
+
+        foreach (var name in workbook.NamedFormulas.Keys.ToList())
+        {
+            var original = workbook.NamedFormulas[name];
+            var rewritten = FormulaRewriter.Rewrite(original, new DeleteSheetOp(deletedSheetName), hostSheetName);
+            if (rewritten is null || rewritten == original)
+                continue; // null = no change or unparseable; leave the original untouched
+
+            (snapshot ??= [])[name] = original;
+            workbook.NamedFormulas[name] = rewritten;
+        }
+
+        return snapshot ?? [];
+    }
+
+    private static void RestoreNamedFormulas(Workbook workbook, Dictionary<string, string>? snapshot)
+    {
+        if (snapshot is null)
+            return;
+
+        foreach (var (name, original) in snapshot)
+            workbook.NamedFormulas[name] = original;
     }
 }
 

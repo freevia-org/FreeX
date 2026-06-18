@@ -153,6 +153,29 @@ public sealed partial class Sheet
             copy.SetStyleOnly(row, col, styleId);
 
         copy.ReplaceMergedRegions(MergedRegions.Select(r => RemapRange(r, newId)));
+        CopySpillStateTo(copy);
+    }
+
+    /// <summary>
+    /// Copy dynamic-array spill state (spilled values, anchor extents, and provisional spill-cell
+    /// ownership) to a clone. Keys are (row, col) within the sheet and values are immutable, so no
+    /// SheetId remapping is required. Without this a duplicated sheet shows blank spill ranges and
+    /// loses <see cref="Sheet.TryGetSpillExtent"/> info until a recalculation reruns.
+    /// </summary>
+    private void CopySpillStateTo(Sheet copy)
+    {
+        foreach (var (key, value) in _spillValues)
+            copy._spillValues[key] = value;
+
+        foreach (var (key, extent) in _spillAnchors)
+            copy._spillAnchors[key] = extent;
+
+        if (_provisionalSpillCells is { Count: > 0 })
+        {
+            copy._provisionalSpillCells ??= [];
+            foreach (var (key, owner) in _provisionalSpillCells)
+                copy._provisionalSpillCells[key] = owner;
+        }
     }
 
     private static PivotTableModel ClonePivotTable(PivotTableModel pt, SheetId newId)

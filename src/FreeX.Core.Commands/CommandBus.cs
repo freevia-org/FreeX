@@ -33,7 +33,20 @@ public sealed class CommandBus : ICommandBus, ICommandStackChangeNotifier, IComm
     {
         var ctx = _contextFactory(workbookId);
         RunBeforeMutation(workbookId, ctx);
-        var outcome = command.Apply(ctx);
+
+        CommandOutcome outcome;
+        try
+        {
+            outcome = command.Apply(ctx);
+        }
+        catch (Exception ex)
+        {
+            // Apply threw mid-mutation: attempt a best-effort rollback so the
+            // workbook is not left half-edited, and report failure rather than
+            // propagating with a dirty model and nothing on the undo stack.
+            TryRevert(command, ctx);
+            return new CommandOutcome(false, $"Command failed: {ex.Message}");
+        }
 
         if (outcome.Success)
         {
@@ -96,6 +109,9 @@ public sealed class CommandBus : ICommandBus, ICommandStackChangeNotifier, IComm
         }
         catch (Exception ex)
         {
+            // Apply threw mid-mutation: roll back any partial edit, then restore
+            // the entry so the user can retry.
+            TryRevert(command, ctx);
             stack.PushRedo(entry); // restore so the user can retry
             return new CommandOutcome(false, $"Redo failed: {ex.Message}");
         }
@@ -147,6 +163,19 @@ public sealed class CommandBus : ICommandBus, ICommandStackChangeNotifier, IComm
 
     private void RunBeforeMutation(WorkbookId workbookId, ICommandContext context) =>
         _beforeMutation?.Invoke(workbookId, context);
+
+    private static void TryRevert(IWorkbookCommand command, ICommandContext ctx)
+    {
+        try
+        {
+            command.Revert(ctx);
+        }
+        catch
+        {
+            // Best-effort rollback only; the original failure is already being
+            // reported, and a secondary revert failure must not mask it.
+        }
+    }
 
     private void NotifyStackChanged(WorkbookId workbookId)
     {

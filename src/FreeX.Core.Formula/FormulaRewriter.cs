@@ -182,6 +182,15 @@ public static class FormulaRewriter
         if (op is MoveRangeOp move)
             return RewriteRangeMove(rr, endRef, move, hostSheetName, ref changed);
 
+        // Row/column deletes that cover only part of a range must SHRINK the range to the surviving
+        // rows/columns, not collapse the whole reference to #REF!. Excel emits #REF! only when the
+        // entire range is deleted. Rewriting the endpoints independently (below) cannot express this,
+        // so delete ops get dedicated handling.
+        if (op is DeleteRowsOp delRows)
+            return RewriteRangeDeleteRows(rr, endRef, delRows, hostSheetName, ref changed);
+        if (op is DeleteColsOp delCols)
+            return RewriteRangeDeleteCols(rr, endRef, delCols, hostSheetName, ref changed);
+
         var start = RewriteCellRef(rr.Start, op, hostSheetName, ref changed);
         var end   = RewriteCellRef(endRef,   op, hostSheetName, ref changed);
 
@@ -200,6 +209,77 @@ public static class FormulaRewriter
         }
 
         return rr with { Start = (CellRefNode)start, End = (CellRefNode)end, SheetName = sheetName };
+    }
+
+    private static FormulaNode RewriteRangeDeleteRows(
+        RangeRefNode rr, CellRefNode endRef, DeleteRowsOp op, string hostSheetName, ref bool changed)
+    {
+        if (!Matches(rr.SheetName, op, hostSheetName))
+            return rr;
+
+        uint s = rr.Start.Row, e = endRef.Row;
+        uint bandStart = op.StartRow, bandEnd = op.StartRow + op.Count - 1;
+
+        // Whole range inside the deleted band → the reference is gone.
+        if (bandStart <= s && e <= bandEnd)
+        {
+            changed = true;
+            return new ErrorNode(ErrorValue.Ref);
+        }
+
+        var newStart = ShiftOrClampForDelete(s, bandStart, bandEnd, op.Count, isRangeStart: true);
+        var newEnd = ShiftOrClampForDelete(e, bandStart, bandEnd, op.Count, isRangeStart: false);
+        if (newStart == s && newEnd == e)
+            return rr; // band entirely below the range: no change
+
+        changed = true;
+        return rr with
+        {
+            Start = rr.Start with { Row = newStart },
+            End = endRef with { Row = newEnd },
+        };
+    }
+
+    private static FormulaNode RewriteRangeDeleteCols(
+        RangeRefNode rr, CellRefNode endRef, DeleteColsOp op, string hostSheetName, ref bool changed)
+    {
+        if (!Matches(rr.SheetName, op, hostSheetName))
+            return rr;
+
+        uint s = rr.Start.ColumnNumber, e = endRef.ColumnNumber;
+        uint bandStart = op.StartCol, bandEnd = op.StartCol + op.Count - 1;
+
+        if (bandStart <= s && e <= bandEnd)
+        {
+            changed = true;
+            return new ErrorNode(ErrorValue.Ref);
+        }
+
+        var newStart = ShiftOrClampForDelete(s, bandStart, bandEnd, op.Count, isRangeStart: true);
+        var newEnd = ShiftOrClampForDelete(e, bandStart, bandEnd, op.Count, isRangeStart: false);
+        if (newStart == s && newEnd == e)
+            return rr;
+
+        changed = true;
+        return rr with
+        {
+            Start = rr.Start with { ColumnName = CellAddress.NumberToColumnName(newStart) },
+            End = endRef with { ColumnName = CellAddress.NumberToColumnName(newEnd) },
+        };
+    }
+
+    /// <summary>
+    /// Map a single range endpoint (row or column number) through a delete: unchanged when before the
+    /// deleted band, shifted up/left by <paramref name="count"/> when after it, and clamped to the
+    /// surviving edge when inside it (start → first row/col after the band, end → last before it).
+    /// </summary>
+    private static uint ShiftOrClampForDelete(uint value, uint bandStart, uint bandEnd, uint count, bool isRangeStart)
+    {
+        if (value < bandStart)
+            return value;
+        if (value > bandEnd)
+            return value - count;
+        return isRangeStart ? bandStart : bandStart - 1;
     }
 
     private static FormulaNode RewriteFullColumnRange(
