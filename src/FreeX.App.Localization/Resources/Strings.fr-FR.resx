@@ -77,6 +77,14 @@
   <data name="PivotOptions_SubtotalsHeader" xml:space="preserve"><value>Sous-totaux</value></data>
   <data name="PivotOptions_ReportLayoutLabel" xml:space="preserve"><value>Disposition du rapport :</value></data>
   <data name="PivotOptions_CompactIndentLabel" xml:space="preserve"><value>Retrait des étiquettes de ligne en forme compacte :</value></data>
+  <data name="PivotStyleGallery_Title" xml:space="preserve"><value>Styles de tableau croisé dynamique</value></data>
+  <data name="PivotStyleGallery_StyleLabel" xml:space="preserve"><value>Style du tableau croisé dynamique :</value></data>
+  <data name="PivotStyleGallery_GalleryName" xml:space="preserve"><value>Galerie de styles de tableau croisé dynamique</value></data>
+  <data name="PivotStyleGallery_Applied" xml:space="preserve"><value>Style du tableau croisé dynamique : {0}.</value></data>
+  <data name="PivotDataSource_Title" xml:space="preserve"><value>Modifier la source de données du tableau croisé dynamique</value></data>
+  <data name="PivotDataSource_RangeLabel" xml:space="preserve"><value>Tableau/Plage :</value></data>
+  <data name="PivotDataSource_RangeName" xml:space="preserve"><value>Plage source du tableau croisé dynamique</value></data>
+  <data name="PivotDataSource_Changed" xml:space="preserve"><value>Source de données du tableau croisé dynamique modifiée en {0}.</value></data>
   <data name="PivotValueField_Title" xml:space="preserve"><value>Paramètres des champs de valeurs ({0})</value></data>
   <data name="PivotValueField_CustomName" xml:space="preserve"><value>Nom personnalisé :</value></data>
   <data name="PivotValueField_SummarizeBy" xml:space="preserve"><value>Synthétiser le champ de valeurs par :</value></data>
