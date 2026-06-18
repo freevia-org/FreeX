@@ -479,6 +479,25 @@ public sealed class WorkbookSession
         return GoToRange(range);
     }
 
+    /// <summary>
+    /// Resolves an A1 reference / named range to a <see cref="GridRange"/> on the active sheet without
+    /// changing the selection. Used by dialogs (e.g. conditional-format applies-to editing) that need to
+    /// parse a reference the same way Go To does.
+    /// </summary>
+    public bool TryResolveReferenceRange(string reference, out GridRange range)
+    {
+        range = default;
+        if (string.IsNullOrWhiteSpace(reference))
+            return false;
+
+        return WorkbookReferenceNavigator.TryParseReferenceRange(
+            reference,
+            ActiveSheet.Id,
+            ResolveSheetIdByName,
+            Workbook.NamedRanges,
+            out range);
+    }
+
     public bool CanOpenSelectedHyperlink =>
         HyperlinkNavigationPlanner.TryCreatePlan(ActiveSheet, SelectedRange.Start, CurrentFilePath, out _);
 

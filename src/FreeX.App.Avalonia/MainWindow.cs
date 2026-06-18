@@ -13552,6 +13552,69 @@ public sealed partial class MainWindow : Window
             hasDataValidationDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 540, height: 560, minWidth: 460, minHeight: 440);
         });
 
+        var hasConditionalFormatRuleDialog = false;
+        var hasConditionalFormatRuleTypeControls = false;
+        var hasConditionalFormatRulePresetControls = false;
+        var hasConditionalFormatRuleValueControls = false;
+        var hasConditionalFormatRuleActionButtons = false;
+        var hasConditionalFormatRuleCompactLayout = false;
+        var conditionalFormatRuleDialogResult = await ShowConditionalFormatRuleEditorAsync(
+            existingRule: null,
+            launchSmokeProbe: probe =>
+            {
+                hasConditionalFormatRuleDialog = HasLaunchSmokeDialog(probe.Dialog, "New Formatting Rule");
+                hasConditionalFormatRuleTypeControls =
+                    HasLaunchSmokeComboBox(probe.RuleTypeBox, "ConditionalFormatRuleTypeBox", "Rule type") &&
+                    probe.RuleTypeBox.SelectedIndex == 0 &&
+                    HasLaunchSmokeComboBox(probe.TopBottomBox, "ConditionalFormatTopBottomBox", "Top or bottom") &&
+                    HasLaunchSmokeAutomationId(probe.IconSetBox, "ConditionalFormatIconSetBox");
+                hasConditionalFormatRulePresetControls =
+                    HasLaunchSmokeComboBox(probe.PresetBox, "ConditionalFormatPresetBox", "Preset") &&
+                    probe.PresetBox.ItemCount > 0 &&
+                    HasLaunchSmokeAutomationId(probe.HighlightBox, "ConditionalFormatHighlightBox") &&
+                    probe.HighlightBox.SelectedIndex == 0;
+                hasConditionalFormatRuleValueControls =
+                    HasLaunchSmokeAutomationId(probe.OperatorBox, "ConditionalFormatOperatorBox") &&
+                    HasLaunchSmokeAutomationId(probe.Value1Box, "ConditionalFormatValue1Box") &&
+                    HasLaunchSmokeAutomationId(probe.FormulaBox, "ConditionalFormatFormulaBox") &&
+                    HasLaunchSmokeAutomationId(probe.TextBox, "ConditionalFormatTextBox") &&
+                    HasLaunchSmokeAutomationId(probe.RankBox, "ConditionalFormatRankBox") &&
+                    HasLaunchSmokeAutomationId(probe.MinColorBox, "ConditionalFormatMinColorBox") &&
+                    HasLaunchSmokeAutomationId(probe.MaxColorBox, "ConditionalFormatMaxColorBox");
+                hasConditionalFormatRuleActionButtons =
+                    HasLaunchSmokeButton(probe.OkButton, "ConditionalFormatOkButton", "OK") &&
+                    HasLaunchSmokeButton(probe.CancelButton, "ConditionalFormatCancelButton", "Cancel");
+                hasConditionalFormatRuleCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 460, height: 470, minWidth: 420, minHeight: 400);
+            });
+
+        var hasManageConditionalFormatsDialog = false;
+        var hasManageConditionalFormatsListControls = false;
+        var hasManageConditionalFormatsReorderControls = false;
+        var hasManageConditionalFormatsAppliesToControls = false;
+        var hasManageConditionalFormatsActionButtons = false;
+        var hasManageConditionalFormatsCompactLayout = false;
+        var manageConditionalFormatsClosedWithoutAccept = false;
+        await ShowManageConditionalFormatsDialogAsync(probe =>
+        {
+            hasManageConditionalFormatsDialog = HasLaunchSmokeDialog(probe.Dialog, "Manage Conditional Formatting Rules");
+            hasManageConditionalFormatsListControls =
+                HasLaunchSmokeAutomationId(probe.ListBox, "ManageConditionalFormatsListBox") &&
+                string.Equals(AutomationProperties.GetName(probe.ListBox), "Conditional formatting rules", StringComparison.Ordinal);
+            hasManageConditionalFormatsReorderControls =
+                HasLaunchSmokeButton(probe.MoveUpButton, "ManageConditionalFormatsMoveUpButton", "Move Up") &&
+                HasLaunchSmokeButton(probe.MoveDownButton, "ManageConditionalFormatsMoveDownButton", "Move Down");
+            hasManageConditionalFormatsAppliesToControls =
+                HasLaunchSmokeAutomationId(probe.AppliesToBox, "ManageConditionalFormatsAppliesToBox") &&
+                HasLaunchSmokeButton(probe.ApplyAppliesToButton, "ManageConditionalFormatsApplyAppliesToButton", "Apply Range");
+            hasManageConditionalFormatsActionButtons =
+                HasLaunchSmokeButton(probe.NewButton, "ManageConditionalFormatsNewButton", "New…") &&
+                HasLaunchSmokeButton(probe.EditButton, "ManageConditionalFormatsEditButton", "Edit…") &&
+                HasLaunchSmokeButton(probe.DeleteButton, "ManageConditionalFormatsDeleteButton", "Delete") &&
+                HasLaunchSmokeButton(probe.CloseButton, "ManageConditionalFormatsCloseButton", "Close");
+            hasManageConditionalFormatsCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 560, height: 460, minWidth: 480, minHeight: 360);
+            manageConditionalFormatsClosedWithoutAccept = true;
+        });
+
         _launchSmokeDialogEvidence = new MacOsLaunchSmokeDialogSnapshot(
             hasFindDialog,
             hasFindDialogTextBox,
@@ -13598,7 +13661,21 @@ public sealed partial class MainWindow : Window
             hasDataValidationDialogMessageControls,
             hasDataValidationDialogActionButtons,
             hasDataValidationDialogCompactLayout,
-            dataValidationDialogResult is null);
+            dataValidationDialogResult is null,
+            hasConditionalFormatRuleDialog,
+            hasConditionalFormatRuleTypeControls,
+            hasConditionalFormatRulePresetControls,
+            hasConditionalFormatRuleValueControls,
+            hasConditionalFormatRuleActionButtons,
+            hasConditionalFormatRuleCompactLayout,
+            conditionalFormatRuleDialogResult is null,
+            hasManageConditionalFormatsDialog,
+            hasManageConditionalFormatsListControls,
+            hasManageConditionalFormatsReorderControls,
+            hasManageConditionalFormatsAppliesToControls,
+            hasManageConditionalFormatsActionButtons,
+            hasManageConditionalFormatsCompactLayout,
+            manageConditionalFormatsClosedWithoutAccept);
         return _launchSmokeDialogEvidence;
     }
 
