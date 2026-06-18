@@ -39,6 +39,21 @@ public sealed class AutosaveSnapshotStoreTests
             .Should().Be(@"C:\FreeX\Recovery\recovery-1234-w0.sidecar.json");
     }
 
+    [Fact]
+    public void CreateDefault_UsesProvidedApplicationDataPathProvider()
+    {
+        var root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        var provider = new TestApplicationDataPathProvider(root);
+
+        var store = AutosaveSnapshotStore.CreateDefault(provider);
+
+        store.GetSnapshotPath("recovery-1234-w0").Should().Be(Path.Combine(
+            root,
+            AppStoragePathPlanner.ProductDirectoryName,
+            AutosaveSnapshotStore.RecoveryDirectoryName,
+            "recovery-1234-w0.fxl"));
+    }
+
     // ── Sidecar serialization round-trip ──────────────────────────────────────
 
     [Fact]
@@ -197,5 +212,10 @@ public sealed class AutosaveSnapshotStoreTests
 
         var act = () => store.DeleteSnapshot("recovery-nonexistent-w0");
         act.Should().NotThrow();
+    }
+
+    private sealed class TestApplicationDataPathProvider(string path) : IApplicationDataPathProvider
+    {
+        public string GetApplicationDataDirectory() => path;
     }
 }

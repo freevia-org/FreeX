@@ -75,7 +75,7 @@ public sealed class AutosaveSnapshotStore
     public static AutosaveSnapshotStore CreateDefault(IApplicationDataPathProvider pathProvider)
     {
         ArgumentNullException.ThrowIfNull(pathProvider);
-        var localData = PlatformApplicationDataPathProvider.LocalInstance.GetApplicationDataDirectory();
+        var localData = pathProvider.GetApplicationDataDirectory();
         return new AutosaveSnapshotStore(
             Path.Combine(localData, AppStoragePathPlanner.ProductDirectoryName, RecoveryDirectoryName));
     }
