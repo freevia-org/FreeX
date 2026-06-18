@@ -256,7 +256,8 @@ public partial class GridView
 
     private static void DrawFormControlSunkenEdge(DrawingContext dc, Rect box)
     {
-        // Light bottom/right, dark top/left -> a slightly sunken well like Excel's checkbox.
+        // Dark shadow lines on the top/left edges give the box a slightly recessed look (the cell
+        // background supplies the lighter bottom/right), approximating Excel's sunken checkbox well.
         dc.DrawLine(FormControlShadowPen, box.TopLeft, box.TopRight);
         dc.DrawLine(FormControlShadowPen, box.TopLeft, box.BottomLeft);
     }
