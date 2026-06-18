@@ -730,6 +730,29 @@ public sealed partial class MainWindow : Window
                     ["Clear Contents"] = ClearSelectedRangeContents,
                     ["Clear Comments and Notes"] = ClearSelectedRangeComments,
                     ["Clear Hyperlinks"] = ClearSelectedRangeHyperlinks,
+                    // Home ▸ Editing ▸ AutoSum dropdown items (canonical ids from HomeRibbonMenus.AutoSum; the
+                    // Formulas-tab AutoSum picker shares these ids, so this covers both). Split-button face is
+                    // wired above (home.autoSum). Mirrors the native AutoSum submenu handlers.
+                    ["Sum"] = () => InsertAutoSumFormula("SUM"),
+                    ["Average"] = () => InsertAutoSumFormula("AVERAGE"),
+                    ["Count Numbers"] = () => InsertAutoSumFormula("COUNT"),
+                    ["Count All"] = () => InsertAutoSumFormula("COUNTA"),
+                    ["Max"] = () => InsertAutoSumFormula("MAX"),
+                    ["Min"] = () => InsertAutoSumFormula("MIN"),
+                    ["More Functions"] = InsertFunction,
+                    // Home ▸ Editing ▸ Find & Select dropdown items (canonical ids from HomeRibbonMenus.FindSelect).
+                    // Split-button face is wired above (home.findSelect). "Conditional Formatting" is intentionally
+                    // omitted: its canonical id is shared with the already-wired Home ▸ Conditional button.
+                    ["Find"] = () => _ = ShowFindDialogAsync(),
+                    ["Replace"] = () => _ = ShowReplaceDialogAsync(),
+                    ["Go To"] = () => _ = ShowGoToDialogAsync(),
+                    ["Go To Special"] = () => _ = ShowGoToSpecialDialogAsync(),
+                    ["Formulas"] = () => SelectGoToSpecial(GoToSpecialKind.Formulas),
+                    ["Notes"] = () => SelectGoToSpecial(GoToSpecialKind.Comments),
+                    ["Constants"] = () => SelectGoToSpecial(GoToSpecialKind.Constants),
+                    ["Data Validation"] = () => SelectGoToSpecial(GoToSpecialKind.DataValidation),
+                    ["Select Objects"] = () => SelectGoToSpecial(GoToSpecialKind.Objects),
+                    ["Selection Pane"] = () => RefreshShell("The Selection Pane isn't available in this build yet."),
                     // Insert tab (Links / Text groups).
                     ["insert.hyperlink"] = () => _ = ShowInsertHyperlinkDialogAsync(),
                     // Home Font group (added buttons).

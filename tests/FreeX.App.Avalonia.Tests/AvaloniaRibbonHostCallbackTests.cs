@@ -214,6 +214,24 @@ public sealed class AvaloniaRibbonHostCallbackTests
     [InlineData("Clear Contents")]
     [InlineData("Clear Comments and Notes")]
     [InlineData("Clear Hyperlinks")]
+    // Home ▸ Editing ▸ AutoSum / Find & Select dropdown items (raw canonical menu ids).
+    [InlineData("Sum")]
+    [InlineData("Average")]
+    [InlineData("Count Numbers")]
+    [InlineData("Count All")]
+    [InlineData("Max")]
+    [InlineData("Min")]
+    [InlineData("More Functions")]
+    [InlineData("Find")]
+    [InlineData("Replace")]
+    [InlineData("Go To")]
+    [InlineData("Go To Special")]
+    [InlineData("Formulas")]
+    [InlineData("Notes")]
+    [InlineData("Constants")]
+    [InlineData("Data Validation")]
+    [InlineData("Select Objects")]
+    [InlineData("Selection Pane")]
     public void NewTabCommands_AreRealCommandIds_AndBindViaExtraCommands(string commandId)
     {
         // The canonical id exists in the shared definition (so it seeds a NoOp default to begin with) ...
