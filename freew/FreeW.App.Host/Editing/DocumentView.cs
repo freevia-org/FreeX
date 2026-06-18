@@ -5348,9 +5348,14 @@ public sealed class DocumentView : RichTextBox
                 LineRule = lineFrom.LineRule,
                 LineHeightPt = lineFrom.LineHeightPt,
                 LineSpacingIsSet = p.LineSpacingIsSet || sp.LineSpacingIsSet,
-                IndentLeftPt = p.IndentLeftPt != d.IndentLeftPt ? p.IndentLeftPt : sp.IndentLeftPt,
-                IndentRightPt = p.IndentRightPt != d.IndentRightPt ? p.IndentRightPt : sp.IndentRightPt,
-                FirstLineIndentPt = p.FirstLineIndentPt != d.FirstLineIndentPt ? p.FirstLineIndentPt : sp.FirstLineIndentPt,
+                // Indents cascade on the explicit flag, not value-vs-default, so an explicit 0 (resetting an
+                // indented style to the margin) is kept rather than re-inheriting the style's indent.
+                IndentLeftPt = p.IndentLeftIsSet ? p.IndentLeftPt : sp.IndentLeftIsSet ? sp.IndentLeftPt : p.IndentLeftPt,
+                IndentRightPt = p.IndentRightIsSet ? p.IndentRightPt : sp.IndentRightIsSet ? sp.IndentRightPt : p.IndentRightPt,
+                FirstLineIndentPt = p.FirstLineIndentIsSet ? p.FirstLineIndentPt : sp.FirstLineIndentIsSet ? sp.FirstLineIndentPt : p.FirstLineIndentPt,
+                IndentLeftIsSet = p.IndentLeftIsSet || sp.IndentLeftIsSet,
+                IndentRightIsSet = p.IndentRightIsSet || sp.IndentRightIsSet,
+                FirstLineIndentIsSet = p.FirstLineIndentIsSet || sp.FirstLineIndentIsSet,
                 Border = p.Border ?? sp.Border,
                 ShadingColorHex = p.ShadingColorHex ?? sp.ShadingColorHex,
             };

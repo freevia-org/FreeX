@@ -279,6 +279,22 @@ public sealed record ParagraphFormatting
     public double IndentLeftPt { get; init; }
     public double IndentRightPt { get; init; }
     public double FirstLineIndentPt { get; init; }
+
+    /// <summary>
+    /// Whether the corresponding indent (<c>w:ind/@w:left</c>/<c>@w:right</c>/<c>@w:firstLine</c>) was set
+    /// *explicitly* on this paragraph or style, so the render cascade can inherit the style's indent when the
+    /// paragraph sets none — and keep an explicit <c>0</c> that resets an indented style to the margin
+    /// (otherwise 0 == the default and would wrongly re-inherit). Per-field so a paragraph that sets only the
+    /// first-line indent still inherits its style's left/right. Render-only; mirrors <see cref="LineSpacingIsSet"/>.
+    /// </summary>
+    public bool IndentLeftIsSet { get; init; }
+
+    /// <summary><inheritdoc cref="IndentLeftIsSet"/></summary>
+    public bool IndentRightIsSet { get; init; }
+
+    /// <summary><inheritdoc cref="IndentLeftIsSet"/></summary>
+    public bool FirstLineIndentIsSet { get; init; }
+
     public ListKind ListKind { get; init; } = ListKind.None;
     public int ListLevel { get; init; }
 

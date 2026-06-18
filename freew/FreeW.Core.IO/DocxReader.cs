@@ -2370,6 +2370,11 @@ public static class DocxReader
             IndentLeftPt = DxaToPoints(indent?.Attribute(W + "left")?.Value ?? indent?.Attribute(W + "start")?.Value),
             IndentRightPt = DxaToPoints(indent?.Attribute(W + "right")?.Value ?? indent?.Attribute(W + "end")?.Value),
             FirstLineIndentPt = DxaToPoints(indent?.Attribute(W + "firstLine")?.Value),
+            // Explicit only when this pPr sets the matching w:ind attribute, so the render cascade inherits the
+            // style's indent when the paragraph sets none (and preserves an explicit 0 that resets to margin).
+            IndentLeftIsSet = indent?.Attribute(W + "left") is not null || indent?.Attribute(W + "start") is not null,
+            IndentRightIsSet = indent?.Attribute(W + "right") is not null || indent?.Attribute(W + "end") is not null,
+            FirstLineIndentIsSet = indent?.Attribute(W + "firstLine") is not null,
             ListKind = listKind,
             ListLevel = listLevel,
             TabStops = ReadTabStops(pPr.Element(W + "tabs"))
