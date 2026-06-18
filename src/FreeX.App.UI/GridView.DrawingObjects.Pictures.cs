@@ -51,7 +51,9 @@ public partial class GridView
                 picture.Height,
                 MinimumPictureObjectWidth,
                 MinimumPictureObjectHeight,
-                out var rect))
+                out var rect,
+                picture.AnchorOffsetX,
+                picture.AnchorOffsetY))
             return;
 
         var rotationDegrees = picture.RotationDegrees;

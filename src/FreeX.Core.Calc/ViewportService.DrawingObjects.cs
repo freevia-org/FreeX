@@ -57,7 +57,9 @@ public sealed partial class ViewportService
                 out var left,
                 out var top,
                 out var width,
-                out var height))
+                out var height,
+                shape.AnchorOffsetX,
+                shape.AnchorOffsetY))
         {
             return;
         }
@@ -129,7 +131,9 @@ public sealed partial class ViewportService
                 out var left,
                 out var top,
                 out var width,
-                out var height))
+                out var height,
+                picture.AnchorOffsetX,
+                picture.AnchorOffsetY))
         {
             return;
         }
@@ -182,7 +186,9 @@ public sealed partial class ViewportService
                 out var left,
                 out var top,
                 out var width,
-                out var height))
+                out var height,
+                textBox.AnchorOffsetX,
+                textBox.AnchorOffsetY))
         {
             return;
         }
@@ -214,7 +220,9 @@ public sealed partial class ViewportService
         out double left,
         out double top,
         out double normalizedWidth,
-        out double normalizedHeight)
+        out double normalizedHeight,
+        double anchorOffsetX = 0,
+        double anchorOffsetY = 0)
     {
         left = 0;
         top = 0;
@@ -226,8 +234,11 @@ public sealed partial class ViewportService
             return false;
         }
 
-        left = column.LeftOffset;
-        top = row.TopOffset;
+        // Add the from-cell sub-cell EMU offsets (already converted to DIP pixels on load, EMU/9525)
+        // so side-by-side objects authored within one column keep their distinct positions instead of
+        // snapping to the whole-cell left/top edge.
+        left = column.LeftOffset + anchorOffsetX;
+        top = row.TopOffset + anchorOffsetY;
         normalizedWidth = NormalizeObjectExtent(width);
         normalizedHeight = NormalizeObjectExtent(height);
         return true;

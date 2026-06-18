@@ -74,6 +74,20 @@ public sealed class DrawingShapeModel
     public Guid Id { get; init; } = Guid.NewGuid();
     public string? Name { get; set; }
     public CellAddress Anchor { get; set; }
+
+    /// <summary>
+    /// Horizontal sub-cell offset (in DIP pixels, EMU/9525) from the left edge of the <see cref="Anchor"/>
+    /// cell to the shape's left edge, preserved from the authored two-/one-cell anchor's <c>from/colOff</c>.
+    /// Lets the render reflect the true sub-cell position rather than snapping to the whole-cell left edge.
+    /// </summary>
+    public double AnchorOffsetX { get; set; }
+
+    /// <summary>
+    /// Vertical sub-cell offset (in DIP pixels, EMU/9525) from the top edge of the <see cref="Anchor"/> cell
+    /// to the shape's top edge, preserved from the authored anchor's <c>from/rowOff</c>.
+    /// </summary>
+    public double AnchorOffsetY { get; set; }
+
     public DrawingShapeKind Kind { get; set; } = DrawingShapeKind.Rectangle;
     public double Width { get; set; } = 120;
     public double Height { get; set; } = 70;

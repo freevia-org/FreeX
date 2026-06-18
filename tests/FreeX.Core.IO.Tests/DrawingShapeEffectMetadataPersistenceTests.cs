@@ -205,6 +205,11 @@ public sealed class DrawingShapeEffectMetadataPersistenceTests
         textBox.Anchor!.Kind.Should().Be(ChartDrawingAnchorKind.TwoCell);
         textBox.Anchor.FromColumnZeroBased.Should().Be(3, "the box anchors to column D, not A");
         textBox.Anchor.FromRowZeroBased.Should().Be(0);
+
+        // The from-cell sub-cell offsets are exposed in DIP pixels (EMU/9525) so the placement layer can
+        // add them to the cell's left/top edge, keeping side-by-side objects within column D distinct.
+        textBox.Anchor.FromColumnOffset.Should().BeApproximately(438151 / 9525.0, 0.001);
+        textBox.Anchor.FromRowOffset.Should().BeApproximately(228600 / 9525.0, 0.001);
     }
 
     [Theory]
