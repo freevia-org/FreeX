@@ -249,268 +249,191 @@ internal static class SampleRibbon
             {
                 home.Group("clipboard", "Clipboard", "C", 100, g =>
                 {
+                    // WPF: Paste large (with menu); Cut/Copy/Format Painter medium (icon + label).
                     g.SplitButton("home.paste", "Paste", PasteMenu(), c => c with
                     {
                         PreferredLayout = RibbonCommandLayoutKind.Large,
                         Icon = new RibbonCommandIcon(RibbonCommandIconKind.Paste),
                     });
-                    g.Button("home.cut", "Cut", c => c with
-                    {
-                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Cut),
-                    });
-                    g.Button("home.copy", "Copy", c => c with
-                    {
-                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Copy),
-                    });
-                    g.Button("home.formatPainter", "Format Painter", c => c with
-                    {
-                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.FormatPainter),
-                    });
+                    g.Medium("home.cut", "Cut", RibbonCommandIconKind.Cut, "X");
+                    g.Medium("home.copy", "Copy", RibbonCommandIconKind.Copy, "C");
+                    g.Medium("home.formatPainter", "Format Painter", RibbonCommandIconKind.FormatPainter, "FP");
                 });
 
                 home.Group("font", "Font", "F", 90, g =>
                 {
+                    // WPF Font group: row 1 = Font/Size combos + Increase/Decrease Font Size (icon-only),
+                    // RowBreak, row 2 = Bold/Italic/Underline/Strikethrough (icon-only toggles), separator,
+                    // Borders/Fill Color/Font Color (icon-only dropdowns).
                     g.ComboBox("home.fontName", "Font", c => c with
                     {
+                        Width = 120,
                         Items = new[] { "Calibri", "Arial", "Times New Roman", "Consolas" },
                     });
                     g.ComboBox("home.fontSize", "Size", c => c with
                     {
+                        Width = 44,
                         Items = new[] { "8", "9", "10", "11", "12", "14", "16", "18", "24" },
                     });
-                    g.Toggle("home.bold", "Bold", c => c with
-                    {
-                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Bold),
-                    });
-                    g.Toggle("home.italic", "Italic", c => c with
-                    {
-                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Italic),
-                    });
-                    g.Toggle("home.underline", "Underline", c => c with
-                    {
-                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Underline),
-                    });
-                    g.Toggle("home.strikethrough", "Strikethrough", c => c with
-                    {
-                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Strikethrough),
-                    });
-                    g.Button("home.increaseFont", "Increase Font Size", c => c with
-                    {
-                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Font),
-                    });
-                    g.Button("home.decreaseFont", "Decrease Font Size", c => c with
-                    {
-                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Font),
-                    });
+                    g.Icon("home.increaseFont", "Increase Font Size", RibbonCommandIconKind.Font, "FG");
+                    g.Icon("home.decreaseFont", "Decrease Font Size", RibbonCommandIconKind.Font, "FK");
+                    g.RowBreak();
+                    g.IconToggle("home.bold", "Bold", RibbonCommandIconKind.Bold, "1");
+                    g.IconToggle("home.italic", "Italic", RibbonCommandIconKind.Italic, "2");
+                    g.IconToggle("home.underline", "Underline", RibbonCommandIconKind.Underline, "3");
+                    g.IconToggle("home.strikethrough", "Strikethrough", RibbonCommandIconKind.Strikethrough, "4");
                     g.Separator();
-                    g.Dropdown("home.fontColor", "Font Color", FontColorMenu(), c => c with
+                    g.Dropdown("home.borders", "Borders", BordersMenu(), c => c with
                     {
-                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Font),
+                        PreferredLayout = RibbonCommandLayoutKind.Small,
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Border),
                     });
                     g.Dropdown("home.fillColor", "Fill Color", FillColorMenu(), c => c with
                     {
+                        PreferredLayout = RibbonCommandLayoutKind.Small,
                         Icon = new RibbonCommandIcon(RibbonCommandIconKind.Fill),
                     });
-                    g.Dropdown("home.borders", "Borders", BordersMenu(), c => c with
+                    g.Dropdown("home.fontColor", "Font Color", FontColorMenu(), c => c with
                     {
-                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Border),
+                        PreferredLayout = RibbonCommandLayoutKind.Small,
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Color),
                     });
                 });
 
                 home.Group("alignment", "Alignment", "A", 80, g =>
                 {
-                    g.Button("home.alignTop", "Top Align", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Align) });
-                    g.Button("home.alignMiddle", "Middle Align", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Align) });
-                    g.Button("home.alignBottom", "Bottom Align", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Align) });
-                    g.Button("home.orientation", "Orientation", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Orientation) });
+                    // WPF Alignment group: row 1 = vertical aligns (icon-only toggles), separator, Orientation
+                    // (icon-only), Wrap Text (medium); RowBreak; row 2 = horizontal aligns (icon-only toggles),
+                    // separator, Decrease/Increase Indent (icon-only), Merge & Center (medium, with menu).
+                    g.IconToggle("home.alignTop", "Top Align", RibbonCommandIconKind.Align, "AT");
+                    g.IconToggle("home.alignMiddle", "Middle Align", RibbonCommandIconKind.Align, "AM");
+                    g.IconToggle("home.alignBottom", "Bottom Align", RibbonCommandIconKind.Align, "AB");
                     g.Separator();
-                    g.Button("home.alignLeft", "Align Left", c => c with
-                    {
-                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Align),
-                    });
-                    g.Button("home.alignCenter", "Center", c => c with
-                    {
-                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Align),
-                    });
-                    g.Button("home.alignRight", "Align Right", c => c with
-                    {
-                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Align),
-                    });
-                    g.Button("home.decreaseIndent", "Decrease Indent", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Align) });
-                    g.Button("home.increaseIndent", "Increase Indent", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Align) });
-                    g.Button("home.wrapText", "Wrap Text", c => c with
-                    {
-                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Wrap),
-                    });
+                    g.Icon("home.orientation", "Orientation", RibbonCommandIconKind.Orientation, "RO");
+                    g.Medium("home.wrapText", "Wrap Text", RibbonCommandIconKind.Wrap, "W");
+                    g.RowBreak();
+                    g.IconToggle("home.alignLeft", "Align Left", RibbonCommandIconKind.Align, "AL");
+                    g.IconToggle("home.alignCenter", "Center", RibbonCommandIconKind.Align, "AC");
+                    g.IconToggle("home.alignRight", "Align Right", RibbonCommandIconKind.Align, "AR");
+                    g.Separator();
+                    g.Icon("home.decreaseIndent", "Decrease Indent", RibbonCommandIconKind.Align, "AO");
+                    g.Icon("home.increaseIndent", "Increase Indent", RibbonCommandIconKind.Align, "AI");
                     g.SplitButton("home.merge", "Merge & Center", MergeMenu(), c => c with
                     {
-                        PreferredLayout = RibbonCommandLayoutKind.Large,
+                        PreferredLayout = RibbonCommandLayoutKind.Medium,
                         Icon = new RibbonCommandIcon(RibbonCommandIconKind.Merge),
                     });
                 });
 
                 home.Group("number", "Number", "N", 70, g =>
                 {
+                    // WPF Number group: row 1 = Number Format selector; RowBreak; row 2 = Accounting/Percent/
+                    // Comma (icon-only), separator, Increase/Decrease Decimal (icon-only). The Number Format
+                    // selector keeps its dropdown menu (callbacks bind the fmt* menu ids) and reads as a
+                    // labeled (medium) format picker on the top row.
                     g.Dropdown("home.numberFormat", "Number Format", NumberFormatMenu(), c => c with
                     {
+                        PreferredLayout = RibbonCommandLayoutKind.Medium,
                         Icon = new RibbonCommandIcon(RibbonCommandIconKind.Number),
                     });
-                    g.Button("home.currency", "Currency", c => c with
-                    {
-                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Currency),
-                    });
-                    g.Button("home.percent", "Percent", c => c with
-                    {
-                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Percent),
-                    });
-                    g.Button("home.accounting", "Accounting", c => c with
-                    {
-                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Currency),
-                    });
-                    g.Button("home.comma", "Comma", c => c with
-                    {
-                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Comma),
-                    });
-                    g.Button("home.increaseDecimal", "Increase Decimal", c => c with
-                    {
-                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Decimal),
-                    });
-                    g.Button("home.decreaseDecimal", "Decrease Decimal", c => c with
-                    {
-                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Decimal),
-                    });
+                    g.RowBreak();
+                    g.Icon("home.accounting", "Accounting", RibbonCommandIconKind.Currency, "AN");
+                    g.Icon("home.currency", "Currency", RibbonCommandIconKind.Currency, "CY");
+                    g.Icon("home.percent", "Percent", RibbonCommandIconKind.Percent, "P");
+                    g.Icon("home.comma", "Comma", RibbonCommandIconKind.Comma, "K");
+                    g.Separator();
+                    g.Icon("home.increaseDecimal", "Increase Decimal", RibbonCommandIconKind.Decimal, "QI");
+                    g.Icon("home.decreaseDecimal", "Decrease Decimal", RibbonCommandIconKind.Decimal, "QD");
                 });
 
                 home.Group("styles", "Styles", "S", 60, g =>
                 {
-                    g.Button("home.cellStyles", "Cell Styles", c => c with
-                    {
-                        PreferredLayout = RibbonCommandLayoutKind.Large,
-                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Theme),
-                    });
-                    g.Button("home.formatAsTable", "Format as Table", c => c with
-                    {
-                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Table),
-                    });
-                    g.Button("home.conditional", "Conditional", c => c with
-                    {
-                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Color),
-                    });
+                    // WPF Styles group: Conditional Formatting / Format as Table / Cell Styles are all large.
+                    g.Large("home.conditional", "Conditional", RibbonCommandIconKind.Color, "L");
+                    g.Large("home.formatAsTable", "Format as Table", RibbonCommandIconKind.Table, "T");
+                    g.Large("home.cellStyles", "Cell Styles", RibbonCommandIconKind.Theme, "J");
                 });
 
                 home.Group("cells", "Cells", "E", 50, g =>
                 {
-                    g.Button("home.insertCells", "Insert", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Insert) });
-                    g.Button("home.deleteCells", "Delete", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Delete) });
-                    g.Button("home.formatCells", "Format", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Size) });
+                    // WPF Cells group: Insert / Delete / Format are medium (icon + label).
+                    g.Medium("home.insertCells", "Insert", RibbonCommandIconKind.Insert, "I");
+                    g.Medium("home.deleteCells", "Delete", RibbonCommandIconKind.Delete, "D");
+                    g.Medium("home.formatCells", "Format", RibbonCommandIconKind.Size, "O");
                 });
 
                 home.Group("editing", "Editing", "G", 40, g =>
                 {
-                    g.Button("home.autoSum", "AutoSum", c => c with
-                    {
-                        PreferredLayout = RibbonCommandLayoutKind.Large,
-                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Sum),
-                    });
-                    g.Button("home.fillDown", "Fill", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Fill) });
-                    g.Button("home.clear", "Clear", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Clear) });
-                    g.Button("home.findSelect", "Find & Select", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Search) });
+                    // WPF Editing group: AutoSum / Fill / Clear / Find & Select are medium (icon + label).
+                    g.Medium("home.autoSum", "AutoSum", RibbonCommandIconKind.Sum, "U");
+                    g.Medium("home.fillDown", "Fill", RibbonCommandIconKind.Fill, "FI");
+                    g.Medium("home.clear", "Clear", RibbonCommandIconKind.Clear, "E");
+                    g.Medium("home.findSelect", "Find & Select", RibbonCommandIconKind.Search, "FD");
                 });
             })
             .Tab("insert", "Insert", "I", insert =>
             {
+                // WPF Insert tab: PivotTable/Table large; chart types medium; illustrations/links/comments/
+                // text/symbols large; sparklines medium.
                 insert.Group("tables", "Tables", "T", 100, g =>
                 {
-                    g.Button("insert.pivotTable", "PivotTable", c => c with
-                    {
-                        PreferredLayout = RibbonCommandLayoutKind.Large,
-                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.PivotTable),
-                    });
-                    g.Button("insert.pivotChart", "PivotChart", c => c with
-                    {
-                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.ChartColumn),
-                    });
-                    g.Button("insert.table", "Table", c => c with
-                    {
-                        PreferredLayout = RibbonCommandLayoutKind.Large,
-                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Table),
-                    });
+                    g.Large("insert.pivotTable", "PivotTable", RibbonCommandIconKind.PivotTable, "PT");
+                    g.Medium("insert.pivotChart", "PivotChart", RibbonCommandIconKind.ChartColumn, "PC");
+                    g.Large("insert.table", "Table", RibbonCommandIconKind.Table, "TB");
                 });
 
                 insert.Group("charts", "Charts", "C", 90, g =>
                 {
                     g.Dropdown("insert.column", "Column", ChartTypeMenu(), c => c with
                     {
+                        PreferredLayout = RibbonCommandLayoutKind.Medium,
                         Icon = new RibbonCommandIcon(RibbonCommandIconKind.ChartColumn),
                     });
-                    g.Button("insert.line", "Line", c => c with
-                    {
-                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.ChartLine),
-                    });
-                    g.Button("insert.pie", "Pie", c => c with
-                    {
-                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.ChartPie),
-                    });
-                    g.Button("insert.scatter", "Scatter", c => c with
-                    {
-                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.ChartScatter),
-                    });
+                    g.Medium("insert.line", "Line", RibbonCommandIconKind.ChartLine, "LC");
+                    g.Medium("insert.pie", "Pie", RibbonCommandIconKind.ChartPie, "PY");
+                    g.Medium("insert.scatter", "Scatter", RibbonCommandIconKind.ChartScatter, "SX");
                 });
 
                 insert.Group("illustrations", "Illustrations", "L", 80, g =>
                 {
-                    g.Button("insert.picture", "Picture", c => c with
-                    {
-                        PreferredLayout = RibbonCommandLayoutKind.Large,
-                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Picture),
-                    });
-                    g.Button("insert.shapes", "Shapes", c => c with
-                    {
-                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Rectangle),
-                    });
-                    g.Button("insert.textBox", "Text Box", c => c with
-                    {
-                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.TextBox),
-                    });
+                    g.Large("insert.picture", "Picture", RibbonCommandIconKind.Picture, "IP");
+                    g.Large("insert.shapes", "Shapes", RibbonCommandIconKind.Rectangle, "SH");
+                    g.Large("insert.textBox", "Text Box", RibbonCommandIconKind.TextBox, "TX");
                 });
 
                 insert.Group("sparklines", "Sparklines", "S", 70, g =>
                 {
-                    g.Button("insert.sparklineLine", "Line", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Sparkline) });
-                    g.Button("insert.sparklineColumn", "Column", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.ChartColumn) });
-                    g.Button("insert.sparklineWinLoss", "Win/Loss", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Sparkline) });
+                    g.Medium("insert.sparklineLine", "Line", RibbonCommandIconKind.Sparkline, "SL");
+                    g.Medium("insert.sparklineColumn", "Column", RibbonCommandIconKind.ChartColumn, "SK");
+                    g.Medium("insert.sparklineWinLoss", "Win/Loss", RibbonCommandIconKind.Sparkline, "SW");
                 });
 
                 insert.Group("filters", "Filters", "F", 60, g =>
                 {
-                    g.Button("insert.slicer", "Slicer", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Filter) });
-                    g.Button("insert.timeline", "Timeline", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Date) });
+                    g.Medium("insert.slicer", "Slicer", RibbonCommandIconKind.Filter, "SR");
+                    g.Large("insert.timeline", "Timeline", RibbonCommandIconKind.Date, "IT");
                 });
 
                 insert.Group("links", "Links", "I", 50, g =>
                 {
-                    g.Button("insert.hyperlink", "Link", c => c with
-                    {
-                        PreferredLayout = RibbonCommandLayoutKind.Large,
-                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Link),
-                    });
+                    g.Large("insert.hyperlink", "Link", RibbonCommandIconKind.Link, "K");
                 });
 
                 insert.Group("comments", "Comments", "C", 40, g =>
                 {
-                    g.Button("insert.comment", "Comment", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Comment) });
+                    g.Large("insert.comment", "Comment", RibbonCommandIconKind.Comment, "C2");
                 });
 
                 insert.Group("text", "Text", "X", 30, g =>
                 {
-                    g.Button("insert.headerFooter", "Header & Footer", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.HeaderFooter) });
-                    g.Button("insert.object", "Object", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Insert) });
+                    g.Large("insert.headerFooter", "Header & Footer", RibbonCommandIconKind.HeaderFooter, "HF");
+                    g.Large("insert.object", "Object", RibbonCommandIconKind.Insert, "OB");
                 });
 
                 insert.Group("symbols", "Symbols", "Y", 20, g =>
                 {
-                    g.Button("insert.equation", "Equation", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Function) });
-                    g.Button("insert.symbol", "Symbol", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Symbol) });
+                    g.Large("insert.equation", "Equation", RibbonCommandIconKind.Function, "EQ");
+                    g.Large("insert.symbol", "Symbol", RibbonCommandIconKind.Symbol, "SY");
                 });
             })
             .Tab("data", "Data", "D", data =>
