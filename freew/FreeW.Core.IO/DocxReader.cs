@@ -2350,6 +2350,9 @@ public static class DocxReader
             LineRule = lineRule,
             LineSpacing = lineSpacing,
             LineHeightPt = lineHeightPt,
+            // Explicit only when this pPr carries its own w:line — an inherited docDefault value (baked above)
+            // leaves it unset so the render cascade can prefer the paragraph's style instead.
+            LineSpacingIsSet = lineVal is not null,
             SpaceBeforePt = spaceBeforePt,
             SpaceAfterPt = spaceAfterPt,
             ShadingColorHex = shading is null or "auto" ? null : "#" + shading.TrimStart('#'),

@@ -43,6 +43,41 @@ public sealed class ParagraphStyleCascadeTests
     }
 
     [StaFact]
+    public void StyledParagraph_WithoutDirectLineSpacing_InheritsStyleLineSpacing()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.DefaultRun = doc.DefaultRun with { FontFamily = "Calibri", FontSizePt = 11 };
+        doc.Blocks.Clear();
+        doc.Styles["Body"] = new DocumentStyle
+        {
+            Id = "Body",
+            Name = "Body",
+            Type = StyleType.Paragraph,
+            // The style sets 1.5-line spacing explicitly (LineSpacingIsSet).
+            Paragraph = ParagraphFormatting.Default with
+            {
+                LineSpacing = 1.5,
+                LineRule = LineSpacingRule.Multiple,
+                LineSpacingIsSet = true,
+            },
+        };
+        // The paragraph sets alignment (so it goes through the per-property cascade, not the all-default
+        // fast path) but leaves line spacing unset — it must inherit the style's 1.5, not FreeW's default.
+        doc.Blocks.Add(new Paragraph("body text")
+        {
+            StyleId = "Body",
+            Formatting = ParagraphFormatting.Default with { Alignment = TextAlignment.Center },
+        });
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var wpf = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().First();
+        var ratio = new System.Windows.Media.FontFamily("Calibri").LineSpacing;
+        Assert.Equal(1.5 * ratio * 11 * PxPerPoint, wpf.LineHeight, 1);
+    }
+
+    [StaFact]
     public void DirectSpacing_WinsOverStyle()
     {
         var doc = TextDocument.CreateEmpty();

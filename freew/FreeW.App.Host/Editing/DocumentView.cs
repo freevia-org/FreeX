@@ -5319,23 +5319,30 @@ public sealed class DocumentView : RichTextBox
         // paragraph leaves at the model default, inherit the paragraph style's value (Word's cascade).
         // The previous all-or-nothing rule fell back to FreeW's hardcoded defaults for a paragraph that set
         // ANY property (e.g. a list kind), ignoring the style's spacing/indents. List membership, breaks
-        // and toggles stay paragraph-intrinsic. (Value-typed formatting can't distinguish "explicitly the
+        // and toggles stay paragraph-intrinsic. (Most value-typed formatting can't distinguish "explicitly the
         // default" from "unset", so a property explicitly set to the default value inherits the style; the
-        // fully-correct fix is nullable formatting recording only explicit props — a larger refactor.)
+        // fully-correct fix is nullable formatting recording only explicit props — a larger refactor. Line
+        // spacing is the exception: it carries an explicit LineSpacingIsSet flag, so it cascades precisely.)
         if (paragraph.StyleId is { } id && document.Styles.TryGetValue(id, out var style))
         {
             var sp = style.Paragraph;
             if (p == ParagraphFormatting.Default)
                 return sp;
             var d = ParagraphFormatting.Default;
+            // Line spacing resolves as one unit (direct w:line ?? style w:line ?? the paragraph's own
+            // inherited docDefault/built-in value, which the reader already baked into p). The IsSet flag
+            // distinguishes an explicit setting from an inherited one, so a paragraph with no direct line
+            // spacing correctly takes its style's — not the docDefault that masked it before.
+            var lineFrom = p.LineSpacingIsSet ? p : sp.LineSpacingIsSet ? sp : p;
             return p with
             {
                 Alignment = p.Alignment != d.Alignment ? p.Alignment : sp.Alignment,
                 SpaceBeforePt = p.SpaceBeforePt != d.SpaceBeforePt ? p.SpaceBeforePt : sp.SpaceBeforePt,
                 SpaceAfterPt = p.SpaceAfterPt != d.SpaceAfterPt ? p.SpaceAfterPt : sp.SpaceAfterPt,
-                LineSpacing = p.LineSpacing != d.LineSpacing ? p.LineSpacing : sp.LineSpacing,
-                LineRule = p.LineRule != d.LineRule ? p.LineRule : sp.LineRule,
-                LineHeightPt = p.LineHeightPt != d.LineHeightPt ? p.LineHeightPt : sp.LineHeightPt,
+                LineSpacing = lineFrom.LineSpacing,
+                LineRule = lineFrom.LineRule,
+                LineHeightPt = lineFrom.LineHeightPt,
+                LineSpacingIsSet = p.LineSpacingIsSet || sp.LineSpacingIsSet,
                 IndentLeftPt = p.IndentLeftPt != d.IndentLeftPt ? p.IndentLeftPt : sp.IndentLeftPt,
                 IndentRightPt = p.IndentRightPt != d.IndentRightPt ? p.IndentRightPt : sp.IndentRightPt,
                 FirstLineIndentPt = p.FirstLineIndentPt != d.FirstLineIndentPt ? p.FirstLineIndentPt : sp.FirstLineIndentPt,

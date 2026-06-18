@@ -252,6 +252,17 @@ public sealed record ParagraphFormatting
     /// multiple rule applies.
     /// </summary>
     public double LineHeightPt { get; init; }
+
+    /// <summary>
+    /// Whether the line spacing (<see cref="LineSpacing"/>/<see cref="LineRule"/>/<see cref="LineHeightPt"/>)
+    /// was set *explicitly* on this paragraph or style (a direct <c>w:spacing/@w:line</c>), as opposed to
+    /// carrying the inherited document-default/built-in value. Lets the render-time cascade tell an explicit
+    /// setting from an inherited one so a paragraph with no direct line spacing inherits its style's value
+    /// (Word's cascade: direct ?? style ?? docDefault) rather than the masked default. Render-only; the writer
+    /// continues to emit from the value fields, so this does not affect docx round-trip.
+    /// </summary>
+    public bool LineSpacingIsSet { get; init; }
+
     public double IndentLeftPt { get; init; }
     public double IndentRightPt { get; init; }
     public double FirstLineIndentPt { get; init; }
