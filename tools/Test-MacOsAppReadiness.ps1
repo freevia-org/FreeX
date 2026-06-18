@@ -1177,7 +1177,8 @@ function Test-SourceWiring {
                 "dialog.Opened += (_, _) => cancelButton.Focus();",
                 "AutomationProperties.SetAutomationId(replaceButton, `"PdfExportOverwriteReplaceButton`")",
                 "AutomationProperties.SetAutomationId(cancelButton, `"PdfExportOverwriteCancelButton`")",
-                "PortablePdfDocumentExporter.Save(_session.Workbook, exportPlan, path)",
+                "var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, exportPlan, pdfBuffer);",
+                "await File.WriteAllBytesAsync(path, pdfBuffer.ToArray());",
                 "_workbookStatisticsMenuItem.Header = `"Workbook Statistics...`";",
                 "_workbookStatisticsMenuItem.Gesture = new KeyGesture(Key.G, KeyModifiers.Control | KeyModifiers.Shift);",
                 "_workbookStatisticsMenuItem.Click += async (_, _) => await ShowWorkbookStatisticsDialogAsync();",
@@ -2082,6 +2083,18 @@ function Test-SourceWiring {
                 "EncodeWinAnsiHexText(normalized)",
                 "private static byte EncodeWinAnsiByte(char ch)",
                 "built-in Helvetica/WinAnsi set"
+            )
+            OrderedPairs = @()
+        },
+        @{
+            # File > Export to PDF prefers Skia (Unicode) but MUST keep the dependency-free WinAnsi
+            # PortablePdfDocumentExporter as the fallback so the macOS bundle can export without Skia.
+            Path = "src\FreeX.App.Avalonia\Pdf\AvaloniaPdfDocumentExporter.cs"
+            Markers = @(
+                "public static class AvaloniaPdfDocumentExporter",
+                "var result = SkiaPdfDocumentExporter.Save(workbook, exportPlan, stream, options);",
+                "catch (Exception ex) when (IsSkiaUnavailable(ex))",
+                "var result = PortablePdfDocumentExporter.Save(workbook, exportPlan, stream, options);"
             )
             OrderedPairs = @()
         },

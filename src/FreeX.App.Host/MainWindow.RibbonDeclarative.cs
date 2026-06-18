@@ -93,6 +93,7 @@ public partial class MainWindow
             }
             RepointBackplaneNamesToRenderedControls(renderedByName);
             WireRenderedMenuOpenedHandlers(renderedByName);
+            WireRenderedFormatPainterDoubleClick(renderedByName);
             PopulateAndWireRenderedHomeCombos(renderedByName);
             PopulateAndWireRenderedPageLayoutCombos(renderedByName);
 
@@ -360,6 +361,29 @@ public partial class MainWindow
             arrangeAll is ButtonBase { ContextMenu: { } arrangeMenu })
         {
             arrangeMenu.Opened += ArrangeAllContextMenu_Opened;
+        }
+    }
+
+    /// <summary>Guards against re-wiring the rendered Format Painter double-click handler.</summary>
+    private bool _renderedFormatPainterDoubleClickWired;
+
+    /// <summary>
+    /// Attaches the persistent (double-click) capture handler to the *rendered* Format Painter button.
+    /// The single-click path routes through the command binding (<see cref="FormatPainterBtn_Click"/> via
+    /// the registry), but the double-click <see cref="FormatPainterBtn_PreviewMouseLeftButtonDown"/> handler
+    /// — which arms persistent painter mode — is not part of the command model, so the XAML→declarative
+    /// cutover dropped it. Re-attach it here by command name, mirroring how the original XAML button wired
+    /// <c>PreviewMouseLeftButtonDown="FormatPainterBtn_PreviewMouseLeftButtonDown"</c>.
+    /// </summary>
+    private void WireRenderedFormatPainterDoubleClick(IReadOnlyDictionary<string, Control> rendered)
+    {
+        if (_renderedFormatPainterDoubleClickWired)
+            return;
+
+        if (rendered.TryGetValue("Format Painter", out var control) && control is ButtonBase formatPainterButton)
+        {
+            formatPainterButton.PreviewMouseLeftButtonDown += FormatPainterBtn_PreviewMouseLeftButtonDown;
+            _renderedFormatPainterDoubleClickWired = true;
         }
     }
 

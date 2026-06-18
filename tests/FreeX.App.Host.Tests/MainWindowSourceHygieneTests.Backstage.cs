@@ -98,7 +98,9 @@ public sealed partial class MainWindowSourceHygieneTests
         var newMethod = ExtractMethodSource(backstageSource, "private async Task RequestNewWorkbookAsync()");
         newMethod.Should().Contain("ConfirmSaveBeforeDestructiveActionAsync(UiText.Get(\"MainWindowMessage_SaveChangesBeforeCreatingWorkbook\"))");
         newMethod.Should().Contain("== SaveChangesConfirmation.Cancel");
-        newMethod.Should().Contain("CreateNewWorkbook();");
+        // File > New advances the session name sequence (Book2, Book3, …) via InitializeNewWorkbook
+        // rather than re-creating Book1 through CreateNewWorkbook() (Issue 121).
+        newMethod.Should().Contain("InitializeNewWorkbook(_newWorkbookNameSequence.Next());");
         newMethod.Should().Contain("HideStartScreen();");
 
         var openMethod = ExtractMethodSource(backstageSource, "private async Task OpenFileAsync(");
@@ -472,7 +474,9 @@ public sealed partial class MainWindowSourceHygieneTests
         xaml.Should().Contain("x:Name=\"SsBackstagePrintNowButton\"");
         xaml.Should().Contain("x:Name=\"SsPrintOptionsHost\"");
         xaml.Should().Contain("x:Name=\"SsPrintPreviewViewer\"");
-        xaml.ShouldContainLocalizedAttribute("Content", "Print");
+        // The backstage Print button now carries the access-key label "_Print..." for its visible content,
+        // while its stable automation name stays "Print".
+        xaml.ShouldContainLocalizedAttribute("Content", "_Print...");
         xaml.ShouldContainLocalizedAttribute("AutomationProperties.Name", "Print");
         xaml.Should().Contain("Click=\"BackstagePrintNowButton_Click\"");
         xaml.Should().Contain("AutomationProperties.AutomationId=\"BackstagePrintPreviewViewer\"");

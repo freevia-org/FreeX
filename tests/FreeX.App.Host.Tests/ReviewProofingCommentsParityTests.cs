@@ -1,35 +1,50 @@
+using System.Linq;
 using FluentAssertions;
+using Free.Shared.Ribbon;
+using FreeX.Ribbon.Definitions;
 
 namespace FreeX.App.Host.Tests;
 
 public sealed class ReviewProofingCommentsParityTests
 {
+    // After the declarative-ribbon cutover (commit a02d5c06d) the Review-tab proofing/comment/note
+    // commands live in the single-source declarative ribbon model (FreeXRibbon.Build()) rather than in
+    // hand-authored MainWindow.xaml <Button> markup. The old assertions on per-button AutomationId,
+    // HelpText and Click handlers no longer have a declarative meaning, so parity is now asserted
+    // against the declarative catalog: each command must appear in its expected Review-tab group
+    // (by group header) with the expected access-key (KeyTip).
     [Theory]
-    [InlineData("Spelling", "SpellCheckBtn_Click", "ReviewSpellingButton", "MainWindow_TooltipDescription_FindKnownMisspellingsInTextCellsOnTheActiveSheetWithReplaceReplaceAllAnd_D58B6767")]
-    [InlineData("Workbook Statistics", "WorkbookStatisticsBtn_Click", "ReviewWorkbookStatisticsButton", "MainWindow_AutomationHelpText_ShowWorkbookCountsForSheetsCellsFormulasCommentsAndObjects")]
-    [InlineData("Check Accessibility", "AccessibilityCheckerBtn_Click", "ReviewAccessibilityCheckerButton", "MainWindow_AutomationHelpText_FindMergedCellsBlankTableHeadersObjectsMissingAlternateTextAndChartsWith_AD813E90")]
-    [InlineData("New Comment", "ReviewNewThreadedCommentBtn_Click", "ReviewNewCommentButton", "MainWindow_TooltipDescription_AddOrEditAThreadedCommentOnTheSelectedCellCtrlShiftF2")]
-    [InlineData("Delete Comment", "ReviewDeleteThreadedCommentBtn_Click", "ReviewDeleteCommentButton", "MainWindow_TooltipDescription_DeleteTheThreadedCommentOnTheSelectedCell")]
-    [InlineData("Previous Comment", "ReviewPrevCommentBtn_Click", "ReviewPreviousCommentButton", "MainWindow_TooltipDescription_NavigateToThePreviousCommentInTheSheet")]
-    [InlineData("Next Comment", "ReviewNextCommentBtn_Click", "ReviewNextCommentButton", "MainWindow_TooltipDescription_NavigateToTheNextCommentInTheSheet")]
-    [InlineData("Show Comments", "ReviewShowCommentsBtn_Click", "ReviewShowCommentsButton", "MainWindow_TooltipDescription_OpenAListOfThreadedCommentsOnTheActiveSheet")]
-    [InlineData("New Note", "ReviewNewCommentBtn_Click", "ReviewNewNoteButton", "MainWindow_TooltipDescription_AddASimpleCellNoteToTheSelectedCell")]
-    [InlineData("Edit Note", "ReviewNewCommentBtn_Click", "ReviewEditNoteButton", "MainWindow_TooltipDescription_EditTheSimpleCellNoteOnTheSelectedCell")]
-    [InlineData("Delete Note", "ReviewDeleteCommentBtn_Click", "ReviewDeleteNoteButton", "MainWindow_TooltipDescription_RemoveTheSimpleCellNoteFromTheSelectedCell")]
-    [InlineData("Previous Note", "ReviewPrevNoteBtn_Click", "ReviewPreviousNoteButton", "MainWindow_TooltipDescription_NavigateToThePreviousSimpleCellNoteInTheSheet")]
-    [InlineData("Next Note", "ReviewNextNoteBtn_Click", "ReviewNextNoteButton", "MainWindow_TooltipDescription_NavigateToTheNextSimpleCellNoteInTheSheet")]
-    [InlineData("Show Notes", "ReviewShowNotesBtn_Click", "ReviewShowNotesButton", "MainWindow_TooltipDescription_OpenAListOfSimpleCellNotesOnTheActiveSheet")]
-    public void ReviewProofingCommentAndNoteButtons_ExposeAutomationIdAndHelpText(
+    [InlineData("Proofing", "Spelling", "SP")]
+    [InlineData("Proofing", "Workbook Statistics", "W")]
+    [InlineData("Accessibility", "Check Accessibility", "CA")]
+    [InlineData("Comments", "New Comment", "CM")]
+    [InlineData("Comments", "Delete Comment", "XC")]
+    [InlineData("Comments", "Previous Comment", "PC")]
+    [InlineData("Comments", "Next Comment", "JC")]
+    [InlineData("Comments", "Show Comments", "SC")]
+    [InlineData("Notes", "New Note", "O")]
+    [InlineData("Notes", "Edit Note", "E")]
+    [InlineData("Notes", "Delete Note", "D")]
+    [InlineData("Notes", "Previous Note", "PN")]
+    [InlineData("Notes", "Next Note", "N")]
+    [InlineData("Notes", "Show Notes", "H")]
+    public void ReviewProofingCommentAndNoteCommands_ArePresentWithKeyTipInExpectedGroup(
+        string groupName,
         string commandName,
-        string handler,
-        string automationId,
-        string helpTextKey)
+        string keyTip)
     {
-        var button = LocalizedXamlTestSupport.ReadMainWindowXaml()
-            .ExtractButtonElementByInvariantCommandName(commandName, $"Click=\"{handler}\"");
+        var reviewTab = FreeXRibbon.Build().Tabs
+            .SingleOrDefault(tab => string.Equals(tab.Header, "Review", StringComparison.Ordinal));
+        reviewTab.Should().NotBeNull("the Review ribbon tab should be present");
 
-        button.Should().Contain($"AutomationProperties.AutomationId=\"{automationId}\"");
-        button.Should().Contain($"AutomationProperties.HelpText=\"{{local:Loc Key={helpTextKey}}}\"");
+        var group = reviewTab!.Groups
+            .SingleOrDefault(g => string.Equals(g.Header, groupName, StringComparison.Ordinal));
+        group.Should().NotBeNull($"the Review/{groupName} ribbon group should be present");
+
+        var command = group!.Controls
+            .SingleOrDefault(control => string.Equals(control.Label, commandName, StringComparison.Ordinal));
+        command.Should().NotBeNull($"the Review/{groupName}/{commandName} command should be present");
+        command!.KeyTip.Should().Be(keyTip);
     }
 
     [Fact]
