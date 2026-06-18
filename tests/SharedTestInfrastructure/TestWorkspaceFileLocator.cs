@@ -29,8 +29,36 @@ internal static class TestWorkspaceFileLocator
         Path.GetDirectoryName(Find(relativeParts))
         ?? throw new DirectoryNotFoundException($"Could not locate workspace directory for {Path.Combine(relativeParts)}.");
 
+    /// <summary>
+    /// Walks up from <see cref="AppContext.BaseDirectory"/> looking for a directory whose path,
+    /// combined with <paramref name="relativeParts"/>, exists. The neutral engine behind per-app
+    /// <c>RepositoryFileLocator.FindDirectory</c> shims.
+    /// </summary>
+    public static string FindDirectoryFromBaseDirectory(params string[] relativeParts) =>
+        FindExistingDirectory(new DirectoryInfo(AppContext.BaseDirectory), relativeParts)
+        ?? throw new DirectoryNotFoundException($"Could not find repository directory '{Path.Combine(relativeParts)}'.");
+
+    /// <summary>
+    /// Walks up from <see cref="AppContext.BaseDirectory"/> looking for a file whose path,
+    /// combined with <paramref name="relativeParts"/>, exists. The neutral engine behind per-app
+    /// <c>RepositoryFileLocator.Find</c> shims.
+    /// </summary>
+    public static string FindFileFromBaseDirectory(params string[] relativeParts) =>
+        FindExistingFile(new DirectoryInfo(AppContext.BaseDirectory), relativeParts)
+        ?? throw new FileNotFoundException($"Could not find repository file '{Path.Combine(relativeParts)}'.");
+
     public static string ReadAllText(params string[] relativeParts) =>
         File.ReadAllText(Find(relativeParts));
+
+    /// <summary>
+    /// Builds a reader rooted at a project directory (e.g. <c>["src", "FreeX.App.Host"]</c>):
+    /// the returned delegate reads a source file by name relative to that root, locating it up
+    /// the directory tree via <see cref="ReadAllText(string[])"/>. App-neutral: a sister app
+    /// supplies its own project-root parts. This is the engine behind per-app "read host source"
+    /// helpers — keep those as thin shims over this factory.
+    /// </summary>
+    public static Func<string, string> SourceReaderRootedAt(params string[] projectRootParts) =>
+        fileName => ReadAllText([.. projectRootParts, fileName]);
 
     public static string ReadAllTextWithFailureMessage(string message, params string[] relativeParts) =>
         File.ReadAllText(FindWithFailureMessage(message, relativeParts));

@@ -14,7 +14,7 @@ internal static class DialogSourceTestSupport
         ReadHostSourcesWithSeparator(Environment.NewLine, fileNames);
 
     public static string ReadHostSourcesWithSeparator(string separator, params string[] fileNames) =>
-        string.Join(separator, fileNames.Select(ReadHostSource));
+        SourceTextTestSupport.ReadSources(ReadHostSource, separator, fileNames);
 
     public static string ReadHostSourceFile(params string[] relativeParts) =>
         WorkspaceFileLocator.ReadAllText(
@@ -37,52 +37,20 @@ internal static class DialogSourceTestSupport
     public static XDocument LoadHostXamlDocument(params string[] relativeParts) =>
         XDocument.Load(FindHostSourceFile(relativeParts));
 
-    public static string ReadClassSource(string fileName, string startMarker, string endMarker)
-    {
-        var source = ReadHostSource(fileName);
-        var start = source.IndexOf(startMarker, StringComparison.Ordinal);
-        start.Should().BeGreaterThanOrEqualTo(0);
-
-        var end = string.IsNullOrEmpty(endMarker)
-            ? source.Length
-            : source.IndexOf(endMarker, start, StringComparison.Ordinal);
-        if (end < 0)
-            end = source.Length;
-
-        end.Should().BeGreaterThan(start);
-        return source[start..end];
-    }
+    public static string ReadClassSource(string fileName, string startMarker, string endMarker) =>
+        SourceTextTestSupport.ExtractBetweenMarkers(ReadHostSource(fileName), startMarker, endMarker);
 
     public static T GetPrivateField<T>(object instance, string name)
-        where T : class
-    {
-        var type = instance.GetType();
-        FieldInfo? field = null;
-        while (type is not null && field is null)
-        {
-            field = type.GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
-            type = type.BaseType;
-        }
-
-        field.Should().NotBeNull();
-        return field!.GetValue(instance).Should().BeOfType<T>().Subject;
-    }
+        where T : class =>
+        SourceTextTestSupport.GetPrivateField<T>(instance, name);
 
     public static void InvokePrivateHandler(object instance, string methodName) =>
         InvokePrivateHandler(instance, methodName, instance);
 
     public static void InvokePrivateHandler(object instance, string methodName, object sender)
     {
-        var type = instance.GetType();
-        MethodInfo? method = null;
-        while (type is not null && method is null)
-        {
-            method = type.GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
-            type = type.BaseType;
-        }
-
-        method.Should().NotBeNull();
-        object[] parameters = method!.GetParameters().Length == 0
+        var method = SourceTextTestSupport.GetPrivateMethod(instance, methodName);
+        object[] parameters = method.GetParameters().Length == 0
             ? []
             : [sender, new RoutedEventArgs()];
         method.Invoke(instance, parameters);
