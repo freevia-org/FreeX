@@ -130,4 +130,32 @@
   <data name="ChartTrendline_OrderLabel" xml:space="preserve"><value>Ordre polynomial (polynomial uniquement) :</value></data>
   <data name="ChartTrendline_ShowEquation" xml:space="preserve"><value>Afficher l'équation sur le graphique</value></data>
   <data name="ChartTrendline_ShowRSquared" xml:space="preserve"><value>Afficher le coefficient de détermination (R²)</value></data>
+  <data name="ConditionalFormat_NewRuleTitle" xml:space="preserve"><value>Nouvelle règle de mise en forme</value></data>
+  <data name="ConditionalFormat_EditRuleTitle" xml:space="preserve"><value>Modifier la règle de mise en forme</value></data>
+  <data name="ConditionalFormat_AppliesToFormat" xml:space="preserve"><value>S'applique à {0}</value></data>
+  <data name="ConditionalFormat_RuleTypeLabel" xml:space="preserve"><value>Type de règle</value></data>
+  <data name="ConditionalFormat_PresetLabel" xml:space="preserve"><value>Préréglage</value></data>
+  <data name="ConditionalFormat_OperatorLabel" xml:space="preserve"><value>Opérateur</value></data>
+  <data name="ConditionalFormat_ValueLabel" xml:space="preserve"><value>Valeur</value></data>
+  <data name="ConditionalFormat_MaximumLabel" xml:space="preserve"><value>Maximum</value></data>
+  <data name="ConditionalFormat_FormulaLabel" xml:space="preserve"><value>Formule (par ex. =A1&gt;10)</value></data>
+  <data name="ConditionalFormat_TextLabel" xml:space="preserve"><value>Texte</value></data>
+  <data name="ConditionalFormat_RankOrPercentLabel" xml:space="preserve"><value>Rang ou pourcentage</value></data>
+  <data name="ConditionalFormat_TopOrBottomLabel" xml:space="preserve"><value>Haut ou bas</value></data>
+  <data name="ConditionalFormat_IconSetStyleLabel" xml:space="preserve"><value>Style du jeu d'icônes</value></data>
+  <data name="ConditionalFormat_MinColorLabel" xml:space="preserve"><value>Couleur minimale (r,v,b)</value></data>
+  <data name="ConditionalFormat_MidColorLabel" xml:space="preserve"><value>Couleur médiane (r,v,b)</value></data>
+  <data name="ConditionalFormat_MaxColorLabel" xml:space="preserve"><value>Couleur maximale (r,v,b)</value></data>
+  <data name="ConditionalFormat_FormatLabel" xml:space="preserve"><value>Format</value></data>
+  <data name="ConditionalFormat_PercentOfRange" xml:space="preserve"><value>% de la plage</value></data>
+  <data name="ConditionalFormat_UseThreeColorScale" xml:space="preserve"><value>Utiliser une échelle à trois couleurs</value></data>
+  <data name="ConditionalFormat_ManageTitle" xml:space="preserve"><value>Gérer les règles de mise en forme conditionnelle</value></data>
+  <data name="ConditionalFormat_NoRules" xml:space="preserve"><value>Aucune règle de mise en forme conditionnelle pour cette sélection.</value></data>
+  <data name="ConditionalFormat_AppliesToLabel" xml:space="preserve"><value>S'applique à</value></data>
+  <data name="ConditionalFormat_ManageNew" xml:space="preserve"><value>Nouvelle…</value></data>
+  <data name="ConditionalFormat_ManageEdit" xml:space="preserve"><value>Modifier…</value></data>
+  <data name="ConditionalFormat_ManageDelete" xml:space="preserve"><value>Supprimer</value></data>
+  <data name="ConditionalFormat_ManageMoveUp" xml:space="preserve"><value>Monter</value></data>
+  <data name="ConditionalFormat_ManageMoveDown" xml:space="preserve"><value>Descendre</value></data>
+  <data name="ConditionalFormat_ManageApplyRange" xml:space="preserve"><value>Appliquer la plage</value></data>
 </root>

@@ -139,4 +139,34 @@
   <data name="ChartTrendline_OrderLabel" xml:space="preserve"><value>Polynomial order (polynomial only):</value></data>
   <data name="ChartTrendline_ShowEquation" xml:space="preserve"><value>Display equation on chart</value></data>
   <data name="ChartTrendline_ShowRSquared" xml:space="preserve"><value>Display R-squared value</value></data>
+  <!-- Conditional Formatting: New/Edit Rule dialog -->
+  <data name="ConditionalFormat_NewRuleTitle" xml:space="preserve"><value>New Formatting Rule</value></data>
+  <data name="ConditionalFormat_EditRuleTitle" xml:space="preserve"><value>Edit Formatting Rule</value></data>
+  <data name="ConditionalFormat_AppliesToFormat" xml:space="preserve"><value>Applies to {0}</value></data>
+  <data name="ConditionalFormat_RuleTypeLabel" xml:space="preserve"><value>Rule type</value></data>
+  <data name="ConditionalFormat_PresetLabel" xml:space="preserve"><value>Preset</value></data>
+  <data name="ConditionalFormat_OperatorLabel" xml:space="preserve"><value>Operator</value></data>
+  <data name="ConditionalFormat_ValueLabel" xml:space="preserve"><value>Value</value></data>
+  <data name="ConditionalFormat_MaximumLabel" xml:space="preserve"><value>Maximum</value></data>
+  <data name="ConditionalFormat_FormulaLabel" xml:space="preserve"><value>Formula (e.g. =A1&gt;10)</value></data>
+  <data name="ConditionalFormat_TextLabel" xml:space="preserve"><value>Text</value></data>
+  <data name="ConditionalFormat_RankOrPercentLabel" xml:space="preserve"><value>Rank or percent</value></data>
+  <data name="ConditionalFormat_TopOrBottomLabel" xml:space="preserve"><value>Top or bottom</value></data>
+  <data name="ConditionalFormat_IconSetStyleLabel" xml:space="preserve"><value>Icon set style</value></data>
+  <data name="ConditionalFormat_MinColorLabel" xml:space="preserve"><value>Minimum color (r,g,b)</value></data>
+  <data name="ConditionalFormat_MidColorLabel" xml:space="preserve"><value>Midpoint color (r,g,b)</value></data>
+  <data name="ConditionalFormat_MaxColorLabel" xml:space="preserve"><value>Maximum color (r,g,b)</value></data>
+  <data name="ConditionalFormat_FormatLabel" xml:space="preserve"><value>Format</value></data>
+  <data name="ConditionalFormat_PercentOfRange" xml:space="preserve"><value>% of range</value></data>
+  <data name="ConditionalFormat_UseThreeColorScale" xml:space="preserve"><value>Use three-color scale</value></data>
+  <!-- Conditional Formatting: Manage Rules dialog -->
+  <data name="ConditionalFormat_ManageTitle" xml:space="preserve"><value>Manage Conditional Formatting Rules</value></data>
+  <data name="ConditionalFormat_NoRules" xml:space="preserve"><value>No conditional formatting rules for this selection.</value></data>
+  <data name="ConditionalFormat_AppliesToLabel" xml:space="preserve"><value>Applies to</value></data>
+  <data name="ConditionalFormat_ManageNew" xml:space="preserve"><value>New…</value></data>
+  <data name="ConditionalFormat_ManageEdit" xml:space="preserve"><value>Edit…</value></data>
+  <data name="ConditionalFormat_ManageDelete" xml:space="preserve"><value>Delete</value></data>
+  <data name="ConditionalFormat_ManageMoveUp" xml:space="preserve"><value>Move Up</value></data>
+  <data name="ConditionalFormat_ManageMoveDown" xml:space="preserve"><value>Move Down</value></data>
+  <data name="ConditionalFormat_ManageApplyRange" xml:space="preserve"><value>Apply Range</value></data>
 </root>
