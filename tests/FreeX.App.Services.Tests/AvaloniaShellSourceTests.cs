@@ -4394,6 +4394,49 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("native_bring_all_to_front_menu_item={FormatBool(snapshot.HasNativeBringAllToFrontMenuItem)}");
     }
 
+    [Fact]
+    public void MainWindow_WiresConditionalFormatRuleAndManageDialogsToLaunchSmoke()
+    {
+        var cfSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.ConditionalFormat.cs"));
+        var windowSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+
+        // New Formatting Rule editor: rule-type picker, presets, per-type controls, automation ids.
+        cfSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"ConditionalFormatRuleDialog\");");
+        cfSource.Should().Contain("AutomationProperties.SetAutomationId(ruleTypeBox, \"ConditionalFormatRuleTypeBox\");");
+        cfSource.Should().Contain("AutomationProperties.SetAutomationId(presetBox, \"ConditionalFormatPresetBox\");");
+        cfSource.Should().Contain("AutomationProperties.SetAutomationId(topBottomBox, \"ConditionalFormatTopBottomBox\");");
+        cfSource.Should().Contain("AutomationProperties.SetAutomationId(minColorBox, \"ConditionalFormatMinColorBox\");");
+        cfSource.Should().Contain("AutomationProperties.SetAutomationId(maxColorBox, \"ConditionalFormatMaxColorBox\");");
+        cfSource.Should().Contain("ConditionalFormatPresetFactory.BuildInput(preset)");
+        cfSource.Should().Contain("ConditionalFormatRuleBuilder.TryBuildApplyCommand(");
+
+        // Manage Rules dialog: New / reorder / change applies-to, automation ids.
+        cfSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"ManageConditionalFormatsDialog\");");
+        cfSource.Should().Contain("AutomationProperties.SetAutomationId(moveUpButton, \"ManageConditionalFormatsMoveUpButton\");");
+        cfSource.Should().Contain("AutomationProperties.SetAutomationId(moveDownButton, \"ManageConditionalFormatsMoveDownButton\");");
+        cfSource.Should().Contain("AutomationProperties.SetAutomationId(appliesToBox, \"ManageConditionalFormatsAppliesToBox\");");
+        cfSource.Should().Contain("AutomationProperties.SetAutomationId(applyAppliesToButton, \"ManageConditionalFormatsApplyAppliesToButton\");");
+        cfSource.Should().Contain("ConditionalFormatManageModel.BuildMoveCommand(");
+        cfSource.Should().Contain("ConditionalFormatManageModel.BuildAppliesToCommand(");
+        cfSource.Should().Contain("_session.TryResolveReferenceRange(reference, out var range)");
+
+        // Launch-smoke probe wiring for both dialogs.
+        cfSource.Should().Contain("private sealed record ConditionalFormatRuleDialogSmokeProbe(");
+        cfSource.Should().Contain("private sealed record ManageConditionalFormatsDialogSmokeProbe(");
+        windowSource.Should().Contain("HasLaunchSmokeDialog(probe.Dialog, \"New Formatting Rule\")");
+        windowSource.Should().Contain("HasLaunchSmokeDialog(probe.Dialog, \"Manage Conditional Formatting Rules\")");
+
+        // Snapshot fields, IsPassed gating, and report lines for the two CF dialogs.
+        smokeSource.Should().Contain("bool HasConditionalFormatRuleDialog = false,");
+        smokeSource.Should().Contain("bool HasManageConditionalFormatsDialog = false,");
+        smokeSource.Should().Contain("HasConditionalFormatRuleDialog &&");
+        smokeSource.Should().Contain("HasManageConditionalFormatsReorderControls &&");
+        smokeSource.Should().Contain("HasManageConditionalFormatsAppliesToControls &&");
+        smokeSource.Should().Contain("conditional_format_rule_dialog={FormatBool(snapshot.DialogEvidence.HasConditionalFormatRuleDialog)}");
+        smokeSource.Should().Contain("manage_conditional_formats_dialog={FormatBool(snapshot.DialogEvidence.HasManageConditionalFormatsDialog)}");
+    }
+
     private static string ExtractSourceBlock(string source, string startMarker, string endMarker)
     {
         var start = source.IndexOf(startMarker, StringComparison.Ordinal);
