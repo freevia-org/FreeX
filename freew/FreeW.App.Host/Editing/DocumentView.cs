@@ -2721,13 +2721,18 @@ public sealed class DocumentView : RichTextBox
                 Math.Max(0, paraFmt.IndentRightPt * PxPerPoint),
                 Math.Max(0, paraFmt.SpaceAfterPt * PxPerPoint)),
             TextIndent = paraFmt.FirstLineIndentPt * PxPerPoint,
-            // Line spacing. For the Multiple rule, LineHeight = multiple x font size. For Exact/AtLeast the
-            // model carries an absolute height in points; WPF only does absolute LineHeight, so both map to
-            // that height — and Exact additionally forces BlockLineHeight so the height is honoured even for
-            // taller content (AtLeast is approximated as exact, the closest FlowDocument behaviour).
+            // Line spacing. For the Multiple rule, Word multiplies the font's *natural* line height (one
+            // "line" = ascent+descent+gap), NOT the raw em — so a 1.08/1.15-line paragraph is ~8–15% taller
+            // than the font size. WPF exposes that natural height as FontFamily.LineSpacing, so the multiple
+            // is applied to (em x ratio). Previously we multiplied the bare em, and MaxHeight then clamped the
+            // result back to a single natural line, rendering every multiple-spaced paragraph too short and
+            // letting FreeW pack more lines per page than Word. For Exact/AtLeast the model carries an absolute
+            // height in points; WPF only does absolute LineHeight, so both map to that height — and Exact
+            // additionally forces BlockLineHeight so the height is honoured even for taller content (AtLeast is
+            // approximated as exact, the closest FlowDocument behaviour).
             LineHeight = paraFmt.LineRule == LineSpacingRule.Multiple
                 ? (paraFmt.LineSpacing > 0
-                    ? paraFmt.LineSpacing * (document.DefaultRun.FontSizePt ?? 11) * PxPerPoint
+                    ? paraFmt.LineSpacing * DefaultLineHeightRatio(document) * (document.DefaultRun.FontSizePt ?? 11) * PxPerPoint
                     : double.NaN)
                 : (paraFmt.LineHeightPt > 0 ? paraFmt.LineHeightPt * PxPerPoint : double.NaN),
             LineStackingStrategy = paraFmt.LineRule == LineSpacingRule.Exact
@@ -3678,6 +3683,17 @@ public sealed class DocumentView : RichTextBox
         StrokeThickness = 1
     };
 
+    /// <summary>Faint horizontal value gridlines across the plot (matching Word), drawn behind the data.</summary>
+    private static void DrawChartGridlines(Canvas plot, double plotH, double w)
+    {
+        var brush = new SolidColorBrush(Color.FromRgb(0xE6, 0xE6, 0xE6));
+        for (var i = 1; i <= 4; i++)
+        {
+            var y = plotH - plotH * i / 4.0;
+            plot.Children.Add(new System.Windows.Shapes.Line { X1 = 0, Y1 = y, X2 = w, Y2 = y, Stroke = brush, StrokeThickness = 1 });
+        }
+    }
+
     /// <summary>Grouped column (vertical) or bar (horizontal) chart over all series, with category labels.</summary>
     private static void DrawBarChart(Canvas plot, Chart chart, double w, double h, bool horizontal)
     {
@@ -3694,6 +3710,7 @@ public sealed class DocumentView : RichTextBox
             var groupW = w / cats;
             var gap = groupW * 0.15;
             var barW = Math.Max(1, (groupW - 2 * gap) / seriesCount);
+            DrawChartGridlines(plot, plotH, w);
             plot.Children.Add(ChartAxisLine(0, plotH, w, plotH));
             for (var c = 0; c < cats; c++)
             {
@@ -3756,6 +3773,7 @@ public sealed class DocumentView : RichTextBox
         var max = ChartMax(chart);
         const double labelStrip = 14;
         var plotH = Math.Max(8, h - labelStrip);
+        DrawChartGridlines(plot, plotH, w);
         plot.Children.Add(ChartAxisLine(0, plotH, w, plotH));
 
         double X(int c) => cats == 1 ? w / 2 : (c + 0.5) * (w / cats);
@@ -5232,14 +5250,41 @@ public sealed class DocumentView : RichTextBox
     }
 
     // Recover the line-spacing multiplier from a WPF paragraph's LineHeight, inverting the formula used
-    // in BuildParagraph (LineHeight = LineSpacing * defaultFontSize * PxPerPoint). An unset LineHeight is
-    // NaN; fall back to the model default so editing text never silently flattens a paragraph's spacing.
+    // in BuildParagraph (LineHeight = LineSpacing * ratio * defaultFontSize * PxPerPoint, where ratio is the
+    // default font's natural line height). Must use the SAME ratio as the forward path or an edit/commit
+    // cycle would shift every paragraph's spacing. An unset LineHeight is NaN; fall back to the model default
+    // so editing text never silently flattens a paragraph's spacing.
     private static double ReadLineSpacing(double lineHeight, TextDocument document)
     {
         var fontPt = document.DefaultRun.FontSizePt ?? 11;
-        if (double.IsNaN(lineHeight) || lineHeight <= 0 || fontPt <= 0)
+        var ratio = DefaultLineHeightRatio(document);
+        if (double.IsNaN(lineHeight) || lineHeight <= 0 || fontPt <= 0 || ratio <= 0)
             return ParagraphFormatting.Default.LineSpacing;
-        return lineHeight / (fontPt * PxPerPoint);
+        return lineHeight / (fontPt * PxPerPoint * ratio);
+    }
+
+    // One "line" in Word's Multiple line rule is the font's natural line height (ascent+descent+line gap),
+    // which WPF surfaces as FontFamily.LineSpacing (Times ~1.15, Calibri ~1.22). Keyed on the document's
+    // default font and cached, since BuildParagraph runs this for every paragraph on load. Forward and
+    // inverse line-spacing math both call this so they stay exactly invertible.
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, double> LineHeightRatioCache = new();
+    private static double DefaultLineHeightRatio(TextDocument document)
+    {
+        var name = document.DefaultRun.FontFamily;
+        if (string.IsNullOrEmpty(name))
+            name = "Calibri";
+        return LineHeightRatioCache.GetOrAdd(name, static n =>
+        {
+            try
+            {
+                var ratio = new System.Windows.Media.FontFamily(n).LineSpacing;
+                return ratio > 0 ? ratio : 1.0;
+            }
+            catch
+            {
+                return 1.0;
+            }
+        });
     }
 
     // --- formatting resolution (run/paragraph -> style -> document default) ---
@@ -5269,14 +5314,48 @@ public sealed class DocumentView : RichTextBox
 
     private static ParagraphFormatting Resolve(ModelParagraph paragraph, TextDocument document)
     {
-        // Explicit paragraph formatting wins; otherwise fall back to the style's paragraph props.
+        var p = paragraph.Formatting;
+        // Per-property cascade: direct paragraph formatting wins; for any presentation property the
+        // paragraph leaves at the model default, inherit the paragraph style's value (Word's cascade).
+        // The previous all-or-nothing rule fell back to FreeW's hardcoded defaults for a paragraph that set
+        // ANY property (e.g. a list kind), ignoring the style's spacing/indents. List membership, breaks
+        // and toggles stay paragraph-intrinsic. (Most value-typed formatting can't distinguish "explicitly the
+        // default" from "unset", so a property explicitly set to the default value inherits the style; the
+        // fully-correct fix is nullable formatting recording only explicit props — a larger refactor. Line
+        // spacing is the exception: it carries an explicit LineSpacingIsSet flag, so it cascades precisely.)
         if (paragraph.StyleId is { } id && document.Styles.TryGetValue(id, out var style))
         {
             var sp = style.Paragraph;
-            var p = paragraph.Formatting;
-            return p == ParagraphFormatting.Default ? sp : p;
+            if (p == ParagraphFormatting.Default)
+                return sp;
+            var d = ParagraphFormatting.Default;
+            // Line spacing resolves as one unit (direct w:line ?? style w:line ?? the paragraph's own
+            // inherited docDefault/built-in value, which the reader already baked into p). The IsSet flag
+            // distinguishes an explicit setting from an inherited one, so a paragraph with no direct line
+            // spacing correctly takes its style's — not the docDefault that masked it before.
+            var lineFrom = p.LineSpacingIsSet ? p : sp.LineSpacingIsSet ? sp : p;
+            return p with
+            {
+                Alignment = p.Alignment != d.Alignment ? p.Alignment : sp.Alignment,
+                // Space before/after cascade on the explicit flag, not value-vs-default: a read paragraph
+                // carries 0pt-after when it sets none, and 0 != the model's 8pt default would otherwise keep
+                // the 0 and never inherit the style's spacing (packing styled list items tighter than Word).
+                SpaceBeforePt = p.SpaceBeforeIsSet ? p.SpaceBeforePt : sp.SpaceBeforeIsSet ? sp.SpaceBeforePt : p.SpaceBeforePt,
+                SpaceAfterPt = p.SpaceAfterIsSet ? p.SpaceAfterPt : sp.SpaceAfterIsSet ? sp.SpaceAfterPt : p.SpaceAfterPt,
+                SpaceBeforeIsSet = p.SpaceBeforeIsSet || sp.SpaceBeforeIsSet,
+                SpaceAfterIsSet = p.SpaceAfterIsSet || sp.SpaceAfterIsSet,
+                LineSpacing = lineFrom.LineSpacing,
+                LineRule = lineFrom.LineRule,
+                LineHeightPt = lineFrom.LineHeightPt,
+                LineSpacingIsSet = p.LineSpacingIsSet || sp.LineSpacingIsSet,
+                IndentLeftPt = p.IndentLeftPt != d.IndentLeftPt ? p.IndentLeftPt : sp.IndentLeftPt,
+                IndentRightPt = p.IndentRightPt != d.IndentRightPt ? p.IndentRightPt : sp.IndentRightPt,
+                FirstLineIndentPt = p.FirstLineIndentPt != d.FirstLineIndentPt ? p.FirstLineIndentPt : sp.FirstLineIndentPt,
+                Border = p.Border ?? sp.Border,
+                ShadingColorHex = p.ShadingColorHex ?? sp.ShadingColorHex,
+            };
         }
-        return paragraph.Formatting;
+        return p;
     }
 
     private static RunFormatting StyleRun(ModelParagraph paragraph, TextDocument document) =>

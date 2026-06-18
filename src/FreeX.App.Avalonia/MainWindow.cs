@@ -569,6 +569,7 @@ public sealed partial class MainWindow : Window
     private bool _isUpdatingWorksheetScrollBars;
     private SelectionPaneObjectKind? _selectedDrawingObjectKind;
     private Guid? _selectedDrawingObjectId;
+    private readonly AvaloniaRibbonContextSource _ribbonContextSource = new();
 
     public MainWindow(IReadOnlyList<string> startupArguments)
         : this(
@@ -611,10 +612,7 @@ public sealed partial class MainWindow : Window
     {
         var root = new DockPanel();
 
-        var ribbon = FreeX.App.Avalonia.Ribbon.AvaloniaRibbonHost.Build(
-            () => _session,
-            RefreshShell,
-            new FreeX.App.Avalonia.Ribbon.AvaloniaRibbonHostCallbacks
+        var ribbonCallbacks = new FreeX.App.Avalonia.Ribbon.AvaloniaRibbonHostCallbacks
             {
                 OpenTextToColumns = TextToColumns,
                 OpenConsolidate = Consolidate,
@@ -701,6 +699,17 @@ public sealed partial class MainWindow : Window
                     ["pageLayout.gridlines"] = () => _ = ShowGridlinesSheetOptionsAsync(),
                     ["pageLayout.headings"] = () => _ = ShowHeadingsSheetOptionsAsync(),
                     ["review.showNotes"] = () => _ = ShowNotesListAsync(),
+                    // Insert ▸ PivotChart (charts the active pivot's result range).
+                    ["insert.pivotChart"] = InsertPivotChart,
+                    // View ▸ Window group (multi-window).
+                    ["view.newWindow"] = NewWindow,
+                    ["view.arrangeAll"] = ArrangeAllWindows,
+                    ["view.hide"] = HideActiveWindow,
+                    // Review proofing (built-in thesaurus / offline-honest translate) + Insert equation/object.
+                    ["review.thesaurus"] = () => _ = ShowThesaurusDialogAsync(),
+                    ["review.translate"] = () => _ = ShowTranslateDialogAsync(),
+                    ["insert.equation"] = () => _ = ShowEquationDialogAsync(),
+                    ["insert.object"] = ShowInsertObjectUnsupported,
                     // Home tab (Editing group).
                     ["home.autoSum"] = () => InsertAutoSumFormula("SUM"),
                     ["home.fillDown"] = () => FillSelectedRange(FillCellsDirection.Down),
@@ -811,7 +820,20 @@ public sealed partial class MainWindow : Window
                     ["formulas.calcOptions"] = ToggleCalculationMode,
                     ["formulas.calcNow"] = CalculateNow,
                 },
-            });
+            };
+
+        // Merge in the Help-tab + contextual-tab (Chart/Picture/Shape/Table/Pivot) command handlers.
+        var ribbonExtraCommands = new Dictionary<string, Action>(
+            ribbonCallbacks.ExtraCommands!, StringComparer.Ordinal);
+        foreach (var (id, action) in BuildContextualTabCommands())
+            ribbonExtraCommands[id] = action;
+        ribbonCallbacks = ribbonCallbacks with { ExtraCommands = ribbonExtraCommands };
+
+        var ribbon = FreeX.App.Avalonia.Ribbon.AvaloniaRibbonHost.Build(
+            () => _session,
+            RefreshShell,
+            ribbonCallbacks,
+            _ribbonContextSource);
         DockPanel.SetDock(ribbon, Dock.Top);
         root.Children.Add(ribbon);
 
@@ -1792,6 +1814,13 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetName(_zoomText, "Zoom");
         AutomationProperties.SetHelpText(_zoomText, "Shows the active worksheet zoom.");
 
+        // The status-bar readouts share one "Customize Status Bar" right-click menu, attached to each of
+        // the three status controls so right-clicking anywhere in the footer readout opens it.
+        var statusBarCustomizeMenu = BuildStatusBarCustomizeContextMenu();
+        _statusText.ContextMenu = statusBarCustomizeMenu;
+        _selectionStatsText.ContextMenu = statusBarCustomizeMenu;
+        _zoomText.ContextMenu = statusBarCustomizeMenu;
+
         _openButton.Content = "Open";
         _openButton.Padding = new Thickness(10, 4);
         _openButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
@@ -2222,15 +2251,21 @@ public sealed partial class MainWindow : Window
             _formulaBox.SelectionEnd = Math.Min(formulaSelectionEnd, _formulaBox.Text?.Length ?? 0);
         }
 
+        // Render the footer from the shared neutral StatusBarViewModel (see ApplyStatusBarModel). These
+        // direct assignments are the unfiltered baseline drawn from the same WorkbookSession data the
+        // shared model is built from; ApplyStatusBarModel then refines them with the customize toggles.
         _statusText.Text = status;
         _selectionStatsText.Text = _session.SelectionStatsText;
         _zoomText.Text = FormatZoomPercent(_session.ZoomPercent);
+        ApplyStatusBarModel(status);
         _statusText.Foreground = ShouldUseWarningStatusColor(status)
             ? Brush(143, 74, 18)
             : Brush(67, 113, 83);
         Title = $"FreeX - {FormatWindowWorkbookTitle()}{(_session.IsDirty ? " *" : "")}";
         UpdateViewportScrollBars();
         RefreshPivotFieldPane();
+        _ribbonContextSource.OnPivotActive(
+            FreeX.App.Avalonia.Pivot.PivotSourceContext.FindActivePivot(_session.ActiveSheet, _session.ActiveCell) is not null);
         UpdateSaveButton();
     }
 
@@ -2917,6 +2952,7 @@ public sealed partial class MainWindow : Window
 
         _selectedDrawingObjectKind = drawingObject.Kind;
         _selectedDrawingObjectId = drawingObject.Id;
+        _ribbonContextSource.OnDrawingObjectSelected(drawingObject.Kind);
         RefreshShell($"Selected {FormatDrawingObjectKind(drawingObject.Kind)}: {drawingObject.DisplayName}");
     }
 
@@ -2928,6 +2964,10 @@ public sealed partial class MainWindow : Window
     {
         _selectedDrawingObjectKind = null;
         _selectedDrawingObjectId = null;
+        // TODO: table/pivot active context is not yet signaled — no shell accessor exists for
+        // "active cell is inside a table/pivot" in the Avalonia shell. Chart/picture/shape
+        // selection (above) drives the contextual tabs for now; clearing drops them.
+        _ribbonContextSource.OnSelectionCleared();
     }
 
     private static Border CreateSelectedDrawingObjectAdorner() =>
@@ -2977,27 +3017,91 @@ public sealed partial class MainWindow : Window
     {
         var fill = Brush(drawingObject.FillColor ?? new CellColor(0x5B, 0x9B, 0xD5));
         var stroke = Brush(drawingObject.OutlineColor ?? new CellColor(0x2F, 0x55, 0x97));
-        return drawingObject.ShapeKind switch
+        var w = Math.Max(1, width);
+        var h = Math.Max(1, height);
+        Control visual = drawingObject.ShapeKind switch
         {
             DrawingShapeKind.Ellipse => new AvaloniaEllipse
             {
-                Width = Math.Max(1, width),
-                Height = Math.Max(1, height),
+                Width = w,
+                Height = h,
                 Fill = fill,
                 Stroke = stroke,
                 StrokeThickness = 1.5,
                 IsHitTestVisible = false,
             },
             DrawingShapeKind.Line => CreateDrawingLineVisual(stroke, width),
-            _ => new AvaloniaRectangle
+            _ => CreateDrawingShapeGeometryVisual(drawingObject.ShapeKind, fill, stroke, w, h),
+        };
+
+        ApplyDrawingObjectEffect(visual, drawingObject.Effect);
+        return visual;
+    }
+
+    // Non-ellipse/line shapes: render the true preset outline via the geometry factory when available,
+    // falling back to a plain rectangle for kinds the factory does not cover.
+    private static Control CreateDrawingShapeGeometryVisual(
+        DrawingShapeKind? shapeKind,
+        IBrush fill,
+        IBrush stroke,
+        double w,
+        double h)
+    {
+        if (shapeKind is { } kind &&
+            AvaloniaDrawingShapeGeometryFactory.CreateGeometry(kind, w, h) is { } geometry)
+        {
+            return new global::Avalonia.Controls.Shapes.Path
             {
-                Width = Math.Max(1, width),
-                Height = Math.Max(1, height),
+                Data = geometry,
+                // Geometry is authored inside a (0,0,w,h) box, so render it 1:1.
+                Stretch = Stretch.None,
+                Width = w,
+                Height = h,
                 Fill = fill,
                 Stroke = stroke,
                 StrokeThickness = 1.5,
                 IsHitTestVisible = false,
-            }
+            };
+        }
+
+        return new AvaloniaRectangle
+        {
+            Width = w,
+            Height = h,
+            Fill = fill,
+            Stroke = stroke,
+            StrokeThickness = 1.5,
+            IsHitTestVisible = false,
+        };
+    }
+
+    // Approximates the authored shape effect (shadow / glow / soft-edges / bevel / reflection / 3-D)
+    // using Avalonia's bitmap effects. Faithful: outer/inner shadow, glow (offsetless colored shadow),
+    // soft-edges (blur). Approximated: bevel / reflection / 3-D fall back to a light drop shadow so the
+    // shape still reads as "lifted" without the full WPF authored geometry.
+    private static void ApplyDrawingObjectEffect(Control visual, DrawingObjectEffect? effect)
+    {
+        if (effect is null)
+            return;
+
+        var color = effect.Color ?? new CellColor(0, 0, 0);
+        var avColor = Color.FromRgb(color.R, color.G, color.B);
+
+        if (effect.HasSoftEdges)
+        {
+            visual.Effect = new BlurEffect { Radius = effect.BlurRadius };
+            return;
+        }
+
+        // Shadow, glow, and the bevel/reflection/3-D approximations all map onto a drop shadow.
+        // Glow simply uses a zero offset and the glow colour so it reads as a symmetric halo.
+        visual.Effect = new DropShadowEffect
+        {
+            Color = avColor,
+            BlurRadius = effect.BlurRadius,
+            OffsetX = effect.OffsetX,
+            OffsetY = effect.OffsetY,
+            Opacity = effect.Opacity,
         };
     }
 
@@ -4491,6 +4595,7 @@ public sealed partial class MainWindow : Window
 
         ClearSelectedDrawingObject();
         _session.SelectCell(address);
+        RefreshTableContextualTab();
         ApplyFormatPainterAfterTargetSelection();
     }
 
@@ -4501,6 +4606,7 @@ public sealed partial class MainWindow : Window
 
         ClearSelectedDrawingObject();
         _session.SelectRange(new GridRange(_session.ActiveCell, address));
+        RefreshTableContextualTab();
         ApplyFormatPainterAfterTargetSelection();
     }
 

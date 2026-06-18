@@ -29,9 +29,16 @@ public static class RibbonIconFactory
     public static Func<string, RibbonCommandIconKind?>? CommandIconKindResolver { get; set; }
 
     /// <summary>
+    /// Optional host-supplied command artwork loader. Hosts that carry app-local SVG/raster assets can
+    /// return a ready-to-render element here; returning <c>null</c> keeps the shared geometry fallback.
+    /// </summary>
+    public static Func<string, RibbonCommandIcon, double, Brush, FrameworkElement?>? CommandIconElementResolver { get; set; }
+
+    /// <summary>
     /// Builds the icon for a command. Resolution order: an explicit kind carried by the control's own
-    /// icon wins; otherwise the host resolver maps the command id to a kind; otherwise the supplied
-    /// fallback icon is used (generic when nothing else applies).
+    /// app-local asset wins; otherwise an explicit kind carried by the control's own icon wins; otherwise
+    /// the host resolver maps the command id to a kind; otherwise the supplied fallback icon is used
+    /// (generic when nothing else applies).
     /// </summary>
     public static FrameworkElement CreateCommandIcon(
         string commandName,
@@ -39,6 +46,12 @@ public static class RibbonIconFactory
         double size,
         Brush glyphBrush)
     {
+        if (!string.IsNullOrWhiteSpace(commandName) &&
+            CommandIconElementResolver?.Invoke(commandName, fallbackIcon, size, glyphBrush) is { } appIcon)
+        {
+            return appIcon;
+        }
+
         if (fallbackIcon.Kind == RibbonCommandIconKind.Generic &&
             !string.IsNullOrWhiteSpace(commandName) &&
             CommandIconKindResolver?.Invoke(commandName) is { } resolved)

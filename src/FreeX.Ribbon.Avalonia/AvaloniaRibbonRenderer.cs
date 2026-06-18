@@ -74,8 +74,27 @@ public static class AvaloniaRibbonRenderer
         };
     }
 
-    /// <summary>Builds a <see cref="TabControl"/> over a whole definition's visible tabs.</summary>
-    public static Control BuildRibbon(RibbonDefinition definition, IRibbonCommandRegistry? registry = null)
+    /// <summary>Builds a single <see cref="TabItem"/> for a tab (header + content), tagged with the tab id.</summary>
+    private static TabItem BuildTabItem(RibbonTab tab, IRibbonCommandRegistry? registry) => new()
+    {
+        Header = tab.Header,
+        Content = BuildTabContent(tab, registry),
+        Tag = tab.Id,
+    };
+
+    /// <summary>
+    /// Builds a <see cref="TabControl"/> over a whole definition's tabs. When a
+    /// <paramref name="contextSource"/> is supplied, the visible tab set is resolved from its current
+    /// context (normal tabs plus any contextual tab whose activation key is active) and the strip is
+    /// re-synced whenever the source raises <see cref="IRibbonContextSource.ContextChanged"/>:
+    /// newly-active contextual tabs are inserted in declaration order, deactivated ones removed, and the
+    /// previously-selected tab preserved if it is still visible (otherwise the first tab is selected).
+    /// With no source, the strip is the definition's non-contextual tabs (back-compat).
+    /// </summary>
+    public static Control BuildRibbon(
+        RibbonDefinition definition,
+        IRibbonCommandRegistry? registry = null,
+        IRibbonContextSource? contextSource = null)
     {
         ArgumentNullException.ThrowIfNull(definition);
 
@@ -85,20 +104,67 @@ public static class AvaloniaRibbonRenderer
         };
         ApplyRibbonTheme(tabControl);
 
-        foreach (var tab in definition.VisibleTabs)
-        {
-            tabControl.Items.Add(new TabItem
-            {
-                Header = tab.Header,
-                Content = BuildTabContent(tab, registry),
-                Tag = tab.Id,
-            });
-        }
+        var initialTabs = contextSource is null
+            ? (IReadOnlyList<RibbonTab>)definition.VisibleTabs.ToArray()
+            : RibbonContextResolver.Resolve(definition, contextSource.Current);
+
+        foreach (var tab in initialTabs)
+            tabControl.Items.Add(BuildTabItem(tab, registry));
 
         if (tabControl.Items.Count > 0)
             tabControl.SelectedIndex = 0;
 
+        if (contextSource is not null)
+            contextSource.ContextChanged += (_, _) => SyncContextualTabs(tabControl, definition, registry, contextSource);
+
         return tabControl;
+    }
+
+    /// <summary>
+    /// Reconciles the tab strip with the source's current context: the resolver yields the exact ordered
+    /// set of tabs that should be visible; we diff by tab id (the <see cref="TabItem.Tag"/>), inserting
+    /// missing tabs at their resolved position and removing stale ones, preserving the user's selection.
+    /// </summary>
+    private static void SyncContextualTabs(
+        TabControl tabControl,
+        RibbonDefinition definition,
+        IRibbonCommandRegistry? registry,
+        IRibbonContextSource contextSource)
+    {
+        var desired = RibbonContextResolver.Resolve(definition, contextSource.Current);
+        var selectedId = (tabControl.SelectedItem as TabItem)?.Tag as string;
+
+        // Remove tabs no longer desired.
+        var desiredIds = new HashSet<string>(desired.Select(t => t.Id), StringComparer.Ordinal);
+        for (var i = tabControl.Items.Count - 1; i >= 0; i--)
+        {
+            if (tabControl.Items[i] is TabItem item && item.Tag is string id && !desiredIds.Contains(id))
+                tabControl.Items.RemoveAt(i);
+        }
+
+        // Insert missing tabs at their resolved (declaration-order) index.
+        for (var i = 0; i < desired.Count; i++)
+        {
+            var tab = desired[i];
+            var existingIndex = IndexOfTab(tabControl, tab.Id);
+            if (existingIndex < 0)
+                tabControl.Items.Insert(Math.Min(i, tabControl.Items.Count), BuildTabItem(tab, registry));
+        }
+
+        // Preserve selection if still visible; otherwise select the first tab.
+        var restoreIndex = selectedId is null ? -1 : IndexOfTab(tabControl, selectedId);
+        if (restoreIndex >= 0)
+            tabControl.SelectedIndex = restoreIndex;
+        else if (tabControl.Items.Count > 0)
+            tabControl.SelectedIndex = 0;
+    }
+
+    private static int IndexOfTab(TabControl tabControl, string tabId)
+    {
+        for (var i = 0; i < tabControl.Items.Count; i++)
+            if (tabControl.Items[i] is TabItem item && item.Tag is string id && string.Equals(id, tabId, StringComparison.Ordinal))
+                return i;
+        return -1;
     }
 
     /// <summary>

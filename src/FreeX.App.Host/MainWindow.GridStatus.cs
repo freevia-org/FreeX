@@ -55,16 +55,16 @@ public partial class MainWindow
         ApplyStatusBarDisplayState(_statusBarDisplayStateCache.GetStats(stats));
     }
 
-    private void ApplyStatusBarDisplayState(StatusBarDisplayState state)
+    private void ApplyStatusBarDisplayState(Free.Shared.AppServices.StatusBarViewModel state)
     {
         if (_lastStatusBarDisplayState == state && IsStatusBarDisplayStateApplied(state))
             return;
 
-        SetVisibilityIfChanged(StatusReadyText, _options.StatusBarShowCellMode ? state.ReadyVisibility : Visibility.Collapsed);
+        SetVisibilityIfChanged(StatusReadyText, _options.StatusBarShowCellMode ? ToVisibility(state.IsReadyVisible) : Visibility.Collapsed);
         SetVisibilityIfChanged(StatusPageNumberText, _options.StatusBarShowPageNumber && !string.IsNullOrEmpty(StatusPageNumberText.Text)
             ? Visibility.Visible
             : Visibility.Collapsed);
-        SetVisibilityIfChanged(StatusStatsPanel, HasVisibleStatusBarStatistic() ? state.StatsVisibility : Visibility.Collapsed);
+        SetVisibilityIfChanged(StatusStatsPanel, HasVisibleStatusBarStatistic() ? ToVisibility(state.AreStatsVisible) : Visibility.Collapsed);
         SetVisibilityIfChanged(StatusAvgText, _options.StatusBarShowAverage ? Visibility.Visible : Visibility.Collapsed);
         SetVisibilityIfChanged(StatusCountText, _options.StatusBarShowCount ? Visibility.Visible : Visibility.Collapsed);
         SetVisibilityIfChanged(StatusNumericalCountText, _options.StatusBarShowNumericalCount ? Visibility.Visible : Visibility.Collapsed);
@@ -72,23 +72,28 @@ public partial class MainWindow
         SetVisibilityIfChanged(StatusMinText, _options.StatusBarShowMinimum ? Visibility.Visible : Visibility.Collapsed);
         SetVisibilityIfChanged(StatusMaxText, _options.StatusBarShowMaximum ? Visibility.Visible : Visibility.Collapsed);
         SetTextIfChanged(StatusReadyText, state.ReadyText);
-        SetStatusStatisticTextIfChanged(StatusAvgText, state.AverageText, UiText.Get("StatusBar_Average"));
-        SetStatusStatisticTextIfChanged(StatusCountText, state.CountText, UiText.Get("StatusBar_Count"));
-        SetStatusStatisticTextIfChanged(StatusNumericalCountText, state.NumericalCountText, UiText.Get("StatusBar_NumericalCount"));
-        SetStatusStatisticTextIfChanged(StatusSumText, state.SumText, UiText.Get("StatusBar_Sum"));
-        SetStatusStatisticTextIfChanged(StatusMinText, state.MinText, UiText.Get("StatusBar_Minimum"));
-        SetStatusStatisticTextIfChanged(StatusMaxText, state.MaxText, UiText.Get("StatusBar_Maximum"));
+        SetStatusStatisticTextIfChanged(StatusAvgText, ReadoutValue(state, StatusBarReadoutKind.Average), UiText.Get("StatusBar_Average"));
+        SetStatusStatisticTextIfChanged(StatusCountText, ReadoutValue(state, StatusBarReadoutKind.Count), UiText.Get("StatusBar_Count"));
+        SetStatusStatisticTextIfChanged(StatusNumericalCountText, ReadoutValue(state, StatusBarReadoutKind.NumericalCount), UiText.Get("StatusBar_NumericalCount"));
+        SetStatusStatisticTextIfChanged(StatusSumText, ReadoutValue(state, StatusBarReadoutKind.Sum), UiText.Get("StatusBar_Sum"));
+        SetStatusStatisticTextIfChanged(StatusMinText, ReadoutValue(state, StatusBarReadoutKind.Minimum), UiText.Get("StatusBar_Minimum"));
+        SetStatusStatisticTextIfChanged(StatusMaxText, ReadoutValue(state, StatusBarReadoutKind.Maximum), UiText.Get("StatusBar_Maximum"));
         UpdateStatusStatsPanelAutomation(state);
         ApplyStatusBarInteractiveDisplayState();
         _lastStatusBarDisplayState = state;
     }
 
-    private bool IsStatusBarDisplayStateApplied(StatusBarDisplayState state) =>
-        StatusReadyText.Visibility == (_options.StatusBarShowCellMode ? state.ReadyVisibility : Visibility.Collapsed) &&
+    private static Visibility ToVisibility(bool isVisible) => isVisible ? Visibility.Visible : Visibility.Collapsed;
+
+    private static string ReadoutValue(Free.Shared.AppServices.StatusBarViewModel state, StatusBarReadoutKind kind) =>
+        state.FindReadout(kind)?.Value ?? string.Empty;
+
+    private bool IsStatusBarDisplayStateApplied(Free.Shared.AppServices.StatusBarViewModel state) =>
+        StatusReadyText.Visibility == (_options.StatusBarShowCellMode ? ToVisibility(state.IsReadyVisible) : Visibility.Collapsed) &&
         StatusPageNumberText.Visibility == (_options.StatusBarShowPageNumber && !string.IsNullOrEmpty(StatusPageNumberText.Text)
             ? Visibility.Visible
             : Visibility.Collapsed) &&
-        StatusStatsPanel.Visibility == (HasVisibleStatusBarStatistic() ? state.StatsVisibility : Visibility.Collapsed) &&
+        StatusStatsPanel.Visibility == (HasVisibleStatusBarStatistic() ? ToVisibility(state.AreStatsVisible) : Visibility.Collapsed) &&
         StatusAvgText.Visibility == (_options.StatusBarShowAverage ? Visibility.Visible : Visibility.Collapsed) &&
         StatusCountText.Visibility == (_options.StatusBarShowCount ? Visibility.Visible : Visibility.Collapsed) &&
         StatusNumericalCountText.Visibility == (_options.StatusBarShowNumericalCount ? Visibility.Visible : Visibility.Collapsed) &&
@@ -99,12 +104,12 @@ public partial class MainWindow
         StatusZoomText.Visibility == (_options.StatusBarShowZoom ? Visibility.Visible : Visibility.Collapsed) &&
         StatusZoomSliderControls.Visibility == (_options.StatusBarShowZoomSlider ? Visibility.Visible : Visibility.Collapsed) &&
         StatusReadyText.Text == state.ReadyText &&
-        StatusAvgText.Text == state.AverageText &&
-        StatusCountText.Text == state.CountText &&
-        StatusNumericalCountText.Text == state.NumericalCountText &&
-        StatusSumText.Text == state.SumText &&
-        StatusMinText.Text == state.MinText &&
-        StatusMaxText.Text == state.MaxText;
+        StatusAvgText.Text == ReadoutValue(state, StatusBarReadoutKind.Average) &&
+        StatusCountText.Text == ReadoutValue(state, StatusBarReadoutKind.Count) &&
+        StatusNumericalCountText.Text == ReadoutValue(state, StatusBarReadoutKind.NumericalCount) &&
+        StatusSumText.Text == ReadoutValue(state, StatusBarReadoutKind.Sum) &&
+        StatusMinText.Text == ReadoutValue(state, StatusBarReadoutKind.Minimum) &&
+        StatusMaxText.Text == ReadoutValue(state, StatusBarReadoutKind.Maximum);
 
     private bool HasVisibleStatusBarStatistic() =>
         _options.StatusBarShowAverage ||
@@ -258,7 +263,7 @@ public partial class MainWindow
             AutomationProperties.SetHelpText(textBlock, automationName);
     }
 
-    private void UpdateStatusStatsPanelAutomation(StatusBarDisplayState state)
+    private void UpdateStatusStatsPanelAutomation(Free.Shared.AppServices.StatusBarViewModel state)
     {
         // Skip the string[]/LINQ allocation when the stat texts and option flags are unchanged.
         // _lastStatusBarAutomationState uses record value-equality, so a genuinely new state
@@ -279,12 +284,12 @@ public partial class MainWindow
 
         var visibleStatTexts = new[]
             {
-                _options.StatusBarShowAverage ? state.AverageText : string.Empty,
-                _options.StatusBarShowCount ? state.CountText : string.Empty,
-                _options.StatusBarShowNumericalCount ? state.NumericalCountText : string.Empty,
-                _options.StatusBarShowSum ? state.SumText : string.Empty,
-                _options.StatusBarShowMinimum ? state.MinText : string.Empty,
-                _options.StatusBarShowMaximum ? state.MaxText : string.Empty
+                _options.StatusBarShowAverage ? ReadoutValue(state, StatusBarReadoutKind.Average) : string.Empty,
+                _options.StatusBarShowCount ? ReadoutValue(state, StatusBarReadoutKind.Count) : string.Empty,
+                _options.StatusBarShowNumericalCount ? ReadoutValue(state, StatusBarReadoutKind.NumericalCount) : string.Empty,
+                _options.StatusBarShowSum ? ReadoutValue(state, StatusBarReadoutKind.Sum) : string.Empty,
+                _options.StatusBarShowMinimum ? ReadoutValue(state, StatusBarReadoutKind.Minimum) : string.Empty,
+                _options.StatusBarShowMaximum ? ReadoutValue(state, StatusBarReadoutKind.Maximum) : string.Empty
             }
             .Where(text => !string.IsNullOrWhiteSpace(text))
             .ToArray();

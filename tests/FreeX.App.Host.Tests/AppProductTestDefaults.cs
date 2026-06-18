@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using Free.Shared.AppServices;
+using Free.Shared.Shell;
 
 namespace FreeX.App.Host.Tests;
 
@@ -9,6 +10,12 @@ namespace FreeX.App.Host.Tests;
 internal static class AppProductTestDefaults
 {
     [ModuleInitializer]
-    public static void Initialize() =>
+    public static void Initialize()
+    {
         AppProduct.Current = new AppProductIdentity("FreeX", "FREEX_DIAGNOSTICS", "FreeX");
+        // The neutral backstage planners (greeting, recent-file list) now live in the shared
+        // shell and resolve strings via BackstageStrings.Current; install FreeX's catalog so
+        // their assertions match UiText, exactly as App.xaml.cs does at runtime.
+        BackstageStrings.Current = new FreeXBackstageStrings();
+    }
 }

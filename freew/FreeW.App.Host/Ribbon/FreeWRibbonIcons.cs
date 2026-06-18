@@ -16,8 +16,11 @@ namespace FreeW.App.Host;
 internal static class FreeWRibbonIcons
 {
     /// <summary>Installs the FreeW command-id → glyph resolver on the shared icon factory.</summary>
-    public static void Install() =>
+    public static void Install()
+    {
+        Free.Shared.Ribbon.Wpf.RibbonIconFactory.CommandIconElementResolver = RibbonIconFactory.TryCreateCommandIcon;
         Free.Shared.Ribbon.Wpf.RibbonIconFactory.CommandIconKindResolver = Resolve;
+    }
 
     public static RibbonCommandIconKind? Resolve(string commandId) =>
         Map.TryGetValue(commandId, out var kind) ? kind : null;

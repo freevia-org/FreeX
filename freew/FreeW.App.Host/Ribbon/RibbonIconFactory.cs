@@ -30,6 +30,16 @@ internal static class RibbonIconFactory
         double size,
         Brush glyphBrush)
     {
+        return TryCreateCommandIcon(commandName, fallbackIcon, size, glyphBrush)
+            ?? CreateIcon(fallbackIcon, size, glyphBrush);
+    }
+
+    public static FrameworkElement? TryCreateCommandIcon(
+        string commandName,
+        RibbonCommandIcon fallbackIcon,
+        double size,
+        Brush glyphBrush)
+    {
         if (TryLoadCommandIcon(commandName, glyphBrush, size) is { } source)
         {
             return new Image
@@ -43,7 +53,7 @@ internal static class RibbonIconFactory
             };
         }
 
-        return CreateIcon(fallbackIcon, size, glyphBrush);
+        return null;
     }
 
     private static ImageSource? TryLoadCommandIcon(string commandName, Brush glyphBrush, double size)
@@ -165,8 +175,11 @@ internal static class RibbonIconFactory
         if (string.IsNullOrWhiteSpace(text))
             return string.Empty;
 
-        var lower = text
-            .Trim()
+        var trimmed = text.Trim();
+        if (trimmed.StartsWith("freew.", StringComparison.OrdinalIgnoreCase))
+            trimmed = trimmed["freew.".Length..];
+
+        var lower = trimmed
             .ToLowerInvariant()
             .Replace("&amp;", "and", StringComparison.Ordinal)
             .Replace("&", "and", StringComparison.Ordinal);

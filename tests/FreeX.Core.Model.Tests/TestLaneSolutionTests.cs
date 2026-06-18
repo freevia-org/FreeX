@@ -36,6 +36,18 @@ public sealed class TestLaneSolutionTests
     }
 
     [Fact]
+    public void RibbonTestLane_ContainsOnlyTheHostUiTestProject()
+    {
+        var ribbonLaneProjects = ReadSolutionProjects(TestWorkspaceFileLocator.FindFromWorkspaceRoot(
+            "FreeX.RibbonTests.slnx"));
+
+        ribbonLaneProjects.Should().BeEquivalentTo(new[]
+        {
+            "tests/FreeX.App.Host.Tests/FreeX.App.Host.Tests.csproj"
+        }, "the ribbon lane is a focused view over the host UI tests, run with --filter Category=RibbonUiLane");
+    }
+
+    [Fact]
     public void DefaultAgentVerification_DocumentsNonUiTestLane()
     {
         var agents = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot("AGENTS.md");

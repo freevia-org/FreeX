@@ -518,16 +518,23 @@ public sealed partial class MainWindowSourceHygieneTests
             .Should().BeLessThan(xaml.IndexOf("x:Name=\"StatusSumText\"", StringComparison.Ordinal));
 
         gridStatusSource.Should().Contain("ApplyStatusBarDisplayState(_statusBarDisplayStateCache.GetStats(stats))");
-        gridStatusSource.Should().Contain("SetStatusStatisticTextIfChanged(StatusCountText, state.CountText");
-        gridStatusSource.Should().Contain("SetStatusStatisticTextIfChanged(StatusNumericalCountText, state.NumericalCountText");
-        gridStatusSource.Should().Contain("SetStatusStatisticTextIfChanged(StatusSumText, state.SumText");
+        gridStatusSource.Should().Contain("SetStatusStatisticTextIfChanged(StatusCountText, ReadoutValue(state, StatusBarReadoutKind.Count)");
+        gridStatusSource.Should().Contain("SetStatusStatisticTextIfChanged(StatusNumericalCountText, ReadoutValue(state, StatusBarReadoutKind.NumericalCount)");
+        gridStatusSource.Should().Contain("SetStatusStatisticTextIfChanged(StatusSumText, ReadoutValue(state, StatusBarReadoutKind.Sum)");
         gridStatusSource.Should().Contain("_statusBarDisplayStateCache.GetReady(UiText.Get(\"MainWindow_Text_Ready\"))");
-        DialogSourceTestSupport.ReadHostSources("StatusBarDisplayState.cs")
+        // Readout formatting now lives in the platform-neutral shared builder, keyed by readout kind
+        // (the WPF host's UiTextStatusBarTextProvider maps each kind to its StatusBar_*Format resource).
+        WorkspaceFileLocator.ReadAllText("shared", "Free.Shared.AppServices", "StatusBarDisplayModelBuilder.cs")
             .Should()
-            .Contain("FormatStatusText(\"StatusBar_CountFormat\", stats.Count)")
-            .And.Contain("FormatStatusText(\"StatusBar_NumericalCountFormat\", stats.NumericalCount)")
-            .And.Contain("FormatStatusText(\"StatusBar_SumFormat\", sumNumber)")
+            .Contain("CountReadout(StatusBarReadoutKind.Count")
+            .And.Contain("CountReadout(StatusBarReadoutKind.NumericalCount")
+            .And.Contain("Readout(StatusBarReadoutKind.Sum")
             .And.Contain("FormatNumberWithReuse");
+        WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Host", "UiTextStatusBarTextProvider.cs")
+            .Should()
+            .Contain("StatusBar_CountFormat")
+            .And.Contain("StatusBar_NumericalCountFormat")
+            .And.Contain("StatusBar_SumFormat");
         gridStatusSource.Should().Contain("if (stats.Count == 0)");
     }
 

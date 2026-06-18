@@ -52,7 +52,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
         return (Rect)args[1];
     }
 
-    private sealed class MainWindowHarness : IDisposable
+    private sealed partial class MainWindowHarness : IDisposable
     {
         private static MainWindow? SharedWindow;
 
@@ -897,11 +897,22 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             if (button.Content is string text)
                 return text;
 
-            return WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(button)
+            var textBlocks = WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(button)
                 .Concat(WpfTestTree.FindLogicalDescendants<DependencyObject>(button))
                 .OfType<TextBlock>()
-                .FirstOrDefault(RibbonMetadata.IsCommandLabel)
-                ?.Text ?? "";
+                .Distinct()
+                .ToList();
+
+            if (textBlocks.FirstOrDefault(RibbonMetadata.IsCommandLabel) is { } tagged)
+                return tagged.Text;
+
+            // The declarative renderer (RibbonWpfRenderer) does not tag its caption TextBlocks with the
+            // CommandLabel role, so fall back to the button's own caption: the first non-empty TextBlock,
+            // with any trailing dropdown chevron ("  ▾") stripped. Collapsed-group overflow buttons are
+            // filtered by callers via IsCollapsedGroupButton, so this is the command label.
+            return textBlocks
+                .Select(tb => tb.Text?.Trim().TrimEnd('▾', ' ').TrimEnd() ?? "")
+                .FirstOrDefault(t => !string.IsNullOrWhiteSpace(t)) ?? "";
         }
 
         private bool IsToggleChecked(string name) =>

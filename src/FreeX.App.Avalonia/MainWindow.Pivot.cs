@@ -64,7 +64,9 @@ public sealed partial class MainWindow
     private void RefreshPivotFieldPane()
     {
         var pivot = PivotSourceContext.FindActivePivot(_session.ActiveSheet, _session.ActiveCell);
-        if (pivot is null)
+        // Honor the Analyze ▸ Field List toggle: if the user explicitly closed the pane, keep it hidden
+        // even while a pivot stays active (so the choice survives selection moves).
+        if (pivot is null || _pivotFieldPaneUserHidden)
         {
             if (_pivotFieldPaneHost.IsVisible)
             {
