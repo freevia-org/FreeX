@@ -17,9 +17,9 @@ public enum PivotSortOptionMode
 /// Portable, UI-free planning for the PivotTable "More Sort Options" dialog. Resolves the dialog's initial
 /// mode/value-field selection from the field's current <see cref="PivotSortModel"/>, validates a value-sort
 /// (a value field must exist), and builds the resulting <see cref="PivotSortModel"/>. Single-sourced here so
-/// the WPF host and the Avalonia/macOS shell share identical behavior. Replacing the field's existing sort
-/// in the pivot's <see cref="PivotTableModel.Sorts"/> list (and running the view command) stays with each
-/// shell's command glue.
+/// every desktop host shares identical behavior. Replacing the field's existing sort in the pivot's
+/// <see cref="PivotTableModel.Sorts"/> list (and running the view command) stays with each shell's command
+/// glue.
 /// </summary>
 public static class PivotSortPlanner
 {

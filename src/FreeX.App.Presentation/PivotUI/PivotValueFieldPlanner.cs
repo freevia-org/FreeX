@@ -6,8 +6,8 @@ namespace FreeX.App.Presentation.PivotUI;
 /// Portable, UI-free planning for the PivotTable "Value Field Settings" dialog: the summary-function and
 /// show-values-as option catalogs, index resolution, base-field validation, the auto-generated caption
 /// rules, and building the resulting <see cref="PivotDataFieldModel"/>. Single-sourced here (English labels)
-/// so the WPF host and the Avalonia/macOS shell share identical behavior. Number-format planning is handled
-/// separately by the host's number-format parser and is intentionally not part of this portable planner.
+/// so every desktop host shares identical behavior. Number-format planning is handled separately by the
+/// host's number-format parser and is intentionally not part of this portable planner.
 /// </summary>
 public static class PivotValueFieldPlanner
 {
