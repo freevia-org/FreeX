@@ -1363,228 +1363,22 @@
                 AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_OpeningWorkbook}"
                 AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_ShowsWorkbookOpenProgressAndBlocksWorkbookInteractionUntilLoadingFinishe_45BE9EDF}"/>
 
+        <!-- The hand-rolled StartScreenSidebar rail was removed in the unification program (P1): the rail
+             is now the shared Free.Shared.Ribbon.Wpf.BackstageFrame, built in MainWindow.BackstageFrame.cs
+             and hosted in StartScreenFrameHost below. The three content panes (SsHomeView/SsInfoView/
+             SsPrintView) are kept verbatim, parked collapsed in StartScreenPaneHolder; each pane entry's
+             ContentFactory reparents the live pane into the frame's content host on selection. -->
         <Grid x:Name="StartScreenOverlay"
               Grid.Row="1" Grid.RowSpan="5"
               Panel.ZIndex="200"
-              PreviewKeyDown="StartScreenOverlay_PreviewKeyDown"
               KeyboardNavigation.TabNavigation="Cycle"
               KeyboardNavigation.ControlTabNavigation="Cycle"
               Visibility="Collapsed">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="190"/>
-                <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
 
-            <!-- ── Left sidebar ─────────────────────────────────────────── -->
-            <DockPanel x:Name="StartScreenSidebar" Grid.Column="0" Background="#10253A" LastChildFill="True">
-
-                <!-- Back arrow -->
-	                <Button x:Name="SsBackBtn" DockPanel.Dock="Top"
-	                        HorizontalAlignment="Left"
-	                        Style="{StaticResource SsNavBtn}"
-	                        Padding="18,11" FontSize="18"
-	                        Click="SsBackBtn_Click"
-	                        AutomationProperties.AutomationId="BackstageBackButton"
-	                        AutomationProperties.Name="{local:Loc Key=MainWindow_TooltipTitle_Back}"
-	                        AutomationProperties.HelpText="{local:Loc Key=MainWindow_ToolTip_BackToWorkbook}"
-	                        ToolTip="{local:Loc Key=MainWindow_ToolTip_BackToWorkbook}"
-	                        local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Back}"
-	                        local:RibbonTooltip.KeyTip="B" local:RibbonMetadata.CommandName="Back">
-                    <local:RibbonIcon Kind="Previous" Style="{StaticResource BackstageSidebarBackIcon}"/>
-                </Button>
-
-                <!-- Home (active/selected when showing home view) -->
-                <Button x:Name="SsHomeNavBtn" DockPanel.Dock="Top"
-                        HorizontalAlignment="Stretch"
-                        Style="{StaticResource SsNavBtnActive}"
-                        Click="SsHomeNavBtn_Click"
-                        AutomationProperties.AutomationId="BackstageHomeButton"
-                        AutomationProperties.Name="{local:Loc Key=MainWindow_Text_Home}"
-                        AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipTitle_Home}"
-                        local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Home}"
-                        local:RibbonTooltip.KeyTip="H" local:RibbonMetadata.CommandName="Home">
-                    <StackPanel Orientation="Horizontal">
-                        <local:RibbonIcon CommandName="Home" Kind="Grid" Style="{StaticResource BackstageSidebarIcon}"/>
-                        <AccessText Text="{local:Loc Key=MainWindow_Text_Home}" VerticalAlignment="Center"/>
-                    </StackPanel>
-                </Button>
-
-                <!-- Account / Options pinned to bottom -->
-                <StackPanel DockPanel.Dock="Bottom" Margin="0,0,0,10">
-                    <Rectangle Height="1" Fill="#24445E" Margin="0,0,0,6"/>
-                    <local:AutomationInvokeButton x:Name="SsAccountNavBtn"
-                                                  HorizontalAlignment="Stretch"
-                                                  Style="{StaticResource SsNavBtn}"
-                                                  Click="SsAccountBtn_Click"
-                                                  IsTabStop="True"
-                                                  AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_Account}"
-                                                  AutomationProperties.AutomationId="BackstageAccountButton"
-                                                  AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_ShowLocalAccountInformationForFreeX}"
-                                                  local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_LocalAccount}"
-                                                  local:RibbonTooltip.KeyTip="AC"
-                                                  local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_MicrosoftAccountIntegrationIsNotImplementedFreeXUsesLocalFilesAndLocalOp_EC989658}" local:RibbonMetadata.CommandName="Local Account">
-                        <StackPanel Orientation="Horizontal">
-                            <local:RibbonIcon CommandName="Account" Kind="Info" Style="{StaticResource BackstageSidebarIcon}"/>
-                            <AccessText Text="{local:Loc Key=MainWindow_Text_Account}" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </local:AutomationInvokeButton>
-                    <local:AutomationInvokeButton x:Name="SsOptionsNavBtn"
-                                                  HorizontalAlignment="Stretch"
-                                                  Style="{StaticResource SsNavBtn}"
-                                                  Click="SsOptionsBtn_Click"
-                                                  IsTabStop="True"
-                                                  AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_Options}"
-                                                  AutomationProperties.AutomationId="BackstageOptionsButton"
-                                                  AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_OpenFreeXSettingsAndFormulaErrorCheckingOptions}"
-                                                  local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Options}"
-                                                  local:RibbonTooltip.KeyTip="T" local:RibbonMetadata.CommandName="Options">
-                        <StackPanel Orientation="Horizontal">
-                            <local:RibbonIcon CommandName="Options" Kind="View" Style="{StaticResource BackstageSidebarIcon}"/>
-                            <AccessText Text="{local:Loc Key=MainWindow_Text_Options}" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </local:AutomationInvokeButton>
-                </StackPanel>
-
-                <!-- Navigation items -->
-                <StackPanel>
-                    <Button x:Name="SsNewNavBtn"
-                            HorizontalAlignment="Stretch"
-                            Style="{StaticResource SsNavBtn}"
-                            Click="SsNewBtn_Click"
-                            AutomationProperties.AutomationId="BackstageNewButton"
-                            AutomationProperties.Name="{local:Loc Key=MainWindow_Text_New}"
-                            AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_CreateANewWorkbook}"
-                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_New}"
-                            local:RibbonTooltip.KeyTip="N" local:RibbonMetadata.CommandName="New">
-                        <StackPanel Orientation="Horizontal">
-                            <local:RibbonIcon CommandName="New" Kind="Insert" Style="{StaticResource BackstageSidebarIcon}"/>
-                            <AccessText Text="{local:Loc Key=MainWindow_Text_New}" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
-                    <Button x:Name="SsOpenNavBtn"
-                            HorizontalAlignment="Stretch"
-                            Style="{StaticResource SsNavBtn}"
-                            Click="SsOpenBtn_Click"
-                            AutomationProperties.AutomationId="BackstageOpenButton"
-                            AutomationProperties.Name="{local:Loc Key=MainWindow_Text_Open}"
-                            AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_OpenAnExistingWorkbook}"
-                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Open}"
-                            local:RibbonTooltip.KeyTip="O" local:RibbonMetadata.CommandName="Open">
-                        <StackPanel Orientation="Horizontal">
-                            <local:RibbonIcon CommandName="Open" Kind="GetData" Style="{StaticResource BackstageSidebarIcon}"/>
-                            <AccessText Text="{local:Loc Key=MainWindow_Text_Open}" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
-                    <Button x:Name="SsShareNavBtn"
-                            HorizontalAlignment="Stretch"
-                            Style="{StaticResource SsNavBtn}"
-                            Click="SsShareBtn_Click"
-                            AutomationProperties.AutomationId="BackstageShareButton"
-                            AutomationProperties.Name="{local:Loc Key=MainWindow_Text_Share}"
-                            AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_SaveTheWorkbookIfNeededAndOpenWindowsShareForTheFile}"
-                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Share}"
-                            local:RibbonTooltip.KeyTip="SH"
-                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_SaveTheWorkbookIfNeededAndOpenWindowsShareForTheFile}" local:RibbonMetadata.CommandName="Share">
-                        <StackPanel Orientation="Horizontal">
-                            <local:RibbonIcon CommandName="Share" Kind="Share" Style="{StaticResource BackstageSidebarIcon}"/>
-                            <AccessText Text="{local:Loc Key=MainWindow_Text_Share}" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
-
-                    <Rectangle Height="1" Fill="#24445E" Margin="0,6"/>
-
-                    <Button x:Name="SsInfoNavBtn"
-                            HorizontalAlignment="Stretch"
-                            Style="{StaticResource SsNavBtn}"
-                            Click="SsInfoBtn_Click"
-                            AutomationProperties.AutomationId="BackstageInfoButton"
-                            AutomationProperties.Name="{local:Loc Key=MainWindow_Text_Info}"
-                            AutomationProperties.HelpText="{local:Loc Key=MainWindow_Text_ReviewLocalFileStatusAndUnsupportedWorkbookFeatureWarnings}"
-                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Info}"
-                            local:RibbonTooltip.KeyTip="I" local:RibbonMetadata.CommandName="Info">
-                        <StackPanel Orientation="Horizontal">
-                            <local:RibbonIcon CommandName="Info" Kind="Info" Style="{StaticResource BackstageSidebarIcon}"/>
-                            <AccessText Text="{local:Loc Key=MainWindow_Text_Info}" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
-                    <Button x:Name="SsSaveNavBtn"
-                            HorizontalAlignment="Stretch"
-                            Style="{StaticResource SsNavBtn}"
-                            Click="SaveButton_Click"
-                            AutomationProperties.AutomationId="BackstageSaveButton"
-                            AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_Save}"
-                            AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_SaveTheWorkbook}"
-                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Save}"
-                            local:RibbonTooltip.KeyTip="S" local:RibbonMetadata.CommandName="Save">
-                        <StackPanel Orientation="Horizontal">
-                            <local:RibbonIcon CommandName="Save" Kind="Save" Style="{StaticResource BackstageSidebarIcon}"/>
-                            <AccessText Text="{local:Loc Key=MainWindow_Text_Save}" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
-                    <Button x:Name="SsSaveAsNavBtn"
-                            HorizontalAlignment="Stretch"
-                            Style="{StaticResource SsNavBtn}"
-                            Click="SaveAsButton_Click"
-                            AutomationProperties.AutomationId="BackstageSaveAsButton"
-                            AutomationProperties.Name="{local:Loc Key=MainWindow_TooltipTitle_SaveAs}"
-                            AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_SaveTheWorkbookWithANewNameOrFormat}"
-                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_SaveAs}"
-                            local:RibbonTooltip.KeyTip="A" local:RibbonMetadata.CommandName="Save As">
-                        <StackPanel Orientation="Horizontal">
-                            <local:RibbonIcon CommandName="Save As" Kind="Save" Style="{StaticResource BackstageSidebarIcon}"/>
-                            <AccessText Text="{local:Loc Key=MainWindow_Text_SaveAs}" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
-                    <Button x:Name="SsPrintNavBtn" HorizontalAlignment="Stretch"
-                            Style="{StaticResource SsNavBtn}"
-                            AutomationProperties.AutomationId="BackstagePrintButton"
-                            AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_Print}"
-                            AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_OpenPrintPreviewWithWorksheetSettingsAndNativePrintAccess}"
-                            Click="SsPrintNavBtn_Click"
-                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Print}"
-                            local:RibbonTooltip.KeyTip="P"
-                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_OpenThePrintPreviewAndNativePrintDialogForTheRenderedWorksheet}" local:RibbonMetadata.CommandName="Print">
-                        <StackPanel Orientation="Horizontal">
-                            <local:RibbonIcon CommandName="Print" Kind="Print" Style="{StaticResource BackstageSidebarIcon}"/>
-                            <AccessText Text="{local:Loc Key=MainWindow_Text_Print}" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
-                    <Button x:Name="SsExportNavBtn"
-                            HorizontalAlignment="Stretch"
-                            Style="{StaticResource SsNavBtn}"
-                            Click="ExportPdfButton_Click"
-                            AutomationProperties.AutomationId="BackstageExportButton"
-                            AutomationProperties.Name="{local:Loc Key=MainWindow_TooltipTitle_ExportPDFXPS}"
-                            AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_SaveSheetsTheCurrentSelectionOrTheWorkbookAsAPDFFileOrAnXPSPackage}"
-                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ExportPDFXPS}"
-                            local:RibbonTooltip.KeyTip="E"
-                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_SaveSheetsTheCurrentSelectionOrTheWorkbookAsAPDFFileOrAnXPSPackage}" local:RibbonMetadata.CommandName="Export PDF/XPS">
-                        <StackPanel Orientation="Horizontal">
-                            <local:RibbonIcon CommandName="Export" Kind="Share" Style="{StaticResource BackstageSidebarIcon}"/>
-                            <AccessText Text="{local:Loc Key=MainWindow_Text_Export}" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
-                    <Button x:Name="SsCloseNavBtn"
-                            HorizontalAlignment="Stretch"
-                            Style="{StaticResource SsNavBtn}"
-                            Click="SsCloseBtn_Click"
-                            AutomationProperties.AutomationId="BackstageCloseButton"
-                            AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_Close}"
-                            AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipTitle_Close}"
-                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Close}"
-                            local:RibbonTooltip.KeyTip="C" local:RibbonMetadata.CommandName="Close">
-                        <StackPanel Orientation="Horizontal">
-                            <local:RibbonIcon CommandName="Close" Kind="WindowClose" Style="{StaticResource BackstageSidebarIcon}"/>
-                            <AccessText Text="{local:Loc Key=MainWindow_Text_Close}" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
-                </StackPanel>
-            </DockPanel>
-
-            <!-- ── Right content area ───────────────────────────────────── -->
-            <Grid Grid.Column="1" Background="White">
-
-                <!-- ══ HOME VIEW ════════════════════════════════════════════ -->
+            <!-- Hidden holder: keeps the pane elements alive and named so the BackstageFrame factories can
+                 grab + reparent them. Collapsed and zero-size so it never paints behind the frame. -->
+            <Grid x:Name="StartScreenPaneHolder" Visibility="Collapsed"
+                  Width="0" Height="0" IsHitTestVisible="False">
                 <Grid x:Name="SsHomeView">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>  <!-- Greeting -->
@@ -2075,7 +1869,13 @@
                     </Grid>
                 </Grid><!-- end SsPrintView -->
 
-            </Grid>
+            </Grid><!-- end StartScreenPaneHolder -->
+
+            <!-- The shared backstage frame (rail + content host) fills the overlay; the panes above flow
+                 into its content host via the per-entry ContentFactory in MainWindow.BackstageFrame.cs. -->
+            <ContentControl x:Name="StartScreenFrameHost"
+                            HorizontalContentAlignment="Stretch"
+                            VerticalContentAlignment="Stretch"/>
         </Grid>
 
         <Canvas x:Name="KeyTipOverlay"

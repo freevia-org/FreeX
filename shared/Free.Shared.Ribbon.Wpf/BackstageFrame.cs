@@ -82,7 +82,7 @@ public sealed class BackstageEntry
             TooltipTitle = tooltipTitle, TooltipDescription = tooltipDescription
         };
 
-    public static BackstageEntry Divider() => new() { Separator = true };
+    public static BackstageEntry Divider(bool dockBottom = false) => new() { Separator = true, DockBottom = dockBottom };
 }
 
 /// <summary>
@@ -103,6 +103,7 @@ public sealed class BackstageFrame : UserControl
     private readonly StackPanel _bottomNav;     // bottom-docked entries (Options / Close)
     private readonly Border _rail;
     private readonly ContentControl _content;
+    private readonly Button _back;              // top-of-rail back arrow (closes the overlay)
     private readonly List<(BackstageEntry Entry, Button Button)> _navButtons = new();
 
     private Button? _selectedButton;
@@ -134,12 +135,12 @@ public sealed class BackstageFrame : UserControl
         // The rail is a DockPanel so top entries flow from the top and bottom entries pin to the bottom.
         var railDock = new DockPanel { LastChildFill = true };
 
-        var back = new Button { ToolTip = "Back (Esc)" };
-        ApplyStyle(back, "BackstageSidebarBackButton");
-        back.Content = BuildIcon(RibbonCommandIconKind.Previous, size: 20);
-        back.Click += (_, _) => Hide();
-        DockPanel.SetDock(back, Dock.Top);
-        railDock.Children.Add(back);
+        _back = new Button { ToolTip = "Back (Esc)" };
+        ApplyStyle(_back, "BackstageSidebarBackButton");
+        _back.Content = BuildIcon(RibbonCommandIconKind.Previous, size: 20);
+        _back.Click += (_, _) => Hide();
+        DockPanel.SetDock(_back, Dock.Top);
+        railDock.Children.Add(_back);
 
         _bottomNav = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
         DockPanel.SetDock(_bottomNav, Dock.Bottom);
@@ -253,11 +254,44 @@ public sealed class BackstageFrame : UserControl
         }
     }
 
-    /// <summary>Show the overlay and land on the default pane (or <paramref name="paneLabel"/> if given).</summary>
-    public void Show(string? paneLabel = null)
+    /// <summary>
+    /// Apply optional FreeX-parity metadata (key-tip, automation id/name/help, rich tooltip) to the
+    /// built-in top-of-rail Back arrow. All arguments are optional and null-guarded so FreeW — which never
+    /// calls this — keeps its plain back arrow. Mirrors the metadata the hand-rolled FreeX <c>SsBackBtn</c>
+    /// carried so Alt-keytips and the accessibility tree are unchanged after the migration.
+    /// </summary>
+    public void ConfigureBackButton(
+        string? automationId = null,
+        string? automationName = null,
+        string? automationHelpText = null,
+        string? toolTip = null,
+        string? tooltipTitle = null,
+        string? keyTip = null)
+    {
+        if (toolTip is { } tip)
+            _back.ToolTip = tip;
+        if (keyTip is { } badge)
+            RibbonTooltip.SetKeyTip(_back, badge);
+        if (tooltipTitle is { } title)
+            RibbonTooltip.SetTitle(_back, title);
+        if (automationId is { } id)
+            System.Windows.Automation.AutomationProperties.SetAutomationId(_back, id);
+        if (automationName is { } name)
+            System.Windows.Automation.AutomationProperties.SetName(_back, name);
+        if (automationHelpText is { } help)
+            System.Windows.Automation.AutomationProperties.SetHelpText(_back, help);
+    }
+
+    /// <summary>
+    /// Show the overlay and land on the default pane, or on the pane identified by
+    /// <paramref name="paneLabelOrAutomationId"/> (its label or its automation id) when given. Addressing by
+    /// automation id lets a host land on a pane language-invariantly (FreeX's localized labels change per UI
+    /// language, but its automation ids — <c>BackstageInfoButton</c>, <c>BackstagePrintButton</c> — do not).
+    /// </summary>
+    public void Show(string? paneLabelOrAutomationId = null)
     {
         Visibility = Visibility.Visible;
-        var target = paneLabel ?? _defaultPaneLabel;
+        var target = paneLabelOrAutomationId ?? _defaultPaneLabel;
         if (target is not null)
             SelectPane(target);
         Focus();
@@ -270,12 +304,59 @@ public sealed class BackstageFrame : UserControl
         Closed?.Invoke();
     }
 
-    // Select a pane entry by label: highlight it and swap the content host. No-op for unknown labels.
-    private void SelectPane(string label)
+    /// <summary>
+    /// Move keyboard focus to a rail nav button identified by its <see cref="BackstageEntry.AutomationId"/>
+    /// or, failing that, its <see cref="BackstageEntry.Label"/>. Returns <c>false</c> when no entry matches.
+    /// Used by hosts that need to land focus on a specific rail entry (e.g. FreeX's screenshot tour, which
+    /// previously focused named rail buttons such as <c>SsNewNavBtn</c>). The match is case-sensitive on the
+    /// automation id and case-insensitive on the label, mirroring how the rail is addressed elsewhere.
+    /// </summary>
+    public bool FocusEntry(string automationIdOrLabel)
+    {
+        var button = FindNavButton(automationIdOrLabel);
+        if (button is null)
+            return false;
+
+        button.Focus();
+        Keyboard.Focus(button);
+        return true;
+    }
+
+    /// <summary>
+    /// True when the rail nav button identified by <paramref name="automationIdOrLabel"/> currently holds
+    /// keyboard focus. Lets a host assert focus returned to a specific entry without reaching into the
+    /// private button list.
+    /// </summary>
+    public bool IsEntryFocused(string automationIdOrLabel) =>
+        FindNavButton(automationIdOrLabel) is { } button && ReferenceEquals(Keyboard.FocusedElement, button);
+
+    private Button? FindNavButton(string automationIdOrLabel)
     {
         foreach (var (entry, button) in _navButtons)
         {
-            if (entry.Label == label && entry.ContentFactory is not null)
+            if (entry.AutomationId is { } id && string.Equals(id, automationIdOrLabel, StringComparison.Ordinal))
+                return button;
+        }
+        foreach (var (entry, button) in _navButtons)
+        {
+            if (string.Equals(entry.Label, automationIdOrLabel, StringComparison.OrdinalIgnoreCase))
+                return button;
+        }
+        return null;
+    }
+
+    // Select a pane entry by label or automation id: highlight it and swap the content host. No-op for
+    // unknown identifiers or for entries that are not panes (action entries have no content to show).
+    private void SelectPane(string labelOrAutomationId)
+    {
+        foreach (var (entry, button) in _navButtons)
+        {
+            if (entry.ContentFactory is null)
+                continue;
+
+            var matches = string.Equals(entry.Label, labelOrAutomationId, StringComparison.Ordinal) ||
+                (entry.AutomationId is { } id && string.Equals(id, labelOrAutomationId, StringComparison.Ordinal));
+            if (matches)
             {
                 Activate(entry, button);
                 return;
@@ -288,16 +369,19 @@ public sealed class BackstageFrame : UserControl
         var button = new Button { Tag = entry };
         ApplyStyle(button, "BackstageSidebarNavButton");
 
+        // Render the label through AccessText so a mnemonic underscore (e.g. FreeX's "_Save"/"Save _As")
+        // shows the access-key marker and participates in Alt-access, exactly like the hand-rolled rail did.
+        // FreeW's labels carry no underscore, so AccessText renders them identically — this stays additive.
         if (entry.Icon is { } kind)
         {
             var row = new StackPanel { Orientation = Orientation.Horizontal };
             row.Children.Add(BuildIcon(kind, size: 22, commandName: entry.IconCommandName));
-            row.Children.Add(new TextBlock { Text = entry.Label, VerticalAlignment = VerticalAlignment.Center });
+            row.Children.Add(new AccessText { Text = entry.Label, VerticalAlignment = VerticalAlignment.Center });
             button.Content = row;
         }
         else
         {
-            button.Content = entry.Label;
+            button.Content = new AccessText { Text = entry.Label };
         }
 
         // FreeX parity metadata — key-tip badge, rich-tooltip card and the accessibility tree. All

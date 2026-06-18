@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -2707,8 +2707,7 @@ public partial class MainWindow
         await WaitForRibbonScreenshotRenderPassAsync();
         await Task.Delay(300);
 
-        SsOpenNavBtn.Focus();
-        Keyboard.Focus(SsOpenNavBtn);
+        _backstageFrame?.FocusEntry("BackstageOpenButton");
         captures.Add(await CaptureBackstageRecentExportShareStateAsync(
             outputDir,
             "open-recent-list",
@@ -2732,8 +2731,7 @@ public partial class MainWindow
             "main-window"));
 
         ShowInfoView();
-        SsInfoNavBtn.Focus();
-        Keyboard.Focus(SsInfoNavBtn);
+        _backstageFrame?.FocusEntry("BackstageInfoButton");
         UpdateLayout();
         await WaitForRibbonScreenshotRenderPassAsync();
         await Task.Delay(250);
@@ -2767,8 +2765,7 @@ public partial class MainWindow
         _currentXlsxFeatureReport = previousFeatureReport;
 
         ShowStartScreen();
-        SsExportNavBtn.Focus();
-        Keyboard.Focus(SsExportNavBtn);
+        _backstageFrame?.FocusEntry("BackstageExportButton");
         UpdateLayout();
         await WaitForRibbonScreenshotRenderPassAsync();
         await Task.Delay(250);
@@ -2798,8 +2795,7 @@ public partial class MainWindow
         _currentFilePath = null;
         ShowStartScreen();
         ShowInfoView();
-        SsShareNavBtn.Focus();
-        Keyboard.Focus(SsShareNavBtn);
+        _backstageFrame?.FocusEntry("BackstageShareButton");
         UpdateLayout();
         await WaitForRibbonScreenshotRenderPassAsync();
         await Task.Delay(250);
@@ -2816,8 +2812,7 @@ public partial class MainWindow
         await SaveBackstageRecentExportShareTourWorkbookAsync(savedWorkbookPath);
         ShowStartScreen();
         ShowInfoView();
-        SsShareNavBtn.Focus();
-        Keyboard.Focus(SsShareNavBtn);
+        _backstageFrame?.FocusEntry("BackstageShareButton");
         UpdateLayout();
         await WaitForRibbonScreenshotRenderPassAsync();
         await Task.Delay(250);
@@ -2830,7 +2825,9 @@ public partial class MainWindow
             "Info/share status records the saved local workbook state before Windows Share; the external OS share UI is intentionally not launched.",
             "main-window"));
 
-        SsBackBtn_Click(SsBackBtn, new RoutedEventArgs(ButtonBase.ClickEvent, SsBackBtn));
+        // The Back arrow now lives on the shared BackstageFrame; HideStartScreen() drives the same
+        // close-and-return-focus path the arrow/Esc trigger.
+        HideStartScreen();
         UpdateLayout();
         await WaitForRibbonScreenshotRenderPassAsync();
         await Task.Delay(250);
@@ -3161,8 +3158,7 @@ public partial class MainWindow
         await WaitForRibbonScreenshotRenderPassAsync();
         await Task.Delay(350);
 
-        SsAccountNavBtn.Focus();
-        Keyboard.Focus(SsAccountNavBtn);
+        _backstageFrame?.FocusEntry("BackstageAccountButton");
         await CaptureCurrentWindowAsync(outputDir, "freex_account_backstage_entry_focused", 760);
 
         var accountPlan = LocalAccountPlanner.Create(
@@ -3175,12 +3171,11 @@ public partial class MainWindow
             UiText.Get("DeferredCommand_LocalAccount_Title"),
             outputDir,
             "freex_account_local_account_message");
-        SsAccountBtn_Click(SsAccountNavBtn, new RoutedEventArgs(ButtonBase.ClickEvent, SsAccountNavBtn));
+        SsAccountBtn_Click(this, new RoutedEventArgs());
         var accountMessage = await accountMessageCapture;
 
         Activate();
-        SsAccountNavBtn.Focus();
-        Keyboard.Focus(SsAccountNavBtn);
+        _backstageFrame?.FocusEntry("BackstageAccountButton");
         UpdateLayout();
         await WaitForRibbonScreenshotRenderPassAsync();
         await CaptureCurrentWindowAsync(outputDir, "freex_account_backstage_focus_return", 760);
@@ -3259,9 +3254,8 @@ public partial class MainWindow
 
         Activate();
         ShowStartScreen();
-        SsOptionsNavBtn.Focus();
-        Keyboard.Focus(SsOptionsNavBtn);
-        focusReturned = IsActive && Keyboard.FocusedElement == SsOptionsNavBtn;
+        _backstageFrame?.FocusEntry("BackstageOptionsButton");
+        focusReturned = IsActive && (_backstageFrame?.IsEntryFocused("BackstageOptionsButton") ?? false);
         UpdateLayout();
         await WaitForRibbonScreenshotRenderPassAsync();
         await CaptureCurrentWindowAsync(outputDir, "freex_options_cancel_focus_return", 760);
