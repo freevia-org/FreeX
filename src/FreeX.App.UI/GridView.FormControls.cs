@@ -119,7 +119,9 @@ public partial class GridView
         DrawFormControlRaisedButton(dc, button);
         DrawFormTriangle(dc, button, pointingUp: false);
 
-        var text = FormControlRenderPlanner.GetCaption(control);
+        // A drop-down has no authored caption in Excel — its field shows the SELECTED ITEM text
+        // (the host resolves ListFillRange[SelectedIndex] into SelectedText). Blank when unresolved.
+        var text = FormControlRenderPlanner.GetSelectedText(control);
         if (!string.IsNullOrEmpty(text))
         {
             var textRect = FormControlRenderPlanner.GetDropDownTextRect(rect, button);

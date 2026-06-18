@@ -84,4 +84,13 @@ public sealed class FormControlModel
 
     /// <summary>For list/dropdown controls: the selected item index (1-based, Excel <c>sel</c>).</summary>
     public int? SelectedIndex { get; set; }
+
+    /// <summary>
+    /// For list/dropdown controls: the resolved display text of the currently selected item
+    /// (the <see cref="SelectedIndex"/>-th cell value of <see cref="ListFillRange"/>). This is a
+    /// render-time projection populated by the host before the control is handed to the renderer
+    /// (see <c>FormControlListResolver</c>) so the UI layer never needs raw workbook/range access.
+    /// <see langword="null"/> when there is no selection or the source range cannot be resolved.
+    /// </summary>
+    public string? SelectedText { get; set; }
 }
