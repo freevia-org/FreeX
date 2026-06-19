@@ -163,16 +163,19 @@ internal sealed class CapabilityProfile
         //      single <table>. CellValues are Lossy (export writes the DISPLAY value, re-import coerces text
         //      back to typed heuristically — compared by display, not raw type). MergedCells are Lossy: the
         //      <td colspan/rowspan> geometry round-trips exactly back into the same merged region.
-        //      Fonts/Fills/Borders ARE mapped to inline CSS on export and re-imported on read, but the
-        //      mapping is an APPROXIMATION (a compact subset of attributes, color/border-style quantization),
-        //      so an exact-equality assertion would mis-flag the expected approximation as a BUG. The harness
-        //      comparer scores style dimensions by exact equality even at Lossy, so these are honestly marked
-        //      None (their drift is an expected ceiling, never a bug) rather than asserted. Everything else —
-        //      formulas, number formats, alignment, multi-sheet, sheet names, widths/heights, charts, etc. —
-        //      is None (one table = one sheet; display text carries no formula or number-format string).
+        //      Fonts/Fills/Borders/Alignment are mapped to inline CSS on export and PARSED BACK on import, so
+        //      they ARE asserted — but as Lossy, because the CSS mapping is an approximation: colors are the
+        //      RESOLVED RGB (theme refs flatten to concrete values), a double underline collapses to single,
+        //      strikethrough is not carried, a pattern fill flattens to a solid swatch, border styles map to
+        //      the nearest CSS width/line bucket, and only the {left,center,right,justify} horizontal-align
+        //      subset survives (vertical/wrap/rotation/indent drop). The comparer's Lossy branch scores those
+        //      tolerances, so a faithful round-trip is BUGS:0. NumberFormats stays None — HTML carries the
+        //      DISPLAY TEXT, not the format string, so there is nothing to assert (honest, not a fake pass).
+        //      Everything else — formulas, multi-sheet, sheet names, widths/heights, charts, etc. — is None
+        //      (one table = one sheet; display text carries no formula).
         profiles.Add(new CapabilityProfile { Key = "html", Extension = ".html" }
-            .Set(Cap.Lossy, Dim.CellValues, Dim.MergedCells)
-            .Set(Cap.None, Dim.Formulas, Dim.NumberFormats, Dim.Fonts, Dim.Fills, Dim.Borders, Dim.Alignment,
+            .Set(Cap.Lossy, Dim.CellValues, Dim.MergedCells, Dim.Fonts, Dim.Fills, Dim.Borders, Dim.Alignment)
+            .Set(Cap.None, Dim.Formulas, Dim.NumberFormats,
                 Dim.MultiSheet, Dim.SheetNames, Dim.ColumnWidths, Dim.RowHeights, Dim.FreezePanes,
                 Dim.Hyperlinks, Dim.Comments, Dim.DefinedNames, Dim.DataValidation, Dim.ConditionalFormat,
                 Dim.Charts, Dim.Images, Dim.Vba));

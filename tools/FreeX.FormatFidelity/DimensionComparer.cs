@@ -64,9 +64,9 @@ internal static class DimensionComparer
             Dim.Formulas => CompareFormulas(d, cap, sheetPairs),
             Dim.NumberFormats => CompareNumberFormats(d, cap, sheetPairs),
             Dim.Fonts => CompareFonts(d, cap, sheetPairs),
-            Dim.Fills => CompareCellStyle(d, cap, sheetPairs, FillsEqual),
-            Dim.Borders => CompareCellStyle(d, cap, sheetPairs, BordersEqual),
-            Dim.Alignment => CompareCellStyle(d, cap, sheetPairs, AlignmentEqual),
+            Dim.Fills => CompareCellStyle(d, cap, sheetPairs, (a, b, c) => c == Cap.Lossy ? FillsEqualLossy(a, b) : FillsEqual(a.Style, b.Style)),
+            Dim.Borders => CompareCellStyle(d, cap, sheetPairs, (a, b, c) => c == Cap.Lossy ? BordersEqualLossy(a.Style, b.Style) : BordersEqual(a.Style, b.Style)),
+            Dim.Alignment => CompareCellStyle(d, cap, sheetPairs, (a, b, c) => c == Cap.Lossy ? AlignmentEqualLossy(a.Style, b.Style) : AlignmentEqual(a.Style, b.Style)),
             Dim.MultiSheet => CompareScalar(d, cap, refSnap.Sheets.Count, gotSnap.Sheets.Count,
                 $"sheet count {refSnap.Sheets.Count}->{gotSnap.Sheets.Count}"),
             Dim.SheetNames => CompareSheetNames(d, cap, refSnap, gotSnap),
@@ -212,7 +212,8 @@ internal static class DimensionComparer
 
     // ---- style comparison -------------------------------------------------------------------
 
-    private static DimensionResult CompareCellStyle(Dim d, Cap cap, List<SheetPair> pairs, Func<CellStyle, CellStyle, bool> eq)
+    private static DimensionResult CompareCellStyle(Dim d, Cap cap, List<SheetPair> pairs,
+        Func<WorkbookSnapshot.CellEntry, WorkbookSnapshot.CellEntry, Cap, bool> eq)
     {
         if (cap == Cap.None)
         {
@@ -222,7 +223,7 @@ internal static class DimensionComparer
                 foreach (var ((row, col), refCell) in pair.Ref.Cells)
                 {
                     pair.Got.Cells.TryGetValue((row, col), out var gotCell);
-                    if (gotCell is null || !eq(refCell.Style, gotCell.Style)) { anyChange = true; break; }
+                    if (gotCell is null || !eq(refCell, gotCell, cap)) { anyChange = true; break; }
                 }
             return MakeNoneResult(d, cap, anyChange);
         }
@@ -235,7 +236,7 @@ internal static class DimensionComparer
             {
                 total++;
                 pair.Got.Cells.TryGetValue((row, col), out var gotCell);
-                bool ok = gotCell is not null && eq(refCell.Style, gotCell.Style);
+                bool ok = gotCell is not null && eq(refCell, gotCell, cap);
                 if (ok) matched++;
                 else if (samples.Count < 6)
                     samples.Add($"{pair.Ref.Name}!{FidelityCompare.ColToLetter(col)}{row}");
@@ -250,12 +251,24 @@ internal static class DimensionComparer
     // A genuine substitution (e.g. effective "Aptos Narrow" -> "Calibri") still fails.
     private static DimensionResult CompareFonts(Dim d, Cap cap, List<SheetPair> pairs)
     {
-        Func<WorkbookSnapshot.CellEntry, WorkbookSnapshot.CellEntry, bool> eq = (a, b) =>
-            string.Equals(a.EffectiveFontName, b.EffectiveFontName, StringComparison.Ordinal) &&
-            Math.Abs(a.Style.FontSize - b.Style.FontSize) < 1e-6 &&
-            a.Style.Bold == b.Style.Bold && a.Style.Italic == b.Style.Italic &&
-            a.Style.Underline == b.Style.Underline && a.Style.Strikethrough == b.Style.Strikethrough &&
-            a.Style.FontColor == b.Style.FontColor;
+        // Full: assert the raw stored font (effective name + weight/style/underline/strike + raw color).
+        // Lossy (HTML): assert only what inline CSS carries — the EFFECTIVE family/size, bold/italic, the
+        // resolved font color, and underline treated as a single bucket (HTML cannot distinguish single vs
+        // double underline). Strikethrough is NOT carried by the writer, so it is a tolerated approximation
+        // and not asserted at Lossy.
+        Func<WorkbookSnapshot.CellEntry, WorkbookSnapshot.CellEntry, bool> eq = cap == Cap.Lossy
+            ? (a, b) =>
+                string.Equals(a.EffectiveFontName, b.EffectiveFontName, StringComparison.Ordinal) &&
+                Math.Abs(a.Style.FontSize - b.Style.FontSize) < 1e-6 &&
+                a.Style.Bold == b.Style.Bold && a.Style.Italic == b.Style.Italic &&
+                (a.Style.Underline || a.Style.DoubleUnderline) == (b.Style.Underline || b.Style.DoubleUnderline) &&
+                a.ResolvedFontColor == b.ResolvedFontColor
+            : (a, b) =>
+                string.Equals(a.EffectiveFontName, b.EffectiveFontName, StringComparison.Ordinal) &&
+                Math.Abs(a.Style.FontSize - b.Style.FontSize) < 1e-6 &&
+                a.Style.Bold == b.Style.Bold && a.Style.Italic == b.Style.Italic &&
+                a.Style.Underline == b.Style.Underline && a.Style.Strikethrough == b.Style.Strikethrough &&
+                a.Style.FontColor == b.Style.FontColor;
 
         if (cap == Cap.None)
         {
@@ -332,13 +345,62 @@ internal static class DimensionComparer
         Nullable.Equals(a.FillColor, b.FillColor) && a.FillPatternStyle == b.FillPatternStyle &&
         Nullable.Equals(a.FillPatternColor, b.FillPatternColor);
 
+    // Lossy (HTML): a fill is a flat background-color, so only the RESOLVED fill color is carried (theme
+    // refs arrive as concrete RGB, any pattern collapses to a solid swatch). Compare presence + RGB.
+    private static bool FillsEqualLossy(WorkbookSnapshot.CellEntry a, WorkbookSnapshot.CellEntry b) =>
+        Nullable.Equals(a.ResolvedFillColor, b.ResolvedFillColor);
+
     private static bool BordersEqual(CellStyle a, CellStyle b) =>
         a.BorderTop == b.BorderTop && a.BorderRight == b.BorderRight &&
         a.BorderBottom == b.BorderBottom && a.BorderLeft == b.BorderLeft;
 
+    // Lossy (HTML): each edge round-trips through the writer's BorderStyle -> (width,line) CSS quantization.
+    // Compare each edge by that CSS bucket + color, so a model style that maps to the same CSS as its
+    // reloaded form is a match (the nearest-CSS-equivalent tolerance the html profile documents).
+    private static bool BordersEqualLossy(CellStyle a, CellStyle b) =>
+        BorderEdgeEqualLossy(a.BorderTop, b.BorderTop) && BorderEdgeEqualLossy(a.BorderRight, b.BorderRight) &&
+        BorderEdgeEqualLossy(a.BorderBottom, b.BorderBottom) && BorderEdgeEqualLossy(a.BorderLeft, b.BorderLeft);
+
+    private static bool BorderEdgeEqualLossy(CellBorder a, CellBorder b)
+    {
+        var (wa, la) = CssBorderBucket(a.Style);
+        var (wb, lb) = CssBorderBucket(b.Style);
+        if (la is null && lb is null) return true;          // both "no border" once quantized
+        if (la is null || lb is null) return false;
+        return wa == wb && la == lb && a.Color == b.Color;
+    }
+
+    // Mirror of HtmlTableWriter.AppendBorder's BorderStyle -> (width-px, line) mapping. None -> (0,null).
+    private static (int Width, string? Line) CssBorderBucket(BorderStyle style) => style switch
+    {
+        BorderStyle.None => (0, null),
+        BorderStyle.Thin => (1, "solid"),
+        BorderStyle.Medium => (2, "solid"),
+        BorderStyle.Thick => (3, "solid"),
+        BorderStyle.Dashed => (1, "dashed"),
+        BorderStyle.Dotted => (1, "dotted"),
+        BorderStyle.Double => (3, "double"),
+        _ => (1, "solid"),
+    };
+
     private static bool AlignmentEqual(CellStyle a, CellStyle b) =>
         a.HorizontalAlignment == b.HorizontalAlignment && a.VerticalAlignment == b.VerticalAlignment &&
         a.WrapText == b.WrapText && a.TextRotation == b.TextRotation && a.IndentLevel == b.IndentLevel;
+
+    // Lossy (HTML): only horizontal text-align is carried, and only the {Left,Center,Right,Justify} subset
+    // (General/Distributed are not emitted and reload as General). Compare by that CSS bucket; vertical
+    // alignment / wrap / rotation / indent are not representable and are tolerated approximations.
+    private static bool AlignmentEqualLossy(CellStyle a, CellStyle b) =>
+        CssAlignBucket(a.HorizontalAlignment) == CssAlignBucket(b.HorizontalAlignment);
+
+    private static string? CssAlignBucket(HorizontalAlignment h) => h switch
+    {
+        HorizontalAlignment.Left => "left",
+        HorizontalAlignment.Center => "center",
+        HorizontalAlignment.Right => "right",
+        HorizontalAlignment.Justify => "justify",
+        _ => null, // General / Distributed -> not emitted
+    };
 
     // ---- structure --------------------------------------------------------------------------
 
