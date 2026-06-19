@@ -212,6 +212,7 @@ public class ProtectionGuardCoverageTests
         ["SetWorksheetViewOptionsCommand"] = "View options; not protection-blocked.",
         ["SetWorksheetZoomCommand"] = "Zoom level; not protection-blocked.",
         ["SetWorksheetOutlineSymbolsCommand"] = "Outline symbol visibility; not protection-blocked.",
+        ["SetWorksheetOutlineSettingsCommand"] = "Outline summary-direction + auto-style settings; not protection-blocked.",
         ["SetWorksheetShowFormulasCommand"] = "Show-formulas mode; not protection-blocked.",
         ["SetFreezePanesCommand"] = "Freeze panes; not protection-blocked.",
         ["SetSplitPanesCommand"] = "Split panes; not protection-blocked.",
