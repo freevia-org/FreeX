@@ -73,7 +73,24 @@ internal static class FreeWRibbonCommands
         Action? onTogglePrintLayout,
         Func<bool>? isPrintLayoutActive,
         Action? onToggleOutlineView,
-        Func<bool>? isOutlineViewActive)
+        Func<bool>? isOutlineViewActive) =>
+        Build(editor, stateStore, onPrintPreview, onToggleNavPane, isNavPaneVisible,
+            onToggleReadMode, isReadModeActive, onTogglePrintLayout, isPrintLayoutActive,
+            onToggleOutlineView, isOutlineViewActive, onZoomDialog: null);
+
+    public static RibbonCommandRegistry Build(
+        DocumentView editor,
+        RibbonStateStore stateStore,
+        Action? onPrintPreview,
+        Action? onToggleNavPane,
+        Func<bool>? isNavPaneVisible,
+        Action? onToggleReadMode,
+        Func<bool>? isReadModeActive,
+        Action? onTogglePrintLayout,
+        Func<bool>? isPrintLayoutActive,
+        Action? onToggleOutlineView,
+        Func<bool>? isOutlineViewActive,
+        Action? onZoomDialog)
     {
         var registry = new RibbonCommandRegistry();
         var stateful = new List<(RibbonCommandId Id, IRibbonStatefulCommand Command)>();
@@ -513,6 +530,11 @@ internal static class FreeWRibbonCommands
         // whether the outline view is currently active.
         if (onToggleOutlineView is not null && isOutlineViewActive is not null)
             registry.Register("freew.outline-view", new ToggleActionCommand(onToggleOutlineView, isOutlineViewActive));
+
+        // View tab — open Word's Zoom dialog (presets / page fits / custom %). The host computes the
+        // page-relative fit factors from the live viewport and applies the chosen factor to the editor.
+        if (onZoomDialog is not null)
+            registry.Register("freew.zoom-dialog", new ActionCommand(onZoomDialog));
 
         // View tab — Show Formatting Marks: a stateful toggle over the editor's display-only pilcrow /
         // space-dot / tab-arrow overlay. The marks are drawn as a non-editable adorner computed from the

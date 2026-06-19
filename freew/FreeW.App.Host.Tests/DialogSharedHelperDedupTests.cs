@@ -19,6 +19,7 @@ public sealed class DialogSharedHelperDedupTests
     [InlineData("PropertiesDialog.cs")]
     [InlineData("DateTimeDialog.cs")]
     [InlineData("StyleDialog.cs")]
+    [InlineData("ZoomDialog.cs")]
     public void DialogsWithOkCancelRows_UseSharedButtonRowFactory(string fileName)
     {
         var source = ReadDialogSource(fileName);

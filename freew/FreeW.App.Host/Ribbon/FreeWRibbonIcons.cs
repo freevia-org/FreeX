@@ -211,6 +211,7 @@ internal static class FreeWRibbonIcons
             ["freew.formatting-marks"] = RibbonCommandIconKind.FormattingMarks,
             ["freew.read-mode"] = RibbonCommandIconKind.ReadMode,
             ["freew.outline-view"] = RibbonCommandIconKind.MultilevelList,
+            ["freew.zoom-dialog"] = RibbonCommandIconKind.Zoom,
 
             // Mailings
             ["freew.merge-data"] = RibbonCommandIconKind.Recipients,

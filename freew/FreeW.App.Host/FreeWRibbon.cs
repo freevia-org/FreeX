@@ -293,6 +293,8 @@ internal static class FreeWRibbon
                     g.MediumToggle("freew.nav-pane", "Navigation Pane", RibbonCommandIconKind.NavigationPane);
                     g.MediumToggle("freew.formatting-marks", "Show ¶", RibbonCommandIconKind.FormattingMarks);
                 });
+                // Zoom group → Word's View > Zoom hero, opening the Zoom dialog (presets / page fits / custom %).
+                tab.Group("zoom", "Zoom", "Z", 80, g => g.Large("freew.zoom-dialog", "Zoom", RibbonCommandIconKind.Zoom));
             })
             .Tab("mailings", "Mailings", "M", tab =>
             {
