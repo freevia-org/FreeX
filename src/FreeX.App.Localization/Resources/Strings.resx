@@ -395,4 +395,62 @@
   <data name="TableStyleGallery_NoTable" xml:space="preserve"><value>Table Styles: the active cell is not inside a table.</value></data>
   <data name="TableStyleGallery_Applied" xml:space="preserve"><value>Table style: {0}.</value></data>
   <data name="TableStyleGallery_Failed" xml:space="preserve"><value>Table Styles failed.</value></data>
+  <!-- Drawing: shared object selection / status -->
+  <data name="Drawing_SelectPictureFirst" xml:space="preserve"><value>Select a picture first.</value></data>
+  <data name="Drawing_SelectShapeFirst" xml:space="preserve"><value>Select a shape first.</value></data>
+  <data name="Drawing_SelectObjectFirst" xml:space="preserve"><value>Select a picture or shape first.</value></data>
+  <data name="Drawing_ObjectNoLongerAvailable" xml:space="preserve"><value>The selected object is no longer available.</value></data>
+  <!-- Format Picture / Format Shape dialog -->
+  <data name="FormatPicture_PictureTitle" xml:space="preserve"><value>Format Picture</value></data>
+  <data name="FormatPicture_ShapeTitle" xml:space="preserve"><value>Format Shape</value></data>
+  <data name="FormatPicture_SizeHeader" xml:space="preserve"><value>Size</value></data>
+  <data name="FormatPicture_WidthLabel" xml:space="preserve"><value>Width:</value></data>
+  <data name="FormatPicture_HeightLabel" xml:space="preserve"><value>Height:</value></data>
+  <data name="FormatPicture_RotationLabel" xml:space="preserve"><value>Rotation (degrees):</value></data>
+  <data name="FormatPicture_LockAspectRatio" xml:space="preserve"><value>Lock aspect ratio</value></data>
+  <data name="FormatPicture_AltTextHeader" xml:space="preserve"><value>Alt Text</value></data>
+  <data name="FormatPicture_AltTextLabel" xml:space="preserve"><value>Describe this object for accessibility:</value></data>
+  <data name="FormatPicture_Applied" xml:space="preserve"><value>Object formatting updated.</value></data>
+  <!-- Shape Effects dialog -->
+  <data name="ShapeEffects_Title" xml:space="preserve"><value>Shape Effects</value></data>
+  <data name="ShapeEffects_Label" xml:space="preserve"><value>Effect preset:</value></data>
+  <data name="ShapeEffects_Applied" xml:space="preserve"><value>Shape effect set to {0}.</value></data>
+  <data name="ShapeEffects_Cleared" xml:space="preserve"><value>Shape effect cleared.</value></data>
+  <data name="ShapeEffects_None" xml:space="preserve"><value>No Effect</value></data>
+  <data name="ShapeEffects_NoneDescription" xml:space="preserve"><value>Remove shadow, glow, reflection, and other effects.</value></data>
+  <data name="ShapeEffects_Shadow" xml:space="preserve"><value>Shadow</value></data>
+  <data name="ShapeEffects_ShadowDescription" xml:space="preserve"><value>Add an outer drop shadow behind the shape.</value></data>
+  <data name="ShapeEffects_InnerShadow" xml:space="preserve"><value>Inner Shadow</value></data>
+  <data name="ShapeEffects_InnerShadowDescription" xml:space="preserve"><value>Cast a shadow inside the shape's edges.</value></data>
+  <data name="ShapeEffects_Reflection" xml:space="preserve"><value>Reflection</value></data>
+  <data name="ShapeEffects_ReflectionDescription" xml:space="preserve"><value>Mirror the shape beneath itself.</value></data>
+  <data name="ShapeEffects_Glow" xml:space="preserve"><value>Glow</value></data>
+  <data name="ShapeEffects_GlowDescription" xml:space="preserve"><value>Surround the shape with a soft colored glow.</value></data>
+  <data name="ShapeEffects_SoftEdges" xml:space="preserve"><value>Soft Edges</value></data>
+  <data name="ShapeEffects_SoftEdgesDescription" xml:space="preserve"><value>Feather the shape's outline into the background.</value></data>
+  <data name="ShapeEffects_Bevel" xml:space="preserve"><value>Bevel</value></data>
+  <data name="ShapeEffects_BevelDescription" xml:space="preserve"><value>Give the shape a raised, three-dimensional edge.</value></data>
+  <data name="ShapeEffects_ThreeDRotation" xml:space="preserve"><value>3-D Rotation</value></data>
+  <data name="ShapeEffects_ThreeDRotationDescription" xml:space="preserve"><value>Tilt the shape in three-dimensional space.</value></data>
+  <!-- Shape Gradient dialog -->
+  <data name="ShapeGradient_Title" xml:space="preserve"><value>Gradient Fill</value></data>
+  <data name="ShapeGradient_StartColorLabel" xml:space="preserve"><value>Start color:</value></data>
+  <data name="ShapeGradient_EndColorLabel" xml:space="preserve"><value>End color:</value></data>
+  <data name="ShapeGradient_DirectionLabel" xml:space="preserve"><value>Direction:</value></data>
+  <data name="ShapeGradient_ChooseStartColor" xml:space="preserve"><value>Start color...</value></data>
+  <data name="ShapeGradient_ChooseEndColor" xml:space="preserve"><value>End color...</value></data>
+  <data name="ShapeGradient_PreviewLabel" xml:space="preserve"><value>Preview</value></data>
+  <data name="ShapeGradient_Applied" xml:space="preserve"><value>Shape gradient set ({0} → {1}).</value></data>
+  <data name="ShapeGradient_DirectionDiagonalDown" xml:space="preserve"><value>Diagonal down</value></data>
+  <data name="ShapeGradient_DirectionHorizontal" xml:space="preserve"><value>Horizontal</value></data>
+  <data name="ShapeGradient_DirectionVertical" xml:space="preserve"><value>Vertical</value></data>
+  <data name="ShapeGradient_DirectionDiagonalUp" xml:space="preserve"><value>Diagonal up</value></data>
+  <!-- Crop Picture dialog -->
+  <data name="PictureCrop_Title" xml:space="preserve"><value>Crop Picture</value></data>
+  <data name="PictureCrop_LeftLabel" xml:space="preserve"><value>Left (%):</value></data>
+  <data name="PictureCrop_TopLabel" xml:space="preserve"><value>Top (%):</value></data>
+  <data name="PictureCrop_RightLabel" xml:space="preserve"><value>Right (%):</value></data>
+  <data name="PictureCrop_BottomLabel" xml:space="preserve"><value>Bottom (%):</value></data>
+  <data name="PictureCrop_Reset" xml:space="preserve"><value>Reset</value></data>
+  <data name="PictureCrop_Applied" xml:space="preserve"><value>Picture cropped.</value></data>
 </root>

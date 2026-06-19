@@ -4,6 +4,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -34,8 +35,17 @@ public sealed partial class MainWindow
         return new Dictionary<string, Action>(StringComparer.Ordinal)
         {
             // --- Picture Format (picture.selected). ---
-            ["pictureFormat.formatPicture"] = () => ReportContextualNotYetAvailable("Format Picture"),
-            ["pictureFormat.crop"] = () => ReportContextualNotYetAvailable("Crop Picture"),
+            // Format Picture dialog — size (W/H + lock aspect), rotation, and alt text via FormatPicturePlanner,
+            // applied through ResizePictureCommand / SetPictureLockAspectRatioCommand /
+            // SetDrawingObjectRotationCommand / SetPictureAltTextCommand.
+            ["pictureFormat.formatPicture"] = () => RunGuarded(OpenFormatPictureDialogAsync),
+            // Crop Picture is a dropdown: its "Crop..." menu item opens the per-edge crop-percentage dialog
+            // (PictureCropDialogPlanner + SetPictureCropCommand, image pictures only); "Reset Crop" clears the
+            // crop. The dropdown PARENT only opens the menu (the renderer never invokes a dropdown's own
+            // command), so it stays a registered, enabled no-op-style hint.
+            ["pictureFormat.crop"] = () => RefreshShell(UiText.Get("PictureCrop_Title")),
+            ["Crop"] = () => RunGuarded(OpenPictureCropDialogAsync),
+            ["Reset Crop"] = () => ResetSelectedPictureCrop(),
             // Picture z-order has no Core command yet (Core's z-order commands are shape-only); honest stub.
             ["pictureFormat.bringForward"] = () => ReportContextualNotYetAvailable("Bring Forward (pictures)"),
             ["pictureFormat.sendBackward"] = () => ReportContextualNotYetAvailable("Send Backward (pictures)"),
@@ -47,9 +57,26 @@ public sealed partial class MainWindow
             // --- Shape Format (shape.selected). ---
             ["shapeFormat.shapeFill"] = () => RunGuarded(SetSelectedShapeFillColorAsync),
             ["shapeFormat.shapeOutline"] = () => RunGuarded(SetSelectedShapeOutlineColorAsync),
-            ["shapeFormat.shapeGradient"] = () => RunGuarded(SetSelectedShapeGradientAsync),
+            // Shape Gradient dialog — start/end stop colors + direction via ShapeGradientPlanner, applied through
+            // SetDrawingShapeGradientCommand.
+            ["shapeFormat.shapeGradient"] = () => RunGuarded(OpenShapeGradientDialogAsync),
+            // Shape Effects is a dropdown whose eight menu items (No Effect / Shadow / Inner Shadow / Reflection
+            // / Glow / Soft Edges / Bevel / 3-D Rotation) are now all wired to apply the matching preset through
+            // SetDrawingShapeEffectCommand. The preset catalog (presets + labels) is single-sourced in the
+            // portable ShapeEffectsPlanner. The dropdown PARENT only opens the menu (the renderer never invokes
+            // a dropdown's own command), so it stays a registered, enabled menu hint. The two legacy
+            // shapeEffectNone/shapeEffectShadow aliases are preserved for backward compatibility.
             ["shapeFormat.shapeEffectNone"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.None),
             ["shapeFormat.shapeEffectShadow"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.Shadow),
+            ["shapeFormat.shapeEffects"] = () => RefreshShell(UiText.Get("ShapeEffects_Title")),
+            ["No Effect"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.None),
+            ["Shadow"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.Shadow),
+            ["Inner Shadow"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.InnerShadow),
+            ["Reflection"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.Reflection),
+            ["Glow"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.Glow),
+            ["Soft Edges"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.SoftEdges),
+            ["Bevel"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.Bevel),
+            ["3-D Rotation"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.ThreeDRotation),
             ["shapeFormat.bringForward"] = () => BringSelectedShapeForward(),
             ["shapeFormat.sendBackward"] = () => SendSelectedShapeBackward(),
             ["shapeFormat.selectionPane"] = () => ReportContextualNotYetAvailable("Selection Pane"),
@@ -70,13 +97,13 @@ public sealed partial class MainWindow
     {
         if (_selectedDrawingObjectKind != SelectionPaneObjectKind.Picture || _selectedDrawingObjectId is not { } id)
         {
-            RefreshShell("Select a picture first.");
+            RefreshShell(UiText.Get("Drawing_SelectPictureFirst"));
             return null;
         }
 
         var picture = _session.ActiveSheet.Pictures.FirstOrDefault(p => p.Id == id);
         if (picture is null)
-            RefreshShell("The selected picture is no longer available.");
+            RefreshShell(UiText.Get("Drawing_ObjectNoLongerAvailable"));
         return picture;
     }
 
@@ -87,13 +114,13 @@ public sealed partial class MainWindow
     {
         if (_selectedDrawingObjectKind != SelectionPaneObjectKind.Shape || _selectedDrawingObjectId is not { } id)
         {
-            RefreshShell("Select a shape first.");
+            RefreshShell(UiText.Get("Drawing_SelectShapeFirst"));
             return null;
         }
 
         var shape = _session.ActiveSheet.DrawingShapes.FirstOrDefault(s => s.Id == id);
         if (shape is null)
-            RefreshShell("The selected shape is no longer available.");
+            RefreshShell(UiText.Get("Drawing_ObjectNoLongerAvailable"));
         return shape;
     }
 
@@ -208,10 +235,28 @@ public sealed partial class MainWindow
         if (ResolveSelectedShape() is not { } shape)
             return;
 
+        // Single-source the preset normalization through the portable ShapeEffectsPlanner so an unsupported
+        // value collapses to None identically across shells.
+        var normalized = ShapeEffectsPlanner.NormalizePreset(preset);
+        var status = normalized == DrawingShapeEffectPreset.None
+            ? UiText.Get("ShapeEffects_Cleared")
+            : UiText.Format("ShapeEffects_Applied", ShapeEffectPresetLabel(normalized));
         RunDrawingObjectCommand(
-            new SetDrawingShapeEffectCommand(_session.ActiveSheet.Id, shape.Id, preset),
-            preset == DrawingShapeEffectPreset.None ? "Shape effect cleared." : $"Shape effect set to {preset}.",
+            new SetDrawingShapeEffectCommand(_session.ActiveSheet.Id, shape.Id, normalized),
+            status,
             "Shape Effects");
+    }
+
+    /// <summary>Localized label for an effect preset, resolved from the shared ShapeEffectsPlanner catalog.</summary>
+    private static string ShapeEffectPresetLabel(DrawingShapeEffectPreset preset)
+    {
+        foreach (var option in ShapeEffectsPlanner.CreateOptions())
+        {
+            if (option.Preset == preset)
+                return UiText.Get(option.LabelKey);
+        }
+
+        return preset.ToString();
     }
 
     // -------------------------------------------------------------------------------------------------------
