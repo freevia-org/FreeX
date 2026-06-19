@@ -85,7 +85,8 @@ docx reader/writer; unsupported renderings are noted under [Known limitations](#
 ### Paragraph formatting
 - Alignment (left/center/right/justify), line spacing, space before/after.
 - Indentation: increase/decrease step + explicit left/right/first-line (hanging) indents.
-- **Tab stops** (left/center/right/decimal) with **tab leaders** (dots/dashes/underline) — `w:tabs`/`w:tab`.
+- **Tab stops** (left/center/right/decimal) with **tab leaders** (dots/dashes/underline) — `w:tabs`/`w:tab`;
+  set/clear via the **Tabs dialog** (Home > Paragraph > Tabs…).
 - Paragraph **borders & shading** (`w:pBdr` + paragraph `w:shd`).
 - Flow control: keep-with-next, keep-lines-together, widow control (`w:keepNext`/`w:keepLines`/`w:widowControl`).
 - Bulleted / numbered / **multilevel** lists persisted to `word/numbering.xml` (`w:numPr`); multilevel
@@ -234,7 +235,8 @@ print-layout detail. The model/IO still round-trip these faithfully; the live vi
 
 - **Tab leaders** are carried verbatim through round-trip but are **not drawn** live (FlowDocument has
   no tab-leader API); FreeW preserves them via a paragraph `Tag`.
-- **Tab stops** are likewise preserved via the paragraph `Tag` (FlowDocument has no tab-stop API).
+- **Tab stops** are editable via the Tabs dialog (set/clear/clear-all, position + alignment + leader) and
+  preserved via the paragraph `Tag` (FlowDocument has no tab-stop API, so custom stops are not drawn live).
 - **Vertical page alignment** (`w:vAlign`) is persisted but not reflowed live.
 - **Widow/orphan control** is stored in the model/docx but is model-only on screen.
 - **Watermark** is stored as a `docProps/custom.xml` custom property (FreeW's own convention), not as a

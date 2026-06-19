@@ -82,6 +82,7 @@ internal static class FreeWRibbon
                     g.Icon("freew.space-before-toggle", "Add Space Before Paragraph", RibbonCommandIconKind.SpaceBefore);
                     g.Icon("freew.space-after-toggle", "Add Space After Paragraph", RibbonCommandIconKind.SpaceAfter);
                     g.Icon("freew.paragraph-dialog", "Paragraph Settings", RibbonCommandIconKind.TextFunction);
+                    g.Icon("freew.tabs-dialog", "Tabs", RibbonCommandIconKind.Ruler);
                     g.Icon("freew.keep-with-next", "Keep with Next", RibbonCommandIconKind.TextFunction);
                     g.Icon("freew.keep-lines", "Keep Lines Together", RibbonCommandIconKind.TextFunction);
                     g.Icon("freew.widow-control", "Widow/Orphan Control", RibbonCommandIconKind.TextFunction);

@@ -1089,6 +1089,17 @@ public sealed class DocumentView : RichTextBox
         SelectedModelParagraphs().FirstOrDefault()?.Formatting ?? ParagraphFormatting.Default;
 
     /// <summary>
+    /// Replace the tab stops (pPr/w:tabs) on every paragraph spanned by the selection with
+    /// <paramref name="tabStops"/> (positions/alignments/leaders), via the undo/redo bus. Pass an empty
+    /// list to clear all custom stops. The stops round-trip to docx through the existing w:tabs writer;
+    /// WPF's FlowDocument has no tab-stop API, so the model values are carried on the rendered
+    /// paragraph's Tag (a ParagraphTag) and applied by Print Preview / on save (see Render). Used by the
+    /// Tabs dialog (Home > Paragraph > Tabs…).
+    /// </summary>
+    public void SetParagraphTabStops(IReadOnlyList<TabStop> tabStops) =>
+        FormatSelectedModelParagraphs(f => f with { TabStops = tabStops });
+
+    /// <summary>
     /// An approximate "Page X of Y" for the status bar: the page the caret currently sits on, and the
     /// total page count. Both are computed from the editable surface's single continuous flow against the
     /// page's printable content height (<see cref="PageLayout.ContentAreaDip"/>) — the same approximation

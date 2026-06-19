@@ -373,6 +373,7 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.indent-increase", new ActionCommand(() => { editor.Focus(); editor.IncreaseIndent(); }));
         registry.Register("freew.indent-decrease", new ActionCommand(() => { editor.Focus(); editor.DecreaseIndent(); }));
         registry.Register("freew.paragraph-dialog", new ParagraphIndentCommand(editor));
+        registry.Register("freew.tabs-dialog", new TabsCommand(editor));
 
         // Home > Paragraph: toggle a box border on the selected paragraph(s), and pick/clear shading.
         registry.Register("freew.para-border", new ActionCommand(() => editor.ToggleParagraphBorder()));
@@ -689,6 +690,27 @@ internal static class FreeWRibbonCommands
             {
                 editor.Focus();
                 editor.SetParagraphIndents(chosen.Left, chosen.Right, chosen.FirstLine);
+            }
+        }
+    }
+
+    // Home > Paragraph > Tabs…: open the Tabs dialog seeded with the first selected paragraph's current
+    // tab stops, and apply the edited stop list to every selected paragraph through the view (reversible
+    // via the bus). The stops round-trip to docx via the existing w:tabs writer.
+    private sealed class TabsCommand(DocumentView editor) : IRibbonCommand
+    {
+        // Word's classic default tab-stop spacing (0.5in). The real value lives in word/settings.xml
+        // (w:defaultTabStop), which FreeW preserves verbatim but does not model; shown read-only for reference.
+        private const double DefaultTabStopPt = 36;
+
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var current = editor.CurrentParagraphFormatting.TabStops;
+            if (TabsDialog.Prompt(Window.GetWindow(editor), current, DefaultTabStopPt) is { } chosen)
+            {
+                editor.Focus();
+                editor.SetParagraphTabStops(chosen);
             }
         }
     }

@@ -73,6 +73,7 @@ internal static class FreeWRibbonIcons
             ["freew.indent-increase"] = RibbonCommandIconKind.IndentIncrease,
             ["freew.indent-decrease"] = RibbonCommandIconKind.IndentDecrease,
             ["freew.paragraph-dialog"] = RibbonCommandIconKind.LineSpacing,
+            ["freew.tabs-dialog"] = RibbonCommandIconKind.Ruler,
             ["freew.para-border"] = RibbonCommandIconKind.Border,
             ["freew.para-shading"] = RibbonCommandIconKind.Fill,
             ["freew.keep-with-next"] = RibbonCommandIconKind.Wrap,
