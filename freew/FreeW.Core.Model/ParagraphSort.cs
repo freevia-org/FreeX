@@ -1,48 +1,125 @@
+using System.Globalization;
+
 namespace FreeW.Core.Model;
 
 /// <summary>
-/// Pure, deterministic sort helpers for paragraphs and table rows. Sorting is by visible text
-/// (<see cref="Paragraph.PlainText"/> / a row's key-column cell text), using a culture-invariant
-/// ordinal (or ordinal-ignore-case) comparison so results are stable across locales. The sort is
-/// stable: items comparing equal keep their original relative order. The input collections are never
-/// mutated — a new, reordered list of the same item instances is returned — so callers stay in
-/// control of how the reordered items are spliced back into the model.
+/// The data type a sort key is interpreted as, mirroring the subset of Word's "Sort Text" dialog:
+/// <see cref="Text"/> compares the raw text, <see cref="Number"/> parses a leading numeric value,
+/// and <see cref="Date"/> parses a date/time. Items whose key fails to parse as the requested type
+/// fall back to the text comparison so a stray non-numeric/non-date line still lands deterministically.
+/// </summary>
+public enum SortKind
+{
+    Text,
+    Number,
+    Date,
+}
+
+/// <summary>
+/// Pure, deterministic sort helpers for paragraphs and table rows, matching the subset of Word's
+/// "Sort Text" dialog FreeW exposes: sort by visible text as <see cref="SortKind.Text"/>,
+/// <see cref="SortKind.Number"/>, or <see cref="SortKind.Date"/>, ascending or descending, with an
+/// optional case-sensitive toggle and an optional "has header row" that pins the first item in place.
+///
+/// <para>
+/// Text comparison is culture-invariant ordinal (or ordinal-ignore-case) so results are stable across
+/// locales; numbers and dates parse with the invariant culture. The sort is stable — items comparing
+/// equal keep their original relative order — and the input collections are never mutated: a new,
+/// reordered list of the same item instances is returned, so callers stay in control of how the
+/// reordered items are spliced back into the model.
+/// </para>
 /// </summary>
 public static class ParagraphSort
 {
     /// <summary>
-    /// Return <paramref name="paragraphs"/> reordered by <see cref="Paragraph.PlainText"/>. When
-    /// <paramref name="ascending"/> is false the order is reversed; <paramref name="caseSensitive"/>
-    /// selects ordinal vs. ordinal-ignore-case comparison. The same <see cref="Paragraph"/> instances
-    /// are returned (never copies), the input is left untouched, and the sort is stable.
+    /// Return <paramref name="paragraphs"/> reordered by <see cref="Paragraph.PlainText"/> as plain
+    /// text. When <paramref name="ascending"/> is false the order is reversed;
+    /// <paramref name="caseSensitive"/> selects ordinal vs. ordinal-ignore-case comparison. The same
+    /// <see cref="Paragraph"/> instances are returned (never copies), the input is left untouched, and
+    /// the sort is stable.
     /// </summary>
     public static IReadOnlyList<Paragraph> Sort(
-        IReadOnlyList<Paragraph> paragraphs, bool ascending, bool caseSensitive)
-    {
-        ArgumentNullException.ThrowIfNull(paragraphs);
-        var comparer = KeyComparer(caseSensitive);
-        // OrderBy is a stable sort; reverse the comparer (not the result) so ties keep original order.
-        return ascending
-            ? [.. paragraphs.OrderBy(p => p.PlainText, comparer)]
-            : [.. paragraphs.OrderByDescending(p => p.PlainText, comparer)];
-    }
+        IReadOnlyList<Paragraph> paragraphs, bool ascending, bool caseSensitive) =>
+        Sort(paragraphs, SortKind.Text, ascending, caseSensitive, hasHeaderRow: false);
+
+    /// <summary>
+    /// Return <paramref name="paragraphs"/> reordered by <see cref="Paragraph.PlainText"/>, interpreting
+    /// each key as <paramref name="kind"/> (<see cref="SortKind.Text"/>/<see cref="SortKind.Number"/>/
+    /// <see cref="SortKind.Date"/>). When <paramref name="hasHeaderRow"/> is true the first paragraph is
+    /// left in place and only the rest are reordered. Direction and case follow
+    /// <paramref name="ascending"/>/<paramref name="caseSensitive"/>. The same instances are returned,
+    /// the input is left untouched, and the sort is stable.
+    /// </summary>
+    public static IReadOnlyList<Paragraph> Sort(
+        IReadOnlyList<Paragraph> paragraphs,
+        SortKind kind,
+        bool ascending,
+        bool caseSensitive,
+        bool hasHeaderRow) =>
+        SortPinningHeader(paragraphs, hasHeaderRow, p => p.PlainText, kind, ascending, caseSensitive);
 
     /// <summary>
     /// Return <paramref name="rows"/> reordered by the text of each row's cell in column
-    /// <paramref name="keyColumn"/> (the cell's <see cref="TableCell.PlainText"/>). Rows that are too
-    /// short to have that column sort as if the key were empty. When <paramref name="ascending"/> is
-    /// false the order is reversed; <paramref name="caseSensitive"/> selects ordinal vs.
-    /// ordinal-ignore-case comparison. The same <see cref="TableRow"/> instances are returned, the
-    /// input is left untouched, and the sort is stable.
+    /// <paramref name="keyColumn"/> (the cell's <see cref="TableCell.PlainText"/>). Rows too short to
+    /// have that column sort as if the key were empty. Direction/case follow
+    /// <paramref name="ascending"/>/<paramref name="caseSensitive"/>; comparison is plain text. The same
+    /// <see cref="TableRow"/> instances are returned, the input is left untouched, and the sort is stable.
     /// </summary>
     public static IReadOnlyList<TableRow> SortRows(
-        IReadOnlyList<TableRow> rows, int keyColumn, bool ascending, bool caseSensitive)
+        IReadOnlyList<TableRow> rows, int keyColumn, bool ascending, bool caseSensitive) =>
+        SortRows(rows, keyColumn, SortKind.Text, ascending, caseSensitive, hasHeaderRow: false);
+
+    /// <summary>
+    /// Return <paramref name="rows"/> reordered by the text of each row's cell in column
+    /// <paramref name="keyColumn"/>, interpreting each key as <paramref name="kind"/>. When
+    /// <paramref name="hasHeaderRow"/> is true the first row is left in place and only the body rows are
+    /// reordered (Word's "Header row" option). Rows too short to have the key column sort as if the key
+    /// were empty. Direction/case follow <paramref name="ascending"/>/<paramref name="caseSensitive"/>.
+    /// The same instances are returned, the input is left untouched, and the sort is stable.
+    /// </summary>
+    public static IReadOnlyList<TableRow> SortRows(
+        IReadOnlyList<TableRow> rows,
+        int keyColumn,
+        SortKind kind,
+        bool ascending,
+        bool caseSensitive,
+        bool hasHeaderRow) =>
+        SortPinningHeader(rows, hasHeaderRow, r => CellKey(r, keyColumn), kind, ascending, caseSensitive);
+
+    // Sort a list with an optional pinned header: when hasHeaderRow is true (and there is more than one
+    // item) the first item stays put and only items[1..] are reordered; otherwise the whole list sorts.
+    private static IReadOnlyList<T> SortPinningHeader<T>(
+        IReadOnlyList<T> items,
+        bool hasHeaderRow,
+        Func<T, string> keyOf,
+        SortKind kind,
+        bool ascending,
+        bool caseSensitive)
     {
-        ArgumentNullException.ThrowIfNull(rows);
-        var comparer = KeyComparer(caseSensitive);
+        ArgumentNullException.ThrowIfNull(items);
+        if (!hasHeaderRow || items.Count < 2)
+            return SortBody(items, keyOf, kind, ascending, caseSensitive);
+
+        var header = items[0];
+        var body = new List<T>(items.Count - 1);
+        for (var i = 1; i < items.Count; i++)
+            body.Add(items[i]);
+
+        var sorted = SortBody(body, keyOf, kind, ascending, caseSensitive);
+        var result = new List<T>(items.Count) { header };
+        result.AddRange(sorted);
+        return result;
+    }
+
+    // Stable order of items by their key under the given kind/direction/case. OrderBy/OrderByDescending
+    // are stable, so reversing direction is expressed by the comparer choice (not by reversing results).
+    private static IReadOnlyList<T> SortBody<T>(
+        IReadOnlyList<T> items, Func<T, string> keyOf, SortKind kind, bool ascending, bool caseSensitive)
+    {
+        var comparer = new SortKeyComparer(kind, caseSensitive);
         return ascending
-            ? [.. rows.OrderBy(r => CellKey(r, keyColumn), comparer)]
-            : [.. rows.OrderByDescending(r => CellKey(r, keyColumn), comparer)];
+            ? [.. items.OrderBy(keyOf, comparer)]
+            : [.. items.OrderByDescending(keyOf, comparer)];
     }
 
     // The key text for a row: the plain text of its cell in keyColumn, or empty when the row has no
@@ -50,6 +127,62 @@ public static class ParagraphSort
     private static string CellKey(TableRow row, int keyColumn) =>
         keyColumn >= 0 && keyColumn < row.Cells.Count ? row.Cells[keyColumn].PlainText : string.Empty;
 
-    private static StringComparer KeyComparer(bool caseSensitive) =>
-        caseSensitive ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase;
+    // Compares string keys interpreted as text, numbers, or dates. Numeric/date keys that fail to parse
+    // sort after all parseable ones (and tie-break on text) so the result stays total and deterministic.
+    private sealed class SortKeyComparer(SortKind kind, bool caseSensitive) : IComparer<string>
+    {
+        private readonly StringComparer _text =
+            caseSensitive ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase;
+
+        public int Compare(string? x, string? y)
+        {
+            x ??= string.Empty;
+            y ??= string.Empty;
+            return kind switch
+            {
+                SortKind.Number => CompareParsed(x, y, TryParseNumber),
+                SortKind.Date => CompareParsed(x, y, TryParseDate),
+                _ => _text.Compare(x, y),
+            };
+        }
+
+        // Compare two keys by a parsed value; unparseable keys sort after parseable ones, and two
+        // unparseable (or exactly-equal) keys tie-break on the text comparison for a stable total order.
+        private int CompareParsed(string x, string y, ParseKey parse)
+        {
+            var hasX = parse(x, out var vx);
+            var hasY = parse(y, out var vy);
+            if (hasX && hasY)
+            {
+                var cmp = vx.CompareTo(vy);
+                return cmp != 0 ? cmp : _text.Compare(x, y);
+            }
+            if (hasX != hasY)
+                return hasX ? -1 : 1; // parseable keys first
+            return _text.Compare(x, y);
+        }
+
+        private delegate bool ParseKey(string text, out double value);
+
+        // Parse a leading numeric value (currency/grouping tolerated), invariant culture.
+        private static bool TryParseNumber(string text, out double value) =>
+            double.TryParse(
+                text.Trim(),
+                NumberStyles.Number | NumberStyles.AllowLeadingSign | NumberStyles.AllowCurrencySymbol,
+                CultureInfo.InvariantCulture,
+                out value);
+
+        // Parse a date/time, invariant culture; the comparable value is the tick count as a double.
+        private static bool TryParseDate(string text, out double value)
+        {
+            if (DateTime.TryParse(
+                    text.Trim(), CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+            {
+                value = date.Ticks;
+                return true;
+            }
+            value = 0;
+            return false;
+        }
+    }
 }

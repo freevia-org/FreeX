@@ -1349,12 +1349,23 @@ public sealed class DocumentView : RichTextBox
 
     /// <summary>
     /// Sort the paragraphs spanned by the current selection (or, with a bare caret, the paragraph the
-    /// caret sits in) by their text, in place. Tables interleaved in the selected span are left fixed at
-    /// their own positions — only the paragraph blocks are reordered among their own slots — so the
-    /// operation stays well-defined over a mixed body. Routes through the undo/redo bus (one reversible
-    /// <see cref="ReplaceBlocksCommand"/>) and re-renders. No-op without at least two sortable paragraphs.
+    /// caret sits in) by their text, ascending and case-insensitively. Convenience overload of
+    /// <see cref="SortSelectedParagraphs(SortKind, bool, bool, bool)"/>.
     /// </summary>
-    public void SortSelectedParagraphs(bool ascending, bool caseSensitive)
+    public void SortSelectedParagraphs(bool ascending, bool caseSensitive) =>
+        SortSelectedParagraphs(SortKind.Text, ascending, caseSensitive, hasHeaderRow: false);
+
+    /// <summary>
+    /// Sort the paragraphs spanned by the current selection (or, with a bare caret, the paragraph the
+    /// caret sits in) in place, interpreting each as <paramref name="kind"/>
+    /// (<see cref="SortKind.Text"/>/<see cref="SortKind.Number"/>/<see cref="SortKind.Date"/>). When
+    /// <paramref name="hasHeaderRow"/> is true the first selected paragraph stays put and only the rest
+    /// reorder. Tables interleaved in the selected span are left fixed at their own positions — only the
+    /// paragraph blocks are reordered among their own slots — so the operation stays well-defined over a
+    /// mixed body. Routes through the undo/redo bus (one reversible <see cref="ReplaceBlocksCommand"/>)
+    /// and re-renders. No-op without at least two sortable paragraphs.
+    /// </summary>
+    public void SortSelectedParagraphs(SortKind kind, bool ascending, bool caseSensitive, bool hasHeaderRow)
     {
         Focus();
         CommitToModel();
@@ -1379,7 +1390,7 @@ public sealed class DocumentView : RichTextBox
         if (paragraphs.Count < 2)
             return; // nothing to reorder
 
-        var sorted = ParagraphSort.Sort(paragraphs, ascending, caseSensitive);
+        var sorted = ParagraphSort.Sort(paragraphs, kind, ascending, caseSensitive, hasHeaderRow);
 
         // Rebuild the span: drop sorted paragraphs back into the paragraph slots, keeping any
         // interleaved tables fixed at their own positions.
@@ -1389,6 +1400,38 @@ public sealed class DocumentView : RichTextBox
             replacement.Add(_model.Blocks[i] is ModelParagraph ? sorted[nextSorted++] : _model.Blocks[i]);
 
         _commands.Execute(new ReplaceBlocksCommand(first, replacement.Count, replacement));
+    }
+
+    /// <summary>
+    /// Sort the rows of the table containing the caret by the caret's column (matching Word, which sorts
+    /// table rows by a chosen column when the selection is inside a table), interpreting each key as
+    /// <paramref name="kind"/>. When <paramref name="hasHeaderRow"/> is true the first row stays put and
+    /// only the body rows reorder. A fresh table with the same formatting, column grid, and row instances
+    /// (reordered) replaces the original through the undo/redo bus (one reversible
+    /// <see cref="ReplaceBlocksCommand"/>). No-op outside a table or with fewer than two sortable rows.
+    /// </summary>
+    public void SortCaretTableRows(SortKind kind, bool ascending, bool caseSensitive, bool hasHeaderRow)
+    {
+        Focus();
+        CommitToModel();
+
+        var (blockIndex, _, columnIndex) = CaretTableLocation();
+        if (blockIndex < 0 || blockIndex >= _model.Blocks.Count
+            || _model.Blocks[blockIndex] is not ModelTable table)
+            return;
+        if (table.Rows.Count < 2)
+            return;
+
+        var keyColumn = columnIndex < 0 ? 0 : columnIndex;
+        var sorted = ParagraphSort.SortRows(table.Rows, keyColumn, kind, ascending, caseSensitive, hasHeaderRow);
+
+        // Rebuild the table preserving its formatting and column grid; only the row order changes (the
+        // same TableRow instances are reused, so cell content/shading travels with each row).
+        var replacement = new ModelTable { Formatting = table.Formatting };
+        replacement.ColumnWidthsPt.AddRange(table.ColumnWidthsPt);
+        replacement.Rows.AddRange(sorted);
+
+        _commands.Execute(new ReplaceBlocksCommand(blockIndex, 1, new ModelBlock[] { replacement }));
     }
 
     /// <summary>

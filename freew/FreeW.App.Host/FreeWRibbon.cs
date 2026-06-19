@@ -70,6 +70,7 @@ internal static class FreeWRibbon
                     g.Icon("freew.align-center", "Center", RibbonCommandIconKind.AlignCenter);
                     g.Icon("freew.align-right", "Align Right", RibbonCommandIconKind.AlignRight);
                     g.Icon("freew.align-justify", "Justify", RibbonCommandIconKind.AlignJustify);
+                    g.Icon("freew.sort", "Sort", RibbonCommandIconKind.Sort);
                     g.ComboBox("freew.line-spacing", "Line and Paragraph Spacing", c => c with
                     {
                         Items = new[] { "1.0", "1.15", "1.5", "2.0" },
@@ -245,8 +246,7 @@ internal static class FreeWRibbon
                 });
                 tab.Group("data", "Data", "D", 88, g =>
                 {
-                    // Small group → labelled Medium buttons.
-                    g.Medium("freew.sort", "Sort", RibbonCommandIconKind.Sort);
+                    // Small group → labelled Medium buttons. (Sort lives in Home > Paragraph, matching Word.)
                     g.Medium("freew.text-to-table", "Text to Table", RibbonCommandIconKind.Table, accent: RibbonCommandIconAccent.Green);
                     g.Medium("freew.table-to-text", "Table to Text", RibbonCommandIconKind.TextFunction);
                 });

@@ -2688,83 +2688,25 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // Layout > Sort: open the sort dialog (order + case option) and sort the selected paragraphs in
-    // place. The view reorders the paragraph blocks through its undo/redo bus and re-renders.
+    // Home > Paragraph > Sort: open the Sort dialog (type + order + case + header-row) and sort either
+    // the rows of the table at the caret (by the caret's column, matching Word) or the selected
+    // paragraphs. The view routes the reorder through its undo/redo bus and re-renders.
     private sealed class SortCommand(DocumentView editor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            var options = SortDialog.Ask(Window.GetWindow(editor));
-            if (options is null)
+            var inTable = editor.IsCaretInTable();
+            var choice = SortDialog.Prompt(Window.GetWindow(editor), forTable: inTable);
+            if (choice is null)
                 return; // cancelled
+
             editor.Focus();
-            editor.SortSelectedParagraphs(options.Value.Ascending, options.Value.CaseSensitive);
-        }
-    }
-
-    // The options captured by the sort dialog: sort direction and whether the comparison is case-sensitive.
-    private readonly record struct SortOptions(bool Ascending, bool CaseSensitive);
-
-    // A small modal dialog for Sort: A→Z / Z→A radios plus a "Case sensitive" checkbox. Returns the
-    // chosen options, or null if cancelled.
-    private static class SortDialog
-    {
-        public static SortOptions? Ask(Window? owner)
-        {
-            var ascending = new System.Windows.Controls.RadioButton
-            {
-                Content = "Ascending (A → Z)",
-                IsChecked = true,
-                Margin = new Thickness(0, 0, 0, 4)
-            };
-            var descending = new System.Windows.Controls.RadioButton
-            {
-                Content = "Descending (Z → A)",
-                Margin = new Thickness(0, 0, 0, 8)
-            };
-            var caseSensitive = new System.Windows.Controls.CheckBox
-            {
-                Content = "Case sensitive",
-                Margin = new Thickness(0, 0, 0, 12)
-            };
-
-            SortOptions? result = null;
-            var dialog = new Window
-            {
-                Title = "Sort",
-                SizeToContent = SizeToContent.WidthAndHeight,
-                ResizeMode = ResizeMode.NoResize,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                Owner = owner,
-                ShowInTaskbar = false
-            };
-
-            var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
-            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
-            ok.Click += (_, _) =>
-            {
-                result = new SortOptions(ascending.IsChecked == true, caseSensitive.IsChecked == true);
-                dialog.DialogResult = true;
-            };
-
-            var buttons = new System.Windows.Controls.StackPanel
-            {
-                Orientation = System.Windows.Controls.Orientation.Horizontal,
-                HorizontalAlignment = HorizontalAlignment.Right
-            };
-            buttons.Children.Add(ok);
-            buttons.Children.Add(cancel);
-
-            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16), MinWidth = 240 };
-            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Sort selected paragraphs by text:", Margin = new Thickness(0, 0, 0, 8) });
-            panel.Children.Add(ascending);
-            panel.Children.Add(descending);
-            panel.Children.Add(caseSensitive);
-            panel.Children.Add(buttons);
-            dialog.Content = panel;
-
-            return dialog.ShowDialog() == true ? result : null;
+            var c = choice.Value;
+            if (inTable)
+                editor.SortCaretTableRows(c.Kind, c.Ascending, c.CaseSensitive, c.HasHeaderRow);
+            else
+                editor.SortSelectedParagraphs(c.Kind, c.Ascending, c.CaseSensitive, c.HasHeaderRow);
         }
     }
 
