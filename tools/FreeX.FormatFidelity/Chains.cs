@@ -83,17 +83,15 @@ internal static class Chains
                 Hops = new[] { new Hop("xlsx-rebuilt", x) },
                 MutateBeforeSnapshot = true,
             },
-            // SpreadsheetML round-trip — merges/widths/numfmt Full; styles None; R1C1/comment bugs surface.
-            // Terminates at the xml reload (single hop): the chain capability intersection is identical to
-            // adding a trailing ->xlsx hop (xml already collapses styling to None, so a later xlsx hop can't
-            // resurrect it), and stopping at xml avoids a ClosedXML AddHyperlinkRelationship(null) crash that
-            // the xml adapter triggers when its null-URI hyperlinks are re-serialized to xlsx. The compared
-            // surface is exactly what the spec asks for: styles EXPECTED-LOSS, structure Full, formulas Lossy.
+            // SpreadsheetML full round-trip — merges/widths/numfmt/formulas Full; styles None.
+            // The trailing ->xlsx hop is back now that (a) R1C1<->A1 conversion makes formulas round-trip
+            // faithfully (xml Formulas promoted to Full) and (b) the xml adapter no longer emits null-URI
+            // hyperlinks, so re-serializing to xlsx no longer hits ClosedXML AddHyperlinkRelationship(null).
             new Chain
             {
-                Name = "xlsx -> xml (reload)",
+                Name = "xlsx -> xml -> xlsx",
                 SourcePath = sourcePath,
-                Hops = new[] { new Hop("xml", ".xml") },
+                Hops = new[] { new Hop("xml", ".xml"), new Hop("xlsx-rebuilt", x) },
             },
             // CSV round-trip — values + formula-text only; styles/sheets EXPECTED-LOSS.
             new Chain

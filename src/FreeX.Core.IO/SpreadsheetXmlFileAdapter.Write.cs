@@ -291,11 +291,16 @@ public sealed partial class SpreadsheetXmlFileAdapter
         }
 
         if (cell.Cell.FormulaText is { Length: > 0 } formulaText)
-            WriteSpreadsheetAttribute(writer, SpreadsheetFormulaAttribute, formulaText.StartsWith("=", StringComparison.Ordinal) ? formulaText : $"={formulaText}");
-
-        if (!string.IsNullOrWhiteSpace(cell.HyperlinkTarget))
         {
-            WriteSpreadsheetAttribute(writer, SpreadsheetHrefAttribute, cell.HyperlinkTarget);
+            var a1 = formulaText.StartsWith("=", StringComparison.Ordinal) ? formulaText[1..] : formulaText;
+            // Excel expects SpreadsheetML formulas in R1C1; convert from the model's A1 form.
+            var r1c1 = ConvertA1FormulaToR1C1(a1, cell.Row, cell.Col);
+            WriteSpreadsheetAttribute(writer, SpreadsheetFormulaAttribute, $"={r1c1}");
+        }
+
+        if (BuildHyperlinkHref(cell.HyperlinkTarget, cell.HyperlinkMetadata) is { } href)
+        {
+            WriteSpreadsheetAttribute(writer, SpreadsheetHrefAttribute, href);
             if (!string.IsNullOrWhiteSpace(cell.HyperlinkMetadata?.ScreenTip))
                 WriteSpreadsheetAttribute(writer, SpreadsheetHrefScreenTipAttribute, cell.HyperlinkMetadata.ScreenTip);
         }

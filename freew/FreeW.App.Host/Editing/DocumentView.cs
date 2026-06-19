@@ -5083,10 +5083,86 @@ public sealed class DocumentView : RichTextBox
             paragraph = new WpfParagraph();
             Document.Blocks.Add(paragraph);
         }
-        paragraph.Inlines.Add(inline);
+        InsertInlineAt(paragraph, caret, inline);
+        CaretPosition = inline.ContentEnd.GetInsertionPosition(LogicalDirection.Forward) ?? inline.ElementEnd;
 
         CommitToModel();
         Render();
+    }
+
+    private static void InsertInlineAt(WpfParagraph paragraph, TextPointer caret, Inline inline)
+    {
+        if (paragraph.Inlines.FirstInline is null)
+        {
+            paragraph.Inlines.Add(inline);
+            return;
+        }
+
+        if (caret.Parent is WpfRun run && ReferenceEquals(run.Parent, paragraph))
+        {
+            InsertInlineIntoRun(paragraph, run, caret, inline);
+            return;
+        }
+
+        foreach (var existing in paragraph.Inlines)
+        {
+            if (caret.CompareTo(existing.ContentStart) <= 0)
+            {
+                paragraph.Inlines.InsertBefore(existing, inline);
+                return;
+            }
+
+            if (caret.CompareTo(existing.ContentEnd) <= 0)
+            {
+                paragraph.Inlines.InsertAfter(existing, inline);
+                return;
+            }
+        }
+
+        paragraph.Inlines.Add(inline);
+    }
+
+    private static void InsertInlineIntoRun(WpfParagraph paragraph, WpfRun run, TextPointer caret, Inline inline)
+    {
+        var before = new TextRange(run.ContentStart, caret).Text;
+        var after = new TextRange(caret, run.ContentEnd).Text;
+
+        if (before.Length == 0)
+        {
+            paragraph.Inlines.InsertBefore(run, inline);
+            return;
+        }
+
+        if (after.Length == 0)
+        {
+            paragraph.Inlines.InsertAfter(run, inline);
+            return;
+        }
+
+        run.Text = before;
+        var tail = CloneTextRun(run, after);
+        paragraph.Inlines.InsertAfter(run, inline);
+        paragraph.Inlines.InsertAfter(inline, tail);
+    }
+
+    private static WpfRun CloneTextRun(WpfRun source, string text)
+    {
+        var clone = new WpfRun(text)
+        {
+            FontWeight = source.FontWeight,
+            FontStyle = source.FontStyle,
+            FontFamily = source.FontFamily,
+            FontSize = source.FontSize,
+            Foreground = source.Foreground,
+            Background = source.Background,
+            BaselineAlignment = source.BaselineAlignment,
+            TextDecorations = source.TextDecorations,
+            FlowDirection = source.FlowDirection,
+            Tag = source.Tag,
+            ToolTip = source.ToolTip
+        };
+        Typography.SetCapitals(clone, Typography.GetCapitals(source));
+        return clone;
     }
 
     /// <summary>

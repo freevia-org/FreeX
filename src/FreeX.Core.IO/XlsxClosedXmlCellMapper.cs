@@ -57,7 +57,7 @@ internal static class XlsxClosedXmlCellMapper
     {
         if (xlValue.IsBlank) return BlankValue.Instance;
         if (xlValue.IsNumber) return new NumberValue(xlValue.GetNumber());
-        if (xlValue.IsText) return new TextValue(xlValue.GetText());
+        if (xlValue.IsText) return new TextValue(DecodeUnresolvedXmlHexEscapes(xlValue.GetText()));
         if (xlValue.IsBoolean) return new BoolValue(xlValue.GetBoolean());
         if (xlValue.IsDateTime)
         {
@@ -468,4 +468,99 @@ internal static class XlsxClosedXmlCellMapper
 
     private static bool IsSupportedFontSize(double fontSize) =>
         double.IsFinite(fontSize) && fontSize > 0 && fontSize <= 409;
+
+    /// <summary>
+    /// Decodes OOXML <c>_xHHHH_</c> hex escapes that ClosedXML leaves unresolved when it reads a cached
+    /// formula-string value (the <c>&lt;v&gt;</c> of a <c>t="str"</c> cell). ClosedXML's own writer escapes
+    /// astral characters (emoji, etc.) as a pair of surrogate-half escapes such as
+    /// <c>_xD83C__xDF89_</c> for U+1F389, but its reader only un-escapes the shared-string / inline-string
+    /// path, so a full ClosedXML re-save round-trips emoji in formula results into literal escape text.
+    ///
+    /// The decode is scoped narrowly: it only runs when the text contains a UTF-16 surrogate-half escape
+    /// (<c>_xD800_</c>–<c>_xDFFF_</c>). A lone surrogate half is never valid in a real .NET string, so this
+    /// pattern is unambiguously the ClosedXML artifact and can never collide with legitimate user text that
+    /// happens to contain a BMP-looking <c>_x0041_</c> literal (Excel re-escapes those on every save, so they
+    /// never reach the model as literal text either way).
+    /// </summary>
+    internal static string DecodeUnresolvedXmlHexEscapes(string text)
+    {
+        if (string.IsNullOrEmpty(text) || !ContainsSurrogateHalfEscape(text))
+            return text;
+
+        var builder = new System.Text.StringBuilder(text.Length);
+        int i = 0;
+        while (i < text.Length)
+        {
+            if (TryReadHexEscape(text, i, out var code, out var consumed) &&
+                code is >= 0xD800 and <= 0xDFFF)
+            {
+                // High surrogate immediately followed by a low-surrogate escape -> recombine to the astral char.
+                if (code <= 0xDBFF &&
+                    TryReadHexEscape(text, i + consumed, out var low, out var lowConsumed) &&
+                    low is >= 0xDC00 and <= 0xDFFF)
+                {
+                    builder.Append((char)code);
+                    builder.Append((char)low);
+                    i += consumed + lowConsumed;
+                    continue;
+                }
+
+                // A lone surrogate-half escape: emit the surrogate code unit (matches what Excel renders).
+                builder.Append((char)code);
+                i += consumed;
+                continue;
+            }
+
+            builder.Append(text[i]);
+            i++;
+        }
+
+        return builder.ToString();
+    }
+
+    private static bool ContainsSurrogateHalfEscape(string text)
+    {
+        int idx = text.IndexOf("_xD", StringComparison.Ordinal);
+        while (idx >= 0)
+        {
+            if (TryReadHexEscape(text, idx, out var code, out _) && code is >= 0xD800 and <= 0xDFFF)
+                return true;
+            idx = text.IndexOf("_xD", idx + 1, StringComparison.Ordinal);
+        }
+
+        return false;
+    }
+
+    /// <summary>Parses a <c>_xHHHH_</c> escape at <paramref name="start"/>; HHHH is exactly 4 hex digits.</summary>
+    private static bool TryReadHexEscape(string text, int start, out int code, out int consumed)
+    {
+        code = 0;
+        consumed = 0;
+        const int length = 7; // "_xHHHH_"
+        if (start < 0 || start + length > text.Length)
+            return false;
+        if (text[start] != '_' || (text[start + 1] != 'x' && text[start + 1] != 'X') || text[start + 6] != '_')
+            return false;
+
+        int value = 0;
+        for (int j = start + 2; j < start + 6; j++)
+        {
+            int digit = HexDigit(text[j]);
+            if (digit < 0)
+                return false;
+            value = (value << 4) | digit;
+        }
+
+        code = value;
+        consumed = length;
+        return true;
+    }
+
+    private static int HexDigit(char c) => c switch
+    {
+        >= '0' and <= '9' => c - '0',
+        >= 'a' and <= 'f' => c - 'a' + 10,
+        >= 'A' and <= 'F' => c - 'A' + 10,
+        _ => -1,
+    };
 }

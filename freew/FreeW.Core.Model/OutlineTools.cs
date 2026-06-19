@@ -118,12 +118,16 @@ public static class OutlineTools
         if (end <= start)
             return blocks; // nothing to move (not a heading)
 
+        if (blocks[start] is not Paragraph heading
+            || !DocumentOutline.TryGetLevel(heading.StyleId, out var movingLevel))
+            return blocks;
+
         int target;
         if (moveUp)
         {
             // The sibling subtree directly before us starts at the previous heading of the same-or-higher
             // level; we re-insert our span at that heading's index (i.e. before it).
-            if (!TryFindPreviousSiblingStart(blocks, start, out target))
+            if (!TryFindPreviousSiblingStart(blocks, start, movingLevel, out target))
                 return blocks; // already first sibling — nothing above to move past
         }
         else
@@ -133,6 +137,10 @@ public static class OutlineTools
             // after the sibling. Computed below by rebuilding the list explicitly.
             if (end >= blocks.Count)
                 return blocks; // already last sibling — nothing below to move past
+            if (blocks[end] is not Paragraph nextHeading
+                || !DocumentOutline.TryGetLevel(nextHeading.StyleId, out var nextLevel)
+                || nextLevel != movingLevel)
+                return blocks;
             var nextEnd = SubtreeRange(blocks, end).End;
             target = nextEnd;
         }
@@ -144,21 +152,26 @@ public static class OutlineTools
     // <paramref name="start"/>: scan backward for the nearest heading whose level is the same or higher
     // (smaller-or-equal level number) than the moving heading's level. Returns false when none exists
     // (the moving heading is already the first at its level in its enclosing scope).
-    private static bool TryFindPreviousSiblingStart(IReadOnlyList<Block> blocks, int start, out int siblingStart)
+    private static bool TryFindPreviousSiblingStart(
+        IReadOnlyList<Block> blocks,
+        int start,
+        int movingLevel,
+        out int siblingStart)
     {
         siblingStart = -1;
-        if (blocks[start] is not Paragraph heading
-            || !DocumentOutline.TryGetLevel(heading.StyleId, out var level))
-            return false;
-
         for (var i = start - 1; i >= 0; i--)
         {
             if (blocks[i] is Paragraph p
-                && DocumentOutline.TryGetLevel(p.StyleId, out var lvl)
-                && lvl <= level)
+                && DocumentOutline.TryGetLevel(p.StyleId, out var lvl))
             {
-                siblingStart = i;
-                return true;
+                if (lvl == movingLevel)
+                {
+                    siblingStart = i;
+                    return true;
+                }
+
+                if (lvl < movingLevel)
+                    return false;
             }
         }
         return false;

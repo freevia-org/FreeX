@@ -17,6 +17,8 @@ namespace FreeX.App.Avalonia;
 /// </summary>
 internal sealed class CupsPlatformPrinter : IPlatformPrinter
 {
+    private static readonly TimeSpan CommandTimeout = TimeSpan.FromSeconds(10);
+
     public bool CanPrint => OperatingSystem.IsLinux() || OperatingSystem.IsMacOS();
 
     public async Task<IReadOnlyList<PrinterDescriptor>> GetPrintersAsync(CancellationToken cancellationToken = default)
@@ -40,6 +42,10 @@ internal sealed class CupsPlatformPrinter : IPlatformPrinter
             return CupsPrintCommandPlanner.ParsePrinters(listResult.StandardOutput, defaultId);
         }
         catch (Exception ex) when (IsToolingUnavailable(ex))
+        {
+            return [];
+        }
+        catch (TimeoutException)
         {
             return [];
         }
@@ -80,6 +86,10 @@ internal sealed class CupsPlatformPrinter : IPlatformPrinter
         {
             return PrintSubmissionResult.Failure("Printing failed: the CUPS 'lp' utility is not installed on this host.");
         }
+        catch (TimeoutException)
+        {
+            return PrintSubmissionResult.Failure("Printing failed: the CUPS command timed out.");
+        }
         catch (Exception ex)
         {
             return PrintSubmissionResult.Failure($"Printing failed: {ex.Message}");
@@ -109,13 +119,36 @@ internal sealed class CupsPlatformPrinter : IPlatformPrinter
         using var process = new Process { StartInfo = startInfo };
         process.Start();
 
-        var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-        var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
-        await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(CommandTimeout);
+        var stdoutTask = process.StandardOutput.ReadToEndAsync(timeout.Token);
+        var stderrTask = process.StandardError.ReadToEndAsync(timeout.Token);
+        try
+        {
+            await process.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            TryKill(process);
+            throw new TimeoutException($"{fileName} did not exit within {CommandTimeout.TotalSeconds:n0} seconds.");
+        }
 
         var stdout = await stdoutTask.ConfigureAwait(false);
         var stderr = await stderrTask.ConfigureAwait(false);
         return new ProcessRunResult(process.ExitCode, stdout, stderr);
+    }
+
+    private static void TryKill(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+                process.Kill(entireProcessTree: true);
+        }
+        catch
+        {
+            // Best-effort cleanup; the timeout result is already reported to the caller.
+        }
     }
 
     private static bool IsToolingUnavailable(Exception ex) =>

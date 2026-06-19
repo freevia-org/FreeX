@@ -2293,6 +2293,32 @@ public class DocxRoundTripTests
     }
 
     [Theory]
+    [InlineData(RevisionKind.Inserted)]
+    [InlineData(RevisionKind.Deleted)]
+    public void RevisedContentControl_RoundTrips_ControlAndRevision(RevisionKind revisionKind)
+    {
+        var doc = new TextDocument();
+        var body = new Paragraph();
+        var control = Run.PlainTextControl("tracked control", tag: "Tracked", alias: "Tracked control");
+        control.Revision = revisionKind;
+        control.RevisionAuthor = "Alex Editor";
+        control.RevisionDateXml = "2026-06-19T08:00:00Z";
+        body.Runs.Add(control);
+        doc.Blocks.Add(body);
+
+        var result = RoundTrip(doc);
+
+        var run = result.Paragraphs.First().Runs.Single();
+        run.Text.Should().Be("tracked control");
+        run.Control.Should().NotBeNull();
+        run.Control!.Kind.Should().Be(ContentControlKind.PlainText);
+        run.Control.Tag.Should().Be("Tracked");
+        run.Revision.Should().Be(revisionKind);
+        run.RevisionAuthor.Should().Be("Alex Editor");
+        run.RevisionDateXml.Should().Be("2026-06-19T08:00:00Z");
+    }
+
+    [Theory]
     [InlineData(true, "☒")]
     [InlineData(false, "☐")]
     public void CheckBoxContentControl_RoundTrips_CheckedState(bool isChecked, string glyph)
