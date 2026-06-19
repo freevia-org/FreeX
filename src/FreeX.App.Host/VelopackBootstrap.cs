@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Velopack;
-using FreeX.App.Host.FileAssociations;
+using Free.Shared.AppServices.Windows;
+using FreeX.App.Services.FileAssociations;
 
 namespace FreeX.App.Host;
 
@@ -21,7 +22,7 @@ public static class VelopackBootstrap
         var exePath = Process.GetCurrentProcess().MainModule?.FileName
                       ?? Environment.ProcessPath
                       ?? AppContext.BaseDirectory;
-        var assoc = new WindowsFileAssociationService();
+        var assoc = new WindowsFileAssociationService(FreeXFileAssociations.All);
 
         return VelopackApp.Build()
             .OnAfterInstallFastCallback(_ => assoc.RegisterAll(exePath))

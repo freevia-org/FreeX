@@ -1,22 +1,28 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Win32;
-using FreeX.App.Services.FileAssociations;
+using Free.Shared.AppServices;
 using System.Runtime.InteropServices;
 
-namespace FreeX.App.Host.FileAssociations;
+namespace Free.Shared.AppServices.Windows;
 
 /// <summary>
-/// Per-user (HKCU) file-association registration for Windows. Owned types become the default
-/// handler; neutral/Office types are only added to OpenWithProgids so existing defaults survive.
+/// App-neutral per-user (HKCU) file-association registration for Windows. The owning app supplies
+/// its own list of <see cref="FileAssociationDefinition"/>; owned types become the default handler,
+/// while neutral types are only added to OpenWithProgids so existing defaults survive.
 /// All operations are best-effort and never throw to the caller.
 /// </summary>
 public sealed class WindowsFileAssociationService : IFileAssociationService
 {
+    private readonly IReadOnlyList<FileAssociationDefinition> _definitions;
     private readonly string _classesRootPath;
     private readonly ILogger? _logger;
 
-    public WindowsFileAssociationService(string classesRootPath = @"Software\Classes", ILogger? logger = null)
+    public WindowsFileAssociationService(
+        IReadOnlyList<FileAssociationDefinition> definitions,
+        string classesRootPath = @"Software\Classes",
+        ILogger? logger = null)
     {
+        _definitions = definitions;
         _classesRootPath = classesRootPath;
         _logger = logger;
     }
@@ -25,7 +31,7 @@ public sealed class WindowsFileAssociationService : IFileAssociationService
     {
         try
         {
-            foreach (var def in FileAssociationDefinition.All)
+            foreach (var def in _definitions)
                 RegisterOne(def, executablePath);
             NotifyShell();
         }
@@ -36,7 +42,7 @@ public sealed class WindowsFileAssociationService : IFileAssociationService
     {
         try
         {
-            foreach (var def in FileAssociationDefinition.All)
+            foreach (var def in _definitions)
             {
                 // Remove the ProgId tree.
                 Registry.CurrentUser.DeleteSubKeyTree($@"{_classesRootPath}\{def.ProgId}", throwOnMissingSubKey: false);
@@ -57,7 +63,7 @@ public sealed class WindowsFileAssociationService : IFileAssociationService
 
     public bool IsDefaultHandler(string extension)
     {
-        var def = FileAssociationDefinition.All.FirstOrDefault(d => d.Extension == extension);
+        var def = _definitions.FirstOrDefault(d => d.Extension == extension);
         if (def is null) return false;
         using var ext = Registry.CurrentUser.OpenSubKey($@"{_classesRootPath}\{extension}");
         return (ext?.GetValue(null) as string) == def.ProgId;
