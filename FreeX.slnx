@@ -39,6 +39,7 @@
     <Project Path="tests/Free.Shared.Ribbon.Tests/Free.Shared.Ribbon.Tests.csproj" />
     <Project Path="tests/FreeX.Fixtures/FreeX.Fixtures.csproj" />
     <Project Path="tests/FreeX.Integration.Tests/FreeX.Integration.Tests.csproj" />
+    <Project Path="tests/FreeX.ParityCompare.Tests/FreeX.ParityCompare.Tests.csproj" />
   </Folder>
   <Folder Name="/tools/">
     <Project Path="tools/FreeX.AppIoBench/FreeX.AppIoBench.csproj" />
@@ -48,6 +49,8 @@
     <Project Path="tools/FreeX.ExcelOpenSmoke/FreeX.ExcelOpenSmoke.csproj" />
     <Project Path="tools/FreeX.FidelityCompare/FreeX.FidelityCompare.csproj" />
     <Project Path="tools/FreeX.FormatFidelity/FreeX.FormatFidelity.csproj" />
+    <Project Path="tools/FreeX.ParityCompare/FreeX.ParityCompare.csproj" />
+    <Project Path="tools/FreeX.ParityCompare.Core/FreeX.ParityCompare.Core.csproj" />
     <Project Path="tools/FreeX.ForegroundCapture/FreeX.ForegroundCapture.csproj" />
     <Project Path="tools/FreeW.RenderCompare/FreeW.RenderCompare.csproj" />
     <Project Path="tools/FreeX.SheetFidelity/FreeX.SheetFidelity.csproj" />
