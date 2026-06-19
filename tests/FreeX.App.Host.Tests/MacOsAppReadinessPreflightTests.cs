@@ -2188,6 +2188,18 @@ public sealed class MacOsAppReadinessPreflightTests
                     Text = UiText.Get("FormatCells_ProtectionExplanation"),
                     CreateFormatCellsField(UiText.Get("FormatCells_PatternStyle"), fillPatternStyleBox)
                     CreateFormatCellsField(UiText.Get("FormatCells_PatternColor"), fillPatternColorBox)
+                    private readonly NativeMenuItem _backstageExportMenuItem = new();
+                    private readonly NativeMenuItem _backstageInfoMenuItem = new();
+                    private readonly NativeMenuItem _backstageAccountMenuItem = new();
+                    _backstageInfoMenuItem.Header = UiText.Get("Backstage_Info_MenuItem");
+                    _backstageInfoMenuItem.Click += (_, _) => ShowBackstageInfo();
+                    _backstageExportMenuItem.Header = UiText.Get("Backstage_Export_MenuItem");
+                    _backstageExportMenuItem.Click += (_, _) => ShowBackstageExport();
+                    _backstageAccountMenuItem.Header = UiText.Get("Backstage_Account_MenuItem");
+                    _backstageAccountMenuItem.Click += (_, _) => ShowBackstageAccount();
+                    fileMenu.Items.Add(_backstageExportMenuItem);
+                    fileMenu.Items.Add(_backstageInfoMenuItem);
+                    fileMenu.Items.Add(_backstageAccountMenuItem);
                     HasNativeWorkbookStatisticsMenuItem: HasNativeMenuItem(_workbookStatisticsMenuItem, "Workbook Statistics...")
                     e.Key == Key.G && e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift)
                     private async Task ShowWorkbookStatisticsDialogAsync()
