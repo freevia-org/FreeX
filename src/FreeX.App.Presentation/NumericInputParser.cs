@@ -1,8 +1,8 @@
 using System.Globalization;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Presentation;
 
-internal static class NumericInputParser
+public static class NumericInputParser
 {
     public static bool TryParseFiniteDouble(string input, CultureInfo culture, out double value)
         => TryParseFiniteDouble(input, NumberStyles.Float, culture, out value);
