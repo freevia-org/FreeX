@@ -105,6 +105,7 @@ public sealed class GitHubWorkflowPreflightTests
         script.Should().Contain("runner: macos-26");
         script.Should().Contain("dotnet workload install macos --version");
         script.Should().Contain("-p:EnableMacOsTargetFramework=true");
+        script.Should().Contain("-p:ApplicationId=io.github.tony-xmelon.freex");
         script.Should().Contain("--framework net10.0-macos");
         script.Should().Contain("--runtime");
         script.Should().Contain("macOS TFM validation job must be gated to workflow_dispatch validate_macos_tfm runs");
@@ -293,10 +294,10 @@ public sealed class GitHubWorkflowPreflightTests
         readinessStep.Should().Contain("Missing downloaded macOS preview artifact wrapper(s):");
         readinessStep.Should().Contain("Unexpected downloaded macOS preview artifact wrapper(s):");
         readinessStep.Should().Contain("tools/Test-MacOsPublicPreviewReadiness.ps1");
-        readinessStep.Should().Contain("\"-ExpectedRunId\", $env:GITHUB_RUN_ID");
-        readinessStep.Should().Contain("\"-ExpectedRunAttempt\", $env:GITHUB_RUN_ATTEMPT");
-        readinessStep.Should().Contain("\"-RequireSeparateDiagnosticsArtifact\"");
-        readinessStep.Should().Contain("$arguments += \"-DistributionCandidate\"");
+        readinessStep.Should().Contain("ExpectedRunId = $env:GITHUB_RUN_ID");
+        readinessStep.Should().Contain("ExpectedRunAttempt = $env:GITHUB_RUN_ATTEMPT");
+        readinessStep.Should().Contain("RequireSeparateDiagnosticsArtifact = $true");
+        readinessStep.Should().Contain("$arguments.DistributionCandidate = $true");
 
         var manifestStep = ExtractRequiredYamlBlock(aggregateJob, "- name: Write aggregate manifest");
         manifestStep.Should().Contain("GH_TOKEN: ${{ github.token }}");
@@ -749,7 +750,7 @@ public sealed class GitHubWorkflowPreflightTests
         var brokenWorkflow = ReplaceRequiredText(
             ReplaceRequiredText(
                 AddValidMacOsTfmValidationLane(ReadMacOsAppWorkflow()),
-                "dotnet workload install macos --version \"$FREEX_DOTNET_WORKLOAD_SET_VERSION\" --skip-manifest-update",
+                "dotnet workload install macos --version \"$FREEX_DOTNET_WORKLOAD_SET_VERSION\"",
                 "dotnet workload install macos --skip-manifest-update"),
             "--framework \"$FREEX_MACOS_TFM\"",
             "--framework net10.0");
@@ -762,7 +763,7 @@ public sealed class GitHubWorkflowPreflightTests
 
         result.ExitCode.Should().NotBe(0);
         result.NormalizedCombinedOutput.Should().Contain("macOS TFM validation job must install the pinned macOS workload set");
-        result.NormalizedCombinedOutput.Should().Contain("macOS TFM validation job must build FreeX.App.Avalonia with -p:EnableMacOsTargetFramework=true, --framework net10.0-macos, and --runtime");
+        result.NormalizedCombinedOutput.Should().Contain("macOS TFM validation job must build FreeX.App.Avalonia with -p:EnableMacOsTargetFramework=true, -p:ApplicationId=io.github.tony-xmelon.freex, --framework net10.0-macos, and --runtime");
         result.CombinedOutput.Should().Contain("macos-app.yml");
     }
 
@@ -1146,7 +1147,7 @@ public sealed class GitHubWorkflowPreflightTests
                     run: |
                       set -euo pipefail
                       {
-                        dotnet workload install macos --version "$FREEX_DOTNET_WORKLOAD_SET_VERSION" --skip-manifest-update
+                        dotnet workload install macos --version "$FREEX_DOTNET_WORKLOAD_SET_VERSION"
                         dotnet workload --info
                       } | tee -a "$FREEX_MACOS_TFM_EVIDENCE"
 
@@ -1158,7 +1159,8 @@ public sealed class GitHubWorkflowPreflightTests
                         --configuration Release \
                         --framework "$FREEX_MACOS_TFM" \
                         --runtime "$FREEX_RUNTIME" \
-                        -p:EnableMacOsTargetFramework=true
+                        -p:EnableMacOsTargetFramework=true \
+                        -p:ApplicationId=io.github.tony-xmelon.freex
                       {
                         echo "macos_tfm_build=passed"
                         echo "macos_tfm=$FREEX_MACOS_TFM"

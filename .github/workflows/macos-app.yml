@@ -1206,13 +1206,15 @@ jobs:
             --configuration Release \
             --framework "$FREEX_MACOS_TFM" \
             --runtime "$FREEX_RUNTIME" \
-            -p:EnableMacOsTargetFramework=true
+            -p:EnableMacOsTargetFramework=true \
+            -p:ApplicationId=io.github.tony-xmelon.freex
 
           dotnet msbuild src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj \
             -p:Configuration=Release \
             -p:EnableMacOsTargetFramework=true \
             -p:TargetFramework="$FREEX_MACOS_TFM" \
             -p:RuntimeIdentifier="$FREEX_RUNTIME" \
+            -p:ApplicationId=io.github.tony-xmelon.freex \
             -getItem:Compile \
             > "$compile_items_path"
 
@@ -1288,14 +1290,14 @@ jobs:
             throw "Unexpected downloaded macOS preview artifact wrapper(s): $($unexpectedWrapperNames -join ', ')"
           }
 
-          $arguments = @(
-            "-ArtifactRoot", $artifactRoot,
-            "-ExpectedRunId", $env:GITHUB_RUN_ID,
-            "-ExpectedRunAttempt", $env:GITHUB_RUN_ATTEMPT,
-            "-RequireSeparateDiagnosticsArtifact"
-          )
+          $arguments = @{
+            ArtifactRoot = $artifactRoot
+            ExpectedRunId = $env:GITHUB_RUN_ID
+            ExpectedRunAttempt = $env:GITHUB_RUN_ATTEMPT
+            RequireSeparateDiagnosticsArtifact = $true
+          }
           if ("${{ github.event_name == 'workflow_dispatch' && inputs.distribution_candidate == true }}" -eq "true") {
-            $arguments += "-DistributionCandidate"
+            $arguments.DistributionCandidate = $true
           }
 
           & (Join-Path $env:GITHUB_WORKSPACE "tools/Test-MacOsPublicPreviewReadiness.ps1") @arguments
