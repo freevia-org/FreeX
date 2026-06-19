@@ -50,6 +50,8 @@ replace this dependency or confirm the project has the required Xceed license.
 | Avalonia.X11 | 12.0.4 | MIT | https://avaloniaui.net/ |
 | ClosedXML | 0.105.0 | MIT | https://github.com/ClosedXML/ClosedXML |
 | ClosedXML.Parser | 2.0.0 | MIT | https://github.com/ClosedXML/ClosedXML.Parser |
+| DocSharp.Binary.Common | 0.20.0 | MIT | https://github.com/manfromarce/DocSharp |
+| DocSharp.Binary.Doc | 0.20.0 | MIT | https://github.com/manfromarce/DocSharp |
 | DocumentFormat.OpenXml | 3.1.1 | MIT | https://github.com/dotnet/Open-XML-SDK |
 | DocumentFormat.OpenXml.Framework | 3.1.1 | MIT | https://github.com/dotnet/Open-XML-SDK |
 | ExcelDataReader | 3.8.0 | MIT | https://github.com/ExcelDataReader/ExcelDataReader |
@@ -85,6 +87,8 @@ replace this dependency or confirm the project has the required Xceed license.
 | SkiaSharp.NativeAssets.Win32 | 3.119.4 | MIT | https://go.microsoft.com/fwlink/?linkid=868515 |
 | System.IO.Packaging | 8.0.1 | MIT | https://dot.net/ |
 | Tmds.DBus.Protocol | 0.92.0 | MIT |  |
+| UglyToad.PdfPig | 1.7.0-custom-5 | Apache-2.0 | https://github.com/UglyToad/PdfPig |
+| UglyToad.PdfPig.DocumentLayoutAnalysis | 1.7.0-custom-5 | Apache-2.0 | https://github.com/UglyToad/PdfPig |
 | Velopack | 1.2.0 | MIT | https://github.com/velopack/velopack |
 
 ## Test And Development Packages

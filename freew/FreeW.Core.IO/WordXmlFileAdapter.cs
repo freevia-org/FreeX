@@ -15,8 +15,9 @@ namespace FreeW.Core.IO;
 /// re-implementing the WordprocessingML mapping, this adapter transcodes between the flat XML and an
 /// in-memory OPC ZIP and delegates to the existing <see cref="DocxReader"/>/<see cref="DocxWriter"/> — so the
 /// full engine (incl. <c>PreservedParts</c>) is reused without touching it. The older Word 2003 WordML
-/// schema (<c>&lt;w:wordDocument&gt;</c> root) also uses <c>.xml</c> but is a different format; opening one
-/// fails with a clear message (read support is a planned follow-up).
+/// schema (<c>&lt;w:wordDocument&gt;</c> root) also uses <c>.xml</c> but is a different format; <see cref="Load"/>
+/// sniffs the root element and dispatches it to the read-only <see cref="Wordml2003Reader"/>. <see cref="Save"/>
+/// always writes Flat OPC (the 2003 schema is read-only).
 /// </summary>
 public sealed class WordXmlFileAdapter : IDocumentFileAdapter
 {
@@ -34,11 +35,17 @@ public sealed class WordXmlFileAdapter : IDocumentFileAdapter
             flat = XDocument.Load(reader);
 
         var root = flat.Root;
+
+        // Both Flat OPC and the older Word 2003 WordML schema use the .xml extension; sniff the root element
+        // to dispatch. <w:wordDocument> is the read-only 2003 schema; <pkg:package> is Flat OPC (below).
+        if (root is not null && root.Name == Wordml2003Reader.RootName)
+            return Wordml2003Reader.Read(root);
+
         if (root is null || root.Name != Pkg + "package")
         {
             throw new InvalidDataException(
-                "Not a Flat OPC Word XML document: missing a <pkg:package> root. " +
-                "(Word 2003 WordprocessingML .xml is a different format and is not yet supported.)");
+                "Not a recognised Word XML document: the root element is neither <pkg:package> (Flat OPC) " +
+                "nor <w:wordDocument> (Word 2003 WordprocessingML).");
         }
 
         // Rehydrate the inline parts into an in-memory .docx package, then hand it to the existing reader.

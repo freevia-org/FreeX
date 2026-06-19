@@ -105,9 +105,9 @@ public sealed class ParityEngineReportTests : IDisposable
         big.IsHardRegression(2.0).Should().BeTrue();
 
         var home = c.Surfaces.Single(s => s.Id == "tab.Home");
-        home.Severity.Should().Be(DiffSeverity.Informational);
+        home.Severity.Should().Be(DiffSeverity.Chrome);
         home.DiffPercent.Should().BeGreaterThan(0);
-        home.IsHardRegression(2.0).Should().BeFalse(); // informational never regresses
+        home.IsHardRegression(2.0).Should().BeFalse(); // chrome never gate-fails
 
         c.Surfaces.Single(s => s.Id == "dialog.WinOnly").DiffPercent.Should().BeNull();
         c.Surfaces.Single(s => s.Id == "backstage.LinuxOnly").DiffPercent.Should().BeNull();

@@ -9,15 +9,20 @@ public enum SurfacePresence
 }
 
 /// <summary>
-/// How a surface's visual diff should be interpreted. <c>grid.*</c> surfaces are a hard
-/// fidelity metric (both shells render the same document model the same way); chrome and
-/// dialogs differ by design across WPF and Avalonia, so their diff is informational.
+/// How a surface's visual diff should be interpreted.
+/// <c>grid.*</c> surfaces are a hard fidelity metric (both shells render the same document
+/// model the same way). <c>tab.*</c> and <c>backstage.*</c> are chrome — expected to differ
+/// between WPF and Avalonia by design (different title-bar, Linux compact toolbar row, backstage
+/// rail vs dialog layout) — compared and shown, never gate-failing. Dialog surfaces are
+/// informational: diff is shown but not gate-failing either.
 /// </summary>
 public enum DiffSeverity
 {
-    /// <summary>grid.* — diff is a real fidelity signal.</summary>
+    /// <summary>grid.* — diff is a real fidelity signal; exceeding the threshold fails the gate.</summary>
     Hard,
-    /// <summary>chrome/dialog/backstage — diff expected, shown for reference only.</summary>
+    /// <summary>tab.* and backstage.* — chrome differences expected by design; informational only.</summary>
+    Chrome,
+    /// <summary>dialog.* and other non-grid surfaces — diff shown for reference, never gate-failing.</summary>
     Informational,
 }
 
@@ -47,6 +52,14 @@ public sealed class SurfaceComparison
     public bool IsHardRegression(double threshold) =>
         Severity == DiffSeverity.Hard && Presence == SurfacePresence.Both
         && DiffPercent is { } d && d > threshold;
+
+    /// <summary>
+    /// True when this is a chrome surface whose diff exceeds the informational high-water mark —
+    /// worth reviewing but never gate-failing.
+    /// </summary>
+    public bool IsLargeChromeDiff(double highWaterMark = SurfaceComparer.ChromeHighWaterMark) =>
+        Severity == DiffSeverity.Chrome && Presence == SurfacePresence.Both
+        && DiffPercent is { } d && d > highWaterMark;
 }
 
 /// <summary>
@@ -56,8 +69,21 @@ public sealed class SurfaceComparison
 /// </summary>
 public static class SurfaceComparer
 {
-    /// <summary>Default hard-fidelity fail threshold for grid surfaces (mean-pixel-diff %).</summary>
-    public const double DefaultHardThreshold = 2.0;
+    /// <summary>
+    /// Default hard-fidelity fail threshold for grid surfaces (mean-pixel-diff %).
+    /// Set to 5% rather than 2% because whole-window captures include the outer shell chrome; the
+    /// Avalonia shell adds a compact toolbar row that shifts the grid down, contributing ~2–4% to the
+    /// whole-window mean-pixel-diff even when cell rendering is pixel-perfect. Genuine cell-rendering
+    /// defects are expected to produce diffs well above this band.
+    /// </summary>
+    public const double DefaultHardThreshold = 5.0;
+
+    /// <summary>
+    /// Informational upper bound for chrome surfaces (tab.* / backstage.*). Surfaces above this
+    /// level are annotated in the report as a large chrome difference — not gate-failing, but
+    /// worth reviewing when the shells are being aligned.
+    /// </summary>
+    public const double ChromeHighWaterMark = 20.0;
 
     /// <summary>Derive a surface kind from its id prefix when the manifest omits it.</summary>
     public static string KindOf(CapturedSurface s)
@@ -70,7 +96,10 @@ public static class SurfaceComparer
     public static DiffSeverity SeverityOf(string kind) =>
         kind.Equals("grid", StringComparison.OrdinalIgnoreCase)
             ? DiffSeverity.Hard
-            : DiffSeverity.Informational;
+            : kind.Equals("tab", StringComparison.OrdinalIgnoreCase)
+              || kind.Equals("backstage", StringComparison.OrdinalIgnoreCase)
+                ? DiffSeverity.Chrome
+                : DiffSeverity.Informational;
 
     /// <summary>
     /// Build the (unfilled-diff) comparison rows by pairing the two manifests' surfaces by id.

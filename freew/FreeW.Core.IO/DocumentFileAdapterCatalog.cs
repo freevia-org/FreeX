@@ -15,6 +15,9 @@ public static class DocumentFileAdapterCatalog
         DocxFileAdapter.Dotx(),
         DocxFileAdapter.Dotm(),
         new WordXmlFileAdapter(),
+        new RtfFileAdapter(),
+        new PdfFileAdapter(),
+        new LegacyDocFileAdapter(),
         new PlainTextFileAdapter(),
     ];
 }

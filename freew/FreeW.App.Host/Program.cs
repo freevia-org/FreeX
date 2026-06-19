@@ -1,5 +1,3 @@
-using System;
-using System.Reflection;
 using System.Windows;
 
 namespace FreeW.App.Host;
@@ -27,7 +25,7 @@ public static class Program
 
         // Local diagnostics, backed by the shared file store under %LOCALAPPDATA%\FreeW\Diagnostics.
         // FreeX-style local-only wiring (no Sentry). Best-effort throughout.
-        var diagnostics = FreeWDiagnostics.CreateDefault(ResolveAppVersion());
+        var diagnostics = FreeWDiagnostics.CreateDefault(EntryAssemblyVersion.Resolve());
 
         var app = new Application { ShutdownMode = ShutdownMode.OnMainWindowClose };
 
@@ -39,10 +37,4 @@ public static class Program
 
         diagnostics.RecordEvent("app_exit");
     }
-
-    private static string ResolveAppVersion() =>
-        Assembly.GetEntryAssembly()?
-            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
-        ?? Assembly.GetEntryAssembly()?.GetName().Version?.ToString()
-        ?? "0.0.0";
 }

@@ -17,7 +17,7 @@ using FreeX.ParityCompare.Core;
 //   --skip-capture     Don't run either shell; compare existing capture dirs
 //   --win-dir <dir>    Capture dir for Windows PNGs+manifest (default: <out>/capture-win)
 //   --lin-dir <dir>    Capture dir for Linux PNGs+manifest  (default: <out>/capture-linux/out)
-//   --threshold <pct>  Hard grid-fidelity fail threshold (default: 2.0)
+//   --threshold <pct>  Hard grid-fidelity fail threshold (default: 5.0)
 //   --docker-image <i> Docker image for the Linux run (default: ubuntu:24.04)
 // ---------------------------------------------------------------------------
 
@@ -84,9 +84,17 @@ Console.WriteLine($"surfaces      : {comparison.TotalSurfaces}");
 Console.WriteLine($"present both  : {comparison.BothCount}");
 Console.WriteLine($"win-only      : {comparison.WindowsOnlyCount}");
 Console.WriteLine($"linux-only    : {comparison.LinuxOnlyCount}");
-Console.WriteLine($"hard regress. : {comparison.HardRegressions.Count} (threshold {opts.Threshold:0.##}%)");
+Console.WriteLine($"grid (hard)   : {comparison.HardSurfaceCount} surface(s), threshold {opts.Threshold:0.##}%");
+Console.WriteLine($"chrome        : {comparison.ChromeSurfaceCount} surface(s) (expected diff — informational)");
+Console.WriteLine($"hard regress. : {comparison.HardRegressions.Count}");
 foreach (var r in comparison.HardRegressions)
     Console.WriteLine($"   REGRESSION {r.Id}  diff={r.DiffPercent:0.00}%");
+if (comparison.LargeChromeDiffs.Count > 0)
+{
+    Console.WriteLine($"chrome >20%   : {comparison.LargeChromeDiffs.Count} (informational)");
+    foreach (var r in comparison.LargeChromeDiffs)
+        Console.WriteLine($"   chrome-diff {r.Id}  diff={r.DiffPercent:0.00}%");
+}
 Console.WriteLine($"report        : {htmlPath}");
 Console.WriteLine(comparison.Passed ? "RESULT: PASS" : "RESULT: FAIL");
 

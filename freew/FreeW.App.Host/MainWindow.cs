@@ -393,6 +393,7 @@ public sealed class MainWindow : Window
             SaveAs: () => _file.SaveAs(),
             Print: Print,
             ExportPdf: ExportToPdf,
+            ExportXps: ExportToXps,
             EditProperties: OpenProperties,
             EditOptions: OpenOptions,
             CurrentOptions: () => _options,
@@ -1618,6 +1619,53 @@ public sealed class MainWindow : Window
                 this,
                 "The document could not be exported to PDF.\n\n" + ex.Message,
                 "Export to PDF",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
+    /// <summary>
+    /// File &gt; Export: writes the document to a real XPS package. Reuses the same print pipeline
+    /// (<see cref="PrintLayout.BuildPaginator"/>) as Print / Export to PDF so the exported pages match
+    /// exactly (page geometry, header/footer, watermark, border, footnotes), serialises them as vector
+    /// glyph runs via <see cref="XpsExport"/>, and flushes atomically through the shared
+    /// <see cref="Free.Shared.Shell.ExportAtomicWriter"/>.
+    /// </summary>
+    private void ExportToXps()
+    {
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = "Export to XPS",
+            Filter = "XPS document (*.xps)|*.xps",
+            DefaultExt = ".xps",
+            AddExtension = true,
+            OverwritePrompt = true,
+            FileName = _file.DisplayName + ".xps"
+        };
+        if (dialog.ShowDialog(this) != true)
+            return;
+
+        var path = dialog.FileName;
+        try
+        {
+            // Render on the UI thread (walks the WPF visual tree), then write atomically.
+            var paginator = PrintLayout.BuildPaginator(_editor);
+            var bytes = XpsExport.RenderToBytes(paginator);
+            Free.Shared.Shell.ExportAtomicWriter.WriteAllBytes(path, bytes);
+
+            MessageBox.Show(
+                this,
+                $"Exported to XPS:\n{path}",
+                "Export to XPS",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                this,
+                "The document could not be exported to XPS.\n\n" + ex.Message,
+                "Export to XPS",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
         }

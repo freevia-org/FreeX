@@ -96,7 +96,7 @@ public static class ParityReport
         sb.AppendLine();
         sb.AppendLine($"Generated: {c.GeneratedAt:yyyy-MM-dd HH:mm:ss zzz}  ");
         sb.AppendLine($"Windows: `{c.WindowsShell}` ({c.WindowsPlatform}) — Linux: `{c.LinuxShell}` ({c.LinuxPlatform})  ");
-        sb.AppendLine($"Hard grid fidelity threshold: **{c.HardThreshold:0.##}%** mean-pixel-diff  ");
+        sb.AppendLine($"Grid fidelity threshold: **{c.HardThreshold:0.##}%** mean-pixel-diff  ");
         sb.AppendLine($"Result: **{(c.Passed ? "PASS" : "FAIL")}** ({c.HardRegressions.Count} hard regression(s))");
         sb.AppendLine();
         sb.AppendLine("See also: [functional parity matrix](functional-parity.md) (command-binding parity).");
@@ -109,22 +109,57 @@ public static class ParityReport
         sb.AppendLine($"| Present in both | {c.BothCount} |");
         sb.AppendLine($"| Windows-only (missing on Linux) | {c.WindowsOnlyCount} |");
         sb.AppendLine($"| Linux-only (missing on Windows) | {c.LinuxOnlyCount} |");
-        sb.AppendLine($"| Hard (grid) surfaces | {c.HardSurfaceCount} |");
+        sb.AppendLine($"| Grid (hard) surfaces | {c.HardSurfaceCount} |");
+        sb.AppendLine($"| Chrome surfaces (expected diff) | {c.ChromeSurfaceCount} |");
         sb.AppendLine($"| Hard regressions (> threshold) | {c.HardRegressions.Count} |");
         sb.AppendLine();
-        sb.AppendLine("## Surfaces (worst diff first)");
+        sb.AppendLine("## Grid / content surfaces");
         sb.AppendLine();
-        sb.AppendLine("| Surface | Kind | Severity | Presence | Diff% | Flag |");
-        sb.AppendLine("|---|---|---|---|---:|---|");
-        foreach (var s in c.Surfaces)
+        sb.AppendLine("These are the fidelity gate: both shells render the same document model.");
+        sb.AppendLine("Diffs above the threshold indicate a genuine rendering defect.");
+        sb.AppendLine();
+        sb.AppendLine("| Surface | Diff% | Flag |");
+        sb.AppendLine("|---|---:|---|");
+        foreach (var s in c.Surfaces.Where(s => s.Severity == DiffSeverity.Hard))
         {
             string diff = s.DiffPercent is { } d ? d.ToString("0.00", CultureInfo.InvariantCulture) : "—";
             string flag = s.IsHardRegression(c.HardThreshold) ? "**REGRESSION**"
                 : s.Presence == SurfacePresence.WindowsOnly ? "missing-on-linux"
                 : s.Presence == SurfacePresence.LinuxOnly ? "missing-on-windows"
-                : s.Error != null ? "error"
-                : "ok";
-            sb.AppendLine($"| `{s.Id}` | {s.Kind} | {s.Severity} | {Presence(s.Presence)} | {diff} | {flag} |");
+                : s.Error != null ? "error" : "ok";
+            sb.AppendLine($"| `{s.Id}` | {diff} | {flag} |");
+        }
+        sb.AppendLine();
+        sb.AppendLine("## Chrome surfaces (ribbon tabs + backstage)");
+        sb.AppendLine();
+        sb.AppendLine("> **Expected differences.** The Avalonia shell adds a compact toolbar row (Open/Save/Undo/Redo/…)");
+        sb.AppendLine("> between the ribbon and the grid, and uses its own native title bar — so whole-window captures");
+        sb.AppendLine("> of ribbon tabs and the backstage will always show structural chrome differences. These diffs");
+        sb.AppendLine("> are informational and never gate-failing. Large values (> 20%) are annotated for review.");
+        sb.AppendLine();
+        sb.AppendLine("| Surface | Diff% | Flag |");
+        sb.AppendLine("|---|---:|---|");
+        foreach (var s in c.Surfaces.Where(s => s.Severity == DiffSeverity.Chrome))
+        {
+            string diff = s.DiffPercent is { } d ? d.ToString("0.00", CultureInfo.InvariantCulture) : "—";
+            string flag = s.Presence == SurfacePresence.WindowsOnly ? "missing-on-linux"
+                : s.Presence == SurfacePresence.LinuxOnly ? "missing-on-windows"
+                : s.IsLargeChromeDiff() ? "large-chrome-diff"
+                : s.Error != null ? "error" : "ok";
+            sb.AppendLine($"| `{s.Id}` | {diff} | {flag} |");
+        }
+        sb.AppendLine();
+        sb.AppendLine("## Dialog / other surfaces");
+        sb.AppendLine();
+        sb.AppendLine("| Surface | Kind | Diff% | Flag |");
+        sb.AppendLine("|---|---|---:|---|");
+        foreach (var s in c.Surfaces.Where(s => s.Severity == DiffSeverity.Informational))
+        {
+            string diff = s.DiffPercent is { } d ? d.ToString("0.00", CultureInfo.InvariantCulture) : "—";
+            string flag = s.Presence == SurfacePresence.WindowsOnly ? "missing-on-linux"
+                : s.Presence == SurfacePresence.LinuxOnly ? "missing-on-windows"
+                : s.Error != null ? "error" : "ok";
+            sb.AppendLine($"| `{s.Id}` | {s.Kind} | {diff} | {flag} |");
         }
         return sb.ToString();
     }
@@ -154,10 +189,10 @@ public static class ParityReport
         sb.AppendLine(".pass{color:#1a7f37;font-weight:600} .fail{color:#cf222e;font-weight:600}");
         sb.AppendLine(".row{background:#fff;border:1px solid #e0e0e0;border-radius:8px;margin:12px 0;padding:12px}");
         sb.AppendLine(".row.hard{border-left:5px solid #8250df} .row.reg{border-left:5px solid #cf222e}");
-        sb.AppendLine(".row.miss{border-left:5px solid #bf8700}");
+        sb.AppendLine(".row.miss{border-left:5px solid #bf8700} .row.chrome{border-left:5px solid #e6c84a}");
         sb.AppendLine(".hdr{display:flex;align-items:baseline;gap:12px;margin-bottom:8px}");
         sb.AppendLine(".id{font-weight:600;font-size:15px} .badge{font-size:11px;padding:2px 8px;border-radius:10px;background:#eee;color:#333}");
-        sb.AppendLine(".badge.hard{background:#efe6ff;color:#6639ba} .badge.info{background:#eef;color:#3355bb}");
+        sb.AppendLine(".badge.hard{background:#efe6ff;color:#6639ba} .badge.chrome{background:#fffbef;color:#5a4500} .badge.info{background:#eef;color:#3355bb}");
         sb.AppendLine(".diff{margin-left:auto;font-variant-numeric:tabular-nums;font-weight:600}");
         sb.AppendLine(".gallery{display:grid;grid-template-columns:1fr 1fr;gap:12px}");
         sb.AppendLine(".cell{text-align:center} .cell img{max-width:100%;border:1px solid #ccc;background:#fff}");
@@ -180,34 +215,59 @@ public static class ParityReport
         Card(sb, c.WindowsOnlyCount, "win only");
         Card(sb, c.LinuxOnlyCount, "linux only");
         Card(sb, c.HardSurfaceCount, "grid (hard)");
+        Card(sb, c.ChromeSurfaceCount, "chrome");
         Card(sb, c.HardRegressions.Count, "regressions");
         sb.AppendLine("</div>");
 
-        foreach (var s in c.Surfaces)
-        {
-            bool reg = s.IsHardRegression(c.HardThreshold);
-            bool miss = s.Presence != SurfacePresence.Both;
-            string rowCls = reg ? "row reg" : miss ? "row miss" : s.Severity == DiffSeverity.Hard ? "row hard" : "row";
-            sb.AppendLine($"<div class=\"{rowCls}\">");
-            sb.AppendLine("<div class=\"hdr\">");
-            sb.Append($"<span class=\"id\">{Esc(s.Id)}</span>");
-            sb.Append($"<span class=\"badge {(s.Severity == DiffSeverity.Hard ? "hard" : "info")}\">{s.Severity}</span>");
-            sb.Append($"<span class=\"badge\">{Presence(s.Presence)}</span>");
-            if (reg) sb.Append("<span class=\"badge\" style=\"background:#ffebe9;color:#cf222e\">REGRESSION</span>");
-            string diffTxt = s.DiffPercent is { } d ? $"diff {d:0.00}%" : (miss ? "n/a" : "—");
-            sb.Append($"<span class=\"diff\">{diffTxt}</span>");
-            sb.AppendLine("</div>");
+        sb.AppendLine("<h2>Grid / content surfaces</h2>");
+        sb.AppendLine("<p style=\"color:#555;font-size:14px\">Fidelity gate — both shells render the same document model. Diffs above threshold indicate a genuine rendering defect.</p>");
+        foreach (var s in c.Surfaces.Where(s => s.Severity == DiffSeverity.Hard))
+            RenderSurfaceRow(sb, s, c.HardThreshold, reportDir);
 
-            sb.AppendLine("<div class=\"gallery\">");
-            ImageCell(sb, "Windows", s.WindowsImage, reportDir, s.WindowsNote);
-            ImageCell(sb, "Linux", s.LinuxImage, reportDir, s.LinuxNote);
-            sb.AppendLine("</div>");
-            if (s.Error != null) sb.AppendLine($"<div class=\"note\">⚠ {Esc(s.Error)}</div>");
-            sb.AppendLine("</div>");
-        }
+        sb.AppendLine("<h2>Chrome surfaces — ribbon tabs &amp; backstage</h2>");
+        sb.AppendLine("<div style=\"background:#fffbef;border:1px solid #e6c84a;border-radius:8px;padding:10px 14px;margin:8px 0 16px;font-size:13px;color:#5a4500\">");
+        sb.AppendLine("<strong>Expected differences.</strong> The Avalonia shell adds a compact toolbar row (Open / Save / Undo / Redo / …) between the ribbon and the grid, and uses its own native title bar. Whole-window captures of ribbon tabs and the backstage therefore always show structural chrome differences. These diffs are <em>informational and never gate-failing</em>. Values above 20% are flagged for review.");
+        sb.AppendLine("</div>");
+        foreach (var s in c.Surfaces.Where(s => s.Severity == DiffSeverity.Chrome))
+            RenderSurfaceRow(sb, s, c.HardThreshold, reportDir);
+
+        sb.AppendLine("<h2>Dialog / other surfaces</h2>");
+        foreach (var s in c.Surfaces.Where(s => s.Severity == DiffSeverity.Informational))
+            RenderSurfaceRow(sb, s, c.HardThreshold, reportDir);
 
         sb.AppendLine("</body></html>");
         return sb.ToString();
+    }
+
+    private static void RenderSurfaceRow(StringBuilder sb, SurfaceComparison s, double threshold, string reportDir)
+    {
+        bool reg = s.IsHardRegression(threshold);
+        bool miss = s.Presence != SurfacePresence.Both;
+        bool largeChrome = s.IsLargeChromeDiff();
+        string rowCls = reg ? "row reg"
+            : miss ? "row miss"
+            : s.Severity == DiffSeverity.Hard ? "row hard"
+            : s.Severity == DiffSeverity.Chrome ? "row chrome"
+            : "row";
+        sb.AppendLine($"<div class=\"{rowCls}\">");
+        sb.AppendLine("<div class=\"hdr\">");
+        sb.Append($"<span class=\"id\">{Esc(s.Id)}</span>");
+        string badgeCls = s.Severity == DiffSeverity.Hard ? "hard"
+            : s.Severity == DiffSeverity.Chrome ? "chrome"
+            : "info";
+        sb.Append($"<span class=\"badge {badgeCls}\">{s.Severity}</span>");
+        sb.Append($"<span class=\"badge\">{Presence(s.Presence)}</span>");
+        if (reg) sb.Append("<span class=\"badge\" style=\"background:#ffebe9;color:#cf222e\">REGRESSION</span>");
+        if (largeChrome) sb.Append("<span class=\"badge\" style=\"background:#fffbef;color:#5a4500\">large chrome diff</span>");
+        string diffTxt = s.DiffPercent is { } d ? $"diff {d:0.00}%" : (miss ? "n/a" : "—");
+        sb.Append($"<span class=\"diff\">{diffTxt}</span>");
+        sb.AppendLine("</div>");
+        sb.AppendLine("<div class=\"gallery\">");
+        ImageCell(sb, "Windows", s.WindowsImage, reportDir, s.WindowsNote);
+        ImageCell(sb, "Linux", s.LinuxImage, reportDir, s.LinuxNote);
+        sb.AppendLine("</div>");
+        if (s.Error != null) sb.AppendLine($"<div class=\"note\">⚠ {Esc(s.Error)}</div>");
+        sb.AppendLine("</div>");
     }
 
     private static void Card(StringBuilder sb, int n, string label) =>

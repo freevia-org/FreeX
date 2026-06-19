@@ -7,8 +7,9 @@ namespace FreeX.App.Localization;
 /// Expands neutral English text into a pseudo-localized form so that culture-sensitive
 /// layout, truncation and string-formatting bugs surface without a real translation pass.
 /// Mirrors the WPF host's pseudo-localization rules so the two catalogs behave identically.
+/// Single source shared by the WPF host (<c>FreeX.App.Host</c>) and the portable catalog.
 /// </summary>
-internal static partial class PseudoLocalization
+public static partial class PseudoLocalization
 {
     public static string Expand(string value)
     {

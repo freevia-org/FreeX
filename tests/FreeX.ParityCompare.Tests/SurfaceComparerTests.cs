@@ -38,11 +38,13 @@ public class SurfaceComparerTests
     }
 
     [Fact]
-    public void Grid_surfaces_are_hard_others_informational()
+    public void Severity_classifies_grid_chrome_and_informational()
     {
         SurfaceComparer.SeverityOf("grid").Should().Be(DiffSeverity.Hard);
         SurfaceComparer.SeverityOf("GRID").Should().Be(DiffSeverity.Hard);
-        SurfaceComparer.SeverityOf("tab").Should().Be(DiffSeverity.Informational);
+        SurfaceComparer.SeverityOf("tab").Should().Be(DiffSeverity.Chrome);
+        SurfaceComparer.SeverityOf("backstage").Should().Be(DiffSeverity.Chrome);
+        SurfaceComparer.SeverityOf("BACKSTAGE").Should().Be(DiffSeverity.Chrome);
         SurfaceComparer.SeverityOf("dialog").Should().Be(DiffSeverity.Informational);
     }
 

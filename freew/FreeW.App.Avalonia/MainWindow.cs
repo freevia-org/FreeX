@@ -17,18 +17,13 @@ namespace FreeW.App.Avalonia;
 
 public sealed class MainWindow : Window
 {
-    private static readonly FilePickerFileType DocxFileType = new("Word document")
-    {
-        Patterns = ["*.docx"],
-        MimeTypes = ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
-    };
-
     private static readonly FilePickerFileType PdfFileType = new("PDF document")
     {
         Patterns = ["*.pdf"],
         MimeTypes = ["application/pdf"],
     };
 
+    private readonly IReadOnlyList<IDocumentFileAdapter> _adapters = DocumentFileAdapterCatalog.CreateDefaultAdapters();
     private readonly DocumentView _editor = new();
     private readonly TextBlock _status = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0) };
     private readonly TextBox _findBox = new() { Width = 200, VerticalAlignment = VerticalAlignment.Center };
@@ -308,7 +303,7 @@ public sealed class MainWindow : Window
         {
             Title = "Open document",
             AllowMultiple = false,
-            FileTypeFilter = [DocxFileType],
+            FileTypeFilter = [.. DocumentFilePickerTypes.BuildOpenTypes(_adapters)],
         });
 
         if (files.Count == 0)
@@ -318,11 +313,29 @@ public sealed class MainWindow : Window
         if (path is null)
             return;
 
+        var adapter = DocumentFileFormatResolver.FindOpenAdapter(_adapters, Path.GetExtension(path), out var format);
+        if (adapter is null)
+        {
+            _status.Text = $"Open failed: unsupported file type \"{Path.GetExtension(path)}\".";
+            return;
+        }
+
         try
         {
-            _editor.LoadDocument(DocxReader.Read(path));
-            _currentPath = path;
-            Title = $"FreeW - {Path.GetFileName(path)}";
+            using var stream = File.OpenRead(path);
+            _editor.LoadDocument(adapter.Load(stream));
+
+            if (format?.OpensAsTemplate == true)
+            {
+                // Templates seed a new untitled document: clearing the path makes the next Save a Save-As.
+                _currentPath = null;
+                Title = "FreeW";
+            }
+            else
+            {
+                _currentPath = path;
+                Title = $"FreeW - {Path.GetFileName(path)}";
+            }
         }
         catch (Exception ex)
         {
@@ -340,7 +353,7 @@ public sealed class MainWindow : Window
                 Title = "Save document",
                 DefaultExtension = "docx",
                 SuggestedFileName = "Document.docx",
-                FileTypeChoices = [DocxFileType],
+                FileTypeChoices = [.. DocumentFilePickerTypes.BuildSaveTypes(_adapters)],
             });
             path = file?.TryGetLocalPath();
         }
@@ -348,9 +361,17 @@ public sealed class MainWindow : Window
         if (path is null)
             return;
 
+        var adapter = DocumentFileFormatResolver.FindSaveAdapter(_adapters, Path.GetExtension(path), out _);
+        if (adapter is null)
+        {
+            _status.Text = $"Save failed: unsupported file type \"{Path.GetExtension(path)}\".";
+            return;
+        }
+
         try
         {
-            DocxWriter.Write(_editor.Document, path);
+            using (var stream = File.Create(path))
+                adapter.Save(_editor.Document, stream);
             _currentPath = path;
             Title = $"FreeW - {Path.GetFileName(path)}";
             _status.Text = $"Saved {Path.GetFileName(path)}";

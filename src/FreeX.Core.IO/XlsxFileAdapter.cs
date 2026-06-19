@@ -1517,6 +1517,9 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             if (IsClosedXmlConditionalFormattingLoadFailure(ex))
                 return OpenConditionalFormattingStripped();
 
+            if (IsClosedXmlRelationshipLookupFailure(ex))
+                return OpenPivotStripped();
+
             packageStream.Position = 0;
             var fallbackPackageStream = MeasurePackagePreparation(() => CreateClosedXmlParsePackage(
                 packageStream,
@@ -1534,6 +1537,29 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                     fallbackPackageStream.Dispose();
 
                 return OpenConditionalFormattingStripped();
+            }
+        }
+
+        ClosedXmlLoadResult OpenPivotStripped()
+        {
+            packageStream.Position = 0;
+            var pivotStrippedHints = sanitizationHints with { HasPivotPackageMetadata = true };
+            var pivotStrippedPackageStream = MeasurePackagePreparation(() => CreateClosedXmlParsePackage(
+                packageStream,
+                styleOnlyWorksheetPathsToStrip,
+                pivotStrippedHints,
+                removeUnsupportedConditionalFormatting: false));
+            try
+            {
+                return Complete(
+                    pivotStrippedPackageStream,
+                    MeasureWorkbookOpen(() => new XLWorkbook(pivotStrippedPackageStream)));
+            }
+            catch
+            {
+                if (!ReferenceEquals(pivotStrippedPackageStream, packageStream))
+                    pivotStrippedPackageStream.Dispose();
+                throw;
             }
         }
 
@@ -1618,6 +1644,22 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         for (var current = exception; current is not null; current = current.InnerException)
         {
             if (current.StackTrace?.Contains("LoadConditionalFormatting", StringComparison.Ordinal) == true)
+                return true;
+        }
+
+        return false;
+    }
+
+    // ClosedXML uses .First() when resolving part relationships; files authored by LibreOffice
+    // (and other non-Excel producers) sometimes emit table or pivot-cache relationships in a
+    // layout ClosedXML doesn't match, causing InvalidOperationException with the LINQ sentinel
+    // message.  Strip pivot metadata and retry so the rest of the workbook loads cleanly.
+    private static bool IsClosedXmlRelationshipLookupFailure(Exception exception)
+    {
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is InvalidOperationException &&
+                current.Message.Contains("Sequence contains no matching element", StringComparison.Ordinal))
                 return true;
         }
 

@@ -473,6 +473,12 @@ public sealed class XlsxFileAdapterFormatTests
         legacyDrawingHfDependencies.Should().NotContain(
             ".ToList()",
             "legacy header/footer drawing cleanup should stream relationship targets instead of allocating a target list");
+        adapterSource.Should().Contain("IsClosedXmlRelationshipLookupFailure(ex)",
+            "ClosedXML's .First() on pivot/table relationships throws InvalidOperationException when LibreOffice-authored files have unexpected part layouts — the guard must strip pivot metadata and retry");
+        adapterSource.Should().Contain("OpenPivotStripped()",
+            "the pivot-stripped fallback local function must exist and be reachable from the sanitization fallback path");
+        adapterSource.Should().Contain("IsClosedXmlRelationshipLookupFailure",
+            "the detection method for the pivot relationship lookup failure must exist in the adapter source");
     }
 
     [Fact]
