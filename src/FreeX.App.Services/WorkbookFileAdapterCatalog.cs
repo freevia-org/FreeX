@@ -17,6 +17,7 @@ public static class WorkbookFileAdapterCatalog
         new DelimitedTextFileAdapter(".tab", "Tab-delimited text", '\t'),
         new SpreadsheetXmlFileAdapter(),
         new SlkFileAdapter(),
+        new DifFileAdapter(),
         new NativeJsonAdapter(),
     ];
 }
