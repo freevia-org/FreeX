@@ -862,10 +862,11 @@ public sealed partial class MainWindow : Window
                     // Review: New Note / New Comment on the active cell.
                     ["review.newNote"] = () => _ = ShowNewNoteDialogAsync(),
                     ["review.newComment"] = () => _ = ShowNewThreadedCommentDialogAsync(),
-                    // Insert: Sparklines — reuse the existing Quick-Analysis sparkline insertion.
-                    ["insert.sparklineLine"] = () => InsertQuickAnalysisSparklines(SparklineKind.Line),
-                    ["insert.sparklineColumn"] = () => InsertQuickAnalysisSparklines(SparklineKind.Column),
-                    ["insert.sparklineWinLoss"] = () => InsertQuickAnalysisSparklines(SparklineKind.WinLoss),
+                    // Insert: Sparklines — open the insert dialog (or edit, when the active cell already
+                    // anchors a sparkline) with the chosen kind preselected.
+                    ["insert.sparklineLine"] = () => InsertOrEditSparkline(SparklineKind.Line),
+                    ["insert.sparklineColumn"] = () => InsertOrEditSparkline(SparklineKind.Column),
+                    ["insert.sparklineWinLoss"] = () => InsertOrEditSparkline(SparklineKind.WinLoss),
                     // Data: Outline Group / Ungroup.
                     ["data.group"] = GroupSelectedRows,
                     ["data.ungroup"] = ClearWorksheetOutline,

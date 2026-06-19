@@ -581,6 +581,37 @@ public class ProtectionGuardCoverageTests
                     new CellAddress(sheet.Id, 1, 2),
                     SparklineKind.Line),
 
+            ["ConfigureSparklineCommand"] = (wb, sheet) =>
+            {
+                var sparkline = new SparklineModel
+                {
+                    DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 1)),
+                    Location = new CellAddress(sheet.Id, 1, 2),
+                    Kind = SparklineKind.Line,
+                };
+                sheet.IsProtected = false;
+                sheet.Sparklines.Add(sparkline);
+                sheet.IsProtected = true;
+                return new ConfigureSparklineCommand(
+                    sheet.Id,
+                    sparkline.Id,
+                    SparklineSettings.Capture(sparkline) with { Kind = SparklineKind.Column });
+            },
+
+            ["ClearSparklineCommand"] = (wb, sheet) =>
+            {
+                var sparkline = new SparklineModel
+                {
+                    DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 1)),
+                    Location = new CellAddress(sheet.Id, 1, 2),
+                    Kind = SparklineKind.Line,
+                };
+                sheet.IsProtected = false;
+                sheet.Sparklines.Add(sparkline);
+                sheet.IsProtected = true;
+                return new ClearSparklineCommand(sheet.Id, sparkline.Id);
+            },
+
             // ---- Hyperlinks ----
             ["SetHyperlinkCommand"] = (wb, sheet) =>
                 new SetHyperlinkCommand(
