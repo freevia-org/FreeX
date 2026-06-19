@@ -765,4 +765,53 @@
   <data name="WTA_ThemeEffects_Title" xml:space="preserve"><value>Effets du thème</value></data>
   <data name="WTA_ThemeEffects_Applied" xml:space="preserve"><value>Effets du thème {0} appliqués</value></data>
   <data name="WTA_ContextFilter_NoFilter" xml:space="preserve"><value>La feuille active n'a aucun filtre à effacer.</value></data>
+  <data name="Backstage_Info_MenuItem" xml:space="preserve"><value>Informations...</value></data>
+  <data name="Backstage_Info_Title" xml:space="preserve"><value>Informations</value></data>
+  <data name="Backstage_Info_FileSectionHeader" xml:space="preserve"><value>Fichier</value></data>
+  <data name="Backstage_Info_NameLabel" xml:space="preserve"><value>Nom :</value></data>
+  <data name="Backstage_Info_PathLabel" xml:space="preserve"><value>Emplacement :</value></data>
+  <data name="Backstage_Info_FormatLabel" xml:space="preserve"><value>Format :</value></data>
+  <data name="Backstage_Info_SizeLabel" xml:space="preserve"><value>Taille :</value></data>
+  <data name="Backstage_Info_ModifiedLabel" xml:space="preserve"><value>Dernière modification :</value></data>
+  <data name="Backstage_Info_SheetsLabel" xml:space="preserve"><value>Feuilles :</value></data>
+  <data name="Backstage_Info_NotSavedYet" xml:space="preserve"><value>Pas encore enregistré</value></data>
+  <data name="Backstage_Info_FileMissing" xml:space="preserve"><value>Fichier introuvable sur le disque</value></data>
+  <data name="Backstage_Info_UnsavedChanges" xml:space="preserve"><value>Ce classeur comporte des modifications non enregistrées.</value></data>
+  <data name="Backstage_Info_ProtectionSectionHeader" xml:space="preserve"><value>Protéger le classeur</value></data>
+  <data name="Backstage_Info_ProtectionNone" xml:space="preserve"><value>Tout le monde peut ouvrir, copier et modifier n'importe quelle partie de ce classeur.</value></data>
+  <data name="Backstage_Info_ProtectionStructure" xml:space="preserve"><value>La structure du classeur est verrouillée pour empêcher l'ajout, la suppression ou la réorganisation des feuilles.</value></data>
+  <data name="Backstage_Info_ProtectionSheets" xml:space="preserve"><value>{0} feuilles sur {1} sont protégées contre les modifications indésirables.</value></data>
+  <data name="Backstage_Info_ProtectionStructureAndSheets" xml:space="preserve"><value>La structure du classeur est verrouillée et {0} feuilles sur {1} sont protégées.</value></data>
+  <data name="Backstage_Info_ActiveSheetProtected" xml:space="preserve"><value>La feuille active est protégée.</value></data>
+  <data name="Backstage_Info_ActiveSheetUnprotected" xml:space="preserve"><value>La feuille active n'est pas protégée.</value></data>
+  <data name="Backstage_Info_StatisticsSectionHeader" xml:space="preserve"><value>Statistiques associées</value></data>
+  <data name="Backstage_Info_ProtectSheetAction" xml:space="preserve"><value>Protéger la feuille</value></data>
+  <data name="Backstage_Info_ProtectWorkbookAction" xml:space="preserve"><value>Protéger le classeur</value></data>
+  <data name="Backstage_Info_InspectAction" xml:space="preserve"><value>Rechercher les problèmes</value></data>
+  <data name="Backstage_Export_MenuItem" xml:space="preserve"><value>Exporter...</value></data>
+  <data name="Backstage_Export_Title" xml:space="preserve"><value>Exporter</value></data>
+  <data name="Backstage_Export_ScopeHeader" xml:space="preserve"><value>Éléments à exporter</value></data>
+  <data name="Backstage_Export_ScopeSelection" xml:space="preserve"><value>Sélection</value></data>
+  <data name="Backstage_Export_ScopeActiveSheet" xml:space="preserve"><value>Feuille active</value></data>
+  <data name="Backstage_Export_ScopeWorkbook" xml:space="preserve"><value>Classeur entier</value></data>
+  <data name="Backstage_Export_ScopeSelectionUnavailable" xml:space="preserve"><value>Sélection (sélectionnez d'abord une plage)</value></data>
+  <data name="Backstage_Export_FormatHeader" xml:space="preserve"><value>Format</value></data>
+  <data name="Backstage_Export_FormatPdf" xml:space="preserve"><value>Document PDF (.pdf)</value></data>
+  <data name="Backstage_Export_FormatXps" xml:space="preserve"><value>Document XPS (.xps)</value></data>
+  <data name="Backstage_Export_CreateButton" xml:space="preserve"><value>Exporter</value></data>
+  <data name="Backstage_Export_CancelButton" xml:space="preserve"><value>Annuler</value></data>
+  <data name="Backstage_Export_Unavailable" xml:space="preserve"><value>Aucune feuille de calcul visible n'est disponible pour l'exportation.</value></data>
+  <data name="Backstage_Account_MenuItem" xml:space="preserve"><value>Compte...</value></data>
+  <data name="Backstage_Account_Title" xml:space="preserve"><value>Compte</value></data>
+  <data name="Backstage_Account_ProductSectionHeader" xml:space="preserve"><value>Informations sur le produit</value></data>
+  <data name="Backstage_Account_ProductLabel" xml:space="preserve"><value>Produit :</value></data>
+  <data name="Backstage_Account_VersionLabel" xml:space="preserve"><value>Version :</value></data>
+  <data name="Backstage_Account_DeviceLabel" xml:space="preserve"><value>Appareil :</value></data>
+  <data name="Backstage_Account_UserLabel" xml:space="preserve"><value>Connecté en tant que :</value></data>
+  <data name="Backstage_Account_LocalOnlyNote" xml:space="preserve"><value>FreeX est une application de bureau locale. Il n'y a aucun compte cloud auquel se connecter.</value></data>
+  <data name="Backstage_Account_UserLocalOnly" xml:space="preserve"><value>Compte Windows local</value></data>
+  <data name="Backstage_Account_NoticesSectionHeader" xml:space="preserve"><value>Mentions</value></data>
+  <data name="Backstage_Account_OptionsButton" xml:space="preserve"><value>Options FreeX...</value></data>
+  <data name="Backstage_Account_LegalNoticesButton" xml:space="preserve"><value>Mentions légales...</value></data>
+  <data name="Backstage_Account_CloseButton" xml:space="preserve"><value>Fermer</value></data>
 </root>
