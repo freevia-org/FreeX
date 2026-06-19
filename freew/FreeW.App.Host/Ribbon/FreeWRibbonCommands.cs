@@ -2331,57 +2331,46 @@ internal static class FreeWRibbonCommands
 
     // Review > Combine: merge the revisions of two reviewers (Word's Combine Documents). The current
     // document is treated as reviewer A; the user picks the shared ORIGINAL (base) and reviewer B's revised
-    // copy. The result loads as one document carrying BOTH reviewers' tracked insertions/deletions, each
-    // attributed to its own author, via the pure DocumentCombine helper. Pending edits are committed first so
-    // the combine reflects the on-screen text. Authors come from each document's Author property (falling
-    // back to the OS user for A and to "Reviewer 2" for B); the revision date is stamped at combine time.
+    // copy via the CombineDocumentsDialog — which confirms paths and lets the user override each reviewer's
+    // author label — then the result loads as one document carrying BOTH reviewers' tracked insertions/
+    // deletions, each attributed to its own author, via the pure DocumentCombine helper. Pending edits are
+    // committed first so the combine reflects the on-screen text. Authors are seeded from each document's
+    // Author property (falling back to the OS user for A and to "Reviewer 2" for B); the revision date is
+    // stamped at combine time.
     private sealed class CombineDocumentsCommand(DocumentView editor) : IRibbonCommand
     {
-        private const string Filter = "Word documents (*.docx)|*.docx|All files (*.*)|*.*";
-
         public void Execute(RibbonCommandContext context)
         {
             var owner = Window.GetWindow(editor);
 
-            var originalDialog = new OpenFileDialog
-            {
-                Filter = Filter,
-                DefaultExt = ".docx",
-                Title = "Combine: pick the ORIGINAL (base) document"
-            };
-            if (originalDialog.ShowDialog(owner) != true)
-                return;
+            // Seed author boxes from the current document (reviewer A) and fall back to the OS user.
+            editor.CommitToModel();
+            var revisedA = editor.Model;
 
-            var reviewerDialog = new OpenFileDialog
-            {
-                Filter = Filter,
-                DefaultExt = ".docx",
-                Title = "Combine: pick the SECOND reviewer's revised document"
-            };
-            if (reviewerDialog.ShowDialog(owner) != true)
+            var defaultAuthorA = revisedA.Properties.Author?.Trim();
+            if (string.IsNullOrWhiteSpace(defaultAuthorA))
+                defaultAuthorA = Environment.UserName;
+
+            var reviewerATitle = revisedA.Properties.Title?.Trim()
+                ?? System.IO.Path.GetFileName(editor.CurrentFileName ?? string.Empty);
+
+            var picked = CombineDocumentsDialog.Prompt(
+                owner,
+                defaultAuthorA!,
+                defaultAuthorB: "Reviewer 2",
+                reviewerATitle: reviewerATitle ?? string.Empty);
+            if (picked is null)
                 return;
 
             try
             {
-                editor.CommitToModel();
-                var original = DocxReader.Read(originalDialog.FileName);
-                var revisedB = DocxReader.Read(reviewerDialog.FileName);
-                var revisedA = editor.Model;
-
-                var authorA = revisedA.Properties.Author;
-                if (string.IsNullOrWhiteSpace(authorA))
-                    authorA = Environment.UserName;
-                authorA = authorA?.Trim() ?? string.Empty;
-
-                var authorB = revisedB.Properties.Author;
-                if (string.IsNullOrWhiteSpace(authorB))
-                    authorB = "Reviewer 2";
-                authorB = authorB.Trim();
+                var original = DocxReader.Read(picked.OriginalFilePath);
+                var revisedB = DocxReader.Read(picked.ReviewerBFilePath);
 
                 var dateXml = DateTimeOffset.UtcNow.ToString(
                     "yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture);
 
-                var combined = DocumentCombine.Combine(original, revisedA, authorA, revisedB, authorB, dateXml);
+                var combined = DocumentCombine.Combine(original, revisedA, picked.AuthorA, revisedB, picked.AuthorB, dateXml);
                 editor.LoadModel(combined);
             }
             catch (Exception ex)
