@@ -39,7 +39,7 @@ public sealed partial class MainWindow
 
         if (!ChartComboPlanner.SupportsCombo(chart))
         {
-            RefreshShell("Combo charts need a column or area chart with at least two data series.");
+            RefreshShell(UiText.Get("ChartLoc_ComboChartsNeed"));
             return;
         }
 
@@ -153,7 +153,7 @@ public sealed partial class MainWindow
         var plan = ChartMovePlanner.Plan(edited, name => _session.Workbook.GetSheet(name) is not null);
         if (!plan.IsValid)
         {
-            RefreshShell(plan.Error ?? "Move Chart failed.");
+            RefreshShell(plan.Error ?? UiText.Get("ChartLoc_MoveChartFailed"));
             return;
         }
 
@@ -166,21 +166,21 @@ public sealed partial class MainWindow
                 new MoveChartToNewSheetCommand(_session.ActiveSheet.Id, chart.Id, plan.TargetName));
             if (!commandResult.Success)
             {
-                RefreshShell(commandResult.ErrorMessage ?? "Move Chart failed.");
+                RefreshShell(commandResult.ErrorMessage ?? UiText.Get("ChartLoc_MoveChartFailed"));
                 return;
             }
 
             ClearSelectedDrawingObject();
             if (_session.Workbook.GetSheet(plan.TargetName) is { } createdSheet)
                 _session.SelectSheet(createdSheet.Id);
-            RefreshShell($"Moved chart to new sheet '{plan.TargetName}'.");
+            RefreshShell(UiText.Format("ChartLoc_MovedChartToNewSheet", plan.TargetName));
             return;
         }
 
         var targetSheet = _session.Workbook.GetSheet(plan.TargetName);
         if (targetSheet is null)
         {
-            RefreshShell($"There is no sheet named '{plan.TargetName}'.");
+            RefreshShell(UiText.Format("ChartLoc_NoSheetNamed", plan.TargetName));
             return;
         }
 
@@ -188,13 +188,13 @@ public sealed partial class MainWindow
             new MoveChartCommand(_session.ActiveSheet.Id, chart.Id, targetSheet.Id));
         if (!moveResult.Success)
         {
-            RefreshShell(moveResult.ErrorMessage ?? "Move Chart failed.");
+            RefreshShell(moveResult.ErrorMessage ?? UiText.Get("ChartLoc_MoveChartFailed"));
             return;
         }
 
         ClearSelectedDrawingObject();
         _session.SelectSheet(targetSheet.Id);
-        RefreshShell($"Moved chart to '{plan.TargetName}'.");
+        RefreshShell(UiText.Format("ChartLoc_MovedChartTo", plan.TargetName));
     }
 
     private async Task<ChartMoveInput?> ShowMoveChartDialogAsync(ChartMoveInput current)
@@ -330,7 +330,7 @@ public sealed partial class MainWindow
             if (!double.TryParse((borderWidthBox.Text ?? string.Empty).Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var width)
                 || !double.IsFinite(width))
             {
-                RefreshShell($"Enter a plot-area border width between {ChartAreaFormatPlanner.MinBorderThickness} and {ChartAreaFormatPlanner.MaxBorderThickness}.");
+                RefreshShell(UiText.Format("ChartLoc_EnterPlotAreaBorderWidth", ChartAreaFormatPlanner.MinBorderThickness, ChartAreaFormatPlanner.MaxBorderThickness));
                 return;
             }
 

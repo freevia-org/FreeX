@@ -27,7 +27,7 @@ public sealed partial class MainWindow
 
         if (!ChartComboPlanner.SupportsCombo(chart))
         {
-            RefreshShell("Combo charts need a column or area chart with at least two data series.");
+            RefreshShell(UiText.Get("ChartLoc_ComboChartsNeed"));
             return;
         }
 
@@ -142,7 +142,7 @@ public sealed partial class MainWindow
 
         if (ChartTypeSupport.GetDataSeriesCount(chart) <= 0)
         {
-            RefreshShell("This chart has no data series to format.");
+            RefreshShell(UiText.Get("ChartLoc_NoDataSeriesToFormat"));
             return;
         }
 
@@ -161,13 +161,13 @@ public sealed partial class MainWindow
 
         if (ChartTypeSupport.GetDataSeriesCount(chart) <= 0)
         {
-            RefreshShell("This chart has no data series to format.");
+            RefreshShell(UiText.Get("ChartLoc_NoDataSeriesToFormat"));
             return;
         }
 
         if (!ChartTypeSupport.SupportsSeriesMarkers(chart.Type))
         {
-            RefreshShell("Markers are available on line and scatter charts.");
+            RefreshShell(UiText.Get("ChartLoc_MarkersAvailableOn"));
             return;
         }
 

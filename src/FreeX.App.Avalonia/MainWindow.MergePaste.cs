@@ -50,8 +50,8 @@ public sealed partial class MainWindow
         var range = _session.SelectedRange;
         if (range.CellCount <= 1)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue("Select two or more cells to merge.");
+            RefreshShell(_statusText.Text ?? UiText.Get("TableLoc_Ready"));
+            ShowEditIssue(UiText.Get("TableLoc_MergeSelectTwoOrMoreCells"));
             return;
         }
 
@@ -62,7 +62,7 @@ public sealed partial class MainWindow
             var choice = await ShowMergeCellsContentWarningDialogAsync(contentPlan);
             if (choice == MergeCellsWarningChoice.Cancel)
             {
-                RefreshShell(_statusText.Text ?? "Ready");
+                RefreshShell(_statusText.Text ?? UiText.Get("TableLoc_Ready"));
                 return;
             }
 
@@ -77,12 +77,12 @@ public sealed partial class MainWindow
         var result = _session.ExecuteReviewCommand(command);
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "Merge Cells failed.");
+            RefreshShell(_statusText.Text ?? UiText.Get("TableLoc_Ready"));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("TableLoc_MergeCellsFailed"));
             return;
         }
 
-        RefreshShell($"Merged {rangeReference}");
+        RefreshShell(UiText.Format("TableLoc_Merged", rangeReference));
     }
 
     /// <summary>
@@ -101,8 +101,8 @@ public sealed partial class MainWindow
         var range = _session.SelectedRange;
         if (range.ColCount <= 1)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue("Select two or more columns to merge across.");
+            RefreshShell(_statusText.Text ?? UiText.Get("TableLoc_Ready"));
+            ShowEditIssue(UiText.Get("TableLoc_MergeAcrossSelectTwoOrMoreColumns"));
             return;
         }
 
@@ -125,7 +125,7 @@ public sealed partial class MainWindow
 
         if (rowCommands.Count == 0)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
+            RefreshShell(_statusText.Text ?? UiText.Get("TableLoc_Ready"));
             return;
         }
 
@@ -134,12 +134,12 @@ public sealed partial class MainWindow
         var result = _session.ExecuteReviewCommand(command);
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "Merge Across failed.");
+            RefreshShell(_statusText.Text ?? UiText.Get("TableLoc_Ready"));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("TableLoc_MergeAcrossFailed"));
             return;
         }
 
-        RefreshShell($"Merged across {rangeReference}");
+        RefreshShell(UiText.Format("TableLoc_MergedAcross", rangeReference));
     }
 
     /// <summary>
@@ -195,7 +195,7 @@ public sealed partial class MainWindow
         var choice = await PromptPasteSpecialModeAsync();
         if (choice is not { } selection)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
+            RefreshShell(_statusText.Text ?? UiText.Get("TableLoc_Ready"));
             return;
         }
 
@@ -213,7 +213,7 @@ public sealed partial class MainWindow
 
         var dialog = new Window
         {
-            Title = "Paste Special",
+            Title = UiText.Get("TableLoc_PasteSpecialTitle"),
             Width = 320,
             Height = 280,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -229,16 +229,16 @@ public sealed partial class MainWindow
 
         root.Children.Add(new TextBlock
         {
-            Text = "Paste",
+            Text = UiText.Get("TableLoc_PasteSpecialPasteLabel"),
             FontWeight = FontWeight.SemiBold
         });
 
         var options = new (PasteCellsMode Mode, string Label, string AutomationId)[]
         {
-            (PasteCellsMode.All, "All", "PasteSpecialAllRadio"),
-            (PasteCellsMode.Values, "Values", "PasteSpecialValuesRadio"),
-            (PasteCellsMode.Formulas, "Formulas", "PasteSpecialFormulasRadio"),
-            (PasteCellsMode.Formats, "Formats", "PasteSpecialFormatsRadio")
+            (PasteCellsMode.All, UiText.Get("TableLoc_PasteSpecialAll"), "PasteSpecialAllRadio"),
+            (PasteCellsMode.Values, UiText.Get("TableLoc_PasteSpecialValues"), "PasteSpecialValuesRadio"),
+            (PasteCellsMode.Formulas, UiText.Get("TableLoc_PasteSpecialFormulas"), "PasteSpecialFormulasRadio"),
+            (PasteCellsMode.Formats, UiText.Get("TableLoc_PasteSpecialFormats"), "PasteSpecialFormatsRadio")
         };
 
         var radios = new List<RadioButton>();
@@ -269,7 +269,7 @@ public sealed partial class MainWindow
 
         var okButton = new Button
         {
-            Content = "OK",
+            Content = UiText.Get("TableLoc_OK"),
             MinWidth = 82,
             IsDefault = true
         };
@@ -288,7 +288,7 @@ public sealed partial class MainWindow
 
         var cancelButton = new Button
         {
-            Content = "Cancel",
+            Content = UiText.Get("TableLoc_Cancel"),
             MinWidth = 82,
             IsCancel = true
         };

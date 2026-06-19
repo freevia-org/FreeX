@@ -64,7 +64,7 @@ public sealed partial class MainWindow : Window
         var window = new MainWindow(App.StartupArguments);
         window.Show();
         window.Activate();
-        RefreshShell("Opened a new window (independent workbook).");
+        RefreshShell(UiText.Get("ShellLoc_OpenedNewWindow"));
     }
 
     // view.arrangeAll button face — keeps the Excel default (Tiled).
@@ -156,7 +156,7 @@ public sealed partial class MainWindow : Window
         // user, since view.unhide restores worksheets, not windows.
         if (visibleCount <= 1)
         {
-            RefreshShell("Cannot hide the last visible window. Open a new window first.");
+            RefreshShell(UiText.Get("ShellLoc_CannotHideLastWindow"));
             return;
         }
 

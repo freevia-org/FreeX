@@ -11,8 +11,8 @@ public sealed partial class MainWindow
     {
         var result = _session.ClearSelectedRangeComments();
         RefreshShell(result.Success
-            ? "Cleared comments and notes."
-            : result.ErrorMessage ?? "Could not delete the comment.");
+            ? UiText.Get("InsertLoc_ClearedCommentsAndNotes")
+            : result.ErrorMessage ?? UiText.Get("InsertLoc_CouldNotDeleteComment"));
     }
 
     /// <summary>Formulas ▸ Error Checking — select formula cells that evaluate to an error.</summary>
@@ -22,8 +22,8 @@ public sealed partial class MainWindow
             GoToSpecialKind.Formulas,
             new GoToSpecialOptions(GoToSpecialValueTypes.Errors));
         RefreshShell(result.Success && result.MatchCount > 0
-            ? $"Error checking: selected {result.MatchCount} cell(s) with formula errors."
-            : "Error checking: no formula errors found.");
+            ? UiText.Format("InsertLoc_ErrorCheckingSelected", result.MatchCount)
+            : UiText.Get("InsertLoc_ErrorCheckingNone"));
     }
 
     /// <summary>View ▸ Normal — leave Page Break Preview.</summary>
@@ -31,7 +31,7 @@ public sealed partial class MainWindow
     {
         if (_isPageBreakPreviewActive)
             _isPageBreakPreviewActive = false;
-        RefreshShell("Normal view");
+        RefreshShell(UiText.Get("InsertLoc_NormalView"));
     }
 
     /// <summary>View ▸ Split — split the window at the active cell.</summary>
@@ -41,7 +41,7 @@ public sealed partial class MainWindow
         var result = _session.ExecuteReviewCommand(
             new SetSplitPanesCommand(_session.ActiveSheet.Id, cell.Row, cell.Col));
         RefreshShell(result.Success
-            ? $"Split window at {FormatCellReference(cell)}"
-            : result.ErrorMessage ?? "Could not split the window.");
+            ? UiText.Format("InsertLoc_SplitWindowAt", FormatCellReference(cell))
+            : result.ErrorMessage ?? UiText.Get("InsertLoc_CouldNotSplitWindow"));
     }
 }

@@ -40,13 +40,13 @@ public sealed partial class MainWindow
         var pivot = ResolveInsertControlPivot();
         if (pivot is null)
         {
-            RefreshShell("Select a cell inside a PivotTable to refresh it.");
+            RefreshShell(UiText.Get("PivotLoc_SelectCellToRefresh"));
             return;
         }
 
         ExecutePivotTabCommand(
             new RefreshPivotTableCommand(_session.ActiveSheet.Id, pivot.Name),
-            $"Refreshed PivotTable \"{pivot.Name}\".");
+            UiText.Format("PivotLoc_RefreshedPivot", pivot.Name));
     }
 
     // ── Analyze ▸ Filter (reuse the existing Insert Slicer/Timeline pickers) ─────
@@ -68,13 +68,13 @@ public sealed partial class MainWindow
         var pivot = PivotSourceContext.FindActivePivot(_session.ActiveSheet, _session.ActiveCell);
         if (pivot is null)
         {
-            RefreshShell("Select a cell inside a PivotTable to show its field list.");
+            RefreshShell(UiText.Get("PivotLoc_SelectCellToShowFieldList"));
             return;
         }
 
         _pivotFieldPaneUserHidden = !_pivotFieldPaneUserHidden;
         RefreshPivotFieldPane();
-        RefreshShell(_pivotFieldPaneUserHidden ? "PivotTable field list hidden." : "PivotTable field list shown.");
+        RefreshShell(_pivotFieldPaneUserHidden ? UiText.Get("PivotLoc_FieldListHidden") : UiText.Get("PivotLoc_FieldListShown"));
     }
 
     /// <summary>Field Headers — toggles <see cref="PivotTableModel.ShowFieldHeaders"/> on the active pivot.</summary>
@@ -82,7 +82,7 @@ public sealed partial class MainWindow
         => ApplyPivotOption(
             pivot => !pivot.ShowFieldHeaders,
             (pivot, value) => pivot with { ShowFieldHeaders = value },
-            value => value ? "Field headers shown." : "Field headers hidden.");
+            value => value ? UiText.Get("PivotLoc_FieldHeadersShown") : UiText.Get("PivotLoc_FieldHeadersHidden"));
 
     // ── Design ▸ Layout ──────────────────────────────────────────────────────────
 
@@ -91,21 +91,21 @@ public sealed partial class MainWindow
         => ApplyPivotOption(
             pivot => !(pivot.ShowRowGrandTotals || pivot.ShowColumnGrandTotals),
             (pivot, value) => pivot with { ShowRowGrandTotals = value, ShowColumnGrandTotals = value },
-            value => value ? "Grand totals on for rows and columns." : "Grand totals off.");
+            value => value ? UiText.Get("PivotLoc_GrandTotalsOn") : UiText.Get("PivotLoc_GrandTotalsOff"));
 
     /// <summary>Subtotals — toggles <see cref="PivotTableModel.ShowSubtotals"/> on the active pivot.</summary>
     private void TogglePivotSubtotals()
         => ApplyPivotOption(
             pivot => !pivot.ShowSubtotals,
             (pivot, value) => pivot with { ShowSubtotals = value },
-            value => value ? "Subtotals shown." : "Subtotals hidden.");
+            value => value ? UiText.Get("PivotLoc_SubtotalsShown") : UiText.Get("PivotLoc_SubtotalsHidden"));
 
     /// <summary>Blank Rows — toggles <see cref="PivotTableModel.BlankLineAfterItems"/> on the active pivot.</summary>
     private void TogglePivotBlankRows()
         => ApplyPivotOption(
             pivot => !pivot.BlankLineAfterItems,
             (pivot, value) => pivot with { BlankLineAfterItems = value },
-            value => value ? "Blank row inserted after each item." : "Blank rows removed.");
+            value => value ? UiText.Get("PivotLoc_BlankRowInserted") : UiText.Get("PivotLoc_BlankRowsRemoved"));
 
     /// <summary>Report Layout — cycles Compact → Outline → Tabular on the active pivot.</summary>
     private void CyclePivotReportLayout()
@@ -123,7 +123,7 @@ public sealed partial class MainWindow
         var options = CapturePivotOptions(pivot) with { ReportLayout = next };
         ExecutePivotTabCommand(
             BuildPivotOptionsCommand(pivot, options),
-            $"Report layout: {FormatReportLayout(next)}.");
+            UiText.Format("PivotLoc_ReportLayoutStatus", FormatReportLayout(next)));
     }
 
     // ── Design ▸ Style Options ──────────────────────────────────────────────────
@@ -133,28 +133,28 @@ public sealed partial class MainWindow
         => ApplyPivotOption(
             pivot => !pivot.ShowRowStripes,
             (pivot, value) => pivot with { ShowRowStripes = value },
-            value => value ? "Banded rows on." : "Banded rows off.");
+            value => value ? UiText.Get("PivotLoc_BandedRowsOn") : UiText.Get("PivotLoc_BandedRowsOff"));
 
     /// <summary>Banded Columns — toggles <see cref="PivotTableModel.ShowColumnStripes"/> on the active pivot.</summary>
     private void TogglePivotBandedColumns()
         => ApplyPivotOption(
             pivot => !pivot.ShowColumnStripes,
             (pivot, value) => pivot with { ShowColumnStripes = value },
-            value => value ? "Banded columns on." : "Banded columns off.");
+            value => value ? UiText.Get("PivotLoc_BandedColumnsOn") : UiText.Get("PivotLoc_BandedColumnsOff"));
 
     /// <summary>Row Headers — toggles <see cref="PivotTableModel.ShowRowHeaders"/> on the active pivot.</summary>
     private void TogglePivotRowHeaders()
         => ApplyPivotOption(
             pivot => !pivot.ShowRowHeaders,
             (pivot, value) => pivot with { ShowRowHeaders = value },
-            value => value ? "Row headers shown." : "Row headers hidden.");
+            value => value ? UiText.Get("PivotLoc_RowHeadersShown") : UiText.Get("PivotLoc_RowHeadersHidden"));
 
     /// <summary>Column Headers — toggles <see cref="PivotTableModel.ShowColumnHeaders"/> on the active pivot.</summary>
     private void TogglePivotColumnHeaders()
         => ApplyPivotOption(
             pivot => !pivot.ShowColumnHeaders,
             (pivot, value) => pivot with { ShowColumnHeaders = value },
-            value => value ? "Column headers shown." : "Column headers hidden.");
+            value => value ? UiText.Get("PivotLoc_ColumnHeadersShown") : UiText.Get("PivotLoc_ColumnHeadersHidden"));
 
     // ── Shared option-mutation plumbing ──────────────────────────────────────────
 
@@ -189,7 +189,7 @@ public sealed partial class MainWindow
         pivot = ResolveInsertControlPivot();
         if (pivot is null)
         {
-            RefreshShell("Select a cell inside a PivotTable to change its layout.");
+            RefreshShell(UiText.Get("PivotLoc_SelectCellToChangeLayout"));
             return false;
         }
 
@@ -248,7 +248,7 @@ public sealed partial class MainWindow
         var result = _session.ExecuteReviewCommand(command);
         if (!result.Success)
         {
-            RefreshShell(result.ErrorMessage ?? "PivotTable update failed.");
+            RefreshShell(result.ErrorMessage ?? UiText.Get("PivotLoc_UpdateFailed"));
             return;
         }
 
@@ -258,7 +258,7 @@ public sealed partial class MainWindow
 
     /// <summary>Reports that a PivotTable contextual command is not yet backed by Core.</summary>
     private void ReportPivotNotYetAvailable(string commandLabel)
-        => RefreshShell($"{commandLabel} is not yet available.");
+        => RefreshShell(UiText.Format("PivotLoc_NotYetAvailable", commandLabel));
 
     private static string FormatReportLayout(PivotReportLayout layout) => layout switch
     {
