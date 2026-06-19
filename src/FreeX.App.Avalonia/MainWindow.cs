@@ -761,7 +761,7 @@ public sealed partial class MainWindow : Window
                     ["Constants"] = () => SelectGoToSpecial(GoToSpecialKind.Constants),
                     ["Data Validation"] = () => SelectGoToSpecial(GoToSpecialKind.DataValidation),
                     ["Select Objects"] = () => SelectGoToSpecial(GoToSpecialKind.Objects),
-                    ["Selection Pane"] = () => RefreshShell("The Selection Pane isn't available in this build yet."),
+                    ["Selection Pane"] = () => RunGuarded(OpenSelectionPaneDialogAsync),
                     // Home ▸ Font ▸ Borders dropdown items (canonical ids from HomeRibbonMenus.Borders). The
                     // single-edge/inside presets map to CellBorderPreset; "More Borders" opens Format Cells
                     // (Borders tab). All/Outside/No Border are wired above. Exotic thick/double/draw variants

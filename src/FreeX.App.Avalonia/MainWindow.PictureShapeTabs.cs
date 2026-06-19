@@ -49,7 +49,7 @@ public sealed partial class MainWindow
             // Picture z-order has no Core command yet (Core's z-order commands are shape-only); honest stub.
             ["pictureFormat.bringForward"] = () => ReportContextualNotYetAvailable("Bring Forward (pictures)"),
             ["pictureFormat.sendBackward"] = () => ReportContextualNotYetAvailable("Send Backward (pictures)"),
-            ["pictureFormat.selectionPane"] = () => ReportContextualNotYetAvailable("Selection Pane"),
+            ["pictureFormat.selectionPane"] = () => RunGuarded(OpenSelectionPaneDialogAsync),
             ["pictureFormat.rotate"] = () => RunGuarded(RotateSelectedDrawingObjectAsync),
             ["pictureFormat.size"] = () => RunGuarded(ResizeSelectedDrawingObjectAsync),
             ["pictureFormat.altText"] = () => RunGuarded(EditSelectedDrawingObjectAltTextAsync),
@@ -79,7 +79,7 @@ public sealed partial class MainWindow
             ["3-D Rotation"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.ThreeDRotation),
             ["shapeFormat.bringForward"] = () => BringSelectedShapeForward(),
             ["shapeFormat.sendBackward"] = () => SendSelectedShapeBackward(),
-            ["shapeFormat.selectionPane"] = () => ReportContextualNotYetAvailable("Selection Pane"),
+            ["shapeFormat.selectionPane"] = () => RunGuarded(OpenSelectionPaneDialogAsync),
             ["shapeFormat.rotate"] = () => RunGuarded(RotateSelectedDrawingObjectAsync),
             ["shapeFormat.size"] = () => RunGuarded(ResizeSelectedDrawingObjectAsync),
             ["shapeFormat.altText"] = () => RunGuarded(EditSelectedDrawingObjectAltTextAsync),
