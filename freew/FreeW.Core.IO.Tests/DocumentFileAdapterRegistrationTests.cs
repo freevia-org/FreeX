@@ -21,6 +21,8 @@ public class DocumentFileAdapterRegistrationTests
     [InlineData(".xml", true, true, false)]
     [InlineData(".rtf", true, true, false)]
     [InlineData(".pdf", true, false, false)]
+    [InlineData(".doc", true, false, false)]
+    [InlineData(".dot", true, false, true)]
     [InlineData(".txt", true, true, false)]
     [InlineData(".text", true, true, false)]
     [InlineData(".log", true, true, false)]

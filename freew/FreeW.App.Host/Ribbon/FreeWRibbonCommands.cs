@@ -275,6 +275,10 @@ internal static class FreeWRibbonCommands
             new Equation([MathRun.Delimiter("a, b")]))));
         registry.Register("freew.equation-matrix", new ActionCommand(() => InsertEquationPreset(editor,
             new Equation([MathRun.MatrixOf(MathMatrix.Identity2x2())]))));
+        registry.Register("freew.equation-func", new ActionCommand(() => InsertEquationPreset(editor,
+            new Equation([MathRun.FunctionApply("sin", "x")]))));
+        registry.Register("freew.equation-groupchr", new ActionCommand(() => InsertEquationPreset(editor,
+            new Equation([MathRun.GroupCharOf("x+y")]))));
         registry.Register("freew.chart", new ActionCommand(() =>
         {
             editor.Focus();
@@ -310,6 +314,9 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.footnote", new InsertFootnoteCommand(editor));
         // Insert tab — References: prompt for endnote text and insert an endnote reference at the caret.
         registry.Register("freew.endnote", new InsertEndnoteCommand(editor));
+        // Insert tab — References: open the Footnote and Endnote numbering options dialog (number format,
+        // start-at, restart mode). Applies to w:footnotePr / w:endnotePr in settings.xml.
+        registry.Register("freew.footnote-endnote-options", new FootnoteEndnoteOptionsCommand(editor));
         // Insert tab — References: generate a Table of Contents from the heading outline at the caret,
         // and rebuild it in place (remove the prior TOC region + re-insert). Both route through the bus.
         registry.Register("freew.toc", new ActionCommand(() => { editor.Focus(); editor.InsertTableOfContents(); }));
@@ -441,6 +448,11 @@ internal static class FreeWRibbonCommands
         // Review tab — Compare: open a second .docx and load a comparison of the current document against
         // it as tracked changes (insertions/deletions relative to the opened "original").
         registry.Register("freew.compare", new CompareDocumentsCommand(editor));
+
+        // Review tab — Combine: open the original (base) document plus a second reviewer's revised copy and
+        // merge BOTH reviewers' edits (the current document is reviewer A, the opened file is reviewer B)
+        // into one document whose tracked changes preserve each reviewer's authorship.
+        registry.Register("freew.combine", new CombineDocumentsCommand(editor));
 
         // Review tab — Inspect Document: report the metadata the document carries (comments, tracked
         // changes, document properties, bookmarks) via the pure DocumentInspector, and let the user
@@ -1845,6 +1857,34 @@ internal static class FreeWRibbonCommands
         }
     }
 
+    // Insert > References > Footnote/Endnote Options: open the Footnote and Endnote numbering options
+    // dialog (number format, start-at, restart mode for both footnotes and endnotes). Applies the chosen
+    // settings to the document's FootnoteNumbering / EndnoteNumbering, which round-trip as w:footnotePr /
+    // w:endnotePr in word/settings.xml.
+    private sealed class FootnoteEndnoteOptionsCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var owner = Window.GetWindow(editor);
+            var model = editor.Model;
+            var result = FootnoteEndnoteOptionsDialog.Prompt(owner, model.FootnoteNumbering, model.EndnoteNumbering);
+            if (result is null)
+                return;
+
+            // Apply the chosen numbering options. The model properties are mutable; we mutate in-place
+            // and commit via ApplyPageSettings (a page-settings no-op) so the editor commits pending
+            // edits, re-renders (marking the document dirty) and the settings round-trip on next save.
+            model.FootnoteNumbering.NumberFormat = result.FootnoteFormat;
+            model.FootnoteNumbering.StartAt = result.FootnoteStartAt;
+            model.FootnoteNumbering.NumberRestart = result.FootnoteRestart;
+            model.EndnoteNumbering.NumberFormat = result.EndnoteFormat;
+            model.EndnoteNumbering.StartAt = result.EndnoteStartAt;
+            model.EndnoteNumbering.NumberRestart = result.EndnoteRestart;
+            editor.ApplyPageSettings(_ => { });  // commits pending edits + marks document dirty
+        }
+    }
+
     // Insert > References > Citation: insert an in-text citation at the caret. If the document already
     // has sources, the user picks one (or chooses "Add New Source…"); otherwise they go straight to the
     // new-source form. A new source is appended to the model, then its in-text citation is inserted.
@@ -2247,48 +2287,106 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // Review > Compare: prompt the user to open a second .docx, read it, and load a comparison of the
-    // current document against it into the editor. The opened document is treated as the "original" and
-    // the current document as the "revised"; differences load as tracked insertions/deletions (rendered
-    // with the existing track-changes styling). The author comes from the document Author property
-    // (falling back to the OS user); the revision date is stamped at compare time (UI side, not the pure
-    // helper). Pending edits are committed first so the comparison reflects the on-screen text.
+    // Review > Compare: two-phase dialog — first pick the original .docx (file picker), then confirm
+    // and optionally override the reviewer name in the Compare Documents dialog — then load the legal
+    // blackline result into the editor. The opened document is treated as the "original" and the current
+    // document as the "revised"; differences appear as tracked insertions/deletions attributed to the
+    // chosen author. Pending edits are committed first so the comparison reflects the on-screen text.
     private sealed class CompareDocumentsCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            var owner = Window.GetWindow(editor);
+
+            // Seed the author box from the document's Author property, falling back to the OS user.
+            editor.CommitToModel();
+            var revised = editor.Model;
+            var defaultAuthor = revised.Properties.Author?.Trim();
+            if (string.IsNullOrWhiteSpace(defaultAuthor))
+                defaultAuthor = Environment.UserName;
+
+            var revisedTitle = revised.Properties.Title?.Trim()
+                ?? System.IO.Path.GetFileName(editor.CurrentFileName ?? string.Empty);
+
+            var picked = CompareDocumentsDialog.Prompt(owner, defaultAuthor!, revisedTitle ?? string.Empty);
+            if (picked is null)
+                return;
+
+            try
+            {
+                var original = DocxReader.Read(picked.OriginalFilePath);
+                var dateXml = DateTimeOffset.UtcNow.ToString(
+                    "yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture);
+
+                var compared = DocumentCompare.Compare(original, revised, picked.Author, dateXml);
+                editor.LoadModel(compared);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(owner, $"Could not compare the documents:\n{ex.Message}",
+                    "FreeW", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+    }
+
+    // Review > Combine: merge the revisions of two reviewers (Word's Combine Documents). The current
+    // document is treated as reviewer A; the user picks the shared ORIGINAL (base) and reviewer B's revised
+    // copy. The result loads as one document carrying BOTH reviewers' tracked insertions/deletions, each
+    // attributed to its own author, via the pure DocumentCombine helper. Pending edits are committed first so
+    // the combine reflects the on-screen text. Authors come from each document's Author property (falling
+    // back to the OS user for A and to "Reviewer 2" for B); the revision date is stamped at combine time.
+    private sealed class CombineDocumentsCommand(DocumentView editor) : IRibbonCommand
     {
         private const string Filter = "Word documents (*.docx)|*.docx|All files (*.*)|*.*";
 
         public void Execute(RibbonCommandContext context)
         {
             var owner = Window.GetWindow(editor);
-            var dialog = new OpenFileDialog
+
+            var originalDialog = new OpenFileDialog
             {
                 Filter = Filter,
                 DefaultExt = ".docx",
-                Title = "Compare With Document"
+                Title = "Combine: pick the ORIGINAL (base) document"
             };
-            if (dialog.ShowDialog(owner) != true)
+            if (originalDialog.ShowDialog(owner) != true)
+                return;
+
+            var reviewerDialog = new OpenFileDialog
+            {
+                Filter = Filter,
+                DefaultExt = ".docx",
+                Title = "Combine: pick the SECOND reviewer's revised document"
+            };
+            if (reviewerDialog.ShowDialog(owner) != true)
                 return;
 
             try
             {
                 editor.CommitToModel();
-                var original = DocxReader.Read(dialog.FileName);
-                var revised = editor.Model;
+                var original = DocxReader.Read(originalDialog.FileName);
+                var revisedB = DocxReader.Read(reviewerDialog.FileName);
+                var revisedA = editor.Model;
 
-                var author = revised.Properties.Author;
-                if (string.IsNullOrWhiteSpace(author))
-                    author = Environment.UserName;
-                author = author?.Trim() ?? string.Empty;
+                var authorA = revisedA.Properties.Author;
+                if (string.IsNullOrWhiteSpace(authorA))
+                    authorA = Environment.UserName;
+                authorA = authorA?.Trim() ?? string.Empty;
+
+                var authorB = revisedB.Properties.Author;
+                if (string.IsNullOrWhiteSpace(authorB))
+                    authorB = "Reviewer 2";
+                authorB = authorB.Trim();
 
                 var dateXml = DateTimeOffset.UtcNow.ToString(
                     "yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture);
 
-                var compared = DocumentCompare.Compare(original, revised, author, dateXml);
-                editor.LoadModel(compared);
+                var combined = DocumentCombine.Combine(original, revisedA, authorA, revisedB, authorB, dateXml);
+                editor.LoadModel(combined);
             }
             catch (Exception ex)
             {
-                MessageBox.Show(owner, $"Could not compare the documents:\n{ex.Message}",
+                MessageBox.Show(owner, $"Could not combine the documents:\n{ex.Message}",
                     "FreeW", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }

@@ -743,6 +743,75 @@ public sealed class Endnote(int id)
 }
 
 /// <summary>
+/// Number format for footnote/endnote reference marks. Maps to w:numFmt/@w:val inside
+/// w:footnotePr / w:endnotePr in word/settings.xml. The default is <see cref="Decimal"/> (1, 2, 3, …).
+/// </summary>
+public enum NoteNumberFormat
+{
+    /// <summary>Arabic numerals: 1, 2, 3, … (w:numFmt val="decimal", the Word default).</summary>
+    Decimal,
+    /// <summary>Lower-case Roman numerals: i, ii, iii, … (w:numFmt val="lowerRoman").</summary>
+    LowerRoman,
+    /// <summary>Upper-case Roman numerals: I, II, III, … (w:numFmt val="upperRoman").</summary>
+    UpperRoman,
+    /// <summary>Lower-case letters: a, b, c, … (w:numFmt val="lowerLetter").</summary>
+    LowerLetter,
+    /// <summary>Upper-case letters: A, B, C, … (w:numFmt val="upperLetter").</summary>
+    UpperLetter,
+    /// <summary>Symbol sequence: *, †, ‡, §, **, †† … (w:numFmt val="chicago").</summary>
+    Chicago
+}
+
+/// <summary>
+/// Controls when footnote/endnote numbering restarts. Maps to w:numRestart/@w:val inside
+/// w:footnotePr / w:endnotePr in word/settings.xml. The default is <see cref="Continuous"/>
+/// (numbering runs across the whole document without restarting).
+/// </summary>
+public enum NoteNumberRestart
+{
+    /// <summary>Continuous numbering through the whole document (the Word default).</summary>
+    Continuous,
+    /// <summary>Restart numbering at 1 on each new section (w:numRestart val="eachSect").</summary>
+    EachSection,
+    /// <summary>Restart numbering at 1 on each new page (w:numRestart val="eachPage"; footnotes only).</summary>
+    EachPage
+}
+
+/// <summary>
+/// Document-level footnote (or endnote) numbering options stored in word/settings.xml as
+/// w:footnotePr (or w:endnotePr). All properties have Word-default values so a freshly created
+/// document round-trips without emitting these elements.
+/// </summary>
+public sealed class NoteNumberingOptions
+{
+    /// <summary>
+    /// Number format for the reference marks. Defaults to <see cref="NoteNumberFormat.Decimal"/>
+    /// (1, 2, 3, …), matching Word's default.
+    /// </summary>
+    public NoteNumberFormat NumberFormat { get; set; } = NoteNumberFormat.Decimal;
+
+    /// <summary>
+    /// The starting number for the first reference mark. Defaults to 1 (Word's default).
+    /// </summary>
+    public int StartAt { get; set; } = 1;
+
+    /// <summary>
+    /// When numbering restarts. Defaults to <see cref="NoteNumberRestart.Continuous"/>,
+    /// matching Word's default.
+    /// </summary>
+    public NoteNumberRestart NumberRestart { get; set; } = NoteNumberRestart.Continuous;
+
+    /// <summary>
+    /// Returns true when all properties match Word's defaults, meaning the w:footnotePr /
+    /// w:endnotePr element need not be emitted (keeps a freshly authored document minimal).
+    /// </summary>
+    public bool IsDefault =>
+        NumberFormat == NoteNumberFormat.Decimal &&
+        StartAt == 1 &&
+        NumberRestart == NoteNumberRestart.Continuous;
+}
+
+/// <summary>
 /// A single review comment: an id (matching the body runs' <see cref="Run.CommentId"/>), an author
 /// and initials, an optional explicit date, and the comment's block content as a list of paragraphs.
 /// Maps onto a w:comment element inside word/comments.xml. The date is an explicit model value (never
@@ -1917,6 +1986,20 @@ public sealed class TextDocument
 
     /// <summary>The next unused endnote id (1-based; ignores the reserved separator ids -1 and 0).</summary>
     public int NextEndnoteId() => Endnotes.Count == 0 ? 1 : Math.Max(0, Endnotes.Keys.Max()) + 1;
+
+    /// <summary>
+    /// Document-level footnote numbering options (number format, start-at, restart). Read from and
+    /// written to <c>w:footnotePr</c> in word/settings.xml. A fresh document uses Word's defaults so
+    /// no element is emitted until the user changes something.
+    /// </summary>
+    public NoteNumberingOptions FootnoteNumbering { get; } = new();
+
+    /// <summary>
+    /// Document-level endnote numbering options (number format, start-at, restart). Read from and
+    /// written to <c>w:endnotePr</c> in word/settings.xml. A fresh document uses Word's defaults so
+    /// no element is emitted until the user changes something.
+    /// </summary>
+    public NoteNumberingOptions EndnoteNumbering { get; } = new();
 
     /// <summary>
     /// The document's review comments, keyed by comment id (matching the body runs' <see cref="Run.CommentId"/>).

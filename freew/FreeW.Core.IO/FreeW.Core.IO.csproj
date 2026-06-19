@@ -9,6 +9,9 @@
          reading-order text extractor. -->
     <PackageReference Include="UglyToad.PdfPig" />
     <PackageReference Include="UglyToad.PdfPig.DocumentLayoutAnalysis" />
+    <!-- Legacy binary Word (.doc/.dot) read-only import; transcodes to .docx for the existing DocxReader. -->
+    <PackageReference Include="DocSharp.Binary.Doc" />
+    <PackageReference Include="DocSharp.Binary.Common" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\FreeW.Core.Model\FreeW.Core.Model.csproj" />

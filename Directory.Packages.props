@@ -3,6 +3,9 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
   <ItemGroup>
+    <!-- Legacy binary Word (.doc/.dot) read-only import via transcode to in-memory .docx (MIT). -->
+    <PackageVersion Include="DocSharp.Binary.Doc" Version="0.20.0" />
+    <PackageVersion Include="DocSharp.Binary.Common" Version="0.20.0" />
     <!-- PDF text import (read-only) for FreeW. Pinned to the exact (prerelease) version the package ships. -->
     <PackageVersion Include="UglyToad.PdfPig" Version="1.7.0-custom-5" />
     <PackageVersion Include="UglyToad.PdfPig.DocumentLayoutAnalysis" Version="1.7.0-custom-5" />
