@@ -91,6 +91,9 @@ public sealed partial class MainWindow
             // Table Styles gallery — picks a built-in style via TableStyleGalleryPlanner and applies it through
             // ApplyStructuredTableStyleCommand (MainWindow.TableStyleGallery).
             ["tableDesign.tableStyles"] = OpenTableStyleGallery,
+            // Summarize with PivotTable — opens the Insert PivotTable dialog seeded from the active table's range
+            // (MainWindow.TableSummarizeWithPivot), reusing the existing PivotCreatePlanner path.
+            ["tableDesign.summarizeWithPivot"] = SummarizeActiveTableWithPivot,
 
             // --- PivotTable Analyze / Design (pivot.active) — real handlers via
             // ConfigurePivotTableOptionsCommand / RefreshPivotTableCommand (MainWindow.PivotTabs). ---
@@ -126,9 +129,28 @@ public sealed partial class MainWindow
             // Calculated Field dialog — add/modify/delete a calculated field via PivotCalculatedFieldPlanner,
             // applied through ConfigurePivotTableCalculatedItemsCommand (MainWindow.PivotCalculatedField).
             ["pivotAnalyze.calculatedField"] = OpenPivotCalculatedField,
-            // Field Settings opens per-field value/sort dialogs from the header dropdown (MainWindow.PivotFieldSettings);
-            // the ribbon button has no current-field selection at the ribbon level yet, so it stays an honest stub here.
-            ["pivotAnalyze.fieldSettings"] = () => ReportPivotNotYetAvailable("Field Settings"),
+            // Field Settings opens the value-field-settings dialog (MainWindow.PivotFieldSettings) for the
+            // active pivot's first value field, reusing the same PivotValueFieldPlanner the header dropdown uses.
+            ["pivotAnalyze.fieldSettings"] = OpenActivePivotFieldSettings,
+            // Show Details drills the selected value cell into a new detail sheet via DrillDownPivotTableCommand.
+            ["pivotAnalyze.showDetails"] = ShowActivePivotDetails,
+            // Clear empties the active pivot's layout via ClearPivotTableViewCommand.
+            ["pivotAnalyze.clear"] = ClearActivePivotTable,
+            // Select moves the selection onto the active pivot's full target range.
+            ["pivotAnalyze.select"] = SelectActivePivotTable,
+            // Move PivotTable opens the destination dialog (MainWindow.PivotMove) -> MovePivotTableCommand.
+            ["pivotAnalyze.move"] = OpenPivotMove,
+            // Calculated Item opens the add/modify/delete dialog (MainWindow.PivotCalculatedItem) ->
+            // ConfigurePivotTableCalculatedItemsCommand.
+            ["pivotAnalyze.calculatedItem"] = OpenPivotCalculatedItem,
+            // +/- Buttons toggles PivotTableModel.ShowExpandCollapseButtons via ConfigurePivotTableOptionsCommand.
+            ["pivotAnalyze.plusMinusButtons"] = TogglePivotExpandCollapseButtons,
+            // PivotChart inserts a PivotChart over the active pivot (MainWindow.PivotChart).
+            ["pivotAnalyze.pivotChart"] = InsertPivotChart,
+            // Change Chart Type re-types the active pivot's chart (MainWindow.PivotChartCommands).
+            ["pivotAnalyze.changeChartType"] = () => RunGuarded(ChangeActivePivotChartTypeAsync),
+            // PivotChart Options opens the field-button / data-table options dialog (MainWindow.PivotChartOptions).
+            ["pivotAnalyze.pivotChartOptions"] = () => RunGuarded(OpenPivotChartOptionsAsync),
 
             // Shape Effects is a dropdown: clicking the parent opens its menu (No Effect / Shadow, wired via
             // BuildPictureShapeTabCommands). Register the parent id too so the renderer keeps it enabled

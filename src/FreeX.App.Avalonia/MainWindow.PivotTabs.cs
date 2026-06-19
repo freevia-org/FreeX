@@ -217,7 +217,10 @@ public sealed partial class MainWindow
     /// snapshot. Only the layout/style flags this tab exposes are carried; the command leaves all other
     /// (cache/print/alt-text/tooltip) options untouched by passing their "no update" defaults.
     /// </summary>
-    private ConfigurePivotTableOptionsCommand BuildPivotOptionsCommand(PivotTableModel pivot, PivotOptionValues o)
+    private ConfigurePivotTableOptionsCommand BuildPivotOptionsCommand(
+        PivotTableModel pivot,
+        PivotOptionValues o,
+        bool? showExpandCollapseButtons = null)
         => new(
             _session.ActiveSheet.Id,
             pivot.Name,
@@ -233,7 +236,8 @@ public sealed partial class MainWindow
             showRowStripes: o.ShowRowStripes,
             showColumnStripes: o.ShowColumnStripes,
             reportLayout: o.ReportLayout,
-            showFieldHeaders: o.ShowFieldHeaders);
+            showFieldHeaders: o.ShowFieldHeaders,
+            showExpandCollapseButtons: showExpandCollapseButtons);
 
     /// <summary>
     /// Runs a pivot command through the shared review path, surfacing failures on the status bar and forcing
