@@ -592,4 +592,13 @@
   <data name="Sparkline_Updated" xml:space="preserve"><value>Graphique sparkline mis à jour.</value></data>
   <data name="Sparkline_Cleared" xml:space="preserve"><value>Graphique sparkline effacé.</value></data>
   <data name="Sparkline_EditFailed" xml:space="preserve"><value>Échec de la modification du graphique sparkline.</value></data>
+  <data name="RowColumn_RowsHidden" xml:space="preserve"><value>{0} ligne(s) masquée(s).</value></data>
+  <data name="RowColumn_RowsUnhidden" xml:space="preserve"><value>Lignes affichées dans la sélection.</value></data>
+  <data name="RowColumn_ColumnsHidden" xml:space="preserve"><value>{0} colonne(s) masquée(s).</value></data>
+  <data name="RowColumn_ColumnsUnhidden" xml:space="preserve"><value>Colonnes affichées dans la sélection.</value></data>
+  <data name="RowColumn_HideRowsFailed" xml:space="preserve"><value>Impossible de masquer les lignes.</value></data>
+  <data name="RowColumn_UnhideRowsFailed" xml:space="preserve"><value>Impossible d'afficher les lignes.</value></data>
+  <data name="RowColumn_HideColumnsFailed" xml:space="preserve"><value>Impossible de masquer les colonnes.</value></data>
+  <data name="RowColumn_UnhideColumnsFailed" xml:space="preserve"><value>Impossible d'afficher les colonnes.</value></data>
+  <data name="RowColumn_NoSelection" xml:space="preserve"><value>Sélectionnez d'abord des lignes ou des colonnes.</value></data>
 </root>
