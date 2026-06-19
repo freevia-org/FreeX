@@ -18,7 +18,7 @@ public sealed record PivotGroupFieldLayout(
 /// (None / Year / Quarter / Month / Day / Number range), capturing the current grouping off a source field,
 /// validating the starting/ending/by inputs, building the resulting grouped (or ungrouped)
 /// <see cref="PivotFieldModel"/>, and rewriting the row/column/page layout lists to carry it. Single-sourced
-/// here so the desktop host and the Avalonia/macOS shell share identical behavior; building the dialog and
+/// here so the desktop host and the cross-platform shell share identical behavior; building the dialog and
 /// running the command stays with each shell's command glue (both hand the layout to
 /// <c>ConfigurePivotTableCalculatedItemsCommand</c>, which carries the row/column/page fields plus the
 /// existing calculated fields/items). Mirrors the Core <see cref="PivotFieldGrouping"/> model exactly, so no

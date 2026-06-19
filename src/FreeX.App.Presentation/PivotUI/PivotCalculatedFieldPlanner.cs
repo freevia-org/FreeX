@@ -7,7 +7,7 @@ namespace FreeX.App.Presentation.PivotUI;
 /// fields the dialog lets the user pick/modify/delete, seeding the name/formula boxes off a chosen field,
 /// validating the name+formula, inserting a source-field reference token into the formula at the caret, and
 /// rebuilding the pivot's <see cref="PivotTableModel.CalculatedFields"/> list (add/modify by name, or delete).
-/// Single-sourced here so the desktop host and the Avalonia/macOS shell share identical behavior; building the
+/// Single-sourced here so the desktop host and the cross-platform shell share identical behavior; building the
 /// dialog and running the command stays with each shell's command glue (both hand the rebuilt calculated-field
 /// list to <c>ConfigurePivotTableCalculatedItemsCommand</c>, leaving the row/column/page fields and calculated
 /// items untouched). Mirrors the Core <see cref="PivotCalculatedFieldModel"/> model exactly, so no Core change
