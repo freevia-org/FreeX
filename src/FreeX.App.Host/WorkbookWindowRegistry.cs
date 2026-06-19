@@ -228,7 +228,7 @@ public sealed class WorkbookWindowRegistry
             return false;
 
         var bounds = ArrangeAllLayoutPlanner.Arrange(
-            arrangement,
+            (ShellWindowArrangement)arrangement,
             workAreaWidth,
             workAreaHeight,
             visibleWindows.Count);
@@ -237,7 +237,10 @@ public sealed class WorkbookWindowRegistry
 
         DisableSideBySide();
         for (var index = 0; index < visibleWindows.Count; index++)
-            visibleWindows[index].TileToWorkArea(bounds[index]);
+        {
+            var b = bounds[index];
+            visibleWindows[index].TileToWorkArea(new Rect(b.X, b.Y, b.Width, b.Height));
+        }
 
         return true;
     }

@@ -1,33 +1,43 @@
-namespace FreeX.App.Host;
+namespace FreeX.App.Services;
 
 /// <summary>
-/// The outcome of the save-changes confirmation dialog shown before a destructive action.
-/// Promoted from a private nested type to a top-level internal type so that
-/// <see cref="WindowCloseDecisionPlanner"/> can reference it without being nested inside
-/// <c>MainWindow</c>.
+/// The outcome of the save-changes confirmation dialog shown before a destructive action
+/// (closing a workbook window, creating a new workbook, or opening another file).
 /// </summary>
-internal enum SaveChangesConfirmation
+public enum SaveChangesConfirmation
 {
     /// <summary>The user clicked Cancel — abort the action, keep the window open.</summary>
     Cancel,
+
     /// <summary>
     /// The user clicked Save and the save completed (or the workbook was already clean).
     /// The window may still stay open if new edits arrived mid-save.
     /// </summary>
     Continue,
-    /// <summary>The user clicked "Don't Save" — discard changes and proceed.</summary>
+
+    /// <summary>The user clicked "Don't Save" / "Discard" — discard changes and proceed.</summary>
     DiscardWithoutSaving
 }
 
+/// <summary>The action the calling window should take after the close-decision planner returns.</summary>
+public enum WindowCloseAction
+{
+    /// <summary>Proceed to close the window.</summary>
+    Close,
+
+    /// <summary>Keep the window open (cancel the close).</summary>
+    StayOpen
+}
+
 /// <summary>
-/// Pure decision logic for the post-prompt close step in <c>MainWindow_Closing</c>.
-/// Determines whether the window should proceed to close or stay open, given the
-/// user's dialog answer and the current dirty state.
+/// Pure decision logic for the post-prompt close step. Determines whether the window
+/// should proceed to close or stay open, given the user's dialog answer and the current
+/// dirty state. Shared across every shell.
 /// <para>
-/// Extracted for unit-testability: no WPF, no async, no side effects.
+/// Extracted for unit-testability: no UI framework, no async, no side effects.
 /// </para>
 /// </summary>
-internal static class WindowCloseDecisionPlanner
+public static class WindowCloseDecisionPlanner
 {
     /// <summary>
     /// Determines the close action after the save-changes prompt has returned.
@@ -47,7 +57,7 @@ internal static class WindowCloseDecisionPlanner
 
             // User clicked "Don't Save" (Discard) — close unconditionally.
             // The discard path never calls MarkWorkbookSaved, so the dirty flag
-            // remains set; the original bug was applying the dirty re-check here.
+            // remains set; re-checking dirtiness here was the original bug.
             SaveChangesConfirmation.DiscardWithoutSaving => WindowCloseAction.Close,
 
             // User clicked Save (Continue) — a save ran.  If new edits arrived
@@ -60,13 +70,4 @@ internal static class WindowCloseDecisionPlanner
 
             _ => WindowCloseAction.StayOpen
         };
-}
-
-/// <summary>The action the calling window should take after the close-decision planner returns.</summary>
-internal enum WindowCloseAction
-{
-    /// <summary>Proceed to close the window.</summary>
-    Close,
-    /// <summary>Keep the window open (cancel the close).</summary>
-    StayOpen
 }

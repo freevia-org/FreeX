@@ -26,6 +26,7 @@ public sealed class AvaloniaProjectPortabilityGuardTests
         "FreeX.Core.IO",
         "FreeX.Core.Model",
         "Free.Shared.Ribbon",
+        "Free.Shared.Shell",
         "FreeX.Ribbon.Definitions",
         "FreeX.Ribbon.Avalonia"
     ];

@@ -12,6 +12,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using System.Globalization;
+using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Services;
 using FreeX.App.Services.Ribbon;
 using FreeX.App.Services.Updates;
@@ -411,6 +412,9 @@ public sealed partial class MainWindow : Window
     private readonly NativeMenuItem _saveMenuItem = new();
     private readonly NativeMenuItem _saveAsMenuItem = new();
     private readonly NativeMenuItem _exportPdfMenuItem = new();
+    private readonly NativeMenuItem _backstageExportMenuItem = new();
+    private readonly NativeMenuItem _backstageInfoMenuItem = new();
+    private readonly NativeMenuItem _backstageAccountMenuItem = new();
     private readonly NativeMenuItem _shareWorkbookMenuItem = new();
     private readonly NativeMenuItem _workbookStatisticsMenuItem = new();
     private readonly NativeMenuItem _optionsMenuItem = new();
@@ -704,7 +708,8 @@ public sealed partial class MainWindow : Window
                     ["data.circleInvalid"] = CircleInvalidData,
                     ["data.clearCircles"] = ClearValidationCircles,
                     ["data.getData"] = GetDataNotSupported,
-                    ["data.refresh"] = RefreshAllNotSupported,
+                    // Data ▸ Connections ▸ Refresh All: WPF aliases this to Calculate Now (recalc workbook).
+                    ["data.refresh"] = CalculateNow,
                     // Page Layout sheet options (view + print) and Review ▸ Show Notes.
                     ["pageLayout.gridlines"] = () => _ = ShowGridlinesSheetOptionsAsync(),
                     ["pageLayout.headings"] = () => _ = ShowHeadingsSheetOptionsAsync(),
@@ -714,6 +719,12 @@ public sealed partial class MainWindow : Window
                     // View ▸ Window group (multi-window).
                     ["view.newWindow"] = NewWindow,
                     ["view.arrangeAll"] = ArrangeAllWindows,
+                    // View ▸ Window ▸ Arrange All submenu (canonical menu ids from the shared ribbon
+                    // definition). Each positions every visible window via the shared layout planner.
+                    ["Tiled"] = () => ArrangeAllWindows(WorkbookWindowArrangement.Tiled),
+                    ["Horizontal#ArrangeAllMenuItem_Click"] = () => ArrangeAllWindows(WorkbookWindowArrangement.Horizontal),
+                    ["Vertical"] = () => ArrangeAllWindows(WorkbookWindowArrangement.Vertical),
+                    ["Cascade"] = () => ArrangeAllWindows(WorkbookWindowArrangement.Cascade),
                     ["view.hide"] = HideActiveWindow,
                     // Review proofing (built-in thesaurus / offline-honest translate) + Insert equation/object.
                     ["review.thesaurus"] = () => _ = ShowThesaurusDialogAsync(),
@@ -897,9 +908,9 @@ public sealed partial class MainWindow : Window
                     ["insert.headerFooter"] = () => _ = ShowPageSetupDialogAsync(),
                     // Page Layout ▸ Themes (Office / Colorful / Grayscale picker).
                     ["pageLayout.themes"] = () => _ = ShowThemesGalleryAsync(),
-                    ["pageLayout.themeColors"] = () => _ = ShowThemesGalleryAsync(),
-                    ["pageLayout.themeFonts"] = () => _ = ShowThemesGalleryAsync(),
-                    ["pageLayout.themeEffects"] = () => _ = ShowThemesGalleryAsync(),
+                    ["pageLayout.themeColors"] = () => _ = ShowThemeColorsGalleryAsync(),
+                    ["pageLayout.themeFonts"] = () => _ = ShowThemeFontsGalleryAsync(),
+                    ["pageLayout.themeEffects"] = () => _ = ShowThemeEffectsGalleryAsync(),
                     // Insert ▸ Symbol.
                     ["insert.symbol"] = () => _ = ShowSymbolPickerAsync(),
                     // Insert ▸ Slicer / Timeline (field picker → AddSlicerCommand / AddTimelineCommand).
@@ -916,6 +927,186 @@ public sealed partial class MainWindow : Window
                     // Formulas ▸ Calculation group.
                     ["formulas.calcOptions"] = ToggleCalculationMode,
                     ["formulas.calcNow"] = CalculateNow,
+
+                    // ─────────────────────────────────────────────────────────────────────────────
+                    // Ribbon dropdown / split-button menu items that were inert (canonical ids never
+                    // bound, so they fell through to the NoOp seed). Each reuses an existing handler.
+                    // ─────────────────────────────────────────────────────────────────────────────
+
+                    // Home ▸ Clipboard ▸ Paste menu.
+                    ["Paste Formulas"] = () => _ = PasteSpecialClipboardTextAsync(PasteCellsMode.Formulas, default, "Formulas"),
+                    ["Transpose Paste"] = () => _ = PasteSpecialClipboardTextAsync(PasteCellsMode.All, new PasteSpecialOptions(Transpose: true), "Transpose"),
+                    ["Picture"] = () => _ = PastePictureFromClipboardAsync("Picture", linkedPicture: false),
+                    ["Linked Picture"] = () => _ = PastePictureFromClipboardAsync("Linked Picture", linkedPicture: true),
+
+                    // Home ▸ Font ▸ Borders dropdown: compound / thick / double presets.
+                    ["Thick Bottom Border"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.ThickBottom),
+                    ["Bottom Double Border"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.DoubleBottom),
+                    ["Thick Outside Borders"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.ThickOutside),
+                    ["Top and Bottom Border"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.TopAndBottom),
+                    ["Top and Thick Bottom Border"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.TopAndThickBottom),
+                    ["Top and Double Bottom Border"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.TopAndDoubleBottom),
+                    // Draw-Border-Grid / Erase Border are selection-apply equivalents of All / No Border.
+                    ["Draw Border Grid"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.All),
+                    ["Erase Border"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.NoBorder),
+
+                    // Home ▸ Number ▸ Accounting dropdown. Euro/Pound/Yen share the single canonical id
+                    // "Accounting Number Format" in the shared def (already wired to home.accounting / USD),
+                    // so they cannot be distinctly bound from here without a ribbon-def change.
+                    ["More Accounting Formats"] = () => _ = ShowFormatCellsDialogAsync(),
+
+                    // Home ▸ Styles ▸ Conditional Formatting ▸ Highlight Cells Rules detail items.
+                    ["Less Than"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.HighlightLessThan),
+                    ["Between"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.HighlightBetween),
+                    ["Equal To"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.HighlightEqualTo),
+                    ["Text that Contains"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.HighlightTextContains),
+                    ["A Date Occurring"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.HighlightDateOccurring),
+                    ["Duplicate Values"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.HighlightDuplicateValues),
+
+                    // Home ▸ Styles ▸ Conditional Formatting ▸ Top/Bottom Rules detail items.
+                    ["Top 10%"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.Top10Percent),
+                    ["Bottom 10 Items"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.Bottom10Items),
+                    ["Bottom 10%"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.Bottom10Percent),
+                    ["Above Average"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.AboveAverage),
+                    ["Below Average"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.BelowAverage),
+
+                    // Home ▸ Styles ▸ Conditional Formatting ▸ Icon Sets submenu.
+                    ["3 Arrows"] = () => ApplyConditionalFormatIconSet("3Arrows"),
+                    ["3 Arrows (Gray)"] = () => ApplyConditionalFormatIconSet("3ArrowsGray"),
+                    ["4 Arrows"] = () => ApplyConditionalFormatIconSet("4Arrows"),
+                    ["4 Arrows (Gray)"] = () => ApplyConditionalFormatIconSet("4ArrowsGray"),
+                    ["5 Arrows"] = () => ApplyConditionalFormatIconSet("5Arrows"),
+                    ["5 Arrows (Gray)"] = () => ApplyConditionalFormatIconSet("5ArrowsGray"),
+                    ["3 Traffic Lights"] = () => ApplyConditionalFormatIconSet("3TrafficLights1"),
+                    ["3 Traffic Lights (Rimmed)"] = () => ApplyConditionalFormatIconSet("3TrafficLights2"),
+                    ["3 Signs"] = () => ApplyConditionalFormatIconSet("3Signs"),
+                    ["3 Symbols"] = () => ApplyConditionalFormatIconSet("3Symbols"),
+                    ["3 Symbols (Uncircled)"] = () => ApplyConditionalFormatIconSet("3Symbols2"),
+                    ["3 Flags"] = () => ApplyConditionalFormatIconSet("3Flags"),
+                    ["4 Traffic Lights"] = () => ApplyConditionalFormatIconSet("4TrafficLights"),
+                    ["4 Red To Black"] = () => ApplyConditionalFormatIconSet("4RedToBlack"),
+                    ["4 Ratings"] = () => ApplyConditionalFormatIconSet("4Rating"),
+                    ["5 Ratings"] = () => ApplyConditionalFormatIconSet("5Rating"),
+                    ["5 Quarters"] = () => ApplyConditionalFormatIconSet("5Quarters"),
+                    ["5 Boxes"] = () => ApplyConditionalFormatIconSet("5Boxes"),
+                    ["More Rules"] = () => _ = ShowConditionalFormatNewRuleDialogAsync(),
+
+                    // Home ▸ Styles ▸ Conditional Formatting ▸ New Formula Rule / Manage Rules.
+                    ["New Formula Rule"] = () => _ = ShowConditionalFormatNewRuleDialogAsync(CfRuleType.Formula),
+                    ["Manage Rules"] = () => _ = ShowManageConditionalFormatsDialogAsync(),
+
+                    // Home ▸ Cells ▸ Insert / Delete dropdowns.
+                    ["Insert Sheet Rows"] = InsertSheetRows,
+                    ["Insert Sheet Columns"] = InsertSheetColumns,
+                    ["Delete Sheet Rows"] = DeleteSheetRows,
+                    ["Delete Sheet Columns"] = DeleteSheetColumns,
+                    ["Delete Sheet"] = DeleteActiveSheet,
+
+                    // Home ▸ Cells ▸ Format dropdown.
+                    ["Rename Sheet"] = () => _ = RenameActiveSheetAsync(),
+                    ["Hide Sheet"] = HideActiveSheet,
+                    ["Tab Color"] = () => _ = ShowSheetTabColorPickerAsync(),
+                    ["Lock Cell"] = ToggleSelectedRangeLock,
+
+                    // Home ▸ Editing ▸ Sort & Filter dropdown.
+                    ["Sort A to Z"] = () => SortSelectedRange(ascending: true),
+                    ["Sort Z to A"] = () => SortSelectedRange(ascending: false),
+                    ["Custom Sort"] = () => _ = ShowSortDialogAsync(),
+                    ["Filter"] = ToggleAutoFilter,
+
+                    // Page Layout ▸ Page Setup ▸ Background.
+                    ["Choose Background"] = ChooseSheetBackground,
+                    ["Delete Background"] = DeleteSheetBackground,
+
+                    // Page Layout ▸ Page Setup ▸ Margins presets.
+                    ["Normal"] = () => ApplyPageMargins(WorksheetPageMargins.Normal, "RibbonWire_MarginsNormal"),
+                    ["Wide"] = () => ApplyPageMargins(WorksheetPageMargins.Wide, "RibbonWire_MarginsWide"),
+                    ["Narrow"] = () => ApplyPageMargins(WorksheetPageMargins.Narrow, "RibbonWire_MarginsNarrow"),
+                    ["Custom Margins"] = () => _ = ShowPageSetupDialogAsync(),
+
+                    // Page Layout ▸ Page Setup ▸ Orientation presets.
+                    ["Portrait"] = () => ApplyPageOrientation(WorksheetPageOrientation.Portrait, "RibbonWire_OrientationPortrait"),
+                    ["Landscape"] = () => ApplyPageOrientation(WorksheetPageOrientation.Landscape, "RibbonWire_OrientationLandscape"),
+
+                    // Page Layout ▸ Page Setup ▸ Paper Size presets. The Core enum models only
+                    // Letter / Legal / A4; other sizes open Page Setup (same partial behaviour as WPF).
+                    ["Letter"] = () => ApplyPaperSize(WorksheetPaperSize.Letter, "RibbonWire_PaperLetter"),
+                    ["Legal"] = () => ApplyPaperSize(WorksheetPaperSize.Legal, "RibbonWire_PaperLegal"),
+                    ["A4"] = () => ApplyPaperSize(WorksheetPaperSize.A4, "RibbonWire_PaperA4"),
+                    ["A3"] = () => _ = ShowPageSetupDialogAsync(),
+                    ["A5"] = () => _ = ShowPageSetupDialogAsync(),
+                    ["Executive"] = () => _ = ShowPageSetupDialogAsync(),
+                    ["Statement"] = () => _ = ShowPageSetupDialogAsync(),
+                    ["Tabloid"] = () => _ = ShowPageSetupDialogAsync(),
+                    ["B4"] = () => _ = ShowPageSetupDialogAsync(),
+                    ["B5"] = () => _ = ShowPageSetupDialogAsync(),
+
+                    // Page Layout ▸ Page Setup ▸ Print Area.
+                    ["Set Print Area"] = SetPrintAreaFromSelection,
+                    ["Clear Print Area"] = ClearPrintArea,
+
+                    // Formulas ▸ Formula Auditing ▸ Watch Window / Remove Arrows submenu.
+                    ["Watch Window"] = () => _ = ShowWatchWindowDialogAsync(),
+                    ["Remove Precedent Arrows"] = () => RemoveFormulaTraceArrowsOfKind(FormulaTraceArrowKind.Precedent),
+                    ["Remove Dependent Arrows"] = () => RemoveFormulaTraceArrowsOfKind(FormulaTraceArrowKind.Dependent),
+
+                    // Formulas ▸ Error Checking ▸ Error Checking Options.
+                    ["Error Checking Options"] = () => _ = ShowOptionsDialogAsync(),
+
+                    // Formulas ▸ Calculation ▸ Calculate Sheet + Calculation Options menu items.
+                    ["Calculate Sheet"] = CalculateSheet,
+                    ["Automatic"] = SetCalculationModeAutomatic,
+                    ["Manual"] = SetCalculationModeManual,
+                    ["Automatic Except Data Tables"] = SetCalculationModeAutomatic,
+
+                    // Data ▸ Connections ▸ Refresh All (parity: recalculates the workbook).
+                    ["data.refresh"] = CalculateNow,
+
+                    // Data ▸ Sort & Filter ▸ Sort button (canonical id "Sort", no dotted prefix).
+                    ["Sort"] = () => _ = ShowSortDialogAsync(),
+
+                    // Data ▸ Data Tools ▸ What-If Analysis dropdown.
+                    ["Goal Seek"] = () => _ = ShowGoalSeekDialogAsync(),
+                    ["Scenario Manager"] = () => _ = ShowScenarioManagerDialogAsync(),
+                    ["Data Table"] = () => _ = ShowDataTableDialogAsync(),
+
+                    // Data ▸ Outline ▸ Show / Hide Detail, Clear Outline, Group / Ungroup submenu items.
+                    ["Show Detail"] = ShowOutlineDetail,
+                    ["Hide Detail"] = HideOutlineDetail,
+                    ["Clear Outline"] = ClearWorksheetOutline,
+                    ["Group#GroupRowsMenuItem_Click"] = GroupSelectedRows,
+                    ["Ungroup#UngroupRowsMenuItem_Click"] = ClearWorksheetOutline,
+
+                    // Review ▸ Proofing / Comments / Notes / Share.
+                    ["Workbook Statistics"] = () => _ = ShowWorkbookStatisticsDialogAsync(),
+                    ["Next Comment"] = () => NavigateReviewThreadedComment(previous: false),
+                    ["Previous Comment"] = () => NavigateReviewThreadedComment(previous: true),
+                    ["Show Comments"] = () => _ = ShowNotesListAsync(),
+                    ["Edit Note"] = () => _ = ShowEditNoteDialogAsync(),
+                    ["Delete Note"] = DeleteActiveCellComment,
+                    ["Share"] = () => _ = ShareWorkbookAsync(),
+
+                    // View ▸ Show ▸ Ruler.
+                    ["Ruler"] = ToggleShowRulers,
+
+                    // View ▸ Window ▸ Switch Windows / Reset Window Position.
+                    ["Switch Windows"] = ShowSwitchWindowsDialog,
+                    ["Reset Window Position"] = ResetWindowPosition,
+
+                    // View ▸ Window ▸ Freeze Panes split-button menu items. The "Freeze Panes" menu item
+                    // keeps its handler suffix in the canonical id.
+                    ["Freeze Panes#FreezeAtSelectionMenuItem_Click"] = FreezePanesAtActiveCell,
+                    ["Freeze Top Row"] = FreezeTopRow,
+                    ["Freeze First Column"] = FreezeFirstColumn,
+                    ["Unfreeze Panes"] = UnfreezePanes,
+
+                    // View ▸ Zoom split-button preset menu items. The "100%" menu item keeps its handler
+                    // suffix in the canonical id.
+                    ["200%"] = () => ApplyZoomPercentPreset(200),
+                    ["100%#ZoomPresetMenuItem_Click"] = () => ApplyZoomPercentPreset(100),
+                    ["75%"] = () => ApplyZoomPercentPreset(75),
+                    ["50%"] = () => ApplyZoomPercentPreset(50),
+                    ["25%"] = () => ApplyZoomPercentPreset(25),
                 },
             };
 
@@ -1152,6 +1343,15 @@ public sealed partial class MainWindow : Window
         _workbookStatisticsMenuItem.Header = "Workbook Statistics...";
         _workbookStatisticsMenuItem.Gesture = new KeyGesture(Key.G, KeyModifiers.Control | KeyModifiers.Shift);
         _workbookStatisticsMenuItem.Click += async (_, _) => await ShowWorkbookStatisticsDialogAsync();
+
+        _backstageInfoMenuItem.Header = UiText.Get("Backstage_Info_MenuItem");
+        _backstageInfoMenuItem.Click += (_, _) => ShowBackstageInfo();
+
+        _backstageExportMenuItem.Header = UiText.Get("Backstage_Export_MenuItem");
+        _backstageExportMenuItem.Click += (_, _) => ShowBackstageExport();
+
+        _backstageAccountMenuItem.Header = UiText.Get("Backstage_Account_MenuItem");
+        _backstageAccountMenuItem.Click += (_, _) => ShowBackstageAccount();
 
         _optionsMenuItem.Header = UiText.Get("Options_Title");
         _optionsMenuItem.Gesture = new KeyGesture(Key.OemComma, KeyModifiers.Meta);
@@ -1636,9 +1836,12 @@ public sealed partial class MainWindow : Window
         fileMenu.Items.Add(_saveMenuItem);
         fileMenu.Items.Add(_saveAsMenuItem);
         fileMenu.Items.Add(_exportPdfMenuItem);
+        fileMenu.Items.Add(_backstageExportMenuItem);
         fileMenu.Items.Add(_shareWorkbookMenuItem);
         fileMenu.Items.Add(_workbookStatisticsMenuItem);
+        fileMenu.Items.Add(_backstageInfoMenuItem);
         fileMenu.Items.Add(new NativeMenuItemSeparator());
+        fileMenu.Items.Add(_backstageAccountMenuItem);
         fileMenu.Items.Add(_optionsMenuItem);
         fileMenu.Items.Add(new NativeMenuItemSeparator());
         fileMenu.Items.Add(_pageSetupMenuItem);
@@ -2483,8 +2686,11 @@ public sealed partial class MainWindow : Window
         _saveMenuItem.IsEnabled = _saveButton.IsEnabled;
         _saveAsMenuItem.IsEnabled = _saveAsButton.IsEnabled;
         _exportPdfMenuItem.IsEnabled = isIdle && StorageProvider.CanSave;
+        _backstageExportMenuItem.IsEnabled = isIdle && StorageProvider.CanSave;
         _shareWorkbookMenuItem.IsEnabled = isIdle;
         _workbookStatisticsMenuItem.IsEnabled = isIdle;
+        _backstageInfoMenuItem.IsEnabled = isIdle;
+        _backstageAccountMenuItem.IsEnabled = isIdle;
         _closeWorkbookMenuItem.IsEnabled = isIdle;
         var activeSheetTabIndex = FindActiveSheetTabIndex();
         _newSheetMenuItem.IsEnabled = _newSheetButton.IsEnabled;
@@ -3905,9 +4111,13 @@ public sealed partial class MainWindow : Window
     /// <summary>
     /// Routes a worksheet context-menu command id back to the matching Avalonia document command.
     /// Every action that has a working shell handler (clipboard, clear, insert/delete, sort/filter,
-    /// data tools, outline grouping, comments/notes, hyperlinks, format cells, pivot options) is wired
-    /// to the same handler the ribbon uses. Only the genuinely-unbacked actions (Pick From Drop-down,
-    /// Format as Table, in-place Edit/Resolve Comment and Edit Note) fall through to the no-op default.
+    /// clear filter, data tools, outline grouping, comments/notes, hyperlinks, format cells, pivot
+    /// options) is wired to the same handler the ribbon uses. The drawing/chart/picture per-target
+    /// variants (Format Picture/Chart Area, Bring Forward, Selection Pane, etc.) are not reachable from
+    /// the worksheet cell menu — they belong to the Picture/Shape/Chart target-kind menus, which the
+    /// Avalonia grid does not yet raise (no in-grid drawing-object hit-testing). The only Worksheet-menu
+    /// action that falls through to the no-op default is Pick From Drop-down List, which has no backing
+    /// shell/session API yet.
     /// </summary>
     private void DispatchWorksheetContextMenuCommand(RibbonCommandId commandId)
     {
@@ -3992,6 +4202,9 @@ public sealed partial class MainWindow : Window
                 break;
             case WorksheetContextMenuAction.Filter:
                 ToggleAutoFilter();
+                break;
+            case WorksheetContextMenuAction.ClearFilter:
+                ClearActiveSheetFilters();
                 break;
             case WorksheetContextMenuAction.ReapplyFilter:
                 ReapplyCurrentFilterSort();
@@ -4230,8 +4443,8 @@ public sealed partial class MainWindow : Window
 
     private static Control CreateConditionalIconLayer(CfIconRenderInstruction icon, double zoomFactor)
     {
-        const double iconSize = 10d;
-        const double iconLeftInset = 4d;
+        const double iconSize = ConditionalIconCellLayoutPlanner.IconSize;
+        const double iconLeftInset = ConditionalIconCellLayoutPlanner.IconLeftInset;
         var size = iconSize * zoomFactor;
         var glyph = ConditionalFormatIconGlyphFactory.Create(icon, size);
         return new Border
@@ -13479,6 +13692,16 @@ public sealed partial class MainWindow : Window
         ApplySelectedRangeNumberFormat(CurrencyNumberFormat, "Applied currency format to", "Currency format failed.");
     }
 
+    /// <summary>
+    /// Applies an accounting number format for the given currency symbol (e.g. "€"/"£"/"¥") to the
+    /// selection, reusing the shared <see cref="FormatCellsNumberFormatPlanner.BuildAccountingFormatFor"/>.
+    /// </summary>
+    private void ApplySelectedRangeAccountingFormat(string symbol)
+    {
+        var format = FormatCellsNumberFormatPlanner.BuildAccountingFormatFor(2, symbol);
+        ApplySelectedRangeNumberFormat(format, "Applied accounting format to", "Accounting format failed.");
+    }
+
     private void ApplySelectedRangePercentFormat()
     {
         ApplySelectedRangeNumberFormat(PercentNumberFormat, "Applied percent format to", "Percent format failed.");
@@ -15868,6 +16091,114 @@ public sealed partial class MainWindow : Window
                 ActiveSheetIndex: ResolveActiveSheetIndex()),
             new WorkbookExportPrintPageCapacity(PortablePdfRowsPerPage, PortablePdfColumnsPerPage),
             WorkbookExportPrintSurface.MacOs);
+
+    /// <summary>
+    /// Scoped variant of <see cref="ExportActiveSheetPdfAsync"/> used by the backstage Export pane. Reuses
+    /// the same picker → <see cref="WorkbookExportPrintPlanner"/> → <see cref="PortablePdfExportPlanner"/>
+    /// → <see cref="Pdf.AvaloniaPdfDocumentExporter"/> path; the only addition is honoring the user's chosen
+    /// scope (selection / active sheet / whole visible workbook). Output kind is currently PDF on this
+    /// surface (XPS is offered only where the surface advertises it, which macOS does not).
+    /// </summary>
+    private async Task ExportWorkbookPdfAsync(
+        WorkbookExportPrintScope scope,
+        WorkbookExportPrintOutputKind outputKind)
+    {
+        if (_isSaving)
+            return;
+
+        if (!StorageProvider.CanSave)
+        {
+            ShowExportIssue("PDF export unavailable on this platform.");
+            return;
+        }
+
+        var pdfFileType = new FilePickerFileType("PDF Document")
+        {
+            Patterns = ["*.pdf"],
+        };
+        var storageFile = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "Export to PDF",
+            SuggestedFileName = BuildSuggestedPdfExportFileName(),
+            DefaultExtension = "pdf",
+            FileTypeChoices = [pdfFileType],
+            SuggestedFileType = pdfFileType,
+            ShowOverwritePrompt = true,
+        });
+
+        if (storageFile is null)
+            return;
+
+        using (storageFile)
+        {
+            var path = storageFile.TryGetLocalPath();
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                ShowExportIssue("PDF export requires a local file path.");
+                return;
+            }
+
+            var requestedPath = path;
+            var exportPathPlan = ExportPathPlanner.Plan(requestedPath, ExportFileFormat.Pdf);
+            if (ExportPathPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, exportPathPlan, File.Exists) &&
+                !await ConfirmNormalizedPdfOverwriteAsync(exportPathPlan.Path))
+            {
+                ShowExportIssue("PDF export canceled.");
+                return;
+            }
+
+            path = exportPathPlan.Path;
+            _isSaving = true;
+            UpdateSaveButton();
+            try
+            {
+                _statusText.Text = "Exporting PDF...";
+                _statusText.Foreground = Brush(67, 113, 83);
+
+                var exportPrintPlan = CreateScopedPortablePdfPrintPlan(scope, outputKind);
+                var exportPlan = PortablePdfExportPlanner.CreatePlan(exportPrintPlan);
+                if (!exportPlan.IsReady)
+                {
+                    ShowExportIssue(exportPlan.StatusText);
+                    return;
+                }
+
+                using var pdfBuffer = new MemoryStream();
+                var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, exportPlan, pdfBuffer);
+                await File.WriteAllBytesAsync(path, pdfBuffer.ToArray());
+
+                RefreshShell($"{outcome.Result.StatusText} {Path.GetFileName(path)}");
+            }
+            catch (Exception ex)
+            {
+                ShowExportIssue($"PDF export failed: {ex.Message}");
+            }
+            finally
+            {
+                _isSaving = false;
+                UpdateSaveButton();
+            }
+        }
+    }
+
+    private WorkbookExportPrintPlan CreateScopedPortablePdfPrintPlan(
+        WorkbookExportPrintScope scope,
+        WorkbookExportPrintOutputKind outputKind)
+    {
+        var selectedRange = scope == WorkbookExportPrintScope.SelectedRange
+            ? _session.SelectedRange
+            : (GridRange?)null;
+
+        return WorkbookExportPrintPlanner.CreatePlan(
+            _session.Workbook,
+            new WorkbookExportPrintIntent(
+                scope,
+                outputKind,
+                ActiveSheetIndex: ResolveActiveSheetIndex(),
+                SelectedRange: selectedRange),
+            new WorkbookExportPrintPageCapacity(PortablePdfRowsPerPage, PortablePdfColumnsPerPage),
+            WorkbookExportPrintSurface.MacOs);
+    }
 
     private int ResolveActiveSheetIndex()
     {

@@ -408,6 +408,7 @@ public sealed partial class XlsxFileAdapter
             removeSourceCalcChain: patchDiagnostics.InvalidatesCalcChain);
         packageStream.Position = 0;
         packageStream.CopyTo(stream);
+        SaveStreamPreparer.TruncateFromCurrentPosition(stream);
     }
 
     private static bool CanSavePackageInPlace(Stream stream) =>

@@ -274,16 +274,35 @@ internal static class AvaloniaCommandIdAdapter
         ["chartDesign.selectData"] = "Select Data Source",
         ["chartDesign.changeType"] = "Change Chart Type#ChangeChartTypeBtn_Click",
         ["chartDesign.comboChart"] = "Combo Chart",
+        ["chartDesign.comboChartSeries"] = "Combo Chart Series",
         ["chartDesign.moveChart"] = "Move Chart",
 
         // ── Chart Format (contextual: chart.selected) ────────────────────────────────────────────────────
         ["chartFormat.formatChartArea"] = "Format Chart Area",
+        // Current Selection ▸ Format: type-specific format dialogs (bar/column, pie/doughnut, bubble, stock).
+        ["chartFormat.formatBarColumn"] = "Format Bar/Column",
+        ["chartFormat.formatPieDoughnut"] = "Format Pie/Doughnut",
+        ["chartFormat.formatBubble"] = "Format Bubble Chart",
+        ["chartFormat.formatStock"] = "Format Stock Chart",
         ["chartFormat.chartAreaFill"] = "Chart Area Fill",
         ["chartFormat.plotAreaFill"] = "Plot Area Fill",
         ["chartFormat.plotAreaBorder"] = "Plot Area Border",
         ["chartFormat.seriesColor"] = "Series Color",
         ["chartFormat.seriesWidth"] = "Series Width",
+        // Shape Styles ▸ Series Dash / Series Marker (full series dialog) / Marker Size quick buttons.
+        ["chartFormat.seriesDash"] = "Series Dash",
+        ["chartFormat.seriesMarker"] = "Series Marker",
+        ["chartFormat.markerSize"] = "Marker Size",
         ["chartFormat.legendText"] = "Legend Text",
+        // Text group quick buttons: title/axis-title colors & sizes, legend font size, data-label text/fill/border.
+        ["chartFormat.chartTitleColor"] = "Chart Title Color",
+        ["chartFormat.chartTitleSize"] = "Chart Title Size",
+        ["chartFormat.axisTitleColor"] = "Axis Title Color",
+        ["chartFormat.axisTitleSize"] = "Axis Title Size",
+        ["chartFormat.legendFontSize"] = "Legend Font Size",
+        ["chartFormat.dataLabelText"] = "Data Label Text",
+        ["chartFormat.dataLabelFill"] = "Data Label Fill",
+        ["chartFormat.dataLabelBorder"] = "Data Label Border",
         ["chartFormat.xAxisBounds"] = "X Axis Bounds",
         ["chartFormat.yAxisBounds"] = "Y Axis Bounds",
         ["chartFormat.xGridlines"] = "X Axis Gridlines",
@@ -327,6 +346,7 @@ internal static class AvaloniaCommandIdAdapter
         ["tableDesign.bandedColumns"] = "Banded Columns#TableDesignBandedColumnsBtn_Click",
         ["tableDesign.filterButton"] = "Filter Button",
         ["tableDesign.tableStyles"] = "Table Styles",
+        ["tableDesign.summarizeWithPivot"] = "Summarize with PivotTable",
 
         // ── PivotTable Analyze (contextual: pivot.active) ───────────────────────────────────────────────
         ["pivotAnalyze.name"] = "PivotTable Name",
@@ -339,8 +359,17 @@ internal static class AvaloniaCommandIdAdapter
         ["pivotAnalyze.refresh"] = "Refresh",
         ["pivotAnalyze.changeDataSource"] = "Change Data Source",
         ["pivotAnalyze.calculatedField"] = "Calculated Field",
+        ["pivotAnalyze.calculatedItem"] = "Calculated Item",
         ["pivotAnalyze.fieldList"] = "Field List",
         ["pivotAnalyze.fieldHeaders"] = "Field Headers",
+        ["pivotAnalyze.showDetails"] = "Show Details",
+        ["pivotAnalyze.clear"] = "Clear#PivotTableClearBtn_Click",
+        ["pivotAnalyze.select"] = "Select",
+        ["pivotAnalyze.move"] = "Move PivotTable",
+        ["pivotAnalyze.plusMinusButtons"] = "+/- Buttons",
+        ["pivotAnalyze.pivotChart"] = "PivotChart",
+        ["pivotAnalyze.changeChartType"] = "Change Chart Type#PivotChartChangeTypeBtn_Click",
+        ["pivotAnalyze.pivotChartOptions"] = "PivotChart Options",
 
         // ── PivotTable Design (contextual: pivot.active) ────────────────────────────────────────────────
         ["pivotDesign.grandTotals"] = "Grand Totals",
