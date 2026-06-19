@@ -52,8 +52,9 @@ public static class WpfRasterPdfWriter
                 AddLinkAnnotations(page, linkOverlays);
         }
 
+        var pageCount = pdf.PageCount;
         pdf.Save(stream);
-        return pdf.PageCount;
+        return pageCount;
     }
 
     /// <summary>Writes <paramref name="document"/> to a file path (creating directories as needed).</summary>
