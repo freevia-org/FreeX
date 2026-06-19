@@ -99,7 +99,12 @@ internal sealed class WorkbookSnapshot
             foreach (var (k, v) in sheet.RowHeights) ss.RowHeights[k] = v;
             ss.FrozenRows = sheet.FrozenRows;
             ss.FrozenCols = sheet.FrozenCols;
-            ss.HyperlinkCount = sheet.Hyperlinks.Count;
+            // Count hyperlinks collapsed per merged region: a range hyperlink over a merged cell (e.g.
+            // ref="A3:M3" on merged A3:AM3) is expanded by ClosedXML's reader into one entry per covered
+            // cell, but only the merge anchor survives a write (Excel anchors a merged cell's hyperlink at
+            // its top-left). Counting one hyperlink per (anchor cell | merged-region) matches what the user
+            // actually sees and round-trips, so the merged-range expansion is not scored as a false loss.
+            ss.HyperlinkCount = CountEffectiveHyperlinks(sheet);
             ss.CommentCount = sheet.Comments.Count;
             ss.DataValidationCount = sheet.DataValidations.Count();
             ss.ConditionalFormatCount = sheet.ConditionalFormats.Count;
@@ -116,6 +121,43 @@ internal sealed class WorkbookSnapshot
     }
 
     private static int CountImages(Sheet sheet) => sheet.Pictures.Count;
+
+    /// <summary>
+    /// Number of hyperlinks the workbook effectively carries, collapsing every hyperlink that lands on a
+    /// non-anchor cell of a merged region onto that region's anchor. A merged region therefore contributes
+    /// at most one hyperlink (its anchor's), and standalone hyperlinks each count once — which is exactly
+    /// the set Excel renders and what survives a full re-save.
+    /// </summary>
+    private static int CountEffectiveHyperlinks(Sheet sheet)
+    {
+        var merges = sheet.MergedRegions.ToList();
+        var anchored = new HashSet<(uint Row, uint Col)>();
+        int count = 0;
+        foreach (var addr in sheet.Hyperlinks.Keys)
+        {
+            var covering = FindCoveringMerge(merges, addr);
+            if (covering is { } region)
+            {
+                // Count this merged region only once (on its first encountered hyperlink).
+                if (anchored.Add((region.Start.Row, region.Start.Col)))
+                    count++;
+            }
+            else
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    private static GridRange? FindCoveringMerge(List<GridRange> merges, CellAddress addr)
+    {
+        foreach (var region in merges)
+            if (region.Contains(addr))
+                return region;
+        return null;
+    }
 
     private static string RangeKey(GridRange r) =>
         $"{r.Start.Row},{r.Start.Col}:{r.End.Row},{r.End.Col}";
