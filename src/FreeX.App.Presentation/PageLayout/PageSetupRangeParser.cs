@@ -2,14 +2,14 @@ using System.Globalization;
 
 using FreeX.Core.Model;
 
-namespace FreeX.App.Avalonia.Dialogs;
+namespace FreeX.App.Presentation.PageLayout;
 
 /// <summary>
-/// Small portable parser for the free-text range fields of the Avalonia Page Setup dialog: the print
-/// area (cell range), the rows-to-repeat-at-top (row range), and the columns-to-repeat-at-left (column
-/// range). This is a trimmed Avalonia-local copy of the validation the WPF host's PageLayoutInputParser
+/// Small portable parser for the free-text range fields of the cross-platform Page Setup dialog: the
+/// print area (cell range), the rows-to-repeat-at-top (row range), and the columns-to-repeat-at-left
+/// (column range). This is a trimmed copy of the validation the WPF host's PageLayoutInputParser
 /// performs, since that parser lives in the Windows-only host project. Empty / "none" inputs clear the
-/// corresponding setting. No UI dependency, so it is unit-tested directly.
+/// corresponding setting. No UI dependency, so it is unit-tested directly and both shells reuse it.
 /// </summary>
 public static class PageSetupRangeParser
 {

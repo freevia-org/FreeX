@@ -222,4 +222,70 @@
   <data name="FormatCells_MoreFillColors" xml:space="preserve"><value>Autres couleurs de remplissage</value></data>
   <data name="FormatCells_MorePatternColors" xml:space="preserve"><value>Autres couleurs de motif</value></data>
   <data name="FormatCells_MoreBorderColors" xml:space="preserve"><value>Autres couleurs de bordure</value></data>
+  <data name="PageSetup_Title" xml:space="preserve"><value>Mise en page</value></data>
+  <data name="PageSetup_PageTab" xml:space="preserve"><value>Page</value></data>
+  <data name="PageSetup_MarginsTab" xml:space="preserve"><value>Marges</value></data>
+  <data name="PageSetup_HeaderFooterTab" xml:space="preserve"><value>En-tête/Pied de page</value></data>
+  <data name="PageSetup_SheetTab" xml:space="preserve"><value>Feuille</value></data>
+  <data name="PageSetup_Orientation" xml:space="preserve"><value>Orientation</value></data>
+  <data name="PageSetup_Portrait" xml:space="preserve"><value>Portrait</value></data>
+  <data name="PageSetup_Landscape" xml:space="preserve"><value>Paysage</value></data>
+  <data name="PageSetup_PaperSize" xml:space="preserve"><value>Format du papier</value></data>
+  <data name="PageSetup_Scaling" xml:space="preserve"><value>Mise à l'échelle</value></data>
+  <data name="PageSetup_AdjustTo" xml:space="preserve"><value>Réduire/agrandir à (% de la taille normale)</value></data>
+  <data name="PageSetup_FitTo" xml:space="preserve"><value>Ajuster à</value></data>
+  <data name="PageSetup_WideBy" xml:space="preserve"><value>page(s) en largeur sur</value></data>
+  <data name="PageSetup_Tall" xml:space="preserve"><value>en hauteur</value></data>
+  <data name="PageSetup_FirstPageNumber" xml:space="preserve"><value>Numéro de la première page</value></data>
+  <data name="PageSetup_PrintQuality" xml:space="preserve"><value>Qualité d'impression (DPI)</value></data>
+  <data name="PageSetup_PrintQualityHelp" xml:space="preserve"><value>Résolution en points par pouce, ou vide pour la valeur par défaut de l'imprimante.</value></data>
+  <data name="PageSetup_Auto" xml:space="preserve"><value>Auto</value></data>
+  <data name="PageSetup_MarginsLabel" xml:space="preserve"><value>Marges (gauche, droite, haut, bas en pouces)</value></data>
+  <data name="PageSetup_MarginsHelp" xml:space="preserve"><value>Gauche, droite, haut, bas en pouces.</value></data>
+  <data name="PageSetup_HeaderMargin" xml:space="preserve"><value>Marge d'en-tête (pouces)</value></data>
+  <data name="PageSetup_FooterMargin" xml:space="preserve"><value>Marge de pied de page (pouces)</value></data>
+  <data name="PageSetup_CenterOnPage" xml:space="preserve"><value>Centrer sur la page</value></data>
+  <data name="PageSetup_CenterHorizontally" xml:space="preserve"><value>Horizontalement</value></data>
+  <data name="PageSetup_CenterVertically" xml:space="preserve"><value>Verticalement</value></data>
+  <data name="PageSetup_HeaderPreset" xml:space="preserve"><value>En-tête</value></data>
+  <data name="PageSetup_FooterPreset" xml:space="preserve"><value>Pied de page</value></data>
+  <data name="PageSetup_CustomHeader" xml:space="preserve"><value>En-tête personnalisé (gauche, centre, droite)</value></data>
+  <data name="PageSetup_CustomFooter" xml:space="preserve"><value>Pied de page personnalisé (gauche, centre, droite)</value></data>
+  <data name="PageSetup_DifferentFirstPage" xml:space="preserve"><value>Première page différente</value></data>
+  <data name="PageSetup_DifferentOddEven" xml:space="preserve"><value>Pages paires et impaires différentes</value></data>
+  <data name="PageSetup_ScaleWithDocument" xml:space="preserve"><value>Mettre à l'échelle avec le document</value></data>
+  <data name="PageSetup_AlignWithMargins" xml:space="preserve"><value>Aligner sur les marges de la page</value></data>
+  <data name="PageSetup_None" xml:space="preserve"><value>(aucun)</value></data>
+  <data name="PageSetup_PresetPage" xml:space="preserve"><value>Page 1</value></data>
+  <data name="PageSetup_PresetPageOf" xml:space="preserve"><value>Page 1 sur ?</value></data>
+  <data name="PageSetup_PresetSheetName" xml:space="preserve"><value>Nom de la feuille</value></data>
+  <data name="PageSetup_PresetFileName" xml:space="preserve"><value>Nom du fichier</value></data>
+  <data name="PageSetup_PresetFileSheet" xml:space="preserve"><value>Nom du fichier, nom de la feuille</value></data>
+  <data name="PageSetup_PresetDate" xml:space="preserve"><value>Date</value></data>
+  <data name="PageSetup_PresetTime" xml:space="preserve"><value>Heure</value></data>
+  <data name="PageSetup_PresetDatePage" xml:space="preserve"><value>Date, Page 1</value></data>
+  <data name="PageSetup_PresetConfidential" xml:space="preserve"><value>Confidentiel, Page 1</value></data>
+  <data name="PageSetup_PresetFilePath" xml:space="preserve"><value>Chemin du fichier</value></data>
+  <data name="PageSetup_PrintArea" xml:space="preserve"><value>Zone d'impression</value></data>
+  <data name="PageSetup_PrintAreaHelp" xml:space="preserve"><value>Plage de cellules comme A1:D20, ou vide pour effacer.</value></data>
+  <data name="PageSetup_RepeatRows" xml:space="preserve"><value>Lignes à répéter en haut</value></data>
+  <data name="PageSetup_RepeatRowsHelp" xml:space="preserve"><value>Plage de lignes comme 1:2, ou vide pour aucune.</value></data>
+  <data name="PageSetup_RepeatColumns" xml:space="preserve"><value>Colonnes à répéter à gauche</value></data>
+  <data name="PageSetup_RepeatColumnsHelp" xml:space="preserve"><value>Plage de colonnes comme A:B, ou vide pour aucune.</value></data>
+  <data name="PageSetup_PrintGridlines" xml:space="preserve"><value>Imprimer le quadrillage</value></data>
+  <data name="PageSetup_PrintHeadings" xml:space="preserve"><value>Imprimer les en-têtes de lignes et de colonnes</value></data>
+  <data name="PageSetup_BlackAndWhite" xml:space="preserve"><value>Noir et blanc</value></data>
+  <data name="PageSetup_DraftQuality" xml:space="preserve"><value>Qualité brouillon</value></data>
+  <data name="PageSetup_PageOrder" xml:space="preserve"><value>Ordre des pages</value></data>
+  <data name="PageSetup_DownThenOver" xml:space="preserve"><value>Vers le bas, puis à droite</value></data>
+  <data name="PageSetup_OverThenDown" xml:space="preserve"><value>À droite, puis vers le bas</value></data>
+  <data name="PageSetup_CellErrorsAs" xml:space="preserve"><value>Erreurs de cellule en tant que</value></data>
+  <data name="PageSetup_ErrorsDisplayed" xml:space="preserve"><value>Affichées</value></data>
+  <data name="PageSetup_ErrorsBlank" xml:space="preserve"><value>&lt;vide&gt;</value></data>
+  <data name="PageSetup_ErrorsDash" xml:space="preserve"><value>--</value></data>
+  <data name="PageSetup_ErrorsNotAvailable" xml:space="preserve"><value>#N/A</value></data>
+  <data name="PageSetup_Comments" xml:space="preserve"><value>Commentaires</value></data>
+  <data name="PageSetup_CommentsNone" xml:space="preserve"><value>(Aucun)</value></data>
+  <data name="PageSetup_CommentsAtEnd" xml:space="preserve"><value>En fin de feuille</value></data>
+  <data name="PageSetup_CommentsAsDisplayed" xml:space="preserve"><value>Tels qu'affichés sur la feuille</value></data>
 </root>
