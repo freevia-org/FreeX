@@ -175,6 +175,68 @@ internal static class Chains
     }
 
     /// <summary>
+    /// Phase 3 — ODS (audit §4 Phase 3, the highest-ROI net-new format). The single-hop gate asserts that
+    /// styles/merges/structure/number-formats survive an xlsx->ods->xlsx round-trip exactly (all Full in
+    /// the ods profile). The multi-hop chains verify the intersection logic composes: once csv collapses
+    /// styling to None it stays None, and an ods hop after an xml hop cannot resurrect dropped styling.
+    /// </summary>
+    public static List<Chain> Phase3(string sourcePath)
+    {
+        var x = ".xlsx";
+        return new List<Chain>
+        {
+            // The ODS regression gate — styles/merges/structure/number-formats are Full and must survive.
+            new Chain
+            {
+                Name = "xlsx -> ods -> xlsx",
+                SourcePath = sourcePath,
+                Hops = new[] { new Hop("ods", ".ods"), new Hop("xlsx-rebuilt", x) },
+            },
+            // ODS then CSV — after the csv hop, values + formula-text are the only surviving dims.
+            new Chain
+            {
+                Name = "xlsx -> ods -> xlsx -> csv -> xlsx",
+                SourcePath = sourcePath,
+                Hops = new[]
+                {
+                    new Hop("ods", ".ods"),
+                    new Hop("xlsx-rebuilt", x),
+                    new Hop("csv", ".csv"),
+                    new Hop("xlsx-rebuilt", x),
+                },
+                PromoteDataSheet = true,
+            },
+            // SpreadsheetML then ODS — styling is None (xml can't hold it), but values/formulas/merges/
+            // widths/numfmt remain Full across both hops and must round-trip.
+            new Chain
+            {
+                Name = "xlsx -> xml -> xlsx -> ods -> xlsx",
+                SourcePath = sourcePath,
+                Hops = new[]
+                {
+                    new Hop("xml", ".xml"),
+                    new Hop("xlsx-rebuilt", x),
+                    new Hop("ods", ".ods"),
+                    new Hop("xlsx-rebuilt", x),
+                },
+            },
+            // ODS then SpreadsheetML — the reverse order; styling collapses at the xml hop.
+            new Chain
+            {
+                Name = "xlsx -> ods -> xlsx -> xml -> xlsx",
+                SourcePath = sourcePath,
+                Hops = new[]
+                {
+                    new Hop("ods", ".ods"),
+                    new Hop("xlsx-rebuilt", x),
+                    new Hop("xml", ".xml"),
+                    new Hop("xlsx-rebuilt", x),
+                },
+            },
+        };
+    }
+
+    /// <summary>
     /// Dirties the workbook so the xlsx source-package patch path cannot apply (forcing a full rebuild):
     /// writes a sentinel value to a far-off, guaranteed-empty cell on the first sheet. Done before the
     /// reference snapshot so the sentinel is present in both ref and got and is never itself a BUG.

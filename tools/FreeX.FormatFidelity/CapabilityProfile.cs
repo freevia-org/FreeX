@@ -146,6 +146,19 @@ internal sealed class CapabilityProfile
                 Dim.FreezePanes, Dim.Hyperlinks, Dim.Comments, Dim.DefinedNames, Dim.DataValidation,
                 Dim.ConditionalFormat, Dim.Charts, Dim.Images, Dim.Vba));
 
+        // ---- ods (OpenDocument Spreadsheet): the highest-ROI net-new format. The adapter maps cells,
+        //      A1<->OpenFormula formulas, number formats, fonts/fills/borders/alignment, merges, multiple
+        //      sheets + names, and column/row sizes faithfully — all Full, so the xlsx->ods->xlsx gate
+        //      catches any regression in those dimensions exactly. Deferred (None, expected ceiling for
+        //      now): freeze panes, hyperlinks, comments, defined names, data validation, conditional
+        //      formatting, charts, images, VBA. ODF *can* hold several of these, so they are honestly
+        //      marked None (not Lossy) until mapped — their loss is expected, never a BUG.
+        profiles.Add(new CapabilityProfile { Key = "ods", Extension = ".ods" }
+            .Set(Cap.Full, Dim.CellValues, Dim.Formulas, Dim.NumberFormats, Dim.Fonts, Dim.Fills, Dim.Borders,
+                Dim.Alignment, Dim.MultiSheet, Dim.SheetNames, Dim.MergedCells, Dim.ColumnWidths, Dim.RowHeights)
+            .Set(Cap.None, Dim.FreezePanes, Dim.Hyperlinks, Dim.Comments, Dim.DefinedNames, Dim.DataValidation,
+                Dim.ConditionalFormat, Dim.Charts, Dim.Images, Dim.Vba));
+
         // ---- xltx: the xlsx writer with the package content-type flipped to template. The harness runs
         //      it through the verbatim source-copy/patch path (same as xlsx-preserved), so every modeled
         //      dimension round-trips faithfully — the chain's job is to prove the content-type flip does

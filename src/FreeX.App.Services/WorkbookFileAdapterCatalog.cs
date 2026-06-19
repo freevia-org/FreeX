@@ -16,6 +16,7 @@ public static class WorkbookFileAdapterCatalog
         new DelimitedTextFileAdapter(".tsv", "TSV (Tab-separated values)", '\t'),
         new DelimitedTextFileAdapter(".tab", "Tab-delimited text", '\t'),
         new SpreadsheetXmlFileAdapter(),
+        new OdsFileAdapter(),
         new SlkFileAdapter(),
         new DifFileAdapter(),
         new NativeJsonAdapter(),
