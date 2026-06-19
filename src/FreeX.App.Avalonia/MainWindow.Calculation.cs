@@ -71,14 +71,14 @@ public sealed partial class MainWindow
     {
         if (_session.Workbook.CalculationMode == mode)
         {
-            RefreshShell($"Calculation already set to {DescribeCalculationMode(mode)}.");
+            RefreshShell(UiText.Format("ShellLoc_CalculationAlreadySet", DescribeCalculationMode(mode)));
             return;
         }
 
         var result = _session.ExecuteReviewCommand(new SetCalculationModeCommand(mode));
         if (!result.Success)
         {
-            RefreshShell(result.ErrorMessage ?? "Could not change calculation mode.");
+            RefreshShell(result.ErrorMessage ?? UiText.Get("ShellLoc_CouldNotChangeCalcMode"));
             return;
         }
 
@@ -87,7 +87,7 @@ public sealed partial class MainWindow
         if (mode == WorkbookCalculationMode.Automatic)
             _session.RecalculateWorkbook();
 
-        RefreshShell($"Calculation set to {DescribeCalculationMode(mode)}.");
+        RefreshShell(UiText.Format("ShellLoc_CalculationSet", DescribeCalculationMode(mode)));
     }
 
     /// <summary>
@@ -101,9 +101,11 @@ public sealed partial class MainWindow
     private void CalculateNow()
     {
         _session.RecalculateWorkbook();
-        RefreshShell("Recalculated all formulas.");
+        RefreshShell(UiText.Get("ShellLoc_RecalculatedAllFormulas"));
     }
 
     private static string DescribeCalculationMode(WorkbookCalculationMode mode) =>
-        mode == WorkbookCalculationMode.Manual ? "Manual" : "Automatic";
+        mode == WorkbookCalculationMode.Manual
+            ? UiText.Get("ShellLoc_CalcModeManual")
+            : UiText.Get("ShellLoc_CalcModeAutomatic");
 }

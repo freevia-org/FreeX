@@ -46,7 +46,7 @@ public sealed partial class MainWindow
 
         var dialog = new Window
         {
-            Title = state.IsProtected ? "Unprotect Sheet" : "Protect Sheet",
+            Title = state.IsProtected ? UiText.Get("ShellLoc_UnprotectSheetTitle") : UiText.Get("ShellLoc_ProtectSheetTitle"),
             Width = 380,
             Height = state.IsProtected ? 200 : 520,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -67,9 +67,9 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(warningText, "ProtectSheetWarningText");
 
-        var okButton = new Button { Content = "OK", IsDefault = true, MinWidth = 84 };
+        var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 84 };
         AutomationProperties.SetAutomationId(okButton, "ProtectSheetOkButton");
-        var cancelButton = new Button { Content = "Cancel", IsCancel = true, MinWidth = 84 };
+        var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 84 };
         AutomationProperties.SetAutomationId(cancelButton, "ProtectSheetCancelButton");
         cancelButton.Click += (_, _) => dialog.Close();
 
@@ -86,14 +86,14 @@ public sealed partial class MainWindow
             contentChildren.Add(new TextBlock
             {
                 Text = state.HasPassword
-                    ? "This sheet is protected. Enter the password to unprotect it."
-                    : "This sheet is protected. Click OK to unprotect it.",
+                    ? UiText.Get("ShellLoc_SheetProtectedEnterPassword")
+                    : UiText.Get("ShellLoc_SheetProtectedClickOk"),
                 Foreground = HeaderForeground,
                 TextWrapping = TextWrapping.Wrap,
             });
 
             if (state.HasPassword)
-                contentChildren.Add(ProtectionLabeledField("Password:", passwordBox));
+                contentChildren.Add(ProtectionLabeledField(UiText.Get("ShellLoc_PasswordLabel"), passwordBox));
 
             okButton.Click += (_, _) =>
             {
@@ -104,11 +104,11 @@ public sealed partial class MainWindow
                 var result = _session.ExecuteReviewCommand(command);
                 if (!result.Success)
                 {
-                    ShowWarning(result.ErrorMessage ?? "Could not unprotect the sheet.");
+                    ShowWarning(result.ErrorMessage ?? UiText.Get("ShellLoc_CouldNotUnprotectSheet"));
                     return;
                 }
 
-                RefreshShell("Unprotected sheet");
+                RefreshShell(UiText.Get("ShellLoc_UnprotectedSheet"));
                 dialog.Close();
             };
         }
@@ -130,11 +130,11 @@ public sealed partial class MainWindow
                 index++;
             }
 
-            contentChildren.Add(ProtectionLabeledField("Password (optional):", passwordBox));
-            contentChildren.Add(ProtectionLabeledField("Confirm password:", confirmBox));
+            contentChildren.Add(ProtectionLabeledField(UiText.Get("ShellLoc_PasswordOptionalLabel"), passwordBox));
+            contentChildren.Add(ProtectionLabeledField(UiText.Get("ShellLoc_ConfirmPasswordLabel"), confirmBox));
             contentChildren.Add(new TextBlock
             {
-                Text = "Allow all users of this worksheet to:",
+                Text = UiText.Get("ShellLoc_AllowAllUsersToLabel"),
                 Foreground = HeaderForeground,
                 Margin = new Thickness(0, 6, 0, 0),
             });
@@ -157,7 +157,7 @@ public sealed partial class MainWindow
                 var validation = options.ValidatePassword();
                 if (!validation.IsValid)
                 {
-                    ShowWarning("The passwords you entered do not match.");
+                    ShowWarning(UiText.Get("ShellLoc_PasswordsDoNotMatch"));
                     return;
                 }
 
@@ -165,11 +165,11 @@ public sealed partial class MainWindow
                 var result = _session.ExecuteReviewCommand(command);
                 if (!result.Success)
                 {
-                    ShowWarning(result.ErrorMessage ?? "Could not protect the sheet.");
+                    ShowWarning(result.ErrorMessage ?? UiText.Get("ShellLoc_CouldNotProtectSheet"));
                     return;
                 }
 
-                RefreshShell("Protected sheet");
+                RefreshShell(UiText.Get("ShellLoc_ProtectedSheet"));
                 dialog.Close();
             };
         }
@@ -196,7 +196,7 @@ public sealed partial class MainWindow
 
         var dialog = new Window
         {
-            Title = state.IsStructureProtected ? "Unprotect Workbook" : "Protect Workbook",
+            Title = state.IsStructureProtected ? UiText.Get("ShellLoc_UnprotectWorkbookTitle") : UiText.Get("ShellLoc_ProtectWorkbookTitle"),
             Width = 380,
             Height = state.IsStructureProtected ? 200 : 320,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -209,9 +209,9 @@ public sealed partial class MainWindow
         var confirmBox = new TextBox { PasswordChar = '•', MinWidth = 200 };
         AutomationProperties.SetAutomationId(confirmBox, "ProtectWorkbookConfirmBox");
 
-        var structureBox = new CheckBox { Content = "Structure", IsChecked = true };
+        var structureBox = new CheckBox { Content = UiText.Get("ShellLoc_StructureCheckbox"), IsChecked = true };
         AutomationProperties.SetAutomationId(structureBox, "ProtectWorkbookStructureBox");
-        var windowsBox = new CheckBox { Content = "Windows" };
+        var windowsBox = new CheckBox { Content = UiText.Get("ShellLoc_WindowsCheckbox") };
         AutomationProperties.SetAutomationId(windowsBox, "ProtectWorkbookWindowsBox");
 
         var warningText = new TextBlock
@@ -222,9 +222,9 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(warningText, "ProtectWorkbookWarningText");
 
-        var okButton = new Button { Content = "OK", IsDefault = true, MinWidth = 84 };
+        var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 84 };
         AutomationProperties.SetAutomationId(okButton, "ProtectWorkbookOkButton");
-        var cancelButton = new Button { Content = "Cancel", IsCancel = true, MinWidth = 84 };
+        var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 84 };
         AutomationProperties.SetAutomationId(cancelButton, "ProtectWorkbookCancelButton");
         cancelButton.Click += (_, _) => dialog.Close();
 
@@ -241,14 +241,14 @@ public sealed partial class MainWindow
             contentChildren.Add(new TextBlock
             {
                 Text = state.HasPassword
-                    ? "This workbook's structure is protected. Enter the password to unprotect it."
-                    : "This workbook's structure is protected. Click OK to unprotect it.",
+                    ? UiText.Get("ShellLoc_WorkbookProtectedEnterPassword")
+                    : UiText.Get("ShellLoc_WorkbookProtectedClickOk"),
                 Foreground = HeaderForeground,
                 TextWrapping = TextWrapping.Wrap,
             });
 
             if (state.HasPassword)
-                contentChildren.Add(ProtectionLabeledField("Password:", passwordBox));
+                contentChildren.Add(ProtectionLabeledField(UiText.Get("ShellLoc_PasswordLabel"), passwordBox));
 
             okButton.Click += (_, _) =>
             {
@@ -258,11 +258,11 @@ public sealed partial class MainWindow
                 var result = _session.ExecuteReviewCommand(command);
                 if (!result.Success)
                 {
-                    ShowWarning(result.ErrorMessage ?? "Could not unprotect the workbook.");
+                    ShowWarning(result.ErrorMessage ?? UiText.Get("ShellLoc_CouldNotUnprotectWorkbook"));
                     return;
                 }
 
-                RefreshShell("Unprotected workbook");
+                RefreshShell(UiText.Get("ShellLoc_UnprotectedWorkbook"));
                 dialog.Close();
             };
         }
@@ -270,13 +270,13 @@ public sealed partial class MainWindow
         {
             contentChildren.Add(new TextBlock
             {
-                Text = "Protect workbook for:",
+                Text = UiText.Get("ShellLoc_ProtectWorkbookForLabel"),
                 Foreground = HeaderForeground,
             });
             contentChildren.Add(structureBox);
             contentChildren.Add(windowsBox);
-            contentChildren.Add(ProtectionLabeledField("Password (optional):", passwordBox));
-            contentChildren.Add(ProtectionLabeledField("Confirm password:", confirmBox));
+            contentChildren.Add(ProtectionLabeledField(UiText.Get("ShellLoc_PasswordOptionalLabel"), passwordBox));
+            contentChildren.Add(ProtectionLabeledField(UiText.Get("ShellLoc_ConfirmPasswordLabel"), confirmBox));
 
             okButton.Click += (_, _) =>
             {
@@ -284,7 +284,7 @@ public sealed partial class MainWindow
 
                 if (structureBox.IsChecked != true && windowsBox.IsChecked != true)
                 {
-                    ShowWarning("Select Structure or Windows to protect.");
+                    ShowWarning(UiText.Get("ShellLoc_SelectStructureOrWindows"));
                     return;
                 }
 
@@ -299,7 +299,7 @@ public sealed partial class MainWindow
                 var validation = options.ValidatePassword();
                 if (!validation.IsValid)
                 {
-                    ShowWarning("The passwords you entered do not match.");
+                    ShowWarning(UiText.Get("ShellLoc_PasswordsDoNotMatch"));
                     return;
                 }
 
@@ -307,11 +307,11 @@ public sealed partial class MainWindow
                 var result = _session.ExecuteReviewCommand(command);
                 if (!result.Success)
                 {
-                    ShowWarning(result.ErrorMessage ?? "Could not protect the workbook.");
+                    ShowWarning(result.ErrorMessage ?? UiText.Get("ShellLoc_CouldNotProtectWorkbook"));
                     return;
                 }
 
-                RefreshShell("Protected workbook");
+                RefreshShell(UiText.Get("ShellLoc_ProtectedWorkbook"));
                 dialog.Close();
             };
         }

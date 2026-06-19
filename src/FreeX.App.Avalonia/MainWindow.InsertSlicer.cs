@@ -51,20 +51,20 @@ public sealed partial class MainWindow
         var pivot = ResolveInsertControlPivot();
         if (pivot is null)
         {
-            RefreshShell("Select a cell inside a PivotTable to insert a slicer.");
+            RefreshShell(UiText.Get("PivotLoc_SelectCellForSlicer"));
             return;
         }
 
         var headers = PivotSourceContext.ReadHeaders(_session.Workbook, pivot);
         if (headers.Count == 0)
         {
-            RefreshShell("The PivotTable has no fields to slice on.");
+            RefreshShell(UiText.Get("PivotLoc_NoFieldsToSlice"));
             return;
         }
 
         var dialog = new Window
         {
-            Title = "Insert Slicers",
+            Title = UiText.Get("PivotLoc_InsertSlicersTitle"),
             Width = 320,
             Height = 420,
             MinWidth = 280,
@@ -94,9 +94,9 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(warningText, "InsertSlicerWarningText");
 
-        var okButton = new Button { Content = "OK", IsDefault = true, MinWidth = 84 };
+        var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 84 };
         AutomationProperties.SetAutomationId(okButton, "InsertSlicerOkButton");
-        var cancelButton = new Button { Content = "Cancel", IsCancel = true, MinWidth = 84 };
+        var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 84 };
         AutomationProperties.SetAutomationId(cancelButton, "InsertSlicerCancelButton");
 
         okButton.Click += (_, _) =>
@@ -110,7 +110,7 @@ public sealed partial class MainWindow
 
             if (selectedFields.Count == 0)
             {
-                warningText.Text = "Select at least one field.";
+                warningText.Text = UiText.Get("PivotLoc_SelectAtLeastOneField");
                 warningText.IsVisible = true;
                 return;
             }
@@ -148,7 +148,7 @@ public sealed partial class MainWindow
                     {
                         DockTop(new TextBlock
                         {
-                            Text = $"Choose fields from \"{pivot.Name}\" to create slicers:",
+                            Text = UiText.Format("PivotLoc_ChooseFieldsForSlicers", pivot.Name),
                             TextWrapping = TextWrapping.Wrap,
                             Margin = new Thickness(0, 0, 0, 8),
                         }),
@@ -170,20 +170,20 @@ public sealed partial class MainWindow
         var pivot = ResolveInsertControlPivot();
         if (pivot is null)
         {
-            RefreshShell("Select a cell inside a PivotTable to insert a timeline.");
+            RefreshShell(UiText.Get("PivotLoc_SelectCellForTimeline"));
             return;
         }
 
         var headers = PivotSourceContext.ReadHeaders(_session.Workbook, pivot);
         if (headers.Count == 0)
         {
-            RefreshShell("The PivotTable has no fields for a timeline.");
+            RefreshShell(UiText.Get("PivotLoc_NoFieldsForTimeline"));
             return;
         }
 
         var dialog = new Window
         {
-            Title = "Insert Timelines",
+            Title = UiText.Get("PivotLoc_InsertTimelinesTitle"),
             Width = 320,
             Height = 420,
             MinWidth = 280,
@@ -208,9 +208,9 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(warningText, "InsertTimelineWarningText");
 
-        var okButton = new Button { Content = "OK", IsDefault = true, MinWidth = 84 };
+        var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 84 };
         AutomationProperties.SetAutomationId(okButton, "InsertTimelineOkButton");
-        var cancelButton = new Button { Content = "Cancel", IsCancel = true, MinWidth = 84 };
+        var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 84 };
         AutomationProperties.SetAutomationId(cancelButton, "InsertTimelineCancelButton");
 
         okButton.Click += (_, _) =>
@@ -224,7 +224,7 @@ public sealed partial class MainWindow
 
             if (selectedFields.Count == 0)
             {
-                warningText.Text = "Select at least one date field.";
+                warningText.Text = UiText.Get("PivotLoc_SelectAtLeastOneDateField");
                 warningText.IsVisible = true;
                 return;
             }
@@ -262,7 +262,7 @@ public sealed partial class MainWindow
                     {
                         DockTop(new TextBlock
                         {
-                            Text = $"Choose date fields from \"{pivot.Name}\" to create timelines:",
+                            Text = UiText.Format("PivotLoc_ChooseDateFieldsForTimelines", pivot.Name),
                             TextWrapping = TextWrapping.Wrap,
                             Margin = new Thickness(0, 0, 0, 8),
                         }),
@@ -292,16 +292,16 @@ public sealed partial class MainWindow
             var result = _session.ExecuteReviewCommand(command);
             if (!result.Success)
             {
-                error = result.ErrorMessage ?? $"Could not insert a slicer for \"{field}\".";
+                error = result.ErrorMessage ?? UiText.Format("PivotLoc_CouldNotInsertSlicer", field);
                 if (applied > 0)
-                    RefreshShell($"Inserted {applied} slicer(s).");
+                    RefreshShell(UiText.Format("PivotLoc_InsertedSlicersCount", applied));
                 return false;
             }
 
             applied++;
         }
 
-        RefreshShell(applied == 1 ? $"Inserted slicer for {fields[0]}." : $"Inserted {applied} slicers.");
+        RefreshShell(applied == 1 ? UiText.Format("PivotLoc_InsertedSlicerFor", fields[0]) : UiText.Format("PivotLoc_InsertedSlicersCount", applied));
         return true;
     }
 
@@ -321,16 +321,16 @@ public sealed partial class MainWindow
             var result = _session.ExecuteReviewCommand(command);
             if (!result.Success)
             {
-                error = result.ErrorMessage ?? $"Could not insert a timeline for \"{field}\".";
+                error = result.ErrorMessage ?? UiText.Format("PivotLoc_CouldNotInsertTimeline", field);
                 if (applied > 0)
-                    RefreshShell($"Inserted {applied} timeline(s).");
+                    RefreshShell(UiText.Format("PivotLoc_InsertedTimelinesCount", applied));
                 return false;
             }
 
             applied++;
         }
 
-        RefreshShell(applied == 1 ? $"Inserted timeline for {fields[0]}." : $"Inserted {applied} timelines.");
+        RefreshShell(applied == 1 ? UiText.Format("PivotLoc_InsertedTimelineFor", fields[0]) : UiText.Format("PivotLoc_InsertedTimelinesCount", applied));
         return true;
     }
 

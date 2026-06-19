@@ -177,7 +177,7 @@ public sealed partial class MainWindow
             // Shape Effects is a dropdown: clicking the parent opens its menu (No Effect / Shadow, wired via
             // BuildPictureShapeTabCommands). Register the parent id too so the renderer keeps it enabled
             // rather than disabling it for an unregistered command.
-            ["shapeFormat.shapeEffects"] = () => RefreshShell("Choose a shape effect from the menu."),
+            ["shapeFormat.shapeEffects"] = () => RefreshShell(UiText.Get("InsertLoc_ChooseShapeEffect")),
         };
 
         // Merge the Picture/Shape Format handlers (Arrange / Shape Styles / Accessibility), which also
@@ -190,7 +190,7 @@ public sealed partial class MainWindow
 
     /// <summary>Reports that a contextual-tab command is a Phase-1 shell, on the status bar.</summary>
     private void ReportContextualNotYetAvailable(string commandLabel)
-        => RefreshShell($"{commandLabel} is not yet available.");
+        => RefreshShell(UiText.Format("InsertLoc_NotYetAvailable", commandLabel));
 
     /// <summary>
     /// Launches a fire-and-forget async UI handler so a thrown exception is surfaced on the status
@@ -205,7 +205,7 @@ public sealed partial class MainWindow
         }
         catch (Exception ex)
         {
-            RefreshShell($"Command failed: {ex.Message}");
+            RefreshShell(UiText.Format("InsertLoc_CommandFailed", ex.Message));
         }
     }
 }
