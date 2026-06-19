@@ -325,7 +325,21 @@ internal static class ExcelOpenSmoke
 
             if (smokeInputs.Count == 0)
             {
-                Console.Error.WriteLine("No XLSX files matched the requested inputs.");
+                if (CorpusSelectionHasOnlyMissingOptionalPrivateRows(corpusSelection))
+                {
+                    var zeroInputSummary = new ExcelSmokeSummary(0, 0, 0, []);
+                    Console.WriteLine(options.SaveReopen ? "Excel save/reopen smoke" : "Excel open smoke");
+                    Console.WriteLine($"Run directory: {runDirectory}");
+                    Console.WriteLine("Input count: 0");
+                    Console.WriteLine($"Validation mode: {(options.SaveReopen ? "open -> SaveCopyAs -> close -> reopen" : "open only")}");
+                    Console.WriteLine($"Corpus manifest: {corpusSelection!.ManifestPath}");
+                    Console.WriteLine($"Corpus selected: {corpusSelection.Inputs.Count}; skipped: {corpusSelection.Skipped.Count}");
+                    WriteMachineReadableReport(runDirectory, options, zeroInputSummary, corpusSelection);
+                    Console.WriteLine("PASS: Corpus rows were skipped because optional private local workbooks are missing.");
+                    return 0;
+                }
+
+                Console.Error.WriteLine("No XLSX/XLSM files matched the requested inputs.");
                 return 2;
             }
 
@@ -358,6 +372,24 @@ internal static class ExcelOpenSmoke
             return 3;
         }
     }
+
+    private static bool CorpusSelectionHasOnlyMissingOptionalPrivateRows(CorpusManifestSelection? corpusSelection)
+    {
+        if (corpusSelection is null || corpusSelection.Inputs.Count > 0)
+            return false;
+
+        var selectedSkips = corpusSelection.Skipped
+            .Where(skip => !IsSelectionFilterSkip(skip.Reason))
+            .ToArray();
+
+        return selectedSkips.Length > 0 &&
+            selectedSkips.All(skip =>
+                skip.Reason == "missing-file" &&
+                string.Equals(skip.Row.SourceType, "local-private", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool IsSelectionFilterSkip(string reason) =>
+        reason is "id-filter" or "source-filter" or "status-filter";
 
     private static ExcelSmokeSummary RunExcelSmoke(
         IReadOnlyList<WorkbookSmokeInput> inputFiles,

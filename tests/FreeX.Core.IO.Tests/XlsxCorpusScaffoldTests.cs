@@ -218,6 +218,37 @@ public class XlsxCorpusScaffoldTests
     }
 
     [Fact]
+    public void CorpusManifest_IncludesCoinToolPublicOpenPerformanceFixture()
+    {
+        var manifestRows = ReadManifestRows();
+
+        manifestRows.Should().Contain(row =>
+            row.Path == "public/COIN_Tool_v1_FULL_exampledata.xlsm" &&
+            row.SourceType == "public" &&
+            row.SourceUrl == "user-provided-local" &&
+            row.License == "user-provided" &&
+            row.ExpectedWarnings == "excluded VBA macro disclosed" &&
+            row.ExpectedStatus == "public-pass" &&
+            row.FeatureTags.Contains("performance", StringComparison.Ordinal) &&
+            row.FeatureTags.Contains("open-load", StringComparison.Ordinal) &&
+            row.Notes.Contains("open/load performance profiling", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void ExcelOpenSmokeCorpusResolver_TreatsXlsmRowsAsOpenableAndMissingPrivateFilesAsSkips()
+    {
+        var resolverSource = TestWorkspaceFiles.ReadWorkspaceText(
+            "tools",
+            "FreeX.ExcelOpenSmoke",
+            "CorpusManifestResolver.cs");
+
+        resolverSource.Should().Contain("IsSupportedOpenXmlSpreadsheetWorkbook(fullPath)");
+        resolverSource.Should().Contain("extension.Equals(\".xlsm\", StringComparison.OrdinalIgnoreCase)");
+        resolverSource.Should().Contain("skipped.Add(new CorpusManifestSkip(row, \"missing-file\", fullPath));");
+        resolverSource.Should().Contain("Path.GetFullPath(Path.Combine(manifestDirectory, row.RelativePath))");
+    }
+
+    [Fact]
     public void CorpusManifest_PreservesBidirectionalCoverageForSupportedFeatureTags()
     {
         var supportedRows = ReadManifestRows()
@@ -304,12 +335,9 @@ public class XlsxCorpusScaffoldTests
 
         publicRows.Should().HaveCountGreaterThan(0);
         publicRows.Should().OnlyContain(
-            row =>
-                row.SourceUrl.StartsWith("https://", StringComparison.Ordinal) &&
-                !string.IsNullOrWhiteSpace(row.RetrievedOn) &&
-                !string.IsNullOrWhiteSpace(row.License),
+            row => HasPublicSourceMetadata(row),
             "redistributed public corpus rows need auditable provenance metadata");
-        report.Should().Contain($"| Public source metadata coverage | {publicRows.Length}/{publicRows.Length} rows declare source URL, retrieval date, and license |");
+        report.Should().Contain($"| Public source metadata coverage | {publicRows.Length}/{publicRows.Length} rows declare source URL or user-provided-local marker, retrieval date, and license |");
     }
 
     [Fact]
@@ -593,7 +621,7 @@ public class XlsxCorpusScaffoldTests
         var regressionCount = manifestRows.Count(row => row.SourceType == "regression");
 
         outstandingBuild.Should().Contain(
-            $"Current manifest has {manifestRows.Count} rows: {generatedCount} generated rows, {publicCount} public Tealeg rows, {localPrivateCount} optional local-private rows, and {regressionCount} regression formula-cache workbooks.");
+            $"Current manifest has {manifestRows.Count} rows: {generatedCount} generated rows, {publicCount} public rows, {localPrivateCount} optional local-private rows, and {regressionCount} regression formula-cache workbooks.");
         nextPhasesPlan.Should().Contain($"current {manifestRows.Count}-row manifest baseline");
         nextPhasesPlan.Should().NotContain("prior 90-row manifest baseline");
     }
@@ -677,6 +705,16 @@ public class XlsxCorpusScaffoldTests
         return isDriveLetter && path[1] == ':' && (path[2] == '\\' || path[2] == '/');
     }
 
+    private static bool HasPublicSourceMetadata(ManifestRow row)
+    {
+        if (string.IsNullOrWhiteSpace(row.RetrievedOn) || string.IsNullOrWhiteSpace(row.License))
+            return false;
+
+        if (row.SourceUrl == "user-provided-local")
+            return row.License == "user-provided";
+
+        return row.SourceUrl.StartsWith("https://", StringComparison.Ordinal);
+    }
     private static IReadOnlyList<string> ExpectedWarningsFor(ManifestRow row)
     {
         var tags = row.FeatureTags.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
