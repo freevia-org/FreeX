@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
+using FreeX.App.Presentation.Charts;
 using FreeX.Core.Model;
 
 namespace FreeX.App.UI;
@@ -483,15 +484,29 @@ public partial class GridView
         Rect pageBounds,
         WorksheetPaperSize paperSize,
         WorksheetPageOrientation orientation,
-        WorksheetPageMargins margins) =>
-        PageMarginRulerLayoutPlanner.CalculateHandles(pageBounds, paperSize, orientation, margins);
+        WorksheetPageMargins margins)
+    {
+        var handles = FreeX.App.Presentation.PageLayout.PageMarginRulerLayoutPlanner.CalculateHandles(
+            ToLayoutRect(pageBounds), paperSize, orientation, margins);
+        return new PageMarginRulerHandles(
+            ToWpfRect(handles.Left),
+            ToWpfRect(handles.Right),
+            ToWpfRect(handles.Top),
+            ToWpfRect(handles.Bottom));
+    }
 
     public static WorksheetPageMarginEdge? HitTestPageMarginRulerHandles(
         PageMarginRulerHandles handles,
         Point pos,
         bool showRulers = true)
     {
-        return PageMarginRulerLayoutPlanner.HitTestHandles(handles, pos, showRulers);
+        var presHandles = new FreeX.App.Presentation.PageLayout.PageMarginRulerHandles(
+            ToLayoutRect(handles.Left),
+            ToLayoutRect(handles.Right),
+            ToLayoutRect(handles.Top),
+            ToLayoutRect(handles.Bottom));
+        return FreeX.App.Presentation.PageLayout.PageMarginRulerLayoutPlanner.HitTestHandles(
+            presHandles, new LayoutPoint(pos.X, pos.Y), showRulers);
     }
 
     private void RenderPrintAreaBoundary(DrawingContext dc, GridRange printArea, Pen pen, bool drawClippedEdges)
