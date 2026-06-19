@@ -21,7 +21,10 @@ public partial class App : Application
 {
     private static FreeXOptions? _startupOptions;
 
-    public static ServiceProvider Services { get; private set; } = null!;
+    private static ServiceProvider? _services;
+
+    public static ServiceProvider Services =>
+        _services ?? throw new InvalidOperationException("Application services are not initialized.");
 
     private void App_OnStartup(object sender, StartupEventArgs e)
     {
@@ -65,7 +68,7 @@ public partial class App : Application
         {
             _startupOptions = null;
         }
-        Services = serviceCollection.BuildServiceProvider();
+        _services = serviceCollection.BuildServiceProvider();
         var crashAnalytics = Services.GetRequiredService<ICrashAnalytics>();
         var crashAnalyticsOptions = Services.GetRequiredService<AppCrashAnalyticsOptions>();
         var diagnosticsMetadata = Services.GetRequiredService<AppDiagnosticsMetadata>();
@@ -486,14 +489,21 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
-        Services.GetService<IAppDiagnostics>()?.RecordEvent("app_exit", new Dictionary<string, string?>
+        try
         {
-            ["status"] = e.ApplicationExitCode.ToString()
-        });
-        Log.Information("FreeX shutting down");
-        Log.CloseAndFlush();
-        Services.Dispose();
-        base.OnExit(e);
+            _services?.GetService<IAppDiagnostics>()?.RecordEvent("app_exit", new Dictionary<string, string?>
+            {
+                ["status"] = e.ApplicationExitCode.ToString()
+            });
+            Log.Information("FreeX shutting down");
+            Log.CloseAndFlush();
+            _services?.Dispose();
+        }
+        finally
+        {
+            _services = null;
+            base.OnExit(e);
+        }
     }
 }
 

@@ -8,6 +8,7 @@ public static class AppHelpInfo
     public const string HelpUrl = "https://github.com/tony-xmelon/FreeX";
     public const string FeedbackUrl = "https://github.com/tony-xmelon/FreeX/issues/new";
     public const string LatestReleaseUrl = "https://github.com/tony-xmelon/FreeX/releases/latest";
+    public const string ReleaseChannel = "test";
     public const string TrademarkNotice = "FreeX is not affiliated with, endorsed by, or sponsored by Microsoft. Microsoft Excel is a trademark of Microsoft Corporation.";
     public const string ProjectLicenseNotice = "FreeX Source License: Copyright (c) 2026 FreeX contributors. All rights reserved. Tester binaries may be downloaded and run for personal evaluation and testing. Redistribution or commercial distribution requires separate written permission from the copyright holder.";
     public const string PrivacyNotice = "Privacy: FreeX is a local desktop app. Workbooks are opened, edited, and saved on this machine unless the user explicitly chooses an external sharing path. Local tester diagnostics stay on the user's machine unless the user chooses to share them. FreeX does not intentionally collect workbook contents, formulas, filenames, or file paths in diagnostics or crash reports.";

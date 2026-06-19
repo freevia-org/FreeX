@@ -4,10 +4,12 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Threading;
+using System.Xml;
 using System.Xml.Linq;
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Validation;
+using Free.Shared.Opc;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
 using static ExcelSmokeCom;
@@ -1386,7 +1388,13 @@ internal static class ExcelOpenSmoke
     private static XDocument LoadPackageXml(ZipArchiveEntry entry)
     {
         using var stream = entry.Open();
-        return XDocument.Load(stream);
+        return LoadPackageXml(stream);
+    }
+
+    private static XDocument LoadPackageXml(Stream stream)
+    {
+        using var reader = XmlReader.Create(stream, SecureXmlReaderSettings.Create());
+        return XDocument.Load(reader);
     }
 
     private static void AssertRequiredExcelSavedPackageParts(
@@ -1484,7 +1492,7 @@ internal static class ExcelOpenSmoke
 
         XDocument contentTypesXml;
         using (var stream = contentTypesEntry.Open())
-            contentTypesXml = XDocument.Load(stream);
+            contentTypesXml = LoadPackageXml(stream);
 
         var missing = new List<string>();
         foreach (var expectation in requiredContentTypes)
@@ -1580,7 +1588,7 @@ internal static class ExcelOpenSmoke
 
         XDocument contentTypesXml;
         using (var stream = contentTypesEntry.Open())
-            contentTypesXml = XDocument.Load(stream);
+            contentTypesXml = LoadPackageXml(stream);
 
         if (contentTypesXml.Root?.Name != PackageContentTypeNs + "Types")
         {
@@ -1892,7 +1900,7 @@ internal static class ExcelOpenSmoke
 
             XDocument relationshipsXml;
             using (var stream = entry.Open())
-                relationshipsXml = XDocument.Load(stream);
+                relationshipsXml = LoadPackageXml(stream);
 
             if (relationshipsXml.Root?.Elements(PackageRelationshipNs + "Relationship")
                     .Any(relationship => PackageRelationshipMatches(relationshipPart, relationship, expectation)) != true)
@@ -15039,7 +15047,7 @@ internal static class ExcelOpenSmoke
             try
             {
                 using var stream = entry.Open();
-                relationshipsXml = XDocument.Load(stream);
+                relationshipsXml = LoadPackageXml(stream);
             }
             catch (Exception ex) when (ex is InvalidOperationException or System.Xml.XmlException)
             {

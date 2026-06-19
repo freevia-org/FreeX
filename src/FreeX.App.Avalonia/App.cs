@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Styling;
 using Avalonia.Themes.Fluent;
+using FreeX.App.Services;
 using FreeX.App.Services.Updates;
 
 namespace FreeX.App.Avalonia;
@@ -34,8 +35,8 @@ public sealed class App : Application
             // degrades to Unavailable and the indicator simply never appears.
             var updateService = VelopackUpdateService.CreateForGitHub(
                 repoUrl: UpdateFeed.GitHubRepoUrl,
-                prerelease: UpdateFeed.AllowPrereleases("test"),
-                releasesPageUrl: "https://github.com/tony-xmelon/FreeX/releases/latest");
+                prerelease: UpdateFeed.AllowPrereleases(AppHelpInfo.ReleaseChannel),
+                releasesPageUrl: AppHelpInfo.LatestReleaseUrl);
             mainWindow.AttachUpdateService(updateService);
 
             if (this.TryGetFeature<IActivatableLifetime>() is { } activatableLifetime)

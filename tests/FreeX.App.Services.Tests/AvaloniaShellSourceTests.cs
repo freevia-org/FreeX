@@ -287,6 +287,16 @@ public sealed class AvaloniaShellSourceTests
     }
 
     [Fact]
+    public void App_UsesSharedReleaseChannelForPrereleaseUpdatePolicy()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "App.cs"));
+
+        source.Should().Contain("UpdateFeed.AllowPrereleases(AppHelpInfo.ReleaseChannel)");
+        source.Should().Contain("releasesPageUrl: AppHelpInfo.LatestReleaseUrl");
+        source.Should().NotContain("UpdateFeed.AllowPrereleases(\"test\")");
+    }
+
+    [Fact]
     public void MainWindow_WiresNativeFileMenuToSharedOpenSavePipeline()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));

@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <PackageReference Include="DocumentFormat.OpenXml" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Opc\Free.Shared.Opc.csproj" />
     <ProjectReference Include="..\..\src\FreeX.Core.IO\FreeX.Core.IO.csproj" />
     <ProjectReference Include="..\..\src\FreeX.Core.Model\FreeX.Core.Model.csproj" />
   </ItemGroup>
