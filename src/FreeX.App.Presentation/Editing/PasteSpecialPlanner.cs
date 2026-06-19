@@ -1,6 +1,6 @@
 using FreeX.Core.Commands;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Presentation.Editing;
 
 public static class PasteSpecialPlanner
 {
@@ -87,4 +87,33 @@ public enum PasteSpecialAction
     LinkedPicture,
     ExternalText,
     Link
+}
+
+public enum PasteMode
+{
+    All,
+    Values,
+    Formulas,
+    Formats
+}
+
+public enum PasteSpecialDialogMode
+{
+    All,
+    Values,
+    Formulas,
+    Formats,
+    Comments,
+    Validation,
+    AllUsingSourceTheme,
+    AllExceptBorders,
+    AllMergingConditionalFormats,
+    ColumnWidths,
+    FormulasAndNumberFormats,
+    ValuesAndNumberFormats,
+    ValuesAndSourceFormatting,
+    Text,
+    UnicodeText,
+    Picture,
+    LinkedPicture
 }
