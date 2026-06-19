@@ -188,7 +188,19 @@ public partial class MainWindow
     /// </summary>
     private void CloseAutoFilterDropdownOnSheetChange()
     {
-        if (_autoFilterDropdown is { } dialog && !_autoFilterDropdownSheetId.Equals(_currentSheetId))
+        if (_autoFilterDropdown is not null && !_autoFilterDropdownSheetId.Equals(_currentSheetId))
+            CloseAutoFilterDropdown();
+    }
+
+    /// <summary>
+    /// Closes the open AutoFilter dropdown flyout, if any. The flyout self-dismisses on deactivation
+    /// (click anywhere outside it), but events that move the anchored cell without changing window
+    /// activation — scrolling the grid, a programmatic sheet switch — must dismiss it explicitly so it
+    /// never floats detached from its column header.
+    /// </summary>
+    private void CloseAutoFilterDropdown()
+    {
+        if (_autoFilterDropdown is { } dialog)
         {
             _autoFilterDropdown = null;
             dialog.Close();
