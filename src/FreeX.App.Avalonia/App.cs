@@ -13,6 +13,8 @@ public sealed class App : Application
 
     internal static MacOsLaunchSmokeOptions? LaunchSmokeOptions { get; set; }
 
+    internal static ParityCaptureOptions? ParityCaptureOptions { get; set; }
+
     internal static AvaloniaAppDiagnostics? Diagnostics { get; set; }
 
     public override void OnFrameworkInitializationCompleted()
@@ -44,6 +46,9 @@ public sealed class App : Application
 
             if (LaunchSmokeOptions is { } launchSmokeOptions)
                 MacOsLaunchSmokeCoordinator.Start(mainWindow, launchSmokeOptions, Diagnostics);
+
+            if (ParityCaptureOptions is { } parityCaptureOptions)
+                ParityCaptureCoordinator.Start(mainWindow, parityCaptureOptions, Diagnostics);
         }
 
         base.OnFrameworkInitializationCompleted();
