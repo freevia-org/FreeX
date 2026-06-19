@@ -142,7 +142,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private const string WorkbookShareSheetLabel = \"macOS Share Sheet\";");
         source.Should().Contain("private readonly IWorkbookShareSheetService _workbookShareSheetService;");
         source.Should().Contain("WorkbookShareSheetServiceFactory.Create(WorkbookShareSheetLabel),");
-        source.Should().Contain("WorkbookFileAccessServiceFactory.Create(App.Diagnostics))");
+        source.Should().Contain("WorkbookFileAccessServiceFactory.Create(App.Diagnostics),");
         source.Should().Contain("ArgumentNullException.ThrowIfNull(workbookShareSheetService);");
         source.Should().Contain("private readonly NativeMenuItem _shareWorkbookMenuItem = new();");
         source.Should().Contain("_shareWorkbookMenuItem.Header = \"Share Workbook...\";");

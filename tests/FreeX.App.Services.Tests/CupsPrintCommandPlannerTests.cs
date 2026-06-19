@@ -98,12 +98,12 @@ public sealed class CupsPrintCommandPlannerTests
     }
 
     [Fact]
-    public void NullPlatformPrinter_CannotPrintAndEnumeratesNothing()
+    public async Task NullPlatformPrinter_CannotPrintAndEnumeratesNothing()
     {
         var printer = NullPlatformPrinter.Instance;
 
         printer.CanPrint.Should().BeFalse();
-        printer.GetPrintersAsync().Result.Should().BeEmpty();
-        printer.SubmitAsync(Submission()).Result.Succeeded.Should().BeFalse();
+        (await printer.GetPrintersAsync()).Should().BeEmpty();
+        (await printer.SubmitAsync(Submission())).Succeeded.Should().BeFalse();
     }
 }
