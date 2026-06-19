@@ -202,6 +202,29 @@
   <data name="ChartArea_BorderLabel" xml:space="preserve"><value>Plot area border:</value></data>
   <data name="ChartArea_PlotAreaBorder" xml:space="preserve"><value>Plot area border</value></data>
   <data name="ChartArea_BorderWidthLabel" xml:space="preserve"><value>Plot area border width:</value></data>
+  <!-- Chart Format contextual tab: type-specific Current Selection format dialogs -->
+  <data name="ChartFmt_BarTitle" xml:space="preserve"><value>Format Bar/Column</value></data>
+  <data name="ChartFmt_BarGapWidthLabel" xml:space="preserve"><value>Gap width (0–500):</value></data>
+  <data name="ChartFmt_BarOverlapLabel" xml:space="preserve"><value>Series overlap (-100–100):</value></data>
+  <data name="ChartFmt_PieTitle" xml:space="preserve"><value>Format Pie/Doughnut</value></data>
+  <data name="ChartFmt_PieFirstSliceAngleLabel" xml:space="preserve"><value>Angle of first slice (0–359°):</value></data>
+  <data name="ChartFmt_PieExplodedIndexLabel" xml:space="preserve"><value>Exploded slice index (0-based):</value></data>
+  <data name="ChartFmt_PieExplodedDistanceLabel" xml:space="preserve"><value>Exploded slice distance (0–50%):</value></data>
+  <data name="ChartFmt_PieHoleSizeLabel" xml:space="preserve"><value>Doughnut hole size (10–90%):</value></data>
+  <data name="ChartFmt_BubbleTitle" xml:space="preserve"><value>Format Bubble Chart</value></data>
+  <data name="ChartFmt_BubbleScaleLabel" xml:space="preserve"><value>Bubble scale (1–300):</value></data>
+  <data name="ChartFmt_BubbleShowNegative" xml:space="preserve"><value>Show negative-value bubbles</value></data>
+  <data name="ChartFmt_BubbleSizeRepresentsLabel" xml:space="preserve"><value>Bubble size represents:</value></data>
+  <data name="ChartFmt_StockTitle" xml:space="preserve"><value>Format Stock Chart</value></data>
+  <data name="ChartFmt_StockGapWidthLabel" xml:space="preserve"><value>Up/down bar gap width (0–500):</value></data>
+  <data name="ChartFmt_StockBarsLabel" xml:space="preserve"><value>Up/down bars:</value></data>
+  <data name="ChartFmt_StockUpBarFill" xml:space="preserve"><value>Up bar fill</value></data>
+  <data name="ChartFmt_StockUpBarBorder" xml:space="preserve"><value>Up bar border</value></data>
+  <data name="ChartFmt_StockDownBarFill" xml:space="preserve"><value>Down bar fill</value></data>
+  <data name="ChartFmt_StockDownBarBorder" xml:space="preserve"><value>Down bar border</value></data>
+  <data name="ChartFmt_StockHighLowLabel" xml:space="preserve"><value>High-low line:</value></data>
+  <data name="ChartFmt_StockHighLowLineColor" xml:space="preserve"><value>High-low line color</value></data>
+  <data name="ChartFmt_StockLineThicknessLabel" xml:space="preserve"><value>High-low line thickness (0.5–10):</value></data>
   <!-- Conditional Formatting: New/Edit Rule dialog -->
   <data name="ConditionalFormat_NewRuleTitle" xml:space="preserve"><value>New Formatting Rule</value></data>
   <data name="ConditionalFormat_EditRuleTitle" xml:space="preserve"><value>Edit Formatting Rule</value></data>

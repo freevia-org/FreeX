@@ -187,6 +187,29 @@
   <data name="ChartArea_BorderLabel" xml:space="preserve"><value>Bordure de la zone de traçage :</value></data>
   <data name="ChartArea_PlotAreaBorder" xml:space="preserve"><value>Bordure de la zone de traçage</value></data>
   <data name="ChartArea_BorderWidthLabel" xml:space="preserve"><value>Largeur de la bordure de la zone de traçage :</value></data>
+  <!-- Chart Format contextual tab: type-specific Current Selection format dialogs -->
+  <data name="ChartFmt_BarTitle" xml:space="preserve"><value>Mettre en forme l'histogramme/la barre</value></data>
+  <data name="ChartFmt_BarGapWidthLabel" xml:space="preserve"><value>Largeur de l'intervalle (0–500) :</value></data>
+  <data name="ChartFmt_BarOverlapLabel" xml:space="preserve"><value>Superposition des séries (-100–100) :</value></data>
+  <data name="ChartFmt_PieTitle" xml:space="preserve"><value>Mettre en forme le secteur/l'anneau</value></data>
+  <data name="ChartFmt_PieFirstSliceAngleLabel" xml:space="preserve"><value>Angle du premier secteur (0–359°) :</value></data>
+  <data name="ChartFmt_PieExplodedIndexLabel" xml:space="preserve"><value>Index du secteur éclaté (base 0) :</value></data>
+  <data name="ChartFmt_PieExplodedDistanceLabel" xml:space="preserve"><value>Distance d'éclatement du secteur (0–50%) :</value></data>
+  <data name="ChartFmt_PieHoleSizeLabel" xml:space="preserve"><value>Taille du trou de l'anneau (10–90%) :</value></data>
+  <data name="ChartFmt_BubbleTitle" xml:space="preserve"><value>Mettre en forme le graphique en bulles</value></data>
+  <data name="ChartFmt_BubbleScaleLabel" xml:space="preserve"><value>Échelle des bulles (1–300) :</value></data>
+  <data name="ChartFmt_BubbleShowNegative" xml:space="preserve"><value>Afficher les bulles de valeurs négatives</value></data>
+  <data name="ChartFmt_BubbleSizeRepresentsLabel" xml:space="preserve"><value>La taille des bulles représente :</value></data>
+  <data name="ChartFmt_StockTitle" xml:space="preserve"><value>Mettre en forme le graphique boursier</value></data>
+  <data name="ChartFmt_StockGapWidthLabel" xml:space="preserve"><value>Largeur de l'intervalle des barres haut/bas (0–500) :</value></data>
+  <data name="ChartFmt_StockBarsLabel" xml:space="preserve"><value>Barres haut/bas :</value></data>
+  <data name="ChartFmt_StockUpBarFill" xml:space="preserve"><value>Remplissage de la barre haut</value></data>
+  <data name="ChartFmt_StockUpBarBorder" xml:space="preserve"><value>Bordure de la barre haut</value></data>
+  <data name="ChartFmt_StockDownBarFill" xml:space="preserve"><value>Remplissage de la barre bas</value></data>
+  <data name="ChartFmt_StockDownBarBorder" xml:space="preserve"><value>Bordure de la barre bas</value></data>
+  <data name="ChartFmt_StockHighLowLabel" xml:space="preserve"><value>Ligne haut-bas :</value></data>
+  <data name="ChartFmt_StockHighLowLineColor" xml:space="preserve"><value>Couleur de la ligne haut-bas</value></data>
+  <data name="ChartFmt_StockLineThicknessLabel" xml:space="preserve"><value>Épaisseur de la ligne haut-bas (0,5–10) :</value></data>
   <data name="ConditionalFormat_NewRuleTitle" xml:space="preserve"><value>Nouvelle règle de mise en forme</value></data>
   <data name="ConditionalFormat_EditRuleTitle" xml:space="preserve"><value>Modifier la règle de mise en forme</value></data>
   <data name="ConditionalFormat_AppliesToFormat" xml:space="preserve"><value>S'applique à {0}</value></data>
