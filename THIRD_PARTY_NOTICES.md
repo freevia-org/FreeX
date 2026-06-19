@@ -10,7 +10,7 @@ license text and package-provided license text found in the restored packages.
 ## Audit Status
 
 - Audit command: `dotnet restore FreeX.slnx --disable-parallel -v:minimal`.
-- Restored package inventory: 67 unique NuGet packages across 18
+- Restored package inventory: 68 unique NuGet packages across 18
   `project.assets.json` files.
 - Coverage: every restored package is listed below.
 - Runtime package posture: the publishable app dependency set is covered by
@@ -41,6 +41,7 @@ replace this dependency or confirm the project has the required Xceed license.
 | Avalonia.FreeDesktop | 12.0.4 | MIT | https://avaloniaui.net/ |
 | Avalonia.FreeDesktop.AtSpi | 12.0.4 | MIT | https://avaloniaui.net/ |
 | Avalonia.HarfBuzz | 12.0.4 | MIT | https://avaloniaui.net/ |
+| Avalonia.Headless | 12.0.4 | MIT | https://avaloniaui.net/ |
 | Avalonia.Native | 12.0.4 | MIT | https://avaloniaui.net/ |
 | Avalonia.Remote.Protocol | 12.0.4 | MIT | https://avaloniaui.net/ |
 | Avalonia.Skia | 12.0.4 | MIT | https://avaloniaui.net/ |
