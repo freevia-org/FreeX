@@ -58,13 +58,6 @@ internal static class Program
             return 1;
         }
 
-        if (args.Contains("--probe-fxl"))
-        {
-            ProbeFxl.Run(sourcePath, Emit);
-            File.WriteAllText(reportPath, sb.ToString(), Encoding.UTF8);
-            return 0;
-        }
-
         var runner = new ChainRunner(outputDir);
         var chains = Chains.Phase0(sourcePath);
         if (chainFilter is not null)
