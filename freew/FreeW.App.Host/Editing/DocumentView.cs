@@ -2928,22 +2928,22 @@ public sealed class DocumentView : RichTextBox
                 modelParagraph.Runs.Add(new ModelRun(string.Empty) { Image = modelImage, HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip });
                 break;
             case InlineUIContainer { Child: FrameworkElement { Tag: Shape modelShape } }:
-                modelParagraph.Runs.Add(ModelRun.FromShape(modelShape));
+                modelParagraph.Runs.Add(WithHyperlink(ModelRun.FromShape(modelShape), hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip));
                 break;
             case InlineUIContainer { Child: FrameworkElement { Tag: Chart modelChart } }:
-                modelParagraph.Runs.Add(ModelRun.FromChart(modelChart));
+                modelParagraph.Runs.Add(WithHyperlink(ModelRun.FromChart(modelChart), hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip));
                 break;
             case InlineUIContainer { Child: FrameworkElement { Tag: WordArt modelWordArt } }:
-                modelParagraph.Runs.Add(ModelRun.FromWordArt(modelWordArt));
+                modelParagraph.Runs.Add(WithHyperlink(ModelRun.FromWordArt(modelWordArt), hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip));
                 break;
             case InlineUIContainer { Child: FrameworkElement { Tag: Equation modelEquation } }:
-                modelParagraph.Runs.Add(ModelRun.FromEquation(modelEquation));
+                modelParagraph.Runs.Add(WithHyperlink(ModelRun.FromEquation(modelEquation), hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip));
                 break;
             case InlineUIContainer { Child: FrameworkElement { Tag: SmartArt modelSmartArt } }:
-                modelParagraph.Runs.Add(ModelRun.FromSmartArt(modelSmartArt));
+                modelParagraph.Runs.Add(WithHyperlink(ModelRun.FromSmartArt(modelSmartArt), hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip));
                 break;
             case InlineUIContainer { Child: FrameworkElement { Tag: EmbeddedObject modelEmbedded } }:
-                modelParagraph.Runs.Add(ModelRun.FromEmbeddedObject(modelEmbedded));
+                modelParagraph.Runs.Add(WithHyperlink(ModelRun.FromEmbeddedObject(modelEmbedded), hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip));
                 break;
             case WpfRun { Tag: MultiLevelMarker }:
                 // Synthetic accumulated outline marker ("1.1.1") — view-only chrome, never enters the
@@ -3048,6 +3048,14 @@ public sealed class DocumentView : RichTextBox
                 modelParagraph.Runs.Add(new ModelRun(StripSoftHyphens(run.Text), ReadRunFormatting(run)) { HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip });
                 break;
         }
+    }
+
+    private static ModelRun WithHyperlink(ModelRun run, string? url, string? anchor, string? tooltip)
+    {
+        run.HyperlinkUrl = url;
+        run.HyperlinkAnchor = anchor;
+        run.HyperlinkTooltip = tooltip;
+        return run;
     }
 
     private static ModelTable ReadTable(WpfTable wpfTable, TextDocument document)
@@ -3528,25 +3536,25 @@ public sealed class DocumentView : RichTextBox
     private static Inline BuildRun(ModelRun run, ModelParagraph paragraph, TextDocument document)
     {
         if (run.Image is { } image)
-            return BuildImageRun(image);
+            return WrapHyperlinkIfNeeded(run, BuildImageRun(image));
 
         if (run.Shape is { } shape)
-            return BuildShapeRun(shape);
+            return WrapHyperlinkIfNeeded(run, BuildShapeRun(shape));
 
         if (run.Chart is { } chart)
-            return BuildChartRun(chart);
+            return WrapHyperlinkIfNeeded(run, BuildChartRun(chart));
 
         if (run.WordArt is { } wordArt)
-            return BuildWordArtRun(wordArt);
+            return WrapHyperlinkIfNeeded(run, BuildWordArtRun(wordArt));
 
         if (run.Equation is { } equation)
-            return BuildEquationRun(equation);
+            return WrapHyperlinkIfNeeded(run, BuildEquationRun(equation));
 
         if (run.SmartArt is { } smartArt)
-            return BuildSmartArtRun(smartArt);
+            return WrapHyperlinkIfNeeded(run, BuildSmartArtRun(smartArt));
 
         if (run.EmbeddedObject is { } embedded)
-            return BuildEmbeddedObjectRun(embedded);
+            return WrapHyperlinkIfNeeded(run, BuildEmbeddedObjectRun(embedded));
 
         if (run.FootnoteId is { } footnoteId)
             return BuildFootnoteReference(footnoteId, document);
@@ -3683,6 +3691,15 @@ public sealed class DocumentView : RichTextBox
             return BuildInternalHyperlink(wpf, anchor, run.HyperlinkTooltip);
 
         return wpf;
+    }
+
+    private static Inline WrapHyperlinkIfNeeded(ModelRun run, Inline inline)
+    {
+        if (run.HyperlinkUrl is { Length: > 0 } url)
+            return BuildHyperlink(inline, url, run.HyperlinkTooltip);
+        if (run.HyperlinkAnchor is { Length: > 0 } anchor)
+            return BuildInternalHyperlink(inline, anchor, run.HyperlinkTooltip);
+        return inline;
     }
 
     /// <summary>
@@ -3943,7 +3960,7 @@ public sealed class DocumentView : RichTextBox
     // Wraps a styled run in a WPF Hyperlink that targets an internal bookmark. The bookmark name is
     // stored on the link's Tag (not NavigateUri, which is reserved for external URLs) so it reads back
     // on commit; navigating scrolls the bookmarked paragraph into view (best-effort).
-    private static Inline BuildInternalHyperlink(WpfRun content, string anchor, string? tooltip = null)
+    private static Inline BuildInternalHyperlink(Inline content, string anchor, string? tooltip = null)
     {
         var link = new WpfHyperlink(content);
         StyleInternalLink(link, anchor, tooltip);
@@ -3987,7 +4004,7 @@ public sealed class DocumentView : RichTextBox
 
     // Wraps a styled run in a WPF Hyperlink (blue + underlined, with NavigateUri) so the link reads
     // back on commit and can be opened. Falls back to a plain run if the URL is not a valid Uri.
-    private static Inline BuildHyperlink(WpfRun content, string url, string? tooltip = null)
+    private static Inline BuildHyperlink(Inline content, string url, string? tooltip = null)
     {
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
             return content;

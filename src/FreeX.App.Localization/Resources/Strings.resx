@@ -1505,4 +1505,16 @@
   <data name="ShellLoc_SortedAToZ" xml:space="preserve"><value>Sorted A to Z</value></data>
   <data name="ShellLoc_SortedZToA" xml:space="preserve"><value>Sorted Z to A</value></data>
   <data name="ShellLoc_FilterUpdateFailed" xml:space="preserve"><value>Filter update failed.</value></data>
+  <data name="AvaloniaNativeMenu_NewWorkbook" xml:space="preserve"><value>New Workbook</value></data>
+  <data name="AvaloniaNativeMenu_Open" xml:space="preserve"><value>Open...</value></data>
+  <data name="AvaloniaNativeMenu_OpenRecent" xml:space="preserve"><value>Open Recent</value></data>
+  <data name="AvaloniaNativeMenu_Save" xml:space="preserve"><value>Save</value></data>
+  <data name="AvaloniaNativeMenu_SaveAs" xml:space="preserve"><value>Save As...</value></data>
+  <data name="AvaloniaNativeMenu_ExportPdf" xml:space="preserve"><value>Export to PDF...</value></data>
+  <data name="AvaloniaNativeMenu_PageSetup" xml:space="preserve"><value>Page Setup...</value></data>
+  <data name="AvaloniaNativeMenu_PrintPreview" xml:space="preserve"><value>Print Preview...</value></data>
+  <data name="AvaloniaNativeMenu_ShareWorkbook" xml:space="preserve"><value>Share Workbook...</value></data>
+  <data name="AvaloniaNativeMenu_WorkbookStatistics" xml:space="preserve"><value>Workbook Statistics...</value></data>
+  <data name="AvaloniaNativeMenu_CloseWorkbook" xml:space="preserve"><value>Close Workbook</value></data>
+  <data name="AvaloniaNativeMenu_NewSheet" xml:space="preserve"><value>New Sheet</value></data>
 </root>

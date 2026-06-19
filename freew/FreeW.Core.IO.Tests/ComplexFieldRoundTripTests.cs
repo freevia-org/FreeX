@@ -186,6 +186,61 @@ public class ComplexFieldRoundTripTests
         run.Text.Should().Be("yes");
     }
 
+    [Fact]
+    public void ComplexField_InsideContentControl_PreservesFieldAndControl()
+    {
+        // Word can wrap arbitrary inline content in a structured document tag. The paragraph reader's
+        // recursive content-control path must keep complex fields as fields instead of flattening the
+        // fldChar/instrText sequence to only its cached result text.
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph());
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+
+        using var outStream = new MemoryStream();
+        using (var src = new ZipArchive(new MemoryStream(stream.ToArray()), ZipArchiveMode.Read))
+        using (var dst = new ZipArchive(outStream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var entry in src.Entries)
+            {
+                var copy = dst.CreateEntry(entry.FullName);
+                using var es = entry.Open();
+                using var cs = copy.Open();
+                if (entry.FullName == "word/document.xml")
+                {
+                    XNamespace w = W;
+                    var body = new XElement(w + "document", new XAttribute(XNamespace.Xmlns + "w", w.NamespaceName),
+                        new XElement(w + "body",
+                            new XElement(w + "p",
+                                new XElement(w + "sdt",
+                                    new XElement(w + "sdtPr",
+                                        new XElement(w + "tag", new XAttribute(w + "val", "FieldControl"))),
+                                    new XElement(w + "sdtContent",
+                                        FldChar(w, "begin"),
+                                        InstrText(w, " PAGE "),
+                                        FldChar(w, "separate"),
+                                        TextRun(w, "7"),
+                                        FldChar(w, "end"))))));
+                    new XDocument(body).Save(cs);
+                }
+                else
+                {
+                    es.CopyTo(cs);
+                }
+            }
+        }
+
+        outStream.Position = 0;
+        var run = DocxReader.Read(outStream).Blocks.OfType<Paragraph>().Single().Runs.Single();
+
+        run.ComplexField.Should().NotBeNull();
+        run.ComplexField!.Instruction.Should().Be(" PAGE ");
+        run.Text.Should().Be("7");
+        run.Control.Should().NotBeNull();
+        run.Control!.Tag.Should().Be("FieldControl");
+    }
+
     private static XElement FldChar(XNamespace w, string type) =>
         new(w + "r", new XElement(w + "fldChar", new XAttribute(w + "fldCharType", type)));
 

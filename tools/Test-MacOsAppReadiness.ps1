@@ -10,6 +10,8 @@ param(
         "src\FreeX.App.Services",
         "src\FreeX.Ribbon.Avalonia",
         "shared\Free.Shared.AppServices",
+        "shared\Free.Shared.Pdf",
+        "shared\Free.Shared.Pdf.Skia",
         "shared\Free.Shared.Ribbon"
     )
 )
@@ -412,6 +414,8 @@ function Test-AvaloniaProject {
     Assert-True -Condition ((Get-ProjectNodeCondition $macOsDefineConstants[0]) -eq "'`$(TargetFramework)' == 'net10.0-macos'") -Message "Avalonia app FREEX_MACOS_SHARE_SHEET constant must be scoped to net10.0-macos."
 
     $allowedProjectReferences = @(
+        "Free.Shared.Pdf",
+        "Free.Shared.Pdf.Skia",
         "Free.Shared.Ribbon",
         "Free.Shared.Shell",
         "FreeX.App.Localization",
@@ -1164,11 +1168,11 @@ function Test-SourceWiring {
                 "HasNativeFormatPainterMenuItem: HasNativeMenuItem(_formatPainterMenuItem, `"Format Painter`", requireGesture: false)",
                 "private readonly NativeMenuItem _workbookStatisticsMenuItem = new();",
                 "private readonly NativeMenuItem _exportPdfMenuItem = new();",
-                "_exportPdfMenuItem.Header = `"Export to PDF...`";",
+                "_exportPdfMenuItem.Header = UiText.Get(`"AvaloniaNativeMenu_ExportPdf`");",
                 "_exportPdfMenuItem.Click += async (_, _) => await ExportActiveSheetPdfAsync();",
                 "fileMenu.Items.Add(_exportPdfMenuItem);",
                 "_exportPdfMenuItem.IsEnabled = isIdle && StorageProvider.CanSave;",
-                "HasNativeExportPdfMenuItem: HasNativeMenuItem(_exportPdfMenuItem, `"Export to PDF...`", requireGesture: false)",
+                "HasNativeExportPdfMenuItem: HasNativeMenuItem(_exportPdfMenuItem, UiText.Get(`"AvaloniaNativeMenu_ExportPdf`"), requireGesture: false)",
                 "private async Task ExportActiveSheetPdfAsync()",
                 "var exportPathPlan = ExportPathPlanner.Plan(requestedPath, ExportFileFormat.Pdf);",
                 "ExportPathPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, exportPathPlan, File.Exists)",
@@ -1181,12 +1185,12 @@ function Test-SourceWiring {
                 "AutomationProperties.SetAutomationId(cancelButton, `"PdfExportOverwriteCancelButton`")",
                 "var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, exportPlan, pdfBuffer);",
                 "await File.WriteAllBytesAsync(path, pdfBuffer.ToArray());",
-                "_workbookStatisticsMenuItem.Header = `"Workbook Statistics...`";",
+                "_workbookStatisticsMenuItem.Header = UiText.Get(`"AvaloniaNativeMenu_WorkbookStatistics`");",
                 "_workbookStatisticsMenuItem.Gesture = new KeyGesture(Key.G, KeyModifiers.Control | KeyModifiers.Shift);",
                 "_workbookStatisticsMenuItem.Click += async (_, _) => await ShowWorkbookStatisticsDialogAsync();",
                 "fileMenu.Items.Add(_workbookStatisticsMenuItem);",
                 "_workbookStatisticsMenuItem.IsEnabled = isIdle;",
-                "HasNativeWorkbookStatisticsMenuItem: HasNativeMenuItem(_workbookStatisticsMenuItem, `"Workbook Statistics...`")",
+                "HasNativeWorkbookStatisticsMenuItem: HasNativeMenuItem(_workbookStatisticsMenuItem, UiText.Get(`"AvaloniaNativeMenu_WorkbookStatistics`"))",
                 # File > Options (Settings) - native menu item with the macOS Preferences shortcut (Cmd+,).
                 "private readonly NativeMenuItem _optionsMenuItem = new();",
                 "_optionsMenuItem.Header = UiText.Get(`"Options_Title`");",
@@ -1213,7 +1217,7 @@ function Test-SourceWiring {
                 "_printMenuItem.Click += async (_, _) => await ShowPrintDialogAsync();",
                 "fileMenu.Items.Add(_printMenuItem);",
                 "private readonly NativeMenuItem _printPreviewMenuItem = new();",
-                "_printPreviewMenuItem.Header = `"Print Preview...`";",
+                "_printPreviewMenuItem.Header = UiText.Get(`"AvaloniaNativeMenu_PrintPreview`");",
                 "_printPreviewMenuItem.Gesture = new KeyGesture(Key.P, KeyModifiers.Meta | KeyModifiers.Shift);",
                 "_printPreviewMenuItem.Click += async (_, _) => await ShowPrintPreviewDialogAsync();",
                 "e.Key == Key.G && e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift)",
@@ -1529,7 +1533,7 @@ function Test-SourceWiring {
                 "private static bool HasVisibleCellBorder(CellStyle? style)",
                 "private readonly RecentFilesStore _recentFiles = RecentFilesStore.Load();",
                 "_newWorkbookMenuItem.Click += (_, _) => CreateNewWorkbook();",
-                "_openRecentMenuItem.Header = `"Open Recent`";",
+                "_openRecentMenuItem.Header = UiText.Get(`"AvaloniaNativeMenu_OpenRecent`");",
                 "_openRecentMenuItem.Menu = CreateNativeOpenRecentMenu(isIdle: true);",
                 "fileMenu.Items.Add(_openRecentMenuItem);",
                 "RefreshNativeOpenRecentMenu(isIdle);",
@@ -2106,10 +2110,34 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
+            # PortablePdfDocumentExporter is now a thin shim: builds the shared draw-op model via
+            # WorkbookPdfContentBuilder, then emits bytes via the shared PortablePdfWriter. The WinAnsi
+            # byte-format guarantees (WinAnsiEncoding, EncodeWinAnsiByte, etc.) live in
+            # shared/Free.Shared.Pdf/PortablePdfWriter.cs — see the block below.
             Path = "src\FreeX.App.Services\PortablePdfDocumentExporter.cs"
             Markers = @(
                 "public static class PortablePdfDocumentExporter",
+                "PortablePdfTextCapabilityPlanner.CreatePlan(workbook, exportPlan, options)",
+                "WorkbookPdfContentBuilder.Build(workbook, exportPlan, options)",
+                "PortablePdfWriter.WriteToBytes(document, `"FreeX portable PDF`")"
+            )
+            OrderedPairs = @()
+        },
+        @{
+            Path = "src\FreeX.App.Services\WorkbookPdfContentBuilder.cs"
+            Markers = @(
+                "public static class WorkbookPdfContentBuilder",
                 "PortablePdfPageContentPlanner.CreatePlan(workbook, request)",
+                "PortablePdfWinAnsiTextCapability.Truncate(cell.DisplayText, options.MaximumCellTextLength)"
+            )
+            OrderedPairs = @()
+        },
+        @{
+            # WinAnsi byte-format guarantees moved to the shared tier in the shared-pdf M2 refactor.
+            # Assert here so the macOS fallback path (no-Skia export) can never silently regress to
+            # non-WinAnsi or font-embedding that requires system DLLs.
+            Path = "shared\Free.Shared.Pdf\PortablePdfWriter.cs"
+            Markers = @(
                 "/Encoding /WinAnsiEncoding",
                 "EncodeWinAnsiHexText(normalized)",
                 "private static byte EncodeWinAnsiByte(char ch)",

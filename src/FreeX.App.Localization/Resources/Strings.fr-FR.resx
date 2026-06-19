@@ -1487,4 +1487,16 @@
   <data name="ShellLoc_SortedAToZ" xml:space="preserve"><value>Trié de A à Z</value></data>
   <data name="ShellLoc_SortedZToA" xml:space="preserve"><value>Trié de Z à A</value></data>
   <data name="ShellLoc_FilterUpdateFailed" xml:space="preserve"><value>Échec de la mise à jour du filtre.</value></data>
+  <data name="AvaloniaNativeMenu_NewWorkbook" xml:space="preserve"><value>Nouveau classeur</value></data>
+  <data name="AvaloniaNativeMenu_Open" xml:space="preserve"><value>Ouvrir...</value></data>
+  <data name="AvaloniaNativeMenu_OpenRecent" xml:space="preserve"><value>Ouvrir recent</value></data>
+  <data name="AvaloniaNativeMenu_Save" xml:space="preserve"><value>Enregistrer</value></data>
+  <data name="AvaloniaNativeMenu_SaveAs" xml:space="preserve"><value>Enregistrer sous...</value></data>
+  <data name="AvaloniaNativeMenu_ExportPdf" xml:space="preserve"><value>Exporter en PDF...</value></data>
+  <data name="AvaloniaNativeMenu_PageSetup" xml:space="preserve"><value>Mise en page...</value></data>
+  <data name="AvaloniaNativeMenu_PrintPreview" xml:space="preserve"><value>Apercu avant impression...</value></data>
+  <data name="AvaloniaNativeMenu_ShareWorkbook" xml:space="preserve"><value>Partager le classeur...</value></data>
+  <data name="AvaloniaNativeMenu_WorkbookStatistics" xml:space="preserve"><value>Statistiques du classeur...</value></data>
+  <data name="AvaloniaNativeMenu_CloseWorkbook" xml:space="preserve"><value>Fermer le classeur</value></data>
+  <data name="AvaloniaNativeMenu_NewSheet" xml:space="preserve"><value>Nouvelle feuille</value></data>
 </root>

@@ -48,28 +48,7 @@ public static class DocxReader
             Paragraph? prevPara = null;
             var prevAfterAuto = false;
             foreach (var element in body.Elements())
-            {
-                if (element.Name == W + "p")
-                {
-                    var para = ReadParagraph(element, archive, imageRelationships, hyperlinkRelationships, numbering, capturePreservedNumbering: true, preservedDrawingTarget: document);
-                    document.Blocks.Add(para);
-                    var sp = element.Element(W + "pPr")?.Element(W + "spacing");
-                    var beforeAuto = sp?.Attribute(W + "beforeAutospacing")?.Value is "1" or "true" or "on";
-                    if (prevPara is not null && prevAfterAuto && beforeAuto)
-                    {
-                        prevPara.Formatting = prevPara.Formatting with { SpaceAfterPt = 0 };
-                        para.Formatting = para.Formatting with { SpaceBeforePt = 0 };
-                    }
-                    prevPara = para;
-                    prevAfterAuto = sp?.Attribute(W + "afterAutospacing")?.Value is "1" or "true" or "on";
-                }
-                else if (element.Name == W + "tbl")
-                {
-                    document.Blocks.Add(ReadTable(element, archive, imageRelationships, hyperlinkRelationships, numbering, document));
-                    prevPara = null;
-                    prevAfterAuto = false;
-                }
-            }
+                AddBodyBlock(element, document, archive, imageRelationships, hyperlinkRelationships, numbering, ref prevPara, ref prevAfterAuto);
         }
 
         if (document.Blocks.Count == 0)
@@ -464,17 +443,11 @@ public static class DocxReader
 
         foreach (var element in root.Elements(B + "Source"))
         {
-            // The author is stored as a single corporate author (b:Author/b:Author/b:Corporate); fall back
-            // to a plain b:Author text node so a hand-authored / Word-authored source still yields a name.
-            var author = element.Element(B + "Author")?.Element(B + "Author")?.Element(B + "Corporate")?.Value
-                ?? element.Element(B + "Author")?.Value
-                ?? string.Empty;
-
             document.Sources.Add(new Source
             {
                 Tag = Field(element, "Tag") ?? string.Empty,
                 Type = ParseSourceType(Field(element, "SourceType")),
-                Author = author.Trim(),
+                Author = ReadBibliographyAuthor(element),
                 Title = Field(element, "Title") ?? string.Empty,
                 Year = Field(element, "Year") ?? string.Empty,
                 Publisher = Field(element, "Publisher"),
@@ -491,6 +464,34 @@ public static class DocxReader
         {
             var value = source.Element(B + localName)?.Value;
             return string.IsNullOrEmpty(value) ? null : value;
+        }
+    }
+
+    private static string ReadBibliographyAuthor(XElement source)
+    {
+        var author = source.Element(B + "Author");
+        if (author is null)
+            return string.Empty;
+
+        var corporate = author.Element(B + "Author")?.Element(B + "Corporate")?.Value;
+        if (!string.IsNullOrWhiteSpace(corporate))
+            return corporate.Trim();
+
+        var people = author.Descendants(B + "Person")
+            .Select(PersonName)
+            .Where(name => name.Length > 0)
+            .ToList();
+        if (people.Count > 0)
+            return string.Join("; ", people);
+
+        return (author.Value ?? string.Empty).Trim();
+
+        static string PersonName(XElement person)
+        {
+            var first = person.Element(B + "First")?.Value?.Trim();
+            var middle = person.Element(B + "Middle")?.Value?.Trim();
+            var last = person.Element(B + "Last")?.Value?.Trim();
+            return string.Join(" ", new[] { first, middle, last }.Where(part => !string.IsNullOrWhiteSpace(part)));
         }
     }
 
@@ -1004,7 +1005,8 @@ public static class DocxReader
         IReadOnlyDictionary<string, string> hyperlinkRelationships,
         IReadOnlyDictionary<int, ListKind> numbering,
         bool capturePreservedNumbering = false,
-        TextDocument? preservedDrawingTarget = null)
+        TextDocument? preservedDrawingTarget = null,
+        ContentControl? inheritedControl = null)
     {
         var paragraph = new Paragraph();
         var pPr = p.Element(W + "pPr");
@@ -1087,7 +1089,10 @@ public static class DocxReader
                         var instruction = fieldInstr.ToString();
                         var result = fieldResult.ToString();
                         var formatting = ReadRunFormatting(fieldFormattingSource?.Element(W + "rPr"));
-                        paragraph.Runs.Add(Run.ComplexFieldRun(instruction, result, showCode: false, formatting));
+                        var complexField = Run.ComplexFieldRun(instruction, result, showCode: false, formatting);
+                        complexField.CommentId = activeCommentId;
+                        complexField.Control = inheritedControl;
+                        paragraph.Runs.Add(complexField);
                         fieldInstr.Clear();
                         fieldResult.Clear();
                         fieldPastSeparate = false;
@@ -1119,79 +1124,250 @@ public static class DocxReader
                 fieldResult.Clear();
                 fieldFormattingSource = null;
             }
-            else if (child.Name == W + "r")
+            else
             {
-                // A run carrying a w:commentReference is the textless comment anchor; recover it.
-                var commentRef = child.Element(W + "commentReference");
-                if (commentRef is not null && int.TryParse(commentRef.Attribute(W + "id")?.Value, out var refId))
-                    paragraph.Runs.Add(Run.CommentReference(refId));
-                else
-                    AddRun(paragraph, child, archive, imageRelationships, hyperlinkUrl: null, hyperlinkAnchor: null, commentId: activeCommentId, preservedDrawingTarget: preservedDrawingTarget);
-            }
-            else if (child.Name == W + "hyperlink")
-            {
-                var anchor = child.Attribute(W + "anchor")?.Value;
-                var id = child.Attribute(R + "id")?.Value;
-                var url = id is not null && hyperlinkRelationships.TryGetValue(id, out var target) ? target : null;
-                var tooltip = child.Attribute(W + "tooltip")?.Value;
-                foreach (var r in child.Elements(W + "r"))
-                    AddRun(paragraph, r, archive, imageRelationships, url, url is null ? anchor : null, commentId: activeCommentId, hyperlinkTooltip: tooltip, preservedDrawingTarget: preservedDrawingTarget);
-            }
-            else if (child.Name == W + "ins" || child.Name == W + "del")
-            {
-                // A tracked insertion (w:ins) or deletion (w:del) wraps one or more runs (and possibly
-                // hyperlinks). Recover the revision kind plus author/date and stamp every covered run.
-                var kind = child.Name == W + "del" ? RevisionKind.Deleted : RevisionKind.Inserted;
-                var author = child.Attribute(W + "author")?.Value;
-                var date = child.Attribute(W + "date")?.Value;
-                var revision = new RevisionInfo(kind, author, date);
-
-                foreach (var revChild in child.Elements())
-                {
-                    if (revChild.Name == W + "r")
-                        AddRun(paragraph, revChild, archive, imageRelationships, hyperlinkUrl: null, hyperlinkAnchor: null, commentId: activeCommentId, revision: revision, preservedDrawingTarget: preservedDrawingTarget);
-                    else if (revChild.Name == W + "hyperlink")
-                    {
-                        var hAnchor = revChild.Attribute(W + "anchor")?.Value;
-                        var hId = revChild.Attribute(R + "id")?.Value;
-                        var hUrl = hId is not null && hyperlinkRelationships.TryGetValue(hId, out var hTarget) ? hTarget : null;
-                        var hTooltip = revChild.Attribute(W + "tooltip")?.Value;
-                        foreach (var r in revChild.Elements(W + "r"))
-                            AddRun(paragraph, r, archive, imageRelationships, hUrl, hUrl is null ? hAnchor : null, commentId: activeCommentId, revision: revision, hyperlinkTooltip: hTooltip, preservedDrawingTarget: preservedDrawingTarget);
-                    }
-                    else if (revChild.Name == W + "sdt")
-                    {
-                        AddContentControlRuns(paragraph, revChild, archive, imageRelationships, activeCommentId, revision, preservedDrawingTarget);
-                    }
-                }
-            }
-            else if (child.Name == W + "sdt")
-            {
-                // A content control (structured document tag): w:sdtPr describes the control (tag/alias +
-                // kind), w:sdtContent holds the wrapped run(s). Recover the control and stamp every content
-                // run with it (one shared instance so the writer re-coalesces them into one w:sdt).
-                AddContentControlRuns(paragraph, child, archive, imageRelationships, activeCommentId, revision: default, preservedDrawingTarget);
-            }
-            else if (child.Name == W + "fldSimple")
-            {
-                AddSimpleField(paragraph, child);
-            }
-            else if (child.Name == M + "oMath")
-            {
-                // An inline equation: parse the OMML m:oMath into an Equation carried by a run.
-                paragraph.Runs.Add(Run.FromEquation(ReadOMath(child)));
-            }
-            else if (child.Name == W + "bookmarkStart")
-            {
-                // Capture the first non-internal bookmark name on the paragraph. Word emits an
-                // implicit "_GoBack" bookmark on the document; skip it so it is not mistaken for a target.
-                var name = child.Attribute(W + "name")?.Value;
-                if (paragraph.BookmarkName is null && name is { Length: > 0 } && name != "_GoBack")
-                    paragraph.BookmarkName = name;
+                AddParagraphContentElement(
+                    paragraph,
+                    child,
+                    archive,
+                    imageRelationships,
+                    hyperlinkRelationships,
+                    activeCommentId,
+                    revision: default,
+                    control: inheritedControl,
+                    hyperlinkUrl: null,
+                    hyperlinkAnchor: null,
+                    hyperlinkTooltip: null,
+                    preservedDrawingTarget);
             }
         }
 
         return paragraph;
+    }
+
+    private static void AddBodyBlock(
+        XElement element,
+        TextDocument document,
+        ZipArchive archive,
+        IReadOnlyDictionary<string, string> imageRelationships,
+        IReadOnlyDictionary<string, string> hyperlinkRelationships,
+        IReadOnlyDictionary<int, ListKind> numbering,
+        ref Paragraph? prevPara,
+        ref bool prevAfterAuto,
+        ContentControl? inheritedControl = null)
+    {
+        if (element.Name == W + "p")
+        {
+            var para = ReadParagraph(
+                element,
+                archive,
+                imageRelationships,
+                hyperlinkRelationships,
+                numbering,
+                capturePreservedNumbering: true,
+                preservedDrawingTarget: document,
+                inheritedControl);
+            document.Blocks.Add(para);
+            var sp = element.Element(W + "pPr")?.Element(W + "spacing");
+            var beforeAuto = sp?.Attribute(W + "beforeAutospacing")?.Value is "1" or "true" or "on";
+            if (prevPara is not null && prevAfterAuto && beforeAuto)
+            {
+                prevPara.Formatting = prevPara.Formatting with { SpaceAfterPt = 0 };
+                para.Formatting = para.Formatting with { SpaceBeforePt = 0 };
+            }
+            prevPara = para;
+            prevAfterAuto = sp?.Attribute(W + "afterAutospacing")?.Value is "1" or "true" or "on";
+        }
+        else if (element.Name == W + "tbl")
+        {
+            document.Blocks.Add(ReadTable(element, archive, imageRelationships, hyperlinkRelationships, numbering, document, inheritedControl));
+            prevPara = null;
+            prevAfterAuto = false;
+        }
+        else if (element.Name == W + "sdt")
+        {
+            var control = ReadContentControl(element.Element(W + "sdtPr"));
+            foreach (var child in element.Element(W + "sdtContent")?.Elements() ?? [])
+                AddBodyBlock(child, document, archive, imageRelationships, hyperlinkRelationships, numbering, ref prevPara, ref prevAfterAuto, control);
+        }
+    }
+
+    private static void AddParagraphRuns(
+        Paragraph paragraph,
+        XElement container,
+        ZipArchive archive,
+        IReadOnlyDictionary<string, string> imageRelationships,
+        IReadOnlyDictionary<string, string> hyperlinkRelationships,
+        int? commentId,
+        RevisionInfo revision,
+        ContentControl? control,
+        string? hyperlinkUrl,
+        string? hyperlinkAnchor,
+        string? hyperlinkTooltip,
+        TextDocument? preservedDrawingTarget)
+    {
+        var fieldDepth = 0;
+        var fieldInstr = new System.Text.StringBuilder();
+        var fieldResult = new System.Text.StringBuilder();
+        var fieldPastSeparate = false;
+        XElement? fieldFormattingSource = null;
+
+        foreach (var child in container.Elements())
+        {
+            if (fieldDepth > 0 && child.Name == W + "r")
+            {
+                var fldChar = child.Element(W + "fldChar")?.Attribute(W + "fldCharType")?.Value;
+                if (fldChar == "begin")
+                {
+                    fieldDepth++;
+                }
+                else if (fldChar == "separate")
+                {
+                    fieldPastSeparate = true;
+                }
+                else if (fldChar == "end")
+                {
+                    fieldDepth--;
+                    if (fieldDepth == 0)
+                    {
+                        AddComplexFieldRun(
+                            paragraph,
+                            fieldInstr.ToString(),
+                            fieldResult.ToString(),
+                            ReadRunFormatting(fieldFormattingSource?.Element(W + "rPr")),
+                            commentId,
+                            revision,
+                            control,
+                            hyperlinkUrl,
+                            hyperlinkAnchor,
+                            hyperlinkTooltip);
+                        fieldInstr.Clear();
+                        fieldResult.Clear();
+                        fieldPastSeparate = false;
+                        fieldFormattingSource = null;
+                    }
+                }
+                else if (!fieldPastSeparate)
+                {
+                    fieldInstr.Append(string.Concat(child.Elements(W + "instrText").Select(t => t.Value)));
+                    fieldInstr.Append(string.Concat(child.Elements(W + "t").Select(t => t.Value)));
+                }
+                else
+                {
+                    fieldFormattingSource ??= child;
+                    fieldResult.Append(string.Concat(child.Elements(W + "t").Select(t => t.Value)));
+                }
+
+                continue;
+            }
+
+            if (child.Name == W + "r" && child.Element(W + "fldChar")?.Attribute(W + "fldCharType")?.Value == "begin"
+                && child.Element(W + "fldChar")?.Element(W + "ffData") is null)
+            {
+                fieldDepth = 1;
+                fieldPastSeparate = false;
+                fieldInstr.Clear();
+                fieldResult.Clear();
+                fieldFormattingSource = null;
+                continue;
+            }
+
+            AddParagraphContentElement(paragraph, child, archive, imageRelationships, hyperlinkRelationships, commentId, revision, control, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip, preservedDrawingTarget);
+        }
+    }
+
+    private static void AddComplexFieldRun(
+        Paragraph paragraph,
+        string instruction,
+        string result,
+        RunFormatting? formatting,
+        int? commentId,
+        RevisionInfo revision,
+        ContentControl? control,
+        string? hyperlinkUrl,
+        string? hyperlinkAnchor,
+        string? hyperlinkTooltip)
+    {
+        var run = Run.ComplexFieldRun(instruction, result, showCode: false, formatting);
+        run.CommentId = commentId;
+        run.Control = control;
+        run.HyperlinkUrl = hyperlinkUrl;
+        run.HyperlinkAnchor = hyperlinkAnchor;
+        run.HyperlinkTooltip = hyperlinkTooltip;
+        if (revision.Kind != RevisionKind.None)
+        {
+            run.Revision = revision.Kind;
+            run.RevisionAuthor = revision.Author;
+            run.RevisionDateXml = revision.DateXml;
+        }
+
+        paragraph.Runs.Add(run);
+    }
+
+    private static void AddParagraphContentElement(
+        Paragraph paragraph,
+        XElement child,
+        ZipArchive archive,
+        IReadOnlyDictionary<string, string> imageRelationships,
+        IReadOnlyDictionary<string, string> hyperlinkRelationships,
+        int? commentId,
+        RevisionInfo revision,
+        ContentControl? control,
+        string? hyperlinkUrl,
+        string? hyperlinkAnchor,
+        string? hyperlinkTooltip,
+        TextDocument? preservedDrawingTarget)
+    {
+        if (child.Name == W + "r")
+        {
+            // A run carrying a w:commentReference is the textless comment anchor; recover it.
+            var commentRef = child.Element(W + "commentReference");
+            if (commentRef is not null && int.TryParse(commentRef.Attribute(W + "id")?.Value, out var refId))
+                paragraph.Runs.Add(Run.CommentReference(refId));
+            else
+                AddRun(paragraph, child, archive, imageRelationships, hyperlinkUrl, hyperlinkAnchor, commentId, revision, control, hyperlinkTooltip, preservedDrawingTarget);
+        }
+        else if (child.Name == W + "hyperlink")
+        {
+            var anchor = child.Attribute(W + "anchor")?.Value;
+            var id = child.Attribute(R + "id")?.Value;
+            var url = id is not null && hyperlinkRelationships.TryGetValue(id, out var target) ? target : null;
+            var tooltip = child.Attribute(W + "tooltip")?.Value;
+            AddParagraphRuns(paragraph, child, archive, imageRelationships, hyperlinkRelationships, commentId, revision, control, url, url is null ? anchor : null, tooltip, preservedDrawingTarget);
+        }
+        else if (child.Name == W + "ins" || child.Name == W + "del")
+        {
+            // A tracked insertion (w:ins) or deletion (w:del) wraps runs, hyperlinks, and sometimes SDTs.
+            var kind = child.Name == W + "del" ? RevisionKind.Deleted : RevisionKind.Inserted;
+            var childRevision = new RevisionInfo(kind, child.Attribute(W + "author")?.Value, child.Attribute(W + "date")?.Value);
+            AddParagraphRuns(paragraph, child, archive, imageRelationships, hyperlinkRelationships, commentId, childRevision, control, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip, preservedDrawingTarget);
+        }
+        else if (child.Name == W + "sdt")
+        {
+            AddContentControlRuns(paragraph, child, archive, imageRelationships, hyperlinkRelationships, commentId, revision, preservedDrawingTarget, control, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip);
+        }
+        else if (child.Name == W + "fldSimple")
+        {
+            AddSimpleField(paragraph, child);
+        }
+        else if (child.Name == M + "oMath")
+        {
+            // An inline equation: parse the OMML m:oMath into an Equation carried by a run.
+            var run = Run.FromEquation(ReadOMath(child));
+            run.Control = control;
+            run.HyperlinkUrl = hyperlinkUrl;
+            run.HyperlinkAnchor = hyperlinkAnchor;
+            run.HyperlinkTooltip = hyperlinkTooltip;
+            paragraph.Runs.Add(run);
+        }
+        else if (child.Name == W + "bookmarkStart")
+        {
+            // Capture the first non-internal bookmark name on the paragraph. Word emits an
+            // implicit "_GoBack" bookmark on the document; skip it so it is not mistaken for a target.
+            var name = child.Attribute(W + "name")?.Value;
+            if (paragraph.BookmarkName is null && name is { Length: > 0 } && name != "_GoBack")
+                paragraph.BookmarkName = name;
+        }
     }
 
     /// <summary>
@@ -1554,23 +1730,33 @@ public static class DocxReader
         XElement sdt,
         ZipArchive archive,
         IReadOnlyDictionary<string, string> imageRelationships,
+        IReadOnlyDictionary<string, string> hyperlinkRelationships,
         int? commentId,
         RevisionInfo revision,
-        TextDocument? preservedDrawingTarget)
+        TextDocument? preservedDrawingTarget,
+        ContentControl? inheritedControl = null,
+        string? hyperlinkUrl = null,
+        string? hyperlinkAnchor = null,
+        string? hyperlinkTooltip = null)
     {
         var control = ReadContentControl(sdt.Element(W + "sdtPr"));
         var sdtContent = sdt.Element(W + "sdtContent");
         if (sdtContent is null)
             return;
 
-        foreach (var sdtChild in sdtContent.Elements(W + "r"))
-            AddRun(paragraph, sdtChild, archive, imageRelationships,
-                hyperlinkUrl: null,
-                hyperlinkAnchor: null,
-                commentId: commentId,
-                revision: revision,
-                control: control,
-                preservedDrawingTarget: preservedDrawingTarget);
+        AddParagraphRuns(
+            paragraph,
+            sdtContent,
+            archive,
+            imageRelationships,
+            hyperlinkRelationships,
+            commentId,
+            revision,
+            control ?? inheritedControl,
+            hyperlinkUrl,
+            hyperlinkAnchor,
+            hyperlinkTooltip,
+            preservedDrawingTarget);
     }
 
     private static ContentControl ReadContentControl(XElement? sdtPr)
@@ -1820,7 +2006,8 @@ public static class DocxReader
         IReadOnlyDictionary<string, string> imageRelationships,
         IReadOnlyDictionary<string, string> hyperlinkRelationships,
         IReadOnlyDictionary<int, ListKind> numbering,
-        TextDocument? preservedDrawingTarget = null)
+        TextDocument? preservedDrawingTarget = null,
+        ContentControl? inheritedControl = null)
     {
         var table = new Table();
 
@@ -1960,8 +2147,37 @@ public static class DocxReader
                     // Per-cell margin override (w:tcMar); absent → null (inherit table default).
                     cell.Margins = ReadCellMargins(tcPr.Element(W + "tcMar"));
                 }
-                foreach (var p in tc.Elements(W + "p"))
-                    cell.Paragraphs.Add(ReadParagraph(p, archive, imageRelationships, hyperlinkRelationships, numbering, capturePreservedNumbering: true, preservedDrawingTarget: preservedDrawingTarget));
+                foreach (var child in tc.Elements())
+                {
+                    if (child.Name == W + "p")
+                    {
+                        cell.Paragraphs.Add(ReadParagraph(
+                            child,
+                            archive,
+                            imageRelationships,
+                            hyperlinkRelationships,
+                            numbering,
+                            capturePreservedNumbering: true,
+                            preservedDrawingTarget: preservedDrawingTarget,
+                            inheritedControl));
+                    }
+                    else if (child.Name == W + "sdt")
+                    {
+                        var control = ReadContentControl(child.Element(W + "sdtPr"));
+                        foreach (var sdtChild in child.Element(W + "sdtContent")?.Elements(W + "p") ?? [])
+                        {
+                            cell.Paragraphs.Add(ReadParagraph(
+                                sdtChild,
+                                archive,
+                                imageRelationships,
+                                hyperlinkRelationships,
+                                numbering,
+                                capturePreservedNumbering: true,
+                                preservedDrawingTarget: preservedDrawingTarget,
+                                control));
+                        }
+                    }
+                }
                 if (cell.Paragraphs.Count == 0)
                     cell.Paragraphs.Add(new Paragraph());
                 row.Cells.Add(cell);
