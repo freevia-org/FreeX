@@ -514,4 +514,30 @@
   <data name="Options_InvalidSheetCountMessage" xml:space="preserve"><value>Entrez un nombre de feuilles compris entre 1 et 255.</value></data>
   <data name="Options_Saved" xml:space="preserve"><value>Options enregistrées.</value></data>
   <data name="Options_SaveFailed" xml:space="preserve"><value>Impossible d'enregistrer les options.</value></data>
+  <data name="Sparkline_InsertTitle" xml:space="preserve"><value>Insérer des graphiques sparkline</value></data>
+  <data name="Sparkline_EditTitle" xml:space="preserve"><value>Outils de graphique sparkline</value></data>
+  <data name="Sparkline_DataRange" xml:space="preserve"><value>Plage de données :</value></data>
+  <data name="Sparkline_LocationRange" xml:space="preserve"><value>Plage d'emplacement :</value></data>
+  <data name="Sparkline_SparklineType" xml:space="preserve"><value>Type de graphique sparkline :</value></data>
+  <data name="Sparkline_KindLine" xml:space="preserve"><value>Courbe</value></data>
+  <data name="Sparkline_KindColumn" xml:space="preserve"><value>Histogramme</value></data>
+  <data name="Sparkline_KindWinLoss" xml:space="preserve"><value>Positif/Négatif</value></data>
+  <data name="Sparkline_ShowHeader" xml:space="preserve"><value>Afficher</value></data>
+  <data name="Sparkline_ToggleMarkers" xml:space="preserve"><value>Marqueurs</value></data>
+  <data name="Sparkline_ToggleHighPoint" xml:space="preserve"><value>Point haut</value></data>
+  <data name="Sparkline_ToggleLowPoint" xml:space="preserve"><value>Point bas</value></data>
+  <data name="Sparkline_ToggleFirstPoint" xml:space="preserve"><value>Premier point</value></data>
+  <data name="Sparkline_ToggleLastPoint" xml:space="preserve"><value>Dernier point</value></data>
+  <data name="Sparkline_ToggleNegativePoints" xml:space="preserve"><value>Points négatifs</value></data>
+  <data name="Sparkline_ColorHeader" xml:space="preserve"><value>Couleur du graphique sparkline</value></data>
+  <data name="Sparkline_EditColor" xml:space="preserve"><value>Couleur...</value></data>
+  <data name="Sparkline_DefaultColor" xml:space="preserve"><value>Couleur par défaut</value></data>
+  <data name="Sparkline_Clear" xml:space="preserve"><value>Effacer</value></data>
+  <data name="Sparkline_InvalidDataRange" xml:space="preserve"><value>Entrez une plage de données valide pour le graphique sparkline.</value></data>
+  <data name="Sparkline_InvalidLocation" xml:space="preserve"><value>Entrez une cellule d'emplacement valide pour le graphique sparkline.</value></data>
+  <data name="Sparkline_Inserted" xml:space="preserve"><value>Graphique sparkline inséré en {0}.</value></data>
+  <data name="Sparkline_InsertFailed" xml:space="preserve"><value>Échec de l'insertion du graphique sparkline.</value></data>
+  <data name="Sparkline_Updated" xml:space="preserve"><value>Graphique sparkline mis à jour.</value></data>
+  <data name="Sparkline_Cleared" xml:space="preserve"><value>Graphique sparkline effacé.</value></data>
+  <data name="Sparkline_EditFailed" xml:space="preserve"><value>Échec de la modification du graphique sparkline.</value></data>
 </root>

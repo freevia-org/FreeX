@@ -532,4 +532,30 @@
   <data name="Options_InvalidSheetCountMessage" xml:space="preserve"><value>Enter a sheet count between 1 and 255.</value></data>
   <data name="Options_Saved" xml:space="preserve"><value>Options saved.</value></data>
   <data name="Options_SaveFailed" xml:space="preserve"><value>Could not save options.</value></data>
+  <data name="Sparkline_InsertTitle" xml:space="preserve"><value>Insert Sparklines</value></data>
+  <data name="Sparkline_EditTitle" xml:space="preserve"><value>Sparkline Tools</value></data>
+  <data name="Sparkline_DataRange" xml:space="preserve"><value>Data range:</value></data>
+  <data name="Sparkline_LocationRange" xml:space="preserve"><value>Location range:</value></data>
+  <data name="Sparkline_SparklineType" xml:space="preserve"><value>Sparkline type:</value></data>
+  <data name="Sparkline_KindLine" xml:space="preserve"><value>Line</value></data>
+  <data name="Sparkline_KindColumn" xml:space="preserve"><value>Column</value></data>
+  <data name="Sparkline_KindWinLoss" xml:space="preserve"><value>Win/Loss</value></data>
+  <data name="Sparkline_ShowHeader" xml:space="preserve"><value>Show</value></data>
+  <data name="Sparkline_ToggleMarkers" xml:space="preserve"><value>Markers</value></data>
+  <data name="Sparkline_ToggleHighPoint" xml:space="preserve"><value>High point</value></data>
+  <data name="Sparkline_ToggleLowPoint" xml:space="preserve"><value>Low point</value></data>
+  <data name="Sparkline_ToggleFirstPoint" xml:space="preserve"><value>First point</value></data>
+  <data name="Sparkline_ToggleLastPoint" xml:space="preserve"><value>Last point</value></data>
+  <data name="Sparkline_ToggleNegativePoints" xml:space="preserve"><value>Negative points</value></data>
+  <data name="Sparkline_ColorHeader" xml:space="preserve"><value>Sparkline color</value></data>
+  <data name="Sparkline_EditColor" xml:space="preserve"><value>Color...</value></data>
+  <data name="Sparkline_DefaultColor" xml:space="preserve"><value>Default color</value></data>
+  <data name="Sparkline_Clear" xml:space="preserve"><value>Clear</value></data>
+  <data name="Sparkline_InvalidDataRange" xml:space="preserve"><value>Enter a valid data range for the sparkline.</value></data>
+  <data name="Sparkline_InvalidLocation" xml:space="preserve"><value>Enter a valid location cell for the sparkline.</value></data>
+  <data name="Sparkline_Inserted" xml:space="preserve"><value>Inserted sparkline at {0}.</value></data>
+  <data name="Sparkline_InsertFailed" xml:space="preserve"><value>Insert Sparkline failed.</value></data>
+  <data name="Sparkline_Updated" xml:space="preserve"><value>Sparkline updated.</value></data>
+  <data name="Sparkline_Cleared" xml:space="preserve"><value>Sparkline cleared.</value></data>
+  <data name="Sparkline_EditFailed" xml:space="preserve"><value>Edit Sparkline failed.</value></data>
 </root>
