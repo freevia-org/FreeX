@@ -1,0 +1,93 @@
+using System;
+using System.IO;
+using System.Linq;
+using System.Text;
+
+namespace FreeW.Core.IO.Tests;
+
+public class PlainTextFileAdapterTests
+{
+    private static TextDocument DocOf(params string[] lines)
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        foreach (var line in lines)
+            document.Blocks.Add(new Paragraph(line));
+        return document;
+    }
+
+    private static byte[] Save(TextDocument document, PlainTextFileAdapter adapter)
+    {
+        using var ms = new MemoryStream();
+        adapter.Save(document, ms);
+        return ms.ToArray();
+    }
+
+    private static string[] LinesOf(TextDocument document) =>
+        document.Blocks.OfType<Paragraph>().Select(p => p.PlainText).ToArray();
+
+    [Fact]
+    public void RoundTrip_PreservesLinesAndCount()
+    {
+        var adapter = new PlainTextFileAdapter();
+        var bytes = Save(DocOf("First line", "Second", "", "Last"), adapter);
+
+        using var ms = new MemoryStream(bytes);
+        LinesOf(adapter.Load(ms)).Should().Equal("First line", "Second", "", "Last");
+    }
+
+    [Fact]
+    public void Save_DefaultsToUtf8_NoBom_Crlf()
+    {
+        var bytes = Save(DocOf("hi", "there"), new PlainTextFileAdapter());
+
+        bytes.Take(3).Should().NotEqual(new byte[] { 0xEF, 0xBB, 0xBF });
+        Encoding.UTF8.GetString(bytes).Should().Be("hi\r\nthere");
+    }
+
+    [Fact]
+    public void Save_HonoursLfEol()
+    {
+        var adapter = new PlainTextFileAdapter(new TextSaveOptions(new UTF8Encoding(false), EolStyle.Lf));
+
+        Encoding.UTF8.GetString(Save(DocOf("a", "b"), adapter)).Should().Be("a\nb");
+    }
+
+    [Fact]
+    public void Save_EmitsBom_WhenRequested()
+    {
+        var adapter = new PlainTextFileAdapter(new TextSaveOptions(new UTF8Encoding(false), EolStyle.Crlf, EmitBom: true));
+
+        Save(DocOf("x"), adapter).Take(3).Should().Equal(new byte[] { 0xEF, 0xBB, 0xBF });
+    }
+
+    [Fact]
+    public void Load_DetectsUtf16LeBom()
+    {
+        var bytes = Encoding.Unicode.GetPreamble()
+            .Concat(Encoding.Unicode.GetBytes("héllo\r\nwörld"))
+            .ToArray();
+
+        using var ms = new MemoryStream(bytes);
+        LinesOf(new PlainTextFileAdapter().Load(ms)).Should().Equal("héllo", "wörld");
+    }
+
+    [Fact]
+    public void Load_EmptyInput_YieldsSingleEmptyParagraph()
+    {
+        using var ms = new MemoryStream(Array.Empty<byte>());
+        var lines = LinesOf(new PlainTextFileAdapter().Load(ms));
+
+        lines.Should().ContainSingle().Which.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void RoundTrip_PreservesNonAsciiUtf8()
+    {
+        var adapter = new PlainTextFileAdapter();
+        var bytes = Save(DocOf("café ☕ — naïve"), adapter);
+
+        using var ms = new MemoryStream(bytes);
+        LinesOf(adapter.Load(ms)).Should().Equal("café ☕ — naïve");
+    }
+}
