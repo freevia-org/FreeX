@@ -782,12 +782,18 @@ public sealed partial class MainWindow : Window
                     ["Rotate Text Up"] = () => ApplySelectedRangeTextRotation(90, "Rotated text up for", "Rotate Text Up failed."),
                     ["Rotate Text Down"] = () => ApplySelectedRangeTextRotation(-90, "Rotated text down for", "Rotate Text Down failed."),
                     // Home ▸ Cells ▸ Insert / Delete / Format dropdown items that map to existing handlers
-                    // (canonical ids from HomeRibbonMenus.Insert/Delete/Format). Row-height/column-width/AutoFit/
-                    // lock-cell items stay NoOp until those operations exist in the shell.
+                    // (canonical ids from HomeRibbonMenus.Insert/Delete/Format). The lock-cell item stays NoOp
+                    // until that operation exists in the shell.
                     ["Insert Cells"] = () => _ = ShowInsertCellsDialogAsync(),
                     ["Insert Sheet"] = AddNewSheet,
                     ["Delete Cells"] = () => _ = ShowDeleteCellsDialogAsync(),
                     ["Format Cells"] = () => _ = ShowFormatCellsDialogAsync(),
+                    // Home ▸ Cells ▸ Format ▸ Row Height / Column Width / AutoFit (ids from HomeRibbonMenus.Format)
+                    // → shared Set{Row,Column} commands + AutoFitSizingService on the current selection.
+                    ["Row Height"] = () => _ = ShowRowHeightDialogAsync(),
+                    ["AutoFit Row Height"] = AutoFitSelectedRowHeight,
+                    ["Column Width"] = () => _ = ShowColumnWidthDialogAsync(),
+                    ["AutoFit Column Width"] = AutoFitSelectedColumnWidth,
                     // Home ▸ Cells ▸ Format ▸ Hide & Unhide (ids from HomeRibbonMenus.Format) → shared
                     // Set{Rows,Columns}HiddenCommand on the current selection.
                     ["Hide Rows"] = HideSelectedRows,
@@ -3945,6 +3951,18 @@ public sealed partial class MainWindow : Window
                 break;
             case WorksheetContextMenuAction.UnhideColumns:
                 UnhideSelectedColumns();
+                break;
+            case WorksheetContextMenuAction.RowHeight:
+                _ = ShowRowHeightDialogAsync();
+                break;
+            case WorksheetContextMenuAction.AutoFitRowHeight:
+                AutoFitSelectedRowHeight();
+                break;
+            case WorksheetContextMenuAction.ColumnWidth:
+                _ = ShowColumnWidthDialogAsync();
+                break;
+            case WorksheetContextMenuAction.AutoFitColumnWidth:
+                AutoFitSelectedColumnWidth();
                 break;
             case WorksheetContextMenuAction.InsertRowAbove:
             case WorksheetContextMenuAction.InsertRowBelow:
