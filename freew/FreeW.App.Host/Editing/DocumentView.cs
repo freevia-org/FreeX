@@ -2928,22 +2928,22 @@ public sealed class DocumentView : RichTextBox
                 modelParagraph.Runs.Add(new ModelRun(string.Empty) { Image = modelImage, HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip });
                 break;
             case InlineUIContainer { Child: FrameworkElement { Tag: Shape modelShape } }:
-                modelParagraph.Runs.Add(ModelRun.FromShape(modelShape));
+                modelParagraph.Runs.Add(WithHyperlink(ModelRun.FromShape(modelShape), hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip));
                 break;
             case InlineUIContainer { Child: FrameworkElement { Tag: Chart modelChart } }:
-                modelParagraph.Runs.Add(ModelRun.FromChart(modelChart));
+                modelParagraph.Runs.Add(WithHyperlink(ModelRun.FromChart(modelChart), hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip));
                 break;
             case InlineUIContainer { Child: FrameworkElement { Tag: WordArt modelWordArt } }:
-                modelParagraph.Runs.Add(ModelRun.FromWordArt(modelWordArt));
+                modelParagraph.Runs.Add(WithHyperlink(ModelRun.FromWordArt(modelWordArt), hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip));
                 break;
             case InlineUIContainer { Child: FrameworkElement { Tag: Equation modelEquation } }:
-                modelParagraph.Runs.Add(ModelRun.FromEquation(modelEquation));
+                modelParagraph.Runs.Add(WithHyperlink(ModelRun.FromEquation(modelEquation), hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip));
                 break;
             case InlineUIContainer { Child: FrameworkElement { Tag: SmartArt modelSmartArt } }:
-                modelParagraph.Runs.Add(ModelRun.FromSmartArt(modelSmartArt));
+                modelParagraph.Runs.Add(WithHyperlink(ModelRun.FromSmartArt(modelSmartArt), hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip));
                 break;
             case InlineUIContainer { Child: FrameworkElement { Tag: EmbeddedObject modelEmbedded } }:
-                modelParagraph.Runs.Add(ModelRun.FromEmbeddedObject(modelEmbedded));
+                modelParagraph.Runs.Add(WithHyperlink(ModelRun.FromEmbeddedObject(modelEmbedded), hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip));
                 break;
             case WpfRun { Tag: MultiLevelMarker }:
                 // Synthetic accumulated outline marker ("1.1.1") — view-only chrome, never enters the
@@ -3048,6 +3048,14 @@ public sealed class DocumentView : RichTextBox
                 modelParagraph.Runs.Add(new ModelRun(StripSoftHyphens(run.Text), ReadRunFormatting(run)) { HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip });
                 break;
         }
+    }
+
+    private static ModelRun WithHyperlink(ModelRun run, string? url, string? anchor, string? tooltip)
+    {
+        run.HyperlinkUrl = url;
+        run.HyperlinkAnchor = anchor;
+        run.HyperlinkTooltip = tooltip;
+        return run;
     }
 
     private static ModelTable ReadTable(WpfTable wpfTable, TextDocument document)
@@ -3528,25 +3536,25 @@ public sealed class DocumentView : RichTextBox
     private static Inline BuildRun(ModelRun run, ModelParagraph paragraph, TextDocument document)
     {
         if (run.Image is { } image)
-            return BuildImageRun(image);
+            return WrapHyperlinkIfNeeded(run, BuildImageRun(image));
 
         if (run.Shape is { } shape)
-            return BuildShapeRun(shape);
+            return WrapHyperlinkIfNeeded(run, BuildShapeRun(shape));
 
         if (run.Chart is { } chart)
-            return BuildChartRun(chart);
+            return WrapHyperlinkIfNeeded(run, BuildChartRun(chart));
 
         if (run.WordArt is { } wordArt)
-            return BuildWordArtRun(wordArt);
+            return WrapHyperlinkIfNeeded(run, BuildWordArtRun(wordArt));
 
         if (run.Equation is { } equation)
-            return BuildEquationRun(equation);
+            return WrapHyperlinkIfNeeded(run, BuildEquationRun(equation));
 
         if (run.SmartArt is { } smartArt)
-            return BuildSmartArtRun(smartArt);
+            return WrapHyperlinkIfNeeded(run, BuildSmartArtRun(smartArt));
 
         if (run.EmbeddedObject is { } embedded)
-            return BuildEmbeddedObjectRun(embedded);
+            return WrapHyperlinkIfNeeded(run, BuildEmbeddedObjectRun(embedded));
 
         if (run.FootnoteId is { } footnoteId)
             return BuildFootnoteReference(footnoteId, document);
@@ -3683,6 +3691,15 @@ public sealed class DocumentView : RichTextBox
             return BuildInternalHyperlink(wpf, anchor, run.HyperlinkTooltip);
 
         return wpf;
+    }
+
+    private static Inline WrapHyperlinkIfNeeded(ModelRun run, Inline inline)
+    {
+        if (run.HyperlinkUrl is { Length: > 0 } url)
+            return BuildHyperlink(inline, url, run.HyperlinkTooltip);
+        if (run.HyperlinkAnchor is { Length: > 0 } anchor)
+            return BuildInternalHyperlink(inline, anchor, run.HyperlinkTooltip);
+        return inline;
     }
 
     /// <summary>
@@ -3943,7 +3960,7 @@ public sealed class DocumentView : RichTextBox
     // Wraps a styled run in a WPF Hyperlink that targets an internal bookmark. The bookmark name is
     // stored on the link's Tag (not NavigateUri, which is reserved for external URLs) so it reads back
     // on commit; navigating scrolls the bookmarked paragraph into view (best-effort).
-    private static Inline BuildInternalHyperlink(WpfRun content, string anchor, string? tooltip = null)
+    private static Inline BuildInternalHyperlink(Inline content, string anchor, string? tooltip = null)
     {
         var link = new WpfHyperlink(content);
         StyleInternalLink(link, anchor, tooltip);
@@ -3987,7 +4004,7 @@ public sealed class DocumentView : RichTextBox
 
     // Wraps a styled run in a WPF Hyperlink (blue + underlined, with NavigateUri) so the link reads
     // back on commit and can be opened. Falls back to a plain run if the URL is not a valid Uri.
-    private static Inline BuildHyperlink(WpfRun content, string url, string? tooltip = null)
+    private static Inline BuildHyperlink(Inline content, string url, string? tooltip = null)
     {
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
             return content;
@@ -4390,19 +4407,31 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
-    /// F9: updates (recomputes) every field's cached result. PAGE keeps its last value (true pagination is
-    /// the paginator's job); DATE/TIME/AUTHOR/FILENAME/NUMPAGES re-resolve to their current values. Also
-    /// re-resolves the simple <see cref="RunFieldKind"/> fields so both field forms stay current.
+    /// F9: updates (recomputes) every field's cached result. DATE/TIME/AUTHOR/FILENAME/NUMPAGES re-resolve
+    /// to their current values; the reference/numbering fields FreeW models — <c>REF</c>/<c>PAGEREF</c>
+    /// (cross-references to a bookmark: text vs page number) and <c>SEQ</c> (sequence numbering, the basis
+    /// of captions) — re-evaluate against the current document via <see cref="ComplexFieldEngine"/>; and any
+    /// inserted Table of Contents is regenerated (Word's "Update entire table"). Also re-resolves the simple
+    /// <see cref="RunFieldKind"/> fields so both field forms stay current.
     /// </summary>
     public void UpdateFields()
     {
         CommitToModel();
-        foreach (var paragraph in _model.Blocks.OfType<ModelParagraph>())
-            foreach (var r in paragraph.Runs)
+        var blocks = _model.Blocks;
+        for (var b = 0; b < blocks.Count; b++)
+        {
+            if (blocks[b] is not ModelParagraph paragraph)
+                continue;
+            for (var i = 0; i < paragraph.Runs.Count; i++)
             {
+                var r = paragraph.Runs[i];
                 if (r.ComplexField is { } cf)
                 {
-                    var resolved = ResolveFieldText(ComplexFieldKindFor(cf.Keyword), r.Text, _model, CurrentFileName);
+                    // REF/PAGEREF/SEQ re-evaluate against current bookmarks/sequences; the rest reuse the
+                    // live DATE/AUTHOR/… resolver (PAGE/NUMPAGES keep their cached value here).
+                    var resolved = ComplexFieldEngine.CanRecompute(cf)
+                        ? ComplexFieldEngine.Recompute(_model, b, i)
+                        : ResolveFieldText(ComplexFieldKindFor(cf.Keyword), r.Text, _model, CurrentFileName);
                     if (resolved.Length > 0)
                         r.Text = resolved;
                 }
@@ -4413,6 +4442,17 @@ public sealed class DocumentView : RichTextBox
                         r.Text = resolved;
                 }
             }
+        }
+
+        // "Update entire table": regenerate any inserted TOC from the current heading outline. Only when a
+        // TOC region is present, so F9 on a TOC-less document is unaffected. RefreshTableOfContents commits
+        // and re-renders itself, so return afterwards rather than double-rendering.
+        if (_model.Blocks.Any(TableOfContents.IsTocParagraph))
+        {
+            RefreshTableOfContents();
+            return;
+        }
+
         Render();
     }
 
@@ -6179,6 +6219,73 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         TrackChanges.RejectAll(_model);
         Render();
+    }
+
+    /// <summary>
+    /// Every tracked change in the committed document, in reading order — the model behind the Reviewing
+    /// Pane. Commits pending edits first so the list reflects the current text, then defers to the pure
+    /// <see cref="RevisionList"/>. Re-call after any single accept/reject to get a fresh, non-stale list.
+    /// </summary>
+    public IReadOnlyList<RevisionEntry> ListRevisions()
+    {
+        CommitToModel();
+        return RevisionList.Enumerate(_model);
+    }
+
+    /// <summary>
+    /// Accept exactly one tracked change (the one described by <paramref name="entry"/>), leaving every
+    /// other revision pending. Re-renders so the resolved text shows immediately. Returns true when the
+    /// entry resolved (false when it was already stale). The caller must re-list revisions afterwards.
+    /// </summary>
+    public bool AcceptRevision(RevisionEntry entry)
+    {
+        var resolved = RevisionList.Accept(_model, entry);
+        if (resolved)
+            Render();
+        return resolved;
+    }
+
+    /// <summary>
+    /// Reject exactly one tracked change (the one described by <paramref name="entry"/>), leaving every
+    /// other revision pending. Re-renders so the resolved text shows immediately. Returns true when the
+    /// entry resolved (false when it was already stale). The caller must re-list revisions afterwards.
+    /// </summary>
+    public bool RejectRevision(RevisionEntry entry)
+    {
+        var resolved = RevisionList.Reject(_model, entry);
+        if (resolved)
+            Render();
+        return resolved;
+    }
+
+    /// <summary>
+    /// Scroll the editor to (and place the caret at the start of) the top-level block that owns the given
+    /// revision — the click-to-navigate / Previous-Next target. For a revision inside a table cell this
+    /// lands on the table (the granularity <see cref="BringBlockIntoView"/> supports). A no-op when the
+    /// owning block can no longer be found.
+    /// </summary>
+    public void NavigateToRevision(RevisionEntry entry)
+    {
+        var topLevelIndex = TopLevelBlockIndexOf(entry.Paragraph);
+        if (topLevelIndex >= 0)
+            BringBlockIntoView(topLevelIndex);
+    }
+
+    // The index, among the committed model's top-level blocks, of the block that owns paragraph
+    // <paramref name="target"/> — itself if it is a top-level paragraph, or the containing table. Returns
+    // -1 if it is not found. Matches the leaf-numbering BringBlockIntoView uses (a table is one leaf).
+    private int TopLevelBlockIndexOf(ModelParagraph target)
+    {
+        for (var i = 0; i < _model.Blocks.Count; i++)
+        {
+            var block = _model.Blocks[i];
+            if (ReferenceEquals(block, target))
+                return i;
+            if (block is ModelTable table &&
+                table.Rows.Any(r => r.Cells.Any(c => c.Paragraphs.Any(p => ReferenceEquals(p, target)))))
+                return i;
+        }
+        return -1;
     }
 
     /// <summary>

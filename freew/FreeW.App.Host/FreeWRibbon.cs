@@ -395,10 +395,21 @@ internal static class FreeWRibbon
                 });
                 tab.Group("tracking", "Tracking", "G", 90, g =>
                 {
-                    // Track Changes is the big toggle; Accept/Reject read as labelled Medium rows.
+                    // Track Changes is the big toggle; the Reviewing Pane toggle opens the dockable revisions
+                    // list. Accept/Reject read as labelled Medium rows (the All variants resolve everything).
                     g.MediumToggle("freew.track-changes", "Track Changes", RibbonCommandIconKind.History);
+                    g.MediumToggle("freew.reviewing-pane", "Reviewing Pane", RibbonCommandIconKind.History);
                     g.Medium("freew.accept-all", "Accept All", RibbonCommandIconKind.AcceptChange);
                     g.Medium("freew.reject-all", "Reject All", RibbonCommandIconKind.RejectChange);
+                });
+                // Changes group: act on ONE revision at a time. Accept/Reject the selected change in the
+                // Reviewing Pane, and step Previous/Next through the document's tracked changes.
+                tab.Group("changes", "Changes", "H", 88, g =>
+                {
+                    g.Medium("freew.accept-this", "Accept", RibbonCommandIconKind.AcceptChange);
+                    g.Medium("freew.reject-this", "Reject", RibbonCommandIconKind.RejectChange);
+                    g.Medium("freew.previous-change", "Previous", RibbonCommandIconKind.History);
+                    g.Medium("freew.next-change", "Next", RibbonCommandIconKind.History);
                 });
                 // Protect group: Word's Mark as Final (advisory read-only toggle) + Restrict Editing
                 // (opens the restrict-editing pane; the toggle reflects whether protection is enforced).

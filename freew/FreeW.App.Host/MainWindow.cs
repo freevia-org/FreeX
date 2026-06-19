@@ -52,6 +52,19 @@ public sealed class MainWindow : Window
     private StackPanel _revealContent = null!;
     private bool _revealPaneVisible;
 
+    // Reviewing Pane (Word's Review > Reviewing Pane): a dockable list of every tracked change in the
+    // document — author, date, type, and the affected text — with click-to-navigate (jumps the editor to
+    // the change) plus Accept / Reject of the SELECTED single revision and Previous/Next navigation. It is
+    // rebuilt from the pure FreeW.Core.Model.RevisionList whenever the document changes or the pane opens,
+    // so the surface never owns revision logic. Mirrors the navigation/reveal panes' dock + toggle shape.
+    private Border _reviewPane = null!;
+    private ListBox _reviewList = null!;
+    private TextBlock _reviewStatus = null!;
+    private bool _reviewPaneVisible;
+    private bool _reviewPaneVisibleBeforeReadMode;
+    // The revisions currently shown in the pane (the live snapshot the list items index into).
+    private System.Collections.Generic.IReadOnlyList<RevisionEntry> _reviewEntries = System.Array.Empty<RevisionEntry>();
+
     // Navigation-pane search (the box at the top of the pane). Typing finds every occurrence of the term
     // in the document body; the result label shows the count and Next/Prev step through the matches,
     // jumping each into view in the editor. The heading outline below is filtered to entries that either
@@ -199,9 +212,15 @@ public sealed class MainWindow : Window
             onDraftView: () => SetViewMode(DocumentViewMode.Draft),
             isDraftViewActive: () => !_outlineMode && _editor.ViewMode == DocumentViewMode.Draft,
             onToggleRevealFormatting: ToggleRevealFormatting,
-            isRevealFormattingVisible: () => _revealPaneVisible);
+            isRevealFormattingVisible: () => _revealPaneVisible,
+            onToggleReviewingPane: ToggleReviewPane,
+            isReviewingPaneVisible: () => _reviewPaneVisible,
+            onAcceptThisChange: AcceptSelectedRevision,
+            onRejectThisChange: RejectSelectedRevision,
+            onPreviousChange: () => StepRevision(-1),
+            onNextChange: () => StepRevision(+1));
         _file = new FileCommands(this, editor, UpdateTitle, _options);
-        editor.TextChanged += (_, _) => { _file.MarkDirty(); UpdateCounts(); RefreshOutline(); RefreshContextualTabs(); };
+        editor.TextChanged += (_, _) => { _file.MarkDirty(); UpdateCounts(); RefreshOutline(); RefreshContextualTabs(); RefreshReviewPane(); };
         // Live selection stats: when the caret/selection moves, refresh the status-bar counts so a
         // non-empty selection shows its own word/character totals (and reverts when nothing is selected).
         // Also re-evaluate which contextual "Tools" tabs apply to the new selection.
@@ -248,6 +267,12 @@ public sealed class MainWindow : Window
         var revealPane = BuildRevealPane();
         DockPanel.SetDock(revealPane, Dock.Right);
         body.Children.Add(revealPane);
+
+        // Reviewing Pane also docks on the RIGHT (Word's side for the revisions list). Added before the
+        // fill child so the DockPanel reserves its edge; only one of reveal/review is typically open.
+        var reviewPane = BuildReviewPane();
+        DockPanel.SetDock(reviewPane, Dock.Right);
+        body.Children.Add(reviewPane);
 
         // Grey "workspace" behind the editor so the Print-Layout page reads as a white sheet floating on a
         // desk. The editor sizes/centres itself to the page width in Print-Layout mode (see
@@ -950,6 +975,197 @@ public sealed class MainWindow : Window
         }
     }
 
+    // The Reviewing Pane: a header, an Accept/Reject/Prev/Next toolbar, a status line ("N changes"), and a
+    // scrollable list of every tracked change (author • type, plus the affected text). Collapsed by default;
+    // ToggleReviewPane shows/hides it. Selecting an entry jumps the editor to that change (click-to-navigate)
+    // and the toolbar acts on the SELECTED single revision. Content is rebuilt from the pure RevisionList
+    // (see RefreshReviewPane), so the pane never owns revision logic. Mirrors BuildRevealPane's dock/chrome.
+    private UIElement BuildReviewPane()
+    {
+        var header = new TextBlock
+        {
+            Text = "Revisions",
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(10, 8, 10, 6)
+        };
+
+        Button MakeButton(string text, string tip, System.Action onClick)
+        {
+            var button = new Button
+            {
+                Content = text,
+                ToolTip = tip,
+                Padding = new Thickness(8, 2, 8, 2),
+                Margin = new Thickness(0, 0, 4, 0),
+                MinWidth = 28
+            };
+            button.Click += (_, _) => onClick();
+            return button;
+        }
+
+        var toolbar = new WrapPanel { Margin = new Thickness(10, 0, 10, 6) };
+        toolbar.Children.Add(MakeButton("Accept", "Accept the selected change", AcceptSelectedRevision));
+        toolbar.Children.Add(MakeButton("Reject", "Reject the selected change", RejectSelectedRevision));
+        toolbar.Children.Add(MakeButton("▲", "Previous change (jump up)", () => StepRevision(-1)));
+        toolbar.Children.Add(MakeButton("▼", "Next change (jump down)", () => StepRevision(+1)));
+
+        _reviewStatus = new TextBlock
+        {
+            Foreground = new SolidColorBrush(Color.FromRgb(0x60, 0x60, 0x60)),
+            Margin = new Thickness(10, 0, 10, 6)
+        };
+
+        _reviewList = new ListBox
+        {
+            BorderThickness = new Thickness(0),
+            Background = Brushes.Transparent,
+            Margin = new Thickness(4, 0, 4, 8)
+        };
+        // Selecting an entry navigates the editor to that change (click-to-navigate).
+        _reviewList.SelectionChanged += (_, _) =>
+        {
+            var index = _reviewList.SelectedIndex;
+            if (index >= 0 && index < _reviewEntries.Count)
+                _editor.NavigateToRevision(_reviewEntries[index]);
+        };
+
+        var layout = new DockPanel { Width = 260 };
+        DockPanel.SetDock(header, Dock.Top);
+        DockPanel.SetDock(toolbar, Dock.Top);
+        DockPanel.SetDock(_reviewStatus, Dock.Top);
+        layout.Children.Add(header);
+        layout.Children.Add(toolbar);
+        layout.Children.Add(_reviewStatus);
+        layout.Children.Add(_reviewList);
+
+        _reviewPane = new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(0xFA, 0xFA, 0xFA)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xD0, 0xD0, 0xD0)),
+            BorderThickness = new Thickness(1, 0, 0, 0),
+            Visibility = Visibility.Collapsed,
+            Child = layout
+        };
+        return _reviewPane;
+    }
+
+    // Show/hide the Reviewing Pane and keep the Review > Reviewing Pane toggle button in sync. Rebuilds the
+    // list when it appears so it reflects the current document immediately.
+    private void ToggleReviewPane()
+    {
+        _reviewPaneVisible = !_reviewPaneVisible;
+        _reviewPane.Visibility = _reviewPaneVisible ? Visibility.Visible : Visibility.Collapsed;
+        _stateStore.SetChecked("freew.reviewing-pane", _reviewPaneVisible);
+        if (_reviewPaneVisible)
+            RefreshReviewPane();
+    }
+
+    // Rebuild the Reviewing Pane's list from the document's tracked changes (the pure RevisionList via
+    // DocumentView.ListRevisions). No-op when the pane is hidden, so editing churn while it is closed costs
+    // nothing. Tries to preserve the selected position so Accept/Reject keeps focus on the next change.
+    private void RefreshReviewPane()
+    {
+        if (_reviewList is null || !_reviewPaneVisible)
+            return;
+
+        var previousIndex = _reviewList.SelectedIndex;
+        _reviewEntries = _editor.ListRevisions();
+
+        _reviewList.Items.Clear();
+        foreach (var entry in _reviewEntries)
+            _reviewList.Items.Add(BuildRevisionItem(entry));
+
+        _reviewStatus.Text = _reviewEntries.Count switch
+        {
+            0 => "No tracked changes",
+            1 => "1 change",
+            var n => $"{n} changes"
+        };
+
+        if (_reviewEntries.Count == 0)
+            return;
+        // Keep the cursor near where it was (the change that slid into the resolved slot, or the last one).
+        var next = previousIndex < 0 ? 0 : System.Math.Min(previousIndex, _reviewEntries.Count - 1);
+        _reviewList.SelectedIndex = next;
+    }
+
+    // One reviewing-pane row: a bold "Author • Type" caption over the affected text (wrapped, dimmed).
+    private static UIElement BuildRevisionItem(RevisionEntry entry)
+    {
+        var verb = entry.Kind switch
+        {
+            RevisionEntryKind.Insertion => "Inserted",
+            RevisionEntryKind.Deletion => "Deleted",
+            _ => "Formatted"
+        };
+        var author = string.IsNullOrWhiteSpace(entry.Author) ? "Unknown" : entry.Author;
+
+        var panel = new StackPanel { Margin = new Thickness(6, 4, 6, 4) };
+        panel.Children.Add(new TextBlock
+        {
+            Text = $"{author} • {verb}",
+            FontWeight = FontWeights.SemiBold,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x17, 0x32, 0x4D))
+        });
+        var preview = entry.Text.Replace("\r", " ").Replace("\n", " ").Trim();
+        if (preview.Length > 0)
+            panel.Children.Add(new TextBlock
+            {
+                Text = preview,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x50, 0x50, 0x50))
+            });
+        return panel;
+    }
+
+    // Accept the single revision selected in the Reviewing Pane, then rebuild the list (which slides the
+    // selection onto the next pending change). No-op when nothing is selected.
+    private void AcceptSelectedRevision()
+    {
+        var index = _reviewList.SelectedIndex;
+        if (index < 0 || index >= _reviewEntries.Count)
+            return;
+        if (_editor.AcceptRevision(_reviewEntries[index]))
+        {
+            _file.MarkDirty();
+            UpdateCounts();
+        }
+        RefreshReviewPane();
+    }
+
+    // Reject the single revision selected in the Reviewing Pane, then rebuild the list.
+    private void RejectSelectedRevision()
+    {
+        var index = _reviewList.SelectedIndex;
+        if (index < 0 || index >= _reviewEntries.Count)
+            return;
+        if (_editor.RejectRevision(_reviewEntries[index]))
+        {
+            _file.MarkDirty();
+            UpdateCounts();
+        }
+        RefreshReviewPane();
+    }
+
+    // Previous/Next change: step the selection through the list (and so navigate the editor, via the list's
+    // SelectionChanged handler). Opens the pane first if it is closed. Wraps at the ends.
+    private void StepRevision(int direction)
+    {
+        if (!_reviewPaneVisible)
+            ToggleReviewPane();
+        else
+            RefreshReviewPane();
+        if (_reviewEntries.Count == 0)
+            return;
+
+        var current = _reviewList.SelectedIndex;
+        var next = current < 0
+            ? (direction > 0 ? 0 : _reviewEntries.Count - 1)
+            : (current + direction + _reviewEntries.Count) % _reviewEntries.Count;
+        _reviewList.SelectedIndex = next;
+        _reviewList.ScrollIntoView(_reviewList.SelectedItem);
+    }
+
     // Read mode (distraction-free view): hide the ribbon, title bar, navigation pane, and the status
     // bar's non-essential extras (data folder + zoom), then constrain the editor to a centered, roomy
     // reading column. Toggling off restores every hidden element to exactly what it was before (including
@@ -982,6 +1198,10 @@ public sealed class MainWindow : Window
             _revealPaneVisibleBeforeReadMode = _revealPaneVisible;
             _revealPane.Visibility = Visibility.Collapsed;
 
+            // And hide the Reviewing Pane while reading (its remembered state is untouched).
+            _reviewPaneVisibleBeforeReadMode = _reviewPaneVisible;
+            _reviewPane.Visibility = Visibility.Collapsed;
+
             // A centered, comfortable reading column: cap the width and add generous breathing room.
             // Drop any Print-Layout page sizing/shadow so the reading column owns the surface width.
             _editor.HorizontalAlignment = HorizontalAlignment.Center;
@@ -1010,6 +1230,9 @@ public sealed class MainWindow : Window
 
             // Restore the Reveal Formatting pane to whatever it was before entering read mode.
             _revealPane.Visibility = _revealPaneVisibleBeforeReadMode ? Visibility.Visible : Visibility.Collapsed;
+
+            // Restore the Reviewing Pane to whatever it was before entering read mode.
+            _reviewPane.Visibility = _reviewPaneVisibleBeforeReadMode ? Visibility.Visible : Visibility.Collapsed;
         }
 
         _stateStore.SetChecked("freew.read-mode", _readMode);

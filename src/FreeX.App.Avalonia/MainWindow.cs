@@ -891,6 +891,10 @@ public sealed partial class MainWindow : Window
                     // Dropdown parent buttons apply a sensible default (their menu items remain individually wired).
                     ["home.borders"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.All),
                     ["home.accounting"] = ApplySelectedRangeCurrencyFormat,
+                    ["Accounting Number Format US Dollar"] = () => ApplySelectedRangeAccountingFormat("$"),
+                    ["Accounting Number Format Euro"] = () => ApplySelectedRangeAccountingFormat("\u20AC"),
+                    ["Accounting Number Format British Pound"] = () => ApplySelectedRangeAccountingFormat("\u00A3"),
+                    ["Accounting Number Format Japanese Yen"] = () => ApplySelectedRangeAccountingFormat("\u00A5"),
                     ["home.fontColor"] = () => ApplySelectedRangeFontColor(new CellColor(0, 0, 0)),
                     ["home.fillColor"] = () => ApplySelectedRangeFillColor(new CellColor(255, 235, 132)),
                     ["home.numberFormat"] = () => _ = ShowFormatCellsDialogAsync(),
@@ -969,9 +973,7 @@ public sealed partial class MainWindow : Window
                     ["Draw Border Grid"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.All),
                     ["Erase Border"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.NoBorder),
 
-                    // Home ▸ Number ▸ Accounting dropdown. Euro/Pound/Yen share the single canonical id
-                    // "Accounting Number Format" in the shared def (already wired to home.accounting / USD),
-                    // so they cannot be distinctly bound from here without a ribbon-def change.
+                    // Home ▸ Number ▸ Accounting dropdown.
                     ["More Accounting Formats"] = () => _ = ShowFormatCellsDialogAsync(),
 
                     // Home ▸ Styles ▸ Conditional Formatting ▸ Highlight Cells Rules detail items.
@@ -1327,43 +1329,43 @@ public sealed partial class MainWindow : Window
 
     private void ConfigureNativeMenu()
     {
-        _newWorkbookMenuItem.Header = "New Workbook";
+        _newWorkbookMenuItem.Header = UiText.Get("AvaloniaNativeMenu_NewWorkbook");
         _newWorkbookMenuItem.Gesture = new KeyGesture(Key.N, KeyModifiers.Meta);
         _newWorkbookMenuItem.Click += (_, _) => CreateNewWorkbook();
 
-        _openMenuItem.Header = "Open...";
+        _openMenuItem.Header = UiText.Get("AvaloniaNativeMenu_Open");
         _openMenuItem.Gesture = new KeyGesture(Key.O, KeyModifiers.Meta);
         _openMenuItem.Click += async (_, _) => await OpenWorkbookAsync();
 
-        _openRecentMenuItem.Header = "Open Recent";
+        _openRecentMenuItem.Header = UiText.Get("AvaloniaNativeMenu_OpenRecent");
         _openRecentMenuItem.Menu = CreateNativeOpenRecentMenu(isIdle: true);
 
-        _saveMenuItem.Header = "Save";
+        _saveMenuItem.Header = UiText.Get("AvaloniaNativeMenu_Save");
         _saveMenuItem.Gesture = new KeyGesture(Key.S, KeyModifiers.Meta);
         _saveMenuItem.Click += async (_, _) => await SaveCurrentWorkbookAsync();
 
-        _saveAsMenuItem.Header = "Save As...";
+        _saveAsMenuItem.Header = UiText.Get("AvaloniaNativeMenu_SaveAs");
         _saveAsMenuItem.Gesture = new KeyGesture(Key.S, KeyModifiers.Meta | KeyModifiers.Shift);
         _saveAsMenuItem.Click += async (_, _) => await SaveWorkbookAsAsync();
 
-        _exportPdfMenuItem.Header = "Export to PDF...";
+        _exportPdfMenuItem.Header = UiText.Get("AvaloniaNativeMenu_ExportPdf");
         _exportPdfMenuItem.Click += async (_, _) => await ExportActiveSheetPdfAsync();
 
         _printMenuItem.Header = UiText.Get("Print_MenuItem");
         _printMenuItem.Gesture = new KeyGesture(Key.P, KeyModifiers.Meta);
         _printMenuItem.Click += async (_, _) => await ShowPrintDialogAsync();
 
-        _pageSetupMenuItem.Header = "Page Setup...";
+        _pageSetupMenuItem.Header = UiText.Get("AvaloniaNativeMenu_PageSetup");
         _pageSetupMenuItem.Click += async (_, _) => await ShowPageSetupDialogAsync();
 
-        _printPreviewMenuItem.Header = "Print Preview...";
+        _printPreviewMenuItem.Header = UiText.Get("AvaloniaNativeMenu_PrintPreview");
         _printPreviewMenuItem.Gesture = new KeyGesture(Key.P, KeyModifiers.Meta | KeyModifiers.Shift);
         _printPreviewMenuItem.Click += async (_, _) => await ShowPrintPreviewDialogAsync();
 
-        _shareWorkbookMenuItem.Header = "Share Workbook...";
+        _shareWorkbookMenuItem.Header = UiText.Get("AvaloniaNativeMenu_ShareWorkbook");
         _shareWorkbookMenuItem.Click += async (_, _) => await ShareWorkbookAsync();
 
-        _workbookStatisticsMenuItem.Header = "Workbook Statistics...";
+        _workbookStatisticsMenuItem.Header = UiText.Get("AvaloniaNativeMenu_WorkbookStatistics");
         _workbookStatisticsMenuItem.Gesture = new KeyGesture(Key.G, KeyModifiers.Control | KeyModifiers.Shift);
         _workbookStatisticsMenuItem.Click += async (_, _) => await ShowWorkbookStatisticsDialogAsync();
 
@@ -1380,11 +1382,11 @@ public sealed partial class MainWindow : Window
         _optionsMenuItem.Gesture = new KeyGesture(Key.OemComma, KeyModifiers.Meta);
         _optionsMenuItem.Click += (_, _) => ShowOptions();
 
-        _closeWorkbookMenuItem.Header = "Close Workbook";
+        _closeWorkbookMenuItem.Header = UiText.Get("AvaloniaNativeMenu_CloseWorkbook");
         _closeWorkbookMenuItem.Gesture = new KeyGesture(Key.W, KeyModifiers.Meta);
         _closeWorkbookMenuItem.Click += async (_, _) => await CloseWorkbookAsync();
 
-        _newSheetMenuItem.Header = "New Sheet";
+        _newSheetMenuItem.Header = UiText.Get("AvaloniaNativeMenu_NewSheet");
         _newSheetMenuItem.Gesture = new KeyGesture(Key.F11, KeyModifiers.Shift);
         _newSheetMenuItem.Click += (_, _) => AddNewSheet();
 
@@ -14579,17 +14581,17 @@ public sealed partial class MainWindow : Window
             HasNativeSheetMenu: hasNativeSheetMenu,
             HasNativeWindowMenu: hasNativeWindowMenu,
             HasNativeHelpMenu: hasNativeHelpMenu,
-            HasNativeNewWorkbookMenuItem: HasNativeMenuItem(_newWorkbookMenuItem, "New Workbook"),
-            HasNativeOpenMenuItem: HasNativeMenuItem(_openMenuItem, "Open..."),
-            HasNativeOpenRecentMenuItem: HasNativeMenuItem(_openRecentMenuItem, "Open Recent", requireGesture: false),
+            HasNativeNewWorkbookMenuItem: HasNativeMenuItem(_newWorkbookMenuItem, UiText.Get("AvaloniaNativeMenu_NewWorkbook")),
+            HasNativeOpenMenuItem: HasNativeMenuItem(_openMenuItem, UiText.Get("AvaloniaNativeMenu_Open")),
+            HasNativeOpenRecentMenuItem: HasNativeMenuItem(_openRecentMenuItem, UiText.Get("AvaloniaNativeMenu_OpenRecent"), requireGesture: false),
             NativeOpenRecentItemCount: nativeOpenRecentItemCount,
-            HasNativeSaveMenuItem: HasNativeMenuItem(_saveMenuItem, "Save"),
-            HasNativeSaveAsMenuItem: HasNativeMenuItem(_saveAsMenuItem, "Save As..."),
-            HasNativeExportPdfMenuItem: HasNativeMenuItem(_exportPdfMenuItem, "Export to PDF...", requireGesture: false),
-            HasNativeShareWorkbookMenuItem: HasEnabledNativeMenuItem(_shareWorkbookMenuItem, "Share Workbook...", requireGesture: false),
-            HasNativeWorkbookStatisticsMenuItem: HasNativeMenuItem(_workbookStatisticsMenuItem, "Workbook Statistics..."),
-            HasNativeCloseWorkbookMenuItem: HasNativeMenuItem(_closeWorkbookMenuItem, "Close Workbook"),
-            HasNativeNewSheetMenuItem: HasNativeMenuItem(_newSheetMenuItem, "New Sheet"),
+            HasNativeSaveMenuItem: HasNativeMenuItem(_saveMenuItem, UiText.Get("AvaloniaNativeMenu_Save")),
+            HasNativeSaveAsMenuItem: HasNativeMenuItem(_saveAsMenuItem, UiText.Get("AvaloniaNativeMenu_SaveAs")),
+            HasNativeExportPdfMenuItem: HasNativeMenuItem(_exportPdfMenuItem, UiText.Get("AvaloniaNativeMenu_ExportPdf"), requireGesture: false),
+            HasNativeShareWorkbookMenuItem: HasEnabledNativeMenuItem(_shareWorkbookMenuItem, UiText.Get("AvaloniaNativeMenu_ShareWorkbook"), requireGesture: false),
+            HasNativeWorkbookStatisticsMenuItem: HasNativeMenuItem(_workbookStatisticsMenuItem, UiText.Get("AvaloniaNativeMenu_WorkbookStatistics")),
+            HasNativeCloseWorkbookMenuItem: HasNativeMenuItem(_closeWorkbookMenuItem, UiText.Get("AvaloniaNativeMenu_CloseWorkbook")),
+            HasNativeNewSheetMenuItem: HasNativeMenuItem(_newSheetMenuItem, UiText.Get("AvaloniaNativeMenu_NewSheet")),
             HasNativeRenameSheetMenuItem: HasNativeMenuItem(_renameSheetMenuItem, "Rename Sheet...", requireGesture: false),
             HasNativeDuplicateSheetMenuItem: HasNativeMenuItem(_duplicateSheetMenuItem, "Duplicate Sheet", requireGesture: false),
             HasNativeMoveSheetLeftMenuItem: HasNativeMenuItem(_moveSheetLeftMenuItem, "Move Sheet Left", requireGesture: false),
@@ -15912,145 +15914,180 @@ public sealed partial class MainWindow : Window
 
     private async Task SaveWorkbookAsAsync()
     {
-        if (_isSaving)
+        if (!TryBeginFileOperation())
             return;
 
-        if (!TryCommitPendingFormulaEdit())
-            return;
-
-        if (!StorageProvider.CanSave)
+        try
         {
-            ShowSaveIssue("Save As unavailable on this platform.");
-            return;
-        }
+            if (!TryCommitPendingFormulaEdit())
+                return;
 
-        var fileTypes = BuildSaveFileTypes();
-        if (fileTypes.Count == 0)
-        {
-            ShowSaveIssue("No save formats are available.");
-            return;
-        }
-
-        var storageFile = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
-        {
-            Title = "Save Workbook",
-            SuggestedFileName = _session.BuildSuggestedSaveAsFileName(NativeWorkbookExtension),
-            DefaultExtension = NativeWorkbookExtension[1..],
-            FileTypeChoices = fileTypes,
-            SuggestedFileType = fileTypes[0],
-            ShowOverwritePrompt = true,
-        });
-
-        if (storageFile is null)
-            return;
-
-        using (storageFile)
-        {
-            var path = storageFile.TryGetLocalPath();
-            if (string.IsNullOrWhiteSpace(path))
+            if (!StorageProvider.CanSave)
             {
-                ShowSaveIssue("Save As requires a local file path.");
+                ShowSaveIssue("Save As unavailable on this platform.");
                 return;
             }
 
-            path = WorkbookSession.EnsureSaveExtension(path, NativeWorkbookExtension);
-            if (!_session.TryResolveSaveTarget(path, out var target, out var message))
+            var fileTypes = BuildSaveFileTypes();
+            if (fileTypes.Count == 0)
             {
-                ShowSaveIssue(message);
+                ShowSaveIssue("No save formats are available.");
                 return;
             }
 
-            var fileAccessIdentity = await _workbookFileAccessService.CreateIdentityAsync(path, storageFile);
-            await SaveWorkbookToTargetAsync(target!, fileAccessIdentity);
+            var storageFile = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+            {
+                Title = "Save Workbook",
+                SuggestedFileName = _session.BuildSuggestedSaveAsFileName(NativeWorkbookExtension),
+                DefaultExtension = NativeWorkbookExtension[1..],
+                FileTypeChoices = fileTypes,
+                SuggestedFileType = fileTypes[0],
+                ShowOverwritePrompt = true,
+            });
+
+            if (storageFile is null)
+                return;
+
+            using (storageFile)
+            {
+                var path = storageFile.TryGetLocalPath();
+                if (string.IsNullOrWhiteSpace(path))
+                {
+                    ShowSaveIssue("Save As requires a local file path.");
+                    return;
+                }
+
+                var requestedPath = path;
+                path = WorkbookSession.EnsureSaveExtension(path, NativeWorkbookExtension);
+                if (ShouldPromptForNormalizedWorkbookOverwrite(requestedPath, path) &&
+                    !await ConfirmNormalizedWorkbookOverwriteAsync(path))
+                {
+                    ShowSaveIssue("Save canceled.");
+                    return;
+                }
+
+                if (!_session.TryResolveSaveTarget(path, out var target, out var message))
+                {
+                    ShowSaveIssue(message);
+                    return;
+                }
+
+                var fileAccessIdentity = await _workbookFileAccessService.CreateIdentityAsync(path, storageFile);
+                await SaveWorkbookToTargetAsync(target!, fileAccessIdentity);
+            }
+        }
+        finally
+        {
+            EndFileOperation();
         }
     }
 
     private async Task ExportActiveSheetPdfAsync()
     {
-        if (_isSaving)
+        if (!TryBeginFileOperation())
             return;
 
-        if (!TryCommitPendingFormulaEdit())
-            return;
-
-        if (!StorageProvider.CanSave)
+        try
         {
-            ShowExportIssue(UiText.Get("MainLoc_PdfExportUnavailable"));
-            return;
-        }
+            if (!TryCommitPendingFormulaEdit())
+                return;
 
-        var pdfFileType = new FilePickerFileType("PDF Document")
-        {
-            Patterns = ["*.pdf"],
-        };
-        var storageFile = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
-        {
-            Title = "Export to PDF",
-            SuggestedFileName = BuildSuggestedPdfExportFileName(),
-            DefaultExtension = "pdf",
-            FileTypeChoices = [pdfFileType],
-            SuggestedFileType = pdfFileType,
-            ShowOverwritePrompt = true,
-        });
-
-        if (storageFile is null)
-            return;
-
-        using (storageFile)
-        {
-            var path = storageFile.TryGetLocalPath();
-            if (string.IsNullOrWhiteSpace(path))
+            if (!StorageProvider.CanSave)
             {
-                ShowExportIssue(UiText.Get("MainLoc_PdfExportRequiresLocalPath"));
+                ShowExportIssue(UiText.Get("MainLoc_PdfExportUnavailable"));
                 return;
             }
 
-            var requestedPath = path;
-            var exportPathPlan = ExportPathPlanner.Plan(requestedPath, ExportFileFormat.Pdf);
-            if (ExportPathPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, exportPathPlan, File.Exists) &&
-                !await ConfirmNormalizedPdfOverwriteAsync(exportPathPlan.Path))
+            var pdfFileType = new FilePickerFileType("PDF Document")
             {
-                ShowExportIssue(UiText.Get("MainLoc_PdfExportCanceled"));
+                Patterns = ["*.pdf"],
+            };
+            var storageFile = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+            {
+                Title = "Export to PDF",
+                SuggestedFileName = BuildSuggestedPdfExportFileName(),
+                DefaultExtension = "pdf",
+                FileTypeChoices = [pdfFileType],
+                SuggestedFileType = pdfFileType,
+                ShowOverwritePrompt = true,
+            });
+
+            if (storageFile is null)
                 return;
-            }
 
-            path = exportPathPlan.Path;
-            _isSaving = true;
-            UpdateSaveButton();
-            try
+            using (storageFile)
             {
-                _statusText.Text = "Exporting PDF...";
-                _statusText.Foreground = Brush(67, 113, 83);
-
-                var exportPrintPlan = CreateActiveSheetPortablePdfPrintPlan();
-                var exportPlan = PortablePdfExportPlanner.CreatePlan(exportPrintPlan);
-                if (!exportPlan.IsReady)
+                var path = storageFile.TryGetLocalPath();
+                if (string.IsNullOrWhiteSpace(path))
                 {
-                    ShowExportIssue(exportPlan.StatusText);
+                    ShowExportIssue(UiText.Get("MainLoc_PdfExportRequiresLocalPath"));
                     return;
                 }
 
-                // Prefer the Unicode-capable Skia writer (shapes + auto-embeds/subsets fonts), and
-                // fall back to the dependency-free WinAnsi writer when Skia is unavailable
-                // (headless/no-Skia). The routing decision lives in AvaloniaPdfDocumentExporter so it
-                // is exercised by tests.
-                using var pdfBuffer = new MemoryStream();
-                var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, exportPlan, pdfBuffer);
-                await File.WriteAllBytesAsync(path, pdfBuffer.ToArray());
+                var requestedPath = path;
+                var exportPathPlan = ExportPathPlanner.Plan(requestedPath, ExportFileFormat.Pdf);
+                if (ExportPathPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, exportPathPlan, File.Exists) &&
+                    !await ConfirmNormalizedPdfOverwriteAsync(exportPathPlan.Path))
+                {
+                    ShowExportIssue(UiText.Get("MainLoc_PdfExportCanceled"));
+                    return;
+                }
 
-                RefreshShell(UiText.Format("MainLoc_StatusFileName", outcome.Result.StatusText, Path.GetFileName(path)));
-            }
-            catch (Exception ex)
-            {
-                ShowExportIssue(UiText.Format("MainLoc_PdfExportFailed", ex.Message));
-            }
-            finally
-            {
-                _isSaving = false;
-                UpdateSaveButton();
+                path = exportPathPlan.Path;
+                try
+                {
+                    _statusText.Text = "Exporting PDF...";
+                    _statusText.Foreground = Brush(67, 113, 83);
+
+                    var exportPrintPlan = CreateActiveSheetPortablePdfPrintPlan();
+                    var exportPlan = PortablePdfExportPlanner.CreatePlan(exportPrintPlan);
+                    if (!exportPlan.IsReady)
+                    {
+                        ShowExportIssue(exportPlan.StatusText);
+                        return;
+                    }
+
+                    // Prefer the Unicode-capable Skia writer (shapes + auto-embeds/subsets fonts), and
+                    // fall back to the dependency-free WinAnsi writer when Skia is unavailable
+                    // (headless/no-Skia). The routing decision lives in AvaloniaPdfDocumentExporter so it
+                    // is exercised by tests.
+                    using var pdfBuffer = new MemoryStream();
+                    var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, exportPlan, pdfBuffer);
+                    await File.WriteAllBytesAsync(path, pdfBuffer.ToArray());
+
+                    RefreshShell(UiText.Format("MainLoc_StatusFileName", outcome.Result.StatusText, Path.GetFileName(path)));
+                }
+                catch (Exception ex)
+                {
+                    ShowExportIssue(UiText.Format("MainLoc_PdfExportFailed", ex.Message));
+                }
             }
         }
+        finally
+        {
+            EndFileOperation();
+        }
     }
+
+    private bool TryBeginFileOperation()
+    {
+        if (_isOpening || _isSaving)
+            return false;
+
+        _isSaving = true;
+        UpdateSaveButton();
+        return true;
+    }
+
+    private void EndFileOperation()
+    {
+        _isSaving = false;
+        UpdateSaveButton();
+    }
+
+    private static bool ShouldPromptForNormalizedWorkbookOverwrite(string requestedPath, string normalizedPath) =>
+        !string.Equals(Path.GetFullPath(requestedPath), Path.GetFullPath(normalizedPath), StringComparison.OrdinalIgnoreCase)
+        && File.Exists(normalizedPath);
 
     private async Task<bool> ConfirmNormalizedPdfOverwriteAsync(string normalizedPath)
     {
@@ -16150,6 +16187,104 @@ public sealed partial class MainWindow : Window
         return shouldReplace;
     }
 
+    private async Task<bool> ConfirmNormalizedWorkbookOverwriteAsync(string normalizedPath)
+    {
+        var fileName = Path.GetFileName(normalizedPath);
+        if (string.IsNullOrWhiteSpace(fileName))
+            fileName = normalizedPath;
+
+        var dialog = new Window
+        {
+            Title = "Replace workbook?",
+            Width = 460,
+            Height = 210,
+            MinWidth = 420,
+            MinHeight = 200,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+
+        var titleText = new TextBlock
+        {
+            Text = $"{fileName} already exists.",
+            FontSize = 16,
+            FontWeight = FontWeight.SemiBold,
+            TextWrapping = TextWrapping.Wrap,
+        };
+        var detailText = new TextBlock
+        {
+            Text = "FreeX changed the selected file name to use the workbook extension. Replace the existing workbook?",
+            Foreground = HeaderForeground,
+            TextWrapping = TextWrapping.Wrap,
+        };
+
+        var replaceButton = new Button
+        {
+            Content = "Replace",
+            MinWidth = 92,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(replaceButton, "WorkbookSaveOverwriteReplaceButton");
+        AutomationProperties.SetName(replaceButton, "Replace");
+        AutomationProperties.SetHelpText(replaceButton, "Replace the existing normalized workbook file.");
+
+        var cancelButton = new Button
+        {
+            Content = "Cancel",
+            MinWidth = 92,
+            Padding = new Thickness(10, 4),
+            IsCancel = true,
+        };
+        AutomationProperties.SetAutomationId(cancelButton, "WorkbookSaveOverwriteCancelButton");
+        AutomationProperties.SetName(cancelButton, "Cancel");
+        AutomationProperties.SetHelpText(cancelButton, "Return without saving the workbook.");
+
+        var shouldReplace = false;
+        void Finish(bool value)
+        {
+            shouldReplace = value;
+            dialog.Close();
+        }
+
+        replaceButton.Click += (_, _) => Finish(true);
+        cancelButton.Click += (_, _) => Finish(false);
+        dialog.Opened += (_, _) => cancelButton.Focus();
+        dialog.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Escape)
+            {
+                Finish(false);
+                e.Handled = true;
+            }
+        };
+
+        dialog.Content = new StackPanel
+        {
+            Margin = new Thickness(18),
+            Spacing = 12,
+            Children =
+            {
+                titleText,
+                detailText,
+                new Border { Height = 10 },
+                new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 8,
+                    HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+                    Children =
+                    {
+                        cancelButton,
+                        replaceButton,
+                    },
+                },
+            },
+        };
+
+        await dialog.ShowDialog(this);
+        return shouldReplace;
+    }
+
     private WorkbookExportPrintPlan CreateActiveSheetPortablePdfPrintPlan() =>
         WorkbookExportPrintPlanner.CreatePlan(
             _session.Workbook,
@@ -16171,81 +16306,81 @@ public sealed partial class MainWindow : Window
         WorkbookExportPrintScope scope,
         WorkbookExportPrintOutputKind outputKind)
     {
-        if (_isSaving)
+        if (!TryBeginFileOperation())
             return;
 
-        if (!StorageProvider.CanSave)
+        try
         {
-            ShowExportIssue(UiText.Get("MainLoc_PdfExportUnavailable"));
-            return;
-        }
-
-        var pdfFileType = new FilePickerFileType("PDF Document")
-        {
-            Patterns = ["*.pdf"],
-        };
-        var storageFile = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
-        {
-            Title = "Export to PDF",
-            SuggestedFileName = BuildSuggestedPdfExportFileName(),
-            DefaultExtension = "pdf",
-            FileTypeChoices = [pdfFileType],
-            SuggestedFileType = pdfFileType,
-            ShowOverwritePrompt = true,
-        });
-
-        if (storageFile is null)
-            return;
-
-        using (storageFile)
-        {
-            var path = storageFile.TryGetLocalPath();
-            if (string.IsNullOrWhiteSpace(path))
+            if (!StorageProvider.CanSave)
             {
-                ShowExportIssue(UiText.Get("MainLoc_PdfExportRequiresLocalPath"));
+                ShowExportIssue(UiText.Get("MainLoc_PdfExportUnavailable"));
                 return;
             }
 
-            var requestedPath = path;
-            var exportPathPlan = ExportPathPlanner.Plan(requestedPath, ExportFileFormat.Pdf);
-            if (ExportPathPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, exportPathPlan, File.Exists) &&
-                !await ConfirmNormalizedPdfOverwriteAsync(exportPathPlan.Path))
+            var pdfFileType = new FilePickerFileType("PDF Document")
             {
-                ShowExportIssue(UiText.Get("MainLoc_PdfExportCanceled"));
+                Patterns = ["*.pdf"],
+            };
+            var storageFile = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+            {
+                Title = "Export to PDF",
+                SuggestedFileName = BuildSuggestedPdfExportFileName(),
+                DefaultExtension = "pdf",
+                FileTypeChoices = [pdfFileType],
+                SuggestedFileType = pdfFileType,
+                ShowOverwritePrompt = true,
+            });
+
+            if (storageFile is null)
                 return;
-            }
 
-            path = exportPathPlan.Path;
-            _isSaving = true;
-            UpdateSaveButton();
-            try
+            using (storageFile)
             {
-                _statusText.Text = "Exporting PDF...";
-                _statusText.Foreground = Brush(67, 113, 83);
-
-                var exportPrintPlan = CreateScopedPortablePdfPrintPlan(scope, outputKind);
-                var exportPlan = PortablePdfExportPlanner.CreatePlan(exportPrintPlan);
-                if (!exportPlan.IsReady)
+                var path = storageFile.TryGetLocalPath();
+                if (string.IsNullOrWhiteSpace(path))
                 {
-                    ShowExportIssue(exportPlan.StatusText);
+                    ShowExportIssue(UiText.Get("MainLoc_PdfExportRequiresLocalPath"));
                     return;
                 }
 
-                using var pdfBuffer = new MemoryStream();
-                var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, exportPlan, pdfBuffer);
-                await File.WriteAllBytesAsync(path, pdfBuffer.ToArray());
+                var requestedPath = path;
+                var exportPathPlan = ExportPathPlanner.Plan(requestedPath, ExportFileFormat.Pdf);
+                if (ExportPathPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, exportPathPlan, File.Exists) &&
+                    !await ConfirmNormalizedPdfOverwriteAsync(exportPathPlan.Path))
+                {
+                    ShowExportIssue(UiText.Get("MainLoc_PdfExportCanceled"));
+                    return;
+                }
 
-                RefreshShell(UiText.Format("MainLoc_StatusFileName", outcome.Result.StatusText, Path.GetFileName(path)));
+                path = exportPathPlan.Path;
+                try
+                {
+                    _statusText.Text = "Exporting PDF...";
+                    _statusText.Foreground = Brush(67, 113, 83);
+
+                    var exportPrintPlan = CreateScopedPortablePdfPrintPlan(scope, outputKind);
+                    var exportPlan = PortablePdfExportPlanner.CreatePlan(exportPrintPlan);
+                    if (!exportPlan.IsReady)
+                    {
+                        ShowExportIssue(exportPlan.StatusText);
+                        return;
+                    }
+
+                    using var pdfBuffer = new MemoryStream();
+                    var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, exportPlan, pdfBuffer);
+                    await File.WriteAllBytesAsync(path, pdfBuffer.ToArray());
+
+                    RefreshShell(UiText.Format("MainLoc_StatusFileName", outcome.Result.StatusText, Path.GetFileName(path)));
+                }
+                catch (Exception ex)
+                {
+                    ShowExportIssue(UiText.Format("MainLoc_PdfExportFailed", ex.Message));
+                }
             }
-            catch (Exception ex)
-            {
-                ShowExportIssue(UiText.Format("MainLoc_PdfExportFailed", ex.Message));
-            }
-            finally
-            {
-                _isSaving = false;
-                UpdateSaveButton();
-            }
+        }
+        finally
+        {
+            EndFileOperation();
         }
     }
 

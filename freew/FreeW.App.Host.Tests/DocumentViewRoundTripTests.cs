@@ -94,6 +94,42 @@ public sealed class DocumentViewRoundTripTests
     }
 
     [StaFact]
+    public void RichInlineHyperlinks_RoundTripThroughView()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var para = new Paragraph();
+        para.Runs.Add(Linked(Run.FromImage(new InlineImage(OnePixelPng(), 24, 24) { AltText = "linked image" })));
+        para.Runs.Add(Linked(Run.FromShape(new Shape(ShapeKind.Rectangle, 40, 20))));
+        para.Runs.Add(Linked(Run.FromChart(Chart.Create(ChartKind.Column, ["Q1"], [1.0]))));
+        para.Runs.Add(Linked(Run.FromWordArt(WordArt.Create("Banner", WordArtStyle.GradientFill))));
+        para.Runs.Add(Linked(Run.FromEquation(Equation.FromText("x + y"))));
+        para.Runs.Add(Linked(Run.FromSmartArt(SmartArt.Create(SmartArtKind.Process, ["One", "Two"]))));
+        para.Runs.Add(Linked(Run.FromEmbeddedObject(EmbeddedObject.Create([1, 2, 3], "Package"))));
+        doc.Blocks.Add(para);
+
+        var result = RoundTrip(doc);
+
+        var runs = ((Paragraph)result.Blocks[0]).Runs;
+        runs.Should().HaveCount(7);
+        runs.Should().OnlyContain(r => r.HyperlinkUrl == "https://example.com/rich" && r.HyperlinkTooltip == "Open rich object");
+        runs.Count(r => r.Image is not null).Should().Be(1);
+        runs.Count(r => r.Shape is not null).Should().Be(1);
+        runs.Count(r => r.Chart is not null).Should().Be(1);
+        runs.Count(r => r.WordArt is not null).Should().Be(1);
+        runs.Count(r => r.Equation is not null).Should().Be(1);
+        runs.Count(r => r.SmartArt is not null).Should().Be(1);
+        runs.Count(r => r.EmbeddedObject is not null).Should().Be(1);
+
+        static Run Linked(Run run)
+        {
+            run.HyperlinkUrl = "https://example.com/rich";
+            run.HyperlinkTooltip = "Open rich object";
+            return run;
+        }
+    }
+
+    [StaFact]
     public void BulletList_RoundTrips()
     {
         var doc = TextDocument.CreateEmpty();
