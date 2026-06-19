@@ -72,18 +72,10 @@ public sealed class FreeWDiagnostics
     /// </summary>
     public void RegisterCrashHandlers()
     {
-        if (System.Windows.Application.Current is { } app)
-        {
-            app.DispatcherUnhandledException += (_, args) => RecordCrash(args.Exception, "dispatcher");
-        }
-
-        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
-        {
-            if (args.ExceptionObject is Exception exception)
-                RecordCrash(exception, "appdomain");
-        };
-
-        System.Threading.Tasks.TaskScheduler.UnobservedTaskException += (_, args) =>
-            RecordCrash(args.Exception, "task");
+        AppCrashHandlers.Register(
+            recordCrash: (exception, source) => RecordCrash(exception, source),
+            subscribeDispatcher: System.Windows.Application.Current is { } app
+                ? handler => app.DispatcherUnhandledException += (_, args) => handler(args.Exception)
+                : null);
     }
 }
