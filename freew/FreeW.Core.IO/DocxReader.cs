@@ -2493,7 +2493,9 @@ public static class DocxReader
         var spacing = pPr.Element(W + "spacing");
         var indent = pPr.Element(W + "ind");
         var jc = pPr.Element(W + "jc")?.Attribute(W + "val")?.Value;
-        var shading = pPr.Element(W + "shd")?.Attribute(W + "fill")?.Value;
+        var shd = pPr.Element(W + "shd");
+        var shading = shd?.Attribute(W + "fill")?.Value;
+        var shadingPattern = ShadingPatterns.FromToken(shd?.Attribute(W + "val")?.Value);
 
         // A list paragraph references a numbering definition via pPr/w:numPr (w:numId + w:ilvl).
         // Resolve the numId to a ListKind through numbering.xml; the ilvl becomes the ListLevel.
@@ -2582,6 +2584,7 @@ public static class DocxReader
             SpaceBeforeIsSet = beforeAuto || spacing?.Attribute(W + "before") is not null,
             SpaceAfterIsSet = afterAuto || spacing?.Attribute(W + "after") is not null,
             ShadingColorHex = shading is null or "auto" ? null : "#" + shading.TrimStart('#'),
+            ShadingPattern = shadingPattern,
             Alignment = jc switch
             {
                 "center" => TextAlignment.Center,
@@ -2646,17 +2649,30 @@ public static class DocxReader
 
         var color = edge.Attribute(W + "color")?.Value;
         var width = EighthPointsToPoints(edge.Attribute(W + "sz")?.Value);
+        var lineStyle = BorderLineStyles.FromToken(edge.Attribute(W + "val")?.Value);
+
+        bool Drawn(string name) =>
+            (pBdr.Element(W + name)?.Attribute(W + "val")?.Value ?? "none") is not ("none" or "nil");
+        var top = Drawn("top");
+        var left = Drawn("left");
+        var bottom = Drawn("bottom");
+        var right = Drawn("right");
 
         // A bottom-only rule: the only drawn edge is w:bottom (top/left/right absent or off). This is how
         // CreateHorizontalRule writes itself; recovering the flag keeps the round-trip lossless.
-        bool Drawn(string name) =>
-            (pBdr.Element(W + name)?.Attribute(W + "val")?.Value ?? "none") is not ("none" or "nil");
-        var bottomOnly = Drawn("bottom") && !Drawn("top") && !Drawn("left") && !Drawn("right");
+        var bottomOnly = bottom && !top && !left && !right;
 
         return new ParagraphBorder(
             color is null or "auto" ? "#000000" : "#" + color.TrimStart('#'),
             width > 0 ? width : 0.5,
-            bottomOnly);
+            bottomOnly)
+        {
+            LineStyle = lineStyle,
+            Top = top,
+            Left = left,
+            Bottom = bottom,
+            Right = right,
+        };
     }
 
     /// <summary>Reads a page border (w:pgBorders) into a <see cref="PageBorder"/>, or null if absent/off.</summary>
@@ -2672,10 +2688,14 @@ public static class DocxReader
 
         var color = edge.Attribute(W + "color")?.Value;
         var width = EighthPointsToPoints(edge.Attribute(W + "sz")?.Value);
+        var lineStyle = BorderLineStyles.FromToken(edge.Attribute(W + "val")?.Value);
 
         return new PageBorder(
             color is null or "auto" ? "#000000" : "#" + color.TrimStart('#'),
-            width > 0 ? width : 1.0);
+            width > 0 ? width : 1.0)
+        {
+            LineStyle = lineStyle,
+        };
     }
 
     /// <summary>

@@ -1878,23 +1878,36 @@ public static class DocxWriter
                 new XAttribute(W + "left", PointsToDxa(f.IndentLeftPt)),
                 new XAttribute(W + "right", PointsToDxa(f.IndentRightPt)),
                 new XAttribute(W + "firstLine", PointsToDxa(f.FirstLineIndentPt))));
-        // Paragraph border (w:pBdr): a uniform box (all four edges) by default, or a bottom-only edge
-        // when the border is a horizontal rule. Each edge shares one colour/width, analogous to w:tblBorders.
+        // Paragraph border (w:pBdr): a box whose drawn edges are selected by the per-edge flags (all four =
+        // a box) with one shared colour/width/line-style, analogous to w:tblBorders. A horizontal rule is the
+        // bottom-only case. Each drawn edge carries the model's line style (w:val).
         if (f.Border is { } border)
         {
+            var styleToken = BorderLineStyles.ToToken(border.LineStyle);
             XElement Edge(string name) => new(W + name,
-                new XAttribute(W + "val", "single"),
+                new XAttribute(W + "val", styleToken),
                 new XAttribute(W + "sz", PointsToEighthPoints(border.WidthPt)),
                 new XAttribute(W + "space", 0),
                 new XAttribute(W + "color", border.ColorHex.TrimStart('#')));
-            pPr.Add(border.BottomOnly
-                ? new XElement(W + "pBdr", Edge("bottom"))
-                : new XElement(W + "pBdr", Edge("top"), Edge("left"), Edge("bottom"), Edge("right")));
+            // BottomOnly forces a bottom-only rule (the horizontal-rule case); otherwise honour the per-edge
+            // flags. An edge that is off is omitted entirely (a null is dropped by XElement) so the round-trip
+            // reads it back as off.
+            var drawBottom = border.BottomOnly || border.Bottom;
+            var drawTop = !border.BottomOnly && border.Top;
+            var drawLeft = !border.BottomOnly && border.Left;
+            var drawRight = !border.BottomOnly && border.Right;
+            if (drawTop || drawLeft || drawBottom || drawRight)
+                pPr.Add(new XElement(W + "pBdr",
+                    drawTop ? Edge("top") : null,
+                    drawLeft ? Edge("left") : null,
+                    drawBottom ? Edge("bottom") : null,
+                    drawRight ? Edge("right") : null));
         }
-        // Paragraph shading (background fill), mirroring run-level w:shd highlight.
+        // Paragraph shading (background fill), mirroring run-level w:shd highlight. The pattern (w:val) comes
+        // from the model; the default Clear preserves the byte-unchanged round-trip of existing documents.
         if (f.ShadingColorHex is { Length: > 0 } shading)
             pPr.Add(new XElement(W + "shd",
-                new XAttribute(W + "val", "clear"),
+                new XAttribute(W + "val", ShadingPatterns.ToToken(f.ShadingPattern)),
                 new XAttribute(W + "color", "auto"),
                 new XAttribute(W + "fill", shading.TrimStart('#'))));
 
@@ -3477,8 +3490,9 @@ public static class DocxWriter
         if (border is null)
             return null;
 
+        var styleToken = BorderLineStyles.ToToken(border.LineStyle);
         XElement Edge(string name) => new(W + name,
-            new XAttribute(W + "val", "single"),
+            new XAttribute(W + "val", styleToken),
             new XAttribute(W + "sz", PointsToEighthPoints(border.WidthPt)),
             new XAttribute(W + "space", 24),
             new XAttribute(W + "color", border.ColorHex.TrimStart('#')));

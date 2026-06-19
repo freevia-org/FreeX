@@ -956,6 +956,28 @@ public sealed class DocumentView : RichTextBox
         });
 
     /// <summary>
+    /// Set (or clear, when <paramref name="border"/> is null) the box border on every selected paragraph,
+    /// honouring its line style, width, colour and per-edge flags. Used by the Borders and Shading dialog;
+    /// routes through the undo/redo bus and re-renders. The full <see cref="ParagraphBorder"/> survives an
+    /// edit/commit cycle (the model-only fields ride on the paragraph Tag — see BuildParagraph).
+    /// </summary>
+    public void SetParagraphBorder(ParagraphBorder? border) =>
+        FormatSelectedModelParagraphs(f => f with { Border = border });
+
+    /// <summary>
+    /// Set (or clear, when <paramref name="colorHex"/> is null/empty) paragraph shading over the selection
+    /// with the given fill colour and <paramref name="pattern"/>. Used by the Borders and Shading dialog;
+    /// routes through the undo/redo bus and re-renders. Mirrors <see cref="ToggleParagraphShading"/> but
+    /// applies an explicit colour+pattern rather than toggling.
+    /// </summary>
+    public void SetParagraphShading(string? colorHex, ShadingPattern pattern) =>
+        FormatSelectedModelParagraphs(f => f with
+        {
+            ShadingColorHex = string.IsNullOrEmpty(colorHex) ? null : colorHex,
+            ShadingPattern = string.IsNullOrEmpty(colorHex) ? ShadingPattern.Clear : pattern,
+        });
+
+    /// <summary>
     /// Toggle "keep with next" (pPr/w:keepNext) over the selected paragraphs. If any spanned paragraph
     /// lacks the flag, all get it; otherwise it is cleared. Reversible via the undo/redo bus.
     /// </summary>
@@ -2507,7 +2529,7 @@ public sealed class DocumentView : RichTextBox
     /// list level round-trip through an edit/commit cycle, which keeps the accumulated outline markers
     /// (1.1.1) stable after editing. Defaults to 0 (the non-list / top-level case).
     /// </para>
-    private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, string? BookmarkName, bool PageBreakBefore = false, bool WidowControl = false, string? StyleId = null, int ListLevel = 0);
+    private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, string? BookmarkName, bool PageBreakBefore = false, bool WidowControl = false, string? StyleId = null, int ListLevel = 0, ParagraphBorder? Border = null, ShadingPattern ShadingPattern = ShadingPattern.Clear);
 
     /// <summary>Read the edited FlowDocument back into the model (paragraphs + tables).</summary>
     public void CommitToModel()
@@ -3142,10 +3164,14 @@ public sealed class DocumentView : RichTextBox
         if (paraFmt.Border is { } border && TryParseColor(border.ColorHex, out var borderColor))
         {
             wpf.BorderBrush = new SolidColorBrush(borderColor);
-            // A bottom-only border (horizontal rule) draws just the bottom edge; a box draws all four.
-            // ReadParagraphFormatting recovers BottomOnly from the same asymmetric thickness.
+            // A bottom-only border (horizontal rule) draws just the bottom edge; otherwise the per-edge
+            // flags select which edges are drawn (all four = a box). The model-only line style/pattern can't
+            // be expressed on a WPF Border, so the full ParagraphBorder is also carried on the Tag (below)
+            // and recovered verbatim on commit.
             var w = border.WidthPt * PxPerPoint;
-            wpf.BorderThickness = border.BottomOnly ? new Thickness(0, 0, 0, w) : new Thickness(w);
+            wpf.BorderThickness = border.BottomOnly
+                ? new Thickness(0, 0, 0, w)
+                : new Thickness(border.Left ? w : 0, border.Top ? w : 0, border.Right ? w : 0, border.Bottom ? w : 0);
             wpf.Padding = new Thickness(2);
         }
         if (TryParseColor(paraFmt.ShadingColorHex, out var shading))
@@ -3175,8 +3201,18 @@ public sealed class DocumentView : RichTextBox
         // bookmark name and page-break-before; carried verbatim and recovered on commit.
         // The list nesting depth is carried on the Tag too: the editor flattens a list run into one WPF
         // List, so depth has no structural slot and would otherwise reset to 0 on commit (see ParagraphTag).
-        if (paraFmt.TabStops.Count > 0 || paragraph.BookmarkName is { Length: > 0 } || paraFmt.PageBreakBefore || paraFmt.WidowControl || paragraph.StyleId is { Length: > 0 } || paraFmt.ListLevel > 0)
-            wpf.Tag = new ParagraphTag(paraFmt.TabStops, paragraph.BookmarkName, paraFmt.PageBreakBefore, paraFmt.WidowControl, paragraph.StyleId, paraFmt.ListLevel);
+        // The border's line style / per-edge flags and the shading pattern have no WPF Border equivalent,
+        // so carry the full ParagraphBorder + shading pattern on the Tag whenever they are non-default; they
+        // are recovered verbatim on commit (see ReadParagraphFormatting) so the dialog's choices survive.
+        var borderNeedsTag = paraFmt.Border is { } b
+            && (b.LineStyle != BorderLineStyle.Single || !b.Top || !b.Left || !b.Bottom || !b.Right);
+        var shadingNeedsTag = paraFmt.ShadingColorHex is { Length: > 0 } && paraFmt.ShadingPattern != ShadingPattern.Clear;
+        if (paraFmt.TabStops.Count > 0 || paragraph.BookmarkName is { Length: > 0 } || paraFmt.PageBreakBefore || paraFmt.WidowControl || paragraph.StyleId is { Length: > 0 } || paraFmt.ListLevel > 0 || borderNeedsTag || shadingNeedsTag)
+            wpf.Tag = new ParagraphTag(
+                paraFmt.TabStops, paragraph.BookmarkName, paraFmt.PageBreakBefore, paraFmt.WidowControl,
+                paragraph.StyleId, paraFmt.ListLevel,
+                borderNeedsTag ? paraFmt.Border : null,
+                shadingNeedsTag ? paraFmt.ShadingPattern : ShadingPattern.Clear);
 
         foreach (var run in paragraph.Runs)
             wpf.Inlines.Add(BuildRun(run, paragraph, document));
@@ -6059,9 +6095,17 @@ public sealed class DocumentView : RichTextBox
             IndentLeftPt = paragraph.Margin.Left / PxPerPoint,
             IndentRightPt = paragraph.Margin.Right / PxPerPoint,
             FirstLineIndentPt = paragraph.TextIndent / PxPerPoint,
-            Border = ReadParagraphBorder(paragraph, pageBreakBefore),
+            // A border whose line style / per-edge flags were set in the dialog has no WPF Border slot, so it
+            // is carried verbatim on the Tag and recovered here in preference to the WPF-derived border; an
+            // untagged paragraph (a plain quick-toggle box / horizontal rule) recovers from the WPF Border.
+            Border = paragraph.Tag is ParagraphTag { Border: { } taggedBorder }
+                ? taggedBorder
+                : ReadParagraphBorder(paragraph, pageBreakBefore),
             PageBreakBefore = pageBreakBefore,
             ShadingColorHex = paragraph.Background is SolidColorBrush shading ? ToHex(shading.Color) : null,
+            // The shading pattern (w:shd/@w:val) likewise has no WPF slot; recovered from the Tag (Clear when
+            // untagged) so a non-solid pattern set in the dialog survives an edit/commit cycle.
+            ShadingPattern = paragraph.Tag is ParagraphTag { ShadingPattern: var pattern } ? pattern : ShadingPattern.Clear,
             // Tab stops are not representable in the WPF FlowDocument Paragraph, so they are preserved
             // verbatim from the Tag stamped by BuildParagraph (see comment there); empty if none.
             TabStops = paragraph.Tag is ParagraphTag { TabStops: var tabStops } ? tabStops : []

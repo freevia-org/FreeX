@@ -414,6 +414,71 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void ParagraphBorder_PerEdgeStyleColourAndWidth_RoundTrip()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("custom border")
+        {
+            Formatting = ParagraphFormatting.Default with
+            {
+                Border = new ParagraphBorder("#00B050", 2.25)
+                {
+                    LineStyle = BorderLineStyle.Dashed,
+                    Top = true,
+                    Left = false,
+                    Bottom = true,
+                    Right = false,
+                }
+            }
+        });
+
+        var border = RoundTrip(doc).Paragraphs.First().Formatting.Border;
+
+        border.Should().NotBeNull();
+        border!.ColorHex.Should().Be("#00B050");
+        border.WidthPt.Should().BeApproximately(2.25, 0.001);
+        border.LineStyle.Should().Be(BorderLineStyle.Dashed);
+        border.Top.Should().BeTrue();
+        border.Left.Should().BeFalse();
+        border.Bottom.Should().BeTrue();
+        border.Right.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ParagraphShading_WithPattern_RoundTrips()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("shaded")
+        {
+            Formatting = ParagraphFormatting.Default with
+            {
+                ShadingColorHex = "#DDDDDD",
+                ShadingPattern = ShadingPattern.Pct25,
+            }
+        });
+
+        var formatting = RoundTrip(doc).Paragraphs.First().Formatting;
+
+        formatting.ShadingColorHex.Should().Be("#DDDDDD");
+        formatting.ShadingPattern.Should().Be(ShadingPattern.Pct25);
+    }
+
+    [Fact]
+    public void PageBorder_LineStyle_RoundTrips()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("page with dotted border"));
+        doc.Page.PageBorder = new PageBorder("#7030A0", 3.0) { LineStyle = BorderLineStyle.Dotted };
+
+        var page = RoundTrip(doc).Page;
+
+        page.PageBorder.Should().NotBeNull();
+        page.PageBorder!.ColorHex.Should().Be("#7030A0");
+        page.PageBorder.WidthPt.Should().BeApproximately(3.0, 0.001);
+        page.PageBorder.LineStyle.Should().Be(BorderLineStyle.Dotted);
+    }
+
+    [Fact]
     public void DefaultPage_HasNoPageBorderOrWatermark()
     {
         var doc = new TextDocument();

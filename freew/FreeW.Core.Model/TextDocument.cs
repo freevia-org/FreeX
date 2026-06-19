@@ -1151,7 +1151,14 @@ public sealed class HeaderFooter
 /// colour and width (points). Null on <see cref="PageSettings.PageBorder"/> means no page border, so
 /// existing documents are unaffected. Mirrors how <see cref="ParagraphBorder"/> is modelled.
 /// </summary>
-public sealed record PageBorder(string ColorHex = "#000000", double WidthPt = 1.0);
+public sealed record PageBorder(string ColorHex = "#000000", double WidthPt = 1.0)
+{
+    /// <summary>
+    /// The line style of every page-border edge (w:val). Defaults to <see cref="BorderLineStyle.Single"/>,
+    /// matching what the writer previously emitted, so existing documents round-trip byte-unchanged.
+    /// </summary>
+    public BorderLineStyle LineStyle { get; init; } = BorderLineStyle.Single;
+}
 
 /// <summary>
 /// How (and whether) lines are numbered in the page margin (w:sectPr/w:lnNumType).

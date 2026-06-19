@@ -427,6 +427,8 @@ internal static class FreeWRibbonCommands
         // Home > Paragraph: toggle a box border on the selected paragraph(s), and pick/clear shading.
         registry.Register("freew.para-border", new ActionCommand(() => editor.ToggleParagraphBorder()));
         registry.Register("freew.para-shading", new ParagraphShadingCommand(editor));
+        // Home / Design > Borders and Shading…: the full dialog (paragraph border, page border, shading).
+        registry.Register("freew.borders-shading", new BordersAndShadingCommand(editor));
 
         // Home > Paragraph (Line and Page Breaks): flow-control toggles over the selected paragraph(s).
         // Each flips its pPr flag (keepNext/keepLines/widowControl) reversibly through the undo/redo bus.
@@ -494,10 +496,10 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.page-valign", new PageVerticalAlignmentCommand(editor));
         registry.Register("freew.different-first-page", new DifferentFirstPageCommand(editor));
 
-        // Layout tab — Page Background: toggle a whole-page border (w:pgBorders) and set/clear the
-        // page watermark. Both mutate PageSettings via ApplyPageSettings (commit + re-render) and
-        // round-trip through docx save.
-        registry.Register("freew.page-border", new ActionCommand(() => { editor.Focus(); editor.TogglePageBorder(); }));
+        // Layout tab — Page Background: "Page Border" opens the full Borders and Shading dialog (Word's
+        // Page Borders button), and Watermark sets/clears the page watermark. Both ultimately mutate
+        // PageSettings via ApplyPageSettings (commit + re-render) and round-trip through docx save.
+        registry.Register("freew.page-border", new BordersAndShadingCommand(editor));
         registry.Register("freew.watermark", new WatermarkCommand(editor));
 
         // Design tab — Page Background: pick the whole-page background colour (Word's Page Color). Opens a
@@ -1204,6 +1206,26 @@ internal static class FreeWRibbonCommands
     private sealed class PageCommand(DocumentView editor, Action<PageSettings> apply) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context) => apply(editor.Model.Page);
+    }
+
+    // Home / Design > Borders and Shading…: opens the full dialog (paragraph border, page border, shading)
+    // seeded with the current paragraph's border/shading and the page border. Applies the chosen paragraph
+    // border/shading through DocumentView (the undo/redo bus) and the page border through ApplyPageSettings;
+    // everything round-trips through the existing w:pBdr / w:pgBorders / w:shd writers.
+    private sealed class BordersAndShadingCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var result = BordersAndShadingDialog.Prompt(
+                Window.GetWindow(editor), editor.CurrentParagraphFormatting, editor.Model.Page.PageBorder);
+            if (result is null)
+                return;
+
+            editor.SetParagraphBorder(result.ParagraphBorder);
+            editor.SetParagraphShading(result.ShadingHex, result.ShadingPattern);
+            editor.ApplyPageSettings(page => page.PageBorder = result.PageBorder);
+        }
     }
 
     // Opens the Columns dialog (One/Two/Three/Left/Right presets + custom count, spacing, line-between) and

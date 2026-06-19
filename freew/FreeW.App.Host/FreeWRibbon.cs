@@ -79,6 +79,7 @@ internal static class FreeWRibbon
                     });
                     g.Icon("freew.para-shading", "Shading", RibbonCommandIconKind.Fill);
                     g.Icon("freew.para-border", "Borders", RibbonCommandIconKind.Border);
+                    g.Icon("freew.borders-shading", "Borders and Shading…", RibbonCommandIconKind.Border, accent: RibbonCommandIconAccent.Border);
                     g.Icon("freew.space-before-toggle", "Add Space Before Paragraph", RibbonCommandIconKind.SpaceBefore);
                     g.Icon("freew.space-after-toggle", "Add Space After Paragraph", RibbonCommandIconKind.SpaceAfter);
                     g.Icon("freew.paragraph-dialog", "Paragraph Settings", RibbonCommandIconKind.TextFunction);
@@ -277,6 +278,8 @@ internal static class FreeWRibbon
                 tab.Group("page-background", "Page Background", "B", 90, g =>
                 {
                     g.Medium("freew.page-color", "Page Color", RibbonCommandIconKind.Fill, accent: RibbonCommandIconAccent.Fill, dropdown: true);
+                    // Word's Design > Page Background > Page Borders: opens the full Borders and Shading dialog.
+                    g.Medium("freew.page-border", "Page Borders", RibbonCommandIconKind.Border, accent: RibbonCommandIconAccent.Border);
                 });
             })
             .Tab("view", "View", "W", tab =>
