@@ -332,4 +332,25 @@
   <data name="FillSeries_NoSeed" xml:space="preserve"><value>La première cellule de la sélection doit contenir un nombre (ou une date pour une série de dates).</value></data>
   <data name="FillSeries_Filled" xml:space="preserve"><value>Série remplie dans {0}</value></data>
   <data name="FillSeries_Failed" xml:space="preserve"><value>Le remplissage de la série a échoué.</value></data>
+  <!-- Table Design: Table Name dialog -->
+  <data name="TableName_Title" xml:space="preserve"><value>Nom du tableau</value></data>
+  <data name="TableName_Label" xml:space="preserve"><value>Nom du tableau :</value></data>
+  <data name="TableName_BoxName" xml:space="preserve"><value>Nom du tableau</value></data>
+  <data name="TableName_NoTable" xml:space="preserve"><value>Nom du tableau : la cellule active n'est pas dans un tableau.</value></data>
+  <data name="TableName_Renamed" xml:space="preserve"><value>Tableau renommé en « {0} ».</value></data>
+  <data name="TableName_Failed" xml:space="preserve"><value>Échec du nom du tableau.</value></data>
+  <!-- Table Design: Resize Table dialog -->
+  <data name="TableResize_Title" xml:space="preserve"><value>Redimensionner le tableau</value></data>
+  <data name="TableResize_Label" xml:space="preserve"><value>Sélectionnez la nouvelle plage de données du tableau :</value></data>
+  <data name="TableResize_BoxName" xml:space="preserve"><value>Plage du tableau redimensionné</value></data>
+  <data name="TableResize_NoTable" xml:space="preserve"><value>Redimensionner le tableau : la cellule active n'est pas dans un tableau.</value></data>
+  <data name="TableResize_Resized" xml:space="preserve"><value>Tableau « {0} » redimensionné à {1}.</value></data>
+  <data name="TableResize_Failed" xml:space="preserve"><value>Échec du redimensionnement du tableau.</value></data>
+  <!-- Table Design: Table Styles gallery -->
+  <data name="TableStyleGallery_Title" xml:space="preserve"><value>Styles de tableau</value></data>
+  <data name="TableStyleGallery_StyleLabel" xml:space="preserve"><value>Style de tableau :</value></data>
+  <data name="TableStyleGallery_GalleryName" xml:space="preserve"><value>Galerie de styles de tableau</value></data>
+  <data name="TableStyleGallery_NoTable" xml:space="preserve"><value>Styles de tableau : la cellule active n'est pas dans un tableau.</value></data>
+  <data name="TableStyleGallery_Applied" xml:space="preserve"><value>Style de tableau : {0}.</value></data>
+  <data name="TableStyleGallery_Failed" xml:space="preserve"><value>Échec des styles de tableau.</value></data>
 </root>

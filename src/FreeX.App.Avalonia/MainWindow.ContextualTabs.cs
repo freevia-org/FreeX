@@ -79,10 +79,15 @@ public sealed partial class MainWindow
             ["tableDesign.filterButton"] = ToggleActiveTableFilterButton,
             ["tableDesign.convertToRange"] = ConvertActiveTableToRange,
             ["tableDesign.removeDuplicates"] = () => RunGuarded(ShowRemoveDuplicatesDialogAsync),
-            // No Core support yet (table name / resize / styles gallery) — honest stubs.
-            ["tableDesign.tableName"] = () => ReportContextualNotYetAvailable("Table Name"),
-            ["tableDesign.resize"] = () => ReportContextualNotYetAvailable("Resize Table"),
-            ["tableDesign.tableStyles"] = () => ReportContextualNotYetAvailable("Table Styles"),
+            // Table Name dialog — validates/renames the active table via TableNamePlanner +
+            // RenameStructuredTableCommand (MainWindow.TableName).
+            ["tableDesign.tableName"] = OpenTableName,
+            // Resize Table dialog — validates/resolves a new data range via TableResizePlanner and applies it
+            // through ResizeStructuredTableCommand (+ style reapply) (MainWindow.TableResize).
+            ["tableDesign.resize"] = OpenTableResize,
+            // Table Styles gallery — picks a built-in style via TableStyleGalleryPlanner and applies it through
+            // ApplyStructuredTableStyleCommand (MainWindow.TableStyleGallery).
+            ["tableDesign.tableStyles"] = OpenTableStyleGallery,
 
             // --- PivotTable Analyze / Design (pivot.active) — real handlers via
             // ConfigurePivotTableOptionsCommand / RefreshPivotTableCommand (MainWindow.PivotTabs). ---
