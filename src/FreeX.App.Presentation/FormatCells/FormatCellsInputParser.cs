@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Presentation.FormatCells;
 
 public static class FormatCellsInputParser
 {
