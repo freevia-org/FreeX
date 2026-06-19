@@ -3224,8 +3224,9 @@ public static class DocxReader
     }
 
     /// <summary>
-    /// Reads the FreeW page watermark from docProps/custom.xml into <see cref="PageSettings.Watermark"/>,
-    /// mirroring how the writer persists it as a named custom property. A missing part is fine.
+    /// Reads FreeW custom document properties from docProps/custom.xml: the page watermark into
+    /// <see cref="PageSettings.Watermark"/> and Word's "Mark as Final" flag (<c>_MarkAsFinal</c>) into
+    /// <see cref="TextDocument.MarkedAsFinal"/>, mirroring how the writer persists them. A missing part is fine.
     /// </summary>
     private static void ReadCustomProperties(ZipArchive archive, TextDocument document)
     {
@@ -3234,11 +3235,17 @@ public static class DocxReader
         if (root is null)
             return;
 
-        var property = root.Elements(CustomProps + "property")
-            .FirstOrDefault(p => p.Attribute("name")?.Value == WatermarkPropertyName);
-        var text = property?.Element(VtVariant + "lpwstr")?.Value;
+        var properties = root.Elements(CustomProps + "property").ToList();
+
+        var watermark = properties.FirstOrDefault(p => p.Attribute("name")?.Value == WatermarkPropertyName);
+        var text = watermark?.Element(VtVariant + "lpwstr")?.Value;
         if (!string.IsNullOrEmpty(text))
             document.Page.Watermark = text;
+
+        var markAsFinal = properties.FirstOrDefault(p => p.Attribute("name")?.Value == MarkAsFinalPropertyName);
+        var flag = markAsFinal?.Element(VtVariant + "bool")?.Value;
+        if (flag is not null && (flag.Equals("true", StringComparison.OrdinalIgnoreCase) || flag == "1"))
+            document.MarkedAsFinal = true;
     }
 
     private static void ReadStyles(ZipArchive archive, TextDocument document)

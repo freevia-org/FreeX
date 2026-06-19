@@ -398,9 +398,11 @@ internal static class FreeWRibbon
                     g.Medium("freew.accept-all", "Accept All", RibbonCommandIconKind.AcceptChange);
                     g.Medium("freew.reject-all", "Reject All", RibbonCommandIconKind.RejectChange);
                 });
-                // Single-command group → labelled Medium toggle (Word shows Restrict Editing labelled).
+                // Protect group: Word's Mark as Final (advisory read-only toggle) + Restrict Editing
+                // (opens the restrict-editing pane; the toggle reflects whether protection is enforced).
                 tab.Group("protect", "Protect", "T", 85, g =>
                 {
+                    g.MediumToggle("freew.mark-as-final", "Mark as Final", RibbonCommandIconKind.Protect);
                     g.MediumToggle("freew.restrict-editing", "Restrict Editing", RibbonCommandIconKind.Protect);
                 });
                 // Single-command group → Large.

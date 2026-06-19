@@ -138,6 +138,12 @@ internal static class Ooxml
     /// <summary>The custom-property name under which the FreeW page watermark text is persisted.</summary>
     public const string WatermarkPropertyName = "FreeWWatermark";
 
+    /// <summary>
+    /// The custom-property name under which Word's "Mark as Final" flag is persisted (a boolean
+    /// <c>vt:bool</c> custom document property). This is the Word convention.
+    /// </summary>
+    public const string MarkAsFinalPropertyName = "_MarkAsFinal";
+
     public const string NumberingContentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml";
     public const string NumberingRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering";
     public const string NumberingPartName = "/word/numbering.xml";
@@ -318,25 +324,27 @@ internal static class Ooxml
     /// <summary>
     /// Maps a <see cref="ProtectionMode"/> to the w:documentProtection/@w:edit token, or null for
     /// <see cref="ProtectionMode.None"/> (no protection element is emitted). ReadOnly→"readOnly",
-    /// CommentsOnly→"comments", TrackChangesOnly→"trackedChanges".
+    /// CommentsOnly→"comments", TrackChangesOnly→"trackedChanges", FillingForms→"forms".
     /// </summary>
     public static string? ProtectionEditToken(ProtectionMode mode) => mode switch
     {
         ProtectionMode.ReadOnly => "readOnly",
         ProtectionMode.CommentsOnly => "comments",
         ProtectionMode.TrackChangesOnly => "trackedChanges",
+        ProtectionMode.FillingForms => "forms",
         _ => null
     };
 
     /// <summary>
     /// Maps a w:documentProtection/@w:edit token back to a <see cref="ProtectionMode"/>. Any unknown
-    /// or absent token (including "forms"/"none") maps to <see cref="ProtectionMode.None"/>.
+    /// or absent token (including "none") maps to <see cref="ProtectionMode.None"/>.
     /// </summary>
     public static ProtectionMode ProtectionModeFromEditToken(string? edit) => edit switch
     {
         "readOnly" => ProtectionMode.ReadOnly,
         "comments" => ProtectionMode.CommentsOnly,
         "trackedChanges" => ProtectionMode.TrackChangesOnly,
+        "forms" => ProtectionMode.FillingForms,
         _ => ProtectionMode.None
     };
 

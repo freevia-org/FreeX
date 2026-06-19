@@ -2487,6 +2487,7 @@ public class DocxRoundTripTests
     [InlineData(ProtectionMode.ReadOnly, "readOnly")]
     [InlineData(ProtectionMode.CommentsOnly, "comments")]
     [InlineData(ProtectionMode.TrackChangesOnly, "trackedChanges")]
+    [InlineData(ProtectionMode.FillingForms, "forms")]
     public void DocumentProtection_RoundTrips_EachMode(ProtectionMode mode, string expectedEdit)
     {
         var doc = new TextDocument { Protection = new ProtectionSettings(mode) };
@@ -2563,6 +2564,67 @@ public class DocxRoundTripTests
         var result = DocxReader.Read(stream);
         result.Protection.Mode.Should().Be(ProtectionMode.None);
         result.Protection.IsProtected.Should().BeFalse();
+    }
+
+    [Fact]
+    public void MarkAsFinal_RoundTrips_AsCustomProperty()
+    {
+        var doc = new TextDocument { MarkedAsFinal = true };
+        doc.Blocks.Add(new Paragraph("Final body"));
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            // The flag rides in docProps/custom.xml as the Word-convention _MarkAsFinal boolean property,
+            // with the part declared and related in the package.
+            using var customReader = new StreamReader(zip.GetEntry("docProps/custom.xml")!.Open());
+            var custom = customReader.ReadToEnd();
+            custom.Should().Contain("_MarkAsFinal");
+            custom.Should().Contain("<vt:bool>true</vt:bool>");
+
+            using var ctReader = new StreamReader(zip.GetEntry("[Content_Types].xml")!.Open());
+            ctReader.ReadToEnd().Should().Contain("custom-properties+xml");
+
+            using var relsReader = new StreamReader(zip.GetEntry("_rels/.rels")!.Open());
+            relsReader.ReadToEnd().Should().Contain("docProps/custom.xml");
+        }
+
+        stream.Position = 0;
+        DocxReader.Read(stream).MarkedAsFinal.Should().BeTrue();
+    }
+
+    [Fact]
+    public void MarkAsFinal_AndWatermark_BothRoundTrip_InOneCustomPart()
+    {
+        var doc = new TextDocument { MarkedAsFinal = true };
+        doc.Page.Watermark = "DRAFT";
+        doc.Blocks.Add(new Paragraph("Body"));
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        var result = DocxReader.Read(stream);
+        result.MarkedAsFinal.Should().BeTrue();
+        result.Page.Watermark.Should().Be("DRAFT");
+    }
+
+    [Fact]
+    public void NotMarkedAsFinal_AndNoWatermark_EmitsNoCustomPart()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Body"));
+        doc.MarkedAsFinal.Should().BeFalse(); // default
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        zip.GetEntry("docProps/custom.xml").Should().BeNull();
     }
 
     // --- Page setup polish: hyphenation (settings.xml), vertical alignment + titlePg (sectPr) ---

@@ -2284,17 +2284,46 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void ApplyProtection()
     {
-        var protectedDoc = _model.Protection.IsProtected;
-        IsReadOnly = protectedDoc;
+        var mode = _model.Protection.Mode;
 
-        // A protected document gets a distinct amber frame so the read-only state is visible. An
+        // Typing is blocked when the document is Mark-as-Final (advisory read-only), when restrict-editing
+        // is No-changes (ReadOnly), or when it is Comments-only / Filling-forms (those permit only comment
+        // insertion / form-field fill, not free typing — approximated as a read-only typing surface; the
+        // comment command writes to the model directly and so still works). Track-changes-only leaves the
+        // surface editable but forces TrackChangesEnabled so edits become tracked revisions.
+        var typingLocked = _model.MarkedAsFinal
+            || mode is ProtectionMode.ReadOnly or ProtectionMode.CommentsOnly or ProtectionMode.FillingForms;
+        IsReadOnly = typingLocked;
+
+        if (mode == ProtectionMode.TrackChangesOnly)
+            TrackChangesEnabled = true;
+
+        // A protected / final document gets a distinct amber frame so the locked state is visible. An
         // unprotected document keeps whatever frame ApplyPageChrome set (page border or default grey).
-        if (protectedDoc)
+        if (_model.Protection.IsProtected || _model.MarkedAsFinal)
         {
             BorderBrush = new SolidColorBrush(Color.FromRgb(0xC8, 0x8A, 0x00));
             BorderThickness = new Thickness(Math.Max(2, BorderThickness.Top));
         }
+
+        ProtectionStateChanged?.Invoke(this, EventArgs.Empty);
     }
+
+    /// <summary>
+    /// Raised whenever the document's protection or Mark-as-Final state changes (after
+    /// <see cref="ApplyProtection"/>). The host listens to update the Restrict-Editing toggle, the
+    /// "Marked as Final" banner and the status bar.
+    /// </summary>
+    public event EventHandler? ProtectionStateChanged;
+
+    /// <summary>True when restrict-editing protection is enforced (any mode other than None).</summary>
+    public bool IsProtected => _model.Protection.IsProtected;
+
+    /// <summary>The current restrict-editing protection mode.</summary>
+    public ProtectionMode ProtectionMode => _model.Protection.Mode;
+
+    /// <summary>True when the document is "Marked as Final" (advisory read-only).</summary>
+    public bool IsMarkedAsFinal => _model.MarkedAsFinal;
 
     /// <summary>
     /// Set the document's protection (restrict-editing) mode, committing pending edits first (only while
@@ -2320,6 +2349,22 @@ public sealed class DocumentView : RichTextBox
         var next = _model.Protection.Mode == ProtectionMode.None ? ProtectionMode.ReadOnly : ProtectionMode.None;
         SetProtection(next);
         return next;
+    }
+
+    /// <summary>
+    /// Set the document's "Mark as Final" flag (Word's advisory read-only). Commits pending edits first
+    /// (while still editable) so nothing is lost, then re-renders so the read-only state, amber frame and
+    /// banner update immediately. The flag round-trips through docx save (docProps/custom.xml
+    /// <c>_MarkAsFinal</c>). Clearing it ("Edit Anyway") restores normal editing.
+    /// </summary>
+    public void SetMarkedAsFinal(bool markedAsFinal)
+    {
+        if (_model.MarkedAsFinal == markedAsFinal)
+            return;
+        if (!IsReadOnly)
+            CommitToModel();
+        _model.MarkedAsFinal = markedAsFinal;
+        Render();
     }
 
     /// <summary>

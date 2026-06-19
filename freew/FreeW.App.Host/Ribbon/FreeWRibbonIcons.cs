@@ -253,6 +253,7 @@ internal static class FreeWRibbonIcons
             ["freew.track-changes"] = RibbonCommandIconKind.History,
             ["freew.accept-all"] = RibbonCommandIconKind.AcceptChange,
             ["freew.reject-all"] = RibbonCommandIconKind.RejectChange,
+            ["freew.mark-as-final"] = RibbonCommandIconKind.Protect,
             ["freew.restrict-editing"] = RibbonCommandIconKind.Protect,
             ["freew.compare"] = RibbonCommandIconKind.Compare,
             ["freew.inspect-document"] = RibbonCommandIconKind.Search,

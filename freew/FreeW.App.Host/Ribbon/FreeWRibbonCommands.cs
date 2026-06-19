@@ -397,10 +397,18 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.accept-all", new ActionCommand(() => { editor.Focus(); editor.AcceptAllRevisions(); }));
         registry.Register("freew.reject-all", new ActionCommand(() => { editor.Focus(); editor.RejectAllRevisions(); }));
 
-        // Review tab — Protect: Restrict Editing. A stateful toggle over document protection: turning it
-        // on locks the document read-only (RichTextBox IsReadOnly) and emits word/settings.xml's
-        // w:documentProtection on save; turning it off clears protection. The toggle reflects whether
-        // the document is currently protected.
+        // Review tab — Protect: Mark as Final. A stateful toggle over Word's advisory read-only flag:
+        // turning it on makes the editor read-only, shows the "Marked as Final" banner and persists the
+        // _MarkAsFinal custom property; "Edit Anyway" (or toggling off) clears it. The checked state
+        // reflects whether the document is currently marked final.
+        var markAsFinal = new MarkAsFinalToggleCommand(editor);
+        registry.Register("freew.mark-as-final", markAsFinal);
+        stateful.Add(("freew.mark-as-final", markAsFinal));
+
+        // Review tab — Protect: Restrict Editing. Opens the Restrict Editing pane to choose the allowed
+        // editing type (No changes / Tracked changes / Comments / Filling in forms) and start enforcing,
+        // or stop protection. The chosen mode is enforced on the live editor and emits word/settings.xml's
+        // w:documentProtection on save. The toggle reflects whether protection is currently enforced.
         var restrictEditing = new RestrictEditingToggleCommand(editor);
         registry.Register("freew.restrict-editing", restrictEditing);
         stateful.Add(("freew.restrict-editing", restrictEditing));
@@ -2128,21 +2136,39 @@ internal static class FreeWRibbonCommands
         public RibbonCommandState GetState() => new(IsEnabled: true, IsChecked: editor.TrackChangesEnabled);
     }
 
-    // Review > Protect > Restrict Editing: a stateful toggle over document protection. Executing flips
-    // the document between unprotected and read-only (the common restrict-editing gesture): turning it
-    // ON makes the RichTextBox read-only and emits word/settings.xml's w:documentProtection on save;
-    // turning it OFF clears protection and restores editing. The checked state reflects whether the
-    // document is currently protected, so the ribbon button shows the lock state at a glance.
+    // Review > Protect > Restrict Editing: opens the Restrict Editing pane to choose the allowed editing
+    // type and start enforcing (or stop protection). The chosen ProtectionMode is enforced on the live
+    // editor (read-only for No-changes/Comments/Forms, forced track-changes for Tracked) and emits
+    // word/settings.xml's w:documentProtection on save. The checked state reflects whether protection is
+    // currently enforced, so the ribbon button shows the lock state at a glance.
     private sealed class RestrictEditingToggleCommand(DocumentView editor) : IRibbonStatefulCommand
     {
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            editor.ToggleReadOnlyProtection();
+            var chosen = RestrictEditingDialog.Prompt(Window.GetWindow(editor), editor.ProtectionMode);
+            if (chosen is { } mode)
+                editor.SetProtection(mode);
         }
 
         public RibbonCommandState GetState() =>
-            new(IsEnabled: true, IsChecked: editor.Model.Protection.IsProtected);
+            new(IsEnabled: true, IsChecked: editor.IsProtected);
+    }
+
+    // Review > Protect > Mark as Final: a stateful toggle over Word's advisory read-only flag. Turning it
+    // ON makes the editor read-only, shows the "Marked as Final" banner and persists the _MarkAsFinal
+    // custom property on save; turning it OFF ("Edit Anyway") restores editing. The checked state reflects
+    // whether the document is currently marked final.
+    private sealed class MarkAsFinalToggleCommand(DocumentView editor) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            editor.SetMarkedAsFinal(!editor.IsMarkedAsFinal);
+        }
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: true, IsChecked: editor.IsMarkedAsFinal);
     }
 
     // Review > Speech > Read Aloud: a stateful toggle that starts/stops an in-box text-to-speech

@@ -1281,14 +1281,16 @@ public sealed class DocumentProperties
 /// <see cref="None"/> is an unprotected document (the default — no settings part is emitted);
 /// <see cref="ReadOnly"/> locks the whole document against edits; <see cref="CommentsOnly"/> permits
 /// only the insertion of comments; <see cref="TrackChangesOnly"/> permits edits but forces them to be
-/// tracked revisions. Maps onto w:documentProtection/@w:edit ("readOnly"/"comments"/"trackedChanges").
+/// tracked revisions; <see cref="FillingForms"/> permits only filling in form fields. Maps onto
+/// w:documentProtection/@w:edit ("readOnly"/"comments"/"trackedChanges"/"forms").
 /// </summary>
 public enum ProtectionMode
 {
     None,
     ReadOnly,
     CommentsOnly,
-    TrackChangesOnly
+    TrackChangesOnly,
+    FillingForms
 }
 
 /// <summary>
@@ -1808,6 +1810,14 @@ public sealed class TextDocument
     /// the writer emits w:settings/w:documentProtection and the reader maps it back here.
     /// </summary>
     public ProtectionSettings Protection { get; set; } = ProtectionSettings.Unprotected;
+
+    /// <summary>
+    /// Word's "Mark as Final" flag. When true the document is advisory read-only: editors should open it
+    /// non-editable and show a "Marked as Final" banner ("Edit Anyway" clears it). Persisted following the
+    /// Word convention as the <c>_MarkAsFinal</c> boolean custom document property (docProps/custom.xml);
+    /// the reader maps it back here. Independent of <see cref="Protection"/> (enforced restrict-editing).
+    /// </summary>
+    public bool MarkedAsFinal { get; set; }
 
     /// <summary>
     /// The document's persisted theme — the colour/font scheme that maps to <c>word/theme/theme1.xml</c>.

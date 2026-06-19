@@ -102,6 +102,7 @@ public sealed class MainWindow : Window
     private int _lastRibbonTabIndex = 1;
     private bool _suppressFileTabRevert;
     private Border _status = null!;
+    private Border _markedAsFinalBanner = null!;
     private TextBlock _dataFolderText = null!;
     private FrameworkElement _dataFolderItem = null!;
     private FrameworkElement _viewSwitchItem = null!;
@@ -291,7 +292,24 @@ public sealed class MainWindow : Window
         var contentHost = new Grid();
         contentHost.Children.Add(_workspace);
         contentHost.Children.Add(_outlineView);
+
+        // "Marked as Final" banner (Word's advisory read-only bar): a subtle amber strip docked above the
+        // editing surface, with an "Edit Anyway" button that clears the flag. Collapsed until the document
+        // is marked final; kept in sync via the editor's ProtectionStateChanged event.
+        _markedAsFinalBanner = BuildMarkedAsFinalBanner();
+        DockPanel.SetDock(_markedAsFinalBanner, Dock.Top);
+        body.Children.Add(_markedAsFinalBanner);
+
         body.Children.Add(contentHost);
+
+        // Keep the banner and the Protect-group ribbon toggles in sync with the editor's protection /
+        // Mark-as-Final state, however it changes (ribbon command, load, or "Edit Anyway").
+        editor.ProtectionStateChanged += (_, _) =>
+        {
+            RefreshMarkedAsFinalBanner();
+            _stateStore.SetChecked("freew.mark-as-final", _editor.IsMarkedAsFinal);
+            _stateStore.SetChecked("freew.restrict-editing", _editor.IsProtected);
+        };
 
         // Keep the indent/tab markers on the horizontal ruler following the caret/selection.
         editor.SelectionChanged += (_, _) => _hRuler.Refresh();
@@ -492,6 +510,48 @@ public sealed class MainWindow : Window
     // is allowed to condense/ellipsize as the window narrows, while the right-side view + zoom controls are
     // pinned in Auto columns so they stay fully visible. The whole strip uses the same #2B579A surface as the
     // title bar with the shared clean (flat, hover-only) footer button styles.
+    // Word's "Marked as Final" advisory bar: a subtle amber strip above the editing surface with the
+    // information text and an "Edit Anyway" button that clears the flag (re-enabling editing). Collapsed
+    // until the document is marked final; see RefreshMarkedAsFinalBanner.
+    private Border BuildMarkedAsFinalBanner()
+    {
+        var text = new TextBlock
+        {
+            Text = "Marked as Final  An author has marked this document as final to discourage editing.",
+            Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x4D, 0x00)),
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            Margin = new Thickness(0, 0, 12, 0)
+        };
+
+        var editAnyway = new Button
+        {
+            Content = "Edit Anyway",
+            MinWidth = 96,
+            Padding = new Thickness(8, 2, 8, 2),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        editAnyway.Click += (_, _) => _editor.SetMarkedAsFinal(false);
+
+        var row = new DockPanel { LastChildFill = true, Margin = new Thickness(12, 4, 12, 4) };
+        DockPanel.SetDock(editAnyway, Dock.Right);
+        row.Children.Add(editAnyway);
+        row.Children.Add(text);
+
+        return new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(0xFD, 0xF3, 0xD0)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xE3, 0xC8, 0x70)),
+            BorderThickness = new Thickness(0, 0, 0, 1),
+            Visibility = Visibility.Collapsed,
+            Child = row
+        };
+    }
+
+    // Show the "Marked as Final" banner only while the document carries Word's advisory read-only flag.
+    private void RefreshMarkedAsFinalBanner() =>
+        _markedAsFinalBanner.Visibility = _editor.IsMarkedAsFinal ? Visibility.Visible : Visibility.Collapsed;
+
     private Border BuildStatusBar()
     {
         var grid = new Grid { VerticalAlignment = VerticalAlignment.Center, ClipToBounds = true };
