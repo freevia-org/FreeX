@@ -288,4 +288,48 @@
   <data name="PageSetup_CommentsNone" xml:space="preserve"><value>(Aucun)</value></data>
   <data name="PageSetup_CommentsAtEnd" xml:space="preserve"><value>En fin de feuille</value></data>
   <data name="PageSetup_CommentsAsDisplayed" xml:space="preserve"><value>Tels qu'affichés sur la feuille</value></data>
+  <data name="PasteNames_Title" xml:space="preserve"><value>Coller un nom</value></data>
+  <data name="PasteNames_NamesLabel" xml:space="preserve"><value>Coller le nom</value></data>
+  <data name="PasteNames_PasteList" xml:space="preserve"><value>Coller la liste</value></data>
+  <data name="PasteNames_NameColumn" xml:space="preserve"><value>Nom</value></data>
+  <data name="PasteNames_RefersToColumn" xml:space="preserve"><value>Fait référence à</value></data>
+  <data name="PasteNames_NoNames" xml:space="preserve"><value>Aucun nom défini à coller.</value></data>
+  <data name="PasteNames_NotEnoughColumns" xml:space="preserve"><value>Il n'y a pas assez de colonnes pour coller la liste des noms.</value></data>
+  <data name="PasteNames_NotEnoughRows" xml:space="preserve"><value>Il n'y a pas assez de lignes pour coller la liste des noms.</value></data>
+  <data name="PasteNames_Pasted" xml:space="preserve"><value>Nom « {0} » collé</value></data>
+  <data name="PasteNames_PastedList" xml:space="preserve"><value>Liste de {0} nom(s) collée</value></data>
+  <data name="AllowEditRange_Title" xml:space="preserve"><value>Autoriser les utilisateurs à modifier les plages</value></data>
+  <data name="AllowEditRange_Intro" xml:space="preserve"><value>Plages déverrouillées par un mot de passe lorsque la feuille est protégée :</value></data>
+  <data name="AllowEditRange_ExistingRangesLabel" xml:space="preserve"><value>Plages</value></data>
+  <data name="AllowEditRange_RangeLabel" xml:space="preserve"><value>Fait référence aux cellules :</value></data>
+  <data name="AllowEditRange_Example" xml:space="preserve"><value>Par exemple, A1:B5 ou Feuil1!A1.</value></data>
+  <data name="AllowEditRange_NewButton" xml:space="preserve"><value>Nouveau...</value></data>
+  <data name="AllowEditRange_ModifyButton" xml:space="preserve"><value>Modifier...</value></data>
+  <data name="AllowEditRange_DeleteButton" xml:space="preserve"><value>Supprimer</value></data>
+  <data name="AllowEditRange_InvalidRange" xml:space="preserve"><value>Entrez une plage de cellules valide (par exemple, A1:B5).</value></data>
+  <data name="AllowEditRange_Added" xml:space="preserve"><value>Plage de modification {0} ajoutée</value></data>
+  <data name="AllowEditRange_Modified" xml:space="preserve"><value>Plage de modification {0} modifiée</value></data>
+  <data name="AllowEditRange_Removed" xml:space="preserve"><value>Plage de modification {0} supprimée</value></data>
+  <data name="FillSeries_Title" xml:space="preserve"><value>Série</value></data>
+  <data name="FillSeries_SeriesInHeader" xml:space="preserve"><value>Série dans</value></data>
+  <data name="FillSeries_Rows" xml:space="preserve"><value>Lignes</value></data>
+  <data name="FillSeries_Columns" xml:space="preserve"><value>Colonnes</value></data>
+  <data name="FillSeries_TypeHeader" xml:space="preserve"><value>Type</value></data>
+  <data name="FillSeries_Linear" xml:space="preserve"><value>Linéaire</value></data>
+  <data name="FillSeries_Growth" xml:space="preserve"><value>Géométrique</value></data>
+  <data name="FillSeries_Date" xml:space="preserve"><value>Date</value></data>
+  <data name="FillSeries_AutoFill" xml:space="preserve"><value>Recopie</value></data>
+  <data name="FillSeries_DateUnitHeader" xml:space="preserve"><value>Unité de date</value></data>
+  <data name="FillSeries_Day" xml:space="preserve"><value>Jour</value></data>
+  <data name="FillSeries_Weekday" xml:space="preserve"><value>Jour ouvré</value></data>
+  <data name="FillSeries_Month" xml:space="preserve"><value>Mois</value></data>
+  <data name="FillSeries_Year" xml:space="preserve"><value>Année</value></data>
+  <data name="FillSeries_StepValueLabel" xml:space="preserve"><value>Valeur du pas :</value></data>
+  <data name="FillSeries_StopValueLabel" xml:space="preserve"><value>Dernière valeur :</value></data>
+  <data name="FillSeries_InvalidStep" xml:space="preserve"><value>Entrez une valeur de pas valide.</value></data>
+  <data name="FillSeries_InvalidStop" xml:space="preserve"><value>Entrez une dernière valeur valide, ou laissez ce champ vide.</value></data>
+  <data name="FillSeries_NeedsSelection" xml:space="preserve"><value>Sélectionnez au moins deux cellules dans une ligne ou une colonne pour remplir une série.</value></data>
+  <data name="FillSeries_NoSeed" xml:space="preserve"><value>La première cellule de la sélection doit contenir un nombre (ou une date pour une série de dates).</value></data>
+  <data name="FillSeries_Filled" xml:space="preserve"><value>Série remplie dans {0}</value></data>
+  <data name="FillSeries_Failed" xml:space="preserve"><value>Le remplissage de la série a échoué.</value></data>
 </root>
