@@ -22,7 +22,7 @@ Latest verified tester pre-release: [FreeX (Test Release) v0.8.105](https://gith
 
 Start with the [user guide](docs/user/guide.md) and the [documentation index](docs/README.md). Current build scope and known limitations are tracked in [outstanding build](docs/planning/outstanding-build.md) and [fidelity contract](docs/formats/fidelity-contract.md).
 
-This monorepo also hosts **FreeW**, a sibling `.docx` word processor built on the same shared tier — see [freew/README.md](freew/README.md).
+This monorepo also hosts **FreeW**, a sibling `.docx` word processor built on the same shared tier. See [freew/README.md](freew/README.md).
 
 ## Legal And Privacy
 
