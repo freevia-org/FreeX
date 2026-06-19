@@ -237,4 +237,114 @@
   <data name="FormatCells_MoreFillColors" xml:space="preserve"><value>More Fill Colors</value></data>
   <data name="FormatCells_MorePatternColors" xml:space="preserve"><value>More Pattern Colors</value></data>
   <data name="FormatCells_MoreBorderColors" xml:space="preserve"><value>More Border Colors</value></data>
+  <data name="PageSetup_Title" xml:space="preserve"><value>Page Setup</value></data>
+  <data name="PageSetup_PageTab" xml:space="preserve"><value>Page</value></data>
+  <data name="PageSetup_MarginsTab" xml:space="preserve"><value>Margins</value></data>
+  <data name="PageSetup_HeaderFooterTab" xml:space="preserve"><value>Header/Footer</value></data>
+  <data name="PageSetup_SheetTab" xml:space="preserve"><value>Sheet</value></data>
+  <data name="PageSetup_Orientation" xml:space="preserve"><value>Orientation</value></data>
+  <data name="PageSetup_Portrait" xml:space="preserve"><value>Portrait</value></data>
+  <data name="PageSetup_Landscape" xml:space="preserve"><value>Landscape</value></data>
+  <data name="PageSetup_PaperSize" xml:space="preserve"><value>Paper size</value></data>
+  <data name="PageSetup_Scaling" xml:space="preserve"><value>Scaling</value></data>
+  <data name="PageSetup_AdjustTo" xml:space="preserve"><value>Adjust to (% of normal size)</value></data>
+  <data name="PageSetup_FitTo" xml:space="preserve"><value>Fit to</value></data>
+  <data name="PageSetup_WideBy" xml:space="preserve"><value>page(s) wide by</value></data>
+  <data name="PageSetup_Tall" xml:space="preserve"><value>tall</value></data>
+  <data name="PageSetup_FirstPageNumber" xml:space="preserve"><value>First page number</value></data>
+  <data name="PageSetup_PrintQuality" xml:space="preserve"><value>Print quality (DPI)</value></data>
+  <data name="PageSetup_PrintQualityHelp" xml:space="preserve"><value>Resolution in dots per inch, or blank for the printer default.</value></data>
+  <data name="PageSetup_Auto" xml:space="preserve"><value>Auto</value></data>
+  <data name="PageSetup_MarginsLabel" xml:space="preserve"><value>Margins (left, right, top, bottom inches)</value></data>
+  <data name="PageSetup_MarginsHelp" xml:space="preserve"><value>Left, right, top, bottom in inches.</value></data>
+  <data name="PageSetup_HeaderMargin" xml:space="preserve"><value>Header margin (inches)</value></data>
+  <data name="PageSetup_FooterMargin" xml:space="preserve"><value>Footer margin (inches)</value></data>
+  <data name="PageSetup_CenterOnPage" xml:space="preserve"><value>Center on page</value></data>
+  <data name="PageSetup_CenterHorizontally" xml:space="preserve"><value>Horizontally</value></data>
+  <data name="PageSetup_CenterVertically" xml:space="preserve"><value>Vertically</value></data>
+  <data name="PageSetup_HeaderPreset" xml:space="preserve"><value>Header</value></data>
+  <data name="PageSetup_FooterPreset" xml:space="preserve"><value>Footer</value></data>
+  <data name="PageSetup_CustomHeader" xml:space="preserve"><value>Custom header (left, center, right)</value></data>
+  <data name="PageSetup_CustomFooter" xml:space="preserve"><value>Custom footer (left, center, right)</value></data>
+  <data name="PageSetup_DifferentFirstPage" xml:space="preserve"><value>Different first page</value></data>
+  <data name="PageSetup_DifferentOddEven" xml:space="preserve"><value>Different odd and even pages</value></data>
+  <data name="PageSetup_ScaleWithDocument" xml:space="preserve"><value>Scale with document</value></data>
+  <data name="PageSetup_AlignWithMargins" xml:space="preserve"><value>Align with page margins</value></data>
+  <data name="PageSetup_None" xml:space="preserve"><value>(none)</value></data>
+  <data name="PageSetup_PresetPage" xml:space="preserve"><value>Page 1</value></data>
+  <data name="PageSetup_PresetPageOf" xml:space="preserve"><value>Page 1 of ?</value></data>
+  <data name="PageSetup_PresetSheetName" xml:space="preserve"><value>Sheet name</value></data>
+  <data name="PageSetup_PresetFileName" xml:space="preserve"><value>File name</value></data>
+  <data name="PageSetup_PresetFileSheet" xml:space="preserve"><value>File name, sheet name</value></data>
+  <data name="PageSetup_PresetDate" xml:space="preserve"><value>Date</value></data>
+  <data name="PageSetup_PresetTime" xml:space="preserve"><value>Time</value></data>
+  <data name="PageSetup_PresetDatePage" xml:space="preserve"><value>Date, Page 1</value></data>
+  <data name="PageSetup_PresetConfidential" xml:space="preserve"><value>Confidential, Page 1</value></data>
+  <data name="PageSetup_PresetFilePath" xml:space="preserve"><value>File path</value></data>
+  <data name="PageSetup_PrintArea" xml:space="preserve"><value>Print area</value></data>
+  <data name="PageSetup_PrintAreaHelp" xml:space="preserve"><value>Cell range like A1:D20, or blank to clear.</value></data>
+  <data name="PageSetup_RepeatRows" xml:space="preserve"><value>Rows to repeat at top</value></data>
+  <data name="PageSetup_RepeatRowsHelp" xml:space="preserve"><value>Row range like 1:2, or blank for none.</value></data>
+  <data name="PageSetup_RepeatColumns" xml:space="preserve"><value>Columns to repeat at left</value></data>
+  <data name="PageSetup_RepeatColumnsHelp" xml:space="preserve"><value>Column range like A:B, or blank for none.</value></data>
+  <data name="PageSetup_PrintGridlines" xml:space="preserve"><value>Print gridlines</value></data>
+  <data name="PageSetup_PrintHeadings" xml:space="preserve"><value>Print row and column headings</value></data>
+  <data name="PageSetup_BlackAndWhite" xml:space="preserve"><value>Black and white</value></data>
+  <data name="PageSetup_DraftQuality" xml:space="preserve"><value>Draft quality</value></data>
+  <data name="PageSetup_PageOrder" xml:space="preserve"><value>Page order</value></data>
+  <data name="PageSetup_DownThenOver" xml:space="preserve"><value>Down, then over</value></data>
+  <data name="PageSetup_OverThenDown" xml:space="preserve"><value>Over, then down</value></data>
+  <data name="PageSetup_CellErrorsAs" xml:space="preserve"><value>Cell errors as</value></data>
+  <data name="PageSetup_ErrorsDisplayed" xml:space="preserve"><value>Displayed</value></data>
+  <data name="PageSetup_ErrorsBlank" xml:space="preserve"><value>&lt;blank&gt;</value></data>
+  <data name="PageSetup_ErrorsDash" xml:space="preserve"><value>--</value></data>
+  <data name="PageSetup_ErrorsNotAvailable" xml:space="preserve"><value>#N/A</value></data>
+  <data name="PageSetup_Comments" xml:space="preserve"><value>Comments</value></data>
+  <data name="PageSetup_CommentsNone" xml:space="preserve"><value>(None)</value></data>
+  <data name="PageSetup_CommentsAtEnd" xml:space="preserve"><value>At end of sheet</value></data>
+  <data name="PageSetup_CommentsAsDisplayed" xml:space="preserve"><value>As displayed on sheet</value></data>
+  <data name="PasteNames_Title" xml:space="preserve"><value>Paste Name</value></data>
+  <data name="PasteNames_NamesLabel" xml:space="preserve"><value>Paste name</value></data>
+  <data name="PasteNames_PasteList" xml:space="preserve"><value>Paste List</value></data>
+  <data name="PasteNames_NameColumn" xml:space="preserve"><value>Name</value></data>
+  <data name="PasteNames_RefersToColumn" xml:space="preserve"><value>Refers To</value></data>
+  <data name="PasteNames_NoNames" xml:space="preserve"><value>There are no defined names to paste.</value></data>
+  <data name="PasteNames_NotEnoughColumns" xml:space="preserve"><value>There are not enough columns to paste the list of names.</value></data>
+  <data name="PasteNames_NotEnoughRows" xml:space="preserve"><value>There are not enough rows to paste the list of names.</value></data>
+  <data name="PasteNames_Pasted" xml:space="preserve"><value>Pasted name '{0}'</value></data>
+  <data name="PasteNames_PastedList" xml:space="preserve"><value>Pasted list of {0} name(s)</value></data>
+  <data name="AllowEditRange_Title" xml:space="preserve"><value>Allow Users to Edit Ranges</value></data>
+  <data name="AllowEditRange_Intro" xml:space="preserve"><value>Ranges unlocked by a password when the sheet is protected:</value></data>
+  <data name="AllowEditRange_ExistingRangesLabel" xml:space="preserve"><value>Ranges</value></data>
+  <data name="AllowEditRange_RangeLabel" xml:space="preserve"><value>Refers to cells:</value></data>
+  <data name="AllowEditRange_Example" xml:space="preserve"><value>For example, A1:B5 or Sheet1!A1.</value></data>
+  <data name="AllowEditRange_NewButton" xml:space="preserve"><value>New...</value></data>
+  <data name="AllowEditRange_ModifyButton" xml:space="preserve"><value>Modify...</value></data>
+  <data name="AllowEditRange_DeleteButton" xml:space="preserve"><value>Delete</value></data>
+  <data name="AllowEditRange_InvalidRange" xml:space="preserve"><value>Enter a valid cell range (for example, A1:B5).</value></data>
+  <data name="AllowEditRange_Added" xml:space="preserve"><value>Added edit range {0}</value></data>
+  <data name="AllowEditRange_Modified" xml:space="preserve"><value>Modified edit range {0}</value></data>
+  <data name="AllowEditRange_Removed" xml:space="preserve"><value>Removed edit range {0}</value></data>
+  <data name="FillSeries_Title" xml:space="preserve"><value>Series</value></data>
+  <data name="FillSeries_SeriesInHeader" xml:space="preserve"><value>Series in</value></data>
+  <data name="FillSeries_Rows" xml:space="preserve"><value>Rows</value></data>
+  <data name="FillSeries_Columns" xml:space="preserve"><value>Columns</value></data>
+  <data name="FillSeries_TypeHeader" xml:space="preserve"><value>Type</value></data>
+  <data name="FillSeries_Linear" xml:space="preserve"><value>Linear</value></data>
+  <data name="FillSeries_Growth" xml:space="preserve"><value>Growth</value></data>
+  <data name="FillSeries_Date" xml:space="preserve"><value>Date</value></data>
+  <data name="FillSeries_AutoFill" xml:space="preserve"><value>AutoFill</value></data>
+  <data name="FillSeries_DateUnitHeader" xml:space="preserve"><value>Date unit</value></data>
+  <data name="FillSeries_Day" xml:space="preserve"><value>Day</value></data>
+  <data name="FillSeries_Weekday" xml:space="preserve"><value>Weekday</value></data>
+  <data name="FillSeries_Month" xml:space="preserve"><value>Month</value></data>
+  <data name="FillSeries_Year" xml:space="preserve"><value>Year</value></data>
+  <data name="FillSeries_StepValueLabel" xml:space="preserve"><value>Step value:</value></data>
+  <data name="FillSeries_StopValueLabel" xml:space="preserve"><value>Stop value:</value></data>
+  <data name="FillSeries_InvalidStep" xml:space="preserve"><value>Enter a valid step value.</value></data>
+  <data name="FillSeries_InvalidStop" xml:space="preserve"><value>Enter a valid stop value, or leave it blank.</value></data>
+  <data name="FillSeries_NeedsSelection" xml:space="preserve"><value>Select two or more cells in a row or column to fill a series.</value></data>
+  <data name="FillSeries_NoSeed" xml:space="preserve"><value>The first cell of the selection must contain a number (or a date for a date series).</value></data>
+  <data name="FillSeries_Filled" xml:space="preserve"><value>Filled series in {0}</value></data>
+  <data name="FillSeries_Failed" xml:space="preserve"><value>Fill Series failed.</value></data>
 </root>

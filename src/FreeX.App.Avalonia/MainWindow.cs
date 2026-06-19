@@ -371,6 +371,7 @@ public sealed partial class MainWindow : Window
     private readonly MenuItem _fillRightFlyoutItem = new();
     private readonly MenuItem _fillUpFlyoutItem = new();
     private readonly MenuItem _fillLeftFlyoutItem = new();
+    private readonly MenuItem _fillSeriesFlyoutItem = new();
     private readonly DropDownButton _clearButton = new();
     private readonly MenuItem _clearAllFlyoutItem = new();
     private readonly MenuItem _clearFormatsFlyoutItem = new();
@@ -492,6 +493,7 @@ public sealed partial class MainWindow : Window
     private readonly NativeMenuItem _fillRightMenuItem = new();
     private readonly NativeMenuItem _fillUpMenuItem = new();
     private readonly NativeMenuItem _fillLeftMenuItem = new();
+    private readonly NativeMenuItem _fillSeriesMenuItem = new();
     private readonly NativeMenuItem _clearMenuItem = new();
     private readonly NativeMenuItem _clearAllMenuItem = new();
     private readonly NativeMenuItem _clearFormatsMenuItem = new();
@@ -670,11 +672,13 @@ public sealed partial class MainWindow : Window
                     ["formulas.nameManager"] = NameManager,
                     ["formulas.defineName"] = DefineName,
                     ["formulas.createFromSelection"] = CreateNamesFromSelection,
+                    ["Use in Formula"] = PasteNames,
                     // Review tab.
                     ["review.spelling"] = () => _ = ShowSpellingDialogAsync(),
                     ["review.checkAccessibility"] = () => _ = ShowReviewSummaryDialogAsync(focusAccessibility: true),
                     ["review.protectSheet"] = () => _ = ShowProtectSheetDialogAsync(),
                     ["review.protectWorkbook"] = () => _ = ShowProtectWorkbookDialogAsync(),
+                    ["Allow Users to Edit Ranges"] = AllowEditRanges,
                     // View tab.
                     ["view.gridlines"] = ToggleShowGridlines,
                     ["view.headings"] = ToggleShowHeadings,
@@ -727,7 +731,7 @@ public sealed partial class MainWindow : Window
                     ["Right"] = () => FillSelectedRange(FillCellsDirection.Right),
                     ["Up"] = () => FillSelectedRange(FillCellsDirection.Up),
                     ["Left"] = () => FillSelectedRange(FillCellsDirection.Left),
-                    ["Series"] = () => RefreshShell("Fill Series isn't supported yet; use Fill Down/Right/Up/Left to copy."),
+                    ["Series"] = FillSeries,
                     // Home ▸ Editing ▸ Clear dropdown items (canonical menu ids from HomeRibbonMenus.Clear).
                     ["Clear All"] = ClearSelectedRangeAll,
                     ["Clear Formats"] = ClearSelectedRangeFormats,
@@ -1387,6 +1391,9 @@ public sealed partial class MainWindow : Window
         _fillLeftMenuItem.Header = "Left";
         _fillLeftMenuItem.Click += (_, _) => FillSelectedRange(FillCellsDirection.Left);
 
+        _fillSeriesMenuItem.Header = "Series...";
+        _fillSeriesMenuItem.Click += (_, _) => FillSeries();
+
         _clearMenuItem.Header = "Clear";
         _clearMenuItem.Menu = CreateNativeClearMenu();
 
@@ -2012,6 +2019,10 @@ public sealed partial class MainWindow : Window
         _fillLeftFlyoutItem.Header = "Left";
         _fillLeftFlyoutItem.Click += (_, _) => FillSelectedRange(FillCellsDirection.Left);
 
+        _fillSeriesFlyoutItem.Header = "Series...";
+        AutomationProperties.SetAutomationId(_fillSeriesFlyoutItem, "HomeFillSeriesMenuItem");
+        _fillSeriesFlyoutItem.Click += (_, _) => FillSeries();
+
         _clearButton.Content = "Clear";
         _clearButton.Padding = new Thickness(10, 4);
         _clearButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
@@ -2407,10 +2418,14 @@ public sealed partial class MainWindow : Window
         _fillRightFlyoutItem.IsEnabled = isIdle && _session.CanFillSelectedRange(FillCellsDirection.Right);
         _fillUpFlyoutItem.IsEnabled = isIdle && _session.CanFillSelectedRange(FillCellsDirection.Up);
         _fillLeftFlyoutItem.IsEnabled = isIdle && _session.CanFillSelectedRange(FillCellsDirection.Left);
+        _fillSeriesFlyoutItem.IsEnabled = isIdle &&
+            (_session.CanFillSelectedRange(FillCellsDirection.Down) ||
+             _session.CanFillSelectedRange(FillCellsDirection.Right));
         _fillCellsButton.IsEnabled = _fillDownFlyoutItem.IsEnabled ||
             _fillRightFlyoutItem.IsEnabled ||
             _fillUpFlyoutItem.IsEnabled ||
-            _fillLeftFlyoutItem.IsEnabled;
+            _fillLeftFlyoutItem.IsEnabled ||
+            _fillSeriesFlyoutItem.IsEnabled;
         _clearButton.IsEnabled = isIdle;
         _boldButton.IsEnabled = isIdle;
         _italicButton.IsEnabled = isIdle;
@@ -2533,6 +2548,7 @@ public sealed partial class MainWindow : Window
         _fillRightMenuItem.IsEnabled = _fillRightFlyoutItem.IsEnabled;
         _fillUpMenuItem.IsEnabled = _fillUpFlyoutItem.IsEnabled;
         _fillLeftMenuItem.IsEnabled = _fillLeftFlyoutItem.IsEnabled;
+        _fillSeriesMenuItem.IsEnabled = _fillSeriesFlyoutItem.IsEnabled;
         _clearMenuItem.IsEnabled = _clearButton.IsEnabled;
         _clearAllMenuItem.IsEnabled = _clearButton.IsEnabled;
         _clearFormatsMenuItem.IsEnabled = _clearButton.IsEnabled;
@@ -4189,12 +4205,14 @@ public sealed partial class MainWindow : Window
     private MenuFlyout CreateFillCellsFlyout() =>
         new()
         {
-            ItemsSource = new[]
+            ItemsSource = new Control[]
             {
                 _fillDownFlyoutItem,
                 _fillRightFlyoutItem,
                 _fillUpFlyoutItem,
                 _fillLeftFlyoutItem,
+                new Separator(),
+                _fillSeriesFlyoutItem,
             },
         };
 
@@ -4237,6 +4255,8 @@ public sealed partial class MainWindow : Window
         menu.Items.Add(_fillRightMenuItem);
         menu.Items.Add(_fillUpMenuItem);
         menu.Items.Add(_fillLeftMenuItem);
+        menu.Items.Add(new NativeMenuItemSeparator());
+        menu.Items.Add(_fillSeriesMenuItem);
         return menu;
     }
 

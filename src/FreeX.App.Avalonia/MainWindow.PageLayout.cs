@@ -11,6 +11,7 @@ using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 using AvaloniaControlShapesLine = Avalonia.Controls.Shapes.Line;
+using AvaloniaDock = Avalonia.Controls.Dock;
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
 using AvaloniaRectangle = Avalonia.Controls.Shapes.Rectangle;
 using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
@@ -78,6 +79,14 @@ public sealed partial class MainWindow
         if (!pageSetupResult.Success)
         {
             ShowEditIssue(pageSetupResult.ErrorMessage ?? "Page setup failed.");
+            return;
+        }
+
+        var headerFooterCommand = PageSetupDialogModel.BuildHeaderFooterCommand(sheet, fields);
+        var headerFooterResult = _session.ExecuteReviewCommand(headerFooterCommand);
+        if (!headerFooterResult.Success)
+        {
+            ShowEditIssue(headerFooterResult.ErrorMessage ?? "Header and footer update failed.");
             return;
         }
 
@@ -253,23 +262,40 @@ public sealed partial class MainWindow
         });
     }
 
+    private static TextBlock PageSetupLabel(string text) =>
+        new() { Text = text, VerticalAlignment = AvaloniaVerticalAlignment.Center };
+
+    private static int PageSetupPresetIndex(string center)
+    {
+        var presets = PageSetupDialogModel.HeaderFooterPresets;
+        for (var i = 0; i < presets.Count; i++)
+        {
+            if (string.Equals(presets[i], center, StringComparison.Ordinal))
+                return i;
+        }
+
+        return 0;
+    }
+
     private async Task<PageSetupDialogFields?> ShowPageSetupDialogCoreAsync(PageSetupDialogFields initial)
     {
         PageSetupDialogFields? result = null;
         var dialog = new Window
         {
-            Title = "Page Setup",
-            Width = 440,
-            Height = 540,
-            MinWidth = 420,
+            Title = UiText.Get("PageSetup_Title"),
+            Width = 460,
+            Height = 560,
+            MinWidth = 440,
             MinHeight = 520,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
+        AutomationProperties.SetAutomationId(dialog, "PageSetupDialog");
 
+        // --- Page tab ---
         var orientationBox = new ComboBox
         {
-            ItemsSource = new[] { "Portrait", "Landscape" },
+            ItemsSource = new[] { UiText.Get("PageSetup_Portrait"), UiText.Get("PageSetup_Landscape") },
             SelectedIndex = initial.Orientation == WorksheetPageOrientation.Landscape ? 1 : 0,
             MinWidth = 220,
         };
@@ -284,13 +310,9 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(paperBox, "PageSetupPaperSizeBox");
 
-        var marginsBox = new TextBox { Text = initial.MarginsText, MinWidth = 220 };
-        AutomationProperties.SetAutomationId(marginsBox, "PageSetupMarginsBox");
-        AutomationProperties.SetHelpText(marginsBox, "Left, right, top, bottom in inches.");
-
         var adjustRadio = new RadioButton
         {
-            Content = "Adjust to (% of normal size)",
+            Content = UiText.Get("PageSetup_AdjustTo"),
             GroupName = "PageSetupScaling",
             IsChecked = initial.ScalingMode == PageSetupScalingMode.AdjustToPercent,
         };
@@ -300,7 +322,7 @@ public sealed partial class MainWindow
 
         var fitRadio = new RadioButton
         {
-            Content = "Fit to (pages wide x tall)",
+            Content = UiText.Get("PageSetup_FitTo"),
             GroupName = "PageSetupScaling",
             IsChecked = initial.ScalingMode == PageSetupScalingMode.FitToPages,
         };
@@ -310,30 +332,193 @@ public sealed partial class MainWindow
         var fitTallBox = new TextBox { Text = initial.FitToTallText, MinWidth = 70 };
         AutomationProperties.SetAutomationId(fitTallBox, "PageSetupFitTallBox");
 
+        var firstPageNumberBox = new TextBox
+        {
+            Text = initial.FirstPageNumberText,
+            MinWidth = 220,
+            PlaceholderText = UiText.Get("PageSetup_Auto"),
+        };
+        AutomationProperties.SetAutomationId(firstPageNumberBox, "PageSetupFirstPageNumberBox");
+
+        var printQualityBox = new TextBox
+        {
+            Text = initial.PrintQualityDpiText,
+            MinWidth = 220,
+            PlaceholderText = UiText.Get("PageSetup_Auto"),
+        };
+        AutomationProperties.SetAutomationId(printQualityBox, "PageSetupPrintQualityBox");
+        AutomationProperties.SetHelpText(printQualityBox, UiText.Get("PageSetup_PrintQualityHelp"));
+
+        // --- Margins tab ---
+        var marginsBox = new TextBox { Text = initial.MarginsText, MinWidth = 220 };
+        AutomationProperties.SetAutomationId(marginsBox, "PageSetupMarginsBox");
+        AutomationProperties.SetHelpText(marginsBox, UiText.Get("PageSetup_MarginsHelp"));
+        var headerMarginBox = new TextBox { Text = initial.HeaderMarginText, MinWidth = 220 };
+        AutomationProperties.SetAutomationId(headerMarginBox, "PageSetupHeaderMarginBox");
+        var footerMarginBox = new TextBox { Text = initial.FooterMarginText, MinWidth = 220 };
+        AutomationProperties.SetAutomationId(footerMarginBox, "PageSetupFooterMarginBox");
+        var centerHorizontallyCheck = new CheckBox
+        {
+            Content = UiText.Get("PageSetup_CenterHorizontally"),
+            IsChecked = initial.CenterHorizontally,
+        };
+        AutomationProperties.SetAutomationId(centerHorizontallyCheck, "PageSetupCenterHorizontallyCheck");
+        var centerVerticallyCheck = new CheckBox
+        {
+            Content = UiText.Get("PageSetup_CenterVertically"),
+            IsChecked = initial.CenterVertically,
+        };
+        AutomationProperties.SetAutomationId(centerVerticallyCheck, "PageSetupCenterVerticallyCheck");
+
+        // --- Header/Footer tab ---
+        var presetLabels = new[]
+        {
+            UiText.Get("PageSetup_None"),
+            UiText.Get("PageSetup_PresetPage"),
+            UiText.Get("PageSetup_PresetPageOf"),
+            UiText.Get("PageSetup_PresetSheetName"),
+            UiText.Get("PageSetup_PresetFileName"),
+            UiText.Get("PageSetup_PresetFileSheet"),
+            UiText.Get("PageSetup_PresetDate"),
+            UiText.Get("PageSetup_PresetTime"),
+            UiText.Get("PageSetup_PresetDatePage"),
+            UiText.Get("PageSetup_PresetConfidential"),
+            UiText.Get("PageSetup_PresetFilePath"),
+        };
+        var headerPresetBox = new ComboBox
+        {
+            ItemsSource = presetLabels,
+            SelectedIndex = PageSetupPresetIndex(initial.Header.Center),
+            MinWidth = 260,
+        };
+        AutomationProperties.SetAutomationId(headerPresetBox, "PageSetupHeaderPresetBox");
+        var footerPresetBox = new ComboBox
+        {
+            ItemsSource = presetLabels,
+            SelectedIndex = PageSetupPresetIndex(initial.Footer.Center),
+            MinWidth = 260,
+        };
+        AutomationProperties.SetAutomationId(footerPresetBox, "PageSetupFooterPresetBox");
+
+        var headerLeftBox = new TextBox { Text = initial.Header.Left, MinWidth = 120 };
+        AutomationProperties.SetAutomationId(headerLeftBox, "PageSetupCustomHeaderLeftBox");
+        var headerCenterBox = new TextBox { Text = initial.Header.Center, MinWidth = 120 };
+        AutomationProperties.SetAutomationId(headerCenterBox, "PageSetupCustomHeaderCenterBox");
+        var headerRightBox = new TextBox { Text = initial.Header.Right, MinWidth = 120 };
+        AutomationProperties.SetAutomationId(headerRightBox, "PageSetupCustomHeaderRightBox");
+        var footerLeftBox = new TextBox { Text = initial.Footer.Left, MinWidth = 120 };
+        AutomationProperties.SetAutomationId(footerLeftBox, "PageSetupCustomFooterLeftBox");
+        var footerCenterBox = new TextBox { Text = initial.Footer.Center, MinWidth = 120 };
+        AutomationProperties.SetAutomationId(footerCenterBox, "PageSetupCustomFooterCenterBox");
+        var footerRightBox = new TextBox { Text = initial.Footer.Right, MinWidth = 120 };
+        AutomationProperties.SetAutomationId(footerRightBox, "PageSetupCustomFooterRightBox");
+
+        // A preset selection fills the matching custom center box (mirrors the WPF preset combo).
+        headerPresetBox.SelectionChanged += (_, _) =>
+        {
+            var idx = headerPresetBox.SelectedIndex;
+            if (idx >= 0 && idx < PageSetupDialogModel.HeaderFooterPresets.Count)
+                headerCenterBox.Text = PageSetupDialogModel.HeaderFooterPresets[idx];
+        };
+        footerPresetBox.SelectionChanged += (_, _) =>
+        {
+            var idx = footerPresetBox.SelectedIndex;
+            if (idx >= 0 && idx < PageSetupDialogModel.HeaderFooterPresets.Count)
+                footerCenterBox.Text = PageSetupDialogModel.HeaderFooterPresets[idx];
+        };
+
+        var differentFirstPageCheck = new CheckBox
+        {
+            Content = UiText.Get("PageSetup_DifferentFirstPage"),
+            IsChecked = initial.DifferentFirstPage,
+        };
+        AutomationProperties.SetAutomationId(differentFirstPageCheck, "PageSetupDifferentFirstPageCheck");
+        var differentOddEvenCheck = new CheckBox
+        {
+            Content = UiText.Get("PageSetup_DifferentOddEven"),
+            IsChecked = initial.DifferentOddEvenPages,
+        };
+        AutomationProperties.SetAutomationId(differentOddEvenCheck, "PageSetupDifferentOddEvenCheck");
+        var scaleWithDocumentCheck = new CheckBox
+        {
+            Content = UiText.Get("PageSetup_ScaleWithDocument"),
+            IsChecked = initial.ScaleHeaderFooterWithDocument,
+        };
+        AutomationProperties.SetAutomationId(scaleWithDocumentCheck, "PageSetupScaleWithDocumentCheck");
+        var alignWithMarginsCheck = new CheckBox
+        {
+            Content = UiText.Get("PageSetup_AlignWithMargins"),
+            IsChecked = initial.AlignHeaderFooterWithMargins,
+        };
+        AutomationProperties.SetAutomationId(alignWithMarginsCheck, "PageSetupAlignWithMarginsCheck");
+
+        // --- Sheet tab ---
         var printAreaBox = new TextBox { Text = initial.PrintAreaText, MinWidth = 220 };
         AutomationProperties.SetAutomationId(printAreaBox, "PageSetupPrintAreaBox");
-        AutomationProperties.SetHelpText(printAreaBox, "Cell range like A1:D20, or blank to clear.");
+        AutomationProperties.SetHelpText(printAreaBox, UiText.Get("PageSetup_PrintAreaHelp"));
 
         var repeatRowsBox = new TextBox { Text = initial.RepeatRowsText, MinWidth = 220 };
         AutomationProperties.SetAutomationId(repeatRowsBox, "PageSetupRepeatRowsBox");
-        AutomationProperties.SetHelpText(repeatRowsBox, "Row range like 1:2, or blank for none.");
+        AutomationProperties.SetHelpText(repeatRowsBox, UiText.Get("PageSetup_RepeatRowsHelp"));
 
         var repeatColumnsBox = new TextBox { Text = initial.RepeatColumnsText, MinWidth = 220 };
         AutomationProperties.SetAutomationId(repeatColumnsBox, "PageSetupRepeatColumnsBox");
-        AutomationProperties.SetHelpText(repeatColumnsBox, "Column range like A:B, or blank for none.");
+        AutomationProperties.SetHelpText(repeatColumnsBox, UiText.Get("PageSetup_RepeatColumnsHelp"));
 
-        var gridlinesCheck = new CheckBox { Content = "Print gridlines", IsChecked = initial.PrintGridlines };
+        var gridlinesCheck = new CheckBox { Content = UiText.Get("PageSetup_PrintGridlines"), IsChecked = initial.PrintGridlines };
         AutomationProperties.SetAutomationId(gridlinesCheck, "PageSetupPrintGridlinesCheck");
-        var headingsCheck = new CheckBox { Content = "Print row and column headings", IsChecked = initial.PrintHeadings };
+        var headingsCheck = new CheckBox { Content = UiText.Get("PageSetup_PrintHeadings"), IsChecked = initial.PrintHeadings };
         AutomationProperties.SetAutomationId(headingsCheck, "PageSetupPrintHeadingsCheck");
+        var blackAndWhiteCheck = new CheckBox { Content = UiText.Get("PageSetup_BlackAndWhite"), IsChecked = initial.PrintBlackAndWhite };
+        AutomationProperties.SetAutomationId(blackAndWhiteCheck, "PageSetupBlackAndWhiteCheck");
+        var draftQualityCheck = new CheckBox { Content = UiText.Get("PageSetup_DraftQuality"), IsChecked = initial.PrintDraftQuality };
+        AutomationProperties.SetAutomationId(draftQualityCheck, "PageSetupDraftQualityCheck");
 
         var pageOrderBox = new ComboBox
         {
-            ItemsSource = new[] { "Down, then over", "Over, then down" },
+            ItemsSource = new[] { UiText.Get("PageSetup_DownThenOver"), UiText.Get("PageSetup_OverThenDown") },
             SelectedIndex = initial.PageOrder == WorksheetPageOrder.OverThenDown ? 1 : 0,
             MinWidth = 220,
         };
         AutomationProperties.SetAutomationId(pageOrderBox, "PageSetupPageOrderBox");
+
+        var cellErrorsBox = new ComboBox
+        {
+            ItemsSource = new[]
+            {
+                UiText.Get("PageSetup_ErrorsDisplayed"),
+                UiText.Get("PageSetup_ErrorsBlank"),
+                UiText.Get("PageSetup_ErrorsDash"),
+                UiText.Get("PageSetup_ErrorsNotAvailable"),
+            },
+            SelectedIndex = initial.PrintErrorValue switch
+            {
+                WorksheetPrintErrorValue.Blank => 1,
+                WorksheetPrintErrorValue.Dash => 2,
+                WorksheetPrintErrorValue.NotAvailable => 3,
+                _ => 0,
+            },
+            MinWidth = 220,
+        };
+        AutomationProperties.SetAutomationId(cellErrorsBox, "PageSetupCellErrorsBox");
+
+        var commentsBox = new ComboBox
+        {
+            ItemsSource = new[]
+            {
+                UiText.Get("PageSetup_CommentsNone"),
+                UiText.Get("PageSetup_CommentsAtEnd"),
+                UiText.Get("PageSetup_CommentsAsDisplayed"),
+            },
+            SelectedIndex = initial.PrintComments switch
+            {
+                WorksheetPrintComments.AtEnd => 1,
+                WorksheetPrintComments.AsDisplayed => 2,
+                _ => 0,
+            },
+            MinWidth = 220,
+        };
+        AutomationProperties.SetAutomationId(commentsBox, "PageSetupCommentsBox");
 
         var validationText = new TextBlock
         {
@@ -343,10 +528,25 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(validationText, "PageSetupValidationText");
 
-        var okButton = new Button { Content = "OK", MinWidth = 84, Padding = new Thickness(10, 4) };
-        var cancelButton = new Button { Content = "Cancel", MinWidth = 84, Padding = new Thickness(10, 4) };
+        var okButton = new Button { Content = UiText.Get("Common_Ok"), MinWidth = 84, Padding = new Thickness(10, 4) };
+        var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), MinWidth = 84, Padding = new Thickness(10, 4) };
         AutomationProperties.SetAutomationId(okButton, "PageSetupOkButton");
         AutomationProperties.SetAutomationId(cancelButton, "PageSetupCancelButton");
+
+        WorksheetPrintErrorValue ReadErrorValue() => cellErrorsBox.SelectedIndex switch
+        {
+            1 => WorksheetPrintErrorValue.Blank,
+            2 => WorksheetPrintErrorValue.Dash,
+            3 => WorksheetPrintErrorValue.NotAvailable,
+            _ => WorksheetPrintErrorValue.Displayed,
+        };
+
+        WorksheetPrintComments ReadComments() => commentsBox.SelectedIndex switch
+        {
+            1 => WorksheetPrintComments.AtEnd,
+            2 => WorksheetPrintComments.AsDisplayed,
+            _ => WorksheetPrintComments.None,
+        };
 
         PageSetupDialogFields ReadFields() => new()
         {
@@ -355,20 +555,36 @@ public sealed partial class MainWindow
                 : WorksheetPageOrientation.Portrait,
             PaperSize = paperSizes[Math.Clamp(paperBox.SelectedIndex, 0, paperSizes.Count - 1)],
             MarginsText = marginsBox.Text ?? "",
+            HeaderMarginText = headerMarginBox.Text ?? "",
+            FooterMarginText = footerMarginBox.Text ?? "",
+            CenterHorizontally = centerHorizontallyCheck.IsChecked == true,
+            CenterVertically = centerVerticallyCheck.IsChecked == true,
             ScalingMode = fitRadio.IsChecked == true
                 ? PageSetupScalingMode.FitToPages
                 : PageSetupScalingMode.AdjustToPercent,
             ScalePercentText = scalePercentBox.Text ?? "",
             FitToWideText = fitWideBox.Text ?? "",
             FitToTallText = fitTallBox.Text ?? "",
+            FirstPageNumberText = firstPageNumberBox.Text ?? "",
+            PrintQualityDpiText = printQualityBox.Text ?? "",
             PrintAreaText = printAreaBox.Text ?? "",
             RepeatRowsText = repeatRowsBox.Text ?? "",
             RepeatColumnsText = repeatColumnsBox.Text ?? "",
             PrintGridlines = gridlinesCheck.IsChecked == true,
             PrintHeadings = headingsCheck.IsChecked == true,
+            PrintBlackAndWhite = blackAndWhiteCheck.IsChecked == true,
+            PrintDraftQuality = draftQualityCheck.IsChecked == true,
+            PrintErrorValue = ReadErrorValue(),
+            PrintComments = ReadComments(),
             PageOrder = pageOrderBox.SelectedIndex == 1
                 ? WorksheetPageOrder.OverThenDown
                 : WorksheetPageOrder.DownThenOver,
+            Header = new WorksheetHeaderFooter(headerLeftBox.Text ?? "", headerCenterBox.Text ?? "", headerRightBox.Text ?? ""),
+            Footer = new WorksheetHeaderFooter(footerLeftBox.Text ?? "", footerCenterBox.Text ?? "", footerRightBox.Text ?? ""),
+            DifferentFirstPage = differentFirstPageCheck.IsChecked == true,
+            DifferentOddEvenPages = differentOddEvenCheck.IsChecked == true,
+            ScaleHeaderFooterWithDocument = scaleWithDocumentCheck.IsChecked == true,
+            AlignHeaderFooterWithMargins = alignWithMarginsCheck.IsChecked == true,
         };
 
         void Accept()
@@ -409,21 +625,8 @@ public sealed partial class MainWindow
             Orientation = Orientation.Horizontal,
             Spacing = 8,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Margin = new Thickness(0, 12, 0, 0),
             Children = { cancelButton, okButton },
-        };
-
-        var fitRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 6,
-            Children =
-            {
-                fitRadio,
-                fitWideBox,
-                new TextBlock { Text = "wide x", VerticalAlignment = AvaloniaVerticalAlignment.Center },
-                fitTallBox,
-                new TextBlock { Text = "tall", VerticalAlignment = AvaloniaVerticalAlignment.Center },
-            },
         };
 
         var adjustRow = new StackPanel
@@ -434,41 +637,159 @@ public sealed partial class MainWindow
             {
                 adjustRadio,
                 scalePercentBox,
-                new TextBlock { Text = "%", VerticalAlignment = AvaloniaVerticalAlignment.Center },
+                PageSetupLabel("%"),
             },
         };
 
-        var content = new StackPanel
+        var fitRow = new StackPanel
         {
-            Margin = new Thickness(16),
-            Spacing = 8,
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
             Children =
             {
-                new TextBlock { Text = "Orientation" },
-                orientationBox,
-                new TextBlock { Text = "Paper size" },
-                paperBox,
-                new TextBlock { Text = "Margins (left, right, top, bottom inches)" },
-                marginsBox,
-                new TextBlock { Text = "Scaling", FontWeight = FontWeight.SemiBold, Margin = new Thickness(0, 6, 0, 0) },
-                adjustRow,
-                fitRow,
-                new TextBlock { Text = "Print area" },
-                printAreaBox,
-                new TextBlock { Text = "Rows to repeat at top" },
-                repeatRowsBox,
-                new TextBlock { Text = "Columns to repeat at left" },
-                repeatColumnsBox,
-                gridlinesCheck,
-                headingsCheck,
-                new TextBlock { Text = "Page order" },
-                pageOrderBox,
-                validationText,
-                buttonRow,
+                fitRadio,
+                fitWideBox,
+                PageSetupLabel(UiText.Get("PageSetup_WideBy")),
+                fitTallBox,
+                PageSetupLabel(UiText.Get("PageSetup_Tall")),
             },
         };
 
-        dialog.Content = new ScrollViewer { Content = content };
+        var pageTab = new TabItem
+        {
+            Header = UiText.Get("PageSetup_PageTab"),
+            Content = new ScrollViewer
+            {
+                Content = new StackPanel
+                {
+                    Margin = new Thickness(14),
+                    Spacing = 8,
+                    Children =
+                    {
+                        PageSetupLabel(UiText.Get("PageSetup_Orientation")),
+                        orientationBox,
+                        PageSetupLabel(UiText.Get("PageSetup_PaperSize")),
+                        paperBox,
+                        new TextBlock { Text = UiText.Get("PageSetup_Scaling"), FontWeight = FontWeight.SemiBold, Margin = new Thickness(0, 6, 0, 0) },
+                        adjustRow,
+                        fitRow,
+                        PageSetupLabel(UiText.Get("PageSetup_FirstPageNumber")),
+                        firstPageNumberBox,
+                        PageSetupLabel(UiText.Get("PageSetup_PrintQuality")),
+                        printQualityBox,
+                    },
+                },
+            },
+        };
+
+        var marginsTab = new TabItem
+        {
+            Header = UiText.Get("PageSetup_MarginsTab"),
+            Content = new ScrollViewer
+            {
+                Content = new StackPanel
+                {
+                    Margin = new Thickness(14),
+                    Spacing = 8,
+                    Children =
+                    {
+                        PageSetupLabel(UiText.Get("PageSetup_MarginsLabel")),
+                        marginsBox,
+                        PageSetupLabel(UiText.Get("PageSetup_HeaderMargin")),
+                        headerMarginBox,
+                        PageSetupLabel(UiText.Get("PageSetup_FooterMargin")),
+                        footerMarginBox,
+                        new TextBlock { Text = UiText.Get("PageSetup_CenterOnPage"), FontWeight = FontWeight.SemiBold, Margin = new Thickness(0, 6, 0, 0) },
+                        centerHorizontallyCheck,
+                        centerVerticallyCheck,
+                    },
+                },
+            },
+        };
+
+        var headerFooterTab = new TabItem
+        {
+            Header = UiText.Get("PageSetup_HeaderFooterTab"),
+            Content = new ScrollViewer
+            {
+                Content = new StackPanel
+                {
+                    Margin = new Thickness(14),
+                    Spacing = 8,
+                    Children =
+                    {
+                        PageSetupLabel(UiText.Get("PageSetup_HeaderPreset")),
+                        headerPresetBox,
+                        new TextBlock { Text = UiText.Get("PageSetup_CustomHeader"), FontWeight = FontWeight.SemiBold, Margin = new Thickness(0, 4, 0, 0) },
+                        new StackPanel
+                        {
+                            Orientation = Orientation.Horizontal,
+                            Spacing = 6,
+                            Children = { headerLeftBox, headerCenterBox, headerRightBox },
+                        },
+                        PageSetupLabel(UiText.Get("PageSetup_FooterPreset")),
+                        footerPresetBox,
+                        new TextBlock { Text = UiText.Get("PageSetup_CustomFooter"), FontWeight = FontWeight.SemiBold, Margin = new Thickness(0, 4, 0, 0) },
+                        new StackPanel
+                        {
+                            Orientation = Orientation.Horizontal,
+                            Spacing = 6,
+                            Children = { footerLeftBox, footerCenterBox, footerRightBox },
+                        },
+                        differentFirstPageCheck,
+                        differentOddEvenCheck,
+                        scaleWithDocumentCheck,
+                        alignWithMarginsCheck,
+                    },
+                },
+            },
+        };
+
+        var sheetTab = new TabItem
+        {
+            Header = UiText.Get("PageSetup_SheetTab"),
+            Content = new ScrollViewer
+            {
+                Content = new StackPanel
+                {
+                    Margin = new Thickness(14),
+                    Spacing = 8,
+                    Children =
+                    {
+                        PageSetupLabel(UiText.Get("PageSetup_PrintArea")),
+                        printAreaBox,
+                        PageSetupLabel(UiText.Get("PageSetup_RepeatRows")),
+                        repeatRowsBox,
+                        PageSetupLabel(UiText.Get("PageSetup_RepeatColumns")),
+                        repeatColumnsBox,
+                        gridlinesCheck,
+                        headingsCheck,
+                        blackAndWhiteCheck,
+                        draftQualityCheck,
+                        PageSetupLabel(UiText.Get("PageSetup_CellErrorsAs")),
+                        cellErrorsBox,
+                        PageSetupLabel(UiText.Get("PageSetup_Comments")),
+                        commentsBox,
+                        PageSetupLabel(UiText.Get("PageSetup_PageOrder")),
+                        pageOrderBox,
+                    },
+                },
+            },
+        };
+
+        var tabs = new TabControl
+        {
+            Items = { pageTab, marginsTab, headerFooterTab, sheetTab },
+        };
+        AutomationProperties.SetAutomationId(tabs, "PageSetupTabs");
+
+        DockPanel.SetDock(buttonRow, AvaloniaDock.Bottom);
+        DockPanel.SetDock(validationText, AvaloniaDock.Bottom);
+        dialog.Content = new DockPanel
+        {
+            Margin = new Thickness(8),
+            Children = { buttonRow, validationText, tabs },
+        };
         dialog.Opened += (_, _) => orientationBox.Focus();
 
         await dialog.ShowDialog(this);
