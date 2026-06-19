@@ -801,6 +801,33 @@
   <data name="Backstage_Export_CreateButton" xml:space="preserve"><value>Exporter</value></data>
   <data name="Backstage_Export_CancelButton" xml:space="preserve"><value>Annuler</value></data>
   <data name="Backstage_Export_Unavailable" xml:space="preserve"><value>Aucune feuille de calcul visible n'est disponible pour l'exportation.</value></data>
+  <data name="Print_MenuItem" xml:space="preserve"><value>Imprimer...</value></data>
+  <data name="Print_Title" xml:space="preserve"><value>Imprimer</value></data>
+  <data name="Print_PrinterHeader" xml:space="preserve"><value>Imprimante</value></data>
+  <data name="Print_NoPrinterNote" xml:space="preserve"><value>Aucune imprimante n'a été trouvée sur cet appareil. L'impression enregistrera un PDF prêt à imprimer.</value></data>
+  <data name="Print_ScopeHeader" xml:space="preserve"><value>Que faut-il imprimer</value></data>
+  <data name="Print_ScopeSelection" xml:space="preserve"><value>Sélection</value></data>
+  <data name="Print_ScopeSelectionUnavailable" xml:space="preserve"><value>Sélection (sélectionnez d'abord une plage)</value></data>
+  <data name="Print_ScopeActiveSheet" xml:space="preserve"><value>Feuille active</value></data>
+  <data name="Print_ScopeWorkbook" xml:space="preserve"><value>Classeur entier</value></data>
+  <data name="Print_PagesHeader" xml:space="preserve"><value>Pages</value></data>
+  <data name="Print_PagesAll" xml:space="preserve"><value>Toutes les pages</value></data>
+  <data name="Print_PagesRange" xml:space="preserve"><value>Plage de pages</value></data>
+  <data name="Print_PagesFrom" xml:space="preserve"><value>De</value></data>
+  <data name="Print_PagesTo" xml:space="preserve"><value>À</value></data>
+  <data name="Print_CopiesHeader" xml:space="preserve"><value>Copies</value></data>
+  <data name="Print_CopiesLabel" xml:space="preserve"><value>Nombre de copies</value></data>
+  <data name="Print_Collate" xml:space="preserve"><value>Assembler</value></data>
+  <data name="Print_PrintButton" xml:space="preserve"><value>Imprimer</value></data>
+  <data name="Print_SaveAsPdfButton" xml:space="preserve"><value>Enregistrer au format PDF...</value></data>
+  <data name="Print_CancelButton" xml:space="preserve"><value>Annuler</value></data>
+  <data name="Print_Unavailable" xml:space="preserve"><value>Aucune feuille de calcul visible n'est disponible pour l'impression.</value></data>
+  <data name="Print_Spooling" xml:space="preserve"><value>Envoi à l'imprimante...</value></data>
+  <data name="Print_Sent" xml:space="preserve"><value>Imprimé. {0}</value></data>
+  <data name="Print_SavedPdf" xml:space="preserve"><value>PDF prêt à imprimer enregistré {0}</value></data>
+  <data name="Print_RenderFailed" xml:space="preserve"><value>Échec de l'impression : {0}</value></data>
+  <data name="Print_RequiresLocalPath" xml:space="preserve"><value>L'impression au format PDF nécessite un chemin de fichier local.</value></data>
+  <data name="Print_NoSpoolerNoSave" xml:space="preserve"><value>Aucune imprimante ni destination de fichier n'est disponible sur cet hôte.</value></data>
   <data name="Backstage_Account_MenuItem" xml:space="preserve"><value>Compte...</value></data>
   <data name="Backstage_Account_Title" xml:space="preserve"><value>Compte</value></data>
   <data name="Backstage_Account_ProductSectionHeader" xml:space="preserve"><value>Informations sur le produit</value></data>
