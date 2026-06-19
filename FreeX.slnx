@@ -52,6 +52,7 @@
     <Project Path="tools/FreeX.ExcelExamplesCharts/FreeX.ExcelExamplesCharts.csproj" />
     <Project Path="tools/FreeX.ExcelOpenSmoke/FreeX.ExcelOpenSmoke.csproj" />
     <Project Path="tools/FreeX.FidelityCompare/FreeX.FidelityCompare.csproj" />
+    <Project Path="tools/FreeX.FormatCrossCheck/FreeX.FormatCrossCheck.csproj" />
     <Project Path="tools/FreeX.FormatFidelity/FreeX.FormatFidelity.csproj" />
     <Project Path="tools/FreeX.ParityCompare/FreeX.ParityCompare.csproj" />
     <Project Path="tools/FreeX.ParityCompare.Core/FreeX.ParityCompare.Core.csproj" />
