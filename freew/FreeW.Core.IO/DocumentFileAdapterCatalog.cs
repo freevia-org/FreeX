@@ -17,6 +17,7 @@ public static class DocumentFileAdapterCatalog
         new WordXmlFileAdapter(),
         new RtfFileAdapter(),
         new PdfFileAdapter(),
+        new LegacyDocFileAdapter(),
         new PlainTextFileAdapter(),
     ];
 }
