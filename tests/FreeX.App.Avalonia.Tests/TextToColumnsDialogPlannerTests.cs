@@ -1,4 +1,3 @@
-using FreeX.App.Avalonia;
 using FreeX.App.Presentation.TextToColumns;
 using FreeX.Core.Model;
 
@@ -7,19 +6,19 @@ using FluentAssertions;
 namespace FreeX.App.Avalonia.Tests;
 
 /// <summary>
-/// Unit tests for the UI-free <see cref="TextToColumnsShellPlanner"/>: turning dialog state into portable
+/// Unit tests for the UI-free <see cref="TextToColumnsDialogPlanner"/>: turning dialog state into portable
 /// <see cref="TextToColumnsOptions"/>, mapping a planned <see cref="TextToColumnsResult"/> over the source
 /// column into cell edits (delimited and fixed-width, honoring Skip columns), and reporting the non-empty
 /// cells an apply would overwrite. No running shell required.
 /// </summary>
-public sealed class TextToColumnsShellPlannerTests
+public sealed class TextToColumnsDialogPlannerTests
 {
     [Fact]
     public void BuildOptions_Delimited_SelectsCheckedDelimitersAndQualifier()
     {
         var state = DelimitedState(comma: true, space: true, qualifier: TextToColumnsTextQualifier.SingleQuote);
 
-        var options = TextToColumnsShellPlanner.BuildOptions(state);
+        var options = TextToColumnsDialogPlanner.BuildOptions(state);
 
         options.SplitMode.Should().Be(TextToColumnsSplitMode.Delimited);
         options.Delimiters.Should().Contain(",").And.Contain(" ");
@@ -31,7 +30,7 @@ public sealed class TextToColumnsShellPlannerTests
     {
         var state = DelimitedState();
 
-        var act = () => TextToColumnsShellPlanner.BuildOptions(state);
+        var act = () => TextToColumnsDialogPlanner.BuildOptions(state);
 
         act.Should().Throw<ArgumentException>();
     }
@@ -41,7 +40,7 @@ public sealed class TextToColumnsShellPlannerTests
     {
         var state = FixedWidthState(5, 5, 2, -1);
 
-        var options = TextToColumnsShellPlanner.BuildOptions(state);
+        var options = TextToColumnsDialogPlanner.BuildOptions(state);
 
         options.SplitMode.Should().Be(TextToColumnsSplitMode.FixedWidth);
         // Sorted, de-duplicated, non-positive dropped.
@@ -53,7 +52,7 @@ public sealed class TextToColumnsShellPlannerTests
     {
         var state = FixedWidthState();
 
-        var act = () => TextToColumnsShellPlanner.BuildOptions(state);
+        var act = () => TextToColumnsDialogPlanner.BuildOptions(state);
 
         act.Should().Throw<ArgumentException>();
     }
@@ -67,7 +66,7 @@ public sealed class TextToColumnsShellPlannerTests
         var options = TextToColumnsOptions.Delimited([TextToColumnsDelimiterKind.Comma]);
         var result = TextToColumnsPlanner.Plan(["a,b,c", "x,y"], options);
 
-        var edits = TextToColumnsShellPlanner.MapToEdits(sheet.Id, result, range);
+        var edits = TextToColumnsDialogPlanner.MapToEdits(sheet.Id, result, range);
 
         // Row 1 -> B1,C1,D1; row 2 -> B2,C2 (and a blank D2 to clear stale values).
         edits.Should().Contain(e => e.Address == new CellAddress(sheet.Id, 1, 2) && Text(e.NewCell) == "a");
@@ -92,7 +91,7 @@ public sealed class TextToColumnsShellPlannerTests
         var options = TextToColumnsOptions.Delimited([TextToColumnsDelimiterKind.Comma], columnFormats: formats);
         var result = TextToColumnsPlanner.Plan(["a,b,c"], options);
 
-        var edits = TextToColumnsShellPlanner.MapToEdits(sheet.Id, result, range);
+        var edits = TextToColumnsDialogPlanner.MapToEdits(sheet.Id, result, range);
 
         // "b" is skipped; "a" -> A1, "c" -> B1 (the skip neither writes nor consumes a target column).
         edits.Should().HaveCount(2);
@@ -109,7 +108,7 @@ public sealed class TextToColumnsShellPlannerTests
         var options = TextToColumnsOptions.FixedWidth([3]);
         var result = TextToColumnsPlanner.Plan(["abcdef"], options);
 
-        var edits = TextToColumnsShellPlanner.MapToEdits(sheet.Id, result, range);
+        var edits = TextToColumnsDialogPlanner.MapToEdits(sheet.Id, result, range);
 
         edits.Should().Contain(e => e.Address == new CellAddress(sheet.Id, 3, 1) && Text(e.NewCell) == "abc");
         edits.Should().Contain(e => e.Address == new CellAddress(sheet.Id, 3, 2) && Text(e.NewCell) == "def");
@@ -124,9 +123,9 @@ public sealed class TextToColumnsShellPlannerTests
         var range = Range(sheet.Id, 1, 2, 1, 2);
         var options = TextToColumnsOptions.Delimited([TextToColumnsDelimiterKind.Comma]);
         var result = TextToColumnsPlanner.Plan(["a,b"], options);
-        var edits = TextToColumnsShellPlanner.MapToEdits(sheet.Id, result, range);
+        var edits = TextToColumnsDialogPlanner.MapToEdits(sheet.Id, result, range);
 
-        var overwrites = TextToColumnsShellPlanner.FindOverwriteTargets(sheet, edits, range);
+        var overwrites = TextToColumnsDialogPlanner.FindOverwriteTargets(sheet, edits, range);
 
         // Only C1 (col 3) is a non-empty overwrite; the source column B is excluded.
         overwrites.Should().ContainSingle()
