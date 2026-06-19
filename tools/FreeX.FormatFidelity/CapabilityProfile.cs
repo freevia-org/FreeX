@@ -126,12 +126,15 @@ internal sealed class CapabilityProfile
                     Dim.ConditionalFormat, Dim.Charts, Dim.Images, Dim.Vba));
         }
 
-        // ---- slk (SYLK): single-sheet line format. Values + R1C1 formulas + a coarse number-format
-        //      subset survive; everything structural/visual is None (footnote: formulas Lossy[R1C1]).
+        // ---- slk (SYLK): single-sheet line format. Values + R1C1 formulas round-trip (both Lossy: value
+        //      coercion + R1C1 notation). Number formats are a best-effort coarse subset preserved only on
+        //      value-bearing cells (formatted-but-empty cells cannot carry a format in SYLK), so the
+        //      dimension is None (the round-trip that DOES survive shows as a preserved-anyway bonus rather
+        //      than being a guaranteed-faithful assertion). Everything structural/visual is None.
         profiles.Add(new CapabilityProfile { Key = "slk", Extension = ".slk" }
-            .Set(Cap.Lossy, Dim.CellValues, Dim.Formulas, Dim.NumberFormats)
-            .Set(Cap.None, Dim.Fonts, Dim.Fills, Dim.Borders, Dim.Alignment, Dim.MultiSheet, Dim.SheetNames,
-                Dim.MergedCells, Dim.ColumnWidths, Dim.RowHeights, Dim.FreezePanes, Dim.Hyperlinks,
+            .Set(Cap.Lossy, Dim.CellValues, Dim.Formulas)
+            .Set(Cap.None, Dim.NumberFormats, Dim.Fonts, Dim.Fills, Dim.Borders, Dim.Alignment, Dim.MultiSheet,
+                Dim.SheetNames, Dim.MergedCells, Dim.ColumnWidths, Dim.RowHeights, Dim.FreezePanes, Dim.Hyperlinks,
                 Dim.Comments, Dim.DefinedNames, Dim.DataValidation, Dim.ConditionalFormat, Dim.Charts,
                 Dim.Images, Dim.Vba));
 
