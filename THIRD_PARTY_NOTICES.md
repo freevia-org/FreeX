@@ -33,6 +33,7 @@ replace this dependency or confirm the project has the required Xceed license.
 
 | Package | Version | License | Project |
 | --- | --- | --- | --- |
+| AngleSharp | 1.5.1 | MIT | https://anglesharp.github.io/ |
 | Avalonia | 12.0.4 | MIT | https://avaloniaui.net/ |
 | Avalonia.Angle.Windows.Natives | 2.1.27548.20260419 | BSD-style package license file | https://avaloniaui.net/ |
 | Avalonia.BuildServices | 11.3.2 | MIT | https://avaloniaui.net/ |
@@ -68,6 +69,7 @@ replace this dependency or confirm the project has the required Xceed license.
 | Microsoft.Extensions.Options | 10.0.7 | MIT | https://dot.net/ |
 | Microsoft.Extensions.Primitives | 10.0.7 | MIT | https://dot.net/ |
 | MicroCom.Runtime | 0.11.4 | MIT |  |
+| MimeKit | 4.17.0 | MIT | https://github.com/jstedfast/MimeKit |
 | OxyPlot.Core | 2.2.0 | MIT | https://oxyplot.github.io/ |
 | OxyPlot.Wpf | 2.2.0 | MIT | https://oxyplot.github.io/ |
 | OxyPlot.Wpf.Shared | 2.2.0 | MIT | https://oxyplot.github.io/ |

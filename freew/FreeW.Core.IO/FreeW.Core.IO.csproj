@@ -18,6 +18,11 @@
     <ProjectReference Include="..\..\shared\Free.Shared.Opc\Free.Shared.Opc.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <!-- HTML/MHTML read path: AngleSharp (HTML5 DOM) + MimeKit (MHTML multipart/related). Both MIT. -->
+    <PackageReference Include="AngleSharp" />
+    <PackageReference Include="MimeKit" />
+  </ItemGroup>
+  <ItemGroup>
     <!-- Lets the IO test project exercise the internal ODTTF obfuscation helper (Ooxml.ObfuscateFont). -->
     <InternalsVisibleTo Include="FreeW.Core.IO.Tests" />
   </ItemGroup>

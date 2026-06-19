@@ -3,6 +3,10 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
   <ItemGroup>
+    <!-- HTML/MHTML reading (FreeW.Core.IO HtmlFileAdapter/MhtmlFileAdapter): AngleSharp = HTML5 DOM
+         parser/tree-construction; MimeKit = multipart/related MIME (MHTML) wrapper. Both MIT. -->
+    <PackageVersion Include="AngleSharp" Version="1.5.1" />
+    <PackageVersion Include="MimeKit" Version="4.17.0" />
     <!-- Legacy binary Word (.doc/.dot) read-only import via transcode to in-memory .docx (MIT). -->
     <PackageVersion Include="DocSharp.Binary.Doc" Version="0.20.0" />
     <PackageVersion Include="DocSharp.Binary.Common" Version="0.20.0" />
