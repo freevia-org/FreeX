@@ -47,6 +47,7 @@ public sealed partial class MainWindowXamlKeyTipTests
         var qatSource = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAccessToolbar.cs");
         var keyTipSource = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyTips.cs");
         var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
+        var lifecycleSource = DialogSourceTestSupport.ReadHostSources("MainWindow.WorkbookLifecycle.cs");
         var commandSource = DialogSourceTestSupport.ReadHostSources("MainWindow.CommandExecution.cs");
 
         xaml.Should().Contain("x:Name=\"TitleBarQatPanel\"");
@@ -79,9 +80,13 @@ public sealed partial class MainWindowXamlKeyTipTests
         keyTipSource.Should().Contain("match.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, match));");
 
         backstageSource.Should().Contain("private async void SaveButton_Click(object sender, RoutedEventArgs e)");
-        backstageSource.Should().Contain("FileSavePlanner.TryResolveExistingPath(_currentFilePath, _fileAdapters, out var target)");
-        backstageSource.Should().Contain("await SaveWorkbookToTargetAsync(target!)");
-        backstageSource.Should().Contain("await SaveWorkbookWithDialogAsync()");
+        // Save now delegates the existing-path-vs-dialog DECISION to the shared SaveResolvedAsync helper
+        // (MainWindow.WorkbookLifecycle.cs), the same resolution the dirty-gate's "Save then proceed" takes.
+        backstageSource.Should().Contain("await SaveResolvedAsync()");
+        lifecycleSource.Should().Contain("private async Task<bool> SaveResolvedAsync()");
+        lifecycleSource.Should().Contain("FileSavePlanner.TryResolveExistingPath(_currentFilePath, _fileAdapters, out var target)");
+        lifecycleSource.Should().Contain("await SaveWorkbookToTargetAsync(target!)");
+        lifecycleSource.Should().Contain("await SaveWorkbookWithDialogAsync()");
         backstageSource.Should().Contain("MarkWorkbookSaved()");
         backstageSource.Should().Contain("UpdateTitleBar()");
 

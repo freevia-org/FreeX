@@ -62,7 +62,7 @@ public sealed partial class MainWindow
         var dataFieldIndex = ResolvePivotDataFieldIndex(pivot, target);
         if (dataFieldIndex is null)
         {
-            ShowEditIssue("Select a value field to change its settings.");
+            ShowEditIssue(UiText.Get("PivotLoc_SelectValueFieldForSettings"));
             return;
         }
 
@@ -94,7 +94,7 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(baseFieldBox, "PivotValueFieldSettingsBaseFieldBox");
         AutomationProperties.SetName(baseFieldBox, "Base field");
 
-        var baseItemBox = new TextBox { MinWidth = 240, Text = field.BaseItem ?? string.Empty, PlaceholderText = "Base item" };
+        var baseItemBox = new TextBox { MinWidth = 240, Text = field.BaseItem ?? string.Empty, PlaceholderText = UiText.Get("PivotLoc_BaseItemPlaceholder") };
         AutomationProperties.SetAutomationId(baseItemBox, "PivotValueFieldSettingsBaseItemBox");
         AutomationProperties.SetName(baseItemBox, "Base item");
 
@@ -135,7 +135,7 @@ public sealed partial class MainWindow
             var baseItem = PivotValueFieldPlanner.ResolveBaseItem(showValuesAs, baseItemBox.Text);
             if (!PivotValueFieldPlanner.TryValidateShowValuesAs(showValuesAs, baseFieldIndex, baseItem, out var error))
             {
-                ShowEditIssue(error ?? "Complete the show-values-as settings.");
+                ShowEditIssue(error ?? UiText.Get("PivotLoc_CompleteShowValuesAs"));
                 return;
             }
 

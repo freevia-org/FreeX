@@ -1,5 +1,9 @@
 using System.Windows;
+using FreeX.App.Presentation.Charts;
+using FreeX.App.Presentation.DrawingInteraction;
 using FreeX.Core.Model;
+using PlannerCore = FreeX.App.Presentation.DrawingInteraction.ObjectDragPlanner;
+using CoreDragKind = FreeX.App.Presentation.DrawingInteraction.ObjectDragKind;
 
 namespace FreeX.App.UI;
 
@@ -23,14 +27,21 @@ public readonly record struct ObjectDragTransform(
     bool CrossedHorizontally,
     bool CrossedVertically);
 
+/// <summary>
+/// WPF host adapter over the portable <see cref="PlannerCore"/>: bridges System.Windows
+/// <see cref="Rect"/>/<see cref="Point"/> to the shared <see cref="LayoutRect"/>/<see cref="LayoutPoint"/>
+/// geometry and delegates all drag/resize/rotation/hit-test math to it, then adds the WPF-only
+/// viewport anchor-cell hit-testing that depends on host grid metrics. The local
+/// <see cref="ObjectDragKind"/> enum mirrors the portable one member-for-member.
+/// </summary>
 public static class GridObjectDragPlanner
 {
-    public const double MinimumObjectSize = 8;
+    public const double MinimumObjectSize = PlannerCore.MinimumObjectSize;
 
     /// <summary>
     /// Vertical distance (in pixels) of the rotation grip's center above the top edge of the object.
     /// </summary>
-    public const double RotationGripOffset = 20;
+    public const double RotationGripOffset = PlannerCore.RotationGripOffset;
 
     public static Rect CalculateDragRect(
         ObjectDragKind dragKind,
@@ -47,229 +58,60 @@ public static class GridObjectDragPlanner
         Point currentPosition,
         double minimumSize = MinimumObjectSize)
     {
-        var dx = currentPosition.X - startPosition.X;
-        var dy = currentPosition.Y - startPosition.Y;
-
-        var left = startRect.Left;
-        var top = startRect.Top;
-        var right = startRect.Right;
-        var bottom = startRect.Bottom;
-        var movesLeft = false;
-        var movesRight = false;
-        var movesTop = false;
-        var movesBottom = false;
-
-        switch (dragKind)
-        {
-            case ObjectDragKind.Move:
-                return new ObjectDragTransform(
-                    new Rect(startRect.X + dx, startRect.Y + dy, startRect.Width, startRect.Height),
-                    CrossedHorizontally: false,
-                    CrossedVertically: false);
-            case ObjectDragKind.ResizeNW:
-                left += dx;
-                top += dy;
-                movesLeft = true;
-                movesTop = true;
-                break;
-            case ObjectDragKind.ResizeN:
-                top += dy;
-                movesTop = true;
-                break;
-            case ObjectDragKind.ResizeNE:
-                right += dx;
-                top += dy;
-                movesRight = true;
-                movesTop = true;
-                break;
-            case ObjectDragKind.ResizeE:
-                right += dx;
-                movesRight = true;
-                break;
-            case ObjectDragKind.ResizeSE:
-                right += dx;
-                bottom += dy;
-                movesRight = true;
-                movesBottom = true;
-                break;
-            case ObjectDragKind.ResizeS:
-                bottom += dy;
-                movesBottom = true;
-                break;
-            case ObjectDragKind.ResizeSW:
-                left += dx;
-                bottom += dy;
-                movesLeft = true;
-                movesBottom = true;
-                break;
-            case ObjectDragKind.ResizeW:
-                left += dx;
-                movesLeft = true;
-                break;
-            default:
-                return new ObjectDragTransform(startRect, CrossedHorizontally: false, CrossedVertically: false);
-        }
-
-        var horizontal = NormalizeAxis(left, right, movesLeft, movesRight, minimumSize);
-        var vertical = NormalizeAxis(top, bottom, movesTop, movesBottom, minimumSize);
+        var transform = PlannerCore.CalculateDragTransform(
+            ToCore(dragKind),
+            ToLayoutRect(startRect),
+            ToLayoutPoint(startPosition),
+            ToLayoutPoint(currentPosition),
+            minimumSize);
         return new ObjectDragTransform(
-            new Rect(
-                horizontal.Start,
-                vertical.Start,
-                horizontal.End - horizontal.Start,
-                vertical.End - vertical.Start),
-            horizontal.Crossed,
-            vertical.Crossed);
-    }
-
-    private static AxisDragTransform NormalizeAxis(
-        double lower,
-        double upper,
-        bool movesLower,
-        bool movesUpper,
-        double minimumSize)
-    {
-        var minSize = double.IsFinite(minimumSize) && minimumSize > 0 ? minimumSize : MinimumObjectSize;
-        if (movesLower == movesUpper)
-            return new AxisDragTransform(lower, upper, Crossed: false);
-
-        if (movesLower)
-        {
-            var signedExtent = upper - lower;
-            if (signedExtent >= 0)
-            {
-                var extent = Math.Max(signedExtent, minSize);
-                return new AxisDragTransform(upper - extent, upper, Crossed: false);
-            }
-
-            return new AxisDragTransform(upper, upper + Math.Max(-signedExtent, minSize), Crossed: true);
-        }
-
-        var upperSignedExtent = upper - lower;
-        if (upperSignedExtent >= 0)
-        {
-            var extent = Math.Max(upperSignedExtent, minSize);
-            return new AxisDragTransform(lower, lower + extent, Crossed: false);
-        }
-
-        return new AxisDragTransform(lower - Math.Max(-upperSignedExtent, minSize), lower, Crossed: true);
+            ToWpfRect(transform.Rect),
+            transform.CrossedHorizontally,
+            transform.CrossedVertically);
     }
 
     /// <summary>
     /// Computes the rotation angle (in degrees, clockwise, 0 = pointer straight up) of the
     /// pointer relative to the object center. Returns 0 when the pointer is at the center.
     /// </summary>
-    public static double CalculateRotationDegrees(Point center, Point pointer)
-    {
-        var dx = pointer.X - center.X;
-        var dy = pointer.Y - center.Y;
-        if (dx == 0 && dy == 0)
-            return 0;
-
-        // Atan2(dx, -dy) gives 0 for straight up and increases clockwise (screen Y grows downward).
-        var degrees = Math.Atan2(dx, -dy) * (180.0 / Math.PI);
-        return degrees < 0 ? degrees + 360 : degrees;
-    }
+    public static double CalculateRotationDegrees(Point center, Point pointer) =>
+        PlannerCore.CalculateRotationDegrees(ToLayoutPoint(center), ToLayoutPoint(pointer));
 
     public static ObjectDragKind HitTestHandle(
         Point position,
         Rect objectRect,
         double handleSize = 8,
         double handleHitPadding = 4,
-        double rotationDegrees = 0)
-    {
-        if (objectRect.IsEmpty)
-            return ObjectDragKind.None;
-
-        if (Math.Abs(rotationDegrees) > 0.0001)
-            position = RotatePointAroundCenter(position, objectRect, -rotationDegrees);
-
-        return HitTestUnrotatedHandle(position, objectRect, handleSize, handleHitPadding);
-    }
+        double rotationDegrees = 0) =>
+        ToWpf(PlannerCore.HitTestHandle(
+            ToLayoutPoint(position),
+            ToLayoutRect(objectRect),
+            handleSize,
+            handleHitPadding,
+            rotationDegrees));
 
     public static Point RotateHandleCenter(
         ObjectDragKind handle,
         Rect objectRect,
-        double rotationDegrees)
-    {
-        var center = GetUnrotatedHandleCenter(handle, objectRect);
-        return Math.Abs(rotationDegrees) <= 0.0001
-            ? center
-            : RotatePointAroundCenter(center, objectRect, rotationDegrees);
-    }
+        double rotationDegrees) =>
+        ToWpfPoint(PlannerCore.RotateHandleCenter(ToCore(handle), ToLayoutRect(objectRect), rotationDegrees));
 
-    public static Point RotatePointAroundCenter(Point point, Rect objectRect, double rotationDegrees)
-    {
-        if (objectRect.IsEmpty || Math.Abs(rotationDegrees) <= 0.0001)
-            return point;
+    public static Point RotatePointAroundCenter(Point point, Rect objectRect, double rotationDegrees) =>
+        ToWpfPoint(PlannerCore.RotatePointAroundCenter(
+            ToLayoutPoint(point), ToLayoutRect(objectRect), rotationDegrees));
 
-        var radians = rotationDegrees * Math.PI / 180.0;
-        var centerX = objectRect.Left + objectRect.Width / 2.0;
-        var centerY = objectRect.Top + objectRect.Height / 2.0;
-        var dx = point.X - centerX;
-        var dy = point.Y - centerY;
-        var cos = Math.Cos(radians);
-        var sin = Math.Sin(radians);
-        return new Point(
-            centerX + dx * cos - dy * sin,
-            centerY + dx * sin + dy * cos);
-    }
+    private static CoreDragKind ToCore(ObjectDragKind kind) => (CoreDragKind)(int)kind;
 
-    private static ObjectDragKind HitTestUnrotatedHandle(
-        Point position,
-        Rect objectRect,
-        double handleSize,
-        double handleHitPadding)
-    {
-        var pad = handleHitPadding + handleSize / 2;
+    private static ObjectDragKind ToWpf(CoreDragKind kind) => (ObjectDragKind)(int)kind;
 
-        // Rotation grip sits above the top-center handle with a connector line.
-        var gripCenter = new Point(
-            objectRect.Left + objectRect.Width / 2,
-            objectRect.Top - RotationGripOffset);
-        if (Math.Abs(position.X - gripCenter.X) <= pad && Math.Abs(position.Y - gripCenter.Y) <= pad)
-            return ObjectDragKind.Rotate;
+    private static LayoutRect ToLayoutRect(Rect rect) =>
+        rect.IsEmpty ? new LayoutRect(0, 0, -1, -1) : new LayoutRect(rect.X, rect.Y, rect.Width, rect.Height);
 
-        var nearLeft = Math.Abs(position.X - objectRect.Left) <= pad;
-        var nearTop = Math.Abs(position.Y - objectRect.Top) <= pad;
-        var nearRight = Math.Abs(position.X - objectRect.Right) <= pad;
-        var nearBottom = Math.Abs(position.Y - objectRect.Bottom) <= pad;
-        var inVertical = position.Y >= objectRect.Top - pad && position.Y <= objectRect.Bottom + pad;
-        var inHorizontal = position.X >= objectRect.Left - pad && position.X <= objectRect.Right + pad;
+    private static Rect ToWpfRect(LayoutRect rect) => new(rect.X, rect.Y, rect.Width, rect.Height);
 
-        // Corners take priority over edges (a corner is near two perpendicular edges).
-        if (nearLeft && nearTop) return ObjectDragKind.ResizeNW;
-        if (nearRight && nearTop) return ObjectDragKind.ResizeNE;
-        if (nearRight && nearBottom) return ObjectDragKind.ResizeSE;
-        if (nearLeft && nearBottom) return ObjectDragKind.ResizeSW;
+    private static LayoutPoint ToLayoutPoint(Point point) => new(point.X, point.Y);
 
-        // Edges: anywhere along the edge line within the object's span.
-        if (nearTop && inHorizontal) return ObjectDragKind.ResizeN;
-        if (nearBottom && inHorizontal) return ObjectDragKind.ResizeS;
-        if (nearRight && inVertical) return ObjectDragKind.ResizeE;
-        if (nearLeft && inVertical) return ObjectDragKind.ResizeW;
-        if (objectRect.Contains(position)) return ObjectDragKind.Move;
-        return ObjectDragKind.None;
-    }
-
-    private static Point GetUnrotatedHandleCenter(ObjectDragKind handle, Rect objectRect)
-    {
-        var centerX = objectRect.Left + objectRect.Width / 2.0;
-        var centerY = objectRect.Top + objectRect.Height / 2.0;
-        return handle switch
-        {
-            ObjectDragKind.ResizeNW => new Point(objectRect.Left, objectRect.Top),
-            ObjectDragKind.ResizeN => new Point(centerX, objectRect.Top),
-            ObjectDragKind.ResizeNE => new Point(objectRect.Right, objectRect.Top),
-            ObjectDragKind.ResizeE => new Point(objectRect.Right, centerY),
-            ObjectDragKind.ResizeSE => new Point(objectRect.Right, objectRect.Bottom),
-            ObjectDragKind.ResizeS => new Point(centerX, objectRect.Bottom),
-            ObjectDragKind.ResizeSW => new Point(objectRect.Left, objectRect.Bottom),
-            ObjectDragKind.ResizeW => new Point(objectRect.Left, centerY),
-            ObjectDragKind.Rotate => new Point(centerX, objectRect.Top - RotationGripOffset),
-            _ => new Point(centerX, centerY)
-        };
-    }
+    private static Point ToWpfPoint(LayoutPoint point) => new(point.X, point.Y);
 
     public static CellAddress? HitTestAnchorCell(
         ViewportModel? viewport,
@@ -422,6 +264,4 @@ public static class GridObjectDragPlanner
 
         return null;
     }
-
-    private readonly record struct AxisDragTransform(double Start, double End, bool Crossed);
 }

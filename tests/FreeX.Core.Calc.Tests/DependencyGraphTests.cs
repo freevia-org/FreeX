@@ -857,6 +857,35 @@ public class VolatileFunctionTests
     }
 
     [Fact]
+    public void FormulaRewriteOutcomeAffectedCells_RefreshesIncrementalDependencies()
+    {
+        var wb = new Workbook("Test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var engine = new RecalcEngine(new DependencyGraph(), new FormulaEvaluator());
+        var a2 = new CellAddress(sheet.Id, 2, 1);
+        var a3 = new CellAddress(sheet.Id, 3, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+
+        sheet.SetCell(a2, new NumberValue(2));
+        sheet.SetFormula(b1, "A2");
+        engine.RegisterFormulaDependencies(
+            b1,
+            new Parser(new Lexer("=A2").Tokenize()).Parse(),
+            sheet.Id,
+            wb);
+
+        var outcome = new InsertRowsCommand(sheet.Id, 2).Apply(ctx);
+
+        outcome.AffectedCells.Should().Contain(b1);
+        engine.Recalculate(wb, outcome.AffectedCells!);
+        sheet.SetCell(a3, new NumberValue(7));
+        engine.Recalculate(wb, [a3]);
+
+        sheet.GetValue(b1).Should().Be(new NumberValue(7));
+    }
+
+    [Fact]
     public void RecalculateAllFormulas_EvaluatesNonVolatileFormulaWithoutChangedCells()
     {
         var wb = new Workbook("Test");

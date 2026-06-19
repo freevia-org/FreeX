@@ -46,7 +46,7 @@ public sealed partial class MainWindow
 
         var dialog = new Window
         {
-            Title = "Name Manager",
+            Title = UiText.Get("InsertLoc_NameManagerTitle"),
             Width = 620,
             Height = 460,
             MinWidth = 520,
@@ -67,11 +67,11 @@ public sealed partial class MainWindow
         var namesList = new ListBox { MinHeight = 220 };
         AutomationProperties.SetAutomationId(namesList, "NameManagerNamesList");
 
-        var newButton = new Button { Content = "New...", MinWidth = 84 };
+        var newButton = new Button { Content = UiText.Get("InsertLoc_NewButton"), MinWidth = 84 };
         AutomationProperties.SetAutomationId(newButton, "NameManagerNewButton");
-        var editButton = new Button { Content = "Edit...", MinWidth = 84, IsEnabled = false };
+        var editButton = new Button { Content = UiText.Get("InsertLoc_EditButton"), MinWidth = 84, IsEnabled = false };
         AutomationProperties.SetAutomationId(editButton, "NameManagerEditButton");
-        var deleteButton = new Button { Content = "Delete", MinWidth = 84, IsEnabled = false };
+        var deleteButton = new Button { Content = UiText.Get("InsertLoc_DeleteButton"), MinWidth = 84, IsEnabled = false };
         AutomationProperties.SetAutomationId(deleteButton, "NameManagerDeleteButton");
 
         var warningText = new TextBlock
@@ -131,16 +131,16 @@ public sealed partial class MainWindow
             var result = _session.ExecuteReviewCommand(command);
             if (!result.Success)
             {
-                warningText.Text = result.ErrorMessage ?? $"Could not delete '{name}'.";
+                warningText.Text = result.ErrorMessage ?? UiText.Format("InsertLoc_CouldNotDeleteName", name);
                 warningText.IsVisible = true;
                 return;
             }
 
-            RefreshShell($"Deleted name '{name}'");
+            RefreshShell(UiText.Format("InsertLoc_DeletedName", name));
             RefreshRows();
         };
 
-        var closeButton = new Button { Content = "Close", IsCancel = true, MinWidth = 84 };
+        var closeButton = new Button { Content = UiText.Get("InsertLoc_CloseButton"), IsCancel = true, MinWidth = 84 };
         AutomationProperties.SetAutomationId(closeButton, "NameManagerCloseButton");
         closeButton.Click += (_, _) => dialog.Close();
 
@@ -169,7 +169,7 @@ public sealed partial class MainWindow
             Spacing = 8,
             Children =
             {
-                new TextBlock { Text = "Filter:", VerticalAlignment = AvaloniaVerticalAlignment.Center },
+                new TextBlock { Text = UiText.Get("InsertLoc_FilterLabel"), VerticalAlignment = AvaloniaVerticalAlignment.Center },
                 filterBox,
             },
         };
@@ -212,7 +212,7 @@ public sealed partial class MainWindow
         var isEdit = seed is not null;
         var dialog = new Window
         {
-            Title = isEdit ? "Edit Name" : "New Name",
+            Title = isEdit ? UiText.Get("InsertLoc_EditNameTitle") : UiText.Get("InsertLoc_NewNameTitle"),
             Width = 440,
             Height = 300,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -258,9 +258,9 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(warningText, "DefineNameWarningText");
 
-        var okButton = new Button { Content = "OK", IsDefault = true, MinWidth = 84 };
+        var okButton = new Button { Content = UiText.Get("InsertLoc_OkButton"), IsDefault = true, MinWidth = 84 };
         AutomationProperties.SetAutomationId(okButton, "DefineNameOkButton");
-        var cancelButton = new Button { Content = "Cancel", IsCancel = true, MinWidth = 84 };
+        var cancelButton = new Button { Content = UiText.Get("InsertLoc_CancelButton"), IsCancel = true, MinWidth = 84 };
         AutomationProperties.SetAutomationId(cancelButton, "DefineNameCancelButton");
 
         void ShowWarning(string message)
@@ -311,13 +311,13 @@ public sealed partial class MainWindow
             var refersToText = refersToBox.Text?.Trim() ?? string.Empty;
             if (!DefinedNameDraft.ValidateRefersTo(refersToText).IsValid)
             {
-                ShowWarning("Enter a valid Refers To expression.");
+                ShowWarning(UiText.Get("InsertLoc_EnterValidRefersTo"));
                 return;
             }
 
             if (!TryParseDefinedNameRange(refersToText, out var range))
             {
-                ShowWarning("Refers To must resolve to a cell or range (e.g. Sheet1!A1:B2).");
+                ShowWarning(UiText.Get("InsertLoc_RefersToMustResolve"));
                 return;
             }
 
@@ -330,7 +330,7 @@ public sealed partial class MainWindow
                 var removeResult = _session.ExecuteReviewCommand(DefinedNamesShellGlue.BuildDeleteCommand(seed.Name));
                 if (!removeResult.Success)
                 {
-                    ShowWarning(removeResult.ErrorMessage ?? $"Could not rename '{seed.Name}'.");
+                    ShowWarning(removeResult.ErrorMessage ?? UiText.Format("InsertLoc_CouldNotRenameName", seed.Name));
                     return;
                 }
             }
@@ -339,11 +339,11 @@ public sealed partial class MainWindow
             var result = _session.ExecuteReviewCommand(command);
             if (!result.Success)
             {
-                ShowWarning(result.ErrorMessage ?? "Could not define the name.");
+                ShowWarning(result.ErrorMessage ?? UiText.Get("InsertLoc_CouldNotDefineName"));
                 return;
             }
 
-            RefreshShell(isEdit ? $"Updated name '{name}'" : $"Defined name '{name}'");
+            RefreshShell(isEdit ? UiText.Format("InsertLoc_UpdatedName", name) : UiText.Format("InsertLoc_DefinedName", name));
             dialog.Close();
         };
         cancelButton.Click += (_, _) => dialog.Close();
@@ -352,10 +352,10 @@ public sealed partial class MainWindow
         for (var i = 0; i < 4; i++)
             form.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
 
-        AddDefineNameRow(form, 0, "Name:", nameBox);
-        AddDefineNameRow(form, 1, "Scope:", scopeBox);
-        AddDefineNameRow(form, 2, "Comment:", commentBox);
-        AddDefineNameRow(form, 3, "Refers to:", refersToBox);
+        AddDefineNameRow(form, 0, UiText.Get("InsertLoc_NameFieldLabel"), nameBox);
+        AddDefineNameRow(form, 1, UiText.Get("InsertLoc_ScopeFieldLabel"), scopeBox);
+        AddDefineNameRow(form, 2, UiText.Get("InsertLoc_CommentFieldLabel"), commentBox);
+        AddDefineNameRow(form, 3, UiText.Get("InsertLoc_RefersToFieldLabel"), refersToBox);
 
         var buttonRow = new StackPanel
         {
@@ -397,7 +397,7 @@ public sealed partial class MainWindow
 
         var dialog = new Window
         {
-            Title = "Create Names from Selection",
+            Title = UiText.Get("InsertLoc_CreateNamesTitle"),
             Width = 360,
             Height = 240,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -405,13 +405,13 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(dialog, "CreateNamesFromSelectionDialog");
 
-        var topRowBox = new CheckBox { Content = "Top row", IsChecked = true };
+        var topRowBox = new CheckBox { Content = UiText.Get("InsertLoc_CreateNamesTopRow"), IsChecked = true };
         AutomationProperties.SetAutomationId(topRowBox, "CreateNamesTopRowBox");
-        var leftColumnBox = new CheckBox { Content = "Left column" };
+        var leftColumnBox = new CheckBox { Content = UiText.Get("InsertLoc_CreateNamesLeftColumn") };
         AutomationProperties.SetAutomationId(leftColumnBox, "CreateNamesLeftColumnBox");
-        var bottomRowBox = new CheckBox { Content = "Bottom row" };
+        var bottomRowBox = new CheckBox { Content = UiText.Get("InsertLoc_CreateNamesBottomRow") };
         AutomationProperties.SetAutomationId(bottomRowBox, "CreateNamesBottomRowBox");
-        var rightColumnBox = new CheckBox { Content = "Right column" };
+        var rightColumnBox = new CheckBox { Content = UiText.Get("InsertLoc_CreateNamesRightColumn") };
         AutomationProperties.SetAutomationId(rightColumnBox, "CreateNamesRightColumnBox");
 
         var warningText = new TextBlock
@@ -422,9 +422,9 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(warningText, "CreateNamesWarningText");
 
-        var okButton = new Button { Content = "OK", IsDefault = true, MinWidth = 84 };
+        var okButton = new Button { Content = UiText.Get("InsertLoc_OkButton"), IsDefault = true, MinWidth = 84 };
         AutomationProperties.SetAutomationId(okButton, "CreateNamesOkButton");
-        var cancelButton = new Button { Content = "Cancel", IsCancel = true, MinWidth = 84 };
+        var cancelButton = new Button { Content = UiText.Get("InsertLoc_CancelButton"), IsCancel = true, MinWidth = 84 };
         AutomationProperties.SetAutomationId(cancelButton, "CreateNamesCancelButton");
 
         okButton.Click += (_, _) =>
@@ -439,7 +439,7 @@ public sealed partial class MainWindow
 
             if (!options.HasAnyEdge)
             {
-                warningText.Text = "Select at least one label position.";
+                warningText.Text = UiText.Get("InsertLoc_SelectAtLeastOneLabel");
                 warningText.IsVisible = true;
                 return;
             }
@@ -453,7 +453,7 @@ public sealed partial class MainWindow
 
             if (planned.Count == 0)
             {
-                warningText.Text = "No valid labels were found in the selection.";
+                warningText.Text = UiText.Get("InsertLoc_NoValidLabels");
                 warningText.IsVisible = true;
                 return;
             }
@@ -464,7 +464,7 @@ public sealed partial class MainWindow
                 var result = _session.ExecuteReviewCommand(command);
                 if (!result.Success)
                 {
-                    warningText.Text = result.ErrorMessage ?? "Could not create names from the selection.";
+                    warningText.Text = result.ErrorMessage ?? UiText.Get("InsertLoc_CouldNotCreateNames");
                     warningText.IsVisible = true;
                     return;
                 }
@@ -472,7 +472,7 @@ public sealed partial class MainWindow
                 created++;
             }
 
-            RefreshShell($"Created {created} name(s) from selection");
+            RefreshShell(UiText.Format("InsertLoc_CreatedNamesFromSelection", created));
             dialog.Close();
         };
         cancelButton.Click += (_, _) => dialog.Close();
@@ -500,7 +500,7 @@ public sealed partial class MainWindow
                     {
                         new TextBlock
                         {
-                            Text = "Create names from values in the:",
+                            Text = UiText.Get("InsertLoc_CreateNamesFromValuesIn"),
                             Foreground = HeaderForeground,
                         },
                         topRowBox,
@@ -550,21 +550,21 @@ public sealed partial class MainWindow
 
     private static string DescribeNameError(DefinedNameError error) => error switch
     {
-        DefinedNameError.Blank => "Enter a name.",
-        DefinedNameError.TooLong => "The name is too long (255 characters maximum).",
-        DefinedNameError.InvalidFirstCharacter => "A name must start with a letter, underscore, or backslash.",
-        DefinedNameError.InvalidCharacter => "A name may contain only letters, digits, periods, and underscores (no spaces).",
-        DefinedNameError.LooksLikeReference => "A name cannot look like a cell reference.",
-        DefinedNameError.Reserved => "That name is reserved.",
-        DefinedNameError.Duplicate => "A name with that text already exists in this scope.",
-        _ => "Enter a valid name.",
+        DefinedNameError.Blank => UiText.Get("InsertLoc_NameErrorBlank"),
+        DefinedNameError.TooLong => UiText.Get("InsertLoc_NameErrorTooLong"),
+        DefinedNameError.InvalidFirstCharacter => UiText.Get("InsertLoc_NameErrorInvalidFirstChar"),
+        DefinedNameError.InvalidCharacter => UiText.Get("InsertLoc_NameErrorInvalidChar"),
+        DefinedNameError.LooksLikeReference => UiText.Get("InsertLoc_NameErrorLooksLikeReference"),
+        DefinedNameError.Reserved => UiText.Get("InsertLoc_NameErrorReserved"),
+        DefinedNameError.Duplicate => UiText.Get("InsertLoc_NameErrorDuplicate"),
+        _ => UiText.Get("InsertLoc_NameErrorGeneric"),
     };
 
     private static string DescribeRefersToError(RefersToError error) => error switch
     {
-        RefersToError.Blank => "Enter a Refers To expression.",
-        RefersToError.NotAFormula => "Refers To must be a valid formula or reference.",
-        _ => "Enter a valid Refers To expression.",
+        RefersToError.Blank => UiText.Get("InsertLoc_RefersToErrorBlank"),
+        RefersToError.NotAFormula => UiText.Get("InsertLoc_RefersToErrorNotAFormula"),
+        _ => UiText.Get("InsertLoc_EnterValidRefersTo"),
     };
 
     private static string DefinedNameLabelText(ScalarValue? value) => value switch

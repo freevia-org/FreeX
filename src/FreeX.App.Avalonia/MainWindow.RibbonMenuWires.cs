@@ -38,7 +38,7 @@ public sealed partial class MainWindow
         var result = _session.SetShowRulers(showRulers);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Ruler failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("InsertLoc_RulerFailed"));
             return;
         }
 
@@ -47,7 +47,7 @@ public sealed partial class MainWindow
 
     // ── View ▸ Zoom split-button presets ────────────────────────────────────────
     private void ApplyZoomPercentPreset(int zoomPercent) =>
-        ApplyZoomPercent(zoomPercent, "Zoom failed.");
+        ApplyZoomPercent(zoomPercent, UiText.Get("InsertLoc_ZoomFailed"));
 
     // ── View ▸ Window ▸ Switch Windows ──────────────────────────────────────────
     // Builds a chooser of every visible top-level window and activates the picked one. Self-contained
@@ -79,7 +79,7 @@ public sealed partial class MainWindow
         for (var index = 0; index < windows.Count; index++)
         {
             var window = windows[index];
-            var label = string.IsNullOrWhiteSpace(window.Title) ? $"Window {index + 1}" : window.Title!;
+            var label = string.IsNullOrWhiteSpace(window.Title) ? UiText.Format("InsertLoc_WindowLabel", index + 1) : window.Title!;
             var button = new Button
             {
                 Content = label,
@@ -199,7 +199,7 @@ public sealed partial class MainWindow
         var result = _session.ApplySelectedRangeCompactFormat(new StyleDiff(Locked: !locked), borderPreset: null);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Lock Cell failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("InsertLoc_LockCellFailed"));
             return;
         }
 
@@ -307,7 +307,7 @@ public sealed partial class MainWindow
         }
         catch (IOException ex)
         {
-            ShowEditIssue($"Could not read the image: {ex.Message}");
+            ShowEditIssue(UiText.Format("InsertLoc_CouldNotReadImage", ex.Message));
             return;
         }
 

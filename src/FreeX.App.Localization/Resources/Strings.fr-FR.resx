@@ -933,4 +933,557 @@
   <data name="WfInsertObject_ErrorRead" xml:space="preserve"><value>Impossible de lire le fichier : {0}</value></data>
   <data name="WfInsertObject_ErrorEmptyFile" xml:space="preserve"><value>Le fichier sélectionné est vide.</value></data>
   <data name="WfInsertObject_ErrorGeneric" xml:space="preserve"><value>Échec de l'insertion de l'objet.</value></data>
+  <data name="ChartLoc_AxisNoAxesToFormat" xml:space="preserve"><value>Ce type de graphique n'a pas d'axes à mettre en forme.</value></data>
+  <data name="ChartLoc_EnterNumberOrBlankAuto" xml:space="preserve"><value>Saisissez un nombre ou laissez vide pour Auto.</value></data>
+  <data name="ChartLoc_NoDataSeriesToFormat" xml:space="preserve"><value>Ce graphique n'a pas de série de données à mettre en forme.</value></data>
+  <data name="ChartLoc_TrendlinesAvailableOn" xml:space="preserve"><value>Les courbes de tendance sont disponibles sur les graphiques en colonnes, en courbes, en barres, en nuage de points, en bulles et en aires.</value></data>
+  <data name="ChartLoc_EnterMovingAveragePeriod" xml:space="preserve"><value>Saisissez une période de moyenne mobile comprise entre {0} et {1}.</value></data>
+  <data name="ChartLoc_EnterPolynomialOrder" xml:space="preserve"><value>Saisissez un ordre polynomial compris entre {0} et {1}.</value></data>
+  <data name="ChartLoc_ErrorBarsAvailableOn" xml:space="preserve"><value>Les barres d'erreur sont disponibles sur les graphiques en colonnes, en courbes, en barres, en nuage de points, en bulles et en aires.</value></data>
+  <data name="ChartLoc_EnterErrorBarAmount" xml:space="preserve"><value>Saisissez une valeur de barre d'erreur comprise entre {0} et {1}.</value></data>
+  <data name="ChartLoc_AutoPlaceholder" xml:space="preserve"><value>Auto</value></data>
+  <data name="ChartLoc_ComboChartsNeed" xml:space="preserve"><value>Les graphiques combinés nécessitent un graphique en colonnes ou en aires avec au moins deux séries de données.</value></data>
+  <data name="ChartLoc_MarkersAvailableOn" xml:space="preserve"><value>Les marqueurs sont disponibles sur les graphiques en courbes et en nuage de points.</value></data>
+  <data name="ChartLoc_MoveChartFailed" xml:space="preserve"><value>Échec du déplacement du graphique.</value></data>
+  <data name="ChartLoc_MovedChartToNewSheet" xml:space="preserve"><value>Graphique déplacé vers la nouvelle feuille « {0} ».</value></data>
+  <data name="ChartLoc_NoSheetNamed" xml:space="preserve"><value>Aucune feuille nommée « {0} ».</value></data>
+  <data name="ChartLoc_MovedChartTo" xml:space="preserve"><value>Graphique déplacé vers « {0} ».</value></data>
+  <data name="ChartLoc_EnterPlotAreaBorderWidth" xml:space="preserve"><value>Saisissez une largeur de bordure de la zone de traçage comprise entre {0} et {1}.</value></data>
+  <data name="ChartLoc_SelectChartBeforeUsing" xml:space="preserve"><value>Sélectionnez un graphique avant d'utiliser {0}.</value></data>
+  <data name="ChartLoc_CommandApplied" xml:space="preserve"><value>{0} appliqué.</value></data>
+  <data name="ChartLoc_CommandFailed" xml:space="preserve"><value>Échec : {0}.</value></data>
+  <data name="ChartLoc_ChangeChartTypeFailed" xml:space="preserve"><value>Échec de la modification du type de graphique.</value></data>
+  <data name="ChartLoc_ChangedChartTypeTo" xml:space="preserve"><value>Type de graphique remplacé par {0}.</value></data>
+  <data name="ChartLoc_ChangeChartTypeTitle" xml:space="preserve"><value>Modifier le type de graphique</value></data>
+  <data name="ChartLoc_ChooseChartType" xml:space="preserve"><value>Choisissez un type de graphique :</value></data>
+  <data name="ChartLoc_EnterValidChartDataRange" xml:space="preserve"><value>Saisissez une plage de données de graphique valide (par ex. A1:C10).</value></data>
+  <data name="ChartLoc_ChartDataSourceSetTo" xml:space="preserve"><value>Source de données du graphique définie sur {0}.</value></data>
+  <data name="ChartLoc_SelectDataFailed" xml:space="preserve"><value>Échec de la sélection des données.</value></data>
+  <data name="ChartLoc_FirstColumnContainsCategories" xml:space="preserve"><value>La première colonne contient les étiquettes de catégorie</value></data>
+  <data name="ChartLoc_SelectDataSourceTitle" xml:space="preserve"><value>Sélectionner la source de données</value></data>
+  <data name="ChartLoc_ChartDataRangeLabel" xml:space="preserve"><value>Plage de données du graphique :</value></data>
+  <data name="ChartLoc_RangePlaceholder" xml:space="preserve"><value>par ex. A1:C10</value></data>
+  <data name="ChartLoc_ChartTitlesTitle" xml:space="preserve"><value>Titres du graphique</value></data>
+  <data name="ChartLoc_ChartTitleLabel" xml:space="preserve"><value>Titre du graphique :</value></data>
+  <data name="ChartLoc_HorizontalAxisTitleLabel" xml:space="preserve"><value>Titre de l'axe horizontal (abscisses) :</value></data>
+  <data name="ChartLoc_VerticalAxisTitleLabel" xml:space="preserve"><value>Titre de l'axe vertical (ordonnées) :</value></data>
+  <data name="ChartLoc_ShowLegend" xml:space="preserve"><value>Afficher la légende</value></data>
+  <data name="ChartLoc_LegendTitle" xml:space="preserve"><value>Légende</value></data>
+  <data name="ChartLoc_LegendPositionLabel" xml:space="preserve"><value>Position de la légende :</value></data>
+  <data name="ChartLoc_AppliedChartStyle" xml:space="preserve"><value>Style de graphique {0} appliqué.</value></data>
+  <data name="ChartLoc_ChartStylesFailed" xml:space="preserve"><value>Échec des styles de graphique.</value></data>
+  <data name="ChartLoc_SecondaryAxisNeeds" xml:space="preserve"><value>L'axe secondaire nécessite un graphique en colonnes/courbes/aires/nuage de points avec au moins deux séries de données.</value></data>
+  <data name="ChartLoc_ChartAreaFill" xml:space="preserve"><value>Remplissage de la zone de graphique</value></data>
+  <data name="ChartLoc_PlotAreaBorder" xml:space="preserve"><value>Bordure de la zone de traçage</value></data>
+  <data name="ChartLoc_PlotAreaFill" xml:space="preserve"><value>Remplissage de la zone de traçage</value></data>
+  <data name="ChartLoc_NoDataSeriesToColor" xml:space="preserve"><value>Ce graphique n'a pas de série de données à colorer.</value></data>
+  <data name="ChartLoc_SeriesColor" xml:space="preserve"><value>Couleur de la série</value></data>
+  <data name="ChartLoc_NoAxesForGridlines" xml:space="preserve"><value>Ce type de graphique n'a pas d'axes pour afficher des quadrillages.</value></data>
+  <data name="ChartLoc_NoAxes" xml:space="preserve"><value>Ce type de graphique n'a pas d'axes.</value></data>
+  <data name="ChartLoc_CommandNotYetAvailable" xml:space="preserve"><value>{0} n'est pas encore disponible.</value></data>
+  <data name="ChartLoc_GapWidthOverlapAvailableOn" xml:space="preserve"><value>La largeur d'intervalle et la superposition sont disponibles sur les graphiques en barres et en colonnes.</value></data>
+  <data name="ChartLoc_EnterWholeNumbersGapOverlap" xml:space="preserve"><value>Saisissez des nombres entiers pour la largeur d'intervalle et la superposition.</value></data>
+  <data name="ChartLoc_OptionsAvailablePieDoughnut" xml:space="preserve"><value>Ces options sont disponibles sur les graphiques en secteurs et en anneau.</value></data>
+  <data name="ChartLoc_EnterFirstSliceAngle" xml:space="preserve"><value>Saisissez un angle du premier secteur compris entre {0} et {1} degrés.</value></data>
+  <data name="ChartLoc_EnterExplodedSliceIndex" xml:space="preserve"><value>Saisissez un index de secteur éclaté sous forme de nombre entier.</value></data>
+  <data name="ChartLoc_EnterExplodedSliceDistance" xml:space="preserve"><value>Saisissez une distance de secteur éclaté comprise entre 0 % et 50 %.</value></data>
+  <data name="ChartLoc_EnterDoughnutHoleSize" xml:space="preserve"><value>Saisissez une taille de trou de l'anneau comprise entre 10 % et 90 %.</value></data>
+  <data name="ChartLoc_OptionsAvailableBubble" xml:space="preserve"><value>Ces options sont disponibles sur les graphiques en bulles.</value></data>
+  <data name="ChartLoc_EnterBubbleScale" xml:space="preserve"><value>Saisissez une échelle de bulles comprise entre {0} et {1}.</value></data>
+  <data name="ChartLoc_OptionsAvailableStock" xml:space="preserve"><value>Ces options sont disponibles sur les graphiques boursiers.</value></data>
+  <data name="ChartLoc_EnterUpDownBarGapWidth" xml:space="preserve"><value>Saisissez une largeur d'intervalle des barres hausse/baisse comprise entre {0} et {1}.</value></data>
+  <data name="ChartLoc_EnterHighLowLineThickness" xml:space="preserve"><value>Saisissez une épaisseur de ligne haut-bas comprise entre {0} et {1}.</value></data>
+  <data name="ChartLoc_SelectChartHelpText" xml:space="preserve"><value>Sélectionne ce graphique dans la fenêtre du classeur.</value></data>
+  <data name="ChartLoc_SelectedChart" xml:space="preserve"><value>Graphique sélectionné : {0}</value></data>
+  <data name="ChartLoc_InsertChartFailed" xml:space="preserve"><value>Échec de l'insertion du graphique.</value></data>
+  <data name="ChartLoc_InsertedChartFrom" xml:space="preserve"><value>Graphique {0} inséré à partir de {1}</value></data>
+  <data name="InsertLoc_PictureUnavailable" xml:space="preserve"><value>Insérer une image n'est pas disponible sur cette plateforme.</value></data>
+  <data name="InsertLoc_InsertPictureTitle" xml:space="preserve"><value>Insérer une image</value></data>
+  <data name="InsertLoc_UnsupportedImageFormat" xml:space="preserve"><value>Format d'image non pris en charge.</value></data>
+  <data name="InsertLoc_CouldNotReadImage" xml:space="preserve"><value>Impossible de lire l'image : {0}</value></data>
+  <data name="InsertLoc_SelectedImageEmpty" xml:space="preserve"><value>L'image sélectionnée est vide.</value></data>
+  <data name="InsertLoc_InsertPictureFailed" xml:space="preserve"><value>Échec de l'insertion de l'image.</value></data>
+  <data name="InsertLoc_InsertedPictureAt" xml:space="preserve"><value>Image insérée en {0}</value></data>
+  <data name="InsertLoc_InsertShapeFailed" xml:space="preserve"><value>Échec de l'insertion de la forme.</value></data>
+  <data name="InsertLoc_InsertedShapeAt" xml:space="preserve"><value>Forme {0} insérée en {1}</value></data>
+  <data name="InsertLoc_InsertTextBoxFailed" xml:space="preserve"><value>Échec de l'insertion de la zone de texte.</value></data>
+  <data name="InsertLoc_InsertedTextBoxAt" xml:space="preserve"><value>Zone de texte insérée en {0}</value></data>
+  <data name="InsertLoc_InsertTableFailed" xml:space="preserve"><value>Échec de l'insertion du tableau.</value></data>
+  <data name="InsertLoc_CreatedTableFrom" xml:space="preserve"><value>Tableau créé à partir de {0}</value></data>
+  <data name="InsertLoc_NameManagerTitle" xml:space="preserve"><value>Gestionnaire de noms</value></data>
+  <data name="InsertLoc_NewButton" xml:space="preserve"><value>Nouveau...</value></data>
+  <data name="InsertLoc_EditButton" xml:space="preserve"><value>Modifier...</value></data>
+  <data name="InsertLoc_DeleteButton" xml:space="preserve"><value>Supprimer</value></data>
+  <data name="InsertLoc_CouldNotDeleteName" xml:space="preserve"><value>Impossible de supprimer « {0} ».</value></data>
+  <data name="InsertLoc_DeletedName" xml:space="preserve"><value>Nom « {0} » supprimé</value></data>
+  <data name="InsertLoc_CloseButton" xml:space="preserve"><value>Fermer</value></data>
+  <data name="InsertLoc_FilterLabel" xml:space="preserve"><value>Filtre :</value></data>
+  <data name="InsertLoc_EditNameTitle" xml:space="preserve"><value>Modifier le nom</value></data>
+  <data name="InsertLoc_NewNameTitle" xml:space="preserve"><value>Nouveau nom</value></data>
+  <data name="InsertLoc_OkButton" xml:space="preserve"><value>OK</value></data>
+  <data name="InsertLoc_CancelButton" xml:space="preserve"><value>Annuler</value></data>
+  <data name="InsertLoc_EnterValidRefersTo" xml:space="preserve"><value>Entrez une expression « Fait référence à » valide.</value></data>
+  <data name="InsertLoc_RefersToMustResolve" xml:space="preserve"><value>« Fait référence à » doit correspondre à une cellule ou à une plage (par ex. Feuil1!A1:B2).</value></data>
+  <data name="InsertLoc_CouldNotRenameName" xml:space="preserve"><value>Impossible de renommer « {0} ».</value></data>
+  <data name="InsertLoc_CouldNotDefineName" xml:space="preserve"><value>Impossible de définir le nom.</value></data>
+  <data name="InsertLoc_UpdatedName" xml:space="preserve"><value>Nom « {0} » mis à jour</value></data>
+  <data name="InsertLoc_DefinedName" xml:space="preserve"><value>Nom « {0} » défini</value></data>
+  <data name="InsertLoc_NameFieldLabel" xml:space="preserve"><value>Nom :</value></data>
+  <data name="InsertLoc_ScopeFieldLabel" xml:space="preserve"><value>Étendue :</value></data>
+  <data name="InsertLoc_CommentFieldLabel" xml:space="preserve"><value>Commentaire :</value></data>
+  <data name="InsertLoc_RefersToFieldLabel" xml:space="preserve"><value>Fait référence à :</value></data>
+  <data name="InsertLoc_CreateNamesTitle" xml:space="preserve"><value>Créer des noms à partir de la sélection</value></data>
+  <data name="InsertLoc_CreateNamesTopRow" xml:space="preserve"><value>Ligne du haut</value></data>
+  <data name="InsertLoc_CreateNamesLeftColumn" xml:space="preserve"><value>Colonne de gauche</value></data>
+  <data name="InsertLoc_CreateNamesBottomRow" xml:space="preserve"><value>Ligne du bas</value></data>
+  <data name="InsertLoc_CreateNamesRightColumn" xml:space="preserve"><value>Colonne de droite</value></data>
+  <data name="InsertLoc_SelectAtLeastOneLabel" xml:space="preserve"><value>Sélectionnez au moins une position d'étiquette.</value></data>
+  <data name="InsertLoc_NoValidLabels" xml:space="preserve"><value>Aucune étiquette valide trouvée dans la sélection.</value></data>
+  <data name="InsertLoc_CouldNotCreateNames" xml:space="preserve"><value>Impossible de créer des noms à partir de la sélection.</value></data>
+  <data name="InsertLoc_CreatedNamesFromSelection" xml:space="preserve"><value>{0} nom(s) créé(s) à partir de la sélection</value></data>
+  <data name="InsertLoc_CreateNamesFromValuesIn" xml:space="preserve"><value>Créer des noms à partir des valeurs dans :</value></data>
+  <data name="InsertLoc_NameErrorBlank" xml:space="preserve"><value>Entrez un nom.</value></data>
+  <data name="InsertLoc_NameErrorTooLong" xml:space="preserve"><value>Le nom est trop long (255 caractères maximum).</value></data>
+  <data name="InsertLoc_NameErrorInvalidFirstChar" xml:space="preserve"><value>Un nom doit commencer par une lettre, un trait de soulignement ou une barre oblique inverse.</value></data>
+  <data name="InsertLoc_NameErrorInvalidChar" xml:space="preserve"><value>Un nom ne peut contenir que des lettres, des chiffres, des points et des traits de soulignement (pas d'espaces).</value></data>
+  <data name="InsertLoc_NameErrorLooksLikeReference" xml:space="preserve"><value>Un nom ne peut pas ressembler à une référence de cellule.</value></data>
+  <data name="InsertLoc_NameErrorReserved" xml:space="preserve"><value>Ce nom est réservé.</value></data>
+  <data name="InsertLoc_NameErrorDuplicate" xml:space="preserve"><value>Un nom avec ce texte existe déjà dans cette étendue.</value></data>
+  <data name="InsertLoc_NameErrorGeneric" xml:space="preserve"><value>Entrez un nom valide.</value></data>
+  <data name="InsertLoc_RefersToErrorBlank" xml:space="preserve"><value>Entrez une expression « Fait référence à ».</value></data>
+  <data name="InsertLoc_RefersToErrorNotAFormula" xml:space="preserve"><value>« Fait référence à » doit être une formule ou une référence valide.</value></data>
+  <data name="InsertLoc_ChooseShapeEffect" xml:space="preserve"><value>Choisissez un effet de forme dans le menu.</value></data>
+  <data name="InsertLoc_NotYetAvailable" xml:space="preserve"><value>{0} n'est pas encore disponible.</value></data>
+  <data name="InsertLoc_CommandFailed" xml:space="preserve"><value>Échec de la commande : {0}</value></data>
+  <data name="InsertLoc_DrawingCommandFailed" xml:space="preserve"><value>Échec : {0}.</value></data>
+  <data name="InsertLoc_BroughtShapeForward" xml:space="preserve"><value>Forme avancée.</value></data>
+  <data name="InsertLoc_BringForwardLabel" xml:space="preserve"><value>Avancer</value></data>
+  <data name="InsertLoc_SentShapeBackward" xml:space="preserve"><value>Forme reculée.</value></data>
+  <data name="InsertLoc_SendBackwardLabel" xml:space="preserve"><value>Reculer</value></data>
+  <data name="InsertLoc_ShapeFillTitle" xml:space="preserve"><value>Remplissage de forme</value></data>
+  <data name="InsertLoc_ShapeFillSet" xml:space="preserve"><value>Remplissage de forme défini sur {0}.</value></data>
+  <data name="InsertLoc_ShapeOutlineTitle" xml:space="preserve"><value>Contour de forme</value></data>
+  <data name="InsertLoc_ShapeOutlineSet" xml:space="preserve"><value>Contour de forme défini sur {0}.</value></data>
+  <data name="InsertLoc_GradientStartColor" xml:space="preserve"><value>Couleur de début du dégradé</value></data>
+  <data name="InsertLoc_GradientEndColor" xml:space="preserve"><value>Couleur de fin du dégradé</value></data>
+  <data name="InsertLoc_ShapeGradientSet" xml:space="preserve"><value>Dégradé de forme défini ({0} -&gt; {1}).</value></data>
+  <data name="InsertLoc_ShapeGradientTitle" xml:space="preserve"><value>Dégradé de forme</value></data>
+  <data name="InsertLoc_ShapeEffectsLabel" xml:space="preserve"><value>Effets de forme</value></data>
+  <data name="InsertLoc_SelectPictureOrShapeFirst" xml:space="preserve"><value>Sélectionnez d'abord une image ou une forme.</value></data>
+  <data name="InsertLoc_RotateObjectTitle" xml:space="preserve"><value>Faire pivoter l'objet</value></data>
+  <data name="InsertLoc_RotationDegreesPrompt" xml:space="preserve"><value>Rotation (degrés) :</value></data>
+  <data name="InsertLoc_EnterValidRotation" xml:space="preserve"><value>Entrez une rotation valide en degrés.</value></data>
+  <data name="InsertLoc_RotatedObject" xml:space="preserve"><value>Objet pivoté à {0:0.##} degrés.</value></data>
+  <data name="InsertLoc_ObjectNoLongerAvailable" xml:space="preserve"><value>L'objet sélectionné n'est plus disponible.</value></data>
+  <data name="InsertLoc_ResizedObject" xml:space="preserve"><value>Objet redimensionné à {0:0.##} x {1:0.##}.</value></data>
+  <data name="InsertLoc_ObjectSizeTitle" xml:space="preserve"><value>Taille de l'objet</value></data>
+  <data name="InsertLoc_AltTextTitle" xml:space="preserve"><value>Texte de remplacement</value></data>
+  <data name="InsertLoc_AltTextPrompt" xml:space="preserve"><value>Décrivez cet objet pour l'accessibilité :</value></data>
+  <data name="InsertLoc_AltTextCleared" xml:space="preserve"><value>Texte de remplacement effacé.</value></data>
+  <data name="InsertLoc_AltTextUpdated" xml:space="preserve"><value>Texte de remplacement mis à jour.</value></data>
+  <data name="InsertLoc_EnterPositiveSize" xml:space="preserve"><value>Entrez des nombres positifs pour la largeur et la hauteur.</value></data>
+  <data name="InsertLoc_WidthLabel" xml:space="preserve"><value>Largeur :</value></data>
+  <data name="InsertLoc_HeightLabel" xml:space="preserve"><value>Hauteur :</value></data>
+  <data name="InsertLoc_RulerFailed" xml:space="preserve"><value>Échec de la règle.</value></data>
+  <data name="InsertLoc_ZoomFailed" xml:space="preserve"><value>Échec du zoom.</value></data>
+  <data name="InsertLoc_WindowLabel" xml:space="preserve"><value>Fenêtre {0}</value></data>
+  <data name="InsertLoc_LockCellFailed" xml:space="preserve"><value>Échec du verrouillage de la cellule.</value></data>
+  <data name="InsertLoc_CfAppliedPreset" xml:space="preserve"><value>{0} appliqué à {1}</value></data>
+  <data name="InsertLoc_CfAppliedIconSet" xml:space="preserve"><value>Jeu d'icônes appliqué à {0}</value></data>
+  <data name="InsertLoc_CfGreaterThanTitle" xml:space="preserve"><value>Supérieur à</value></data>
+  <data name="InsertLoc_CfGreaterThanPrompt" xml:space="preserve"><value>Mettre en forme les cellules SUPÉRIEURES À :</value></data>
+  <data name="InsertLoc_CfAppliedHighlight" xml:space="preserve"><value>Règle de surbrillance appliquée à {0}</value></data>
+  <data name="InsertLoc_CfCleared" xml:space="preserve"><value>Mise en forme conditionnelle effacée de {0}</value></data>
+  <data name="InsertLoc_CfFailed" xml:space="preserve"><value>Échec de la mise en forme conditionnelle.</value></data>
+  <data name="InsertLoc_CfAppliedRule" xml:space="preserve"><value>Mise en forme conditionnelle appliquée à {0}</value></data>
+  <data name="InsertLoc_CfAddedRule" xml:space="preserve"><value>Règle de mise en forme conditionnelle ajoutée</value></data>
+  <data name="InsertLoc_CfEditedRule" xml:space="preserve"><value>Règle de mise en forme conditionnelle modifiée</value></data>
+  <data name="InsertLoc_CfDeletedRule" xml:space="preserve"><value>Règle de mise en forme conditionnelle supprimée</value></data>
+  <data name="InsertLoc_CfReorderedRules" xml:space="preserve"><value>Règles de mise en forme conditionnelle réordonnées</value></data>
+  <data name="InsertLoc_CfAppliesToInvalid" xml:space="preserve"><value>La plage « S'applique à » n'est pas valide.</value></data>
+  <data name="InsertLoc_CfChangedRuleRange" xml:space="preserve"><value>Plage de la règle modifiée en {0}</value></data>
+  <data name="InsertLoc_ClearedCommentsAndNotes" xml:space="preserve"><value>Commentaires et notes effacés.</value></data>
+  <data name="InsertLoc_CouldNotDeleteComment" xml:space="preserve"><value>Impossible de supprimer le commentaire.</value></data>
+  <data name="InsertLoc_ErrorCheckingSelected" xml:space="preserve"><value>Vérification des erreurs : {0} cellule(s) avec erreurs de formule sélectionnée(s).</value></data>
+  <data name="InsertLoc_ErrorCheckingNone" xml:space="preserve"><value>Vérification des erreurs : aucune erreur de formule trouvée.</value></data>
+  <data name="InsertLoc_NormalView" xml:space="preserve"><value>Mode Normal</value></data>
+  <data name="InsertLoc_SplitWindowAt" xml:space="preserve"><value>Fenêtre fractionnée à {0}</value></data>
+  <data name="InsertLoc_CouldNotSplitWindow" xml:space="preserve"><value>Impossible de fractionner la fenêtre.</value></data>
+  <data name="MainLoc_RestartingToInstall" xml:space="preserve"><value>Redémarrage pour installer FreeX{0}...</value></data>
+  <data name="MainLoc_Ready" xml:space="preserve"><value>Prêt</value></data>
+  <data name="MainLoc_SelectedX" xml:space="preserve"><value>{0} sélectionné</value></data>
+  <data name="MainLoc_NewSheetFailed" xml:space="preserve"><value>Échec de Nouvelle feuille.</value></data>
+  <data name="MainLoc_RenameSheetFailed" xml:space="preserve"><value>Échec du renommage de la feuille.</value></data>
+  <data name="MainLoc_DuplicateSheetFailed" xml:space="preserve"><value>Échec de la duplication de la feuille.</value></data>
+  <data name="MainLoc_MoveSheetLeftFailed" xml:space="preserve"><value>Échec du déplacement de la feuille vers la gauche.</value></data>
+  <data name="MainLoc_MoveSheetRightFailed" xml:space="preserve"><value>Échec du déplacement de la feuille vers la droite.</value></data>
+  <data name="MainLoc_GridlinesFailed" xml:space="preserve"><value>Échec du quadrillage.</value></data>
+  <data name="MainLoc_HeadingsFailed" xml:space="preserve"><value>Échec des en-têtes.</value></data>
+  <data name="MainLoc_ShowFormulasFailed" xml:space="preserve"><value>Échec de l'affichage des formules.</value></data>
+  <data name="MainLoc_HideSheetFailed" xml:space="preserve"><value>Échec du masquage de la feuille.</value></data>
+  <data name="MainLoc_NoHiddenSheets" xml:space="preserve"><value>Aucune feuille masquée.</value></data>
+  <data name="MainLoc_UnhideSheetFailed" xml:space="preserve"><value>Échec de l'affichage de la feuille.</value></data>
+  <data name="MainLoc_DeleteSheetFailed" xml:space="preserve"><value>Échec de la suppression de la feuille.</value></data>
+  <data name="MainLoc_FindAllFailed" xml:space="preserve"><value>Échec de Tout rechercher.</value></data>
+  <data name="MainLoc_NoMatchesFound" xml:space="preserve"><value>Aucune correspondance trouvée.</value></data>
+  <data name="MainLoc_FoundCells" xml:space="preserve"><value>{0} cellules trouvées</value></data>
+  <data name="MainLoc_FindFailed" xml:space="preserve"><value>Échec de la recherche.</value></data>
+  <data name="MainLoc_FoundRangeOfCount" xml:space="preserve"><value>{0} trouvé ({1} sur {2})</value></data>
+  <data name="MainLoc_FindResultNotSelected" xml:space="preserve"><value>Impossible de sélectionner le résultat de la recherche.</value></data>
+  <data name="MainLoc_FoundSheetCell" xml:space="preserve"><value>{0}!{1} trouvé</value></data>
+  <data name="MainLoc_ReplaceFailed" xml:space="preserve"><value>Échec du remplacement.</value></data>
+  <data name="MainLoc_NoReplaceableMatch" xml:space="preserve"><value>Aucune correspondance remplaçable trouvée.</value></data>
+  <data name="MainLoc_ReplacedCells" xml:space="preserve"><value>{0} cellules remplacées</value></data>
+  <data name="MainLoc_ReplacedRangeOfCount" xml:space="preserve"><value>{0} remplacé ({1} sur {2})</value></data>
+  <data name="MainLoc_GoToFailed" xml:space="preserve"><value>Échec de Atteindre.</value></data>
+  <data name="MainLoc_HyperlinkTargetNotFound" xml:space="preserve"><value>Cible du lien hypertexte introuvable.</value></data>
+  <data name="MainLoc_OpenHyperlinkFailed" xml:space="preserve"><value>Échec de l'ouverture du lien hypertexte.</value></data>
+  <data name="MainLoc_OpenHyperlinkRequiresLocalPath" xml:space="preserve"><value>L'ouverture du lien hypertexte nécessite un chemin de fichier local.</value></data>
+  <data name="MainLoc_OpenHyperlinkRequiresWorkbook" xml:space="preserve"><value>L'ouverture du lien hypertexte nécessite un fichier classeur pris en charge.</value></data>
+  <data name="MainLoc_OpenHyperlinkSchemeBlocked" xml:space="preserve"><value>L'ouverture du lien hypertexte a bloqué ce lien car son schéma n'est pas pris en charge.</value></data>
+  <data name="MainLoc_OpenHyperlinkNoExternal" xml:space="preserve"><value>L'ouverture du lien hypertexte ne peut pas ouvrir de liens externes sur cette plateforme.</value></data>
+  <data name="MainLoc_OpenHyperlinkCouldNotOpen" xml:space="preserve"><value>L'ouverture du lien hypertexte n'a pas pu ouvrir le lien.</value></data>
+  <data name="MainLoc_GoToSpecialFailed" xml:space="preserve"><value>Échec de Atteindre une cellule.</value></data><data name="MainLoc_InsertedHyperlinkFor" xml:space="preserve"><value>Lien hypertexte inséré pour {0}</value></data>
+  <data name="MainLoc_ReviewTargetNotSelected" xml:space="preserve"><value>La cible de révision n'a pas été sélectionnée.</value></data>
+  <data name="MainLoc_FormatCellsFailed" xml:space="preserve"><value>Échec du format de cellule.</value></data>
+  <data name="MainLoc_FormattedX" xml:space="preserve"><value>{0} mis en forme</value></data>
+  <data name="MainLoc_FlashFilledX" xml:space="preserve"><value>Remplissage instantané de {0}</value></data>
+  <data name="MainLoc_ToggleFilterFailed" xml:space="preserve"><value>Échec du basculement du filtre.</value></data>
+  <data name="MainLoc_RemovedFilter" xml:space="preserve"><value>Filtre supprimé</value></data>
+  <data name="MainLoc_AddedFilter" xml:space="preserve"><value>Filtre ajouté</value></data>
+  <data name="MainLoc_SortedX" xml:space="preserve"><value>{0} trié</value></data>
+  <data name="MainLoc_GoalSeekRestoreFailed" xml:space="preserve"><value>Échec de la restauration de la valeur cible.</value></data>
+  <data name="MainLoc_RestoredGoalSeekValues" xml:space="preserve"><value>Valeurs cibles d'origine restaurées pour {0}</value></data>
+  <data name="MainLoc_SubtotalFailed" xml:space="preserve"><value>Échec du sous-total.</value></data>
+  <data name="MainLoc_RemovedSubtotalsFrom" xml:space="preserve"><value>Sous-totaux supprimés de {0}</value></data>
+  <data name="MainLoc_AddedSubtotalsTo" xml:space="preserve"><value>Sous-totaux ajoutés à {0}</value></data>
+  <data name="MainLoc_ScenarioManagerFailed" xml:space="preserve"><value>Échec du gestionnaire de scénarios.</value></data>
+  <data name="MainLoc_ClearDataValidationFailed" xml:space="preserve"><value>Échec de l'effacement de la validation des données.</value></data>
+  <data name="MainLoc_ClearedDataValidationFrom" xml:space="preserve"><value>Validation des données effacée de {0}</value></data>
+  <data name="MainLoc_NoDataValidationToClear" xml:space="preserve"><value>Aucune validation des données à effacer de {0}</value></data>
+  <data name="MainLoc_DataValidationFailed" xml:space="preserve"><value>Échec de la validation des données.</value></data>
+  <data name="MainLoc_CutFailed" xml:space="preserve"><value>Échec du couper.</value></data>
+  <data name="MainLoc_CutX" xml:space="preserve"><value>{0} coupé</value></data>
+  <data name="MainLoc_CopyFailed" xml:space="preserve"><value>Échec de la copie.</value></data>
+  <data name="MainLoc_CopiedX" xml:space="preserve"><value>{0} copié</value></data>
+  <data name="MainLoc_PastedAt" xml:space="preserve"><value>Collé en {0}</value></data>
+  <data name="MainLoc_PastePictureFailed" xml:space="preserve"><value>Échec du collage de l'image.</value></data>
+  <data name="MainLoc_PastedPictureAt" xml:space="preserve"><value>Image collée en {0}</value></data>
+  <data name="MainLoc_PasteColumnWidthsFailed" xml:space="preserve"><value>Échec du collage des largeurs de colonne.</value></data>
+  <data name="MainLoc_PasteCommentsFailed" xml:space="preserve"><value>Échec du collage des commentaires.</value></data>
+  <data name="MainLoc_PasteValidationFailed" xml:space="preserve"><value>Échec du collage de la validation.</value></data>
+  <data name="MainLoc_PasteLinkFailed" xml:space="preserve"><value>Échec du collage avec liaison.</value></data>
+  <data name="MainLoc_PasteSpecialTextFailed" xml:space="preserve"><value>Échec du collage spécial du texte.</value></data>
+  <data name="MainLoc_PastedLabelAt" xml:space="preserve"><value>{0} collé en {1}</value></data>
+  <data name="MainLoc_ClearedAllFrom" xml:space="preserve"><value>Tout effacé de {0}</value></data>
+  <data name="MainLoc_ClearedFormatsFrom" xml:space="preserve"><value>Formats effacés de {0}</value></data>
+  <data name="MainLoc_ClearedCommentsAndNotesFrom" xml:space="preserve"><value>Commentaires et notes effacés de {0}</value></data>
+  <data name="MainLoc_ClearedHyperlinksFrom" xml:space="preserve"><value>Liens hypertexte effacés de {0}</value></data>
+  <data name="MainLoc_FormatPainterLockedOn" xml:space="preserve"><value>Reproduire la mise en forme verrouillée sur {0}</value></data>
+  <data name="MainLoc_FormatPainterCopied" xml:space="preserve"><value>Mise en forme copiée de {0}</value></data>
+  <data name="MainLoc_FormatPainterCanceled" xml:space="preserve"><value>Reproduire la mise en forme annulé</value></data>
+  <data name="MainLoc_AppliedFormatPainterTo" xml:space="preserve"><value>Mise en forme reproduite sur {0}</value></data>
+  <data name="MainLoc_SetFontSizeFailed" xml:space="preserve"><value>Échec de la définition de la taille de police.</value></data>
+  <data name="MainLoc_SetFontSizeFor" xml:space="preserve"><value>Taille de police {0:0.##} définie pour {1}</value></data>
+  <data name="MainLoc_SetFontFailed" xml:space="preserve"><value>Échec de la définition de la police.</value></data>
+  <data name="MainLoc_SetFontFor" xml:space="preserve"><value>Police {0} définie pour {1}</value></data>
+  <data name="MainLoc_DataValidationDropdownFailed" xml:space="preserve"><value>Échec de la liste déroulante de validation des données.</value></data>
+  <data name="MainLoc_PdfExportUnavailable" xml:space="preserve"><value>Export PDF indisponible sur cette plateforme.</value></data>
+  <data name="MainLoc_PdfExportRequiresLocalPath" xml:space="preserve"><value>L'export PDF nécessite un chemin de fichier local.</value></data>
+  <data name="MainLoc_PdfExportCanceled" xml:space="preserve"><value>Export PDF annulé.</value></data>
+  <data name="MainLoc_PdfExportFailed" xml:space="preserve"><value>Échec de l'export PDF : {0}</value></data>
+  <data name="MainLoc_StatusFileName" xml:space="preserve"><value>{0} {1}</value></data>
+  <data name="MainLoc_SavedX" xml:space="preserve"><value>{0} enregistré</value></data>
+  <data name="PivotLoc_FieldsPaneTitle" xml:space="preserve"><value>Champs de tableau croisé dynamique</value></data>
+  <data name="PivotLoc_SearchFields" xml:space="preserve"><value>Rechercher des champs</value></data>
+  <data name="PivotLoc_BucketFilters" xml:space="preserve"><value>Filtres</value></data>
+  <data name="PivotLoc_BucketColumns" xml:space="preserve"><value>Colonnes</value></data>
+  <data name="PivotLoc_BucketRows" xml:space="preserve"><value>Lignes</value></data>
+  <data name="PivotLoc_BucketValues" xml:space="preserve"><value>Valeurs</value></data>
+  <data name="PivotLoc_NoFields" xml:space="preserve"><value>Aucun champ</value></data>
+  <data name="PivotLoc_ChooseFields" xml:space="preserve"><value>Choisir des champs</value></data>
+  <data name="PivotLoc_DropFieldsHere" xml:space="preserve"><value>Déposez des champs ici</value></data>
+  <data name="PivotLoc_FilterItemsMenu" xml:space="preserve"><value>Filtrer les éléments...</value></data>
+  <data name="PivotLoc_FieldMoveNotAllowed" xml:space="preserve"><value>Ce déplacement de champ n'est pas autorisé.</value></data>
+  <data name="PivotLoc_NeedsValueField" xml:space="preserve"><value>Un tableau croisé dynamique nécessite au moins un champ de valeur.</value></data>
+  <data name="PivotLoc_ActionNotAvailableYet" xml:space="preserve"><value>Cette action n'est pas encore disponible.</value></data>
+  <data name="PivotLoc_UpdateFailed" xml:space="preserve"><value>Échec de la mise à jour du tableau croisé dynamique.</value></data>
+  <data name="PivotLoc_SelectCellForPivotChart" xml:space="preserve"><value>Sélectionnez une cellule dans un tableau croisé dynamique pour insérer un graphique croisé dynamique.</value></data>
+  <data name="PivotLoc_InsertedPivotChart" xml:space="preserve"><value>Graphique croisé dynamique inséré pour « {0} ».</value></data>
+  <data name="PivotLoc_InsertPivotChartFailed" xml:space="preserve"><value>Échec de l'insertion du graphique croisé dynamique.</value></data>
+  <data name="PivotLoc_RoleUnused" xml:space="preserve"><value>(Non utilisé)</value></data>
+  <data name="PivotLoc_RoleRow" xml:space="preserve"><value>Ligne</value></data>
+  <data name="PivotLoc_RoleValue" xml:space="preserve"><value>Valeur</value></data>
+  <data name="PivotLoc_SelectRangeForPivot" xml:space="preserve"><value>Sélectionnez une plage avec une ligne d'en-tête et au moins une ligne de données pour insérer un tableau croisé dynamique.</value></data>
+  <data name="PivotLoc_InsertPivotTableTitle" xml:space="preserve"><value>Insérer un tableau croisé dynamique</value></data>
+  <data name="PivotLoc_PlaceOnNewWorksheet" xml:space="preserve"><value>Placer dans une nouvelle feuille de calcul</value></data>
+  <data name="PivotLoc_AssignAtLeastOneValue" xml:space="preserve"><value>Affectez au moins une colonne à la zone Valeurs.</value></data>
+  <data name="PivotLoc_InsertPivotTableFailed" xml:space="preserve"><value>Échec de l'insertion du tableau croisé dynamique.</value></data>
+  <data name="PivotLoc_InsertedPivotTableFrom" xml:space="preserve"><value>Tableau croisé dynamique inséré à partir de {0}</value></data>
+  <data name="PivotLoc_SourceAssignPrompt" xml:space="preserve"><value>Source : {0}. Affectez chaque colonne à la zone Ligne ou Valeurs.</value></data>
+  <data name="PivotLoc_SelectValueFieldForSettings" xml:space="preserve"><value>Sélectionnez un champ de valeur pour modifier ses paramètres.</value></data>
+  <data name="PivotLoc_CompleteShowValuesAs" xml:space="preserve"><value>Complétez les paramètres Afficher les valeurs.</value></data>
+  <data name="PivotLoc_BaseItemPlaceholder" xml:space="preserve"><value>Élément de base</value></data>
+  <data name="PivotLoc_NoItemsToFilter" xml:space="preserve"><value>Ce champ n'a aucun élément à filtrer.</value></data>
+  <data name="PivotLoc_SelectAll" xml:space="preserve"><value>(Sélectionner tout)</value></data>
+  <data name="PivotLoc_ValuePlaceholder" xml:space="preserve"><value>Valeur</value></data>
+  <data name="PivotLoc_SecondValuePlaceholder" xml:space="preserve"><value>Deuxième valeur (Entre)</value></data>
+  <data name="PivotLoc_AddValueFieldBeforeFilter" xml:space="preserve"><value>Ajoutez un champ de valeur avant d'appliquer un filtre de valeur.</value></data>
+  <data name="PivotLoc_CountOrValuePlaceholder" xml:space="preserve"><value>Nombre / valeur</value></data>
+  <data name="PivotLoc_FilterFailed" xml:space="preserve"><value>Échec du filtre du tableau croisé dynamique.</value></data>
+  <data name="PivotLoc_SelectCellToRefresh" xml:space="preserve"><value>Sélectionnez une cellule dans un tableau croisé dynamique pour l'actualiser.</value></data>
+  <data name="PivotLoc_RefreshedPivot" xml:space="preserve"><value>Tableau croisé dynamique « {0} » actualisé.</value></data>
+  <data name="PivotLoc_SelectCellToShowFieldList" xml:space="preserve"><value>Sélectionnez une cellule dans un tableau croisé dynamique pour afficher sa liste de champs.</value></data>
+  <data name="PivotLoc_FieldListHidden" xml:space="preserve"><value>Liste des champs du tableau croisé dynamique masquée.</value></data>
+  <data name="PivotLoc_FieldListShown" xml:space="preserve"><value>Liste des champs du tableau croisé dynamique affichée.</value></data>
+  <data name="PivotLoc_FieldHeadersShown" xml:space="preserve"><value>En-têtes de champ affichés.</value></data>
+  <data name="PivotLoc_FieldHeadersHidden" xml:space="preserve"><value>En-têtes de champ masqués.</value></data>
+  <data name="PivotLoc_GrandTotalsOn" xml:space="preserve"><value>Totaux généraux activés pour les lignes et les colonnes.</value></data>
+  <data name="PivotLoc_GrandTotalsOff" xml:space="preserve"><value>Totaux généraux désactivés.</value></data>
+  <data name="PivotLoc_SubtotalsShown" xml:space="preserve"><value>Sous-totaux affichés.</value></data>
+  <data name="PivotLoc_SubtotalsHidden" xml:space="preserve"><value>Sous-totaux masqués.</value></data>
+  <data name="PivotLoc_BlankRowInserted" xml:space="preserve"><value>Ligne vide insérée après chaque élément.</value></data>
+  <data name="PivotLoc_BlankRowsRemoved" xml:space="preserve"><value>Lignes vides supprimées.</value></data>
+  <data name="PivotLoc_ReportLayoutStatus" xml:space="preserve"><value>Disposition du rapport : {0}.</value></data>
+  <data name="PivotLoc_BandedRowsOn" xml:space="preserve"><value>Lignes en bandes activées.</value></data>
+  <data name="PivotLoc_BandedRowsOff" xml:space="preserve"><value>Lignes en bandes désactivées.</value></data>
+  <data name="PivotLoc_BandedColumnsOn" xml:space="preserve"><value>Colonnes en bandes activées.</value></data>
+  <data name="PivotLoc_BandedColumnsOff" xml:space="preserve"><value>Colonnes en bandes désactivées.</value></data>
+  <data name="PivotLoc_RowHeadersShown" xml:space="preserve"><value>En-têtes de ligne affichés.</value></data>
+  <data name="PivotLoc_RowHeadersHidden" xml:space="preserve"><value>En-têtes de ligne masqués.</value></data>
+  <data name="PivotLoc_ColumnHeadersShown" xml:space="preserve"><value>En-têtes de colonne affichés.</value></data>
+  <data name="PivotLoc_ColumnHeadersHidden" xml:space="preserve"><value>En-têtes de colonne masqués.</value></data>
+  <data name="PivotLoc_SelectCellToChangeLayout" xml:space="preserve"><value>Sélectionnez une cellule dans un tableau croisé dynamique pour modifier sa disposition.</value></data>
+  <data name="PivotLoc_NotYetAvailable" xml:space="preserve"><value>{0} n'est pas encore disponible.</value></data>
+  <data name="PivotLoc_SelectCellForSlicer" xml:space="preserve"><value>Sélectionnez une cellule dans un tableau croisé dynamique pour insérer un segment.</value></data>
+  <data name="PivotLoc_NoFieldsToSlice" xml:space="preserve"><value>Le tableau croisé dynamique n'a aucun champ à segmenter.</value></data>
+  <data name="PivotLoc_InsertSlicersTitle" xml:space="preserve"><value>Insérer des segments</value></data>
+  <data name="PivotLoc_SelectAtLeastOneField" xml:space="preserve"><value>Sélectionnez au moins un champ.</value></data>
+  <data name="PivotLoc_ChooseFieldsForSlicers" xml:space="preserve"><value>Choisissez des champs de « {0} » pour créer des segments :</value></data>
+  <data name="PivotLoc_SelectCellForTimeline" xml:space="preserve"><value>Sélectionnez une cellule dans un tableau croisé dynamique pour insérer une chronologie.</value></data>
+  <data name="PivotLoc_NoFieldsForTimeline" xml:space="preserve"><value>Le tableau croisé dynamique n'a aucun champ pour une chronologie.</value></data>
+  <data name="PivotLoc_InsertTimelinesTitle" xml:space="preserve"><value>Insérer des chronologies</value></data>
+  <data name="PivotLoc_SelectAtLeastOneDateField" xml:space="preserve"><value>Sélectionnez au moins un champ de date.</value></data>
+  <data name="PivotLoc_ChooseDateFieldsForTimelines" xml:space="preserve"><value>Choisissez des champs de date de « {0} » pour créer des chronologies :</value></data>
+  <data name="PivotLoc_CouldNotInsertSlicer" xml:space="preserve"><value>Impossible d'insérer un segment pour « {0} ».</value></data>
+  <data name="PivotLoc_InsertedSlicersCount" xml:space="preserve"><value>{0} segments insérés.</value></data>
+  <data name="PivotLoc_InsertedSlicerFor" xml:space="preserve"><value>Segment inséré pour {0}.</value></data>
+  <data name="PivotLoc_CouldNotInsertTimeline" xml:space="preserve"><value>Impossible d'insérer une chronologie pour « {0} ».</value></data>
+  <data name="PivotLoc_InsertedTimelinesCount" xml:space="preserve"><value>{0} chronologies insérées.</value></data>
+  <data name="PivotLoc_InsertedTimelineFor" xml:space="preserve"><value>Chronologie insérée pour {0}.</value></data>
+  <data name="ShellLoc_ProtectSheetTitle" xml:space="preserve"><value>Protéger la feuille</value></data>
+  <data name="ShellLoc_UnprotectSheetTitle" xml:space="preserve"><value>Ôter la protection de la feuille</value></data>
+  <data name="ShellLoc_SheetProtectedEnterPassword" xml:space="preserve"><value>Cette feuille est protégée. Saisissez le mot de passe pour ôter la protection.</value></data>
+  <data name="ShellLoc_SheetProtectedClickOk" xml:space="preserve"><value>Cette feuille est protégée. Cliquez sur OK pour ôter la protection.</value></data>
+  <data name="ShellLoc_PasswordLabel" xml:space="preserve"><value>Mot de passe :</value></data>
+  <data name="ShellLoc_CouldNotUnprotectSheet" xml:space="preserve"><value>Impossible d'ôter la protection de la feuille.</value></data>
+  <data name="ShellLoc_UnprotectedSheet" xml:space="preserve"><value>Protection de la feuille ôtée</value></data>
+  <data name="ShellLoc_PasswordOptionalLabel" xml:space="preserve"><value>Mot de passe (facultatif) :</value></data>
+  <data name="ShellLoc_ConfirmPasswordLabel" xml:space="preserve"><value>Confirmer le mot de passe :</value></data>
+  <data name="ShellLoc_AllowAllUsersToLabel" xml:space="preserve"><value>Autoriser tous les utilisateurs de cette feuille à :</value></data>
+  <data name="ShellLoc_PasswordsDoNotMatch" xml:space="preserve"><value>Les mots de passe saisis ne correspondent pas.</value></data>
+  <data name="ShellLoc_CouldNotProtectSheet" xml:space="preserve"><value>Impossible de protéger la feuille.</value></data>
+  <data name="ShellLoc_ProtectedSheet" xml:space="preserve"><value>Feuille protégée</value></data>
+  <data name="ShellLoc_ProtectWorkbookTitle" xml:space="preserve"><value>Protéger le classeur</value></data>
+  <data name="ShellLoc_UnprotectWorkbookTitle" xml:space="preserve"><value>Ôter la protection du classeur</value></data>
+  <data name="ShellLoc_StructureCheckbox" xml:space="preserve"><value>Structure</value></data>
+  <data name="ShellLoc_WindowsCheckbox" xml:space="preserve"><value>Fenêtres</value></data>
+  <data name="ShellLoc_WorkbookProtectedEnterPassword" xml:space="preserve"><value>La structure de ce classeur est protégée. Saisissez le mot de passe pour ôter la protection.</value></data>
+  <data name="ShellLoc_WorkbookProtectedClickOk" xml:space="preserve"><value>La structure de ce classeur est protégée. Cliquez sur OK pour ôter la protection.</value></data>
+  <data name="ShellLoc_CouldNotUnprotectWorkbook" xml:space="preserve"><value>Impossible d'ôter la protection du classeur.</value></data>
+  <data name="ShellLoc_UnprotectedWorkbook" xml:space="preserve"><value>Protection du classeur ôtée</value></data>
+  <data name="ShellLoc_ProtectWorkbookForLabel" xml:space="preserve"><value>Protéger le classeur pour :</value></data>
+  <data name="ShellLoc_SelectStructureOrWindows" xml:space="preserve"><value>Sélectionnez Structure ou Fenêtres à protéger.</value></data>
+  <data name="ShellLoc_CouldNotProtectWorkbook" xml:space="preserve"><value>Impossible de protéger le classeur.</value></data>
+  <data name="ShellLoc_ProtectedWorkbook" xml:space="preserve"><value>Classeur protégé</value></data>
+  <data name="ShellLoc_CouldNotUpdateCell" xml:space="preserve"><value>Impossible de mettre à jour la cellule.</value></data>
+  <data name="ShellLoc_ThesaurusSelectWord" xml:space="preserve"><value>Dictionnaire des synonymes : sélectionnez une cellule contenant un mot.</value></data>
+  <data name="ShellLoc_ThesaurusLookedUp" xml:space="preserve"><value>Recherché : {0}</value></data>
+  <data name="ShellLoc_ThesaurusNoSynonyms" xml:space="preserve"><value>Aucun synonyme trouvé dans la liste de mots intégrée.</value></data>
+  <data name="ShellLoc_ThesaurusTitle" xml:space="preserve"><value>Dictionnaire des synonymes</value></data>
+  <data name="ShellLoc_ReplaceButton" xml:space="preserve"><value>Remplacer</value></data>
+  <data name="ShellLoc_ThesaurusReplaced" xml:space="preserve"><value>« {0} » remplacé par « {1} ».</value></data>
+  <data name="ShellLoc_EquationLabel" xml:space="preserve"><value>Équation (insérée dans la cellule sous forme de texte) :</value></data>
+  <data name="ShellLoc_InsertButton" xml:space="preserve"><value>Insérer</value></data>
+  <data name="ShellLoc_InsertedEquation" xml:space="preserve"><value>Équation insérée sous forme de texte.</value></data>
+  <data name="ShellLoc_InsertEquationTitle" xml:space="preserve"><value>Insérer une équation</value></data>
+  <data name="ShellLoc_SpellingTitle" xml:space="preserve"><value>Orthographe</value></data>
+  <data name="ShellLoc_SpellingNoMisspellings" xml:space="preserve"><value>Vérification orthographique terminée. Aucune faute trouvée.</value></data>
+  <data name="ShellLoc_SpellingCompleteZero" xml:space="preserve"><value>Vérification orthographique terminée. 0 correction.</value></data>
+  <data name="ShellLoc_SpellingNotInDictionary" xml:space="preserve"><value>Absent du dictionnaire :</value></data>
+  <data name="ShellLoc_SpellingSuggestions" xml:space="preserve"><value>Suggestions :</value></data>
+  <data name="ShellLoc_SpellingNoSuggestions" xml:space="preserve"><value>(aucune suggestion)</value></data>
+  <data name="ShellLoc_SpellingChangeTo" xml:space="preserve"><value>Remplacer par :</value></data>
+  <data name="ShellLoc_SpellingIgnore" xml:space="preserve"><value>Ignorer</value></data>
+  <data name="ShellLoc_SpellingIgnoreAll" xml:space="preserve"><value>Ignorer tout</value></data>
+  <data name="ShellLoc_SpellingChange" xml:space="preserve"><value>Remplacer</value></data>
+  <data name="ShellLoc_SpellingChangeAll" xml:space="preserve"><value>Remplacer tout</value></data>
+  <data name="ShellLoc_SpellingCorrectionSingular" xml:space="preserve"><value>correction</value></data>
+  <data name="ShellLoc_SpellingCorrectionPlural" xml:space="preserve"><value>corrections</value></data>
+  <data name="ShellLoc_SpellingComplete" xml:space="preserve"><value>Vérification orthographique terminée. {0} {1}.</value></data>
+  <data name="ShellLoc_SpellingStopped" xml:space="preserve"><value>Vérification orthographique interrompue. {0} {1}.</value></data>
+  <data name="ShellLoc_CalculationAlreadySet" xml:space="preserve"><value>Le calcul est déjà défini sur {0}.</value></data>
+  <data name="ShellLoc_CouldNotChangeCalcMode" xml:space="preserve"><value>Impossible de modifier le mode de calcul.</value></data>
+  <data name="ShellLoc_CalculationSet" xml:space="preserve"><value>Calcul défini sur {0}.</value></data>
+  <data name="ShellLoc_RecalculatedAllFormulas" xml:space="preserve"><value>Toutes les formules ont été recalculées.</value></data>
+  <data name="ShellLoc_CalcModeManual" xml:space="preserve"><value>Manuel</value></data>
+  <data name="ShellLoc_CalcModeAutomatic" xml:space="preserve"><value>Automatique</value></data>
+  <data name="ShellLoc_GridlinesTitle" xml:space="preserve"><value>Quadrillage</value></data>
+  <data name="ShellLoc_GridlinesFailed" xml:space="preserve"><value>Échec du quadrillage.</value></data>
+  <data name="ShellLoc_HeadingsTitle" xml:space="preserve"><value>En-têtes</value></data>
+  <data name="ShellLoc_HeadingsFailed" xml:space="preserve"><value>Échec des en-têtes.</value></data>
+  <data name="ShellLoc_SheetOptionView" xml:space="preserve"><value>Afficher</value></data>
+  <data name="ShellLoc_SheetOptionPrint" xml:space="preserve"><value>Imprimer</value></data>
+  <data name="ShellLoc_CouldNotUpdatePrintOptions" xml:space="preserve"><value>Impossible de mettre à jour les options d'impression.</value></data>
+  <data name="ShellLoc_SheetOptionStatus" xml:space="preserve"><value>{0} : Afficher {1}, Imprimer {2}</value></data>
+  <data name="ShellLoc_OnState" xml:space="preserve"><value>activé</value></data>
+  <data name="ShellLoc_OffState" xml:space="preserve"><value>désactivé</value></data>
+  <data name="ShellLoc_NoNotesOnSheet" xml:space="preserve"><value>Cette feuille ne contient aucune note ni commentaire.</value></data>
+  <data name="ShellLoc_GoToButton" xml:space="preserve"><value>Atteindre</value></data>
+  <data name="ShellLoc_NotesTitle" xml:space="preserve"><value>Notes</value></data>
+  <data name="ShellLoc_SelectedCell" xml:space="preserve"><value>{0} sélectionné</value></data>
+  <data name="ShellLoc_NoteKindComment" xml:space="preserve"><value>Commentaire</value></data>
+  <data name="ShellLoc_NoteKindNote" xml:space="preserve"><value>Note</value></data>
+  <data name="ShellLoc_ShowingFormulaBar" xml:space="preserve"><value>Barre de formule affichée</value></data>
+  <data name="ShellLoc_HidingFormulaBar" xml:space="preserve"><value>Barre de formule masquée</value></data>
+  <data name="ShellLoc_PageLayoutView" xml:space="preserve"><value>Mode Mise en page (limites des pages affichées)</value></data>
+  <data name="ShellLoc_OpenedNewWindow" xml:space="preserve"><value>Nouvelle fenêtre ouverte (classeur indépendant).</value></data>
+  <data name="ShellLoc_CannotHideLastWindow" xml:space="preserve"><value>Impossible de masquer la dernière fenêtre visible. Ouvrez d'abord une nouvelle fenêtre.</value></data>
+  <data name="ShellLoc_PageSetupInvalid" xml:space="preserve"><value>La mise en page n'est pas valide.</value></data>
+  <data name="ShellLoc_PrintAreaMustBeRange" xml:space="preserve"><value>La zone d'impression doit être une plage de cellules comme A1:D20.</value></data>
+  <data name="ShellLoc_PageSetupFailed" xml:space="preserve"><value>Échec de la mise en page.</value></data>
+  <data name="ShellLoc_HeaderFooterUpdateFailed" xml:space="preserve"><value>Échec de la mise à jour de l'en-tête et du pied de page.</value></data>
+  <data name="ShellLoc_PageSetupUpdated" xml:space="preserve"><value>Mise en page mise à jour</value></data>
+  <data name="ShellLoc_PrintAreaFailed" xml:space="preserve"><value>Échec de la zone d'impression.</value></data>
+  <data name="ShellLoc_PageBreakPreviewOn" xml:space="preserve"><value>Aperçu des sauts de page activé</value></data>
+  <data name="ShellLoc_PageBreakPreviewOff" xml:space="preserve"><value>Aperçu des sauts de page désactivé</value></data>
+  <data name="ShellLoc_NothingToPreview" xml:space="preserve"><value>Rien à afficher en aperçu : la feuille active n'a aucune cellule imprimable.</value></data>
+  <data name="ShellLoc_PrintPreviewTitle" xml:space="preserve"><value>Aperçu avant impression</value></data>
+  <data name="ShellLoc_PrintPreviewPrev" xml:space="preserve"><value>Précédent</value></data>
+  <data name="ShellLoc_PrintPreviewNext" xml:space="preserve"><value>Suivant</value></data>
+  <data name="ShellLoc_PrintPreviewExportPdf" xml:space="preserve"><value>Exporter au format PDF...</value></data>
+  <data name="ShellLoc_PageCouldNotRender" xml:space="preserve"><value>Cette page n'a pas pu être affichée.</value></data>
+  <data name="TableLoc_ConvertToRangeNotInTable" xml:space="preserve"><value>Convertir en plage : la cellule active n'est pas dans un tableau.</value></data>
+  <data name="TableLoc_ConvertedTableToRange" xml:space="preserve"><value>Tableau « {0} » converti en plage.</value></data>
+  <data name="TableLoc_ConvertToRangeFailed" xml:space="preserve"><value>Échec de la conversion en plage.</value></data>
+  <data name="TableLoc_StyleOptionFirstColumn" xml:space="preserve"><value>Première colonne</value></data>
+  <data name="TableLoc_StyleOptionLastColumn" xml:space="preserve"><value>Dernière colonne</value></data>
+  <data name="TableLoc_StyleOptionBandedRows" xml:space="preserve"><value>Lignes à bandes</value></data>
+  <data name="TableLoc_StyleOptionBandedColumns" xml:space="preserve"><value>Colonnes à bandes</value></data>
+  <data name="TableLoc_StyleOptionFilterButton" xml:space="preserve"><value>Bouton de filtre</value></data>
+  <data name="TableLoc_TotalRowNotInTable" xml:space="preserve"><value>Ligne de total : la cellule active n'est pas dans un tableau.</value></data>
+  <data name="TableLoc_TotalRowOnForTable" xml:space="preserve"><value>Ligne de total activée pour le tableau « {0} ».</value></data>
+  <data name="TableLoc_TotalRowOffForTable" xml:space="preserve"><value>Ligne de total désactivée pour le tableau « {0} ».</value></data>
+  <data name="TableLoc_TotalRowFailed" xml:space="preserve"><value>Échec de la ligne de total.</value></data>
+  <data name="TableLoc_StyleOptionNotInTable" xml:space="preserve"><value>{0} : la cellule active n'est pas dans un tableau.</value></data>
+  <data name="TableLoc_StyleOptionOnForTable" xml:space="preserve"><value>{0} activé pour le tableau « {1} ».</value></data>
+  <data name="TableLoc_StyleOptionOffForTable" xml:space="preserve"><value>{0} désactivé pour le tableau « {1} ».</value></data>
+  <data name="TableLoc_StyleOptionFailed" xml:space="preserve"><value>Échec de {0}.</value></data>
+  <data name="TableLoc_ReapplyFilterFailed" xml:space="preserve"><value>Échec de la réapplication du filtre.</value></data>
+  <data name="TableLoc_ReapplySortFailed" xml:space="preserve"><value>Échec de la réapplication du tri.</value></data>
+  <data name="TableLoc_NoReapplyableFilterOrSort" xml:space="preserve"><value>Aucun filtre ou tri réapplicable sur la feuille active</value></data>
+  <data name="TableLoc_ReapplyedDefinitionsOne" xml:space="preserve"><value>{0} définition de filtre/tri réappliquée</value></data>
+  <data name="TableLoc_ReapplyedDefinitionsMany" xml:space="preserve"><value>{0} définitions de filtre/tri réappliquées</value></data>
+  <data name="TableLoc_NoInvalidDataFound" xml:space="preserve"><value>Aucune donnée non valide trouvée sur la feuille active</value></data>
+  <data name="TableLoc_CircledInvalidCellsOne" xml:space="preserve"><value>{0} cellule non valide entourée</value></data>
+  <data name="TableLoc_CircledInvalidCellsMany" xml:space="preserve"><value>{0} cellules non valides entourées</value></data>
+  <data name="TableLoc_NoValidationCirclesToClear" xml:space="preserve"><value>Aucun cercle de validation à effacer</value></data>
+  <data name="TableLoc_ClearedValidationCircles" xml:space="preserve"><value>Cercles de validation effacés</value></data>
+  <data name="TableLoc_TtcFormatGeneral" xml:space="preserve"><value>Standard</value></data>
+  <data name="TableLoc_TtcFormatText" xml:space="preserve"><value>Texte</value></data>
+  <data name="TableLoc_TtcFormatDate" xml:space="preserve"><value>Date</value></data>
+  <data name="TableLoc_TtcFormatSkip" xml:space="preserve"><value>Ignorer</value></data>
+  <data name="TableLoc_TtcSelectSingleColumn" xml:space="preserve"><value>Sélectionnez une seule colonne de cellules à convertir avec Convertir en colonnes.</value></data>
+  <data name="TableLoc_TtcNoTextToSplit" xml:space="preserve"><value>Aucun texte à fractionner dans {0}.</value></data>
+  <data name="TableLoc_TtcDialogTitle" xml:space="preserve"><value>Convertir en colonnes</value></data>
+  <data name="TableLoc_TtcDelimited" xml:space="preserve"><value>Délimité</value></data>
+  <data name="TableLoc_TtcFixedWidth" xml:space="preserve"><value>Largeur fixe</value></data>
+  <data name="TableLoc_TtcDelimTab" xml:space="preserve"><value>Tabulation</value></data>
+  <data name="TableLoc_TtcDelimSemicolon" xml:space="preserve"><value>Point-virgule</value></data>
+  <data name="TableLoc_TtcDelimComma" xml:space="preserve"><value>Virgule</value></data>
+  <data name="TableLoc_TtcDelimSpace" xml:space="preserve"><value>Espace</value></data>
+  <data name="TableLoc_TtcDelimOther" xml:space="preserve"><value>Autre</value></data>
+  <data name="TableLoc_TtcTreatConsecutive" xml:space="preserve"><value>Traiter les délimiteurs consécutifs comme un seul</value></data>
+  <data name="TableLoc_TtcQualifierNone" xml:space="preserve"><value>(aucun)</value></data>
+  <data name="TableLoc_TtcBreaksPlaceholder" xml:space="preserve"><value>ex. 5, 12, 20</value></data>
+  <data name="TableLoc_TtcSplittingStatus" xml:space="preserve"><value>Fractionnement de {0} cellule(s) en {1} colonne(s).</value></data>
+  <data name="TableLoc_TtcColumnN" xml:space="preserve"><value>Colonne {0}</value></data>
+  <data name="TableLoc_Apply" xml:space="preserve"><value>Appliquer</value></data>
+  <data name="TableLoc_Cancel" xml:space="preserve"><value>Annuler</value></data>
+  <data name="TableLoc_TtcNoColumnsToWrite" xml:space="preserve"><value>Les options actuelles ne produisent aucune colonne à écrire.</value></data>
+  <data name="TableLoc_TtcOverwriteWarning" xml:space="preserve"><value>Cela remplacera les données de {0} cellule(s) à droite. Cliquez de nouveau sur Appliquer pour continuer.</value></data>
+  <data name="TableLoc_TtcTextQualifierLabel" xml:space="preserve"><value>Qualificateur de texte :</value></data>
+  <data name="TableLoc_TtcBreakPositionsLabel" xml:space="preserve"><value>Positions de coupure :</value></data>
+  <data name="TableLoc_TtcColumnFormatLabel" xml:space="preserve"><value>Format de colonne :</value></data>
+  <data name="TableLoc_TtcSourceLabel" xml:space="preserve"><value>Source : {0}</value></data>
+  <data name="TableLoc_TtcPreviewLabel" xml:space="preserve"><value>Aperçu</value></data>
+  <data name="TableLoc_TtcFailed" xml:space="preserve"><value>Échec de Convertir en colonnes.</value></data>
+  <data name="TableLoc_TtcSplitIntoColumns" xml:space="preserve"><value>{0} fractionné en colonnes</value></data>
+  <data name="TableLoc_TtcColumnNSkip" xml:space="preserve"><value>Colonne {0} (ignorée)</value></data>
+  <data name="TableLoc_ConsolidateDialogTitle" xml:space="preserve"><value>Consolider</value></data>
+  <data name="TableLoc_ConsolidateReferencePlaceholder" xml:space="preserve"><value>ex. Feuil1!A1:B5</value></data>
+  <data name="TableLoc_Add" xml:space="preserve"><value>Ajouter</value></data>
+  <data name="TableLoc_Remove" xml:space="preserve"><value>Supprimer</value></data>
+  <data name="TableLoc_ConsolidateTopRow" xml:space="preserve"><value>Ligne du haut</value></data>
+  <data name="TableLoc_ConsolidateLeftColumn" xml:space="preserve"><value>Colonne de gauche</value></data>
+  <data name="TableLoc_ConsolidateEnterValidSource" xml:space="preserve"><value>Entrez une plage source valide (ex. Feuil1!A1:B5).</value></data>
+  <data name="TableLoc_ConsolidateSourceAlreadyListed" xml:space="preserve"><value>Cette plage source figure déjà dans la liste.</value></data>
+  <data name="TableLoc_ConsolidateAddAtLeastOne" xml:space="preserve"><value>Ajoutez au moins une plage source.</value></data>
+  <data name="TableLoc_ConsolidateCannotResolveSource" xml:space="preserve"><value>Impossible de résoudre la plage source « {0} ».</value></data>
+  <data name="TableLoc_ConsolidateEnterValidDestination" xml:space="preserve"><value>Entrez une cellule de destination valide.</value></data>
+  <data name="TableLoc_ConsolidateNoOutput" xml:space="preserve"><value>Les sources et options actuelles ne produisent aucun résultat à écrire.</value></data>
+  <data name="TableLoc_ConsolidateOutsideBounds" xml:space="preserve"><value>Le résultat consolidé dépasse les limites de la feuille de calcul.</value></data>
+  <data name="TableLoc_ConsolidateOverwriteWarning" xml:space="preserve"><value>Cela remplacera les données de {0} cellule(s). Cliquez de nouveau sur Appliquer pour continuer.</value></data>
+  <data name="TableLoc_ConsolidateUseLabelsIn" xml:space="preserve"><value>Utiliser les étiquettes dans :</value></data>
+  <data name="TableLoc_ConsolidateFunctionLabel" xml:space="preserve"><value>Fonction</value></data>
+  <data name="TableLoc_ConsolidateReferenceLabel" xml:space="preserve"><value>Référence</value></data>
+  <data name="TableLoc_ConsolidateAllReferencesLabel" xml:space="preserve"><value>Toutes les références</value></data>
+  <data name="TableLoc_ConsolidateDestinationLabel" xml:space="preserve"><value>Cellule de destination</value></data>
+  <data name="TableLoc_ConsolidateFailed" xml:space="preserve"><value>Échec de la consolidation.</value></data>
+  <data name="TableLoc_ConsolidatedInto" xml:space="preserve"><value>Consolidé dans {0}</value></data>
+  <data name="TableLoc_NoPrecedentsToTrace" xml:space="preserve"><value>Aucun antécédent à repérer pour la cellule active</value></data>
+  <data name="TableLoc_TracedPrecedentArrowsOne" xml:space="preserve"><value>{0} flèche d'antécédent repérée</value></data>
+  <data name="TableLoc_TracedPrecedentArrowsMany" xml:space="preserve"><value>{0} flèches d'antécédents repérées</value></data>
+  <data name="TableLoc_NoDependentsReference" xml:space="preserve"><value>Aucun dépendant ne référence la cellule active</value></data>
+  <data name="TableLoc_TracedDependentArrowsOne" xml:space="preserve"><value>{0} flèche de dépendant repérée</value></data>
+  <data name="TableLoc_TracedDependentArrowsMany" xml:space="preserve"><value>{0} flèches de dépendants repérées</value></data>
+  <data name="TableLoc_NoTraceArrowsToRemove" xml:space="preserve"><value>Aucune flèche de repérage à supprimer</value></data>
+  <data name="TableLoc_RemovedAllTraceArrows" xml:space="preserve"><value>Toutes les flèches de repérage supprimées</value></data>
+  <data name="TableLoc_Ready" xml:space="preserve"><value>Prêt</value></data>
+  <data name="TableLoc_MergeSelectTwoOrMoreCells" xml:space="preserve"><value>Sélectionnez deux cellules ou plus à fusionner.</value></data>
+  <data name="TableLoc_MergeCellsFailed" xml:space="preserve"><value>Échec de la fusion des cellules.</value></data>
+  <data name="TableLoc_Merged" xml:space="preserve"><value>{0} fusionné</value></data>
+  <data name="TableLoc_MergeAcrossSelectTwoOrMoreColumns" xml:space="preserve"><value>Sélectionnez deux colonnes ou plus à fusionner horizontalement.</value></data>
+  <data name="TableLoc_MergeAcrossFailed" xml:space="preserve"><value>Échec de la fusion horizontale.</value></data>
+  <data name="TableLoc_MergedAcross" xml:space="preserve"><value>{0} fusionné horizontalement</value></data>
+  <data name="TableLoc_PasteSpecialTitle" xml:space="preserve"><value>Collage spécial</value></data>
+  <data name="TableLoc_PasteSpecialPasteLabel" xml:space="preserve"><value>Coller</value></data>
+  <data name="TableLoc_PasteSpecialAll" xml:space="preserve"><value>Tout</value></data>
+  <data name="TableLoc_PasteSpecialValues" xml:space="preserve"><value>Valeurs</value></data>
+  <data name="TableLoc_PasteSpecialFormulas" xml:space="preserve"><value>Formules</value></data>
+  <data name="TableLoc_PasteSpecialFormats" xml:space="preserve"><value>Formats</value></data>
+  <data name="TableLoc_OK" xml:space="preserve"><value>OK</value></data>
+  <data name="TableLoc_QaGroupFormatting" xml:space="preserve"><value>Mise en forme</value></data>
+  <data name="TableLoc_QaGroupCharts" xml:space="preserve"><value>Graphiques</value></data>
+  <data name="TableLoc_QaGroupTotals" xml:space="preserve"><value>Totaux</value></data>
+  <data name="TableLoc_QaGroupTables" xml:space="preserve"><value>Tableaux</value></data>
+  <data name="TableLoc_QaGroupSparklines" xml:space="preserve"><value>Graphiques sparkline</value></data>
+  <data name="TableLoc_QaSelectMoreThanOne" xml:space="preserve"><value>Sélectionnez plusieurs cellules pour utiliser l'Analyse rapide.</value></data>
+  <data name="TableLoc_QaNoSuggestions" xml:space="preserve"><value>Aucune suggestion d'Analyse rapide pour {0}.</value></data>
+  <data name="TableLoc_QaDialogTitle" xml:space="preserve"><value>Analyse rapide</value></data>
+  <data name="TableLoc_Close" xml:space="preserve"><value>Fermer</value></data>
+  <data name="TableLoc_QaSuggestionsFor" xml:space="preserve"><value>Suggestions pour {0}</value></data>
+  <data name="TableLoc_QaSuggestionNotAvailable" xml:space="preserve"><value>Cette suggestion d'Analyse rapide n'est pas encore disponible.</value></data>
+  <data name="TableLoc_QaSparklinesNeedTwoColumns" xml:space="preserve"><value>Les graphiques sparkline de l'Analyse rapide nécessitent au moins deux colonnes de données.</value></data>
+  <data name="TableLoc_QaInsertSparklineFailed" xml:space="preserve"><value>Échec de l'insertion du graphique sparkline.</value></data>
+  <data name="TableLoc_QaInsertedSparklines" xml:space="preserve"><value>{0} graphique(s) sparkline inséré(s) à côté de {1}</value></data>
+  <data name="ShellLoc_CopySheetFailed" xml:space="preserve"><value>Échec de la copie de la feuille.</value></data>
+  <data name="ShellLoc_MoveSheetFailed" xml:space="preserve"><value>Échec du déplacement de la feuille.</value></data>
+  <data name="ShellLoc_FilterFailed" xml:space="preserve"><value>Échec du filtre.</value></data>
+  <data name="ShellLoc_ClearedFilter" xml:space="preserve"><value>Filtre effacé</value></data>
+  <data name="ShellLoc_AppliedFilter" xml:space="preserve"><value>Filtre appliqué</value></data>
+  <data name="ShellLoc_SortFailed" xml:space="preserve"><value>Échec du tri.</value></data>
+  <data name="ShellLoc_SortedAToZ" xml:space="preserve"><value>Trié de A à Z</value></data>
+  <data name="ShellLoc_SortedZToA" xml:space="preserve"><value>Trié de Z à A</value></data>
+  <data name="ShellLoc_FilterUpdateFailed" xml:space="preserve"><value>Échec de la mise à jour du filtre.</value></data>
 </root>

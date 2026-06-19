@@ -34,7 +34,9 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
 
         ValidateSchemaHeader(dto);
 
-        var workbook = new Workbook(dto.Name);
+        var workbook = ToCellStyle(dto.DefaultStyle) is { } customizedDefaultStyle
+            ? new Workbook(dto.Name, customizedDefaultStyle)
+            : new Workbook(dto.Name);
         if (dto.Theme is { } theme)
             workbook.Theme = ToWorkbookTheme(theme);
         workbook.Uses1904DateSystem = dto.Uses1904DateSystem;
@@ -63,6 +65,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
 
         var loadedSheetsBySourceName = new Dictionary<string, Sheet>(StringComparer.OrdinalIgnoreCase);
         var pendingPivotTables = new List<(Sheet Sheet, SheetDto Dto)>();
+        var pendingCrossSheetCharts = new List<(ChartModel Chart, string DataRangeSheetName)>();
         var cellStyleTable = LoadCellStyleTable(workbook, dto.CellStyles);
         Dictionary<CellStyleDto, StyleId>? styleIdCache = null;
         var sheetIndex = 1;
@@ -295,7 +298,11 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             foreach (var chartDto in sDto.Charts ?? [])
             {
                 if (TryLoadChart(chartDto, sheet.Id) is { } chart)
+                {
                     sheet.Charts.Add(chart);
+                    if (!string.IsNullOrWhiteSpace(chartDto.DataRangeSheetName))
+                        pendingCrossSheetCharts.Add((chart, chartDto.DataRangeSheetName));
+                }
             }
 
             foreach (var validationDto in sDto.DataValidations ?? [])
@@ -360,6 +367,19 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             workbook.AddSheet("Sheet1");
 
         LoadPivotTables(workbook, loadedSheetsBySourceName, pendingPivotTables);
+
+        // Rebind cross-sheet chart data ranges to their source sheet now that all sheets exist.
+        // TryLoadChart parsed the range against the host sheet; restore the data-source sheet identity.
+        foreach (var (chart, dataRangeSheetName) in pendingCrossSheetCharts)
+        {
+            var dataSheet = ResolveLoadedSheet(workbook, loadedSheetsBySourceName, dataRangeSheetName);
+            if (dataSheet is null)
+                continue;
+            var range = chart.DataRange;
+            chart.DataRange = new GridRange(
+                range.Start with { Sheet = dataSheet.Id },
+                range.End with { Sheet = dataSheet.Id });
+        }
 
         var maxLoadedSheetIndex = Math.Max(0, workbook.Sheets.Count - 1);
         workbook.FirstVisibleSheetIndex = NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(workbook.FirstVisibleSheetIndex, maxLoadedSheetIndex);

@@ -118,7 +118,7 @@ public sealed partial class MainWindow
 
         var title = new TextBlock
         {
-            Text = "PivotTable Fields",
+            Text = UiText.Get("PivotLoc_FieldsPaneTitle"),
             FontWeight = FontWeight.SemiBold,
             Foreground = HeaderForeground,
             Margin = new Thickness(2, 0, 0, 6),
@@ -128,7 +128,7 @@ public sealed partial class MainWindow
 
         var searchBox = new TextBox
         {
-            PlaceholderText = "Search fields",
+            PlaceholderText = UiText.Get("PivotLoc_SearchFields"),
             Text = _pivotPaneSearchText,
             Margin = new Thickness(0, 0, 0, 8),
         };
@@ -142,10 +142,10 @@ public sealed partial class MainWindow
 
         var stack = new StackPanel { Spacing = 8 };
         stack.Children.Add(BuildPivotAvailableBucket(pivot, headers, model.Available));
-        stack.Children.Add(BuildPivotBucket(pivot, headers, "Filters", model.Filters));
-        stack.Children.Add(BuildPivotBucket(pivot, headers, "Columns", model.Columns));
-        stack.Children.Add(BuildPivotBucket(pivot, headers, "Rows", model.Rows));
-        stack.Children.Add(BuildPivotBucket(pivot, headers, "Values", model.Values));
+        stack.Children.Add(BuildPivotBucket(pivot, headers, UiText.Get("PivotLoc_BucketFilters"), model.Filters));
+        stack.Children.Add(BuildPivotBucket(pivot, headers, UiText.Get("PivotLoc_BucketColumns"), model.Columns));
+        stack.Children.Add(BuildPivotBucket(pivot, headers, UiText.Get("PivotLoc_BucketRows"), model.Rows));
+        stack.Children.Add(BuildPivotBucket(pivot, headers, UiText.Get("PivotLoc_BucketValues"), model.Values));
 
         layout.Children.Add(new ScrollViewer
         {
@@ -165,12 +165,12 @@ public sealed partial class MainWindow
         var filtered = PivotFieldListPaneBuilder.FilterByCaption(bucket.Fields, _pivotPaneSearchText);
         var body = new StackPanel { Spacing = 2 };
         if (filtered.Count == 0)
-            body.Children.Add(BuildPivotPlaceholder("No fields"));
+            body.Children.Add(BuildPivotPlaceholder(UiText.Get("PivotLoc_NoFields")));
         else
             foreach (var field in filtered)
                 body.Children.Add(BuildPivotFieldChip(pivot, headers, field, showMenu: false));
 
-        return BuildPivotBucketContainer(pivot, headers, "Choose fields", PivotFieldBucket.Available, body);
+        return BuildPivotBucketContainer(pivot, headers, UiText.Get("PivotLoc_ChooseFields"), PivotFieldBucket.Available, body);
     }
 
     private Control BuildPivotBucket(
@@ -181,7 +181,7 @@ public sealed partial class MainWindow
     {
         var body = new StackPanel { Spacing = 2 };
         if (bucket.IsEmpty)
-            body.Children.Add(BuildPivotPlaceholder("Drop fields here"));
+            body.Children.Add(BuildPivotPlaceholder(UiText.Get("PivotLoc_DropFieldsHere")));
         else
             foreach (var field in bucket.Fields)
                 body.Children.Add(BuildPivotFieldChip(pivot, headers, field, showMenu: true));
@@ -387,14 +387,14 @@ public sealed partial class MainWindow
         var result = validator.Validate(pivot, headers, request);
         if (!result.IsAllowed)
         {
-            ShowEditIssue(result.RejectionReason ?? "That field move is not allowed.");
+            ShowEditIssue(result.RejectionReason ?? UiText.Get("PivotLoc_FieldMoveNotAllowed"));
             return;
         }
 
         var command = PivotFieldLayoutCommandFactory.TryCreate(_session.ActiveSheet.Id, pivot, headers, result);
         if (command is null)
         {
-            ShowEditIssue("A PivotTable needs at least one value field.");
+            ShowEditIssue(UiText.Get("PivotLoc_NeedsValueField"));
             return;
         }
 
@@ -435,7 +435,7 @@ public sealed partial class MainWindow
         // Manual item (checkbox) filter for row/column/page fields.
         if (target.Area is PivotHeaderArea.Row or PivotHeaderArea.Column or PivotHeaderArea.Page)
         {
-            var itemFilter = new MenuItem { Header = "Filter Items..." };
+            var itemFilter = new MenuItem { Header = UiText.Get("PivotLoc_FilterItemsMenu") };
             itemFilter.Click += (_, _) => OpenPivotItemFilter(pivot, headers, target);
             items.Add(new Separator());
             items.Add(itemFilter);
@@ -468,7 +468,7 @@ public sealed partial class MainWindow
 
         if (result.IsDeferred)
         {
-            ShowEditIssue(result.DeferredReason ?? "That action is not available yet.");
+            ShowEditIssue(result.DeferredReason ?? UiText.Get("PivotLoc_ActionNotAvailableYet"));
             return;
         }
 
@@ -512,7 +512,7 @@ public sealed partial class MainWindow
         var result = _session.ExecuteReviewCommand(command);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "PivotTable update failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("PivotLoc_UpdateFailed"));
             return;
         }
 

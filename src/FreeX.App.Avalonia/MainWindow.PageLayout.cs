@@ -65,20 +65,20 @@ public sealed partial class MainWindow
         var build = PageSetupDialogModel.TryBuildCommand(sheet, fields);
         if (!build.Success)
         {
-            ShowEditIssue(build.Error ?? "Page setup is invalid.");
+            ShowEditIssue(build.Error ?? UiText.Get("ShellLoc_PageSetupInvalid"));
             return;
         }
 
         if (!PageSetupDialogModel.TryParsePrintArea(fields.PrintAreaText, sheet.Id, out var printArea))
         {
-            ShowEditIssue("Print area must be a cell range like A1:D20.");
+            ShowEditIssue(UiText.Get("ShellLoc_PrintAreaMustBeRange"));
             return;
         }
 
         var pageSetupResult = _session.ExecuteReviewCommand(build.Command!);
         if (!pageSetupResult.Success)
         {
-            ShowEditIssue(pageSetupResult.ErrorMessage ?? "Page setup failed.");
+            ShowEditIssue(pageSetupResult.ErrorMessage ?? UiText.Get("ShellLoc_PageSetupFailed"));
             return;
         }
 
@@ -86,14 +86,14 @@ public sealed partial class MainWindow
         var headerFooterResult = _session.ExecuteReviewCommand(headerFooterCommand);
         if (!headerFooterResult.Success)
         {
-            ShowEditIssue(headerFooterResult.ErrorMessage ?? "Header and footer update failed.");
+            ShowEditIssue(headerFooterResult.ErrorMessage ?? UiText.Get("ShellLoc_HeaderFooterUpdateFailed"));
             return;
         }
 
         if (!ApplyPrintArea(sheet, printArea))
             return;
 
-        RefreshShell("Page setup updated");
+        RefreshShell(UiText.Get("ShellLoc_PageSetupUpdated"));
     }
 
     private bool ApplyPrintArea(Sheet sheet, GridRange? printArea)
@@ -112,7 +112,7 @@ public sealed partial class MainWindow
         var result = _session.ExecuteReviewCommand(command);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Print area failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("ShellLoc_PrintAreaFailed"));
             return false;
         }
 
@@ -129,7 +129,7 @@ public sealed partial class MainWindow
 
         ClearSelectedDrawingObject();
         _isPageBreakPreviewActive = !_isPageBreakPreviewActive;
-        RefreshShell(_isPageBreakPreviewActive ? "Page Break Preview on" : "Page Break Preview off");
+        RefreshShell(_isPageBreakPreviewActive ? UiText.Get("ShellLoc_PageBreakPreviewOn") : UiText.Get("ShellLoc_PageBreakPreviewOff"));
     }
 
     private Canvas? BuildPageBreakPreviewOverlay(ViewportModel viewport, bool showHeadings, double zoomFactor)
@@ -600,7 +600,7 @@ public sealed partial class MainWindow
 
             if (!PageSetupDialogModel.TryParsePrintArea(fields.PrintAreaText, _session.ActiveSheet.Id, out _))
             {
-                validationText.Text = "Print area must be a cell range like A1:D20.";
+                validationText.Text = UiText.Get("ShellLoc_PrintAreaMustBeRange");
                 validationText.IsVisible = true;
                 return;
             }

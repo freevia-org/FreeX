@@ -131,7 +131,7 @@ public sealed partial class MainWindow
         var result = _session.ExecuteReviewCommand(command);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? $"{failurePrefix} failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Format("InsertLoc_DrawingCommandFailed", failurePrefix));
             return;
         }
 
@@ -149,8 +149,8 @@ public sealed partial class MainWindow
 
         RunDrawingObjectCommand(
             new BringDrawingShapeForwardCommand(_session.ActiveSheet.Id, shape.Id),
-            "Brought shape forward.",
-            "Bring Forward");
+            UiText.Get("InsertLoc_BroughtShapeForward"),
+            UiText.Get("InsertLoc_BringForwardLabel"));
     }
 
     private void SendSelectedShapeBackward()
@@ -160,8 +160,8 @@ public sealed partial class MainWindow
 
         RunDrawingObjectCommand(
             new SendDrawingShapeBackwardCommand(_session.ActiveSheet.Id, shape.Id),
-            "Sent shape backward.",
-            "Send Backward");
+            UiText.Get("InsertLoc_SentShapeBackward"),
+            UiText.Get("InsertLoc_SendBackwardLabel"));
     }
 
     // -------------------------------------------------------------------------------------------------------
@@ -203,7 +203,7 @@ public sealed partial class MainWindow
             return;
 
         var initial = shape.FillColor ?? DrawingShapeModel.DefaultFillColor;
-        var color = await ShowMoreColorsDialogAsync("Shape Fill", initial);
+        var color = await ShowMoreColorsDialogAsync(UiText.Get("InsertLoc_ShapeFillTitle"), initial);
         if (color is not { } chosen)
             return;
         if (ResolveSelectedShape() is not { } current)
@@ -211,8 +211,8 @@ public sealed partial class MainWindow
 
         RunDrawingObjectCommand(
             new SetDrawingShapeColorsCommand(_session.ActiveSheet.Id, current.Id, fillColor: chosen, outlineColor: null, updateFill: true, updateOutline: false),
-            $"Shape fill set to {FormatHex(chosen)}.",
-            "Shape Fill");
+            UiText.Format("InsertLoc_ShapeFillSet", FormatHex(chosen)),
+            UiText.Get("InsertLoc_ShapeFillTitle"));
     }
 
     private async System.Threading.Tasks.Task SetSelectedShapeOutlineColorAsync()
@@ -223,7 +223,7 @@ public sealed partial class MainWindow
             return;
 
         var initial = shape.OutlineColor ?? DrawingShapeModel.DefaultOutlineColor;
-        var color = await ShowMoreColorsDialogAsync("Shape Outline", initial);
+        var color = await ShowMoreColorsDialogAsync(UiText.Get("InsertLoc_ShapeOutlineTitle"), initial);
         if (color is not { } chosen)
             return;
         if (ResolveSelectedShape() is not { } current)
@@ -231,8 +231,8 @@ public sealed partial class MainWindow
 
         RunDrawingObjectCommand(
             new SetDrawingShapeColorsCommand(_session.ActiveSheet.Id, current.Id, fillColor: null, outlineColor: chosen, updateFill: false, updateOutline: true),
-            $"Shape outline set to {FormatHex(chosen)}.",
-            "Shape Outline");
+            UiText.Format("InsertLoc_ShapeOutlineSet", FormatHex(chosen)),
+            UiText.Get("InsertLoc_ShapeOutlineTitle"));
     }
 
     private async System.Threading.Tasks.Task SetSelectedShapeGradientAsync()
@@ -243,10 +243,10 @@ public sealed partial class MainWindow
             return;
 
         var startInitial = shape.FillColor ?? DrawingShapeModel.DefaultFillColor;
-        var start = await ShowMoreColorsDialogAsync("Gradient Start Color", startInitial);
+        var start = await ShowMoreColorsDialogAsync(UiText.Get("InsertLoc_GradientStartColor"), startInitial);
         if (start is not { } startColor)
             return;
-        var end = await ShowMoreColorsDialogAsync("Gradient End Color", new CellColor(0xFF, 0xFF, 0xFF));
+        var end = await ShowMoreColorsDialogAsync(UiText.Get("InsertLoc_GradientEndColor"), new CellColor(0xFF, 0xFF, 0xFF));
         if (end is not { } endColor)
             return;
         if (ResolveSelectedShape() is not { } current)
@@ -254,8 +254,8 @@ public sealed partial class MainWindow
 
         RunDrawingObjectCommand(
             new SetDrawingShapeGradientCommand(_session.ActiveSheet.Id, current.Id, startColor, endColor),
-            $"Shape gradient set ({FormatHex(startColor)} -> {FormatHex(endColor)}).",
-            "Shape Gradient");
+            UiText.Format("InsertLoc_ShapeGradientSet", FormatHex(startColor), FormatHex(endColor)),
+            UiText.Get("InsertLoc_ShapeGradientTitle"));
     }
 
     private void ApplySelectedShapeEffect(DrawingShapeEffectPreset preset)
@@ -272,7 +272,7 @@ public sealed partial class MainWindow
         RunDrawingObjectCommand(
             new SetDrawingShapeEffectCommand(_session.ActiveSheet.Id, shape.Id, normalized),
             status,
-            "Shape Effects");
+            UiText.Get("InsertLoc_ShapeEffectsLabel"));
     }
 
     /// <summary>Localized label for an effect preset, resolved from the shared ShapeEffectsPlanner catalog.</summary>
@@ -312,26 +312,26 @@ public sealed partial class MainWindow
                 id = shape.Id;
                 break;
             default:
-                RefreshShell("Select a picture or shape first.");
+                RefreshShell(UiText.Get("InsertLoc_SelectPictureOrShapeFirst"));
                 return;
         }
 
         var input = await ShowSingleValueDialogAsync(
-            "Rotate Object",
-            "Rotation (degrees):",
+            UiText.Get("InsertLoc_RotateObjectTitle"),
+            UiText.Get("InsertLoc_RotationDegreesPrompt"),
             current.ToString("0.##", CultureInfo.CurrentCulture));
         if (input is null)
             return;
         if (!double.TryParse(input, NumberStyles.Float, CultureInfo.CurrentCulture, out var degrees))
         {
-            ShowEditIssue("Enter a valid rotation in degrees.");
+            ShowEditIssue(UiText.Get("InsertLoc_EnterValidRotation"));
             return;
         }
 
         RunDrawingObjectCommand(
             new SetDrawingObjectRotationCommand(_session.ActiveSheet.Id, kind, id, degrees),
-            $"Rotated object to {degrees:0.##} degrees.",
-            "Rotate Object");
+            UiText.Format("InsertLoc_RotatedObject", degrees),
+            UiText.Get("InsertLoc_RotateObjectTitle"));
     }
 
     // -------------------------------------------------------------------------------------------------------
@@ -363,7 +363,7 @@ public sealed partial class MainWindow
                 height = shape.Height;
                 break;
             default:
-                RefreshShell("Select a picture or shape first.");
+                RefreshShell(UiText.Get("InsertLoc_SelectPictureOrShapeFirst"));
                 return;
         }
 
@@ -372,14 +372,14 @@ public sealed partial class MainWindow
             return;
         if (_selectedDrawingObjectId is null)
         {
-            RefreshShell("The selected object is no longer available.");
+            RefreshShell(UiText.Get("InsertLoc_ObjectNoLongerAvailable"));
             return;
         }
 
         RunDrawingObjectCommand(
             BuildResize(chosen.Width, chosen.Height),
-            $"Resized object to {chosen.Width:0.##} x {chosen.Height:0.##}.",
-            "Object Size");
+            UiText.Format("InsertLoc_ResizedObject", chosen.Width, chosen.Height),
+            UiText.Get("InsertLoc_ObjectSizeTitle"));
     }
 
     // -------------------------------------------------------------------------------------------------------
@@ -408,27 +408,27 @@ public sealed partial class MainWindow
                 current = shape.AltText;
                 break;
             default:
-                RefreshShell("Select a picture or shape first.");
+                RefreshShell(UiText.Get("InsertLoc_SelectPictureOrShapeFirst"));
                 return;
         }
 
         var input = await ShowSingleValueDialogAsync(
-            "Alt Text",
-            "Describe this object for accessibility:",
+            UiText.Get("InsertLoc_AltTextTitle"),
+            UiText.Get("InsertLoc_AltTextPrompt"),
             current ?? string.Empty,
             multiline: true);
         if (input is null)
             return;
         if (_selectedDrawingObjectId is null)
         {
-            RefreshShell("The selected object is no longer available.");
+            RefreshShell(UiText.Get("InsertLoc_ObjectNoLongerAvailable"));
             return;
         }
 
         RunDrawingObjectCommand(
             BuildAltText(input),
-            string.IsNullOrWhiteSpace(input) ? "Alt text cleared." : "Alt text updated.",
-            "Alt Text");
+            string.IsNullOrWhiteSpace(input) ? UiText.Get("InsertLoc_AltTextCleared") : UiText.Get("InsertLoc_AltTextUpdated"),
+            UiText.Get("InsertLoc_AltTextTitle"));
     }
 
     // -------------------------------------------------------------------------------------------------------
@@ -461,11 +461,11 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(dialog, "PictureShapeInputDialog");
 
-        var okButton = new Button { Content = "OK", Width = 80, IsDefault = true };
+        var okButton = new Button { Content = UiText.Get("InsertLoc_OkButton"), Width = 80, IsDefault = true };
         AutomationProperties.SetAutomationId(okButton, "PictureShapeInputOkButton");
         okButton.Click += (_, _) => dialog.Close(input.Text ?? string.Empty);
 
-        var cancelButton = new Button { Content = "Cancel", Width = 80, IsCancel = true };
+        var cancelButton = new Button { Content = UiText.Get("InsertLoc_CancelButton"), Width = 80, IsCancel = true };
         AutomationProperties.SetAutomationId(cancelButton, "PictureShapeInputCancelButton");
         cancelButton.Click += (_, _) => dialog.Close((string?)null);
 
@@ -520,7 +520,7 @@ public sealed partial class MainWindow
 
         var dialog = new Window
         {
-            Title = "Object Size",
+            Title = UiText.Get("InsertLoc_ObjectSizeTitle"),
             SizeToContent = SizeToContent.WidthAndHeight,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -528,7 +528,7 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(dialog, "ObjectSizeDialog");
 
-        var okButton = new Button { Content = "OK", Width = 80, IsDefault = true };
+        var okButton = new Button { Content = UiText.Get("InsertLoc_OkButton"), Width = 80, IsDefault = true };
         AutomationProperties.SetAutomationId(okButton, "ObjectSizeOkButton");
         okButton.Click += (_, _) =>
         {
@@ -536,7 +536,7 @@ public sealed partial class MainWindow
                 !double.TryParse(heightBox.Text, NumberStyles.Float, CultureInfo.CurrentCulture, out var h) ||
                 !(w > 0) || !(h > 0))
             {
-                warning.Text = "Enter positive numbers for width and height.";
+                warning.Text = UiText.Get("InsertLoc_EnterPositiveSize");
                 warning.IsVisible = true;
                 return;
             }
@@ -544,7 +544,7 @@ public sealed partial class MainWindow
             dialog.Close(((double, double)?)(w, h));
         };
 
-        var cancelButton = new Button { Content = "Cancel", Width = 80, IsCancel = true };
+        var cancelButton = new Button { Content = UiText.Get("InsertLoc_CancelButton"), Width = 80, IsCancel = true };
         AutomationProperties.SetAutomationId(cancelButton, "ObjectSizeCancelButton");
         cancelButton.Click += (_, _) => dialog.Close(((double, double)?)null);
 
@@ -567,8 +567,8 @@ public sealed partial class MainWindow
             MinWidth = 260,
             Children =
             {
-                Row("Width:", widthBox),
-                Row("Height:", heightBox),
+                Row(UiText.Get("InsertLoc_WidthLabel"), widthBox),
+                Row(UiText.Get("InsertLoc_HeightLabel"), heightBox),
                 warning,
                 new StackPanel
                 {

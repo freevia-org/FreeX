@@ -57,7 +57,7 @@ public sealed partial class MainWindow
         var sheet = _session.ActiveSheet;
         if (!PrintPreviewPaginationContext.TryCreate(_session.Workbook, sheet, out var context))
         {
-            ShowEditIssue("Nothing to preview: the active sheet has no printable cells.");
+            ShowEditIssue(UiText.Get("ShellLoc_NothingToPreview"));
             return;
         }
 
@@ -70,7 +70,7 @@ public sealed partial class MainWindow
 
         var dialog = new Window
         {
-            Title = "Print Preview",
+            Title = UiText.Get("ShellLoc_PrintPreviewTitle"),
             Width = 760,
             Height = 720,
             MinWidth = 520,
@@ -97,16 +97,16 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(pageLabel, "PrintPreviewPageLabel");
 
-        var prevButton = new Button { Content = "Prev", MinWidth = 84, Padding = new Thickness(10, 4) };
-        var nextButton = new Button { Content = "Next", MinWidth = 84, Padding = new Thickness(10, 4) };
+        var prevButton = new Button { Content = UiText.Get("ShellLoc_PrintPreviewPrev"), MinWidth = 84, Padding = new Thickness(10, 4) };
+        var nextButton = new Button { Content = UiText.Get("ShellLoc_PrintPreviewNext"), MinWidth = 84, Padding = new Thickness(10, 4) };
         AutomationProperties.SetAutomationId(prevButton, "PrintPreviewPrevButton");
         AutomationProperties.SetAutomationId(nextButton, "PrintPreviewNextButton");
 
-        var exportButton = new Button { Content = "Export to PDF...", MinWidth = 120, Padding = new Thickness(10, 4) };
+        var exportButton = new Button { Content = UiText.Get("ShellLoc_PrintPreviewExportPdf"), MinWidth = 120, Padding = new Thickness(10, 4) };
         AutomationProperties.SetAutomationId(exportButton, "PrintPreviewExportPdfButton");
         exportButton.IsEnabled = StorageProvider.CanSave;
 
-        var closeButton = new Button { Content = "Close", MinWidth = 84, Padding = new Thickness(10, 4) };
+        var closeButton = new Button { Content = UiText.Get("Common_Close"), MinWidth = 84, Padding = new Thickness(10, 4) };
         AutomationProperties.SetAutomationId(closeButton, "PrintPreviewCloseButton");
 
         void Render()
@@ -206,7 +206,7 @@ public sealed partial class MainWindow
         {
             return new TextBlock
             {
-                Text = "This page could not be rendered.",
+                Text = UiText.Get("ShellLoc_PageCouldNotRender"),
                 Foreground = Brushes.White,
                 HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
                 VerticalAlignment = AvaloniaVerticalAlignment.Center,

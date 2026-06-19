@@ -26,12 +26,14 @@ public sealed partial class MainWindow
 
         if (added.Count == 0)
         {
-            RefreshShell("No precedents to trace for the active cell");
+            RefreshShell(UiText.Get("TableLoc_NoPrecedentsToTrace"));
             return;
         }
 
         _formulaTraceArrows.AddRange(added);
-        RefreshShell($"Traced {added.Count} precedent {Pluralize("arrow", added.Count)}");
+        RefreshShell(UiText.Format(
+            added.Count == 1 ? "TableLoc_TracedPrecedentArrowsOne" : "TableLoc_TracedPrecedentArrowsMany",
+            added.Count));
     }
 
     private void TraceFormulaDependents()
@@ -46,24 +48,26 @@ public sealed partial class MainWindow
 
         if (added.Count == 0)
         {
-            RefreshShell("No dependents reference the active cell");
+            RefreshShell(UiText.Get("TableLoc_NoDependentsReference"));
             return;
         }
 
         _formulaTraceArrows.AddRange(added);
-        RefreshShell($"Traced {added.Count} dependent {Pluralize("arrow", added.Count)}");
+        RefreshShell(UiText.Format(
+            added.Count == 1 ? "TableLoc_TracedDependentArrowsOne" : "TableLoc_TracedDependentArrowsMany",
+            added.Count));
     }
 
     private void RemoveFormulaTraceArrows()
     {
         if (_formulaTraceArrows.Count == 0)
         {
-            RefreshShell("No trace arrows to remove");
+            RefreshShell(UiText.Get("TableLoc_NoTraceArrowsToRemove"));
             return;
         }
 
         _formulaTraceArrows.Clear();
-        RefreshShell("Removed all trace arrows");
+        RefreshShell(UiText.Get("TableLoc_RemovedAllTraceArrows"));
     }
 
     // Called from BuildDrawingObjectOverlay so the arrows are painted onto the same overlay Canvas
@@ -113,8 +117,6 @@ public sealed partial class MainWindow
         Canvas.SetTop(arrowVisual, 0);
         overlay.Children.Add(arrowVisual);
     }
-
-    private static string Pluralize(string noun, int count) => count == 1 ? noun : noun + "s";
 
     private readonly record struct FormulaTraceArrowSegment(Point Start, Point End, FormulaTraceArrowKind Kind);
 

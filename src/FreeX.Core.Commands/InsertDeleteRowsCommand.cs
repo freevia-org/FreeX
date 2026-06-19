@@ -98,7 +98,11 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         _formulaSnapshot.Clear();
         RowColumnShiftHelpers.RewriteAllFormulas(ctx.Workbook, new InsertRowsOp(sheet.Name, _beforeRow, _count), _formulaSnapshot);
 
-        return new CommandOutcome(true);
+        return new CommandOutcome(
+            true,
+            AffectedCells: RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
+                Enumerable.Empty<CellAddress>(),
+                _formulaSnapshot));
     }
 
     public void Revert(ICommandContext ctx)

@@ -4,11 +4,12 @@ namespace FreeX.Core.IO;
 
 public sealed partial class NativeJsonAdapter
 {
-    private static ChartDto ToChartDto(ChartModel chart) => new()
+    private static ChartDto ToChartDto(Workbook workbook, SheetId hostSheetId, ChartModel chart) => new()
     {
         Type = chart.Type,
         Name = chart.Name,
         DataRange = chart.DataRange.ToString(),
+        DataRangeSheetName = ResolveChartDataRangeSheetName(workbook, hostSheetId, chart),
         IsVisible = chart.IsVisible,
         IsPivotChart = chart.IsPivotChart,
         PivotSourceSheetName = chart.PivotSourceSheetName,
@@ -272,9 +273,19 @@ public sealed partial class NativeJsonAdapter
         DrawingAnchorKind = chart.DrawingAnchorKind
     };
 
-    private static bool IsChartOnSheet(ChartModel chart, SheetId sheetId) =>
-        chart.DataRange.Start.Sheet == sheetId &&
-        chart.DataRange.End.Sheet == sheetId;
+    /// <summary>
+    /// Returns the name of the sheet that the chart's data range belongs to when it differs from the
+    /// host sheet the chart is displayed on (a cross-sheet chart); otherwise null. The host sheet is
+    /// implicit in <see cref="Sheet.Charts"/> membership, so a chart whose data range lives on another
+    /// sheet must persist that sheet's identity to round-trip without rebinding to the host sheet.
+    /// </summary>
+    private static string? ResolveChartDataRangeSheetName(Workbook workbook, SheetId hostSheetId, ChartModel chart)
+    {
+        var dataSheet = chart.DataRange.Start.Sheet;
+        if (dataSheet == hostSheetId)
+            return null;
+        return workbook.GetSheet(dataSheet)?.Name;
+    }
 
     private static ChartSurfaceFormatDto? FromChartSurfaceFormat(ChartSurfaceFormatModel? format) =>
         format is null

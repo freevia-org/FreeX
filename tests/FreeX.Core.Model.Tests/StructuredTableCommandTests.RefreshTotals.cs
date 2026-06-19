@@ -45,6 +45,45 @@ public sealed partial class StructuredTableCommandTests
         sheet.GetValue(5, 3).Should().Be(BlankValue.Instance);
     }
 
+    [Fact]
+    public void RefreshStructuredTableTotalsCommand_MaterializesExplicitTotalsFormulaAsFormulaCell()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        SeedTotalsTable(sheet);
+        var table = new StructuredTableModel
+        {
+            Id = 3,
+            Name = "Sales",
+            DisplayName = "Sales",
+            Range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 3)),
+            TotalsRowShown = true,
+            Columns =
+            {
+                new StructuredTableColumnModel(1, "Region", TotalsRowLabel: "Total"),
+                new StructuredTableColumnModel(2, "Sales", TotalsRowFormula: "SUM(B2:B4)"),
+                new StructuredTableColumnModel(3, "Orders", TotalsRowFunction: "count")
+            }
+        };
+        sheet.StructuredTables.Add(table);
+        var ctx = new TestCommandContext(wb);
+        var command = new RefreshStructuredTableTotalsCommand(sheet.Id, table.Id);
+
+        var outcome = command.Apply(ctx);
+
+        var totalsFormulaCell = sheet.GetCell(5, 2);
+        outcome.Success.Should().BeTrue();
+        outcome.AffectedCells.Should().BeEquivalentTo([
+            new CellAddress(sheet.Id, 5, 1),
+            new CellAddress(sheet.Id, 5, 2),
+            new CellAddress(sheet.Id, 5, 3)
+        ]);
+        totalsFormulaCell.Should().NotBeNull();
+        totalsFormulaCell!.FormulaText.Should().Be("SUM(B2:B4)");
+        totalsFormulaCell.Value.Should().Be(BlankValue.Instance);
+        sheet.GetValue(5, 3).Should().Be(new NumberValue(2));
+    }
+
     [BenchmarkFact]
     public void Benchmark_RefreshStructuredTableTotalsWideTable_ReportsTimingAndAllocatedBytes()
     {

@@ -107,6 +107,7 @@ public sealed partial class NativeJsonAdapter
                 .Select(ToPivotCacheDto)
                 .ToList(),
             CellStyles = includeCellStyles ? ToCellStyleTable(workbook) : null,
+            DefaultStyle = ToCustomizedDefaultStyleDto(workbook),
             Sheets = workbook.Sheets.Select(s => new SheetDto
             {
                 Name = s.Name,
@@ -287,8 +288,7 @@ public sealed partial class NativeJsonAdapter
                     .ToList(),
                 Charts = s.Charts
                     .OfType<ChartModel>()
-                    .Where(chart => IsChartOnSheet(chart, s.Id))
-                    .Select(ToChartDto)
+                    .Select(chart => ToChartDto(workbook, s.Id, chart))
                     .ToList(),
                 PivotTables = s.PivotTables
                     .OfType<PivotTableModel>()
@@ -430,6 +430,20 @@ public sealed partial class NativeJsonAdapter
             dto.Style = null;
             StyleOnlyCellDtoJsonConverter.WriteCell(writer, dto, options, row, col);
         }
+    }
+
+    /// <summary>
+    /// Captures the workbook's customized default style (style 0) when it differs from the built-in
+    /// <see cref="CellStyle.Default"/>, so it can be restored into slot 0 on load. Returns null when
+    /// the workbook uses the hard-coded default (nothing to persist).
+    /// </summary>
+    private static CellStyleDto? ToCustomizedDefaultStyleDto(Workbook workbook)
+    {
+        var defaultStyle = workbook.GetStyle(StyleId.Default);
+        if (defaultStyle.Equals(CellStyle.Default))
+            return null;
+
+        return FromCellStyle(defaultStyle);
     }
 
     private static List<CellStyleDto>? ToCellStyleTable(Workbook workbook)

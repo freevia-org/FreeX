@@ -2430,8 +2430,11 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
-    public void NativeJsonAdapter_Save_SkipsCrossSheetCharts()
+    public void NativeJsonAdapter_Save_PersistsCrossSheetCharts()
     {
+        // A chart is hosted by Sheet.Charts membership, independent of where its data range lives.
+        // Cross-sheet charts (data range on another sheet) must be persisted, tagged with the
+        // data-source sheet name so the range rebinds correctly on load instead of being dropped.
         var workbook = new Workbook("ChartCrossSheetSaveTest");
         var sheet = workbook.AddSheet("Sheet1");
         var otherSheet = workbook.AddSheet("Other");
@@ -2458,11 +2461,18 @@ public partial class FileAdapterSmokeTests
 
         using var document = JsonDocument.Parse(ms);
         var sheetJson = document.RootElement.GetProperty("Sheets")[0];
-        var chart = sheetJson.GetProperty("Charts").EnumerateArray()
-            .Should().ContainSingle()
-            .Subject;
-        chart.GetProperty("Title").GetString().Should().Be("On Sheet");
-        chart.GetProperty("DataRange").GetString().Should().Be("A1:B3");
+        var charts = sheetJson.GetProperty("Charts").EnumerateArray().ToList();
+        charts.Should().HaveCount(2, "both the same-sheet and cross-sheet charts must be persisted");
+
+        var sameSheet = charts.Single(c => c.GetProperty("Title").GetString() == "On Sheet");
+        sameSheet.GetProperty("DataRange").GetString().Should().Be("A1:B3");
+        sameSheet.TryGetProperty("DataRangeSheetName", out var sameSheetName).Should().BeTrue();
+        sameSheetName.ValueKind.Should().Be(JsonValueKind.Null,
+            "a same-sheet chart needs no data-range sheet name");
+
+        var crossSheet = charts.Single(c => c.GetProperty("Title").GetString() == "Other Sheet");
+        crossSheet.GetProperty("DataRange").GetString().Should().Be("A1:B3");
+        crossSheet.GetProperty("DataRangeSheetName").GetString().Should().Be("Other");
     }
 
     [Fact]
