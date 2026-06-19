@@ -236,15 +236,10 @@ public sealed partial class MainWindow
 
     // ── Get Data / Refresh All ────────────────────────────────────────────────────
     //
-    // This app has no external-data / query / connection engine: there is no QueryTable executor, no
-    // connection-refresh service, and no provider-backed data model. (XlsxConnectionQueryTableSchemaNormalizer
-    // only round-trips connection XML for file fidelity; it executes nothing.) Rather than fake an import
-    // picker or alias a recalculation, both buttons report the honest capability gap.
-    private void GetDataNotSupported() =>
-        RefreshShell("External data sources are not supported");
-
-    private void RefreshAllNotSupported() =>
-        RefreshShell("External data connections are not supported; nothing to refresh");
+    // Get Data ▸ From Text/CSV (file-based import) lives in MainWindow.GetData.cs and Refresh re-imports the
+    // remembered file source. There is still no external DB/web/query/connection engine
+    // (XlsxConnectionQueryTableSchemaNormalizer only round-trips connection XML for file fidelity; it
+    // executes nothing), so those connector surfaces remain out of scope.
 
     private sealed class ValidationCircleControl : Control
     {
