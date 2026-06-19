@@ -15,6 +15,10 @@ public class DocumentFileAdapterRegistrationTests
 
     [Theory]
     [InlineData(".docx", true, true, false)]
+    [InlineData(".docm", true, true, false)]
+    [InlineData(".dotx", true, true, true)]
+    [InlineData(".dotm", true, true, true)]
+    [InlineData(".xml", true, true, false)]
     [InlineData(".txt", true, true, false)]
     [InlineData(".text", true, true, false)]
     [InlineData(".log", true, true, false)]

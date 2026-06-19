@@ -10,7 +10,11 @@ public static class DocumentFileAdapterCatalog
 {
     public static IReadOnlyList<IDocumentFileAdapter> CreateDefaultAdapters() =>
     [
-        new DocxFileAdapter(),
+        DocxFileAdapter.Docx(),
+        DocxFileAdapter.Docm(),
+        DocxFileAdapter.Dotx(),
+        DocxFileAdapter.Dotm(),
+        new WordXmlFileAdapter(),
         new PlainTextFileAdapter(),
     ];
 }

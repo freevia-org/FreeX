@@ -226,6 +226,32 @@ public static class DocxReader
             Capture("/word/webSettings.xml",
                 docRelTypesByTarget.GetValueOrDefault("webSettings.xml") ?? WebSettingsRelType);
 
+        // VBA macro project (.docm/.dotm): word/vbaProject.bin, its optional word/vbaData.xml, and the
+        // part-local word/_rels/vbaProject.bin.rels. Preserved verbatim and NEVER executed/deserialized. The
+        // content type is forced to a per-part Override (valid OPC, and wins over any source Default-by-
+        // extension) so a macro-only document re-emits a typed part even though FreeW emits no bin/vbaData
+        // Default. The writer drops these again for non-macro variants (.docx/.dotx) via DocxWriteOptions.
+        if (archive.GetEntry("word/vbaProject.bin") is not null)
+        {
+            var vbaProject = LoadMedia(archive, "word/vbaProject.bin");
+            if (vbaProject is not null)
+            {
+                document.Preserved.Parts.Add(new PreservedPart(
+                    "/word/vbaProject.bin",
+                    vbaProject,
+                    VbaProjectContentType,
+                    docRelTypesByTarget.GetValueOrDefault("vbaProject.bin") ?? VbaProjectRelType));
+
+                var vbaData = LoadMedia(archive, "word/vbaData.xml");
+                if (vbaData is not null)
+                    document.Preserved.Parts.Add(new PreservedPart("/word/vbaData.xml", vbaData, VbaDataContentType, null));
+
+                var vbaRels = LoadMedia(archive, "word/_rels/vbaProject.bin.rels");
+                if (vbaRels is not null)
+                    document.Preserved.Parts.Add(new PreservedPart("/word/_rels/vbaProject.bin.rels", vbaRels, null, null));
+            }
+        }
+
         // customXml/* — items, their props and the items' own _rels. The document→item relationships live in
         // document.xml.rels with a customXml-relative Target (e.g. "../customXml/item1.xml"); item→props
         // relationships live in each item's own _rels (not document.xml.rels), so those parts carry no document
