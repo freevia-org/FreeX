@@ -94,7 +94,15 @@ public sealed partial class MainWindow
 
         container.PointerPressed += (_, args) =>
         {
-            if (args.GetCurrentPoint(container).Properties.IsLeftButtonPressed)
+            var point = args.GetCurrentPoint(container);
+            if (point.Properties.IsRightButtonPressed)
+            {
+                // Right-click selects the chart, then opens the per-target Chart context menu.
+                HandleChartPointerContext(chart, container, args);
+                return;
+            }
+
+            if (point.Properties.IsLeftButtonPressed)
             {
                 SelectChart(chart);
                 args.Handled = true;

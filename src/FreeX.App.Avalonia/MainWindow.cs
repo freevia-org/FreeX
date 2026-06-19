@@ -3255,6 +3255,13 @@ public sealed partial class MainWindow : Window
 
         container.PointerPressed += (_, args) =>
         {
+            if (args.GetCurrentPoint(container).Properties.IsRightButtonPressed)
+            {
+                // Right-click selects the object, then opens its per-target context menu.
+                HandleDrawingObjectPointerContext(drawingObject, container, args);
+                return;
+            }
+
             if (args.GetCurrentPoint(container).Properties.IsLeftButtonPressed)
             {
                 SelectDrawingObject(drawingObject);
@@ -4095,15 +4102,23 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// Creates the worksheet cell <see cref="ContextMenu"/> from the shared neutral plan. The
-    /// <see cref="WorksheetContextMenuState"/> is left at its default for this slice — structure is
-    /// fully populated; state-driven enablement (comments/notes/hyperlinks/filter) is derivable
-    /// later once the Avalonia session exposes those flags.
+    /// dropdown-target flag is computed from the active cell so "Pick From Drop-down List" is enabled
+    /// exactly when the cell carries an in-cell list validation; the remaining state-driven enablement
+    /// (comments/notes/hyperlinks/filter) is derivable later once the Avalonia session exposes those
+    /// flags.
     /// </summary>
     private ContextMenu BuildWorksheetCellContextMenu()
     {
+        var state = WorksheetContextMenuState.Default with
+        {
+            HasDropdownTarget = DataValidationDropdownPlanner.HasDropdownList(
+                _session.Workbook,
+                _session.ActiveSheet,
+                _session.ActiveCell),
+        };
         var commands = WorksheetContextMenuPlanner.BuildCommands(
             WorksheetContextMenuTargetKind.Worksheet,
-            WorksheetContextMenuState.Default);
+            state);
         var ribbonMenu = WorksheetContextMenuRibbonAdapter.ToRibbonMenu(commands);
         return AvaloniaContextMenuRenderer.BuildContextMenu(ribbonMenu, DispatchWorksheetContextMenuCommand);
     }
@@ -4112,12 +4127,11 @@ public sealed partial class MainWindow : Window
     /// Routes a worksheet context-menu command id back to the matching Avalonia document command.
     /// Every action that has a working shell handler (clipboard, clear, insert/delete, sort/filter,
     /// clear filter, data tools, outline grouping, comments/notes, hyperlinks, format cells, pivot
-    /// options) is wired to the same handler the ribbon uses. The drawing/chart/picture per-target
-    /// variants (Format Picture/Chart Area, Bring Forward, Selection Pane, etc.) are not reachable from
-    /// the worksheet cell menu — they belong to the Picture/Shape/Chart target-kind menus, which the
-    /// Avalonia grid does not yet raise (no in-grid drawing-object hit-testing). The only Worksheet-menu
-    /// action that falls through to the no-op default is Pick From Drop-down List, which has no backing
-    /// shell/session API yet.
+    /// options, pick-from-drop-down) is wired to the same handler the ribbon uses. The drawing/chart/
+    /// picture per-target variants (Format Picture/Chart Area, Bring Forward, Selection Pane, etc.) are
+    /// raised instead from the Picture/Shape/TextBox/Chart object menus (right-clicking a selected
+    /// drawing object) via <see cref="DispatchDrawingObjectContextMenuCommand"/>, so they do not appear
+    /// in this worksheet cell menu.
     /// </summary>
     private void DispatchWorksheetContextMenuCommand(RibbonCommandId commandId)
     {
@@ -4280,9 +4294,14 @@ public sealed partial class MainWindow : Window
             case WorksheetContextMenuAction.FormatCells:
                 _ = ShowFormatCellsDialogAsync();
                 break;
+            case WorksheetContextMenuAction.PickFromDropDown:
+                // Opens the active cell's in-cell data-validation dropdown overlay (the same dropdown
+                // Alt+Down opens). Reports honestly when the cell has no list to pick from.
+                if (!OpenActiveDataValidationDropdown())
+                    RefreshShell(UiText.Get("DrawingInteract_PickListNoList"));
+                break;
             default:
                 // TODO(avalonia-shell): wire remaining context-menu actions as Avalonia document commands land (ref: docs/parity/command-surface.md#deferred-architectural-features)
-                // Honestly-deferred only: Pick From Drop-down List — no backing shell/session API exists for it yet.
                 break;
         }
     }

@@ -474,6 +474,11 @@
   <data name="Drawing_PictureSentBackward" xml:space="preserve"><value>Image reculée d'un plan.</value></data>
   <data name="Drawing_BringForwardLabel" xml:space="preserve"><value>Avancer</value></data>
   <data name="Drawing_SendBackwardLabel" xml:space="preserve"><value>Reculer</value></data>
+  <!-- In-grid drawing-object interaction (DrawingInteract_*) -->
+  <data name="DrawingInteract_ChartSizeAndProperties" xml:space="preserve"><value>Taille et propriétés du graphique</value></data>
+  <data name="DrawingInteract_Moved" xml:space="preserve"><value>Objet de dessin déplacé.</value></data>
+  <data name="DrawingInteract_Resized" xml:space="preserve"><value>Objet de dessin redimensionné.</value></data>
+  <data name="DrawingInteract_PickListNoList" xml:space="preserve"><value>La cellule active n'a aucune liste déroulante.</value></data>
   <!-- Selection Pane dialog -->
   <data name="SelectionPane_Title" xml:space="preserve"><value>Volet Sélection</value></data>
   <data name="SelectionPane_Hint" xml:space="preserve"><value>Sélectionnez un objet pour le renommer, afficher/masquer ou modifier son ordre de superposition.</value></data>
