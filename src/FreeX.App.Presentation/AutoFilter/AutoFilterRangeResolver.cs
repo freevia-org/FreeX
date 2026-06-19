@@ -7,7 +7,7 @@ namespace FreeX.App.Presentation.AutoFilter;
 /// <c>&lt;autoFilter&gt;</c> reference takes precedence (an explicit AutoFilter applied to a range);
 /// otherwise the first structured table whose <see cref="StructuredTableModel.HasAutoFilter"/> is set
 /// supplies the range so its header still shows filter-arrow buttons exactly as Excel renders them.
-/// Core-model only (no UI deps) so both the WPF host and the Avalonia port share one implementation.
+/// Core-model only (no UI deps) so every desktop shell shares one implementation.
 /// </summary>
 public static class AutoFilterRangeResolver
 {
