@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using FreeX.App.Presentation.Filtering;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;

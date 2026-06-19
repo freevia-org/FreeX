@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.App.Presentation.FormatCells;
 
 namespace FreeX.App.Host.Tests;
 

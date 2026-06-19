@@ -1,6 +1,8 @@
 using FluentAssertions;
 using static FreeX.App.Host.Tests.LocalizedXamlTestSupport;
 
+using FreeX.App.Presentation.PageLayout;
+
 namespace FreeX.App.Host.Tests;
 
 public sealed class PageLayoutCommandSourceTests

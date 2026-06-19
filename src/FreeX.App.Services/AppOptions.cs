@@ -52,6 +52,14 @@ public sealed class AppOptions
     public bool AutoCalculate { get; set; } = true;
     public bool UseR1C1ReferenceStyle { get; set; }
 
+    // Formulas — error checking. When off, the green error-checking triangles and the
+    // background error scan are suppressed (parity with Excel's "Enable background error checking").
+    public bool ErrorCheckingEnabled { get; set; } = true;
+
+    // Proofing — spell-check ignore rules (parity with Excel's AutoCorrect / proofing options).
+    public bool ProofingIgnoreUppercase { get; set; } = true;
+    public bool ProofingIgnoreNumbers { get; set; } = true;
+
     public bool ShowFormulaBar { get; set; } = true;
     public bool FormulaBarExpanded { get; set; }
     public bool MoveSelectionAfterEnter { get; set; } = true;

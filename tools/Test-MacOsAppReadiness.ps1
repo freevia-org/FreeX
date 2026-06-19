@@ -1186,6 +1186,12 @@ function Test-SourceWiring {
                 "fileMenu.Items.Add(_workbookStatisticsMenuItem);",
                 "_workbookStatisticsMenuItem.IsEnabled = isIdle;",
                 "HasNativeWorkbookStatisticsMenuItem: HasNativeMenuItem(_workbookStatisticsMenuItem, `"Workbook Statistics...`")",
+                # File > Options (Settings) - native menu item with the macOS Preferences shortcut (Cmd+,).
+                "private readonly NativeMenuItem _optionsMenuItem = new();",
+                "_optionsMenuItem.Header = UiText.Get(`"Options_Title`");",
+                "_optionsMenuItem.Gesture = new KeyGesture(Key.OemComma, KeyModifiers.Meta);",
+                "_optionsMenuItem.Click += (_, _) => ShowOptions();",
+                "fileMenu.Items.Add(_optionsMenuItem);",
                 "e.Key == Key.G && e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift)",
                 "private async Task ShowWorkbookStatisticsDialogAsync()",
                 "WorkbookStatisticsService.GetStatistics(_session.Workbook)",

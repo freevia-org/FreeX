@@ -5,7 +5,6 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 
-using FreeX.App.Avalonia.Dialogs;
 using FreeX.App.Presentation.Dialogs;
 
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
@@ -22,7 +21,7 @@ public sealed partial class MainWindow
 {
     // The Most Recently Used list shown in the Insert Function category dropdown. Promoted whenever a
     // function is inserted (most recent first) and seeded from the catalog defaults.
-    private IReadOnlyList<string> _insertFunctionMostRecentlyUsed = InsertFunctionCatalog.DefaultMostRecentlyUsed;
+    private IReadOnlyList<string> _insertFunctionMostRecentlyUsed = InsertFunctionCatalogPlanner.DefaultMostRecentlyUsed;
 
     private void InsertFunction() => _ = ShowInsertFunctionDialogAsync();
 
@@ -47,7 +46,7 @@ public sealed partial class MainWindow
 
     private async Task<InsertFunctionCatalogEntry?> ShowInsertFunctionPickerDialogAsync()
     {
-        var catalog = InsertFunctionCatalog.BuildCatalog();
+        var catalog = InsertFunctionCatalogPlanner.BuildCatalog();
         InsertFunctionCatalogEntry? result = null;
 
         var dialog = new Window
@@ -69,8 +68,8 @@ public sealed partial class MainWindow
 
         var categoryBox = new ComboBox
         {
-            ItemsSource = InsertFunctionCatalog.BuildCategoryChoices(catalog),
-            SelectedItem = InsertFunctionCatalog.MostRecentlyUsedCategory,
+            ItemsSource = InsertFunctionCatalogPlanner.BuildCategoryChoices(catalog),
+            SelectedItem = InsertFunctionCatalogPlanner.MostRecentlyUsedCategory,
             MinWidth = 220,
         };
         AutomationProperties.SetName(categoryBox, "Or select a category");
@@ -99,7 +98,7 @@ public sealed partial class MainWindow
 
         void RefreshList()
         {
-            var filtered = InsertFunctionCatalog.FilterCatalog(
+            var filtered = InsertFunctionCatalogPlanner.FilterCatalog(
                 catalog,
                 categoryBox.SelectedItem?.ToString(),
                 searchBox.Text,
@@ -378,7 +377,7 @@ public sealed partial class MainWindow
             return;
 
         _insertFunctionMostRecentlyUsed =
-            InsertFunctionCatalog.UpdateMostRecentlyUsed(_insertFunctionMostRecentlyUsed, functionName);
+            InsertFunctionCatalogPlanner.UpdateMostRecentlyUsed(_insertFunctionMostRecentlyUsed, functionName);
     }
 
     private static string FormatFunctionSyntax(string functionName)

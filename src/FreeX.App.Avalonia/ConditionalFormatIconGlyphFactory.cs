@@ -2,6 +2,8 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
 
+using FreeX.App.Presentation.ConditionalFormatting;
+
 using AvaloniaEllipse = Avalonia.Controls.Shapes.Ellipse;
 using AvaloniaLine = Avalonia.Controls.Shapes.Line;
 using AvaloniaPath = Avalonia.Controls.Shapes.Path;
@@ -39,29 +41,29 @@ internal static class ConditionalFormatIconGlyphFactory
     {
         switch (icon.GlyphKind)
         {
-            case CfIconGlyphKind.TrafficLight:
+            case ConditionalIconGlyphKind.TrafficLight:
                 yield return Ellipse(rect, fill, outline: true);
                 break;
-            case CfIconGlyphKind.Sign:
+            case ConditionalIconGlyphKind.Sign:
                 foreach (var s in SignGlyph(icon.IconIndex, rect, fill))
                     yield return s;
                 break;
-            case CfIconGlyphKind.Symbol:
+            case ConditionalIconGlyphKind.Symbol:
                 foreach (var s in SymbolGlyph(icon.IconIndex, rect, fill))
                     yield return s;
                 break;
-            case CfIconGlyphKind.Flag:
+            case ConditionalIconGlyphKind.Flag:
                 yield return GeometryPath(FlagGeometry(rect), fill, outline: true);
                 break;
-            case CfIconGlyphKind.Rating:
+            case ConditionalIconGlyphKind.Rating:
                 yield return GeometryPath(StarGeometry(rect), fill, outline: true);
                 break;
-            case CfIconGlyphKind.Quarter:
+            case ConditionalIconGlyphKind.Quarter:
                 yield return Ellipse(rect, Brushes.White, outline: true);
                 yield return GeometryPath(PieGeometry(rect, QuarterSweep(icon)), fill, outline: false);
                 yield return Ellipse(rect, Brushes.Transparent, outline: true);
                 break;
-            case CfIconGlyphKind.Box:
+            case ConditionalIconGlyphKind.Box:
                 yield return BoxGlyph(icon, rect, fill);
                 break;
             default:

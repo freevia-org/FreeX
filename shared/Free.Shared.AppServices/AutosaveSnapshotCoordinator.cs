@@ -1,0 +1,164 @@
+namespace Free.Shared.AppServices;
+
+/// <summary>
+/// Per-app binding that supplies the autosave engine with everything it needs to decide
+/// whether to snapshot and how to produce the snapshot bytes. Each app implements this:
+/// FreeX serializes a workbook, FreeW writes a .docx. The engine itself owns the neutral
+/// orchestration (dirty/generation gating, sidecar, atomic write, emergency-save, delete).
+/// </summary>
+public interface IAutosaveSnapshotSource
+{
+    /// <summary>The user-facing original file path, embedded in the sidecar.</summary>
+    string? OriginalFilePath { get; }
+
+    /// <summary>A friendly document name shown in the recovery prompt.</summary>
+    string DisplayName { get; }
+
+    /// <summary>Whether the document currently has unsaved changes.</summary>
+    bool IsDirty { get; }
+
+    /// <summary>
+    /// A monotonically advancing dirty-edit counter. The engine only re-snapshots when this
+    /// differs from the generation it last snapshotted, suppressing redundant writes. Apps that
+    /// do not track generations may return a constant value to snapshot on every dirty tick.
+    /// </summary>
+    int DirtyGeneration { get; }
+
+    /// <summary>
+    /// Serializes the current document to <paramref name="snapshotPath"/>. Called on the
+    /// dispatcher/UI thread. May throw — the engine treats failures as best-effort no-ops.
+    /// </summary>
+    void WriteSnapshot(string snapshotPath);
+}
+
+/// <summary>
+/// Neutral autosave orchestration shared by FreeX and FreeW. Given an
+/// <see cref="IAutosaveSnapshotSource"/>, it gates snapshots on dirty-state and generation,
+/// writes the snapshot atomically (temp + move) followed by the sidecar, supports a never-throw
+/// emergency snapshot for crash handlers, and deletes the snapshot on clean save/close.
+///
+/// This type is timer-agnostic: the host owns the periodic timer (FreeX uses a background-priority
+/// DispatcherTimer at 5 min, FreeW a 30 s DispatcherTimer) and calls <see cref="Snapshot"/> on each
+/// tick. Keeping the timer in the host preserves each app's exact threading and interval behavior.
+///
+/// Thread note: serialization runs synchronously on the calling (dispatcher) thread, matching the
+/// prior per-app behavior.
+/// </summary>
+public sealed class AutosaveSnapshotCoordinator
+{
+    private const int BufferSize = 1024 * 128;
+
+    private readonly AutosaveSnapshotStore _store;
+    private readonly string _snapshotId;
+
+    private int _lastSnapshotGeneration = -1;
+    private bool _disposed;
+
+    public AutosaveSnapshotCoordinator(AutosaveSnapshotStore store, string snapshotId)
+    {
+        ArgumentNullException.ThrowIfNull(store);
+        ArgumentException.ThrowIfNullOrWhiteSpace(snapshotId);
+        _store = store;
+        _snapshotId = snapshotId;
+    }
+
+    /// <summary>The stable session snapshot id this coordinator writes under.</summary>
+    public string SnapshotId => _snapshotId;
+
+    /// <summary>
+    /// Writes a snapshot for <paramref name="source"/> if it is dirty and its generation changed
+    /// since the last snapshot. Intended to be called on each timer tick (dispatcher thread).
+    /// Best-effort: never throws.
+    /// </summary>
+    public void Snapshot(IAutosaveSnapshotSource source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        if (_disposed)
+            return;
+
+        TryWriteSnapshot(source);
+    }
+
+    /// <summary>
+    /// Performs an emergency best-effort snapshot — used from crash handlers. Must never throw.
+    /// Bypasses generation gating: a crash handler always tries to capture the latest state.
+    /// </summary>
+    public void TryEmergencySnapshot(IAutosaveSnapshotSource source)
+    {
+        try
+        {
+            if (_disposed || source is null)
+                return;
+
+            TryWriteSnapshot(source);
+        }
+        catch
+        {
+            // Crash handlers must never throw.
+        }
+    }
+
+    /// <summary>
+    /// Deletes the recovery snapshot for this session. Call after a clean save or normal close.
+    /// </summary>
+    public void DeleteSnapshot() => _store.DeleteSnapshot(_snapshotId);
+
+    private void TryWriteSnapshot(IAutosaveSnapshotSource source)
+    {
+        try
+        {
+            if (!AutosaveSnapshotStore.ShouldSnapshot(
+                    source.IsDirty,
+                    source.DirtyGeneration,
+                    _lastSnapshotGeneration))
+            {
+                return;
+            }
+
+            var snapshotPath = _store.GetSnapshotPath(_snapshotId);
+            var sidecarPath = _store.GetSidecarPath(_snapshotId);
+
+            Directory.CreateDirectory(Path.GetDirectoryName(snapshotPath)!);
+
+            // Write the snapshot atomically: produce into a sibling temp file, then move into place.
+            var tempSnapshot = snapshotPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            try
+            {
+                source.WriteSnapshot(tempSnapshot);
+                File.Move(tempSnapshot, snapshotPath, overwrite: true);
+            }
+            finally
+            {
+                if (File.Exists(tempSnapshot))
+                    try { File.Delete(tempSnapshot); } catch { /* best-effort */ }
+            }
+
+            var sidecar = new AutosaveSidecar
+            {
+                OriginalFilePath = source.OriginalFilePath,
+                DisplayName = source.DisplayName,
+                TimestampUtc = DateTimeOffset.UtcNow.ToString("O"),
+                SnapshotId = _snapshotId
+            };
+            AtomicFileWriter.WriteAllText(sidecarPath, AutosaveSnapshotStore.SerializeSidecar(sidecar));
+
+            _lastSnapshotGeneration = source.DirtyGeneration;
+        }
+        catch
+        {
+            // Autosave is best-effort and must never affect app behavior.
+        }
+    }
+
+    /// <summary>
+    /// A reusable file stream sized for snapshot writes, opened with exclusive create semantics.
+    /// Helper for sources that serialize through a <see cref="System.IO.Stream"/>.
+    /// </summary>
+    public static FileStream OpenSnapshotStream(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        return new FileStream(path, FileMode.Create, FileAccess.ReadWrite, FileShare.None, BufferSize);
+    }
+
+    public void Dispose() => _disposed = true;
+}

@@ -49,7 +49,7 @@ public sealed partial class MainWindow
             var inset = Math.Min(28 * zoomFactor, Math.Min(width, height) / 4);
             var plotArea = new PlotRect(inset, inset, Math.Max(1, width - (2 * inset)), Math.Max(1, height - (2 * inset)));
 
-            var request = AvaloniaChartRequestBuilder.TryBuild(chart, plotArea, accessor, ChartTextMeasurer);
+            var request = ChartLayoutRequestBuilder.TryBuild(chart, plotArea, accessor, ChartTextMeasurer);
             if (request is null)
                 continue;
 
@@ -166,7 +166,7 @@ public sealed partial class MainWindow
     /// Builds a cell accessor over the viewport's chart-data cells (and visible cells as a fallback),
     /// mirroring the desktop renderer's chart cell lookup + numeric coercion.
     /// </summary>
-    private static AvaloniaChartRequestBuilder.ChartCellAccessor BuildChartCellAccessor(
+    private static ChartLayoutRequestBuilder.ChartCellAccessor BuildChartCellAccessor(
         ViewportModel viewport,
         SheetId sheetId)
     {

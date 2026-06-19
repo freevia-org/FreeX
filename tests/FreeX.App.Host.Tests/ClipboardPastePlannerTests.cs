@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.App.Presentation.Editing;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 using System.Windows;

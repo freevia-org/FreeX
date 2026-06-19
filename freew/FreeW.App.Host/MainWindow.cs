@@ -357,9 +357,14 @@ public sealed class MainWindow : Window
 
     private void UpdateTitle()
     {
-        var name = _file.DisplayName + (_file.IsDirty ? " *" : "");
-        Title = $"{name} — FreeW";
-        _titleText.Text = $"{name} — FreeW";
+        var title = WindowTitlePlanner.Compose(
+            displayName: _file.DisplayName,
+            applicationName: "FreeW",
+            isDirty: _file.IsDirty,
+            dirtyMarker: " *",
+            separator: " — ");
+        Title = title;
+        _titleText.Text = title;
     }
 
     // Recompute the live status-bar counts. When there is a non-empty selection, show that selection's

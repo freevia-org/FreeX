@@ -16,7 +16,7 @@ public sealed partial class FunctionArgumentsDialog : Window
 
     public string? ResultFormula { get; private set; }
 
-    public FunctionArgumentsDialog(InsertFunctionCatalogEntry function)
+    public FunctionArgumentsDialog(FreeX.App.Presentation.Dialogs.InsertFunctionCatalogEntry function)
     {
         _functionName = function.Name.Trim().ToUpperInvariant();
         _arguments = GetArgumentSpecs(_functionName);

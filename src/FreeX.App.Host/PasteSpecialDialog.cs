@@ -1,29 +1,9 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.App.Presentation.Editing;
 
 namespace FreeX.App.Host;
-
-public enum PasteSpecialDialogMode
-{
-    All,
-    Values,
-    Formulas,
-    Formats,
-    Comments,
-    Validation,
-    AllUsingSourceTheme,
-    AllExceptBorders,
-    AllMergingConditionalFormats,
-    ColumnWidths,
-    FormulasAndNumberFormats,
-    ValuesAndNumberFormats,
-    ValuesAndSourceFormatting,
-    Text,
-    UnicodeText,
-    Picture,
-    LinkedPicture
-}
 
 public sealed partial class PasteSpecialDialog : Window
 {

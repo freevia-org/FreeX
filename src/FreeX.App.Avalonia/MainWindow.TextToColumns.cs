@@ -173,7 +173,7 @@ public sealed partial class MainWindow
             TextToColumnsOptions options;
             try
             {
-                options = TextToColumnsShellPlanner.BuildOptions(BuildState());
+                options = TextToColumnsDialogPlanner.BuildOptions(BuildState());
             }
             catch (ArgumentException ex)
             {
@@ -263,7 +263,7 @@ public sealed partial class MainWindow
             TextToColumnsOptions options;
             try
             {
-                options = TextToColumnsShellPlanner.BuildOptions(BuildState());
+                options = TextToColumnsDialogPlanner.BuildOptions(BuildState());
             }
             catch (ArgumentException ex)
             {
@@ -273,7 +273,7 @@ public sealed partial class MainWindow
             }
 
             var result = TextToColumnsPlanner.Plan(sources, options);
-            var edits = TextToColumnsShellPlanner.MapToEdits(sheet.Id, result, range);
+            var edits = TextToColumnsDialogPlanner.MapToEdits(sheet.Id, result, range);
             if (edits.Count == 0)
             {
                 warningText.Text = "The current options produce no columns to write.";
@@ -281,7 +281,7 @@ public sealed partial class MainWindow
                 return;
             }
 
-            var overwrites = TextToColumnsShellPlanner.FindOverwriteTargets(sheet, edits, range);
+            var overwrites = TextToColumnsDialogPlanner.FindOverwriteTargets(sheet, edits, range);
             if (overwrites.Count > 0 && !overwriteConfirmed)
             {
                 overwriteConfirmed = true;

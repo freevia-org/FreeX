@@ -371,6 +371,7 @@ public sealed partial class MainWindow : Window
     private readonly MenuItem _fillRightFlyoutItem = new();
     private readonly MenuItem _fillUpFlyoutItem = new();
     private readonly MenuItem _fillLeftFlyoutItem = new();
+    private readonly MenuItem _fillSeriesFlyoutItem = new();
     private readonly DropDownButton _clearButton = new();
     private readonly MenuItem _clearAllFlyoutItem = new();
     private readonly MenuItem _clearFormatsFlyoutItem = new();
@@ -412,6 +413,7 @@ public sealed partial class MainWindow : Window
     private readonly NativeMenuItem _exportPdfMenuItem = new();
     private readonly NativeMenuItem _shareWorkbookMenuItem = new();
     private readonly NativeMenuItem _workbookStatisticsMenuItem = new();
+    private readonly NativeMenuItem _optionsMenuItem = new();
     private readonly NativeMenuItem _closeWorkbookMenuItem = new();
     private readonly NativeMenuItem _newSheetMenuItem = new();
     private readonly NativeMenuItem _renameSheetMenuItem = new();
@@ -492,6 +494,7 @@ public sealed partial class MainWindow : Window
     private readonly NativeMenuItem _fillRightMenuItem = new();
     private readonly NativeMenuItem _fillUpMenuItem = new();
     private readonly NativeMenuItem _fillLeftMenuItem = new();
+    private readonly NativeMenuItem _fillSeriesMenuItem = new();
     private readonly NativeMenuItem _clearMenuItem = new();
     private readonly NativeMenuItem _clearAllMenuItem = new();
     private readonly NativeMenuItem _clearFormatsMenuItem = new();
@@ -670,12 +673,15 @@ public sealed partial class MainWindow : Window
                     ["formulas.nameManager"] = NameManager,
                     ["formulas.defineName"] = DefineName,
                     ["formulas.createFromSelection"] = CreateNamesFromSelection,
+                    ["Use in Formula"] = PasteNames,
                     // Review tab.
                     ["review.spelling"] = () => _ = ShowSpellingDialogAsync(),
                     ["review.checkAccessibility"] = () => _ = ShowReviewSummaryDialogAsync(focusAccessibility: true),
                     ["review.protectSheet"] = () => _ = ShowProtectSheetDialogAsync(),
                     ["review.protectWorkbook"] = () => _ = ShowProtectWorkbookDialogAsync(),
+                    ["Allow Users to Edit Ranges"] = AllowEditRanges,
                     // View tab.
+                    ["Custom Views"] = () => RunGuarded(OpenCustomViewsDialogAsync),
                     ["view.gridlines"] = ToggleShowGridlines,
                     ["view.headings"] = ToggleShowHeadings,
                     ["view.zoom"] = ZoomIn,
@@ -727,7 +733,7 @@ public sealed partial class MainWindow : Window
                     ["Right"] = () => FillSelectedRange(FillCellsDirection.Right),
                     ["Up"] = () => FillSelectedRange(FillCellsDirection.Up),
                     ["Left"] = () => FillSelectedRange(FillCellsDirection.Left),
-                    ["Series"] = () => RefreshShell("Fill Series isn't supported yet; use Fill Down/Right/Up/Left to copy."),
+                    ["Series"] = FillSeries,
                     // Home ▸ Editing ▸ Clear dropdown items (canonical menu ids from HomeRibbonMenus.Clear).
                     ["Clear All"] = ClearSelectedRangeAll,
                     ["Clear Formats"] = ClearSelectedRangeFormats,
@@ -756,7 +762,7 @@ public sealed partial class MainWindow : Window
                     ["Constants"] = () => SelectGoToSpecial(GoToSpecialKind.Constants),
                     ["Data Validation"] = () => SelectGoToSpecial(GoToSpecialKind.DataValidation),
                     ["Select Objects"] = () => SelectGoToSpecial(GoToSpecialKind.Objects),
-                    ["Selection Pane"] = () => RefreshShell("The Selection Pane isn't available in this build yet."),
+                    ["Selection Pane"] = () => RunGuarded(OpenSelectionPaneDialogAsync),
                     // Home ▸ Font ▸ Borders dropdown items (canonical ids from HomeRibbonMenus.Borders). The
                     // single-edge/inside presets map to CellBorderPreset; "More Borders" opens Format Cells
                     // (Borders tab). All/Outside/No Border are wired above. Exotic thick/double/draw variants
@@ -776,12 +782,24 @@ public sealed partial class MainWindow : Window
                     ["Rotate Text Up"] = () => ApplySelectedRangeTextRotation(90, "Rotated text up for", "Rotate Text Up failed."),
                     ["Rotate Text Down"] = () => ApplySelectedRangeTextRotation(-90, "Rotated text down for", "Rotate Text Down failed."),
                     // Home ▸ Cells ▸ Insert / Delete / Format dropdown items that map to existing handlers
-                    // (canonical ids from HomeRibbonMenus.Insert/Delete/Format). Row-height/column-width/AutoFit/
-                    // hide-row-column/lock-cell items stay NoOp until those operations exist in the shell.
+                    // (canonical ids from HomeRibbonMenus.Insert/Delete/Format). The lock-cell item stays NoOp
+                    // until that operation exists in the shell.
                     ["Insert Cells"] = () => _ = ShowInsertCellsDialogAsync(),
                     ["Insert Sheet"] = AddNewSheet,
                     ["Delete Cells"] = () => _ = ShowDeleteCellsDialogAsync(),
                     ["Format Cells"] = () => _ = ShowFormatCellsDialogAsync(),
+                    // Home ▸ Cells ▸ Format ▸ Row Height / Column Width / AutoFit (ids from HomeRibbonMenus.Format)
+                    // → shared Set{Row,Column} commands + AutoFitSizingService on the current selection.
+                    ["Row Height"] = () => _ = ShowRowHeightDialogAsync(),
+                    ["AutoFit Row Height"] = AutoFitSelectedRowHeight,
+                    ["Column Width"] = () => _ = ShowColumnWidthDialogAsync(),
+                    ["AutoFit Column Width"] = AutoFitSelectedColumnWidth,
+                    // Home ▸ Cells ▸ Format ▸ Hide & Unhide (ids from HomeRibbonMenus.Format) → shared
+                    // Set{Rows,Columns}HiddenCommand on the current selection.
+                    ["Hide Rows"] = HideSelectedRows,
+                    ["Unhide Rows"] = UnhideSelectedRows,
+                    ["Hide Columns"] = HideSelectedColumns,
+                    ["Unhide Columns"] = UnhideSelectedColumns,
                     ["Protect Sheet"] = () => _ = ShowProtectSheetDialogAsync(),
                     ["Unhide Sheet"] = () => _ = UnhideSheetAsync(),
                     // Home ▸ Styles ▸ Conditional Formatting dropdown items backed by existing presets/handlers
@@ -849,7 +867,7 @@ public sealed partial class MainWindow : Window
                     // Page Layout buttons covered by the Page Setup dialog.
                     ["pageLayout.printArea"] = () => _ = ShowPageSetupDialogAsync(),
                     ["pageLayout.printTitles"] = () => _ = ShowPageSetupDialogAsync(),
-                    ["pageLayout.breaks"] = () => _ = ShowPageSetupDialogAsync(),
+                    ["pageLayout.breaks"] = ShowPageBreaksMenu,
                     ["pageLayout.background"] = () => _ = ShowPageSetupDialogAsync(),
                     ["pageLayout.scale"] = () => _ = ShowPageSetupDialogAsync(),
                     ["pageLayout.width"] = () => _ = ShowPageSetupDialogAsync(),
@@ -857,10 +875,11 @@ public sealed partial class MainWindow : Window
                     // Review: New Note / New Comment on the active cell.
                     ["review.newNote"] = () => _ = ShowNewNoteDialogAsync(),
                     ["review.newComment"] = () => _ = ShowNewThreadedCommentDialogAsync(),
-                    // Insert: Sparklines — reuse the existing Quick-Analysis sparkline insertion.
-                    ["insert.sparklineLine"] = () => InsertQuickAnalysisSparklines(SparklineKind.Line),
-                    ["insert.sparklineColumn"] = () => InsertQuickAnalysisSparklines(SparklineKind.Column),
-                    ["insert.sparklineWinLoss"] = () => InsertQuickAnalysisSparklines(SparklineKind.WinLoss),
+                    // Insert: Sparklines — open the insert dialog (or edit, when the active cell already
+                    // anchors a sparkline) with the chosen kind preselected.
+                    ["insert.sparklineLine"] = () => InsertOrEditSparkline(SparklineKind.Line),
+                    ["insert.sparklineColumn"] = () => InsertOrEditSparkline(SparklineKind.Column),
+                    ["insert.sparklineWinLoss"] = () => InsertOrEditSparkline(SparklineKind.WinLoss),
                     // Data: Outline Group / Ungroup.
                     ["data.group"] = GroupSelectedRows,
                     ["data.ungroup"] = ClearWorksheetOutline,
@@ -1134,6 +1153,10 @@ public sealed partial class MainWindow : Window
         _workbookStatisticsMenuItem.Gesture = new KeyGesture(Key.G, KeyModifiers.Control | KeyModifiers.Shift);
         _workbookStatisticsMenuItem.Click += async (_, _) => await ShowWorkbookStatisticsDialogAsync();
 
+        _optionsMenuItem.Header = UiText.Get("Options_Title");
+        _optionsMenuItem.Gesture = new KeyGesture(Key.OemComma, KeyModifiers.Meta);
+        _optionsMenuItem.Click += (_, _) => ShowOptions();
+
         _closeWorkbookMenuItem.Header = "Close Workbook";
         _closeWorkbookMenuItem.Gesture = new KeyGesture(Key.W, KeyModifiers.Meta);
         _closeWorkbookMenuItem.Click += async (_, _) => await CloseWorkbookAsync();
@@ -1387,6 +1410,9 @@ public sealed partial class MainWindow : Window
         _fillLeftMenuItem.Header = "Left";
         _fillLeftMenuItem.Click += (_, _) => FillSelectedRange(FillCellsDirection.Left);
 
+        _fillSeriesMenuItem.Header = "Series...";
+        _fillSeriesMenuItem.Click += (_, _) => FillSeries();
+
         _clearMenuItem.Header = "Clear";
         _clearMenuItem.Menu = CreateNativeClearMenu();
 
@@ -1612,6 +1638,8 @@ public sealed partial class MainWindow : Window
         fileMenu.Items.Add(_exportPdfMenuItem);
         fileMenu.Items.Add(_shareWorkbookMenuItem);
         fileMenu.Items.Add(_workbookStatisticsMenuItem);
+        fileMenu.Items.Add(new NativeMenuItemSeparator());
+        fileMenu.Items.Add(_optionsMenuItem);
         fileMenu.Items.Add(new NativeMenuItemSeparator());
         fileMenu.Items.Add(_pageSetupMenuItem);
         fileMenu.Items.Add(_printPreviewMenuItem);
@@ -2012,6 +2040,10 @@ public sealed partial class MainWindow : Window
         _fillLeftFlyoutItem.Header = "Left";
         _fillLeftFlyoutItem.Click += (_, _) => FillSelectedRange(FillCellsDirection.Left);
 
+        _fillSeriesFlyoutItem.Header = "Series...";
+        AutomationProperties.SetAutomationId(_fillSeriesFlyoutItem, "HomeFillSeriesMenuItem");
+        _fillSeriesFlyoutItem.Click += (_, _) => FillSeries();
+
         _clearButton.Content = "Clear";
         _clearButton.Padding = new Thickness(10, 4);
         _clearButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
@@ -2407,10 +2439,14 @@ public sealed partial class MainWindow : Window
         _fillRightFlyoutItem.IsEnabled = isIdle && _session.CanFillSelectedRange(FillCellsDirection.Right);
         _fillUpFlyoutItem.IsEnabled = isIdle && _session.CanFillSelectedRange(FillCellsDirection.Up);
         _fillLeftFlyoutItem.IsEnabled = isIdle && _session.CanFillSelectedRange(FillCellsDirection.Left);
+        _fillSeriesFlyoutItem.IsEnabled = isIdle &&
+            (_session.CanFillSelectedRange(FillCellsDirection.Down) ||
+             _session.CanFillSelectedRange(FillCellsDirection.Right));
         _fillCellsButton.IsEnabled = _fillDownFlyoutItem.IsEnabled ||
             _fillRightFlyoutItem.IsEnabled ||
             _fillUpFlyoutItem.IsEnabled ||
-            _fillLeftFlyoutItem.IsEnabled;
+            _fillLeftFlyoutItem.IsEnabled ||
+            _fillSeriesFlyoutItem.IsEnabled;
         _clearButton.IsEnabled = isIdle;
         _boldButton.IsEnabled = isIdle;
         _italicButton.IsEnabled = isIdle;
@@ -2533,6 +2569,7 @@ public sealed partial class MainWindow : Window
         _fillRightMenuItem.IsEnabled = _fillRightFlyoutItem.IsEnabled;
         _fillUpMenuItem.IsEnabled = _fillUpFlyoutItem.IsEnabled;
         _fillLeftMenuItem.IsEnabled = _fillLeftFlyoutItem.IsEnabled;
+        _fillSeriesMenuItem.IsEnabled = _fillSeriesFlyoutItem.IsEnabled;
         _clearMenuItem.IsEnabled = _clearButton.IsEnabled;
         _clearAllMenuItem.IsEnabled = _clearButton.IsEnabled;
         _clearFormatsMenuItem.IsEnabled = _clearButton.IsEnabled;
@@ -2694,11 +2731,14 @@ public sealed partial class MainWindow : Window
         yield return CreateSheetTabContextMenuItem(tab, "Rename...", async () => await RenameActiveSheetAsync(), isIdle);
         yield return CreateSheetTabContextMenuItem(tab, "Insert Sheet", AddNewSheet, isIdle);
         yield return CreateSheetTabContextMenuItem(tab, "Duplicate", DuplicateActiveSheet, isIdle);
+        yield return CreateSheetTabContextMenuItem(tab, UiText.Get("MoveCopySheet_MenuItem"), ShowMoveOrCopySheetDialog, isIdle);
         yield return CreateSheetTabContextMenuItem(tab, "Delete Sheet", DeleteActiveSheet, isIdle);
         yield return new Separator();
         yield return CreateSheetTabContextMenuItem(tab, "Hide", HideActiveSheet, isIdle && _session.SheetTabs.Count > 1);
         yield return CreateSheetTabContextMenuItem(tab, "Unhide...", async () => await UnhideSheetAsync(), isIdle && _session.HiddenSheets.Count > 0);
         yield return CreateSheetTabColorContextMenuItem(tab, isIdle);
+        yield return new Separator();
+        yield return CreateSheetTabContextMenuItem(tab, UiText.Get("OutlineSettings_MenuItem"), ShowOutlineSettingsDialog, isIdle);
         yield return new Separator();
         yield return CreateSheetTabContextMenuItem(tab, "Select All Sheets", SelectAllVisibleSheets, isIdle && _session.SheetTabs.Count > 1);
         yield return CreateSheetTabContextMenuItem(tab, "Ungroup Sheets", UngroupSheets, isIdle && _session.IsWorkbookGrouped);
@@ -2813,7 +2853,7 @@ public sealed partial class MainWindow : Window
             {
                 var col = viewport.ColMetrics[colIndex].Col;
                 var selected = IsSelectedColumn(col);
-                AddGridChild(grid, CreateHeaderCell(CellAddress.NumberToColumnName(col), selected, zoomFactor), 0, colIndex + headerOffset);
+                AddGridChild(grid, CreateColumnHeaderCell(col, selected, zoomFactor), 0, colIndex + headerOffset);
             }
         }
 
@@ -2825,7 +2865,7 @@ public sealed partial class MainWindow : Window
             if (showHeadings)
             {
                 var selectedRow = IsSelectedRow(row);
-                AddGridChild(grid, CreateHeaderCell(row.ToString(), selectedRow, zoomFactor), rowIndex + headerOffset, 0);
+                AddGridChild(grid, CreateRowHeaderCell(row, selectedRow, zoomFactor), rowIndex + headerOffset, 0);
             }
 
             for (var colIndex = 0; colIndex < viewport.ColMetrics.Count; colIndex++)
@@ -3595,6 +3635,60 @@ public sealed partial class MainWindow : Window
             zoomFactor: zoomFactor);
 
     /// <summary>
+    /// Builds a clickable column header. Left-click selects the whole column (Shift extends from the
+    /// active cell); right-click selects then opens the shared column-header context menu, so Hide/
+    /// Unhide Columns and the other column commands act on the column the user clicked.
+    /// </summary>
+    private Control CreateColumnHeaderCell(uint col, bool selected, double zoomFactor)
+    {
+        var header = CreateHeaderCell(CellAddress.NumberToColumnName(col), selected, zoomFactor);
+        header.Cursor = new Cursor(StandardCursorType.Hand);
+        header.PointerPressed += (_, args) =>
+        {
+            var point = args.GetCurrentPoint(header);
+            if (point.Properties.IsRightButtonPressed)
+            {
+                if (!IsSelectedColumn(col))
+                    SelectEntireColumn(col);
+                OpenColumnHeaderContextMenu(header);
+                args.Handled = true;
+                return;
+            }
+
+            SelectEntireColumn(col, extend: args.KeyModifiers.HasFlag(KeyModifiers.Shift));
+            args.Handled = true;
+        };
+        return header;
+    }
+
+    /// <summary>
+    /// Builds a clickable row header. Left-click selects the whole row (Shift extends from the active
+    /// cell); right-click selects then opens the shared row-header context menu, so Hide/Unhide Rows
+    /// and the other row commands act on the row the user clicked.
+    /// </summary>
+    private Control CreateRowHeaderCell(uint row, bool selected, double zoomFactor)
+    {
+        var header = CreateHeaderCell(row.ToString(), selected, zoomFactor);
+        header.Cursor = new Cursor(StandardCursorType.Hand);
+        header.PointerPressed += (_, args) =>
+        {
+            var point = args.GetCurrentPoint(header);
+            if (point.Properties.IsRightButtonPressed)
+            {
+                if (!IsSelectedRow(row))
+                    SelectEntireRow(row);
+                OpenRowHeaderContextMenu(header);
+                args.Handled = true;
+                return;
+            }
+
+            SelectEntireRow(row, extend: args.KeyModifiers.HasFlag(KeyModifiers.Shift));
+            args.Handled = true;
+        };
+        return header;
+    }
+
+    /// <summary>
     /// Reads every sparkline on <paramref name="sheet"/> into a per-cell lookup keyed by its anchor
     /// <see cref="SparklineModel.Location"/>, using the same numeric series read as the Windows host
     /// (<see cref="SparklineRenderPlanner.BuildValues"/>). Empty series are dropped so cells without
@@ -3810,8 +3904,10 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// Routes a worksheet context-menu command id back to the matching Avalonia document command.
-    /// Actions with an existing Avalonia handler (clipboard + clear) are wired; the rest are no-ops
-    /// with a TODO until their Avalonia equivalents exist.
+    /// Every action that has a working shell handler (clipboard, clear, insert/delete, sort/filter,
+    /// data tools, outline grouping, comments/notes, hyperlinks, format cells, pivot options) is wired
+    /// to the same handler the ribbon uses. Only the genuinely-unbacked actions (Pick From Drop-down,
+    /// Format as Table, in-place Edit/Resolve Comment and Edit Note) fall through to the no-op default.
     /// </summary>
     private void DispatchWorksheetContextMenuCommand(RibbonCommandId commandId)
     {
@@ -3844,10 +3940,136 @@ public sealed partial class MainWindow : Window
             case WorksheetContextMenuAction.ClearHyperlinks:
                 ClearSelectedRangeHyperlinks();
                 break;
+            case WorksheetContextMenuAction.HideRows:
+                HideSelectedRows();
+                break;
+            case WorksheetContextMenuAction.UnhideRows:
+                UnhideSelectedRows();
+                break;
+            case WorksheetContextMenuAction.HideColumns:
+                HideSelectedColumns();
+                break;
+            case WorksheetContextMenuAction.UnhideColumns:
+                UnhideSelectedColumns();
+                break;
+            case WorksheetContextMenuAction.RowHeight:
+                _ = ShowRowHeightDialogAsync();
+                break;
+            case WorksheetContextMenuAction.AutoFitRowHeight:
+                AutoFitSelectedRowHeight();
+                break;
+            case WorksheetContextMenuAction.ColumnWidth:
+                _ = ShowColumnWidthDialogAsync();
+                break;
+            case WorksheetContextMenuAction.AutoFitColumnWidth:
+                AutoFitSelectedColumnWidth();
+                break;
+            case WorksheetContextMenuAction.InsertRowAbove:
+            case WorksheetContextMenuAction.InsertRowBelow:
+            case WorksheetContextMenuAction.InsertColumnLeft:
+            case WorksheetContextMenuAction.InsertColumnRight:
+            case WorksheetContextMenuAction.InsertCells:
+            case WorksheetContextMenuAction.InsertCopiedCells:
+                _ = ShowInsertCellsDialogAsync();
+                break;
+            case WorksheetContextMenuAction.DeleteRows:
+            case WorksheetContextMenuAction.DeleteColumns:
+            case WorksheetContextMenuAction.DeleteCells:
+                _ = ShowDeleteCellsDialogAsync();
+                break;
+            case WorksheetContextMenuAction.PasteSpecial:
+                _ = ShowPasteSpecialDialogAsync();
+                break;
+            // Sort & Filter submenu → existing sort/filter handlers (same ones the ribbon Data tab uses).
+            case WorksheetContextMenuAction.SortAscending:
+                SortSelectedRange(ascending: true);
+                break;
+            case WorksheetContextMenuAction.SortDescending:
+                SortSelectedRange(ascending: false);
+                break;
+            case WorksheetContextMenuAction.CustomSort:
+                _ = ShowSortDialogAsync();
+                break;
+            case WorksheetContextMenuAction.Filter:
+                ToggleAutoFilter();
+                break;
+            case WorksheetContextMenuAction.ReapplyFilter:
+                ReapplyCurrentFilterSort();
+                break;
+            case WorksheetContextMenuAction.QuickAnalysis:
+                _ = ShowQuickAnalysisDialogAsync();
+                break;
+            // Data Tools submenu → existing data-tools dialogs/handlers.
+            case WorksheetContextMenuAction.DefineName:
+                DefineName();
+                break;
+            case WorksheetContextMenuAction.CreateTable:
+            case WorksheetContextMenuAction.FormatAsTable:
+                InsertTableFromSelection();
+                break;
+            case WorksheetContextMenuAction.TextToColumns:
+                TextToColumns();
+                break;
+            case WorksheetContextMenuAction.RemoveDuplicates:
+                _ = ShowRemoveDuplicatesDialogAsync();
+                break;
+            case WorksheetContextMenuAction.DataValidation:
+                _ = ShowDataValidationDialogAsync();
+                break;
+            // Outline grouping (Rows-and-Columns submenu on row/column selections).
+            case WorksheetContextMenuAction.Group:
+                GroupSelectedRows();
+                break;
+            case WorksheetContextMenuAction.Ungroup:
+                ClearWorksheetOutline();
+                break;
+            // Comments and Notes submenu (create/edit/delete/resolve/show route through WorkbookSession
+            // comment APIs; SetThreadedCommentCommand / UpdateThreadedCommentTextCommand /
+            // ResolveThreadedCommentCommand / SetCommentCommand all carry undo/redo).
+            case WorksheetContextMenuAction.NewComment:
+                _ = ShowNewThreadedCommentDialogAsync();
+                break;
+            case WorksheetContextMenuAction.NewNote:
+                _ = ShowNewNoteDialogAsync();
+                break;
+            case WorksheetContextMenuAction.EditComment:
+                _ = ShowEditThreadedCommentDialogAsync();
+                break;
+            case WorksheetContextMenuAction.EditNote:
+                _ = ShowEditNoteDialogAsync();
+                break;
+            case WorksheetContextMenuAction.ResolveComment:
+                ResolveActiveCellThreadedComment(resolved: true);
+                break;
+            case WorksheetContextMenuAction.UnresolveComment:
+                ResolveActiveCellThreadedComment(resolved: false);
+                break;
+            case WorksheetContextMenuAction.DeleteComment:
+            case WorksheetContextMenuAction.DeleteNote:
+                DeleteActiveCellComment();
+                break;
+            case WorksheetContextMenuAction.ShowNotes:
+                _ = ShowNotesListAsync();
+                break;
+            // Hyperlink submenu → existing hyperlink handlers.
+            case WorksheetContextMenuAction.Hyperlink:
+                _ = ShowInsertHyperlinkDialogAsync();
+                break;
+            case WorksheetContextMenuAction.OpenHyperlink:
+                _ = OpenSelectedHyperlinkAsync();
+                break;
+            case WorksheetContextMenuAction.RemoveHyperlinks:
+                ClearSelectedRangeHyperlinks();
+                break;
+            case WorksheetContextMenuAction.PivotTableOptions:
+                OpenPivotTableOptions();
+                break;
+            case WorksheetContextMenuAction.FormatCells:
+                _ = ShowFormatCellsDialogAsync();
+                break;
             default:
                 // TODO(avalonia-shell): wire remaining context-menu actions as Avalonia document commands land (ref: docs/parity/command-surface.md#deferred-architectural-features)
-                // No Avalonia equivalent yet (insert/delete cells, sort/filter, comments,
-                // notes, data tools, format cells, etc.). Menu structure is present.
+                // Honestly-deferred only: Pick From Drop-down List — no backing shell/session API exists for it yet.
                 break;
         }
     }
@@ -4189,12 +4411,14 @@ public sealed partial class MainWindow : Window
     private MenuFlyout CreateFillCellsFlyout() =>
         new()
         {
-            ItemsSource = new[]
+            ItemsSource = new Control[]
             {
                 _fillDownFlyoutItem,
                 _fillRightFlyoutItem,
                 _fillUpFlyoutItem,
                 _fillLeftFlyoutItem,
+                new Separator(),
+                _fillSeriesFlyoutItem,
             },
         };
 
@@ -4237,6 +4461,8 @@ public sealed partial class MainWindow : Window
         menu.Items.Add(_fillRightMenuItem);
         menu.Items.Add(_fillUpMenuItem);
         menu.Items.Add(_fillLeftMenuItem);
+        menu.Items.Add(new NativeMenuItemSeparator());
+        menu.Items.Add(_fillSeriesMenuItem);
         return menu;
     }
 
@@ -14423,6 +14649,9 @@ public sealed partial class MainWindow : Window
             SelectGoToSpecial(GoToSpecialKind.VisibleCellsOnly);
             return;
         }
+
+        if (TryHandleRowColumnVisibilityShortcut(e))
+            return;
 
         if (!e.KeyModifiers.HasFlag(KeyModifiers.Control) &&
             !e.KeyModifiers.HasFlag(KeyModifiers.Meta))

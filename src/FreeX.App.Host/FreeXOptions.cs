@@ -46,6 +46,11 @@ public sealed class FreeXOptions
     // Formulas
     public bool AutoCalculate { get; set; } = true;
     public bool UseR1C1ReferenceStyle { get; set; }
+    public bool ErrorCheckingEnabled { get; set; } = true;
+
+    // Proofing — ignore rules
+    public bool ProofingIgnoreUppercase { get; set; } = true;
+    public bool ProofingIgnoreNumbers { get; set; } = true;
 
     // View
     public bool ShowFormulaBar { get; set; } = true;
@@ -155,6 +160,9 @@ public sealed class FreeXOptions
             SpellCheckCustomDictionaryWords = SpellCheckCustomDictionaryWords,
             AutoCalculate = AutoCalculate,
             UseR1C1ReferenceStyle = UseR1C1ReferenceStyle,
+            ErrorCheckingEnabled = ErrorCheckingEnabled,
+            ProofingIgnoreUppercase = ProofingIgnoreUppercase,
+            ProofingIgnoreNumbers = ProofingIgnoreNumbers,
             ShowFormulaBar = ShowFormulaBar,
             FormulaBarExpanded = FormulaBarExpanded,
             MoveSelectionAfterEnter = MoveSelectionAfterEnter,
@@ -202,6 +210,9 @@ public sealed class FreeXOptions
         SpellCheckCustomDictionaryWords = options.SpellCheckCustomDictionaryWords;
         AutoCalculate = options.AutoCalculate;
         UseR1C1ReferenceStyle = options.UseR1C1ReferenceStyle;
+        ErrorCheckingEnabled = options.ErrorCheckingEnabled;
+        ProofingIgnoreUppercase = options.ProofingIgnoreUppercase;
+        ProofingIgnoreNumbers = options.ProofingIgnoreNumbers;
         ShowFormulaBar = options.ShowFormulaBar;
         FormulaBarExpanded = options.FormulaBarExpanded;
         MoveSelectionAfterEnter = options.MoveSelectionAfterEnter;
