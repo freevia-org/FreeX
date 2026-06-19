@@ -24,6 +24,34 @@ public class EquationsTests
     }
 
     [Fact]
+    public void MathRun_Accent_DefaultsToHatAndCarriesBase()
+    {
+        var hat = MathRun.AccentOf("x");
+        hat.Kind.Should().Be(MathRunKind.Accent);
+        hat.Base.Should().Be("x");
+        hat.Accent.Should().Be("̂");
+        hat.LinearText.Should().Be("x̂");
+
+        // An explicit accent glyph (e.g. a vector arrow) is preserved; an empty glyph falls back to the hat.
+        MathRun.AccentOf("v", "→").Accent.Should().Be("→");
+        MathRun.AccentOf("v", "").Accent.Should().Be("̂");
+    }
+
+    [Fact]
+    public void MathRun_Bar_DefaultsToOverbarAndHonoursPosition()
+    {
+        var over = MathRun.BarOf("AB");
+        over.Kind.Should().Be(MathRunKind.Bar);
+        over.Base.Should().Be("AB");
+        over.BarTop.Should().BeTrue();
+        over.LinearText.Should().Be("‾AB‾");
+
+        var under = MathRun.BarOf("AB", top: false);
+        under.BarTop.Should().BeFalse();
+        under.LinearText.Should().Be("_AB_");
+    }
+
+    [Fact]
     public void MathMatrix_ReportsDimensions()
     {
         var matrix = new MathMatrix([["a", "b", "c"], ["d", "e", "f"]]);

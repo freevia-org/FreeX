@@ -175,6 +175,8 @@ internal static class FreeWRibbon
                         m.Item("freew.equation-integral", "Integral", "I");
                         m.Item("freew.equation-summation", "Summation", "U");
                         m.Item("freew.equation-product", "Product", "P");
+                        m.Item("freew.equation-accent", "Accent (Hat)", "A");
+                        m.Item("freew.equation-bar", "Overbar", "O");
                         m.Item("freew.equation-bracket", "Bracket", "B");
                         m.Item("freew.equation-matrix", "Matrix (2×2)", "M");
                     });

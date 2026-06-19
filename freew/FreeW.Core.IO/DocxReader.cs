@@ -1181,7 +1181,8 @@ public static class DocxReader
     /// <summary>
     /// Parses an inline OMML equation (m:oMath) into an <see cref="Equation"/>. Recognises m:r (plain
     /// text), m:sSup / m:sSub / m:sSubSup (scripts), m:f (fraction), m:rad (radical), m:nary (n-ary),
-    /// m:d (delimiter) and m:m (matrix); any other top-level child degrades to the plain text of its
+    /// m:acc (accent), m:bar (over/under-bar), m:d (delimiter) and m:m (matrix); any other top-level child
+    /// degrades to the plain text of its
     /// descendant m:t runs so nothing is lost or throws. Mirrors how the writer emits these (see
     /// <c>DocxWriter.BuildMathRun</c>).
     /// </summary>
@@ -1213,6 +1214,10 @@ public static class DocxReader
                 equation.Runs.Add(ReadRadical(child));
             else if (child.Name == M + "nary")
                 equation.Runs.Add(ReadNAry(child));
+            else if (child.Name == M + "acc")
+                equation.Runs.Add(ReadAccent(child));
+            else if (child.Name == M + "bar")
+                equation.Runs.Add(ReadBar(child));
             else if (child.Name == M + "d")
                 equation.Runs.Add(ReadDelimiter(child));
             else if (child.Name == M + "m")
@@ -1252,6 +1257,27 @@ public static class DocxReader
             MathTextOf(nary.Element(M + "sub")),
             MathTextOf(nary.Element(M + "sup")),
             MathTextOf(nary.Element(M + "e")));
+    }
+
+    /// <summary>
+    /// Reads an accent (m:acc): the accent glyph from m:accPr/m:chr (default a combining circumflex/hat)
+    /// and the accented base from m:e. Mirrors <c>DocxWriter.BuildAccent</c>.
+    /// </summary>
+    private static MathRun ReadAccent(XElement acc)
+    {
+        var chr = acc.Element(M + "accPr")?.Element(M + "chr")?.Attribute(M + "val")?.Value;
+        return MathRun.AccentOf(MathTextOf(acc.Element(M + "e")), string.IsNullOrEmpty(chr) ? "̂" : chr);
+    }
+
+    /// <summary>
+    /// Reads a bar (m:bar): m:barPr/m:pos "bot" is an underbar (top = false); anything else (including the
+    /// default "top" or an absent m:pos) is an overbar. The barred base comes from m:e. Mirrors
+    /// <c>DocxWriter.BuildBar</c>.
+    /// </summary>
+    private static MathRun ReadBar(XElement bar)
+    {
+        var pos = bar.Element(M + "barPr")?.Element(M + "pos")?.Attribute(M + "val")?.Value;
+        return MathRun.BarOf(MathTextOf(bar.Element(M + "e")), top: pos != "bot");
     }
 
     /// <summary>

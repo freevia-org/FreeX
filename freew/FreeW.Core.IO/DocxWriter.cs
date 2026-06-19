@@ -2310,7 +2310,8 @@ public static class DocxWriter
 
     /// <summary>
     /// Builds the OMML element for a single math fragment: m:sSup / m:sSub / m:sSubSup / m:f / m:rad /
-    /// m:nary / m:d / m:m, or a plain m:r for text. Mirrors the reader (see <c>DocxReader.ReadOMath</c>).
+    /// m:nary / m:acc / m:bar / m:d / m:m, or a plain m:r for text. Mirrors the reader (see
+    /// <c>DocxReader.ReadOMath</c>).
     /// </summary>
     private static XElement BuildMathRun(MathRun run) => run.Kind switch
     {
@@ -2329,6 +2330,8 @@ public static class DocxWriter
             new XElement(M + "den", MathText(run.Denominator))),
         MathRunKind.Radical => BuildRadical(run),
         MathRunKind.NAry => BuildNAry(run),
+        MathRunKind.Accent => BuildAccent(run),
+        MathRunKind.Bar => BuildBar(run),
         MathRunKind.Delimiter => BuildDelimiter(run),
         MathRunKind.Matrix => BuildMatrix(run.Matrix),
         _ => MathText(run.Text)
@@ -2369,6 +2372,31 @@ public static class DocxWriter
             new XElement(M + "sup", MathText(run.Sup)),
             new XElement(M + "e", MathText(run.Base)));
     }
+
+    /// <summary>
+    /// Builds an accent (m:acc): m:accPr/m:chr carries the accent glyph (hat/bar/vec/dot/tilde); the
+    /// accented base is the m:e element. The reader keys off m:accPr/m:chr to recover
+    /// <see cref="MathRun.Accent"/>. Mirrors <c>DocxReader.ReadAccent</c>.
+    /// </summary>
+    private static XElement BuildAccent(MathRun run)
+    {
+        var pr = new XElement(M + "accPr");
+        if (!string.IsNullOrEmpty(run.Accent))
+            pr.Add(new XElement(M + "chr", new XAttribute(M + "val", run.Accent)));
+        return new XElement(M + "acc",
+            pr,
+            new XElement(M + "e", MathText(run.Base)));
+    }
+
+    /// <summary>
+    /// Builds a bar (m:bar): m:barPr/m:pos carries "top" (overbar) or "bot" (underbar); the barred base
+    /// is the m:e element. Mirrors <c>DocxReader.ReadBar</c>.
+    /// </summary>
+    private static XElement BuildBar(MathRun run) =>
+        new(M + "bar",
+            new XElement(M + "barPr",
+                new XElement(M + "pos", new XAttribute(M + "val", run.BarTop ? "top" : "bot"))),
+            new XElement(M + "e", MathText(run.Base)));
 
     /// <summary>
     /// Builds a delimiter (m:d): m:dPr carries the begin/end glyphs (m:begChr / m:endChr); a single

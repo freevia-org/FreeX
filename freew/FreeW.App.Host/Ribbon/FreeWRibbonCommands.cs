@@ -261,6 +261,10 @@ internal static class FreeWRibbonCommands
             new Equation([MathRun.NAry("∑", "i=1", "n", "i")]))));
         registry.Register("freew.equation-product", new ActionCommand(() => InsertEquationPreset(editor,
             new Equation([MathRun.NAry("∏", "i=1", "n", "i")]))));
+        registry.Register("freew.equation-accent", new ActionCommand(() => InsertEquationPreset(editor,
+            new Equation([MathRun.AccentOf("x")]))));
+        registry.Register("freew.equation-bar", new ActionCommand(() => InsertEquationPreset(editor,
+            new Equation([MathRun.BarOf("x")]))));
         registry.Register("freew.equation-bracket", new ActionCommand(() => InsertEquationPreset(editor,
             new Equation([MathRun.Delimiter("a, b")]))));
         registry.Register("freew.equation-matrix", new ActionCommand(() => InsertEquationPreset(editor,
