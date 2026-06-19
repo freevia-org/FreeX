@@ -1,7 +1,7 @@
 #requires -Version 5.1
 <#
 .SYNOPSIS
-    Downloads the on-demand real-world XLSX fidelity corpus declared in fidelity-corpus/manifest.csv.
+    Downloads the on-demand real-world XLSX/XLS fidelity corpus declared in fidelity-corpus/manifest.csv.
 
 .DESCRIPTION
     The fidelity corpus is NOT part of the normal build/test/release flow. It backs the on-demand
@@ -18,11 +18,15 @@
 
 .PARAMETER ManifestPath
     Override the manifest path (defaults to fidelity-corpus/manifest.csv next to the repo root).
+
+.PARAMETER Source
+    Download only rows whose source column matches this value.
 #>
 [CmdletBinding()]
 param(
     [switch]$Force,
-    [string]$ManifestPath
+    [string]$ManifestPath,
+    [string]$Source
 )
 
 $ErrorActionPreference = 'Stop'
@@ -40,6 +44,9 @@ if (-not (Test-Path $filesDir)) {
 }
 
 $rows = Import-Csv -Path $ManifestPath
+if (-not [string]::IsNullOrWhiteSpace($Source)) {
+    $rows = @($rows | Where-Object { $_.source -eq $Source })
+}
 $downloaded = 0
 $skipped = 0
 $failed = 0
@@ -68,6 +75,10 @@ foreach ($row in $rows) {
     }
 
     try {
+        $targetDir = Split-Path -Parent $target
+        if (-not (Test-Path $targetDir)) {
+            New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
+        }
         Invoke-WebRequest -Uri $row.url -OutFile $target -UseBasicParsing -TimeoutSec 120
         $size = (Get-Item $target).Length
         if ($size -le 0) { throw "downloaded 0 bytes" }

@@ -47,17 +47,9 @@ internal static class RibbonAdaptiveTabProfiles
                     1320,
                     collapseGroups: ["Sparklines", "Filters", "Links", "Text", "Symbols", "Comments"])
             ],
-            RuntimeStates:
-            [
-                Runtime(900, "Charts", RibbonAdaptiveGroupState.Collapsed)
-            ],
-            RuntimeVisibility:
-            [
-                Runtime(900, "Charts", RibbonAdaptiveGroupState.Collapsed)
-            ],
             ProtectedGroups:
             [
-                Protected(double.PositiveInfinity, ["Tables"])
+                Protected(double.PositiveInfinity, ["Tables", "Charts"])
             ],
             RequiresMeasuredCorrection: true),
         new(

@@ -66,6 +66,16 @@ public sealed class RibbonGroupHost : ContentControl
             if (_collapsed == value)
                 return;
             _collapsed = value;
+            if (value)
+            {
+                Width = CollapsedWidth;
+                MinWidth = CollapsedWidth;
+            }
+            else
+            {
+                ClearValue(WidthProperty);
+                ClearValue(MinWidthProperty);
+            }
             Content = value ? (_collapsedButton ??= BuildCollapsedButton()) : _full;
         }
     }
@@ -143,7 +153,7 @@ public sealed class RibbonGroupHost : ContentControl
             popup.IsOpen = true;
         };
 
-        var container = new Grid();
+        var container = new Grid { Width = CollapsedWidth, MinWidth = CollapsedWidth };
         container.Children.Add(button);
         container.Children.Add(popup);
         return container;
@@ -151,7 +161,7 @@ public sealed class RibbonGroupHost : ContentControl
 
     private static FrameworkElement Wrap(FrameworkElement element)
     {
-        var grid = new Grid();
+        var grid = new Grid { Width = CollapsedWidth, MinWidth = CollapsedWidth };
         grid.Children.Add(element);
         return grid;
     }

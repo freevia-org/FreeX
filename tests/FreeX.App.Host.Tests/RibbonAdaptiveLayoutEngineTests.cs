@@ -137,7 +137,7 @@ public sealed class RibbonAdaptiveLayoutEngineTests
     }
 
     [Fact]
-    public void Plan_AppliesInsertRuntimeVisibilityStateBeforeMeasuringPlannedWidth()
+    public void Plan_KeepsInsertChartsVisibleAtNormalNarrowWidths()
     {
         var groups = new[]
         {
@@ -150,7 +150,7 @@ public sealed class RibbonAdaptiveLayoutEngineTests
 
         layout.States[Array.IndexOf(groups.Select(group => group.Name).ToArray(), "Charts")]
             .Should()
-            .Be(RibbonAdaptiveGroupState.Collapsed);
+            .NotBe(RibbonAdaptiveGroupState.Collapsed);
         layout.PlannedWidth.Should().BeLessThanOrEqualTo(900);
         layout.RequiresMeasuredCorrection.Should().BeTrue();
     }
@@ -173,20 +173,20 @@ public sealed class RibbonAdaptiveLayoutEngineTests
     }
 
     [Fact]
-    public void Plan_ExpandsProtectedInsertTablesByCollapsingLowerPriorityGroups()
+    public void Plan_ExpandsProtectedInsertTablesAndChartsByCollapsingLowerPriorityGroups()
     {
         var groups = new[]
         {
             new RibbonAdaptiveGroup("Tables", 320, 100, 60, 40),
-            new RibbonAdaptiveGroup("Sparklines", 420, 100, 70, 40),
-            new RibbonAdaptiveGroup("Charts", 150, 100, 70, 40)
+            new RibbonAdaptiveGroup("Charts", 150, 100, 70, 40),
+            new RibbonAdaptiveGroup("Sparklines", 420, 100, 70, 40)
         };
 
         var layout = RibbonAdaptiveLayoutEngine.Plan(780, groups, fixedChromeWidth: 0, selectedTabHeader: "Insert");
 
         layout.States[0].Should().Be(RibbonAdaptiveGroupState.Full);
-        layout.States[1].Should().NotBe(RibbonAdaptiveGroupState.Full);
-        layout.States[2].Should().Be(RibbonAdaptiveGroupState.Collapsed);
+        layout.States[1].Should().Be(RibbonAdaptiveGroupState.Full);
+        layout.States[2].Should().NotBe(RibbonAdaptiveGroupState.Full);
         layout.PlannedWidth.Should().BeLessThanOrEqualTo(780);
     }
 
@@ -214,7 +214,7 @@ public sealed class RibbonAdaptiveLayoutEngineTests
             .Contain(430);
         RibbonAdaptiveLayoutEngine.BuildResizeThresholds(insertGroups, fixedChromeWidth: 20)
             .Should()
-            .Contain(900);
+            .Contain(910);
     }
 
     [Fact]
