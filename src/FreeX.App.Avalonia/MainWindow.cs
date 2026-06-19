@@ -333,6 +333,7 @@ public sealed partial class MainWindow : Window
     private readonly WorkbookSaveService _saveService = new();
     private readonly IWorkbookShareSheetService _workbookShareSheetService;
     private readonly IWorkbookFileAccessService _workbookFileAccessService;
+    private readonly IPlatformPrinter _platformPrinter;
     private readonly RecentFilesStore _recentFiles = RecentFilesStore.Load();
     private readonly ContentControl _sheetGridHost = new();
     private readonly ContentControl _sheetTabsHost = new();
@@ -412,6 +413,7 @@ public sealed partial class MainWindow : Window
     private readonly NativeMenuItem _saveMenuItem = new();
     private readonly NativeMenuItem _saveAsMenuItem = new();
     private readonly NativeMenuItem _exportPdfMenuItem = new();
+    private readonly NativeMenuItem _printMenuItem = new();
     private readonly NativeMenuItem _backstageExportMenuItem = new();
     private readonly NativeMenuItem _backstageInfoMenuItem = new();
     private readonly NativeMenuItem _backstageAccountMenuItem = new();
@@ -586,20 +588,24 @@ public sealed partial class MainWindow : Window
         : this(
             startupArguments,
             WorkbookShareSheetServiceFactory.Create(WorkbookShareSheetLabel),
-            WorkbookFileAccessServiceFactory.Create(App.Diagnostics))
+            WorkbookFileAccessServiceFactory.Create(App.Diagnostics),
+            new CupsPlatformPrinter())
     {
     }
 
     internal MainWindow(
         IReadOnlyList<string> startupArguments,
         IWorkbookShareSheetService workbookShareSheetService,
-        IWorkbookFileAccessService workbookFileAccessService)
+        IWorkbookFileAccessService workbookFileAccessService,
+        IPlatformPrinter platformPrinter)
     {
         ArgumentNullException.ThrowIfNull(workbookShareSheetService);
         ArgumentNullException.ThrowIfNull(workbookFileAccessService);
+        ArgumentNullException.ThrowIfNull(platformPrinter);
 
         _workbookShareSheetService = workbookShareSheetService;
         _workbookFileAccessService = workbookFileAccessService;
+        _platformPrinter = platformPrinter;
         var source = new StartupWorkbookLoader().Load(startupArguments);
         _session = _sessionFactory.Create(source, InitialViewportHeight, InitialViewportWidth, includeObjects: true);
 
@@ -1330,11 +1336,15 @@ public sealed partial class MainWindow : Window
         _exportPdfMenuItem.Header = "Export to PDF...";
         _exportPdfMenuItem.Click += async (_, _) => await ExportActiveSheetPdfAsync();
 
+        _printMenuItem.Header = UiText.Get("Print_MenuItem");
+        _printMenuItem.Gesture = new KeyGesture(Key.P, KeyModifiers.Meta);
+        _printMenuItem.Click += async (_, _) => await ShowPrintDialogAsync();
+
         _pageSetupMenuItem.Header = "Page Setup...";
         _pageSetupMenuItem.Click += async (_, _) => await ShowPageSetupDialogAsync();
 
         _printPreviewMenuItem.Header = "Print Preview...";
-        _printPreviewMenuItem.Gesture = new KeyGesture(Key.P, KeyModifiers.Meta);
+        _printPreviewMenuItem.Gesture = new KeyGesture(Key.P, KeyModifiers.Meta | KeyModifiers.Shift);
         _printPreviewMenuItem.Click += async (_, _) => await ShowPrintPreviewDialogAsync();
 
         _shareWorkbookMenuItem.Header = "Share Workbook...";
@@ -1836,6 +1846,7 @@ public sealed partial class MainWindow : Window
         fileMenu.Items.Add(_saveMenuItem);
         fileMenu.Items.Add(_saveAsMenuItem);
         fileMenu.Items.Add(_exportPdfMenuItem);
+        fileMenu.Items.Add(_printMenuItem);
         fileMenu.Items.Add(_backstageExportMenuItem);
         fileMenu.Items.Add(_shareWorkbookMenuItem);
         fileMenu.Items.Add(_workbookStatisticsMenuItem);
@@ -2686,6 +2697,7 @@ public sealed partial class MainWindow : Window
         _saveMenuItem.IsEnabled = _saveButton.IsEnabled;
         _saveAsMenuItem.IsEnabled = _saveAsButton.IsEnabled;
         _exportPdfMenuItem.IsEnabled = isIdle && StorageProvider.CanSave;
+        _printMenuItem.IsEnabled = isIdle;
         _backstageExportMenuItem.IsEnabled = isIdle && StorageProvider.CanSave;
         _shareWorkbookMenuItem.IsEnabled = isIdle;
         _workbookStatisticsMenuItem.IsEnabled = isIdle;
@@ -15076,6 +15088,16 @@ public sealed partial class MainWindow : Window
         {
             e.Handled = true;
             await CloseWorkbookAsync();
+        }
+        else if (e.Key == Key.P && HasOnlyCommandModifier(e.KeyModifiers))
+        {
+            e.Handled = true;
+            await ShowPrintDialogAsync();
+        }
+        else if (e.Key == Key.P && HasCommandAndShiftModifiers(e.KeyModifiers))
+        {
+            e.Handled = true;
+            await ShowPrintPreviewDialogAsync();
         }
         else if (e.Key == Key.O)
         {
