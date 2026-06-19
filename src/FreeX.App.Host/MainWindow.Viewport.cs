@@ -12,6 +12,10 @@ public partial class MainWindow
 {
     private void Scroll_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
+        // Scrolling the grid moves the column header the AutoFilter flyout is anchored to without
+        // changing window activation, so dismiss the flyout here (its own deactivation handler covers
+        // click-away cases). Scrolling within the flyout's own list does not raise this event.
+        CloseAutoFilterDropdown();
         UpdateViewport();
         BroadcastScrollOffsetToSideBySidePartner();
     }
