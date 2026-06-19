@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using ClosedXML.Excel;
 using FreeX.Core.Model;
 
@@ -28,14 +29,25 @@ internal static class XlsxClosedXmlCellMapper
 
     public static ScalarValue MapFormulaValue(IXLCell xlCell)
     {
+        ScalarValue value;
         try
         {
-            return MapValue(xlCell);
+            value = MapValue(xlCell);
         }
         catch (NotImplementedException ex) when (ShouldUseCachedExternalFormulaValue(xlCell, ex))
         {
-            return MapValue(xlCell.CachedValue);
+            value = MapValue(xlCell.CachedValue);
         }
+
+        // ClosedXML resolves the OOXML _xHHHH_ escaping when reading shared strings, but NOT when reading
+        // the cached <v> of a string-valued formula (t="str"). Excel and ClosedXML write characters that
+        // cannot be emitted literally there — notably astral-plane characters such as emoji, one _xHHHH_
+        // per UTF-16 code unit — so without this the literal escape leaks into the cell value on a full
+        // rebuild (e.g. "🎉" surfaces as "_xD83C__xDF89_"). Decode here, scoped to the formula-cached path,
+        // so an already-decoded shared string is never decoded a second time.
+        return value is TextValue text
+            ? new TextValue(DecodeXmlEscapedText(text.Value))
+            : value;
     }
 
     public static string NormalizeFormulaText(string formulaText)
@@ -79,6 +91,25 @@ internal static class XlsxClosedXmlCellMapper
         }
         if (xlValue.IsError) return MapErrorValue(xlValue.GetError());
         return new TextValue(xlValue.ToString());
+    }
+
+    private static readonly Regex XmlEscapedCodeUnitRegex =
+        new("_x([0-9A-Fa-f]{4})_", RegexOptions.Compiled);
+
+    // Reverses the OOXML _xHHHH_ escaping (one entry per UTF-16 code unit). This mirrors ClosedXML's own
+    // XmlEncoder.DecodeString and is the exact inverse of the encoder that produced the cached value:
+    // decoding matches left-to-right preserves genuine text, because the encoder guards a literal "_xHHHH_"
+    // run by escaping its leading underscore as _x005F_. So "_x0041_" is stored as "_x005F_x0041_" and
+    // decodes back to "_x0041_" ("_" + the now-unmatched "x0041_") rather than collapsing to "A". Adjacent
+    // decoded surrogate halves recombine naturally into their code point in the resulting UTF-16 string.
+    private static string DecodeXmlEscapedText(string text)
+    {
+        if (text.IndexOf("_x", StringComparison.Ordinal) < 0)
+            return text;
+
+        return XmlEscapedCodeUnitRegex.Replace(
+            text,
+            static match => ((char)Convert.ToInt32(match.Groups[1].Value, 16)).ToString());
     }
 
     public static XLCellValue MapValueInverse(ScalarValue value) => value switch
