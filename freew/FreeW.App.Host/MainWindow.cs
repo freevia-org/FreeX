@@ -44,6 +44,14 @@ public sealed class MainWindow : Window
     private ListBox _navList = null!;
     private bool _navPaneVisible;
 
+    // Reveal Formatting pane (Word's Shift+F1): a read-only side pane, docked on the right (Word's side),
+    // that mirrors the effective FONT / PARAGRAPH / SECTION formatting of the current selection. It updates
+    // on SelectionChanged from the pure FreeW.Core.Model.RevealFormatting describer, so the pane never
+    // touches the model and cannot interfere with editing. Mirrors the navigation pane's dock/toggle shape.
+    private Border _revealPane = null!;
+    private StackPanel _revealContent = null!;
+    private bool _revealPaneVisible;
+
     // Navigation-pane search (the box at the top of the pane). Typing finds every occurrence of the term
     // in the document body; the result label shows the count and Next/Prev step through the matches,
     // jumping each into view in the editor. The heading outline below is filtered to entries that either
@@ -94,6 +102,7 @@ public sealed class MainWindow : Window
     private int _lastRibbonTabIndex = 1;
     private bool _suppressFileTabRevert;
     private Border _status = null!;
+    private Border _markedAsFinalBanner = null!;
     private TextBlock _dataFolderText = null!;
     private FrameworkElement _dataFolderItem = null!;
     private FrameworkElement _viewSwitchItem = null!;
@@ -115,6 +124,7 @@ public sealed class MainWindow : Window
     private Visibility _hRulerVisibilityBeforeOutline;
     private Visibility _vRulerVisibilityBeforeOutline;
     private bool _navPaneVisibleBeforeReadMode;
+    private bool _revealPaneVisibleBeforeReadMode;
     private Thickness _editorMarginBeforeReadMode;
     private double _editorMaxWidthBeforeReadMode = double.PositiveInfinity;
     private HorizontalAlignment _editorAlignmentBeforeReadMode = HorizontalAlignment.Stretch;
@@ -174,6 +184,9 @@ public sealed class MainWindow : Window
 
         var editor = new DocumentView { Margin = new Thickness(40, 24, 40, 24) };
         _editor = editor;
+        // Push the persisted AutoCorrect / AutoFormat-As-You-Type settings so the editor's as-you-type
+        // rules honour the user's toggles from the first keystroke (re-applied when Options is saved).
+        ApplyAutoFormatOptions();
         editor.LoadModel(CreateSampleDocument());
         var stateStore = new RibbonStateStore();
         _stateStore = stateStore;
@@ -184,7 +197,9 @@ public sealed class MainWindow : Window
             onWebLayout: () => SetViewMode(DocumentViewMode.WebLayout),
             isWebLayoutActive: () => !_outlineMode && _editor.ViewMode == DocumentViewMode.WebLayout,
             onDraftView: () => SetViewMode(DocumentViewMode.Draft),
-            isDraftViewActive: () => !_outlineMode && _editor.ViewMode == DocumentViewMode.Draft);
+            isDraftViewActive: () => !_outlineMode && _editor.ViewMode == DocumentViewMode.Draft,
+            onToggleRevealFormatting: ToggleRevealFormatting,
+            isRevealFormattingVisible: () => _revealPaneVisible);
         _file = new FileCommands(this, editor, UpdateTitle, _options);
         editor.TextChanged += (_, _) => { _file.MarkDirty(); UpdateCounts(); RefreshOutline(); RefreshContextualTabs(); };
         // Live selection stats: when the caret/selection moves, refresh the status-bar counts so a
@@ -227,6 +242,12 @@ public sealed class MainWindow : Window
         var navPane = BuildNavPane();
         DockPanel.SetDock(navPane, Dock.Left);
         body.Children.Add(navPane);
+
+        // Reveal Formatting pane docks on the RIGHT (Word's side for the Shift+F1 pane), opposite the
+        // left navigation pane. Added before the fill child so the DockPanel reserves its edge first.
+        var revealPane = BuildRevealPane();
+        DockPanel.SetDock(revealPane, Dock.Right);
+        body.Children.Add(revealPane);
 
         // Grey "workspace" behind the editor so the Print-Layout page reads as a white sheet floating on a
         // desk. The editor sizes/centres itself to the page width in Print-Layout mode (see
@@ -271,10 +292,30 @@ public sealed class MainWindow : Window
         var contentHost = new Grid();
         contentHost.Children.Add(_workspace);
         contentHost.Children.Add(_outlineView);
+
+        // "Marked as Final" banner (Word's advisory read-only bar): a subtle amber strip docked above the
+        // editing surface, with an "Edit Anyway" button that clears the flag. Collapsed until the document
+        // is marked final; kept in sync via the editor's ProtectionStateChanged event.
+        _markedAsFinalBanner = BuildMarkedAsFinalBanner();
+        DockPanel.SetDock(_markedAsFinalBanner, Dock.Top);
+        body.Children.Add(_markedAsFinalBanner);
+
         body.Children.Add(contentHost);
+
+        // Keep the banner and the Protect-group ribbon toggles in sync with the editor's protection /
+        // Mark-as-Final state, however it changes (ribbon command, load, or "Edit Anyway").
+        editor.ProtectionStateChanged += (_, _) =>
+        {
+            RefreshMarkedAsFinalBanner();
+            _stateStore.SetChecked("freew.mark-as-final", _editor.IsMarkedAsFinal);
+            _stateStore.SetChecked("freew.restrict-editing", _editor.IsProtected);
+        };
 
         // Keep the indent/tab markers on the horizontal ruler following the caret/selection.
         editor.SelectionChanged += (_, _) => _hRuler.Refresh();
+
+        // Keep the Reveal Formatting pane (when shown) reflecting the caret's current formatting.
+        editor.SelectionChanged += (_, _) => RefreshRevealFormatting();
 
         CommandBindings.Add(new CommandBinding(ApplicationCommands.New, (_, _) => _file.New()));
         CommandBindings.Add(new CommandBinding(ApplicationCommands.Open, (_, _) => _file.Open()));
@@ -292,6 +333,11 @@ public sealed class MainWindow : Window
         var pastePlain = new RoutedUICommand("Paste Text Only", "PastePlain", typeof(MainWindow));
         CommandBindings.Add(new CommandBinding(pastePlain, (_, _) => _editor.PastePlainText()));
         InputBindings.Add(new KeyBinding(pastePlain, new KeyGesture(Key.V, ModifierKeys.Control | ModifierKeys.Shift)));
+
+        // Shift+F1: toggle the Reveal Formatting pane (Word's keyboard shortcut for the Shift+F1 pane).
+        var revealFormatting = new RoutedUICommand("Reveal Formatting", "RevealFormatting", typeof(MainWindow));
+        CommandBindings.Add(new CommandBinding(revealFormatting, (_, _) => ToggleRevealFormatting()));
+        InputBindings.Add(new KeyBinding(revealFormatting, new KeyGesture(Key.F1, ModifierKeys.Shift)));
 
         UpdateTitle();
         UpdateCounts();
@@ -464,6 +510,48 @@ public sealed class MainWindow : Window
     // is allowed to condense/ellipsize as the window narrows, while the right-side view + zoom controls are
     // pinned in Auto columns so they stay fully visible. The whole strip uses the same #2B579A surface as the
     // title bar with the shared clean (flat, hover-only) footer button styles.
+    // Word's "Marked as Final" advisory bar: a subtle amber strip above the editing surface with the
+    // information text and an "Edit Anyway" button that clears the flag (re-enabling editing). Collapsed
+    // until the document is marked final; see RefreshMarkedAsFinalBanner.
+    private Border BuildMarkedAsFinalBanner()
+    {
+        var text = new TextBlock
+        {
+            Text = "Marked as Final  An author has marked this document as final to discourage editing.",
+            Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x4D, 0x00)),
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            Margin = new Thickness(0, 0, 12, 0)
+        };
+
+        var editAnyway = new Button
+        {
+            Content = "Edit Anyway",
+            MinWidth = 96,
+            Padding = new Thickness(8, 2, 8, 2),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        editAnyway.Click += (_, _) => _editor.SetMarkedAsFinal(false);
+
+        var row = new DockPanel { LastChildFill = true, Margin = new Thickness(12, 4, 12, 4) };
+        DockPanel.SetDock(editAnyway, Dock.Right);
+        row.Children.Add(editAnyway);
+        row.Children.Add(text);
+
+        return new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(0xFD, 0xF3, 0xD0)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xE3, 0xC8, 0x70)),
+            BorderThickness = new Thickness(0, 0, 0, 1),
+            Visibility = Visibility.Collapsed,
+            Child = row
+        };
+    }
+
+    // Show the "Marked as Final" banner only while the document carries Word's advisory read-only flag.
+    private void RefreshMarkedAsFinalBanner() =>
+        _markedAsFinalBanner.Visibility = _editor.IsMarkedAsFinal ? Visibility.Visible : Visibility.Collapsed;
+
     private Border BuildStatusBar()
     {
         var grid = new Grid { VerticalAlignment = VerticalAlignment.Center, ClipToBounds = true };
@@ -765,6 +853,93 @@ public sealed class MainWindow : Window
             RefreshOutline();
     }
 
+    // The Reveal Formatting pane: a header plus a scrollable, read-only list of the FONT / PARAGRAPH /
+    // SECTION formatting in effect at the caret. Collapsed by default; ToggleRevealFormatting shows/hides
+    // it. The content is rebuilt on every selection change from the pure RevealFormatting describer (see
+    // RefreshRevealFormatting), so the pane never touches the model. Mirrors BuildNavPane's dock/chrome.
+    private UIElement BuildRevealPane()
+    {
+        var header = new TextBlock
+        {
+            Text = "Reveal Formatting",
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(10, 8, 10, 6)
+        };
+
+        _revealContent = new StackPanel { Margin = new Thickness(10, 0, 10, 8) };
+        var scroll = new ScrollViewer
+        {
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Content = _revealContent
+        };
+
+        var layout = new DockPanel { Width = 240 };
+        DockPanel.SetDock(header, Dock.Top);
+        layout.Children.Add(header);
+        layout.Children.Add(scroll);
+
+        _revealPane = new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(0xFA, 0xFA, 0xFA)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xD0, 0xD0, 0xD0)),
+            BorderThickness = new Thickness(1, 0, 0, 0),
+            Visibility = Visibility.Collapsed,
+            Child = layout
+        };
+        return _revealPane;
+    }
+
+    // Show/hide the Reveal Formatting pane and keep the View > Reveal Formatting toggle button in sync.
+    // Rebuilds the pane's content when it appears so it shows the current selection immediately.
+    private void ToggleRevealFormatting()
+    {
+        _revealPaneVisible = !_revealPaneVisible;
+        _revealPane.Visibility = _revealPaneVisible ? Visibility.Visible : Visibility.Collapsed;
+        _stateStore.SetChecked("freew.reveal-formatting", _revealPaneVisible);
+        if (_revealPaneVisible)
+            RefreshRevealFormatting();
+    }
+
+    // Rebuild the Reveal Formatting pane from the effective formatting at the caret (run + paragraph +
+    // section), via the pure RevealFormatting describer. No-op when the pane is hidden, so selection
+    // churn while the pane is closed costs nothing. Read-only: never commits or mutates the model.
+    private void RefreshRevealFormatting()
+    {
+        if (_revealContent is null || !_revealPaneVisible)
+            return;
+
+        var sections = RevealFormatting.Describe(
+            _editor.CurrentRunFormatting, _editor.CurrentParagraphFormatting, _editor.Model.Page);
+
+        _revealContent.Children.Clear();
+        foreach (var section in sections)
+        {
+            _revealContent.Children.Add(new TextBlock
+            {
+                Text = section.Heading,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x17, 0x32, 0x4D)),
+                Margin = new Thickness(0, 10, 0, 4)
+            });
+
+            foreach (var item in section.Items)
+            {
+                _revealContent.Children.Add(new TextBlock
+                {
+                    Text = item.Label,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0x60, 0x60, 0x60)),
+                    Margin = new Thickness(0, 4, 0, 0)
+                });
+                _revealContent.Children.Add(new TextBlock
+                {
+                    Text = item.Value,
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(8, 0, 0, 2)
+                });
+            }
+        }
+    }
+
     // Read mode (distraction-free view): hide the ribbon, title bar, navigation pane, and the status
     // bar's non-essential extras (data folder + zoom), then constrain the editor to a centered, roomy
     // reading column. Toggling off restores every hidden element to exactly what it was before (including
@@ -793,6 +968,10 @@ public sealed class MainWindow : Window
             // Collapse the navigation pane while reading (without disturbing its remembered state).
             _navPane.Visibility = Visibility.Collapsed;
 
+            // Likewise hide the Reveal Formatting pane while reading (its remembered state is untouched).
+            _revealPaneVisibleBeforeReadMode = _revealPaneVisible;
+            _revealPane.Visibility = Visibility.Collapsed;
+
             // A centered, comfortable reading column: cap the width and add generous breathing room.
             // Drop any Print-Layout page sizing/shadow so the reading column owns the surface width.
             _editor.HorizontalAlignment = HorizontalAlignment.Center;
@@ -818,6 +997,9 @@ public sealed class MainWindow : Window
 
             // Restore the navigation pane to whatever it was before entering read mode.
             _navPane.Visibility = _navPaneVisibleBeforeReadMode ? Visibility.Visible : Visibility.Collapsed;
+
+            // Restore the Reveal Formatting pane to whatever it was before entering read mode.
+            _revealPane.Visibility = _revealPaneVisibleBeforeReadMode ? Visibility.Visible : Visibility.Collapsed;
         }
 
         _stateStore.SetChecked("freew.read-mode", _readMode);
@@ -1239,10 +1421,21 @@ public sealed class MainWindow : Window
         _options.RecentFilesCap = edited.RecentFilesCap;
         _options.DefaultSaveFormat = edited.DefaultSaveFormat;
         _options.UiLanguage = edited.UiLanguage;
+        _options.AutoCorrectEnabled = edited.AutoCorrectEnabled;
+        _options.AutoFormat = edited.AutoFormat;
         _options.Normalize();
+        ApplyAutoFormatOptions();
 
         if (!_optionsStore.Save(_options))
             DialogMessageHelper.ShowError(this, _optionsStore.LastError, "FreeW Options");
+    }
+
+    // Push the persisted AutoCorrect master switch + per-rule AutoFormat toggles onto the live editor so the
+    // as-you-type rules honour the user's settings immediately (called at construction and after Options OK).
+    private void ApplyAutoFormatOptions()
+    {
+        _editor.AutoCorrectEnabled = _options.AutoCorrectEnabled;
+        _editor.AutoFormatOptions = _options.AutoFormat ?? AutoFormatOptions.Default;
     }
 
     // Shows that AppProduct = "FreeW" routes the shared storage helpers to FreeW's own folder.

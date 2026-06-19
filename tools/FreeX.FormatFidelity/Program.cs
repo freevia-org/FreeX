@@ -62,6 +62,7 @@ internal static class Program
         var chains = Chains.Phase0(sourcePath);
         chains.AddRange(Chains.Phase2(sourcePath));
         chains.AddRange(Chains.Phase3(sourcePath));
+        chains.AddRange(Chains.Phase4(sourcePath));
         if (chainFilter is not null)
             chains = chains.Where(c => c.Name.Contains(chainFilter, StringComparison.OrdinalIgnoreCase)).ToList();
 

@@ -108,6 +108,7 @@ internal static class FreeWRibbonIcons
             ["freew.table-banded-rows"] = RibbonCommandIconKind.Table,
             ["freew.table-repeat-header"] = RibbonCommandIconKind.Table,
             ["freew.table-formula"] = RibbonCommandIconKind.Sum,
+            ["freew.table-properties"] = RibbonCommandIconKind.Table,
 
             // Insert: illustrations
             ["freew.picture"] = RibbonCommandIconKind.Picture,
@@ -193,8 +194,11 @@ internal static class FreeWRibbonIcons
 
             // Layout: page setup
             ["freew.margins"] = RibbonCommandIconKind.Margins,
+            ["freew.custom-margins"] = RibbonCommandIconKind.Margins,
             ["freew.orientation"] = RibbonCommandIconKind.Orientation,
             ["freew.size"] = RibbonCommandIconKind.OnePage,
+            ["freew.more-paper-sizes"] = RibbonCommandIconKind.OnePage,
+            ["freew.page-setup"] = RibbonCommandIconKind.Margins,
             ["freew.columns"] = RibbonCommandIconKind.TextColumns,
             ["freew.line-numbers"] = RibbonCommandIconKind.Number,
             ["freew.hyphenation"] = RibbonCommandIconKind.Hyphenation,
@@ -225,6 +229,7 @@ internal static class FreeWRibbonIcons
             ["freew.print-layout"] = RibbonCommandIconKind.PrintLayout,
             ["freew.nav-pane"] = RibbonCommandIconKind.NavigationPane,
             ["freew.formatting-marks"] = RibbonCommandIconKind.FormattingMarks,
+            ["freew.reveal-formatting"] = RibbonCommandIconKind.Info,
             ["freew.read-mode"] = RibbonCommandIconKind.ReadMode,
             ["freew.web-layout"] = RibbonCommandIconKind.WebLayout,
             ["freew.draft-view"] = RibbonCommandIconKind.Draft,
@@ -248,6 +253,7 @@ internal static class FreeWRibbonIcons
             ["freew.track-changes"] = RibbonCommandIconKind.History,
             ["freew.accept-all"] = RibbonCommandIconKind.AcceptChange,
             ["freew.reject-all"] = RibbonCommandIconKind.RejectChange,
+            ["freew.mark-as-final"] = RibbonCommandIconKind.Protect,
             ["freew.restrict-editing"] = RibbonCommandIconKind.Protect,
             ["freew.compare"] = RibbonCommandIconKind.Compare,
             ["freew.inspect-document"] = RibbonCommandIconKind.Search,

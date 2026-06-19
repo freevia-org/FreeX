@@ -131,6 +131,7 @@ internal static class FreeWRibbon
                     g.Icon("freew.table-banded-rows", "Banded Rows", RibbonCommandIconKind.Table, RibbonCommandIconAccent.Green);
                     g.Icon("freew.table-repeat-header", "Repeat Header", RibbonCommandIconKind.Table, RibbonCommandIconAccent.Green);
                     g.Icon("freew.table-formula", "Formula", RibbonCommandIconKind.Sum, RibbonCommandIconAccent.Green);
+                    g.Icon("freew.table-properties", "Table Properties", RibbonCommandIconKind.Table, RibbonCommandIconAccent.Green);
                 });
                 tab.Group("illustrations", "Illustrations", "I", 80, g =>
                 {
@@ -255,11 +256,23 @@ internal static class FreeWRibbon
                 tab.Group("page-setup", "Page Setup", "P", 100, g =>
                 {
                     // Margins is the hero; the remaining page-setup dropdowns read as labelled Medium rows.
-                    g.Large("freew.margins", "Margins", RibbonCommandIconKind.Margins, dropdown: true);
+                    // Margins / Size carry a menu with the "Custom Margins…" / "More Paper Sizes…" launchers that
+                    // open the unified Page Setup dialog (on the Margins / Paper tab).
+                    g.Large("freew.margins", "Margins", RibbonCommandIconKind.Margins, "M", menu: m =>
+                    {
+                        m.Item("freew.margins", "Normal / Narrow (toggle)", "N");
+                        m.Item("freew.custom-margins", "Custom Margins…", "A");
+                    });
                     g.Medium("freew.orientation", "Orientation", RibbonCommandIconKind.Orientation, dropdown: true);
-                    g.Medium("freew.size", "Size", RibbonCommandIconKind.OnePage, dropdown: true);
+                    g.Medium("freew.size", "Size", RibbonCommandIconKind.OnePage, "Z", menu: m =>
+                    {
+                        m.Item("freew.size", "Letter / A4 (toggle)", "L");
+                        m.Item("freew.more-paper-sizes", "More Paper Sizes…", "M");
+                    });
                     g.Medium("freew.columns", "Columns", RibbonCommandIconKind.TextColumns, dropdown: true);
                     g.RowBreak();
+                    // Page Setup launcher: the unified Margins / Paper / Layout dialog (Word's group launcher).
+                    g.Icon("freew.page-setup", "Page Setup", RibbonCommandIconKind.Margins, "G");
                     g.Icon("freew.line-numbers", "Line Numbers", RibbonCommandIconKind.Number);
                     // Hyphenation dropdown (Word's Layout > Page Setup > Hyphenation): None / Automatic /
                     // Manual, plus the Hyphenation Options… dialog. The mode items set the document flag; the
@@ -328,6 +341,7 @@ internal static class FreeWRibbon
                 {
                     g.MediumToggle("freew.nav-pane", "Navigation Pane", RibbonCommandIconKind.NavigationPane);
                     g.MediumToggle("freew.formatting-marks", "Show ¶", RibbonCommandIconKind.FormattingMarks);
+                    g.MediumToggle("freew.reveal-formatting", "Reveal Formatting", RibbonCommandIconKind.Info);
                 });
                 // Zoom group → Word's View > Zoom hero, opening the Zoom dialog (presets / page fits / custom %).
                 tab.Group("zoom", "Zoom", "Z", 80, g => g.Large("freew.zoom-dialog", "Zoom", RibbonCommandIconKind.Zoom));
@@ -384,9 +398,11 @@ internal static class FreeWRibbon
                     g.Medium("freew.accept-all", "Accept All", RibbonCommandIconKind.AcceptChange);
                     g.Medium("freew.reject-all", "Reject All", RibbonCommandIconKind.RejectChange);
                 });
-                // Single-command group → labelled Medium toggle (Word shows Restrict Editing labelled).
+                // Protect group: Word's Mark as Final (advisory read-only toggle) + Restrict Editing
+                // (opens the restrict-editing pane; the toggle reflects whether protection is enforced).
                 tab.Group("protect", "Protect", "T", 85, g =>
                 {
+                    g.MediumToggle("freew.mark-as-final", "Mark as Final", RibbonCommandIconKind.Protect);
                     g.MediumToggle("freew.restrict-editing", "Restrict Editing", RibbonCommandIconKind.Protect);
                 });
                 // Single-command group → Large.
@@ -447,6 +463,8 @@ internal static class FreeWRibbon
                 });
                 tab.Group("table-data", "Data", "D", 70, g =>
                     g.Large("freew.table-formula", "Formula", RibbonCommandIconKind.Sum, accent: RibbonCommandIconAccent.Green));
+                tab.Group("table-properties", "Properties", "P", 60, g =>
+                    g.Large("freew.table-properties", "Properties", RibbonCommandIconKind.Table, accent: RibbonCommandIconAccent.Green));
             })
             .Build();
     }

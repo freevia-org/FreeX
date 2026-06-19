@@ -122,6 +122,12 @@ internal static partial class XlsxWorksheetDrawingPartReader
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
         var relationshipTargets = ReadRelationshipTargetsById(drawingRelsXml.Root, packageRelNs);
 
+        // A single chart part referenced by more than one anchor in the same worksheet drawing is one
+        // chart, not several: count each resolved chart-part path at most once so a drawing that ends up
+        // with duplicate graphicFrames pointing at the same chart (e.g. a source-package anchor merged on
+        // top of a freshly-written one) does not load — and re-save — the chart twice.
+        var seenChartPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         foreach (var chartElement in drawingXml.Descendants().Where(element => element.Name == chartNs + "chart" || element.Name == chartExNs + "chart"))
         {
             var chartRelId = chartElement.Attribute(relNs + "id")?.Value;
@@ -132,6 +138,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
                 continue;
 
             var chartPath = XlsxPackagePath.ResolveRelationshipTarget(drawingPath, chartTarget);
+            if (!seenChartPaths.Add(chartPath))
+                continue;
             var chartEntry = archive.GetEntry(chartPath);
             if (chartEntry is null)
                 continue;

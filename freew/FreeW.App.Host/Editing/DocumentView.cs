@@ -7,6 +7,7 @@ using System.Windows.Media;
 using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
 using FreeW.Core.Model;
+using FreeW.App.Host;
 using System.Diagnostics;
 using WpfParagraph = System.Windows.Documents.Paragraph;
 using WpfRun = System.Windows.Documents.Run;
@@ -211,9 +212,17 @@ public sealed class DocumentView : RichTextBox
 
     /// <summary>
     /// When true (the default), as-you-type smart typing corrections (smart quotes, dashes, symbols,
-    /// ellipsis, sentence capitalization) are applied via <see cref="AutoCorrect"/> on each keystroke.
+    /// ellipsis, sentence capitalization, lists, ordinals, fractions, hyperlinks) are applied via
+    /// <see cref="AutoCorrect"/> on each keystroke, honouring <see cref="AutoFormatOptions"/>.
     /// </summary>
     public bool AutoCorrectEnabled { get; set; } = true;
+
+    /// <summary>
+    /// The per-rule AutoFormat-As-You-Type toggles consulted by <see cref="AutoCorrect.Evaluate(string?, char, AutoFormatOptions)"/>.
+    /// Defaults to every rule on; the host pushes the persisted <c>FreeWOptions.AutoFormat</c> here so the
+    /// user's choices take effect live. Never null.
+    /// </summary>
+    public AutoFormatOptions AutoFormatOptions { get; set; } = AutoFormatOptions.Default;
 
     /// <summary>
     /// Whether the editor's built-in spell checking (red squiggles) is on. Mirrors
@@ -376,6 +385,30 @@ public sealed class DocumentView : RichTextBox
         base.OnPreviewTextInput(e);
     }
 
+    /// <summary>
+    /// Test seam: simulate typing a single character at the caret through the same AutoCorrect/AutoFormat
+    /// path <see cref="OnPreviewTextInput"/> uses. When a rule fires the correction is applied and the raw
+    /// character is suppressed (returns true); otherwise the character is inserted literally (returns false).
+    /// Lets the as-you-type rules be driven deterministically from STA tests without synthesising WPF input
+    /// events. Honours <see cref="AutoCorrectEnabled"/> and <see cref="AutoFormatOptions"/> just like real typing.
+    /// </summary>
+    internal bool SimulateTypeCharacter(char c)
+    {
+        if (AutoCorrectEnabled && Selection.IsEmpty && TryAutoCorrect(c))
+            return true;
+        // No rule fired: insert the literal character at the caret (mirroring the RichTextBox's own insert).
+        CaretPosition.InsertTextInRun(c.ToString());
+        CaretPosition = CaretPosition.GetPositionAtOffset(1, LogicalDirection.Forward) ?? CaretPosition;
+        return false;
+    }
+
+    /// <summary>Test seam: type a whole string one character at a time through <see cref="SimulateTypeCharacter"/>.</summary>
+    internal void SimulateTypeText(string text)
+    {
+        foreach (var c in text)
+            SimulateTypeCharacter(c);
+    }
+
     // Read the text before the caret (within the current paragraph), evaluate the AutoCorrect rules for
     // the just-typed char, and if one fires, delete back N chars and insert the replacement at the caret.
     // Returns true when a correction was applied (the raw keystroke should be suppressed).
@@ -390,7 +423,7 @@ public sealed class DocumentView : RichTextBox
         var start = caret.Paragraph.ContentStart;
         var textBefore = new TextRange(start, caret).Text;
 
-        var result = AutoCorrect.Evaluate(textBefore, justTyped);
+        var result = AutoCorrect.Evaluate(textBefore, justTyped, AutoFormatOptions);
         if (!result.Applies)
             return false;
 
@@ -406,10 +439,94 @@ public sealed class DocumentView : RichTextBox
         if (deleteStart is null)
             return false;
 
+        // List outcomes consume the typed marker and convert the paragraph to a list instead of inserting
+        // text: delete the marker range, then run the built-in bullet/number toggle on the now-empty line.
+        if (result.Outcome is AutoFormatOutcomeKind.BulletList or AutoFormatOutcomeKind.NumberList)
+        {
+            new TextRange(deleteStart, caret) { Text = string.Empty };
+            CaretPosition = deleteStart;
+            var toggle = result.Outcome == AutoFormatOutcomeKind.BulletList
+                ? EditingCommands.ToggleBullets
+                : EditingCommands.ToggleNumbering;
+            toggle.Execute(null, this);
+            return true;
+        }
+
         // Replace [deleteStart, caret) with the insertion text in one edit so it is a single undo unit.
         var range = new TextRange(deleteStart, caret) { Text = result.Insert };
         CaretPosition = range.End;
+
+        // Super-script the trailing suffix of an ordinal (the "st" of "1st "); the trailing space we just
+        // emitted is excluded from the styled span by walking back one position from the range end.
+        if (result.Outcome == AutoFormatOutcomeKind.SuperscriptSuffix && result.SuffixLength > 0)
+        {
+            ApplySuperscriptSuffix(range.End, result.SuffixLength);
+        }
+        // Hyperlink the just-completed URL/e-mail word: the styled span is [start-of-word, end-of-word),
+        // i.e. the insert minus its trailing space (so the word length is Insert.Length - 1).
+        else if (result.Outcome == AutoFormatOutcomeKind.Hyperlink && result.LinkTarget is { } target)
+        {
+            ApplyAutoHyperlink(range.End, result.Insert.Length - 1, target);
+        }
+
         return true;
+    }
+
+    // Super-script the last <suffixLength> characters ending one position before <afterInsert> (the trailing
+    // space stays baseline). Pure-WPF: select the suffix run and apply the VerticalAlignment property so it
+    // round-trips as w:vertAlign on save, then collapse the caret to the end.
+    private void ApplySuperscriptSuffix(TextPointer afterInsert, int suffixLength)
+    {
+        var suffixEnd = afterInsert.GetNextInsertionPosition(LogicalDirection.Backward); // skip the space
+        if (suffixEnd is null)
+            return;
+        var suffixStart = suffixEnd;
+        for (var i = 0; i < suffixLength; i++)
+        {
+            var prev = suffixStart?.GetNextInsertionPosition(LogicalDirection.Backward);
+            if (prev is null)
+                return;
+            suffixStart = prev;
+        }
+        if (suffixStart is null)
+            return;
+        var span = new TextRange(suffixStart, suffixEnd);
+        span.ApplyPropertyValue(Inline.BaselineAlignmentProperty, BaselineAlignment.Superscript);
+        span.ApplyPropertyValue(TextElement.FontSizeProperty, Math.Max(1.0, FontSize * 0.65));
+        CaretPosition = afterInsert;
+    }
+
+    // Wrap the <wordLength>-character word ending one position before <afterInsert> (the trailing space) in
+    // a hyperlink to <target>. Walks back from the caret by insertion positions (same idiom as the ordinal
+    // helper) so the span lands on real text. Mirrors ApplyHyperlink's styling so an auto-link looks identical.
+    private void ApplyAutoHyperlink(TextPointer afterInsert, int wordLength, string target)
+    {
+        var linkEnd = afterInsert.GetNextInsertionPosition(LogicalDirection.Backward); // skip the trailing space
+        if (linkEnd is null || wordLength <= 0 || !Uri.TryCreate(target, UriKind.Absolute, out var uri))
+            return;
+        var wordStart = linkEnd;
+        for (var i = 0; i < wordLength; i++)
+        {
+            var prev = wordStart?.GetNextInsertionPosition(LogicalDirection.Backward);
+            if (prev is null)
+                return;
+            wordStart = prev;
+        }
+        if (wordStart is null)
+            return;
+        try
+        {
+            // Route through the editor's selection so WPF normalises the endpoints into a single valid text
+            // span (a raw Span/Hyperlink ctor over hand-walked pointers can land on element edges and throw).
+            Selection.Select(wordStart, linkEnd);
+            var link = new WpfHyperlink(Selection.Start, Selection.End) { NavigateUri = uri, ToolTip = target };
+            StyleLink(link, target);
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+        {
+            return; // spanned a non-text boundary — leave the text un-linked rather than crash
+        }
+        CaretPosition = afterInsert;
     }
 
     /// <summary>Undo/redo command bus over this view's model (backed by the shared UndoRedoStack).</summary>
@@ -1151,6 +1268,16 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public ParagraphFormatting CurrentParagraphFormatting =>
         SelectedModelParagraphs().FirstOrDefault()?.Formatting ?? ParagraphFormatting.Default;
+
+    /// <summary>
+    /// The <em>effective</em> character formatting of the current selection (or the caret), resolved the
+    /// same way the toolbar/format-painter reads it: font, size, colour, highlight, bold/italic/underline/
+    /// strikethrough, small/all caps and super/subscript, taken from the live WPF selection so the run's
+    /// own properties already cascade over its style and the document default. Read-only; used by the
+    /// Reveal Formatting pane to mirror what is actually in effect at the caret. Does not commit pending
+    /// edits (cheap, called on selection change).
+    /// </summary>
+    public RunFormatting CurrentRunFormatting => CaptureSelectionRunFormatting();
 
     /// <summary>
     /// Replace the tab stops (pPr/w:tabs) on every paragraph spanned by the selection with
@@ -2157,17 +2284,46 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void ApplyProtection()
     {
-        var protectedDoc = _model.Protection.IsProtected;
-        IsReadOnly = protectedDoc;
+        var mode = _model.Protection.Mode;
 
-        // A protected document gets a distinct amber frame so the read-only state is visible. An
+        // Typing is blocked when the document is Mark-as-Final (advisory read-only), when restrict-editing
+        // is No-changes (ReadOnly), or when it is Comments-only / Filling-forms (those permit only comment
+        // insertion / form-field fill, not free typing — approximated as a read-only typing surface; the
+        // comment command writes to the model directly and so still works). Track-changes-only leaves the
+        // surface editable but forces TrackChangesEnabled so edits become tracked revisions.
+        var typingLocked = _model.MarkedAsFinal
+            || mode is ProtectionMode.ReadOnly or ProtectionMode.CommentsOnly or ProtectionMode.FillingForms;
+        IsReadOnly = typingLocked;
+
+        if (mode == ProtectionMode.TrackChangesOnly)
+            TrackChangesEnabled = true;
+
+        // A protected / final document gets a distinct amber frame so the locked state is visible. An
         // unprotected document keeps whatever frame ApplyPageChrome set (page border or default grey).
-        if (protectedDoc)
+        if (_model.Protection.IsProtected || _model.MarkedAsFinal)
         {
             BorderBrush = new SolidColorBrush(Color.FromRgb(0xC8, 0x8A, 0x00));
             BorderThickness = new Thickness(Math.Max(2, BorderThickness.Top));
         }
+
+        ProtectionStateChanged?.Invoke(this, EventArgs.Empty);
     }
+
+    /// <summary>
+    /// Raised whenever the document's protection or Mark-as-Final state changes (after
+    /// <see cref="ApplyProtection"/>). The host listens to update the Restrict-Editing toggle, the
+    /// "Marked as Final" banner and the status bar.
+    /// </summary>
+    public event EventHandler? ProtectionStateChanged;
+
+    /// <summary>True when restrict-editing protection is enforced (any mode other than None).</summary>
+    public bool IsProtected => _model.Protection.IsProtected;
+
+    /// <summary>The current restrict-editing protection mode.</summary>
+    public ProtectionMode ProtectionMode => _model.Protection.Mode;
+
+    /// <summary>True when the document is "Marked as Final" (advisory read-only).</summary>
+    public bool IsMarkedAsFinal => _model.MarkedAsFinal;
 
     /// <summary>
     /// Set the document's protection (restrict-editing) mode, committing pending edits first (only while
@@ -2193,6 +2349,22 @@ public sealed class DocumentView : RichTextBox
         var next = _model.Protection.Mode == ProtectionMode.None ? ProtectionMode.ReadOnly : ProtectionMode.None;
         SetProtection(next);
         return next;
+    }
+
+    /// <summary>
+    /// Set the document's "Mark as Final" flag (Word's advisory read-only). Commits pending edits first
+    /// (while still editable) so nothing is lost, then re-renders so the read-only state, amber frame and
+    /// banner update immediately. The flag round-trips through docx save (docProps/custom.xml
+    /// <c>_MarkAsFinal</c>). Clearing it ("Edit Anyway") restores normal editing.
+    /// </summary>
+    public void SetMarkedAsFinal(bool markedAsFinal)
+    {
+        if (_model.MarkedAsFinal == markedAsFinal)
+            return;
+        if (!IsReadOnly)
+            CommitToModel();
+        _model.MarkedAsFinal = markedAsFinal;
+        Render();
     }
 
     /// <summary>
@@ -4012,6 +4184,76 @@ public sealed class DocumentView : RichTextBox
         if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
             return null;
         return (table, rowIndex, columnIndex);
+    }
+
+    /// <summary>
+    /// The caret's table plus its current row and cell, for seeding the Table Properties dialog, or null when
+    /// the caret is not inside a table. Commits pending edits first so the model reflects current content.
+    /// </summary>
+    public ModelTableContext? CaretTableContext()
+    {
+        CommitToModel();
+        var (blockIndex, rowIndex, columnIndex) = CaretTableLocation();
+        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
+            return null;
+        var row = rowIndex >= 0 && rowIndex < table.Rows.Count ? table.Rows[rowIndex] : null;
+        var cell = row is not null && columnIndex >= 0 && columnIndex < row.Cells.Count ? row.Cells[columnIndex] : null;
+        return new ModelTableContext(table, row, cell);
+    }
+
+    /// <summary>
+    /// Apply the values from the Table Properties dialog onto the caret's table / current row / current cell
+    /// (direct model set + re-render, mirroring <see cref="SetCaretCellShading"/>). Table-level properties go
+    /// on the table; row-level properties on the caret's row; cell-level properties on the caret's cell.
+    /// No-op outside a table.
+    /// </summary>
+    public void ApplyTableProperties(TablePropertiesValues values)
+    {
+        CommitToModel();
+        var (blockIndex, rowIndex, columnIndex) = CaretTableLocation();
+        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
+            return;
+
+        // Table tab.
+        table.PreferredWidthPt = values.PreferredWidthPt;
+        table.Alignment = values.Alignment;
+        table.IndentFromLeftPt = values.IndentFromLeftPt;
+        table.TextWrapping = values.TextWrapping;
+        table.DefaultCellMargins = values.DefaultCellMargins;
+        table.CellSpacingPt = values.CellSpacingPt;
+        // "Repeat as header row" lives on the Row tab in Word but is a table-level flag in the model.
+        table.Formatting = table.Formatting with { RepeatHeaderRow = values.RepeatHeaderRow };
+
+        // Row tab → caret's row.
+        if (rowIndex >= 0 && rowIndex < table.Rows.Count)
+        {
+            var row = table.Rows[rowIndex];
+            row.HeightPt = values.RowHeightPt;
+            row.HeightRule = values.RowHeightRule;
+            row.AllowBreakAcrossPages = values.AllowRowBreak;
+        }
+
+        // Column tab → preferred width of every cell in the caret's column.
+        if (values.ColumnWidthPt is { } columnWidthPt && columnIndex >= 0)
+            foreach (var r in table.Rows)
+                if (columnIndex < r.Cells.Count)
+                    r.Cells[columnIndex].WidthPt = columnWidthPt;
+
+        // Cell tab → caret's cell.
+        if (rowIndex >= 0 && rowIndex < table.Rows.Count)
+        {
+            var cells = table.Rows[rowIndex].Cells;
+            if (columnIndex >= 0 && columnIndex < cells.Count)
+            {
+                var cell = cells[columnIndex];
+                if (values.CellPreferredWidthPt is { } cellWidthPt)
+                    cell.WidthPt = cellWidthPt;
+                cell.VerticalAlignment = values.CellVerticalAlignment;
+                cell.Margins = values.CellMargins;
+            }
+        }
+
+        Render();
     }
 
     public void InsertField(RunFieldKind kind)

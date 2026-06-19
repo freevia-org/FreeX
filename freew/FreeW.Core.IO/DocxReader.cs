@@ -171,6 +171,9 @@ public static class DocxReader
         // even header/footer references in w:sectPr are honoured (see ReadHeaderFooter).
         document.Page.DifferentOddEvenPages = ReadToggle(root, "evenAndOddHeaders");
 
+        // Mirror margins (w:mirrorMargins): an on/off toggle for double-sided printing (inside/outside margins).
+        document.Page.MirrorMargins = ReadToggle(root, "mirrorMargins");
+
         var protection = root.Element(W + "documentProtection");
         if (protection is null)
             return;
@@ -794,6 +797,14 @@ public static class DocxReader
                 page.MarginTopPt = DxaToPoints(top.Value);
             if (pgMar.Attribute(W + "bottom") is { } bottom)
                 page.MarginBottomPt = DxaToPoints(bottom.Value);
+            // Header/footer distance from the page edge (@w:header / @w:footer) and the binding gutter
+            // (@w:gutter). Each is read only when present, leaving the model's "unspecified" 0 default otherwise.
+            if (pgMar.Attribute(W + "header") is { } header)
+                page.HeaderDistancePt = DxaToPoints(header.Value);
+            if (pgMar.Attribute(W + "footer") is { } footer)
+                page.FooterDistancePt = DxaToPoints(footer.Value);
+            if (pgMar.Attribute(W + "gutter") is { } gutter)
+                page.GutterPt = DxaToPoints(gutter.Value);
         }
 
         // Column layout (w:cols): @w:num + @w:space (equal-width), @w:sep (line between), and optional
@@ -1847,6 +1858,35 @@ public static class DocxReader
             RepeatHeaderRow = repeatHeader
         };
 
+        // Preferred table width (w:tblW type="dxa"); "auto"/absent stays null (automatic width).
+        var tblW = tblPr?.Element(W + "tblW");
+        if (tblW?.Attribute(W + "type")?.Value == "dxa")
+            table.PreferredWidthPt = DxaToPoints(tblW.Attribute(W + "w")?.Value);
+
+        // Table alignment (w:jc); absent → Left.
+        table.Alignment = (tblPr?.Element(W + "jc")?.Attribute(W + "val")?.Value) switch
+        {
+            "center" => TableAlignment.Center,
+            "right" or "end" => TableAlignment.Right,
+            _ => TableAlignment.Left
+        };
+
+        // Indent from the left margin (w:tblInd, dxa); absent → null.
+        var tblInd = tblPr?.Element(W + "tblInd");
+        if (tblInd is not null)
+            table.IndentFromLeftPt = DxaToPoints(tblInd.Attribute(W + "w")?.Value);
+
+        // Spacing between cells (w:tblCellSpacing, dxa); absent → null.
+        var tblCellSpacing = tblPr?.Element(W + "tblCellSpacing");
+        if (tblCellSpacing is not null)
+            table.CellSpacingPt = DxaToPoints(tblCellSpacing.Attribute(W + "w")?.Value);
+
+        // Floating table (text wrapping around) is signalled by a w:tblpPr position element.
+        table.TextWrapping = tblPr?.Element(W + "tblpPr") is not null;
+
+        // Default cell margins (w:tblCellMar); absent → null (use the implicit docx default).
+        table.DefaultCellMargins = ReadCellMargins(tblPr?.Element(W + "tblCellMar"));
+
         // The table grid (w:tblGrid/w:gridCol) carries per-column widths in dxa.
         var grid = tbl.Element(W + "tblGrid");
         if (grid is not null)
@@ -1859,6 +1899,27 @@ public static class DocxReader
         foreach (var tr in tbl.Elements(W + "tr"))
         {
             var row = new TableRow();
+
+            // Row properties (w:trPr): explicit height + rule (w:trHeight) and the cant-split flag.
+            var trPr = tr.Element(W + "trPr");
+            if (trPr is not null)
+            {
+                row.AllowBreakAcrossPages = trPr.Element(W + "cantSplit") is null;
+                var trHeight = trPr.Element(W + "trHeight");
+                if (trHeight is not null)
+                {
+                    var hVal = trHeight.Attribute(W + "val")?.Value;
+                    if (hVal is not null)
+                        row.HeightPt = DxaToPoints(hVal);
+                    row.HeightRule = (trHeight.Attribute(W + "hRule")?.Value) switch
+                    {
+                        "exact" => TableRowHeightRule.Exact,
+                        "atLeast" => TableRowHeightRule.AtLeast,
+                        _ => TableRowHeightRule.Auto
+                    };
+                }
+            }
+
             // Cells in styled rows carry the style fill (header/banded) we wrote; recognise and strip it so
             // it reads back as style-derived shading, not as an explicit per-cell colour.
             var isStyleHeader = headerRow && rowIndex == 0;
@@ -1895,6 +1956,17 @@ public static class DocxReader
                             ? VerticalMergeState.Restart
                             : VerticalMergeState.Continue;
                     }
+
+                    // Vertical alignment of the cell content (w:vAlign); absent → Top.
+                    cell.VerticalAlignment = (tcPr.Element(W + "vAlign")?.Attribute(W + "val")?.Value) switch
+                    {
+                        "center" => TableCellVerticalAlignment.Center,
+                        "bottom" => TableCellVerticalAlignment.Bottom,
+                        _ => TableCellVerticalAlignment.Top
+                    };
+
+                    // Per-cell margin override (w:tcMar); absent → null (inherit table default).
+                    cell.Margins = ReadCellMargins(tcPr.Element(W + "tcMar"));
                 }
                 foreach (var child in tc.Elements())
                 {
@@ -1948,6 +2020,24 @@ public static class DocxReader
     {
         var bodyIndex = hasHeader ? rowIndex - 1 : rowIndex;
         return bodyIndex >= 0 && bodyIndex % 2 == 1;
+    }
+
+    // Reads a cell-margins container (w:tblCellMar or w:tcMar) into a TableCellMargins, or null when the
+    // element is absent. Each edge defaults to the model's default if missing from the element.
+    private static TableCellMargins? ReadCellMargins(XElement? container)
+    {
+        if (container is null)
+            return null;
+        double Edge(string edge, double fallback)
+        {
+            var w = container.Element(W + edge)?.Attribute(W + "w")?.Value;
+            return w is null ? fallback : DxaToPoints(w);
+        }
+        return new TableCellMargins(
+            TopPt: Edge("top", TableCellMargins.Default.TopPt),
+            LeftPt: Edge("left", TableCellMargins.Default.LeftPt),
+            BottomPt: Edge("bottom", TableCellMargins.Default.BottomPt),
+            RightPt: Edge("right", TableCellMargins.Default.RightPt));
     }
 
     private static bool ReadBorders(XElement? tblBorders)
@@ -3293,8 +3383,9 @@ public static class DocxReader
     }
 
     /// <summary>
-    /// Reads the FreeW page watermark from docProps/custom.xml into <see cref="PageSettings.Watermark"/>,
-    /// mirroring how the writer persists it as a named custom property. A missing part is fine.
+    /// Reads FreeW custom document properties from docProps/custom.xml: the page watermark into
+    /// <see cref="PageSettings.Watermark"/> and Word's "Mark as Final" flag (<c>_MarkAsFinal</c>) into
+    /// <see cref="TextDocument.MarkedAsFinal"/>, mirroring how the writer persists them. A missing part is fine.
     /// </summary>
     private static void ReadCustomProperties(ZipArchive archive, TextDocument document)
     {
@@ -3303,11 +3394,17 @@ public static class DocxReader
         if (root is null)
             return;
 
-        var property = root.Elements(CustomProps + "property")
-            .FirstOrDefault(p => p.Attribute("name")?.Value == WatermarkPropertyName);
-        var text = property?.Element(VtVariant + "lpwstr")?.Value;
+        var properties = root.Elements(CustomProps + "property").ToList();
+
+        var watermark = properties.FirstOrDefault(p => p.Attribute("name")?.Value == WatermarkPropertyName);
+        var text = watermark?.Element(VtVariant + "lpwstr")?.Value;
         if (!string.IsNullOrEmpty(text))
             document.Page.Watermark = text;
+
+        var markAsFinal = properties.FirstOrDefault(p => p.Attribute("name")?.Value == MarkAsFinalPropertyName);
+        var flag = markAsFinal?.Element(VtVariant + "bool")?.Value;
+        if (flag is not null && (flag.Equals("true", StringComparison.OrdinalIgnoreCase) || flag == "1"))
+            document.MarkedAsFinal = true;
     }
 
     private static void ReadStyles(ZipArchive archive, TextDocument document)

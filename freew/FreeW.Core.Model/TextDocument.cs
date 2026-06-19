@@ -1032,6 +1032,19 @@ public sealed class TableCell
     /// </summary>
     public VerticalMergeState VerticalMerge { get; set; } = VerticalMergeState.None;
 
+    /// <summary>
+    /// Vertical alignment of the cell's content (<c>tc/tcPr/w:vAlign</c>): top, center or bottom.
+    /// <see cref="TableCellVerticalAlignment.Top"/> is the docx default, so it is not emitted and existing
+    /// cells round-trip unchanged. Set by the Table Properties dialog's Cell tab.
+    /// </summary>
+    public TableCellVerticalAlignment VerticalAlignment { get; set; } = TableCellVerticalAlignment.Top;
+
+    /// <summary>
+    /// Per-cell margin override (<c>tc/tcPr/w:tcMar</c>), or null to inherit the table default
+    /// (<see cref="Table.DefaultCellMargins"/>). Null is the default so existing cells are unaffected.
+    /// </summary>
+    public TableCellMargins? Margins { get; set; }
+
     public TableCell() { }
 
     public TableCell(string text) => Paragraphs.Add(new Paragraph(text));
@@ -1051,10 +1064,68 @@ public enum VerticalMergeState
     Continue
 }
 
+/// <summary>
+/// Vertical alignment of a table cell's content (<c>tc/tcPr/w:vAlign</c>). <see cref="Top"/> is the docx
+/// default (no element emitted); <see cref="Center"/> and <see cref="Bottom"/> map to the "center"/"bottom"
+/// tokens.
+/// </summary>
+public enum TableCellVerticalAlignment
+{
+    Top,
+    Center,
+    Bottom
+}
+
+/// <summary>
+/// How a table row's height is interpreted (<c>tr/trPr/w:trHeight/@w:hRule</c>). <see cref="Auto"/> is the
+/// docx default — the row grows to fit its content and no explicit height is emitted. <see cref="AtLeast"/>
+/// is a minimum height the row may exceed; <see cref="Exact"/> fixes the height (content may be clipped).
+/// </summary>
+public enum TableRowHeightRule
+{
+    Auto,
+    AtLeast,
+    Exact
+}
+
+/// <summary>
+/// The four inside margins (cell padding) of a table cell, in points, mapping onto a <c>w:tcMar</c>
+/// (per-cell override) or <c>w:tblCellMar</c> (table default) element. Immutable so it round-trips cleanly.
+/// Word's default cell margins are 0 top/bottom and ~5.4pt (108 dxa) left/right.
+/// </summary>
+public sealed record TableCellMargins(
+    double TopPt = 0,
+    double LeftPt = 5.4,
+    double BottomPt = 0,
+    double RightPt = 5.4)
+{
+    /// <summary>Word's default table cell margins (0 top/bottom, 5.4pt left/right).</summary>
+    public static readonly TableCellMargins Default = new();
+}
+
 /// <summary>A table row: an ordered sequence of cells (w:tr).</summary>
 public sealed class TableRow
 {
     public List<TableCell> Cells { get; } = [];
+
+    /// <summary>
+    /// Explicit row height in points (<c>tr/trPr/w:trHeight/@w:val</c>), interpreted per <see cref="HeightRule"/>.
+    /// Null (the default) means automatic height, so no <c>w:trHeight</c> is emitted and existing rows are
+    /// unaffected.
+    /// </summary>
+    public double? HeightPt { get; set; }
+
+    /// <summary>
+    /// How <see cref="HeightPt"/> is interpreted (<c>@w:hRule</c>). <see cref="TableRowHeightRule.Auto"/> is
+    /// the default; it is irrelevant unless <see cref="HeightPt"/> is set.
+    /// </summary>
+    public TableRowHeightRule HeightRule { get; set; } = TableRowHeightRule.Auto;
+
+    /// <summary>
+    /// Whether the row's contents may break across a page boundary (Word's "Allow row to break across pages").
+    /// True (the default) lets the row split; false emits <c>tr/trPr/w:cantSplit</c> to keep the row whole.
+    /// </summary>
+    public bool AllowBreakAcrossPages { get; set; } = true;
 }
 
 /// <summary>
@@ -1088,6 +1159,18 @@ public sealed record TableFormatting
     public static readonly TableFormatting Default = new();
 }
 
+/// <summary>
+/// Horizontal alignment of a table within its column / page width (<c>tbl/tblPr/w:jc</c>). <see cref="Left"/>
+/// is the docx default (no element emitted); <see cref="Center"/> and <see cref="Right"/> map to the
+/// "center"/"right" tokens. Set by the Table Properties dialog's Table tab.
+/// </summary>
+public enum TableAlignment
+{
+    Left,
+    Center,
+    Right
+}
+
 /// <summary>A table block: rows of cells, each cell holding paragraphs (w:tbl / w:tr / w:tc).</summary>
 public sealed class Table : Block
 {
@@ -1100,6 +1183,45 @@ public sealed class Table : Block
     /// existing tables are unaffected.
     /// </summary>
     public List<double> ColumnWidthsPt { get; } = [];
+
+    /// <summary>
+    /// Preferred total table width in points (<c>tbl/tblPr/w:tblW</c> with <c>type="dxa"</c>), or null for
+    /// automatic width (<c>type="auto"</c>, the historical default), so existing tables are unaffected. Set
+    /// by the Table Properties dialog's Table tab.
+    /// </summary>
+    public double? PreferredWidthPt { get; set; }
+
+    /// <summary>
+    /// Horizontal alignment of the table (<c>tbl/tblPr/w:jc</c>). <see cref="TableAlignment.Left"/> is the
+    /// default, so it is not emitted and existing tables are unaffected.
+    /// </summary>
+    public TableAlignment Alignment { get; set; } = TableAlignment.Left;
+
+    /// <summary>
+    /// Indent of the table from the left margin in points (<c>tbl/tblPr/w:tblInd</c>), or null for none
+    /// (the default). Word's "Indent from left" on the Table tab.
+    /// </summary>
+    public double? IndentFromLeftPt { get; set; }
+
+    /// <summary>
+    /// True when the table floats with text wrapping around it (Word's "Text wrapping: Around"). Emits a
+    /// minimal <c>tbl/tblPr/w:tblpPr</c> floating-position element so Word treats the table as floating.
+    /// False (the default) keeps the table inline, so existing tables are unaffected.
+    /// </summary>
+    public bool TextWrapping { get; set; }
+
+    /// <summary>
+    /// Default inside margins (cell padding) applied to every cell that has no <see cref="TableCell.Margins"/>
+    /// override (<c>tbl/tblPr/w:tblCellMar</c>), or null to use the implicit docx default, so existing tables
+    /// are unaffected. Set by the Table tab's "Options… &gt; Default cell margins".
+    /// </summary>
+    public TableCellMargins? DefaultCellMargins { get; set; }
+
+    /// <summary>
+    /// Spacing between cells in points (<c>tbl/tblPr/w:tblCellSpacing</c>), or null for none (the default).
+    /// Word's "Allow spacing between cells" on the Table Options dialog.
+    /// </summary>
+    public double? CellSpacingPt { get; set; }
 
     public Table() { }
 
@@ -1159,14 +1281,16 @@ public sealed class DocumentProperties
 /// <see cref="None"/> is an unprotected document (the default — no settings part is emitted);
 /// <see cref="ReadOnly"/> locks the whole document against edits; <see cref="CommentsOnly"/> permits
 /// only the insertion of comments; <see cref="TrackChangesOnly"/> permits edits but forces them to be
-/// tracked revisions. Maps onto w:documentProtection/@w:edit ("readOnly"/"comments"/"trackedChanges").
+/// tracked revisions; <see cref="FillingForms"/> permits only filling in form fields. Maps onto
+/// w:documentProtection/@w:edit ("readOnly"/"comments"/"trackedChanges"/"forms").
 /// </summary>
 public enum ProtectionMode
 {
     None,
     ReadOnly,
     CommentsOnly,
-    TrackChangesOnly
+    TrackChangesOnly,
+    FillingForms
 }
 
 /// <summary>
@@ -1255,6 +1379,40 @@ public sealed class PageSettings
     public double MarginTopPt { get; set; } = 72;
     public double MarginBottomPt { get; set; } = 72;
     public bool Landscape { get; set; }
+
+    /// <summary>
+    /// The binding gutter — extra margin added on the binding edge (w:sectPr/w:pgMar/@w:gutter), in points.
+    /// Defaults to 0 so existing documents round-trip unchanged — the @w:gutter attribute is emitted only when
+    /// greater than 0. Word's Page Setup &gt; Margins dialog exposes this as "Gutter". Always non-negative.
+    /// </summary>
+    public double GutterPt { get; set; }
+
+    /// <summary>
+    /// The distance from the top of the page to the header (w:sectPr/w:pgMar/@w:header), in points. Defaults to
+    /// 0, meaning "unspecified" — the @w:header attribute is then not emitted, so existing documents round-trip
+    /// unchanged (Word's own default is 0.5"). When greater than 0 the writer emits @w:header and the reader maps
+    /// it back here. Word's Page Setup &gt; Layout dialog exposes this as "Header from edge". Always non-negative.
+    /// </summary>
+    public double HeaderDistancePt { get; set; }
+
+    /// <summary>
+    /// The distance from the bottom of the page to the footer (w:sectPr/w:pgMar/@w:footer), in points. Defaults to
+    /// 0, meaning "unspecified" — the @w:footer attribute is then not emitted, so existing documents round-trip
+    /// unchanged (Word's own default is 0.5"). When greater than 0 the writer emits @w:footer and the reader maps
+    /// it back here. Word's Page Setup &gt; Layout dialog exposes this as "Footer from edge". Always non-negative.
+    /// </summary>
+    public double FooterDistancePt { get; set; }
+
+    /// <summary>
+    /// Whether the document uses mirror margins for double-sided printing (the document-level
+    /// w:settings/w:mirrorMargins toggle). When set, the left/right margins become inside/outside margins that
+    /// swap on facing pages and the gutter is added to the inside edge. Defaults to false so existing documents
+    /// are unaffected — no w:mirrorMargins is emitted and no settings part is forced. When true the writer emits
+    /// the toggle in word/settings.xml and the reader maps it back. Like <see cref="DifferentOddEvenPages"/> this
+    /// is a document-wide setting carried on the body-level page settings. Word's Page Setup &gt; Margins dialog
+    /// exposes this via the "Multiple pages: Mirror margins" option.
+    /// </summary>
+    public bool MirrorMargins { get; set; }
 
     /// <summary>
     /// The number of equal-width text columns the page content flows into (w:sectPr/w:cols w:num).
@@ -1403,6 +1561,10 @@ public sealed class PageSettings
         MarginTopPt = MarginTopPt,
         MarginBottomPt = MarginBottomPt,
         Landscape = Landscape,
+        GutterPt = GutterPt,
+        HeaderDistancePt = HeaderDistancePt,
+        FooterDistancePt = FooterDistancePt,
+        MirrorMargins = MirrorMargins,
         ColumnCount = ColumnCount,
         ColumnSpacingPt = ColumnSpacingPt,
         ColumnsLineBetween = ColumnsLineBetween,
@@ -1648,6 +1810,14 @@ public sealed class TextDocument
     /// the writer emits w:settings/w:documentProtection and the reader maps it back here.
     /// </summary>
     public ProtectionSettings Protection { get; set; } = ProtectionSettings.Unprotected;
+
+    /// <summary>
+    /// Word's "Mark as Final" flag. When true the document is advisory read-only: editors should open it
+    /// non-editable and show a "Marked as Final" banner ("Edit Anyway" clears it). Persisted following the
+    /// Word convention as the <c>_MarkAsFinal</c> boolean custom document property (docProps/custom.xml);
+    /// the reader maps it back here. Independent of <see cref="Protection"/> (enforced restrict-editing).
+    /// </summary>
+    public bool MarkedAsFinal { get; set; }
 
     /// <summary>
     /// The document's persisted theme — the colour/font scheme that maps to <c>word/theme/theme1.xml</c>.

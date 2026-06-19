@@ -110,6 +110,10 @@ public static class DocxWriter
         // emitted only when a watermark is set.
         var hasWatermark = !string.IsNullOrEmpty(document.Page.Watermark);
 
+        // A docProps/custom.xml part is emitted when the watermark OR Word's "Mark as Final" flag needs to
+        // round-trip; both ride in the same custom-properties part.
+        var hasCustomProps = hasWatermark || document.MarkedAsFinal;
+
         // A word/settings.xml part is emitted only when something needs it — document protection
         // (w:documentProtection), automatic hyphenation (w:autoHyphenation), the different-odd/even-headers
         // toggle (w:evenAndOddHeaders) and/or a page background to display (w:displayBackgroundShape) — so
@@ -130,6 +134,7 @@ public static class DocxWriter
         var hasSettings = hasProtection
             || document.Page.AutoHyphenation
             || document.Page.DifferentOddEvenPages
+            || document.Page.MirrorMargins
             || hasBackground
             || hasEmbeddedFonts
             || hasPreservedSettings;
@@ -161,11 +166,11 @@ public static class DocxWriter
             : document.Preserved.Parts.Where(p => !DocxWriteOptions.IsMacroPart(p.PartName)).ToList();
 
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true);
-        WritePart(archive, "[Content_Types].xml", BuildContentTypes(imageExtensions, emitNumbering, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasWatermark, hasSettings, hasBibliography, charts, embeddedObjects.Count > 0, smartArts, hasEmbeddedFonts, preservedParts, document.Preserved.ContentTypeDefaults, options.MainDocumentContentType));
-        WritePart(archive, "_rels/.rels", BuildPackageRels(hasWatermark));
+        WritePart(archive, "[Content_Types].xml", BuildContentTypes(imageExtensions, emitNumbering, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasCustomProps, hasSettings, hasBibliography, charts, embeddedObjects.Count > 0, smartArts, hasEmbeddedFonts, preservedParts, document.Preserved.ContentTypeDefaults, options.MainDocumentContentType));
+        WritePart(archive, "_rels/.rels", BuildPackageRels(hasCustomProps));
         WritePart(archive, "docProps/core.xml", BuildCoreProperties(document.Properties));
-        if (hasWatermark)
-            WritePart(archive, "docProps/custom.xml", BuildCustomProperties(document.Page.Watermark!));
+        if (hasCustomProps)
+            WritePart(archive, "docProps/custom.xml", BuildCustomProperties(document.Page.Watermark, document.MarkedAsFinal));
         WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, emitNumbering, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasSettings, hasBibliography, charts, embeddedObjects, smartArts, hasEmbeddedFonts, preservedParts));
         WritePart(archive, "word/document.xml", BuildDocument(document, images, charts, embeddedObjects, smartArts, hyperlinks, headerFooterParts, preservedNumbering, preservedParts));
         WritePart(archive, "word/styles.xml", BuildStyles(document, preservedNumbering));
@@ -613,7 +618,7 @@ public static class DocxWriter
         entryStream.Write(content, 0, content.Length);
     }
 
-    private static XDocument BuildContentTypes(IReadOnlyList<string> imageExtensions, bool includeNumbering, IReadOnlyList<HeaderFooterPart> headerFooterParts, bool hasFootnotes, bool hasEndnotes, bool hasComments, bool hasWatermark, bool hasSettings, bool hasBibliography, IReadOnlyList<ChartPart> charts, bool hasEmbeddedObjects, IReadOnlyList<SmartArtPart> smartArts, bool hasEmbeddedFonts, IReadOnlyList<PreservedPart> preservedParts, IReadOnlyDictionary<string, string> preservedContentTypeDefaults, string mainDocumentContentType) => new(
+    private static XDocument BuildContentTypes(IReadOnlyList<string> imageExtensions, bool includeNumbering, IReadOnlyList<HeaderFooterPart> headerFooterParts, bool hasFootnotes, bool hasEndnotes, bool hasComments, bool hasCustomProps, bool hasSettings, bool hasBibliography, IReadOnlyList<ChartPart> charts, bool hasEmbeddedObjects, IReadOnlyList<SmartArtPart> smartArts, bool hasEmbeddedFonts, IReadOnlyList<PreservedPart> preservedParts, IReadOnlyDictionary<string, string> preservedContentTypeDefaults, string mainDocumentContentType) => new(
         new XElement(Ct + "Types",
             new XElement(Ct + "Default", new XAttribute("Extension", "rels"),
                 new XAttribute("ContentType", "application/vnd.openxmlformats-package.relationships+xml")),
@@ -698,7 +703,7 @@ public static class DocxWriter
                 new XAttribute("ContentType", ThemeContentType)),
             new XElement(Ct + "Override", new XAttribute("PartName", CorePropertiesPartName),
                 new XAttribute("ContentType", CorePropertiesContentType)),
-            hasWatermark
+            hasCustomProps
                 ? new XElement(Ct + "Override", new XAttribute("PartName", CustomPropertiesPartName),
                     new XAttribute("ContentType", CustomPropertiesContentType))
                 : null,
@@ -735,7 +740,7 @@ public static class DocxWriter
                     new XAttribute("PartName", p.PartName),
                     new XAttribute("ContentType", p.ContentTypeOverride!)))));
 
-    private static XDocument BuildPackageRels(bool hasWatermark) => new(
+    private static XDocument BuildPackageRels(bool hasCustomProps) => new(
         new XElement(Rel + "Relationships",
             new XElement(Rel + "Relationship",
                 new XAttribute("Id", "rId1"),
@@ -745,7 +750,7 @@ public static class DocxWriter
                 new XAttribute("Id", "rIdCore"),
                 new XAttribute("Type", CorePropertiesRelType),
                 new XAttribute("Target", "docProps/core.xml")),
-            hasWatermark
+            hasCustomProps
                 ? new XElement(Rel + "Relationship",
                     new XAttribute("Id", "rIdCustom"),
                     new XAttribute("Type", CustomPropertiesRelType),
@@ -753,18 +758,30 @@ public static class DocxWriter
                 : null));
 
     /// <summary>
-    /// Builds docProps/custom.xml carrying the page watermark text as a single named custom property
-    /// (<see cref="WatermarkPropertyName"/>). This is a standards-compliant OPC custom-properties part,
-    /// so the watermark text round-trips even though it is not a true Word VML watermark.
+    /// Builds docProps/custom.xml carrying the page watermark text (<see cref="WatermarkPropertyName"/>,
+    /// vt:lpwstr) and/or Word's "Mark as Final" flag (<see cref="MarkAsFinalPropertyName"/>, vt:bool) as
+    /// named custom properties. This is a standards-compliant OPC custom-properties part. Properties get
+    /// sequential pids starting at 2 (pid 0/1 are reserved); only set properties are emitted.
     /// </summary>
-    private static XDocument BuildCustomProperties(string watermark) => new(
-        new XElement(CustomProps + "Properties",
-            new XAttribute(XNamespace.Xmlns + "vt", VtVariant.NamespaceName),
-            new XElement(CustomProps + "property",
+    private static XDocument BuildCustomProperties(string? watermark, bool markedAsFinal)
+    {
+        var properties = new XElement(CustomProps + "Properties",
+            new XAttribute(XNamespace.Xmlns + "vt", VtVariant.NamespaceName));
+        var pid = 2;
+        if (!string.IsNullOrEmpty(watermark))
+            properties.Add(new XElement(CustomProps + "property",
                 new XAttribute("fmtid", "{D5CDD505-2E9C-101B-9397-08002B2CF9AE}"),
-                new XAttribute("pid", "2"),
+                new XAttribute("pid", (pid++).ToString(System.Globalization.CultureInfo.InvariantCulture)),
                 new XAttribute("name", WatermarkPropertyName),
-                new XElement(VtVariant + "lpwstr", watermark))));
+                new XElement(VtVariant + "lpwstr", watermark)));
+        if (markedAsFinal)
+            properties.Add(new XElement(CustomProps + "property",
+                new XAttribute("fmtid", "{D5CDD505-2E9C-101B-9397-08002B2CF9AE}"),
+                new XAttribute("pid", (pid++).ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                new XAttribute("name", MarkAsFinalPropertyName),
+                new XElement(VtVariant + "bool", "true")));
+        return new XDocument(properties);
+    }
 
     /// <summary>Builds docProps/core.xml from <see cref="DocumentProperties"/>, emitting only set values.</summary>
     private static XDocument BuildCoreProperties(DocumentProperties properties)
@@ -1424,9 +1441,25 @@ public static class DocxWriter
             var bandedShade = fmt.BandedRows && !isHeaderRow && IsBandedBodyRow(rowIndex, fmt.HeaderRow);
 
             var tr = new XElement(W + "tr");
+            // Row properties (w:trPr): cantSplit / trHeight / tblHeader, in CT_TrPr schema order. Emitted
+            // only when a non-default row property is set, so plain rows stay unchanged.
+            var trPr = new XElement(W + "trPr");
+            if (!row.AllowBreakAcrossPages)
+                trPr.Add(new XElement(W + "cantSplit"));
+            if (row.HeightPt is { } heightPt)
+                trPr.Add(new XElement(W + "trHeight",
+                    new XAttribute(W + "val", PointsToDxa(heightPt)),
+                    new XAttribute(W + "hRule", row.HeightRule switch
+                    {
+                        TableRowHeightRule.Exact => "exact",
+                        TableRowHeightRule.AtLeast => "atLeast",
+                        _ => "auto"
+                    })));
             // Repeat the header row across page breaks (w:trPr/w:tblHeader) when requested.
             if (isHeaderRow && fmt.RepeatHeaderRow)
-                tr.Add(new XElement(W + "trPr", new XElement(W + "tblHeader")));
+                trPr.Add(new XElement(W + "tblHeader"));
+            if (trPr.HasElements)
+                tr.Add(trPr);
 
             foreach (var cell in row.Cells)
             {
@@ -1512,8 +1545,40 @@ public static class DocxWriter
 
     private static XElement BuildTableProperties(Table table)
     {
-        var tblPr = new XElement(W + "tblPr",
-            new XElement(W + "tblW", new XAttribute(W + "w", 0), new XAttribute(W + "type", "auto")));
+        // Children must follow the CT_TblPr schema order, else Word's strict validator rejects the table:
+        // tblpPr, tblW, jc, tblCellSpacing, tblInd, tblBorders, tblCellMar, tblLook.
+        var tblPr = new XElement(W + "tblPr");
+
+        // Floating-table position (w:tblpPr): a minimal anchor so Word treats the table as floating
+        // ("Text wrapping: Around"). Emitted only when text wrapping is on.
+        if (table.TextWrapping)
+            tblPr.Add(new XElement(W + "tblpPr",
+                new XAttribute(W + "leftFromText", 180),
+                new XAttribute(W + "rightFromText", 180),
+                new XAttribute(W + "vertAnchor", "text"),
+                new XAttribute(W + "horzAnchor", "text"),
+                new XAttribute(W + "tblpY", 1)));
+
+        // Preferred table width (w:tblW): a fixed dxa width when set, else automatic (the historical default).
+        tblPr.Add(table.PreferredWidthPt is { } widthPt
+            ? new XElement(W + "tblW", new XAttribute(W + "w", PointsToDxa(widthPt)), new XAttribute(W + "type", "dxa"))
+            : new XElement(W + "tblW", new XAttribute(W + "w", 0), new XAttribute(W + "type", "auto")));
+
+        // Table alignment (w:jc): emitted only when not Left (the default).
+        if (table.Alignment != TableAlignment.Left)
+            tblPr.Add(new XElement(W + "jc", new XAttribute(W + "val",
+                table.Alignment == TableAlignment.Center ? "center" : "right")));
+
+        // Spacing between cells (w:tblCellSpacing), emitted only when set.
+        if (table.CellSpacingPt is { } spacingPt)
+            tblPr.Add(new XElement(W + "tblCellSpacing",
+                new XAttribute(W + "w", PointsToDxa(spacingPt)), new XAttribute(W + "type", "dxa")));
+
+        // Indent from the left margin (w:tblInd), emitted only when set.
+        if (table.IndentFromLeftPt is { } indentPt)
+            tblPr.Add(new XElement(W + "tblInd",
+                new XAttribute(W + "w", PointsToDxa(indentPt)), new XAttribute(W + "type", "dxa")));
+
         if (table.Formatting.Borders)
         {
             XElement Border(string name) => new(W + name,
@@ -1535,6 +1600,11 @@ public static class DocxWriter
                 new XElement(W + "insideH", new XAttribute(W + "val", "none")),
                 new XElement(W + "insideV", new XAttribute(W + "val", "none"))));
         }
+
+        // Default cell margins (w:tblCellMar): inside padding applied to cells with no own override.
+        // Emitted only when set, so plain tables stay unchanged. Follows tblBorders in CT_TblPr order.
+        if (table.DefaultCellMargins is { } cellMar)
+            tblPr.Add(BuildCellMarginsElement("tblCellMar", cellMar));
 
         // w:tblLook carries the table-style toggles so they round-trip without a full table-style part:
         // w:firstRow="1" persists HeaderRow; w:noHBand="0" persists BandedRows (banding on). The flags are
@@ -1579,7 +1649,27 @@ public static class DocxWriter
                 new XAttribute(W + "val", "clear"),
                 new XAttribute(W + "color", "auto"),
                 new XAttribute(W + "fill", fill)));
+        // Per-cell margin override (w:tcMar) and vertical alignment (w:vAlign), in CT_TcPr schema order
+        // (tcMar before vAlign, both after shd). Emitted only when set, so plain cells stay unchanged.
+        if (cell.Margins is { } margins)
+            tcPr.Add(BuildCellMarginsElement("tcMar", margins));
+        if (cell.VerticalAlignment != TableCellVerticalAlignment.Top)
+            tcPr.Add(new XElement(W + "vAlign", new XAttribute(W + "val",
+                cell.VerticalAlignment == TableCellVerticalAlignment.Center ? "center" : "bottom")));
         return tcPr.HasElements ? tcPr : null;
+    }
+
+    // Builds a cell-margins container (w:tblCellMar for the table default, or w:tcMar for a per-cell
+    // override) with the four edge elements in top/left/bottom/right order, each a dxa width.
+    private static XElement BuildCellMarginsElement(string name, TableCellMargins margins)
+    {
+        XElement Edge(string edge, double pt) => new(W + edge,
+            new XAttribute(W + "w", PointsToDxa(pt)), new XAttribute(W + "type", "dxa"));
+        return new XElement(W + name,
+            Edge("top", margins.TopPt),
+            Edge("left", margins.LeftPt),
+            Edge("bottom", margins.BottomPt),
+            Edge("right", margins.RightPt));
     }
 
     /// <summary>True when two runs carry the same tracked-change kind, author and date (so they coalesce).</summary>
@@ -3507,7 +3597,13 @@ public static class DocxWriter
                 new XAttribute(W + "left", PointsToDxa(page.MarginLeftPt)),
                 new XAttribute(W + "right", PointsToDxa(page.MarginRightPt)),
                 new XAttribute(W + "top", PointsToDxa(page.MarginTopPt)),
-                new XAttribute(W + "bottom", PointsToDxa(page.MarginBottomPt))),
+                new XAttribute(W + "bottom", PointsToDxa(page.MarginBottomPt)),
+                // Header/footer distance from the page edge (@w:header / @w:footer) and the binding gutter
+                // (@w:gutter) are emitted only when set (> 0), so documents that never touched them round-trip
+                // byte-unchanged. @w:header/@w:footer carry the schema attribute order (after bottom, before gutter).
+                page.HeaderDistancePt > 0 ? new XAttribute(W + "header", PointsToDxa(page.HeaderDistancePt)) : null,
+                page.FooterDistancePt > 0 ? new XAttribute(W + "footer", PointsToDxa(page.FooterDistancePt)) : null,
+                page.GutterPt > 0 ? new XAttribute(W + "gutter", PointsToDxa(page.GutterPt)) : null),
             // Page border (w:pgBorders): a uniform box on all four edges, offset from the page edge.
             // Emitted only when set; w:sz is in eighths of a point, matching w:pBdr edges.
             BuildPageBorders(page.PageBorder),
@@ -3891,6 +3987,7 @@ public static class DocxWriter
     {
         var autoHyphenation = page.AutoHyphenation;
         var differentOddEvenPages = page.DifferentOddEvenPages;
+        var mirrorMargins = page.MirrorMargins;
         // Fresh documents keep the historical minimal-settings behavior: dormant hyphenation sub-options do
         // not create a settings part by themselves. Preserved settings are different: Word-authored documents
         // can keep these values while auto hyphenation is off, and the reader captures them so they survive.
@@ -3916,6 +4013,10 @@ public static class DocxWriter
                 fresh.Add(new XElement(W + "embedTrueTypeFonts"));
             if (displayBackground)
                 fresh.Add(new XElement(W + "displayBackgroundShape"));
+            // Mirror margins (w:mirrorMargins) sits after the font-embedding region and before autoHyphenation
+            // in CT_Settings schema order.
+            if (mirrorMargins)
+                fresh.Add(new XElement(W + "mirrorMargins"));
             if (autoHyphenation)
                 fresh.Add(new XElement(W + "autoHyphenation"));
             // Hyphenation sub-options follow autoHyphenation in CT_Settings schema order.
@@ -3941,6 +4042,7 @@ public static class DocxWriter
         var settings = new XElement(original);
         OverlaySetting(settings, "embedTrueTypeFonts", embedTrueTypeFonts ? new XElement(W + "embedTrueTypeFonts") : null);
         OverlaySetting(settings, "displayBackgroundShape", displayBackground ? new XElement(W + "displayBackgroundShape") : null);
+        OverlaySetting(settings, "mirrorMargins", mirrorMargins ? new XElement(W + "mirrorMargins") : null);
         OverlaySetting(settings, "autoHyphenation", autoHyphenation ? new XElement(W + "autoHyphenation") : null);
         OverlaySetting(settings, "consecutiveHyphenLimit", consecutiveLimit);
         OverlaySetting(settings, "hyphenationZone", hyphenationZone);

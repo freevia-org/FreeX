@@ -275,15 +275,28 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("native_export_pdf_menu_item={FormatBool(snapshot.HasNativeExportPdfMenuItem)}");
 
         exporterSource.Should().Contain("public static class PortablePdfDocumentExporter");
-        exporterSource.Should().Contain("PortablePdfPageContentPlanner.CreatePlan(workbook, request)");
-        exporterSource.Should().Contain("/Encoding /WinAnsiEncoding");
-        exporterSource.Should().Contain("EncodeWinAnsiHexText(normalized)");
-        exporterSource.Should().Contain("private static byte EncodeWinAnsiByte(char ch)");
-        exporterSource.Should().Contain("built-in Helvetica/WinAnsi set");
+        // The WinAnsi byte format now lives in the shared Free.Shared.Pdf tier; the FreeX exporter
+        // builds the app-agnostic draw-op model (via WorkbookPdfContentBuilder) and delegates byte
+        // emission to the shared writer.
+        exporterSource.Should().Contain("WorkbookPdfContentBuilder.Build(workbook, exportPlan, options)");
+        exporterSource.Should().Contain("PortablePdfWriter.WriteToBytes(document, \"FreeX portable PDF\")");
+        var builderSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookPdfContentBuilder.cs"));
+        builderSource.Should().Contain("PortablePdfPageContentPlanner.CreatePlan(workbook, request)");
         exporterSource.Should().NotContain("/Encoding /Identity-H");
         exporterSource.Should().NotContain("/ArialMT");
         exporterSource.Should().NotContain("System.Windows");
         exporterSource.Should().NotContain("Microsoft.Win32");
+
+        // The dependency-free WinAnsi guarantees are now proven on the shared writer source.
+        var sharedWriterSource = File.ReadAllText(RepositoryFileLocator.Find("shared", "Free.Shared.Pdf", "PortablePdfWriter.cs"));
+        sharedWriterSource.Should().Contain("/Encoding /WinAnsiEncoding");
+        sharedWriterSource.Should().Contain("EncodeWinAnsiHexText(normalized)");
+        sharedWriterSource.Should().Contain("private static byte EncodeWinAnsiByte(char ch)");
+        sharedWriterSource.Should().Contain("built-in Helvetica/WinAnsi set");
+        sharedWriterSource.Should().NotContain("/Encoding /Identity-H");
+        sharedWriterSource.Should().NotContain("/ArialMT");
+        sharedWriterSource.Should().NotContain("System.Windows");
+        sharedWriterSource.Should().NotContain("Microsoft.Win32");
     }
 
     [Fact]

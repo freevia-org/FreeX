@@ -166,4 +166,209 @@ public class AutoCorrectTests
         AutoCorrect.Evaluate(null, '"').Insert.Should().Be("“");
         AutoCorrect.Evaluate(null, 'a').Insert.Should().Be("A");
     }
+
+    // ── AutoFormat-As-You-Type: dashes en vs. em ───────────────────────────────────────────────────────
+
+    [Fact]
+    public void DoubleHyphen_BetweenWords_IsEnDash()
+    {
+        // "word--" (the dashes hug the word) → en dash, matching the original behaviour.
+        AutoCorrect.Evaluate("word-", '-').Insert.Should().Be("–");
+    }
+
+    [Fact]
+    public void DoubleHyphen_SpaceFlanked_IsEmDash()
+    {
+        // "word --" (a space precedes the double hyphen) → em dash.
+        var result = AutoCorrect.Evaluate("word -", '-');
+        result.DeleteBefore.Should().Be(1);
+        result.Insert.Should().Be("—");
+    }
+
+    // ── Automatic bulleted lists ───────────────────────────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData("*")]
+    [InlineData("-")]
+    [InlineData(">")]
+    public void BulletMarker_AtParagraphStart_RequestsBulletList(string before)
+    {
+        var result = AutoCorrect.Evaluate(before, ' ');
+
+        result.Applies.Should().BeTrue();
+        result.Outcome.Should().Be(AutoFormatOutcomeKind.BulletList);
+        result.DeleteBefore.Should().Be(before.Length); // the marker is consumed
+        result.Insert.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void BulletMarker_MidLine_DoesNotTrigger()
+    {
+        // "a -" is not at the paragraph start, so the space does not start a list.
+        AutoCorrect.Evaluate("a -", ' ').Applies.Should().BeFalse();
+    }
+
+    // ── Automatic numbered lists ───────────────────────────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData("1.")]
+    [InlineData("1)")]
+    public void NumberMarker_AtParagraphStart_RequestsNumberList(string before)
+    {
+        var result = AutoCorrect.Evaluate(before, ' ');
+
+        result.Outcome.Should().Be(AutoFormatOutcomeKind.NumberList);
+        result.DeleteBefore.Should().Be(before.Length);
+        result.Insert.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void NumberMarker_NonOne_DoesNotTrigger()
+    {
+        // Only a leading "1." auto-starts a list (so an in-progress "2." edit is left alone).
+        AutoCorrect.Evaluate("2.", ' ').Applies.Should().BeFalse();
+    }
+
+    // ── Ordinals → superscript ─────────────────────────────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData("1st", 2)]
+    [InlineData("2nd", 2)]
+    [InlineData("3rd", 2)]
+    [InlineData("4th", 2)]
+    [InlineData("11th", 2)]
+    [InlineData("21st", 2)]
+    [InlineData("103rd", 2)]
+    public void Ordinal_OnSpace_SuperscriptsSuffix(string word, int suffixLength)
+    {
+        var result = AutoCorrect.Evaluate(word, ' ');
+
+        result.Applies.Should().BeTrue();
+        result.Outcome.Should().Be(AutoFormatOutcomeKind.SuperscriptSuffix);
+        result.DeleteBefore.Should().Be(word.Length);
+        result.Insert.Should().Be(word + " ");
+        result.SuffixLength.Should().Be(suffixLength);
+    }
+
+    [Theory]
+    [InlineData("1th")]   // wrong suffix for 1 (should be st)
+    [InlineData("2st")]   // wrong suffix for 2 (should be nd)
+    [InlineData("11st")]  // 11 is always th
+    [InlineData("abc")]   // not numeric
+    public void Ordinal_WrongOrNonOrdinal_DoesNotTrigger(string word)
+    {
+        AutoCorrect.Evaluate(word, ' ').Applies.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Ordinal_GluedToLetters_DoesNotTrigger()
+    {
+        // "x1st" is not a word boundary before the number, so no ordinal.
+        AutoCorrect.Evaluate("x1st", ' ').Applies.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Ordinal_AfterSpace_Triggers()
+    {
+        var result = AutoCorrect.Evaluate("the 2nd", ' ');
+        result.Outcome.Should().Be(AutoFormatOutcomeKind.SuperscriptSuffix);
+        result.Insert.Should().Be("2nd ");
+    }
+
+    // ── Fractions → glyph ──────────────────────────────────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData("1/2", "½")]
+    [InlineData("1/4", "¼")]
+    [InlineData("3/4", "¾")]
+    public void Fraction_OnSpace_BecomesGlyph(string before, string glyph)
+    {
+        var result = AutoCorrect.Evaluate(before, ' ');
+
+        result.Applies.Should().BeTrue();
+        result.DeleteBefore.Should().Be(before.Length);
+        result.Insert.Should().Be(glyph + " ");
+        result.Outcome.Should().Be(AutoFormatOutcomeKind.None);
+    }
+
+    [Theory]
+    [InlineData("11/2")]  // no dedicated glyph / not a clean fraction at a boundary
+    [InlineData("1/3")]   // no single glyph
+    public void Fraction_NoGlyphOrGlued_DoesNotTrigger(string before)
+    {
+        AutoCorrect.Evaluate(before, ' ').Applies.Should().BeFalse();
+    }
+
+    // ── Hyperlinks ─────────────────────────────────────────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData("see http://example.com", "http://example.com")]
+    [InlineData("go https://www.example.com/path", "https://www.example.com/path")]
+    public void Hyperlink_Url_OnSpace_Links(string before, string expectedTarget)
+    {
+        var result = AutoCorrect.Evaluate(before, ' ');
+
+        result.Outcome.Should().Be(AutoFormatOutcomeKind.Hyperlink);
+        result.LinkTarget.Should().Be(expectedTarget);
+        result.Insert.Should().EndWith(" ");
+    }
+
+    [Fact]
+    public void Hyperlink_BareWww_GetsHttpScheme()
+    {
+        var result = AutoCorrect.Evaluate("visit www.example.com", ' ');
+        result.Outcome.Should().Be(AutoFormatOutcomeKind.Hyperlink);
+        result.LinkTarget.Should().Be("http://www.example.com");
+    }
+
+    [Fact]
+    public void Hyperlink_Email_GetsMailto()
+    {
+        var result = AutoCorrect.Evaluate("mail me@example.com", ' ');
+        result.Outcome.Should().Be(AutoFormatOutcomeKind.Hyperlink);
+        result.LinkTarget.Should().Be("mailto:me@example.com");
+    }
+
+    [Theory]
+    [InlineData("just a word")]
+    [InlineData("not.a.url")]      // dots but no scheme/www/@
+    [InlineData("@example.com")]   // empty local part
+    public void Hyperlink_NonLink_DoesNotTrigger(string before)
+    {
+        AutoCorrect.Evaluate(before, ' ').Applies.Should().BeFalse();
+    }
+
+    [Fact]
+    public void LinkTargetFor_IsPureAndReusable()
+    {
+        AutoCorrect.LinkTargetFor("https://a.com").Should().Be("https://a.com");
+        AutoCorrect.LinkTargetFor("www.a.com").Should().Be("http://www.a.com");
+        AutoCorrect.LinkTargetFor("a@b.com").Should().Be("mailto:a@b.com");
+        AutoCorrect.LinkTargetFor("plain").Should().BeNull();
+    }
+
+    // ── Per-rule toggles: a disabled rule is a no-op ───────────────────────────────────────────────────
+
+    [Fact]
+    public void DisabledRule_IsNoOp_PerRule()
+    {
+        AutoCorrect.Evaluate("word", '"', AutoFormatOptions.Default with { SmartQuotes = false }).Applies.Should().BeFalse();
+        AutoCorrect.Evaluate("word-", '-', AutoFormatOptions.Default with { Dashes = false }).Applies.Should().BeFalse();
+        AutoCorrect.Evaluate("wait..", '.', AutoFormatOptions.Default with { Ellipsis = false }).Applies.Should().BeFalse();
+        AutoCorrect.Evaluate("(c", ')', AutoFormatOptions.Default with { Symbols = false }).Applies.Should().BeFalse();
+        AutoCorrect.Evaluate("", 'h', AutoFormatOptions.Default with { Capitalization = false }).Applies.Should().BeFalse();
+        AutoCorrect.Evaluate("*", ' ', AutoFormatOptions.Default with { BulletedLists = false }).Applies.Should().BeFalse();
+        AutoCorrect.Evaluate("1.", ' ', AutoFormatOptions.Default with { NumberedLists = false }).Applies.Should().BeFalse();
+        AutoCorrect.Evaluate("1st", ' ', AutoFormatOptions.Default with { Ordinals = false }).Applies.Should().BeFalse();
+        AutoCorrect.Evaluate("1/2", ' ', AutoFormatOptions.Default with { Fractions = false }).Applies.Should().BeFalse();
+        AutoCorrect.Evaluate("http://x.com", ' ', AutoFormatOptions.Default with { Hyperlinks = false }).Applies.Should().BeFalse();
+    }
+
+    [Fact]
+    public void AllOff_SuppressesEveryRule()
+    {
+        AutoCorrect.Evaluate("word", '"', AutoFormatOptions.AllOff).Applies.Should().BeFalse();
+        AutoCorrect.Evaluate("1st", ' ', AutoFormatOptions.AllOff).Applies.Should().BeFalse();
+        AutoCorrect.Evaluate("", 'h', AutoFormatOptions.AllOff).Applies.Should().BeFalse();
+    }
 }
