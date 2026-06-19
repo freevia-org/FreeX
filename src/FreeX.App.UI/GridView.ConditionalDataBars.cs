@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Media;
+using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.Core.Model;
 
 namespace FreeX.App.UI;
@@ -12,22 +13,19 @@ public partial class GridView
         Rect cellRect,
         Dictionary<CellColor, SolidColorBrush>? brushCache = null)
     {
-        var start = Math.Clamp(dataBar.StartFraction, 0d, 1d);
-        var end = Math.Clamp(dataBar.EndFraction, 0d, 1d);
-        if (end < start)
-            (start, end) = (end, start);
+        if (ConditionalDataBarLayoutPlanner.Plan(dataBar.StartFraction, dataBar.EndFraction)
+                is not { } layout)
+            return;
 
-        const double horizontalInset = 2d;
-        const double verticalInset = 3d;
-        var drawableWidth = Math.Max(0d, cellRect.Width - horizontalInset * 2);
-        var drawableHeight = Math.Max(0d, cellRect.Height - verticalInset * 2);
-        var barWidth = drawableWidth * (end - start);
+        var drawableWidth = Math.Max(0d, cellRect.Width - layout.HorizontalInset * 2);
+        var drawableHeight = Math.Max(0d, cellRect.Height - layout.VerticalInset * 2);
+        var barWidth = drawableWidth * layout.FractionWidth;
         if (barWidth <= 0d || drawableHeight <= 0d)
             return;
 
         var rect = new Rect(
-            cellRect.Left + horizontalInset + drawableWidth * start,
-            cellRect.Top + verticalInset,
+            cellRect.Left + layout.HorizontalInset + drawableWidth * layout.Start,
+            cellRect.Top + layout.VerticalInset,
             barWidth,
             drawableHeight);
         var color = dataBar.FillColor.ToCellColor();

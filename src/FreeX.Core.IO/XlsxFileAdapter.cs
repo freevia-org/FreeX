@@ -690,7 +690,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             catch (Exception ex) { warnings.Add($"[conditional-format] Sheet '{xlSheet.Name}': {ex.Message}"); }
 
             // Load data validation rules (best-effort)
-            try { XlsxDataValidationClosedXmlMapper.Load(xlSheet, sheet); }
+            try { XlsxDataValidationClosedXmlMapper.Load(xlSheet, sheet, warnings); }
             catch (Exception ex) { warnings.Add($"[data-validation] Sheet '{xlSheet.Name}': {ex.Message}"); }
             if (xmlLayout is not null)
                 XlsxDataValidationNativeMetadataMapper.Apply(sheet, xmlLayout.DataValidationNativeMetadata);
@@ -708,7 +708,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         ResolvePivotChartCacheBindings(workbook);
 
         // Load named ranges (best-effort; skip any we cannot map)
-        try { XlsxNamedRangeMapper.Load(xlWorkbook, workbook); }
+        try { XlsxNamedRangeMapper.Load(xlWorkbook, workbook, warnings); }
         catch (Exception ex) { warnings.Add($"[named-ranges]: {ex.Message}"); }
 
         foreach (var customView in xlsxCustomViews)
