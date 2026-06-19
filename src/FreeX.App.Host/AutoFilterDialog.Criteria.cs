@@ -1,3 +1,5 @@
+using FreeX.App.Presentation.Filtering;
+
 namespace FreeX.App.Host;
 
 public sealed partial class AutoFilterDialog
@@ -20,7 +22,7 @@ public sealed partial class AutoFilterDialog
         AutoFilterDialogCriteriaPlanner.SetSelectionForSearch(items, searchText, isSelected);
 
     public static string GetFilterFamilyHeader(AutoFilterMenuFilterKind filterKind) =>
-        AutoFilterDialogCriteriaPlanner.GetFilterFamilyHeader(filterKind);
+        AutoFilterCriteriaLabels.GetFilterFamilyHeader(filterKind);
 
     public static AutoFilterDialogResult BuildResult(
         AutoFilterSortDirection sortDirection,
@@ -50,7 +52,7 @@ public sealed partial class AutoFilterDialog
         AutoFilterDialogCriteriaPlanner.GetCriteriaSuggestions(menuPlan);
 
     public static IReadOnlyList<AutoFilterCriteriaOption> GetCriteriaOptions(AutoFilterMenuFilterKind filterKind) =>
-        AutoFilterDialogCriteriaPlanner.GetCriteriaOptions(filterKind);
+        AutoFilterCriteriaLabels.GetCriteriaOptions(filterKind);
 
     public static string BuildCriteriaText(AutoFilterCriteriaOption option, string? value) =>
         AutoFilterDialogCriteriaPlanner.BuildCriteriaText(option, value);

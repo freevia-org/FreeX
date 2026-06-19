@@ -1,8 +1,14 @@
-using FreeX.Core.Commands;
+namespace FreeX.App.Presentation.Filtering;
 
-namespace FreeX.App.Host;
-
-internal static class AutoFilterDialogCriteriaPlanner
+/// <summary>
+/// Portable, UI-free planning for the AutoFilter dialog's value checklist and custom-criteria text: search
+/// filtering and select-all/clear of the value list, building the dialog result from the current selection and
+/// search mode, and composing the criteria strings the filter command parses (typed operators, Between,
+/// Top/Bottom, the date-preset and composite And/Or rows). Pure decision/format logic single-sourced here so the
+/// desktop host and the macOS port share identical behavior; the host keeps only the widget construction and
+/// supplies the localized operator labels (see the host-side label helper).
+/// </summary>
+public static class AutoFilterDialogCriteriaPlanner
 {
     public static IReadOnlyList<AutoFilterDialogItem> FilterItems(
         IEnumerable<AutoFilterDialogItem> items,
@@ -68,14 +74,6 @@ internal static class AutoFilterDialogCriteriaPlanner
         return updated;
     }
 
-    public static string GetFilterFamilyHeader(AutoFilterMenuFilterKind filterKind) =>
-        filterKind switch
-        {
-            AutoFilterMenuFilterKind.Number => UiText.Get("AutoFilter_FilterFamily_Number"),
-            AutoFilterMenuFilterKind.Date => UiText.Get("AutoFilter_FilterFamily_Date"),
-            _ => UiText.Get("AutoFilter_FilterFamily_Text")
-        };
-
     public static AutoFilterDialogResult BuildResult(
         AutoFilterSortDirection sortDirection,
         IEnumerable<AutoFilterDialogItem> items,
@@ -140,52 +138,6 @@ internal static class AutoFilterDialogCriteriaPlanner
 
         return [];
     }
-
-    public static IReadOnlyList<AutoFilterCriteriaOption> GetCriteriaOptions(AutoFilterMenuFilterKind filterKind) =>
-        filterKind switch
-        {
-            AutoFilterMenuFilterKind.Number =>
-            [
-                new(UiText.Get("AutoFilter_Criteria_Equals"), "="),
-                new(UiText.Get("AutoFilter_Criteria_DoesNotEqual"), "<>"),
-                new(UiText.Get("AutoFilter_Criteria_GreaterThan"), ">"),
-                new(UiText.Get("AutoFilter_Criteria_GreaterThanOrEqualTo"), ">="),
-                new(UiText.Get("AutoFilter_Criteria_LessThan"), "<"),
-                new(UiText.Get("AutoFilter_Criteria_LessThanOrEqualTo"), "<="),
-                new(UiText.Get("AutoFilter_Criteria_Between"), "between:"),
-                new(UiText.Get("AutoFilter_Criteria_Top10"), "top:"),
-                new(UiText.Get("AutoFilter_Criteria_Bottom10"), "bottom:"),
-                new(UiText.Get("AutoFilter_Criteria_Top10Percent"), "toppercent:"),
-                new(UiText.Get("AutoFilter_Criteria_Bottom10Percent"), "bottompercent:"),
-                new(UiText.Get("AutoFilter_Criteria_AboveAverage"), "above average", RequiresValue: false),
-                new(UiText.Get("AutoFilter_Criteria_BelowAverage"), "below average", RequiresValue: false),
-                new(UiText.Get("AutoFilter_Criteria_Blanks"), "blank", RequiresValue: false),
-                new(UiText.Get("AutoFilter_Criteria_NonBlanks"), "nonblank", RequiresValue: false)
-            ],
-            AutoFilterMenuFilterKind.Date =>
-            [
-                new(UiText.Get("AutoFilter_Criteria_Equals"), "date="),
-                new(UiText.Get("AutoFilter_Criteria_DoesNotEqual"), "date<>"),
-                new(UiText.Get("AutoFilter_Criteria_After"), "date>"),
-                new(UiText.Get("AutoFilter_Criteria_OnOrAfter"), "date>="),
-                new(UiText.Get("AutoFilter_Criteria_Before"), "date<"),
-                new(UiText.Get("AutoFilter_Criteria_OnOrBefore"), "date<="),
-                new(UiText.Get("AutoFilter_Criteria_Between"), "datebetween:"),
-                new(UiText.Get("AutoFilter_Criteria_Blanks"), "blank", RequiresValue: false),
-                new(UiText.Get("AutoFilter_Criteria_NonBlanks"), "nonblank", RequiresValue: false)
-            ],
-            _ =>
-            [
-                new(UiText.Get("AutoFilter_Criteria_Equals"), "text="),
-                new(UiText.Get("AutoFilter_Criteria_DoesNotEqual"), "text<>"),
-                new(UiText.Get("AutoFilter_Criteria_Contains"), "contains:"),
-                new(UiText.Get("AutoFilter_Criteria_DoesNotContain"), "notcontains:"),
-                new(UiText.Get("AutoFilter_Criteria_BeginsWith"), "begins:"),
-                new(UiText.Get("AutoFilter_Criteria_EndsWith"), "ends:"),
-                new(UiText.Get("AutoFilter_Criteria_Blanks"), "blank", RequiresValue: false),
-                new(UiText.Get("AutoFilter_Criteria_NonBlanks"), "nonblank", RequiresValue: false)
-            ]
-        };
 
     public static string BuildCriteriaText(AutoFilterCriteriaOption option, string? value) =>
         !option.RequiresValue
