@@ -11,7 +11,7 @@ public partial class GridView
     {
         var hit = GridResizeHitPlanner.HitTest(
             Viewport,
-            pos,
+            new GridPoint(pos.X, pos.Y),
             ActualRowHeaderWidth,
             EffectiveColHeaderHeight,
             ResizeHitZone,
