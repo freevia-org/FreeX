@@ -88,7 +88,8 @@ docx reader/writer; unsupported renderings are noted under [Known limitations](#
 - **Tab stops** (left/center/right/decimal) with **tab leaders** (dots/dashes/underline) — `w:tabs`/`w:tab`.
 - Paragraph **borders & shading** (`w:pBdr` + paragraph `w:shd`).
 - Flow control: keep-with-next, keep-lines-together, widow control (`w:keepNext`/`w:keepLines`/`w:widowControl`).
-- Bulleted / numbered / **multilevel** lists persisted to `word/numbering.xml` (`w:numPr`).
+- Bulleted / numbered / **multilevel** lists persisted to `word/numbering.xml` (`w:numPr`); multilevel
+  lists show Word's accumulated outline markers (`1`, `1.1`, `1.1.1`) live in the editor.
 - **Drop cap** (split first letter into an oversized run).
 
 ### Styles, themes & design
@@ -103,7 +104,7 @@ docx reader/writer; unsupported renderings are noted under [Known limitations](#
 - **Multi-column** layout (1/2/3 equal columns, `sectPr/w:cols`).
 - **Headers & footers** with a live **PAGE-number field** (`word/header1.xml`/`footer1.xml`, `w:fldSimple`).
 - Page borders + **watermark** (page border `w:pgBorders`; watermark stored as a `docProps/custom.xml` custom property).
-- **Line numbers** (continuous / restart-each-page, `sectPr/w:lnNumType`) drawn in print preview.
+- **Line numbers** (continuous / restart-each-page, `sectPr/w:lnNumType`) drawn in the live editor margin and in print preview.
 - Auto-hyphenation (`w:autoHyphenation`), vertical page alignment (`sectPr/w:vAlign`), different-first-page (`w:titlePg`).
 - **Different odd & even page** headers/footers (`w:evenAndOddHeaders` + `header2.xml`/`footer2.xml`, `w:type="even"`).
 - **Page background colour** (`w:background` + `w:displayBackgroundShape`).
@@ -231,12 +232,9 @@ self-contained and does not pull in FreeX. The build treats warnings as errors, 
 FreeW renders into a WPF `FlowDocument`, which is excellent for live editing but cannot reproduce every
 print-layout detail. The model/IO still round-trip these faithfully; the live view is the approximation.
 
-- **Multilevel list markers** render best-effort decimal-per-level on screen, not Word's exact
-  `1.1.1` accumulated text (the accumulated level text is still written to `numbering.xml`).
 - **Tab leaders** are carried verbatim through round-trip but are **not drawn** live (FlowDocument has
   no tab-leader API); FreeW preserves them via a paragraph `Tag`.
 - **Tab stops** are likewise preserved via the paragraph `Tag` (FlowDocument has no tab-stop API).
-- **Line numbers** appear only in **print preview**, not in the live editing surface.
 - **Vertical page alignment** (`w:vAlign`) is persisted but not reflowed live.
 - **Widow/orphan control** is stored in the model/docx but is model-only on screen.
 - **Watermark** is stored as a `docProps/custom.xml` custom property (FreeW's own convention), not as a

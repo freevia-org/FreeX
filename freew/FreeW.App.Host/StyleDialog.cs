@@ -131,15 +131,12 @@ internal static class StyleDialog
         alignment.ItemsSource = alignLabels;
         alignment.SelectedIndex = (int)seedPara.Alignment;
 
-        var ok = new Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
-        var cancel = new Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
-        ok.Click += (_, _) =>
+        void Accept()
         {
             var styleName = name.Text.Trim();
             if (styleName.Length == 0)
             {
-                MessageBox.Show(dialog, "Please enter a style name.", "New Style",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                DialogMessageHelper.ShowWarning(dialog, "Please enter a style name.", "New Style");
                 return;
             }
 
@@ -161,16 +158,11 @@ internal static class StyleDialog
 
             result = new StyleDefinition(styleName, chosenBasedOn, run, para);
             dialog.DialogResult = true;
-        };
+        }
 
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 12, 0, 0),
-        };
-        buttons.Children.Add(ok);
-        buttons.Children.Add(cancel);
+        // Reuse the shared OK/Cancel button row (accelerators, automation names, shell strings; Cancel is
+        // IsCancel so Esc/Cancel closes). Single source of truth shared with FreeX's dialogs.
+        var buttons = DialogButtonRowFactory.Create(Accept, buttonWidth: 72, rowMargin: new Thickness(0, 12, 0, 0));
 
         var panel = new StackPanel { Margin = new Thickness(16) };
         AddRow(panel, "Name:", name);

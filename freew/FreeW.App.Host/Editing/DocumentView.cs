@@ -70,6 +70,11 @@ public sealed class DocumentView : RichTextBox
     // geometry from the current Document + model PageSettings and is recomputed cheaply on relayout.
     private PageBreakAdorner? _pageBreakAdorner;
 
+    // The live overlay drawing line numbers in the left margin when the document enables them
+    // (w:lnNumType), or null when line numbering is off. Like the page-break overlay it is an
+    // AdornerLayer overlay, never part of the FlowDocument content, and recomputed on relayout.
+    private LineNumberAdorner? _lineNumberAdorner;
+
     private static DropShadowEffect CreatePageShadow()
     {
         var shadow = new DropShadowEffect
@@ -151,6 +156,7 @@ public sealed class DocumentView : RichTextBox
         PrintLayoutEnabled = !PrintLayoutEnabled;
         ApplyPageChrome();
         SyncPageBreakAdorner();
+        SyncLineNumberAdorner();
         return PrintLayoutEnabled;
     }
 
@@ -1809,14 +1815,31 @@ public sealed class DocumentView : RichTextBox
                 // the same Decimal marker, so ReadList recovers the kind from this Tag rather than inferring
                 // it from the marker (which can't tell MultiLevel from Number) — see ReadList/FromMarkerStyle.
                 var list = new WpfList { MarkerStyle = ToMarkerStyle(kind), Tag = kind };
+
+                // Collect this list's paragraphs first so a MultiLevel list can compute its accumulated
+                // outline markers ("1.1.1") across the whole run before building the WPF items.
+                var listParagraphs = new List<ModelParagraph>();
                 while (i < blocks.Count
                     && !hidden.Contains(i)
                     && blocks[i] is ModelParagraph { Formatting.ListKind: var k } listParagraph
                     && k == kind)
                 {
-                    list.ListItems.Add(new WpfListItem(BuildParagraph(listParagraph, _model)));
+                    listParagraphs.Add(listParagraph);
                     visibleCount++;
                     i++;
+                }
+
+                // MultiLevel lists suppress WPF's built-in marker and render a computed accumulated marker
+                // instead (WPF cannot accumulate "1.1.1"); other kinds use the built-in WPF marker.
+                var markers = kind == ListKind.MultiLevel
+                    ? MultiLevelMarkerSequence(listParagraphs.Select(p => p.Formatting.ListLevel))
+                    : null;
+                for (var p = 0; p < listParagraphs.Count; p++)
+                {
+                    var wpfParagraph = BuildParagraph(listParagraphs[p], _model);
+                    if (markers is not null)
+                        PrependMultiLevelMarker(wpfParagraph, markers[p], _model);
+                    list.ListItems.Add(new WpfListItem(wpfParagraph));
                 }
                 flow.Blocks.Add(list);
             }
@@ -1833,6 +1856,7 @@ public sealed class DocumentView : RichTextBox
         ApplyProtection();
         SyncFormattingMarksAdorner();
         SyncPageBreakAdorner();
+        SyncLineNumberAdorner();
     }
 
     /// <summary>
@@ -2056,6 +2080,48 @@ public sealed class DocumentView : RichTextBox
         SyncPageBreakAdorner();
     }
 
+    // Add, remove, or refresh the line-number overlay to match the model's LineNumberMode. Mirrors
+    // SyncPageBreakAdorner: the overlay shows when the document enables line numbering and is removed when
+    // it does not. The adorner layer only exists once the control is loaded, so when it is not yet
+    // available we defer via a one-shot Loaded handler. Line numbers are drawn in the left margin gutter,
+    // which only exists in Print Layout; in the plain continuous view there is no margin to host them, so
+    // the overlay is suppressed there (matching where Print Preview shows them).
+    private void SyncLineNumberAdorner()
+    {
+        var enabled = PrintLayoutEnabled && _model.Page.LineNumberMode != LineNumberMode.None;
+        var layer = AdornerLayer.GetAdornerLayer(this);
+        if (layer is null)
+        {
+            if (enabled)
+            {
+                Loaded -= OnLoadedSyncLineNumbers;
+                Loaded += OnLoadedSyncLineNumbers;
+            }
+            return;
+        }
+
+        if (enabled)
+        {
+            if (_lineNumberAdorner is null)
+            {
+                _lineNumberAdorner = new LineNumberAdorner(this);
+                layer.Add(_lineNumberAdorner);
+            }
+            _lineNumberAdorner.InvalidateVisual();
+        }
+        else if (_lineNumberAdorner is not null)
+        {
+            layer.Remove(_lineNumberAdorner);
+            _lineNumberAdorner = null;
+        }
+    }
+
+    private void OnLoadedSyncLineNumbers(object sender, RoutedEventArgs e)
+    {
+        Loaded -= OnLoadedSyncLineNumbers;
+        SyncLineNumberAdorner();
+    }
+
     /// <summary>
     /// Builds a tiling brush that paints faint, 45-degree watermark text on a white page so it sits
     /// behind the document content. Used by the editor background; the print/preview path draws the
@@ -2104,11 +2170,94 @@ public sealed class DocumentView : RichTextBox
         }
     }
 
-    // Both numbered and multilevel lists render with a decimal marker. WPF's FlowDocument List has no
-    // built-in accumulating outline marker (true "1.1.1" form), so MultiLevel is rendered best-effort
-    // as a plain decimal-per-level marker; the outline definition still round-trips through the docx.
-    private static TextMarkerStyle ToMarkerStyle(ListKind kind) =>
-        kind is ListKind.Number or ListKind.MultiLevel ? TextMarkerStyle.Decimal : TextMarkerStyle.Disc;
+    // Numbered lists render with WPF's built-in decimal marker. MultiLevel lists suppress the built-in
+    // marker (None) because WPF cannot produce an accumulating outline marker (true "1.1.1" form); their
+    // per-paragraph accumulated text is computed by MultiLevelMarkerSequence and rendered as a leading
+    // non-editable run instead (see Render). Bullets use a disc.
+    private static TextMarkerStyle ToMarkerStyle(ListKind kind) => kind switch
+    {
+        ListKind.Number => TextMarkerStyle.Decimal,
+        ListKind.MultiLevel => TextMarkerStyle.None,
+        _ => TextMarkerStyle.Disc
+    };
+
+    // Maximum outline depth FreeW's numbering covers (matches DocxWriter.ListLevelCount / numbering.xml).
+    private const int MultiLevelDepth = 9;
+
+    /// <summary>
+    /// Computes the accumulated outline marker text ("1.", "1.1.", "1.1.1.", …) for a run of multilevel
+    /// list paragraphs, mirroring exactly what FreeW writes to <c>numbering.xml</c>: each level n shows the
+    /// dotted run of all ancestor counters, <c>%1.%2.…%(n+1).</c> (see <c>DocxWriter.BuildNumbering</c>).
+    /// One marker is returned per input level, in order.
+    /// <para>
+    /// Counter rules match Word's <c>w:multiLevelType="multilevel"</c>: entering a level increments that
+    /// level's counter and resets every deeper level to its start; an ancestor level that has not yet been
+    /// numbered in this run is shown at its start value (1) so a list that begins at, or jumps to, a deeper
+    /// level still renders a sensible dotted prefix rather than zeros.
+    /// </para>
+    /// Pure (no WPF), so it is unit-testable. Levels are clamped to <c>[0, <see cref="MultiLevelDepth"/>)</c>.
+    /// </summary>
+    internal static IReadOnlyList<string> MultiLevelMarkerSequence(IEnumerable<int> levels)
+    {
+        ArgumentNullException.ThrowIfNull(levels);
+        var counters = new int[MultiLevelDepth];
+        var markers = new List<string>();
+        var builder = new System.Text.StringBuilder();
+        foreach (var rawLevel in levels)
+        {
+            var level = Math.Clamp(rawLevel, 0, MultiLevelDepth - 1);
+            counters[level]++;
+            for (var deeper = level + 1; deeper < MultiLevelDepth; deeper++)
+                counters[deeper] = 0;
+
+            builder.Clear();
+            for (var ancestor = 0; ancestor <= level; ancestor++)
+            {
+                // An ancestor never numbered yet (jumped-into deeper level) shows its start value (1),
+                // matching Word's behaviour rather than printing a "0." prefix.
+                var value = counters[ancestor] == 0 ? 1 : counters[ancestor];
+                builder.Append(value.ToString(System.Globalization.CultureInfo.InvariantCulture)).Append('.');
+            }
+            markers.Add(builder.ToString());
+        }
+        return markers;
+    }
+
+    /// <summary>
+    /// Prepends the computed accumulated outline marker (e.g. <c>1.1.1.</c>) to a multilevel-list
+    /// paragraph as a leading non-editable run, plus a tab so the body text aligns past the marker
+    /// (mirroring Word's hanging-indent layout). The run is tagged with <see cref="MultiLevelMarker"/>
+    /// so <see cref="ReadInline"/> drops it on commit — the marker is view-only chrome and never enters
+    /// the model (the outline definition lives in <c>numbering.xml</c>, regenerated on save). Marker text
+    /// inherits the paragraph's leading run formatting so it tracks the list's font size/colour.
+    /// </summary>
+    private static void PrependMultiLevelMarker(WpfParagraph paragraph, string markerText, TextDocument document)
+    {
+        // Mirrors the footnote/endnote marker convention: a plain run carrying a Tag that ReadInline drops
+        // on commit. The marker text is regenerated on every Render, so even if the user edits over it the
+        // model is unaffected (the outline definition lives in numbering.xml).
+        var marker = new WpfRun(markerText + '\t')
+        {
+            Tag = MultiLevelMarker.Instance
+        };
+        // Match the paragraph's font size so the marker scales with the list text (fall back to default).
+        var firstRun = paragraph.Inlines.OfType<WpfRun>().FirstOrDefault();
+        if (firstRun is not null && firstRun.FontSize > 0)
+            marker.FontSize = firstRun.FontSize;
+        else
+            marker.FontSize = (document.DefaultRun.FontSizePt ?? DefaultFontSizePt) * PxPerPoint;
+        paragraph.Inlines.InsertBefore(paragraph.Inlines.FirstInline, marker);
+    }
+
+    /// <summary>
+    /// Marks the synthetic leading run that renders a multilevel list's accumulated outline number
+    /// (see <see cref="PrependMultiLevelMarker"/>). View-only chrome: <see cref="ReadInline"/> skips any
+    /// run carrying this tag so the marker text never round-trips into the model.
+    /// </summary>
+    private sealed record MultiLevelMarker
+    {
+        public static readonly MultiLevelMarker Instance = new();
+    }
 
     /// <summary>
     /// Applies the page's multi-column layout to a <see cref="FlowDocument"/>. A FlowDocument derives
@@ -2156,7 +2305,15 @@ public sealed class DocumentView : RichTextBox
     /// round-trip through an edit/commit cycle.
     /// </para>
     /// </summary>
-    private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, string? BookmarkName, bool PageBreakBefore = false, bool WidowControl = false, string? StyleId = null);
+    /// <para>
+    /// Also carries the paragraph's list nesting depth (<see cref="ModelParagraph.Formatting"/>'s
+    /// <c>ListLevel</c>). The editor coalesces a run of same-kind list paragraphs into one flat WPF
+    /// <see cref="WpfList"/>, so the nesting depth has no structural slot in the FlowDocument and was
+    /// dropped on commit (collapsing every multilevel item back to level 0). Stamping it here makes the
+    /// list level round-trip through an edit/commit cycle, which keeps the accumulated outline markers
+    /// (1.1.1) stable after editing. Defaults to 0 (the non-list / top-level case).
+    /// </para>
+    private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, string? BookmarkName, bool PageBreakBefore = false, bool WidowControl = false, string? StyleId = null, int ListLevel = 0);
 
     /// <summary>Read the edited FlowDocument back into the model (paragraphs + tables).</summary>
     public void CommitToModel()
@@ -2274,7 +2431,14 @@ public sealed class DocumentView : RichTextBox
                         break;
                     case WpfParagraph paragraph:
                         var model = ReadParagraph(paragraph, document);
-                        model.Formatting = model.Formatting with { ListKind = kind, ListLevel = level };
+                        // Recover the list nesting depth: prefer the depth stamped on the paragraph Tag at
+                        // render (the editor flattens a list run into one WPF List, so the structural nesting
+                        // `level` is 0 for every item); fall back to the structural level for nested WPF lists
+                        // the user built fresh in the editor (those carry no ParagraphTag depth).
+                        var listLevel = paragraph.Tag is ParagraphTag { ListLevel: var taggedLevel } && taggedLevel > 0
+                            ? taggedLevel
+                            : level;
+                        model.Formatting = model.Formatting with { ListKind = kind, ListLevel = listLevel };
                         target.Add(model);
                         break;
                     case WpfTable table:
@@ -2333,6 +2497,10 @@ public sealed class DocumentView : RichTextBox
                 break;
             case InlineUIContainer { Child: FrameworkElement { Tag: EmbeddedObject modelEmbedded } }:
                 modelParagraph.Runs.Add(ModelRun.FromEmbeddedObject(modelEmbedded));
+                break;
+            case WpfRun { Tag: MultiLevelMarker }:
+                // Synthetic accumulated outline marker ("1.1.1") — view-only chrome, never enters the
+                // model (numbering.xml carries the list definition). Drop it on commit.
                 break;
             case WpfRun { Tag: FootnoteMarker marker }:
                 modelParagraph.Runs.Add(ModelRun.FootnoteReference(marker.FootnoteId));
@@ -2799,8 +2967,10 @@ public sealed class DocumentView : RichTextBox
         // paragraph's Tag (a ParagraphTag) and read them back verbatim on commit; the round-trip is exact.
         // WidowControl has no FlowDocument property either, so it joins the Tag alongside tab stops,
         // bookmark name and page-break-before; carried verbatim and recovered on commit.
-        if (paraFmt.TabStops.Count > 0 || paragraph.BookmarkName is { Length: > 0 } || paraFmt.PageBreakBefore || paraFmt.WidowControl || paragraph.StyleId is { Length: > 0 })
-            wpf.Tag = new ParagraphTag(paraFmt.TabStops, paragraph.BookmarkName, paraFmt.PageBreakBefore, paraFmt.WidowControl, paragraph.StyleId);
+        // The list nesting depth is carried on the Tag too: the editor flattens a list run into one WPF
+        // List, so depth has no structural slot and would otherwise reset to 0 on commit (see ParagraphTag).
+        if (paraFmt.TabStops.Count > 0 || paragraph.BookmarkName is { Length: > 0 } || paraFmt.PageBreakBefore || paraFmt.WidowControl || paragraph.StyleId is { Length: > 0 } || paraFmt.ListLevel > 0)
+            wpf.Tag = new ParagraphTag(paraFmt.TabStops, paragraph.BookmarkName, paraFmt.PageBreakBefore, paraFmt.WidowControl, paragraph.StyleId, paraFmt.ListLevel);
 
         foreach (var run in paragraph.Runs)
             wpf.Inlines.Add(BuildRun(run, paragraph, document));
@@ -5707,6 +5877,157 @@ public sealed class DocumentView : RichTextBox
             // Sit the label just below the rule, centred across the visible width.
             var x = bounds.Left + Math.Max(0, (bounds.Width - label.Width) / 2);
             dc.DrawText(label, new Point(x, y + 1));
+        }
+    }
+
+    /// <summary>
+    /// Draws line numbers in the left-margin gutter of the live Print-Layout editing surface when the
+    /// document enables line numbering (<see cref="PageSettings.LineNumberMode"/>), so the editor matches
+    /// what Print Preview and the printed page show rather than surfacing the numbers only on print.
+    ///
+    /// The editable surface is one continuous WPF flow, so the adorner reads the laid-out <em>visual</em>
+    /// lines via <see cref="TextPointer.GetLineStartPosition"/> and numbers them top-to-bottom. Continuous
+    /// mode counts every line from the document start; RestartEachPage resets the counter at each printed
+    /// page boundary, approximated (like <see cref="PageBreakAdorner"/>) by stepping the page's printable
+    /// content height — Print Preview remains the authoritative paginated view. Only every
+    /// <see cref="PageSettings.LineNumberCountBy"/>-th number is drawn. Numbers are right-aligned just
+    /// inside the left page margin, matching <c>PrintPreviewWindow.BuildLineNumbers</c>.
+    ///
+    /// Coordinates and zoom behave exactly as for <see cref="PageBreakAdorner"/>: the adorner shares the
+    /// editor's content coordinate space and is scaled by its LayoutTransform, so numbers track the text
+    /// under zoom. Painting is clipped to the visible surface.
+    /// </summary>
+    private sealed class LineNumberAdorner : Adorner
+    {
+        private static readonly Brush NumberBrush = CreateNumberBrush();
+
+        // Cap the number of lines walked per paint so a pathological layout can't make the overlay
+        // expensive; far above any realistic single-screen line count.
+        private const int MaxLines = 20_000;
+
+        private readonly DocumentView _view;
+
+        public LineNumberAdorner(DocumentView view) : base(view)
+        {
+            _view = view;
+            IsHitTestVisible = false;
+            _view.LayoutUpdated += (_, _) => InvalidateVisual();
+        }
+
+        private static Brush CreateNumberBrush()
+        {
+            var brush = new SolidColorBrush(Color.FromRgb(0x60, 0x60, 0x60));
+            brush.Freeze();
+            return brush;
+        }
+
+        protected override void OnRender(DrawingContext drawingContext)
+        {
+            base.OnRender(drawingContext);
+
+            var page = _view._model.Page;
+            if (page.LineNumberMode == LineNumberMode.None || _view.Document is not { } doc)
+                return;
+
+            var countBy = Math.Max(1, page.LineNumberCountBy);
+            var restartEachPage = page.LineNumberMode == LineNumberMode.RestartEachPage;
+
+            // Page geometry used to (a) place numbers in the left margin and (b) approximate page resets.
+            var (_, contentHeight) = PageLayout.ContentAreaDip(page);
+            var (leftMarginDip, _, _, _) = PageLayout.MarginsDip(page);
+            var gutterRight = Math.Max(0, leftMarginDip - PageLayout.PointsToDip(6));
+
+            var origin = FirstLineTop(doc);
+            if (origin is not { } topY)
+                return;
+
+            var bounds = new Rect(_view.RenderSize);
+            var pixelsPerDip = VisualTreeHelper.GetDpi(_view).PixelsPerDip;
+
+            drawingContext.PushClip(new RectangleGeometry(bounds));
+            try
+            {
+                var line = doc.ContentStart;
+                for (var lineIndex = 0; lineIndex < MaxLines; lineIndex++)
+                {
+                    Rect rect;
+                    try
+                    {
+                        rect = line.GetCharacterRect(LogicalDirection.Forward);
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // Layout momentarily unavailable during a relayout; abandon this pass.
+                        return;
+                    }
+
+                    // The 1-based number for this line: continuous counts from the top; RestartEachPage
+                    // resets per approximate printed page (which page this line's Y falls in).
+                    int lineNumber;
+                    if (restartEachPage && contentHeight > 0)
+                    {
+                        var pageIndex = (int)Math.Floor((rect.Top - topY) / contentHeight);
+                        var pageTop = topY + pageIndex * contentHeight;
+                        var withinPage = (int)Math.Round((rect.Top - pageTop) / Math.Max(1, rect.Height));
+                        lineNumber = withinPage + 1;
+                    }
+                    else
+                    {
+                        lineNumber = lineIndex + 1;
+                    }
+
+                    if (lineNumber % countBy == 0 && !rect.IsEmpty
+                        && rect.Bottom >= bounds.Top && rect.Top <= bounds.Bottom)
+                    {
+                        DrawNumber(drawingContext, lineNumber, rect, gutterRight, pixelsPerDip);
+                    }
+
+                    var next = line.GetLineStartPosition(1);
+                    if (next is null || next.CompareTo(line) <= 0)
+                        break; // no further line (end of document) or layout not advancing
+                    line = next;
+
+                    // Stop once we've stepped past the bottom of the viewport (continuous mode keeps the
+                    // global count, but there's nothing more to paint on screen).
+                    if (rect.Top > bounds.Bottom)
+                        break;
+                }
+            }
+            finally
+            {
+                drawingContext.Pop();
+            }
+        }
+
+        // Top Y (editor content coordinates) of the first laid-out line, or null when layout isn't ready.
+        private static double? FirstLineTop(FlowDocument doc)
+        {
+            try
+            {
+                var rect = doc.ContentStart.GetCharacterRect(LogicalDirection.Forward);
+                return rect.IsEmpty ? null : rect.Top;
+            }
+            catch (InvalidOperationException)
+            {
+                return null;
+            }
+        }
+
+        private static void DrawNumber(DrawingContext dc, int lineNumber, Rect lineRect, double gutterRight, double pixelsPerDip)
+        {
+            var formatted = new FormattedText(
+                lineNumber.ToString(System.Globalization.CultureInfo.CurrentCulture),
+                System.Globalization.CultureInfo.CurrentCulture,
+                FlowDirection.LeftToRight,
+                new Typeface("Calibri"),
+                PageLayout.PointsToDip(9.0),
+                NumberBrush,
+                pixelsPerDip);
+
+            // Right-align into the gutter; vertically centre against the line's box.
+            var x = Math.Max(0, gutterRight - formatted.Width);
+            var y = lineRect.Top + Math.Max(0, (lineRect.Height - formatted.Height) / 2);
+            dc.DrawText(formatted, new Point(x, y));
         }
     }
 }

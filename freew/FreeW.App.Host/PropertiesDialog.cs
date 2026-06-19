@@ -55,17 +55,9 @@ internal sealed class PropertiesDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         AddRow(grid, 3, "Keywords:", _keywords);
         AddRow(grid, 4, "Comments:", _comments);
 
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(14, 0, 14, 12)
-        };
-        var ok = new Button { Content = "OK", MinWidth = 84, IsDefault = true, Padding = new Thickness(6, 3, 6, 3) };
-        ok.Click += (_, _) => Commit();
-        var cancel = new Button { Content = "Cancel", MinWidth = 84, IsCancel = true, Margin = new Thickness(6, 0, 0, 0), Padding = new Thickness(6, 3, 6, 3) };
-        buttons.Children.Add(ok);
-        buttons.Children.Add(cancel);
+        // Reuse the shared OK/Cancel button row (accelerators, automation names, shell strings; Cancel is
+        // IsCancel so Esc/Cancel closes). Single source of truth shared with FreeX's dialogs.
+        var buttons = DialogButtonRowFactory.Create(Commit, buttonWidth: 84, rowMargin: new Thickness(14, 0, 14, 12));
 
         var outer = new StackPanel();
         outer.Children.Add(grid);

@@ -129,18 +129,28 @@ internal sealed class BackstageView : UserControl
     }
 
     // ── Export pane ────────────────────────────────────────────────────────────
-    // No PDF/export back-end exists in FreeW yet, so this is an honest placeholder offering Save As.
+    // Real PDF export: the document is paginated through the print pipeline and written to a PDF via
+    // PdfExport (PDFsharp), with a native Save dialog for the destination. Save As (.docx) stays as a
+    // secondary option.
     private UIElement BuildExportPane()
     {
         var panel = new StackPanel { MaxWidth = 560, HorizontalAlignment = HorizontalAlignment.Left };
         panel.Children.Add(Heading("Export"));
         panel.Children.Add(new TextBlock
         {
-            Text = "Exporting to PDF or other formats is not available in this build yet. "
-                 + "Use Save As to write a Word document (.docx).",
+            Text = "Create a PDF copy of this document. The PDF matches Print / Print Preview, "
+                 + "including page size, margins, headers and footers.",
             Foreground = MutedBrush,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 16)
+        });
+        panel.Children.Add(LinkButton("Export to PDF…", () => { Hide(); _actions.ExportPdf(); }));
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Or use Save As to write an editable Word document (.docx).",
+            Foreground = MutedBrush,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 18, 0, 8)
         });
         panel.Children.Add(LinkButton("Save As…", () => { Hide(); _actions.SaveAs(); }));
         return panel;
@@ -211,19 +221,34 @@ internal sealed class BackstageView : UserControl
     }
 
     // ── Options pane ───────────────────────────────────────────────────────────
+    // A live summary of FreeW's persisted settings plus an "Edit Options…" link that opens the modal
+    // OptionsDialog. Editing persists through the shared JsonSettingsStore and applies live (see
+    // MainWindow.OpenOptions), so the summary re-renders with the new values each time this pane is shown.
     private UIElement BuildOptionsPane()
     {
+        var options = _actions.CurrentOptions();
+
         var panel = new StackPanel { MaxWidth = 560, HorizontalAlignment = HorizontalAlignment.Left };
         panel.Children.Add(Heading("Options"));
         panel.Children.Add(new TextBlock
         {
-            Text = "FreeW does not have a dedicated Options dialog yet. Formatting, view, and document "
-                 + "settings are available on the ribbon tabs.",
+            Text = "FreeW application settings. These persist between sessions and apply immediately.",
             Foreground = MutedBrush,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 16)
         });
+
+        panel.Children.Add(Field("Recent files kept", options.RecentFilesCap.ToString()));
+        panel.Children.Add(Field("Default save format", options.DefaultSaveFormat));
+        panel.Children.Add(Field(
+            "UI language",
+            string.IsNullOrEmpty(options.UiLanguage) ? "System default" : options.UiLanguage));
         panel.Children.Add(Field("Data folder", _actions.DataFolder()));
+
+        var edit = LinkButton("Edit options…", () => { Hide(); _actions.EditOptions(); });
+        edit.Margin = new Thickness(0, 14, 0, 0);
+        panel.Children.Add(edit);
+
         return panel;
     }
 
@@ -347,6 +372,9 @@ internal sealed record BackstageActions(
     Action Save,
     Action SaveAs,
     Action Print,
+    Action ExportPdf,
     Action EditProperties,
+    Action EditOptions,
+    Func<FreeWOptions> CurrentOptions,
     Action OnClosed,
     Func<string> DataFolder);

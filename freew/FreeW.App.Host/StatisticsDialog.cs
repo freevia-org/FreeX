@@ -40,21 +40,13 @@ internal sealed class StatisticsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         AddRow(grid, ref row, "Readability (Flesch)",
             $"{stats.FleschReadingEase.ToString("0.0", CultureInfo.CurrentCulture)} — {DescribeEase(stats.FleschReadingEase)}");
 
-        var close = new Button
-        {
-            Content = "Close",
-            MinWidth = 84,
-            IsDefault = true,
-            IsCancel = true,
-            Padding = new Thickness(6, 3, 6, 3),
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(16, 4, 16, 12)
-        };
-        close.Click += (_, _) => Close();
+        // Reuse the shared OK-only button row (accelerator, automation name, shell strings; the single OK
+        // button is IsDefault + IsCancel so Enter/Esc both close). Matches FreeX's informational dialogs.
+        var buttons = DialogButtonRowFactory.CreateOkOnly(Close, buttonWidth: 84, rowMargin: new Thickness(16, 4, 16, 12));
 
         var outer = new StackPanel();
         outer.Children.Add(grid);
-        outer.Children.Add(close);
+        outer.Children.Add(buttons);
         Content = outer;
     }
 

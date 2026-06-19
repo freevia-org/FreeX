@@ -41,18 +41,10 @@ internal sealed class DateTimeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         list.MouseDoubleClick += (_, _) => Accept(list);
         panel.Children.Add(list);
 
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 12, 0, 0)
-        };
-        var ok = new Button { Content = "OK", MinWidth = 72, Margin = new Thickness(6, 0, 0, 0), IsDefault = true };
-        ok.Click += (_, _) => Accept(list);
-        var cancel = new Button { Content = "Cancel", MinWidth = 72, Margin = new Thickness(6, 0, 0, 0), IsCancel = true };
-        buttons.Children.Add(ok);
-        buttons.Children.Add(cancel);
-        panel.Children.Add(buttons);
+        // Reuse the shared OK/Cancel button row (accelerators, automation names, shell strings; Cancel is
+        // IsCancel so Esc/Cancel closes). Single source of truth shared with FreeX's dialogs.
+        panel.Children.Add(DialogButtonRowFactory.Create(
+            () => Accept(list), buttonWidth: 72, rowMargin: new Thickness(0, 12, 0, 0)));
 
         Content = panel;
         list.Focus();

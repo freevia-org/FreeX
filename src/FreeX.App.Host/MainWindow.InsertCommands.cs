@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Windows;
+using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -156,7 +157,7 @@ public partial class MainWindow
     private bool TryOpenHyperlink(CellAddress address)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
-        if (!HyperlinkNavigationPlanner.TryCreatePlan(sheet, address, out var plan) || plan is null)
+        if (!HyperlinkNavigationPlanner.TryCreatePlan(sheet, address, _currentFilePath, out var plan) || plan is null)
             return false;
 
         if (plan.Kind == HyperlinkNavigationKind.WorksheetCell)
@@ -169,6 +170,12 @@ public partial class MainWindow
                 UiText.Get("MainWindowMessage_OpenHyperlinkTitle"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
+            return true;
+        }
+
+        if (plan.Kind == HyperlinkNavigationKind.LocalFile)
+        {
+            OpenLocalFileHyperlink(plan);
             return true;
         }
 
@@ -191,6 +198,24 @@ public partial class MainWindow
         }
 
         return true;
+    }
+
+    private void OpenLocalFileHyperlink(HyperlinkNavigationPlan plan)
+    {
+        // The shared planner already resolved the (absolute) local path; only open it when it
+        // maps to a supported workbook adapter, mirroring the cross-platform port's guard.
+        if (string.IsNullOrWhiteSpace(plan.LocalPath) ||
+            WorkbookDropPlanner.SelectOpenableFile(new[] { plan.LocalPath }, _fileAdapters) is not { } openablePath)
+        {
+            ShowOwnedMessage(
+                UiText.Get("MainWindowMessage_OpenHyperlinkOpenFailed"),
+                UiText.Get("MainWindowMessage_OpenHyperlinkTitle"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
+
+        _ = OpenStartupFileAsync(openablePath);
     }
 
     private bool TryOpenSelectedHyperlink()
