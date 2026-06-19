@@ -2,7 +2,8 @@
 
 This corpus backs the **on-demand** FreeX ↔ Microsoft Excel fidelity batch
 (`tools/FreeX.FidelityCompare`). It is **not** part of the normal build, test, or release flow — nothing
-here is referenced by the test projects or CI. It exists to open complex real-world `.xlsx` files in both
+here is referenced by the test projects or CI. It exists to open complex real-world `.xlsx` and legacy
+`.xls` files in both
 FreeX and desktop Excel and compare visuals and functionality.
 
 ## What is committed vs. downloaded
@@ -14,18 +15,23 @@ FreeX and desktop Excel and compare visuals and functionality.
 ## Getting the files
 
 ```powershell
-pwsh tools/Fetch-FidelityCorpus.ps1        # download anything missing
-pwsh tools/Fetch-FidelityCorpus.ps1 -Force # re-download everything
+pwsh tools/Fetch-FidelityCorpus.ps1                # download anything missing
+pwsh tools/Fetch-FidelityCorpus.ps1 -Force         # re-download everything
+pwsh tools/Fetch-FidelityCorpus.ps1 -Source exinfm # download only EXINFM legacy .xls files
 ```
 
 ## Manifest schema (`manifest.csv`)
 
 `id,file,source,license,retrieved_on,url,feature_tags,notes`
 
-- `license` is **required** for every downloaded row and must be permissive or public-domain. The current
-  catalogue uses Apache POI test data (Apache-2.0), OfficeCLI chart/pivot workbooks (Apache-2.0), plus
-  targeted MIT-licensed library fixtures for form controls, ActiveX controls, dropdown validation,
-  Budget-vs-Actual chart data, chart overlays, PivotTables, chartsheets, and emoji/unicode strings.
+- `license` is **required** for every downloaded row. Rows marked with a permissive or public-domain
+  license can be treated as redistributable metadata-backed samples. Rows marked
+  `free-download-redistribution-unconfirmed`, such as the EXINFM legacy `.xls` samples, are local-only
+  validation inputs: the downloader can fetch them, but the workbook binaries remain ignored and must not
+  be committed or redistributed from this repository. The current catalogue uses Apache POI test data
+  (Apache-2.0), OfficeCLI chart/pivot workbooks (Apache-2.0), plus targeted MIT-licensed library fixtures
+  for form controls, ActiveX controls, dropdown validation, Budget-vs-Actual chart data, chart overlays,
+  PivotTables, chartsheets, and emoji/unicode strings.
   Together those rows cover charts, ChartEx/cx charts, pivots, conditional formatting, tables, data
   validation, formatting/themes, comments, merges, formulas, sparklines, drawings, images, text boxes,
   embedded objects, hyperlinks, protection, page setup, and sizeable worksheet data.

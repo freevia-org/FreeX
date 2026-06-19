@@ -9,7 +9,7 @@ internal static class FreeXInspector
     {
         Workbook workbook;
         using (var stream = File.OpenRead(path))
-            workbook = new XlsxFileAdapter().Load(stream);
+            workbook = CreateOpenAdapter(path).Load(stream);
 
         if (recalc)
         {
@@ -54,6 +54,16 @@ internal static class FreeXInspector
         }
 
         result.FreeX = inv;
+    }
+
+    private static IFileAdapter CreateOpenAdapter(string path)
+    {
+        var extension = Path.GetExtension(path);
+        return extension.ToLowerInvariant() switch
+        {
+            ".xls" or ".xlsb" or ".xlt" => new LegacyXlsFileAdapter(),
+            _ => new XlsxFileAdapter(),
+        };
     }
 
     private static int CountDataValidations(Sheet sheet)
