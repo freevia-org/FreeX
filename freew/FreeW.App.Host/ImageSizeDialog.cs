@@ -44,25 +44,15 @@ internal sealed class ImageSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         Grid.SetColumn(_widthBox, 1);
         grid.Children.Add(_widthBox);
 
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 12, 0, 0)
-        };
-        var ok = new Button { Content = "OK", MinWidth = 72, Margin = new Thickness(6, 0, 0, 0), IsDefault = true };
-        ok.Click += (_, _) => Accept();
-        var cancel = new Button { Content = "Cancel", MinWidth = 72, Margin = new Thickness(6, 0, 0, 0), IsCancel = true };
-        cancel.Click += (_, _) => Close();
-        buttons.Children.Add(ok);
-        buttons.Children.Add(cancel);
+        // Reuse the shared OK/Cancel button row (accelerators, automation names, shell strings; Cancel is
+        // IsCancel so Esc/Cancel closes). Single source of truth shared with FreeX's dialogs.
+        var buttons = DialogButtonRowFactory.Create(Accept, buttonWidth: 72, rowMargin: new Thickness(0, 12, 0, 0));
         Grid.SetRow(buttons, 1);
         Grid.SetColumn(buttons, 1);
         grid.Children.Add(buttons);
 
         Content = grid;
-        _widthBox.Focus();
-        _widthBox.SelectAll();
+        DialogFocus.FocusAndSelect(_widthBox);
     }
 
     private void Accept()
@@ -74,8 +64,7 @@ internal sealed class ImageSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         }
         else
         {
-            MessageBox.Show(this, "Enter a positive width in points.", "FreeW",
-                MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogMessageHelper.ShowWarning(this, "Enter a positive width in points.");
         }
     }
 
