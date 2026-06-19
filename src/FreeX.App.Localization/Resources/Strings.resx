@@ -472,4 +472,29 @@
   <data name="PictureCrop_BottomLabel" xml:space="preserve"><value>Bottom (%):</value></data>
   <data name="PictureCrop_Reset" xml:space="preserve"><value>Reset</value></data>
   <data name="PictureCrop_Applied" xml:space="preserve"><value>Picture cropped.</value></data>
+  <data name="MoveCopySheet_Title" xml:space="preserve"><value>Move or Copy</value></data>
+  <data name="MoveCopySheet_MoveSelectedSheets" xml:space="preserve"><value>Move selected sheets</value></data>
+  <data name="MoveCopySheet_BeforeSheet" xml:space="preserve"><value>Before sheet:</value></data>
+  <data name="MoveCopySheet_MoveToEnd" xml:space="preserve"><value>(move to end)</value></data>
+  <data name="MoveCopySheet_CreateACopy" xml:space="preserve"><value>Create a copy</value></data>
+  <data name="MoveCopySheet_Ok" xml:space="preserve"><value>OK</value></data>
+  <data name="MoveCopySheet_Cancel" xml:space="preserve"><value>Cancel</value></data>
+  <data name="MoveCopySheet_MovedStatus" xml:space="preserve"><value>Moved {0}</value></data>
+  <data name="MoveCopySheet_CopiedStatus" xml:space="preserve"><value>Copied {0}</value></data>
+  <data name="MoveCopySheet_MenuItem" xml:space="preserve"><value>Move or Copy...</value></data>
+  <data name="OutlineSettings_Title" xml:space="preserve"><value>Settings</value></data>
+  <data name="OutlineSettings_Direction" xml:space="preserve"><value>Direction</value></data>
+  <data name="OutlineSettings_SummaryRowsBelow" xml:space="preserve"><value>Summary rows below detail</value></data>
+  <data name="OutlineSettings_SummaryColumnsRight" xml:space="preserve"><value>Summary columns to right of detail</value></data>
+  <data name="OutlineSettings_AutomaticStyles" xml:space="preserve"><value>Automatic styles</value></data>
+  <data name="OutlineSettings_Ok" xml:space="preserve"><value>OK</value></data>
+  <data name="OutlineSettings_Cancel" xml:space="preserve"><value>Cancel</value></data>
+  <data name="OutlineSettings_AppliedStatus" xml:space="preserve"><value>Outline settings updated.</value></data>
+  <data name="OutlineSettings_NoChangeStatus" xml:space="preserve"><value>Outline settings unchanged.</value></data>
+  <data name="OutlineSettings_MenuItem" xml:space="preserve"><value>Settings...</value></data>
+  <data name="PageBreak_Menu" xml:space="preserve"><value>Breaks</value></data>
+  <data name="PageBreak_InsertPageBreak" xml:space="preserve"><value>Insert Page Break</value></data>
+  <data name="PageBreak_RemovePageBreak" xml:space="preserve"><value>Remove Page Break</value></data>
+  <data name="PageBreak_ResetAllPageBreaks" xml:space="preserve"><value>Reset All Page Breaks</value></data>
+  <data name="PageBreak_Failed" xml:space="preserve"><value>Could not update page breaks.</value></data>
 </root>

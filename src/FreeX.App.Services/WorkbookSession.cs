@@ -1223,6 +1223,45 @@ public sealed class WorkbookSession
     public WorkbookCellEditResult MoveActiveSheetRight() =>
         MoveActiveSheetBy(offset: 1);
 
+    /// <summary>
+    /// Moves the active sheet to an absolute 0-based position. Backs the Move-or-Copy dialog, which
+    /// resolves an arbitrary target index (vs. the single-step <see cref="MoveActiveSheetLeft"/> /
+    /// <see cref="MoveActiveSheetRight"/>). Rebuilds the sheet-tab ordering so the shell reflects the
+    /// new position. Undo/redo aware via the shared edit-command path.
+    /// </summary>
+    public WorkbookCellEditResult MoveActiveSheetTo(int targetIndex)
+    {
+        var sheetId = ActiveSheet.Id;
+        var fromIndex = FindSheetIndex(sheetId, notFoundIndex: -1);
+        if (fromIndex < 0)
+        {
+            return new WorkbookCellEditResult(
+                false,
+                "Active sheet was not found.",
+                [],
+                RecalcReport: null);
+        }
+
+        var toIndex = Math.Clamp(targetIndex, 0, Math.Max(0, Workbook.Sheets.Count - 1));
+        if (toIndex == fromIndex)
+        {
+            return new WorkbookCellEditResult(
+                true,
+                null,
+                [],
+                RecalcReport: null);
+        }
+
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new MoveSheetCommand(fromIndex, toIndex));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulWorkbookMetadataResult(sheetId);
+        return result;
+    }
+
     public WorkbookCellEditResult SetActiveSheetTabColor(CellColor? color)
     {
         if (ActiveSheet.TabColor == color)

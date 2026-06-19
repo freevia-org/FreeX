@@ -454,4 +454,29 @@
   <data name="PictureCrop_BottomLabel" xml:space="preserve"><value>Bas (%) :</value></data>
   <data name="PictureCrop_Reset" xml:space="preserve"><value>Réinitialiser</value></data>
   <data name="PictureCrop_Applied" xml:space="preserve"><value>Image rognée.</value></data>
+  <data name="MoveCopySheet_Title" xml:space="preserve"><value>Déplacer ou copier</value></data>
+  <data name="MoveCopySheet_MoveSelectedSheets" xml:space="preserve"><value>Déplacer les feuilles sélectionnées</value></data>
+  <data name="MoveCopySheet_BeforeSheet" xml:space="preserve"><value>Avant la feuille :</value></data>
+  <data name="MoveCopySheet_MoveToEnd" xml:space="preserve"><value>(en dernier)</value></data>
+  <data name="MoveCopySheet_CreateACopy" xml:space="preserve"><value>Créer une copie</value></data>
+  <data name="MoveCopySheet_Ok" xml:space="preserve"><value>OK</value></data>
+  <data name="MoveCopySheet_Cancel" xml:space="preserve"><value>Annuler</value></data>
+  <data name="MoveCopySheet_MovedStatus" xml:space="preserve"><value>{0} déplacée</value></data>
+  <data name="MoveCopySheet_CopiedStatus" xml:space="preserve"><value>{0} copiée</value></data>
+  <data name="MoveCopySheet_MenuItem" xml:space="preserve"><value>Déplacer ou copier...</value></data>
+  <data name="OutlineSettings_Title" xml:space="preserve"><value>Paramètres</value></data>
+  <data name="OutlineSettings_Direction" xml:space="preserve"><value>Direction</value></data>
+  <data name="OutlineSettings_SummaryRowsBelow" xml:space="preserve"><value>Lignes de synthèse sous le détail</value></data>
+  <data name="OutlineSettings_SummaryColumnsRight" xml:space="preserve"><value>Colonnes de synthèse à droite du détail</value></data>
+  <data name="OutlineSettings_AutomaticStyles" xml:space="preserve"><value>Styles automatiques</value></data>
+  <data name="OutlineSettings_Ok" xml:space="preserve"><value>OK</value></data>
+  <data name="OutlineSettings_Cancel" xml:space="preserve"><value>Annuler</value></data>
+  <data name="OutlineSettings_AppliedStatus" xml:space="preserve"><value>Paramètres de plan mis à jour.</value></data>
+  <data name="OutlineSettings_NoChangeStatus" xml:space="preserve"><value>Paramètres de plan inchangés.</value></data>
+  <data name="OutlineSettings_MenuItem" xml:space="preserve"><value>Paramètres...</value></data>
+  <data name="PageBreak_Menu" xml:space="preserve"><value>Sauts de page</value></data>
+  <data name="PageBreak_InsertPageBreak" xml:space="preserve"><value>Insérer un saut de page</value></data>
+  <data name="PageBreak_RemovePageBreak" xml:space="preserve"><value>Supprimer le saut de page</value></data>
+  <data name="PageBreak_ResetAllPageBreaks" xml:space="preserve"><value>Rétablir tous les sauts de page</value></data>
+  <data name="PageBreak_Failed" xml:space="preserve"><value>Impossible de mettre à jour les sauts de page.</value></data>
 </root>
