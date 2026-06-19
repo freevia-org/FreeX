@@ -85,7 +85,8 @@ docx reader/writer; unsupported renderings are noted under [Known limitations](#
 ### Paragraph formatting
 - Alignment (left/center/right/justify), line spacing, space before/after.
 - Indentation: increase/decrease step + explicit left/right/first-line (hanging) indents.
-- **Tab stops** (left/center/right/decimal) with **tab leaders** (dots/dashes/underline) — `w:tabs`/`w:tab`.
+- **Tab stops** (left/center/right/decimal) with **tab leaders** (dots/dashes/underline) — `w:tabs`/`w:tab`;
+  set/clear via the **Tabs dialog** (Home > Paragraph > Tabs…).
 - Paragraph **borders & shading** (`w:pBdr` + paragraph `w:shd`).
 - Flow control: keep-with-next, keep-lines-together, widow control (`w:keepNext`/`w:keepLines`/`w:widowControl`).
 - Bulleted / numbered / **multilevel** lists persisted to `word/numbering.xml` (`w:numPr`); multilevel
@@ -101,7 +102,7 @@ docx reader/writer; unsupported renderings are noted under [Known limitations](#
 
 ### Page & section layout
 - Margins, orientation, page size; honoured by docx save and print.
-- **Multi-column** layout (1/2/3 equal columns, `sectPr/w:cols`).
+- **Multi-column** layout via the **Columns** dialog (One/Two/Three/Left/Right presets, custom count, spacing, line-between; `sectPr/w:cols` with `w:num`/`w:space`/`w:sep` and explicit `w:col` widths for the unequal Left/Right presets).
 - **Headers & footers** with a live **PAGE-number field** (`word/header1.xml`/`footer1.xml`, `w:fldSimple`).
 - Page borders + **watermark** (page border `w:pgBorders`; watermark stored as a `docProps/custom.xml` custom property).
 - **Line numbers** (continuous / restart-each-page, `sectPr/w:lnNumType`) drawn in the live editor margin and in print preview.
@@ -154,12 +155,15 @@ docx reader/writer; unsupported renderings are noted under [Known limitations](#
 - **Document Inspector** (count + selectively remove comments / revisions / properties / bookmarks).
 - **Check Accessibility** — alt-text, link-text, heading-order, table-header, and WCAG contrast rules with a grouped report.
 - Word count + live status bar; **Document Statistics** dialog (words/chars/sentences/syllables, reading time, Flesch reading ease).
+- **Read Aloud** (Review > Speech) — local, in-box text-to-speech (`System.Speech`) that reads from the caret to the end of the document, paragraph by paragraph (table cells included); robust when no voice is installed.
 
 ### Mailings
 - **Mail merge**: `«Field»` placeholders, CSV data source, insert field, preview record (next/prev), Finish & Merge (records concatenated, page-broken).
 
 ### Content & navigation
-- **Content controls** (`w:sdt`): plain-text and clickable checkbox (`w14:checkbox`).
+- **Content controls** (`w:sdt`): plain-text, rich-text (`w:richText`), clickable checkbox (`w14:checkbox`),
+  date picker (`w:date`), drop-down list (`w:dropDownList`) and combo box (`w:comboBox`) — the list controls
+  offer their `w:listItem` choices on click.
 - **Quick Parts / AutoText**: save selection + insert, persisted as `quickparts.json`.
 - **Navigation pane** (heading outline; click to scroll) and **Outline tools** (promote/demote, collapse/expand).
 - **Cross-document insert**: "Text from File" deep-clones another `.docx`'s blocks at the caret (bringing missing styles).
@@ -234,7 +238,8 @@ print-layout detail. The model/IO still round-trip these faithfully; the live vi
 
 - **Tab leaders** are carried verbatim through round-trip but are **not drawn** live (FlowDocument has
   no tab-leader API); FreeW preserves them via a paragraph `Tag`.
-- **Tab stops** are likewise preserved via the paragraph `Tag` (FlowDocument has no tab-stop API).
+- **Tab stops** are editable via the Tabs dialog (set/clear/clear-all, position + alignment + leader) and
+  preserved via the paragraph `Tag` (FlowDocument has no tab-stop API, so custom stops are not drawn live).
 - **Vertical page alignment** (`w:vAlign`) is persisted but not reflowed live.
 - **Widow/orphan control** is stored in the model/docx but is model-only on screen.
 - **Watermark** is stored as a `docProps/custom.xml` custom property (FreeW's own convention), not as a

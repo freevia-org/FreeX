@@ -59,6 +59,28 @@ public class DocumentCommandBusTests
     }
 
     [Fact]
+    public void ReorderBlocks_AppliesPermutation_AndRevertsToOriginalOrder()
+    {
+        var (doc, bus) = New();
+        var a = new Paragraph("A") { StyleId = "Heading1" };
+        var b = new Paragraph("B") { StyleId = "Heading1" };
+        doc.Blocks.Add(a);
+        doc.Blocks.Add(b);
+
+        // Move the "A" heading-subtree down past "B" through the pure helper, then commit the reorder.
+        var reordered = OutlineTools.MoveSubtree(doc.Blocks, 0, moveUp: false);
+        bus.Execute(new ReorderBlocksCommand(reordered));
+
+        doc.Blocks.Should().Equal(b, a); // same instances, new order
+
+        bus.Undo();
+        doc.Blocks.Should().Equal(a, b);
+
+        bus.Redo();
+        doc.Blocks.Should().Equal(b, a);
+    }
+
+    [Fact]
     public void FormatParagraphRuns_TogglesBold_AndReverts()
     {
         var (doc, bus) = New();

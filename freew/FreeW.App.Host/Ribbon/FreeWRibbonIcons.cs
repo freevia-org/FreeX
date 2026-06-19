@@ -73,6 +73,7 @@ internal static class FreeWRibbonIcons
             ["freew.indent-increase"] = RibbonCommandIconKind.IndentIncrease,
             ["freew.indent-decrease"] = RibbonCommandIconKind.IndentDecrease,
             ["freew.paragraph-dialog"] = RibbonCommandIconKind.LineSpacing,
+            ["freew.tabs-dialog"] = RibbonCommandIconKind.Ruler,
             ["freew.para-border"] = RibbonCommandIconKind.Border,
             ["freew.para-shading"] = RibbonCommandIconKind.Fill,
             ["freew.keep-with-next"] = RibbonCommandIconKind.Wrap,
@@ -162,7 +163,11 @@ internal static class FreeWRibbonIcons
 
             // Insert: controls
             ["freew.cc-text"] = RibbonCommandIconKind.TextBox,
+            ["freew.cc-richtext"] = RibbonCommandIconKind.QuickParts,
             ["freew.cc-checkbox"] = RibbonCommandIconKind.CheckBox,
+            ["freew.cc-date"] = RibbonCommandIconKind.Date,
+            ["freew.cc-dropdown"] = RibbonCommandIconKind.List,
+            ["freew.cc-combo"] = RibbonCommandIconKind.ChevronDown,
 
             // Insert: header & footer
             ["freew.header"] = RibbonCommandIconKind.Header,
@@ -214,6 +219,7 @@ internal static class FreeWRibbonIcons
 
             // Review
             ["freew.statistics"] = RibbonCommandIconKind.WordCount,
+            ["freew.read-aloud"] = RibbonCommandIconKind.ReadAloud,
             ["freew.spellcheck-toggle"] = RibbonCommandIconKind.Spelling,
             ["freew.add-to-dictionary"] = RibbonCommandIconKind.Book,
             ["freew.new-comment"] = RibbonCommandIconKind.Comment,

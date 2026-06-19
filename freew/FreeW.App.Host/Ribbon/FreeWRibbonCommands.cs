@@ -280,7 +280,11 @@ internal static class FreeWRibbonCommands
         // control wraps the selection (or a placeholder) as an editable region; the checkbox control
         // drops a toggleable ☐/☒ checkbox. Both round-trip through docx as a w:sdt.
         registry.Register("freew.cc-text", new ActionCommand(() => { editor.Focus(); editor.InsertPlainTextControl(); }));
+        registry.Register("freew.cc-richtext", new ActionCommand(() => { editor.Focus(); editor.InsertRichTextControl(); }));
         registry.Register("freew.cc-checkbox", new ActionCommand(() => { editor.Focus(); editor.InsertCheckBoxControl(); }));
+        registry.Register("freew.cc-date", new ActionCommand(() => { editor.Focus(); editor.InsertDatePickerControl(); }));
+        registry.Register("freew.cc-dropdown", new ActionCommand(() => { editor.Focus(); editor.InsertDropDownListControl(); }));
+        registry.Register("freew.cc-combo", new ActionCommand(() => { editor.Focus(); editor.InsertComboBoxControl(); }));
 
         // Review tab — Comments: prompt for comment text and attach it over the current selection.
         registry.Register("freew.new-comment", new NewCommentCommand(editor));
@@ -304,6 +308,18 @@ internal static class FreeWRibbonCommands
         var spellCheckToggle = new SpellCheckToggleCommand(editor);
         registry.Register("freew.spellcheck-toggle", spellCheckToggle);
         stateful.Add(("freew.spellcheck-toggle", spellCheckToggle));
+
+        // Review tab — Speech > Read Aloud: a stateful toggle over an in-box text-to-speech read-through
+        // (System.Speech via SystemSpeechEngine, behind the model's ISpeechEngine so the controller stays
+        // testable). Toggling ON commits pending edits, maps the caret to the matching speakable segment,
+        // and starts reading from there to the end of the document; toggling OFF stops. The checked state
+        // reflects whether a read-through is active (so the ribbon shows it at a glance), and the controller
+        // pushes its state back into the store when reading finishes on its own. Construction is robust on a
+        // machine with no installed voice (the engine degrades to a no-op rather than crashing).
+        var readAloud = new ReadAloudToggleCommand(editor);
+        readAloud.StateChanged += () => stateStore.SetState("freew.read-aloud", readAloud.GetState());
+        registry.Register("freew.read-aloud", readAloud);
+        stateful.Add(("freew.read-aloud", readAloud));
 
         // Review tab — Tracking: toggle Track Changes mode (stateful so the ribbon reflects it). When
         // ON, marking the current selection as a tracked insertion/deletion is offered; turning it on
@@ -373,6 +389,7 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.indent-increase", new ActionCommand(() => { editor.Focus(); editor.IncreaseIndent(); }));
         registry.Register("freew.indent-decrease", new ActionCommand(() => { editor.Focus(); editor.DecreaseIndent(); }));
         registry.Register("freew.paragraph-dialog", new ParagraphIndentCommand(editor));
+        registry.Register("freew.tabs-dialog", new TabsCommand(editor));
 
         // Home > Paragraph: toggle a box border on the selected paragraph(s), and pick/clear shading.
         registry.Register("freew.para-border", new ActionCommand(() => editor.ToggleParagraphBorder()));
@@ -429,8 +446,9 @@ internal static class FreeWRibbonCommands
             var isLetter = Math.Abs(page.WidthPt - 612) < 1 && Math.Abs(page.HeightPt - 792) < 1;
             (page.WidthPt, page.HeightPt) = isLetter ? (595.0, 842.0) : (612.0, 792.0); // toggle Letter <-> A4
         }));
-        // Columns: cycle 1 -> 2 -> 3 -> 1 equal-width columns, re-rendering so the layout shows at once.
-        registry.Register("freew.columns", new ColumnCountCommand(editor));
+        // Columns: open the Columns dialog (One/Two/Three/Left/Right + spacing/line-between/More), applying
+        // the chosen column layout to PageSettings and re-rendering so the flow shows at once.
+        registry.Register("freew.columns", new ColumnsCommand(editor));
         // Line Numbers: cycle None -> Continuous -> RestartEachPage -> None (shown in print preview).
         registry.Register("freew.line-numbers", new LineNumberCommand(editor));
 
@@ -688,6 +706,27 @@ internal static class FreeWRibbonCommands
             {
                 editor.Focus();
                 editor.SetParagraphIndents(chosen.Left, chosen.Right, chosen.FirstLine);
+            }
+        }
+    }
+
+    // Home > Paragraph > Tabs…: open the Tabs dialog seeded with the first selected paragraph's current
+    // tab stops, and apply the edited stop list to every selected paragraph through the view (reversible
+    // via the bus). The stops round-trip to docx via the existing w:tabs writer.
+    private sealed class TabsCommand(DocumentView editor) : IRibbonCommand
+    {
+        // Word's classic default tab-stop spacing (0.5in). The real value lives in word/settings.xml
+        // (w:defaultTabStop), which FreeW preserves verbatim but does not model; shown read-only for reference.
+        private const double DefaultTabStopPt = 36;
+
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var current = editor.CurrentParagraphFormatting.TabStops;
+            if (TabsDialog.Prompt(Window.GetWindow(editor), current, DefaultTabStopPt) is { } chosen)
+            {
+                editor.Focus();
+                editor.SetParagraphTabStops(chosen);
             }
         }
     }
@@ -1123,12 +1162,27 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context) => apply(editor.Model.Page);
     }
 
-    // Cycles the page through 1 -> 2 -> 3 -> 1 equal-width columns. Routes through ApplyPageSettings so
-    // the editor commits pending edits, mutates PageSettings.ColumnCount, and re-renders immediately.
-    private sealed class ColumnCountCommand(DocumentView editor) : IRibbonCommand
+    // Opens the Columns dialog (One/Two/Three/Left/Right presets + custom count, spacing, line-between) and
+    // applies the chosen layout to PageSettings. Routes through ApplyPageSettings so the editor commits
+    // pending edits, mutates the page columns, and re-renders the multi-column flow immediately. Equal
+    // presets clear any explicit per-column widths; the Left/Right presets set them (w:cols/@w:equalWidth).
+    private sealed class ColumnsCommand(DocumentView editor) : IRibbonCommand
     {
-        public void Execute(RibbonCommandContext context) =>
-            editor.ApplyPageSettings(page => page.ColumnCount = page.ColumnCount >= 3 ? 1 : page.ColumnCount + 1);
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var result = ColumnsDialog.Prompt(Window.GetWindow(editor), editor.Model.Page);
+            if (result is null)
+                return;
+
+            editor.ApplyPageSettings(page =>
+            {
+                page.ColumnCount = result.Count;
+                page.ColumnSpacingPt = result.SpacingPt;
+                page.ColumnsLineBetween = result.LineBetween;
+                page.ColumnWidthsPt = result.WidthsPt;
+            });
+        }
     }
 
     // Cycles page line numbering None -> Continuous -> RestartEachPage -> None. Routes through
@@ -1765,6 +1819,54 @@ internal static class FreeWRibbonCommands
 
         public RibbonCommandState GetState() =>
             new(IsEnabled: true, IsChecked: editor.Model.Protection.IsProtected);
+    }
+
+    // Review > Speech > Read Aloud: a stateful toggle that starts/stops an in-box text-to-speech
+    // read-through of the document from the caret to the end. The pure ReadAloudController owns the
+    // play/stop state machine and segment extraction; the host wires it to a SystemSpeechEngine
+    // (System.Speech) and maps the caret to the start segment. The engine is created lazily on first use so
+    // construction is cheap, and the engine itself is robust when no voice is installed (degrades to a
+    // no-op). The toggle is checked while a read-through is active; the controller raises StateChanged when
+    // reading finishes on its own so the ribbon button clears.
+    private sealed class ReadAloudToggleCommand : IRibbonStatefulCommand
+    {
+        private readonly DocumentView _editor;
+        private SystemSpeechEngine? _engine;
+        private ReadAloudController? _controller;
+
+        // Re-raised to the registry so the ribbon state store refreshes when reading starts/stops — both on
+        // user toggle and when the read-through completes on its own.
+        public event Action? StateChanged;
+
+        public ReadAloudToggleCommand(DocumentView editor) => _editor = editor;
+
+        public void Execute(RibbonCommandContext context)
+        {
+            var controller = EnsureController();
+            if (controller.IsActive)
+            {
+                controller.Stop();
+                return;
+            }
+
+            // Commit pending edits and read from the caret's paragraph to the end (Word's behaviour).
+            var start = _editor.ReadAloudStartSegmentIndex();
+            controller.Start(_editor.Model, start);
+        }
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: true, IsChecked: _controller?.IsActive ?? false);
+
+        private ReadAloudController EnsureController()
+        {
+            if (_controller is not null)
+                return _controller;
+
+            _engine = new SystemSpeechEngine();
+            _controller = new ReadAloudController(_engine);
+            _controller.StateChanged += () => StateChanged?.Invoke();
+            return _controller;
+        }
     }
 
     // Review > Compare: prompt the user to open a second .docx, read it, and load a comparison of the

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Automation;
@@ -13,6 +14,7 @@ using Free.Shared.Ribbon.Wpf;
 using FreeW.App.Host.Backstage;
 using FreeW.App.Host.Editing;
 using FreeW.Core.Model;
+using TextSearch = FreeW.Core.Model.TextSearch;
 
 namespace FreeW.App.Host;
 
@@ -41,6 +43,18 @@ public sealed class MainWindow : Window
     private Border _navPane = null!;
     private ListBox _navList = null!;
     private bool _navPaneVisible;
+
+    // Navigation-pane search (the box at the top of the pane). Typing finds every occurrence of the term
+    // in the document body; the result label shows the count and Next/Prev step through the matches,
+    // jumping each into view in the editor. The heading outline below is filtered to entries that either
+    // match the term themselves or own a matching block in their subtree. All matching reuses the pure
+    // FreeW.Core.Model.TextSearch helper (the same one Find & Replace uses) — no bespoke search here.
+    private TextBox _navSearch = null!;
+    private TextBlock _navSearchStatus = null!;
+    private Button _navSearchPrev = null!;
+    private Button _navSearchNext = null!;
+    private readonly List<int> _navSearchHits = new(); // model block indices with a match, in order
+    private int _navSearchHitIndex = -1;                // current position within _navSearchHits
 
     // Identity/palette for the shared window shell (FreeX navy title bar; the real FreeW app icon as the
     // title-bar badge + window/taskbar icon).
@@ -543,9 +557,13 @@ public sealed class MainWindow : Window
             Margin = new Thickness(10, 8, 10, 6)
         };
 
+        var searchArea = BuildNavSearch();
+
         var layout = new DockPanel { Width = 240 };
         DockPanel.SetDock(header, Dock.Top);
+        DockPanel.SetDock(searchArea, Dock.Top);
         layout.Children.Add(header);
+        layout.Children.Add(searchArea);
         layout.Children.Add(_navList);
 
         _navPane = new Border
@@ -558,6 +576,131 @@ public sealed class MainWindow : Window
         };
         return _navPane;
     }
+
+    // The "Search document" area at the top of the navigation pane: a text box plus a Prev/Next/count
+    // row. Typing recomputes the document matches (TextSearch over every body paragraph) and jumps to
+    // the first; Prev/Next step through them. Built once and reused; wired to the live editor model.
+    private UIElement BuildNavSearch()
+    {
+        _navSearch = new TextBox
+        {
+            Margin = new Thickness(10, 0, 10, 4),
+            Padding = new Thickness(2, 1, 2, 1),
+            ToolTip = "Search document"
+        };
+        _navSearch.TextChanged += (_, _) => RunNavSearch();
+        _navSearch.KeyDown += (_, e) =>
+        {
+            // Enter advances to the next match (Shift+Enter to the previous), mirroring Word's nav search.
+            if (e.Key == Key.Enter)
+            {
+                StepNavSearch(forward: (Keyboard.Modifiers & ModifierKeys.Shift) == 0);
+                e.Handled = true;
+            }
+        };
+
+        _navSearchPrev = new Button { Content = "‹", Width = 22, Padding = new Thickness(0), ToolTip = "Previous match" };
+        _navSearchNext = new Button { Content = "›", Width = 22, Padding = new Thickness(0), ToolTip = "Next match" };
+        _navSearchPrev.Click += (_, _) => StepNavSearch(forward: false);
+        _navSearchNext.Click += (_, _) => StepNavSearch(forward: true);
+
+        _navSearchStatus = new TextBlock
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(6, 0, 0, 0),
+            Foreground = new SolidColorBrush(Color.FromRgb(0x60, 0x60, 0x60))
+        };
+
+        var controls = new DockPanel { Margin = new Thickness(10, 0, 10, 6) };
+        DockPanel.SetDock(_navSearchPrev, Dock.Left);
+        DockPanel.SetDock(_navSearchNext, Dock.Left);
+        controls.Children.Add(_navSearchPrev);
+        controls.Children.Add(_navSearchNext);
+        controls.Children.Add(_navSearchStatus);
+
+        var area = new StackPanel();
+        area.Children.Add(_navSearch);
+        area.Children.Add(controls);
+        UpdateNavSearchStatus();
+        return area;
+    }
+
+    // Recompute the set of body blocks that contain the search term (reusing the pure TextSearch helper),
+    // jump to the first hit, filter the outline to relevant headings, and refresh the Prev/Next/count row.
+    // An empty term clears the search and shows the full outline again.
+    private void RunNavSearch()
+    {
+        _navSearchHits.Clear();
+        _navSearchHitIndex = -1;
+
+        var term = _navSearch?.Text ?? string.Empty;
+        if (!string.IsNullOrEmpty(term))
+        {
+            _editor.CommitToModel();
+            var blocks = _editor.Model.Blocks;
+            for (var i = 0; i < blocks.Count; i++)
+            {
+                if (BlockMatches(blocks[i], term))
+                    _navSearchHits.Add(i);
+            }
+
+            if (_navSearchHits.Count > 0)
+            {
+                _navSearchHitIndex = 0;
+                _editor.BringBlockIntoView(_navSearchHits[0]);
+            }
+        }
+
+        RefreshOutline();
+        UpdateNavSearchStatus();
+    }
+
+    // Move to the next/previous document match (wrapping at the ends) and bring it into view. No-op when
+    // there are no matches.
+    private void StepNavSearch(bool forward)
+    {
+        if (_navSearchHits.Count == 0)
+            return;
+        _navSearchHitIndex = forward
+            ? (_navSearchHitIndex + 1) % _navSearchHits.Count
+            : (_navSearchHitIndex - 1 + _navSearchHits.Count) % _navSearchHits.Count;
+        _editor.BringBlockIntoView(_navSearchHits[_navSearchHitIndex]);
+        UpdateNavSearchStatus();
+    }
+
+    // Update the "n of m" / "No matches" status label and enable the Prev/Next buttons accordingly.
+    private void UpdateNavSearchStatus()
+    {
+        if (_navSearchStatus is null)
+            return;
+
+        var hasTerm = !string.IsNullOrEmpty(_navSearch?.Text);
+        var hasHits = _navSearchHits.Count > 0;
+        _navSearchStatus.Text = !hasTerm
+            ? string.Empty
+            : hasHits
+                ? $"{_navSearchHitIndex + 1} of {_navSearchHits.Count}"
+                : "No matches";
+        _navSearchPrev.IsEnabled = hasHits;
+        _navSearchNext.IsEnabled = hasHits;
+    }
+
+    // Whether a model block's plain text contains at least one match for the term (case-insensitive,
+    // whole-word off — the live "search as you type" behaviour), via the shared TextSearch helper.
+    private static bool BlockMatches(Block block, string term)
+    {
+        var text = block switch
+        {
+            Paragraph paragraph => paragraph.PlainText,
+            Table table => TableText(table),
+            _ => string.Empty
+        };
+        return TextSearch.FindAll(text, term, matchCase: false, wholeWord: false).Any();
+    }
+
+    // Flatten a table's cell text so a search term inside a table cell still registers as a hit.
+    private static string TableText(Table table) =>
+        string.Join(" ", table.Rows.SelectMany(row => row.Cells).Select(cell => cell.PlainText));
 
     // Show/hide the navigation pane and push the new checked-state into the ribbon state store so the
     // View > Navigation Pane toggle button stays in sync. Refreshes the outline when the pane appears.
@@ -649,12 +792,38 @@ public sealed class MainWindow : Window
         _editor.CommitToModel();
         var outline = DocumentOutline.Of(_editor.Model);
 
+        // When a search term is active, narrow the outline to headings that are themselves a match or
+        // that own a matching block in their subtree, so the list doubles as a "results in this document"
+        // view (Word's navigation-pane search behaviour). With no term the full outline is shown.
+        var term = _navSearch?.Text ?? string.Empty;
+        if (!string.IsNullOrEmpty(term) && outline.Count > 0)
+            outline = FilterOutlineToMatches(outline, term);
+
         // Repopulate without triggering a navigation jump from the resulting selection reset.
         _navList.SelectionChanged -= OnOutlineSelected;
         _navList.Items.Clear();
         foreach (var entry in outline)
             _navList.Items.Add(new OutlineItem(entry));
         _navList.SelectionChanged += OnOutlineSelected;
+    }
+
+    // Keep only the outline entries relevant to the active search: a heading whose own text matches, or
+    // one that owns a matching block anywhere in its subtree (OutlineTools.SubtreeRange). Reuses the same
+    // TextSearch matching as the document scan so the filtered headings and the Next/Prev hits agree.
+    private IReadOnlyList<OutlineEntry> FilterOutlineToMatches(IReadOnlyList<OutlineEntry> outline, string term)
+    {
+        var blocks = _editor.Model.Blocks;
+        var kept = new List<OutlineEntry>(outline.Count);
+        foreach (var entry in outline)
+        {
+            var (start, end) = OutlineTools.SubtreeRange(blocks, entry.BlockIndex);
+            var matched = false;
+            for (var i = start; i < end && !matched; i++)
+                matched = BlockMatches(blocks[i], term);
+            if (matched)
+                kept.Add(entry);
+        }
+        return kept;
     }
 
     // Clicking an outline entry scrolls the matching heading into view and moves the caret there by
@@ -671,12 +840,46 @@ public sealed class MainWindow : Window
     private ContextMenu BuildOutlineContextMenu()
     {
         var menu = new ContextMenu();
+        menu.Items.Add(MoveHeadingMenuItem("Move Up", moveUp: true));
+        menu.Items.Add(MoveHeadingMenuItem("Move Down", moveUp: false));
+        menu.Items.Add(new Separator());
         menu.Items.Add(OutlineMenuItem("Promote", entry => _editor.PromoteHeading(entry.BlockIndex)));
         menu.Items.Add(OutlineMenuItem("Demote", entry => _editor.DemoteHeading(entry.BlockIndex)));
         menu.Items.Add(new Separator());
         menu.Items.Add(OutlineMenuItem("Collapse", entry => _editor.CollapseHeading(entry.BlockIndex)));
         menu.Items.Add(OutlineMenuItem("Expand", entry => _editor.ExpandHeading(entry.BlockIndex)));
         return menu;
+    }
+
+    // A "Move Up / Move Down" context item: relocates the selected heading and its whole subtree by one
+    // sibling position via the editor's reversible MoveHeading (OutlineTools.MoveSubtree on the undo/redo
+    // bus), then refreshes the outline and re-selects the heading at its new index so it stays highlighted.
+    private MenuItem MoveHeadingMenuItem(string header, bool moveUp)
+    {
+        var item = new MenuItem { Header = header };
+        item.Click += (_, _) =>
+        {
+            if (_navList.SelectedItem is not OutlineItem selected)
+                return;
+            var newIndex = _editor.MoveHeading(selected.Entry.BlockIndex, moveUp);
+            RefreshOutline();
+            SelectOutlineEntry(newIndex);
+        };
+        return item;
+    }
+
+    // Select the nav-list row whose entry maps to model block index `blockIndex` (no jump beyond the one
+    // the selection already triggers). A no-op when no row matches (e.g. it was filtered out by a search).
+    private void SelectOutlineEntry(int blockIndex)
+    {
+        foreach (var listItem in _navList.Items)
+        {
+            if (listItem is OutlineItem outlineItem && outlineItem.Entry.BlockIndex == blockIndex)
+            {
+                _navList.SelectedItem = listItem;
+                return;
+            }
+        }
     }
 
     // Build one outline context-menu item that runs `action` against the selected outline entry. A no-op

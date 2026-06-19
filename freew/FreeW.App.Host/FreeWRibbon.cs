@@ -82,6 +82,7 @@ internal static class FreeWRibbon
                     g.Icon("freew.space-before-toggle", "Add Space Before Paragraph", RibbonCommandIconKind.SpaceBefore);
                     g.Icon("freew.space-after-toggle", "Add Space After Paragraph", RibbonCommandIconKind.SpaceAfter);
                     g.Icon("freew.paragraph-dialog", "Paragraph Settings", RibbonCommandIconKind.TextFunction);
+                    g.Icon("freew.tabs-dialog", "Tabs", RibbonCommandIconKind.Ruler);
                     g.Icon("freew.keep-with-next", "Keep with Next", RibbonCommandIconKind.TextFunction);
                     g.Icon("freew.keep-lines", "Keep Lines Together", RibbonCommandIconKind.TextFunction);
                     g.Icon("freew.widow-control", "Widow/Orphan Control", RibbonCommandIconKind.TextFunction);
@@ -206,7 +207,11 @@ internal static class FreeWRibbon
                 tab.Group("controls", "Controls", "O", 62, g =>
                 {
                     g.Medium("freew.cc-text", "Text Control", RibbonCommandIconKind.TextBox);
+                    g.Medium("freew.cc-richtext", "Rich Text", RibbonCommandIconKind.QuickParts);
                     g.Medium("freew.cc-checkbox", "Check Box", RibbonCommandIconKind.CheckBox);
+                    g.Medium("freew.cc-date", "Date Picker", RibbonCommandIconKind.Date);
+                    g.Medium("freew.cc-dropdown", "Drop-Down List", RibbonCommandIconKind.List);
+                    g.Medium("freew.cc-combo", "Combo Box", RibbonCommandIconKind.ChevronDown);
                 });
                 tab.Group("header-footer", "Header & Footer", "H", 60, g =>
                 {
@@ -316,6 +321,13 @@ internal static class FreeWRibbon
                     g.Large("freew.statistics", "Word Count", RibbonCommandIconKind.WordCount);
                     g.MediumToggle("freew.spellcheck-toggle", "Spelling & Grammar", RibbonCommandIconKind.Spelling);
                     g.Medium("freew.add-to-dictionary", "Add to Dictionary", RibbonCommandIconKind.Book);
+                });
+                // Single-command group → labelled Medium toggle (Word's Speech > Read Aloud). Reads the
+                // document from the caret to the end using in-box text-to-speech; the toggle reflects
+                // whether a read-through is currently active.
+                tab.Group("speech", "Speech", "S", 97, g =>
+                {
+                    g.MediumToggle("freew.read-aloud", "Read Aloud", RibbonCommandIconKind.ReadAloud);
                 });
                 // Single-command group → Large.
                 tab.Group("comments", "Comments", "C", 95, g =>

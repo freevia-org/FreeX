@@ -59,6 +59,8 @@ public class SectionsTests
             Landscape = true,
             ColumnCount = 3,
             ColumnSpacingPt = 18,
+            ColumnsLineBetween = true,
+            ColumnWidthsPt = [108.0, 144.0, 180.0],
             PageBorder = new PageBorder("#123456", 2.5),
             Watermark = "DRAFT",
             LineNumberMode = LineNumberMode.Continuous,
@@ -80,6 +82,9 @@ public class SectionsTests
         clone.Landscape.Should().BeTrue();
         clone.ColumnCount.Should().Be(3);
         clone.ColumnSpacingPt.Should().Be(18);
+        clone.ColumnsLineBetween.Should().BeTrue();
+        clone.ColumnWidthsPt.Should().Equal(108.0, 144.0, 180.0);
+        clone.ColumnWidthsPt.Should().NotBeSameAs(original.ColumnWidthsPt); // deep copy
         clone.PageBorder.Should().Be(new PageBorder("#123456", 2.5));
         clone.Watermark.Should().Be("DRAFT");
         clone.LineNumberMode.Should().Be(LineNumberMode.Continuous);

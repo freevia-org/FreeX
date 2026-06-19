@@ -553,37 +553,115 @@ public sealed class Run(string text, RunFormatting? formatting = null)
         {
             Control = new ContentControl(ContentControlKind.CheckBox, tag, alias, @checked)
         };
+
+    /// <summary>
+    /// Creates a rich-text content control run carrying <paramref name="text"/> as its content, tagged
+    /// with the optional <paramref name="tag"/> / <paramref name="alias"/>. Serialises as a w:sdt
+    /// (w:richText) wrapping the run.
+    /// </summary>
+    public static Run RichTextControl(string text, string? tag = null, string? alias = null) =>
+        new(text) { Control = new ContentControl(ContentControlKind.RichText, tag, alias) };
+
+    /// <summary>
+    /// Creates a date-picker content control run. The run's <see cref="Text"/> is the displayed date text
+    /// and <paramref name="dateFormat"/> is the control's w:dateFormat (defaults to <see
+    /// cref="ContentControl.DefaultDateFormat"/>). Serialises as a w:sdt with a w:date w:sdtPr.
+    /// </summary>
+    public static Run DatePickerControl(
+        string text, string? tag = null, string? alias = null, string? dateFormat = null) =>
+        new(text)
+        {
+            Control = new ContentControl(
+                ContentControlKind.DatePicker, tag, alias,
+                DateFormat: dateFormat ?? ContentControl.DefaultDateFormat)
+        };
+
+    /// <summary>
+    /// Creates a drop-down-list content control run offering <paramref name="items"/>; the run's
+    /// <see cref="Text"/> is the currently displayed item (the first item's display text when none is
+    /// given). Serialises as a w:sdt with a w:dropDownList w:sdtPr carrying w:listItem entries.
+    /// </summary>
+    public static Run DropDownListControl(
+        IReadOnlyList<ContentControlListItem> items, string? selectedText = null,
+        string? tag = null, string? alias = null) =>
+        new(selectedText ?? (items.Count > 0 ? items[0].DisplayText : string.Empty))
+        {
+            Control = new ContentControl(ContentControlKind.DropDownList, tag, alias, ListItems: items)
+        };
+
+    /// <summary>
+    /// Creates a combo-box content control run offering <paramref name="items"/> (and allowing free text);
+    /// the run's <see cref="Text"/> is the currently displayed value. Serialises as a w:sdt with a
+    /// w:comboBox w:sdtPr carrying w:listItem entries.
+    /// </summary>
+    public static Run ComboBoxControl(
+        IReadOnlyList<ContentControlListItem> items, string? selectedText = null,
+        string? tag = null, string? alias = null) =>
+        new(selectedText ?? (items.Count > 0 ? items[0].DisplayText : string.Empty))
+        {
+            Control = new ContentControl(ContentControlKind.ComboBox, tag, alias, ListItems: items)
+        };
 }
 
 /// <summary>
 /// The kind of content control (structured document tag, w:sdt) a <see cref="Run"/> belongs to.
 /// <see cref="PlainText"/> is a plain-text control (w:sdtPr/w:text); <see cref="CheckBox"/> is a
-/// checkbox control (w:sdtPr/w14:checkbox or w:checkbox) whose run carries the checked/unchecked glyph.
+/// checkbox control (w:sdtPr/w14:checkbox or w:checkbox) whose run carries the checked/unchecked glyph;
+/// <see cref="RichText"/> is a rich-text control (w:sdtPr/w:richText) that may hold formatted content;
+/// <see cref="DatePicker"/> is a date picker (w:sdtPr/w:date) whose run carries the displayed date;
+/// <see cref="DropDownList"/> is a drop-down list (w:sdtPr/w:dropDownList + w:listItem entries) the user
+/// can only pick from; <see cref="ComboBox"/> is a combo box (w:sdtPr/w:comboBox + w:listItem entries)
+/// that additionally allows free text.
 /// </summary>
 public enum ContentControlKind
 {
     PlainText,
-    CheckBox
+    CheckBox,
+    RichText,
+    DatePicker,
+    DropDownList,
+    ComboBox
+}
+
+/// <summary>
+/// A single choice (w:listItem) of a drop-down list or combo box content control: the visible
+/// <see cref="DisplayText"/> (w:displayText) and the stored <see cref="Value"/> (w:value). Modelled as
+/// an immutable record so list items can be shared/compared like the other small marks.
+/// </summary>
+public sealed record ContentControlListItem(string DisplayText, string Value)
+{
+    /// <summary>Convenience for a list item whose stored value equals its display text.</summary>
+    public ContentControlListItem(string displayText) : this(displayText, displayText) { }
 }
 
 /// <summary>
 /// An immutable content-control (structured document tag / w:sdt) mark carried by a <see cref="Run"/>.
 /// Records the control <see cref="Kind"/>, an optional <see cref="Tag"/> (w:tag) and <see cref="Alias"/>
-/// (w:alias), and — for a checkbox — its <see cref="Checked"/> state. Modelled as an immutable record so
-/// it mirrors how other small marks (<see cref="PageBorder"/>, <see cref="TableFormatting"/>) are modelled
-/// and so consecutive runs can share one instance to coalesce into a single w:sdt on save.
+/// (w:alias), and the kind-specific extras: <see cref="Checked"/> (checkbox state), <see cref="DateFormat"/>
+/// (a date picker's w:dateFormat string), and <see cref="ListItems"/> (the w:listItem choices of a
+/// drop-down list or combo box). Modelled as an immutable record so it mirrors how other small marks
+/// (<see cref="PageBorder"/>, <see cref="TableFormatting"/>) are modelled and so consecutive runs can
+/// share one instance to coalesce into a single w:sdt on save.
 /// </summary>
 public sealed record ContentControl(
     ContentControlKind Kind,
     string? Tag = null,
     string? Alias = null,
-    bool Checked = false)
+    bool Checked = false,
+    string? DateFormat = null,
+    IReadOnlyList<ContentControlListItem>? ListItems = null)
 {
     /// <summary>The glyph used in a checkbox run's text when the box is checked (☒, U+2612).</summary>
     public const string CheckedGlyph = "☒";
 
     /// <summary>The glyph used in a checkbox run's text when the box is unchecked (☐, U+2610).</summary>
     public const string UncheckedGlyph = "☐";
+
+    /// <summary>The default date format (matching Word's date picker default) used when none is set.</summary>
+    public const string DefaultDateFormat = "M/d/yyyy";
+
+    /// <summary>The list items of a drop-down/combo control, never null (empty for other kinds).</summary>
+    public IReadOnlyList<ContentControlListItem> Items => ListItems ?? System.Array.Empty<ContentControlListItem>();
 }
 
 /// <summary>
@@ -1122,8 +1200,27 @@ public sealed class PageSettings
     /// <summary>
     /// The gap between adjacent columns in points (w:sectPr/w:cols w:space). Defaults to 36 points
     /// (half an inch), Word's default column spacing. Only meaningful when <see cref="ColumnCount"/> &gt; 1.
+    /// Ignored when <see cref="ColumnWidthsPt"/> carries explicit unequal columns (each column then
+    /// supplies its own trailing space).
     /// </summary>
     public double ColumnSpacingPt { get; set; } = 36;
+
+    /// <summary>
+    /// Whether a vertical line is drawn between adjacent columns (w:sectPr/w:cols w:sep). Defaults to
+    /// false so existing documents round-trip unchanged — no w:sep is emitted. Only meaningful when
+    /// <see cref="ColumnCount"/> &gt; 1; the print preview draws the divider lines when set.
+    /// </summary>
+    public bool ColumnsLineBetween { get; set; }
+
+    /// <summary>
+    /// Optional explicit per-column widths in points for an <em>unequal</em> column layout (Word's
+    /// "Left" / "Right" presets and custom widths). Null — the default — means equal-width columns
+    /// derived from <see cref="ColumnCount"/> and <see cref="ColumnSpacingPt"/>, so existing documents
+    /// are unaffected. When non-null it holds exactly <see cref="ColumnCount"/> widths and the writer
+    /// emits w:cols/@w:equalWidth="0" with one w:col (w:w + trailing w:space) per column. The trailing
+    /// space of all but the last column is <see cref="ColumnSpacingPt"/>.
+    /// </summary>
+    public IReadOnlyList<double>? ColumnWidthsPt { get; set; }
 
     /// <summary>
     /// Optional page border drawn around the whole page (w:sectPr/w:pgBorders), or null for none.
@@ -1218,6 +1315,8 @@ public sealed class PageSettings
         Landscape = Landscape,
         ColumnCount = ColumnCount,
         ColumnSpacingPt = ColumnSpacingPt,
+        ColumnsLineBetween = ColumnsLineBetween,
+        ColumnWidthsPt = ColumnWidthsPt is null ? null : new List<double>(ColumnWidthsPt),
         PageBorder = PageBorder,
         Watermark = Watermark,
         LineNumberMode = LineNumberMode,

@@ -1089,6 +1089,17 @@ public sealed class DocumentView : RichTextBox
         SelectedModelParagraphs().FirstOrDefault()?.Formatting ?? ParagraphFormatting.Default;
 
     /// <summary>
+    /// Replace the tab stops (pPr/w:tabs) on every paragraph spanned by the selection with
+    /// <paramref name="tabStops"/> (positions/alignments/leaders), via the undo/redo bus. Pass an empty
+    /// list to clear all custom stops. The stops round-trip to docx through the existing w:tabs writer;
+    /// WPF's FlowDocument has no tab-stop API, so the model values are carried on the rendered
+    /// paragraph's Tag (a ParagraphTag) and applied by Print Preview / on save (see Render). Used by the
+    /// Tabs dialog (Home > Paragraph > Tabs…).
+    /// </summary>
+    public void SetParagraphTabStops(IReadOnlyList<TabStop> tabStops) =>
+        FormatSelectedModelParagraphs(f => f with { TabStops = tabStops });
+
+    /// <summary>
     /// An approximate "Page X of Y" for the status bar: the page the caret currently sits on, and the
     /// total page count. Both are computed from the editable surface's single continuous flow against the
     /// page's printable content height (<see cref="PageLayout.ContentAreaDip"/>) — the same approximation
@@ -1214,6 +1225,40 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void DemoteHeading(int modelBlockIndex) =>
         ShiftHeadingStyle(modelBlockIndex, OutlineTools.Demote);
+
+    /// <summary>
+    /// Move the heading at <paramref name="modelBlockIndex"/> — together with its whole subtree (every
+    /// block down to the next same-or-higher heading) — one position toward the document start
+    /// (<paramref name="moveUp"/> = true) or end (false), swapping it with the adjacent sibling subtree.
+    /// The reorder is computed by the pure <see cref="OutlineTools.MoveSubtree"/> and applied through the
+    /// reversible <see cref="ReorderBlocksCommand"/> on the undo/redo bus, so it is a single undoable step.
+    /// Returns the new block index of the moved heading (so the nav pane can re-select it), or the original
+    /// index when nothing moved (already at an outline edge, or not a heading). Any collapsed-heading view
+    /// state is dropped first so the indices cannot become stale across the reorder.
+    /// </summary>
+    public int MoveHeading(int modelBlockIndex, bool moveUp)
+    {
+        CommitToModel();
+
+        // Collapse markers are tracked by model block index; a reorder invalidates them, so expand all
+        // first (purely a view concern — the model is unaffected) before relocating the subtree.
+        if (_collapsedHeadings.Count > 0)
+            _collapsedHeadings.Clear();
+
+        var reordered = OutlineTools.MoveSubtree(_model.Blocks, modelBlockIndex, moveUp);
+        if (ReferenceEquals(reordered, _model.Blocks))
+            return modelBlockIndex; // nothing to move
+
+        var heading = _model.Blocks[modelBlockIndex];
+        _commands.Execute(new ReorderBlocksCommand(reordered));
+
+        for (var i = 0; i < reordered.Count; i++)
+        {
+            if (ReferenceEquals(reordered[i], heading))
+                return i;
+        }
+        return modelBlockIndex;
+    }
 
     // Apply a pure style-id shift (promote/demote) to a single model paragraph via the undo/redo bus.
     private void ShiftHeadingStyle(int modelBlockIndex, Func<string?, string?> shift)
@@ -1836,6 +1881,49 @@ public sealed class DocumentView : RichTextBox
         return viewIndex >= 0 ? viewIndex : _model.Blocks.Count - 1;
     }
 
+    /// <summary>
+    /// The index — into <see cref="ReadAloudController.ExtractSegments(TextDocument)"/>'s ordered,
+    /// non-empty segment list — of the segment Review &gt; Read Aloud should start at: the first speakable
+    /// paragraph at or after the caret's block (Word reads from the caret to the end). Commits pending
+    /// edits first so the model reflects the current text, then counts the non-empty speakable paragraphs
+    /// preceding the caret block in the same reading order the controller uses (top-level paragraphs, then
+    /// table-cell paragraphs). Returns 0 when the body is empty or the caret precedes all speakable text.
+    /// </summary>
+    public int ReadAloudStartSegmentIndex()
+    {
+        CommitToModel();
+
+        var caretBlockIndex = CaretBlockIndex();
+        if (caretBlockIndex < 0)
+            return 0;
+
+        // Walk the model blocks in the controller's reading order, numbering non-empty speakable
+        // paragraphs. Stop once we reach the caret's block: the next segment to be produced is the start.
+        var segmentIndex = 0;
+        for (var i = 0; i < _model.Blocks.Count; i++)
+        {
+            if (i >= caretBlockIndex)
+                break;
+
+            switch (_model.Blocks[i])
+            {
+                case ModelParagraph paragraph:
+                    if (!string.IsNullOrWhiteSpace(paragraph.PlainText))
+                        segmentIndex++;
+                    break;
+                case ModelTable table:
+                    foreach (var row in table.Rows)
+                        foreach (var cell in row.Cells)
+                            foreach (var cellParagraph in cell.Paragraphs)
+                                if (!string.IsNullOrWhiteSpace(cellParagraph.PlainText))
+                                    segmentIndex++;
+                    break;
+            }
+        }
+
+        return segmentIndex;
+    }
+
     private void Render()
     {
         // Expose the current file name to the static run builders for this render pass (FILENAME fields).
@@ -2332,7 +2420,12 @@ public sealed class DocumentView : RichTextBox
     /// render exactly <see cref="PageSettings.ColumnCount"/> equal columns we set the column width to
     /// (contentWidth - (N-1)*gap) / N and the gap to the model's column spacing. Single-column pages
     /// (the default) keep an infinite column width so the text spans the full content area, exactly as
-    /// before. Shared by the editor and the print/preview path so on-screen and printed layouts match.
+    /// before. <see cref="PageSettings.ColumnsLineBetween"/> maps to the FlowDocument's column rule, and
+    /// explicit unequal widths (<see cref="PageSettings.ColumnWidthsPt"/>) use the narrowest column as the
+    /// flexible column width so WPF lays out the requested number of columns (it cannot render genuinely
+    /// unequal columns in one FlowDocument — the narrowest-width approximation keeps the count correct and
+    /// the unequal split round-trips faithfully to docx/Word). Shared by the editor and the print/preview
+    /// path so on-screen and printed layouts match.
     /// </summary>
     internal static void ApplyColumnLayout(FlowDocument flow, PageSettings page)
     {
@@ -2341,15 +2434,40 @@ public sealed class DocumentView : RichTextBox
         {
             flow.ColumnWidth = double.PositiveInfinity; // single column spans the whole content area
             flow.ColumnGap = 0;
+            flow.ColumnRuleWidth = 0;
             return;
         }
 
         var (contentWidthDip, _) = PageLayout.ContentAreaDip(page);
         var gapDip = PageLayout.PointsToDip(page.ColumnSpacingPt);
-        var columnWidthDip = (contentWidthDip - (columns - 1) * gapDip) / columns;
+
+        double columnWidthDip;
+        if (page.ColumnWidthsPt is { Count: > 1 } widths && widths.Count == columns)
+        {
+            // Unequal layout: WPF lays out equal flexible columns, so use the narrowest requested width to
+            // guarantee all N columns fit the content area (a faithful approximation of Left/Right).
+            columnWidthDip = PageLayout.PointsToDip(widths.Min());
+        }
+        else
+        {
+            columnWidthDip = (contentWidthDip - (columns - 1) * gapDip) / columns;
+        }
+
         // Guard degenerate geometry (narrow page / wide gaps) so the width stays usable and positive.
         flow.ColumnWidth = Math.Max(1, columnWidthDip);
+        flow.IsColumnWidthFlexible = true; // let WPF expand columns to fill the content area
         flow.ColumnGap = Math.Max(0, gapDip);
+
+        // "Line between" (w:cols/@w:sep) → a thin rule centred in the gap.
+        if (page.ColumnsLineBetween)
+        {
+            flow.ColumnRuleWidth = 1;
+            flow.ColumnRuleBrush = System.Windows.Media.Brushes.Gray;
+        }
+        else
+        {
+            flow.ColumnRuleWidth = 0;
+        }
     }
 
     private sealed class ViewContext(DocumentView view) : IDocumentCommandContext
@@ -3304,22 +3422,58 @@ public sealed class DocumentView : RichTextBox
     {
         AddMarker(wpf, m => m with { Control = new ContentControlMarker(control) });
         wpf.Background = new SolidColorBrush(ContentControlShade);
-        wpf.ToolTip = control.Kind == ContentControlKind.CheckBox
-            ? (control.Alias is { Length: > 0 } a ? $"Checkbox: {a}" : "Checkbox content control (click to toggle)")
-            : (control.Alias is { Length: > 0 } a2 ? $"Content control: {a2}" : "Plain-text content control");
+        wpf.ToolTip = ContentControlTooltip(control);
 
-        if (control.Kind == ContentControlKind.CheckBox)
+        switch (control.Kind)
         {
-            // Synthesise the checkbox glyph from the control's checked state and render it in a symbol font.
-            // Word stores the box glyph in the SDT content run using a symbol font (often a Wingdings/MS
-            // Gothic codepoint), so the raw run text rendered in the body font showed nothing. Driving the
-            // glyph from the state (☒/☐ in Segoe UI Symbol, which has U+2610/U+2612) guarantees a visible,
-            // correct checkbox and matches how FreeW renders its own inserted checkboxes.
-            wpf.Text = control.Checked ? ModelContentControl.CheckedGlyph : ModelContentControl.UncheckedGlyph;
-            wpf.FontFamily = new System.Windows.Media.FontFamily("Segoe UI Symbol");
-            wpf.Cursor = System.Windows.Input.Cursors.Hand;
-            wpf.MouseLeftButtonUp += OnCheckBoxControlClicked;
+            case ContentControlKind.CheckBox:
+                // Synthesise the checkbox glyph from the control's checked state and render it in a symbol
+                // font. Word stores the box glyph in the SDT content run using a symbol font (often a
+                // Wingdings/MS Gothic codepoint), so the raw run text rendered in the body font showed
+                // nothing. Driving the glyph from the state (☒/☐ in Segoe UI Symbol, which has U+2610/U+2612)
+                // guarantees a visible, correct checkbox and matches how FreeW renders its own checkboxes.
+                wpf.Text = control.Checked ? ModelContentControl.CheckedGlyph : ModelContentControl.UncheckedGlyph;
+                wpf.FontFamily = new System.Windows.Media.FontFamily("Segoe UI Symbol");
+                wpf.Cursor = System.Windows.Input.Cursors.Hand;
+                wpf.MouseLeftButtonUp += OnCheckBoxControlClicked;
+                break;
+
+            case ContentControlKind.DropDownList:
+            case ContentControlKind.ComboBox:
+                // A list control offers its choices via a context menu on click; picking one swaps the run
+                // text in place (the chosen item's display text). A combo box additionally allows free text,
+                // so it stays editable; a drop-down list is pick-only and read-only inside the run.
+                wpf.Cursor = System.Windows.Input.Cursors.Hand;
+                wpf.MouseLeftButtonUp += OnListControlClicked;
+                break;
+
+            case ContentControlKind.DatePicker:
+                // A date picker offers a small set of relative dates (today/yesterday/tomorrow) on click,
+                // each formatted with the control's date format, swapping the run text in place.
+                wpf.Cursor = System.Windows.Input.Cursors.Hand;
+                wpf.MouseLeftButtonUp += OnDatePickerClicked;
+                break;
         }
+    }
+
+    /// <summary>The hover tooltip shown for a content-control run, by kind (surfacing the alias when set).</summary>
+    private static string ContentControlTooltip(ModelContentControl control)
+    {
+        var label = control.Alias is { Length: > 0 } a ? a : null;
+        return control.Kind switch
+        {
+            ContentControlKind.CheckBox => label is null
+                ? "Checkbox content control (click to toggle)" : $"Checkbox: {label}",
+            ContentControlKind.RichText => label is null
+                ? "Rich-text content control" : $"Rich-text control: {label}",
+            ContentControlKind.DatePicker => label is null
+                ? "Date picker content control (click to pick a date)" : $"Date picker: {label}",
+            ContentControlKind.DropDownList => label is null
+                ? "Drop-down list content control (click to choose)" : $"Drop-down list: {label}",
+            ContentControlKind.ComboBox => label is null
+                ? "Combo box content control (click to choose or type)" : $"Combo box: {label}",
+            _ => label is null ? "Plain-text content control" : $"Content control: {label}"
+        };
     }
 
     /// <summary>
@@ -3340,6 +3494,72 @@ public sealed class DocumentView : RichTextBox
 
         // Persist the new state into the model so a subsequent save reflects the toggle.
         FindOwnerView(wpf)?.CommitToModel();
+    }
+
+    /// <summary>
+    /// Opens the choice list of a drop-down / combo content control when its run is clicked: a context
+    /// menu offers each <see cref="ModelContentControl.Items"/> display text; selecting one swaps the run
+    /// text in place and re-commits so the choice round-trips on save.
+    /// </summary>
+    private static void OnListControlClicked(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (sender is not WpfRun { Tag: RunMarkers { Control: { } marker } } wpf)
+            return;
+        var control = marker.Control;
+        if (control.Kind is not (ContentControlKind.DropDownList or ContentControlKind.ComboBox)
+            || control.Items.Count == 0)
+            return;
+
+        var menu = new ContextMenu();
+        foreach (var item in control.Items)
+        {
+            var display = item.DisplayText;
+            var entry = new MenuItem { Header = display, IsChecked = display == wpf.Text };
+            entry.Click += (_, _) =>
+            {
+                wpf.Text = display;
+                FindOwnerView(wpf)?.CommitToModel();
+            };
+            menu.Items.Add(entry);
+        }
+        menu.PlacementTarget = wpf.Parent as UIElement;
+        menu.IsOpen = true;
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// Opens a small relative-date menu for a date-picker content control when its run is clicked: Today,
+    /// Yesterday and Tomorrow, each formatted with the control's <see cref="ModelContentControl.DateFormat"/>.
+    /// Selecting one swaps the displayed date text in place and re-commits so it round-trips on save.
+    /// </summary>
+    private static void OnDatePickerClicked(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (sender is not WpfRun { Tag: RunMarkers { Control: { } marker } } wpf
+            || marker.Control.Kind != ContentControlKind.DatePicker)
+            return;
+
+        var format = string.IsNullOrEmpty(marker.Control.DateFormat)
+            ? ModelContentControl.DefaultDateFormat : marker.Control.DateFormat!;
+        var menu = new ContextMenu();
+        foreach (var (label, date) in new[]
+                 {
+                     ("Today", System.DateTime.Today),
+                     ("Yesterday", System.DateTime.Today.AddDays(-1)),
+                     ("Tomorrow", System.DateTime.Today.AddDays(1))
+                 })
+        {
+            var text = date.ToString(format, System.Globalization.CultureInfo.CurrentCulture);
+            var entry = new MenuItem { Header = $"{label} ({text})" };
+            entry.Click += (_, _) =>
+            {
+                wpf.Text = text;
+                FindOwnerView(wpf)?.CommitToModel();
+            };
+            menu.Items.Add(entry);
+        }
+        menu.PlacementTarget = wpf.Parent as UIElement;
+        menu.IsOpen = true;
+        e.Handled = true;
     }
 
     /// <summary>Walks up from an inline to the hosting <see cref="DocumentView"/>, if any.</summary>
@@ -4589,6 +4809,73 @@ public sealed class DocumentView : RichTextBox
         var run = BuildControlRun(ModelRun.CheckBoxControl(@checked: false, tag, alias));
         InsertInlineAtCaret(run);
     }
+
+    /// <summary>
+    /// Inserts a rich-text content control (w:sdt/w:richText) at the caret. Mirrors
+    /// <see cref="InsertPlainTextControl"/> — the selection's text (or a placeholder) becomes the control's
+    /// content and it renders as a shaded region. Re-renders so the control round-trips on the next save.
+    /// </summary>
+    public void InsertRichTextControl(string? tag = null, string? alias = null)
+    {
+        Focus();
+
+        var selected = Selection?.Text;
+        var text = string.IsNullOrEmpty(selected) ? "Click to enter text" : selected;
+        if (Selection is { IsEmpty: false })
+            Selection.Text = string.Empty;
+
+        var run = BuildControlRun(ModelRun.RichTextControl(text, tag, alias));
+        InsertInlineAtCaret(run);
+    }
+
+    /// <summary>
+    /// Inserts a date-picker content control (w:sdt/w:date) at the caret, pre-filled with today's date in
+    /// the control's date format. Clicking the rendered region offers relative dates. Re-renders so the
+    /// control round-trips on the next save.
+    /// </summary>
+    public void InsertDatePickerControl(string? tag = null, string? alias = null, string? dateFormat = null)
+    {
+        Focus();
+        var fmt = string.IsNullOrEmpty(dateFormat) ? ModelContentControl.DefaultDateFormat : dateFormat!;
+        var today = System.DateTime.Today.ToString(fmt, System.Globalization.CultureInfo.CurrentCulture);
+        var run = BuildControlRun(ModelRun.DatePickerControl(today, tag, alias, fmt));
+        InsertInlineAtCaret(run);
+    }
+
+    /// <summary>
+    /// Inserts a drop-down-list content control (w:sdt/w:dropDownList) at the caret offering
+    /// <paramref name="items"/> (a small default sample when none is given). Clicking the rendered region
+    /// lets the user pick one. Re-renders so the control round-trips on the next save.
+    /// </summary>
+    public void InsertDropDownListControl(
+        IReadOnlyList<ContentControlListItem>? items = null, string? tag = null, string? alias = null)
+    {
+        Focus();
+        var run = BuildControlRun(ModelRun.DropDownListControl(items ?? DefaultListItems, tag: tag, alias: alias));
+        InsertInlineAtCaret(run);
+    }
+
+    /// <summary>
+    /// Inserts a combo-box content control (w:sdt/w:comboBox) at the caret offering <paramref name="items"/>
+    /// (a small default sample when none is given) and allowing free text. Clicking the rendered region lets
+    /// the user pick one. Re-renders so the control round-trips on the next save.
+    /// </summary>
+    public void InsertComboBoxControl(
+        IReadOnlyList<ContentControlListItem>? items = null, string? tag = null, string? alias = null)
+    {
+        Focus();
+        var run = BuildControlRun(ModelRun.ComboBoxControl(items ?? DefaultListItems, tag: tag, alias: alias));
+        InsertInlineAtCaret(run);
+    }
+
+    /// <summary>A small default choice sample used when a list/combo control is inserted without items.</summary>
+    private static readonly IReadOnlyList<ContentControlListItem> DefaultListItems =
+    [
+        new ContentControlListItem("Choose an item"),
+        new ContentControlListItem("Item 1"),
+        new ContentControlListItem("Item 2"),
+        new ContentControlListItem("Item 3")
+    ];
 
     /// <summary>Builds the WPF inline for a content-control model run (shaded region + marker tag).</summary>
     private Inline BuildControlRun(ModelRun run) => BuildRun(run, new ModelParagraph(), _model);
