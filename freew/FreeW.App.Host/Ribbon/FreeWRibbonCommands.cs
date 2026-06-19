@@ -94,7 +94,9 @@ internal static class FreeWRibbonCommands
         Action? onWebLayout = null,
         Func<bool>? isWebLayoutActive = null,
         Action? onDraftView = null,
-        Func<bool>? isDraftViewActive = null)
+        Func<bool>? isDraftViewActive = null,
+        Action? onToggleRevealFormatting = null,
+        Func<bool>? isRevealFormattingVisible = null)
     {
         var registry = new RibbonCommandRegistry();
         var stateful = new List<(RibbonCommandId Id, IRibbonStatefulCommand Command)>();
@@ -586,6 +588,13 @@ internal static class FreeWRibbonCommands
             registry.Register("freew.web-layout", new ToggleActionCommand(onWebLayout, isWebLayoutActive));
         if (onDraftView is not null && isDraftViewActive is not null)
             registry.Register("freew.draft-view", new ToggleActionCommand(onDraftView, isDraftViewActive));
+
+        // View tab — toggle the Reveal Formatting pane (Word's Shift+F1 pane), a read-only side pane
+        // showing the effective FONT / PARAGRAPH / SECTION formatting of the selection. Stateful so the
+        // ribbon's toggle button reflects whether the pane is currently shown.
+        if (onToggleRevealFormatting is not null && isRevealFormattingVisible is not null)
+            registry.Register("freew.reveal-formatting",
+                new ToggleActionCommand(onToggleRevealFormatting, isRevealFormattingVisible));
 
         // View tab — open Word's Zoom dialog (presets / page fits / custom %). The host computes the
         // page-relative fit factors from the live viewport and applies the chosen factor to the editor.

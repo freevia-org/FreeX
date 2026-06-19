@@ -1154,6 +1154,16 @@ public sealed class DocumentView : RichTextBox
         SelectedModelParagraphs().FirstOrDefault()?.Formatting ?? ParagraphFormatting.Default;
 
     /// <summary>
+    /// The <em>effective</em> character formatting of the current selection (or the caret), resolved the
+    /// same way the toolbar/format-painter reads it: font, size, colour, highlight, bold/italic/underline/
+    /// strikethrough, small/all caps and super/subscript, taken from the live WPF selection so the run's
+    /// own properties already cascade over its style and the document default. Read-only; used by the
+    /// Reveal Formatting pane to mirror what is actually in effect at the caret. Does not commit pending
+    /// edits (cheap, called on selection change).
+    /// </summary>
+    public RunFormatting CurrentRunFormatting => CaptureSelectionRunFormatting();
+
+    /// <summary>
     /// Replace the tab stops (pPr/w:tabs) on every paragraph spanned by the selection with
     /// <paramref name="tabStops"/> (positions/alignments/leaders), via the undo/redo bus. Pass an empty
     /// list to clear all custom stops. The stops round-trip to docx through the existing w:tabs writer;
