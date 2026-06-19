@@ -145,11 +145,12 @@ internal static class Program
 
         emit("  LibreOffice opened FreeX file: YES");
         emit($"  sheets  : {r.RefSheetCount} -> {r.GotSheetCount}");
-        emit($"  values  : {r.ValuesMatched}/{r.ValuesCompared} survived" +
+        emit($"  values  : {r.ValuesMatched}/{r.ValuesCompared} literal cells survived" +
              (r.ValuesCompared == 0 ? "" : $"  ({Pct(r.ValuesMatched, r.ValuesCompared)})"));
         if (r.Format.PreservesFormulas)
-            emit($"  formulas: {r.FormulasMatched}/{r.FormulasCompared} survived" +
-                 (r.FormulasCompared == 0 ? "" : $"  ({Pct(r.FormulasMatched, r.FormulasCompared)})"));
+            emit($"  formulas: {r.FormulasMatched}/{r.FormulasCompared} survived intact" +
+                 (r.FormulasCompared == 0 ? "" : $"  ({Pct(r.FormulasMatched, r.FormulasCompared)})") +
+                 $";  {r.FormulasRewritten} LO-dialect-rewritten, {r.FormulasVanished} flattened");
         if (!string.IsNullOrEmpty(r.Detail))
             emit($"  note    : {r.Detail}");
 

@@ -14,7 +14,8 @@ internal sealed record FormatProfile(
     bool PreservesFormulas,
     bool PreservesMultiSheet,
     bool ValueComparisonIsDisplayOnly,
-    string Notes)
+    string Notes,
+    string? SofficeInputFilter = null)
 {
     /// <summary>The interchange formats exercised, in report order.</summary>
     public static readonly IReadOnlyList<FormatProfile> All = new[]
@@ -57,9 +58,17 @@ internal sealed record FormatProfile(
             Extension: ".html",
             AdapterFormatName: "Web Page (HTML)",
             PreservesFormulas: false,
-            PreservesMultiSheet: true,
+            // LibreOffice's "HTML (StarCalc)" import puts every HTML table on ONE Calc sheet (HTML has no
+            // native multi-sheet concept), so a multi-sheet workbook collapses to 1 sheet on re-import.
+            // That is expected LibreOffice behavior, not a FreeX loss — compare sheet 1 only.
+            PreservesMultiSheet: false,
             ValueComparisonIsDisplayOnly: true,
-            Notes: "Formulas are flattened to values by HTML export; compare by display."),
+            Notes: "Formulas flattened to values + sheets merged to one by HTML import; compare sheet 1 by display.",
+            // .html is ambiguous: LibreOffice opens it as a Writer/Web doc by default (no xlsx export).
+            // Force the Calc HTML import filter ("HTML (StarCalc)" is the FILTER name; "Calc HTML
+            // (StarCalc)" is only the dialog label and is NOT accepted by --infilter) so it is read as a
+            // spreadsheet and can be re-exported to xlsx.
+            SofficeInputFilter: "HTML (StarCalc)"),
 
         // csv: a single sheet, values only (formulas become results), display-coerced.
         new FormatProfile(

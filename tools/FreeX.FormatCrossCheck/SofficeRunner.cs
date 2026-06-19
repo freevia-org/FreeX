@@ -93,8 +93,13 @@ internal sealed class SofficeRunner
     /// <summary>
     /// Has LibreOffice open <paramref name="inputFile"/> and re-export it to xlsx in <paramref name="outDir"/>.
     /// A unique user-profile dir avoids the single-instance lock. Returns the produced xlsx path on success.
+    ///
+    /// <paramref name="inputFilter"/> pins the IMPORT filter. This matters for ambiguous extensions: an
+    /// .html file is opened by default with the Writer/Web filter (which cannot export to xlsx); forcing
+    /// "Calc HTML (StarCalc)" makes LibreOffice open it as a spreadsheet so the xlsx export succeeds.
+    /// Pass null to let LibreOffice auto-detect (correct for xlsx/ods/xml/csv).
     /// </summary>
-    public ConvertResult ConvertToXlsx(string inputFile, string outDir)
+    public ConvertResult ConvertToXlsx(string inputFile, string outDir, string? inputFilter = null)
     {
         Directory.CreateDirectory(outDir);
         var profileDir = Path.Combine(Path.GetTempPath(), "fx-soffice-profile", Guid.NewGuid().ToString("N"));
@@ -116,6 +121,9 @@ internal sealed class SofficeRunner
         psi.ArgumentList.Add("--nolockcheck");
         psi.ArgumentList.Add("--nologo");
         psi.ArgumentList.Add($"-env:UserInstallation={profileUri}");
+        // --infilter must precede --convert-to; soffice rejects the pair (prints usage) if it follows.
+        if (!string.IsNullOrEmpty(inputFilter))
+            psi.ArgumentList.Add($"--infilter={inputFilter}");
         psi.ArgumentList.Add("--convert-to");
         psi.ArgumentList.Add("xlsx:Calc MS Excel 2007 XML");
         psi.ArgumentList.Add("--outdir");

@@ -21,11 +21,15 @@ internal static class FidelityCompare
         return (a, b) switch
         {
             (BlankValue, BlankValue) => true,
-            (TextValue ta, TextValue tb) => string.Equals(ta.Value, tb.Value, StringComparison.Ordinal),
+            // Normalize line endings: an external tool may re-emit embedded newlines as \n vs \r\n; the
+            // text content is unchanged, so that is not a value loss.
+            (TextValue ta, TextValue tb) => string.Equals(NormalizeNewlines(ta.Value), NormalizeNewlines(tb.Value), StringComparison.Ordinal),
             (ErrorValue, ErrorValue) => true,
             _ => false
         };
     }
+
+    private static string NormalizeNewlines(string s) => s.Replace("\r\n", "\n").Replace("\r", "\n");
 
     public static bool TryNumeric(ScalarValue v, out double value)
     {
