@@ -1,4 +1,5 @@
 using System.Globalization;
+using FreeW.Core.Model;
 
 namespace FreeW.App.Host;
 
@@ -33,13 +34,20 @@ internal static class OptionsDialogPlanner
     /// the single shipped <c>.docx</c> format when null/blank; <see cref="FreeWOptions.Normalize"/> clamps
     /// and trims everything so the result is already store-ready.
     /// </summary>
-    public static FreeWOptions BuildResult(int recentFilesCap, string? format, string? uiLanguage)
+    public static FreeWOptions BuildResult(
+        int recentFilesCap,
+        string? format,
+        string? uiLanguage,
+        bool autoCorrectEnabled,
+        AutoFormatOptions autoFormat)
     {
         var result = new FreeWOptions
         {
             RecentFilesCap = recentFilesCap,
             DefaultSaveFormat = string.IsNullOrWhiteSpace(format) ? FreeWOptions.DocxDefaultFormat : format!,
             UiLanguage = uiLanguage ?? FreeWOptions.SystemDefaultLanguage,
+            AutoCorrectEnabled = autoCorrectEnabled,
+            AutoFormat = autoFormat ?? AutoFormatOptions.Default,
         };
         result.Normalize();
         return result;

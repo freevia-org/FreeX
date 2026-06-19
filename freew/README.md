@@ -78,7 +78,9 @@ docx reader/writer; unsupported renderings are noted under [Known limitations](#
 - Find / Replace (modeless) with match-case, **whole-word**, wrap, Replace All, replace-all-in-selection,
   and **Go To** (heading / bookmark / doc start–end).
 - Spell-check (live red squiggles + suggestions) with a persistent **custom dictionary** (`.lex`) and a toggle.
-- AutoCorrect / smart typing (smart quotes, `--`→en dash, `(c)`/`(r)`/`(tm)`, `...`→…, sentence caps), toggleable.
+- AutoCorrect / smart typing (smart quotes, `--`→en/em dash, `(c)`/`(r)`/`(tm)`, `...`→…, sentence caps) plus
+  **AutoFormat As You Type** (automatic bulleted/numbered lists, ordinals→superscript, `1/2`→½, URLs/e-mail→hyperlinks);
+  each rule individually toggled in the **AutoCorrect Options** dialog (Options → *AutoFormat As You Type* tab) and persisted.
 - Paste Special: Paste Text Only / Merge Formatting (Ctrl+Shift+V).
 - Insert **Symbol** (glyph picker) and **Date & Time**.
 
@@ -154,7 +156,8 @@ docx reader/writer; unsupported renderings are noted under [Known limitations](#
 - **Comments** (`word/comments.xml`, `w:commentRangeStart/End` + `w:commentReference`) with author/text tooltip.
 - **Track changes** (`w:ins`/`w:del`, author/date) with Track-Changes toggle and Accept All / Reject All.
 - **Compare documents** — two-level (paragraph-anchor + word-level) LCS diff producing tracked changes.
-- **Restrict editing / protection** (read-only / comments-only / track-changes-only, `w:documentProtection` in `settings.xml`).
+- **Restrict editing / protection** — Restrict Editing pane (No changes / Tracked changes / Comments / Filling in forms), enforced on the live editor (read-only, forced track-changes, comment-only) and persisted as `w:documentProtection` (`w:edit` + `w:enforcement`) in `settings.xml`; "Stop Protection" lifts it.
+- **Mark as Final** — Word's advisory read-only flag (`_MarkAsFinal` boolean custom property in `docProps/custom.xml`): locks the editor, shows a "Marked as Final" banner, and "Edit Anyway" clears it.
 - **Document Inspector** (count + selectively remove comments / revisions / properties / bookmarks).
 - **Check Accessibility** — alt-text, link-text, heading-order, table-header, and WCAG contrast rules with a grouped report.
 - Word count + live status bar; **Document Statistics** dialog (words/chars/sentences/syllables, reading time, Flesch reading ease).

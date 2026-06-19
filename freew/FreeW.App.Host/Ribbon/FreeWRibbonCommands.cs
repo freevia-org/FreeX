@@ -94,7 +94,9 @@ internal static class FreeWRibbonCommands
         Action? onWebLayout = null,
         Func<bool>? isWebLayoutActive = null,
         Action? onDraftView = null,
-        Func<bool>? isDraftViewActive = null)
+        Func<bool>? isDraftViewActive = null,
+        Action? onToggleRevealFormatting = null,
+        Func<bool>? isRevealFormattingVisible = null)
     {
         var registry = new RibbonCommandRegistry();
         var stateful = new List<(RibbonCommandId Id, IRibbonStatefulCommand Command)>();
@@ -187,6 +189,8 @@ internal static class FreeWRibbonCommands
         // Insert tab — Table Tools: table-style toggles applied to the caret's table (sets model + re-renders).
         // Table Tools — Data: insert a computed formula field (=SUM(ABOVE) etc.) into the caret's cell.
         registry.Register("freew.table-formula", new TableFormulaCommand(editor));
+        // Table Tools — Properties: open the four-tab Table Properties dialog for the caret's table.
+        registry.Register("freew.table-properties", new TablePropertiesCommand(editor));
         registry.Register("freew.table-header-row", new ActionCommand(() => { editor.Focus(); editor.ToggleTableHeaderRow(); }));
         registry.Register("freew.table-banded-rows", new ActionCommand(() => { editor.Focus(); editor.ToggleTableBandedRows(); }));
         registry.Register("freew.table-repeat-header", new ActionCommand(() => { editor.Focus(); editor.ToggleTableRepeatHeaderRow(); }));
@@ -393,10 +397,18 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.accept-all", new ActionCommand(() => { editor.Focus(); editor.AcceptAllRevisions(); }));
         registry.Register("freew.reject-all", new ActionCommand(() => { editor.Focus(); editor.RejectAllRevisions(); }));
 
-        // Review tab — Protect: Restrict Editing. A stateful toggle over document protection: turning it
-        // on locks the document read-only (RichTextBox IsReadOnly) and emits word/settings.xml's
-        // w:documentProtection on save; turning it off clears protection. The toggle reflects whether
-        // the document is currently protected.
+        // Review tab — Protect: Mark as Final. A stateful toggle over Word's advisory read-only flag:
+        // turning it on makes the editor read-only, shows the "Marked as Final" banner and persists the
+        // _MarkAsFinal custom property; "Edit Anyway" (or toggling off) clears it. The checked state
+        // reflects whether the document is currently marked final.
+        var markAsFinal = new MarkAsFinalToggleCommand(editor);
+        registry.Register("freew.mark-as-final", markAsFinal);
+        stateful.Add(("freew.mark-as-final", markAsFinal));
+
+        // Review tab — Protect: Restrict Editing. Opens the Restrict Editing pane to choose the allowed
+        // editing type (No changes / Tracked changes / Comments / Filling in forms) and start enforcing,
+        // or stop protection. The chosen mode is enforced on the live editor and emits word/settings.xml's
+        // w:documentProtection on save. The toggle reflects whether protection is currently enforced.
         var restrictEditing = new RestrictEditingToggleCommand(editor);
         registry.Register("freew.restrict-editing", restrictEditing);
         stateful.Add(("freew.restrict-editing", restrictEditing));
@@ -515,6 +527,11 @@ internal static class FreeWRibbonCommands
         // Columns: open the Columns dialog (One/Two/Three/Left/Right + spacing/line-between/More), applying
         // the chosen column layout to PageSettings and re-rendering so the flow shows at once.
         registry.Register("freew.columns", new ColumnsCommand(editor));
+        // Page Setup: the unified Margins / Paper / Layout dialog (Word's Layout > Page Setup launcher). The
+        // "Custom Margins…" / "More Paper Sizes…" entry points open the same dialog on the Margins / Paper tab.
+        registry.Register("freew.page-setup", new PageSetupCommand(editor, PageSetupDialog.Tab.Margins));
+        registry.Register("freew.custom-margins", new PageSetupCommand(editor, PageSetupDialog.Tab.Margins));
+        registry.Register("freew.more-paper-sizes", new PageSetupCommand(editor, PageSetupDialog.Tab.Paper));
         // Line Numbers: cycle None -> Continuous -> RestartEachPage -> None (shown in print preview).
         registry.Register("freew.line-numbers", new LineNumberCommand(editor));
 
@@ -579,6 +596,13 @@ internal static class FreeWRibbonCommands
             registry.Register("freew.web-layout", new ToggleActionCommand(onWebLayout, isWebLayoutActive));
         if (onDraftView is not null && isDraftViewActive is not null)
             registry.Register("freew.draft-view", new ToggleActionCommand(onDraftView, isDraftViewActive));
+
+        // View tab — toggle the Reveal Formatting pane (Word's Shift+F1 pane), a read-only side pane
+        // showing the effective FONT / PARAGRAPH / SECTION formatting of the selection. Stateful so the
+        // ribbon's toggle button reflects whether the pane is currently shown.
+        if (onToggleRevealFormatting is not null && isRevealFormattingVisible is not null)
+            registry.Register("freew.reveal-formatting",
+                new ToggleActionCommand(onToggleRevealFormatting, isRevealFormattingVisible));
 
         // View tab — open Word's Zoom dialog (presets / page fits / custom %). The host computes the
         // page-relative fit factors from the live viewport and applies the chosen factor to the editor.
@@ -1182,6 +1206,31 @@ internal static class FreeWRibbonCommands
         }
     }
 
+    // Table Tools — Layout > Properties (Word's Table Properties dialog). Requires the caret to be inside a
+    // table; otherwise warns. Seeds the four-tab dialog from the caret's table/row/cell and applies the chosen
+    // values through the editor (which round-trips via w:tblPr / w:trPr / w:tcPr).
+    private sealed class TablePropertiesCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var owner = Window.GetWindow(editor);
+            var tableContext = editor.CaretTableContext();
+            if (tableContext is null)
+            {
+                DialogMessageHelper.ShowWarning(owner!, "The cursor must be inside a table to edit its properties.", "Table Properties");
+                return;
+            }
+
+            var values = TablePropertiesDialog.Prompt(owner, tableContext);
+            if (values is null)
+                return; // cancelled — leave the model untouched
+
+            editor.Focus();
+            editor.ApplyTableProperties(values);
+        }
+    }
+
     private sealed class CellShadingCommand(DocumentView editor) : IRibbonCommand
     {
         private static readonly string[] Palette =
@@ -1295,6 +1344,50 @@ internal static class FreeWRibbonCommands
                 page.ColumnsLineBetween = result.LineBetween;
                 page.ColumnWidthsPt = result.WidthsPt;
             });
+        }
+    }
+
+    // Opens the unified Page Setup dialog (Margins / Paper / Layout tabs) and applies the chosen geometry,
+    // orientation, gutter, mirror-margins, paper size, header/footer distance, vertical alignment and the
+    // different-first-page / odd-even toggles to PageSettings via ApplyPageSettings — the same single
+    // commit + re-render path the other page-setup commands use, round-tripping through the existing w:sectPr /
+    // settings.xml writers. The "Custom Margins…" / "More Paper Sizes…" entry points open the same dialog on the
+    // Margins / Paper tab. The dialog's Line Numbers… / Borders… launchers defer to FreeW's existing Line
+    // Numbers cycle and Borders and Shading dialog respectively, opened after the page settings are applied.
+    private sealed class PageSetupCommand(DocumentView editor, PageSetupDialog.Tab initialTab) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var outcome = PageSetupDialog.Prompt(Window.GetWindow(editor), editor.Model.Page, initialTab: initialTab);
+            if (outcome is not { } o)
+                return;
+
+            var settings = o.Settings;
+            editor.ApplyPageSettings(page =>
+            {
+                page.MarginTopPt = settings.MarginTopPt;
+                page.MarginBottomPt = settings.MarginBottomPt;
+                page.MarginLeftPt = settings.MarginLeftPt;
+                page.MarginRightPt = settings.MarginRightPt;
+                page.GutterPt = settings.GutterPt;
+                page.Landscape = settings.Landscape;
+                page.MirrorMargins = settings.MirrorMargins;
+                page.WidthPt = settings.WidthPt;
+                page.HeightPt = settings.HeightPt;
+                page.DifferentFirstPage = settings.DifferentFirstPage;
+                page.DifferentOddEvenPages = settings.DifferentOddEvenPages;
+                page.HeaderDistancePt = settings.HeaderDistancePt;
+                page.FooterDistancePt = settings.FooterDistancePt;
+                page.VerticalAlignment = settings.VerticalAlignment;
+            });
+
+            // Defer to the existing features for the Layout-tab launchers, so a single source of truth drives
+            // line numbering and page/paragraph borders.
+            if (o.LineNumbers)
+                new LineNumberCommand(editor).Execute(context);
+            else if (o.Borders)
+                new BordersAndShadingCommand(editor).Execute(context);
         }
     }
 
@@ -2043,21 +2136,39 @@ internal static class FreeWRibbonCommands
         public RibbonCommandState GetState() => new(IsEnabled: true, IsChecked: editor.TrackChangesEnabled);
     }
 
-    // Review > Protect > Restrict Editing: a stateful toggle over document protection. Executing flips
-    // the document between unprotected and read-only (the common restrict-editing gesture): turning it
-    // ON makes the RichTextBox read-only and emits word/settings.xml's w:documentProtection on save;
-    // turning it OFF clears protection and restores editing. The checked state reflects whether the
-    // document is currently protected, so the ribbon button shows the lock state at a glance.
+    // Review > Protect > Restrict Editing: opens the Restrict Editing pane to choose the allowed editing
+    // type and start enforcing (or stop protection). The chosen ProtectionMode is enforced on the live
+    // editor (read-only for No-changes/Comments/Forms, forced track-changes for Tracked) and emits
+    // word/settings.xml's w:documentProtection on save. The checked state reflects whether protection is
+    // currently enforced, so the ribbon button shows the lock state at a glance.
     private sealed class RestrictEditingToggleCommand(DocumentView editor) : IRibbonStatefulCommand
     {
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            editor.ToggleReadOnlyProtection();
+            var chosen = RestrictEditingDialog.Prompt(Window.GetWindow(editor), editor.ProtectionMode);
+            if (chosen is { } mode)
+                editor.SetProtection(mode);
         }
 
         public RibbonCommandState GetState() =>
-            new(IsEnabled: true, IsChecked: editor.Model.Protection.IsProtected);
+            new(IsEnabled: true, IsChecked: editor.IsProtected);
+    }
+
+    // Review > Protect > Mark as Final: a stateful toggle over Word's advisory read-only flag. Turning it
+    // ON makes the editor read-only, shows the "Marked as Final" banner and persists the _MarkAsFinal
+    // custom property on save; turning it OFF ("Edit Anyway") restores editing. The checked state reflects
+    // whether the document is currently marked final.
+    private sealed class MarkAsFinalToggleCommand(DocumentView editor) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            editor.SetMarkedAsFinal(!editor.IsMarkedAsFinal);
+        }
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: true, IsChecked: editor.IsMarkedAsFinal);
     }
 
     // Review > Speech > Read Aloud: a stateful toggle that starts/stops an in-box text-to-speech
