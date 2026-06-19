@@ -1739,8 +1739,10 @@ public static class DocxReader
             text += "\t";
         if (text.Length == 0)
             return;
-        var textRun = new Run(text, ReadRunFormatting(r.Element(W + "rPr"))) { HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip, CommentId = commentId, Control = control };
+        var rPr = r.Element(W + "rPr");
+        var textRun = new Run(text, ReadRunFormatting(rPr)) { HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip, CommentId = commentId, Control = control };
         ApplyRevision(textRun);
+        ApplyFormatRevision(textRun, rPr);
         paragraph.Runs.Add(textRun);
     }
 
@@ -3197,6 +3199,23 @@ public static class DocxReader
 
         var level1Text = levels.ElementAtOrDefault(1)?.Element(W + "lvlText")?.Attribute(W + "val")?.Value;
         return level1Text is not null && level1Text.Contains("%1") && level1Text.Contains("%2");
+    }
+
+    /// <summary>
+    /// Reads a tracked formatting change (w:rPrChange) from a run's <paramref name="rPr"/> and stamps it
+    /// onto <paramref name="run"/> as a <see cref="FormatRevision"/>. The rPrChange carries the run's
+    /// <em>previous</em> formatting in a nested w:rPr plus the w:author/w:date of the change. A run with no
+    /// rPrChange is left untouched.
+    /// </summary>
+    private static void ApplyFormatRevision(Run run, XElement? rPr)
+    {
+        var rPrChange = rPr?.Element(W + "rPrChange");
+        if (rPrChange is null)
+            return;
+        var previous = ReadRunFormatting(rPrChange.Element(W + "rPr"));
+        var author = rPrChange.Attribute(W + "author")?.Value;
+        var date = rPrChange.Attribute(W + "date")?.Value;
+        run.FormatRevision = new FormatRevision(previous, author, date);
     }
 
     internal static RunFormatting ReadRunFormatting(XElement? rPr)

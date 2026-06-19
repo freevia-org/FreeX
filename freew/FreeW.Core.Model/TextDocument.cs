@@ -475,6 +475,17 @@ public sealed class Run(string text, RunFormatting? formatting = null)
     /// </summary>
     public string? RevisionDateXml { get; set; }
 
+    /// <summary>
+    /// A tracked <em>formatting</em> change on this run (Word's w:rPrChange), or null when the run's
+    /// formatting was not changed under Track Changes. When set, <see cref="Formatting"/> is the new
+    /// (current) formatting and <see cref="FormatRevision"/> carries the <em>previous</em> formatting plus
+    /// the author/date who made the change. This is independent of <see cref="Revision"/>: a run can be an
+    /// ordinary (un-inserted/un-deleted) run whose formatting was tracked-changed. Accepting keeps the new
+    /// formatting and clears the mark; rejecting restores the previous formatting. Modelled as an optional
+    /// run mark, mirroring <see cref="RevisionAuthor"/>/<see cref="RevisionDateXml"/>.
+    /// </summary>
+    public FormatRevision? FormatRevision { get; set; }
+
     /// <summary>Creates a run that carries an inline image instead of text.</summary>
     public static Run FromImage(InlineImage image) => new(string.Empty) { Image = image };
 
@@ -940,6 +951,15 @@ public enum RevisionKind
     Inserted,
     Deleted
 }
+
+/// <summary>
+/// A tracked formatting change on a run (Word's <c>w:rPrChange</c>). <see cref="PreviousFormatting"/> is
+/// the run's formatting <em>before</em> the change (what reject restores); the run's current
+/// <see cref="Run.Formatting"/> is the new formatting. <see cref="Author"/>/<see cref="DateXml"/> record
+/// who made the change and when (the w:author/w:date on w:rPrChange). Immutable, mirroring how revision
+/// metadata is carried as plain optional data on the run.
+/// </summary>
+public sealed record FormatRevision(RunFormatting PreviousFormatting, string? Author, string? DateXml);
 
 /// <summary>
 /// A top-level document block. The document body is an ordered sequence of blocks; today that is

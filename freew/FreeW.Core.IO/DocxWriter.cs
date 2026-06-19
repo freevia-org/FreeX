@@ -1696,6 +1696,24 @@ public static class DocxWriter
     }
 
     /// <summary>
+    /// Builds a w:rPrChange (tracked formatting change) carrying a unique w:id plus the author/date, with a
+    /// nested w:rPr holding the run's <em>previous</em> formatting. The nested w:rPr is always present (even
+    /// when empty) because that empty element is how Word records "the run previously had default
+    /// formatting". This element is the last child of the run's w:rPr.
+    /// </summary>
+    private static XElement BuildRprChange(FormatRevision revision, IdAllocator ids)
+    {
+        var change = new XElement(W + "rPrChange",
+            new XAttribute(W + "id", ids.NextRevisionId()));
+        if (revision.Author is { Length: > 0 } author)
+            change.Add(new XAttribute(W + "author", author));
+        if (revision.DateXml is { Length: > 0 } date)
+            change.Add(new XAttribute(W + "date", date));
+        change.Add(BuildRunProperties(revision.PreviousFormatting) ?? new XElement(W + "rPr"));
+        return change;
+    }
+
+    /// <summary>
     /// Builds the w:sdtPr (content-control properties) for a content control. Emits w:tag / w:alias when
     /// set, then the control-kind element: w:text for a plain-text control; a w14:checkbox carrying the
     /// checked state (w14:checked val="1"/"0") for a checkbox; w:richText for a rich-text control; a
@@ -2272,6 +2290,15 @@ public static class DocxWriter
     {
         var r = new XElement(W + "r");
         var rPr = BuildRunProperties(run.Formatting);
+        // A tracked formatting change (w:rPrChange) is the LAST child of the run's run-properties and
+        // carries a nested w:rPr of the run's *previous* formatting (what reject restores). When the run
+        // has a format revision but no other run properties, an empty w:rPr must still be created to host
+        // it (an rPr that is null/empty would otherwise be dropped).
+        if (run.FormatRevision is { } formatRevision)
+        {
+            rPr ??= new XElement(W + "rPr");
+            rPr.Add(BuildRprChange(formatRevision, drawings.Ids));
+        }
         if (rPr is not null)
             r.Add(rPr);
         if (run.PreservedDrawing is { } preservedDrawing)
