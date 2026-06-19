@@ -151,6 +151,50 @@ public sealed class DataValidationDropdownPlannerTests
         act.Should().NotThrow().Which.Should().BeFalse();
     }
 
+    [Fact]
+    public void HasDropdownList_IsTrue_ForCellWithListValidation()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var target = new CellAddress(sheet.Id, 3, 4);
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = new GridRange(target, target),
+            Type = DvType.List,
+            Formula1 = "A,B,C",
+            ShowDropdown = true
+        });
+
+        DataValidationDropdownPlanner.HasDropdownList(workbook, sheet, target).Should().BeTrue();
+    }
+
+    [Fact]
+    public void HasDropdownList_IsFalse_ForCellWithoutListValidation()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var target = new CellAddress(sheet.Id, 3, 4);
+
+        DataValidationDropdownPlanner.HasDropdownList(workbook, sheet, target).Should().BeFalse();
+    }
+
+    [Fact]
+    public void HasDropdownList_IsFalse_WhenDropdownSuppressed()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var target = new CellAddress(sheet.Id, 1, 1);
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = new GridRange(target, target),
+            Type = DvType.List,
+            Formula1 = "A,B",
+            ShowDropdown = false
+        });
+
+        DataValidationDropdownPlanner.HasDropdownList(workbook, sheet, target).Should().BeFalse();
+    }
+
     private static Workbook CreateWorkbook()
     {
         var workbook = new Workbook("Book");
