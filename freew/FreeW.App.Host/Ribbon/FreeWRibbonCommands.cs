@@ -921,7 +921,7 @@ internal static class FreeWRibbonCommands
             if (def is null)
                 return;
 
-            var created = StyleManager.CreateStyle(editor.Model, def.Name, def.BasedOnId, def.Run, def.Paragraph);
+            var created = StyleManager.CreateStyle(editor.Model, def.Name, def.BasedOnId, def.Run, def.Paragraph, def.NextStyleId);
             editor.Focus();
             editor.SetParagraphStyle(created.Id);
         }
@@ -963,7 +963,8 @@ internal static class FreeWRibbonCommands
                             continue;
                         StyleManager.ModifyStyle(editor.Model, mod.StyleId,
                             run: def.Run, para: def.Paragraph, basedOnId: def.BasedOnId,
-                            clearBasedOn: def.BasedOnId is null);
+                            clearBasedOn: def.BasedOnId is null,
+                            nextStyleId: def.NextStyleId, clearNext: def.NextStyleId is null);
                         editor.RefreshStyles();
                         continue;
                 }

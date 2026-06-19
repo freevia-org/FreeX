@@ -117,6 +117,73 @@ public class StyleManagerTests
     }
 
     [Fact]
+    public void CreateStyle_SetsNextStyle_WhenItNamesExistingStyle()
+    {
+        var doc = TextDocument.CreateEmpty();
+
+        var style = StyleManager.CreateStyle(
+            doc, "My Heading", basedOnId: "Heading1",
+            RunFormatting.Default, ParagraphFormatting.Default, nextStyleId: "Normal");
+
+        style.NextStyleId.Should().Be("Normal");
+    }
+
+    [Fact]
+    public void CreateStyle_AllowsNextStyle_PointingAtItself()
+    {
+        var doc = TextDocument.CreateEmpty();
+
+        // Word permits a style to chain its follow-on to itself (a body style that stays the body style).
+        var style = StyleManager.CreateStyle(
+            doc, "Body", basedOnId: "Normal",
+            RunFormatting.Default, ParagraphFormatting.Default, nextStyleId: "Body");
+
+        style.NextStyleId.Should().Be(style.Id);
+    }
+
+    [Fact]
+    public void CreateStyle_DropsUnknownNextStyle()
+    {
+        var doc = TextDocument.CreateEmpty();
+
+        var style = StyleManager.CreateStyle(
+            doc, "Floating", basedOnId: null,
+            RunFormatting.Default, ParagraphFormatting.Default, nextStyleId: "Ghost");
+
+        style.NextStyleId.Should().BeNull();
+    }
+
+    [Fact]
+    public void ModifyStyle_UpdatesAndClearsNextStyle()
+    {
+        var doc = TextDocument.CreateEmpty();
+        var created = StyleManager.CreateStyle(
+            doc, "Callout", "Normal", RunFormatting.Default, ParagraphFormatting.Default, nextStyleId: "Normal");
+
+        StyleManager.ModifyStyle(doc, created.Id, nextStyleId: "Heading1")!.NextStyleId.Should().Be("Heading1");
+        StyleManager.ModifyStyle(doc, created.Id, nextStyleId: "Ghost")!.NextStyleId.Should().Be("Heading1"); // unknown ignored
+        StyleManager.ModifyStyle(doc, created.Id, clearNext: true)!.NextStyleId.Should().BeNull();
+    }
+
+    [Fact]
+    public void ModifyStyle_PreservesPreservedNumbering_AndTableBorders()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Styles["ListStyle"] = new DocumentStyle
+        {
+            Id = "ListStyle",
+            Name = "List Style",
+            TableBorders = true,
+            PreservedNumbering = new PreservedNumbering(7, 1),
+        };
+
+        var updated = StyleManager.ModifyStyle(doc, "ListStyle", run: new RunFormatting { Bold = true });
+
+        updated!.TableBorders.Should().BeTrue();
+        updated.PreservedNumbering.Should().Be(new PreservedNumbering(7, 1));
+    }
+
+    [Fact]
     public void ModifyStyle_ReturnsNull_ForUnknownStyle()
     {
         var doc = TextDocument.CreateEmpty();

@@ -4325,19 +4325,34 @@ public static class DocxWriter
                 new XElement(W + "name", new XAttribute(W + "val", style.Name)));
             if (!string.IsNullOrEmpty(style.BasedOnStyleId))
                 element.Add(new XElement(W + "basedOn", new XAttribute(W + "val", style.BasedOnStyleId)));
-            // Style-level numbering FreeW does not model: when the style carried an original w:numPr and the
-            // merge plan remapped that numId (a definition exists in the preserved numbering.xml), re-emit a
-            // w:pPr/w:numPr pointing at the REMAPPED numId (disjoint from FreeW's fixed ids), keeping the
-            // original ilvl. w:pPr precedes w:rPr in CT_Style schema order. A numPr whose numId the plan did
-            // not remap (no matching w:num) is dropped, exactly like a paragraph's preserved numPr.
-            if (preservedNumbering is not null
-                && style.PreservedNumbering is { } sn
-                && preservedNumbering.NumIdRemap.TryGetValue(sn.NumId, out var mappedNumId))
+            // The "Style for following paragraph" (w:next, after w:basedOn in CT_Style order): which style
+            // the paragraph after this one takes (e.g. a Heading's body-text follow-on). Emitted only for
+            // paragraph styles that specify one.
+            if (style.Type != StyleType.Character && !string.IsNullOrEmpty(style.NextStyleId))
+                element.Add(new XElement(W + "next", new XAttribute(W + "val", style.NextStyleId)));
+            // A single w:pPr (which precedes w:rPr in CT_Style order) carrying the style's paragraph
+            // formatting (alignment / indents / spacing) and, for a preserved style-level list, its numPr.
+            // Built only for paragraph styles, and only when there is something to emit, so character styles
+            // and formatting-only paragraph styles are unaffected.
+            if (style.Type != StyleType.Character)
             {
-                element.Add(new XElement(W + "pPr",
-                    new XElement(W + "numPr",
+                var pPr = BuildStyleParagraphProperties(style.Paragraph);
+                // Style-level numbering FreeW does not model: when the style carried an original w:numPr and
+                // the merge plan remapped that numId (a definition exists in the preserved numbering.xml),
+                // re-emit a numPr pointing at the REMAPPED numId (disjoint from FreeW's fixed ids), keeping
+                // the original ilvl. A numPr whose numId the plan did not remap (no matching w:num) is
+                // dropped, exactly like a paragraph's preserved numPr.
+                if (preservedNumbering is not null
+                    && style.PreservedNumbering is { } sn
+                    && preservedNumbering.NumIdRemap.TryGetValue(sn.NumId, out var mappedNumId))
+                {
+                    pPr ??= new XElement(W + "pPr");
+                    pPr.Add(new XElement(W + "numPr",
                         new XElement(W + "ilvl", new XAttribute(W + "val", sn.Ilvl)),
-                        new XElement(W + "numId", new XAttribute(W + "val", mappedNumId)))));
+                        new XElement(W + "numId", new XAttribute(W + "val", mappedNumId))));
+                }
+                if (pPr is not null)
+                    element.Add(pPr);
             }
             var rPr = BuildRunProperties(style.Run);
             if (rPr is not null)
@@ -4346,5 +4361,64 @@ public static class DocxWriter
         }
 
         return new XDocument(styles);
+    }
+
+    /// <summary>
+    /// Build a style-scope <c>w:pPr</c> carrying only the paragraph formatting a custom style can define
+    /// (alignment, left/right/first-line indents, space-before/after, line spacing). Returns null when the
+    /// style's paragraph formatting is the default (nothing to emit), so a formatting-only or run-only style
+    /// adds no empty <c>w:pPr</c>. This is deliberately narrower than the per-paragraph
+    /// <see cref="BuildParagraphProperties"/>, which also handles instance-only concerns (pStyle, section
+    /// breaks, FreeW's modelled lists) that have no place on a style definition.
+    /// </summary>
+    private static XElement? BuildStyleParagraphProperties(ParagraphFormatting f)
+    {
+        var pPr = new XElement(W + "pPr");
+
+        if (f.Alignment != TextAlignment.Left)
+            pPr.Add(new XElement(W + "jc", new XAttribute(W + "val", f.Alignment switch
+            {
+                TextAlignment.Center => "center",
+                TextAlignment.Right => "right",
+                TextAlignment.Justify => "both",
+                _ => "left"
+            })));
+
+        // w:spacing carries before/after and line spacing, mirroring the per-paragraph writer: before/after
+        // are emitted only when non-zero, line spacing only when it differs from the model default. Schema
+        // order places w:spacing before w:ind in CT_PPr.
+        var hasLineSpacing = f.LineRule != LineSpacingRule.Multiple
+            || System.Math.Abs(f.LineSpacing - ParagraphFormatting.Default.LineSpacing) > 0.0001;
+        if (f.SpaceBeforePt > 0 || f.SpaceAfterPt > 0 || hasLineSpacing)
+        {
+            var spacing = new XElement(W + "spacing");
+            if (f.SpaceBeforePt > 0 || f.SpaceAfterPt > 0)
+            {
+                spacing.Add(new XAttribute(W + "before", PointsToDxa(f.SpaceBeforePt)));
+                spacing.Add(new XAttribute(W + "after", PointsToDxa(f.SpaceAfterPt)));
+            }
+            if (hasLineSpacing)
+            {
+                var (line, rule) = f.LineRule switch
+                {
+                    LineSpacingRule.Exact => ((int)System.Math.Round(f.LineHeightPt * 20), "exact"),
+                    LineSpacingRule.AtLeast => ((int)System.Math.Round(f.LineHeightPt * 20), "atLeast"),
+                    _ => ((int)System.Math.Round(f.LineSpacing * 240), "auto")
+                };
+                spacing.Add(new XAttribute(W + "line", line));
+                spacing.Add(new XAttribute(W + "lineRule", rule));
+            }
+            pPr.Add(spacing);
+        }
+
+        // Indents (w:ind), in dxa; emitted as a group only when any edge is non-zero, exactly like the
+        // per-paragraph writer.
+        if (f.IndentLeftPt > 0 || f.IndentRightPt > 0 || f.FirstLineIndentPt > 0)
+            pPr.Add(new XElement(W + "ind",
+                new XAttribute(W + "left", PointsToDxa(f.IndentLeftPt)),
+                new XAttribute(W + "right", PointsToDxa(f.IndentRightPt)),
+                new XAttribute(W + "firstLine", PointsToDxa(f.FirstLineIndentPt))));
+
+        return pPr.HasElements ? pPr : null;
     }
 }

@@ -44,12 +44,18 @@ public static class StyleManager
     /// </param>
     /// <param name="run">The run (character) formatting carried by the style.</param>
     /// <param name="para">The paragraph formatting carried by the style.</param>
+    /// <param name="nextStyleId">
+    /// The id of the style applied to the following paragraph (Word's "Style for following paragraph",
+    /// <c>w:next</c>), or null for none. Ignored when it does not name an existing style, so a stale
+    /// next-style never produces a dangling reference. A style may point its follow-on at itself.
+    /// </param>
     public static DocumentStyle CreateStyle(
         TextDocument doc,
         string name,
         string? basedOnId,
         RunFormatting run,
-        ParagraphFormatting para)
+        ParagraphFormatting para,
+        string? nextStyleId = null)
     {
         ArgumentNullException.ThrowIfNull(doc);
         ArgumentNullException.ThrowIfNull(run);
@@ -60,11 +66,18 @@ public static class StyleManager
 
         var id = GenerateUniqueId(doc, trimmed);
         var basedOn = basedOnId is { Length: > 0 } && doc.Styles.ContainsKey(basedOnId) ? basedOnId : null;
+        // A next-style may point at an existing style or at the new style itself (Word allows a style to
+        // chain to itself, e.g. a body style whose follow-on is the same style). Anything else is dropped.
+        var next = nextStyleId is { Length: > 0 }
+            && (doc.Styles.ContainsKey(nextStyleId) || string.Equals(nextStyleId, id, StringComparison.Ordinal))
+            ? nextStyleId
+            : null;
         var style = new DocumentStyle
         {
             Id = id,
             Name = trimmed,
             BasedOnStyleId = basedOn,
+            NextStyleId = next,
             Run = run,
             Paragraph = para,
         };
@@ -86,7 +99,9 @@ public static class StyleManager
         ParagraphFormatting? para = null,
         string? name = null,
         string? basedOnId = null,
-        bool clearBasedOn = false)
+        bool clearBasedOn = false,
+        string? nextStyleId = null,
+        bool clearNext = false)
     {
         ArgumentNullException.ThrowIfNull(doc);
         if (styleId is null || !doc.Styles.TryGetValue(styleId, out var existing))
@@ -108,6 +123,16 @@ public static class StyleManager
             && doc.Styles.ContainsKey(basedOnId))
             newBasedOn = basedOnId;
 
+        // The follow-on style (w:next). Clearing wins; otherwise a value naming an existing style (or this
+        // style itself, which Word permits) replaces it, and anything else is ignored — symmetric with
+        // based-on but allowing the self-reference a next-style legitimately uses.
+        var newNext = existing.NextStyleId;
+        if (clearNext)
+            newNext = null;
+        else if (nextStyleId is { Length: > 0 }
+            && (doc.Styles.ContainsKey(nextStyleId) || string.Equals(nextStyleId, styleId, StringComparison.Ordinal)))
+            newNext = nextStyleId;
+
         // DocumentStyle's Id/Name/BasedOn are init-only, so replace the entry rather than mutate it.
         var updated = new DocumentStyle
         {
@@ -115,8 +140,13 @@ public static class StyleManager
             Name = newName,
             Type = existing.Type,
             BasedOnStyleId = newBasedOn,
+            NextStyleId = newNext,
             Run = run ?? existing.Run,
             Paragraph = para ?? existing.Paragraph,
+            // Preserve read-only structural data the modify dialog does not edit, so modifying a style read
+            // from a docx does not silently drop its table borders or preserved numbering on the next save.
+            TableBorders = existing.TableBorders,
+            PreservedNumbering = existing.PreservedNumbering,
         };
         doc.Styles[styleId] = updated;
         return updated;

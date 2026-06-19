@@ -3354,6 +3354,9 @@ public static class DocxReader
                 Name = s.Element(W + "name")?.Attribute(W + "val")?.Value ?? id,
                 Type = s.Attribute(W + "type")?.Value == "character" ? StyleType.Character : StyleType.Paragraph,
                 BasedOnStyleId = s.Element(W + "basedOn")?.Attribute(W + "val")?.Value,
+                // The "Style for following paragraph" (w:next): the style applied to the paragraph created
+                // when Enter is pressed at the end of one carrying this style (e.g. Heading1 -> Normal).
+                NextStyleId = s.Element(W + "next")?.Attribute(W + "val")?.Value,
                 Run = rPr is null ? RunFormatting.Default : ReadRunFormatting(rPr),
                 Paragraph = pPr is null ? ParagraphFormatting.Default : ReadParagraphFormatting(pPr),
                 // A table style (e.g. the built-in TableGrid) defines its cell borders in w:tblPr/w:tblBorders;
