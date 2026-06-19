@@ -404,6 +404,27 @@ public sealed class Run(string text, RunFormatting? formatting = null)
         new(cached, formatting) { CrossReference = field };
 
     /// <summary>
+    /// When non-null, this run is a <em>complex</em> Word field (Word's <c>w:fldChar</c> begin / separate /
+    /// end run sequence with a <c>w:instrText</c> instruction) rather than the self-contained
+    /// <c>w:fldSimple</c> carried by <see cref="FieldKind"/>. It preserves the raw field-code instruction
+    /// (e.g. <c> PAGE </c>, <c> DATE \@ "M/d/yyyy" </c>, <c> FILENAME </c>, <c> AUTHOR </c>, <c> REF bm </c>)
+    /// verbatim so <em>any</em> field round-trips, and the run's <see cref="Text"/> doubles as the cached
+    /// result (the last-computed display value) shown when field codes are hidden. This is the generic
+    /// construct behind Insert &gt; Quick Parts &gt; Field, Alt+F9 (toggle codes), and F9 (update). Modelled
+    /// as an optional run mark, mirroring <see cref="CrossReference"/>, so it round-trips without a new block
+    /// type.
+    /// </summary>
+    public ComplexField? ComplexField { get; set; }
+
+    /// <summary>
+    /// Creates a complex field run with the given raw <paramref name="instruction"/> (e.g. <c> PAGE </c>)
+    /// and cached display <paramref name="result"/> (the last-computed value). The run serialises as the
+    /// <c>w:fldChar</c> begin / <c>w:instrText</c> / separate / result / end sequence.
+    /// </summary>
+    public static Run ComplexFieldRun(string instruction, string result = "", bool showCode = false, RunFormatting? formatting = null) =>
+        new(result, formatting) { ComplexField = new ComplexField(instruction, showCode) };
+
+    /// <summary>
     /// When set, this run is a footnote reference marker pointing at the footnote with this id in
     /// <see cref="TextDocument.Footnotes"/>. It carries no literal text of its own; the marker number
     /// is the id. Serialises as a superscript run wrapping a w:footnoteReference w:id="N".
@@ -938,6 +959,34 @@ public enum RunFieldKind
     FileName,
     Author,
     NumPages
+}
+
+/// <summary>
+/// A generic Word <em>complex</em> field — the <c>w:fldChar</c> begin / <c>w:instrText</c> / separate /
+/// result / end run sequence (Insert &gt; Quick Parts &gt; Field). Unlike <see cref="RunFieldKind"/>, which
+/// enumerates a fixed set of self-contained <c>w:fldSimple</c> fields, this preserves the raw field-code
+/// <see cref="Instruction"/> verbatim, so any field (PAGE, NUMPAGES, DATE with a \@ picture, FILENAME,
+/// AUTHOR, REF, or one FreeW does not specifically model) round-trips losslessly. The owning
+/// <see cref="Run.Text"/> holds the cached result. <see cref="ShowCode"/> drives the Alt+F9 toggle: when
+/// true the editor shows the field code (e.g. <c>{ PAGE }</c>) instead of the result; it is presentation
+/// state only and is not serialised.
+/// </summary>
+/// <param name="Instruction">The raw field instruction, e.g. <c> PAGE </c> or <c> DATE \@ "M/d/yyyy" </c>.</param>
+/// <param name="ShowCode">When true, the editor displays the field code rather than the result (Alt+F9).</param>
+public sealed record ComplexField(string Instruction, bool ShowCode = false)
+{
+    /// <summary>The leading keyword of <see cref="Instruction"/> upper-cased (e.g. "PAGE"), or "" if empty.</summary>
+    public string Keyword
+    {
+        get
+        {
+            var t = Instruction.Trim();
+            if (t.Length == 0)
+                return string.Empty;
+            var end = t.IndexOfAny([' ', '\t', '\\']);
+            return (end < 0 ? t : t[..end]).ToUpperInvariant();
+        }
+    }
 }
 
 /// <summary>

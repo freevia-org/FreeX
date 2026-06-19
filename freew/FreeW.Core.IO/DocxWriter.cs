@@ -1880,6 +1880,35 @@ public static class DocxWriter
                 continue;
             }
 
+            // A complex field (Word's w:fldChar begin / w:instrText / separate / result / end sequence)
+            // emits FIVE runs rather than one: a begin fldChar, an instrText run carrying the raw field
+            // instruction, a separate fldChar, the cached-result run, then an end fldChar. The reader
+            // collapses this sequence back into a single ComplexField run. Routed through Content so it
+            // sits correctly inside an open revision/comment context, like any other run.
+            var complex = runs[i].ComplexField;
+            if (complex is not null)
+            {
+                var fieldRun = runs[i++];
+                var rPr = BuildRunProperties(fieldRun.Formatting);
+                XElement WithProps(params object[] children)
+                {
+                    var r = new XElement(W + "r");
+                    if (rPr is not null)
+                        r.Add(new XElement(rPr));
+                    r.Add(children);
+                    return r;
+                }
+                Content(fieldRun, WithProps(new XElement(W + "fldChar", new XAttribute(W + "fldCharType", "begin"))));
+                Content(fieldRun, WithProps(new XElement(W + "instrText",
+                    new XAttribute(XNamespace.Xml + "space", "preserve"), complex.Instruction)));
+                Content(fieldRun, WithProps(new XElement(W + "fldChar", new XAttribute(W + "fldCharType", "separate"))));
+                if (fieldRun.Text.Length > 0)
+                    Content(fieldRun, WithProps(new XElement(W + "t",
+                        new XAttribute(XNamespace.Xml + "space", "preserve"), fieldRun.Text)));
+                Content(fieldRun, WithProps(new XElement(W + "fldChar", new XAttribute(W + "fldCharType", "end"))));
+                continue;
+            }
+
             var url = runs[i].HyperlinkUrl;
             var anchor = runs[i].HyperlinkAnchor;
             var tooltip = runs[i].HyperlinkTooltip;

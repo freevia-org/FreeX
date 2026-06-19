@@ -1040,6 +1040,18 @@ public static class DocxReader
         // and the trailing w:commentReference run anchors the comment. We track the open range id so
         // every covered run gets its CommentId, and recover the reference run as a textless anchor.
         var activeCommentId = (int?)null;
+
+        // Complex-field accumulator (Word's w:fldChar begin / w:instrText / separate / result / end run
+        // sequence). When a begin fldChar is seen we collect the instruction (instrText) and the result
+        // text (runs after the separate) until the matching end, then collapse the whole span into one
+        // ComplexField run. Nesting is tracked by depth so an inner field's begin/end does not close the
+        // outer one. The instruction's leading keyword is parsed (see ReadParagraphRun for the AddRun side).
+        var fieldDepth = 0;
+        var fieldInstr = new System.Text.StringBuilder();
+        var fieldResult = new System.Text.StringBuilder();
+        var fieldPastSeparate = false;
+        XElement? fieldFormattingSource = null;
+
         foreach (var child in p.Elements())
         {
             if (child.Name == W + "commentRangeStart")
@@ -1050,6 +1062,62 @@ public static class DocxReader
             else if (child.Name == W + "commentRangeEnd")
             {
                 activeCommentId = null;
+            }
+            else if (fieldDepth > 0 && child.Name == W + "r")
+            {
+                // Inside a complex field: consume this run into the accumulator instead of emitting it.
+                var fldChar = child.Element(W + "fldChar")?.Attribute(W + "fldCharType")?.Value;
+                if (fldChar == "begin")
+                {
+                    fieldDepth++; // a nested field; its instruction/result text still feeds the accumulator
+                    // (begin char carries no text; nothing to accumulate here)
+                }
+                else if (fldChar == "separate")
+                {
+                    fieldPastSeparate = true;
+                }
+                else if (fldChar == "end")
+                {
+                    fieldDepth--;
+                    if (fieldDepth == 0)
+                    {
+                        // The outermost field closed: collapse to a single ComplexField run, mapping a
+                        // recognised leading keyword (PAGE/DATE/…) to the existing RunFieldKind so update
+                        // and rendering reuse that path, otherwise preserving the raw instruction.
+                        var instruction = fieldInstr.ToString();
+                        var result = fieldResult.ToString();
+                        var formatting = ReadRunFormatting(fieldFormattingSource?.Element(W + "rPr"));
+                        paragraph.Runs.Add(Run.ComplexFieldRun(instruction, result, showCode: false, formatting));
+                        fieldInstr.Clear();
+                        fieldResult.Clear();
+                        fieldPastSeparate = false;
+                        fieldFormattingSource = null;
+                    }
+                    // A nested field's end fldChar just decrements the depth (no text to accumulate).
+                }
+                else if (!fieldPastSeparate)
+                {
+                    // Before the separate: accumulate the instruction text (w:instrText, occasionally w:t).
+                    fieldInstr.Append(string.Concat(child.Elements(W + "instrText").Select(t => t.Value)));
+                    fieldInstr.Append(string.Concat(child.Elements(W + "t").Select(t => t.Value)));
+                }
+                else
+                {
+                    // After the separate: accumulate the cached result text and remember its formatting.
+                    fieldFormattingSource ??= child;
+                    fieldResult.Append(string.Concat(child.Elements(W + "t").Select(t => t.Value)));
+                }
+            }
+            else if (child.Name == W + "r" && child.Element(W + "fldChar")?.Attribute(W + "fldCharType")?.Value == "begin"
+                && child.Element(W + "fldChar")?.Element(W + "ffData") is null)
+            {
+                // A complex field begins here (and it is not a legacy form field, which AddRun handles).
+                // Open the accumulator; subsequent runs feed it until the matching end fldChar.
+                fieldDepth = 1;
+                fieldPastSeparate = false;
+                fieldInstr.Clear();
+                fieldResult.Clear();
+                fieldFormattingSource = null;
             }
             else if (child.Name == W + "r")
             {

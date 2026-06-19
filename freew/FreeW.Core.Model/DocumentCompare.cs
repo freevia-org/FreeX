@@ -376,6 +376,7 @@ public static class DocumentCompare
         IsCommentReference = source.IsCommentReference,
         Control = source.Control,
         Citation = source.Citation,
-        CrossReference = source.CrossReference
+        CrossReference = source.CrossReference,
+        ComplexField = source.ComplexField // immutable record — safe to share
     };
 }

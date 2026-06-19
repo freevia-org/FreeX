@@ -436,6 +436,8 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.footer", new HeaderFooterCommand(editor, isFooter: true));
         registry.Register("freew.page-number", new InsertPageNumberCommand(editor));
         registry.Register("freew.field", new InsertFieldCommand(editor));
+        registry.Register("freew.toggle-field-codes", new ToggleFieldCodesCommand(editor));
+        registry.Register("freew.update-fields", new UpdateFieldsCommand(editor));
 
         // Insert tab — Symbols: pick a glyph from a grid, or a formatted current date/time string, and
         // insert it at the caret as ordinary text (flows through the normal edit/undo path).
@@ -3294,36 +3296,51 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // Insert > Field: open a small picker listing the document field kinds (Date, Time, File Name,
-    // Author, Number of Pages, Page Number) and drop the chosen field run at the caret.
+    // Insert > Quick Parts > Field: open a categorised picker listing Word's common field codes and drop
+    // the chosen field at the caret as a generic complex field (w:fldChar/w:instrText), so it round-trips
+    // losslessly and supports Alt+F9 (toggle codes) / F9 (update). The picker returns the raw field
+    // instruction (e.g. " PAGE ", " DATE \@ \"M/d/yyyy\" ", " FILENAME ").
     private sealed class InsertFieldCommand(DocumentView editor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            var kind = FieldPickerDialog.Ask(Window.GetWindow(editor));
-            if (kind is not { } chosen)
+            var instruction = FieldPickerDialog.Ask(Window.GetWindow(editor));
+            if (instruction is not { } chosen)
                 return; // cancelled
-            editor.InsertField(chosen);
+            editor.InsertComplexField(chosen);
         }
     }
 
-    // A small modal dialog listing the insertable document field kinds. Returns the chosen
-    // RunFieldKind, or null if cancelled.
+    // Alt+F9: toggle whether the document's fields show their field codes or their results.
+    private sealed class ToggleFieldCodesCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context) => editor.ToggleFieldCodes();
+    }
+
+    // F9: update (recompute) every field's result in the document.
+    private sealed class UpdateFieldsCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context) => editor.UpdateFields();
+    }
+
+    // A small modal dialog listing the insertable document field codes, grouped by category (Date and
+    // Time / Document Information / Numbering). Returns the chosen raw field INSTRUCTION (e.g. " PAGE "),
+    // or null if cancelled.
     private static class FieldPickerDialog
     {
-        private sealed record Choice(string Label, RunFieldKind Kind);
+        private sealed record Choice(string Label, string Instruction);
 
-        public static RunFieldKind? Ask(Window? owner)
+        public static string? Ask(Window? owner)
         {
             var choices = new[]
             {
-                new Choice("Date", RunFieldKind.Date),
-                new Choice("Time", RunFieldKind.Time),
-                new Choice("File Name", RunFieldKind.FileName),
-                new Choice("Author", RunFieldKind.Author),
-                new Choice("Number of Pages", RunFieldKind.NumPages),
-                new Choice("Page Number", RunFieldKind.PageNumber),
+                new Choice("Date", " DATE "),
+                new Choice("Time", " TIME "),
+                new Choice("File Name", " FILENAME "),
+                new Choice("Author", " AUTHOR "),
+                new Choice("Number of Pages (NumPages)", " NUMPAGES "),
+                new Choice("Page Number (Page)", " PAGE "),
             };
 
             var list = new System.Windows.Controls.ListBox
@@ -3336,7 +3353,7 @@ internal static class FreeWRibbonCommands
                 list.Items.Add(choice.Label);
             list.SelectedIndex = 0;
 
-            RunFieldKind? result = null;
+            string? result = null;
             var dialog = new Window
             {
                 Title = "Insert Field",
@@ -3352,7 +3369,7 @@ internal static class FreeWRibbonCommands
             void Commit()
             {
                 if (list.SelectedIndex >= 0)
-                    result = choices[list.SelectedIndex].Kind;
+                    result = choices[list.SelectedIndex].Instruction;
                 dialog.DialogResult = true;
             }
             ok.Click += (_, _) => Commit();

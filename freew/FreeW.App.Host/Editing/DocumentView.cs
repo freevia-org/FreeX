@@ -2991,6 +2991,21 @@ public sealed class DocumentView : RichTextBox
                     FieldKind = fieldMarker.Kind
                 });
                 break;
+            case WpfRun { Tag: ComplexFieldMarker complexMarker } complexFieldRun:
+                // A complex (w:fldChar/w:instrText) field round-trips its raw instruction + show-code toggle.
+                // When field codes are shown the visible text is the code, so the cached result is taken from
+                // the marker; otherwise the visible text IS the resolved result and is kept as the cache.
+                var complexCached = complexMarker.Field.ShowCode || complexFieldRun.Text.Length == 0
+                    ? complexMarker.Cached
+                    : complexFieldRun.Text;
+                modelParagraph.Runs.Add(new ModelRun(complexCached, ReadRunFormatting(complexFieldRun))
+                {
+                    HyperlinkUrl = hyperlinkUrl,
+                    HyperlinkAnchor = hyperlinkAnchor,
+                    HyperlinkTooltip = hyperlinkTooltip,
+                    ComplexField = complexMarker.Field
+                });
+                break;
             case WpfRun { Tag: RunMarkers { Comment: { IsReference: true } reference } }:
                 // The textless comment anchor: round-trips as a comment-reference run.
                 modelParagraph.Runs.Add(ModelRun.CommentReference(reference.CommentId));
@@ -3544,6 +3559,16 @@ public sealed class DocumentView : RichTextBox
 
         if (run.CrossReference is not null)
             return BuildCrossReferenceRun(run, document);
+
+        if (run.ComplexField is not null)
+        {
+            var complexRun = BuildComplexFieldRun(run, document);
+            if (run.HyperlinkUrl is { Length: > 0 } cfUrl)
+                return BuildHyperlink(complexRun, cfUrl, run.HyperlinkTooltip);
+            if (run.HyperlinkAnchor is { Length: > 0 } cfAnchor)
+                return BuildInternalHyperlink(complexRun, cfAnchor, run.HyperlinkTooltip);
+            return complexRun;
+        }
 
         if (run.FieldKind != RunFieldKind.None)
         {
@@ -4104,6 +4129,62 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     private sealed record CrossReferenceMarker(CrossReferenceField Field);
 
+    /// <summary>
+    /// Carried on a complex-field WPF run's Tag so <see cref="CommitToModel"/> can round-trip the field
+    /// (raw instruction + show-code toggle). The WPF run's visible text is either the field code (when
+    /// <see cref="ComplexField.ShowCode"/>, e.g. <c>{ PAGE }</c>) or the resolved/cached result.
+    /// </summary>
+    private sealed record ComplexFieldMarker(ComplexField Field, string Cached);
+
+    /// <summary>
+    /// Renders a generic complex field (the <c>w:fldChar</c>/<c>w:instrText</c> construct). When the field's
+    /// <see cref="ComplexField.ShowCode"/> is on (Alt+F9) it shows the field code as <c>{ INSTR }</c>;
+    /// otherwise it shows the resolved result — DATE/TIME/AUTHOR/FILENAME resolve live (reusing
+    /// <see cref="ResolveFieldText"/> via the instruction keyword), the rest fall back to the cached text.
+    /// Tagged with a <see cref="ComplexFieldMarker"/> so the instruction round-trips on commit.
+    /// </summary>
+    private static WpfRun BuildComplexFieldRun(ModelRun run, TextDocument document)
+    {
+        var field = run.ComplexField!;
+        var display = field.ShowCode
+            ? "{" + field.Instruction.TrimEnd() + " }"
+            : ResolveFieldText(ComplexFieldKindFor(field.Keyword), run.Text, document, _renderFileName);
+        var fmt = run.Formatting ?? document.DefaultRun;
+        var wpf = new WpfRun(display)
+        {
+            FontWeight = fmt.Bold ? FontWeights.Bold : FontWeights.Normal,
+            FontStyle = fmt.Italic ? FontStyles.Italic : FontStyles.Normal,
+            Tag = new ComplexFieldMarker(field, run.Text)
+        };
+        if (fmt.FontFamily is { Length: > 0 } family)
+            wpf.FontFamily = new FontFamily(family);
+        if (fmt.FontSizePt is { } size)
+            wpf.FontSize = size * PxPerPoint;
+        if (field.ShowCode)
+            wpf.Foreground = new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80));
+        else if (TryParseColor(fmt.ColorHex, out var color))
+            wpf.Foreground = new SolidColorBrush(color);
+        wpf.ToolTip = (field.Keyword.Length > 0 ? field.Keyword : "Field") + " field: " + field.Instruction.Trim();
+        return wpf;
+    }
+
+    /// <summary>
+    /// Maps a complex field's leading keyword to the <see cref="RunFieldKind"/> that resolves it live, so
+    /// PAGE/DATE/TIME/FILENAME/AUTHOR/NUMPAGES complex fields share <see cref="ResolveFieldText"/> with
+    /// their <c>w:fldSimple</c> cousins. Unrecognised keywords map to <see cref="RunFieldKind.None"/> so the
+    /// field shows its cached result.
+    /// </summary>
+    private static RunFieldKind ComplexFieldKindFor(string keyword) => keyword switch
+    {
+        "PAGE" => RunFieldKind.PageNumber,
+        "DATE" => RunFieldKind.Date,
+        "TIME" => RunFieldKind.Time,
+        "FILENAME" => RunFieldKind.FileName,
+        "AUTHOR" => RunFieldKind.Author,
+        "NUMPAGES" => RunFieldKind.NumPages,
+        _ => RunFieldKind.None
+    };
+
     /// <summary>Builds a WPF run rendering a cross-reference field's cached text, tagged for round-trip.</summary>
     private static WpfRun BuildCrossReferenceRun(ModelRun run, TextDocument document)
     {
@@ -4263,6 +4344,76 @@ public sealed class DocumentView : RichTextBox
         var run = new ModelRun(cached) { FieldKind = kind };
         var inline = BuildFieldRun(run, _model);
         InsertInlineAtCaret(inline);
+    }
+
+    /// <summary>
+    /// Inserts a generic complex field (Insert &gt; Quick Parts &gt; Field) from a raw instruction such as
+    /// <c> PAGE </c>, <c> NUMPAGES </c>, <c> DATE \@ "M/d/yyyy" </c>, <c> FILENAME </c>, <c> AUTHOR </c> or
+    /// <c> REF bookmark </c>. The field's result is resolved immediately (for recognised keywords) so it is
+    /// not blank, and it serialises as the <c>w:fldChar</c>/<c>w:instrText</c> sequence so it round-trips
+    /// and supports Alt+F9 / F9.
+    /// </summary>
+    public void InsertComplexField(string instruction)
+    {
+        Focus();
+        if (string.IsNullOrWhiteSpace(instruction))
+            return;
+        // Word stores instructions with a single leading/trailing space; normalise so " PAGE " is produced
+        // from a bare "PAGE".
+        var normalized = " " + instruction.Trim() + " ";
+        var field = new ComplexField(normalized);
+        var cached = ResolveFieldText(ComplexFieldKindFor(field.Keyword), string.Empty, _model, CurrentFileName);
+        var run = new ModelRun(cached) { ComplexField = field };
+        InsertInlineAtCaret(BuildComplexFieldRun(run, _model));
+    }
+
+    /// <summary>
+    /// Alt+F9: toggles whether complex fields in the document show their field <em>codes</em> (e.g.
+    /// <c>{ PAGE }</c>) or their <em>results</em>. Flips every complex field's
+    /// <see cref="ComplexField.ShowCode"/> to the opposite of the current majority state and re-renders.
+    /// </summary>
+    public void ToggleFieldCodes()
+    {
+        CommitToModel();
+        var fields = _model.Blocks
+            .OfType<ModelParagraph>()
+            .SelectMany(p => p.Runs)
+            .Where(r => r.ComplexField is not null)
+            .ToList();
+        if (fields.Count == 0)
+            return;
+        // Show codes unless they are already (mostly) shown, in which case hide them again.
+        var show = fields.Count(r => r.ComplexField!.ShowCode) * 2 <= fields.Count;
+        foreach (var r in fields)
+            r.ComplexField = r.ComplexField! with { ShowCode = show };
+        Render();
+    }
+
+    /// <summary>
+    /// F9: updates (recomputes) every field's cached result. PAGE keeps its last value (true pagination is
+    /// the paginator's job); DATE/TIME/AUTHOR/FILENAME/NUMPAGES re-resolve to their current values. Also
+    /// re-resolves the simple <see cref="RunFieldKind"/> fields so both field forms stay current.
+    /// </summary>
+    public void UpdateFields()
+    {
+        CommitToModel();
+        foreach (var paragraph in _model.Blocks.OfType<ModelParagraph>())
+            foreach (var r in paragraph.Runs)
+            {
+                if (r.ComplexField is { } cf)
+                {
+                    var resolved = ResolveFieldText(ComplexFieldKindFor(cf.Keyword), r.Text, _model, CurrentFileName);
+                    if (resolved.Length > 0)
+                        r.Text = resolved;
+                }
+                else if (r.FieldKind != RunFieldKind.None)
+                {
+                    var resolved = ResolveFieldText(r.FieldKind, r.Text, _model, CurrentFileName);
+                    if (resolved.Length > 0)
+                        r.Text = resolved;
+                }
+            }
+        Render();
     }
 
     /// <summary>
