@@ -78,7 +78,9 @@ docx reader/writer; unsupported renderings are noted under [Known limitations](#
 - Find / Replace (modeless) with match-case, **whole-word**, wrap, Replace All, replace-all-in-selection,
   and **Go To** (heading / bookmark / doc start–end).
 - Spell-check (live red squiggles + suggestions) with a persistent **custom dictionary** (`.lex`) and a toggle.
-- AutoCorrect / smart typing (smart quotes, `--`→en dash, `(c)`/`(r)`/`(tm)`, `...`→…, sentence caps), toggleable.
+- AutoCorrect / smart typing (smart quotes, `--`→en/em dash, `(c)`/`(r)`/`(tm)`, `...`→…, sentence caps) plus
+  **AutoFormat As You Type** (automatic bulleted/numbered lists, ordinals→superscript, `1/2`→½, URLs/e-mail→hyperlinks);
+  each rule individually toggled in the **AutoCorrect Options** dialog (Options → *AutoFormat As You Type* tab) and persisted.
 - Paste Special: Paste Text Only / Merge Formatting (Ctrl+Shift+V).
 - Insert **Symbol** (glyph picker) and **Date & Time**.
 

@@ -183,6 +183,9 @@ public sealed class MainWindow : Window
 
         var editor = new DocumentView { Margin = new Thickness(40, 24, 40, 24) };
         _editor = editor;
+        // Push the persisted AutoCorrect / AutoFormat-As-You-Type settings so the editor's as-you-type
+        // rules honour the user's toggles from the first keystroke (re-applied when Options is saved).
+        ApplyAutoFormatOptions();
         editor.LoadModel(CreateSampleDocument());
         var stateStore = new RibbonStateStore();
         _stateStore = stateStore;
@@ -1358,10 +1361,21 @@ public sealed class MainWindow : Window
         _options.RecentFilesCap = edited.RecentFilesCap;
         _options.DefaultSaveFormat = edited.DefaultSaveFormat;
         _options.UiLanguage = edited.UiLanguage;
+        _options.AutoCorrectEnabled = edited.AutoCorrectEnabled;
+        _options.AutoFormat = edited.AutoFormat;
         _options.Normalize();
+        ApplyAutoFormatOptions();
 
         if (!_optionsStore.Save(_options))
             DialogMessageHelper.ShowError(this, _optionsStore.LastError, "FreeW Options");
+    }
+
+    // Push the persisted AutoCorrect master switch + per-rule AutoFormat toggles onto the live editor so the
+    // as-you-type rules honour the user's settings immediately (called at construction and after Options OK).
+    private void ApplyAutoFormatOptions()
+    {
+        _editor.AutoCorrectEnabled = _options.AutoCorrectEnabled;
+        _editor.AutoFormatOptions = _options.AutoFormat ?? AutoFormatOptions.Default;
     }
 
     // Shows that AppProduct = "FreeW" routes the shared storage helpers to FreeW's own folder.

@@ -212,9 +212,17 @@ public sealed class DocumentView : RichTextBox
 
     /// <summary>
     /// When true (the default), as-you-type smart typing corrections (smart quotes, dashes, symbols,
-    /// ellipsis, sentence capitalization) are applied via <see cref="AutoCorrect"/> on each keystroke.
+    /// ellipsis, sentence capitalization, lists, ordinals, fractions, hyperlinks) are applied via
+    /// <see cref="AutoCorrect"/> on each keystroke, honouring <see cref="AutoFormatOptions"/>.
     /// </summary>
     public bool AutoCorrectEnabled { get; set; } = true;
+
+    /// <summary>
+    /// The per-rule AutoFormat-As-You-Type toggles consulted by <see cref="AutoCorrect.Evaluate(string?, char, AutoFormatOptions)"/>.
+    /// Defaults to every rule on; the host pushes the persisted <c>FreeWOptions.AutoFormat</c> here so the
+    /// user's choices take effect live. Never null.
+    /// </summary>
+    public AutoFormatOptions AutoFormatOptions { get; set; } = AutoFormatOptions.Default;
 
     /// <summary>
     /// Whether the editor's built-in spell checking (red squiggles) is on. Mirrors
@@ -377,6 +385,30 @@ public sealed class DocumentView : RichTextBox
         base.OnPreviewTextInput(e);
     }
 
+    /// <summary>
+    /// Test seam: simulate typing a single character at the caret through the same AutoCorrect/AutoFormat
+    /// path <see cref="OnPreviewTextInput"/> uses. When a rule fires the correction is applied and the raw
+    /// character is suppressed (returns true); otherwise the character is inserted literally (returns false).
+    /// Lets the as-you-type rules be driven deterministically from STA tests without synthesising WPF input
+    /// events. Honours <see cref="AutoCorrectEnabled"/> and <see cref="AutoFormatOptions"/> just like real typing.
+    /// </summary>
+    internal bool SimulateTypeCharacter(char c)
+    {
+        if (AutoCorrectEnabled && Selection.IsEmpty && TryAutoCorrect(c))
+            return true;
+        // No rule fired: insert the literal character at the caret (mirroring the RichTextBox's own insert).
+        CaretPosition.InsertTextInRun(c.ToString());
+        CaretPosition = CaretPosition.GetPositionAtOffset(1, LogicalDirection.Forward) ?? CaretPosition;
+        return false;
+    }
+
+    /// <summary>Test seam: type a whole string one character at a time through <see cref="SimulateTypeCharacter"/>.</summary>
+    internal void SimulateTypeText(string text)
+    {
+        foreach (var c in text)
+            SimulateTypeCharacter(c);
+    }
+
     // Read the text before the caret (within the current paragraph), evaluate the AutoCorrect rules for
     // the just-typed char, and if one fires, delete back N chars and insert the replacement at the caret.
     // Returns true when a correction was applied (the raw keystroke should be suppressed).
@@ -391,7 +423,7 @@ public sealed class DocumentView : RichTextBox
         var start = caret.Paragraph.ContentStart;
         var textBefore = new TextRange(start, caret).Text;
 
-        var result = AutoCorrect.Evaluate(textBefore, justTyped);
+        var result = AutoCorrect.Evaluate(textBefore, justTyped, AutoFormatOptions);
         if (!result.Applies)
             return false;
 
@@ -407,10 +439,94 @@ public sealed class DocumentView : RichTextBox
         if (deleteStart is null)
             return false;
 
+        // List outcomes consume the typed marker and convert the paragraph to a list instead of inserting
+        // text: delete the marker range, then run the built-in bullet/number toggle on the now-empty line.
+        if (result.Outcome is AutoFormatOutcomeKind.BulletList or AutoFormatOutcomeKind.NumberList)
+        {
+            new TextRange(deleteStart, caret) { Text = string.Empty };
+            CaretPosition = deleteStart;
+            var toggle = result.Outcome == AutoFormatOutcomeKind.BulletList
+                ? EditingCommands.ToggleBullets
+                : EditingCommands.ToggleNumbering;
+            toggle.Execute(null, this);
+            return true;
+        }
+
         // Replace [deleteStart, caret) with the insertion text in one edit so it is a single undo unit.
         var range = new TextRange(deleteStart, caret) { Text = result.Insert };
         CaretPosition = range.End;
+
+        // Super-script the trailing suffix of an ordinal (the "st" of "1st "); the trailing space we just
+        // emitted is excluded from the styled span by walking back one position from the range end.
+        if (result.Outcome == AutoFormatOutcomeKind.SuperscriptSuffix && result.SuffixLength > 0)
+        {
+            ApplySuperscriptSuffix(range.End, result.SuffixLength);
+        }
+        // Hyperlink the just-completed URL/e-mail word: the styled span is [start-of-word, end-of-word),
+        // i.e. the insert minus its trailing space (so the word length is Insert.Length - 1).
+        else if (result.Outcome == AutoFormatOutcomeKind.Hyperlink && result.LinkTarget is { } target)
+        {
+            ApplyAutoHyperlink(range.End, result.Insert.Length - 1, target);
+        }
+
         return true;
+    }
+
+    // Super-script the last <suffixLength> characters ending one position before <afterInsert> (the trailing
+    // space stays baseline). Pure-WPF: select the suffix run and apply the VerticalAlignment property so it
+    // round-trips as w:vertAlign on save, then collapse the caret to the end.
+    private void ApplySuperscriptSuffix(TextPointer afterInsert, int suffixLength)
+    {
+        var suffixEnd = afterInsert.GetNextInsertionPosition(LogicalDirection.Backward); // skip the space
+        if (suffixEnd is null)
+            return;
+        var suffixStart = suffixEnd;
+        for (var i = 0; i < suffixLength; i++)
+        {
+            var prev = suffixStart?.GetNextInsertionPosition(LogicalDirection.Backward);
+            if (prev is null)
+                return;
+            suffixStart = prev;
+        }
+        if (suffixStart is null)
+            return;
+        var span = new TextRange(suffixStart, suffixEnd);
+        span.ApplyPropertyValue(Inline.BaselineAlignmentProperty, BaselineAlignment.Superscript);
+        span.ApplyPropertyValue(TextElement.FontSizeProperty, Math.Max(1.0, FontSize * 0.65));
+        CaretPosition = afterInsert;
+    }
+
+    // Wrap the <wordLength>-character word ending one position before <afterInsert> (the trailing space) in
+    // a hyperlink to <target>. Walks back from the caret by insertion positions (same idiom as the ordinal
+    // helper) so the span lands on real text. Mirrors ApplyHyperlink's styling so an auto-link looks identical.
+    private void ApplyAutoHyperlink(TextPointer afterInsert, int wordLength, string target)
+    {
+        var linkEnd = afterInsert.GetNextInsertionPosition(LogicalDirection.Backward); // skip the trailing space
+        if (linkEnd is null || wordLength <= 0 || !Uri.TryCreate(target, UriKind.Absolute, out var uri))
+            return;
+        var wordStart = linkEnd;
+        for (var i = 0; i < wordLength; i++)
+        {
+            var prev = wordStart?.GetNextInsertionPosition(LogicalDirection.Backward);
+            if (prev is null)
+                return;
+            wordStart = prev;
+        }
+        if (wordStart is null)
+            return;
+        try
+        {
+            // Route through the editor's selection so WPF normalises the endpoints into a single valid text
+            // span (a raw Span/Hyperlink ctor over hand-walked pointers can land on element edges and throw).
+            Selection.Select(wordStart, linkEnd);
+            var link = new WpfHyperlink(Selection.Start, Selection.End) { NavigateUri = uri, ToolTip = target };
+            StyleLink(link, target);
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+        {
+            return; // spanned a non-text boundary — leave the text un-linked rather than crash
+        }
+        CaretPosition = afterInsert;
     }
 
     /// <summary>Undo/redo command bus over this view's model (backed by the shared UndoRedoStack).</summary>

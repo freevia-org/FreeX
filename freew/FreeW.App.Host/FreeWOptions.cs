@@ -1,5 +1,6 @@
 using System;
 using Free.Shared.AppServices;
+using FreeW.Core.Model;
 
 namespace FreeW.App.Host;
 
@@ -31,6 +32,18 @@ public sealed class FreeWOptions
     /// <summary>UI language placeholder (empty = follow the system culture). Reserved for a future picker.</summary>
     public string UiLanguage { get; set; } = SystemDefaultLanguage;
 
+    /// <summary>
+    /// Master switch for as-you-type smart typing (Word's "AutoCorrect"). When off the editor performs no
+    /// AutoCorrect / AutoFormat transforms at all, regardless of <see cref="AutoFormat"/>.
+    /// </summary>
+    public bool AutoCorrectEnabled { get; set; } = true;
+
+    /// <summary>
+    /// The per-rule "AutoFormat As You Type" toggles. A JSON-round-trippable, never-null sub-object; a
+    /// missing value degrades to <see cref="AutoFormatOptions.Default"/> (every rule on).
+    /// </summary>
+    public AutoFormatOptions AutoFormat { get; set; } = AutoFormatOptions.Default;
+
     /// <summary>Normalizes loaded values to their valid ranges (called after a load).</summary>
     public void Normalize()
     {
@@ -38,5 +51,6 @@ public sealed class FreeWOptions
         if (string.IsNullOrWhiteSpace(DefaultSaveFormat))
             DefaultSaveFormat = DocxDefaultFormat;
         UiLanguage = UiLanguage?.Trim() ?? SystemDefaultLanguage;
+        AutoFormat ??= AutoFormatOptions.Default;
     }
 }
