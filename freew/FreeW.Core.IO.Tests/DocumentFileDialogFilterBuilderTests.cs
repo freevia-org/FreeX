@@ -48,6 +48,8 @@ public class DocumentFileDialogFilterBuilderTests
             "HTML document (*.htm)", "*.htm",
             "MHTML document (*.mhtml)", "*.mhtml",
             "MHTML document (*.mht)", "*.mht",
+            "OpenDocument Text (*.odt)", "*.odt",
+            "OpenDocument Text Template (*.ott)", "*.ott",
             "Plain text (*.txt)", "*.txt",
             "Plain text (*.text)", "*.text",
             "Log file (*.log)", "*.log");
