@@ -151,30 +151,15 @@ public static class PrintJobPlanner
         out int firstPage,
         out int lastPage)
     {
-        if (request.PageRangeKind == PrintJobPageRangeKind.AllPages)
-        {
-            firstPage = 1;
-            lastPage = totalPages;
-            return totalPages >= 1;
-        }
+        // The 1-based page-window math is framework-neutral and lives in the shared resolver so FreeP/FreeW
+        // inherit identical "all pages" / clamped-range / open-ended-extends / reject-out-of-bounds behaviour.
+        var window = request.PageRangeKind == PrintJobPageRangeKind.AllPages
+            ? PrintPageWindowResolver.ResolveAllPages(totalPages)
+            : PrintPageWindowResolver.ResolveRange(request.FromPage, request.ToPage, totalPages);
 
-        // 1-based, inclusive. A missing endpoint extends to the document edge so "from 3" or "to 2" work.
-        firstPage = request.FromPage ?? 1;
-        lastPage = request.ToPage ?? totalPages;
-
-        var valid =
-            totalPages >= 1 &&
-            firstPage >= 1 &&
-            lastPage <= totalPages &&
-            firstPage <= lastPage;
-
-        if (!valid)
-        {
-            firstPage = 0;
-            lastPage = 0;
-        }
-
-        return valid;
+        firstPage = window.FirstPage;
+        lastPage = window.LastPage;
+        return window.IsValid;
     }
 
     private static PrintJobPlan Invalid(
