@@ -25,6 +25,13 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
     public string FormatName => "XLSX Workbook";
     internal XlsxSaveDiagnostics LastSaveDiagnostics { get; private set; } = XlsxSaveDiagnostics.NotRun;
     internal XlsxLoadDiagnostics LastLoadDiagnostics { get; private set; } = XlsxLoadDiagnostics.NotRun;
+
+    public static void DetachSourcePackage(Workbook workbook)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+        SourcePackages.Remove(workbook);
+    }
+
     public IReadOnlyList<FileFormatDescriptor> Formats { get; } =
     [
         new(".xlsx", "XLSX Workbook", CanOpen: true, CanSave: true),
@@ -214,6 +221,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             xlWorkbook.Worksheets.Count);
         var workbook = new Workbook("Untitled", XlsxClosedXmlCellMapper.MapStyle(xlWorkbook.Style, workbookTheme));
         workbook.Theme = workbookTheme;
+        workbook.HasVbaProjectPackage = packageParts.HasVbaProjectPackage;
         workbook.Uses1904DateSystem = workbookMetadata.Uses1904DateSystem;
         workbook.Properties = workbookMetadata.WorkbookProperties;
         var workbookViewProperties = workbookMetadata.WorkbookViewProperties;
@@ -1171,6 +1179,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             bool hasSlicerTimelinePackageParts,
             bool hasExternalLinks,
             bool hasStructuredTables,
+            bool hasVbaProjectPackage,
             bool? hasWorkbookWebPublishingSchemaIssues,
             bool? hasWorkbookSmartTagSchemaIssues,
             bool? hasWorkbookNativeMetadataSchemaIssues)
@@ -1185,6 +1194,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             HasSlicerTimelinePackageParts = hasSlicerTimelinePackageParts;
             HasExternalLinks = hasExternalLinks;
             HasStructuredTables = hasStructuredTables;
+            HasVbaProjectPackage = hasVbaProjectPackage;
             HasWorkbookWebPublishingSchemaIssues = hasWorkbookWebPublishingSchemaIssues;
             HasWorkbookSmartTagSchemaIssues = hasWorkbookSmartTagSchemaIssues;
             HasWorkbookNativeMetadataSchemaIssues = hasWorkbookNativeMetadataSchemaIssues;
@@ -1201,6 +1211,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         public bool HasSlicerTimelinePackageParts { get; }
         public bool HasExternalLinks { get; }
         public bool HasStructuredTables { get; }
+        public bool HasVbaProjectPackage { get; }
         public bool? HasWorkbookWebPublishingSchemaIssues { get; }
         public bool? HasWorkbookSmartTagSchemaIssues { get; }
         public bool? HasWorkbookNativeMetadataSchemaIssues { get; }
@@ -1215,6 +1226,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             var hasSlicerTimelinePackageParts = false;
             var hasExternalLinks = false;
             var hasStructuredTables = false;
+            var hasVbaProjectPackage = false;
 
             foreach (var entry in archive.Entries)
             {
@@ -1249,6 +1261,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                     break;
                 }
             }
+            hasVbaProjectPackage = archive.GetEntry("xl/vbaProject.bin") is not null;
 
             // Parse workbook.xml once and share the XDocument across all three schema-issue inspectors.
             XDocument? sharedWorkbookXml = null;
@@ -1282,6 +1295,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 hasSlicerTimelinePackageParts,
                 hasExternalLinks,
                 hasStructuredTables,
+                hasVbaProjectPackage,
                 InspectWorkbookWebPublishingSchemaIssues(sharedWorkbookXml, sharedWorkbookXmlMissing, sharedWorkbookXmlCorrupt),
                 InspectWorkbookSmartTagSchemaIssues(sharedWorkbookXml, sharedWorkbookXmlMissing, sharedWorkbookXmlCorrupt),
                 InspectWorkbookNativeMetadataSchemaIssues(sharedWorkbookXml, sharedWorkbookXmlMissing, sharedWorkbookXmlCorrupt));

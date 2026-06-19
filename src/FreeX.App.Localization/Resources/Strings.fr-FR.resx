@@ -830,6 +830,7 @@
   <data name="Print_Spooling" xml:space="preserve"><value>Envoi à l'imprimante...</value></data>
   <data name="Print_Sent" xml:space="preserve"><value>Imprimé. {0}</value></data>
   <data name="Print_SavedPdf" xml:space="preserve"><value>PDF prêt à imprimer enregistré {0}</value></data>
+  <data name="Print_SaveCanceled" xml:space="preserve"><value>Impression au format PDF annulée.</value></data>
   <data name="Print_RenderFailed" xml:space="preserve"><value>Échec de l'impression : {0}</value></data>
   <data name="Print_RequiresLocalPath" xml:space="preserve"><value>L'impression au format PDF nécessite un chemin de fichier local.</value></data>
   <data name="Print_NoSpoolerNoSave" xml:space="preserve"><value>Aucune imprimante ni destination de fichier n'est disponible sur cet hôte.</value></data>

@@ -964,6 +964,10 @@ public static class DocxReader
                         foreach (var r in revChild.Elements(W + "r"))
                             AddRun(paragraph, r, archive, imageRelationships, hUrl, hUrl is null ? hAnchor : null, commentId: activeCommentId, revision: revision, hyperlinkTooltip: hTooltip, preservedDrawingTarget: preservedDrawingTarget);
                     }
+                    else if (revChild.Name == W + "sdt")
+                    {
+                        AddContentControlRuns(paragraph, revChild, archive, imageRelationships, activeCommentId, revision, preservedDrawingTarget);
+                    }
                 }
             }
             else if (child.Name == W + "sdt")
@@ -971,14 +975,7 @@ public static class DocxReader
                 // A content control (structured document tag): w:sdtPr describes the control (tag/alias +
                 // kind), w:sdtContent holds the wrapped run(s). Recover the control and stamp every content
                 // run with it (one shared instance so the writer re-coalesces them into one w:sdt).
-                var control = ReadContentControl(child.Element(W + "sdtPr"));
-                var sdtContent = child.Element(W + "sdtContent");
-                if (sdtContent is not null)
-                {
-                    foreach (var sdtChild in sdtContent.Elements(W + "r"))
-                        AddRun(paragraph, sdtChild, archive, imageRelationships,
-                            hyperlinkUrl: null, hyperlinkAnchor: null, commentId: activeCommentId, control: control, preservedDrawingTarget: preservedDrawingTarget);
-                }
+                AddContentControlRuns(paragraph, child, archive, imageRelationships, activeCommentId, revision: default, preservedDrawingTarget);
             }
             else if (child.Name == W + "fldSimple")
             {
@@ -1190,6 +1187,30 @@ public static class DocxReader
     /// (recovering its w:listItem choices); a w:richText marks a rich-text control; anything else is a
     /// plain-text control. A null/absent w:sdtPr yields a default plain-text control.
     /// </summary>
+    private static void AddContentControlRuns(
+        Paragraph paragraph,
+        XElement sdt,
+        ZipArchive archive,
+        IReadOnlyDictionary<string, string> imageRelationships,
+        int? commentId,
+        RevisionInfo revision,
+        TextDocument? preservedDrawingTarget)
+    {
+        var control = ReadContentControl(sdt.Element(W + "sdtPr"));
+        var sdtContent = sdt.Element(W + "sdtContent");
+        if (sdtContent is null)
+            return;
+
+        foreach (var sdtChild in sdtContent.Elements(W + "r"))
+            AddRun(paragraph, sdtChild, archive, imageRelationships,
+                hyperlinkUrl: null,
+                hyperlinkAnchor: null,
+                commentId: commentId,
+                revision: revision,
+                control: control,
+                preservedDrawingTarget: preservedDrawingTarget);
+    }
+
     private static ContentControl ReadContentControl(XElement? sdtPr)
     {
         var tag = sdtPr?.Element(W + "tag")?.Attribute(W + "val")?.Value;

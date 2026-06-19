@@ -848,6 +848,7 @@
   <data name="Print_Spooling" xml:space="preserve"><value>Sending to printer...</value></data>
   <data name="Print_Sent" xml:space="preserve"><value>Printed. {0}</value></data>
   <data name="Print_SavedPdf" xml:space="preserve"><value>Saved print-ready PDF {0}</value></data>
+  <data name="Print_SaveCanceled" xml:space="preserve"><value>Printing to PDF canceled.</value></data>
   <data name="Print_RenderFailed" xml:space="preserve"><value>Print failed: {0}</value></data>
   <data name="Print_RequiresLocalPath" xml:space="preserve"><value>Printing to PDF requires a local file path.</value></data>
   <data name="Print_NoSpoolerNoSave" xml:space="preserve"><value>No printer or file destination is available on this host.</value></data>

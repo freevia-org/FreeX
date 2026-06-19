@@ -18,6 +18,15 @@ public sealed class ContentControlEditorTests
         return view;
     }
 
+    private static DocumentView NewViewWithParagraph(string text)
+    {
+        var model = new TextDocument();
+        model.Blocks.Add(new Paragraph(text));
+        var view = new DocumentView();
+        view.LoadModel(model);
+        return view;
+    }
+
     private static Run CommittedControlRun(DocumentView view)
     {
         view.CommitToModel();
@@ -38,6 +47,25 @@ public sealed class ContentControlEditorTests
         run.Control.Tag.Should().Be("Bio");
         run.Control.Alias.Should().Be("Biography");
         run.Text.Should().NotBeEmpty();
+    }
+
+    [StaFact]
+    public void InsertPlainTextControl_InsertsAtMiddleCaret()
+    {
+        var view = NewViewWithParagraph("Hello world");
+        var paragraph = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().Single();
+        view.CaretPosition = PositionAfterText(paragraph, "Hello ");
+
+        view.InsertPlainTextControl(tag: "Mid");
+        view.CommitToModel();
+
+        var runs = view.Model.Blocks
+            .OfType<Paragraph>()
+            .Single()
+            .Runs;
+        runs.Select(r => r.Text).Should().Equal("Hello ", "Click to enter text", "world");
+        runs[1].Control.Should().NotBeNull();
+        runs[1].Control!.Tag.Should().Be("Mid");
     }
 
     [StaFact]
@@ -93,5 +121,28 @@ public sealed class ContentControlEditorTests
 
         var run = CommittedControlRun(view);
         run.Control!.Items.Should().NotBeEmpty("a list control inserted without items gets a default sample");
+    }
+
+    private static System.Windows.Documents.TextPointer PositionAfterText(
+        System.Windows.Documents.Paragraph paragraph,
+        string text)
+    {
+        var remaining = text.Length;
+        var pointer = paragraph.ContentStart;
+        while (pointer is not null && pointer.CompareTo(paragraph.ContentEnd) < 0)
+        {
+            if (pointer.GetPointerContext(System.Windows.Documents.LogicalDirection.Forward) ==
+                System.Windows.Documents.TextPointerContext.Text)
+            {
+                var runText = pointer.GetTextInRun(System.Windows.Documents.LogicalDirection.Forward);
+                if (remaining <= runText.Length)
+                    return pointer.GetPositionAtOffset(remaining)!;
+                remaining -= runText.Length;
+            }
+
+            pointer = pointer.GetNextContextPosition(System.Windows.Documents.LogicalDirection.Forward);
+        }
+
+        throw new InvalidOperationException($"Text '{text}' was not found in the paragraph.");
     }
 }
