@@ -784,7 +784,7 @@ public partial class GridView
         Rect rect,
         Brush? brush,
         Pen? pen) =>
-        dc.DrawGeometry(brush, pen, DrawingShapeGeometryFactory.Create(kind, rect));
+        dc.DrawGeometry(brush, pen, ShapeGeometryWpfAdapter.Create(kind, rect));
 
     private void DrawShapeAuthoredEffect(
         DrawingContext dc,

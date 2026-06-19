@@ -4,7 +4,7 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.UI.Tests;
 
-public sealed class DrawingShapeGeometryFactoryTests
+public sealed class ShapeGeometryWpfAdapterTests
 {
     [Fact]
     public void Create_ReturnsNonEmptyFrozenGeometryForEveryRenderableShape()
@@ -13,7 +13,7 @@ public sealed class DrawingShapeGeometryFactoryTests
 
         foreach (var kind in Enum.GetValues<DrawingShapeKind>().Where(DrawingShapeKindSupport.IsRenderable))
         {
-            var geometry = DrawingShapeGeometryFactory.Create(kind, rect);
+            var geometry = ShapeGeometryWpfAdapter.Create(kind, rect);
 
             geometry.IsFrozen.Should().BeTrue(kind.ToString());
             geometry.Bounds.IsEmpty.Should().BeFalse(kind.ToString());
