@@ -79,6 +79,7 @@ internal static class Program
         var runner = new CrossCheckRunner(Path.Combine(outputDir, "scratch"), soffice);
         int totalDefects = 0;
         int totalMissingSources = 0;
+        int totalProcessedSources = 0;
 
         foreach (var source in sources)
         {
@@ -92,6 +93,7 @@ internal static class Program
                 continue;
             }
             Emit("################################################################################");
+            totalProcessedSources++;
 
             var results = formatFilter is null
                 ? runner.RunAll(source)
@@ -115,11 +117,15 @@ internal static class Program
         Emit($"  FreeX-output-defects (real bugs): {totalDefects}");
         if (totalMissingSources > 0)
             Emit($"  sources missing on disk          : {totalMissingSources}");
+        if (totalProcessedSources == 0)
+            Emit("  processed sources                : 0");
         Emit("================================================================================");
 
         File.WriteAllText(reportPath, sb.ToString(), Encoding.UTF8);
         Console.WriteLine($"\n[Report written to {reportPath}]");
-        return totalDefects == 0 ? 0 : 1;
+        if (totalDefects > 0)
+            return 1;
+        return totalMissingSources == 0 ? 0 : 2;
     }
 
     private static void ReportOne(Action<string> emit, CrossCheckResult r)

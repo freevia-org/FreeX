@@ -1206,22 +1206,102 @@ public static class DocxReader
         string? hyperlinkTooltip,
         TextDocument? preservedDrawingTarget)
     {
+        var fieldDepth = 0;
+        var fieldInstr = new System.Text.StringBuilder();
+        var fieldResult = new System.Text.StringBuilder();
+        var fieldPastSeparate = false;
+        XElement? fieldFormattingSource = null;
+
         foreach (var child in container.Elements())
         {
-            AddParagraphContentElement(
-                paragraph,
-                child,
-                archive,
-                imageRelationships,
-                hyperlinkRelationships,
-                commentId,
-                revision,
-                control,
-                hyperlinkUrl,
-                hyperlinkAnchor,
-                hyperlinkTooltip,
-                preservedDrawingTarget);
+            if (fieldDepth > 0 && child.Name == W + "r")
+            {
+                var fldChar = child.Element(W + "fldChar")?.Attribute(W + "fldCharType")?.Value;
+                if (fldChar == "begin")
+                {
+                    fieldDepth++;
+                }
+                else if (fldChar == "separate")
+                {
+                    fieldPastSeparate = true;
+                }
+                else if (fldChar == "end")
+                {
+                    fieldDepth--;
+                    if (fieldDepth == 0)
+                    {
+                        AddComplexFieldRun(
+                            paragraph,
+                            fieldInstr.ToString(),
+                            fieldResult.ToString(),
+                            ReadRunFormatting(fieldFormattingSource?.Element(W + "rPr")),
+                            commentId,
+                            revision,
+                            control,
+                            hyperlinkUrl,
+                            hyperlinkAnchor,
+                            hyperlinkTooltip);
+                        fieldInstr.Clear();
+                        fieldResult.Clear();
+                        fieldPastSeparate = false;
+                        fieldFormattingSource = null;
+                    }
+                }
+                else if (!fieldPastSeparate)
+                {
+                    fieldInstr.Append(string.Concat(child.Elements(W + "instrText").Select(t => t.Value)));
+                    fieldInstr.Append(string.Concat(child.Elements(W + "t").Select(t => t.Value)));
+                }
+                else
+                {
+                    fieldFormattingSource ??= child;
+                    fieldResult.Append(string.Concat(child.Elements(W + "t").Select(t => t.Value)));
+                }
+
+                continue;
+            }
+
+            if (child.Name == W + "r" && child.Element(W + "fldChar")?.Attribute(W + "fldCharType")?.Value == "begin"
+                && child.Element(W + "fldChar")?.Element(W + "ffData") is null)
+            {
+                fieldDepth = 1;
+                fieldPastSeparate = false;
+                fieldInstr.Clear();
+                fieldResult.Clear();
+                fieldFormattingSource = null;
+                continue;
+            }
+
+            AddParagraphContentElement(paragraph, child, archive, imageRelationships, hyperlinkRelationships, commentId, revision, control, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip, preservedDrawingTarget);
         }
+    }
+
+    private static void AddComplexFieldRun(
+        Paragraph paragraph,
+        string instruction,
+        string result,
+        RunFormatting? formatting,
+        int? commentId,
+        RevisionInfo revision,
+        ContentControl? control,
+        string? hyperlinkUrl,
+        string? hyperlinkAnchor,
+        string? hyperlinkTooltip)
+    {
+        var run = Run.ComplexFieldRun(instruction, result, showCode: false, formatting);
+        run.CommentId = commentId;
+        run.Control = control;
+        run.HyperlinkUrl = hyperlinkUrl;
+        run.HyperlinkAnchor = hyperlinkAnchor;
+        run.HyperlinkTooltip = hyperlinkTooltip;
+        if (revision.Kind != RevisionKind.None)
+        {
+            run.Revision = revision.Kind;
+            run.RevisionAuthor = revision.Author;
+            run.RevisionDateXml = revision.DateXml;
+        }
+
+        paragraph.Runs.Add(run);
     }
 
     private static void AddParagraphContentElement(
