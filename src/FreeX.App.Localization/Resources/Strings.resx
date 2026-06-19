@@ -832,4 +832,43 @@
   <data name="Backstage_Account_OptionsButton" xml:space="preserve"><value>FreeX Options...</value></data>
   <data name="Backstage_Account_LegalNoticesButton" xml:space="preserve"><value>Legal Notices...</value></data>
   <data name="Backstage_Account_CloseButton" xml:space="preserve"><value>Close</value></data>
+  <data name="GetData_DialogTitle" xml:space="preserve"><value>Get Data — From Text/CSV</value></data>
+  <data name="GetData_MenuItem" xml:space="preserve"><value>From Text/CSV...</value></data>
+  <data name="GetData_FilePickerTitle" xml:space="preserve"><value>Import Text or CSV File</value></data>
+  <data name="GetData_FileTypeName" xml:space="preserve"><value>Text and CSV Files</value></data>
+  <data name="GetData_FileLabel" xml:space="preserve"><value>Source file:</value></data>
+  <data name="GetData_BrowseButton" xml:space="preserve"><value>Browse...</value></data>
+  <data name="GetData_DelimiterHeader" xml:space="preserve"><value>Delimiter</value></data>
+  <data name="GetData_DelimiterDetect" xml:space="preserve"><value>Detect automatically</value></data>
+  <data name="GetData_DelimiterComma" xml:space="preserve"><value>Comma</value></data>
+  <data name="GetData_DelimiterTab" xml:space="preserve"><value>Tab</value></data>
+  <data name="GetData_DelimiterSemicolon" xml:space="preserve"><value>Semicolon</value></data>
+  <data name="GetData_DelimiterSpace" xml:space="preserve"><value>Space</value></data>
+  <data name="GetData_DelimiterPipe" xml:space="preserve"><value>Pipe</value></data>
+  <data name="GetData_DelimiterCustom" xml:space="preserve"><value>Custom</value></data>
+  <data name="GetData_EncodingHeader" xml:space="preserve"><value>File origin (encoding)</value></data>
+  <data name="GetData_EncodingDetect" xml:space="preserve"><value>Detect automatically</value></data>
+  <data name="GetData_EncodingUtf8" xml:space="preserve"><value>Unicode (UTF-8)</value></data>
+  <data name="GetData_EncodingUtf16Le" xml:space="preserve"><value>Unicode (UTF-16 LE)</value></data>
+  <data name="GetData_EncodingUtf16Be" xml:space="preserve"><value>Unicode (UTF-16 BE)</value></data>
+  <data name="GetData_EncodingWindows1252" xml:space="preserve"><value>Western European (Windows-1252)</value></data>
+  <data name="GetData_EncodingLatin1" xml:space="preserve"><value>Western European (ISO-8859-1)</value></data>
+  <data name="GetData_DestinationHeader" xml:space="preserve"><value>Load to</value></data>
+  <data name="GetData_DestinationCurrentSheet" xml:space="preserve"><value>Existing sheet (at active cell)</value></data>
+  <data name="GetData_DestinationNewSheet" xml:space="preserve"><value>New sheet</value></data>
+  <data name="GetData_TreatConsecutive" xml:space="preserve"><value>Treat consecutive delimiters as one</value></data>
+  <data name="GetData_PreviewHeader" xml:space="preserve"><value>Preview</value></data>
+  <data name="GetData_PreviewEmpty" xml:space="preserve"><value>Choose a file to preview its contents.</value></data>
+  <data name="GetData_PreviewSummary" xml:space="preserve"><value>Delimiter: {0}   Encoding: {1}   Rows: {2}   Columns: {3}</value></data>
+  <data name="GetData_LoadButton" xml:space="preserve"><value>Load</value></data>
+  <data name="GetData_CancelButton" xml:space="preserve"><value>Cancel</value></data>
+  <data name="GetData_NoFileSelected" xml:space="preserve"><value>Select a file to import first.</value></data>
+  <data name="GetData_ReadError" xml:space="preserve"><value>Could not read the file: {0}</value></data>
+  <data name="GetData_EmptyFile" xml:space="preserve"><value>The selected file contains no data to import.</value></data>
+  <data name="GetData_ImportFailed" xml:space="preserve"><value>Import failed: {0}</value></data>
+  <data name="GetData_ImportedStatus" xml:space="preserve"><value>Imported {0} ({1} rows × {2} columns)</value></data>
+  <data name="GetData_RefreshNoSource" xml:space="preserve"><value>No imported data source to refresh. Use Get Data first.</value></data>
+  <data name="GetData_RefreshedStatus" xml:space="preserve"><value>Refreshed {0}</value></data>
+  <data name="GetData_DelimiterTabGlyph" xml:space="preserve"><value>Tab</value></data>
+  <data name="GetData_DelimiterSpaceGlyph" xml:space="preserve"><value>Space</value></data>
 </root>
