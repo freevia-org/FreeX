@@ -1,44 +1,34 @@
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.Core.Model;
-using System;
 using System.Windows;
 
 namespace FreeX.App.UI;
 
+/// <summary>
+/// Thin WPF adapter over the portable <see cref="ConditionalIconCellLayoutPlanner"/>: maps the shared
+/// neutral geometry into the <see cref="System.Windows.Rect"/>-based <see cref="ConditionalIconCellLayout"/>
+/// the desktop renderer consumes.
+/// </summary>
 public static class ConditionalIconLayoutPlanner
 {
-    private const double ConditionalIconGutterWidth = 20;
-    private const double ConditionalIconSize = 10;
-
     public static ConditionalIconCellLayout CalculateCellLayout(
         Rect cellRect,
         ConditionalFormatIcon icon)
     {
-        var size = Math.Min(
-            ConditionalIconSize,
-            Math.Min(
-                Math.Max(0, cellRect.Width - 8),
-                Math.Max(0, cellRect.Height - 6)));
-        var iconLeft = Math.Clamp(cellRect.Left + 4, cellRect.Left, cellRect.Right - size);
-        var iconRect = new Rect(
-            Math.Round(iconLeft),
-            Math.Round(cellRect.Top + (cellRect.Height - size) / 2),
-            size,
-            size);
+        var layout = ConditionalIconCellLayoutPlanner.CalculateCellLayout(
+            cellRect.Left,
+            cellRect.Top,
+            cellRect.Width,
+            cellRect.Height,
+            icon.ShowValue);
+
+        var iconRect = new Rect(layout.IconLeft, layout.IconTop, layout.IconSize, layout.IconSize);
 
         if (!icon.ShowValue)
             return new ConditionalIconCellLayout(iconRect, Rect.Empty, ShouldDrawText: false);
 
-        var textLeft = Math.Min(cellRect.Right, cellRect.Left + ConditionalIconGutterWidth);
-        var textRect = new Rect(
-            textLeft,
-            cellRect.Top,
-            Math.Max(0, cellRect.Right - textLeft),
-            cellRect.Height);
-        return new ConditionalIconCellLayout(
-            iconRect,
-            textRect,
-            ShouldDrawText: textRect.Width > 0 && textRect.Height > 0);
+        var textRect = new Rect(layout.TextLeft, cellRect.Top, layout.TextWidth, cellRect.Height);
+        return new ConditionalIconCellLayout(iconRect, textRect, ShouldDrawText: layout.ShouldDrawText);
     }
 
     public static ConditionalIconGlyphKind ResolveGlyphKind(ConditionalFormatIcon icon) =>
