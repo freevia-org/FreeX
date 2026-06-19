@@ -136,6 +136,18 @@ public sealed partial class MainWindow
             $"Applied {ConditionalFormatPresetFactory.DisplayName(preset)} to {FormatRangeReference(range)}");
     }
 
+    /// <summary>Applies an icon-set conditional format of the given catalog style to the selection.</summary>
+    private void ApplyConditionalFormatIconSet(string iconSetStyle)
+    {
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var range = _session.SelectedRange;
+        var command = ConditionalFormatPresetFactory.BuildIconSetApplyCommand(
+            iconSetStyle, _session.ActiveSheet.Id, range);
+        RunConditionalFormatCommand(command, $"Applied icon set to {FormatRangeReference(range)}");
+    }
+
     /// <summary>Prompts for a threshold and applies the Highlight &gt; Greater Than preset.</summary>
     private async Task ApplyHighlightGreaterThanPresetAsync()
     {
@@ -184,12 +196,19 @@ public sealed partial class MainWindow
     }
 
     /// <summary>Shows the rule editor for a new rule and applies the built Core rule to the selection.</summary>
-    private async Task ShowConditionalFormatNewRuleDialogAsync()
+    private Task ShowConditionalFormatNewRuleDialogAsync() =>
+        ShowConditionalFormatNewRuleDialogAsync(startRuleType: null);
+
+    /// <summary>
+    /// Shows the new-rule editor, optionally pre-selecting <paramref name="startRuleType"/> (used by the
+    /// ribbon's "New Formula Rule…" item, which seeds the Formula rule type), and applies the result.
+    /// </summary>
+    private async Task ShowConditionalFormatNewRuleDialogAsync(CfRuleType? startRuleType)
     {
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var built = await ShowConditionalFormatRuleEditorAsync(existingRule: null);
+        var built = await ShowConditionalFormatRuleEditorAsync(existingRule: null, startRuleType, launchSmokeProbe: null);
         if (built is null)
             return;
 
@@ -200,7 +219,12 @@ public sealed partial class MainWindow
     }
 
     private Task<ConditionalFormat?> ShowConditionalFormatRuleEditorAsync(ConditionalFormat? existingRule) =>
-        ShowConditionalFormatRuleEditorAsync(existingRule, launchSmokeProbe: null);
+        ShowConditionalFormatRuleEditorAsync(existingRule, startRuleType: null, launchSmokeProbe: null);
+
+    private Task<ConditionalFormat?> ShowConditionalFormatRuleEditorAsync(
+        ConditionalFormat? existingRule,
+        Action<ConditionalFormatRuleDialogSmokeProbe>? launchSmokeProbe) =>
+        ShowConditionalFormatRuleEditorAsync(existingRule, startRuleType: null, launchSmokeProbe);
 
     /// <summary>
     /// The compact rule editor: a rule-type dropdown plus per-type fields shown/hidden from
@@ -210,6 +234,7 @@ public sealed partial class MainWindow
     /// </summary>
     private async Task<ConditionalFormat?> ShowConditionalFormatRuleEditorAsync(
         ConditionalFormat? existingRule,
+        CfRuleType? startRuleType,
         Action<ConditionalFormatRuleDialogSmokeProbe>? launchSmokeProbe)
     {
         ConditionalFormat? result = null;
@@ -390,6 +415,15 @@ public sealed partial class MainWindow
             existingRule, ruleTypeBox, operatorBox, value1Box, value2Box,
             formulaBox, textBox, rankBox, percentBox, topBottomBox, iconSetBox, threeColorBox,
             minColorBox, midColorBox, maxColorBox, highlightBox);
+
+        // Pre-select a starting rule type for new rules (e.g. the ribbon's "New Formula Rule…").
+        if (existingRule is null && startRuleType is { } seedType)
+        {
+            var seedIndex = ConditionalFormatRuleTypeChoices.ToList().FindIndex(c => c.Type == seedType);
+            if (seedIndex >= 0)
+                ruleTypeBox.SelectedIndex = seedIndex;
+        }
+
         UpdateFieldVisibility();
 
         var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 84 };

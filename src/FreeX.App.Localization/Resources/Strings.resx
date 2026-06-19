@@ -648,4 +648,54 @@
   <data name="Comment_CommentFailed" xml:space="preserve"><value>Could not edit comment.</value></data>
   <data name="Comment_Resolved" xml:space="preserve"><value>Resolved comment on {0}</value></data>
   <data name="Comment_Unresolved" xml:space="preserve"><value>Reopened comment on {0}</value></data>
+  <!-- Ribbon dropdown / split-button menu items newly wired (RibbonWire_*) -->
+  <data name="RibbonWire_RulerShown" xml:space="preserve"><value>Showing ruler</value></data>
+  <data name="RibbonWire_RulerHidden" xml:space="preserve"><value>Hiding ruler</value></data>
+  <data name="RibbonWire_SwitchWindowsTitle" xml:space="preserve"><value>Switch Windows</value></data>
+  <data name="RibbonWire_SwitchWindowsNone" xml:space="preserve"><value>No other windows to switch to.</value></data>
+  <data name="RibbonWire_SwitchWindowsActivated" xml:space="preserve"><value>Switched windows.</value></data>
+  <data name="RibbonWire_WindowPositionReset" xml:space="preserve"><value>Reset window position.</value></data>
+  <data name="RibbonWire_CalculateSheetDone" xml:space="preserve"><value>Recalculated the workbook.</value></data>
+  <data name="RibbonWire_NoPrecedentArrows" xml:space="preserve"><value>No precedent arrows to remove</value></data>
+  <data name="RibbonWire_NoDependentArrows" xml:space="preserve"><value>No dependent arrows to remove</value></data>
+  <data name="RibbonWire_RemovedPrecedentArrows" xml:space="preserve"><value>Removed precedent arrows</value></data>
+  <data name="RibbonWire_RemovedDependentArrows" xml:space="preserve"><value>Removed dependent arrows</value></data>
+  <data name="RibbonWire_InsertedSheetRows" xml:space="preserve"><value>Inserted sheet rows.</value></data>
+  <data name="RibbonWire_InsertSheetRowsFailed" xml:space="preserve"><value>Could not insert sheet rows.</value></data>
+  <data name="RibbonWire_InsertedSheetColumns" xml:space="preserve"><value>Inserted sheet columns.</value></data>
+  <data name="RibbonWire_InsertSheetColumnsFailed" xml:space="preserve"><value>Could not insert sheet columns.</value></data>
+  <data name="RibbonWire_DeletedSheetRows" xml:space="preserve"><value>Deleted sheet rows.</value></data>
+  <data name="RibbonWire_DeleteSheetRowsFailed" xml:space="preserve"><value>Could not delete sheet rows.</value></data>
+  <data name="RibbonWire_DeletedSheetColumns" xml:space="preserve"><value>Deleted sheet columns.</value></data>
+  <data name="RibbonWire_DeleteSheetColumnsFailed" xml:space="preserve"><value>Could not delete sheet columns.</value></data>
+  <data name="RibbonWire_CellLocked" xml:space="preserve"><value>Locked the selection.</value></data>
+  <data name="RibbonWire_CellUnlocked" xml:space="preserve"><value>Unlocked the selection.</value></data>
+  <data name="RibbonWire_ShownDetail" xml:space="preserve"><value>Showed outline detail.</value></data>
+  <data name="RibbonWire_ShowDetailFailed" xml:space="preserve"><value>Could not show detail.</value></data>
+  <data name="RibbonWire_HidDetail" xml:space="preserve"><value>Hid outline detail.</value></data>
+  <data name="RibbonWire_HideDetailFailed" xml:space="preserve"><value>Could not hide detail.</value></data>
+  <data name="RibbonWire_MarginsNormal" xml:space="preserve"><value>Applied Normal margins.</value></data>
+  <data name="RibbonWire_MarginsWide" xml:space="preserve"><value>Applied Wide margins.</value></data>
+  <data name="RibbonWire_MarginsNarrow" xml:space="preserve"><value>Applied Narrow margins.</value></data>
+  <data name="RibbonWire_OrientationPortrait" xml:space="preserve"><value>Set page orientation to Portrait.</value></data>
+  <data name="RibbonWire_OrientationLandscape" xml:space="preserve"><value>Set page orientation to Landscape.</value></data>
+  <data name="RibbonWire_PaperLetter" xml:space="preserve"><value>Set paper size to Letter.</value></data>
+  <data name="RibbonWire_PaperLegal" xml:space="preserve"><value>Set paper size to Legal.</value></data>
+  <data name="RibbonWire_PaperA4" xml:space="preserve"><value>Set paper size to A4.</value></data>
+  <data name="RibbonWire_PrintAreaSet" xml:space="preserve"><value>Set print area to the selection.</value></data>
+  <data name="RibbonWire_PrintAreaSetFailed" xml:space="preserve"><value>Could not set the print area.</value></data>
+  <data name="RibbonWire_PrintAreaCleared" xml:space="preserve"><value>Cleared the print area.</value></data>
+  <data name="RibbonWire_PrintAreaClearFailed" xml:space="preserve"><value>Could not clear the print area.</value></data>
+  <data name="RibbonWire_BackgroundUnavailable" xml:space="preserve"><value>Choose Background is unavailable on this platform.</value></data>
+  <data name="RibbonWire_BackgroundPickerTitle" xml:space="preserve"><value>Choose Sheet Background</value></data>
+  <data name="RibbonWire_BackgroundUnsupported" xml:space="preserve"><value>Unsupported image format.</value></data>
+  <data name="RibbonWire_BackgroundSet" xml:space="preserve"><value>Set the sheet background.</value></data>
+  <data name="RibbonWire_BackgroundDeleted" xml:space="preserve"><value>Deleted the sheet background.</value></data>
+  <data name="RibbonWire_TabColorTitle" xml:space="preserve"><value>Tab Color</value></data>
+  <data name="RibbonWire_TabColorNone" xml:space="preserve"><value>No Color</value></data>
+  <data name="RibbonWire_WatchWindowTitle" xml:space="preserve"><value>Watch Window</value></data>
+  <data name="RibbonWire_WatchWindowHint" xml:space="preserve"><value>Add the selection to watch its value and formula; recalculations refresh the list.</value></data>
+  <data name="RibbonWire_WatchWindowAdd" xml:space="preserve"><value>Add Watch</value></data>
+  <data name="RibbonWire_WatchWindowDelete" xml:space="preserve"><value>Delete Watch</value></data>
+  <data name="RibbonWire_WatchWindowRefresh" xml:space="preserve"><value>Refresh</value></data>
 </root>
