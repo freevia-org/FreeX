@@ -412,6 +412,8 @@ function Test-AvaloniaProject {
     Assert-True -Condition ((Get-ProjectNodeCondition $macOsDefineConstants[0]) -eq "'`$(TargetFramework)' == 'net10.0-macos'") -Message "Avalonia app FREEX_MACOS_SHARE_SHEET constant must be scoped to net10.0-macos."
 
     $allowedProjectReferences = @(
+        "Free.Shared.Pdf",
+        "Free.Shared.Pdf.Skia",
         "Free.Shared.Ribbon",
         "Free.Shared.Shell",
         "FreeX.App.Localization",
@@ -2106,10 +2108,24 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
+            # PortablePdfDocumentExporter is now a thin shim: builds the shared draw-op model via
+            # WorkbookPdfContentBuilder, then emits bytes via the shared PortablePdfWriter. The WinAnsi
+            # byte-format guarantees (WinAnsiEncoding, EncodeWinAnsiByte, etc.) live in
+            # shared/Free.Shared.Pdf/PortablePdfWriter.cs — see the block below.
             Path = "src\FreeX.App.Services\PortablePdfDocumentExporter.cs"
             Markers = @(
                 "public static class PortablePdfDocumentExporter",
-                "PortablePdfPageContentPlanner.CreatePlan(workbook, request)",
+                "WorkbookPdfContentBuilder.Build(workbook, exportPlan, options)",
+                "PortablePdfWriter.WriteToBytes(document, `"FreeX portable PDF`")"
+            )
+            OrderedPairs = @()
+        },
+        @{
+            # WinAnsi byte-format guarantees moved to the shared tier in the shared-pdf M2 refactor.
+            # Assert here so the macOS fallback path (no-Skia export) can never silently regress to
+            # non-WinAnsi or font-embedding that requires system DLLs.
+            Path = "shared\Free.Shared.Pdf\PortablePdfWriter.cs"
+            Markers = @(
                 "/Encoding /WinAnsiEncoding",
                 "EncodeWinAnsiHexText(normalized)",
                 "private static byte EncodeWinAnsiByte(char ch)",
