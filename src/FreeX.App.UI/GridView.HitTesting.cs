@@ -1,4 +1,5 @@
 using System.Windows;
+using FreeX.App.Presentation.Charts;
 using FreeX.Core.Model;
 
 namespace FreeX.App.UI;
@@ -39,15 +40,16 @@ public partial class GridView
 
         var guide = GetPageMarginGuidePixels(printArea);
         if (guide is null) return null;
-        var pageBounds = new Rect(
+        var pageBounds = new LayoutRect(
             guide.Value.Left,
             guide.Value.Top,
             Math.Max(0, guide.Value.Right - guide.Value.Left),
             Math.Max(0, guide.Value.Bottom - guide.Value.Top));
-        var handles = CalculatePageMarginRulerHandles(pageBounds, PaperSize, PageOrientation, PageMargins);
-        return PageMarginGuideLayoutPlanner.HitTestGuide(
+        var handles = FreeX.App.Presentation.PageLayout.PageMarginRulerLayoutPlanner.CalculateHandles(
+            pageBounds, PaperSize, PageOrientation, PageMargins);
+        return FreeX.App.Presentation.PageLayout.PageMarginGuideLayoutPlanner.HitTestGuide(
             guide.Value,
-            pos,
+            ToLayoutPoint(pos),
             handles,
             ShowRulers,
             PageMarginGuideHitZone);
@@ -61,13 +63,13 @@ public partial class GridView
         var guide = GetPageMarginGuidePixels(printArea);
         if (guide is null) return null;
 
-        return PageMarginGuideLayoutPlanner.CalculateDraggedMargins(
+        return FreeX.App.Presentation.PageLayout.PageMarginGuideLayoutPlanner.CalculateDraggedMargins(
             PaperSize,
             PageOrientation,
             PageMargins,
             edge,
             guide.Value,
-            pos);
+            ToLayoutPoint(pos));
     }
 
     public static (ChartModel Chart, string FieldButton)? HitTestPivotChartFieldButton(
