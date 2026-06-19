@@ -112,6 +112,11 @@ internal static class ParityCapture
             window.Height = SurfaceHeight;
             window.Show();
             PumpDispatcher();
+            // Render the same fixed demo workbook as the Avalonia capture so grid + data-dependent surfaces
+            // compare identical CONTENT (the live shell otherwise opens an empty Book1). See
+            // ParityDemoWorkbookFactory — both shells build from the committed docs/parity/parity-demo.csv.
+            window.AdoptWorkbookForParityCapture(ParityDemoWorkbookFactory.Create());
+            PumpDispatcher();
             window.UpdateLayout();
             PumpDispatcher();
 
