@@ -4,6 +4,7 @@ using System.Linq;
 using FluentAssertions;
 
 using FreeX.App.Avalonia;
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia.Tests;
@@ -27,6 +28,31 @@ public sealed class AutoFilterColumnValueReaderTests
         AutoFilterColumnValueReader.ToFilterText(DateTimeValue.FromDateTime(new DateTime(2026, 1, 2)))
             .Should().Be("2026-01-02");
         AutoFilterColumnValueReader.ToFilterText(BlankValue.Instance).Should().Be("");
+    }
+
+    [Fact]
+    public void ToFilterText_AgreesWith_CoreFilterValueFormatter()
+    {
+        // The Avalonia checklist reader must produce exactly the canonical text Core's FilterCommand
+        // matches against — they now share the single source of truth, so every value type must agree.
+        ScalarValue[] values =
+        [
+            new TextValue("Hi"),
+            new TextValue(""),
+            new NumberValue(10),
+            new NumberValue(1234.5),
+            new BoolValue(true),
+            new BoolValue(false),
+            DateTimeValue.FromDateTime(new DateTime(2026, 1, 2)),
+            BlankValue.Instance,
+            new ErrorValue("#DIV/0!"),
+        ];
+
+        foreach (var value in values)
+        {
+            AutoFilterColumnValueReader.ToFilterText(value)
+                .Should().Be(FilterValueFormatter.ToText(value));
+        }
     }
 
     [Fact]

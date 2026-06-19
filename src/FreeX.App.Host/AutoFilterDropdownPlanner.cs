@@ -1,5 +1,6 @@
 using FreeX.App.Presentation;
 using FreeX.App.Presentation.Filtering;
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -78,7 +79,9 @@ public static class AutoFilterDropdownPlanner
 
         for (var row = plan.Range.Start.Row + 1; row <= plan.Range.End.Row; row++)
         {
-            var value = SpreadsheetDisplayFormatter.FormatCellValue(sheet.GetValue(row, filterColumn));
+            // Use the canonical filter text (the single source of truth FilterCommand matches against)
+            // so the checklist Value the dropdown sends agrees exactly with what the filter applies.
+            var value = FilterValueFormatter.ToText(sheet.GetValue(row, filterColumn));
             if (!seenValues.Add(value))
                 continue;
 
