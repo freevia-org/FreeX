@@ -104,6 +104,11 @@ public sealed partial class MainWindow
 
             if (point.Properties.IsLeftButtonPressed)
             {
+                // A click on the already-selected chart may begin a move/resize drag (on a resize
+                // handle or the body); otherwise it just selects the chart.
+                if (selected && TryBeginChartDrag(chart, container, args))
+                    return;
+
                 SelectChart(chart);
                 args.Handled = true;
             }
@@ -117,9 +122,12 @@ public sealed partial class MainWindow
             }
         };
 
+        if (selected)
+            WireChartDragMoveRelease(chart, container);
+
         container.Children.Add(visual);
         if (selected)
-            container.Children.Add(CreateSelectedDrawingObjectAdorner());
+            container.Children.Add(CreateChartSelectionAdorner(width, height));
 
         return container;
     }
