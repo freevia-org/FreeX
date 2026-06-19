@@ -100,13 +100,14 @@ internal sealed class CapabilityProfile
             .Set(Cap.Lossy, Dim.ConditionalFormat, Dim.Charts, Dim.Images)
             .Set(Cap.None, Dim.Vba));
 
-        // ---- xml (SpreadsheetML 2003): values/numfmt/structure Full; styling None; formulas Lossy
-        //      (R1C1 not converted, footnote 2); comments Lossy (author hard-coded, footnote 5);
-        //      defined names Lossy (single-area only, footnote 6); hyperlinks Lossy.
+        // ---- xml (SpreadsheetML 2003): values/numfmt/structure Full; styling None. Formulas are now
+        //      Full (footnote 2 retired): the adapter converts Excel's R1C1 to A1 on read and A1 back to
+        //      R1C1 on write, so formulas round-trip faithfully. Comments Lossy (author hard-coded,
+        //      footnote 5); defined names Lossy (single-area only, footnote 6); hyperlinks Lossy.
         profiles.Add(new CapabilityProfile { Key = "xml", Extension = ".xml" }
-            .Set(Cap.Full, Dim.CellValues, Dim.NumberFormats, Dim.MultiSheet, Dim.SheetNames,
+            .Set(Cap.Full, Dim.CellValues, Dim.Formulas, Dim.NumberFormats, Dim.MultiSheet, Dim.SheetNames,
                 Dim.MergedCells, Dim.ColumnWidths, Dim.RowHeights, Dim.FreezePanes)
-            .Set(Cap.Lossy, Dim.Formulas, Dim.Hyperlinks, Dim.Comments, Dim.DefinedNames)
+            .Set(Cap.Lossy, Dim.Hyperlinks, Dim.Comments, Dim.DefinedNames)
             .Set(Cap.None, Dim.Fonts, Dim.Fills, Dim.Borders, Dim.Alignment, Dim.DataValidation,
                 Dim.ConditionalFormat, Dim.Charts, Dim.Images, Dim.Vba));
 

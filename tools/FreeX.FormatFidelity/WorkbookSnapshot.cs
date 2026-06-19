@@ -74,9 +74,13 @@ internal sealed class WorkbookSnapshot
             }
 
             // Style-only cells (formatted-but-empty) carry styling we must still compare for Full-cap
-            // style chains; merge them in (value = blank) if not already present.
+            // style chains; merge them in (value = blank) if not already present. A style-only cell that
+            // is covered by (but not the anchor of) a merged region is NOT independently stored by a
+            // spreadsheet — the anchor's style applies to the whole region — so adapters legitimately
+            // drop it on write. Excluding it here keeps the comparison honest (its loss is not a bug).
             foreach (var (key, styleId) in sheet.GetStyleOnlyEntries())
             {
+                if (IsCoveredByMergeNonAnchor(sheet, key.Row, key.Col)) continue;
                 if (!ss.Cells.ContainsKey(key))
                 {
                     var soStyle = wb.GetStyle(styleId);
@@ -121,6 +125,13 @@ internal sealed class WorkbookSnapshot
             snap.NamedRanges[name] = RangeKey(range);
 
         return snap;
+    }
+
+    private static bool IsCoveredByMergeNonAnchor(Sheet sheet, uint row, uint col)
+    {
+        var addr = new CellAddress(sheet.Id, row, col);
+        return sheet.GetMergeRegion(addr) is { } region &&
+               (region.Start.Row != row || region.Start.Col != col);
     }
 
     private static int CountImages(Sheet sheet) => sheet.Pictures.Count;

@@ -50,7 +50,8 @@ public sealed partial class SpreadsheetXmlFileAdapterTests
         var formulaCell = sheet.GetCell(1, 3);
         sheet.Name.Should().Be("Dynamic Attributes");
         formulaCell.Should().NotBeNull();
-        formulaCell!.FormulaText.Should().Be("SUM(RC[-2]:RC[-1])");
+        // Excel-style R1C1 (=SUM(RC[-2]:RC[-1])) at C1 is converted to A1 on read.
+        formulaCell!.FormulaText.Should().Be("SUM(A1:B1)");
         formulaCell.Value.Should().Be(new NumberValue(19.75));
         workbook.GetStyle(formulaCell.StyleId).NumberFormat.Should().Be("0.00");
     }
@@ -184,7 +185,8 @@ public sealed partial class SpreadsheetXmlFileAdapterTests
             new CellAddress(sheet.Id, 1, 3)));
         var formulaCell = sheet.GetCell(2, 3);
         formulaCell.Should().NotBeNull();
-        formulaCell!.FormulaText.Should().Be("SUM(RC[-2]:RC[-1])");
+        // Excel-style R1C1 (=SUM(RC[-2]:RC[-1])) at C2 is converted to A1 on read.
+        formulaCell!.FormulaText.Should().Be("SUM(A2:B2)");
         formulaCell.Value.Should().Be(new NumberValue(19.75));
     }
 
@@ -266,7 +268,8 @@ public sealed partial class SpreadsheetXmlFileAdapterTests
         sheet.GetCell(1, 2)!.Value.Should().Be(new NumberValue(7.25));
         var formulaCell = sheet.GetCell(1, 3);
         formulaCell.Should().NotBeNull();
-        formulaCell!.FormulaText.Should().Be("SUM(RC[-2]:RC[-1])");
+        // Excel-style R1C1 (=SUM(RC[-2]:RC[-1])) at C1 is converted to A1 on read.
+        formulaCell!.FormulaText.Should().Be("SUM(A1:B1)");
         formulaCell.Value.Should().Be(new NumberValue(19.75));
     }
 
