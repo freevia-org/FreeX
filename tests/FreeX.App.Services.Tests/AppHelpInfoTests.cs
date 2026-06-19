@@ -11,6 +11,7 @@ public sealed class AppHelpInfoTests
         AppHelpInfo.HelpUrl.Should().Be("https://github.com/tony-xmelon/FreeX");
         AppHelpInfo.FeedbackUrl.Should().Be("https://github.com/tony-xmelon/FreeX/issues/new");
         AppHelpInfo.LatestReleaseUrl.Should().Be("https://github.com/tony-xmelon/FreeX/releases/latest");
+        AppHelpInfo.ReleaseChannel.Should().Be("test");
     }
 
     [Fact]

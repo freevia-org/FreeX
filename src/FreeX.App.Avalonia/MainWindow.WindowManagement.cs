@@ -2,6 +2,9 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Platform;
+using Free.Shared.Shell;
+using FreeX.Core.Commands;
+using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia;
 
@@ -64,8 +67,15 @@ public sealed partial class MainWindow : Window
         RefreshShell("Opened a new window (independent workbook).");
     }
 
-    // view.arrangeAll
-    private void ArrangeAllWindows()
+    // view.arrangeAll button face — keeps the Excel default (Tiled).
+    private void ArrangeAllWindows() => ArrangeAllWindows(WorkbookWindowArrangement.Tiled);
+
+    // View ▸ Window ▸ Arrange All ▸ Tiled / Horizontal / Vertical / Cascade.
+    // Each submenu item runs SetWorkbookWindowArrangementCommand (persists the choice with
+    // undo/redo, parity with the WPF host) and then positions every visible top-level window
+    // using the shared, WPF-free ArrangeAllLayoutPlanner in Free.Shared.Shell. The planner is the
+    // single source of arrangement geometry for both the WPF and the cross-platform shells.
+    private void ArrangeAllWindows(WorkbookWindowArrangement arrangement)
     {
         // First, restore anything previously hidden so "Arrange All" is the reliable
         // way back from "Hide".
@@ -86,37 +96,56 @@ public sealed partial class MainWindow : Window
 
         if (windows.Count == 0)
         {
-            RefreshShell("No windows to arrange.");
+            RefreshShell(UiText.Get("WTA_ArrangeAll_NoWindows"));
+            return;
+        }
+
+        // Persist the arrangement choice (undo/redo) so it round-trips like the WPF host.
+        var stored = _session.ExecuteReviewCommand(new SetWorkbookWindowArrangementCommand(arrangement));
+        if (!stored.Success)
+        {
+            RefreshShell(stored.ErrorMessage ?? UiText.Get("WTA_ArrangeAll_Failed"));
             return;
         }
 
         var workArea = GetPrimaryWorkArea();
+        var bounds = ArrangeAllLayoutPlanner.Arrange(
+            (ShellWindowArrangement)arrangement,
+            workArea.Width,
+            workArea.Height,
+            windows.Count);
 
-        // Simple grid tile: as square as possible.
-        var columns = (int)Math.Ceiling(Math.Sqrt(windows.Count));
-        var rows = (int)Math.Ceiling(windows.Count / (double)columns);
-
-        var tileWidth = workArea.Width / columns;
-        var tileHeight = workArea.Height / rows;
+        if (bounds.Count != windows.Count)
+        {
+            RefreshShell(UiText.Get("WTA_ArrangeAll_Failed"));
+            return;
+        }
 
         for (var index = 0; index < windows.Count; index++)
         {
             var window = windows[index];
-            var column = index % columns;
-            var row = index / columns;
+            var rect = bounds[index];
 
             // A maximized/full-screen window cannot be positioned; normalize first.
             window.WindowState = WindowState.Normal;
 
             window.Position = new PixelPoint(
-                workArea.X + (column * tileWidth),
-                workArea.Y + (row * tileHeight));
-            window.Width = Math.Max(window.MinWidth, tileWidth);
-            window.Height = Math.Max(window.MinHeight, tileHeight);
+                workArea.X + (int)rect.X,
+                workArea.Y + (int)rect.Y);
+            window.Width = Math.Max(window.MinWidth, rect.Width);
+            window.Height = Math.Max(window.MinHeight, rect.Height);
         }
 
-        RefreshShell($"Arranged {windows.Count} window(s).");
+        RefreshShell(UiText.Format("WTA_ArrangeAll_Arranged", windows.Count, ArrangementDisplayName(arrangement)));
     }
+
+    private static string ArrangementDisplayName(WorkbookWindowArrangement arrangement) => arrangement switch
+    {
+        WorkbookWindowArrangement.Horizontal => UiText.Get("WTA_ArrangeAll_Horizontal"),
+        WorkbookWindowArrangement.Vertical => UiText.Get("WTA_ArrangeAll_Vertical"),
+        WorkbookWindowArrangement.Cascade => UiText.Get("WTA_ArrangeAll_Cascade"),
+        _ => UiText.Get("WTA_ArrangeAll_Tiled"),
+    };
 
     // view.hide
     private void HideActiveWindow()

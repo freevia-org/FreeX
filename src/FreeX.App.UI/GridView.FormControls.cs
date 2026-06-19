@@ -255,6 +255,8 @@ public partial class GridView
 
     private static Rect ToWpfRect(LayoutRect rect) => new(rect.X, rect.Y, rect.Width, rect.Height);
 
+    private static LayoutPoint ToLayoutPoint(Point point) => new(point.X, point.Y);
+
     private static Rect GetFormControlGlyphRect(Rect rect)
     {
         var size = Math.Min(FormControlGlyphSize, Math.Min(rect.Width, rect.Height));

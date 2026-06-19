@@ -18,6 +18,7 @@ public sealed class SolutionProjectsPreflightTests
         script.Should().Contain("$segments -contains \".worktrees\"");
         script.Should().Contain("$segments -contains \".claude\"");
         script.Should().Contain("$_.StartsWith(\"tools/\")");
+        script.Should().Contain("$_.StartsWith(\"shared/\")");
         script.Should().Contain("Duplicate solution project entry");
         script.Should().Contain("Solution project path escapes solution root");
         script.Should().Contain("Project missing from solution");
@@ -209,6 +210,37 @@ public sealed class SolutionProjectsPreflightTests
         result.ExitCode.Should().NotBe(0);
         combinedOutput.Should().Contain("missing from solution");
         combinedOutput.Should().Contain("tools/MissingTool/MissingTool.csproj");
+    }
+
+    [Fact]
+    public void SolutionProjectsPreflight_FailsWhenSharedProjectIsMissingFromSolution()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var tempDirectory = temp.Path;
+
+        Directory.CreateDirectory(Path.Combine(tempDirectory, "src", "Included"));
+        Directory.CreateDirectory(Path.Combine(tempDirectory, "shared", "MissingShared"));
+
+        File.WriteAllText(
+            Path.Combine(tempDirectory, "FreeX.slnx"),
+            """
+            <Solution>
+              <Folder Name="/src/">
+                <Project Path="src/Included/Included.csproj" />
+              </Folder>
+            </Solution>
+            """);
+        File.WriteAllText(Path.Combine(tempDirectory, "src", "Included", "Included.csproj"), "<Project />");
+        File.WriteAllText(Path.Combine(tempDirectory, "shared", "MissingShared", "MissingShared.csproj"), "<Project />");
+
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Test-SolutionProjects.ps1",
+            $"-ProjectRoot \"{tempDirectory}\" -SolutionPath \"{Path.Combine(tempDirectory, "FreeX.slnx")}\"");
+
+        var combinedOutput = result.NormalizedCombinedOutput;
+        result.ExitCode.Should().NotBe(0);
+        combinedOutput.Should().Contain("missing from solution");
+        combinedOutput.Should().Contain("shared/MissingShared/MissingShared.csproj");
     }
 
     [Fact]

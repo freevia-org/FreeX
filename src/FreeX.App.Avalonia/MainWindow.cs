@@ -412,6 +412,9 @@ public sealed partial class MainWindow : Window
     private readonly NativeMenuItem _saveMenuItem = new();
     private readonly NativeMenuItem _saveAsMenuItem = new();
     private readonly NativeMenuItem _exportPdfMenuItem = new();
+    private readonly NativeMenuItem _backstageExportMenuItem = new();
+    private readonly NativeMenuItem _backstageInfoMenuItem = new();
+    private readonly NativeMenuItem _backstageAccountMenuItem = new();
     private readonly NativeMenuItem _shareWorkbookMenuItem = new();
     private readonly NativeMenuItem _workbookStatisticsMenuItem = new();
     private readonly NativeMenuItem _optionsMenuItem = new();
@@ -716,6 +719,12 @@ public sealed partial class MainWindow : Window
                     // View ▸ Window group (multi-window).
                     ["view.newWindow"] = NewWindow,
                     ["view.arrangeAll"] = ArrangeAllWindows,
+                    // View ▸ Window ▸ Arrange All submenu (canonical menu ids from the shared ribbon
+                    // definition). Each positions every visible window via the shared layout planner.
+                    ["Tiled"] = () => ArrangeAllWindows(WorkbookWindowArrangement.Tiled),
+                    ["Horizontal#ArrangeAllMenuItem_Click"] = () => ArrangeAllWindows(WorkbookWindowArrangement.Horizontal),
+                    ["Vertical"] = () => ArrangeAllWindows(WorkbookWindowArrangement.Vertical),
+                    ["Cascade"] = () => ArrangeAllWindows(WorkbookWindowArrangement.Cascade),
                     ["view.hide"] = HideActiveWindow,
                     // Review proofing (built-in thesaurus / offline-honest translate) + Insert equation/object.
                     ["review.thesaurus"] = () => _ = ShowThesaurusDialogAsync(),
@@ -899,9 +908,9 @@ public sealed partial class MainWindow : Window
                     ["insert.headerFooter"] = () => _ = ShowPageSetupDialogAsync(),
                     // Page Layout ▸ Themes (Office / Colorful / Grayscale picker).
                     ["pageLayout.themes"] = () => _ = ShowThemesGalleryAsync(),
-                    ["pageLayout.themeColors"] = () => _ = ShowThemesGalleryAsync(),
-                    ["pageLayout.themeFonts"] = () => _ = ShowThemesGalleryAsync(),
-                    ["pageLayout.themeEffects"] = () => _ = ShowThemesGalleryAsync(),
+                    ["pageLayout.themeColors"] = () => _ = ShowThemeColorsGalleryAsync(),
+                    ["pageLayout.themeFonts"] = () => _ = ShowThemeFontsGalleryAsync(),
+                    ["pageLayout.themeEffects"] = () => _ = ShowThemeEffectsGalleryAsync(),
                     // Insert ▸ Symbol.
                     ["insert.symbol"] = () => _ = ShowSymbolPickerAsync(),
                     // Insert ▸ Slicer / Timeline (field picker → AddSlicerCommand / AddTimelineCommand).
@@ -1334,6 +1343,15 @@ public sealed partial class MainWindow : Window
         _workbookStatisticsMenuItem.Header = "Workbook Statistics...";
         _workbookStatisticsMenuItem.Gesture = new KeyGesture(Key.G, KeyModifiers.Control | KeyModifiers.Shift);
         _workbookStatisticsMenuItem.Click += async (_, _) => await ShowWorkbookStatisticsDialogAsync();
+
+        _backstageInfoMenuItem.Header = UiText.Get("Backstage_Info_MenuItem");
+        _backstageInfoMenuItem.Click += (_, _) => ShowBackstageInfo();
+
+        _backstageExportMenuItem.Header = UiText.Get("Backstage_Export_MenuItem");
+        _backstageExportMenuItem.Click += (_, _) => ShowBackstageExport();
+
+        _backstageAccountMenuItem.Header = UiText.Get("Backstage_Account_MenuItem");
+        _backstageAccountMenuItem.Click += (_, _) => ShowBackstageAccount();
 
         _optionsMenuItem.Header = UiText.Get("Options_Title");
         _optionsMenuItem.Gesture = new KeyGesture(Key.OemComma, KeyModifiers.Meta);
@@ -1818,9 +1836,12 @@ public sealed partial class MainWindow : Window
         fileMenu.Items.Add(_saveMenuItem);
         fileMenu.Items.Add(_saveAsMenuItem);
         fileMenu.Items.Add(_exportPdfMenuItem);
+        fileMenu.Items.Add(_backstageExportMenuItem);
         fileMenu.Items.Add(_shareWorkbookMenuItem);
         fileMenu.Items.Add(_workbookStatisticsMenuItem);
+        fileMenu.Items.Add(_backstageInfoMenuItem);
         fileMenu.Items.Add(new NativeMenuItemSeparator());
+        fileMenu.Items.Add(_backstageAccountMenuItem);
         fileMenu.Items.Add(_optionsMenuItem);
         fileMenu.Items.Add(new NativeMenuItemSeparator());
         fileMenu.Items.Add(_pageSetupMenuItem);
@@ -2665,8 +2686,11 @@ public sealed partial class MainWindow : Window
         _saveMenuItem.IsEnabled = _saveButton.IsEnabled;
         _saveAsMenuItem.IsEnabled = _saveAsButton.IsEnabled;
         _exportPdfMenuItem.IsEnabled = isIdle && StorageProvider.CanSave;
+        _backstageExportMenuItem.IsEnabled = isIdle && StorageProvider.CanSave;
         _shareWorkbookMenuItem.IsEnabled = isIdle;
         _workbookStatisticsMenuItem.IsEnabled = isIdle;
+        _backstageInfoMenuItem.IsEnabled = isIdle;
+        _backstageAccountMenuItem.IsEnabled = isIdle;
         _closeWorkbookMenuItem.IsEnabled = isIdle;
         var activeSheetTabIndex = FindActiveSheetTabIndex();
         _newSheetMenuItem.IsEnabled = _newSheetButton.IsEnabled;
@@ -4087,9 +4111,13 @@ public sealed partial class MainWindow : Window
     /// <summary>
     /// Routes a worksheet context-menu command id back to the matching Avalonia document command.
     /// Every action that has a working shell handler (clipboard, clear, insert/delete, sort/filter,
-    /// data tools, outline grouping, comments/notes, hyperlinks, format cells, pivot options) is wired
-    /// to the same handler the ribbon uses. Only the genuinely-unbacked actions (Pick From Drop-down,
-    /// Format as Table, in-place Edit/Resolve Comment and Edit Note) fall through to the no-op default.
+    /// clear filter, data tools, outline grouping, comments/notes, hyperlinks, format cells, pivot
+    /// options) is wired to the same handler the ribbon uses. The drawing/chart/picture per-target
+    /// variants (Format Picture/Chart Area, Bring Forward, Selection Pane, etc.) are not reachable from
+    /// the worksheet cell menu — they belong to the Picture/Shape/Chart target-kind menus, which the
+    /// Avalonia grid does not yet raise (no in-grid drawing-object hit-testing). The only Worksheet-menu
+    /// action that falls through to the no-op default is Pick From Drop-down List, which has no backing
+    /// shell/session API yet.
     /// </summary>
     private void DispatchWorksheetContextMenuCommand(RibbonCommandId commandId)
     {
@@ -4174,6 +4202,9 @@ public sealed partial class MainWindow : Window
                 break;
             case WorksheetContextMenuAction.Filter:
                 ToggleAutoFilter();
+                break;
+            case WorksheetContextMenuAction.ClearFilter:
+                ClearActiveSheetFilters();
                 break;
             case WorksheetContextMenuAction.ReapplyFilter:
                 ReapplyCurrentFilterSort();
@@ -16060,6 +16091,114 @@ public sealed partial class MainWindow : Window
                 ActiveSheetIndex: ResolveActiveSheetIndex()),
             new WorkbookExportPrintPageCapacity(PortablePdfRowsPerPage, PortablePdfColumnsPerPage),
             WorkbookExportPrintSurface.MacOs);
+
+    /// <summary>
+    /// Scoped variant of <see cref="ExportActiveSheetPdfAsync"/> used by the backstage Export pane. Reuses
+    /// the same picker → <see cref="WorkbookExportPrintPlanner"/> → <see cref="PortablePdfExportPlanner"/>
+    /// → <see cref="Pdf.AvaloniaPdfDocumentExporter"/> path; the only addition is honoring the user's chosen
+    /// scope (selection / active sheet / whole visible workbook). Output kind is currently PDF on this
+    /// surface (XPS is offered only where the surface advertises it, which macOS does not).
+    /// </summary>
+    private async Task ExportWorkbookPdfAsync(
+        WorkbookExportPrintScope scope,
+        WorkbookExportPrintOutputKind outputKind)
+    {
+        if (_isSaving)
+            return;
+
+        if (!StorageProvider.CanSave)
+        {
+            ShowExportIssue("PDF export unavailable on this platform.");
+            return;
+        }
+
+        var pdfFileType = new FilePickerFileType("PDF Document")
+        {
+            Patterns = ["*.pdf"],
+        };
+        var storageFile = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "Export to PDF",
+            SuggestedFileName = BuildSuggestedPdfExportFileName(),
+            DefaultExtension = "pdf",
+            FileTypeChoices = [pdfFileType],
+            SuggestedFileType = pdfFileType,
+            ShowOverwritePrompt = true,
+        });
+
+        if (storageFile is null)
+            return;
+
+        using (storageFile)
+        {
+            var path = storageFile.TryGetLocalPath();
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                ShowExportIssue("PDF export requires a local file path.");
+                return;
+            }
+
+            var requestedPath = path;
+            var exportPathPlan = ExportPathPlanner.Plan(requestedPath, ExportFileFormat.Pdf);
+            if (ExportPathPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, exportPathPlan, File.Exists) &&
+                !await ConfirmNormalizedPdfOverwriteAsync(exportPathPlan.Path))
+            {
+                ShowExportIssue("PDF export canceled.");
+                return;
+            }
+
+            path = exportPathPlan.Path;
+            _isSaving = true;
+            UpdateSaveButton();
+            try
+            {
+                _statusText.Text = "Exporting PDF...";
+                _statusText.Foreground = Brush(67, 113, 83);
+
+                var exportPrintPlan = CreateScopedPortablePdfPrintPlan(scope, outputKind);
+                var exportPlan = PortablePdfExportPlanner.CreatePlan(exportPrintPlan);
+                if (!exportPlan.IsReady)
+                {
+                    ShowExportIssue(exportPlan.StatusText);
+                    return;
+                }
+
+                using var pdfBuffer = new MemoryStream();
+                var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, exportPlan, pdfBuffer);
+                await File.WriteAllBytesAsync(path, pdfBuffer.ToArray());
+
+                RefreshShell($"{outcome.Result.StatusText} {Path.GetFileName(path)}");
+            }
+            catch (Exception ex)
+            {
+                ShowExportIssue($"PDF export failed: {ex.Message}");
+            }
+            finally
+            {
+                _isSaving = false;
+                UpdateSaveButton();
+            }
+        }
+    }
+
+    private WorkbookExportPrintPlan CreateScopedPortablePdfPrintPlan(
+        WorkbookExportPrintScope scope,
+        WorkbookExportPrintOutputKind outputKind)
+    {
+        var selectedRange = scope == WorkbookExportPrintScope.SelectedRange
+            ? _session.SelectedRange
+            : (GridRange?)null;
+
+        return WorkbookExportPrintPlanner.CreatePlan(
+            _session.Workbook,
+            new WorkbookExportPrintIntent(
+                scope,
+                outputKind,
+                ActiveSheetIndex: ResolveActiveSheetIndex(),
+                SelectedRange: selectedRange),
+            new WorkbookExportPrintPageCapacity(PortablePdfRowsPerPage, PortablePdfColumnsPerPage),
+            WorkbookExportPrintSurface.MacOs);
+    }
 
     private int ResolveActiveSheetIndex()
     {

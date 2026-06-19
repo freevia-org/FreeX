@@ -5,7 +5,7 @@ namespace FreeX.Core.IO;
 
 internal static class XlsxDataValidationClosedXmlMapper
 {
-    public static void Load(IXLWorksheet xlSheet, Sheet sheet)
+    public static void Load(IXLWorksheet xlSheet, Sheet sheet, List<string>? warnings = null)
     {
         foreach (var xlDv in xlSheet.DataValidations)
         {
@@ -89,9 +89,9 @@ internal static class XlsxDataValidationClosedXmlMapper
 
                 sheet.DataValidations.Add(dv);
             }
-            catch
+            catch (Exception ex)
             {
-                // Skip any individual validation we can't map.
+                warnings?.Add($"[data-validation] Sheet '{xlSheet.Name}': one data validation rule could not be loaded and was skipped: {ex.Message}");
             }
         }
     }

@@ -1,6 +1,8 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
+using FreeX.App.Presentation.Charts;
+using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Model;
 
 namespace FreeX.App.UI;
@@ -319,7 +321,7 @@ public partial class GridView
         var logicalHeight = GetLogicalViewportHeight();
         var previewRange = PrintArea ?? PagePreviewRange;
         var layout = previewRange is { } range
-            ? PageBreakPreviewLayoutPlanner.Calculate(
+            ? ToWpfLayout(PageBreakPreviewLayoutPlanner.Calculate(
                 Viewport,
                 range,
                 RowPageBreaks,
@@ -334,8 +336,8 @@ public partial class GridView
                 ActualRowHeaderWidth,
                 EffectiveColHeaderHeight,
                 logicalWidth,
-                logicalHeight)
-            : new PageBreakPreviewLayout([], [], []);
+                logicalHeight))
+            : WpfPageBreakPreviewLayout.Empty;
 
         if (WorksheetViewMode == WorksheetViewMode.PageBreakPreview)
         {
@@ -363,7 +365,7 @@ public partial class GridView
         RenderManualPageBreaks(dc);
     }
 
-    private void RenderPageBreakPreviewLayout(DrawingContext dc, PageBreakPreviewLayout layout)
+    private void RenderPageBreakPreviewLayout(DrawingContext dc, WpfPageBreakPreviewLayout layout)
     {
         foreach (var mask in layout.OutsidePrintAreaMasks)
             dc.DrawRectangle(PageBreakOutsideMaskBrush, null, mask);
@@ -378,7 +380,7 @@ public partial class GridView
             dc.DrawLine(PageBreakAutomaticPen, line.Start, line.End);
     }
 
-    private void RenderPageLayoutPages(DrawingContext dc, PageBreakPreviewLayout layout)
+    private void RenderPageLayoutPages(DrawingContext dc, WpfPageBreakPreviewLayout layout)
     {
         foreach (var page in layout.Pages)
         {
@@ -391,7 +393,7 @@ public partial class GridView
             dc.DrawLine(PageBreakAutomaticPen, line.Start, line.End);
     }
 
-    private static void DrawPageLayoutBoundary(DrawingContext dc, PageBreakPreviewPageLayout page)
+    private static void DrawPageLayoutBoundary(DrawingContext dc, WpfPageBreakPreviewPageLayout page)
     {
         var bounds = page.Bounds;
         if (bounds.Width <= 0 || bounds.Height <= 0)
@@ -407,7 +409,7 @@ public partial class GridView
             dc.DrawLine(PageLayoutPen, bounds.TopRight, bounds.BottomRight);
     }
 
-    private void DrawPageBreakWatermark(DrawingContext dc, PageBreakPreviewPageLayout page)
+    private void DrawPageBreakWatermark(DrawingContext dc, WpfPageBreakPreviewPageLayout page)
     {
         if (page.Bounds.Width <= 8 || page.Bounds.Height <= 8)
             return;
@@ -417,7 +419,7 @@ public partial class GridView
             CultureInfo.CurrentCulture,
             FlowDirection.LeftToRight,
             DefaultTypeface,
-            PageBreakPreviewLayoutPlanner.CalculateWatermarkFontSize(page.Bounds),
+            PageBreakPreviewLayoutPlanner.CalculateWatermarkFontSize(ToLayoutRect(page.Bounds)),
             PageBreakWatermarkBrush,
             VisualTreeHelper.GetDpi(this).PixelsPerDip);
         text.SetFontWeight(FontWeights.Bold);
@@ -429,7 +431,7 @@ public partial class GridView
                 page.Bounds.Top + Math.Max(0, (page.Bounds.Height - text.Height) / 2.0)));
     }
 
-    private void DrawPageLayoutHeaderFooterCues(DrawingContext dc, PageBreakPreviewPageLayout page)
+    private void DrawPageLayoutHeaderFooterCues(DrawingContext dc, WpfPageBreakPreviewPageLayout page)
     {
         var pageBounds = page.Bounds;
         if (!ShowRulers || pageBounds.Width <= 24 || pageBounds.Height <= 48)
@@ -483,15 +485,29 @@ public partial class GridView
         Rect pageBounds,
         WorksheetPaperSize paperSize,
         WorksheetPageOrientation orientation,
-        WorksheetPageMargins margins) =>
-        PageMarginRulerLayoutPlanner.CalculateHandles(pageBounds, paperSize, orientation, margins);
+        WorksheetPageMargins margins)
+    {
+        var handles = FreeX.App.Presentation.PageLayout.PageMarginRulerLayoutPlanner.CalculateHandles(
+            ToLayoutRect(pageBounds), paperSize, orientation, margins);
+        return new PageMarginRulerHandles(
+            ToWpfRect(handles.Left),
+            ToWpfRect(handles.Right),
+            ToWpfRect(handles.Top),
+            ToWpfRect(handles.Bottom));
+    }
 
     public static WorksheetPageMarginEdge? HitTestPageMarginRulerHandles(
         PageMarginRulerHandles handles,
         Point pos,
         bool showRulers = true)
     {
-        return PageMarginRulerLayoutPlanner.HitTestHandles(handles, pos, showRulers);
+        var presHandles = new FreeX.App.Presentation.PageLayout.PageMarginRulerHandles(
+            ToLayoutRect(handles.Left),
+            ToLayoutRect(handles.Right),
+            ToLayoutRect(handles.Top),
+            ToLayoutRect(handles.Bottom));
+        return FreeX.App.Presentation.PageLayout.PageMarginRulerLayoutPlanner.HitTestHandles(
+            presHandles, new LayoutPoint(pos.X, pos.Y), showRulers);
     }
 
     private void RenderPrintAreaBoundary(DrawingContext dc, GridRange printArea, Pen pen, bool drawClippedEdges)
@@ -597,6 +613,53 @@ public partial class GridView
     private void ClearRowPageBreakLookupCache() => _rowPageBreakLookupCache = null;
 
     private void ClearColumnPageBreakLookupCache() => _columnPageBreakLookupCache = null;
+
+    // The page-break-preview / page-layout geometry is computed by the portable
+    // FreeX.App.Presentation.PageLayout.PageBreakPreviewLayoutPlanner over platform-neutral
+    // LayoutRect/LayoutPoint. Convert that result to WPF Rect/Point once at the render boundary so the
+    // drawing helpers below stay in WPF types.
+    private static WpfPageBreakPreviewLayout ToWpfLayout(PageBreakPreviewLayout layout)
+    {
+        var masks = new Rect[layout.OutsidePrintAreaMasks.Count];
+        for (var i = 0; i < masks.Length; i++)
+            masks[i] = ToWpfRect(layout.OutsidePrintAreaMasks[i]);
+
+        var pages = new WpfPageBreakPreviewPageLayout[layout.Pages.Count];
+        for (var i = 0; i < pages.Length; i++)
+        {
+            var page = layout.Pages[i];
+            pages[i] = new WpfPageBreakPreviewPageLayout(page.PageNumber, ToWpfRect(page.Bounds), page.VisibleEdges);
+        }
+
+        var lines = new WpfPageBreakPreviewBreakLine[layout.AutomaticBreakLines.Count];
+        for (var i = 0; i < lines.Length; i++)
+        {
+            var line = layout.AutomaticBreakLines[i];
+            lines[i] = new WpfPageBreakPreviewBreakLine(ToWpfPoint(line.Start), ToWpfPoint(line.End));
+        }
+
+        return new WpfPageBreakPreviewLayout(masks, pages, lines);
+    }
+
+    private static Point ToWpfPoint(LayoutPoint point) => new(point.X, point.Y);
+}
+
+/// <summary>A page-break-preview page rectangle in WPF pixel space, with its on-screen edges.</summary>
+internal sealed record WpfPageBreakPreviewPageLayout(
+    int PageNumber,
+    Rect Bounds,
+    PageBreakPreviewPageEdges VisibleEdges);
+
+/// <summary>An automatic page-break line in WPF pixel space.</summary>
+internal sealed record WpfPageBreakPreviewBreakLine(Point Start, Point End);
+
+/// <summary>The page-break-preview overlay geometry converted to WPF Rect/Point for rendering.</summary>
+internal sealed record WpfPageBreakPreviewLayout(
+    IReadOnlyList<Rect> OutsidePrintAreaMasks,
+    IReadOnlyList<WpfPageBreakPreviewPageLayout> Pages,
+    IReadOnlyList<WpfPageBreakPreviewBreakLine> AutomaticBreakLines)
+{
+    public static WpfPageBreakPreviewLayout Empty { get; } = new([], [], []);
 }
 
 public enum FormulaTraceArrowLayoutKind
