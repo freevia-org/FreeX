@@ -413,6 +413,7 @@ function Test-AvaloniaProject {
 
     $allowedProjectReferences = @(
         "Free.Shared.Ribbon",
+        "Free.Shared.Shell",
         "FreeX.App.Localization",
         "FreeX.App.Presentation",
         "FreeX.App.Services",
