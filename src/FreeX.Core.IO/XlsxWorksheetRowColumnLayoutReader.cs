@@ -505,9 +505,13 @@ internal static class XlsxWorksheetRowColumnLayoutReader
             XlsxWorksheetXmlValueParser.ParsePositiveFiniteDouble(col.Attribute("width")?.Value) is { } width &&
             width > 0)
         {
-            // A column carrying a style at a near-default width is a styling-only entry, not a real
-            // custom width, so skip it. The column-width writer strips the default style="0" from
-            // genuine modelled widths on save, so they survive this check and round-trip intact.
+            // A styled column at a near-default width is a styling-only carrier (Excel/ClosedXML stamp a
+            // style + an auto width — typically 8.43..~9.14 depending on the font — on a column that
+            // merely formats empty cells), not a real custom width, so skip it. A genuinely-modelled
+            // width in this band is written by the column-width writer with its ClosedXML-stamped style
+            // *removed* (see XlsxWorksheetColumnWidthWriter), so it arrives here with no style attribute
+            // and round-trips intact — including a narrow 1.71 / 5.71 gutter or a 8.14 / 8.71 column that
+            // happens to sit in the carrier band.
             if (col.Attribute("style") is not null && width <= 9.2)
                 return;
 
