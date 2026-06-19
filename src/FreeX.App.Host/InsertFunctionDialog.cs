@@ -3,9 +3,9 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 
-namespace FreeX.App.Host;
+using FreeX.App.Presentation.Dialogs;
 
-public sealed record InsertFunctionCatalogEntry(string Name, string Category, string Description);
+namespace FreeX.App.Host;
 
 public sealed class InsertFunctionDialog : Window
 {
@@ -147,7 +147,7 @@ public sealed class InsertFunctionDialog : Window
         [MostRecentlyUsedCategory, AllCategory, .. catalog.Select(entry => entry.Category).Distinct().OrderBy(category => category)];
 
     public static string CreateFormula(string functionName) =>
-        InsertFunctionCatalogPlanner.CreateFormula(functionName);
+        $"{functionName.Trim().ToUpperInvariant()}()";
 
     public static string CreateFormula(string functionName, IEnumerable<string?> arguments) =>
         FunctionArgumentsDialog.CreateFormula(functionName, arguments);
