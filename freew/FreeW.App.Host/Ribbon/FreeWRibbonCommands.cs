@@ -195,6 +195,11 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.insert-file", new InsertFileCommand(editor));
         // Insert tab — Illustrations: pick an image file and insert it as an inline image run.
         registry.Register("freew.picture", new InsertPictureCommand(editor));
+        // Insert tab — Illustrations > Screenshot: the top-level "freew.screenshot" id only opens the
+        // dropdown (no direct insert, so it isn't registered — mirroring "freew.shapes" above). "Screen
+        // Clipping" drag-selects a screen region and inserts the captured PNG as an inline image through
+        // the exact same InsertImage path as Insert Picture.
+        registry.Register("freew.screen-clipping", new ScreenClippingCommand(editor));
         // Insert tab — Illustrations: resize the selected inline image (height scales proportionally).
         registry.Register("freew.image-size", new ImageSizeCommand(editor));
         // Insert tab — Illustrations: set the selected image's accessibility alt text (wp:docPr @descr),
@@ -1472,6 +1477,56 @@ internal static class FreeWRibbonCommands
                 widthPt = MaxWidthPt;
             }
             return new InlineImage(buffer.ToArray(), widthPt, heightPt);
+        }
+    }
+
+    // Insert > Illustrations > Screenshot > Screen Clipping: hide FreeW, let the user drag-select a screen
+    // region (ScreenClipOverlay), capture it to PNG (ScreenshotCapture), restore FreeW, and insert the clip
+    // as an inline image through the same DocumentView.InsertImage path Insert Picture uses. Escape / an
+    // empty drag cancels and inserts nothing (mirroring Word).
+    private sealed class ScreenClippingCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            var window = Window.GetWindow(editor);
+            var previousState = window?.WindowState ?? WindowState.Normal;
+            try
+            {
+                // Briefly hide FreeW so it isn't part of the captured region (Word does the same).
+                if (window is not null)
+                {
+                    window.WindowState = WindowState.Minimized;
+                    // Let the minimize animation settle before the overlay/capture so we grab the desktop,
+                    // not a half-faded FreeW frame.
+                    window.Dispatcher.Invoke(static () => { }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+                }
+
+                var region = ScreenClipOverlay.PromptForRegion();
+
+                if (window is not null)
+                {
+                    window.WindowState = previousState;
+                    window.Activate();
+                }
+
+                if (region is not { } captured)
+                    return;
+
+                var pngBytes = ScreenshotCapture.CaptureRegionPng(captured);
+                if (pngBytes is null)
+                    return;
+
+                var image = ScreenshotCapture.PngToInlineImage(pngBytes);
+                editor.Focus();
+                editor.InsertImage(image);
+            }
+            catch (Exception ex)
+            {
+                if (window is not null && window.WindowState == WindowState.Minimized)
+                    window.WindowState = previousState;
+                MessageBox.Show(window, $"Could not capture the screen clip:\n{ex.Message}",
+                    "FreeW", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
     }
 

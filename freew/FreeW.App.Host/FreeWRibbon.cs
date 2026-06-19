@@ -150,6 +150,13 @@ internal static class FreeWRibbon
                         m.Item("freew.shape-ellipse", "Ellipse", "E");
                         m.Item("freew.shape-textbox", "Text Box", "T");
                     });
+                    // Screenshot gallery: "Screen Clipping" drag-selects a screen region and inserts the
+                    // capture as an inline image (same path as Insert Picture). The top-level id only opens
+                    // the menu (no direct insert), mirroring the Shapes dropdown above.
+                    g.Icon("freew.screenshot", "Screenshot", RibbonCommandIconKind.Picture, "SC", menu: m =>
+                    {
+                        m.Item("freew.screen-clipping", "Screen Clipping", "C");
+                    });
                 });
                 // Media is a compact icon cluster (Word keeps these small), kept icon-only so the dense
                 // 12-group Insert tab fits without collapsing the trailing groups at ~1500-1600px.

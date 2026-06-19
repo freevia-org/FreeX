@@ -121,6 +121,8 @@ internal static class FreeWRibbonIcons
             ["freew.shape-rounded"] = RibbonCommandIconKind.Rectangle,
             ["freew.shape-ellipse"] = RibbonCommandIconKind.Ellipse,
             ["freew.shape-textbox"] = RibbonCommandIconKind.TextBox,
+            ["freew.screenshot"] = RibbonCommandIconKind.Picture,
+            ["freew.screen-clipping"] = RibbonCommandIconKind.Picture,
 
             // Insert: media (equation / chart / WordArt / SmartArt / OLE object)
             ["freew.equation"] = RibbonCommandIconKind.Equation,
