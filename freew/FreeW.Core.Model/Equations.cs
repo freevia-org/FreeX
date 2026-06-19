@@ -29,6 +29,8 @@ namespace FreeW.Core.Model;
 /// <item><see cref="Bar"/> — a base with an over- or under-bar (m:bar).</item>
 /// <item><see cref="Delimiter"/> — a bracketed/parenthesised expression (m:d).</item>
 /// <item><see cref="Matrix"/> — a grid of cells (m:m).</item>
+/// <item><see cref="FunctionApply"/> — a named function (e.g. sin, lim) applied to an argument (m:func).</item>
+/// <item><see cref="GroupChar"/> — an over- or under-brace/arrow spanning the base (m:groupChr).</item>
 /// </list>
 /// </summary>
 public enum MathRunKind
@@ -43,7 +45,9 @@ public enum MathRunKind
     Accent,
     Bar,
     Delimiter,
-    Matrix
+    Matrix,
+    FunctionApply,
+    GroupChar
 }
 
 /// <summary>
@@ -62,6 +66,8 @@ public enum MathRunKind
 /// <item><see cref="MathRunKind.Bar"/> → <see cref="Base"/> with a bar above (<see cref="BarTop"/> true) or below it.</item>
 /// <item><see cref="MathRunKind.Delimiter"/> → <see cref="Base"/> wrapped in <see cref="OpenChar"/>/<see cref="CloseChar"/>.</item>
 /// <item><see cref="MathRunKind.Matrix"/> → <see cref="Matrix"/>.</item>
+/// <item><see cref="MathRunKind.FunctionApply"/> → function name <see cref="FuncName"/> applied to argument <see cref="Base"/>.</item>
+/// <item><see cref="MathRunKind.GroupChar"/> → <see cref="Base"/> spanned by glyph <see cref="GroupChr"/> placed at <see cref="GroupChrPos"/> ("top"/"bot").</item>
 /// </list>
 /// </summary>
 public sealed record MathRun
@@ -116,6 +122,24 @@ public sealed record MathRun
 
     /// <summary>The matrix grid (only meaningful for <see cref="MathRunKind.Matrix"/>).</summary>
     public MathMatrix? Matrix { get; init; }
+
+    /// <summary>
+    /// The function name text (sin, cos, lim…) for a <see cref="MathRunKind.FunctionApply"/> fragment.
+    /// Stored in the m:fName slot of the OMML m:func element.
+    /// </summary>
+    public string FuncName { get; init; } = string.Empty;
+
+    /// <summary>
+    /// The spanning glyph for a <see cref="MathRunKind.GroupChar"/> fragment (e.g. "⏞" U+23DE for an
+    /// overbrace, "⏟" U+23DF for an underbrace, "⟵" for a left arrow). Stored in m:groupChrPr/m:chr.
+    /// </summary>
+    public string GroupChr { get; init; } = "⏞"; // over-brace default
+
+    /// <summary>
+    /// Whether the group-character glyph sits above ("top") or below ("bot") the base. Only meaningful
+    /// for <see cref="MathRunKind.GroupChar"/>; default is "top". Mirrors OMML m:groupChrPr/m:pos.
+    /// </summary>
+    public string GroupChrPos { get; init; } = "top";
 
     /// <summary>Creates a plain math-text fragment (m:r/m:t).</summary>
     public static MathRun PlainText(string text) => new() { Kind = MathRunKind.Text, Text = text };
@@ -173,6 +197,21 @@ public sealed record MathRun
         new() { Kind = MathRunKind.Matrix, Matrix = matrix };
 
     /// <summary>
+    /// Creates a function-apply fragment (m:func): the named function <paramref name="funcName"/> (e.g. "sin",
+    /// "lim") applied to <paramref name="argument"/>. The name is stored in m:fName and the argument in m:e.
+    /// </summary>
+    public static MathRun FunctionApply(string funcName, string argument) =>
+        new() { Kind = MathRunKind.FunctionApply, FuncName = funcName, Base = argument };
+
+    /// <summary>
+    /// Creates a group-character fragment (m:groupChr): the glyph <paramref name="chr"/> (default an
+    /// over-brace U+23DE) placed at <paramref name="pos"/> ("top" = above, "bot" = below) spanning
+    /// <paramref name="@base"/>.
+    /// </summary>
+    public static MathRun GroupCharOf(string @base, string chr = "⏞", string pos = "top") =>
+        new() { Kind = MathRunKind.GroupChar, Base = @base, GroupChr = chr, GroupChrPos = pos };
+
+    /// <summary>
     /// A best-effort linear (plain-text) rendering of this fragment, used for the host run's fallback
     /// text and for the editor's lightweight visual stand-in.
     /// </summary>
@@ -188,6 +227,8 @@ public sealed record MathRun
         MathRunKind.Bar => BarTop ? $"‾{Base}‾" : $"_{Base}_",
         MathRunKind.Delimiter => $"{OpenChar}{Base}{CloseChar}",
         MathRunKind.Matrix => Matrix?.LinearText ?? string.Empty,
+        MathRunKind.FunctionApply => $"{FuncName}({Base})",
+        MathRunKind.GroupChar => GroupChrPos == "bot" ? $"{Base}{GroupChr}" : $"{GroupChr}{Base}",
         _ => Text
     };
 }

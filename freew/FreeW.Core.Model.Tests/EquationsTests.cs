@@ -81,4 +81,46 @@ public class EquationsTests
         run.Equation.Should().NotBeNull();
         run.Text.Should().Be("a/b");
     }
+
+    [Fact]
+    public void MathRun_FunctionApply_SetsKindAndSlots()
+    {
+        var func = MathRun.FunctionApply("sin", "x");
+
+        func.Kind.Should().Be(MathRunKind.FunctionApply);
+        func.FuncName.Should().Be("sin");
+        func.Base.Should().Be("x");
+        func.LinearText.Should().Be("sin(x)");
+    }
+
+    [Fact]
+    public void MathRun_FunctionApply_RendersLimWithArgument()
+    {
+        var lim = MathRun.FunctionApply("lim", "f(x)");
+        lim.LinearText.Should().Be("lim(f(x))");
+    }
+
+    [Fact]
+    public void MathRun_GroupChar_DefaultsToOverbrace()
+    {
+        var gc = MathRun.GroupCharOf("x+y");
+
+        gc.Kind.Should().Be(MathRunKind.GroupChar);
+        gc.Base.Should().Be("x+y");
+        gc.GroupChr.Should().Be("⏞");
+        gc.GroupChrPos.Should().Be("top");
+        // Linear: glyph above → glyph before base
+        gc.LinearText.Should().Be("⏞x+y");
+    }
+
+    [Fact]
+    public void MathRun_GroupChar_UnderbraceSetsBotPos()
+    {
+        var under = MathRun.GroupCharOf("a+b", "⏟", "bot");
+
+        under.GroupChr.Should().Be("⏟");
+        under.GroupChrPos.Should().Be("bot");
+        // Linear: glyph below → glyph after base
+        under.LinearText.Should().Be("a+b⏟");
+    }
 }
