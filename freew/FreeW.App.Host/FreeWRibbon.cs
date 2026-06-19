@@ -179,6 +179,8 @@ internal static class FreeWRibbon
                         m.Item("freew.equation-bar", "Overbar", "O");
                         m.Item("freew.equation-bracket", "Bracket", "B");
                         m.Item("freew.equation-matrix", "Matrix (2×2)", "M");
+                        m.Item("freew.equation-func", "Function (sin)", "C");
+                        m.Item("freew.equation-groupchr", "Group (brace)", "G");
                     });
                     g.Icon("freew.chart", "Chart", RibbonCommandIconKind.ChartColumn, RibbonCommandIconAccent.Chart);
                     g.Icon("freew.wordart", "WordArt", RibbonCommandIconKind.WordArt);
@@ -210,6 +212,7 @@ internal static class FreeWRibbon
                 {
                     g.Icon("freew.footnote", "Footnote", RibbonCommandIconKind.Footnote);
                     g.Icon("freew.endnote", "Endnote", RibbonCommandIconKind.Endnote);
+                    g.Icon("freew.footnote-endnote-options", "Footnote/Endnote Options…", RibbonCommandIconKind.Footnote);
                     g.Icon("freew.toc", "Table of Contents", RibbonCommandIconKind.TableOfContents);
                     g.Icon("freew.toc-refresh", "Update TOC", RibbonCommandIconKind.Refresh);
                     g.Icon("freew.citation", "Citation", RibbonCommandIconKind.Citation);
@@ -418,10 +421,11 @@ internal static class FreeWRibbon
                     g.MediumToggle("freew.mark-as-final", "Mark as Final", RibbonCommandIconKind.Protect);
                     g.MediumToggle("freew.restrict-editing", "Restrict Editing", RibbonCommandIconKind.Protect);
                 });
-                // Single-command group → Large.
+                // Compare (legal blackline) + Combine (merge two reviewers' revisions).
                 tab.Group("compare", "Compare", "M", 80, g =>
                 {
-                    g.Large("freew.compare", "Compare", RibbonCommandIconKind.Compare);
+                    g.Medium("freew.compare", "Compare", RibbonCommandIconKind.Compare);
+                    g.Medium("freew.combine", "Combine", RibbonCommandIconKind.Compare);
                 });
                 tab.Group("inspect", "Inspect", "I", 75, g =>
                 {

@@ -174,6 +174,14 @@ public static class DocxReader
         // Mirror margins (w:mirrorMargins): an on/off toggle for double-sided printing (inside/outside margins).
         document.Page.MirrorMargins = ReadToggle(root, "mirrorMargins");
 
+        // Footnote numbering options (w:footnotePr in settings.xml): number format, start-at, restart.
+        if (root.Element(W + "footnotePr") is { } footnotePr)
+            ReadNoteNumberingOptions(footnotePr, document.FootnoteNumbering);
+
+        // Endnote numbering options (w:endnotePr in settings.xml): mirrors footnote options.
+        if (root.Element(W + "endnotePr") is { } endnotePr)
+            ReadNoteNumberingOptions(endnotePr, document.EndnoteNumbering);
+
         var protection = root.Element(W + "documentProtection");
         if (protection is null)
             return;
@@ -188,6 +196,40 @@ public static class DocxReader
         if (mode != ProtectionMode.None)
             document.Protection = new ProtectionSettings(mode);
     }
+
+    /// <summary>
+    /// Reads footnote/endnote numbering properties (w:numFmt, w:numStart, w:numRestart) from a
+    /// w:footnotePr or w:endnotePr element into <paramref name="options"/>.
+    /// </summary>
+    private static void ReadNoteNumberingOptions(XElement pr, NoteNumberingOptions options)
+    {
+        if (pr.Element(W + "numFmt") is { } numFmt)
+            options.NumberFormat = NoteNumberFormatFromOoxml(numFmt.Attribute(W + "val")?.Value);
+        if (pr.Element(W + "numStart") is { } numStart &&
+            int.TryParse(numStart.Attribute(W + "val")?.Value,
+                System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture, out var startVal) && startVal >= 1)
+            options.StartAt = startVal;
+        if (pr.Element(W + "numRestart") is { } numRestart)
+            options.NumberRestart = NoteNumberRestartFromOoxml(numRestart.Attribute(W + "val")?.Value);
+    }
+
+    private static NoteNumberFormat NoteNumberFormatFromOoxml(string? val) => val switch
+    {
+        "lowerRoman" => NoteNumberFormat.LowerRoman,
+        "upperRoman" => NoteNumberFormat.UpperRoman,
+        "lowerLetter" => NoteNumberFormat.LowerLetter,
+        "upperLetter" => NoteNumberFormat.UpperLetter,
+        "chicago" => NoteNumberFormat.Chicago,
+        _ => NoteNumberFormat.Decimal   // "decimal" and anything unrecognised → default
+    };
+
+    private static NoteNumberRestart NoteNumberRestartFromOoxml(string? val) => val switch
+    {
+        "eachSect" => NoteNumberRestart.EachSection,
+        "eachPage" => NoteNumberRestart.EachPage,
+        _ => NoteNumberRestart.Continuous
+    };
 
     /// <summary>
     /// Captures the package parts FreeW does not model but preserves verbatim (preserve-and-re-emit):
@@ -1466,6 +1508,10 @@ public static class DocxReader
                 equation.Runs.Add(ReadDelimiter(child));
             else if (child.Name == M + "m")
                 equation.Runs.Add(MathRun.MatrixOf(ReadMatrix(child)));
+            else if (child.Name == M + "func")
+                equation.Runs.Add(ReadFunctionApply(child));
+            else if (child.Name == M + "groupChr")
+                equation.Runs.Add(ReadGroupChar(child));
             else
             {
                 // Unknown OMML construct: keep its text so the equation degrades rather than disappears.
@@ -1549,6 +1595,33 @@ public static class DocxReader
         foreach (var mr in m.Elements(M + "mr"))
             matrix.Rows.Add([.. mr.Elements(M + "e").Select(MathTextOf)]);
         return matrix;
+    }
+
+    /// <summary>
+    /// Reads a function-apply element (m:func): the function name from the first m:r/m:t text under
+    /// m:fName, and the argument from m:e. Mirrors <c>DocxWriter.BuildFunctionApply</c>.
+    /// </summary>
+    private static MathRun ReadFunctionApply(XElement func)
+    {
+        var funcName = MathTextOf(func.Element(M + "fName"));
+        var argument = MathTextOf(func.Element(M + "e"));
+        return MathRun.FunctionApply(funcName, argument);
+    }
+
+    /// <summary>
+    /// Reads a group-character element (m:groupChr): the spanning glyph from m:groupChrPr/m:chr
+    /// (default over-brace U+23DE when absent) and the position from m:groupChrPr/m:pos (default "top").
+    /// Mirrors <c>DocxWriter.BuildGroupChar</c>.
+    /// </summary>
+    private static MathRun ReadGroupChar(XElement groupChr)
+    {
+        var pr = groupChr.Element(M + "groupChrPr");
+        var chr = pr?.Element(M + "chr")?.Attribute(M + "val")?.Value;
+        var pos = pr?.Element(M + "pos")?.Attribute(M + "val")?.Value;
+        return MathRun.GroupCharOf(
+            MathTextOf(groupChr.Element(M + "e")),
+            string.IsNullOrEmpty(chr) ? "⏞" : chr,
+            string.IsNullOrEmpty(pos) ? "top" : pos);
     }
 
     /// <summary>The concatenated text of all descendant m:t runs under <paramref name="element"/> (empty if null).</summary>

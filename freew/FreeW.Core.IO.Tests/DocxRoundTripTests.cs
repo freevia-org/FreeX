@@ -3191,4 +3191,214 @@ public class DocxRoundTripTests
         result.Sections[0].BreakKind.Should().Be(SectionBreakKind.Continuous);
         result.Sections[0].Page.ColumnCount.Should().Be(2);
     }
+
+    // ── Footnote/Endnote numbering options (w:footnotePr / w:endnotePr in settings.xml) ─────────
+
+    [Fact]
+    public void FootnoteNumbering_Default_Does_Not_Emit_Settings_Part()
+    {
+        // A freshly authored document with default footnote options must NOT emit a settings part
+        // (nor footnotePr) — keeps the file minimal and byte-equivalent to before.
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("text"));
+        // FootnoteNumbering is IsDefault — no settings part should appear.
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+
+        zip.GetEntry("word/settings.xml").Should().BeNull("default footnote options must not force a settings part");
+    }
+
+    [Fact]
+    public void FootnoteNumbering_RoundTrips_LowerRoman_PerSection()
+    {
+        // Set lower-roman format + start-at=1 + restart-per-section on footnotes;
+        // leave endnotes at default. The settings must survive a save → reload.
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("body"));
+        doc.FootnoteNumbering.NumberFormat = NoteNumberFormat.LowerRoman;
+        doc.FootnoteNumbering.NumberRestart = NoteNumberRestart.EachSection;
+
+        var result = RoundTrip(doc);
+
+        result.FootnoteNumbering.NumberFormat.Should().Be(NoteNumberFormat.LowerRoman);
+        result.FootnoteNumbering.NumberRestart.Should().Be(NoteNumberRestart.EachSection);
+        result.FootnoteNumbering.StartAt.Should().Be(1);  // default preserved
+        // Endnotes untouched.
+        result.EndnoteNumbering.IsDefault.Should().BeTrue();
+    }
+
+    [Fact]
+    public void FootnoteNumbering_RoundTrips_StartAt_3_And_LowerLetter()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("body"));
+        doc.FootnoteNumbering.NumberFormat = NoteNumberFormat.LowerLetter;
+        doc.FootnoteNumbering.StartAt = 3;
+        doc.FootnoteNumbering.NumberRestart = NoteNumberRestart.Continuous;
+
+        var result = RoundTrip(doc);
+
+        result.FootnoteNumbering.NumberFormat.Should().Be(NoteNumberFormat.LowerLetter);
+        result.FootnoteNumbering.StartAt.Should().Be(3);
+        result.FootnoteNumbering.NumberRestart.Should().Be(NoteNumberRestart.Continuous);
+    }
+
+    [Fact]
+    public void FootnoteNumbering_RoundTrips_EachPage_Restart()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("body"));
+        doc.FootnoteNumbering.NumberRestart = NoteNumberRestart.EachPage;
+
+        var result = RoundTrip(doc);
+
+        result.FootnoteNumbering.NumberRestart.Should().Be(NoteNumberRestart.EachPage);
+        result.FootnoteNumbering.NumberFormat.Should().Be(NoteNumberFormat.Decimal);  // default
+    }
+
+    [Fact]
+    public void EndnoteNumbering_RoundTrips_UpperRoman_PerSection()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("body"));
+        doc.EndnoteNumbering.NumberFormat = NoteNumberFormat.UpperRoman;
+        doc.EndnoteNumbering.NumberRestart = NoteNumberRestart.EachSection;
+        doc.EndnoteNumbering.StartAt = 2;
+
+        var result = RoundTrip(doc);
+
+        result.EndnoteNumbering.NumberFormat.Should().Be(NoteNumberFormat.UpperRoman);
+        result.EndnoteNumbering.NumberRestart.Should().Be(NoteNumberRestart.EachSection);
+        result.EndnoteNumbering.StartAt.Should().Be(2);
+        // Footnotes untouched.
+        result.FootnoteNumbering.IsDefault.Should().BeTrue();
+    }
+
+    [Fact]
+    public void FootnoteAndEndnoteNumbering_RoundTrip_Independently()
+    {
+        // Both changed simultaneously — must survive independently.
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("body"));
+        doc.FootnoteNumbering.NumberFormat = NoteNumberFormat.Chicago;
+        doc.FootnoteNumbering.StartAt = 1;
+        doc.FootnoteNumbering.NumberRestart = NoteNumberRestart.EachPage;
+        doc.EndnoteNumbering.NumberFormat = NoteNumberFormat.UpperLetter;
+        doc.EndnoteNumbering.StartAt = 5;
+        doc.EndnoteNumbering.NumberRestart = NoteNumberRestart.EachSection;
+
+        var result = RoundTrip(doc);
+
+        result.FootnoteNumbering.NumberFormat.Should().Be(NoteNumberFormat.Chicago);
+        result.FootnoteNumbering.NumberRestart.Should().Be(NoteNumberRestart.EachPage);
+        result.EndnoteNumbering.NumberFormat.Should().Be(NoteNumberFormat.UpperLetter);
+        result.EndnoteNumbering.StartAt.Should().Be(5);
+        result.EndnoteNumbering.NumberRestart.Should().Be(NoteNumberRestart.EachSection);
+    }
+
+    [Fact]
+    public void FootnoteNumbering_Emits_Correct_Ooxml_Attributes()
+    {
+        // Verify the raw XML written to word/settings.xml contains the correct w:footnotePr children.
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("body"));
+        doc.FootnoteNumbering.NumberFormat = NoteNumberFormat.LowerRoman;
+        doc.FootnoteNumbering.StartAt = 2;
+        doc.FootnoteNumbering.NumberRestart = NoteNumberRestart.EachSection;
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        var settingsEntry = zip.GetEntry("word/settings.xml");
+        settingsEntry.Should().NotBeNull();
+
+        using var reader = new System.IO.StreamReader(settingsEntry!.Open());
+        var xml = reader.ReadToEnd();
+
+        xml.Should().Contain("footnotePr");
+        xml.Should().Contain("lowerRoman");
+        xml.Should().Contain("numStart");
+        xml.Should().Contain("eachSect");
+        // Must NOT contain endnotePr (endnote still default).
+        xml.Should().NotContain("endnotePr");
+    }
+
+    [Fact]
+    public void FootnoteNumbering_PreservedSettings_Overlay_Works()
+    {
+        // When a preserved settings part exists (from a read document), overlaying new footnote options
+        // must replace any existing footnotePr and survive the round-trip.
+
+        // Build a minimal docx with a settings part containing footnotePr and read it back.
+        const string settingsXml =
+            "<?xml version=\"1.0\" encoding=\"utf-8\"?>" +
+            "<w:settings xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\">" +
+            "<w:footnotePr>" +
+            "<w:numFmt w:val=\"upperRoman\"/>" +
+            "<w:numStart w:val=\"3\"/>" +
+            "<w:numRestart w:val=\"eachPage\"/>" +
+            "</w:footnotePr>" +
+            "</w:settings>";
+
+        // Create a minimal docx containing this settings part and read it back.
+        using var srcStream = BuildMinimalDocxWithSettings(settingsXml);
+        var loaded = DocxReader.Read(srcStream);
+
+        // Reader must have populated the model from the settings XML.
+        loaded.FootnoteNumbering.NumberFormat.Should().Be(NoteNumberFormat.UpperRoman);
+        loaded.FootnoteNumbering.StartAt.Should().Be(3);
+        loaded.FootnoteNumbering.NumberRestart.Should().Be(NoteNumberRestart.EachPage);
+
+        // Now change one property and round-trip: the new value must survive.
+        loaded.FootnoteNumbering.NumberFormat = NoteNumberFormat.LowerLetter;
+        var result = RoundTrip(loaded);
+        result.FootnoteNumbering.NumberFormat.Should().Be(NoteNumberFormat.LowerLetter);
+        result.FootnoteNumbering.StartAt.Should().Be(3);
+        result.FootnoteNumbering.NumberRestart.Should().Be(NoteNumberRestart.EachPage);
+    }
+
+    // Builds a MemoryStream containing a minimal valid docx with the given settings XML content.
+    private static MemoryStream BuildMinimalDocxWithSettings(string settingsXml)
+    {
+        var stream = new MemoryStream();
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            WriteZipEntry(zip, "[Content_Types].xml",
+                "<?xml version=\"1.0\" encoding=\"utf-8\"?>" +
+                "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">" +
+                "<Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>" +
+                "<Default Extension=\"xml\" ContentType=\"application/xml\"/>" +
+                "<Override PartName=\"/word/document.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml\"/>" +
+                "</Types>");
+            WriteZipEntry(zip, "_rels/.rels",
+                "<?xml version=\"1.0\" encoding=\"utf-8\"?>" +
+                "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">" +
+                "<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"word/document.xml\"/>" +
+                "</Relationships>");
+            WriteZipEntry(zip, "word/document.xml",
+                "<?xml version=\"1.0\" encoding=\"utf-8\"?>" +
+                "<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\">" +
+                "<w:body><w:p><w:r><w:t>body</w:t></w:r></w:p></w:body></w:document>");
+            // Document rels: reference the settings part (must be written before settings.xml is added).
+            WriteZipEntry(zip, "word/_rels/document.xml.rels",
+                "<?xml version=\"1.0\" encoding=\"utf-8\"?>" +
+                "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">" +
+                "<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings\" Target=\"settings.xml\"/>" +
+                "</Relationships>");
+            WriteZipEntry(zip, "word/settings.xml", settingsXml);
+        }
+        stream.Position = 0;
+        return stream;
+    }
+
+    private static void WriteZipEntry(ZipArchive zip, string path, string content)
+    {
+        var entry = zip.CreateEntry(path);
+        using var writer = new System.IO.StreamWriter(entry.Open());
+        writer.Write(content);
+    }
 }

@@ -138,6 +138,8 @@ internal static class FreeWRibbonIcons
             ["freew.equation-bar"] = RibbonCommandIconKind.Equation,
             ["freew.equation-bracket"] = RibbonCommandIconKind.Equation,
             ["freew.equation-matrix"] = RibbonCommandIconKind.Equation,
+            ["freew.equation-func"] = RibbonCommandIconKind.Equation,
+            ["freew.equation-groupchr"] = RibbonCommandIconKind.Equation,
             ["freew.chart"] = RibbonCommandIconKind.ChartColumn,
             ["freew.wordart"] = RibbonCommandIconKind.WordArt,
             ["freew.smartart"] = RibbonCommandIconKind.SmartArt,
@@ -161,6 +163,7 @@ internal static class FreeWRibbonIcons
             // Insert: references
             ["freew.footnote"] = RibbonCommandIconKind.Footnote,
             ["freew.endnote"] = RibbonCommandIconKind.Endnote,
+            ["freew.footnote-endnote-options"] = RibbonCommandIconKind.Footnote,
             ["freew.toc"] = RibbonCommandIconKind.TableOfContents,
             ["freew.toc-refresh"] = RibbonCommandIconKind.Refresh,
             ["freew.citation"] = RibbonCommandIconKind.Citation,

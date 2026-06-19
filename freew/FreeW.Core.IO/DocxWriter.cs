@@ -137,7 +137,9 @@ public static class DocxWriter
             || document.Page.MirrorMargins
             || hasBackground
             || hasEmbeddedFonts
-            || hasPreservedSettings;
+            || hasPreservedSettings
+            || !document.FootnoteNumbering.IsDefault
+            || !document.EndnoteNumbering.IsDefault;
 
         // The bibliography part (word/bibliography/sources.xml) persists the document's citation Sources and
         // selected BibliographyStyle. Emitted whenever there are sources or a non-default style to record, so a
@@ -176,7 +178,7 @@ public static class DocxWriter
         WritePart(archive, "word/styles.xml", BuildStyles(document, preservedNumbering));
         WritePart(archive, ThemePartName.TrimStart('/'), BuildTheme(document.Theme));
         if (hasSettings)
-            WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.Page, hasBackground, hasEmbeddedFonts, document.Preserved.OriginalSettings));
+            WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.Page, hasBackground, hasEmbeddedFonts, document.FootnoteNumbering, document.EndnoteNumbering, document.Preserved.OriginalSettings));
         if (hasBibliography)
             WritePart(archive, BibliographyPartName.TrimStart('/'), BuildBibliographySources(document));
         // Embedded fonts: word/fontTable.xml + its rels + one obfuscated .odttf per embedded style.
@@ -2390,6 +2392,8 @@ public static class DocxWriter
         MathRunKind.Bar => BuildBar(run),
         MathRunKind.Delimiter => BuildDelimiter(run),
         MathRunKind.Matrix => BuildMatrix(run.Matrix),
+        MathRunKind.FunctionApply => BuildFunctionApply(run),
+        MathRunKind.GroupChar => BuildGroupChar(run),
         _ => MathText(run.Text)
     };
 
@@ -2482,6 +2486,27 @@ public static class DocxWriter
             }
         return m;
     }
+
+    /// <summary>
+    /// Builds a function-apply element (m:func): m:fName holds a plain text run with the function name
+    /// and m:e holds the argument. Mirrors <c>DocxReader.ReadFunctionApply</c>.
+    /// </summary>
+    private static XElement BuildFunctionApply(MathRun run) =>
+        new(M + "func",
+            new XElement(M + "fName", MathText(run.FuncName)),
+            new XElement(M + "e", MathText(run.Base)));
+
+    /// <summary>
+    /// Builds a group-character element (m:groupChr): m:groupChrPr carries the spanning glyph
+    /// (m:chr/@m:val) and its position (m:pos/@m:val, "top" or "bot"); m:e holds the base.
+    /// Mirrors <c>DocxReader.ReadGroupChar</c>.
+    /// </summary>
+    private static XElement BuildGroupChar(MathRun run) =>
+        new(M + "groupChr",
+            new XElement(M + "groupChrPr",
+                new XElement(M + "chr", new XAttribute(M + "val", run.GroupChr)),
+                new XElement(M + "pos", new XAttribute(M + "val", run.GroupChrPos))),
+            new XElement(M + "e", MathText(run.Base)));
 
     /// <summary>Builds an m:r run carrying <paramref name="text"/> in an m:t (xml:space preserved).</summary>
     private static XElement MathText(string text) =>
@@ -4034,7 +4059,7 @@ public static class DocxWriter
     /// for ordering — need listing; any unmodelled element not here keeps its relative position because the
     /// overlay only inserts FreeW's elements and never reorders the originals. The full schema order
     /// (ISO/IEC 29500 §17.15.1.78) places these as: displayBackgroundShape … embedTrueTypeFonts …
-    /// documentProtection … autoHyphenation … evenAndOddHeaders.
+    /// documentProtection … autoHyphenation … evenAndOddHeaders … footnotePr … endnotePr.
     /// </summary>
     private static readonly string[] CtSettingsOrder =
     [
@@ -4047,7 +4072,8 @@ public static class DocxWriter
         "mailMerge", "revisionView", "trackChanges", "doNotTrackMoves", "doNotTrackFormatting",
         "documentProtection", "autoFormatOverride", "styleLockTheme", "styleLockQFSet", "defaultTabStop",
         "autoHyphenation", "consecutiveHyphenLimit", "hyphenationZone", "doNotHyphenateCaps", "showEnvelope",
-        "summaryLength", "clickAndTypeStyle", "defaultTableStyle", "evenAndOddHeaders"
+        "summaryLength", "clickAndTypeStyle", "defaultTableStyle", "evenAndOddHeaders",
+        "footnotePr", "endnotePr"
     ];
 
     /// <summary>
@@ -4067,7 +4093,7 @@ public static class DocxWriter
     /// FreeW's features still apply.
     /// </para>
     /// </summary>
-    private static XDocument BuildSettings(ProtectionSettings protection, PageSettings page, bool displayBackground, bool embedTrueTypeFonts, XElement? original)
+    private static XDocument BuildSettings(ProtectionSettings protection, PageSettings page, bool displayBackground, bool embedTrueTypeFonts, NoteNumberingOptions footnoteNumbering, NoteNumberingOptions endnoteNumbering, XElement? original)
     {
         var autoHyphenation = page.AutoHyphenation;
         var differentOddEvenPages = page.DifferentOddEvenPages;
@@ -4116,6 +4142,12 @@ public static class DocxWriter
                 fresh.Add(new XElement(W + "documentProtection",
                     new XAttribute(W + "edit", freshEdit),
                     new XAttribute(W + "enforcement", "1")));
+            // Footnote/endnote numbering options (w:footnotePr / w:endnotePr) follow evenAndOddHeaders in
+            // CT_Settings schema order. Only emit when non-default (keeps a freshly authored document minimal).
+            if (BuildNotePr(footnoteNumbering, "footnotePr") is { } freshFootnotePr)
+                fresh.Add(freshFootnotePr);
+            if (BuildNotePr(endnoteNumbering, "endnotePr") is { } freshEndnotePr)
+                fresh.Add(freshEndnotePr);
             return new XDocument(fresh);
         }
 
@@ -4138,8 +4170,49 @@ public static class DocxWriter
                     new XAttribute(W + "edit", edit),
                     new XAttribute(W + "enforcement", "1"))
                 : null);
+        // Overlay footnote/endnote numbering: non-default options replace any existing w:footnotePr /
+        // w:endnotePr from the preserved settings; default values remove the element (FreeW owns it now).
+        OverlaySetting(settings, "footnotePr", BuildNotePr(footnoteNumbering, "footnotePr"));
+        OverlaySetting(settings, "endnotePr", BuildNotePr(endnoteNumbering, "endnotePr"));
         return new XDocument(settings);
     }
+
+    /// <summary>
+    /// Builds a w:footnotePr or w:endnotePr child element for word/settings.xml from the given
+    /// <paramref name="options"/>. Returns null when all options are at their Word defaults (no element needed).
+    /// The <paramref name="localName"/> ("footnotePr" or "endnotePr") determines the element name.
+    /// </summary>
+    private static XElement? BuildNotePr(NoteNumberingOptions options, string localName = "footnotePr")
+    {
+        if (options.IsDefault)
+            return null;
+
+        var pr = new XElement(W + localName);
+        if (options.NumberFormat != NoteNumberFormat.Decimal)
+            pr.Add(new XElement(W + "numFmt", new XAttribute(W + "val", NoteNumberFormatToOoxml(options.NumberFormat))));
+        if (options.StartAt != 1)
+            pr.Add(new XElement(W + "numStart", new XAttribute(W + "val", options.StartAt)));
+        if (options.NumberRestart != NoteNumberRestart.Continuous)
+            pr.Add(new XElement(W + "numRestart", new XAttribute(W + "val", NoteNumberRestartToOoxml(options.NumberRestart))));
+        return pr;
+    }
+
+    private static string NoteNumberFormatToOoxml(NoteNumberFormat fmt) => fmt switch
+    {
+        NoteNumberFormat.LowerRoman => "lowerRoman",
+        NoteNumberFormat.UpperRoman => "upperRoman",
+        NoteNumberFormat.LowerLetter => "lowerLetter",
+        NoteNumberFormat.UpperLetter => "upperLetter",
+        NoteNumberFormat.Chicago => "chicago",
+        _ => "decimal"
+    };
+
+    private static string NoteNumberRestartToOoxml(NoteNumberRestart restart) => restart switch
+    {
+        NoteNumberRestart.EachSection => "eachSect",
+        NoteNumberRestart.EachPage => "eachPage",
+        _ => "continuous"
+    };
 
     /// <summary>
     /// Replaces (or removes) the w:&lt;localName&gt; child of a w:settings element with
