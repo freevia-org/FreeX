@@ -49,7 +49,7 @@ public sealed partial class MainWindow
         var result = _session.CommitCellText(text);
         RefreshShell(result.Success
             ? successStatus
-            : result.ErrorMessage ?? "Could not update the cell.");
+            : result.ErrorMessage ?? UiText.Get("ShellLoc_CouldNotUpdateCell"));
         return result.Success;
     }
 
@@ -62,14 +62,14 @@ public sealed partial class MainWindow
 
         if (word is null)
         {
-            RefreshShell("Thesaurus: select a cell containing a word.");
+            RefreshShell(UiText.Get("ShellLoc_ThesaurusSelectWord"));
             return;
         }
 
         var synonyms = ThesaurusData.Lookup(word);
 
         var layout = new StackPanel { Margin = new Thickness(16), Spacing = 8 };
-        layout.Children.Add(new TextBlock { Text = $"Looked up: {word}", FontWeight = FontWeight.SemiBold });
+        layout.Children.Add(new TextBlock { Text = UiText.Format("ShellLoc_ThesaurusLookedUp", word), FontWeight = FontWeight.SemiBold });
 
         var list = new ListBox
         {
@@ -77,13 +77,13 @@ public sealed partial class MainWindow
             ItemsSource = synonyms,
         };
         if (synonyms.Count == 0)
-            layout.Children.Add(new TextBlock { Text = "No synonyms found in the built-in word list.", TextWrapping = TextWrapping.Wrap });
+            layout.Children.Add(new TextBlock { Text = UiText.Get("ShellLoc_ThesaurusNoSynonyms"), TextWrapping = TextWrapping.Wrap });
         else
             layout.Children.Add(list);
 
         var dialog = new Window
         {
-            Title = "Thesaurus",
+            Title = UiText.Get("ShellLoc_ThesaurusTitle"),
             Width = 320,
             Height = 280,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -96,8 +96,8 @@ public sealed partial class MainWindow
             Spacing = 8,
             HorizontalAlignment = AvaloniaProofingHorizontalAlignment.Right,
         };
-        var replace = new Button { Content = "Replace", Width = 90, IsEnabled = synonyms.Count > 0 };
-        var close = new Button { Content = "Close", Width = 90 };
+        var replace = new Button { Content = UiText.Get("ShellLoc_ReplaceButton"), Width = 90, IsEnabled = synonyms.Count > 0 };
+        var close = new Button { Content = UiText.Get("Common_Close"), Width = 90 };
         replace.Click += (_, _) =>
         {
             var chosen = list.SelectedItem as string ?? (synonyms.Count > 0 ? synonyms[0] : null);
@@ -107,7 +107,7 @@ public sealed partial class MainWindow
                 var updated = index >= 0
                     ? cellText.Remove(index, word.Length).Insert(index, chosen)
                     : chosen;
-                CommitProofingText(updated, $"Replaced \"{word}\" with \"{chosen}\".");
+                CommitProofingText(updated, UiText.Format("ShellLoc_ThesaurusReplaced", word, chosen));
             }
             dialog.Close();
         };
@@ -311,7 +311,7 @@ public sealed partial class MainWindow
         }
 
         var layout = new StackPanel { Margin = new Thickness(16), Spacing = 10 };
-        layout.Children.Add(new TextBlock { Text = "Equation (inserted into the cell as text):", FontWeight = FontWeight.SemiBold });
+        layout.Children.Add(new TextBlock { Text = UiText.Get("ShellLoc_EquationLabel"), FontWeight = FontWeight.SemiBold });
         layout.Children.Add(input);
         layout.Children.Add(symbols);
 
@@ -321,15 +321,15 @@ public sealed partial class MainWindow
             Spacing = 8,
             HorizontalAlignment = AvaloniaProofingHorizontalAlignment.Right,
         };
-        var ok = new Button { Content = "Insert", Width = 90 };
-        var cancel = new Button { Content = "Cancel", Width = 90 };
+        var ok = new Button { Content = UiText.Get("ShellLoc_InsertButton"), Width = 90 };
+        var cancel = new Button { Content = UiText.Get("Common_Cancel"), Width = 90 };
         // Captured below once the dialog exists. layout is the Window's Content, so the previous
         // layout.Parent.Parent walked one level too far (Parent is the Window, Parent.Parent null).
         Window? dialog = null;
         ok.Click += (_, _) =>
         {
             var text = input.Text ?? string.Empty;
-            CommitProofingText(text, "Inserted equation as cell text.");
+            CommitProofingText(text, UiText.Get("ShellLoc_InsertedEquation"));
             input.Tag = "ok";
             dialog?.Close();
         };
@@ -340,7 +340,7 @@ public sealed partial class MainWindow
 
         dialog = new Window
         {
-            Title = "Insert Equation",
+            Title = UiText.Get("ShellLoc_InsertEquationTitle"),
             Width = 410,
             Height = 240,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,

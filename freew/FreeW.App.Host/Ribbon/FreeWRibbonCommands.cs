@@ -57,7 +57,40 @@ internal static class FreeWRibbonCommands
         Action? onToggleReadMode,
         Func<bool>? isReadModeActive,
         Action? onTogglePrintLayout,
-        Func<bool>? isPrintLayoutActive)
+        Func<bool>? isPrintLayoutActive) =>
+        Build(editor, stateStore, onPrintPreview, onToggleNavPane, isNavPaneVisible,
+            onToggleReadMode, isReadModeActive, onTogglePrintLayout, isPrintLayoutActive,
+            onToggleOutlineView: null, isOutlineViewActive: null);
+
+    public static RibbonCommandRegistry Build(
+        DocumentView editor,
+        RibbonStateStore stateStore,
+        Action? onPrintPreview,
+        Action? onToggleNavPane,
+        Func<bool>? isNavPaneVisible,
+        Action? onToggleReadMode,
+        Func<bool>? isReadModeActive,
+        Action? onTogglePrintLayout,
+        Func<bool>? isPrintLayoutActive,
+        Action? onToggleOutlineView,
+        Func<bool>? isOutlineViewActive) =>
+        Build(editor, stateStore, onPrintPreview, onToggleNavPane, isNavPaneVisible,
+            onToggleReadMode, isReadModeActive, onTogglePrintLayout, isPrintLayoutActive,
+            onToggleOutlineView, isOutlineViewActive, onZoomDialog: null);
+
+    public static RibbonCommandRegistry Build(
+        DocumentView editor,
+        RibbonStateStore stateStore,
+        Action? onPrintPreview,
+        Action? onToggleNavPane,
+        Func<bool>? isNavPaneVisible,
+        Action? onToggleReadMode,
+        Func<bool>? isReadModeActive,
+        Action? onTogglePrintLayout,
+        Func<bool>? isPrintLayoutActive,
+        Action? onToggleOutlineView,
+        Func<bool>? isOutlineViewActive,
+        Action? onZoomDialog)
     {
         var registry = new RibbonCommandRegistry();
         var stateful = new List<(RibbonCommandId Id, IRibbonStatefulCommand Command)>();
@@ -394,6 +427,8 @@ internal static class FreeWRibbonCommands
         // Home > Paragraph: toggle a box border on the selected paragraph(s), and pick/clear shading.
         registry.Register("freew.para-border", new ActionCommand(() => editor.ToggleParagraphBorder()));
         registry.Register("freew.para-shading", new ParagraphShadingCommand(editor));
+        // Home / Design > Borders and Shading…: the full dialog (paragraph border, page border, shading).
+        registry.Register("freew.borders-shading", new BordersAndShadingCommand(editor));
 
         // Home > Paragraph (Line and Page Breaks): flow-control toggles over the selected paragraph(s).
         // Each flips its pPr flag (keepNext/keepLines/widowControl) reversibly through the undo/redo bus.
@@ -452,19 +487,26 @@ internal static class FreeWRibbonCommands
         // Line Numbers: cycle None -> Continuous -> RestartEachPage -> None (shown in print preview).
         registry.Register("freew.line-numbers", new LineNumberCommand(editor));
 
-        // Page setup polish — all three mutate PageSettings via ApplyPageSettings (commit + re-render)
-        // and round-trip through docx save.
-        //  - Hyphenation: toggle automatic hyphenation (settings.xml w:autoHyphenation).
+        // Page setup polish — all mutate PageSettings via ApplyPageSettings (commit + re-render) and
+        // round-trip through docx save.
+        //  - Hyphenation: a dropdown (None / Automatic / Manual / Options…). The split-button default action
+        //    (freew.hyphenation) toggles automatic hyphenation; the menu items set an explicit mode, and the
+        //    Options item opens the Hyphenation Options dialog. Automatic hyphenation inserts soft hyphens in
+        //    the live document (settings.xml w:autoHyphenation + zone/limit/caps sub-options).
         //  - Page Vertical Alignment: cycle Top -> Center -> Justified (-> Bottom) (sectPr w:vAlign).
         //  - Different First Page: toggle a distinct first-page header/footer (sectPr w:titlePg).
         registry.Register("freew.hyphenation", new HyphenationCommand(editor));
+        registry.Register("freew.hyphenation-none", new HyphenationModeCommand(editor, auto: false));
+        registry.Register("freew.hyphenation-auto", new HyphenationModeCommand(editor, auto: true));
+        registry.Register("freew.hyphenation-manual", new HyphenationManualCommand(editor));
+        registry.Register("freew.hyphenation-options", new HyphenationOptionsCommand(editor));
         registry.Register("freew.page-valign", new PageVerticalAlignmentCommand(editor));
         registry.Register("freew.different-first-page", new DifferentFirstPageCommand(editor));
 
-        // Layout tab — Page Background: toggle a whole-page border (w:pgBorders) and set/clear the
-        // page watermark. Both mutate PageSettings via ApplyPageSettings (commit + re-render) and
-        // round-trip through docx save.
-        registry.Register("freew.page-border", new ActionCommand(() => { editor.Focus(); editor.TogglePageBorder(); }));
+        // Layout tab — Page Background: "Page Border" opens the full Borders and Shading dialog (Word's
+        // Page Borders button), and Watermark sets/clears the page watermark. Both ultimately mutate
+        // PageSettings via ApplyPageSettings (commit + re-render) and round-trip through docx save.
+        registry.Register("freew.page-border", new BordersAndShadingCommand(editor));
         registry.Register("freew.watermark", new WatermarkCommand(editor));
 
         // Design tab — Page Background: pick the whole-page background colour (Word's Page Color). Opens a
@@ -491,6 +533,17 @@ internal static class FreeWRibbonCommands
         // on (the Word default); the host seeds the checked state to match.
         if (onTogglePrintLayout is not null && isPrintLayoutActive is not null)
             registry.Register("freew.print-layout", new ToggleActionCommand(onTogglePrintLayout, isPrintLayoutActive));
+
+        // View tab — toggle Outline view (the heading-structured outline surface with the Outlining
+        // mini-toolbar) vs the normal editing surface. Stateful so the ribbon's toggle button reflects
+        // whether the outline view is currently active.
+        if (onToggleOutlineView is not null && isOutlineViewActive is not null)
+            registry.Register("freew.outline-view", new ToggleActionCommand(onToggleOutlineView, isOutlineViewActive));
+
+        // View tab — open Word's Zoom dialog (presets / page fits / custom %). The host computes the
+        // page-relative fit factors from the live viewport and applies the chosen factor to the editor.
+        if (onZoomDialog is not null)
+            registry.Register("freew.zoom-dialog", new ActionCommand(onZoomDialog));
 
         // View tab — Show Formatting Marks: a stateful toggle over the editor's display-only pilcrow /
         // space-dot / tab-arrow overlay. The marks are drawn as a non-editable adorner computed from the
@@ -1162,6 +1215,26 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context) => apply(editor.Model.Page);
     }
 
+    // Home / Design > Borders and Shading…: opens the full dialog (paragraph border, page border, shading)
+    // seeded with the current paragraph's border/shading and the page border. Applies the chosen paragraph
+    // border/shading through DocumentView (the undo/redo bus) and the page border through ApplyPageSettings;
+    // everything round-trips through the existing w:pBdr / w:pgBorders / w:shd writers.
+    private sealed class BordersAndShadingCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var result = BordersAndShadingDialog.Prompt(
+                Window.GetWindow(editor), editor.CurrentParagraphFormatting, editor.Model.Page.PageBorder);
+            if (result is null)
+                return;
+
+            editor.SetParagraphBorder(result.ParagraphBorder);
+            editor.SetParagraphShading(result.ShadingHex, result.ShadingPattern);
+            editor.ApplyPageSettings(page => page.PageBorder = result.PageBorder);
+        }
+    }
+
     // Opens the Columns dialog (One/Two/Three/Left/Right presets + custom count, spacing, line-between) and
     // applies the chosen layout to PageSettings. Routes through ApplyPageSettings so the editor commits
     // pending edits, mutates the page columns, and re-renders the multi-column flow immediately. Equal
@@ -1205,6 +1278,74 @@ internal static class FreeWRibbonCommands
     {
         public void Execute(RibbonCommandContext context) =>
             editor.ApplyPageSettings(page => page.AutoHyphenation = !page.AutoHyphenation);
+    }
+
+    // Hyphenation dropdown — None / Automatic: sets the document's automatic-hyphenation flag explicitly
+    // (Word's Hyphenation > None / Automatic). Routes through ApplyPageSettings (commit + re-render) so the
+    // soft-hyphen rendering shows at once and the flag round-trips through settings.xml.
+    private sealed class HyphenationModeCommand(DocumentView editor, bool auto) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context) =>
+            editor.ApplyPageSettings(page => page.AutoHyphenation = auto);
+    }
+
+    // Hyphenation dropdown — Manual: a simpler pass that proposes hyphenation points for long words. FreeW's
+    // editor uses the same pure Hyphenator the automatic mode does; "Manual" turns hyphenation on (so the
+    // proposed soft-hyphen break points render) and reports how many words it found break candidates for, so
+    // the user can see the pass ran. (Word's interactive per-break confirmation UI is out of scope.)
+    private sealed class HyphenationManualCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            editor.CommitToModel();
+            var candidates = CountHyphenationCandidates(editor.Model);
+            editor.ApplyPageSettings(page => page.AutoHyphenation = true);
+
+            var owner = Window.GetWindow(editor);
+            if (owner is not null)
+                DialogMessageHelper.ShowInfo(owner,
+                    candidates == 0
+                        ? "Manual hyphenation found no long words to hyphenate."
+                        : $"Manual hyphenation proposed break points for {candidates} word(s). They will hyphenate at line ends.",
+                    "Hyphenation");
+        }
+
+        // Count distinct word occurrences in the live document that the pure Hyphenator would break.
+        private static int CountHyphenationCandidates(TextDocument model)
+        {
+            var count = 0;
+            foreach (var block in model.Blocks)
+                if (block is FreeW.Core.Model.Paragraph { Formatting.SuppressAutoHyphens: false } paragraph)
+                    foreach (var run in paragraph.Runs)
+                        foreach (var token in run.Text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+                            if (Hyphenator.BreakPoints(token.Trim('(', ')', ',', '.', ';', ':', '"', '\'')).Count > 0)
+                                count++;
+            return count;
+        }
+    }
+
+    // Hyphenation dropdown — Hyphenation Options…: opens the dialog (auto toggle, zone, consecutive-hyphen
+    // limit, hyphenate-caps) and applies the chosen settings to PageSettings via ApplyPageSettings so they
+    // round-trip through settings.xml and the live rendering updates.
+    private sealed class HyphenationOptionsCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var owner = Window.GetWindow(editor);
+            var result = HyphenationOptionsDialog.Prompt(owner, editor.Model.Page);
+            if (result is null)
+                return;
+
+            editor.ApplyPageSettings(page =>
+            {
+                page.AutoHyphenation = result.AutoHyphenation;
+                page.HyphenationZonePt = result.ZonePt;
+                page.ConsecutiveHyphenLimit = result.ConsecutiveLimit;
+                page.DoNotHyphenateCaps = !result.HyphenateCaps;
+            });
+        }
     }
 
     // Cycles page vertical alignment Top -> Center -> Justified -> Top (sectPr w:vAlign). Routes through
@@ -3321,9 +3462,10 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // Applies a value chosen from a ribbon combo (font family/size) to the current selection.
-    // Insert > References > Citation Style: set the editor's active citation style from the combo box
-    // label ("APA"/"MLA"/"Chicago"). Unrecognised labels leave the current style unchanged.
+    // References > Citation Style: set the editor's active citation style from the combo box label
+    // ("APA"/"MLA"/"Chicago"/"IEEE"). The style is stored on the document (TextDocument.BibliographyStyle via
+    // DocumentView.ActiveCitationStyle) so it persists and reformats subsequently inserted in-text citations
+    // and bibliographies. Unrecognised labels leave the current style unchanged.
     private sealed class CitationStyleCommand(DocumentView editor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
@@ -3331,13 +3473,7 @@ internal static class FreeWRibbonCommands
             if (!context.Parameters.TryGetValue("value", out var raw) || raw is not string value)
                 return;
 
-            editor.ActiveCitationStyle = value.Trim().ToUpperInvariant() switch
-            {
-                "MLA" => CitationStyle.Mla,
-                "CHICAGO" => CitationStyle.Chicago,
-                "APA" => CitationStyle.Apa,
-                _ => editor.ActiveCitationStyle,
-            };
+            editor.ActiveCitationStyle = Citations.ParseStyle(value, editor.ActiveCitationStyle);
         }
     }
 

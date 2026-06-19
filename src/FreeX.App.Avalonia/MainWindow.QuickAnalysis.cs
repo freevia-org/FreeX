@@ -18,11 +18,11 @@ public sealed partial class MainWindow
     private static string QuickAnalysisGroupTitle(QuickAnalysisGroup group) =>
         group switch
         {
-            QuickAnalysisGroup.Formatting => "Formatting",
-            QuickAnalysisGroup.Charts => "Charts",
-            QuickAnalysisGroup.Totals => "Totals",
-            QuickAnalysisGroup.Tables => "Tables",
-            QuickAnalysisGroup.Sparklines => "Sparklines",
+            QuickAnalysisGroup.Formatting => UiText.Get("TableLoc_QaGroupFormatting"),
+            QuickAnalysisGroup.Charts => UiText.Get("TableLoc_QaGroupCharts"),
+            QuickAnalysisGroup.Totals => UiText.Get("TableLoc_QaGroupTotals"),
+            QuickAnalysisGroup.Tables => UiText.Get("TableLoc_QaGroupTables"),
+            QuickAnalysisGroup.Sparklines => UiText.Get("TableLoc_QaGroupSparklines"),
             _ => group.ToString(),
         };
 
@@ -42,7 +42,7 @@ public sealed partial class MainWindow
         var range = _session.SelectedRange;
         if (range.CellCount <= 1)
         {
-            ShowEditIssue("Select more than one cell to use Quick Analysis.");
+            ShowEditIssue(UiText.Get("TableLoc_QaSelectMoreThanOne"));
             return;
         }
 
@@ -50,13 +50,13 @@ public sealed partial class MainWindow
         var model = QuickAnalysisModelBuilder.Build(description);
         if (model.IsEmpty)
         {
-            ShowEditIssue($"No Quick Analysis suggestions for {FormatRangeReference(range)}.");
+            ShowEditIssue(UiText.Format("TableLoc_QaNoSuggestions", FormatRangeReference(range)));
             return;
         }
 
         var dialog = new Window
         {
-            Title = "Quick Analysis",
+            Title = UiText.Get("TableLoc_QaDialogTitle"),
             Width = 420,
             Height = 460,
             MinWidth = 360,
@@ -98,7 +98,7 @@ public sealed partial class MainWindow
             groupsPanel.Children.Add(buttonRow);
         }
 
-        var closeButton = new Button { Content = "Close", IsCancel = true, MinWidth = 84 };
+        var closeButton = new Button { Content = UiText.Get("TableLoc_Close"), IsCancel = true, MinWidth = 84 };
         AutomationProperties.SetAutomationId(closeButton, "QuickAnalysisCloseButton");
         closeButton.Click += (_, _) => dialog.Close();
 
@@ -125,7 +125,7 @@ public sealed partial class MainWindow
                     {
                         new TextBlock
                         {
-                            Text = $"Suggestions for {FormatRangeReference(range)}",
+                            Text = UiText.Format("TableLoc_QaSuggestionsFor", FormatRangeReference(range)),
                             Foreground = HeaderForeground,
                             TextWrapping = TextWrapping.Wrap,
                         },
@@ -174,7 +174,7 @@ public sealed partial class MainWindow
                 break;
 
             default:
-                RefreshShell(route.DeferredNote ?? "This Quick Analysis suggestion is not yet available.");
+                RefreshShell(route.DeferredNote ?? UiText.Get("TableLoc_QaSuggestionNotAvailable"));
                 break;
         }
     }
@@ -191,7 +191,7 @@ public sealed partial class MainWindow
             _session.ActiveSheet.Id, range, description.HasHeaderRow, kind);
         if (commands.Count == 0)
         {
-            ShowEditIssue("Quick Analysis sparklines need at least two columns of data.");
+            ShowEditIssue(UiText.Get("TableLoc_QaSparklinesNeedTwoColumns"));
             return;
         }
 
@@ -200,11 +200,11 @@ public sealed partial class MainWindow
             var result = _session.ExecuteReviewCommand(command);
             if (!result.Success)
             {
-                ShowEditIssue(result.ErrorMessage ?? "Insert Sparkline failed.");
+                ShowEditIssue(result.ErrorMessage ?? UiText.Get("TableLoc_QaInsertSparklineFailed"));
                 return;
             }
         }
 
-        RefreshShell($"Inserted {commands.Count} sparkline(s) beside {FormatRangeReference(range)}");
+        RefreshShell(UiText.Format("TableLoc_QaInsertedSparklines", commands.Count, FormatRangeReference(range)));
     }
 }

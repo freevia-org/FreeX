@@ -89,7 +89,7 @@ public sealed partial class MainWindow
 
         AutomationProperties.SetAutomationId(container, $"Chart{chart.Id:N}");
         AutomationProperties.SetName(container, $"Chart {ChartDisplayName(chart)}");
-        AutomationProperties.SetHelpText(container, "Selects this chart in the workbook viewport.");
+        AutomationProperties.SetHelpText(container, UiText.Get("ChartLoc_SelectChartHelpText"));
         AutomationProperties.SetItemStatus(container, selected ? "Selected" : "Not selected");
 
         container.PointerPressed += (_, args) =>
@@ -139,7 +139,7 @@ public sealed partial class MainWindow
 
         _selectedDrawingObjectKind = SelectionPaneObjectKind.Chart;
         _selectedDrawingObjectId = chart.Id;
-        RefreshShell($"Selected Chart: {ChartDisplayName(chart)}");
+        RefreshShell(UiText.Format("ChartLoc_SelectedChart", ChartDisplayName(chart)));
     }
 
     private bool IsSelectedChart(ChartModel chart) =>
@@ -168,14 +168,12 @@ public sealed partial class MainWindow
         var result = _session.ExecuteReviewCommand(command);
         if (!result.Success)
         {
-            RefreshShell(result.ErrorMessage ?? "Insert Chart failed.");
+            RefreshShell(result.ErrorMessage ?? UiText.Get("ChartLoc_InsertChartFailed"));
             return;
         }
 
         ClearSelectedDrawingObject();
-        RefreshShell(string.Create(
-            CultureInfo.InvariantCulture,
-            $"Inserted {chartType} chart from {FormatCellReference(range.Start)}"));
+        RefreshShell(UiText.Format("ChartLoc_InsertedChartFrom", chartType, FormatCellReference(range.Start)));
     }
 
     /// <summary>

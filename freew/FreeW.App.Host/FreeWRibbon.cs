@@ -79,6 +79,7 @@ internal static class FreeWRibbon
                     });
                     g.Icon("freew.para-shading", "Shading", RibbonCommandIconKind.Fill);
                     g.Icon("freew.para-border", "Borders", RibbonCommandIconKind.Border);
+                    g.Icon("freew.borders-shading", "Borders and Shading…", RibbonCommandIconKind.Border, accent: RibbonCommandIconAccent.Border);
                     g.Icon("freew.space-before-toggle", "Add Space Before Paragraph", RibbonCommandIconKind.SpaceBefore);
                     g.Icon("freew.space-after-toggle", "Add Space After Paragraph", RibbonCommandIconKind.SpaceAfter);
                     g.Icon("freew.paragraph-dialog", "Paragraph Settings", RibbonCommandIconKind.TextFunction);
@@ -189,7 +190,7 @@ internal static class FreeWRibbon
                     g.Icon("freew.citation", "Citation", RibbonCommandIconKind.Citation);
                     g.ComboBox("freew.citation-style", "Citation Style", c => c with
                     {
-                        Items = new[] { "APA", "MLA", "Chicago" },
+                        Items = new[] { "APA", "MLA", "Chicago", "IEEE" },
                         Width = 90
                     });
                     g.RowBreak();
@@ -238,7 +239,16 @@ internal static class FreeWRibbon
                     g.Medium("freew.columns", "Columns", RibbonCommandIconKind.TextColumns, dropdown: true);
                     g.RowBreak();
                     g.Icon("freew.line-numbers", "Line Numbers", RibbonCommandIconKind.Number);
-                    g.Icon("freew.hyphenation", "Hyphenation", RibbonCommandIconKind.Hyphenation);
+                    // Hyphenation dropdown (Word's Layout > Page Setup > Hyphenation): None / Automatic /
+                    // Manual, plus the Hyphenation Options… dialog. The mode items set the document flag; the
+                    // options item opens the dialog (zone, consecutive-hyphen limit, hyphenate-caps).
+                    g.Icon("freew.hyphenation", "Hyphenation", RibbonCommandIconKind.Hyphenation, "HY", menu: m =>
+                    {
+                        m.Item("freew.hyphenation-none", "None", "N");
+                        m.Item("freew.hyphenation-auto", "Automatic", "A");
+                        m.Item("freew.hyphenation-manual", "Manual", "M");
+                        m.Item("freew.hyphenation-options", "Hyphenation Options…", "H");
+                    });
                     g.Icon("freew.page-valign", "Vertical Align", RibbonCommandIconKind.AlignJustify);
                     g.Icon("freew.different-first-page", "Different First Page", RibbonCommandIconKind.CoverPage);
                 });
@@ -277,6 +287,8 @@ internal static class FreeWRibbon
                 tab.Group("page-background", "Page Background", "B", 90, g =>
                 {
                     g.Medium("freew.page-color", "Page Color", RibbonCommandIconKind.Fill, accent: RibbonCommandIconAccent.Fill, dropdown: true);
+                    // Word's Design > Page Background > Page Borders: opens the full Borders and Shading dialog.
+                    g.Medium("freew.page-border", "Page Borders", RibbonCommandIconKind.Border, accent: RibbonCommandIconAccent.Border);
                 });
             })
             .Tab("view", "View", "W", tab =>
@@ -286,12 +298,15 @@ internal static class FreeWRibbon
                 {
                     g.MediumToggle("freew.print-layout", "Print Layout", RibbonCommandIconKind.PrintLayout);
                     g.MediumToggle("freew.read-mode", "Read Mode", RibbonCommandIconKind.ReadMode);
+                    g.MediumToggle("freew.outline-view", "Outline", RibbonCommandIconKind.MultilevelList);
                 });
                 tab.Group("show", "Show", "S", 90, g =>
                 {
                     g.MediumToggle("freew.nav-pane", "Navigation Pane", RibbonCommandIconKind.NavigationPane);
                     g.MediumToggle("freew.formatting-marks", "Show ¶", RibbonCommandIconKind.FormattingMarks);
                 });
+                // Zoom group → Word's View > Zoom hero, opening the Zoom dialog (presets / page fits / custom %).
+                tab.Group("zoom", "Zoom", "Z", 80, g => g.Large("freew.zoom-dialog", "Zoom", RibbonCommandIconKind.Zoom));
             })
             .Tab("mailings", "Mailings", "M", tab =>
             {

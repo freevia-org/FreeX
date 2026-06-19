@@ -186,6 +186,10 @@ internal static class FreeWRibbonIcons
             ["freew.columns"] = RibbonCommandIconKind.TextColumns,
             ["freew.line-numbers"] = RibbonCommandIconKind.Number,
             ["freew.hyphenation"] = RibbonCommandIconKind.Hyphenation,
+            ["freew.hyphenation-none"] = RibbonCommandIconKind.Hyphenation,
+            ["freew.hyphenation-auto"] = RibbonCommandIconKind.Hyphenation,
+            ["freew.hyphenation-manual"] = RibbonCommandIconKind.Hyphenation,
+            ["freew.hyphenation-options"] = RibbonCommandIconKind.Hyphenation,
             ["freew.page-valign"] = RibbonCommandIconKind.AlignJustify,
             ["freew.different-first-page"] = RibbonCommandIconKind.CoverPage,
 
@@ -210,6 +214,8 @@ internal static class FreeWRibbonIcons
             ["freew.nav-pane"] = RibbonCommandIconKind.NavigationPane,
             ["freew.formatting-marks"] = RibbonCommandIconKind.FormattingMarks,
             ["freew.read-mode"] = RibbonCommandIconKind.ReadMode,
+            ["freew.outline-view"] = RibbonCommandIconKind.MultilevelList,
+            ["freew.zoom-dialog"] = RibbonCommandIconKind.Zoom,
 
             // Mailings
             ["freew.merge-data"] = RibbonCommandIconKind.Recipients,

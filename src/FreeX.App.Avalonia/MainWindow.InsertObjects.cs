@@ -48,7 +48,7 @@ public sealed partial class MainWindow
     {
         if (!((IStorageProvider)StorageProvider).CanOpen)
         {
-            ShowEditIssue("Insert Picture is unavailable on this platform.");
+            ShowEditIssue(UiText.Get("InsertLoc_PictureUnavailable"));
             return;
         }
 
@@ -57,7 +57,7 @@ public sealed partial class MainWindow
 
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = "Insert Picture",
+            Title = UiText.Get("InsertLoc_InsertPictureTitle"),
             AllowMultiple = false,
             FileTypeFilter = [PictureFileType],
         });
@@ -75,7 +75,7 @@ public sealed partial class MainWindow
         var contentType = InsertPictureCommandFactory.ContentTypeForPath(file.Name);
         if (contentType is null)
         {
-            ShowEditIssue("Unsupported image format.");
+            ShowEditIssue(UiText.Get("InsertLoc_UnsupportedImageFormat"));
             return;
         }
 
@@ -89,13 +89,13 @@ public sealed partial class MainWindow
         }
         catch (IOException ex)
         {
-            ShowEditIssue($"Could not read the image: {ex.Message}");
+            ShowEditIssue(UiText.Format("InsertLoc_CouldNotReadImage", ex.Message));
             return;
         }
 
         if (imageBytes.Length == 0)
         {
-            ShowEditIssue("The selected image is empty.");
+            ShowEditIssue(UiText.Get("InsertLoc_SelectedImageEmpty"));
             return;
         }
 
@@ -106,12 +106,12 @@ public sealed partial class MainWindow
         var result = _session.ExecuteReviewCommand(command);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Insert Picture failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("InsertLoc_InsertPictureFailed"));
             return;
         }
 
         ClearSelectedDrawingObject();
-        RefreshShell($"Inserted picture at {FormatCellReference(anchor)}");
+        RefreshShell(UiText.Format("InsertLoc_InsertedPictureAt", FormatCellReference(anchor)));
     }
 
     /// <summary>
@@ -130,12 +130,12 @@ public sealed partial class MainWindow
         var result = _session.ExecuteReviewCommand(command);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Insert Shape failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("InsertLoc_InsertShapeFailed"));
             return;
         }
 
         ClearSelectedDrawingObject();
-        RefreshShell($"Inserted {kind} shape at {FormatCellReference(anchor)}");
+        RefreshShell(UiText.Format("InsertLoc_InsertedShapeAt", kind, FormatCellReference(anchor)));
     }
 
     /// <summary>
@@ -154,12 +154,12 @@ public sealed partial class MainWindow
         var result = _session.ExecuteReviewCommand(command);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Insert Text Box failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("InsertLoc_InsertTextBoxFailed"));
             return;
         }
 
         ClearSelectedDrawingObject();
-        RefreshShell($"Inserted text box at {FormatCellReference(anchor)}");
+        RefreshShell(UiText.Format("InsertLoc_InsertedTextBoxAt", FormatCellReference(anchor)));
     }
 
     /// <summary>Decodes the image's native pixel size via Avalonia, or (0,0) when decoding fails.</summary>
@@ -196,12 +196,12 @@ public sealed partial class MainWindow
         var result = _session.ExecuteReviewCommand(command);
         if (!result.Success)
         {
-            RefreshShell(result.ErrorMessage ?? "Insert Table failed.");
+            RefreshShell(result.ErrorMessage ?? UiText.Get("InsertLoc_InsertTableFailed"));
             return;
         }
 
         ClearSelectedDrawingObject();
-        RefreshShell($"Created table from {FormatRangeReference(range)}");
+        RefreshShell(UiText.Format("InsertLoc_CreatedTableFrom", FormatRangeReference(range)));
     }
 
     private static readonly FilePickerFileType AnyFileType = new("All Files")

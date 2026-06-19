@@ -32,6 +32,7 @@ public static class DocxWriter
     private const string CommentsExtendedRelationshipId = "rIdCommentsExtended";
     private const string SettingsRelationshipId = "rIdSettings";
     private const string FontTableRelationshipId = "rIdFontTable";
+    private const string BibliographyRelationshipId = "rIdBibliography";
     private const string ThemeRelationshipId = "rIdTheme1";
 
     // Minimal numbering scheme: one abstract num per list kind, mapped 1:1 to a w:num. Bullets use
@@ -130,6 +131,11 @@ public static class DocxWriter
             || hasEmbeddedFonts
             || hasPreservedSettings;
 
+        // The bibliography part (word/bibliography/sources.xml) persists the document's citation Sources and
+        // selected BibliographyStyle. Emitted whenever there are sources or a non-default style to record, so a
+        // document that has never touched citations round-trips exactly as before (no bibliography part).
+        var hasBibliography = document.Sources.Count > 0 || document.BibliographyStyle != CitationStyle.Apa;
+
         // A word/theme/theme1.xml part is always emitted (real Word documents always carry one); it
         // serialises the document's DocumentTheme as a real clrScheme/fontScheme/fmtScheme.
         // [Content_Types].xml needs a Default for every image extension actually used by ANY part — body
@@ -144,17 +150,19 @@ public static class DocxWriter
             .ToList();
 
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true);
-        WritePart(archive, "[Content_Types].xml", BuildContentTypes(imageExtensions, emitNumbering, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasWatermark, hasSettings, charts, embeddedObjects.Count > 0, smartArts, hasEmbeddedFonts, document.Preserved.Parts, document.Preserved.ContentTypeDefaults));
+        WritePart(archive, "[Content_Types].xml", BuildContentTypes(imageExtensions, emitNumbering, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasWatermark, hasSettings, hasBibliography, charts, embeddedObjects.Count > 0, smartArts, hasEmbeddedFonts, document.Preserved.Parts, document.Preserved.ContentTypeDefaults));
         WritePart(archive, "_rels/.rels", BuildPackageRels(hasWatermark));
         WritePart(archive, "docProps/core.xml", BuildCoreProperties(document.Properties));
         if (hasWatermark)
             WritePart(archive, "docProps/custom.xml", BuildCustomProperties(document.Page.Watermark!));
-        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, emitNumbering, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasSettings, charts, embeddedObjects, smartArts, hasEmbeddedFonts, document.Preserved.Parts));
+        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, emitNumbering, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasSettings, hasBibliography, charts, embeddedObjects, smartArts, hasEmbeddedFonts, document.Preserved.Parts));
         WritePart(archive, "word/document.xml", BuildDocument(document, images, charts, embeddedObjects, smartArts, hyperlinks, headerFooterParts, preservedNumbering));
         WritePart(archive, "word/styles.xml", BuildStyles(document, preservedNumbering));
         WritePart(archive, ThemePartName.TrimStart('/'), BuildTheme(document.Theme));
         if (hasSettings)
-            WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.Page.AutoHyphenation, document.Page.DifferentOddEvenPages, hasBackground, hasEmbeddedFonts, document.Preserved.OriginalSettings));
+            WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.Page, hasBackground, hasEmbeddedFonts, document.Preserved.OriginalSettings));
+        if (hasBibliography)
+            WritePart(archive, BibliographyPartName.TrimStart('/'), BuildBibliographySources(document));
         // Embedded fonts: word/fontTable.xml + its rels + one obfuscated .odttf per embedded style.
         if (hasEmbeddedFonts)
         {
@@ -594,7 +602,7 @@ public static class DocxWriter
         entryStream.Write(content, 0, content.Length);
     }
 
-    private static XDocument BuildContentTypes(IReadOnlyList<string> imageExtensions, bool includeNumbering, IReadOnlyList<HeaderFooterPart> headerFooterParts, bool hasFootnotes, bool hasEndnotes, bool hasComments, bool hasWatermark, bool hasSettings, IReadOnlyList<ChartPart> charts, bool hasEmbeddedObjects, IReadOnlyList<SmartArtPart> smartArts, bool hasEmbeddedFonts, IReadOnlyList<PreservedPart> preservedParts, IReadOnlyDictionary<string, string> preservedContentTypeDefaults) => new(
+    private static XDocument BuildContentTypes(IReadOnlyList<string> imageExtensions, bool includeNumbering, IReadOnlyList<HeaderFooterPart> headerFooterParts, bool hasFootnotes, bool hasEndnotes, bool hasComments, bool hasWatermark, bool hasSettings, bool hasBibliography, IReadOnlyList<ChartPart> charts, bool hasEmbeddedObjects, IReadOnlyList<SmartArtPart> smartArts, bool hasEmbeddedFonts, IReadOnlyList<PreservedPart> preservedParts, IReadOnlyDictionary<string, string> preservedContentTypeDefaults) => new(
         new XElement(Ct + "Types",
             new XElement(Ct + "Default", new XAttribute("Extension", "rels"),
                 new XAttribute("ContentType", "application/vnd.openxmlformats-package.relationships+xml")),
@@ -663,6 +671,11 @@ public static class DocxWriter
             hasSettings
                 ? new XElement(Ct + "Override", new XAttribute("PartName", SettingsPartName),
                     new XAttribute("ContentType", SettingsContentType))
+                : null,
+            // word/bibliography/sources.xml declares the citation-sources store (b:Sources/@SelectedStyle).
+            hasBibliography
+                ? new XElement(Ct + "Override", new XAttribute("PartName", BibliographyPartName),
+                    new XAttribute("ContentType", BibliographyContentType))
                 : null,
             // word/fontTable.xml declares the embedded-font table (the .odttf parts use the odttf Default above).
             hasEmbeddedFonts
@@ -787,6 +800,7 @@ public static class DocxWriter
         bool hasEndnotes,
         bool hasComments,
         bool hasSettings,
+        bool hasBibliography,
         IReadOnlyList<ChartPart> charts,
         IReadOnlyList<EmbeddedObjectPart> embeddedObjects,
         IReadOnlyList<SmartArtPart> smartArts,
@@ -803,6 +817,12 @@ public static class DocxWriter
                 new XAttribute("Id", SettingsRelationshipId),
                 new XAttribute("Type", SettingsRelType),
                 new XAttribute("Target", "settings.xml")));
+        // The document→bibliography relationship (word/bibliography/sources.xml, target relative to word/).
+        if (hasBibliography)
+            relationships.Add(new XElement(Rel + "Relationship",
+                new XAttribute("Id", BibliographyRelationshipId),
+                new XAttribute("Type", BibliographyRelType),
+                new XAttribute("Target", "bibliography/sources.xml")));
         // The document→fontTable relationship (the fontTable's own rels reference the .odttf font parts).
         if (hasEmbeddedFonts)
             relationships.Add(new XElement(Rel + "Relationship",
@@ -1847,6 +1867,10 @@ public static class DocxWriter
         if (f.TabStops.Count > 0)
             pPr.Add(new XElement(W + "tabs",
                 f.TabStops.Select(BuildTabStop)));
+        // Suppress automatic hyphenation for this paragraph (w:suppressAutoHyphens); emitted only when set,
+        // like the other pPr toggles. In CT_PPr schema order it follows w:tabs.
+        if (f.SuppressAutoHyphens)
+            pPr.Add(new XElement(W + "suppressAutoHyphens"));
         // w:spacing carries before/after AND line spacing. Line spacing is emitted only when it differs
         // from the model default (a multiple of 1.15), so paragraphs with inherited/default spacing stay
         // byte-unchanged; explicit single/1.5/double (auto) and exact/atLeast heights round-trip.
@@ -1878,23 +1902,36 @@ public static class DocxWriter
                 new XAttribute(W + "left", PointsToDxa(f.IndentLeftPt)),
                 new XAttribute(W + "right", PointsToDxa(f.IndentRightPt)),
                 new XAttribute(W + "firstLine", PointsToDxa(f.FirstLineIndentPt))));
-        // Paragraph border (w:pBdr): a uniform box (all four edges) by default, or a bottom-only edge
-        // when the border is a horizontal rule. Each edge shares one colour/width, analogous to w:tblBorders.
+        // Paragraph border (w:pBdr): a box whose drawn edges are selected by the per-edge flags (all four =
+        // a box) with one shared colour/width/line-style, analogous to w:tblBorders. A horizontal rule is the
+        // bottom-only case. Each drawn edge carries the model's line style (w:val).
         if (f.Border is { } border)
         {
+            var styleToken = BorderLineStyles.ToToken(border.LineStyle);
             XElement Edge(string name) => new(W + name,
-                new XAttribute(W + "val", "single"),
+                new XAttribute(W + "val", styleToken),
                 new XAttribute(W + "sz", PointsToEighthPoints(border.WidthPt)),
                 new XAttribute(W + "space", 0),
                 new XAttribute(W + "color", border.ColorHex.TrimStart('#')));
-            pPr.Add(border.BottomOnly
-                ? new XElement(W + "pBdr", Edge("bottom"))
-                : new XElement(W + "pBdr", Edge("top"), Edge("left"), Edge("bottom"), Edge("right")));
+            // BottomOnly forces a bottom-only rule (the horizontal-rule case); otherwise honour the per-edge
+            // flags. An edge that is off is omitted entirely (a null is dropped by XElement) so the round-trip
+            // reads it back as off.
+            var drawBottom = border.BottomOnly || border.Bottom;
+            var drawTop = !border.BottomOnly && border.Top;
+            var drawLeft = !border.BottomOnly && border.Left;
+            var drawRight = !border.BottomOnly && border.Right;
+            if (drawTop || drawLeft || drawBottom || drawRight)
+                pPr.Add(new XElement(W + "pBdr",
+                    drawTop ? Edge("top") : null,
+                    drawLeft ? Edge("left") : null,
+                    drawBottom ? Edge("bottom") : null,
+                    drawRight ? Edge("right") : null));
         }
-        // Paragraph shading (background fill), mirroring run-level w:shd highlight.
+        // Paragraph shading (background fill), mirroring run-level w:shd highlight. The pattern (w:val) comes
+        // from the model; the default Clear preserves the byte-unchanged round-trip of existing documents.
         if (f.ShadingColorHex is { Length: > 0 } shading)
             pPr.Add(new XElement(W + "shd",
-                new XAttribute(W + "val", "clear"),
+                new XAttribute(W + "val", ShadingPatterns.ToToken(f.ShadingPattern)),
                 new XAttribute(W + "color", "auto"),
                 new XAttribute(W + "fill", shading.TrimStart('#'))));
 
@@ -3477,8 +3514,9 @@ public static class DocxWriter
         if (border is null)
             return null;
 
+        var styleToken = BorderLineStyles.ToToken(border.LineStyle);
         XElement Edge(string name) => new(W + name,
-            new XAttribute(W + "val", "single"),
+            new XAttribute(W + "val", styleToken),
             new XAttribute(W + "sz", PointsToEighthPoints(border.WidthPt)),
             new XAttribute(W + "space", 24),
             new XAttribute(W + "color", border.ColorHex.TrimStart('#')));
@@ -3714,8 +3752,23 @@ public static class DocxWriter
     /// FreeW's features still apply.
     /// </para>
     /// </summary>
-    private static XDocument BuildSettings(ProtectionSettings protection, bool autoHyphenation, bool differentOddEvenPages, bool displayBackground, bool embedTrueTypeFonts, XElement? original)
+    private static XDocument BuildSettings(ProtectionSettings protection, PageSettings page, bool displayBackground, bool embedTrueTypeFonts, XElement? original)
     {
+        var autoHyphenation = page.AutoHyphenation;
+        var differentOddEvenPages = page.DifferentOddEvenPages;
+        // The hyphenation sub-options only apply when automatic hyphenation is on, and each is emitted only
+        // when it differs from Word's default (zone 0 = default, limit 0 = no limit, caps hyphenated): a
+        // limit > 0, an explicit zone > 0, and the do-not-hyphenate-caps toggle.
+        var consecutiveLimit = autoHyphenation && page.ConsecutiveHyphenLimit > 0
+            ? new XElement(W + "consecutiveHyphenLimit", new XAttribute(W + "val", page.ConsecutiveHyphenLimit))
+            : null;
+        var hyphenationZone = autoHyphenation && page.HyphenationZonePt > 0
+            ? new XElement(W + "hyphenationZone", new XAttribute(W + "val", PointsToDxa(page.HyphenationZonePt)))
+            : null;
+        var doNotHyphenateCaps = autoHyphenation && page.DoNotHyphenateCaps
+            ? new XElement(W + "doNotHyphenateCaps")
+            : null;
+
         // Authored-from-scratch (no preserved settings): emit a fresh minimal part with exactly FreeW's modelled
         // children in the historical emission order, byte-for-byte as before — no overlay machinery involved.
         if (original is null)
@@ -3728,6 +3781,13 @@ public static class DocxWriter
                 fresh.Add(new XElement(W + "displayBackgroundShape"));
             if (autoHyphenation)
                 fresh.Add(new XElement(W + "autoHyphenation"));
+            // Hyphenation sub-options follow autoHyphenation in CT_Settings schema order.
+            if (consecutiveLimit is not null)
+                fresh.Add(consecutiveLimit);
+            if (hyphenationZone is not null)
+                fresh.Add(hyphenationZone);
+            if (doNotHyphenateCaps is not null)
+                fresh.Add(doNotHyphenateCaps);
             if (differentOddEvenPages)
                 fresh.Add(new XElement(W + "evenAndOddHeaders"));
             if (ProtectionEditToken(protection.Mode) is { } freshEdit)
@@ -3740,11 +3800,14 @@ public static class DocxWriter
         // Preserved settings: overlay each modelled element onto a clone of the original (never mutating the
         // model). Each is removed (so we replace, not duplicate) then re-inserted at its CT_Settings schema
         // position; an element whose feature is off is simply removed, since the modelled value — not the
-        // preserved one — is authoritative for these five. Unmodelled settings keep their place.
+        // preserved one — is authoritative for these. Unmodelled settings keep their place.
         var settings = new XElement(original);
         OverlaySetting(settings, "embedTrueTypeFonts", embedTrueTypeFonts ? new XElement(W + "embedTrueTypeFonts") : null);
         OverlaySetting(settings, "displayBackgroundShape", displayBackground ? new XElement(W + "displayBackgroundShape") : null);
         OverlaySetting(settings, "autoHyphenation", autoHyphenation ? new XElement(W + "autoHyphenation") : null);
+        OverlaySetting(settings, "consecutiveHyphenLimit", consecutiveLimit);
+        OverlaySetting(settings, "hyphenationZone", hyphenationZone);
+        OverlaySetting(settings, "doNotHyphenateCaps", doNotHyphenateCaps);
         OverlaySetting(settings, "evenAndOddHeaders", differentOddEvenPages ? new XElement(W + "evenAndOddHeaders") : null);
         OverlaySetting(settings, "documentProtection",
             ProtectionEditToken(protection.Mode) is { } edit
@@ -3787,6 +3850,61 @@ public static class DocxWriter
             settings.AddFirst(replacement);
         else
             insertAfter.AddAfterSelf(replacement);
+    }
+
+    // The b:SourceType token Word uses for each FreeW SourceType.
+    private static string BibliographySourceTypeName(SourceType type) => type switch
+    {
+        SourceType.JournalArticle => "JournalArticle",
+        SourceType.WebSite => "DocumentFromInternetSite",
+        _ => "Book",
+    };
+
+    /// <summary>
+    /// Builds word/bibliography/sources.xml: a b:Sources element carrying the document's selected
+    /// <see cref="TextDocument.BibliographyStyle"/> (its <c>SelectedStyle</c> attribute as the style name)
+    /// and one b:Source per <see cref="Source"/>. Each source records its tag, type and populated fields —
+    /// the author as a single corporate author (b:Author/b:Author/b:Corporate) since FreeW models author as
+    /// one string — so both the chosen style and every source field round-trip via
+    /// <c>DocxReader.ReadBibliography</c>. Only non-empty fields are emitted.
+    /// </summary>
+    private static XDocument BuildBibliographySources(TextDocument document)
+    {
+        var sources = new XElement(B + "Sources",
+            new XAttribute(XNamespace.Xmlns + "b", B.NamespaceName),
+            new XAttribute("SelectedStyle", Citations.StyleName(document.BibliographyStyle)));
+
+        foreach (var source in document.Sources)
+        {
+            var element = new XElement(B + "Source",
+                new XElement(B + "Tag", source.Tag),
+                new XElement(B + "SourceType", BibliographySourceTypeName(source.Type)));
+
+            if (!string.IsNullOrEmpty(source.Author))
+                element.Add(new XElement(B + "Author",
+                    new XElement(B + "Author",
+                        new XElement(B + "Corporate", source.Author))));
+
+            AddBibliographyField(element, "Title", source.Title);
+            AddBibliographyField(element, "Year", source.Year);
+            AddBibliographyField(element, "Publisher", source.Publisher);
+            AddBibliographyField(element, "JournalName", source.Journal);
+            AddBibliographyField(element, "Volume", source.Volume);
+            AddBibliographyField(element, "Issue", source.Issue);
+            AddBibliographyField(element, "Pages", source.Pages);
+            AddBibliographyField(element, "URL", source.Url);
+            AddBibliographyField(element, "YearAccessed", source.Accessed);
+
+            sources.Add(element);
+        }
+
+        return new XDocument(sources);
+
+        static void AddBibliographyField(XElement parent, string localName, string? value)
+        {
+            if (!string.IsNullOrEmpty(value))
+                parent.Add(new XElement(B + localName, value));
+        }
     }
 
     /// <summary>

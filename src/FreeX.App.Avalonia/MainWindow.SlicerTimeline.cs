@@ -274,7 +274,7 @@ public sealed partial class MainWindow
         var result = _session.ExecuteReviewCommand(command);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Filter update failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("ShellLoc_FilterUpdateFailed"));
             return;
         }
 

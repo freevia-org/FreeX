@@ -80,6 +80,7 @@ public static class DocxReader
         ReadEndnotes(archive, document, imageRelationships, hyperlinkRelationships);
         ReadComments(archive, document, hyperlinkRelationships);
         ReadSettings(archive, document);
+        ReadBibliography(archive, document);
         ReadTheme(archive, document);
         ReadEmbeddedFonts(archive, document);
         ReadPreservedParts(archive, document);
@@ -176,6 +177,16 @@ public static class DocxReader
 
         // Automatic hyphenation (w:autoHyphenation) is an on/off toggle: present + not explicitly off.
         document.Page.AutoHyphenation = ReadToggle(root, "autoHyphenation");
+        // Hyphenation sub-options: w:consecutiveHyphenLimit/@w:val (max consecutive hyphenated lines),
+        // w:hyphenationZone/@w:val (zone in twips) and the w:doNotHyphenateCaps toggle. Each is read whether
+        // or not autoHyphenation is on (so the value round-trips), defaulting to off/0 when absent.
+        if (int.TryParse(root.Element(W + "consecutiveHyphenLimit")?.Attribute(W + "val")?.Value,
+                System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var hyphenLimit) && hyphenLimit > 0)
+            document.Page.ConsecutiveHyphenLimit = hyphenLimit;
+        if (int.TryParse(root.Element(W + "hyphenationZone")?.Attribute(W + "val")?.Value,
+                System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var hyphenZone) && hyphenZone > 0)
+            document.Page.HyphenationZonePt = hyphenZone / 20.0;
+        document.Page.DoNotHyphenateCaps = ReadToggle(root, "doNotHyphenateCaps");
 
         // Different odd/even page headers/footers (w:evenAndOddHeaders): an on/off toggle. When set, the
         // even header/footer references in w:sectPr are honoured (see ReadHeaderFooter).
@@ -400,6 +411,85 @@ public static class DocxReader
                 continue;
             var target = rel.Attribute("Target")?.Value;
             if (!string.IsNullOrEmpty(target))
+                return "word/" + target.TrimStart('/');
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Loads word/bibliography/sources.xml (if present) into <see cref="TextDocument.Sources"/> and
+    /// <see cref="TextDocument.BibliographyStyle"/>: the b:Sources/@SelectedStyle attribute restores the
+    /// chosen citation style (via <see cref="Citations.ParseStyle"/>), and each b:Source restores a
+    /// <see cref="Source"/> with its tag, type and fields (the author read from the single corporate-author
+    /// the writer emits). A missing part leaves the document at its defaults (APA, no sources). Inverse of
+    /// <c>DocxWriter.BuildBibliographySources</c>.
+    /// </summary>
+    private static void ReadBibliography(ZipArchive archive, TextDocument document)
+    {
+        var xml = LoadPart(archive, ResolveBibliographyPartPath(archive) ?? "word/bibliography/sources.xml");
+        var root = xml?.Root;
+        if (root is null || root.Name != B + "Sources")
+            return;
+
+        document.BibliographyStyle = Citations.ParseStyle(root.Attribute("SelectedStyle")?.Value);
+
+        foreach (var element in root.Elements(B + "Source"))
+        {
+            // The author is stored as a single corporate author (b:Author/b:Author/b:Corporate); fall back
+            // to a plain b:Author text node so a hand-authored / Word-authored source still yields a name.
+            var author = element.Element(B + "Author")?.Element(B + "Author")?.Element(B + "Corporate")?.Value
+                ?? element.Element(B + "Author")?.Value
+                ?? string.Empty;
+
+            document.Sources.Add(new Source
+            {
+                Tag = Field(element, "Tag") ?? string.Empty,
+                Type = ParseSourceType(Field(element, "SourceType")),
+                Author = author.Trim(),
+                Title = Field(element, "Title") ?? string.Empty,
+                Year = Field(element, "Year") ?? string.Empty,
+                Publisher = Field(element, "Publisher"),
+                Journal = Field(element, "JournalName"),
+                Volume = Field(element, "Volume"),
+                Issue = Field(element, "Issue"),
+                Pages = Field(element, "Pages"),
+                Url = Field(element, "URL"),
+                Accessed = Field(element, "YearAccessed"),
+            });
+        }
+
+        static string? Field(XElement source, string localName)
+        {
+            var value = source.Element(B + localName)?.Value;
+            return string.IsNullOrEmpty(value) ? null : value;
+        }
+    }
+
+    // Maps Word's b:SourceType token back to a FreeW SourceType; unknown / missing -> Book.
+    private static SourceType ParseSourceType(string? token) => token switch
+    {
+        "JournalArticle" => SourceType.JournalArticle,
+        "DocumentFromInternetSite" => SourceType.WebSite,
+        _ => SourceType.Book,
+    };
+
+    /// <summary>
+    /// Finds the bibliography part path from the document relationships (the rel whose Target ends with
+    /// "bibliography/sources.xml"), resolved relative to the word/ folder. Returns null when no such
+    /// relationship exists so the caller can fall back to the conventional path.
+    /// </summary>
+    private static string? ResolveBibliographyPartPath(ZipArchive archive)
+    {
+        var relsXml = LoadPart(archive, "word/_rels/document.xml.rels");
+        var relationships = relsXml?.Root?.Elements(Rel + "Relationship");
+        if (relationships is null)
+            return null;
+
+        foreach (var rel in relationships)
+        {
+            var target = rel.Attribute("Target")?.Value;
+            if (!string.IsNullOrEmpty(target)
+                && target.EndsWith("bibliography/sources.xml", StringComparison.Ordinal))
                 return "word/" + target.TrimStart('/');
         }
         return null;
@@ -2514,7 +2604,9 @@ public static class DocxReader
         var spacing = pPr.Element(W + "spacing");
         var indent = pPr.Element(W + "ind");
         var jc = pPr.Element(W + "jc")?.Attribute(W + "val")?.Value;
-        var shading = pPr.Element(W + "shd")?.Attribute(W + "fill")?.Value;
+        var shd = pPr.Element(W + "shd");
+        var shading = shd?.Attribute(W + "fill")?.Value;
+        var shadingPattern = ShadingPatterns.FromToken(shd?.Attribute(W + "val")?.Value);
 
         // A list paragraph references a numbering definition via pPr/w:numPr (w:numId + w:ilvl).
         // Resolve the numId to a ListKind through numbering.xml; the ilvl becomes the ListLevel.
@@ -2538,6 +2630,8 @@ public static class DocxReader
         var keepWithNext = ReadToggle(pPr, "keepNext");
         var keepLinesTogether = ReadToggle(pPr, "keepLines");
         var widowControl = ReadToggle(pPr, "widowControl");
+        // Suppress automatic hyphenation for this paragraph (w:suppressAutoHyphens), read as a toggle.
+        var suppressAutoHyphens = ReadToggle(pPr, "suppressAutoHyphens");
         // Right-to-left paragraph direction (w:bidi), read as a toggle like the flow-control flags.
         var rtl = ReadToggle(pPr, "bidi");
 
@@ -2589,6 +2683,7 @@ public static class DocxReader
             KeepWithNext = keepWithNext,
             KeepLinesTogether = keepLinesTogether,
             WidowControl = widowControl,
+            SuppressAutoHyphens = suppressAutoHyphens,
             Rtl = rtl,
             LineRule = lineRule,
             LineSpacing = lineSpacing,
@@ -2603,6 +2698,7 @@ public static class DocxReader
             SpaceBeforeIsSet = beforeAuto || spacing?.Attribute(W + "before") is not null,
             SpaceAfterIsSet = afterAuto || spacing?.Attribute(W + "after") is not null,
             ShadingColorHex = shading is null or "auto" ? null : "#" + shading.TrimStart('#'),
+            ShadingPattern = shadingPattern,
             Alignment = jc switch
             {
                 "center" => TextAlignment.Center,
@@ -2667,17 +2763,30 @@ public static class DocxReader
 
         var color = edge.Attribute(W + "color")?.Value;
         var width = EighthPointsToPoints(edge.Attribute(W + "sz")?.Value);
+        var lineStyle = BorderLineStyles.FromToken(edge.Attribute(W + "val")?.Value);
+
+        bool Drawn(string name) =>
+            (pBdr.Element(W + name)?.Attribute(W + "val")?.Value ?? "none") is not ("none" or "nil");
+        var top = Drawn("top");
+        var left = Drawn("left");
+        var bottom = Drawn("bottom");
+        var right = Drawn("right");
 
         // A bottom-only rule: the only drawn edge is w:bottom (top/left/right absent or off). This is how
         // CreateHorizontalRule writes itself; recovering the flag keeps the round-trip lossless.
-        bool Drawn(string name) =>
-            (pBdr.Element(W + name)?.Attribute(W + "val")?.Value ?? "none") is not ("none" or "nil");
-        var bottomOnly = Drawn("bottom") && !Drawn("top") && !Drawn("left") && !Drawn("right");
+        var bottomOnly = bottom && !top && !left && !right;
 
         return new ParagraphBorder(
             color is null or "auto" ? "#000000" : "#" + color.TrimStart('#'),
             width > 0 ? width : 0.5,
-            bottomOnly);
+            bottomOnly)
+        {
+            LineStyle = lineStyle,
+            Top = top,
+            Left = left,
+            Bottom = bottom,
+            Right = right,
+        };
     }
 
     /// <summary>Reads a page border (w:pgBorders) into a <see cref="PageBorder"/>, or null if absent/off.</summary>
@@ -2693,10 +2802,14 @@ public static class DocxReader
 
         var color = edge.Attribute(W + "color")?.Value;
         var width = EighthPointsToPoints(edge.Attribute(W + "sz")?.Value);
+        var lineStyle = BorderLineStyles.FromToken(edge.Attribute(W + "val")?.Value);
 
         return new PageBorder(
             color is null or "auto" ? "#000000" : "#" + color.TrimStart('#'),
-            width > 0 ? width : 1.0);
+            width > 0 ? width : 1.0)
+        {
+            LineStyle = lineStyle,
+        };
     }
 
     /// <summary>

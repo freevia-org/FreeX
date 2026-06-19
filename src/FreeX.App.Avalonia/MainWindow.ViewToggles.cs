@@ -48,7 +48,7 @@ public sealed partial class MainWindow
         _formulaBox.IsVisible = visible;
         _cellAddressText.IsVisible = visible;
 
-        RefreshShell(visible ? "Showing formula bar" : "Hiding formula bar");
+        RefreshShell(visible ? UiText.Get("ShellLoc_ShowingFormulaBar") : UiText.Get("ShellLoc_HidingFormulaBar"));
     }
 
     /// <summary>
@@ -71,6 +71,6 @@ public sealed partial class MainWindow
         if (!_isPageBreakPreviewActive)
             _isPageBreakPreviewActive = true;
 
-        RefreshShell("Page Layout view (page boundaries shown)");
+        RefreshShell(UiText.Get("ShellLoc_PageLayoutView"));
     }
 }

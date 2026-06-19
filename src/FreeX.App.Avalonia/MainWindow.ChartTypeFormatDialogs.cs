@@ -38,7 +38,7 @@ public sealed partial class MainWindow
 
         if (!ChartBarFormatPlanner.Supports(chart))
         {
-            RefreshShell("Gap width and overlap are available on bar and column charts.");
+            RefreshShell(UiText.Get("ChartLoc_GapWidthOverlapAvailableOn"));
             return;
         }
 
@@ -77,7 +77,7 @@ public sealed partial class MainWindow
             if (!TryParseIntInRange(gapWidthBox.Text, ChartBarFormatPlanner.MinGapWidth, ChartBarFormatPlanner.MaxGapWidth, out var gapWidth)
                 || !TryParseIntInRange(overlapBox.Text, ChartBarFormatPlanner.MinOverlap, ChartBarFormatPlanner.MaxOverlap, out var overlap))
             {
-                RefreshShell("Enter whole numbers for gap width and overlap.");
+                RefreshShell(UiText.Get("ChartLoc_EnterWholeNumbersGapOverlap"));
                 return;
             }
 
@@ -114,7 +114,7 @@ public sealed partial class MainWindow
 
         if (!ChartPieFormatPlanner.Supports(chart))
         {
-            RefreshShell("These options are available on pie and doughnut charts.");
+            RefreshShell(UiText.Get("ChartLoc_OptionsAvailablePieDoughnut"));
             return;
         }
 
@@ -166,26 +166,26 @@ public sealed partial class MainWindow
         {
             if (!TryParseIntInRange(angleBox.Text, ChartPieFormatPlanner.MinFirstSliceAngle, ChartPieFormatPlanner.MaxFirstSliceAngle, out var angle))
             {
-                RefreshShell($"Enter a first-slice angle between {ChartPieFormatPlanner.MinFirstSliceAngle} and {ChartPieFormatPlanner.MaxFirstSliceAngle} degrees.");
+                RefreshShell(UiText.Format("ChartLoc_EnterFirstSliceAngle", ChartPieFormatPlanner.MinFirstSliceAngle, ChartPieFormatPlanner.MaxFirstSliceAngle));
                 return;
             }
 
             if (!int.TryParse((explodedIndexBox.Text ?? string.Empty).Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var explodedIndex))
             {
-                RefreshShell("Enter a whole-number exploded-slice index.");
+                RefreshShell(UiText.Get("ChartLoc_EnterExplodedSliceIndex"));
                 return;
             }
 
             if (!TryParseIntInRange(explodedDistBox.Text, 0, 50, out var explodedDistPct))
             {
-                RefreshShell("Enter an exploded-slice distance between 0% and 50%.");
+                RefreshShell(UiText.Get("ChartLoc_EnterExplodedSliceDistance"));
                 return;
             }
 
             var holePct = (int)Math.Round(current.DoughnutHoleSize * 100);
             if (isDoughnut && !TryParseIntInRange(holeBox.Text, 10, 90, out holePct))
             {
-                RefreshShell("Enter a doughnut hole size between 10% and 90%.");
+                RefreshShell(UiText.Get("ChartLoc_EnterDoughnutHoleSize"));
                 return;
             }
 
@@ -227,7 +227,7 @@ public sealed partial class MainWindow
 
         if (!ChartBubbleFormatPlanner.Supports(chart))
         {
-            RefreshShell("These options are available on bubble charts.");
+            RefreshShell(UiText.Get("ChartLoc_OptionsAvailableBubble"));
             return;
         }
 
@@ -271,7 +271,7 @@ public sealed partial class MainWindow
         {
             if (!TryParseIntInRange(scaleBox.Text, ChartBubbleFormatPlanner.MinBubbleScale, ChartBubbleFormatPlanner.MaxBubbleScale, out var scale))
             {
-                RefreshShell($"Enter a bubble scale between {ChartBubbleFormatPlanner.MinBubbleScale} and {ChartBubbleFormatPlanner.MaxBubbleScale}.");
+                RefreshShell(UiText.Format("ChartLoc_EnterBubbleScale", ChartBubbleFormatPlanner.MinBubbleScale, ChartBubbleFormatPlanner.MaxBubbleScale));
                 return;
             }
 
@@ -310,7 +310,7 @@ public sealed partial class MainWindow
 
         if (!ChartStockFormatPlanner.Supports(chart))
         {
-            RefreshShell("These options are available on stock charts.");
+            RefreshShell(UiText.Get("ChartLoc_OptionsAvailableStock"));
             return;
         }
 
@@ -383,7 +383,7 @@ public sealed partial class MainWindow
         {
             if (!TryParseIntInRange(gapWidthBox.Text, ChartStockFormatPlanner.MinGapWidth, ChartStockFormatPlanner.MaxGapWidth, out var gapWidth))
             {
-                RefreshShell($"Enter an up/down-bar gap width between {ChartStockFormatPlanner.MinGapWidth} and {ChartStockFormatPlanner.MaxGapWidth}.");
+                RefreshShell(UiText.Format("ChartLoc_EnterUpDownBarGapWidth", ChartStockFormatPlanner.MinGapWidth, ChartStockFormatPlanner.MaxGapWidth));
                 return;
             }
 
@@ -392,7 +392,7 @@ public sealed partial class MainWindow
                 || thickness < ChartStockFormatPlanner.MinLineThickness
                 || thickness > ChartStockFormatPlanner.MaxLineThickness)
             {
-                RefreshShell($"Enter a high-low line thickness between {ChartStockFormatPlanner.MinLineThickness} and {ChartStockFormatPlanner.MaxLineThickness}.");
+                RefreshShell(UiText.Format("ChartLoc_EnterHighLowLineThickness", ChartStockFormatPlanner.MinLineThickness, ChartStockFormatPlanner.MaxLineThickness));
                 return;
             }
 
