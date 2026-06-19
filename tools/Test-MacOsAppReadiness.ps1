@@ -946,7 +946,7 @@ function Test-MacOsWorkflow {
         "native_fill_color_swatch_count=69",
         "native_font_color_swatch_count=69",
         "native_borders_menu_item=true",
-        "native_borders_preset_count=8",
+        "native_borders_preset_count=14",
         "native_merge_and_center_menu_item=true",
         "native_unmerge_cells_menu_item=true",
         "native_cell_styles_menu_item=true",

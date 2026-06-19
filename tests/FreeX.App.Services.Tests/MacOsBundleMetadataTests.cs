@@ -370,7 +370,7 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("grep -q \"native_clear_fill_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_font_color_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_borders_menu_item=true\" \"$launch_smoke_report\"");
-        workflow.Should().Contain("grep -q \"native_borders_preset_count=8\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_borders_preset_count=14\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"toolbar_merge_and_center_button=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_cell_styles_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_cell_styles_preset_count=33\" \"$launch_smoke_report\"");
