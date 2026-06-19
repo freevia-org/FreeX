@@ -1,5 +1,6 @@
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
+using SharedTableStyleGalleryPlanner = FreeX.App.Presentation.TableUI.TableStyleGalleryPlanner;
 
 namespace FreeX.App.Host;
 
@@ -8,58 +9,51 @@ public sealed record TableStyleGalleryOption(
     string StyleName,
     StructuredTableStyleBanding Banding);
 
+/// <summary>
+/// WPF-host facade over the portable <see cref="SharedTableStyleGalleryPlanner"/>: the built-in table-style
+/// catalog (Light / Medium / Dark families with theme-resolved banding) is single-sourced in
+/// <c>FreeX.App.Presentation</c> so the WPF gallery, the Avalonia/macOS gallery, and the load-time materializer
+/// all agree on every style name + color. This facade only re-projects the shared option record onto the host's
+/// own <see cref="TableStyleGalleryOption"/> so existing call sites and tests are undisturbed.
+/// </summary>
 public static class TableStyleGalleryPlanner
 {
     public static IReadOnlyList<TableStyleGalleryOption> GetOptions() =>
-        GetOptions(WorkbookTheme.Office);
+        Project(SharedTableStyleGalleryPlanner.GetOptions());
 
     public static IReadOnlyList<TableStyleGalleryOption> GetOptions(WorkbookTheme theme) =>
-    [
-        ..CreateStyleGroup("Light", 21, theme),
-        ..CreateStyleGroup("Medium", 28, theme),
-        ..CreateStyleGroup("Dark", 11, theme)
-    ];
+        Project(SharedTableStyleGalleryPlanner.GetOptions(theme));
 
-    public static TableStyleGalleryOption GetOption(int index)
-        => GetOption(index, WorkbookTheme.Office);
+    public static TableStyleGalleryOption GetOption(int index) =>
+        Project(SharedTableStyleGalleryPlanner.GetOption(index));
 
-    public static TableStyleGalleryOption GetOption(int index, WorkbookTheme theme)
-    {
-        var options = GetOptions(theme);
-        return options[Math.Clamp(index, 0, options.Count - 1)];
-    }
+    public static TableStyleGalleryOption GetOption(int index, WorkbookTheme theme) =>
+        Project(SharedTableStyleGalleryPlanner.GetOption(index, theme));
 
     public static bool TryGetOption(string? styleName, out TableStyleGalleryOption option)
         => TryGetOption(styleName, WorkbookTheme.Office, out option);
 
     public static bool TryGetOption(string? styleName, WorkbookTheme theme, out TableStyleGalleryOption option)
     {
+        if (SharedTableStyleGalleryPlanner.TryGetOption(styleName, theme, out var shared))
+        {
+            option = Project(shared);
+            return true;
+        }
+
         option = null!;
-        if (string.IsNullOrWhiteSpace(styleName))
-            return false;
-
-        foreach (var candidate in GetOptions(theme))
-        {
-            if (!string.Equals(candidate.StyleName, styleName, StringComparison.OrdinalIgnoreCase))
-                continue;
-
-            option = candidate;
-            break;
-        }
-
-        return option is not null;
+        return false;
     }
 
-    // The gallery's labels and grouping live here; the banding colors are resolved by the shared
-    // StructuredTableStyleBandingResolver so the swatches, table creation, and the load-time
-    // materializer all agree on every color for a given style name + theme.
-    private static IEnumerable<TableStyleGalleryOption> CreateStyleGroup(string family, int count, WorkbookTheme theme)
+    private static IReadOnlyList<TableStyleGalleryOption> Project(
+        IReadOnlyList<Presentation.TableUI.TableStyleGalleryOption> options)
     {
-        for (var index = 1; index <= count; index++)
-        {
-            var styleName = $"TableStyle{family}{index}";
-            var banding = StructuredTableStyleBandingResolver.Resolve(styleName, theme);
-            yield return new TableStyleGalleryOption($"{family} {index}", styleName, banding);
-        }
+        var projected = new TableStyleGalleryOption[options.Count];
+        for (var index = 0; index < options.Count; index++)
+            projected[index] = Project(options[index]);
+        return projected;
     }
+
+    private static TableStyleGalleryOption Project(Presentation.TableUI.TableStyleGalleryOption option) =>
+        new(option.Label, option.StyleName, option.Banding);
 }

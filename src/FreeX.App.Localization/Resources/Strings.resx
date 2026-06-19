@@ -347,4 +347,25 @@
   <data name="FillSeries_NoSeed" xml:space="preserve"><value>The first cell of the selection must contain a number (or a date for a date series).</value></data>
   <data name="FillSeries_Filled" xml:space="preserve"><value>Filled series in {0}</value></data>
   <data name="FillSeries_Failed" xml:space="preserve"><value>Fill Series failed.</value></data>
+  <!-- Table Design: Table Name dialog -->
+  <data name="TableName_Title" xml:space="preserve"><value>Table Name</value></data>
+  <data name="TableName_Label" xml:space="preserve"><value>Table name:</value></data>
+  <data name="TableName_BoxName" xml:space="preserve"><value>Table name</value></data>
+  <data name="TableName_NoTable" xml:space="preserve"><value>Table Name: the active cell is not inside a table.</value></data>
+  <data name="TableName_Renamed" xml:space="preserve"><value>Renamed table to '{0}'.</value></data>
+  <data name="TableName_Failed" xml:space="preserve"><value>Table Name failed.</value></data>
+  <!-- Table Design: Resize Table dialog -->
+  <data name="TableResize_Title" xml:space="preserve"><value>Resize Table</value></data>
+  <data name="TableResize_Label" xml:space="preserve"><value>Select the new data range for your table:</value></data>
+  <data name="TableResize_BoxName" xml:space="preserve"><value>Resized table range</value></data>
+  <data name="TableResize_NoTable" xml:space="preserve"><value>Resize Table: the active cell is not inside a table.</value></data>
+  <data name="TableResize_Resized" xml:space="preserve"><value>Resized table '{0}' to {1}.</value></data>
+  <data name="TableResize_Failed" xml:space="preserve"><value>Resize Table failed.</value></data>
+  <!-- Table Design: Table Styles gallery -->
+  <data name="TableStyleGallery_Title" xml:space="preserve"><value>Table Styles</value></data>
+  <data name="TableStyleGallery_StyleLabel" xml:space="preserve"><value>Table style:</value></data>
+  <data name="TableStyleGallery_GalleryName" xml:space="preserve"><value>Table style gallery</value></data>
+  <data name="TableStyleGallery_NoTable" xml:space="preserve"><value>Table Styles: the active cell is not inside a table.</value></data>
+  <data name="TableStyleGallery_Applied" xml:space="preserve"><value>Table style: {0}.</value></data>
+  <data name="TableStyleGallery_Failed" xml:space="preserve"><value>Table Styles failed.</value></data>
 </root>
