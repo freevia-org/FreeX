@@ -1,3 +1,4 @@
+using FreeX.App.Presentation.TextToColumns;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -164,15 +165,15 @@ public static class TextToColumnsPlanner
         address.Row <= sourceRange.End.Row;
 
     public static string[] SplitText(string text, string delimiters) =>
-        TextToColumnsSplitter.SplitText(text, delimiters);
+        TextToColumnsSplitter.SplitDelimited(text, delimiters);
 
     public static string[] SplitText(
         string text,
         string delimiters,
         char? textQualifier,
         bool treatConsecutiveDelimitersAsOne) =>
-        TextToColumnsSplitter.SplitText(text, delimiters, textQualifier, treatConsecutiveDelimitersAsOne);
+        TextToColumnsSplitter.SplitDelimited(text, delimiters, textQualifier, treatConsecutiveDelimitersAsOne);
 
     public static string[] SplitFixedWidthText(string text, IReadOnlyList<int> breakPositions) =>
-        TextToColumnsSplitter.SplitFixedWidthText(text, breakPositions);
+        TextToColumnsSplitter.SplitFixedWidth(text, breakPositions);
 }
