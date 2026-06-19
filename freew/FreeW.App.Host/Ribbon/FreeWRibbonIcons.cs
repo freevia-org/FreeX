@@ -193,8 +193,11 @@ internal static class FreeWRibbonIcons
 
             // Layout: page setup
             ["freew.margins"] = RibbonCommandIconKind.Margins,
+            ["freew.custom-margins"] = RibbonCommandIconKind.Margins,
             ["freew.orientation"] = RibbonCommandIconKind.Orientation,
             ["freew.size"] = RibbonCommandIconKind.OnePage,
+            ["freew.more-paper-sizes"] = RibbonCommandIconKind.OnePage,
+            ["freew.page-setup"] = RibbonCommandIconKind.Margins,
             ["freew.columns"] = RibbonCommandIconKind.TextColumns,
             ["freew.line-numbers"] = RibbonCommandIconKind.Number,
             ["freew.hyphenation"] = RibbonCommandIconKind.Hyphenation,

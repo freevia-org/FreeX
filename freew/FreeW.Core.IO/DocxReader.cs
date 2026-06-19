@@ -192,6 +192,9 @@ public static class DocxReader
         // even header/footer references in w:sectPr are honoured (see ReadHeaderFooter).
         document.Page.DifferentOddEvenPages = ReadToggle(root, "evenAndOddHeaders");
 
+        // Mirror margins (w:mirrorMargins): an on/off toggle for double-sided printing (inside/outside margins).
+        document.Page.MirrorMargins = ReadToggle(root, "mirrorMargins");
+
         var protection = root.Element(W + "documentProtection");
         if (protection is null)
             return;
@@ -767,6 +770,14 @@ public static class DocxReader
                 page.MarginTopPt = DxaToPoints(top.Value);
             if (pgMar.Attribute(W + "bottom") is { } bottom)
                 page.MarginBottomPt = DxaToPoints(bottom.Value);
+            // Header/footer distance from the page edge (@w:header / @w:footer) and the binding gutter
+            // (@w:gutter). Each is read only when present, leaving the model's "unspecified" 0 default otherwise.
+            if (pgMar.Attribute(W + "header") is { } header)
+                page.HeaderDistancePt = DxaToPoints(header.Value);
+            if (pgMar.Attribute(W + "footer") is { } footer)
+                page.FooterDistancePt = DxaToPoints(footer.Value);
+            if (pgMar.Attribute(W + "gutter") is { } gutter)
+                page.GutterPt = DxaToPoints(gutter.Value);
         }
 
         // Column layout (w:cols): @w:num + @w:space (equal-width), @w:sep (line between), and optional

@@ -67,7 +67,11 @@ public class SectionsTests
             LineNumberCountBy = 5,
             AutoHyphenation = true,
             VerticalAlignment = PageVerticalAlignment.Center,
-            DifferentFirstPage = true
+            DifferentFirstPage = true,
+            GutterPt = 21,
+            HeaderDistancePt = 33,
+            FooterDistancePt = 44,
+            MirrorMargins = true
         };
 
         var clone = original.Clone();
@@ -92,6 +96,10 @@ public class SectionsTests
         clone.AutoHyphenation.Should().BeTrue();
         clone.VerticalAlignment.Should().Be(PageVerticalAlignment.Center);
         clone.DifferentFirstPage.Should().BeTrue();
+        clone.GutterPt.Should().Be(21);
+        clone.HeaderDistancePt.Should().Be(33);
+        clone.FooterDistancePt.Should().Be(44);
+        clone.MirrorMargins.Should().BeTrue();
 
         // Mutating the clone does not affect the original.
         clone.WidthPt = 999;

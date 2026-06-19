@@ -127,6 +127,7 @@ public static class DocxWriter
         var hasSettings = hasProtection
             || document.Page.AutoHyphenation
             || document.Page.DifferentOddEvenPages
+            || document.Page.MirrorMargins
             || hasBackground
             || hasEmbeddedFonts
             || hasPreservedSettings;
@@ -3495,7 +3496,13 @@ public static class DocxWriter
                 new XAttribute(W + "left", PointsToDxa(page.MarginLeftPt)),
                 new XAttribute(W + "right", PointsToDxa(page.MarginRightPt)),
                 new XAttribute(W + "top", PointsToDxa(page.MarginTopPt)),
-                new XAttribute(W + "bottom", PointsToDxa(page.MarginBottomPt))),
+                new XAttribute(W + "bottom", PointsToDxa(page.MarginBottomPt)),
+                // Header/footer distance from the page edge (@w:header / @w:footer) and the binding gutter
+                // (@w:gutter) are emitted only when set (> 0), so documents that never touched them round-trip
+                // byte-unchanged. @w:header/@w:footer carry the schema attribute order (after bottom, before gutter).
+                page.HeaderDistancePt > 0 ? new XAttribute(W + "header", PointsToDxa(page.HeaderDistancePt)) : null,
+                page.FooterDistancePt > 0 ? new XAttribute(W + "footer", PointsToDxa(page.FooterDistancePt)) : null,
+                page.GutterPt > 0 ? new XAttribute(W + "gutter", PointsToDxa(page.GutterPt)) : null),
             // Page border (w:pgBorders): a uniform box on all four edges, offset from the page edge.
             // Emitted only when set; w:sz is in eighths of a point, matching w:pBdr edges.
             BuildPageBorders(page.PageBorder),
@@ -3879,6 +3886,7 @@ public static class DocxWriter
     {
         var autoHyphenation = page.AutoHyphenation;
         var differentOddEvenPages = page.DifferentOddEvenPages;
+        var mirrorMargins = page.MirrorMargins;
         // The hyphenation sub-options only apply when automatic hyphenation is on, and each is emitted only
         // when it differs from Word's default (zone 0 = default, limit 0 = no limit, caps hyphenated): a
         // limit > 0, an explicit zone > 0, and the do-not-hyphenate-caps toggle.
@@ -3902,6 +3910,10 @@ public static class DocxWriter
                 fresh.Add(new XElement(W + "embedTrueTypeFonts"));
             if (displayBackground)
                 fresh.Add(new XElement(W + "displayBackgroundShape"));
+            // Mirror margins (w:mirrorMargins) sits after the font-embedding region and before autoHyphenation
+            // in CT_Settings schema order.
+            if (mirrorMargins)
+                fresh.Add(new XElement(W + "mirrorMargins"));
             if (autoHyphenation)
                 fresh.Add(new XElement(W + "autoHyphenation"));
             // Hyphenation sub-options follow autoHyphenation in CT_Settings schema order.
@@ -3927,6 +3939,7 @@ public static class DocxWriter
         var settings = new XElement(original);
         OverlaySetting(settings, "embedTrueTypeFonts", embedTrueTypeFonts ? new XElement(W + "embedTrueTypeFonts") : null);
         OverlaySetting(settings, "displayBackgroundShape", displayBackground ? new XElement(W + "displayBackgroundShape") : null);
+        OverlaySetting(settings, "mirrorMargins", mirrorMargins ? new XElement(W + "mirrorMargins") : null);
         OverlaySetting(settings, "autoHyphenation", autoHyphenation ? new XElement(W + "autoHyphenation") : null);
         OverlaySetting(settings, "consecutiveHyphenLimit", consecutiveLimit);
         OverlaySetting(settings, "hyphenationZone", hyphenationZone);

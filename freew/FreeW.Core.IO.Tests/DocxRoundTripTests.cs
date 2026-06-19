@@ -2786,6 +2786,123 @@ public class DocxRoundTripTests
         DocxReader.Read(stream).Page.DifferentFirstPage.Should().BeFalse();
     }
 
+    // --- Page Setup dialog fields: gutter (pgMar), mirror margins (settings), header/footer distance
+    //     (pgMar), vertical alignment (sectPr) ---
+
+    [Fact]
+    public void PageSetup_GutterHeaderFooterDistance_RoundTrip_AndEmitInPgMar()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("page setup"));
+        doc.Page.GutterPt = 18;          // 0.25"
+        doc.Page.HeaderDistancePt = 30;  // ~0.42"
+        doc.Page.FooterDistancePt = 45;  // 0.625"
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            using var reader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
+            var documentXml = reader.ReadToEnd();
+            documentXml.Should().Contain("w:gutter=\"360\"");  // 18 pt * 20 = 360 twips
+            documentXml.Should().Contain("w:header=\"600\"");  // 30 pt * 20 = 600 twips
+            documentXml.Should().Contain("w:footer=\"900\"");  // 45 pt * 20 = 900 twips
+        }
+
+        stream.Position = 0;
+        var read = DocxReader.Read(stream).Page;
+        read.GutterPt.Should().BeApproximately(18, 0.01);
+        read.HeaderDistancePt.Should().BeApproximately(30, 0.01);
+        read.FooterDistancePt.Should().BeApproximately(45, 0.01);
+    }
+
+    [Fact]
+    public void DefaultPage_PgMar_HasNoGutterHeaderOrFooter()
+    {
+        // Regression guard: a document that never touched these keeps the legacy pgMar (no gutter/header/footer).
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("plain page"));
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        using var reader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
+        var documentXml = reader.ReadToEnd();
+        documentXml.Should().NotContain("w:gutter");
+        documentXml.Should().NotContain("w:header=");
+        documentXml.Should().NotContain("w:footer=");
+    }
+
+    [Fact]
+    public void MirrorMargins_RoundTrips_AndEmitsSettingsToggle()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("double sided"));
+        doc.Page.MirrorMargins = true;
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            using var reader = new StreamReader(zip.GetEntry("word/settings.xml")!.Open());
+            reader.ReadToEnd().Should().Contain("w:mirrorMargins");
+        }
+
+        stream.Position = 0;
+        DocxReader.Read(stream).Page.MirrorMargins.Should().BeTrue();
+    }
+
+    [Fact]
+    public void DefaultPage_NoMirrorMargins_EmitsNoSettingsPart()
+    {
+        // A document needing none of FreeW's settings-triggering features still emits no settings part.
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("plain page"));
+        doc.Page.MirrorMargins.Should().BeFalse(); // default
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        zip.GetEntry("word/settings.xml").Should().BeNull();
+    }
+
+    [Fact]
+    public void PageSetup_AllDialogFields_SurviveFullRoundTrip()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("everything"));
+        doc.Page.MarginTopPt = 54;
+        doc.Page.MarginBottomPt = 60;
+        doc.Page.MarginLeftPt = 66;
+        doc.Page.MarginRightPt = 70;
+        doc.Page.GutterPt = 12;
+        doc.Page.HeaderDistancePt = 24;
+        doc.Page.FooterDistancePt = 24;
+        doc.Page.MirrorMargins = true;
+        doc.Page.DifferentFirstPage = true;
+        doc.Page.VerticalAlignment = PageVerticalAlignment.Center;
+        doc.Page.WidthPt = 595.3; // A4 portrait width
+        doc.Page.HeightPt = 841.9;
+
+        var read = RoundTrip(doc).Page;
+        read.MarginTopPt.Should().BeApproximately(54, 0.05);
+        read.MarginBottomPt.Should().BeApproximately(60, 0.05);
+        read.MarginLeftPt.Should().BeApproximately(66, 0.05);
+        read.MarginRightPt.Should().BeApproximately(70, 0.05);
+        read.GutterPt.Should().BeApproximately(12, 0.05);
+        read.HeaderDistancePt.Should().BeApproximately(24, 0.05);
+        read.FooterDistancePt.Should().BeApproximately(24, 0.05);
+        read.MirrorMargins.Should().BeTrue();
+        read.DifferentFirstPage.Should().BeTrue();
+        read.VerticalAlignment.Should().Be(PageVerticalAlignment.Center);
+        read.WidthPt.Should().BeApproximately(595.3, 0.1);
+        read.HeightPt.Should().BeApproximately(841.9, 0.1);
+    }
+
     [Fact]
     public void SingleSection_RoundTripsIdentically_WithNoParagraphLevelSectPr()
     {

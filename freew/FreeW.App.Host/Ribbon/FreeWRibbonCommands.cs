@@ -515,6 +515,11 @@ internal static class FreeWRibbonCommands
         // Columns: open the Columns dialog (One/Two/Three/Left/Right + spacing/line-between/More), applying
         // the chosen column layout to PageSettings and re-rendering so the flow shows at once.
         registry.Register("freew.columns", new ColumnsCommand(editor));
+        // Page Setup: the unified Margins / Paper / Layout dialog (Word's Layout > Page Setup launcher). The
+        // "Custom Margins…" / "More Paper Sizes…" entry points open the same dialog on the Margins / Paper tab.
+        registry.Register("freew.page-setup", new PageSetupCommand(editor, PageSetupDialog.Tab.Margins));
+        registry.Register("freew.custom-margins", new PageSetupCommand(editor, PageSetupDialog.Tab.Margins));
+        registry.Register("freew.more-paper-sizes", new PageSetupCommand(editor, PageSetupDialog.Tab.Paper));
         // Line Numbers: cycle None -> Continuous -> RestartEachPage -> None (shown in print preview).
         registry.Register("freew.line-numbers", new LineNumberCommand(editor));
 
@@ -1295,6 +1300,50 @@ internal static class FreeWRibbonCommands
                 page.ColumnsLineBetween = result.LineBetween;
                 page.ColumnWidthsPt = result.WidthsPt;
             });
+        }
+    }
+
+    // Opens the unified Page Setup dialog (Margins / Paper / Layout tabs) and applies the chosen geometry,
+    // orientation, gutter, mirror-margins, paper size, header/footer distance, vertical alignment and the
+    // different-first-page / odd-even toggles to PageSettings via ApplyPageSettings — the same single
+    // commit + re-render path the other page-setup commands use, round-tripping through the existing w:sectPr /
+    // settings.xml writers. The "Custom Margins…" / "More Paper Sizes…" entry points open the same dialog on the
+    // Margins / Paper tab. The dialog's Line Numbers… / Borders… launchers defer to FreeW's existing Line
+    // Numbers cycle and Borders and Shading dialog respectively, opened after the page settings are applied.
+    private sealed class PageSetupCommand(DocumentView editor, PageSetupDialog.Tab initialTab) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var outcome = PageSetupDialog.Prompt(Window.GetWindow(editor), editor.Model.Page, initialTab: initialTab);
+            if (outcome is not { } o)
+                return;
+
+            var settings = o.Settings;
+            editor.ApplyPageSettings(page =>
+            {
+                page.MarginTopPt = settings.MarginTopPt;
+                page.MarginBottomPt = settings.MarginBottomPt;
+                page.MarginLeftPt = settings.MarginLeftPt;
+                page.MarginRightPt = settings.MarginRightPt;
+                page.GutterPt = settings.GutterPt;
+                page.Landscape = settings.Landscape;
+                page.MirrorMargins = settings.MirrorMargins;
+                page.WidthPt = settings.WidthPt;
+                page.HeightPt = settings.HeightPt;
+                page.DifferentFirstPage = settings.DifferentFirstPage;
+                page.DifferentOddEvenPages = settings.DifferentOddEvenPages;
+                page.HeaderDistancePt = settings.HeaderDistancePt;
+                page.FooterDistancePt = settings.FooterDistancePt;
+                page.VerticalAlignment = settings.VerticalAlignment;
+            });
+
+            // Defer to the existing features for the Layout-tab launchers, so a single source of truth drives
+            // line numbering and page/paragraph borders.
+            if (o.LineNumbers)
+                new LineNumberCommand(editor).Execute(context);
+            else if (o.Borders)
+                new BordersAndShadingCommand(editor).Execute(context);
         }
     }
 

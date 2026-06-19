@@ -1257,6 +1257,40 @@ public sealed class PageSettings
     public bool Landscape { get; set; }
 
     /// <summary>
+    /// The binding gutter — extra margin added on the binding edge (w:sectPr/w:pgMar/@w:gutter), in points.
+    /// Defaults to 0 so existing documents round-trip unchanged — the @w:gutter attribute is emitted only when
+    /// greater than 0. Word's Page Setup &gt; Margins dialog exposes this as "Gutter". Always non-negative.
+    /// </summary>
+    public double GutterPt { get; set; }
+
+    /// <summary>
+    /// The distance from the top of the page to the header (w:sectPr/w:pgMar/@w:header), in points. Defaults to
+    /// 0, meaning "unspecified" — the @w:header attribute is then not emitted, so existing documents round-trip
+    /// unchanged (Word's own default is 0.5"). When greater than 0 the writer emits @w:header and the reader maps
+    /// it back here. Word's Page Setup &gt; Layout dialog exposes this as "Header from edge". Always non-negative.
+    /// </summary>
+    public double HeaderDistancePt { get; set; }
+
+    /// <summary>
+    /// The distance from the bottom of the page to the footer (w:sectPr/w:pgMar/@w:footer), in points. Defaults to
+    /// 0, meaning "unspecified" — the @w:footer attribute is then not emitted, so existing documents round-trip
+    /// unchanged (Word's own default is 0.5"). When greater than 0 the writer emits @w:footer and the reader maps
+    /// it back here. Word's Page Setup &gt; Layout dialog exposes this as "Footer from edge". Always non-negative.
+    /// </summary>
+    public double FooterDistancePt { get; set; }
+
+    /// <summary>
+    /// Whether the document uses mirror margins for double-sided printing (the document-level
+    /// w:settings/w:mirrorMargins toggle). When set, the left/right margins become inside/outside margins that
+    /// swap on facing pages and the gutter is added to the inside edge. Defaults to false so existing documents
+    /// are unaffected — no w:mirrorMargins is emitted and no settings part is forced. When true the writer emits
+    /// the toggle in word/settings.xml and the reader maps it back. Like <see cref="DifferentOddEvenPages"/> this
+    /// is a document-wide setting carried on the body-level page settings. Word's Page Setup &gt; Margins dialog
+    /// exposes this via the "Multiple pages: Mirror margins" option.
+    /// </summary>
+    public bool MirrorMargins { get; set; }
+
+    /// <summary>
     /// The number of equal-width text columns the page content flows into (w:sectPr/w:cols w:num).
     /// Defaults to 1 (single column) so existing documents are unaffected. Always at least 1.
     /// </summary>
@@ -1403,6 +1437,10 @@ public sealed class PageSettings
         MarginTopPt = MarginTopPt,
         MarginBottomPt = MarginBottomPt,
         Landscape = Landscape,
+        GutterPt = GutterPt,
+        HeaderDistancePt = HeaderDistancePt,
+        FooterDistancePt = FooterDistancePt,
+        MirrorMargins = MirrorMargins,
         ColumnCount = ColumnCount,
         ColumnSpacingPt = ColumnSpacingPt,
         ColumnsLineBetween = ColumnsLineBetween,

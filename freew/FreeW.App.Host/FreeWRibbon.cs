@@ -255,11 +255,23 @@ internal static class FreeWRibbon
                 tab.Group("page-setup", "Page Setup", "P", 100, g =>
                 {
                     // Margins is the hero; the remaining page-setup dropdowns read as labelled Medium rows.
-                    g.Large("freew.margins", "Margins", RibbonCommandIconKind.Margins, dropdown: true);
+                    // Margins / Size carry a menu with the "Custom Margins…" / "More Paper Sizes…" launchers that
+                    // open the unified Page Setup dialog (on the Margins / Paper tab).
+                    g.Large("freew.margins", "Margins", RibbonCommandIconKind.Margins, "M", menu: m =>
+                    {
+                        m.Item("freew.margins", "Normal / Narrow (toggle)", "N");
+                        m.Item("freew.custom-margins", "Custom Margins…", "A");
+                    });
                     g.Medium("freew.orientation", "Orientation", RibbonCommandIconKind.Orientation, dropdown: true);
-                    g.Medium("freew.size", "Size", RibbonCommandIconKind.OnePage, dropdown: true);
+                    g.Medium("freew.size", "Size", RibbonCommandIconKind.OnePage, "Z", menu: m =>
+                    {
+                        m.Item("freew.size", "Letter / A4 (toggle)", "L");
+                        m.Item("freew.more-paper-sizes", "More Paper Sizes…", "M");
+                    });
                     g.Medium("freew.columns", "Columns", RibbonCommandIconKind.TextColumns, dropdown: true);
                     g.RowBreak();
+                    // Page Setup launcher: the unified Margins / Paper / Layout dialog (Word's group launcher).
+                    g.Icon("freew.page-setup", "Page Setup", RibbonCommandIconKind.Margins, "G");
                     g.Icon("freew.line-numbers", "Line Numbers", RibbonCommandIconKind.Number);
                     // Hyphenation dropdown (Word's Layout > Page Setup > Hyphenation): None / Automatic /
                     // Manual, plus the Hyphenation Options… dialog. The mode items set the document flag; the
