@@ -832,4 +832,52 @@
   <data name="Backstage_Account_OptionsButton" xml:space="preserve"><value>FreeX Options...</value></data>
   <data name="Backstage_Account_LegalNoticesButton" xml:space="preserve"><value>Legal Notices...</value></data>
   <data name="Backstage_Account_CloseButton" xml:space="preserve"><value>Close</value></data>
+  <data name="WfTranslate_Title" xml:space="preserve"><value>Translate</value></data>
+  <data name="WfTranslate_FromLabel" xml:space="preserve"><value>From:</value></data>
+  <data name="WfTranslate_ToLabel" xml:space="preserve"><value>To:</value></data>
+  <data name="WfTranslate_SourceLabel" xml:space="preserve"><value>Selected text:</value></data>
+  <data name="WfTranslate_EmptyCell" xml:space="preserve"><value>(empty cell)</value></data>
+  <data name="WfTranslate_TranslationLabel" xml:space="preserve"><value>Translation:</value></data>
+  <data name="WfTranslate_TranslationWatermark" xml:space="preserve"><value>Type the translation here</value></data>
+  <data name="WfTranslate_TargetLabel" xml:space="preserve"><value>Write to cell or range:</value></data>
+  <data name="WfTranslate_ManualNote" xml:space="preserve"><value>No offline translation engine is available, so this is a manual helper: type the translation above and it is written to the chosen target. A multi-line translation fills successive cells of a multi-cell target range.</value></data>
+  <data name="WfTranslate_InsertButton" xml:space="preserve"><value>Insert Translation</value></data>
+  <data name="WfTranslate_CloseButton" xml:space="preserve"><value>Close</value></data>
+  <data name="WfTranslate_StatusInserted" xml:space="preserve"><value>Translation written to {0}.</value></data>
+  <data name="WfTranslate_ErrorEmptyTranslation" xml:space="preserve"><value>Translate: enter the translation text first.</value></data>
+  <data name="WfTranslate_ErrorMissingTarget" xml:space="preserve"><value>Translate: enter a target cell or range.</value></data>
+  <data name="WfTranslate_ErrorInvalidTarget" xml:space="preserve"><value>Translate: the target reference is not a valid cell or range.</value></data>
+  <data name="WfTranslate_ErrorSameTarget" xml:space="preserve"><value>Translate: choose a target other than the source cell.</value></data>
+  <data name="WfTranslate_ErrorGeneric" xml:space="preserve"><value>Translate: could not write the translation.</value></data>
+  <data name="WfTranslate_LangAuto" xml:space="preserve"><value>Detect source</value></data>
+  <data name="WfTranslate_LangEnglish" xml:space="preserve"><value>English</value></data>
+  <data name="WfTranslate_LangFrench" xml:space="preserve"><value>French</value></data>
+  <data name="WfTranslate_LangSpanish" xml:space="preserve"><value>Spanish</value></data>
+  <data name="WfTranslate_LangGerman" xml:space="preserve"><value>German</value></data>
+  <data name="WfTranslate_LangItalian" xml:space="preserve"><value>Italian</value></data>
+  <data name="WfTranslate_LangPortuguese" xml:space="preserve"><value>Portuguese</value></data>
+  <data name="WfTranslate_LangDutch" xml:space="preserve"><value>Dutch</value></data>
+  <data name="WfTranslate_LangChinese" xml:space="preserve"><value>Chinese</value></data>
+  <data name="WfTranslate_LangJapanese" xml:space="preserve"><value>Japanese</value></data>
+  <data name="WfTranslate_LangArabic" xml:space="preserve"><value>Arabic</value></data>
+  <data name="WfTranslate_LangRussian" xml:space="preserve"><value>Russian</value></data>
+  <data name="WfInsertObject_Title" xml:space="preserve"><value>Insert Object</value></data>
+  <data name="WfInsertObject_Heading" xml:space="preserve"><value>Create object from file</value></data>
+  <data name="WfInsertObject_BrowseButton" xml:space="preserve"><value>Browse...</value></data>
+  <data name="WfInsertObject_NoFileChosen" xml:space="preserve"><value>No file chosen.</value></data>
+  <data name="WfInsertObject_LinkLabel" xml:space="preserve"><value>Link to file (record the source path on the object)</value></data>
+  <data name="WfInsertObject_Note" xml:space="preserve"><value>Image files are embedded as pictures. Other files are placed as an icon placeholder labelled with the file name; the original file content is not embedded (this build has no OLE-object model).</value></data>
+  <data name="WfInsertObject_InsertButton" xml:space="preserve"><value>Insert</value></data>
+  <data name="WfInsertObject_CancelButton" xml:space="preserve"><value>Cancel</value></data>
+  <data name="WfInsertObject_Unavailable" xml:space="preserve"><value>Insert Object is unavailable on this platform.</value></data>
+  <data name="WfInsertObject_IconLinkedCaption" xml:space="preserve"><value>{0} (linked)</value></data>
+  <data name="WfInsertObject_AltLinked" xml:space="preserve"><value>Linked object: {0}</value></data>
+  <data name="WfInsertObject_AltEmbedded" xml:space="preserve"><value>Embedded object: {0}</value></data>
+  <data name="WfInsertObject_StatusEmbedded" xml:space="preserve"><value>Inserted "{0}" as an embedded picture.</value></data>
+  <data name="WfInsertObject_StatusPlaceholder" xml:space="preserve"><value>Inserted "{0}" as an icon placeholder.</value></data>
+  <data name="WfInsertObject_ErrorMissingFile" xml:space="preserve"><value>Insert Object: choose a file first.</value></data>
+  <data name="WfInsertObject_ErrorFileNotFound" xml:space="preserve"><value>Insert Object: the chosen file could not be found.</value></data>
+  <data name="WfInsertObject_ErrorRead" xml:space="preserve"><value>Could not read the file: {0}</value></data>
+  <data name="WfInsertObject_ErrorEmptyFile" xml:space="preserve"><value>The selected file is empty.</value></data>
+  <data name="WfInsertObject_ErrorGeneric" xml:space="preserve"><value>Insert Object failed.</value></data>
 </root>

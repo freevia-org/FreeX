@@ -814,4 +814,52 @@
   <data name="Backstage_Account_OptionsButton" xml:space="preserve"><value>Options FreeX...</value></data>
   <data name="Backstage_Account_LegalNoticesButton" xml:space="preserve"><value>Mentions légales...</value></data>
   <data name="Backstage_Account_CloseButton" xml:space="preserve"><value>Fermer</value></data>
+  <data name="WfTranslate_Title" xml:space="preserve"><value>Traduire</value></data>
+  <data name="WfTranslate_FromLabel" xml:space="preserve"><value>De :</value></data>
+  <data name="WfTranslate_ToLabel" xml:space="preserve"><value>Vers :</value></data>
+  <data name="WfTranslate_SourceLabel" xml:space="preserve"><value>Texte sélectionné :</value></data>
+  <data name="WfTranslate_EmptyCell" xml:space="preserve"><value>(cellule vide)</value></data>
+  <data name="WfTranslate_TranslationLabel" xml:space="preserve"><value>Traduction :</value></data>
+  <data name="WfTranslate_TranslationWatermark" xml:space="preserve"><value>Saisissez la traduction ici</value></data>
+  <data name="WfTranslate_TargetLabel" xml:space="preserve"><value>Écrire dans la cellule ou la plage :</value></data>
+  <data name="WfTranslate_ManualNote" xml:space="preserve"><value>Aucun moteur de traduction hors ligne n'est disponible : il s'agit donc d'un assistant manuel. Saisissez la traduction ci-dessus, elle est écrite dans la cible choisie. Une traduction multiligne remplit les cellules successives d'une plage cible.</value></data>
+  <data name="WfTranslate_InsertButton" xml:space="preserve"><value>Insérer la traduction</value></data>
+  <data name="WfTranslate_CloseButton" xml:space="preserve"><value>Fermer</value></data>
+  <data name="WfTranslate_StatusInserted" xml:space="preserve"><value>Traduction écrite dans {0}.</value></data>
+  <data name="WfTranslate_ErrorEmptyTranslation" xml:space="preserve"><value>Traduire : saisissez d'abord le texte de la traduction.</value></data>
+  <data name="WfTranslate_ErrorMissingTarget" xml:space="preserve"><value>Traduire : saisissez une cellule ou une plage cible.</value></data>
+  <data name="WfTranslate_ErrorInvalidTarget" xml:space="preserve"><value>Traduire : la référence cible n'est pas une cellule ou une plage valide.</value></data>
+  <data name="WfTranslate_ErrorSameTarget" xml:space="preserve"><value>Traduire : choisissez une cible différente de la cellule source.</value></data>
+  <data name="WfTranslate_ErrorGeneric" xml:space="preserve"><value>Traduire : impossible d'écrire la traduction.</value></data>
+  <data name="WfTranslate_LangAuto" xml:space="preserve"><value>Détecter la source</value></data>
+  <data name="WfTranslate_LangEnglish" xml:space="preserve"><value>Anglais</value></data>
+  <data name="WfTranslate_LangFrench" xml:space="preserve"><value>Français</value></data>
+  <data name="WfTranslate_LangSpanish" xml:space="preserve"><value>Espagnol</value></data>
+  <data name="WfTranslate_LangGerman" xml:space="preserve"><value>Allemand</value></data>
+  <data name="WfTranslate_LangItalian" xml:space="preserve"><value>Italien</value></data>
+  <data name="WfTranslate_LangPortuguese" xml:space="preserve"><value>Portugais</value></data>
+  <data name="WfTranslate_LangDutch" xml:space="preserve"><value>Néerlandais</value></data>
+  <data name="WfTranslate_LangChinese" xml:space="preserve"><value>Chinois</value></data>
+  <data name="WfTranslate_LangJapanese" xml:space="preserve"><value>Japonais</value></data>
+  <data name="WfTranslate_LangArabic" xml:space="preserve"><value>Arabe</value></data>
+  <data name="WfTranslate_LangRussian" xml:space="preserve"><value>Russe</value></data>
+  <data name="WfInsertObject_Title" xml:space="preserve"><value>Insérer un objet</value></data>
+  <data name="WfInsertObject_Heading" xml:space="preserve"><value>Créer l'objet à partir d'un fichier</value></data>
+  <data name="WfInsertObject_BrowseButton" xml:space="preserve"><value>Parcourir...</value></data>
+  <data name="WfInsertObject_NoFileChosen" xml:space="preserve"><value>Aucun fichier choisi.</value></data>
+  <data name="WfInsertObject_LinkLabel" xml:space="preserve"><value>Lier au fichier (enregistrer le chemin source sur l'objet)</value></data>
+  <data name="WfInsertObject_Note" xml:space="preserve"><value>Les fichiers image sont incorporés comme images. Les autres fichiers sont placés comme un espace réservé avec icône portant le nom du fichier ; le contenu du fichier d'origine n'est pas incorporé (cette version n'a pas de modèle d'objet OLE).</value></data>
+  <data name="WfInsertObject_InsertButton" xml:space="preserve"><value>Insérer</value></data>
+  <data name="WfInsertObject_CancelButton" xml:space="preserve"><value>Annuler</value></data>
+  <data name="WfInsertObject_Unavailable" xml:space="preserve"><value>Insérer un objet n'est pas disponible sur cette plateforme.</value></data>
+  <data name="WfInsertObject_IconLinkedCaption" xml:space="preserve"><value>{0} (lié)</value></data>
+  <data name="WfInsertObject_AltLinked" xml:space="preserve"><value>Objet lié : {0}</value></data>
+  <data name="WfInsertObject_AltEmbedded" xml:space="preserve"><value>Objet incorporé : {0}</value></data>
+  <data name="WfInsertObject_StatusEmbedded" xml:space="preserve"><value>« {0} » inséré comme image incorporée.</value></data>
+  <data name="WfInsertObject_StatusPlaceholder" xml:space="preserve"><value>« {0} » inséré comme espace réservé avec icône.</value></data>
+  <data name="WfInsertObject_ErrorMissingFile" xml:space="preserve"><value>Insérer un objet : choisissez d'abord un fichier.</value></data>
+  <data name="WfInsertObject_ErrorFileNotFound" xml:space="preserve"><value>Insérer un objet : le fichier choisi est introuvable.</value></data>
+  <data name="WfInsertObject_ErrorRead" xml:space="preserve"><value>Impossible de lire le fichier : {0}</value></data>
+  <data name="WfInsertObject_ErrorEmptyFile" xml:space="preserve"><value>Le fichier sélectionné est vide.</value></data>
+  <data name="WfInsertObject_ErrorGeneric" xml:space="preserve"><value>Échec de l'insertion de l'objet.</value></data>
 </root>
