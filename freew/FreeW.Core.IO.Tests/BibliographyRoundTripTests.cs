@@ -24,6 +24,30 @@ public class BibliographyRoundTripTests
         return DocxReader.Read(stream);
     }
 
+    private static TextDocument ReadDocxWithSourcesXml(string sourcesXml)
+    {
+        using var stream = new MemoryStream();
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            void Add(string path, string xml)
+            {
+                var entry = zip.CreateEntry(path);
+                using var writer = new StreamWriter(entry.Open());
+                writer.Write(xml);
+            }
+
+            Add("word/document.xml",
+                """
+                <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+                  <w:body><w:p><w:r><w:t>Body</w:t></w:r></w:p></w:body>
+                </w:document>
+                """);
+            Add("word/bibliography/sources.xml", sourcesXml);
+        }
+        stream.Position = 0;
+        return DocxReader.Read(stream);
+    }
+
     [Fact]
     public void SelectedStyle_SurvivesRoundTrip()
     {
@@ -150,5 +174,42 @@ public class BibliographyRoundTripTests
         // The author is stored as a single corporate author.
         root.Element(B + "Source")!.Element(B + "Author")!.Element(B + "Author")!
             .Element(B + "Corporate")!.Value.Should().Be("Doe");
+    }
+
+    [Fact]
+    public void WordStylePersonAuthor_ReadsStructuredNameList()
+    {
+        var result = ReadDocxWithSourcesXml(
+            """
+            <b:Sources xmlns:b="http://schemas.openxmlformats.org/officeDocument/2006/bibliography">
+              <b:Source>
+                <b:Tag>Doe2024</b:Tag>
+                <b:SourceType>Book</b:SourceType>
+                <b:Author>
+                  <b:Author>
+                    <b:NameList>
+                      <b:Person>
+                        <b:Last>Doe</b:Last>
+                        <b:First>Jane</b:First>
+                        <b:Middle>Q.</b:Middle>
+                      </b:Person>
+                      <b:Person>
+                        <b:Last>Smith</b:Last>
+                        <b:First>Alex</b:First>
+                      </b:Person>
+                    </b:NameList>
+                  </b:Author>
+                </b:Author>
+                <b:Title>Word Authored Source</b:Title>
+                <b:Year>2024</b:Year>
+              </b:Source>
+            </b:Sources>
+            """);
+
+        var source = result.Sources.Should().ContainSingle().Subject;
+        source.Tag.Should().Be("Doe2024");
+        source.Author.Should().Be("Jane Q. Doe; Alex Smith");
+        source.Title.Should().Be("Word Authored Source");
+        source.Year.Should().Be("2024");
     }
 }

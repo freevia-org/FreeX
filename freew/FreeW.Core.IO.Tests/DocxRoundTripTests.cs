@@ -25,6 +25,34 @@ public class DocxRoundTripTests
         return XDocument.Load(entry);
     }
 
+    private static TextDocument ReadHandAuthoredDocx(string bodyXml, string? documentRelsXml = null, string? settingsXml = null)
+    {
+        using var stream = new MemoryStream();
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            void Add(string path, string xml)
+            {
+                var entry = zip.CreateEntry(path);
+                using var writer = new StreamWriter(entry.Open());
+                writer.Write(xml);
+            }
+
+            Add("word/document.xml",
+                $"""
+                <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+                            xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <w:body>{bodyXml}</w:body>
+                </w:document>
+                """);
+            if (documentRelsXml is not null)
+                Add("word/_rels/document.xml.rels", documentRelsXml);
+            if (settingsXml is not null)
+                Add("word/settings.xml", settingsXml);
+        }
+        stream.Position = 0;
+        return DocxReader.Read(stream);
+    }
+
     [Fact]
     public void RunProperties_EmittedInCanonicalSchemaOrder()
     {
@@ -2318,6 +2346,89 @@ public class DocxRoundTripTests
         run.RevisionDateXml.Should().Be("2026-06-19T08:00:00Z");
     }
 
+    [Fact]
+    public void BlockLevelContentControl_ReadsContainedParagraph()
+    {
+        var result = ReadHandAuthoredDocx(
+            """
+            <w:sdt>
+              <w:sdtPr><w:tag w:val="BlockControl"/><w:richText/></w:sdtPr>
+              <w:sdtContent>
+                <w:p><w:r><w:t>block control text</w:t></w:r></w:p>
+              </w:sdtContent>
+            </w:sdt>
+            """);
+
+        var run = result.Paragraphs.Should().ContainSingle().Subject.Runs.Should().ContainSingle().Subject;
+        run.Text.Should().Be("block control text");
+        run.Control.Should().NotBeNull();
+        run.Control!.Kind.Should().Be(ContentControlKind.RichText);
+        run.Control.Tag.Should().Be("BlockControl");
+    }
+
+    [Fact]
+    public void TableCellContentControl_ReadsContainedParagraph()
+    {
+        var result = ReadHandAuthoredDocx(
+            """
+            <w:tbl>
+              <w:tr>
+                <w:tc>
+                  <w:sdt>
+                    <w:sdtPr><w:tag w:val="CellControl"/></w:sdtPr>
+                    <w:sdtContent>
+                      <w:p><w:r><w:t>cell control text</w:t></w:r></w:p>
+                    </w:sdtContent>
+                  </w:sdt>
+                </w:tc>
+              </w:tr>
+            </w:tbl>
+            """);
+
+        var table = result.Blocks.OfType<Table>().Should().ContainSingle().Subject;
+        var run = table.Rows[0].Cells[0].Paragraphs.Should().ContainSingle().Subject.Runs.Should().ContainSingle().Subject;
+        run.Text.Should().Be("cell control text");
+        run.Control.Should().NotBeNull();
+        run.Control!.Kind.Should().Be(ContentControlKind.PlainText);
+        run.Control.Tag.Should().Be("CellControl");
+    }
+
+    [Fact]
+    public void ContentControlWrappedHyperlinkRevision_ReadsTextControlLinkAndRevision()
+    {
+        var rels =
+            """
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rIdLink" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.com" TargetMode="External"/>
+            </Relationships>
+            """;
+        var result = ReadHandAuthoredDocx(
+            """
+            <w:p>
+              <w:sdt>
+                <w:sdtPr><w:tag w:val="TrackedLink"/></w:sdtPr>
+                <w:sdtContent>
+                  <w:hyperlink r:id="rIdLink">
+                    <w:ins w:author="Alex Editor" w:date="2026-06-19T08:00:00Z">
+                      <w:r><w:t>linked tracked control</w:t></w:r>
+                    </w:ins>
+                  </w:hyperlink>
+                </w:sdtContent>
+              </w:sdt>
+            </w:p>
+            """,
+            rels);
+
+        var run = result.Paragraphs.Should().ContainSingle().Subject.Runs.Should().ContainSingle().Subject;
+        run.Text.Should().Be("linked tracked control");
+        run.Control.Should().NotBeNull();
+        run.Control!.Tag.Should().Be("TrackedLink");
+        run.HyperlinkUrl.Should().Be("https://example.com");
+        run.Revision.Should().Be(RevisionKind.Inserted);
+        run.RevisionAuthor.Should().Be("Alex Editor");
+        run.RevisionDateXml.Should().Be("2026-06-19T08:00:00Z");
+    }
+
     [Theory]
     [InlineData(true, "☒")]
     [InlineData(false, "☐")]
@@ -2636,6 +2747,38 @@ public class DocxRoundTripTests
 
         using var offZip = new ZipArchive(offStream, ZipArchiveMode.Read);
         offZip.GetEntry("word/settings.xml").Should().BeNull();
+    }
+
+    [Fact]
+    public void PreservedHyphenationSubOptions_RoundTrip_WhenAutoHyphenationOff()
+    {
+        var read = ReadHandAuthoredDocx(
+            """<w:p><w:r><w:t>plain</w:t></w:r></w:p>""",
+            settingsXml:
+            """
+            <w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+              <w:consecutiveHyphenLimit w:val="4"/>
+              <w:hyphenationZone w:val="360"/>
+              <w:doNotHyphenateCaps/>
+            </w:settings>
+            """);
+
+        read.Page.AutoHyphenation.Should().BeFalse();
+        read.Page.ConsecutiveHyphenLimit.Should().Be(4);
+        read.Page.HyphenationZonePt.Should().BeApproximately(18, 0.01);
+        read.Page.DoNotHyphenateCaps.Should().BeTrue();
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(read, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        using var reader = new StreamReader(zip.GetEntry("word/settings.xml")!.Open());
+        var settings = reader.ReadToEnd();
+        settings.Should().Contain("consecutiveHyphenLimit");
+        settings.Should().Contain("hyphenationZone");
+        settings.Should().Contain("doNotHyphenateCaps");
+        settings.Should().NotContain("autoHyphenation");
     }
 
     [Fact]

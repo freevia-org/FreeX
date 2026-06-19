@@ -414,65 +414,68 @@ public sealed partial class MainWindow
     /// </summary>
     private async Task SavePrintReadyPdfAsync(byte[] documentBytes)
     {
-        if (!StorageProvider.CanSave)
-        {
-            ShowExportIssue(UiText.Get("Print_NoSpoolerNoSave"));
+        if (!TryBeginFileOperation())
             return;
+
+        try
+        {
+            if (!StorageProvider.CanSave)
+            {
+                ShowExportIssue(UiText.Get("Print_NoSpoolerNoSave"));
+                return;
+            }
+
+            var pdfFileType = new FilePickerFileType("PDF Document")
+            {
+                Patterns = ["*.pdf"],
+            };
+            var storageFile = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+            {
+                Title = UiText.Get("Print_SaveAsPdfButton"),
+                SuggestedFileName = BuildSuggestedPdfExportFileName(),
+                DefaultExtension = "pdf",
+                FileTypeChoices = [pdfFileType],
+                SuggestedFileType = pdfFileType,
+                ShowOverwritePrompt = true,
+            });
+
+            if (storageFile is null)
+                return;
+
+            using (storageFile)
+            {
+                var path = storageFile.TryGetLocalPath();
+                if (string.IsNullOrWhiteSpace(path))
+                {
+                    ShowExportIssue(UiText.Get("Print_RequiresLocalPath"));
+                    return;
+                }
+
+                var requestedPath = path;
+                var exportPathPlan = ExportPathPlanner.Plan(requestedPath, ExportFileFormat.Pdf);
+                if (ExportPathPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, exportPathPlan, File.Exists) &&
+                    !await ConfirmNormalizedPdfOverwriteAsync(exportPathPlan.Path))
+                {
+                    ShowExportIssue(UiText.Get("Print_SaveCanceled"));
+                    return;
+                }
+
+                path = exportPathPlan.Path;
+
+                try
+                {
+                    await File.WriteAllBytesAsync(path, documentBytes);
+                    RefreshShell(UiText.Format("Print_SavedPdf", Path.GetFileName(path)));
+                }
+                catch (Exception ex)
+                {
+                    ShowExportIssue(UiText.Format("Print_RenderFailed", ex.Message));
+                }
+            }
         }
-
-        var pdfFileType = new FilePickerFileType("PDF Document")
+        finally
         {
-            Patterns = ["*.pdf"],
-        };
-        var storageFile = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
-        {
-            Title = UiText.Get("Print_SaveAsPdfButton"),
-            SuggestedFileName = BuildSuggestedPdfExportFileName(),
-            DefaultExtension = "pdf",
-            FileTypeChoices = [pdfFileType],
-            SuggestedFileType = pdfFileType,
-            ShowOverwritePrompt = true,
-        });
-
-        if (storageFile is null)
-            return;
-
-        using (storageFile)
-        {
-            var path = storageFile.TryGetLocalPath();
-            if (string.IsNullOrWhiteSpace(path))
-            {
-                ShowExportIssue(UiText.Get("Print_RequiresLocalPath"));
-                return;
-            }
-
-            var requestedPath = path;
-            var exportPathPlan = ExportPathPlanner.Plan(requestedPath, ExportFileFormat.Pdf);
-            if (ExportPathPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, exportPathPlan, File.Exists) &&
-                !await ConfirmNormalizedPdfOverwriteAsync(exportPathPlan.Path))
-            {
-                ShowExportIssue(UiText.Get("Print_SaveCanceled"));
-                return;
-            }
-
-            path = exportPathPlan.Path;
-
-            _isSaving = true;
-            UpdateSaveButton();
-            try
-            {
-                await File.WriteAllBytesAsync(path, documentBytes);
-                RefreshShell(UiText.Format("Print_SavedPdf", Path.GetFileName(path)));
-            }
-            catch (Exception ex)
-            {
-                ShowExportIssue(UiText.Format("Print_RenderFailed", ex.Message));
-            }
-            finally
-            {
-                _isSaving = false;
-                UpdateSaveButton();
-            }
+            EndFileOperation();
         }
     }
 

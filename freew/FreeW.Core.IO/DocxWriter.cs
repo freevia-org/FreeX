@@ -3879,16 +3879,18 @@ public static class DocxWriter
     {
         var autoHyphenation = page.AutoHyphenation;
         var differentOddEvenPages = page.DifferentOddEvenPages;
-        // The hyphenation sub-options only apply when automatic hyphenation is on, and each is emitted only
-        // when it differs from Word's default (zone 0 = default, limit 0 = no limit, caps hyphenated): a
-        // limit > 0, an explicit zone > 0, and the do-not-hyphenate-caps toggle.
-        var consecutiveLimit = autoHyphenation && page.ConsecutiveHyphenLimit > 0
+        // Fresh documents keep the historical minimal-settings behavior: dormant hyphenation sub-options do
+        // not create a settings part by themselves. Preserved settings are different: Word-authored documents
+        // can keep these values while auto hyphenation is off, and the reader captures them so they survive.
+        var preserveDormantHyphenationOptions = original is not null;
+        var writeHyphenationOptions = autoHyphenation || preserveDormantHyphenationOptions;
+        var consecutiveLimit = writeHyphenationOptions && page.ConsecutiveHyphenLimit > 0
             ? new XElement(W + "consecutiveHyphenLimit", new XAttribute(W + "val", page.ConsecutiveHyphenLimit))
             : null;
-        var hyphenationZone = autoHyphenation && page.HyphenationZonePt > 0
+        var hyphenationZone = writeHyphenationOptions && page.HyphenationZonePt > 0
             ? new XElement(W + "hyphenationZone", new XAttribute(W + "val", PointsToDxa(page.HyphenationZonePt)))
             : null;
-        var doNotHyphenateCaps = autoHyphenation && page.DoNotHyphenateCaps
+        var doNotHyphenateCaps = writeHyphenationOptions && page.DoNotHyphenateCaps
             ? new XElement(W + "doNotHyphenateCaps")
             : null;
 
