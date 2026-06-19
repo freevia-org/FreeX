@@ -5,8 +5,11 @@ public class CrossReferencesTests
     [Theory]
     [InlineData(CrossRefType.Heading)]
     [InlineData(CrossRefType.Bookmark)]
-    [InlineData(CrossRefType.Caption)]
+    [InlineData(CrossRefType.Figure)]
+    [InlineData(CrossRefType.Table)]
     [InlineData(CrossRefType.Footnote)]
+    [InlineData(CrossRefType.Endnote)]
+    [InlineData(CrossRefType.NumberedItem)]
     public void Targets_EmptyDocument_YieldsEmpty(CrossRefType type)
     {
         var doc = new TextDocument();
@@ -71,22 +74,22 @@ public class CrossReferencesTests
     }
 
     [Fact]
-    public void Targets_Caption_EnumeratesCaptionParagraphsWithText()
+    public void Targets_Figure_EnumeratesOnlyFigureCaptions()
     {
         var doc = new TextDocument();
         doc.Blocks.Add(new Paragraph("Body"));
         doc.Blocks.Add(Captions.BuildCaption(CaptionLabel.Figure, 1, "Diagram"));
-        doc.Blocks.Add(Captions.BuildCaption(CaptionLabel.Table, 2, ""));
+        doc.Blocks.Add(Captions.BuildCaption(CaptionLabel.Table, 2, "Data"));
 
-        var targets = CrossReferences.Targets(doc, CrossRefType.Caption);
+        var figures = CrossReferences.Targets(doc, CrossRefType.Figure);
+        var tables = CrossReferences.Targets(doc, CrossRefType.Table);
 
-        targets.Should().Equal(
-            new CrossRefTarget("Figure 1: Diagram", null, 1),
-            new CrossRefTarget("Table 2", null, 2));
+        figures.Should().ContainSingle().Which.Should().Be(new CrossRefTarget("Figure 1: Diagram", null, 1));
+        tables.Should().ContainSingle().Which.Should().Be(new CrossRefTarget("Table 2: Data", null, 2));
     }
 
     [Fact]
-    public void Targets_Footnote_EnumeratesByAscendingIdWithFootnoteNLabel()
+    public void Targets_Footnote_EnumeratesByAscendingIdWithNoteId()
     {
         var doc = new TextDocument();
         doc.Footnotes[2] = new Footnote(2, "second");
@@ -95,8 +98,120 @@ public class CrossReferencesTests
         var targets = CrossReferences.Targets(doc, CrossRefType.Footnote);
 
         targets.Should().Equal(
-            new CrossRefTarget("Footnote 1", null, null),
-            new CrossRefTarget("Footnote 2", null, null));
+            new CrossRefTarget("Footnote 1", null, null, 1),
+            new CrossRefTarget("Footnote 2", null, null, 2));
+    }
+
+    [Fact]
+    public void Targets_Endnote_EnumeratesByAscendingIdWithNoteId()
+    {
+        var doc = new TextDocument();
+        doc.Endnotes[1] = new Endnote(1, "note one");
+
+        CrossReferences.Targets(doc, CrossRefType.Endnote)
+            .Should().ContainSingle()
+            .Which.Should().Be(new CrossRefTarget("Endnote 1", null, null, 1));
+    }
+
+    [Fact]
+    public void Targets_NumberedItem_EnumeratesNumberedListParagraphs()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Plain"));
+        doc.Blocks.Add(new Paragraph("Step one") { Formatting = ParagraphFormatting.Default with { ListKind = ListKind.Number } });
+        doc.Blocks.Add(new Paragraph("Step two") { Formatting = ParagraphFormatting.Default with { ListKind = ListKind.Number } });
+
+        var targets = CrossReferences.Targets(doc, CrossRefType.NumberedItem);
+
+        targets.Should().Equal(
+            new CrossRefTarget("Step one", null, 1),
+            new CrossRefTarget("Step two", null, 2));
+    }
+
+    [Fact]
+    public void InsertOptions_NotesOfferPageAndAboveBelowButNoNumberSwitches()
+    {
+        CrossReferences.InsertOptions(CrossRefType.Footnote).Should().Equal(
+            CrossRefInsertAs.Text, CrossRefInsertAs.PageNumber, CrossRefInsertAs.AboveBelow);
+        CrossReferences.InsertOptions(CrossRefType.Heading).Should().Contain(CrossRefInsertAs.HeadingNumber);
+    }
+
+    [Theory]
+    [InlineData(CrossRefType.Heading, CrossRefInsertAs.Text, CrossRefFieldKind.Ref)]
+    [InlineData(CrossRefType.Heading, CrossRefInsertAs.PageNumber, CrossRefFieldKind.PageRef)]
+    [InlineData(CrossRefType.Footnote, CrossRefInsertAs.Text, CrossRefFieldKind.NoteRef)]
+    [InlineData(CrossRefType.Footnote, CrossRefInsertAs.PageNumber, CrossRefFieldKind.PageRef)]
+    public void FieldKindFor_MapsTypeAndInsertAsToFieldKeyword(
+        CrossRefType type, CrossRefInsertAs insertAs, CrossRefFieldKind expected)
+    {
+        CrossReferences.FieldKindFor(type, insertAs).Should().Be(expected);
+    }
+
+    [Fact]
+    public void BuildField_BodyTarget_UsesAnchorAsTarget()
+    {
+        var target = new CrossRefTarget("Chapter One", "ch1", 0);
+
+        var field = CrossReferences.BuildField(CrossRefType.Heading, target, CrossRefInsertAs.PageNumber, hyperlink: true);
+
+        field.Should().Be(new CrossReferenceField(CrossRefFieldKind.PageRef, "ch1", CrossRefInsertAs.PageNumber, Hyperlink: true));
+    }
+
+    [Fact]
+    public void BuildField_NoteTarget_UsesNoteIdAsTarget()
+    {
+        var target = new CrossRefTarget("Footnote 3", null, null, 3);
+
+        var field = CrossReferences.BuildField(CrossRefType.Footnote, target, CrossRefInsertAs.Text, hyperlink: false);
+
+        field.Should().Be(new CrossReferenceField(CrossRefFieldKind.NoteRef, "3", CrossRefInsertAs.Text, Hyperlink: false));
+    }
+
+    [Fact]
+    public void ResolveText_Text_ReturnsTargetDisplay()
+    {
+        var doc = new TextDocument();
+        var target = new CrossRefTarget("Chapter One", "ch1", 0);
+
+        CrossReferences.ResolveText(doc, CrossRefType.Heading, target, CrossRefInsertAs.Text, sourceBlockIndex: 5)
+            .Should().Be("Chapter One");
+    }
+
+    [Fact]
+    public void ResolveText_AboveBelow_ComparesTargetToSource()
+    {
+        var doc = new TextDocument();
+
+        CrossReferences.ResolveText(doc, CrossRefType.Heading, new CrossRefTarget("H", null, 2), CrossRefInsertAs.AboveBelow, sourceBlockIndex: 5)
+            .Should().Be("above");
+        CrossReferences.ResolveText(doc, CrossRefType.Heading, new CrossRefTarget("H", null, 9), CrossRefInsertAs.AboveBelow, sourceBlockIndex: 5)
+            .Should().Be("below");
+    }
+
+    [Fact]
+    public void ResolveText_HeadingNumber_BuildsOutlineNumber()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Chapter One") { StyleId = "Heading1" });   // 1
+        doc.Blocks.Add(new Paragraph("Section A") { StyleId = "Heading2" });     // 1.1
+        doc.Blocks.Add(new Paragraph("Section B") { StyleId = "Heading2" });     // 1.2
+        doc.Blocks.Add(new Paragraph("Chapter Two") { StyleId = "Heading1" });   // 2
+
+        CrossReferences.ResolveText(doc, CrossRefType.Heading, new CrossRefTarget("Section B", null, 2), CrossRefInsertAs.HeadingNumber, 0)
+            .Should().Be("1.2");
+        CrossReferences.ResolveText(doc, CrossRefType.Heading, new CrossRefTarget("Chapter Two", null, 3), CrossRefInsertAs.HeadingNumber, 0)
+            .Should().Be("2");
+    }
+
+    [Fact]
+    public void ResolveText_ParagraphNumber_CountsWithinNumberedRun()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Step one") { Formatting = ParagraphFormatting.Default with { ListKind = ListKind.Number } });
+        doc.Blocks.Add(new Paragraph("Step two") { Formatting = ParagraphFormatting.Default with { ListKind = ListKind.Number } });
+
+        CrossReferences.ResolveText(doc, CrossRefType.NumberedItem, new CrossRefTarget("Step two", null, 1), CrossRefInsertAs.ParagraphNumber, 0)
+            .Should().Be("2)");
     }
 
     [Fact]
@@ -104,11 +219,7 @@ public class CrossReferencesTests
     {
         CrossReferences.ReferenceText(new CrossRefTarget("Chapter One", "ch1", 0))
             .Should().Be("Chapter One");
-        CrossReferences.ReferenceText(new CrossRefTarget("alpha", "alpha", 1))
-            .Should().Be("alpha");
-        CrossReferences.ReferenceText(new CrossRefTarget("Figure 1: Diagram", null, 2))
-            .Should().Be("Figure 1: Diagram");
-        CrossReferences.ReferenceText(new CrossRefTarget("Footnote 3", null, null))
+        CrossReferences.ReferenceText(new CrossRefTarget("Footnote 3", null, null, 3))
             .Should().Be("Footnote 3");
     }
 }

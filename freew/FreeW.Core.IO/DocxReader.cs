@@ -1122,6 +1122,15 @@ public static class DocxReader
             return;
         }
 
+        // A cross-reference field: the leading keyword is REF, PAGEREF or NOTEREF (e.g. " REF _Ref1 \h ").
+        // Recover the field kind, target (bookmark name / note id), insert-as switch and \h hyperlink flag,
+        // and the cached resolved text (the wrapped run's text).
+        if (CrossReferenceFor(instruction) is { } crossReference)
+        {
+            paragraph.Runs.Add(Run.CrossReferenceFieldRun(crossReference, text, formatting));
+            return;
+        }
+
         if (FieldKindFor(instruction) is { } kind)
         {
             // PAGE keeps its historic "1" fallback when no cached value was written; the rest are happy
@@ -1221,6 +1230,67 @@ public static class DocxReader
         }
 
         return new TableFormulaField(expression, string.IsNullOrWhiteSpace(format) ? null : format);
+    }
+
+    /// <summary>
+    /// Parses a cross-reference field instruction (leading keyword <c>REF</c>/<c>PAGEREF</c>/<c>NOTEREF</c>)
+    /// into a <see cref="CrossReferenceField"/>: the field kind, the target (the first token after the
+    /// keyword — a bookmark name or note id), the "insert reference to" switch (<c>\w</c> heading number,
+    /// <c>\n</c> paragraph number, <c>\p</c> above/below; otherwise text/page) and the <c>\h</c> hyperlink
+    /// flag. Returns null for any other field. A target-less instruction yields an empty target so nothing
+    /// throws.
+    /// </summary>
+    private static CrossReferenceField? CrossReferenceFor(string instruction)
+    {
+        var trimmed = instruction.Trim();
+        var tokens = trimmed.Split(' ', '\t');
+        if (tokens.Length == 0)
+            return null;
+
+        var kind = tokens[0].ToUpperInvariant() switch
+        {
+            "REF" => CrossRefFieldKind.Ref,
+            "PAGEREF" => CrossRefFieldKind.PageRef,
+            "NOTEREF" => CrossRefFieldKind.NoteRef,
+            _ => (CrossRefFieldKind?)null
+        };
+        if (kind is not { } fieldKind)
+            return null;
+
+        // The target is the first token after the keyword that is not a switch (does not start with '\').
+        var target = string.Empty;
+        for (var i = 1; i < tokens.Length; i++)
+        {
+            if (tokens[i].Length == 0 || tokens[i].StartsWith('\\'))
+                continue;
+            target = tokens[i];
+            break;
+        }
+
+        var insertAs = CrossRefInsertAs.Text;
+        if (HasSwitch(trimmed, 'w'))
+            insertAs = CrossRefInsertAs.HeadingNumber;
+        else if (HasSwitch(trimmed, 'n'))
+            insertAs = CrossRefInsertAs.ParagraphNumber;
+        else if (HasSwitch(trimmed, 'p'))
+            insertAs = CrossRefInsertAs.AboveBelow;
+        else if (fieldKind == CrossRefFieldKind.PageRef)
+            insertAs = CrossRefInsertAs.PageNumber;
+
+        return new CrossReferenceField(fieldKind, target, insertAs, HasSwitch(trimmed, 'h'));
+    }
+
+    // True when the field instruction carries a "\<letter>" switch (e.g. "\h"), matched case-insensitively
+    // as a whitespace-delimited token so it is not confused with a letter inside the bookmark name.
+    private static bool HasSwitch(string instruction, char switchLetter)
+    {
+        foreach (var token in instruction.Split(' ', '\t'))
+        {
+            if (token.Length == 2 && token[0] == '\\'
+                && char.ToLowerInvariant(token[1]) == char.ToLowerInvariant(switchLetter))
+                return true;
+        }
+        return false;
     }
 
     /// <summary>

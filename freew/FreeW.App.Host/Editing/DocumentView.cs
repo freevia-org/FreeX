@@ -2783,6 +2783,14 @@ public sealed class DocumentView : RichTextBox
                     TableFormula = formulaMarker.Formula
                 });
                 break;
+            case WpfRun { Tag: CrossReferenceMarker crossRefMarker } crossRefRun:
+                // A cross-reference field round-trips its field definition; the run's visible text is the
+                // last-resolved value, kept as the cached fallback (matching Word's cached-field behaviour).
+                modelParagraph.Runs.Add(new ModelRun(crossRefRun.Text, ReadRunFormatting(crossRefRun))
+                {
+                    CrossReference = crossRefMarker.Field
+                });
+                break;
             case WpfRun { Tag: FieldMarker fieldMarker } fieldRun:
                 // A document field round-trips its kind; the run's visible text is the last-resolved
                 // value, which we keep as the cached fallback (matching Word's cached-field behaviour).
@@ -3347,6 +3355,9 @@ public sealed class DocumentView : RichTextBox
         if (run.TableFormula is not null)
             return BuildTableFormulaRun(run, document);
 
+        if (run.CrossReference is not null)
+            return BuildCrossReferenceRun(run, document);
+
         if (run.FieldKind != RunFieldKind.None)
         {
             // A field run can also carry a hyperlink (e.g. a PAGE/DATE field placed inside a link). Wrap
@@ -3899,6 +3910,35 @@ public sealed class DocumentView : RichTextBox
     /// (expression + number format). The WPF run's visible text is the cached computed result.
     /// </summary>
     private sealed record TableFormulaMarker(TableFormulaField Formula);
+
+    /// <summary>
+    /// Carried on a cross-reference WPF run's Tag so <see cref="CommitToModel"/> can round-trip the field
+    /// (kind + target + insert-as + hyperlink). The WPF run's visible text is the cached resolved value.
+    /// </summary>
+    private sealed record CrossReferenceMarker(CrossReferenceField Field);
+
+    /// <summary>Builds a WPF run rendering a cross-reference field's cached text, tagged for round-trip.</summary>
+    private static WpfRun BuildCrossReferenceRun(ModelRun run, TextDocument document)
+    {
+        var fmt = run.Formatting ?? document.DefaultRun;
+        var wpf = new WpfRun(run.Text)
+        {
+            FontWeight = fmt.Bold ? FontWeights.Bold : FontWeights.Normal,
+            FontStyle = fmt.Italic ? FontStyles.Italic : FontStyles.Normal,
+            Tag = new CrossReferenceMarker(run.CrossReference!)
+        };
+        if (fmt.FontFamily is { Length: > 0 } family)
+            wpf.FontFamily = new FontFamily(family);
+        if (fmt.FontSizePt is { } size)
+            wpf.FontSize = size * PxPerPoint;
+        if (TryParseColor(fmt.ColorHex, out var color))
+            wpf.Foreground = new SolidColorBrush(color);
+        // A hyperlink cross-reference renders in the link colour so it reads as clickable, matching Word.
+        else if (run.CrossReference!.Hyperlink)
+            wpf.Foreground = new SolidColorBrush(Color.FromRgb(0x05, 0x63, 0xC1));
+        wpf.ToolTip = "Cross-reference: " + run.CrossReference!.Kind;
+        return wpf;
+    }
 
     /// <summary>Builds a WPF run rendering a table-formula field's cached result, tagged for round-trip.</summary>
     private static WpfRun BuildTableFormulaRun(ModelRun run, TextDocument document)
@@ -5502,6 +5542,79 @@ public sealed class DocumentView : RichTextBox
         if (index < 0 || index > _model.Blocks.Count)
             index = _model.Blocks.Count;
         _commands.Execute(new InsertParagraphCommand(index, caption));
+    }
+
+    /// <summary>
+    /// Inserts a cross-reference field (Word's References &gt; Cross-reference) at the caret pointing at
+    /// <paramref name="target"/> of <paramref name="type"/>, showing <paramref name="insertAs"/> and
+    /// optionally as a clickable hyperlink. For a body target that lacks a bookmark anchor, a hidden
+    /// <c>_Ref…</c> bookmark is added to the target paragraph so the resulting REF/PAGEREF field resolves
+    /// (Word auto-bookmarks targets the same way). The inserted run carries a cached resolved value (the
+    /// target's text/number/position) so it renders sensibly before the next update, and round-trips
+    /// through the model and docx as a field. Routed through a single commit/render so it is undoable via
+    /// the normal text-edit flow.
+    /// </summary>
+    public void InsertCrossReference(CrossRefType type, CrossRefTarget target, CrossRefInsertAs insertAs, bool hyperlink)
+    {
+        Focus();
+        CommitToModel();
+
+        var sourceBlock = CaretBlockIndex();
+        var resolved = target;
+        var fieldKind = CrossReferences.FieldKindFor(type, insertAs);
+
+        // Body targets (REF/PAGEREF) need a bookmark anchor to resolve; ensure one on the target paragraph.
+        if (fieldKind != CrossRefFieldKind.NoteRef
+            && string.IsNullOrEmpty(resolved.Anchor)
+            && resolved.BlockIndex is { } targetBlock
+            && targetBlock >= 0 && targetBlock < _model.Blocks.Count
+            && _model.Blocks[targetBlock] is ModelParagraph targetParagraph)
+        {
+            var anchor = EnsureCrossReferenceAnchor(targetParagraph);
+            resolved = resolved with { Anchor = anchor };
+        }
+
+        var field = CrossReferences.BuildField(type, resolved, insertAs, hyperlink);
+        var cached = CrossReferences.ResolveText(_model, type, resolved, insertAs, sourceBlock);
+        var run = ModelRun.CrossReferenceFieldRun(field, cached);
+
+        // Append the field run to the caret's paragraph in the model (or the last paragraph / a fresh one),
+        // then re-render. Working at the model level keeps the just-added target bookmark from being clobbered
+        // by a view->model commit, and avoids losing the field marker that a view round-trip could.
+        var caretBlock = sourceBlock >= 0 && sourceBlock < _model.Blocks.Count ? sourceBlock : -1;
+        if (caretBlock < 0 || _model.Blocks[caretBlock] is not ModelParagraph host)
+        {
+            host = _model.Blocks.OfType<ModelParagraph>().LastOrDefault() ?? new ModelParagraph();
+            if (!_model.Blocks.Contains(host))
+                _model.Blocks.Add(host);
+        }
+        host.Runs.Add(run);
+        Render();
+    }
+
+    // Returns the target paragraph's existing bookmark name, or assigns a fresh hidden "_Ref<n>" one (the
+    // smallest unused index) so a cross-reference field can resolve to it — mirroring Word's auto-bookmarks.
+    private string EnsureCrossReferenceAnchor(ModelParagraph paragraph)
+    {
+        if (paragraph.BookmarkName is { Length: > 0 } existing)
+            return existing;
+
+        var used = new HashSet<string>(
+            _model.Blocks.OfType<ModelParagraph>()
+                .Select(p => p.BookmarkName)
+                .Where(n => n is { Length: > 0 })!,
+            StringComparer.Ordinal);
+        var index = 1;
+        string name;
+        do
+        {
+            name = "_Ref" + index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            index++;
+        }
+        while (used.Contains(name));
+
+        paragraph.BookmarkName = name;
+        return name;
     }
 
     /// <summary>

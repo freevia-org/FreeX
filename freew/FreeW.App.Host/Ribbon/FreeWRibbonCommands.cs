@@ -2251,18 +2251,12 @@ internal static class FreeWRibbonCommands
         {
             editor.Focus();
             var owner = Window.GetWindow(editor);
-            var doc = editor.Model;
 
-            var pick = CrossReferencePicker.Ask(owner, doc);
+            var pick = CrossReferenceDialog.Prompt(owner, editor.Model);
             if (pick is null)
                 return; // cancelled or nothing to reference
 
-            var text = CrossReferences.ReferenceText(pick.Value);
-            editor.Focus();
-            if (!string.IsNullOrWhiteSpace(pick.Value.Anchor))
-                editor.InsertInternalLink(text, pick.Value.Anchor!);
-            else
-                editor.InsertText(text);
+            editor.InsertCrossReference(pick.Type, pick.Target, pick.InsertAs, pick.Hyperlink);
         }
     }
 
@@ -2365,99 +2359,6 @@ internal static class FreeWRibbonCommands
         private sealed record CategoryItem(CitationCategory Value)
         {
             public override string ToString() => TableOfAuthorities.CategoryHeading(Value);
-        }
-    }
-
-    // A modal dialog letting the user choose a cross-reference type and target. Returns the chosen
-    // target, or null if cancelled (or if there is nothing to reference).
-    private static class CrossReferencePicker
-    {
-        public static CrossRefTarget? Ask(Window? owner, TextDocument doc)
-        {
-            var typeList = new System.Windows.Controls.ListBox
-            {
-                MinWidth = 150,
-                MinHeight = 150,
-                Margin = new Thickness(0, 0, 12, 0)
-            };
-            foreach (var t in new[] { CrossRefType.Heading, CrossRefType.Bookmark, CrossRefType.Caption, CrossRefType.Footnote })
-                typeList.Items.Add(t);
-            typeList.SelectedIndex = 0;
-
-            var targetList = new System.Windows.Controls.ListBox
-            {
-                MinWidth = 320,
-                MinHeight = 150
-            };
-
-            var targets = new List<CrossRefTarget>();
-            void ReloadTargets()
-            {
-                targets.Clear();
-                targetList.Items.Clear();
-                if (typeList.SelectedItem is CrossRefType type)
-                {
-                    foreach (var target in CrossReferences.Targets(doc, type))
-                    {
-                        targets.Add(target);
-                        targetList.Items.Add(target.Display);
-                    }
-                }
-                targetList.SelectedIndex = targetList.Items.Count > 0 ? 0 : -1;
-            }
-            typeList.SelectionChanged += (_, _) => ReloadTargets();
-            ReloadTargets();
-
-            CrossRefTarget? result = null;
-            var dialog = new Window
-            {
-                Title = "Cross-reference",
-                SizeToContent = SizeToContent.WidthAndHeight,
-                ResizeMode = ResizeMode.NoResize,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                Owner = owner,
-                ShowInTaskbar = false
-            };
-
-            var ok = new System.Windows.Controls.Button { Content = "Insert", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
-            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
-            void Commit()
-            {
-                var index = targetList.SelectedIndex;
-                if (index >= 0 && index < targets.Count)
-                {
-                    result = targets[index];
-                    dialog.DialogResult = true;
-                }
-            }
-            ok.Click += (_, _) => Commit();
-            targetList.MouseDoubleClick += (_, _) => Commit();
-
-            var buttons = new System.Windows.Controls.StackPanel
-            {
-                Orientation = System.Windows.Controls.Orientation.Horizontal,
-                HorizontalAlignment = HorizontalAlignment.Right,
-                Margin = new Thickness(0, 12, 0, 0)
-            };
-            buttons.Children.Add(ok);
-            buttons.Children.Add(cancel);
-
-            var lists = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal };
-            var typeColumn = new System.Windows.Controls.StackPanel { Margin = new Thickness(0, 0, 12, 0) };
-            typeColumn.Children.Add(new System.Windows.Controls.TextBlock { Text = "Reference type:", Margin = new Thickness(0, 0, 0, 4) });
-            typeColumn.Children.Add(typeList);
-            var targetColumn = new System.Windows.Controls.StackPanel();
-            targetColumn.Children.Add(new System.Windows.Controls.TextBlock { Text = "Insert reference to:", Margin = new Thickness(0, 0, 0, 4) });
-            targetColumn.Children.Add(targetList);
-            lists.Children.Add(typeColumn);
-            lists.Children.Add(targetColumn);
-
-            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
-            panel.Children.Add(lists);
-            panel.Children.Add(buttons);
-            dialog.Content = panel;
-
-            return dialog.ShowDialog() == true ? result : null;
         }
     }
 

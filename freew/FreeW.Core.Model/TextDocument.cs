@@ -387,6 +387,23 @@ public sealed class Run(string text, RunFormatting? formatting = null)
         new(string.Empty) { Citation = citation };
 
     /// <summary>
+    /// When non-null, this run is a cross-reference field (Word's References &gt; Cross-reference) — a
+    /// <c>REF</c>/<c>PAGEREF</c>/<c>NOTEREF</c> field over a bookmark name or note id, optionally as a
+    /// clickable hyperlink. It serialises as a <c>w:fldSimple</c> whose <c>w:instr</c> is the field
+    /// instruction (e.g. <c> REF _Ref1 \h </c>) wrapping a cached result run; the run's
+    /// <see cref="Text"/> doubles as that cached/last-resolved display text so field-unaware consumers
+    /// still render a value. Modelled as an optional run mark, mirroring <see cref="TableFormula"/> and
+    /// <see cref="Citation"/>, so it round-trips without a new block type.
+    /// </summary>
+    public CrossReferenceField? CrossReference { get; set; }
+
+    /// <summary>
+    /// Creates a cross-reference field run carrying the cached resolved text as its <see cref="Text"/>.
+    /// </summary>
+    public static Run CrossReferenceFieldRun(CrossReferenceField field, string cached = "", RunFormatting? formatting = null) =>
+        new(cached, formatting) { CrossReference = field };
+
+    /// <summary>
     /// When set, this run is a footnote reference marker pointing at the footnote with this id in
     /// <see cref="TextDocument.Footnotes"/>. It carries no literal text of its own; the marker number
     /// is the id. Serialises as a superscript run wrapping a w:footnoteReference w:id="N".

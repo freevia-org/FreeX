@@ -2026,6 +2026,41 @@ public static class DocxWriter
         return instr;
     }
 
+    /// <summary>
+    /// Builds the <c>w:fldSimple/@w:instr</c> for a cross-reference field: the keyword
+    /// (<c>REF</c>/<c>PAGEREF</c>/<c>NOTEREF</c>) and target (a bookmark name or note id), plus the
+    /// "insert reference to" switch (<c>\w</c> heading number, <c>\n</c> paragraph number, <c>\p</c>
+    /// above/below) and a trailing <c>\h</c> when the reference is a hyperlink — e.g.
+    /// <c> REF _Ref1 \w \h </c>. The surrounding spaces match how Word writes field instructions.
+    /// </summary>
+    private static string CrossReferenceInstruction(CrossReferenceField field)
+    {
+        var keyword = field.Kind switch
+        {
+            CrossRefFieldKind.PageRef => "PAGEREF",
+            CrossRefFieldKind.NoteRef => "NOTEREF",
+            _ => "REF"
+        };
+        var builder = new System.Text.StringBuilder(" ");
+        builder.Append(keyword).Append(' ').Append(field.Target);
+        switch (field.InsertAs)
+        {
+            case CrossRefInsertAs.HeadingNumber:
+                builder.Append(" \\w");
+                break;
+            case CrossRefInsertAs.ParagraphNumber:
+                builder.Append(" \\n");
+                break;
+            case CrossRefInsertAs.AboveBelow:
+                builder.Append(" \\p");
+                break;
+        }
+        if (field.Hyperlink)
+            builder.Append(" \\h");
+        builder.Append(' ');
+        return builder.ToString();
+    }
+
     private static XElement BuildRun(Run run, RunDrawings drawings)
     {
         // An inline equation serialises as an m:oMath emitted in place of the run (a paragraph-level
@@ -2063,6 +2098,15 @@ public static class DocxWriter
             return new XElement(W + "fldSimple",
                 new XAttribute(W + "instr", CitationInstruction(citation)),
                 new XElement(W + "r"));
+
+        // A cross-reference field (Word's References > Cross-reference) emits a w:fldSimple whose w:instr is
+        // a REF/PAGEREF/NOTEREF instruction over a bookmark name or note id, with optional \w/\n/\p and \h
+        // switches (e.g. " REF _Ref1 \h "), wrapping a run whose w:t is the cached resolved display text. The
+        // reader recovers the field from the instruction and the cached text from the wrapped run.
+        if (run.CrossReference is { } crossReference)
+            return new XElement(W + "fldSimple",
+                new XAttribute(W + "instr", CrossReferenceInstruction(crossReference)),
+                BuildTextRun(run, drawings));
 
         // A table-cell formula field (Word's Table > Data > Formula) emits a w:fldSimple whose w:instr is
         // the formula plus an optional number-format switch (e.g. " =SUM(ABOVE) \# "#,##0.00" "), wrapping a
