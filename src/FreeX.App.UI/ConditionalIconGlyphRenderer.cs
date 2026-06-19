@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Windows;
 using System.Windows.Media;
 
+using FreeX.App.Presentation.Charts;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.Core.Model;
 
@@ -26,36 +27,97 @@ internal static class ConditionalIconGlyphRenderer
             return;
 
         var appearance = ResolveAppearance(icon);
-        var brush = appearance.Brush;
-        var outline = OutlinePen;
+        var ops = ConditionalIconGlyphGeometry.Build(
+            appearance.GlyphKind,
+            icon.IconIndex,
+            icon.IconCount,
+            rect.X,
+            rect.Y,
+            rect.Width,
+            rect.Height);
 
-        switch (appearance.GlyphKind)
+        foreach (var op in ops)
+            DrawOp(dc, op, appearance.Brush);
+    }
+
+    private static void DrawOp(DrawingContext dc, CfGlyphOp op, Brush iconBrush)
+    {
+        var brush = FillBrush(op.Fill, iconBrush);
+        var pen = StrokePen(op.Stroke);
+
+        switch (op.Kind)
         {
-            case ConditionalIconGlyphKind.TrafficLight:
-                dc.DrawEllipse(brush, outline, Center(rect), rect.Width / 2, rect.Height / 2);
+            case CfGlyphPrimitiveKind.Ellipse:
+                dc.DrawEllipse(brush, pen, ToPoint(op.Center), op.RadiusX, op.RadiusY);
                 break;
-            case ConditionalIconGlyphKind.Sign:
-                DrawSignIcon(dc, icon, rect, brush, outline);
+            case CfGlyphPrimitiveKind.Line:
+                dc.DrawLine(pen, ToPoint(op.Points[0]), ToPoint(op.Points[1]));
                 break;
-            case ConditionalIconGlyphKind.Symbol:
-                DrawSymbolIcon(dc, icon, rect, brush, outline);
+            case CfGlyphPrimitiveKind.Box:
+                dc.DrawRectangle(brush, pen, new Rect(op.Rect.X, op.Rect.Y, op.Rect.Width, op.Rect.Height));
                 break;
-            case ConditionalIconGlyphKind.Flag:
-                dc.DrawGeometry(brush, outline, CreateFlagGeometry(rect));
+            case CfGlyphPrimitiveKind.Polyline:
+                dc.DrawGeometry(null, pen, PolylineGeometry(op.Points, closed: false));
                 break;
-            case ConditionalIconGlyphKind.Rating:
-                dc.DrawGeometry(brush, outline, CreateStarGeometry(rect));
+            case CfGlyphPrimitiveKind.Polygon:
+                dc.DrawGeometry(brush, pen, PolylineGeometry(op.Points, closed: true));
                 break;
-            case ConditionalIconGlyphKind.Quarter:
-                DrawQuarterIcon(dc, icon, rect, brush, outline);
-                break;
-            case ConditionalIconGlyphKind.Box:
-                DrawBoxIcon(dc, icon, rect, brush, outline);
-                break;
-            default:
-                dc.DrawGeometry(brush, outline, CreateArrowGeometry(rect, icon.IconIndex));
+            case CfGlyphPrimitiveKind.Pie:
+                dc.DrawGeometry(brush, pen, PieGeometry(op));
                 break;
         }
+    }
+
+    private static Brush? FillBrush(CfGlyphFill fill, Brush iconBrush) => fill switch
+    {
+        CfGlyphFill.Icon => iconBrush,
+        CfGlyphFill.White => Brushes.White,
+        _ => null,
+    };
+
+    private static Pen? StrokePen(CfGlyphStroke stroke) => stroke switch
+    {
+        CfGlyphStroke.Outline => OutlinePen,
+        CfGlyphStroke.WhiteThin => WhiteThinPen,
+        CfGlyphStroke.WhiteMedium => WhiteMediumPen,
+        _ => null,
+    };
+
+    private static Point ToPoint(LayoutPoint p) => new(p.X, p.Y);
+
+    private static StreamGeometry PolylineGeometry(IReadOnlyList<LayoutPoint> points, bool closed)
+    {
+        var geometry = new StreamGeometry();
+        using (var context = geometry.Open())
+        {
+            context.BeginFigure(ToPoint(points[0]), isFilled: closed, isClosed: closed);
+            for (var i = 1; i < points.Count; i++)
+                context.LineTo(ToPoint(points[i]), isStroked: true, isSmoothJoin: false);
+        }
+
+        geometry.Freeze();
+        return geometry;
+    }
+
+    private static StreamGeometry PieGeometry(CfGlyphOp op)
+    {
+        var geometry = new StreamGeometry();
+        using (var context = geometry.Open())
+        {
+            context.BeginFigure(ToPoint(op.Center), isFilled: true, isClosed: true);
+            context.LineTo(ToPoint(op.Points[0]), isStroked: true, isSmoothJoin: false);
+            context.ArcTo(
+                ToPoint(op.Points[1]),
+                new Size(op.RadiusX, op.RadiusY),
+                0,
+                op.LargeArc,
+                SweepDirection.Clockwise,
+                isStroked: true,
+                isSmoothJoin: false);
+        }
+
+        geometry.Freeze();
+        return geometry;
     }
 
     private static ConditionalIconAppearance ResolveAppearance(ConditionalFormatIcon icon)
@@ -100,196 +162,6 @@ internal static class ConditionalIconGlyphRenderer
         var pen = new Pen(brush, thickness);
         pen.Freeze();
         return pen;
-    }
-
-    private static Point Center(Rect rect) =>
-        new(rect.Left + rect.Width / 2, rect.Top + rect.Height / 2);
-
-    private static void DrawSignIcon(DrawingContext dc, ConditionalFormatIcon icon, Rect rect, Brush brush, Pen outline)
-    {
-        if (icon.IconIndex <= 0)
-        {
-            dc.DrawEllipse(brush, outline, Center(rect), rect.Width / 2, rect.Height / 2);
-            dc.DrawLine(WhiteThinPen, new Point(rect.Left + rect.Width * 0.28, rect.Top + rect.Height * 0.28), new Point(rect.Right - rect.Width * 0.28, rect.Bottom - rect.Height * 0.28));
-            dc.DrawLine(WhiteThinPen, new Point(rect.Right - rect.Width * 0.28, rect.Top + rect.Height * 0.28), new Point(rect.Left + rect.Width * 0.28, rect.Bottom - rect.Height * 0.28));
-        }
-        else if (icon.IconIndex == 1)
-        {
-            dc.DrawGeometry(brush, outline, CreateTriangleGeometry(rect, pointUp: true));
-            dc.DrawLine(WhiteThinPen, new Point(rect.Left + rect.Width * 0.5, rect.Top + rect.Height * 0.3), new Point(rect.Left + rect.Width * 0.5, rect.Top + rect.Height * 0.62));
-            dc.DrawEllipse(Brushes.White, null, new Point(rect.Left + rect.Width * 0.5, rect.Top + rect.Height * 0.75), 0.9, 0.9);
-        }
-        else
-        {
-            dc.DrawEllipse(brush, outline, Center(rect), rect.Width / 2, rect.Height / 2);
-            dc.DrawLine(WhiteMediumPen, new Point(rect.Left + rect.Width * 0.28, rect.Top + rect.Height * 0.56), new Point(rect.Left + rect.Width * 0.44, rect.Top + rect.Height * 0.72));
-            dc.DrawLine(WhiteMediumPen, new Point(rect.Left + rect.Width * 0.44, rect.Top + rect.Height * 0.72), new Point(rect.Right - rect.Width * 0.24, rect.Top + rect.Height * 0.3));
-        }
-    }
-
-    private static void DrawSymbolIcon(DrawingContext dc, ConditionalFormatIcon icon, Rect rect, Brush brush, Pen outline)
-    {
-        if (icon.IconIndex <= 0)
-        {
-            dc.DrawGeometry(brush, outline, CreateDiamondGeometry(rect));
-            dc.DrawLine(WhiteThinPen, new Point(rect.Left + rect.Width * 0.32, rect.Top + rect.Height * 0.32), new Point(rect.Right - rect.Width * 0.32, rect.Bottom - rect.Height * 0.32));
-            dc.DrawLine(WhiteThinPen, new Point(rect.Right - rect.Width * 0.32, rect.Top + rect.Height * 0.32), new Point(rect.Left + rect.Width * 0.32, rect.Bottom - rect.Height * 0.32));
-        }
-        else if (icon.IconIndex == 1)
-        {
-            dc.DrawEllipse(brush, outline, Center(rect), rect.Width / 2, rect.Height / 2);
-            dc.DrawLine(WhiteThinPen, new Point(rect.Left + rect.Width * 0.3, rect.Top + rect.Height * 0.5), new Point(rect.Right - rect.Width * 0.3, rect.Top + rect.Height * 0.5));
-        }
-        else
-        {
-            dc.DrawEllipse(brush, outline, Center(rect), rect.Width / 2, rect.Height / 2);
-            dc.DrawLine(WhiteMediumPen, new Point(rect.Left + rect.Width * 0.28, rect.Top + rect.Height * 0.56), new Point(rect.Left + rect.Width * 0.44, rect.Top + rect.Height * 0.72));
-            dc.DrawLine(WhiteMediumPen, new Point(rect.Left + rect.Width * 0.44, rect.Top + rect.Height * 0.72), new Point(rect.Right - rect.Width * 0.24, rect.Top + rect.Height * 0.3));
-        }
-    }
-
-    private static void DrawQuarterIcon(DrawingContext dc, ConditionalFormatIcon icon, Rect rect, Brush brush, Pen outline)
-    {
-        dc.DrawEllipse(Brushes.White, outline, Center(rect), rect.Width / 2, rect.Height / 2);
-        var sweep = Math.Max(1, icon.IconIndex + 1) / Math.Max(1d, icon.IconCount);
-        dc.DrawGeometry(brush, null, CreatePieGeometry(rect, sweep));
-        dc.DrawEllipse(null, outline, Center(rect), rect.Width / 2, rect.Height / 2);
-    }
-
-    private static void DrawBoxIcon(DrawingContext dc, ConditionalFormatIcon icon, Rect rect, Brush brush, Pen outline)
-    {
-        var inset = Math.Max(0, (icon.IconCount - 1 - icon.IconIndex) * rect.Width * 0.07);
-        dc.DrawRectangle(brush, outline, new Rect(rect.Left + inset, rect.Top + inset, Math.Max(1, rect.Width - inset * 2), Math.Max(1, rect.Height - inset * 2)));
-    }
-
-    private static StreamGeometry CreateArrowGeometry(Rect rect, int iconIndex)
-    {
-        var geometry = new StreamGeometry();
-        using var context = geometry.Open();
-        if (iconIndex == 1)
-        {
-            context.BeginFigure(new Point(rect.Left, rect.Top + rect.Height / 2), true, true);
-            context.LineTo(new Point(rect.Right - 3, rect.Top + rect.Height / 2), true, false);
-            context.LineTo(new Point(rect.Right - 3, rect.Top + 2), true, false);
-            context.LineTo(new Point(rect.Right, rect.Top + rect.Height / 2), true, false);
-            context.LineTo(new Point(rect.Right - 3, rect.Bottom - 2), true, false);
-            context.LineTo(new Point(rect.Right - 3, rect.Top + rect.Height / 2), true, false);
-        }
-        else if (iconIndex == 0)
-        {
-            context.BeginFigure(new Point(rect.Left + rect.Width / 2, rect.Bottom), true, true);
-            context.LineTo(new Point(rect.Left + rect.Width / 2, rect.Top + 3), true, false);
-            context.LineTo(new Point(rect.Left + 2, rect.Top + 3), true, false);
-            context.LineTo(new Point(rect.Left + rect.Width / 2, rect.Top), true, false);
-            context.LineTo(new Point(rect.Right - 2, rect.Top + 3), true, false);
-            context.LineTo(new Point(rect.Left + rect.Width / 2, rect.Top + 3), true, false);
-        }
-        else
-        {
-            context.BeginFigure(new Point(rect.Left + rect.Width / 2, rect.Top), true, true);
-            context.LineTo(new Point(rect.Left + rect.Width / 2, rect.Bottom - 3), true, false);
-            context.LineTo(new Point(rect.Left + 2, rect.Bottom - 3), true, false);
-            context.LineTo(new Point(rect.Left + rect.Width / 2, rect.Bottom), true, false);
-            context.LineTo(new Point(rect.Right - 2, rect.Bottom - 3), true, false);
-            context.LineTo(new Point(rect.Left + rect.Width / 2, rect.Bottom - 3), true, false);
-        }
-        geometry.Freeze();
-        return geometry;
-    }
-
-    private static StreamGeometry CreateTriangleGeometry(Rect rect, bool pointUp)
-    {
-        var geometry = new StreamGeometry();
-        using var context = geometry.Open();
-        if (pointUp)
-        {
-            context.BeginFigure(new Point(rect.Left + rect.Width / 2, rect.Top), true, true);
-            context.LineTo(new Point(rect.Right, rect.Bottom), true, false);
-            context.LineTo(new Point(rect.Left, rect.Bottom), true, false);
-        }
-        else
-        {
-            context.BeginFigure(new Point(rect.Left, rect.Top), true, true);
-            context.LineTo(new Point(rect.Right, rect.Top), true, false);
-            context.LineTo(new Point(rect.Left + rect.Width / 2, rect.Bottom), true, false);
-        }
-        geometry.Freeze();
-        return geometry;
-    }
-
-    private static StreamGeometry CreateDiamondGeometry(Rect rect)
-    {
-        var geometry = new StreamGeometry();
-        using var context = geometry.Open();
-        context.BeginFigure(new Point(rect.Left + rect.Width / 2, rect.Top), true, true);
-        context.LineTo(new Point(rect.Right, rect.Top + rect.Height / 2), true, false);
-        context.LineTo(new Point(rect.Left + rect.Width / 2, rect.Bottom), true, false);
-        context.LineTo(new Point(rect.Left, rect.Top + rect.Height / 2), true, false);
-        geometry.Freeze();
-        return geometry;
-    }
-
-    private static StreamGeometry CreateFlagGeometry(Rect rect)
-    {
-        var geometry = new StreamGeometry();
-        using var context = geometry.Open();
-        var poleX = rect.Left + rect.Width * 0.25;
-        context.BeginFigure(new Point(poleX, rect.Bottom), false, false);
-        context.LineTo(new Point(poleX, rect.Top), true, false);
-        context.BeginFigure(new Point(poleX, rect.Top + rect.Height * 0.08), true, true);
-        context.LineTo(new Point(rect.Right, rect.Top + rect.Height * 0.18), true, false);
-        context.LineTo(new Point(rect.Right - rect.Width * 0.18, rect.Top + rect.Height * 0.46), true, false);
-        context.LineTo(new Point(poleX, rect.Top + rect.Height * 0.38), true, false);
-        geometry.Freeze();
-        return geometry;
-    }
-
-    private static StreamGeometry CreateStarGeometry(Rect rect)
-    {
-        var geometry = new StreamGeometry();
-        using var context = geometry.Open();
-        var center = Center(rect);
-        var outer = Math.Min(rect.Width, rect.Height) / 2;
-        var inner = outer * 0.45;
-        for (var i = 0; i < 10; i++)
-        {
-            var radius = i % 2 == 0 ? outer : inner;
-            var angle = -Math.PI / 2 + i * Math.PI / 5;
-            var point = new Point(center.X + Math.Cos(angle) * radius, center.Y + Math.Sin(angle) * radius);
-            if (i == 0)
-                context.BeginFigure(point, true, true);
-            else
-                context.LineTo(point, true, false);
-        }
-        geometry.Freeze();
-        return geometry;
-    }
-
-    private static StreamGeometry CreatePieGeometry(Rect rect, double sweepFraction)
-    {
-        var geometry = new StreamGeometry();
-        using var context = geometry.Open();
-        var center = Center(rect);
-        var radiusX = rect.Width / 2;
-        var radiusY = rect.Height / 2;
-        var sweep = Math.Clamp(sweepFraction, 0d, 1d) * Math.PI * 2;
-        var start = -Math.PI / 2;
-        var end = start + sweep;
-        var startPoint = new Point(center.X, rect.Top);
-        var endPoint = new Point(center.X + Math.Cos(end) * radiusX, center.Y + Math.Sin(end) * radiusY);
-
-        context.BeginFigure(center, true, true);
-        context.LineTo(startPoint, true, false);
-        context.ArcTo(
-            endPoint,
-            new Size(radiusX, radiusY),
-            0,
-            sweep > Math.PI,
-            SweepDirection.Clockwise,
-            true,
-            false);
-        geometry.Freeze();
-        return geometry;
     }
 
     private readonly record struct ConditionalIconAppearanceKey(
