@@ -7,6 +7,14 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Velopack powers the app-neutral self-update orchestration in Updates/. Referenced here so
+         any shared-tier consumer (FreeX, FreeP, FreeW) gets self-update by supplying config only.
+         Logging.Abstractions supplies the optional ILogger diagnostics sink for that orchestration. -->
+    <PackageReference Include="Velopack" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Domain-neutral app-service helpers extracted from FreeX.App.Services. Kept
          internal-visible to their existing FreeX consumers until promoted to the
          public shared API for FreeW. -->

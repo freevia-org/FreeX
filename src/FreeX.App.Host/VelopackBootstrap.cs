@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Free.Shared.AppServices.Updates;
 using Velopack;
 using FreeX.App.Host.FileAssociations;
 
@@ -23,9 +24,11 @@ public static class VelopackBootstrap
                       ?? AppContext.BaseDirectory;
         var assoc = new WindowsFileAssociationService();
 
-        return VelopackApp.Build()
-            .OnAfterInstallFastCallback(_ => assoc.RegisterAll(exePath))
-            .OnAfterUpdateFastCallback(_ => assoc.RegisterAll(exePath)) // keep command path current after update
-            .OnBeforeUninstallFastCallback(_ => assoc.UnregisterAll());
+        // The hook-building mechanics live in the shared tier (VelopackBootstrapRunner); FreeX
+        // supplies only its own install/update/uninstall callbacks.
+        return VelopackBootstrapRunner.Configure(new VelopackHookConfig(
+            OnAfterInstall: () => assoc.RegisterAll(exePath),
+            OnAfterUpdate: () => assoc.RegisterAll(exePath), // keep command path current after update
+            OnBeforeUninstall: assoc.UnregisterAll));
     }
 }
