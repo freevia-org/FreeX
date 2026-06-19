@@ -853,7 +853,7 @@ public sealed partial class MainWindow : Window
                     // Page Layout buttons covered by the Page Setup dialog.
                     ["pageLayout.printArea"] = () => _ = ShowPageSetupDialogAsync(),
                     ["pageLayout.printTitles"] = () => _ = ShowPageSetupDialogAsync(),
-                    ["pageLayout.breaks"] = () => _ = ShowPageSetupDialogAsync(),
+                    ["pageLayout.breaks"] = ShowPageBreaksMenu,
                     ["pageLayout.background"] = () => _ = ShowPageSetupDialogAsync(),
                     ["pageLayout.scale"] = () => _ = ShowPageSetupDialogAsync(),
                     ["pageLayout.width"] = () => _ = ShowPageSetupDialogAsync(),
@@ -2710,11 +2710,14 @@ public sealed partial class MainWindow : Window
         yield return CreateSheetTabContextMenuItem(tab, "Rename...", async () => await RenameActiveSheetAsync(), isIdle);
         yield return CreateSheetTabContextMenuItem(tab, "Insert Sheet", AddNewSheet, isIdle);
         yield return CreateSheetTabContextMenuItem(tab, "Duplicate", DuplicateActiveSheet, isIdle);
+        yield return CreateSheetTabContextMenuItem(tab, UiText.Get("MoveCopySheet_MenuItem"), ShowMoveOrCopySheetDialog, isIdle);
         yield return CreateSheetTabContextMenuItem(tab, "Delete Sheet", DeleteActiveSheet, isIdle);
         yield return new Separator();
         yield return CreateSheetTabContextMenuItem(tab, "Hide", HideActiveSheet, isIdle && _session.SheetTabs.Count > 1);
         yield return CreateSheetTabContextMenuItem(tab, "Unhide...", async () => await UnhideSheetAsync(), isIdle && _session.HiddenSheets.Count > 0);
         yield return CreateSheetTabColorContextMenuItem(tab, isIdle);
+        yield return new Separator();
+        yield return CreateSheetTabContextMenuItem(tab, UiText.Get("OutlineSettings_MenuItem"), ShowOutlineSettingsDialog, isIdle);
         yield return new Separator();
         yield return CreateSheetTabContextMenuItem(tab, "Select All Sheets", SelectAllVisibleSheets, isIdle && _session.SheetTabs.Count > 1);
         yield return CreateSheetTabContextMenuItem(tab, "Ungroup Sheets", UngroupSheets, isIdle && _session.IsWorkbookGrouped);
