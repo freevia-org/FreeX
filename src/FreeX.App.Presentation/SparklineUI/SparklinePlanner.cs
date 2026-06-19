@@ -30,8 +30,9 @@ public enum SparklinePointToggle
 
 /// <summary>
 /// Portable, framework-free decision logic behind the Sparkline insert / edit dialogs, shared by every
-/// shell (Avalonia today, macOS by inheritance). It owns the sparkline type catalog, the data-range and
-/// location parsing rules (single-sourced with the Core <see cref="SparklineRangeLimits"/> cap), the
+/// shell (the cross-platform shell today, macOS by inheritance). It owns the sparkline type catalog, the
+/// data-range and location parsing rules (single-sourced with the Core <see cref="SparklineRangeLimits"/>
+/// cap), the
 /// marker / point flag catalog + projection, and the build of a <see cref="SparklineSettings"/> snapshot
 /// the Core <see cref="ConfigureSparklineCommand"/> applies. No UI types, so the shells only wire
 /// controls to it.
