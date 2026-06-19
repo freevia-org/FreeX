@@ -1,4 +1,4 @@
-using FreeX.App.Services.FileAssociations;
+using Free.Shared.AppServices;
 
 namespace FreeX.App.Avalonia;
 

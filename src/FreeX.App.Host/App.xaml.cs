@@ -240,8 +240,9 @@ public partial class App : Application
         services.AddSingleton<NewWorkbookNameSequence>();
 
         // Self-update + file associations.
-        services.AddSingleton<FreeX.App.Services.FileAssociations.IFileAssociationService>(
-            new FreeX.App.Host.FileAssociations.WindowsFileAssociationService(logger: null));
+        services.AddSingleton<Free.Shared.AppServices.IFileAssociationService>(
+            new Free.Shared.AppServices.Windows.WindowsFileAssociationService(
+                FreeX.App.Services.FileAssociations.FreeXFileAssociations.All, logger: null));
         services.AddSingleton<FreeX.App.Services.Updates.IUpdateService>(sp =>
         {
             var channel = AppInfo.ReleaseChannel;

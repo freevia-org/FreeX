@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Free.Shared.AppServices;
 using FreeX.App.Services.FileAssociations;
 using Xunit;
 
@@ -9,7 +10,7 @@ public class FileAssociationDefinitionTests
     [Fact]
     public void Catalog_OwnsOnlyFxl()
     {
-        var owned = FileAssociationDefinition.All
+        var owned = FreeXFileAssociations.All
             .Where(d => d.Ownership == AssociationOwnership.Default)
             .Select(d => d.Extension)
             .ToArray();
@@ -22,7 +23,7 @@ public class FileAssociationDefinitionTests
     {
         foreach (var ext in new[] { ".csv", ".tsv", ".tab", ".txt", ".xml", ".xlsx", ".xls" })
         {
-            var def = FileAssociationDefinition.All.Single(d => d.Extension == ext);
+            var def = FreeXFileAssociations.All.Single(d => d.Extension == ext);
             def.Ownership.Should().Be(AssociationOwnership.OpenWith,
                 $"{ext} must be offered via Open With, never made the default handler");
         }
@@ -31,7 +32,7 @@ public class FileAssociationDefinitionTests
     [Fact]
     public void EveryDefinition_HasProgIdAndFriendlyName()
     {
-        foreach (var def in FileAssociationDefinition.All)
+        foreach (var def in FreeXFileAssociations.All)
         {
             def.ProgId.Should().StartWith("FreeX.");
             def.FriendlyName.Should().NotBeNullOrWhiteSpace();

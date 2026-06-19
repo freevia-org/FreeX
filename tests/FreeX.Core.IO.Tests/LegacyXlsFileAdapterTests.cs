@@ -49,6 +49,36 @@ public sealed class LegacyXlsFileAdapterTests
     }
 
     [Fact]
+    public void Load_ReadsXlsbBinaryWorkbookSheetsAndCells()
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "Fixtures", "Simple.xlsb");
+        using var stream = File.OpenRead(path);
+        var adapter = new LegacyXlsFileAdapter();
+
+        var workbook = adapter.Load(stream);
+
+        // The .xlsb (BIFF12) read path shares ExcelDataReader with .xls; this hardens it
+        // with an explicit fixture. The workbook has three sheets, the first carrying a
+        // values-only mix of number, double, date, bool, and text cells.
+        workbook.Sheets.Should().HaveCount(3);
+        var firstSheet = workbook.Sheets[0];
+        firstSheet.Name.Should().NotBeNullOrWhiteSpace();
+        firstSheet.GetUsedRange().Should().NotBeNull();
+
+        firstSheet.GetValue(1, 1).Should().Be(new NumberValue(1));
+        firstSheet.GetValue(1, 2).Should().Be(new NumberValue(1.02));
+        firstSheet.GetValue(1, 3).Should().BeOfType<DateTimeValue>();
+        firstSheet.GetValue(1, 5).Should().Be(new TextValue("next value is null"));
+        firstSheet.GetValue(21, 4).Should().Be(new BoolValue(true));
+
+        var firstSheetCells = firstSheet.EnumerateCells().Select(cell => cell.Cell.Value).ToList();
+        firstSheetCells.Should().Contain(value => value is NumberValue);
+        firstSheetCells.Should().Contain(value => value is TextValue);
+        firstSheetCells.Should().Contain(value => value is BoolValue);
+        firstSheetCells.Should().Contain(value => value is DateTimeValue);
+    }
+
+    [Fact]
     public void Load_MapsLegacyDateCellsToDateTimeValues()
     {
         var value = MapLegacyXlsValue(new DateTime(2026, 5, 17, 9, 30, 0));

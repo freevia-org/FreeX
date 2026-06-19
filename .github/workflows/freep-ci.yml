@@ -1,0 +1,61 @@
+name: FreeP CI
+
+# Dedicated build + test gate for the FreeP presentations app (freep/, FreeP.slnx).
+# Runs on PRs to main and on direct pushes to main that touch FreeP, the shared tier, or this workflow,
+# mirroring the FreeW `freew-ci.yml` lane (windows-latest, .NET 10, build Release then test --no-build).
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "freep/**"
+      - "FreeP.slnx"
+      - "shared/**"
+      - "Directory.Build.props"
+      - "Directory.Packages.props"
+      - ".github/workflows/freep-ci.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "freep/**"
+      - "FreeP.slnx"
+      - "shared/**"
+      - ".github/workflows/freep-ci.yml"
+
+concurrency:
+  group: freep-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  freep-tests:
+    name: FreeP test lane
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build (Release, 0 warnings enforced)
+        shell: pwsh
+        run: dotnet build FreeP.slnx --configuration Release
+
+      - name: Test
+        shell: pwsh
+        run: dotnet test FreeP.slnx --configuration Release --no-build
