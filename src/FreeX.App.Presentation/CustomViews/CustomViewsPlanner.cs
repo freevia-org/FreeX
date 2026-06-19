@@ -5,7 +5,7 @@ namespace FreeX.App.Presentation.CustomViews;
 
 /// <summary>
 /// Portable (no UI framework) planning for the Custom Views feature, shared by the desktop hosts and the
-/// macOS/Avalonia shell. A Custom View captures the workbook's per-sheet view state (the state the model can
+/// macOS shell. A Custom View captures the workbook's per-sheet view state (the state the model can
 /// represent today: view mode, frozen/split panes, gridlines/headings/rulers/formulas toggles, zoom, the
 /// active cell and the scrolled-to top-left cell) plus the active-sheet index, and restores it on demand.
 ///

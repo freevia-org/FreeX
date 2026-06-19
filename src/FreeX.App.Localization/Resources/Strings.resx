@@ -444,6 +444,33 @@
   <data name="SelectionPane_DefaultEllipseName" xml:space="preserve"><value>Ellipse</value></data>
   <data name="SelectionPane_DefaultLineName" xml:space="preserve"><value>Line</value></data>
   <data name="SelectionPane_DefaultRectangleName" xml:space="preserve"><value>Rectangle</value></data>
+  <!-- Custom Views manager (View ▸ Workbook Views ▸ Custom Views) -->
+  <data name="CustomViews_Title" xml:space="preserve"><value>Custom Views</value></data>
+  <data name="CustomViews_Hint" xml:space="preserve"><value>A custom view saves the current display settings (view mode, frozen/split panes, gridlines, headings, zoom and scroll position) and the active sheet so you can switch back to them later.</value></data>
+  <data name="CustomViews_ListLabel" xml:space="preserve"><value>Views</value></data>
+  <data name="CustomViews_ColumnName" xml:space="preserve"><value>Name</value></data>
+  <data name="CustomViews_Show" xml:space="preserve"><value>Show</value></data>
+  <data name="CustomViews_Add" xml:space="preserve"><value>Add...</value></data>
+  <data name="CustomViews_Delete" xml:space="preserve"><value>Delete</value></data>
+  <data name="CustomViews_DefaultNameFormat" xml:space="preserve"><value>View {0}</value></data>
+  <data name="CustomViews_RowFormat" xml:space="preserve"><value>{0}    ({1} sheet(s))</value></data>
+  <data name="CustomViews_NoViews" xml:space="preserve"><value>This workbook has no custom views yet.</value></data>
+  <data name="CustomViews_Applied" xml:space="preserve"><value>Custom view '{0}' applied.</value></data>
+  <data name="CustomViews_ApplyFailed" xml:space="preserve"><value>The custom view could not be applied.</value></data>
+  <data name="CustomViews_Saved" xml:space="preserve"><value>Custom view '{0}' saved.</value></data>
+  <data name="CustomViews_SaveFailed" xml:space="preserve"><value>The custom view could not be saved.</value></data>
+  <data name="CustomViews_Deleted" xml:space="preserve"><value>Custom view '{0}' deleted.</value></data>
+  <data name="CustomViews_DeleteFailed" xml:space="preserve"><value>The custom view could not be deleted.</value></data>
+  <!-- Add Custom View name dialog -->
+  <data name="CustomViews_AddTitle" xml:space="preserve"><value>Add View</value></data>
+  <data name="CustomViews_NameLabel" xml:space="preserve"><value>Name:</value></data>
+  <data name="CustomViews_NameInputLabel" xml:space="preserve"><value>View name</value></data>
+  <data name="CustomViews_IncludePrintSettings" xml:space="preserve"><value>Print settings</value></data>
+  <data name="CustomViews_IncludeHiddenFilter" xml:space="preserve"><value>Hidden rows, columns and filter settings</value></data>
+  <data name="CustomViews_IncludeHeader" xml:space="preserve"><value>Include in view</value></data>
+  <data name="CustomViews_NameBlank" xml:space="preserve"><value>Enter a name for the view.</value></data>
+  <data name="CustomViews_NameTooLong" xml:space="preserve"><value>The view name is too long (255 characters maximum).</value></data>
+  <data name="CustomViews_NameDuplicate" xml:space="preserve"><value>A view with that name already exists.</value></data>
   <!-- Format Picture / Format Shape dialog -->
   <data name="FormatPicture_PictureTitle" xml:space="preserve"><value>Format Picture</value></data>
   <data name="FormatPicture_ShapeTitle" xml:space="preserve"><value>Format Shape</value></data>

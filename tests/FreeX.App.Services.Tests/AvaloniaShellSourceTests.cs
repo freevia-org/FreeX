@@ -4470,6 +4470,35 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("manage_conditional_formats_dialog={FormatBool(snapshot.DialogEvidence.HasManageConditionalFormatsDialog)}");
     }
 
+    [Fact]
+    public void MainWindow_WiresCustomViewsManagerAndAddDialogsThroughPortablePlanner()
+    {
+        var customViewsSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.CustomViews.cs"));
+        var windowSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        // The View ▸ Workbook Views ▸ Custom Views ribbon button is wired to the dialog entry point.
+        windowSource.Should().Contain("[\"Custom Views\"] = () => RunGuarded(OpenCustomViewsDialogAsync),");
+
+        // Manager dialog + Add dialog carry stable automation ids.
+        customViewsSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"CustomViewsDialog\");");
+        customViewsSource.Should().Contain("AutomationProperties.SetAutomationId(viewsList, \"CustomViewsList\");");
+        customViewsSource.Should().Contain("AutomationProperties.SetAutomationId(showButton, \"CustomViewsShowButton\");");
+        customViewsSource.Should().Contain("AutomationProperties.SetAutomationId(addButton, \"CustomViewsAddButton\");");
+        customViewsSource.Should().Contain("AutomationProperties.SetAutomationId(deleteButton, \"CustomViewsDeleteButton\");");
+        customViewsSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"CustomViewAddDialog\");");
+        customViewsSource.Should().Contain("AutomationProperties.SetAutomationId(nameBox, \"CustomViewNameBox\");");
+
+        // All Custom Views logic flows through the portable planner + the shared session command path.
+        customViewsSource.Should().Contain("CustomViewsPlanner.BuildRows(_session.Workbook)");
+        customViewsSource.Should().Contain("CustomViewsPlanner.BuildApplyCommand(name)");
+        customViewsSource.Should().Contain("CustomViewsPlanner.BuildSaveCommand(");
+        customViewsSource.Should().Contain("CustomViewsPlanner.BuildDeleteCommand(name)");
+        customViewsSource.Should().Contain("CustomViewsPlanner.ValidateName(_session.Workbook,");
+        customViewsSource.Should().Contain("_session.ExecuteReviewCommand(");
+        // Applying a view that changes the active sheet re-syncs the session's cached active sheet.
+        customViewsSource.Should().Contain("ResyncActiveSheetToWorkbook();");
+    }
+
     private static string ExtractSourceBlock(string source, string startMarker, string endMarker)
     {
         var start = source.IndexOf(startMarker, StringComparison.Ordinal);
