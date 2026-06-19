@@ -95,6 +95,10 @@ internal static class DialogSourceTestSupport
     private static string ReadHostSource(string fileName) =>
         WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Host", fileName);
 
+    public static string ReadPresentationSources(params string[] relativeParts) =>
+        WorkspaceFileLocator.ReadAllText(
+            new[] { "src", "FreeX.App.Presentation" }.Concat(relativeParts).ToArray());
+
     private static string ReadAppUiSource(string fileName) =>
         WorkspaceFileLocator.ReadAllText("src", "FreeX.App.UI", fileName);
 
