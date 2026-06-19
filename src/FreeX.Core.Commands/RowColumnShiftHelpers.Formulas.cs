@@ -34,4 +34,26 @@ internal static partial class RowColumnShiftHelpers
         }
         snapshot.Clear();
     }
+
+    internal static IReadOnlyList<CellAddress> BuildAffectedCellsForFormulaRewrite(
+        IEnumerable<CellAddress> primaryCells,
+        Dictionary<CellAddress, string> formulaSnapshot)
+    {
+        var affected = new List<CellAddress>();
+        var seen = new HashSet<CellAddress>();
+
+        foreach (var address in primaryCells)
+        {
+            if (seen.Add(address))
+                affected.Add(address);
+        }
+
+        foreach (var address in formulaSnapshot.Keys)
+        {
+            if (seen.Add(address))
+                affected.Add(address);
+        }
+
+        return affected;
+    }
 }

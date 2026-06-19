@@ -306,7 +306,11 @@ internal sealed record FreeXWorkbookSummary(
     int PivotTableCount,
     int PivotCacheCount);
 internal sealed record FreeXLoadSummaryResult(FreeXWorkbookSummary Summary, IReadOnlyList<string> Warnings);
-internal sealed record FreeXSaveResult(string SavedPath, FreeXWorkbookSummary Summary, IReadOnlyList<string> LoadWarnings);
+internal sealed record FreeXSaveResult(
+    string SavedPath,
+    FreeXWorkbookSummary Summary,
+    IReadOnlyList<string> LoadWarnings,
+    IReadOnlyList<string> SaveWarnings);
 internal sealed record ExcelSaveReopenResult(
     string ExcelSavedPath,
     ExcelWorkbookSummary Opened,

@@ -26,6 +26,21 @@ public sealed class ExcelOpenSmokeReportSchemaTests
     }
 
     [Fact]
+    public void FreeXToolingSavePaths_SurfaceSaveWarnings()
+    {
+        var modelsSource = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.ExcelOpenSmoke", "SmokeModels.cs");
+        var smokeSource = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.ExcelOpenSmoke", "Program.cs");
+        var fidelitySource = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.SheetFidelity", "Program.cs");
+
+        modelsSource.Should().Contain("IReadOnlyList<string> SaveWarnings");
+        smokeSource.Should().Contain("adapter.SaveWithWarnings(workbook, output)");
+        smokeSource.Should().Contain("AssertFreeXSaveWarnings(input, \"FreeX source save\", freeXSave.SaveWarnings)");
+        smokeSource.Should().Contain("CombineFreeXWarnings(freeXSave.LoadWarnings, freeXSave.SaveWarnings)");
+        fidelitySource.Should().Contain("new XlsxFileAdapter().SaveWithWarnings(workbook, outStream).Warnings");
+        fidelitySource.Should().Contain("Save warnings");
+    }
+
+    [Fact]
     public void SaveReopenValidation_AllowsExcelWorkbookViewRevisionUid()
     {
         var programSource = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.ExcelOpenSmoke", "Program.cs");

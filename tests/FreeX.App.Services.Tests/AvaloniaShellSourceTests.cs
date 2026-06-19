@@ -1358,6 +1358,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? -1 : 1");
         source.Should().Contain("_session.MoveActiveCell(0, colDelta);");
         source.Should().Contain("var result = _session.CommitCellText(_formulaBox.Text ?? \"\");");
+        source.Should().Contain("if (_isOpening || _isSaving)");
+        source.Should().Contain("Finish saving before editing cells.");
         source.Should().Contain("RefreshShell($\"Edited {FormatCellReference(address)}\");");
         source.Should().Contain("private bool TryCommitPendingFormulaEdit()");
         source.Should().Contain("private bool HasPendingFormulaEditText() =>");
@@ -1365,6 +1367,17 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("StringComparison.Ordinal");
         source.Should().Contain("if (!TryCommitPendingFormulaEdit())");
         source.Should().Contain("Finish the current cell edit before opening another workbook.");
+    }
+
+    [Fact]
+    public void MainWindow_SaveCapturesXlsxWarningsInAvaloniaStatus()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("var saveWarnings = await _saveService.SaveAsync");
+        source.Should().Contain("RefreshShell(FormatSaveCompletionStatus(target.Path, saveWarnings));");
+        source.Should().Contain("private static string FormatSaveCompletionStatus(string path, IReadOnlyList<string> warnings)");
+        source.Should().Contain("with {warnings.Count} warning(s)");
     }
 
     [Fact]

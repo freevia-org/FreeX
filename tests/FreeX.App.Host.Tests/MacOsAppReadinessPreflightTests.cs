@@ -640,7 +640,9 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("`\"FormatCellsFillPatternColorBox`\"");
         script.Should().Contain("`\"FormatCellsNormalFontBox`\"");
         script.Should().Contain("`\"FormatCellsProtectionExplanationText`\"");
-        script.Should().Contain("Locking cells or hiding formulas has no effect until you protect the worksheet.");
+        // The protection explanation was localized; the preflight now declares the contract via the
+        // UiText resource key rather than the inline English string.
+        script.Should().Contain("FormatCells_ProtectionExplanation");
         script.Should().Contain("var normalStyle = CellStyle.Default;");
         script.Should().Contain("Bold: normalFont ? normalStyle.Bold : ReadChangedFormatCellsBool(_session.IsSelectedRangeStartBold, boldBox)");
         script.Should().Contain("FontName: normalFont ? normalStyle.FontName : ReadChangedFormatCellsText(currentFontName, fontNameBox)");
@@ -2171,12 +2173,42 @@ public sealed class MacOsAppReadinessPreflightTests
                     dialog.Opened += (_, _) => cancelButton.Focus();
                     AutomationProperties.SetAutomationId(replaceButton, "PdfExportOverwriteReplaceButton");
                     AutomationProperties.SetAutomationId(cancelButton, "PdfExportOverwriteCancelButton");
-                    Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, exportPlan, pdfBuffer)
+                    var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, exportPlan, pdfBuffer);
+                    await File.WriteAllBytesAsync(path, pdfBuffer.ToArray());
                     _workbookStatisticsMenuItem.Header = "Workbook Statistics...";
                     _workbookStatisticsMenuItem.Gesture = new KeyGesture(Key.G, KeyModifiers.Control | KeyModifiers.Shift);
                     _workbookStatisticsMenuItem.Click += async (_, _) => await ShowWorkbookStatisticsDialogAsync();
                     fileMenu.Items.Add(_workbookStatisticsMenuItem);
                     _workbookStatisticsMenuItem.IsEnabled = isIdle;
+                    private readonly NativeMenuItem _optionsMenuItem = new();
+                    _optionsMenuItem.Header = UiText.Get("Options_Title");
+                    _optionsMenuItem.Gesture = new KeyGesture(Key.OemComma, KeyModifiers.Meta);
+                    _optionsMenuItem.Click += (_, _) => ShowOptions();
+                    fileMenu.Items.Add(_optionsMenuItem);
+                    Text = UiText.Get("FormatCells_ProtectionExplanation"),
+                    CreateFormatCellsField(UiText.Get("FormatCells_PatternStyle"), fillPatternStyleBox)
+                    CreateFormatCellsField(UiText.Get("FormatCells_PatternColor"), fillPatternColorBox)
+                    private readonly NativeMenuItem _backstageExportMenuItem = new();
+                    private readonly NativeMenuItem _backstageInfoMenuItem = new();
+                    private readonly NativeMenuItem _backstageAccountMenuItem = new();
+                    _backstageInfoMenuItem.Header = UiText.Get("Backstage_Info_MenuItem");
+                    _backstageInfoMenuItem.Click += (_, _) => ShowBackstageInfo();
+                    _backstageExportMenuItem.Header = UiText.Get("Backstage_Export_MenuItem");
+                    _backstageExportMenuItem.Click += (_, _) => ShowBackstageExport();
+                    _backstageAccountMenuItem.Header = UiText.Get("Backstage_Account_MenuItem");
+                    _backstageAccountMenuItem.Click += (_, _) => ShowBackstageAccount();
+                    fileMenu.Items.Add(_backstageExportMenuItem);
+                    fileMenu.Items.Add(_backstageInfoMenuItem);
+                    fileMenu.Items.Add(_backstageAccountMenuItem);
+                    private readonly NativeMenuItem _printMenuItem = new();
+                    _printMenuItem.Header = UiText.Get("Print_MenuItem");
+                    _printMenuItem.Gesture = new KeyGesture(Key.P, KeyModifiers.Meta);
+                    _printMenuItem.Click += async (_, _) => await ShowPrintDialogAsync();
+                    fileMenu.Items.Add(_printMenuItem);
+                    private readonly NativeMenuItem _printPreviewMenuItem = new();
+                    _printPreviewMenuItem.Header = "Print Preview...";
+                    _printPreviewMenuItem.Gesture = new KeyGesture(Key.P, KeyModifiers.Meta | KeyModifiers.Shift);
+                    _printPreviewMenuItem.Click += async (_, _) => await ShowPrintPreviewDialogAsync();
                     HasNativeWorkbookStatisticsMenuItem: HasNativeMenuItem(_workbookStatisticsMenuItem, "Workbook Statistics...")
                     e.Key == Key.G && e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift)
                     private async Task ShowWorkbookStatisticsDialogAsync()
@@ -4228,6 +4260,30 @@ public sealed class MacOsAppReadinessPreflightTests
                 }
 
                 private static byte EncodeWinAnsiByte(char ch) => 0;
+            }
+            """);
+
+        WriteFile(
+            root,
+            "src/FreeX.App.Avalonia/Pdf/AvaloniaPdfDocumentExporter.cs",
+            """
+            namespace FreeX.App.Avalonia.Pdf;
+
+            public static class AvaloniaPdfDocumentExporter
+            {
+                public static PdfExportOutcome Save(object workbook, object exportPlan, Stream stream)
+                {
+                    try
+                    {
+                        var result = SkiaPdfDocumentExporter.Save(workbook, exportPlan, stream, options);
+                        return result;
+                    }
+                    catch (Exception ex) when (IsSkiaUnavailable(ex))
+                    {
+                        var result = PortablePdfDocumentExporter.Save(workbook, exportPlan, stream, options);
+                        return result;
+                    }
+                }
             }
             """);
 
