@@ -1,10 +1,17 @@
+using System.Globalization;
+using System.Threading.Tasks;
+using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Layout;
+using Avalonia.Media;
 using Free.Shared.Ribbon;
 using FreeX.App.Services.Ribbon;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 using FreeX.Ribbon.Avalonia;
+using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
 
 namespace FreeX.App.Avalonia;
 
@@ -156,5 +163,204 @@ public sealed partial class MainWindow
         var commands = WorksheetContextMenuPlanner.BuildCommands(WorksheetContextMenuTargetKind.ColumnSelection);
         var ribbonMenu = WorksheetContextMenuRibbonAdapter.ToRibbonMenu(commands);
         AvaloniaContextMenuRenderer.BuildContextMenu(ribbonMenu, DispatchWorksheetContextMenuCommand).Open(anchor);
+    }
+
+    // Row Height / Column Width / AutoFit (Excel parity: Home ▸ Cells ▸ Format and the row/column
+    // header right-click menus). Sizing math + the undoable mutation are portable: the session drives
+    // the shared SetRowHeight/SetColumnWidth commands and AutoFitSizingService via WorkbookSession.
+
+    /// <summary>
+    /// Prompts for a row height in points and applies it to the selected rows via the shared
+    /// <c>SetRowHeightCommand</c> (matching the Windows host's Row Height dialog).
+    /// </summary>
+    private async Task ShowRowHeightDialogAsync()
+    {
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var current = _session.GetSelectedRowHeight();
+        var value = await ShowDimensionInputDialogAsync(
+            UiText.Get("RowColumn_RowHeightDialogTitle"),
+            UiText.Get("RowColumn_RowHeightDialogPrompt"),
+            current,
+            min: 0,
+            max: 409.5,
+            automationId: "RowHeightValueBox");
+        if (value is not { } height)
+            return;
+
+        var result = _session.SetSelectedRowsHeight(height);
+        if (result.Success)
+            RefreshShell(UiText.Format("RowColumn_RowHeightApplied", FormatDimension(height)));
+        else
+            RefreshShell(result.ErrorMessage ?? UiText.Get("RowColumn_RowHeightFailed"));
+    }
+
+    /// <summary>
+    /// Prompts for a column width in characters and applies it to the selected columns via the shared
+    /// <c>SetColumnWidthCommand</c> (matching the Windows host's Column Width dialog).
+    /// </summary>
+    private async Task ShowColumnWidthDialogAsync()
+    {
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var current = _session.GetSelectedColumnWidth();
+        var value = await ShowDimensionInputDialogAsync(
+            UiText.Get("RowColumn_ColumnWidthDialogTitle"),
+            UiText.Get("RowColumn_ColumnWidthDialogPrompt"),
+            current,
+            min: 0,
+            max: 255,
+            automationId: "ColumnWidthValueBox");
+        if (value is not { } width)
+            return;
+
+        var result = _session.SetSelectedColumnsWidth(width);
+        if (result.Success)
+            RefreshShell(UiText.Format("RowColumn_ColumnWidthApplied", FormatDimension(width)));
+        else
+            RefreshShell(result.ErrorMessage ?? UiText.Get("RowColumn_ColumnWidthFailed"));
+    }
+
+    /// <summary>
+    /// AutoFits the selected rows' heights to their content using the shared content-based estimate
+    /// (AutoFitSizingService — character/line counts, not true glyph metrics).
+    /// </summary>
+    private void AutoFitSelectedRowHeight()
+    {
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var result = _session.AutoFitSelectedRowHeight();
+        RefreshShell(result.Success
+            ? UiText.Get("RowColumn_RowHeightAutoFitted")
+            : result.ErrorMessage ?? UiText.Get("RowColumn_AutoFitRowFailed"));
+    }
+
+    /// <summary>
+    /// AutoFits the selected columns' widths to their content using the shared content-based estimate
+    /// (AutoFitSizingService — character/line counts, not true glyph metrics).
+    /// </summary>
+    private void AutoFitSelectedColumnWidth()
+    {
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var result = _session.AutoFitSelectedColumnWidth();
+        RefreshShell(result.Success
+            ? UiText.Get("RowColumn_ColumnWidthAutoFitted")
+            : result.ErrorMessage ?? UiText.Get("RowColumn_AutoFitColumnFailed"));
+    }
+
+    private static string FormatDimension(double value) =>
+        value.ToString("0.##", CultureInfo.CurrentCulture);
+
+    /// <summary>
+    /// Single-numeric-input modal used by the Row Height / Column Width dialogs. Returns the parsed,
+    /// clamped value, or null on cancel / invalid input. The Core command re-validates the range, so
+    /// this clamp is only for an immediate, friendly result.
+    /// </summary>
+    private async Task<double?> ShowDimensionInputDialogAsync(
+        string title,
+        string prompt,
+        double current,
+        double min,
+        double max,
+        string automationId)
+    {
+        double? result = null;
+        var dialog = new Window
+        {
+            Title = title,
+            Width = 320,
+            Height = 170,
+            MinWidth = 280,
+            MinHeight = 160,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+
+        var valueBox = new TextBox
+        {
+            Text = current.ToString("0.##", CultureInfo.CurrentCulture),
+            MinWidth = 240,
+        };
+        AutomationProperties.SetName(valueBox, prompt);
+        AutomationProperties.SetAutomationId(valueBox, automationId);
+
+        var validationText = new TextBlock
+        {
+            Foreground = Brushes.Firebrick,
+            TextWrapping = TextWrapping.Wrap,
+            IsVisible = false,
+        };
+
+        var okButton = new Button { Content = "OK", MinWidth = 84, Padding = new Thickness(10, 4) };
+        var cancelButton = new Button { Content = "Cancel", MinWidth = 84, Padding = new Thickness(10, 4) };
+        AutomationProperties.SetAutomationId(okButton, "DimensionDialogOkButton");
+        AutomationProperties.SetAutomationId(cancelButton, "DimensionDialogCancelButton");
+
+        void Accept()
+        {
+            var text = (valueBox.Text ?? "").Trim();
+            if (!double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out var parsed) &&
+                !double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out parsed))
+            {
+                validationText.Text = prompt;
+                validationText.IsVisible = true;
+                valueBox.Focus();
+                valueBox.SelectAll();
+                return;
+            }
+
+            result = Math.Clamp(parsed, min, max);
+            dialog.Close();
+        }
+
+        okButton.Click += (_, _) => Accept();
+        cancelButton.Click += (_, _) => dialog.Close();
+        valueBox.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter)
+            {
+                Accept();
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Escape)
+            {
+                dialog.Close();
+                e.Handled = true;
+            }
+        };
+
+        var buttonRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Children = { cancelButton, okButton },
+        };
+
+        dialog.Content = new StackPanel
+        {
+            Margin = new Thickness(16),
+            Spacing = 8,
+            Children =
+            {
+                new TextBlock { Text = prompt },
+                valueBox,
+                validationText,
+                buttonRow,
+            },
+        };
+        dialog.Opened += (_, _) =>
+        {
+            valueBox.Focus();
+            valueBox.SelectAll();
+        };
+
+        await dialog.ShowDialog(this);
+        return result;
     }
 }

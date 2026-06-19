@@ -619,4 +619,16 @@
   <data name="RowColumn_HideColumnsFailed" xml:space="preserve"><value>Could not hide columns.</value></data>
   <data name="RowColumn_UnhideColumnsFailed" xml:space="preserve"><value>Could not unhide columns.</value></data>
   <data name="RowColumn_NoSelection" xml:space="preserve"><value>Select rows or columns first.</value></data>
+  <data name="RowColumn_RowHeightDialogTitle" xml:space="preserve"><value>Row Height</value></data>
+  <data name="RowColumn_RowHeightDialogPrompt" xml:space="preserve"><value>Row height (points):</value></data>
+  <data name="RowColumn_ColumnWidthDialogTitle" xml:space="preserve"><value>Column Width</value></data>
+  <data name="RowColumn_ColumnWidthDialogPrompt" xml:space="preserve"><value>Column width (characters):</value></data>
+  <data name="RowColumn_RowHeightApplied" xml:space="preserve"><value>Set row height to {0}.</value></data>
+  <data name="RowColumn_ColumnWidthApplied" xml:space="preserve"><value>Set column width to {0}.</value></data>
+  <data name="RowColumn_RowHeightFailed" xml:space="preserve"><value>Could not set row height.</value></data>
+  <data name="RowColumn_ColumnWidthFailed" xml:space="preserve"><value>Could not set column width.</value></data>
+  <data name="RowColumn_RowHeightAutoFitted" xml:space="preserve"><value>AutoFit row height applied.</value></data>
+  <data name="RowColumn_ColumnWidthAutoFitted" xml:space="preserve"><value>AutoFit column width applied.</value></data>
+  <data name="RowColumn_AutoFitRowFailed" xml:space="preserve"><value>Could not AutoFit row height.</value></data>
+  <data name="RowColumn_AutoFitColumnFailed" xml:space="preserve"><value>Could not AutoFit column width.</value></data>
 </root>

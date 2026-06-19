@@ -601,4 +601,16 @@
   <data name="RowColumn_HideColumnsFailed" xml:space="preserve"><value>Impossible de masquer les colonnes.</value></data>
   <data name="RowColumn_UnhideColumnsFailed" xml:space="preserve"><value>Impossible d'afficher les colonnes.</value></data>
   <data name="RowColumn_NoSelection" xml:space="preserve"><value>Sélectionnez d'abord des lignes ou des colonnes.</value></data>
+  <data name="RowColumn_RowHeightDialogTitle" xml:space="preserve"><value>Hauteur de ligne</value></data>
+  <data name="RowColumn_RowHeightDialogPrompt" xml:space="preserve"><value>Hauteur de ligne (points) :</value></data>
+  <data name="RowColumn_ColumnWidthDialogTitle" xml:space="preserve"><value>Largeur de colonne</value></data>
+  <data name="RowColumn_ColumnWidthDialogPrompt" xml:space="preserve"><value>Largeur de colonne (caractères) :</value></data>
+  <data name="RowColumn_RowHeightApplied" xml:space="preserve"><value>Hauteur de ligne définie sur {0}.</value></data>
+  <data name="RowColumn_ColumnWidthApplied" xml:space="preserve"><value>Largeur de colonne définie sur {0}.</value></data>
+  <data name="RowColumn_RowHeightFailed" xml:space="preserve"><value>Impossible de définir la hauteur de ligne.</value></data>
+  <data name="RowColumn_ColumnWidthFailed" xml:space="preserve"><value>Impossible de définir la largeur de colonne.</value></data>
+  <data name="RowColumn_RowHeightAutoFitted" xml:space="preserve"><value>Ajustement automatique de la hauteur de ligne appliqué.</value></data>
+  <data name="RowColumn_ColumnWidthAutoFitted" xml:space="preserve"><value>Ajustement automatique de la largeur de colonne appliqué.</value></data>
+  <data name="RowColumn_AutoFitRowFailed" xml:space="preserve"><value>Impossible d'ajuster automatiquement la hauteur de ligne.</value></data>
+  <data name="RowColumn_AutoFitColumnFailed" xml:space="preserve"><value>Impossible d'ajuster automatiquement la largeur de colonne.</value></data>
 </root>
