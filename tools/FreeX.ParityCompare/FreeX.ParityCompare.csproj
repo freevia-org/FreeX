@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- Portable net10.0: orchestration shells out to dotnet/docker/exe via Process,
+         so the runner itself needs no WPF/Avalonia/RID. Capture (WPF host exe, Avalonia
+         linux-x64 publish + Docker) is invoked as external processes. -->
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FreeX.ParityCompare.Core\FreeX.ParityCompare.Core.csproj" />
+  </ItemGroup>
+
+</Project>

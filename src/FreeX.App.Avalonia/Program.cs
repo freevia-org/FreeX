@@ -27,6 +27,18 @@ internal static class Program
             return 1;
         }
 
+        // Additive headless surface-capture mode (--parity-capture <outDir>). Parsed out of the
+        // launch-smoke-filtered arguments so it composes with the existing modes without disturbing them.
+        if (!ParityCaptureOptions.TryParse(
+                startupArguments,
+                out var parityCaptureOptions,
+                out startupArguments,
+                out var parityCaptureError))
+        {
+            Console.Error.WriteLine(parityCaptureError);
+            return 1;
+        }
+
         var diagnostics = AvaloniaAppDiagnostics.Create(launchSmokeOptions?.DiagnosticsDirectory);
         diagnostics.RegisterUnhandledExceptionHandlers();
         diagnostics.RecordEvent("app_start", new Dictionary<string, string?>
@@ -38,6 +50,7 @@ internal static class Program
 
         App.StartupArguments = startupArguments;
         App.LaunchSmokeOptions = launchSmokeOptions;
+        App.ParityCaptureOptions = parityCaptureOptions;
         App.Diagnostics = diagnostics;
         try
         {
