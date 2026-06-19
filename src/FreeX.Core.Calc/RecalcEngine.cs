@@ -393,7 +393,14 @@ public sealed class RecalcEngine
 
         var refs = new FormulaDependencySet();
         var cacheableForDependencyPlan = true;
-        var containsVolatileFunction = CollectReferences(ast, sheetId, formulaCell, workbook, refs, ref cacheableForDependencyPlan);
+        var containsVolatileFunction = CollectReferences(
+            ast,
+            sheetId,
+            formulaCell,
+            workbook,
+            refs,
+            ref cacheableForDependencyPlan,
+            namedFormulaStack: null);
 
         if (excludeSelf)
             refs.ExcludeCell(formulaCell);
@@ -677,7 +684,8 @@ public sealed class RecalcEngine
         CellAddress formulaCell,
         FreeX.Core.Model.Workbook? workbook,
         FormulaDependencySet refs,
-        ref bool cacheableForDependencyPlan)
+        ref bool cacheableForDependencyPlan,
+        HashSet<string>? namedFormulaStack)
     {
         switch (node)
         {
@@ -743,6 +751,36 @@ public sealed class RecalcEngine
                 if (workbook is not null && workbook.TryGetNamedRange(named.Name, out var namedRange))
                 {
                     refs.AddRange(namedRange);
+                    return false;
+                }
+
+                if (workbook?.NamedFormulas.TryGetValue(named.Name, out var formulaText) == true &&
+                    !string.IsNullOrWhiteSpace(formulaText))
+                {
+                    namedFormulaStack ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    if (!namedFormulaStack.Add(named.Name))
+                        return false;
+
+                    try
+                    {
+                        var namedAst = FormulaEvaluator.ParseFormula(formulaText);
+                        return CollectReferences(
+                            namedAst,
+                            defaultSheetId,
+                            formulaCell,
+                            workbook,
+                            refs,
+                            ref cacheableForDependencyPlan,
+                            namedFormulaStack);
+                    }
+                    catch (FormulaParseException)
+                    {
+                        return false;
+                    }
+                    finally
+                    {
+                        namedFormulaStack.Remove(named.Name);
+                    }
                 }
                 return false;
             }
@@ -782,13 +820,13 @@ public sealed class RecalcEngine
 
             case BinaryOpNode binary:
             {
-                var leftHasVolatile = CollectReferences(binary.Left, defaultSheetId, formulaCell, workbook, refs, ref cacheableForDependencyPlan);
-                var rightHasVolatile = CollectReferences(binary.Right, defaultSheetId, formulaCell, workbook, refs, ref cacheableForDependencyPlan);
+                var leftHasVolatile = CollectReferences(binary.Left, defaultSheetId, formulaCell, workbook, refs, ref cacheableForDependencyPlan, namedFormulaStack);
+                var rightHasVolatile = CollectReferences(binary.Right, defaultSheetId, formulaCell, workbook, refs, ref cacheableForDependencyPlan, namedFormulaStack);
                 return leftHasVolatile || rightHasVolatile;
             }
 
             case UnaryOpNode unary:
-                return CollectReferences(unary.Operand, defaultSheetId, formulaCell, workbook, refs, ref cacheableForDependencyPlan);
+                return CollectReferences(unary.Operand, defaultSheetId, formulaCell, workbook, refs, ref cacheableForDependencyPlan, namedFormulaStack);
 
             case FunctionCallNode func:
             {
@@ -796,7 +834,7 @@ public sealed class RecalcEngine
                 var arguments = func.Arguments;
                 for (var i = 0; i < arguments.Count; i++)
                 {
-                    if (CollectReferences(arguments[i], defaultSheetId, formulaCell, workbook, refs, ref cacheableForDependencyPlan))
+                    if (CollectReferences(arguments[i], defaultSheetId, formulaCell, workbook, refs, ref cacheableForDependencyPlan, namedFormulaStack))
                         containsVolatileFunction = true;
                 }
 

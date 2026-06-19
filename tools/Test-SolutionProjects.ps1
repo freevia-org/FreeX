@@ -132,7 +132,12 @@ $discoveredProjectPaths = @(
             $relativePath = Normalize-RelativePath (Get-RelativePath -RootPath $resolvedProjectRoot -Path $_.FullName)
             $relativePath
         } |
-        Where-Object { $_.StartsWith("src/") -or $_.StartsWith("tests/") -or $_.StartsWith("tools/") } |
+        Where-Object {
+            $_.StartsWith("src/") -or
+            $_.StartsWith("tests/") -or
+            $_.StartsWith("tools/") -or
+            $_.StartsWith("shared/")
+        } |
         Sort-Object -Unique
 )
 

@@ -1313,6 +1313,30 @@ public sealed class XlsxPackageHealthValidatorTests
     }
 
     [Fact]
+    public void Validate_PreservesEncodedPathSeparatorsWhenResolvingRelationshipTargets()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            workbookRelationships:
+            [
+                Relationship("rId1", WorksheetRelationshipType, "worksheets/sheet%2F1.xml")
+            ],
+            extraEntries:
+            [
+                ("xl/worksheets/sheet%2F1.xml", """
+                    <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+                      <sheetData />
+                    </worksheet>
+                    """)
+            ],
+            contentTypeOverrides:
+            [
+                """<Override PartName="/xl/worksheets/sheet%2F1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml" />"""
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package).Should().BeEmpty();
+    }
+
+    [Fact]
     public void Validate_FlagsExternalUriWithoutExternalTargetMode()
     {
         using var package = CreateMinimalWorkbookPackage(

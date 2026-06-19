@@ -16,7 +16,7 @@ internal static class XlsxNamedRangeMapper
         "Consolidate_Area"
     };
 
-    public static void Load(XLWorkbook xlWorkbook, Workbook workbook)
+    public static void Load(XLWorkbook xlWorkbook, Workbook workbook, List<string>? warnings = null)
     {
         foreach (var namedRange in xlWorkbook.DefinedNames)
         {
@@ -55,8 +55,9 @@ internal static class XlsxNamedRangeMapper
                         break;
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
+                    warnings?.Add($"[named-ranges] Named range '{namedRange.Name}' could not expose its range and was skipped: {ex.Message}");
                     // ClosedXML failed — skip this name.
                 }
 
@@ -80,8 +81,9 @@ internal static class XlsxNamedRangeMapper
 
                 workbook.DefineNamedRange(namedRange.Name, new GridRange(start, end));
             }
-            catch
+            catch (Exception ex)
             {
+                warnings?.Add($"[named-ranges] Named range '{namedRange.Name}' could not be loaded and was skipped: {ex.Message}");
                 // Skip any named range that cannot be mapped into the workbook model.
             }
         }

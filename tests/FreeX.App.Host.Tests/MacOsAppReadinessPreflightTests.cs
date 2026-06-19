@@ -2171,7 +2171,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     dialog.Opened += (_, _) => cancelButton.Focus();
                     AutomationProperties.SetAutomationId(replaceButton, "PdfExportOverwriteReplaceButton");
                     AutomationProperties.SetAutomationId(cancelButton, "PdfExportOverwriteCancelButton");
-                    PortablePdfDocumentExporter.Save(_session.Workbook, exportPlan, path)
+                    Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, exportPlan, pdfBuffer)
                     _workbookStatisticsMenuItem.Header = "Workbook Statistics...";
                     _workbookStatisticsMenuItem.Gesture = new KeyGesture(Key.G, KeyModifiers.Control | KeyModifiers.Shift);
                     _workbookStatisticsMenuItem.Click += async (_, _) => await ShowWorkbookStatisticsDialogAsync();
