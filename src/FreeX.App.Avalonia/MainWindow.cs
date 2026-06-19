@@ -3898,8 +3898,10 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// Routes a worksheet context-menu command id back to the matching Avalonia document command.
-    /// Actions with an existing Avalonia handler (clipboard + clear) are wired; the rest are no-ops
-    /// with a TODO until their Avalonia equivalents exist.
+    /// Every action that has a working shell handler (clipboard, clear, insert/delete, sort/filter,
+    /// data tools, outline grouping, comments/notes, hyperlinks, format cells, pivot options) is wired
+    /// to the same handler the ribbon uses. Only the genuinely-unbacked actions (Pick From Drop-down,
+    /// Format as Table, in-place Edit/Resolve Comment and Edit Note) fall through to the no-op default.
     /// </summary>
     private void DispatchWorksheetContextMenuCommand(RibbonCommandId commandId)
     {
@@ -3945,10 +3947,11 @@ public sealed partial class MainWindow : Window
                 UnhideSelectedColumns();
                 break;
             case WorksheetContextMenuAction.InsertRowAbove:
-            case WorksheetContextMenuAction.InsertCells:
-                _ = ShowInsertCellsDialogAsync();
-                break;
+            case WorksheetContextMenuAction.InsertRowBelow:
             case WorksheetContextMenuAction.InsertColumnLeft:
+            case WorksheetContextMenuAction.InsertColumnRight:
+            case WorksheetContextMenuAction.InsertCells:
+            case WorksheetContextMenuAction.InsertCopiedCells:
                 _ = ShowInsertCellsDialogAsync();
                 break;
             case WorksheetContextMenuAction.DeleteRows:
@@ -3956,10 +3959,86 @@ public sealed partial class MainWindow : Window
             case WorksheetContextMenuAction.DeleteCells:
                 _ = ShowDeleteCellsDialogAsync();
                 break;
+            case WorksheetContextMenuAction.PasteSpecial:
+                _ = ShowPasteSpecialDialogAsync();
+                break;
+            // Sort & Filter submenu → existing sort/filter handlers (same ones the ribbon Data tab uses).
+            case WorksheetContextMenuAction.SortAscending:
+                SortSelectedRange(ascending: true);
+                break;
+            case WorksheetContextMenuAction.SortDescending:
+                SortSelectedRange(ascending: false);
+                break;
+            case WorksheetContextMenuAction.CustomSort:
+                _ = ShowSortDialogAsync();
+                break;
+            case WorksheetContextMenuAction.Filter:
+                ToggleAutoFilter();
+                break;
+            case WorksheetContextMenuAction.ReapplyFilter:
+                ReapplyCurrentFilterSort();
+                break;
+            case WorksheetContextMenuAction.QuickAnalysis:
+                _ = ShowQuickAnalysisDialogAsync();
+                break;
+            // Data Tools submenu → existing data-tools dialogs/handlers.
+            case WorksheetContextMenuAction.DefineName:
+                DefineName();
+                break;
+            case WorksheetContextMenuAction.CreateTable:
+                InsertTableFromSelection();
+                break;
+            case WorksheetContextMenuAction.TextToColumns:
+                TextToColumns();
+                break;
+            case WorksheetContextMenuAction.RemoveDuplicates:
+                _ = ShowRemoveDuplicatesDialogAsync();
+                break;
+            case WorksheetContextMenuAction.DataValidation:
+                _ = ShowDataValidationDialogAsync();
+                break;
+            // Outline grouping (Rows-and-Columns submenu on row/column selections).
+            case WorksheetContextMenuAction.Group:
+                GroupSelectedRows();
+                break;
+            case WorksheetContextMenuAction.Ungroup:
+                ClearWorksheetOutline();
+                break;
+            // Comments and Notes submenu (create/delete/show route to existing handlers; the in-place
+            // edit/resolve variants stay deferred — the shell has no session API for them yet).
+            case WorksheetContextMenuAction.NewComment:
+                _ = ShowNewThreadedCommentDialogAsync();
+                break;
+            case WorksheetContextMenuAction.NewNote:
+                _ = ShowNewNoteDialogAsync();
+                break;
+            case WorksheetContextMenuAction.DeleteComment:
+            case WorksheetContextMenuAction.DeleteNote:
+                DeleteActiveCellComment();
+                break;
+            case WorksheetContextMenuAction.ShowNotes:
+                _ = ShowNotesListAsync();
+                break;
+            // Hyperlink submenu → existing hyperlink handlers.
+            case WorksheetContextMenuAction.Hyperlink:
+                _ = ShowInsertHyperlinkDialogAsync();
+                break;
+            case WorksheetContextMenuAction.OpenHyperlink:
+                _ = OpenSelectedHyperlinkAsync();
+                break;
+            case WorksheetContextMenuAction.RemoveHyperlinks:
+                ClearSelectedRangeHyperlinks();
+                break;
+            case WorksheetContextMenuAction.PivotTableOptions:
+                OpenPivotTableOptions();
+                break;
+            case WorksheetContextMenuAction.FormatCells:
+                _ = ShowFormatCellsDialogAsync();
+                break;
             default:
                 // TODO(avalonia-shell): wire remaining context-menu actions as Avalonia document commands land (ref: docs/parity/command-surface.md#deferred-architectural-features)
-                // No Avalonia equivalent yet (insert/delete cells, sort/filter, comments,
-                // notes, data tools, format cells, etc.). Menu structure is present.
+                // Honestly-deferred only: Pick From Drop-down List, Format as Table, in-place Edit/Resolve
+                // Comment and Edit Note — no backing shell/session API exists for these yet.
                 break;
         }
     }
