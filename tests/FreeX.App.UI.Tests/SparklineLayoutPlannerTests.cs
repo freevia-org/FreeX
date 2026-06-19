@@ -155,16 +155,18 @@ public sealed class SparklineLayoutPlannerTests
     }
 
     [Fact]
-    public void SparklineLayoutPlanner_AvoidsLinqAndIntermediatePointArrays()
+    public void SparklineLayoutPlanner_IsAThinAdapterOverTheSharedEngineAndKeepsTheStreamingPath()
     {
         var source = AppUiSourceTestSupport.ReadAppUiSources("SparklineLayoutPlanner.cs");
 
-        source.Should().Contain("for (var i = firstIndex + 1; i < values.Count; i++)");
-        source.Should().Contain("foreach (var value in values)");
-        source.Should().Contain("double.IsFinite(value)");
-        source.Should().Contain("double.IsFinite(values[i])");
+        // The geometry now lives in the portable SparklineLayoutEngine; this WPF surface only bridges
+        // WPF Point/Rect to the engine's LayoutPoint/LayoutRect and must not re-implement the math.
+        source.Should().Contain("SparklineLayoutEngine.VisitLineLayout");
+        source.Should().Contain("SparklineLayoutEngine.VisitColumnLayout");
         source.Should().Contain("internal static void VisitLineLayout");
         source.Should().Contain("internal static void VisitColumnLayout");
+        source.Should().NotContain("double.IsFinite");
+        source.Should().NotContain("Math.Sign");
         source.Should().NotContain("values.Min(");
         source.Should().NotContain("values.Max(");
         source.Should().NotContain(".Select(");

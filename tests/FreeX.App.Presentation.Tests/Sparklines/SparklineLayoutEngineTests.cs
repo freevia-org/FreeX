@@ -201,4 +201,64 @@ public sealed class SparklineLayoutEngineTests
         layout.Bars.Should().HaveCount(3);
         layout.Bars.Should().OnlyContain(b => b.Rect.Height == 20);
     }
+
+    [Fact]
+    public void VisitLineLayout_StreamsSameGeometryAsCalculateLineLayout()
+    {
+        var collector = new LineCollector();
+        SparklineLayoutEngine.VisitLineLayout([0, 5, 10], Cell, ref collector);
+
+        var expected = SparklineLayoutEngine.CalculateLineLayout([0, 5, 10], Cell);
+
+        collector.SinglePoint.Should().Be(expected.SinglePoint);
+        collector.Segments.Should().Equal(expected.Segments);
+    }
+
+    [Fact]
+    public void VisitLineLayout_SingleValue_StreamsSinglePoint()
+    {
+        var collector = new LineCollector();
+        SparklineLayoutEngine.VisitLineLayout([42], Cell, ref collector);
+
+        collector.Segments.Should().BeEmpty();
+        collector.SinglePoint.Should().Be(new LayoutPoint(60, 40));
+    }
+
+    [Fact]
+    public void VisitColumnLayout_StreamsSameGeometryAsCalculateColumnLayout()
+    {
+        var collector = new ColumnCollector();
+        SparklineLayoutEngine.VisitColumnLayout([2, -4, 0, 6], Cell, winLoss: false, ref collector);
+
+        var expected = SparklineLayoutEngine.CalculateColumnLayout([2, -4, 0, 6], Cell, winLoss: false);
+
+        collector.Bars.Should().Equal(expected.Bars);
+    }
+
+    private struct LineCollector : ISparklineLineLayoutConsumer
+    {
+        public LayoutPoint? SinglePoint;
+        public readonly List<SparklineSegment> Segments = [];
+
+        public LineCollector()
+        {
+        }
+
+        public void AcceptSinglePoint(LayoutPoint point) => SinglePoint = point;
+
+        public readonly void AcceptSegment(LayoutPoint start, LayoutPoint end) =>
+            Segments.Add(new SparklineSegment(start, end));
+    }
+
+    private struct ColumnCollector : ISparklineColumnLayoutConsumer
+    {
+        public readonly List<SparklineColumnBar> Bars = [];
+
+        public ColumnCollector()
+        {
+        }
+
+        public readonly void AcceptBar(LayoutRect rect, bool isNegative) =>
+            Bars.Add(new SparklineColumnBar(rect, isNegative));
+    }
 }
