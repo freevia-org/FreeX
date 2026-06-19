@@ -479,8 +479,8 @@ foreach ($workflow in $workflows) {
                     }
                 }
 
-                if (-not $macOsTfmValidationJobBlock.Contains('dotnet workload install macos --version "$FREEX_DOTNET_WORKLOAD_SET_VERSION" --skip-manifest-update')) {
-                    $errors.Add("$($workflow.Name): macOS TFM validation job must install the pinned macOS workload set with 'dotnet workload install macos --version `"`${FREEX_DOTNET_WORKLOAD_SET_VERSION}`" --skip-manifest-update'.")
+                if (-not $macOsTfmValidationJobBlock.Contains('dotnet workload install macos --version "$FREEX_DOTNET_WORKLOAD_SET_VERSION"')) {
+                    $errors.Add("$($workflow.Name): macOS TFM validation job must install the pinned macOS workload set with 'dotnet workload install macos --version `"`${FREEX_DOTNET_WORKLOAD_SET_VERSION}`"'.")
                 }
 
                 $macOsTfmBuildCommands = @(

@@ -818,7 +818,7 @@ jobs:
             grep -q "native_fill_color_swatch_count=69" "$launch_smoke_report"
             grep -q "native_font_color_swatch_count=69" "$launch_smoke_report"
             grep -q "native_borders_menu_item=true" "$launch_smoke_report"
-            grep -q "native_borders_preset_count=8" "$launch_smoke_report"
+            grep -q "native_borders_preset_count=14" "$launch_smoke_report"
             grep -q "native_cell_styles_menu_item=true" "$launch_smoke_report"
             grep -q "native_cell_styles_preset_count=33" "$launch_smoke_report"
             grep -q "native_horizontal_text_menu_item=true" "$launch_smoke_report"
@@ -1187,7 +1187,7 @@ jobs:
           {
             echo ""
             echo "[dotnet workload install macos]"
-            dotnet workload install macos --version "$FREEX_DOTNET_WORKLOAD_SET_VERSION" --skip-manifest-update
+            dotnet workload install macos --version "$FREEX_DOTNET_WORKLOAD_SET_VERSION"
             echo "[dotnet workload --info]"
             dotnet workload --info
             echo "[dotnet workload list after install]"
