@@ -67,4 +67,31 @@ public sealed partial class SpreadsheetXmlFileAdapter
     private static string GetHyperlinkBookmark(string target) =>
         target.StartsWith("#", StringComparison.Ordinal) ? target[1..] : "";
 
+    /// <summary>
+    /// Produces the <c>ss:HRef</c> string for a cell's hyperlink, or <c>null</c> when there is nothing
+    /// to emit. Internal "place in this document" targets are written with a leading <c>#</c> (the
+    /// SpreadsheetML form Excel uses, e.g. <c>#Sheet1!A1</c>) so that on reload they are classified as
+    /// internal again instead of being mistaken for a relative file path. Without the <c>#</c>, a
+    /// subsequent xlsx save would treat the target as an external link and fail to build a URI for it
+    /// (ClosedXML <c>AddHyperlinkRelationship(null)</c>). Empty/whitespace targets are dropped.
+    /// </summary>
+    private static string? BuildHyperlinkHref(string? target, HyperlinkMetadata? metadata)
+    {
+        var isInternal = metadata?.LinkType == HyperlinkTargetKind.PlaceInThisDocument;
+
+        // Prefer the bookmark for internal links (the in-document address); fall back to the target.
+        var effective = isInternal && !string.IsNullOrWhiteSpace(metadata?.Bookmark)
+            ? metadata!.Bookmark
+            : target;
+
+        if (string.IsNullOrWhiteSpace(effective))
+            return null;
+
+        effective = effective.Trim();
+        if (isInternal && !effective.StartsWith("#", StringComparison.Ordinal))
+            return "#" + effective;
+
+        return effective;
+    }
+
 }

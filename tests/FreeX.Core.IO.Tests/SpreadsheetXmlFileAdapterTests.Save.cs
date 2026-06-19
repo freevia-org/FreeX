@@ -225,8 +225,9 @@ public sealed partial class SpreadsheetXmlFileAdapterTests
         adapter.Save(workbook, stream);
         var document = LoadSpreadsheetXml(stream);
         XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
+        // Excel stores SpreadsheetML formulas in R1C1; the C1 cell's A1:B1 becomes RC[-2]:RC[-1].
         var formulaCell = document.Descendants(ss + "Cell")
-            .Single(cell => cell.Attribute(ss + "Formula")?.Value == "=SUM(A1:B1)");
+            .Single(cell => cell.Attribute(ss + "Formula")?.Value == "=SUM(RC[-2]:RC[-1])");
         formulaCell.Attribute(ss + "StyleID").Should().NotBeNull();
         formulaCell.Element(ss + "Data")!.Attribute(ss + "Type")!.Value.Should().Be("Number");
         formulaCell.Element(ss + "Data")!.Value.Should().Be("19.75");
