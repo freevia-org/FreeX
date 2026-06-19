@@ -30,7 +30,7 @@ public sealed class CliOptions
           --skip-capture      Compare existing capture dirs; run neither shell
           --win-dir <dir>     Windows capture dir (default: <out>/capture-win)
           --lin-dir <dir>     Linux capture dir   (default: <out>/capture-linux/out)
-          --threshold <pct>   Hard grid-fidelity fail threshold % (default: 2.0)
+          --threshold <pct>   Hard grid-fidelity fail threshold % (default: 5.0)
           --docker-image <i>  Docker image for the Linux run (default: ubuntu:24.04)
           -h | --help         Show this help
         """;
