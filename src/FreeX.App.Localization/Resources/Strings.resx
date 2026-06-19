@@ -183,6 +183,25 @@
   <data name="ChartErrorBars_DirectionLabel" xml:space="preserve"><value>Direction:</value></data>
   <data name="ChartErrorBars_ValueLabel" xml:space="preserve"><value>Fixed value or percentage:</value></data>
   <data name="ChartErrorBars_EndCaps" xml:space="preserve"><value>Show end caps</value></data>
+  <!-- Chart: Combo Chart dialog -->
+  <data name="ChartCombo_Title" xml:space="preserve"><value>Combo Chart</value></data>
+  <data name="ChartCombo_Instruction" xml:space="preserve"><value>Choose how each series is plotted:</value></data>
+  <data name="ChartCombo_SeriesRow" xml:space="preserve"><value>Series {0}</value></data>
+  <data name="ChartCombo_AsLine" xml:space="preserve"><value>Plot as line</value></data>
+  <data name="ChartCombo_SecondaryAxis" xml:space="preserve"><value>Secondary axis</value></data>
+  <!-- Chart: Move Chart dialog -->
+  <data name="MoveChart_Title" xml:space="preserve"><value>Move Chart</value></data>
+  <data name="MoveChart_ObjectInSheet" xml:space="preserve"><value>Object in an existing sheet</value></data>
+  <data name="MoveChart_NewChartSheet" xml:space="preserve"><value>New chart sheet</value></data>
+  <data name="MoveChart_TargetNameLabel" xml:space="preserve"><value>Sheet name:</value></data>
+  <!-- Chart: Format Chart Area dialog -->
+  <data name="ChartArea_Title" xml:space="preserve"><value>Format Chart Area</value></data>
+  <data name="ChartArea_FillLabel" xml:space="preserve"><value>Fill:</value></data>
+  <data name="ChartArea_ChartAreaFill" xml:space="preserve"><value>Chart area fill</value></data>
+  <data name="ChartArea_PlotAreaFill" xml:space="preserve"><value>Plot area fill</value></data>
+  <data name="ChartArea_BorderLabel" xml:space="preserve"><value>Plot area border:</value></data>
+  <data name="ChartArea_PlotAreaBorder" xml:space="preserve"><value>Plot area border</value></data>
+  <data name="ChartArea_BorderWidthLabel" xml:space="preserve"><value>Plot area border width:</value></data>
   <!-- Conditional Formatting: New/Edit Rule dialog -->
   <data name="ConditionalFormat_NewRuleTitle" xml:space="preserve"><value>New Formatting Rule</value></data>
   <data name="ConditionalFormat_EditRuleTitle" xml:space="preserve"><value>Edit Formatting Rule</value></data>
