@@ -192,6 +192,13 @@ internal static class Ooxml
     public const string CustomXmlRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml";
     public const string CustomXmlPropsContentType = "application/vnd.openxmlformats-officedocument.customXmlProperties+xml";
 
+    // word/vbaProject.bin (+ word/vbaData.xml and the part-local word/_rels/vbaProject.bin.rels) carry a
+    // document's VBA macro project. FreeW does not model — let alone execute — macros; they are preserved
+    // verbatim so a .docm/.dotm round-trips its macros, and dropped when saving a non-macro variant.
+    public const string VbaProjectRelType = "http://schemas.microsoft.com/office/2006/relationships/vbaProject";
+    public const string VbaProjectContentType = "application/vnd.ms-office.vbaProject";
+    public const string VbaDataContentType = "application/vnd.ms-word.vbaData+xml";
+
     // word/fontTable.xml lists the embedded font families (w:font/w:embedRegular/…). Each embed references an
     // obfuscated font part (word/fonts/fontN.odttf, content type obfuscatedFont) via the fontTable's own rels.
     public const string FontTableContentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.fontTable+xml";
