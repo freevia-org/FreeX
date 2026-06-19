@@ -305,6 +305,18 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.spellcheck-toggle", spellCheckToggle);
         stateful.Add(("freew.spellcheck-toggle", spellCheckToggle));
 
+        // Review tab — Speech > Read Aloud: a stateful toggle over an in-box text-to-speech read-through
+        // (System.Speech via SystemSpeechEngine, behind the model's ISpeechEngine so the controller stays
+        // testable). Toggling ON commits pending edits, maps the caret to the matching speakable segment,
+        // and starts reading from there to the end of the document; toggling OFF stops. The checked state
+        // reflects whether a read-through is active (so the ribbon shows it at a glance), and the controller
+        // pushes its state back into the store when reading finishes on its own. Construction is robust on a
+        // machine with no installed voice (the engine degrades to a no-op rather than crashing).
+        var readAloud = new ReadAloudToggleCommand(editor);
+        readAloud.StateChanged += () => stateStore.SetState("freew.read-aloud", readAloud.GetState());
+        registry.Register("freew.read-aloud", readAloud);
+        stateful.Add(("freew.read-aloud", readAloud));
+
         // Review tab — Tracking: toggle Track Changes mode (stateful so the ribbon reflects it). When
         // ON, marking the current selection as a tracked insertion/deletion is offered; turning it on
         // with a non-empty selection marks that selection as an insertion (a pragmatic stand-in for live
@@ -1803,6 +1815,54 @@ internal static class FreeWRibbonCommands
 
         public RibbonCommandState GetState() =>
             new(IsEnabled: true, IsChecked: editor.Model.Protection.IsProtected);
+    }
+
+    // Review > Speech > Read Aloud: a stateful toggle that starts/stops an in-box text-to-speech
+    // read-through of the document from the caret to the end. The pure ReadAloudController owns the
+    // play/stop state machine and segment extraction; the host wires it to a SystemSpeechEngine
+    // (System.Speech) and maps the caret to the start segment. The engine is created lazily on first use so
+    // construction is cheap, and the engine itself is robust when no voice is installed (degrades to a
+    // no-op). The toggle is checked while a read-through is active; the controller raises StateChanged when
+    // reading finishes on its own so the ribbon button clears.
+    private sealed class ReadAloudToggleCommand : IRibbonStatefulCommand
+    {
+        private readonly DocumentView _editor;
+        private SystemSpeechEngine? _engine;
+        private ReadAloudController? _controller;
+
+        // Re-raised to the registry so the ribbon state store refreshes when reading starts/stops — both on
+        // user toggle and when the read-through completes on its own.
+        public event Action? StateChanged;
+
+        public ReadAloudToggleCommand(DocumentView editor) => _editor = editor;
+
+        public void Execute(RibbonCommandContext context)
+        {
+            var controller = EnsureController();
+            if (controller.IsActive)
+            {
+                controller.Stop();
+                return;
+            }
+
+            // Commit pending edits and read from the caret's paragraph to the end (Word's behaviour).
+            var start = _editor.ReadAloudStartSegmentIndex();
+            controller.Start(_editor.Model, start);
+        }
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: true, IsChecked: _controller?.IsActive ?? false);
+
+        private ReadAloudController EnsureController()
+        {
+            if (_controller is not null)
+                return _controller;
+
+            _engine = new SystemSpeechEngine();
+            _controller = new ReadAloudController(_engine);
+            _controller.StateChanged += () => StateChanged?.Invoke();
+            return _controller;
+        }
     }
 
     // Review > Compare: prompt the user to open a second .docx, read it, and load a comparison of the

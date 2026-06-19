@@ -215,6 +215,7 @@ internal static class FreeWRibbonIcons
 
             // Review
             ["freew.statistics"] = RibbonCommandIconKind.WordCount,
+            ["freew.read-aloud"] = RibbonCommandIconKind.ReadAloud,
             ["freew.spellcheck-toggle"] = RibbonCommandIconKind.Spelling,
             ["freew.add-to-dictionary"] = RibbonCommandIconKind.Book,
             ["freew.new-comment"] = RibbonCommandIconKind.Comment,

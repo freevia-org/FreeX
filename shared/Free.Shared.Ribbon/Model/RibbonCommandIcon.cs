@@ -213,6 +213,7 @@ public enum RibbonCommandIconKind
     TextFromFile,
     CheckBox,
     HorizontalRule,
+    ReadAloud,
 
     // Chart contextual-tab glyphs (added so Chart Design / Chart Format commands are visually distinct
     // instead of all sharing the generic column-chart glyph).

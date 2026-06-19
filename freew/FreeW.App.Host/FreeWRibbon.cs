@@ -318,6 +318,13 @@ internal static class FreeWRibbon
                     g.MediumToggle("freew.spellcheck-toggle", "Spelling & Grammar", RibbonCommandIconKind.Spelling);
                     g.Medium("freew.add-to-dictionary", "Add to Dictionary", RibbonCommandIconKind.Book);
                 });
+                // Single-command group → labelled Medium toggle (Word's Speech > Read Aloud). Reads the
+                // document from the caret to the end using in-box text-to-speech; the toggle reflects
+                // whether a read-through is currently active.
+                tab.Group("speech", "Speech", "S", 97, g =>
+                {
+                    g.MediumToggle("freew.read-aloud", "Read Aloud", RibbonCommandIconKind.ReadAloud);
+                });
                 // Single-command group → Large.
                 tab.Group("comments", "Comments", "C", 95, g =>
                 {

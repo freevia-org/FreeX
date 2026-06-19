@@ -1847,6 +1847,49 @@ public sealed class DocumentView : RichTextBox
         return viewIndex >= 0 ? viewIndex : _model.Blocks.Count - 1;
     }
 
+    /// <summary>
+    /// The index — into <see cref="ReadAloudController.ExtractSegments(TextDocument)"/>'s ordered,
+    /// non-empty segment list — of the segment Review &gt; Read Aloud should start at: the first speakable
+    /// paragraph at or after the caret's block (Word reads from the caret to the end). Commits pending
+    /// edits first so the model reflects the current text, then counts the non-empty speakable paragraphs
+    /// preceding the caret block in the same reading order the controller uses (top-level paragraphs, then
+    /// table-cell paragraphs). Returns 0 when the body is empty or the caret precedes all speakable text.
+    /// </summary>
+    public int ReadAloudStartSegmentIndex()
+    {
+        CommitToModel();
+
+        var caretBlockIndex = CaretBlockIndex();
+        if (caretBlockIndex < 0)
+            return 0;
+
+        // Walk the model blocks in the controller's reading order, numbering non-empty speakable
+        // paragraphs. Stop once we reach the caret's block: the next segment to be produced is the start.
+        var segmentIndex = 0;
+        for (var i = 0; i < _model.Blocks.Count; i++)
+        {
+            if (i >= caretBlockIndex)
+                break;
+
+            switch (_model.Blocks[i])
+            {
+                case ModelParagraph paragraph:
+                    if (!string.IsNullOrWhiteSpace(paragraph.PlainText))
+                        segmentIndex++;
+                    break;
+                case ModelTable table:
+                    foreach (var row in table.Rows)
+                        foreach (var cell in row.Cells)
+                            foreach (var cellParagraph in cell.Paragraphs)
+                                if (!string.IsNullOrWhiteSpace(cellParagraph.PlainText))
+                                    segmentIndex++;
+                    break;
+            }
+        }
+
+        return segmentIndex;
+    }
+
     private void Render()
     {
         // Expose the current file name to the static run builders for this render pass (FILENAME fields).

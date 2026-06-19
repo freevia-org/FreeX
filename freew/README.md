@@ -155,6 +155,7 @@ docx reader/writer; unsupported renderings are noted under [Known limitations](#
 - **Document Inspector** (count + selectively remove comments / revisions / properties / bookmarks).
 - **Check Accessibility** — alt-text, link-text, heading-order, table-header, and WCAG contrast rules with a grouped report.
 - Word count + live status bar; **Document Statistics** dialog (words/chars/sentences/syllables, reading time, Flesch reading ease).
+- **Read Aloud** (Review > Speech) — local, in-box text-to-speech (`System.Speech`) that reads from the caret to the end of the document, paragraph by paragraph (table cells included); robust when no voice is installed.
 
 ### Mailings
 - **Mail merge**: `«Field»` placeholders, CSV data source, insert field, preview record (next/prev), Finish & Merge (records concatenated, page-broken).
