@@ -1,3 +1,4 @@
+using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -5,44 +6,22 @@ namespace FreeX.App.Host;
 public partial class ConditionalFormatDialog
 {
     private static string? BlankToNull(string text) =>
-        string.IsNullOrWhiteSpace(text) ? null : text.Trim();
+        ConditionalFormatInputParser.BlankToNull(text);
 
-    private static bool TryParseOptionalPercent(string text, out int? percent)
-    {
-        percent = null;
-        var trimmed = text.Trim();
-        if (string.IsNullOrWhiteSpace(trimmed))
-            return true;
+    private static bool TryParseOptionalPercent(string text, out int? percent) =>
+        ConditionalFormatInputParser.TryParseOptionalPercent(text, out percent);
 
-        if (!int.TryParse(trimmed, out var value) || value is < 0 or > 100)
-            return false;
-
-        percent = value;
-        return true;
-    }
-
-    private static bool TryParseTopBottomRank(string text, out int rank)
-    {
-        rank = 0;
-        return int.TryParse(text.Trim(), out rank) && rank is >= 1 and <= 1000;
-    }
+    private static bool TryParseTopBottomRank(string text, out int rank) =>
+        ConditionalFormatInputParser.TryParseTopBottomRank(text, out rank);
 
     private static string FormatRgb(RgbColor color) =>
-        $"{color.R},{color.G},{color.B}";
+        ConditionalFormatInputParser.FormatRgb(color);
 
-    private static bool TryParseRgbColor(string text, out RgbColor color)
-    {
-        color = default;
-        if (!ColorInputParser.TryParseRgbColorText(text, out var parsed))
-            return false;
-
-        color = new RgbColor(parsed.R, parsed.G, parsed.B);
-        return true;
-    }
+    private static bool TryParseRgbColor(string text, out RgbColor color) =>
+        ConditionalFormatInputParser.TryParseRgbColor(text, out color);
 
     private static RgbColor? ParseOptionalRgbColor(string text) =>
-        string.IsNullOrWhiteSpace(text) ? null
-        : TryParseRgbColor(text, out var color) ? color : null;
+        ConditionalFormatInputParser.ParseOptionalRgbColor(text);
 
     private static string? AxisPositionToXmlValue(string? label) =>
         label switch

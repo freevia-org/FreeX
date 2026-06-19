@@ -34,7 +34,10 @@ public partial class MainWindow
 
     private async Task<SaveChangesConfirmation> ConfirmSaveBeforeDestructiveActionAsync(string message)
     {
-        if (!_workbookDirty)
+        // P2b: the dirty-gate DECISION is the shared FileLifecyclePlanner's
+        // PlanDirtyGate + ResolveDirtyGate; FreeX supplies only the WPF prompt and the
+        // richer (adapter-resolving, async/generation-aware) save MECHANICS.
+        if (FileLifecyclePlanner.PlanDirtyGate(_workbookDirty) == DirtyGateIntent.ProceedWithoutPrompt)
             return SaveChangesConfirmation.Continue;
 
         var result = ShowOwnedMessage(
@@ -43,19 +46,43 @@ public partial class MainWindow
             MessageBoxButton.YesNoCancel,
             MessageBoxImage.Warning);
 
-        if (result == MessageBoxResult.Cancel)
-            return SaveChangesConfirmation.Cancel;
-        if (result == MessageBoxResult.No)
-            return SaveChangesConfirmation.DiscardWithoutSaving;
+        var prompt = result switch
+        {
+            MessageBoxResult.Cancel => SaveChangesPrompt.Cancel,
+            MessageBoxResult.No => SaveChangesPrompt.DontSave,
+            _ => SaveChangesPrompt.Save
+        };
 
-        if (FileSavePlanner.TryResolveExistingPath(_currentFilePath, _fileAdapters, out var target))
-            return await SaveWorkbookToTargetAsync(target!)
+        return FileLifecyclePlanner.ResolveDirtyGate(prompt) switch
+        {
+            DirtyGateAction.Cancel => SaveChangesConfirmation.Cancel,
+            DirtyGateAction.ProceedDiscardingChanges => SaveChangesConfirmation.DiscardWithoutSaving,
+            // SaveThenProceed: run the FreeX-specific save (existing-path vs Save-As), proceeding only
+            // if it succeeds. The existing-path-vs-dialog branch IS the shared PlanSave decision; FreeX's
+            // FileSavePlanner.TryResolveExistingPath is the adapter-resolving mechanism that realizes it.
+            DirtyGateAction.SaveThenProceed => await SaveResolvedAsync()
                 ? SaveChangesConfirmation.Continue
-                : SaveChangesConfirmation.Cancel;
+                : SaveChangesConfirmation.Cancel,
+            _ => SaveChangesConfirmation.Cancel
+        };
+    }
 
-        return await SaveWorkbookWithDialogAsync()
-            ? SaveChangesConfirmation.Continue
-            : SaveChangesConfirmation.Cancel;
+    /// <summary>
+    /// Runs a Save, resolving Save-vs-Save-As through the shared <see cref="FileLifecyclePlanner.PlanSave"/>
+    /// decision: an existing usable path saves directly to it; otherwise the Save-As dialog is shown.
+    /// The concrete <see cref="FileSaveTarget"/> (path + adapter) is produced by FreeX's adapter-resolving
+    /// <see cref="FileSavePlanner.TryResolveExistingPath"/>. Shared between the dirty-gate's
+    /// "Save then proceed" branch and <c>SaveButton_Click</c>.
+    /// </summary>
+    private async Task<bool> SaveResolvedAsync()
+    {
+        if (FileLifecyclePlanner.PlanSave(_workbookDirty, _currentFilePath) == FileSaveIntent.PromptSaveAs ||
+            !FileSavePlanner.TryResolveExistingPath(_currentFilePath, _fileAdapters, out var target))
+        {
+            return await SaveWorkbookWithDialogAsync();
+        }
+
+        return await SaveWorkbookToTargetAsync(target!);
     }
 
     private async void MainWindow_Closing(object? sender, CancelEventArgs e)

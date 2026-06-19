@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.App.Presentation.Filtering;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -189,16 +190,17 @@ public sealed partial class AutoFilterDialogTests
     [Fact]
     public void CriteriaPlanner_ChecklistHotPathsAvoidLinqMaterialization()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("AutoFilterDialogCriteriaPlanner.cs");
+        var source = WorkspaceFileLocator.ReadAllText(
+            "src", "FreeX.App.Presentation", "Filtering", "AutoFilterDialogCriteriaPlanner.cs");
         var checklistBlock = source[
             source.IndexOf("public static IReadOnlyList<AutoFilterDialogItem> FilterItems", StringComparison.Ordinal)..
-            source.IndexOf("public static string GetFilterFamilyHeader", StringComparison.Ordinal)];
+            source.IndexOf("public static IReadOnlyList<AutoFilterDialogItem> SelectAll", StringComparison.Ordinal)];
         var resultBlock = source[
             source.IndexOf("public static AutoFilterDialogResult BuildResult", StringComparison.Ordinal)..
             source.IndexOf("public static AutoFilterDialogResult CreateClearFilterResult", StringComparison.Ordinal)];
         var suggestionsBlock = source[
             source.IndexOf("public static IReadOnlyList<string> GetCriteriaSuggestions", StringComparison.Ordinal)..
-            source.IndexOf("public static IReadOnlyList<AutoFilterCriteriaOption> GetCriteriaOptions", StringComparison.Ordinal)];
+            source.IndexOf("public static string BuildCriteriaText", StringComparison.Ordinal)];
 
         checklistBlock.Should().Contain("foreach (var item in items)");
         checklistBlock.Should().NotContain(".Where(");

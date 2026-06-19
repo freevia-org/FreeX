@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -17,7 +17,9 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using Free.Shared.Ribbon.Wpf;
 using FreeX.Core.Calc;
+using FreeX.App.Presentation.Filtering;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.IO;
@@ -2707,8 +2709,7 @@ public partial class MainWindow
         await WaitForRibbonScreenshotRenderPassAsync();
         await Task.Delay(300);
 
-        SsOpenNavBtn.Focus();
-        Keyboard.Focus(SsOpenNavBtn);
+        _backstageFrame?.FocusEntry("BackstageOpenButton");
         captures.Add(await CaptureBackstageRecentExportShareStateAsync(
             outputDir,
             "open-recent-list",
@@ -2732,8 +2733,7 @@ public partial class MainWindow
             "main-window"));
 
         ShowInfoView();
-        SsInfoNavBtn.Focus();
-        Keyboard.Focus(SsInfoNavBtn);
+        _backstageFrame?.FocusEntry("BackstageInfoButton");
         UpdateLayout();
         await WaitForRibbonScreenshotRenderPassAsync();
         await Task.Delay(250);
@@ -2767,8 +2767,7 @@ public partial class MainWindow
         _currentXlsxFeatureReport = previousFeatureReport;
 
         ShowStartScreen();
-        SsExportNavBtn.Focus();
-        Keyboard.Focus(SsExportNavBtn);
+        _backstageFrame?.FocusEntry("BackstageExportButton");
         UpdateLayout();
         await WaitForRibbonScreenshotRenderPassAsync();
         await Task.Delay(250);
@@ -2798,8 +2797,7 @@ public partial class MainWindow
         _currentFilePath = null;
         ShowStartScreen();
         ShowInfoView();
-        SsShareNavBtn.Focus();
-        Keyboard.Focus(SsShareNavBtn);
+        _backstageFrame?.FocusEntry("BackstageShareButton");
         UpdateLayout();
         await WaitForRibbonScreenshotRenderPassAsync();
         await Task.Delay(250);
@@ -2816,8 +2814,7 @@ public partial class MainWindow
         await SaveBackstageRecentExportShareTourWorkbookAsync(savedWorkbookPath);
         ShowStartScreen();
         ShowInfoView();
-        SsShareNavBtn.Focus();
-        Keyboard.Focus(SsShareNavBtn);
+        _backstageFrame?.FocusEntry("BackstageShareButton");
         UpdateLayout();
         await WaitForRibbonScreenshotRenderPassAsync();
         await Task.Delay(250);
@@ -2830,7 +2827,9 @@ public partial class MainWindow
             "Info/share status records the saved local workbook state before Windows Share; the external OS share UI is intentionally not launched.",
             "main-window"));
 
-        SsBackBtn_Click(SsBackBtn, new RoutedEventArgs(ButtonBase.ClickEvent, SsBackBtn));
+        // The Back arrow now lives on the shared BackstageFrame; HideStartScreen() drives the same
+        // close-and-return-focus path the arrow/Esc trigger.
+        HideStartScreen();
         UpdateLayout();
         await WaitForRibbonScreenshotRenderPassAsync();
         await Task.Delay(250);
@@ -3161,8 +3160,7 @@ public partial class MainWindow
         await WaitForRibbonScreenshotRenderPassAsync();
         await Task.Delay(350);
 
-        SsAccountNavBtn.Focus();
-        Keyboard.Focus(SsAccountNavBtn);
+        _backstageFrame?.FocusEntry("BackstageAccountButton");
         await CaptureCurrentWindowAsync(outputDir, "freex_account_backstage_entry_focused", 760);
 
         var accountPlan = LocalAccountPlanner.Create(
@@ -3175,12 +3173,11 @@ public partial class MainWindow
             UiText.Get("DeferredCommand_LocalAccount_Title"),
             outputDir,
             "freex_account_local_account_message");
-        SsAccountBtn_Click(SsAccountNavBtn, new RoutedEventArgs(ButtonBase.ClickEvent, SsAccountNavBtn));
+        SsAccountBtn_Click(this, new RoutedEventArgs());
         var accountMessage = await accountMessageCapture;
 
         Activate();
-        SsAccountNavBtn.Focus();
-        Keyboard.Focus(SsAccountNavBtn);
+        _backstageFrame?.FocusEntry("BackstageAccountButton");
         UpdateLayout();
         await WaitForRibbonScreenshotRenderPassAsync();
         await CaptureCurrentWindowAsync(outputDir, "freex_account_backstage_focus_return", 760);
@@ -3259,9 +3256,8 @@ public partial class MainWindow
 
         Activate();
         ShowStartScreen();
-        SsOptionsNavBtn.Focus();
-        Keyboard.Focus(SsOptionsNavBtn);
-        focusReturned = IsActive && Keyboard.FocusedElement == SsOptionsNavBtn;
+        _backstageFrame?.FocusEntry("BackstageOptionsButton");
+        focusReturned = IsActive && (_backstageFrame?.IsEntryFocused("BackstageOptionsButton") ?? false);
         UpdateLayout();
         await WaitForRibbonScreenshotRenderPassAsync();
         await CaptureCurrentWindowAsync(outputDir, "freex_options_cancel_focus_return", 760);
@@ -7503,7 +7499,7 @@ public partial class MainWindow
             ?? throw new InvalidOperationException("Formula authoring/names tour could not find Insert Function function list.");
         foreach (var item in functionList.Items)
         {
-            if (item is InsertFunctionCatalogEntry { Name: "XLOOKUP" })
+            if (item is FreeX.App.Presentation.Dialogs.InsertFunctionCatalogEntry { Name: "XLOOKUP" })
             {
                 functionList.SelectedItem = item;
                 functionList.ScrollIntoView(item);
@@ -9776,23 +9772,11 @@ public partial class MainWindow
     {
         await EnsureWindowForegroundForScreenshotTourAsync($"capturing {fileName}.png");
 
-        var source = PresentationSource.FromVisual(this);
-        var dpiX = source?.CompositionTarget.TransformToDevice.M11 ?? 1.0;
-        var dpiY = source?.CompositionTarget.TransformToDevice.M22 ?? 1.0;
-        int pw = Math.Max(1, (int)(ActualWidth * dpiX));
-        int ph = Math.Max(1, (int)(Math.Min(ActualHeight, logicalHeight) * dpiY));
-
-        var rtb = new RenderTargetBitmap(pw, ph, 96 * dpiX, 96 * dpiY, PixelFormats.Pbgra32);
+        // Render/crop/encode/write are the shared, app-neutral primitives
+        // (Free.Shared.Ribbon.Wpf.ScreenshotCapture); the foreground-focus guards stay FreeX-specific.
         AssertWindowForegroundForScreenshotTour($"rendering {fileName}.png");
-        rtb.Render(this);
         AssertWindowForegroundForScreenshotTour($"saving {fileName}.png");
-        var bitmap = new CroppedBitmap(rtb, new Int32Rect(0, 0, pw, ph));
-
-        var encoder = new PngBitmapEncoder();
-        encoder.Frames.Add(BitmapFrame.Create(bitmap));
-        var path = Path.Combine(outputDir, $"{fileName}.png");
-        await using var stream = File.Create(path);
-        encoder.Save(stream);
+        await ScreenshotCapture.CaptureVisualToPngAsync(this, outputDir, fileName, logicalHeight);
     }
 
     private async Task EnsureWindowForegroundForScreenshotTourAsync(string operation)
@@ -13221,31 +13205,8 @@ public partial class MainWindow
         await CaptureElementAsync(captureTarget, outputDir, fileName);
     }
 
-    private static async Task CaptureElementAsync(FrameworkElement element, string outputDir, string fileName)
-    {
-        element.UpdateLayout();
-
-        var source = PresentationSource.FromVisual(element);
-        var dpiX = source?.CompositionTarget.TransformToDevice.M11 ?? 1.0;
-        var dpiY = source?.CompositionTarget.TransformToDevice.M22 ?? 1.0;
-        int pw = Math.Max(1, (int)(element.ActualWidth * dpiX));
-        int ph = Math.Max(1, (int)(element.ActualHeight * dpiY));
-
-        var rtb = new RenderTargetBitmap(pw, ph, 96 * dpiX, 96 * dpiY, PixelFormats.Pbgra32);
-        var visual = new DrawingVisual();
-        using (var context = visual.RenderOpen())
-        {
-            var brush = new VisualBrush(element) { Stretch = Stretch.Fill };
-            context.DrawRectangle(brush, null, new Rect(0, 0, element.ActualWidth, element.ActualHeight));
-        }
-        rtb.Render(visual);
-
-        var encoder = new PngBitmapEncoder();
-        encoder.Frames.Add(BitmapFrame.Create(rtb));
-        var path = Path.Combine(outputDir, $"{fileName}.png");
-        await using var stream = File.Create(path);
-        encoder.Save(stream);
-    }
+    private static Task CaptureElementAsync(FrameworkElement element, string outputDir, string fileName) =>
+        ScreenshotCapture.CaptureElementToPngAsync(element, outputDir, fileName);
 
     // Activated by FREEX_SHEET_TAB_TOUR=1 env var. Output lands in <repo-root>/screenshots/sheet-tabs-tour/.
     private void TryStartSheetTabVisualTour()

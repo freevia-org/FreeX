@@ -1,0 +1,42 @@
+using System;
+using Free.Shared.AppServices;
+
+namespace FreeW.App.Host;
+
+/// <summary>
+/// FreeW's persisted application settings. App-specific by design (the spreadsheet vs. word-processor
+/// option sets are genuinely different); only the <em>persistence</em> is shared, via the neutral
+/// <see cref="JsonSettingsStore{T}"/> in <c>Free.Shared.AppServices</c>. Kept deliberately small for now
+/// — enough real settings to prove the mechanism end-to-end (a read site, a write site, a round-trip).
+///
+/// <para>
+/// All properties carry sensible defaults and the type is JSON round-trippable with a parameterless
+/// constructor, so a missing or corrupt settings file degrades to <c>new FreeWOptions()</c>.
+/// </para>
+/// </summary>
+public sealed class FreeWOptions
+{
+    public const int DefaultRecentFilesCap = 15;
+    public const int MinRecentFilesCap = 0;
+    public const int MaxRecentFilesCap = RecentFilesStore.MaxRecentEntries;
+    public const string DocxDefaultFormat = ".docx";
+    public const string SystemDefaultLanguage = "";
+
+    /// <summary>How many recent files FreeW retains. Clamped to [0, <see cref="MaxRecentFilesCap"/>].</summary>
+    public int RecentFilesCap { get; set; } = DefaultRecentFilesCap;
+
+    /// <summary>Default save format extension (FreeW ships a single <c>.docx</c> format today).</summary>
+    public string DefaultSaveFormat { get; set; } = DocxDefaultFormat;
+
+    /// <summary>UI language placeholder (empty = follow the system culture). Reserved for a future picker.</summary>
+    public string UiLanguage { get; set; } = SystemDefaultLanguage;
+
+    /// <summary>Normalizes loaded values to their valid ranges (called after a load).</summary>
+    public void Normalize()
+    {
+        RecentFilesCap = Math.Clamp(RecentFilesCap, MinRecentFilesCap, MaxRecentFilesCap);
+        if (string.IsNullOrWhiteSpace(DefaultSaveFormat))
+            DefaultSaveFormat = DocxDefaultFormat;
+        UiLanguage = UiLanguage?.Trim() ?? SystemDefaultLanguage;
+    }
+}

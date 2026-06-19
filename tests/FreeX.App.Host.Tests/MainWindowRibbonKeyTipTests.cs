@@ -574,6 +574,108 @@ public sealed partial class MainWindowRibbonKeyTipTests
                 .ToList();
         }
 
+        // ----- Declarative 2-state collapse helpers (live RibbonAdaptivePanel -> RibbonGroupHost) -----
+
+        private DependencyObject? SelectedRibbonContentRoot
+        {
+            get
+            {
+                if (_window.FindName("RibbonTabs") is not TabControl { SelectedItem: TabItem tab })
+                    return null;
+                return tab.Content as DependencyObject ?? tab;
+            }
+        }
+
+        private RibbonGroupHost? FindRibbonGroupHost(string groupName)
+        {
+            if (SelectedRibbonContentRoot is not { } root)
+                return null;
+            return WpfTestTree.FindVisualSelfAndDescendants<RibbonGroupHost>(root)
+                .FirstOrDefault(host => string.Equals(host.GroupName, groupName, StringComparison.Ordinal));
+        }
+
+        public bool RibbonGroupIsCollapsed(string groupName) =>
+            FindRibbonGroupHost(groupName)?.Collapsed == true;
+
+        // The single overflow button a group folds into when collapsed (RibbonGroupHost swaps its content
+        // to this button). Carries the group's derived keytip + title and a ContextMenu of the group's
+        // commands. Returns null when the group is expanded or has no overflow button.
+        private Button? CollapsedRibbonGroupOverflowButton(string groupName)
+        {
+            if (FindRibbonGroupHost(groupName) is not { Collapsed: true } host)
+                return null;
+            return WpfTestTree.FindVisualSelfAndDescendants<Button>(host)
+                .FirstOrDefault(RibbonMetadata.IsCollapsedGroupButton);
+        }
+
+        public string? CollapsedRibbonGroupOverflowKeyTip(string groupName) =>
+            CollapsedRibbonGroupOverflowButton(groupName) is { } button
+                ? RibbonTooltip.GetKeyTip(button)
+                : null;
+
+        public string? CollapsedRibbonGroupOverflowTitle(string groupName) =>
+            CollapsedRibbonGroupOverflowButton(groupName) is { } button
+                ? RibbonTooltip.GetTitle(button)
+                : null;
+
+        // The collapsed overflow button's rendered width. The live 2-state engine sizes a collapsed group
+        // to RibbonGroupHost.CollapsedWidth (~58px); a zero width means the overflow button never paints
+        // and the whole group is unreachable from the ribbon (see flagged Charts deviation).
+        public double CollapsedRibbonGroupOverflowWidth(string groupName) =>
+            CollapsedRibbonGroupOverflowButton(groupName)?.ActualWidth ?? 0;
+
+        // Opens the collapsed group's overflow dropdown (same path the button's click takes) and returns
+        // the per-command keytips keyed by command header, so a test can assert the group's command set
+        // (e.g. Column Chart -> CC) survives collapse and that deferred commands stay absent.
+        public IReadOnlyDictionary<string, string?> CollapsedRibbonGroupOverflowMenuKeyTips(string groupName)
+        {
+            var result = new Dictionary<string, string?>(StringComparer.Ordinal);
+            if (CollapsedRibbonGroupOverflowButton(groupName) is not { ContextMenu: { } menu })
+                return result;
+
+            menu.IsOpen = true;
+            PumpDispatcher();
+            try
+            {
+                foreach (var item in EnumerateMenuItems(menu))
+                {
+                    var header = NormalizeMenuHeader(item.Header);
+                    if (header.Length > 0)
+                        result[header] = RibbonTooltip.GetKeyTip(item);
+                }
+            }
+            finally
+            {
+                menu.IsOpen = false;
+                PumpDispatcher();
+            }
+
+            return result;
+        }
+
+        // A collapsed group's overflow button carries the dropdown chevron glyph ("▾") so it reads as an
+        // openable group, mirroring Excel's collapsed-group affordance.
+        public bool CollapsedRibbonGroupOverflowHasDropdownGlyph(string groupName) =>
+            CollapsedRibbonGroupOverflowButton(groupName) is { } button &&
+            WpfTestTree.FindVisualSelfAndDescendants<TextBlock>(button)
+                .Any(block => block.Text.Contains('▾'));
+
+        // ----- Declarative ribbon combo-box (e.g. Number Format) live state -----
+
+        private ComboBox? SelectedRibbonComboBox(string title)
+        {
+            if (SelectedRibbonContentRoot is not { } root)
+                return null;
+            return WpfTestTree.FindVisualSelfAndDescendants<ComboBox>(root)
+                .FirstOrDefault(box => string.Equals(RibbonTooltip.GetTitle(box), title, StringComparison.Ordinal));
+        }
+
+        public string? RibbonComboBoxKeyTip(string title) =>
+            SelectedRibbonComboBox(title) is { } box ? RibbonTooltip.GetKeyTip(box) : null;
+
+        public bool? RibbonComboBoxIsEnabled(string title) =>
+            SelectedRibbonComboBox(title)?.IsEnabled;
+
         public bool? CommandButtonIsEnabled(string name) =>
             (_window.FindName(name) as ButtonBase)?.IsEnabled;
 

@@ -30,30 +30,47 @@ public sealed partial class MainWindow
             // --- Chart Design (chart.selected) — real handlers via SetChartLayoutCommand /
             // ChangeChartTypeCommand / ChangeChartSourceCommand / SetChartStyleCommand (MainWindow.ChartTabs). ---
             ["chartDesign.titles"] = () => RunGuarded(ShowChartTitlesDialog),
-            ["chartDesign.dataLabels"] = ToggleChartDataLabels,
+            // The Data Labels button opens the full show/hide + position + which-values dialog
+            // (ChartDataLabelsPlanner); Data Label Position keeps its quick cycle.
+            ["chartDesign.dataLabels"] = () => RunGuarded(ShowChartDataLabelsDialog),
             ["chartDesign.dataLabelPosition"] = CycleChartDataLabelPosition,
-            ["chartDesign.trendline"] = ToggleChartTrendline,
-            ["chartDesign.errorBars"] = ToggleChartErrorBars,
+            // The Trendline button opens the type/period/order + equation/R-squared dialog
+            // (ChartTrendlinePlanner).
+            ["chartDesign.trendline"] = () => RunGuarded(ShowChartTrendlineDialog),
+            // The Error Bars button opens the show/kind/direction + amount/end-caps dialog
+            // (ChartErrorBarsPlanner).
+            ["chartDesign.errorBars"] = () => RunGuarded(ShowChartErrorBarsDialog),
             ["chartDesign.secondaryAxis"] = CycleChartSecondaryAxis,
             ["chartDesign.chartStyles"] = CycleChartStyle,
             ["chartDesign.selectData"] = () => RunGuarded(ShowSelectChartDataDialog),
             ["chartDesign.changeType"] = () => RunGuarded(ShowChangeChartTypeDialog),
-            // No Core support yet (combo overlays, move-chart sheet target dialog) — honest stubs.
-            ["chartDesign.comboChart"] = () => ReportChartCommandNotYetAvailable("Combo Chart"),
-            ["chartDesign.moveChart"] = () => ReportChartCommandNotYetAvailable("Move Chart"),
+            // The Combo Chart button opens the per-series line-overlay + secondary-axis grid
+            // (ChartComboPlanner); Move Chart opens the new-sheet / existing-sheet target dialog
+            // (ChartMovePlanner -> MoveChartCommand / MoveChartToNewSheetCommand).
+            ["chartDesign.comboChart"] = () => RunGuarded(ShowChartComboDialog),
+            ["chartDesign.moveChart"] = () => RunGuarded(ShowMoveChartDialog),
 
             // --- Chart Format (chart.selected) — real handlers via SetChartLayoutCommand. ---
             ["chartFormat.chartAreaFill"] = () => RunGuarded(ShowChartShapeFillDialog),
             ["chartFormat.plotAreaFill"] = () => RunGuarded(ShowChartPlotAreaFillDialog),
             ["chartFormat.plotAreaBorder"] = () => RunGuarded(ShowChartShapeOutlineDialog),
             ["chartFormat.seriesColor"] = () => RunGuarded(ShowChartSeriesColorDialog),
-            ["chartFormat.legendText"] = CycleChartLegendTextColor,
+            // The Series Width button opens the full per-series fill/line/marker dialog
+            // (ChartSeriesFormatPlanner); Series Color keeps its quick picker.
+            ["chartFormat.seriesWidth"] = () => RunGuarded(ShowChartSeriesFormatDialog),
+            // The Legend button opens the show/hide + position options dialog (ChartLegendPlanner).
+            ["chartFormat.legendText"] = () => RunGuarded(ShowChartLegendDialog),
+            // The Axis Bounds buttons open the per-axis min/max/format/gridlines dialog (ChartAxisPlanner);
+            // the Gridlines buttons keep their quick cycle.
+            ["chartFormat.xAxisBounds"] = () => RunGuarded(ShowChartXAxisFormatDialog),
+            ["chartFormat.yAxisBounds"] = () => RunGuarded(ShowChartYAxisFormatDialog),
             ["chartFormat.xGridlines"] = CycleChartXAxisGridlines,
             ["chartFormat.yGridlines"] = CycleChartYAxisGridlines,
             ["chartFormat.xLabels"] = ToggleChartXAxisLabels,
             ["chartFormat.yLabels"] = ToggleChartYAxisLabels,
-            // Type-specific format dialogs have no Core support yet — honest stub.
-            ["chartFormat.formatChartArea"] = () => ReportChartCommandNotYetAvailable("Format Chart Area"),
+            // The Format Chart Area button opens the chart-area / plot-area fill + border dialog
+            // (ChartAreaFormatPlanner -> SetChartLayoutCommand).
+            ["chartFormat.formatChartArea"] = () => RunGuarded(ShowFormatChartAreaDialog),
 
             // --- Table Design (table.active) — real handlers via the structured-table Core commands
             // (MainWindow.TableDesignTab). ---
@@ -65,10 +82,15 @@ public sealed partial class MainWindow
             ["tableDesign.filterButton"] = ToggleActiveTableFilterButton,
             ["tableDesign.convertToRange"] = ConvertActiveTableToRange,
             ["tableDesign.removeDuplicates"] = () => RunGuarded(ShowRemoveDuplicatesDialogAsync),
-            // No Core support yet (table name / resize / styles gallery) — honest stubs.
-            ["tableDesign.tableName"] = () => ReportContextualNotYetAvailable("Table Name"),
-            ["tableDesign.resize"] = () => ReportContextualNotYetAvailable("Resize Table"),
-            ["tableDesign.tableStyles"] = () => ReportContextualNotYetAvailable("Table Styles"),
+            // Table Name dialog — validates/renames the active table via TableNamePlanner +
+            // RenameStructuredTableCommand (MainWindow.TableName).
+            ["tableDesign.tableName"] = OpenTableName,
+            // Resize Table dialog — validates/resolves a new data range via TableResizePlanner and applies it
+            // through ResizeStructuredTableCommand (+ style reapply) (MainWindow.TableResize).
+            ["tableDesign.resize"] = OpenTableResize,
+            // Table Styles gallery — picks a built-in style via TableStyleGalleryPlanner and applies it through
+            // ApplyStructuredTableStyleCommand (MainWindow.TableStyleGallery).
+            ["tableDesign.tableStyles"] = OpenTableStyleGallery,
 
             // --- PivotTable Analyze / Design (pivot.active) — real handlers via
             // ConfigurePivotTableOptionsCommand / RefreshPivotTableCommand (MainWindow.PivotTabs). ---
@@ -85,16 +107,28 @@ public sealed partial class MainWindow
             ["pivotDesign.bandedColumns"] = TogglePivotBandedColumns,
             ["pivotDesign.rowHeaders"] = TogglePivotRowHeaders,
             ["pivotDesign.columnHeaders"] = TogglePivotColumnHeaders,
-            // No Core support yet (name/options dialog, field settings, group/ungroup, change data source,
-            // calculated field, pivot styles gallery) — honest stubs.
-            ["pivotAnalyze.name"] = () => ReportPivotNotYetAvailable("PivotTable Name"),
-            ["pivotAnalyze.options"] = () => ReportPivotNotYetAvailable("PivotTable Options"),
+            // PivotTable Options dialog — totals & layout-display options via ConfigurePivotTableOptionsCommand
+            // (MainWindow.PivotOptions).
+            ["pivotAnalyze.options"] = OpenPivotTableOptions,
+            // Change Data Source dialog — validates/resolves a new source range via PivotDataSourcePlanner and
+            // applies it through ChangePivotTableSourceCommand (MainWindow.PivotDataSource).
+            ["pivotAnalyze.changeDataSource"] = OpenPivotDataSource,
+            // PivotTable Styles gallery — picks a built-in style via PivotStyleGalleryPlanner and applies it
+            // through ConfigurePivotTableOptionsCommand (MainWindow.PivotStyleGallery).
+            ["pivotDesign.pivotStyles"] = OpenPivotStyleGallery,
+            // PivotTable Name dialog — renames the active pivot via PivotNamePlanner + RenamePivotTableCommand
+            // (MainWindow.PivotName).
+            ["pivotAnalyze.name"] = OpenPivotName,
+            // Group Field / Ungroup dialogs — date/number-range grouping via PivotGroupFieldPlanner, applied
+            // through ConfigurePivotTableCalculatedItemsCommand (MainWindow.PivotGroupField).
+            ["pivotAnalyze.groupField"] = OpenPivotGroupField,
+            ["pivotAnalyze.ungroup"] = UngroupPivotField,
+            // Calculated Field dialog — add/modify/delete a calculated field via PivotCalculatedFieldPlanner,
+            // applied through ConfigurePivotTableCalculatedItemsCommand (MainWindow.PivotCalculatedField).
+            ["pivotAnalyze.calculatedField"] = OpenPivotCalculatedField,
+            // Field Settings opens per-field value/sort dialogs from the header dropdown (MainWindow.PivotFieldSettings);
+            // the ribbon button has no current-field selection at the ribbon level yet, so it stays an honest stub here.
             ["pivotAnalyze.fieldSettings"] = () => ReportPivotNotYetAvailable("Field Settings"),
-            ["pivotAnalyze.groupField"] = () => ReportPivotNotYetAvailable("Group Field"),
-            ["pivotAnalyze.ungroup"] = () => ReportPivotNotYetAvailable("Ungroup"),
-            ["pivotAnalyze.changeDataSource"] = () => ReportPivotNotYetAvailable("Change Data Source"),
-            ["pivotAnalyze.calculatedField"] = () => ReportPivotNotYetAvailable("Calculated Field"),
-            ["pivotDesign.pivotStyles"] = () => ReportPivotNotYetAvailable("PivotTable Styles"),
 
             // Shape Effects is a dropdown: clicking the parent opens its menu (No Effect / Shadow, wired via
             // BuildPictureShapeTabCommands). Register the parent id too so the renderer keeps it enabled

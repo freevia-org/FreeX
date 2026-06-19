@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
+using FreeX.App.Presentation.Filtering;
 
 namespace FreeX.App.Host;
 

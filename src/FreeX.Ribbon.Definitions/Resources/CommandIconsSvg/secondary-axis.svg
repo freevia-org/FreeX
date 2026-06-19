@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Secondary Axis">
+  <rect width="32" height="32" fill="none"/>
+  <path d="M7.5 25.5h17M7.5 8v17.5M24.5 8v17.5" fill="none" stroke="#242424" stroke-width="1.4" stroke-linecap="round"/>
+  <rect x="10" y="17" width="3.2" height="8" fill="#5b9bd5"/>
+  <rect x="15" y="13" width="3.2" height="12" fill="#70ad47"/>
+  <path d="M10 13l4 3 4-5 5 3" fill="none" stroke="#ed7d31" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M26.5 11h-3M26.5 17h-3M26.5 23h-3" fill="none" stroke="#4472c4" stroke-width="1.1" stroke-linecap="round"/>
+</svg>

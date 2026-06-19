@@ -237,7 +237,7 @@ public sealed class ConvertStructuredTableToRangeCommand : IWorkbookCommand
     }
 }
 
-internal static class StructuredTableDesignCommandHelpers
+public static class StructuredTableDesignCommandHelpers
 {
     public static string? ValidateTableName(Workbook workbook, string? name, SheetId? exceptSheetId = null, int? exceptTableId = null)
     {

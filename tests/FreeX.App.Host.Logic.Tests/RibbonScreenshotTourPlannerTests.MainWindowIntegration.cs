@@ -451,7 +451,10 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("freex_options_view_category_navigation");
         source.Should().Contain("freex_options_cancel_focus_return");
         source.Should().Contain("LocalAccountPlanner.Create");
-        source.Should().Contain("SsAccountBtn_Click(SsAccountNavBtn");
+        // The backstage rail is now the shared BackstageFrame: the tour focuses the Account entry by its
+        // automation id and invokes the account command rather than driving a named SsAccountNavBtn control.
+        source.Should().Contain("_backstageFrame?.FocusEntry(\"BackstageAccountButton\")");
+        source.Should().Contain("SsAccountBtn_Click(this, new RoutedEventArgs())");
         source.Should().Contain("CaptureOwnedNativeDialogWhenShownAsync");
         source.Should().Contain("PrintWindow-owned-native-dialog");
         source.Should().Contain("new OptionsDialog(_options, _workbook.DisabledFormulaErrorCodes)");

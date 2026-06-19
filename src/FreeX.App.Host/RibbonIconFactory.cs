@@ -44,6 +44,36 @@ public static partial class RibbonIconFactory
         return CreateIcon(fallbackIcon, size, glyphBrush);
     }
 
+    /// <summary>
+    /// Resolver for the shared <see cref="Free.Shared.Ribbon.Wpf.RibbonIconFactory.CommandIconElementResolver"/>
+    /// hook: returns FreeX's branded Office SVG glyph for <paramref name="commandName"/>, or <c>null</c> when
+    /// FreeX has no artwork for it (so the shared geometry fallback still applies — surgical: only commands
+    /// FreeX actually skins are overridden). Lets shared chrome rendered through the shared factory — the
+    /// <c>BackstageFrame</c> rail, QAT, … — reuse the same command icons the ribbon does, instead of the
+    /// generic <see cref="RibbonCommandIconKind"/> geometry.
+    /// </summary>
+    public static FrameworkElement? TryCreateCommandIconElement(
+        string commandName,
+        RibbonCommandIcon fallbackIcon,
+        double size,
+        Brush glyphBrush)
+    {
+        if (TryLoadCommandIcon(commandName, glyphBrush, size) is { } source)
+        {
+            return new Image
+            {
+                Source = source,
+                Width = size,
+                Height = size,
+                Stretch = Stretch.Uniform,
+                SnapsToDevicePixels = true,
+                UseLayoutRounding = true
+            };
+        }
+
+        return null;
+    }
+
     private static bool IsWhiteBrush(Brush brush)
     {
         return brush is SolidColorBrush solid &&

@@ -413,6 +413,7 @@ function Test-AvaloniaProject {
 
     $allowedProjectReferences = @(
         "Free.Shared.Ribbon",
+        "FreeX.App.Localization",
         "FreeX.App.Presentation",
         "FreeX.App.Services",
         "FreeX.Core.Calc",
@@ -1177,13 +1178,20 @@ function Test-SourceWiring {
                 "dialog.Opened += (_, _) => cancelButton.Focus();",
                 "AutomationProperties.SetAutomationId(replaceButton, `"PdfExportOverwriteReplaceButton`")",
                 "AutomationProperties.SetAutomationId(cancelButton, `"PdfExportOverwriteCancelButton`")",
-                "Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, exportPlan, pdfBuffer)",
+                "var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, exportPlan, pdfBuffer);",
+                "await File.WriteAllBytesAsync(path, pdfBuffer.ToArray());",
                 "_workbookStatisticsMenuItem.Header = `"Workbook Statistics...`";",
                 "_workbookStatisticsMenuItem.Gesture = new KeyGesture(Key.G, KeyModifiers.Control | KeyModifiers.Shift);",
                 "_workbookStatisticsMenuItem.Click += async (_, _) => await ShowWorkbookStatisticsDialogAsync();",
                 "fileMenu.Items.Add(_workbookStatisticsMenuItem);",
                 "_workbookStatisticsMenuItem.IsEnabled = isIdle;",
                 "HasNativeWorkbookStatisticsMenuItem: HasNativeMenuItem(_workbookStatisticsMenuItem, `"Workbook Statistics...`")",
+                # File > Options (Settings) - native menu item with the macOS Preferences shortcut (Cmd+,).
+                "private readonly NativeMenuItem _optionsMenuItem = new();",
+                "_optionsMenuItem.Header = UiText.Get(`"Options_Title`");",
+                "_optionsMenuItem.Gesture = new KeyGesture(Key.OemComma, KeyModifiers.Meta);",
+                "_optionsMenuItem.Click += (_, _) => ShowOptions();",
+                "fileMenu.Items.Add(_optionsMenuItem);",
                 "e.Key == Key.G && e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift)",
                 "private async Task ShowWorkbookStatisticsDialogAsync()",
                 "WorkbookStatisticsService.GetStatistics(_session.Workbook)",
@@ -1236,7 +1244,7 @@ function Test-SourceWiring {
                 "`"FormatCellsLockedBox`"",
                 "`"FormatCellsHiddenBox`"",
                 "`"FormatCellsProtectionExplanationText`"",
-                "Locking cells or hiding formulas has no effect until you protect the worksheet.",
+                "Text = UiText.Get(`"FormatCells_ProtectionExplanation`"),",
                 "var currentMergeCells = _session.IsSelectedRangeMerged;",
                 "MergeCells: ReadChangedFormatCellsBool(currentMergeCells, mergeCellsBox)",
                 "var normalStyle = CellStyle.Default;",
@@ -1246,8 +1254,8 @@ function Test-SourceWiring {
                 "SelectFormatCellsColor(fontColorBox, normal.FontColor)",
                 "FillPatternStyle: clearFill ? null : ReadChangedFormatCellsValue(currentFillPatternStyle, fillPatternStyleBox)",
                 "FillPatternColor: clearFill ? null : (fillPatternColorBox.SelectedItem as FormatCellsColorChoice)?.Color",
-                "CreateFormatCellsField(`"Pattern style`", fillPatternStyleBox)",
-                "CreateFormatCellsField(`"Pattern color`", fillPatternColorBox)",
+                "CreateFormatCellsField(UiText.Get(`"FormatCells_PatternStyle`"), fillPatternStyleBox)",
+                "CreateFormatCellsField(UiText.Get(`"FormatCells_PatternColor`"), fillPatternColorBox)",
                 "private static IReadOnlyList<FormatCellsNullableChoice<CellFillPatternStyle>> CreateFormatCellsFillPatternStyleChoices()",
                 "CellFillPatternStyle.DarkTrellis",
                 "_autoSumButton.Content = `"AutoSum`";",
@@ -2082,6 +2090,18 @@ function Test-SourceWiring {
                 "EncodeWinAnsiHexText(normalized)",
                 "private static byte EncodeWinAnsiByte(char ch)",
                 "built-in Helvetica/WinAnsi set"
+            )
+            OrderedPairs = @()
+        },
+        @{
+            # File > Export to PDF prefers Skia (Unicode) but MUST keep the dependency-free WinAnsi
+            # PortablePdfDocumentExporter as the fallback so the macOS bundle can export without Skia.
+            Path = "src\FreeX.App.Avalonia\Pdf\AvaloniaPdfDocumentExporter.cs"
+            Markers = @(
+                "public static class AvaloniaPdfDocumentExporter",
+                "var result = SkiaPdfDocumentExporter.Save(workbook, exportPlan, stream, options);",
+                "catch (Exception ex) when (IsSkiaUnavailable(ex))",
+                "var result = PortablePdfDocumentExporter.Save(workbook, exportPlan, stream, options);"
             )
             OrderedPairs = @()
         },
@@ -3048,8 +3068,22 @@ function Test-PortableSourceHygiene {
 
     foreach ($file in $sourceFiles) {
         $content = Get-Content -LiteralPath $file.FullName -Raw
+        # Strip comments before token scanning: portable abstraction layers legitimately NAME the
+        # Windows/native APIs they replace in documentation (e.g. "the WPF host uses
+        # Microsoft.Win32.SaveFileDialog; Avalonia/macOS use their own pickers"). Only a real code
+        # reference (using/type) is a portability violation, not a doc comment mentioning the token.
+        $scanContent = $content
+        if ($file.Extension -eq ".cs") {
+            $scanContent = [regex]::Replace($scanContent, "/\*[\s\S]*?\*/", " ")
+            $scanContent = [regex]::Replace($scanContent, "//[^\r\n]*", " ")
+        }
+        else {
+            # .csproj / .axaml / .xaml use XML comments.
+            $scanContent = [regex]::Replace($scanContent, "<!--[\s\S]*?-->", " ")
+        }
+
         foreach ($token in $alwaysForbiddenTokens) {
-            if ($content.IndexOf($token, [System.StringComparison]::Ordinal) -ge 0) {
+            if ($scanContent.IndexOf($token, [System.StringComparison]::Ordinal) -ge 0) {
                 throw "Portable macOS source contains forbidden token '$token' in $(Get-RepoRelativePath $file.FullName)."
             }
         }
@@ -3059,7 +3093,7 @@ function Test-PortableSourceHygiene {
         }
 
         foreach ($token in $nativeMacOsTokens) {
-            if ($content.IndexOf($token, [System.StringComparison]::Ordinal) -ge 0) {
+            if ($scanContent.IndexOf($token, [System.StringComparison]::Ordinal) -ge 0) {
                 throw "Portable macOS source contains native macOS token '$token' outside src/FreeX.App.Avalonia/MacOs in $(Get-RepoRelativePath $file.FullName)."
             }
         }

@@ -1,5 +1,4 @@
 using System;
-using System.Windows;
 
 namespace Free.Shared.Shell;
 
@@ -7,7 +6,8 @@ namespace Free.Shared.Shell;
 /// Pure geometry for "Reset Window Position": computes a standard, work-area-relative
 /// size and position for a workbook window, cascading later windows down-and-right and
 /// wrapping so a window is never pushed off the right or bottom of the work area.
-/// WPF-free so it can be unit-tested without standing up a window.
+/// WPF-free (returns the neutral <see cref="ShellRect"/>) so it can be unit-tested without
+/// standing up a window and reused from non-WPF hosts.
 /// </summary>
 public static class WindowResetPositionPlanner
 {
@@ -23,10 +23,10 @@ public static class WindowResetPositionPlanner
     /// <summary>Fallback height used when the work area is non-positive/unknown.</summary>
     public const double FallbackHeight = 768;
 
-    public static Rect Compute(double workAreaWidth, double workAreaHeight, int windowIndex)
+    public static ShellRect Compute(double workAreaWidth, double workAreaHeight, int windowIndex)
     {
         if (workAreaWidth <= 0 || workAreaHeight <= 0)
-            return new Rect(0, 0, FallbackWidth, FallbackHeight);
+            return new ShellRect(0, 0, FallbackWidth, FallbackHeight);
 
         var width = workAreaWidth * StandardSizeFraction;
         var height = workAreaHeight * StandardSizeFraction;
@@ -35,7 +35,7 @@ public static class WindowResetPositionPlanner
         var left = CascadeWithinSlack(workAreaWidth - width, index);
         var top = CascadeWithinSlack(workAreaHeight - height, index);
 
-        return new Rect(left, top, width, height);
+        return new ShellRect(left, top, width, height);
     }
 
     // Centered for index 0, then cascaded by index*offset, wrapped to stay within [0, slack)

@@ -1,0 +1,633 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="Common_Ok" xml:space="preserve"><value>OK</value></data>
+  <data name="Common_Cancel" xml:space="preserve"><value>Annuler</value></data>
+  <data name="Common_Apply" xml:space="preserve"><value>Appliquer</value></data>
+  <data name="Common_Close" xml:space="preserve"><value>Fermer</value></data>
+  <data name="Common_Clear" xml:space="preserve"><value>Effacer</value></data>
+  <data name="Common_None" xml:space="preserve"><value>Aucun</value></data>
+  <data name="Common_Auto" xml:space="preserve"><value>Auto</value></data>
+  <data name="PivotOptions_Title" xml:space="preserve"><value>Options du tableau croisé dynamique ({0})</value></data>
+  <data name="PivotOptions_ShowRowGrandTotals" xml:space="preserve"><value>Afficher les totaux généraux des lignes</value></data>
+  <data name="PivotOptions_ShowColumnGrandTotals" xml:space="preserve"><value>Afficher les totaux généraux des colonnes</value></data>
+  <data name="PivotOptions_ShowSubtotals" xml:space="preserve"><value>Afficher les sous-totaux</value></data>
+  <data name="PivotOptions_RepeatItemLabels" xml:space="preserve"><value>Répéter les étiquettes d'éléments</value></data>
+  <data name="PivotOptions_InsertBlankRow" xml:space="preserve"><value>Insérer une ligne vide après chaque élément</value></data>
+  <data name="PivotOptions_MergeAndCenterLabels" xml:space="preserve"><value>Fusionner et centrer les cellules avec étiquettes</value></data>
+  <data name="PivotOptions_GrandTotalsHeader" xml:space="preserve"><value>Totaux généraux</value></data>
+  <data name="PivotOptions_LayoutHeader" xml:space="preserve"><value>Disposition</value></data>
+  <data name="PivotOptions_SubtotalsHeader" xml:space="preserve"><value>Sous-totaux</value></data>
+  <data name="PivotOptions_ReportLayoutLabel" xml:space="preserve"><value>Disposition du rapport :</value></data>
+  <data name="PivotOptions_CompactIndentLabel" xml:space="preserve"><value>Retrait des étiquettes de ligne en forme compacte :</value></data>
+  <data name="PivotStyleGallery_Title" xml:space="preserve"><value>Styles de tableau croisé dynamique</value></data>
+  <data name="PivotStyleGallery_StyleLabel" xml:space="preserve"><value>Style du tableau croisé dynamique :</value></data>
+  <data name="PivotStyleGallery_GalleryName" xml:space="preserve"><value>Galerie de styles de tableau croisé dynamique</value></data>
+  <data name="PivotStyleGallery_Applied" xml:space="preserve"><value>Style du tableau croisé dynamique : {0}.</value></data>
+  <data name="PivotDataSource_Title" xml:space="preserve"><value>Modifier la source de données du tableau croisé dynamique</value></data>
+  <data name="PivotDataSource_RangeLabel" xml:space="preserve"><value>Tableau/Plage :</value></data>
+  <data name="PivotDataSource_RangeName" xml:space="preserve"><value>Plage source du tableau croisé dynamique</value></data>
+  <data name="PivotDataSource_Changed" xml:space="preserve"><value>Source de données du tableau croisé dynamique modifiée en {0}.</value></data>
+  <data name="PivotName_Title" xml:space="preserve"><value>Nom du tableau croisé dynamique</value></data>
+  <data name="PivotName_Label" xml:space="preserve"><value>Nom du tableau croisé dynamique :</value></data>
+  <data name="PivotName_NameAutomation" xml:space="preserve"><value>Nom du tableau croisé dynamique</value></data>
+  <data name="PivotName_Renamed" xml:space="preserve"><value>Tableau croisé dynamique renommé en {0}.</value></data>
+  <data name="PivotGroup_Title" xml:space="preserve"><value>Groupement ({0})</value></data>
+  <data name="PivotGroup_FieldLabel" xml:space="preserve"><value>Champ :</value></data>
+  <data name="PivotGroup_GroupByLabel" xml:space="preserve"><value>Grouper par :</value></data>
+  <data name="PivotGroup_StartingAtLabel" xml:space="preserve"><value>À partir de :</value></data>
+  <data name="PivotGroup_EndingAtLabel" xml:space="preserve"><value>Jusqu'à :</value></data>
+  <data name="PivotGroup_ByLabel" xml:space="preserve"><value>Par :</value></data>
+  <data name="PivotGroup_Grouped" xml:space="preserve"><value>Champ « {0} » groupé.</value></data>
+  <data name="PivotGroup_Ungrouped" xml:space="preserve"><value>Champ « {0} » dégroupé.</value></data>
+  <data name="PivotGroup_NoField" xml:space="preserve"><value>Ajoutez un champ à la disposition du tableau croisé dynamique, puis groupez-le.</value></data>
+  <data name="PivotCalcField_Title" xml:space="preserve"><value>Insérer un champ calculé</value></data>
+  <data name="PivotCalcField_ExistingLabel" xml:space="preserve"><value>Champ calculé existant :</value></data>
+  <data name="PivotCalcField_ExistingNone" xml:space="preserve"><value>(Nouveau champ calculé)</value></data>
+  <data name="PivotCalcField_NameLabel" xml:space="preserve"><value>Nom :</value></data>
+  <data name="PivotCalcField_FormulaLabel" xml:space="preserve"><value>Formule :</value></data>
+  <data name="PivotCalcField_FieldsLabel" xml:space="preserve"><value>Champs :</value></data>
+  <data name="PivotCalcField_InsertField" xml:space="preserve"><value>Insérer le champ</value></data>
+  <data name="PivotCalcField_FieldsAutomation" xml:space="preserve"><value>Champs disponibles</value></data>
+  <data name="PivotCalcField_Delete" xml:space="preserve"><value>Supprimer</value></data>
+  <data name="PivotCalcField_Saved" xml:space="preserve"><value>Champ calculé « {0} » enregistré.</value></data>
+  <data name="PivotCalcField_Deleted" xml:space="preserve"><value>Champ calculé « {0} » supprimé.</value></data>
+  <data name="PivotValueField_Title" xml:space="preserve"><value>Paramètres des champs de valeurs ({0})</value></data>
+  <data name="PivotValueField_CustomName" xml:space="preserve"><value>Nom personnalisé :</value></data>
+  <data name="PivotValueField_SummarizeBy" xml:space="preserve"><value>Synthétiser le champ de valeurs par :</value></data>
+  <data name="PivotValueField_ShowValuesAs" xml:space="preserve"><value>Afficher les valeurs sous la forme :</value></data>
+  <data name="PivotValueField_BaseField" xml:space="preserve"><value>Champ de base :</value></data>
+  <data name="PivotValueField_BaseItem" xml:space="preserve"><value>Élément de base :</value></data>
+  <data name="PivotSort_Title" xml:space="preserve"><value>Autres options de tri ({0})</value></data>
+  <data name="PivotSort_Heading" xml:space="preserve"><value>Trier {0}</value></data>
+  <data name="PivotSort_AscendingByLabels" xml:space="preserve"><value>Croissant (de A à Z) par étiquettes</value></data>
+  <data name="PivotSort_DescendingByLabels" xml:space="preserve"><value>Décroissant (de Z à A) par étiquettes</value></data>
+  <data name="PivotSort_AscendingByValues" xml:space="preserve"><value>Croissant par valeurs</value></data>
+  <data name="PivotSort_DescendingByValues" xml:space="preserve"><value>Décroissant par valeurs</value></data>
+  <data name="PivotSort_ValueField" xml:space="preserve"><value>Champ de valeurs :</value></data>
+  <data name="PivotFilter_ItemsTitle" xml:space="preserve"><value>Filtrer les éléments</value></data>
+  <data name="PivotFilter_ItemsHeading" xml:space="preserve"><value>Filtrer « {0} »</value></data>
+  <data name="PivotFilter_LabelTitle" xml:space="preserve"><value>Filtre d'étiquette ({0})</value></data>
+  <data name="PivotFilter_ValueTitle" xml:space="preserve"><value>Filtre de valeur ({0})</value></data>
+  <data name="PivotFilter_LabelHeading" xml:space="preserve"><value>Afficher les éléments dont l'étiquette :</value></data>
+  <data name="PivotFilter_SummarizeBy" xml:space="preserve"><value>Synthétiser par :</value></data>
+  <data name="PivotFilter_WhereValueIs" xml:space="preserve"><value>où la valeur est :</value></data>
+  <data name="ChartDataLabels_Title" xml:space="preserve"><value>Étiquettes de données</value></data>
+  <data name="ChartDataLabels_Show" xml:space="preserve"><value>Afficher les étiquettes de données</value></data>
+  <data name="ChartDataLabels_PositionLabel" xml:space="preserve"><value>Position de l'étiquette :</value></data>
+  <data name="ChartDataLabels_ContainsLabel" xml:space="preserve"><value>L'étiquette contient :</value></data>
+  <data name="ChartDataLabels_Value" xml:space="preserve"><value>Valeur</value></data>
+  <data name="ChartDataLabels_CategoryName" xml:space="preserve"><value>Nom de catégorie</value></data>
+  <data name="ChartDataLabels_SeriesName" xml:space="preserve"><value>Nom de série</value></data>
+  <data name="ChartDataLabels_Percentage" xml:space="preserve"><value>Pourcentage</value></data>
+  <data name="ChartDataLabels_LegendKey" xml:space="preserve"><value>Symbole de légende</value></data>
+  <data name="ChartAxis_MinimumLabel" xml:space="preserve"><value>Minimum (vide = auto) :</value></data>
+  <data name="ChartAxis_MaximumLabel" xml:space="preserve"><value>Maximum (vide = auto) :</value></data>
+  <data name="ChartAxis_MajorUnitLabel" xml:space="preserve"><value>Unité principale (vide = auto) :</value></data>
+  <data name="ChartAxis_LogScale" xml:space="preserve"><value>Échelle logarithmique</value></data>
+  <data name="ChartAxis_NumberFormatLabel" xml:space="preserve"><value>Format de nombre :</value></data>
+  <data name="ChartAxis_ShowMajorGridlines" xml:space="preserve"><value>Afficher le quadrillage principal</value></data>
+  <data name="ChartAxis_ShowMinorGridlines" xml:space="preserve"><value>Afficher le quadrillage secondaire</value></data>
+  <data name="ChartSeries_Title" xml:space="preserve"><value>Mettre en forme la série</value></data>
+  <data name="ChartSeries_SeriesLabel" xml:space="preserve"><value>Série :</value></data>
+  <data name="ChartSeries_FillAndLineLabel" xml:space="preserve"><value>Remplissage et ligne :</value></data>
+  <data name="ChartSeries_LineWidthLabel" xml:space="preserve"><value>Largeur de ligne (vide = auto) :</value></data>
+  <data name="ChartSeries_MarkerLabel" xml:space="preserve"><value>Marqueur :</value></data>
+  <data name="ChartSeries_MarkerSizeLabel" xml:space="preserve"><value>Taille du marqueur (vide = auto) :</value></data>
+  <data name="ChartSeries_FillColor" xml:space="preserve"><value>Couleur de remplissage</value></data>
+  <data name="ChartSeries_LineColor" xml:space="preserve"><value>Couleur de ligne</value></data>
+  <data name="ChartSeries_FillColorDialogTitle" xml:space="preserve"><value>Couleur de remplissage de la série</value></data>
+  <data name="ChartSeries_LineColorDialogTitle" xml:space="preserve"><value>Couleur de ligne de la série</value></data>
+  <data name="ChartTrendline_Title" xml:space="preserve"><value>Courbe de tendance</value></data>
+  <data name="ChartTrendline_Show" xml:space="preserve"><value>Afficher la courbe de tendance</value></data>
+  <data name="ChartTrendline_TypeLabel" xml:space="preserve"><value>Type de courbe de tendance :</value></data>
+  <data name="ChartTrendline_PeriodLabel" xml:space="preserve"><value>Période de moyenne mobile (moyenne mobile uniquement) :</value></data>
+  <data name="ChartTrendline_OrderLabel" xml:space="preserve"><value>Ordre polynomial (polynomial uniquement) :</value></data>
+  <data name="ChartTrendline_ShowEquation" xml:space="preserve"><value>Afficher l'équation sur le graphique</value></data>
+  <data name="ChartTrendline_ShowRSquared" xml:space="preserve"><value>Afficher le coefficient de détermination (R²)</value></data>
+  <data name="ChartErrorBars_Title" xml:space="preserve"><value>Barres d'erreur</value></data>
+  <data name="ChartErrorBars_Show" xml:space="preserve"><value>Afficher les barres d'erreur</value></data>
+  <data name="ChartErrorBars_KindLabel" xml:space="preserve"><value>Marge d'erreur :</value></data>
+  <data name="ChartErrorBars_DirectionLabel" xml:space="preserve"><value>Direction :</value></data>
+  <data name="ChartErrorBars_ValueLabel" xml:space="preserve"><value>Valeur fixe ou pourcentage :</value></data>
+  <data name="ChartErrorBars_EndCaps" xml:space="preserve"><value>Afficher les extrémités</value></data>
+  <!-- Chart: Combo Chart dialog -->
+  <data name="ChartCombo_Title" xml:space="preserve"><value>Graphique combiné</value></data>
+  <data name="ChartCombo_Instruction" xml:space="preserve"><value>Choisissez le mode de tracé de chaque série :</value></data>
+  <data name="ChartCombo_SeriesRow" xml:space="preserve"><value>Série {0}</value></data>
+  <data name="ChartCombo_AsLine" xml:space="preserve"><value>Tracer en courbe</value></data>
+  <data name="ChartCombo_SecondaryAxis" xml:space="preserve"><value>Axe secondaire</value></data>
+  <!-- Chart: Move Chart dialog -->
+  <data name="MoveChart_Title" xml:space="preserve"><value>Déplacer le graphique</value></data>
+  <data name="MoveChart_ObjectInSheet" xml:space="preserve"><value>Objet dans une feuille existante</value></data>
+  <data name="MoveChart_NewChartSheet" xml:space="preserve"><value>Nouvelle feuille de graphique</value></data>
+  <data name="MoveChart_TargetNameLabel" xml:space="preserve"><value>Nom de la feuille :</value></data>
+  <!-- Chart: Format Chart Area dialog -->
+  <data name="ChartArea_Title" xml:space="preserve"><value>Mettre en forme la zone de graphique</value></data>
+  <data name="ChartArea_FillLabel" xml:space="preserve"><value>Remplissage :</value></data>
+  <data name="ChartArea_ChartAreaFill" xml:space="preserve"><value>Remplissage de la zone de graphique</value></data>
+  <data name="ChartArea_PlotAreaFill" xml:space="preserve"><value>Remplissage de la zone de traçage</value></data>
+  <data name="ChartArea_BorderLabel" xml:space="preserve"><value>Bordure de la zone de traçage :</value></data>
+  <data name="ChartArea_PlotAreaBorder" xml:space="preserve"><value>Bordure de la zone de traçage</value></data>
+  <data name="ChartArea_BorderWidthLabel" xml:space="preserve"><value>Largeur de la bordure de la zone de traçage :</value></data>
+  <data name="ConditionalFormat_NewRuleTitle" xml:space="preserve"><value>Nouvelle règle de mise en forme</value></data>
+  <data name="ConditionalFormat_EditRuleTitle" xml:space="preserve"><value>Modifier la règle de mise en forme</value></data>
+  <data name="ConditionalFormat_AppliesToFormat" xml:space="preserve"><value>S'applique à {0}</value></data>
+  <data name="ConditionalFormat_RuleTypeLabel" xml:space="preserve"><value>Type de règle</value></data>
+  <data name="ConditionalFormat_PresetLabel" xml:space="preserve"><value>Préréglage</value></data>
+  <data name="ConditionalFormat_OperatorLabel" xml:space="preserve"><value>Opérateur</value></data>
+  <data name="ConditionalFormat_ValueLabel" xml:space="preserve"><value>Valeur</value></data>
+  <data name="ConditionalFormat_MaximumLabel" xml:space="preserve"><value>Maximum</value></data>
+  <data name="ConditionalFormat_FormulaLabel" xml:space="preserve"><value>Formule (par ex. =A1&gt;10)</value></data>
+  <data name="ConditionalFormat_TextLabel" xml:space="preserve"><value>Texte</value></data>
+  <data name="ConditionalFormat_RankOrPercentLabel" xml:space="preserve"><value>Rang ou pourcentage</value></data>
+  <data name="ConditionalFormat_TopOrBottomLabel" xml:space="preserve"><value>Haut ou bas</value></data>
+  <data name="ConditionalFormat_IconSetStyleLabel" xml:space="preserve"><value>Style du jeu d'icônes</value></data>
+  <data name="ConditionalFormat_MinColorLabel" xml:space="preserve"><value>Couleur minimale (r,v,b)</value></data>
+  <data name="ConditionalFormat_MidColorLabel" xml:space="preserve"><value>Couleur médiane (r,v,b)</value></data>
+  <data name="ConditionalFormat_MaxColorLabel" xml:space="preserve"><value>Couleur maximale (r,v,b)</value></data>
+  <data name="ConditionalFormat_FormatLabel" xml:space="preserve"><value>Format</value></data>
+  <data name="ConditionalFormat_PercentOfRange" xml:space="preserve"><value>% de la plage</value></data>
+  <data name="ConditionalFormat_UseThreeColorScale" xml:space="preserve"><value>Utiliser une échelle à trois couleurs</value></data>
+  <data name="ConditionalFormat_ManageTitle" xml:space="preserve"><value>Gérer les règles de mise en forme conditionnelle</value></data>
+  <data name="ConditionalFormat_NoRules" xml:space="preserve"><value>Aucune règle de mise en forme conditionnelle pour cette sélection.</value></data>
+  <data name="ConditionalFormat_AppliesToLabel" xml:space="preserve"><value>S'applique à</value></data>
+  <data name="ConditionalFormat_ManageNew" xml:space="preserve"><value>Nouvelle…</value></data>
+  <data name="ConditionalFormat_ManageEdit" xml:space="preserve"><value>Modifier…</value></data>
+  <data name="ConditionalFormat_ManageDelete" xml:space="preserve"><value>Supprimer</value></data>
+  <data name="ConditionalFormat_ManageMoveUp" xml:space="preserve"><value>Monter</value></data>
+  <data name="ConditionalFormat_ManageMoveDown" xml:space="preserve"><value>Descendre</value></data>
+  <data name="ConditionalFormat_ManageApplyRange" xml:space="preserve"><value>Appliquer la plage</value></data>
+  <data name="FormatCells_Title" xml:space="preserve"><value>Format de cellule</value></data>
+  <data name="FormatCells_TabNumber" xml:space="preserve"><value>Nombre</value></data>
+  <data name="FormatCells_TabAlignment" xml:space="preserve"><value>Alignement</value></data>
+  <data name="FormatCells_TabFont" xml:space="preserve"><value>Police</value></data>
+  <data name="FormatCells_TabFill" xml:space="preserve"><value>Remplissage</value></data>
+  <data name="FormatCells_TabBorder" xml:space="preserve"><value>Bordure</value></data>
+  <data name="FormatCells_TabProtection" xml:space="preserve"><value>Protection</value></data>
+  <data name="FormatCells_Category" xml:space="preserve"><value>Catégorie</value></data>
+  <data name="FormatCells_Type" xml:space="preserve"><value>Type</value></data>
+  <data name="FormatCells_DecimalPlaces" xml:space="preserve"><value>Nombre de décimales</value></data>
+  <data name="FormatCells_Symbol" xml:space="preserve"><value>Symbole</value></data>
+  <data name="FormatCells_NegativeNumbers" xml:space="preserve"><value>Nombres négatifs</value></data>
+  <data name="FormatCells_Sample" xml:space="preserve"><value>Exemple</value></data>
+  <data name="FormatCells_Horizontal" xml:space="preserve"><value>Horizontal</value></data>
+  <data name="FormatCells_Vertical" xml:space="preserve"><value>Vertical</value></data>
+  <data name="FormatCells_Indent" xml:space="preserve"><value>Retrait</value></data>
+  <data name="FormatCells_TextRotation" xml:space="preserve"><value>Rotation du texte</value></data>
+  <data name="FormatCells_Font" xml:space="preserve"><value>Police</value></data>
+  <data name="FormatCells_Size" xml:space="preserve"><value>Taille</value></data>
+  <data name="FormatCells_Color" xml:space="preserve"><value>Couleur</value></data>
+  <data name="FormatCells_Preview" xml:space="preserve"><value>Aperçu</value></data>
+  <data name="FormatCells_FillColor" xml:space="preserve"><value>Couleur de remplissage</value></data>
+  <data name="FormatCells_PatternStyle" xml:space="preserve"><value>Style de motif</value></data>
+  <data name="FormatCells_PatternColor" xml:space="preserve"><value>Couleur de motif</value></data>
+  <data name="FormatCells_Preset" xml:space="preserve"><value>Préréglage</value></data>
+  <data name="FormatCells_LineStyle" xml:space="preserve"><value>Style de ligne</value></data>
+  <data name="FormatCells_LineColor" xml:space="preserve"><value>Couleur de ligne</value></data>
+  <data name="FormatCells_Borders" xml:space="preserve"><value>Bordures</value></data>
+  <data name="FormatCells_WrapText" xml:space="preserve"><value>Renvoyer à la ligne automatiquement</value></data>
+  <data name="FormatCells_ShrinkToFit" xml:space="preserve"><value>Ajuster</value></data>
+  <data name="FormatCells_MergeCells" xml:space="preserve"><value>Fusionner les cellules</value></data>
+  <data name="FormatCells_Bold" xml:space="preserve"><value>Gras</value></data>
+  <data name="FormatCells_Italic" xml:space="preserve"><value>Italique</value></data>
+  <data name="FormatCells_Underline" xml:space="preserve"><value>Souligné</value></data>
+  <data name="FormatCells_DoubleUnderline" xml:space="preserve"><value>Souligné double</value></data>
+  <data name="FormatCells_Strikethrough" xml:space="preserve"><value>Barré</value></data>
+  <data name="FormatCells_Superscript" xml:space="preserve"><value>Exposant</value></data>
+  <data name="FormatCells_Subscript" xml:space="preserve"><value>Indice</value></data>
+  <data name="FormatCells_NormalFont" xml:space="preserve"><value>Police normale</value></data>
+  <data name="FormatCells_Locked" xml:space="preserve"><value>Verrouillé</value></data>
+  <data name="FormatCells_Hidden" xml:space="preserve"><value>Masqué</value></data>
+  <data name="FormatCells_ProtectionExplanation" xml:space="preserve"><value>Le verrouillage des cellules ou le masquage des formules n'a aucun effet tant que vous ne protégez pas la feuille de calcul.</value></data>
+  <data name="FormatCells_BorderPresetNone" xml:space="preserve"><value>Aucune</value></data>
+  <data name="FormatCells_BorderPresetOutline" xml:space="preserve"><value>Contour</value></data>
+  <data name="FormatCells_BorderPresetInside" xml:space="preserve"><value>Intérieur</value></data>
+  <data name="FormatCells_NoChange" xml:space="preserve"><value>Aucune modification</value></data>
+  <data name="FormatCells_MoreFontColors" xml:space="preserve"><value>Autres couleurs de police</value></data>
+  <data name="FormatCells_MoreFillColors" xml:space="preserve"><value>Autres couleurs de remplissage</value></data>
+  <data name="FormatCells_MorePatternColors" xml:space="preserve"><value>Autres couleurs de motif</value></data>
+  <data name="FormatCells_MoreBorderColors" xml:space="preserve"><value>Autres couleurs de bordure</value></data>
+  <data name="PageSetup_Title" xml:space="preserve"><value>Mise en page</value></data>
+  <data name="PageSetup_PageTab" xml:space="preserve"><value>Page</value></data>
+  <data name="PageSetup_MarginsTab" xml:space="preserve"><value>Marges</value></data>
+  <data name="PageSetup_HeaderFooterTab" xml:space="preserve"><value>En-tête/Pied de page</value></data>
+  <data name="PageSetup_SheetTab" xml:space="preserve"><value>Feuille</value></data>
+  <data name="PageSetup_Orientation" xml:space="preserve"><value>Orientation</value></data>
+  <data name="PageSetup_Portrait" xml:space="preserve"><value>Portrait</value></data>
+  <data name="PageSetup_Landscape" xml:space="preserve"><value>Paysage</value></data>
+  <data name="PageSetup_PaperSize" xml:space="preserve"><value>Format du papier</value></data>
+  <data name="PageSetup_Scaling" xml:space="preserve"><value>Mise à l'échelle</value></data>
+  <data name="PageSetup_AdjustTo" xml:space="preserve"><value>Réduire/agrandir à (% de la taille normale)</value></data>
+  <data name="PageSetup_FitTo" xml:space="preserve"><value>Ajuster à</value></data>
+  <data name="PageSetup_WideBy" xml:space="preserve"><value>page(s) en largeur sur</value></data>
+  <data name="PageSetup_Tall" xml:space="preserve"><value>en hauteur</value></data>
+  <data name="PageSetup_FirstPageNumber" xml:space="preserve"><value>Numéro de la première page</value></data>
+  <data name="PageSetup_PrintQuality" xml:space="preserve"><value>Qualité d'impression (DPI)</value></data>
+  <data name="PageSetup_PrintQualityHelp" xml:space="preserve"><value>Résolution en points par pouce, ou vide pour la valeur par défaut de l'imprimante.</value></data>
+  <data name="PageSetup_Auto" xml:space="preserve"><value>Auto</value></data>
+  <data name="PageSetup_MarginsLabel" xml:space="preserve"><value>Marges (gauche, droite, haut, bas en pouces)</value></data>
+  <data name="PageSetup_MarginsHelp" xml:space="preserve"><value>Gauche, droite, haut, bas en pouces.</value></data>
+  <data name="PageSetup_HeaderMargin" xml:space="preserve"><value>Marge d'en-tête (pouces)</value></data>
+  <data name="PageSetup_FooterMargin" xml:space="preserve"><value>Marge de pied de page (pouces)</value></data>
+  <data name="PageSetup_CenterOnPage" xml:space="preserve"><value>Centrer sur la page</value></data>
+  <data name="PageSetup_CenterHorizontally" xml:space="preserve"><value>Horizontalement</value></data>
+  <data name="PageSetup_CenterVertically" xml:space="preserve"><value>Verticalement</value></data>
+  <data name="PageSetup_HeaderPreset" xml:space="preserve"><value>En-tête</value></data>
+  <data name="PageSetup_FooterPreset" xml:space="preserve"><value>Pied de page</value></data>
+  <data name="PageSetup_CustomHeader" xml:space="preserve"><value>En-tête personnalisé (gauche, centre, droite)</value></data>
+  <data name="PageSetup_CustomFooter" xml:space="preserve"><value>Pied de page personnalisé (gauche, centre, droite)</value></data>
+  <data name="PageSetup_DifferentFirstPage" xml:space="preserve"><value>Première page différente</value></data>
+  <data name="PageSetup_DifferentOddEven" xml:space="preserve"><value>Pages paires et impaires différentes</value></data>
+  <data name="PageSetup_ScaleWithDocument" xml:space="preserve"><value>Mettre à l'échelle avec le document</value></data>
+  <data name="PageSetup_AlignWithMargins" xml:space="preserve"><value>Aligner sur les marges de la page</value></data>
+  <data name="PageSetup_None" xml:space="preserve"><value>(aucun)</value></data>
+  <data name="PageSetup_PresetPage" xml:space="preserve"><value>Page 1</value></data>
+  <data name="PageSetup_PresetPageOf" xml:space="preserve"><value>Page 1 sur ?</value></data>
+  <data name="PageSetup_PresetSheetName" xml:space="preserve"><value>Nom de la feuille</value></data>
+  <data name="PageSetup_PresetFileName" xml:space="preserve"><value>Nom du fichier</value></data>
+  <data name="PageSetup_PresetFileSheet" xml:space="preserve"><value>Nom du fichier, nom de la feuille</value></data>
+  <data name="PageSetup_PresetDate" xml:space="preserve"><value>Date</value></data>
+  <data name="PageSetup_PresetTime" xml:space="preserve"><value>Heure</value></data>
+  <data name="PageSetup_PresetDatePage" xml:space="preserve"><value>Date, Page 1</value></data>
+  <data name="PageSetup_PresetConfidential" xml:space="preserve"><value>Confidentiel, Page 1</value></data>
+  <data name="PageSetup_PresetFilePath" xml:space="preserve"><value>Chemin du fichier</value></data>
+  <data name="PageSetup_PrintArea" xml:space="preserve"><value>Zone d'impression</value></data>
+  <data name="PageSetup_PrintAreaHelp" xml:space="preserve"><value>Plage de cellules comme A1:D20, ou vide pour effacer.</value></data>
+  <data name="PageSetup_RepeatRows" xml:space="preserve"><value>Lignes à répéter en haut</value></data>
+  <data name="PageSetup_RepeatRowsHelp" xml:space="preserve"><value>Plage de lignes comme 1:2, ou vide pour aucune.</value></data>
+  <data name="PageSetup_RepeatColumns" xml:space="preserve"><value>Colonnes à répéter à gauche</value></data>
+  <data name="PageSetup_RepeatColumnsHelp" xml:space="preserve"><value>Plage de colonnes comme A:B, ou vide pour aucune.</value></data>
+  <data name="PageSetup_PrintGridlines" xml:space="preserve"><value>Imprimer le quadrillage</value></data>
+  <data name="PageSetup_PrintHeadings" xml:space="preserve"><value>Imprimer les en-têtes de lignes et de colonnes</value></data>
+  <data name="PageSetup_BlackAndWhite" xml:space="preserve"><value>Noir et blanc</value></data>
+  <data name="PageSetup_DraftQuality" xml:space="preserve"><value>Qualité brouillon</value></data>
+  <data name="PageSetup_PageOrder" xml:space="preserve"><value>Ordre des pages</value></data>
+  <data name="PageSetup_DownThenOver" xml:space="preserve"><value>Vers le bas, puis à droite</value></data>
+  <data name="PageSetup_OverThenDown" xml:space="preserve"><value>À droite, puis vers le bas</value></data>
+  <data name="PageSetup_CellErrorsAs" xml:space="preserve"><value>Erreurs de cellule en tant que</value></data>
+  <data name="PageSetup_ErrorsDisplayed" xml:space="preserve"><value>Affichées</value></data>
+  <data name="PageSetup_ErrorsBlank" xml:space="preserve"><value>&lt;vide&gt;</value></data>
+  <data name="PageSetup_ErrorsDash" xml:space="preserve"><value>--</value></data>
+  <data name="PageSetup_ErrorsNotAvailable" xml:space="preserve"><value>#N/A</value></data>
+  <data name="PageSetup_Comments" xml:space="preserve"><value>Commentaires</value></data>
+  <data name="PageSetup_CommentsNone" xml:space="preserve"><value>(Aucun)</value></data>
+  <data name="PageSetup_CommentsAtEnd" xml:space="preserve"><value>En fin de feuille</value></data>
+  <data name="PageSetup_CommentsAsDisplayed" xml:space="preserve"><value>Tels qu'affichés sur la feuille</value></data>
+  <data name="PasteNames_Title" xml:space="preserve"><value>Coller un nom</value></data>
+  <data name="PasteNames_NamesLabel" xml:space="preserve"><value>Coller le nom</value></data>
+  <data name="PasteNames_PasteList" xml:space="preserve"><value>Coller la liste</value></data>
+  <data name="PasteNames_NameColumn" xml:space="preserve"><value>Nom</value></data>
+  <data name="PasteNames_RefersToColumn" xml:space="preserve"><value>Fait référence à</value></data>
+  <data name="PasteNames_NoNames" xml:space="preserve"><value>Aucun nom défini à coller.</value></data>
+  <data name="PasteNames_NotEnoughColumns" xml:space="preserve"><value>Il n'y a pas assez de colonnes pour coller la liste des noms.</value></data>
+  <data name="PasteNames_NotEnoughRows" xml:space="preserve"><value>Il n'y a pas assez de lignes pour coller la liste des noms.</value></data>
+  <data name="PasteNames_Pasted" xml:space="preserve"><value>Nom « {0} » collé</value></data>
+  <data name="PasteNames_PastedList" xml:space="preserve"><value>Liste de {0} nom(s) collée</value></data>
+  <data name="AllowEditRange_Title" xml:space="preserve"><value>Autoriser les utilisateurs à modifier les plages</value></data>
+  <data name="AllowEditRange_Intro" xml:space="preserve"><value>Plages déverrouillées par un mot de passe lorsque la feuille est protégée :</value></data>
+  <data name="AllowEditRange_ExistingRangesLabel" xml:space="preserve"><value>Plages</value></data>
+  <data name="AllowEditRange_RangeLabel" xml:space="preserve"><value>Fait référence aux cellules :</value></data>
+  <data name="AllowEditRange_Example" xml:space="preserve"><value>Par exemple, A1:B5 ou Feuil1!A1.</value></data>
+  <data name="AllowEditRange_NewButton" xml:space="preserve"><value>Nouveau...</value></data>
+  <data name="AllowEditRange_ModifyButton" xml:space="preserve"><value>Modifier...</value></data>
+  <data name="AllowEditRange_DeleteButton" xml:space="preserve"><value>Supprimer</value></data>
+  <data name="AllowEditRange_InvalidRange" xml:space="preserve"><value>Entrez une plage de cellules valide (par exemple, A1:B5).</value></data>
+  <data name="AllowEditRange_Added" xml:space="preserve"><value>Plage de modification {0} ajoutée</value></data>
+  <data name="AllowEditRange_Modified" xml:space="preserve"><value>Plage de modification {0} modifiée</value></data>
+  <data name="AllowEditRange_Removed" xml:space="preserve"><value>Plage de modification {0} supprimée</value></data>
+  <data name="FillSeries_Title" xml:space="preserve"><value>Série</value></data>
+  <data name="FillSeries_SeriesInHeader" xml:space="preserve"><value>Série dans</value></data>
+  <data name="FillSeries_Rows" xml:space="preserve"><value>Lignes</value></data>
+  <data name="FillSeries_Columns" xml:space="preserve"><value>Colonnes</value></data>
+  <data name="FillSeries_TypeHeader" xml:space="preserve"><value>Type</value></data>
+  <data name="FillSeries_Linear" xml:space="preserve"><value>Linéaire</value></data>
+  <data name="FillSeries_Growth" xml:space="preserve"><value>Géométrique</value></data>
+  <data name="FillSeries_Date" xml:space="preserve"><value>Date</value></data>
+  <data name="FillSeries_AutoFill" xml:space="preserve"><value>Recopie</value></data>
+  <data name="FillSeries_DateUnitHeader" xml:space="preserve"><value>Unité de date</value></data>
+  <data name="FillSeries_Day" xml:space="preserve"><value>Jour</value></data>
+  <data name="FillSeries_Weekday" xml:space="preserve"><value>Jour ouvré</value></data>
+  <data name="FillSeries_Month" xml:space="preserve"><value>Mois</value></data>
+  <data name="FillSeries_Year" xml:space="preserve"><value>Année</value></data>
+  <data name="FillSeries_StepValueLabel" xml:space="preserve"><value>Valeur du pas :</value></data>
+  <data name="FillSeries_StopValueLabel" xml:space="preserve"><value>Dernière valeur :</value></data>
+  <data name="FillSeries_InvalidStep" xml:space="preserve"><value>Entrez une valeur de pas valide.</value></data>
+  <data name="FillSeries_InvalidStop" xml:space="preserve"><value>Entrez une dernière valeur valide, ou laissez ce champ vide.</value></data>
+  <data name="FillSeries_NeedsSelection" xml:space="preserve"><value>Sélectionnez au moins deux cellules dans une ligne ou une colonne pour remplir une série.</value></data>
+  <data name="FillSeries_NoSeed" xml:space="preserve"><value>La première cellule de la sélection doit contenir un nombre (ou une date pour une série de dates).</value></data>
+  <data name="FillSeries_Filled" xml:space="preserve"><value>Série remplie dans {0}</value></data>
+  <data name="FillSeries_Failed" xml:space="preserve"><value>Le remplissage de la série a échoué.</value></data>
+  <!-- Table Design: Table Name dialog -->
+  <data name="TableName_Title" xml:space="preserve"><value>Nom du tableau</value></data>
+  <data name="TableName_Label" xml:space="preserve"><value>Nom du tableau :</value></data>
+  <data name="TableName_BoxName" xml:space="preserve"><value>Nom du tableau</value></data>
+  <data name="TableName_NoTable" xml:space="preserve"><value>Nom du tableau : la cellule active n'est pas dans un tableau.</value></data>
+  <data name="TableName_Renamed" xml:space="preserve"><value>Tableau renommé en « {0} ».</value></data>
+  <data name="TableName_Failed" xml:space="preserve"><value>Échec du nom du tableau.</value></data>
+  <!-- Table Design: Resize Table dialog -->
+  <data name="TableResize_Title" xml:space="preserve"><value>Redimensionner le tableau</value></data>
+  <data name="TableResize_Label" xml:space="preserve"><value>Sélectionnez la nouvelle plage de données du tableau :</value></data>
+  <data name="TableResize_BoxName" xml:space="preserve"><value>Plage du tableau redimensionné</value></data>
+  <data name="TableResize_NoTable" xml:space="preserve"><value>Redimensionner le tableau : la cellule active n'est pas dans un tableau.</value></data>
+  <data name="TableResize_Resized" xml:space="preserve"><value>Tableau « {0} » redimensionné à {1}.</value></data>
+  <data name="TableResize_Failed" xml:space="preserve"><value>Échec du redimensionnement du tableau.</value></data>
+  <!-- Table Design: Table Styles gallery -->
+  <data name="TableStyleGallery_Title" xml:space="preserve"><value>Styles de tableau</value></data>
+  <data name="TableStyleGallery_StyleLabel" xml:space="preserve"><value>Style de tableau :</value></data>
+  <data name="TableStyleGallery_GalleryName" xml:space="preserve"><value>Galerie de styles de tableau</value></data>
+  <data name="TableStyleGallery_NoTable" xml:space="preserve"><value>Styles de tableau : la cellule active n'est pas dans un tableau.</value></data>
+  <data name="TableStyleGallery_Applied" xml:space="preserve"><value>Style de tableau : {0}.</value></data>
+  <data name="TableStyleGallery_Failed" xml:space="preserve"><value>Échec des styles de tableau.</value></data>
+  <!-- Drawing: shared object selection / status -->
+  <data name="Drawing_SelectPictureFirst" xml:space="preserve"><value>Sélectionnez d'abord une image.</value></data>
+  <data name="Drawing_SelectShapeFirst" xml:space="preserve"><value>Sélectionnez d'abord une forme.</value></data>
+  <data name="Drawing_SelectObjectFirst" xml:space="preserve"><value>Sélectionnez d'abord une image ou une forme.</value></data>
+  <data name="Drawing_ObjectNoLongerAvailable" xml:space="preserve"><value>L'objet sélectionné n'est plus disponible.</value></data>
+  <data name="Drawing_PictureBroughtForward" xml:space="preserve"><value>Image avancée d'un plan.</value></data>
+  <data name="Drawing_PictureSentBackward" xml:space="preserve"><value>Image reculée d'un plan.</value></data>
+  <data name="Drawing_BringForwardLabel" xml:space="preserve"><value>Avancer</value></data>
+  <data name="Drawing_SendBackwardLabel" xml:space="preserve"><value>Reculer</value></data>
+  <!-- Selection Pane dialog -->
+  <data name="SelectionPane_Title" xml:space="preserve"><value>Volet Sélection</value></data>
+  <data name="SelectionPane_Hint" xml:space="preserve"><value>Sélectionnez un objet pour le renommer, afficher/masquer ou modifier son ordre de superposition.</value></data>
+  <data name="SelectionPane_ObjectListLabel" xml:space="preserve"><value>Objets de cette feuille</value></data>
+  <data name="SelectionPane_NameLabel" xml:space="preserve"><value>Nom de l'objet</value></data>
+  <data name="SelectionPane_VisibilityToggle" xml:space="preserve"><value>Afficher ou masquer cet objet</value></data>
+  <data name="SelectionPane_BringForward" xml:space="preserve"><value>Avancer</value></data>
+  <data name="SelectionPane_SendBackward" xml:space="preserve"><value>Reculer</value></data>
+  <data name="SelectionPane_ShowAll" xml:space="preserve"><value>Tout afficher</value></data>
+  <data name="SelectionPane_HideAll" xml:space="preserve"><value>Tout masquer</value></data>
+  <data name="SelectionPane_NoObjects" xml:space="preserve"><value>Cette feuille ne contient aucun objet.</value></data>
+  <data name="SelectionPane_NoChanges" xml:space="preserve"><value>Aucune modification à appliquer.</value></data>
+  <data name="SelectionPane_Applied" xml:space="preserve"><value>Modifications du volet Sélection appliquées.</value></data>
+  <data name="SelectionPane_ApplyFailed" xml:space="preserve"><value>Impossible d'appliquer les modifications du volet Sélection.</value></data>
+  <data name="SelectionPane_KindChart" xml:space="preserve"><value>Graphique</value></data>
+  <data name="SelectionPane_KindPicture" xml:space="preserve"><value>Image</value></data>
+  <data name="SelectionPane_KindShape" xml:space="preserve"><value>Forme</value></data>
+  <data name="SelectionPane_KindTextBox" xml:space="preserve"><value>Zone de texte</value></data>
+  <data name="SelectionPane_DefaultChartName" xml:space="preserve"><value>Graphique {0}</value></data>
+  <data name="SelectionPane_DefaultPictureName" xml:space="preserve"><value>Image {0}</value></data>
+  <data name="SelectionPane_DefaultTextBoxName" xml:space="preserve"><value>Zone de texte {0}</value></data>
+  <data name="SelectionPane_DefaultShapeNameFormat" xml:space="preserve"><value>{0} {1}</value></data>
+  <data name="SelectionPane_DefaultEllipseName" xml:space="preserve"><value>Ellipse</value></data>
+  <data name="SelectionPane_DefaultLineName" xml:space="preserve"><value>Ligne</value></data>
+  <data name="SelectionPane_DefaultRectangleName" xml:space="preserve"><value>Rectangle</value></data>
+  <!-- Custom Views manager (Affichage ▸ Vues du classeur ▸ Affichages personnalisés) -->
+  <data name="CustomViews_Title" xml:space="preserve"><value>Affichages personnalisés</value></data>
+  <data name="CustomViews_Hint" xml:space="preserve"><value>Un affichage personnalisé enregistre les paramètres d'affichage actuels (mode d'affichage, volets figés/fractionnés, quadrillage, en-têtes, zoom et position de défilement) ainsi que la feuille active, afin que vous puissiez y revenir ultérieurement.</value></data>
+  <data name="CustomViews_ListLabel" xml:space="preserve"><value>Affichages</value></data>
+  <data name="CustomViews_ColumnName" xml:space="preserve"><value>Nom</value></data>
+  <data name="CustomViews_Show" xml:space="preserve"><value>Afficher</value></data>
+  <data name="CustomViews_Add" xml:space="preserve"><value>Ajouter...</value></data>
+  <data name="CustomViews_Delete" xml:space="preserve"><value>Supprimer</value></data>
+  <data name="CustomViews_DefaultNameFormat" xml:space="preserve"><value>Affichage {0}</value></data>
+  <data name="CustomViews_RowFormat" xml:space="preserve"><value>{0}    ({1} feuille(s))</value></data>
+  <data name="CustomViews_NoViews" xml:space="preserve"><value>Ce classeur n'a pas encore d'affichage personnalisé.</value></data>
+  <data name="CustomViews_Applied" xml:space="preserve"><value>Affichage personnalisé « {0} » appliqué.</value></data>
+  <data name="CustomViews_ApplyFailed" xml:space="preserve"><value>L'affichage personnalisé n'a pas pu être appliqué.</value></data>
+  <data name="CustomViews_Saved" xml:space="preserve"><value>Affichage personnalisé « {0} » enregistré.</value></data>
+  <data name="CustomViews_SaveFailed" xml:space="preserve"><value>L'affichage personnalisé n'a pas pu être enregistré.</value></data>
+  <data name="CustomViews_Deleted" xml:space="preserve"><value>Affichage personnalisé « {0} » supprimé.</value></data>
+  <data name="CustomViews_DeleteFailed" xml:space="preserve"><value>L'affichage personnalisé n'a pas pu être supprimé.</value></data>
+  <!-- Add Custom View name dialog -->
+  <data name="CustomViews_AddTitle" xml:space="preserve"><value>Ajouter un affichage</value></data>
+  <data name="CustomViews_NameLabel" xml:space="preserve"><value>Nom :</value></data>
+  <data name="CustomViews_NameInputLabel" xml:space="preserve"><value>Nom de l'affichage</value></data>
+  <data name="CustomViews_IncludePrintSettings" xml:space="preserve"><value>Paramètres d'impression</value></data>
+  <data name="CustomViews_IncludeHiddenFilter" xml:space="preserve"><value>Lignes et colonnes masquées et paramètres de filtre</value></data>
+  <data name="CustomViews_IncludeHeader" xml:space="preserve"><value>Inclure dans l'affichage</value></data>
+  <data name="CustomViews_NameBlank" xml:space="preserve"><value>Entrez un nom pour l'affichage.</value></data>
+  <data name="CustomViews_NameTooLong" xml:space="preserve"><value>Le nom de l'affichage est trop long (255 caractères maximum).</value></data>
+  <data name="CustomViews_NameDuplicate" xml:space="preserve"><value>Un affichage portant ce nom existe déjà.</value></data>
+  <!-- Format Picture / Format Shape dialog -->
+  <data name="FormatPicture_PictureTitle" xml:space="preserve"><value>Format de l'image</value></data>
+  <data name="FormatPicture_ShapeTitle" xml:space="preserve"><value>Format de la forme</value></data>
+  <data name="FormatPicture_SizeHeader" xml:space="preserve"><value>Taille</value></data>
+  <data name="FormatPicture_WidthLabel" xml:space="preserve"><value>Largeur :</value></data>
+  <data name="FormatPicture_HeightLabel" xml:space="preserve"><value>Hauteur :</value></data>
+  <data name="FormatPicture_RotationLabel" xml:space="preserve"><value>Rotation (degrés) :</value></data>
+  <data name="FormatPicture_LockAspectRatio" xml:space="preserve"><value>Conserver les proportions</value></data>
+  <data name="FormatPicture_AltTextHeader" xml:space="preserve"><value>Texte de remplacement</value></data>
+  <data name="FormatPicture_AltTextLabel" xml:space="preserve"><value>Décrivez cet objet pour l'accessibilité :</value></data>
+  <data name="FormatPicture_Applied" xml:space="preserve"><value>Mise en forme de l'objet mise à jour.</value></data>
+  <!-- Shape Effects dialog -->
+  <data name="ShapeEffects_Title" xml:space="preserve"><value>Effets de la forme</value></data>
+  <data name="ShapeEffects_Label" xml:space="preserve"><value>Effet prédéfini :</value></data>
+  <data name="ShapeEffects_Applied" xml:space="preserve"><value>Effet de forme défini sur {0}.</value></data>
+  <data name="ShapeEffects_Cleared" xml:space="preserve"><value>Effet de forme effacé.</value></data>
+  <data name="ShapeEffects_None" xml:space="preserve"><value>Aucun effet</value></data>
+  <data name="ShapeEffects_NoneDescription" xml:space="preserve"><value>Supprimer l'ombre, l'éclat, le reflet et les autres effets.</value></data>
+  <data name="ShapeEffects_Shadow" xml:space="preserve"><value>Ombre</value></data>
+  <data name="ShapeEffects_ShadowDescription" xml:space="preserve"><value>Ajouter une ombre portée derrière la forme.</value></data>
+  <data name="ShapeEffects_InnerShadow" xml:space="preserve"><value>Ombre intérieure</value></data>
+  <data name="ShapeEffects_InnerShadowDescription" xml:space="preserve"><value>Projeter une ombre à l'intérieur des bords de la forme.</value></data>
+  <data name="ShapeEffects_Reflection" xml:space="preserve"><value>Reflet</value></data>
+  <data name="ShapeEffects_ReflectionDescription" xml:space="preserve"><value>Refléter la forme en dessous d'elle-même.</value></data>
+  <data name="ShapeEffects_Glow" xml:space="preserve"><value>Éclat</value></data>
+  <data name="ShapeEffects_GlowDescription" xml:space="preserve"><value>Entourer la forme d'un éclat coloré et diffus.</value></data>
+  <data name="ShapeEffects_SoftEdges" xml:space="preserve"><value>Bords adoucis</value></data>
+  <data name="ShapeEffects_SoftEdgesDescription" xml:space="preserve"><value>Estomper le contour de la forme dans l'arrière-plan.</value></data>
+  <data name="ShapeEffects_Bevel" xml:space="preserve"><value>Biseau</value></data>
+  <data name="ShapeEffects_BevelDescription" xml:space="preserve"><value>Donner à la forme un bord en relief tridimensionnel.</value></data>
+  <data name="ShapeEffects_ThreeDRotation" xml:space="preserve"><value>Rotation 3D</value></data>
+  <data name="ShapeEffects_ThreeDRotationDescription" xml:space="preserve"><value>Incliner la forme dans l'espace tridimensionnel.</value></data>
+  <!-- Shape Gradient dialog -->
+  <data name="ShapeGradient_Title" xml:space="preserve"><value>Remplissage dégradé</value></data>
+  <data name="ShapeGradient_StartColorLabel" xml:space="preserve"><value>Couleur de début :</value></data>
+  <data name="ShapeGradient_EndColorLabel" xml:space="preserve"><value>Couleur de fin :</value></data>
+  <data name="ShapeGradient_DirectionLabel" xml:space="preserve"><value>Direction :</value></data>
+  <data name="ShapeGradient_ChooseStartColor" xml:space="preserve"><value>Couleur de début...</value></data>
+  <data name="ShapeGradient_ChooseEndColor" xml:space="preserve"><value>Couleur de fin...</value></data>
+  <data name="ShapeGradient_PreviewLabel" xml:space="preserve"><value>Aperçu</value></data>
+  <data name="ShapeGradient_Applied" xml:space="preserve"><value>Dégradé de forme défini ({0} → {1}).</value></data>
+  <data name="ShapeGradient_DirectionDiagonalDown" xml:space="preserve"><value>Diagonale vers le bas</value></data>
+  <data name="ShapeGradient_DirectionHorizontal" xml:space="preserve"><value>Horizontal</value></data>
+  <data name="ShapeGradient_DirectionVertical" xml:space="preserve"><value>Vertical</value></data>
+  <data name="ShapeGradient_DirectionDiagonalUp" xml:space="preserve"><value>Diagonale vers le haut</value></data>
+  <!-- Crop Picture dialog -->
+  <data name="PictureCrop_Title" xml:space="preserve"><value>Rogner l'image</value></data>
+  <data name="PictureCrop_LeftLabel" xml:space="preserve"><value>Gauche (%) :</value></data>
+  <data name="PictureCrop_TopLabel" xml:space="preserve"><value>Haut (%) :</value></data>
+  <data name="PictureCrop_RightLabel" xml:space="preserve"><value>Droite (%) :</value></data>
+  <data name="PictureCrop_BottomLabel" xml:space="preserve"><value>Bas (%) :</value></data>
+  <data name="PictureCrop_Reset" xml:space="preserve"><value>Réinitialiser</value></data>
+  <data name="PictureCrop_Applied" xml:space="preserve"><value>Image rognée.</value></data>
+  <data name="MoveCopySheet_Title" xml:space="preserve"><value>Déplacer ou copier</value></data>
+  <data name="MoveCopySheet_MoveSelectedSheets" xml:space="preserve"><value>Déplacer les feuilles sélectionnées</value></data>
+  <data name="MoveCopySheet_BeforeSheet" xml:space="preserve"><value>Avant la feuille :</value></data>
+  <data name="MoveCopySheet_MoveToEnd" xml:space="preserve"><value>(en dernier)</value></data>
+  <data name="MoveCopySheet_CreateACopy" xml:space="preserve"><value>Créer une copie</value></data>
+  <data name="MoveCopySheet_Ok" xml:space="preserve"><value>OK</value></data>
+  <data name="MoveCopySheet_Cancel" xml:space="preserve"><value>Annuler</value></data>
+  <data name="MoveCopySheet_MovedStatus" xml:space="preserve"><value>{0} déplacée</value></data>
+  <data name="MoveCopySheet_CopiedStatus" xml:space="preserve"><value>{0} copiée</value></data>
+  <data name="MoveCopySheet_MenuItem" xml:space="preserve"><value>Déplacer ou copier...</value></data>
+  <data name="OutlineSettings_Title" xml:space="preserve"><value>Paramètres</value></data>
+  <data name="OutlineSettings_Direction" xml:space="preserve"><value>Direction</value></data>
+  <data name="OutlineSettings_SummaryRowsBelow" xml:space="preserve"><value>Lignes de synthèse sous le détail</value></data>
+  <data name="OutlineSettings_SummaryColumnsRight" xml:space="preserve"><value>Colonnes de synthèse à droite du détail</value></data>
+  <data name="OutlineSettings_AutomaticStyles" xml:space="preserve"><value>Styles automatiques</value></data>
+  <data name="OutlineSettings_Ok" xml:space="preserve"><value>OK</value></data>
+  <data name="OutlineSettings_Cancel" xml:space="preserve"><value>Annuler</value></data>
+  <data name="OutlineSettings_AppliedStatus" xml:space="preserve"><value>Paramètres de plan mis à jour.</value></data>
+  <data name="OutlineSettings_NoChangeStatus" xml:space="preserve"><value>Paramètres de plan inchangés.</value></data>
+  <data name="OutlineSettings_MenuItem" xml:space="preserve"><value>Paramètres...</value></data>
+  <data name="PageBreak_Menu" xml:space="preserve"><value>Sauts de page</value></data>
+  <data name="PageBreak_InsertPageBreak" xml:space="preserve"><value>Insérer un saut de page</value></data>
+  <data name="PageBreak_RemovePageBreak" xml:space="preserve"><value>Supprimer le saut de page</value></data>
+  <data name="PageBreak_ResetAllPageBreaks" xml:space="preserve"><value>Rétablir tous les sauts de page</value></data>
+  <data name="PageBreak_Failed" xml:space="preserve"><value>Impossible de mettre à jour les sauts de page.</value></data>
+  <data name="Options_Title" xml:space="preserve"><value>Options FreeX</value></data>
+  <data name="Options_CategoryGeneral" xml:space="preserve"><value>Général</value></data>
+  <data name="Options_CategoryFormulas" xml:space="preserve"><value>Formules</value></data>
+  <data name="Options_CategoryProofing" xml:space="preserve"><value>Vérification</value></data>
+  <data name="Options_CategoryView" xml:space="preserve"><value>Affichage</value></data>
+  <data name="Options_CategorySave" xml:space="preserve"><value>Enregistrement</value></data>
+  <data name="Options_NewWorkbooksHeader" xml:space="preserve"><value>Lors de la création de nouveaux classeurs</value></data>
+  <data name="Options_DefaultFontLabel" xml:space="preserve"><value>Police par défaut :</value></data>
+  <data name="Options_DefaultFontSizeLabel" xml:space="preserve"><value>Taille de police par défaut :</value></data>
+  <data name="Options_DefaultSheetCountLabel" xml:space="preserve"><value>Inclure ce nombre de feuilles :</value></data>
+  <data name="Options_PersonalizeHeader" xml:space="preserve"><value>Personnaliser votre copie de FreeX</value></data>
+  <data name="Options_UserNameLabel" xml:space="preserve"><value>Nom d'utilisateur :</value></data>
+  <data name="Options_ShowScreenTips" xml:space="preserve"><value>Afficher les info-bulles</value></data>
+  <data name="Options_CalculationHeader" xml:space="preserve"><value>Options de calcul</value></data>
+  <data name="Options_CalcAutomatic" xml:space="preserve"><value>Automatique</value></data>
+  <data name="Options_CalcManual" xml:space="preserve"><value>Manuel</value></data>
+  <data name="Options_FormulasWorkingHeader" xml:space="preserve"><value>Manipulation des formules</value></data>
+  <data name="Options_R1C1ReferenceStyle" xml:space="preserve"><value>Style de référence L1C1</value></data>
+  <data name="Options_ErrorCheckingHeader" xml:space="preserve"><value>Vérification des erreurs</value></data>
+  <data name="Options_EnableErrorChecking" xml:space="preserve"><value>Activer la vérification des erreurs en arrière-plan</value></data>
+  <data name="Options_ProofingHeader" xml:space="preserve"><value>Lors de la correction orthographique des classeurs</value></data>
+  <data name="Options_IgnoreUppercase" xml:space="preserve"><value>Ignorer les mots en MAJUSCULES</value></data>
+  <data name="Options_IgnoreNumbers" xml:space="preserve"><value>Ignorer les mots contenant des chiffres</value></data>
+  <data name="Options_ViewDisplayHeader" xml:space="preserve"><value>Options d'affichage de ce classeur</value></data>
+  <data name="Options_ShowFormulaBar" xml:space="preserve"><value>Afficher la barre de formule</value></data>
+  <data name="Options_ShowGridlines" xml:space="preserve"><value>Afficher le quadrillage</value></data>
+  <data name="Options_ShowHeadings" xml:space="preserve"><value>Afficher les en-têtes de ligne et de colonne</value></data>
+  <data name="Options_SaveHeader" xml:space="preserve"><value>Enregistrer les classeurs</value></data>
+  <data name="Options_DefaultFormatLabel" xml:space="preserve"><value>Enregistrer les fichiers au format suivant :</value></data>
+  <data name="Options_DefaultFormatXlsx" xml:space="preserve"><value>Classeur Excel (*.xlsx)</value></data>
+  <data name="Options_DefaultFormatNative" xml:space="preserve"><value>Classeur FreeX (*.fxl)</value></data>
+  <data name="Options_InvalidFontSizeMessage" xml:space="preserve"><value>Entrez une taille de police comprise entre 1 et 409.</value></data>
+  <data name="Options_InvalidSheetCountMessage" xml:space="preserve"><value>Entrez un nombre de feuilles compris entre 1 et 255.</value></data>
+  <data name="Options_Saved" xml:space="preserve"><value>Options enregistrées.</value></data>
+  <data name="Options_SaveFailed" xml:space="preserve"><value>Impossible d'enregistrer les options.</value></data>
+  <data name="Sparkline_InsertTitle" xml:space="preserve"><value>Insérer des graphiques sparkline</value></data>
+  <data name="Sparkline_EditTitle" xml:space="preserve"><value>Outils de graphique sparkline</value></data>
+  <data name="Sparkline_DataRange" xml:space="preserve"><value>Plage de données :</value></data>
+  <data name="Sparkline_LocationRange" xml:space="preserve"><value>Plage d'emplacement :</value></data>
+  <data name="Sparkline_SparklineType" xml:space="preserve"><value>Type de graphique sparkline :</value></data>
+  <data name="Sparkline_KindLine" xml:space="preserve"><value>Courbe</value></data>
+  <data name="Sparkline_KindColumn" xml:space="preserve"><value>Histogramme</value></data>
+  <data name="Sparkline_KindWinLoss" xml:space="preserve"><value>Positif/Négatif</value></data>
+  <data name="Sparkline_ShowHeader" xml:space="preserve"><value>Afficher</value></data>
+  <data name="Sparkline_ToggleMarkers" xml:space="preserve"><value>Marqueurs</value></data>
+  <data name="Sparkline_ToggleHighPoint" xml:space="preserve"><value>Point haut</value></data>
+  <data name="Sparkline_ToggleLowPoint" xml:space="preserve"><value>Point bas</value></data>
+  <data name="Sparkline_ToggleFirstPoint" xml:space="preserve"><value>Premier point</value></data>
+  <data name="Sparkline_ToggleLastPoint" xml:space="preserve"><value>Dernier point</value></data>
+  <data name="Sparkline_ToggleNegativePoints" xml:space="preserve"><value>Points négatifs</value></data>
+  <data name="Sparkline_ColorHeader" xml:space="preserve"><value>Couleur du graphique sparkline</value></data>
+  <data name="Sparkline_EditColor" xml:space="preserve"><value>Couleur...</value></data>
+  <data name="Sparkline_DefaultColor" xml:space="preserve"><value>Couleur par défaut</value></data>
+  <data name="Sparkline_Clear" xml:space="preserve"><value>Effacer</value></data>
+  <data name="Sparkline_InvalidDataRange" xml:space="preserve"><value>Entrez une plage de données valide pour le graphique sparkline.</value></data>
+  <data name="Sparkline_InvalidLocation" xml:space="preserve"><value>Entrez une cellule d'emplacement valide pour le graphique sparkline.</value></data>
+  <data name="Sparkline_Inserted" xml:space="preserve"><value>Graphique sparkline inséré en {0}.</value></data>
+  <data name="Sparkline_InsertFailed" xml:space="preserve"><value>Échec de l'insertion du graphique sparkline.</value></data>
+  <data name="Sparkline_Updated" xml:space="preserve"><value>Graphique sparkline mis à jour.</value></data>
+  <data name="Sparkline_Cleared" xml:space="preserve"><value>Graphique sparkline effacé.</value></data>
+  <data name="Sparkline_EditFailed" xml:space="preserve"><value>Échec de la modification du graphique sparkline.</value></data>
+  <data name="RowColumn_RowsHidden" xml:space="preserve"><value>{0} ligne(s) masquée(s).</value></data>
+  <data name="RowColumn_RowsUnhidden" xml:space="preserve"><value>Lignes affichées dans la sélection.</value></data>
+  <data name="RowColumn_ColumnsHidden" xml:space="preserve"><value>{0} colonne(s) masquée(s).</value></data>
+  <data name="RowColumn_ColumnsUnhidden" xml:space="preserve"><value>Colonnes affichées dans la sélection.</value></data>
+  <data name="RowColumn_HideRowsFailed" xml:space="preserve"><value>Impossible de masquer les lignes.</value></data>
+  <data name="RowColumn_UnhideRowsFailed" xml:space="preserve"><value>Impossible d'afficher les lignes.</value></data>
+  <data name="RowColumn_HideColumnsFailed" xml:space="preserve"><value>Impossible de masquer les colonnes.</value></data>
+  <data name="RowColumn_UnhideColumnsFailed" xml:space="preserve"><value>Impossible d'afficher les colonnes.</value></data>
+  <data name="RowColumn_NoSelection" xml:space="preserve"><value>Sélectionnez d'abord des lignes ou des colonnes.</value></data>
+  <data name="RowColumn_RowHeightDialogTitle" xml:space="preserve"><value>Hauteur de ligne</value></data>
+  <data name="RowColumn_RowHeightDialogPrompt" xml:space="preserve"><value>Hauteur de ligne (points) :</value></data>
+  <data name="RowColumn_ColumnWidthDialogTitle" xml:space="preserve"><value>Largeur de colonne</value></data>
+  <data name="RowColumn_ColumnWidthDialogPrompt" xml:space="preserve"><value>Largeur de colonne (caractères) :</value></data>
+  <data name="RowColumn_RowHeightApplied" xml:space="preserve"><value>Hauteur de ligne définie sur {0}.</value></data>
+  <data name="RowColumn_ColumnWidthApplied" xml:space="preserve"><value>Largeur de colonne définie sur {0}.</value></data>
+  <data name="RowColumn_RowHeightFailed" xml:space="preserve"><value>Impossible de définir la hauteur de ligne.</value></data>
+  <data name="RowColumn_ColumnWidthFailed" xml:space="preserve"><value>Impossible de définir la largeur de colonne.</value></data>
+  <data name="RowColumn_RowHeightAutoFitted" xml:space="preserve"><value>Ajustement automatique de la hauteur de ligne appliqué.</value></data>
+  <data name="RowColumn_ColumnWidthAutoFitted" xml:space="preserve"><value>Ajustement automatique de la largeur de colonne appliqué.</value></data>
+  <data name="RowColumn_AutoFitRowFailed" xml:space="preserve"><value>Impossible d'ajuster automatiquement la hauteur de ligne.</value></data>
+  <data name="RowColumn_AutoFitColumnFailed" xml:space="preserve"><value>Impossible d'ajuster automatiquement la largeur de colonne.</value></data>
+  <!-- Comments and Notes: edit / resolve context actions -->
+  <data name="Comment_EditNoteTitle" xml:space="preserve"><value>Modifier la note</value></data>
+  <data name="Comment_EditCommentTitle" xml:space="preserve"><value>Modifier le commentaire</value></data>
+  <data name="Comment_NoteLabel" xml:space="preserve"><value>Texte de la note</value></data>
+  <data name="Comment_CommentLabel" xml:space="preserve"><value>Texte du commentaire</value></data>
+  <data name="Comment_NoNote" xml:space="preserve"><value>La cellule active n'a pas de note à modifier.</value></data>
+  <data name="Comment_NoComment" xml:space="preserve"><value>La cellule active n'a pas de commentaire à modifier.</value></data>
+  <data name="Comment_NoteUpdated" xml:space="preserve"><value>Note mise à jour sur {0}</value></data>
+  <data name="Comment_CommentUpdated" xml:space="preserve"><value>Commentaire mis à jour sur {0}</value></data>
+  <data name="Comment_NoteFailed" xml:space="preserve"><value>Impossible de modifier la note.</value></data>
+  <data name="Comment_CommentFailed" xml:space="preserve"><value>Impossible de modifier le commentaire.</value></data>
+  <data name="Comment_Resolved" xml:space="preserve"><value>Commentaire résolu sur {0}</value></data>
+  <data name="Comment_Unresolved" xml:space="preserve"><value>Commentaire rouvert sur {0}</value></data>
+</root>

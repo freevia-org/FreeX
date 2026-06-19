@@ -175,12 +175,17 @@ public sealed class RibbonIconFactorySvgTests
     [Theory]
     [InlineData("Sort & Filter", "sort-and-filter", "sort")]
     [InlineData("Find & Select", "find-and-select", "find")]
+    [InlineData("Insert Link", "insert-link", "hyperlink")]
+    [InlineData("Header & Footer", "header-and-footer", "header-footer")]
+    [InlineData("Pictures", "pictures", "picture")]
     [InlineData("Export PDF/XPS", "export-pdf-xps", "export")]
     [InlineData("Collapse Group", "collapse-group", "hide-detail")]
     [InlineData("Expand Group", "expand-group", "show-detail")]
     [InlineData("Add Watch", "add-watch", "watch-add")]
     [InlineData("Delete Watch", "delete-watch", "watch-delete")]
     [InlineData("Reapply", "reapply", "reapply-filter")]
+    [InlineData("Sort A to Z", "sort-a-to-z", "sort-ascending")]
+    [InlineData("Sort Z to A", "sort-z-to-a", "sort-descending")]
     [InlineData("100%", "100", "zoom-to-100")]
     [InlineData("Pick From Drop-down List...", "pick-from-drop-down-list", "pick-from-dropdown")]
     public void CommandIconSlugAliases_NormalizePlainAmpersands(
@@ -203,6 +208,79 @@ public sealed class RibbonIconFactorySvgTests
 
         slug.Should().Be(expectedSlug);
         candidates.Should().ContainInOrder(expectedSlug, expectedAlias);
+    }
+
+    [Theory]
+    [InlineData("Selection Pane#SelectionPaneBtn_Click", "selection-pane")]
+    [InlineData("Remove Duplicates#RemoveDuplicatesBtn_Click", "remove-duplicates")]
+    [InlineData("AutoSum#FormulasAutoSumPickerBtn_Click", "autosum")]
+    [InlineData("Protect Sheet#ProtectSheetBtn_Click", "protect-sheet")]
+    [InlineData("Clear#ClearFilterButton_Click", "clear-filter")]
+    public void CommandIconNames_StripHandlerSuffixesBeforeSlugLookup(
+        string commandName,
+        string expectedSlug)
+    {
+        var normalizeMethod = typeof(RibbonIconFactory).GetMethod(
+            "NormalizeCommandIconName",
+            BindingFlags.NonPublic | BindingFlags.Static);
+        var slugMethod = typeof(RibbonIconFactory).GetMethod(
+            "ToCommandIconSlug",
+            BindingFlags.NonPublic | BindingFlags.Static);
+
+        normalizeMethod.Should().NotBeNull();
+        slugMethod.Should().NotBeNull();
+
+        var normalized = (string)normalizeMethod!.Invoke(null, [commandName])!;
+        var slug = (string)slugMethod!.Invoke(null, [normalized])!;
+
+        normalized.Should().NotContain("#");
+        slug.Should().Be(expectedSlug);
+    }
+
+    [Theory]
+    [InlineData("Selection Pane#SelectionPaneBtn_Click")]
+    [InlineData("Remove Duplicates#RemoveDuplicatesBtn_Click")]
+    [InlineData("AutoSum#FormulasAutoSumPickerBtn_Click")]
+    [InlineData("Protect Sheet#ProtectSheetBtn_Click")]
+    [InlineData("Clear#ClearFilterButton_Click")]
+    public void CreateCommandIcon_LoadsDedicatedSvgArtworkForHandlerSuffixedCommandIds(string commandName)
+    {
+        StaTestRunner.Run(() =>
+        {
+            var icon = RibbonIconFactory.CreateCommandIcon(
+                commandName,
+                new RibbonCommandIcon(RibbonCommandIconKind.Generic),
+                size: 32,
+                Brushes.Black);
+
+            var image = icon.Should().BeOfType<Image>().Subject;
+            image.Source.Should().BeOfType<DrawingImage>();
+        });
+    }
+
+    [Theory]
+    [InlineData("Advanced", "advanced-filter")]
+    [InlineData("Page Setup dialog", "page-setup")]
+    [InlineData("View Gridlines", "gridlines")]
+    [InlineData("View Headings", "headings")]
+    public void CommandIconSlugAliases_MapDeclarativeRibbonLabelsToExistingSvgArtwork(
+        string commandName,
+        string expectedAlias)
+    {
+        var slugMethod = typeof(RibbonIconFactory).GetMethod(
+            "ToCommandIconSlug",
+            BindingFlags.NonPublic | BindingFlags.Static);
+        var aliasesMethod = typeof(RibbonIconFactory).GetMethod(
+            "GetCommandIconSlugCandidates",
+            BindingFlags.NonPublic | BindingFlags.Static);
+
+        slugMethod.Should().NotBeNull();
+        aliasesMethod.Should().NotBeNull();
+
+        var slug = (string)slugMethod!.Invoke(null, [commandName])!;
+        var candidates = ((IEnumerable<string>)aliasesMethod!.Invoke(null, [slug])!).ToList();
+
+        candidates.Should().Contain(expectedAlias);
     }
 
     [Fact]

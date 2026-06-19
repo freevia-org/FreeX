@@ -8,6 +8,7 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 
+using FreeX.App.Presentation.Charts.Editing;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -41,8 +42,6 @@ public sealed partial class MainWindow
     // Cohesive default series/format colors, matching the WPF ChartOptionCycler palette so repeated
     // clicks step through the same Okabe-Ito-style colors.
     private static readonly CellColor ChartCycleBlue = new(0, 114, 178);
-    private static readonly CellColor ChartCycleOrange = new(213, 94, 0);
-    private static readonly CellColor ChartCycleGreen = new(0, 158, 115);
 
     /// <summary>
     /// Resolves the chart the contextual tabs target: the selected drawing object on the active sheet,
@@ -94,42 +93,50 @@ public sealed partial class MainWindow
             return;
 
         var chosen = await ShowChartTypePickerAsync(chart.Type);
-        if (chosen is not { } type || type == chart.Type)
+        if (chosen is not { } type)
             return;
+
+        // Validate the requested change through the shared planner: it filters out no-ops (same type)
+        // and deferred-authoring families, surfacing an honest message instead of a pointless command.
+        var plan = ChartTypeChangePlanner.Plan(chart.Type, type);
+        if (!plan.HasChange)
+        {
+            RefreshShell(plan.Message ?? "Change Chart Type failed.");
+            return;
+        }
 
         // Re-resolve after the dialog: the selection may have changed (or the chart been deleted)
         // while it was open, so act on what is selected now rather than the captured reference.
         if (!TryGetSelectedChart("Change Chart Type", out chart))
             return;
 
-        var result = _session.ExecuteReviewCommand(new ChangeChartTypeCommand(_session.ActiveSheet.Id, chart.Id, type));
+        var result = _session.ExecuteReviewCommand(new ChangeChartTypeCommand(_session.ActiveSheet.Id, chart.Id, plan.AppliedType!.Value));
         RefreshShell(result.Success
-            ? $"Changed chart type to {type}."
+            ? $"Changed chart type to {ChartTypeChangePlanner.DisplayName(plan.AppliedType!.Value)}."
             : result.ErrorMessage ?? "Change Chart Type failed.");
     }
 
     /// <summary>
-    /// Small combo-box chart-type picker. Lists the authorable, non-deferred chart families
-    /// (<see cref="ChartTypeSupport.IsAuthorable"/> filters out families like Map that Core renders but
-    /// cannot author/convert to). Returns the chosen <see cref="ChartType"/> or null on cancel.
+    /// Small combo-box chart-type picker. Lists the authorable, non-deferred chart families from the
+    /// shared <see cref="ChartTypeChangePlanner.GetSupportedChoices"/> (which filters out families like
+    /// Map that Core renders but cannot author/convert to) with their English labels. Returns the chosen
+    /// <see cref="ChartType"/> or null on cancel.
     /// </summary>
     private async Task<ChartType?> ShowChartTypePickerAsync(ChartType currentType)
     {
-        var choices = new List<ChartType>();
-        foreach (ChartType type in Enum.GetValues<ChartType>())
-        {
-            if (ChartTypeSupport.IsAuthorable(type))
-                choices.Add(type);
-        }
+        var choices = ChartTypeChangePlanner.GetSupportedChoices();
 
         var combo = new ComboBox
         {
             Width = 260,
             ItemsSource = choices,
+            DisplayMemberBinding = new global::Avalonia.Data.Binding(nameof(ChartTypeChoice.DisplayName)),
         };
         AutomationProperties.SetName(combo, "Chart type");
         AutomationProperties.SetAutomationId(combo, "ChangeChartTypeCombo");
-        combo.SelectedItem = choices.Contains(currentType) ? currentType : choices.Count > 0 ? choices[0] : currentType;
+        combo.SelectedItem =
+            choices.FirstOrDefault(c => c.Type == currentType)
+            ?? (choices.Count > 0 ? choices[0] : null);
 
         var dialog = new Window
         {
@@ -143,7 +150,7 @@ public sealed partial class MainWindow
 
         var okButton = new Button { Content = "OK", Width = 80, IsDefault = true };
         AutomationProperties.SetAutomationId(okButton, "ChangeChartTypeOkButton");
-        okButton.Click += (_, _) => dialog.Close(combo.SelectedItem is ChartType picked ? (ChartType?)picked : null);
+        okButton.Click += (_, _) => dialog.Close(combo.SelectedItem is ChartTypeChoice picked ? (ChartType?)picked.Type : null);
 
         var cancelButton = new Button { Content = "Cancel", Width = 80, IsCancel = true };
         AutomationProperties.SetAutomationId(cancelButton, "ChangeChartTypeCancelButton");
@@ -277,17 +284,20 @@ public sealed partial class MainWindow
         if (!TryGetSelectedChart("Chart Titles", out var chart))
             return;
 
-        var result = await ShowChartTitlesDialogAsync(chart.Title ?? string.Empty, chart.XAxisTitle ?? string.Empty, chart.YAxisTitle ?? string.Empty);
+        var current = ChartTitlesPlanner.Read(chart);
+        var result = await ShowChartTitlesDialogAsync(current.ChartTitle, current.XAxisTitle, current.YAxisTitle);
         if (result is not { } titles)
             return;
 
         if (!TryGetSelectedChart("Chart Titles", out chart))
             return;
 
-        ApplyChartLayout("Chart Titles", chart, new ChartLayoutOptions(
-            Title: titles.ChartTitle,
-            XAxisTitle: titles.XAxisTitle,
-            YAxisTitle: titles.YAxisTitle));
+        // The shared planner trims/collapses each title and drops axis titles for axis-less chart types
+        // (pie/doughnut), matching Core's EnforceAxisTitleSupport.
+        var options = ChartTitlesPlanner.Plan(
+            chart.Type,
+            new ChartTitlesInput(titles.ChartTitle, titles.XAxisTitle, titles.YAxisTitle));
+        ApplyChartLayout("Chart Titles", chart, options);
     }
 
     private async Task<(string ChartTitle, string XAxisTitle, string YAxisTitle)?> ShowChartTitlesDialogAsync(
@@ -349,14 +359,99 @@ public sealed partial class MainWindow
         return await dialog.ShowDialog<(string, string, string)?>(this);
     }
 
-    private void ToggleChartDataLabels()
+    // ---- Chart Design: Legend options (real, SetChartLayoutCommand via ChartLegendPlanner) ------------
+
+    /// <summary>
+    /// Opens the Legend options dialog (show/hide + top/bottom/left/right placement) for the selected
+    /// chart, then applies the shared <see cref="ChartLegendPlanner"/> result through
+    /// <see cref="SetChartLayoutCommand"/>. The planner keeps the chosen placement even when the legend is
+    /// hidden so re-showing restores it.
+    /// </summary>
+    private async Task ShowChartLegendDialog()
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
-        if (!TryGetSelectedChart("Data Labels", out var chart))
+        if (!TryGetSelectedChart("Legend", out var chart))
             return;
 
-        ApplyChartLayout("Data Labels", chart, new ChartLayoutOptions(ShowDataLabels: !chart.ShowDataLabels));
+        var current = ChartLegendPlanner.Read(chart);
+        var result = await ShowChartLegendDialogAsync(current.ShowLegend, current.Position);
+        if (result is not { } edited)
+            return;
+
+        if (!TryGetSelectedChart("Legend", out chart))
+            return;
+
+        ApplyChartLayout("Legend", chart, ChartLegendPlanner.Plan(edited));
+    }
+
+    private async Task<ChartLegendInput?> ShowChartLegendDialogAsync(bool showLegend, ChartLegendPosition position)
+    {
+        var showCheck = new CheckBox
+        {
+            Content = "Show legend",
+            IsChecked = showLegend,
+        };
+        AutomationProperties.SetAutomationId(showCheck, "ChartLegendShowCheck");
+
+        var positionChoices = ChartLegendPlanner.GetPositionChoices();
+        var positionCombo = new ComboBox
+        {
+            Width = 260,
+            ItemsSource = positionChoices,
+            DisplayMemberBinding = new global::Avalonia.Data.Binding(nameof(ChartLegendPositionChoice.DisplayName)),
+        };
+        AutomationProperties.SetName(positionCombo, "Legend position");
+        AutomationProperties.SetAutomationId(positionCombo, "ChartLegendPositionCombo");
+        positionCombo.SelectedItem =
+            positionChoices.FirstOrDefault(c => c.Position == position)
+            ?? (positionChoices.Count > 0 ? positionChoices[0] : null);
+
+        var dialog = new Window
+        {
+            Title = "Legend",
+            SizeToContent = SizeToContent.WidthAndHeight,
+            CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+        AutomationProperties.SetAutomationId(dialog, "ChartLegendDialog");
+
+        var okButton = new Button { Content = "OK", Width = 80, IsDefault = true };
+        AutomationProperties.SetAutomationId(okButton, "ChartLegendOkButton");
+        okButton.Click += (_, _) =>
+        {
+            var chosenPosition = positionCombo.SelectedItem is ChartLegendPositionChoice picked
+                ? picked.Position
+                : ChartLegendPosition.Right;
+            dialog.Close((ChartLegendInput?)new ChartLegendInput(showCheck.IsChecked == true, chosenPosition));
+        };
+
+        var cancelButton = new Button { Content = "Cancel", Width = 80, IsCancel = true };
+        AutomationProperties.SetAutomationId(cancelButton, "ChartLegendCancelButton");
+        cancelButton.Click += (_, _) => dialog.Close((ChartLegendInput?)null);
+
+        dialog.Content = new StackPanel
+        {
+            Margin = new Thickness(16),
+            Spacing = 12,
+            MinWidth = 292,
+            Children =
+            {
+                showCheck,
+                new TextBlock { Text = "Legend position:" },
+                positionCombo,
+                new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 8,
+                    HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+                    Children = { okButton, cancelButton },
+                },
+            },
+        };
+
+        return await dialog.ShowDialog<ChartLegendInput?>(this);
     }
 
     private void CycleChartDataLabelPosition()
@@ -369,34 +464,6 @@ public sealed partial class MainWindow
         ApplyChartLayout("Data Label Position", chart, new ChartLayoutOptions(
             ShowDataLabels: true,
             DataLabelPosition: NextDataLabelPosition(chart.DataLabelPosition)));
-    }
-
-    private void ToggleChartTrendline()
-    {
-        if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
-            return;
-        if (!TryGetSelectedChart("Trendline", out var chart))
-            return;
-
-        if (!ChartTypeSupport.SupportsTrendlines(chart.Type))
-        {
-            RefreshShell("Trendlines are available on column, line, bar, scatter, bubble and area charts.");
-            return;
-        }
-
-        ApplyChartLayout("Trendline", chart, new ChartLayoutOptions(
-            ShowLinearTrendline: !chart.ShowLinearTrendline,
-            TrendlineType: ChartTrendlineType.Linear));
-    }
-
-    private void ToggleChartErrorBars()
-    {
-        if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
-            return;
-        if (!TryGetSelectedChart("Error Bars", out var chart))
-            return;
-
-        ApplyChartLayout("Error Bars", chart, new ChartLayoutOptions(ShowErrorBars: !chart.ShowErrorBars));
     }
 
     private void CycleChartStyle()
@@ -513,18 +580,6 @@ public sealed partial class MainWindow
         ApplyChartLayout("Series Color", chart, new ChartLayoutOptions(SeriesFormats: formats));
     }
 
-    private void CycleChartLegendTextColor()
-    {
-        if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
-            return;
-        if (!TryGetSelectedChart("Legend Text", out var chart))
-            return;
-
-        ApplyChartLayout("Legend Text", chart, new ChartLayoutOptions(
-            ShowLegend: true,
-            LegendTextColor: NextSeriesColor(chart.LegendTextColor)));
-    }
-
     private void CycleChartXAxisGridlines()
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
@@ -616,17 +671,6 @@ public sealed partial class MainWindow
             ChartDataLabelPosition.InsideEnd => ChartDataLabelPosition.Center,
             _ => ChartDataLabelPosition.BestFit,
         };
-
-    private static CellColor NextSeriesColor(CellColor? current)
-    {
-        if (current is not { } value)
-            return ChartCycleBlue;
-        if (value.R == ChartCycleBlue.R && value.G == ChartCycleBlue.G && value.B == ChartCycleBlue.B)
-            return ChartCycleOrange;
-        if (value.R == ChartCycleOrange.R && value.G == ChartCycleOrange.G && value.B == ChartCycleOrange.B)
-            return ChartCycleGreen;
-        return ChartCycleBlue;
-    }
 
     private static (bool ShowMajor, bool ShowMinor) NextGridlineState(bool currentMajor, bool currentMinor)
     {

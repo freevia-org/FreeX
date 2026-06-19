@@ -6,10 +6,12 @@
     <Project Path="shared/Free.Shared.Ribbon/Free.Shared.Ribbon.csproj" />
     <Project Path="shared/Free.Shared.Ribbon.Wpf/Free.Shared.Ribbon.Wpf.csproj" />
     <Project Path="shared/Free.Shared.Shell/Free.Shared.Shell.csproj" />
+    <Project Path="shared/Free.Shared.Shell.Wpf/Free.Shared.Shell.Wpf.csproj" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj" />
     <Project Path="src/FreeX.App.Host/FreeX.App.Host.csproj" />
+    <Project Path="src/FreeX.App.Localization/FreeX.App.Localization.csproj" />
     <Project Path="src/FreeX.App.Presentation/FreeX.App.Presentation.csproj" />
     <Project Path="src/FreeX.App.Services/FreeX.App.Services.csproj" />
     <Project Path="src/FreeX.App.UI/FreeX.App.UI.csproj" />
@@ -32,6 +34,7 @@
     <Project Path="tests/FreeX.App.UI.Tests/FreeX.App.UI.Tests.csproj" />
     <Project Path="tests/FreeX.App.Host.Tests/FreeX.App.Host.Tests.csproj" />
     <Project Path="tests/FreeX.App.Host.Logic.Tests/FreeX.App.Host.Logic.Tests.csproj" />
+    <Project Path="tests/FreeX.App.Localization.Tests/FreeX.App.Localization.Tests.csproj" />
     <Project Path="tests/Free.Shared.Ribbon.Tests/Free.Shared.Ribbon.Tests.csproj" />
     <Project Path="tests/FreeX.Fixtures/FreeX.Fixtures.csproj" />
     <Project Path="tests/FreeX.Integration.Tests/FreeX.Integration.Tests.csproj" />

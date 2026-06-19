@@ -277,7 +277,24 @@ public sealed class AvaloniaRibbonRendererTests
     [InlineData("Paste")]
     [InlineData("Format Painter")]
     [InlineData("Conditional Formatting")]
-    public Task IconBuild_KnownCommand_LoadsSharedSvg(string commandName) => RunOnUiThread(() =>
+    [InlineData("Selection Pane#SelectionPaneBtn_Click")]
+    [InlineData("Remove Duplicates#RemoveDuplicatesBtn_Click")]
+        [InlineData("Advanced")]
+        [InlineData("Page Setup dialog")]
+        [InlineData("View Gridlines")]
+        [InlineData("View Headings")]
+        [InlineData("Clear#ClearFilterButton_Click")]
+        [InlineData("Sort A to Z#SortAscButton_Click")]
+        [InlineData("Sort Z to A#SortDescButton_Click")]
+        [InlineData("Insert Link")]
+        [InlineData("Header & Footer")]
+        [InlineData("Pictures")]
+        [InlineData("Scale Width")]
+        [InlineData("Scale Height")]
+        [InlineData("Scale Percent")]
+        [InlineData("Refresh")]
+        [InlineData("Select")]
+        public Task IconBuild_KnownCommand_LoadsSharedSvg(string commandName) => RunOnUiThread(() =>
     {
         // A command with a matching CommandIconsSvg/<slug>.svg must render the SAME shared SVG the WPF
         // host loads, parsed natively into an Avalonia Image backed by a DrawingImage (no external SVG

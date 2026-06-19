@@ -4,6 +4,8 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 
+using FreeX.App.Presentation.PageLayout;
+
 namespace FreeX.App.Host;
 
 public enum PageBreakDialogAction

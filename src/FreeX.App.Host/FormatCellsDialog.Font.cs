@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Media;
+using FreeX.App.Presentation.FormatCells;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;

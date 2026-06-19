@@ -1223,6 +1223,45 @@ public sealed class WorkbookSession
     public WorkbookCellEditResult MoveActiveSheetRight() =>
         MoveActiveSheetBy(offset: 1);
 
+    /// <summary>
+    /// Moves the active sheet to an absolute 0-based position. Backs the Move-or-Copy dialog, which
+    /// resolves an arbitrary target index (vs. the single-step <see cref="MoveActiveSheetLeft"/> /
+    /// <see cref="MoveActiveSheetRight"/>). Rebuilds the sheet-tab ordering so the shell reflects the
+    /// new position. Undo/redo aware via the shared edit-command path.
+    /// </summary>
+    public WorkbookCellEditResult MoveActiveSheetTo(int targetIndex)
+    {
+        var sheetId = ActiveSheet.Id;
+        var fromIndex = FindSheetIndex(sheetId, notFoundIndex: -1);
+        if (fromIndex < 0)
+        {
+            return new WorkbookCellEditResult(
+                false,
+                "Active sheet was not found.",
+                [],
+                RecalcReport: null);
+        }
+
+        var toIndex = Math.Clamp(targetIndex, 0, Math.Max(0, Workbook.Sheets.Count - 1));
+        if (toIndex == fromIndex)
+        {
+            return new WorkbookCellEditResult(
+                true,
+                null,
+                [],
+                RecalcReport: null);
+        }
+
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new MoveSheetCommand(fromIndex, toIndex));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulWorkbookMetadataResult(sheetId);
+        return result;
+    }
+
     public WorkbookCellEditResult SetActiveSheetTabColor(CellColor? color)
     {
         if (ActiveSheet.TabColor == color)
@@ -1243,6 +1282,92 @@ public sealed class WorkbookSession
         ApplySuccessfulWorkbookMetadataResult(ActiveSheet.Id);
         return result;
     }
+
+    // ── Row height / column width / AutoFit ──────────────────────────────────
+    // Home ▸ Cells ▸ Format and the row/column header context menus. The selection→span math, the
+    // undoable mutation (Set{Row,Column} commands) and the AutoFit content measurement are fully
+    // portable: they live in FreeX.App.Services.Ribbon.RowColumnSizingPlanner + the shared
+    // AutoFitSizingService, so the cross-platform shell and the Windows host plan identically.
+
+    /// <summary>The explicit/default height of the first row in the selection, for the Row Height dialog.</summary>
+    public double GetSelectedRowHeight() =>
+        Ribbon.RowColumnSizingPlanner.GetRowHeightDialogValue(ActiveSheet, SelectedRange);
+
+    /// <summary>The explicit/default width of the first column in the selection, for the Column Width dialog.</summary>
+    public double GetSelectedColumnWidth() =>
+        Ribbon.RowColumnSizingPlanner.GetColumnWidthDialogValue(ActiveSheet, SelectedRange);
+
+    /// <summary>Applies an explicit height (points) to every row in the selection, undoably.</summary>
+    public WorkbookCellEditResult SetSelectedRowsHeight(double height) =>
+        ExecuteSizingCommand(
+            Ribbon.RowColumnSizingPlanner.CreateRowHeightCommand(ActiveSheet.Id, SelectedRange, height));
+
+    /// <summary>Applies an explicit width (characters) to every column in the selection, undoably.</summary>
+    public WorkbookCellEditResult SetSelectedColumnsWidth(double width) =>
+        ExecuteSizingCommand(
+            Ribbon.RowColumnSizingPlanner.CreateColumnWidthCommand(ActiveSheet.Id, SelectedRange, width));
+
+    /// <summary>
+    /// Sizes each selected row's height to its tallest cell content (content-based estimate via the
+    /// shared AutoFitSizingService — character/line counts, not true glyph metrics). Returns a success
+    /// result when there is nothing measurable (e.g. a whole-sheet selection with no used range).
+    /// </summary>
+    public WorkbookCellEditResult AutoFitSelectedRowHeight()
+    {
+        var plans = Ribbon.RowColumnSizingPlanner.PlanAutoFitRowHeights(
+            SelectedRange,
+            ActiveSheet.GetUsedRange(),
+            GetAutoFitDisplayText,
+            ActiveSheet.DefaultRowHeight);
+        var command = Ribbon.RowColumnSizingPlanner.CreateAutoFitRowHeightCommand(ActiveSheet.Id, plans);
+        return command is null ? SucceededWithoutEdit() : ExecuteSizingCommand(command);
+    }
+
+    /// <summary>
+    /// Sizes each selected column's width to its widest cell content (content-based estimate via the
+    /// shared AutoFitSizingService). Returns a success result when there is nothing measurable.
+    /// </summary>
+    public WorkbookCellEditResult AutoFitSelectedColumnWidth()
+    {
+        var plans = Ribbon.RowColumnSizingPlanner.PlanAutoFitColumnWidths(
+            SelectedRange,
+            ActiveSheet.GetUsedRange(),
+            GetAutoFitDisplayText,
+            ActiveSheet.DefaultColumnWidth);
+        var command = Ribbon.RowColumnSizingPlanner.CreateAutoFitColumnWidthCommand(ActiveSheet.Id, plans);
+        return command is null ? SucceededWithoutEdit() : ExecuteSizingCommand(command);
+    }
+
+    /// <summary>
+    /// Runs a row/column sizing command and restores the selection afterwards. The shared command
+    /// pipeline collapses the selection to the active cell on success (it is built for cell edits),
+    /// but a dimension change must leave the resized rows/columns selected (Excel parity) so a
+    /// follow-up resize targets the same span.
+    /// </summary>
+    private WorkbookCellEditResult ExecuteSizingCommand(IWorkbookCommand command)
+    {
+        var preservedRange = SelectedRange;
+        var result = ExecuteReviewCommand(command);
+        if (result.Success)
+            SelectRange(preservedRange);
+
+        return result;
+    }
+
+    private string? GetAutoFitDisplayText(uint row, uint col)
+    {
+        if (ActiveSheet.GetCell(row, col) is not { } cell)
+            return null;
+
+        if (ActiveSheet.ShowFormulas && cell.FormulaText is not null)
+            return "=" + cell.FormulaText;
+
+        var style = Workbook.GetStyle(cell.StyleId);
+        return FreeX.Core.Formula.NumberFormatter.Format(cell.Value, style.NumberFormat);
+    }
+
+    private static WorkbookCellEditResult SucceededWithoutEdit() =>
+        new(true, null, [], RecalcReport: null);
 
     public WorkbookCellEditResult SetShowFormulas(bool showFormulas)
     {
@@ -2003,6 +2128,46 @@ public sealed class WorkbookSession
         var result = _cellEditService.ExecuteEditCommand(
             Workbook,
             new SetThreadedCommentCommand(ActiveSheet.Id, ActiveCell, text));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulRangeEditResult(result, range);
+        return result;
+    }
+
+    /// <summary>Current legacy note text on the active cell, or <c>null</c> when there is none.</summary>
+    public string? GetActiveCellNote() =>
+        ActiveSheet.Comments.TryGetValue(ActiveCell, out var note) ? note : null;
+
+    /// <summary>Current root text of the active cell threaded comment, or <c>null</c> when there is none.</summary>
+    public string? GetActiveCellThreadedCommentText() =>
+        ActiveSheet.ThreadedComments.TryGetValue(ActiveCell, out var comment) ? comment.Text : null;
+
+    /// <summary>Whether the active cell's threaded comment exists and is currently resolved.</summary>
+    public bool IsActiveCellThreadedCommentResolved() =>
+        ActiveSheet.ThreadedComments.TryGetValue(ActiveCell, out var comment) && comment.IsResolved;
+
+    /// <summary>Replace the root text of the active cell's existing threaded comment.</summary>
+    public WorkbookCellEditResult EditActiveCellThreadedComment(string text)
+    {
+        var range = SelectedRange;
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new UpdateThreadedCommentTextCommand(ActiveSheet.Id, ActiveCell, text));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulRangeEditResult(result, range);
+        return result;
+    }
+
+    /// <summary>Toggle the resolved state of the active cell's existing threaded comment.</summary>
+    public WorkbookCellEditResult SetActiveCellThreadedCommentResolved(bool resolved)
+    {
+        var range = SelectedRange;
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new ResolveThreadedCommentCommand(ActiveSheet.Id, ActiveCell, resolved));
         if (!result.Success)
             return result;
 

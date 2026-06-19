@@ -1,5 +1,6 @@
 using System.Windows.Input;
 using FluentAssertions;
+using FreeX.App.Presentation.Editing;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -282,12 +283,16 @@ public sealed class ShortcutParityBehaviorTests
     [Fact]
     public void AutoFilterDropdownPlanner_SupportsCriteriaSuggestionsAndFilterFamilySubmenus()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("AutoFilterDropdownPlanner.cs");
+        var plannerSource = DialogSourceTestSupport.ReadHostSources("AutoFilterDropdownPlanner.cs");
+        var menuModelSource = WorkspaceFileLocator.ReadAllText(
+            "src", "FreeX.App.Presentation", "Filtering", "AutoFilterMenuModel.cs");
 
-        source.Should().ContainAll(
-            "CriteriaSuggestions",
+        plannerSource.Should().ContainAll(
             "SortAscending",
             "ClearFilter");
+        menuModelSource.Should().ContainAll(
+            "CriteriaSuggestions",
+            "FilterFamily");
     }
 
     [Fact]

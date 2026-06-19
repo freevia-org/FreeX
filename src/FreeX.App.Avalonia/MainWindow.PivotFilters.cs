@@ -1,6 +1,7 @@
 using System.Globalization;
 
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -83,12 +84,7 @@ public sealed partial class MainWindow
 
         var current = FindFieldSelection(pivot, target);
         // No explicit selection (or "(All)") means every item is shown.
-        var currentSet = current is { Count: > 0 }
-            ? new HashSet<string>(current.Where(item =>
-                !string.IsNullOrWhiteSpace(item) &&
-                !string.Equals(item, "(All)", StringComparison.OrdinalIgnoreCase)),
-                StringComparer.CurrentCultureIgnoreCase)
-            : null;
+        var currentSet = PivotFieldFilterPlanner.ResolveAllowedItems(current);
 
         var checkBoxes = new List<CheckBox>();
         var listPanel = new StackPanel();
@@ -119,7 +115,7 @@ public sealed partial class MainWindow
         var content = new StackPanel { Spacing = 8, Margin = new Thickness(12) };
         content.Children.Add(new TextBlock
         {
-            Text = $"Filter “{caption}”",
+            Text = UiText.Format("PivotFilter_ItemsHeading", caption),
             FontWeight = FontWeight.SemiBold,
             Foreground = HeaderForeground,
         });
@@ -132,15 +128,18 @@ public sealed partial class MainWindow
 
         var dialog = new Window
         {
-            Title = "Filter Items",
+            Title = UiText.Get("PivotFilter_ItemsTitle"),
             Width = 300,
             SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
         };
+        AutomationProperties.SetAutomationId(dialog, "PivotItemFilterDialog");
 
-        var ok = new Button { Content = "OK", IsDefault = true, MinWidth = 80 };
-        var cancel = new Button { Content = "Cancel", IsCancel = true, MinWidth = 80 };
+        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 80 };
+        AutomationProperties.SetAutomationId(ok, "PivotItemFilterOkButton");
+        var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 80 };
+        AutomationProperties.SetAutomationId(cancel, "PivotItemFilterCancelButton");
         cancel.Click += (_, _) => dialog.Close(false);
         ok.Click += (_, _) => dialog.Close(true);
 
@@ -159,7 +158,7 @@ public sealed partial class MainWindow
 
         var checked_ = checkBoxes.Where(box => box.IsChecked == true).Select(box => (string)box.Tag!).ToList();
         // Selecting every item is "no filter": clear the selection so new members stay visible.
-        IReadOnlyList<string>? selection = checked_.Count == members.Count ? null : checked_;
+        var selection = PivotFieldFilterPlanner.ResolveItemSelection(checked_, members.Count);
         ApplyPivotItemFilter(pivot, target, selection);
     }
 
@@ -227,16 +226,23 @@ public sealed partial class MainWindow
         var existing = pivot.LabelFilters.FirstOrDefault(filter => filter.SourceFieldIndex == target.SourceFieldIndex);
 
         var kindBox = new ComboBox { MinWidth = 200 };
-        foreach (var kind in Enum.GetValues<PivotLabelFilterKind>())
-            kindBox.Items.Add(kind);
-        kindBox.SelectedItem = existing?.Kind ?? PivotLabelFilterKind.Equals;
+        foreach (var (label, _) in PivotFieldFilterPlanner.LabelFilterKinds)
+            kindBox.Items.Add(label);
+        kindBox.SelectedIndex = PivotFieldFilterPlanner.FindLabelKindIndex(existing?.Kind ?? PivotLabelFilterKind.Equals);
+        AutomationProperties.SetAutomationId(kindBox, "PivotLabelFilterKindBox");
+        AutomationProperties.SetName(kindBox, "Label filter kind");
 
         var value1 = new TextBox { MinWidth = 200, Text = existing?.Value ?? string.Empty, PlaceholderText = "Value" };
+        AutomationProperties.SetAutomationId(value1, "PivotLabelFilterValueBox");
+        AutomationProperties.SetName(value1, "Value");
         var value2 = new TextBox { MinWidth = 200, Text = existing?.Value2 ?? string.Empty, PlaceholderText = "Second value (Between)" };
+        AutomationProperties.SetAutomationId(value2, "PivotLabelFilterValue2Box");
+        AutomationProperties.SetName(value2, "Second value");
 
         void SyncSecond()
         {
-            value2.IsVisible = kindBox.SelectedItem is PivotLabelFilterKind.Between;
+            var kind = PivotFieldFilterPlanner.LabelKindFromIndex(kindBox.SelectedIndex);
+            value2.IsVisible = PivotFieldFilterPlanner.LabelKindNeedsSecondValue(kind);
         }
 
         kindBox.SelectionChanged += (_, _) => SyncSecond();
@@ -244,24 +250,39 @@ public sealed partial class MainWindow
 
         var dialog = new Window
         {
-            Title = $"Label Filter ({target.FieldCaption})",
+            Title = UiText.Format("PivotFilter_LabelTitle", target.FieldCaption),
             Width = 320,
             SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
         };
+        AutomationProperties.SetAutomationId(dialog, "PivotLabelFilterDialog");
 
-        var ok = new Button { Content = "OK", IsDefault = true, MinWidth = 80 };
-        var clear = new Button { Content = "Clear", MinWidth = 80, IsEnabled = existing is not null };
-        var cancel = new Button { Content = "Cancel", IsCancel = true, MinWidth = 80 };
+        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 80 };
+        AutomationProperties.SetAutomationId(ok, "PivotLabelFilterOkButton");
+        var clear = new Button { Content = UiText.Get("Common_Clear"), MinWidth = 80, IsEnabled = existing is not null };
+        AutomationProperties.SetAutomationId(clear, "PivotLabelFilterClearButton");
+        var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 80 };
+        AutomationProperties.SetAutomationId(cancel, "PivotLabelFilterCancelButton");
         cancel.Click += (_, _) => dialog.Close(0);
-        ok.Click += (_, _) => dialog.Close(1);
+        ok.Click += (_, _) =>
+        {
+            var kind = PivotFieldFilterPlanner.LabelKindFromIndex(kindBox.SelectedIndex);
+            if (!PivotFieldFilterPlanner.TryCreateLabelFilter(
+                    target.SourceFieldIndex, kind, value1.Text, value2.Text, out _, out var error))
+            {
+                ShowEditIssue(error ?? PivotFieldFilterPlanner.LabelValueRequiredMessage);
+                return;
+            }
+
+            dialog.Close(1);
+        };
         clear.Click += (_, _) => dialog.Close(2);
 
         var content = new StackPanel { Spacing = 8, Margin = new Thickness(12) };
         content.Children.Add(new TextBlock
         {
-            Text = $"Show items where the label:",
+            Text = UiText.Get("PivotFilter_LabelHeading"),
             Foreground = HeaderForeground,
         });
         content.Children.Add(kindBox);
@@ -280,17 +301,20 @@ public sealed partial class MainWindow
         if (result == 0)
             return;
 
-        var labelFilters = pivot.LabelFilters
-            .Where(filter => filter.SourceFieldIndex != target.SourceFieldIndex)
-            .ToList();
-
+        PivotLabelFilterModel? filter = null;
         if (result == 1)
         {
-            var kind = (PivotLabelFilterKind)(kindBox.SelectedItem ?? PivotLabelFilterKind.Equals);
-            var v1 = value1.Text ?? string.Empty;
-            var v2 = kind == PivotLabelFilterKind.Between ? value2.Text : null;
-            labelFilters.Add(new PivotLabelFilterModel(target.SourceFieldIndex, kind, v1, v2));
+            var kind = PivotFieldFilterPlanner.LabelKindFromIndex(kindBox.SelectedIndex);
+            if (!PivotFieldFilterPlanner.TryCreateLabelFilter(
+                    target.SourceFieldIndex, kind, value1.Text, value2.Text, out filter, out var error))
+            {
+                ShowEditIssue(error ?? PivotFieldFilterPlanner.LabelValueRequiredMessage);
+                return;
+            }
         }
+
+        var labelFilters = PivotFieldFilterPlanner.ReplaceFieldLabelFilter(
+            pivot.LabelFilters, target.SourceFieldIndex, filter);
 
         ExecutePivotFilterCommand(
             pivot,
@@ -317,39 +341,41 @@ public sealed partial class MainWindow
             .FirstOrDefault(filter => filter.SourceFieldIndex == target.SourceFieldIndex);
 
         var kindBox = new ComboBox { MinWidth = 200 };
-        foreach (var kind in Enum.GetValues<PivotValueFilterKind>())
-            kindBox.Items.Add(kind);
-        kindBox.SelectedItem = existing?.Kind ?? PivotValueFilterKind.GreaterThan;
+        foreach (var (label, _) in PivotFieldFilterPlanner.ValueFilterKinds)
+            kindBox.Items.Add(label);
+        kindBox.SelectedIndex = PivotFieldFilterPlanner.FindValueKindIndex(existing?.Kind ?? PivotValueFilterKind.GreaterThan);
+        AutomationProperties.SetAutomationId(kindBox, "PivotValueFilterKindBox");
+        AutomationProperties.SetName(kindBox, "Value filter kind");
 
         var dataFieldBox = new ComboBox { MinWidth = 200 };
         for (var index = 0; index < pivot.DataFields.Count; index++)
             dataFieldBox.Items.Add(pivot.DataFields[index].Name);
-        dataFieldBox.SelectedIndex = existing is { } e && e.DataFieldIndex >= 0 && e.DataFieldIndex < pivot.DataFields.Count
-            ? e.DataFieldIndex
-            : 0;
+        dataFieldBox.SelectedIndex = PivotFieldFilterPlanner.InitialDataFieldIndex(existing, pivot.DataFields.Count);
+        AutomationProperties.SetAutomationId(dataFieldBox, "PivotValueFilterDataFieldBox");
+        AutomationProperties.SetName(dataFieldBox, "Summarize by");
 
         var primary = new TextBox
         {
             MinWidth = 200,
             PlaceholderText = "Count / value",
-            Text = existing is null
-                ? string.Empty
-                : existing.Kind is PivotValueFilterKind.Top or PivotValueFilterKind.Bottom
-                    ? existing.Count.ToString(CultureInfo.CurrentCulture)
-                    : (existing.ComparisonValue?.ToString(CultureInfo.CurrentCulture) ?? string.Empty),
+            Text = PivotFieldFilterPlanner.PrimaryInputText(existing),
         };
+        AutomationProperties.SetAutomationId(primary, "PivotValueFilterPrimaryBox");
+        AutomationProperties.SetName(primary, "Count or value");
         var secondary = new TextBox
         {
             MinWidth = 200,
             PlaceholderText = "Second value (Between)",
-            Text = existing?.ComparisonValue2?.ToString(CultureInfo.CurrentCulture) ?? string.Empty,
+            Text = PivotFieldFilterPlanner.SecondaryInputText(existing),
         };
+        AutomationProperties.SetAutomationId(secondary, "PivotValueFilterSecondaryBox");
+        AutomationProperties.SetName(secondary, "Second value");
 
         void SyncInputs()
         {
-            var kind = (PivotValueFilterKind)(kindBox.SelectedItem ?? PivotValueFilterKind.GreaterThan);
-            primary.IsVisible = kind is not (PivotValueFilterKind.AboveAverage or PivotValueFilterKind.BelowAverage);
-            secondary.IsVisible = kind is PivotValueFilterKind.Between or PivotValueFilterKind.NotBetween;
+            var kind = PivotFieldFilterPlanner.ValueKindFromIndex(kindBox.SelectedIndex);
+            primary.IsVisible = PivotFieldFilterPlanner.ValueKindNeedsPrimaryInput(kind);
+            secondary.IsVisible = PivotFieldFilterPlanner.ValueKindNeedsSecondValue(kind);
         }
 
         kindBox.SelectionChanged += (_, _) => SyncInputs();
@@ -357,24 +383,45 @@ public sealed partial class MainWindow
 
         var dialog = new Window
         {
-            Title = $"Value Filter ({target.FieldCaption})",
+            Title = UiText.Format("PivotFilter_ValueTitle", target.FieldCaption),
             Width = 320,
             SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
         };
+        AutomationProperties.SetAutomationId(dialog, "PivotValueFilterDialog");
 
-        var ok = new Button { Content = "OK", IsDefault = true, MinWidth = 80 };
-        var clear = new Button { Content = "Clear", MinWidth = 80, IsEnabled = existing is not null };
-        var cancel = new Button { Content = "Cancel", IsCancel = true, MinWidth = 80 };
+        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 80 };
+        AutomationProperties.SetAutomationId(ok, "PivotValueFilterOkButton");
+        var clear = new Button { Content = UiText.Get("Common_Clear"), MinWidth = 80, IsEnabled = existing is not null };
+        AutomationProperties.SetAutomationId(clear, "PivotValueFilterClearButton");
+        var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 80 };
+        AutomationProperties.SetAutomationId(cancel, "PivotValueFilterCancelButton");
         cancel.Click += (_, _) => dialog.Close(0);
-        ok.Click += (_, _) => dialog.Close(1);
+        ok.Click += (_, _) =>
+        {
+            var kind = PivotFieldFilterPlanner.ValueKindFromIndex(kindBox.SelectedIndex);
+            if (!PivotFieldFilterPlanner.TryCreateValueFilter(
+                    target.SourceFieldIndex,
+                    dataFieldBox.SelectedIndex,
+                    kind,
+                    primary.Text,
+                    secondary.Text,
+                    out _,
+                    out var error))
+            {
+                ShowEditIssue(error ?? PivotFieldFilterPlanner.NumericValueRequiredMessage);
+                return;
+            }
+
+            dialog.Close(1);
+        };
         clear.Click += (_, _) => dialog.Close(2);
 
         var content = new StackPanel { Spacing = 8, Margin = new Thickness(12) };
-        content.Children.Add(new TextBlock { Text = "Summarize by:", Foreground = HeaderForeground });
+        content.Children.Add(new TextBlock { Text = UiText.Get("PivotFilter_SummarizeBy"), Foreground = HeaderForeground });
         content.Children.Add(dataFieldBox);
-        content.Children.Add(new TextBlock { Text = "where the value is:", Foreground = HeaderForeground });
+        content.Children.Add(new TextBlock { Text = UiText.Get("PivotFilter_WhereValueIs"), Foreground = HeaderForeground });
         content.Children.Add(kindBox);
         content.Children.Add(primary);
         content.Children.Add(secondary);
@@ -391,55 +438,26 @@ public sealed partial class MainWindow
         if (result == 0)
             return;
 
-        var valueFilters = pivot.ValueFilters
-            .Where(filter => filter.SourceFieldIndex != target.SourceFieldIndex)
-            .ToList();
-
+        PivotValueFilterModel? filter = null;
         if (result == 1)
         {
-            var kind = (PivotValueFilterKind)(kindBox.SelectedItem ?? PivotValueFilterKind.GreaterThan);
-            var dataFieldIndex = Math.Max(0, dataFieldBox.SelectedIndex);
-            var count = 0;
-            double? comparison = null;
-            double? comparison2 = null;
-
-            if (kind is PivotValueFilterKind.Top or PivotValueFilterKind.Bottom)
+            var kind = PivotFieldFilterPlanner.ValueKindFromIndex(kindBox.SelectedIndex);
+            if (!PivotFieldFilterPlanner.TryCreateValueFilter(
+                    target.SourceFieldIndex,
+                    dataFieldBox.SelectedIndex,
+                    kind,
+                    primary.Text,
+                    secondary.Text,
+                    out filter,
+                    out var error))
             {
-                if (!int.TryParse(primary.Text, NumberStyles.Integer, CultureInfo.CurrentCulture, out count) || count <= 0)
-                {
-                    ShowEditIssue("Enter a positive item count for a Top/Bottom filter.");
-                    return;
-                }
+                ShowEditIssue(error ?? PivotFieldFilterPlanner.NumericValueRequiredMessage);
+                return;
             }
-            else if (kind is not (PivotValueFilterKind.AboveAverage or PivotValueFilterKind.BelowAverage))
-            {
-                if (!double.TryParse(primary.Text, NumberStyles.Any, CultureInfo.CurrentCulture, out var parsed))
-                {
-                    ShowEditIssue("Enter a numeric comparison value.");
-                    return;
-                }
-
-                comparison = parsed;
-                if (kind is PivotValueFilterKind.Between or PivotValueFilterKind.NotBetween)
-                {
-                    if (!double.TryParse(secondary.Text, NumberStyles.Any, CultureInfo.CurrentCulture, out var parsed2))
-                    {
-                        ShowEditIssue("Enter a numeric second value for a Between filter.");
-                        return;
-                    }
-
-                    comparison2 = parsed2;
-                }
-            }
-
-            valueFilters.Add(new PivotValueFilterModel(
-                dataFieldIndex,
-                kind,
-                count,
-                comparison,
-                comparison2,
-                target.SourceFieldIndex));
         }
+
+        var valueFilters = PivotFieldFilterPlanner.ReplaceFieldValueFilter(
+            pivot.ValueFilters, target.SourceFieldIndex, filter);
 
         ExecutePivotFilterCommand(
             pivot,

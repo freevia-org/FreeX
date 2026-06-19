@@ -183,6 +183,21 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 .Where(title => !string.IsNullOrWhiteSpace(title))
                 .ToList();
 
+        // A collapsed group "advertises its overflow" if clicking it opens a dropdown of its commands.
+        // In the live declarative ribbon the overflow affordance is the button's lazily-built ContextMenu
+        // (the chevron glyph itself is drawn by an adorner that only realizes once the button is loaded
+        // into an on-screen adorner layer, which an offscreen test window does not provide). This lists any
+        // collapsed group whose overflow dropdown is missing or empty after it is opened — i.e. a group the
+        // user could not actually expand from its overflow button.
+        public IReadOnlyList<string> CollapsedActiveRibbonGroupsWithoutOverflowMenu =>
+            ActiveRibbonGroupSurfaces
+                .OfType<Button>()
+                .Where(IsVisibleCollapsedGroupButton)
+                .Where(button => OpenCollapsedMenu(button.ContextMenu)?.Items.OfType<MenuItem>().Any() != true)
+                .Select(button => RibbonTooltip.GetTitle(button) ?? "")
+                .Where(title => !string.IsNullOrWhiteSpace(title))
+                .ToList();
+
         public IReadOnlyList<string> HiddenCollapsedRibbonGroupsWithVisibleDropdownGlyph =>
             ActiveRibbonGroupSurfaces
                 .OfType<Button>()

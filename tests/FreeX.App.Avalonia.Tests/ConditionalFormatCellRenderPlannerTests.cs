@@ -93,7 +93,7 @@ public sealed class ConditionalFormatCellRenderPlannerTests
         var plan = ConditionalFormatCellRenderPlanner.PlanIcon(icon);
 
         plan.Should().NotBeNull();
-        plan!.Value.GlyphKind.Should().Be(CfIconGlyphKind.TrafficLight);
+        plan!.Value.GlyphKind.Should().Be(ConditionalIconGlyphKind.TrafficLight);
         plan.Value.IconIndex.Should().Be(2);
         plan.Value.TextGutter.Should().Be(ConditionalFormatCellRenderPlanner.IconGutterWidth);
         plan.Value.ColorHex.Should().Be("#00B050");
@@ -107,7 +107,7 @@ public sealed class ConditionalFormatCellRenderPlannerTests
         var plan = ConditionalFormatCellRenderPlanner.PlanIcon(icon);
 
         plan.Should().NotBeNull();
-        plan!.Value.GlyphKind.Should().Be(CfIconGlyphKind.Arrow);
+        plan!.Value.GlyphKind.Should().Be(ConditionalIconGlyphKind.Arrow);
         plan.Value.TextGutter.Should().Be(0d);
         plan.Value.ColorHex.Should().Be("#C00000");
     }
@@ -125,19 +125,19 @@ public sealed class ConditionalFormatCellRenderPlannerTests
     // ── Glyph-kind resolution ────────────────────────────────────────────────
 
     [Theory]
-    [InlineData("3TrafficLights1", CfIconGlyphKind.TrafficLight)]
-    [InlineData("4RedToBlack", CfIconGlyphKind.TrafficLight)]
-    [InlineData("3Signs", CfIconGlyphKind.Sign)]
-    [InlineData("3Symbols", CfIconGlyphKind.Symbol)]
-    [InlineData("3Flags", CfIconGlyphKind.Flag)]
-    [InlineData("5Rating", CfIconGlyphKind.Rating)]
-    [InlineData("4QuartersOf5", CfIconGlyphKind.Quarter)]
-    [InlineData("5Boxes", CfIconGlyphKind.Box)]
-    [InlineData("3Arrows", CfIconGlyphKind.Arrow)]
-    [InlineData(null, CfIconGlyphKind.Arrow)]
-    public void ResolveGlyphKind_MatchesStyleName(string? style, CfIconGlyphKind expected)
+    [InlineData("3TrafficLights1", ConditionalIconGlyphKind.TrafficLight)]
+    [InlineData("4RedToBlack", ConditionalIconGlyphKind.TrafficLight)]
+    [InlineData("3Signs", ConditionalIconGlyphKind.Sign)]
+    [InlineData("3Symbols", ConditionalIconGlyphKind.Symbol)]
+    [InlineData("3Flags", ConditionalIconGlyphKind.Flag)]
+    [InlineData("5Rating", ConditionalIconGlyphKind.Rating)]
+    [InlineData("4QuartersOf5", ConditionalIconGlyphKind.Quarter)]
+    [InlineData("5Boxes", ConditionalIconGlyphKind.Box)]
+    [InlineData("3Arrows", ConditionalIconGlyphKind.Arrow)]
+    [InlineData(null, ConditionalIconGlyphKind.Arrow)]
+    public void ResolveGlyphKind_MatchesStyleName(string? style, ConditionalIconGlyphKind expected)
     {
-        ConditionalFormatCellRenderPlanner.ResolveGlyphKind(style).Should().Be(expected);
+        ConditionalIconGlyphResolver.ResolveGlyphKind(style).Should().Be(expected);
     }
 
     // ── Icon-color resolution ────────────────────────────────────────────────
@@ -145,7 +145,7 @@ public sealed class ConditionalFormatCellRenderPlannerTests
     [Fact]
     public void ResolveIconColor_GrayStyle_OverridesPalette()
     {
-        ConditionalFormatCellRenderPlanner.ResolveIconColor("3SymbolsGray", 0, 3).Should().Be("#666666");
+        ConditionalIconGlyphResolver.ResolveIconColor("3SymbolsGray", 0, 3).Should().Be("#666666");
     }
 
     [Theory]
@@ -158,7 +158,7 @@ public sealed class ConditionalFormatCellRenderPlannerTests
     [InlineData(5, 4, "#00B050")]
     public void ResolveIconColor_PerBucketPalette(int count, int index, string expected)
     {
-        ConditionalFormatCellRenderPlanner.ResolveIconColor("3Arrows", index, count).Should().Be(expected);
+        ConditionalIconGlyphResolver.ResolveIconColor("3Arrows", index, count).Should().Be(expected);
     }
 
     [Fact]
