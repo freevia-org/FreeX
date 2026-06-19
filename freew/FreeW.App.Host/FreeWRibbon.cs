@@ -162,7 +162,21 @@ internal static class FreeWRibbon
                 // 12-group Insert tab fits without collapsing the trailing groups at ~1500-1600px.
                 tab.Group("media", "Media", "M", 78, g =>
                 {
-                    g.Icon("freew.equation", "Equation", RibbonCommandIconKind.Equation);
+                    // Equation gallery: the top-level id inserts the default sample equation (E = mc²),
+                    // and the dropdown offers Word's common structure presets — each a one-click insert
+                    // that drops the structure at the caret as a starting point the user can edit.
+                    g.Icon("freew.equation", "Equation", RibbonCommandIconKind.Equation, menu: m =>
+                    {
+                        m.Item("freew.equation-fraction", "Fraction", "F");
+                        m.Item("freew.equation-script", "Subscript / Superscript", "S");
+                        m.Item("freew.equation-radical", "Radical (Square Root)", "R");
+                        m.Item("freew.equation-nthroot", "Radical (nth Root)", "N");
+                        m.Item("freew.equation-integral", "Integral", "I");
+                        m.Item("freew.equation-summation", "Summation", "U");
+                        m.Item("freew.equation-product", "Product", "P");
+                        m.Item("freew.equation-bracket", "Bracket", "B");
+                        m.Item("freew.equation-matrix", "Matrix (2×2)", "M");
+                    });
                     g.Icon("freew.chart", "Chart", RibbonCommandIconKind.ChartColumn, RibbonCommandIconAccent.Chart);
                     g.Icon("freew.wordart", "WordArt", RibbonCommandIconKind.WordArt);
                     g.RowBreak();

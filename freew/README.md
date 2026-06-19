@@ -128,7 +128,9 @@ docx reader/writer; unsupported renderings are noted under [Known limitations](#
 - **Shapes & text boxes** — Rectangle / Rounded Rectangle / Ellipse / Text Box (`wps:wsp`, preset geometry,
   optional fill, `w:txbxContent` body).
 - **WordArt** — decorative text presets (fill / gradient / outline / shadow) via DrawingML text effects.
-- **Equations** — inline OMML (`m:oMath`; text, superscript, fractions).
+- **Equations** — inline OMML (`m:oMath`) with an Insert > Equation structure gallery: text, super/sub/sub-superscript
+  (`m:sSup`/`m:sSub`/`m:sSubSup`), fractions (`m:f`), radicals (square & nth root, `m:rad`), n-ary operators
+  (sum/integral/product with limits, `m:nary`), brackets/delimiters (`m:d`) and matrices (`m:m`) — each round-trips.
 - **Charts** — column / bar / line / pie as a self-contained `word/charts/chartN.xml` part (data in literal caches).
 - **SmartArt** — List / Process / Hierarchy diagrams (four `word/diagrams/*` parts; node text + structure).
 - **OLE embedded objects** — embed a binary payload + ProgID with an icon (`w:object` / `o:OLEObject` +

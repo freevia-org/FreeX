@@ -126,6 +126,15 @@ internal static class FreeWRibbonIcons
 
             // Insert: media (equation / chart / WordArt / SmartArt / OLE object)
             ["freew.equation"] = RibbonCommandIconKind.Equation,
+            ["freew.equation-fraction"] = RibbonCommandIconKind.Equation,
+            ["freew.equation-script"] = RibbonCommandIconKind.Equation,
+            ["freew.equation-radical"] = RibbonCommandIconKind.Equation,
+            ["freew.equation-nthroot"] = RibbonCommandIconKind.Equation,
+            ["freew.equation-integral"] = RibbonCommandIconKind.Equation,
+            ["freew.equation-summation"] = RibbonCommandIconKind.Equation,
+            ["freew.equation-product"] = RibbonCommandIconKind.Equation,
+            ["freew.equation-bracket"] = RibbonCommandIconKind.Equation,
+            ["freew.equation-matrix"] = RibbonCommandIconKind.Equation,
             ["freew.chart"] = RibbonCommandIconKind.ChartColumn,
             ["freew.wordart"] = RibbonCommandIconKind.WordArt,
             ["freew.smartart"] = RibbonCommandIconKind.SmartArt,

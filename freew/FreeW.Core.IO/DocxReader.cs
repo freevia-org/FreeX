@@ -1146,9 +1146,10 @@ public static class DocxReader
 
     /// <summary>
     /// Parses an inline OMML equation (m:oMath) into an <see cref="Equation"/>. Recognises m:r (plain
-    /// text), m:sSup (superscript) and m:f (fraction); any other top-level child degrades to the plain
-    /// text of its descendant m:t runs so nothing is lost or throws. Mirrors how the writer emits these
-    /// (see <c>DocxWriter.BuildOMath</c>).
+    /// text), m:sSup / m:sSub / m:sSubSup (scripts), m:f (fraction), m:rad (radical), m:nary (n-ary),
+    /// m:d (delimiter) and m:m (matrix); any other top-level child degrades to the plain text of its
+    /// descendant m:t runs so nothing is lost or throws. Mirrors how the writer emits these (see
+    /// <c>DocxWriter.BuildMathRun</c>).
     /// </summary>
     private static Equation ReadOMath(XElement oMath)
     {
@@ -1161,10 +1162,27 @@ public static class DocxReader
                 equation.Runs.Add(MathRun.Superscript(
                     MathTextOf(child.Element(M + "e")),
                     MathTextOf(child.Element(M + "sup"))));
+            else if (child.Name == M + "sSub")
+                equation.Runs.Add(MathRun.Subscript(
+                    MathTextOf(child.Element(M + "e")),
+                    MathTextOf(child.Element(M + "sub"))));
+            else if (child.Name == M + "sSubSup")
+                equation.Runs.Add(MathRun.SubSuperscript(
+                    MathTextOf(child.Element(M + "e")),
+                    MathTextOf(child.Element(M + "sub")),
+                    MathTextOf(child.Element(M + "sup"))));
             else if (child.Name == M + "f")
                 equation.Runs.Add(MathRun.Fraction(
                     MathTextOf(child.Element(M + "num")),
                     MathTextOf(child.Element(M + "den"))));
+            else if (child.Name == M + "rad")
+                equation.Runs.Add(ReadRadical(child));
+            else if (child.Name == M + "nary")
+                equation.Runs.Add(ReadNAry(child));
+            else if (child.Name == M + "d")
+                equation.Runs.Add(ReadDelimiter(child));
+            else if (child.Name == M + "m")
+                equation.Runs.Add(MathRun.MatrixOf(ReadMatrix(child)));
             else
             {
                 // Unknown OMML construct: keep its text so the equation degrades rather than disappears.
@@ -1174,6 +1192,59 @@ public static class DocxReader
             }
         }
         return equation;
+    }
+
+    /// <summary>
+    /// Reads a radical (m:rad). When m:radPr/m:degHide is "1" (or m:deg is empty) it is a square root
+    /// (empty degree); otherwise the m:deg text is the nth-root degree. Mirrors <c>DocxWriter.BuildRadical</c>.
+    /// </summary>
+    private static MathRun ReadRadical(XElement rad)
+    {
+        var degHide = rad.Element(M + "radPr")?.Element(M + "degHide")?.Attribute(M + "val")?.Value;
+        var degText = MathTextOf(rad.Element(M + "deg"));
+        var degree = degHide == "1" ? string.Empty : degText;
+        return MathRun.Radical(MathTextOf(rad.Element(M + "e")), degree);
+    }
+
+    /// <summary>
+    /// Reads an n-ary operator (m:nary): the operator glyph from m:naryPr/m:chr (default ∑), the lower/
+    /// upper limits from m:sub / m:sup and the operand from m:e. Mirrors <c>DocxWriter.BuildNAry</c>.
+    /// </summary>
+    private static MathRun ReadNAry(XElement nary)
+    {
+        var chr = nary.Element(M + "naryPr")?.Element(M + "chr")?.Attribute(M + "val")?.Value;
+        return MathRun.NAry(
+            string.IsNullOrEmpty(chr) ? "∑" : chr,
+            MathTextOf(nary.Element(M + "sub")),
+            MathTextOf(nary.Element(M + "sup")),
+            MathTextOf(nary.Element(M + "e")));
+    }
+
+    /// <summary>
+    /// Reads a delimiter (m:d): the begin/end glyphs from m:dPr/m:begChr / m:endChr (default round
+    /// brackets) and the content from the first m:e. Mirrors <c>DocxWriter.BuildDelimiter</c>.
+    /// </summary>
+    private static MathRun ReadDelimiter(XElement d)
+    {
+        var dPr = d.Element(M + "dPr");
+        var open = dPr?.Element(M + "begChr")?.Attribute(M + "val")?.Value;
+        var close = dPr?.Element(M + "endChr")?.Attribute(M + "val")?.Value;
+        return MathRun.Delimiter(
+            MathTextOf(d.Element(M + "e")),
+            string.IsNullOrEmpty(open) ? "(" : open,
+            string.IsNullOrEmpty(close) ? ")" : close);
+    }
+
+    /// <summary>
+    /// Reads a matrix (m:m) into a <see cref="MathMatrix"/>: one row per m:mr, one cell per m:e.
+    /// Mirrors <c>DocxWriter.BuildMatrix</c>.
+    /// </summary>
+    private static MathMatrix ReadMatrix(XElement m)
+    {
+        var matrix = new MathMatrix();
+        foreach (var mr in m.Elements(M + "mr"))
+            matrix.Rows.Add([.. mr.Elements(M + "e").Select(MathTextOf)]);
+        return matrix;
     }
 
     /// <summary>The concatenated text of all descendant m:t runs under <paramref name="element"/> (empty if null).</summary>

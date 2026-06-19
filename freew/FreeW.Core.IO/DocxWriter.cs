@@ -2206,17 +2206,96 @@ public static class DocxWriter
         return oMath;
     }
 
-    /// <summary>Builds the OMML element for a single math fragment (m:r, m:sSup or m:f).</summary>
+    /// <summary>
+    /// Builds the OMML element for a single math fragment: m:sSup / m:sSub / m:sSubSup / m:f / m:rad /
+    /// m:nary / m:d / m:m, or a plain m:r for text. Mirrors the reader (see <c>DocxReader.ReadOMath</c>).
+    /// </summary>
     private static XElement BuildMathRun(MathRun run) => run.Kind switch
     {
         MathRunKind.Superscript => new XElement(M + "sSup",
             new XElement(M + "e", MathText(run.Base)),
             new XElement(M + "sup", MathText(run.Sup))),
+        MathRunKind.Subscript => new XElement(M + "sSub",
+            new XElement(M + "e", MathText(run.Base)),
+            new XElement(M + "sub", MathText(run.Sub))),
+        MathRunKind.SubSuperscript => new XElement(M + "sSubSup",
+            new XElement(M + "e", MathText(run.Base)),
+            new XElement(M + "sub", MathText(run.Sub)),
+            new XElement(M + "sup", MathText(run.Sup))),
         MathRunKind.Fraction => new XElement(M + "f",
             new XElement(M + "num", MathText(run.Numerator)),
             new XElement(M + "den", MathText(run.Denominator))),
+        MathRunKind.Radical => BuildRadical(run),
+        MathRunKind.NAry => BuildNAry(run),
+        MathRunKind.Delimiter => BuildDelimiter(run),
+        MathRunKind.Matrix => BuildMatrix(run.Matrix),
         _ => MathText(run.Text)
     };
+
+    /// <summary>
+    /// Builds a radical (m:rad). A square root sets m:radPr/m:degHide and emits an empty m:deg; an nth
+    /// root carries the degree in m:deg. The radicand is the m:e element. The reader keys off m:degHide
+    /// and the m:deg text to recover <see cref="MathRun.Degree"/>.
+    /// </summary>
+    private static XElement BuildRadical(MathRun run)
+    {
+        var isSquare = string.IsNullOrEmpty(run.Degree);
+        var deg = isSquare
+            ? new XElement(M + "deg")
+            : new XElement(M + "deg", MathText(run.Degree));
+        return new XElement(M + "rad",
+            new XElement(M + "radPr",
+                new XElement(M + "degHide", new XAttribute(M + "val", isSquare ? "1" : "0"))),
+            deg,
+            new XElement(M + "e", MathText(run.Base)));
+    }
+
+    /// <summary>
+    /// Builds an n-ary operator (m:nary): m:naryPr carries the operator glyph (m:chr) plus subscript/
+    /// superscript-limit visibility; m:sub / m:sup hold the limits and m:e the operand.
+    /// </summary>
+    private static XElement BuildNAry(MathRun run)
+    {
+        var pr = new XElement(M + "naryPr");
+        if (!string.IsNullOrEmpty(run.Operator))
+            pr.Add(new XElement(M + "chr", new XAttribute(M + "val", run.Operator)));
+        pr.Add(new XElement(M + "subHide", new XAttribute(M + "val", string.IsNullOrEmpty(run.Sub) ? "1" : "0")));
+        pr.Add(new XElement(M + "supHide", new XAttribute(M + "val", string.IsNullOrEmpty(run.Sup) ? "1" : "0")));
+        return new XElement(M + "nary",
+            pr,
+            new XElement(M + "sub", MathText(run.Sub)),
+            new XElement(M + "sup", MathText(run.Sup)),
+            new XElement(M + "e", MathText(run.Base)));
+    }
+
+    /// <summary>
+    /// Builds a delimiter (m:d): m:dPr carries the begin/end glyphs (m:begChr / m:endChr); a single
+    /// m:e holds the bracketed content.
+    /// </summary>
+    private static XElement BuildDelimiter(MathRun run) =>
+        new(M + "d",
+            new XElement(M + "dPr",
+                new XElement(M + "begChr", new XAttribute(M + "val", run.OpenChar)),
+                new XElement(M + "endChr", new XAttribute(M + "val", run.CloseChar))),
+            new XElement(M + "e", MathText(run.Base)));
+
+    /// <summary>
+    /// Builds a matrix (m:m): one m:mr per row, each holding one m:e (cell) per column. An absent/empty
+    /// matrix degrades to an empty math run so nothing is lost.
+    /// </summary>
+    private static XElement BuildMatrix(MathMatrix? matrix)
+    {
+        var m = new XElement(M + "m");
+        if (matrix is not null)
+            foreach (var row in matrix.Rows)
+            {
+                var mr = new XElement(M + "mr");
+                foreach (var cell in row)
+                    mr.Add(new XElement(M + "e", MathText(cell)));
+                m.Add(mr);
+            }
+        return m;
+    }
 
     /// <summary>Builds an m:r run carrying <paramref name="text"/> in an m:t (xml:space preserved).</summary>
     private static XElement MathText(string text) =>

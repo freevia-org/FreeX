@@ -241,6 +241,26 @@ internal static class FreeWRibbonCommands
             editor.Focus();
             editor.InsertEquation(SampleEquation());
         }));
+        // Equation gallery presets (Insert > Media > Equation dropdown). Each inserts one OMML structure
+        // at the caret as an editable starting point; all round-trip through the model/IO layer.
+        registry.Register("freew.equation-fraction", new ActionCommand(() => InsertEquationPreset(editor,
+            new Equation([MathRun.Fraction("a", "b")]))));
+        registry.Register("freew.equation-script", new ActionCommand(() => InsertEquationPreset(editor,
+            new Equation([MathRun.SubSuperscript("x", "n", "2")]))));
+        registry.Register("freew.equation-radical", new ActionCommand(() => InsertEquationPreset(editor,
+            new Equation([MathRun.Radical("x")]))));
+        registry.Register("freew.equation-nthroot", new ActionCommand(() => InsertEquationPreset(editor,
+            new Equation([MathRun.Radical("x", "n")]))));
+        registry.Register("freew.equation-integral", new ActionCommand(() => InsertEquationPreset(editor,
+            new Equation([MathRun.NAry("∫", "a", "b", "f(x) dx")]))));
+        registry.Register("freew.equation-summation", new ActionCommand(() => InsertEquationPreset(editor,
+            new Equation([MathRun.NAry("∑", "i=1", "n", "i")]))));
+        registry.Register("freew.equation-product", new ActionCommand(() => InsertEquationPreset(editor,
+            new Equation([MathRun.NAry("∏", "i=1", "n", "i")]))));
+        registry.Register("freew.equation-bracket", new ActionCommand(() => InsertEquationPreset(editor,
+            new Equation([MathRun.Delimiter("a, b")]))));
+        registry.Register("freew.equation-matrix", new ActionCommand(() => InsertEquationPreset(editor,
+            new Equation([MathRun.MatrixOf(MathMatrix.Identity2x2())]))));
         registry.Register("freew.chart", new ActionCommand(() =>
         {
             editor.Focus();
@@ -1927,6 +1947,14 @@ internal static class FreeWRibbonCommands
             var dialog = new AccessibilityReportDialog(Window.GetWindow(editor)!, report);
             dialog.ShowDialog();
         }
+    }
+
+    // Focuses the editor and drops an equation-gallery preset at the caret via the editor's undoable
+    // insert path (same path as the default Equation button). Used by the Insert > Equation dropdown.
+    private static void InsertEquationPreset(DocumentView editor, Equation equation)
+    {
+        editor.Focus();
+        editor.InsertEquation(equation);
     }
 
     // A sample equation ("E = mc^2") built from explicit math fragments so its linear form renders the
