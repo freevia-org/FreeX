@@ -9,7 +9,10 @@ namespace FreeX.Core.IO;
 /// <c>&lt;tr&gt;</c> is a row, each <c>&lt;td&gt;</c>/<c>&lt;th&gt;</c> a cell. Cell text is decoded
 /// (entities + tag stripping) and coerced to a typed value (number/bool/error) when it looks numeric,
 /// otherwise kept as text. <c>colspan</c>/<c>rowspan</c> become merged regions, with intervening
-/// columns left blank so later cells keep their grid position.</para>
+/// columns left blank so later cells keep their grid position. The inline CSS that <b>Export</b> emits
+/// (font weight/style/underline, family/size/color, background fill, text-align, per-edge borders) is
+/// parsed back into the cell's <see cref="CellStyle"/> so an xlsx→html→xlsx round-trip preserves the
+/// styling HTML can carry.</para>
 ///
 /// <para><b>Export</b> writes a single styled <c>&lt;table&gt;</c> of the first sheet's used range. Each
 /// cell emits its display value (numbers/dates rendered like the delimited-text writer); a compact set
@@ -36,7 +39,7 @@ public sealed class HtmlFileAdapter : IFileAdapter
         var html = HtmlText.ReadAll(stream);
         var workbook = new Workbook("Untitled");
         var sheet = workbook.AddSheet("Sheet1");
-        HtmlTableReader.Populate(html, sheet);
+        HtmlTableReader.Populate(html, workbook, sheet);
         return workbook;
     }
 

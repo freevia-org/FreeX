@@ -64,7 +64,11 @@ internal static class HtmlTableWriter
                         continue;
 
                     var cell = sheet.GetCell(r, c);
-                    var style = cell is not null ? workbook.GetStyle(cell.StyleId) : null;
+                    // A value cell carries its StyleId; a formatted-but-empty (style-only) cell carries its
+                    // style in the sheet's style-only map. Emit CSS for both so styling round-trips even when
+                    // the cell has no value.
+                    var styleId = cell?.StyleId ?? sheet.GetStyleOnly(r, c);
+                    var style = styleId is { } sid ? workbook.GetStyle(sid) : null;
                     var value = cell?.Value ?? BlankValue.Instance;
 
                     var spanAttrs = "";
@@ -135,8 +139,12 @@ internal static class HtmlTableWriter
         if (style.Italic) sb.Append("font-style:italic;");
         if (style.Underline || style.DoubleUnderline) sb.Append("text-decoration:underline;");
 
-        if (!string.Equals(style.FontName, "Calibri", StringComparison.Ordinal))
-            sb.Append($"font-family:'{CssSafe(style.FontName)}';");
+        // Emit the EFFECTIVE (theme-resolved) font name so a cell whose font follows the theme (FontScheme
+        // Minor/Major) round-trips the rendered family — the reader has no theme to consult, so what we
+        // write is what the cell will display on re-import.
+        var fontName = style.ResolveEffectiveFontName(theme);
+        if (!string.Equals(fontName, "Calibri", StringComparison.Ordinal))
+            sb.Append($"font-family:'{CssSafe(fontName)}';");
         if (Math.Abs(style.FontSize - 11) > 0.001)
             sb.Append($"font-size:{style.FontSize.ToString("0.##", CultureInfo.InvariantCulture)}pt;");
 
