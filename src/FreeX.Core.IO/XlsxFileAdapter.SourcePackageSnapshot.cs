@@ -39,7 +39,7 @@ public sealed partial class XlsxFileAdapter
             return false;
         }
 
-        if (!sourcePackage.TryEnsureCellPatchBaseline(workbook, out var preparedPackage, out blockReason))
+        if (!sourcePackage.TryEnsureCellPatchEligibility(workbook, out var preparedPackage, out blockReason))
         {
             if (!ReferenceEquals(preparedPackage, sourcePackage))
             {
@@ -50,7 +50,12 @@ public sealed partial class XlsxFileAdapter
             return false;
         }
 
-        preparedPackage.TryEnsureCellPatchEligibility(workbook, out preparedPackage, out _);
+        if (!preparedPackage.TryEnsureCellPatchBaseline(workbook, out preparedPackage, out blockReason))
+        {
+            SourcePackages.Remove(workbook);
+            SourcePackages.Add(workbook, preparedPackage);
+            return false;
+        }
 
         if (!ReferenceEquals(preparedPackage, sourcePackage))
         {
@@ -66,6 +71,189 @@ public sealed partial class XlsxFileAdapter
 
     private static string CreatePatchValidationModelFingerprint(Workbook workbook)
         => CreateModelFingerprint(workbook, forPatchValidation: true);
+
+    private static string CreateDrawingModelFingerprint(Workbook workbook)
+    {
+        using var hash = SHA256.Create();
+        using var cryptoStream = new CryptoStream(Stream.Null, hash, CryptoStreamMode.Write, leaveOpen: true);
+        using var stream = new BufferedStream(cryptoStream, bufferSize: 16 * 1024);
+        WriteFingerprintToken(stream, "\nfreex-drawing-model-fingerprint-v1\n");
+        WriteFingerprintNumber(stream, workbook.Sheets.Count);
+        WriteFingerprintToken(stream, "\n");
+
+        for (var sheetIndex = 0; sheetIndex < workbook.Sheets.Count; sheetIndex++)
+        {
+            var sheet = workbook.Sheets[sheetIndex];
+            WriteFingerprintToken(stream, "sheet\t");
+            WriteFingerprintNumber(stream, sheetIndex);
+            WriteFingerprintToken(stream, "\t");
+            WriteFingerprintString(stream, sheet.Id.Value.ToString("D"));
+            WriteFingerprintToken(stream, "\t");
+            WriteFingerprintString(stream, sheet.Name);
+            WriteFingerprintToken(stream, "\ncharts\t");
+            WriteFingerprintNumber(stream, sheet.Charts.Count);
+            WriteFingerprintToken(stream, "\n");
+            foreach (var chart in sheet.Charts)
+                WriteDrawingChartFingerprint(stream, chart);
+
+            WriteFingerprintToken(stream, "pictures\t");
+            WriteFingerprintNumber(stream, sheet.Pictures.Count);
+            WriteFingerprintToken(stream, "\n");
+            foreach (var picture in sheet.Pictures)
+                WriteDrawingPictureFingerprint(stream, picture);
+
+            WriteFingerprintToken(stream, "textBoxes\t");
+            WriteFingerprintNumber(stream, sheet.TextBoxes.Count);
+            WriteFingerprintToken(stream, "\n");
+            foreach (var textBox in sheet.TextBoxes)
+                WriteDrawingTextBoxFingerprint(stream, textBox);
+
+            WriteFingerprintToken(stream, "shapes\t");
+            WriteFingerprintNumber(stream, sheet.DrawingShapes.Count);
+            WriteFingerprintToken(stream, "\n");
+            foreach (var shape in sheet.DrawingShapes)
+                WriteDrawingShapeFingerprint(stream, shape);
+        }
+
+        stream.Flush();
+        cryptoStream.FlushFinalBlock();
+        return Convert.ToHexString(hash.Hash ?? []);
+    }
+
+    private static void WriteDrawingChartFingerprint(Stream stream, ChartModel chart)
+    {
+        WriteFingerprintString(stream, chart.Name);
+        WriteFingerprintToken(stream, "\t");
+        WriteFingerprintNumber(stream, (int)chart.Type);
+        WriteFingerprintToken(stream, "\t");
+        WriteFingerprintString(stream, chart.DataRange.ToString());
+        WriteFingerprintToken(stream, "\t");
+        WriteFingerprintBoolean(stream, chart.IsVisible);
+        WriteFingerprintBoolean(stream, chart.IsPivotChart);
+        WriteFingerprintString(stream, chart.PivotSourceSheetName);
+        WriteFingerprintString(stream, chart.PivotTableName);
+        WriteFingerprintString(stream, chart.PivotCacheId?.ToString(CultureInfo.InvariantCulture));
+        WriteFingerprintString(stream, chart.Title);
+        WriteFingerprintString(stream, chart.XAxisTitle);
+        WriteFingerprintString(stream, chart.YAxisTitle);
+        WriteFingerprintNumber(stream, chart.Width);
+        WriteFingerprintToken(stream, "\t");
+        WriteFingerprintNumber(stream, chart.Height);
+        WriteFingerprintToken(stream, "\t");
+        WriteFingerprintNumber(stream, (int)chart.DrawingAnchorKind);
+        WriteFingerprintToken(stream, "\n");
+    }
+
+    private static void WriteDrawingPictureFingerprint(Stream stream, PictureModel picture)
+    {
+        WriteFingerprintString(stream, picture.Name);
+        WriteFingerprintToken(stream, "\t");
+        WriteFingerprintAddress(stream, picture.Anchor);
+        WriteFingerprintToken(stream, "\t");
+        WriteFingerprintNumber(stream, picture.AnchorOffsetX);
+        WriteFingerprintToken(stream, "\t");
+        WriteFingerprintNumber(stream, picture.AnchorOffsetY);
+        WriteFingerprintToken(stream, "\t");
+        WriteFingerprintNumber(stream, (int)picture.Kind);
+        WriteFingerprintToken(stream, "\t");
+        WriteFingerprintBoolean(stream, picture.IsSourceLoaded);
+        WriteFingerprintBoolean(stream, picture.IsLinkedToSourceRange);
+        WriteFingerprintBoolean(stream, picture.IsVisible);
+        WriteFingerprintString(stream, picture.LinkedSourceRange?.ToString());
+        WriteFingerprintString(stream, picture.LinkedSourceSheetName);
+        WriteFingerprintString(stream, picture.ContentType);
+        WriteFingerprintString(stream, picture.Title);
+        WriteFingerprintString(stream, picture.AltText);
+        WriteFingerprintNumber(stream, picture.Width);
+        WriteFingerprintToken(stream, "\t");
+        WriteFingerprintNumber(stream, picture.Height);
+        WriteFingerprintToken(stream, "\t");
+        WriteFingerprintNumber(stream, picture.RotationDegrees);
+        WriteFingerprintToken(stream, "\t");
+        WriteFingerprintBoolean(stream, picture.FlipHorizontal);
+        WriteFingerprintBoolean(stream, picture.FlipVertical);
+        WriteFingerprintNumber(stream, picture.CropLeft);
+        WriteFingerprintToken(stream, "\t");
+        WriteFingerprintNumber(stream, picture.CropTop);
+        WriteFingerprintToken(stream, "\t");
+        WriteFingerprintNumber(stream, picture.CropRight);
+        WriteFingerprintToken(stream, "\t");
+        WriteFingerprintNumber(stream, picture.CropBottom);
+        WriteFingerprintToken(stream, "\n");
+    }
+
+    private static void WriteDrawingTextBoxFingerprint(Stream stream, TextBoxModel textBox)
+    {
+        WriteFingerprintString(stream, textBox.Name);
+        WriteFingerprintToken(stream, "\t");
+        WriteFingerprintAddress(stream, textBox.Anchor);
+        WriteFingerprintToken(stream, "\t");
+        WriteFingerprintNumber(stream, textBox.AnchorOffsetX);
+        WriteFingerprintToken(stream, "\t");
+        WriteFingerprintNumber(stream, textBox.AnchorOffsetY);
+        WriteFingerprintToken(stream, "\t");
+        WriteFingerprintString(stream, textBox.Text);
+        WriteFingerprintString(stream, textBox.Title);
+        WriteFingerprintString(stream, textBox.AltText);
+        WriteFingerprintNumber(stream, textBox.Width);
+        WriteFingerprintToken(stream, "\t");
+        WriteFingerprintNumber(stream, textBox.Height);
+        WriteFingerprintToken(stream, "\t");
+        WriteFingerprintNumber(stream, textBox.RotationDegrees);
+        WriteFingerprintToken(stream, "\t");
+        WriteFingerprintBoolean(stream, textBox.FlipHorizontal);
+        WriteFingerprintBoolean(stream, textBox.FlipVertical);
+        WriteFingerprintBoolean(stream, textBox.IsVisible);
+        WriteFingerprintBoolean(stream, textBox.HasFill);
+        WriteFingerprintBoolean(stream, textBox.IsSourceLoaded);
+        WriteFingerprintNullableColor(stream, textBox.FillColor);
+        WriteFingerprintNullableColor(stream, textBox.OutlineColor);
+        WriteFingerprintNullableThemeColor(stream, textBox.FillThemeColor);
+        WriteFingerprintNullableThemeColor(stream, textBox.OutlineThemeColor);
+        WriteFingerprintToken(stream, "\n");
+    }
+
+    private static void WriteDrawingShapeFingerprint(Stream stream, DrawingShapeModel shape)
+    {
+        WriteFingerprintString(stream, shape.Name);
+        WriteFingerprintToken(stream, "\t");
+        WriteFingerprintAddress(stream, shape.Anchor);
+        WriteFingerprintToken(stream, "\t");
+        WriteFingerprintNumber(stream, shape.AnchorOffsetX);
+        WriteFingerprintToken(stream, "\t");
+        WriteFingerprintNumber(stream, shape.AnchorOffsetY);
+        WriteFingerprintToken(stream, "\t");
+        WriteFingerprintNumber(stream, (int)shape.Kind);
+        WriteFingerprintToken(stream, "\t");
+        WriteFingerprintNumber(stream, shape.Width);
+        WriteFingerprintToken(stream, "\t");
+        WriteFingerprintNumber(stream, shape.Height);
+        WriteFingerprintToken(stream, "\t");
+        WriteFingerprintNumber(stream, shape.RotationDegrees);
+        WriteFingerprintToken(stream, "\t");
+        WriteFingerprintBoolean(stream, shape.FlipHorizontal);
+        WriteFingerprintBoolean(stream, shape.FlipVertical);
+        WriteFingerprintBoolean(stream, shape.IsVisible);
+        WriteFingerprintBoolean(stream, shape.HasFill);
+        WriteFingerprintBoolean(stream, shape.IsSourceLoaded);
+        WriteFingerprintString(stream, shape.Title);
+        WriteFingerprintString(stream, shape.AltText);
+        WriteFingerprintNullableColor(stream, shape.FillColor);
+        WriteFingerprintNullableColor(stream, shape.OutlineColor);
+        WriteFingerprintNullableColor(stream, shape.GradientFillEndColor);
+        WriteFingerprintNumber(stream, (int)shape.GetEffectiveGradientFillDirection());
+        WriteFingerprintNullableThemeColor(stream, shape.FillThemeColor);
+        WriteFingerprintNullableThemeColor(stream, shape.OutlineThemeColor);
+        WriteFingerprintNumber(stream, (int)shape.GetEffectiveEffectPreset());
+        WriteFingerprintToken(stream, "\n");
+    }
+
+    private static void WriteFingerprintAddress(Stream stream, CellAddress address)
+    {
+        WriteFingerprintNumber(stream, address.Row);
+        WriteFingerprintToken(stream, ",");
+        WriteFingerprintNumber(stream, address.Col);
+    }
 
     private static string CreateModelFingerprint(Workbook workbook, bool forPatchValidation)
     {
@@ -378,7 +566,8 @@ public sealed partial class XlsxFileAdapter
         bool IsCellPatchEligibilityLazy = false,
         bool SourceHasCustomViews = false,
         bool? SourceNeedsPackageGraphNormalization = null,
-        XlsxOfficeRevisionAttributeFacts? SourceOfficeRevisionAttributes = null)
+        XlsxOfficeRevisionAttributeFacts? SourceOfficeRevisionAttributes = null,
+        string? SourceDrawingModelFingerprint = null)
     {
         private const int FingerprintCellLimit = 100_000;
         private const int FingerprintCompressedStyleOnlyCellLimit = 1_250_000;
@@ -389,6 +578,8 @@ public sealed partial class XlsxFileAdapter
         private const string ChartExRelationshipType = "http://schemas.microsoft.com/office/2014/relationships/chartEx";
         private const string ChartExStyleRelationshipType = "http://schemas.microsoft.com/office/2011/relationships/chartStyle";
         private const string ChartExColorStyleRelationshipType = "http://schemas.microsoft.com/office/2011/relationships/chartColorStyle";
+        private const string ChartThemeOverrideRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/themeOverride";
+        private const string ChartThemeOverrideContentType = "application/vnd.openxmlformats-officedocument.themeOverride+xml";
         private const string DiagramDataRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData";
         private const string DiagramLayoutRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramLayout";
         private const string DiagramQuickStyleRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramQuickStyle";
@@ -498,7 +689,8 @@ public sealed partial class XlsxFileAdapter
                 CellPatchBaselineBlockReason: null,
                 IsCellPatchBaselineLazy: true,
                 IsCellPatchEligibilityLazy: true,
-                SourceHasCustomViews: workbook.CustomViews.Count > 0);
+                SourceHasCustomViews: workbook.CustomViews.Count > 0,
+                SourceDrawingModelFingerprint: CreateDrawingModelFingerprint(workbook));
         }
 
         public static XlsxSourcePackage Capture(MemoryStream stream, Workbook workbook)
@@ -594,7 +786,8 @@ public sealed partial class XlsxFileAdapter
                         IsCellPatchBaselineLazy: true,
                         IsCellPatchEligibilityLazy: true,
                         SourceHasCustomViews: sourceHasCustomViews,
-                        SourceNeedsPackageGraphNormalization: sourceNeedsPackageGraphNormalization);
+                        SourceNeedsPackageGraphNormalization: sourceNeedsPackageGraphNormalization,
+                        SourceDrawingModelFingerprint: CreateDrawingModelFingerprint(workbook));
                 }
 
                 var copiedBytes = buffer.Array is not null &&
@@ -618,7 +811,8 @@ public sealed partial class XlsxFileAdapter
                     IsCellPatchBaselineLazy: true,
                     IsCellPatchEligibilityLazy: true,
                     SourceHasCustomViews: sourceHasCustomViews,
-                    SourceNeedsPackageGraphNormalization: sourceNeedsPackageGraphNormalization);
+                    SourceNeedsPackageGraphNormalization: sourceNeedsPackageGraphNormalization,
+                    SourceDrawingModelFingerprint: CreateDrawingModelFingerprint(workbook));
             }
 
             var bytes = ReadBytes(stream);
@@ -637,7 +831,8 @@ public sealed partial class XlsxFileAdapter
                 IsCellPatchBaselineLazy: true,
                 IsCellPatchEligibilityLazy: true,
                 SourceHasCustomViews: sourceHasCustomViews,
-                SourceNeedsPackageGraphNormalization: sourceNeedsPackageGraphNormalization);
+                SourceNeedsPackageGraphNormalization: sourceNeedsPackageGraphNormalization,
+                SourceDrawingModelFingerprint: CreateDrawingModelFingerprint(workbook));
         }
 
         private static bool SourcePackageHasCustomViews(
@@ -690,12 +885,17 @@ public sealed partial class XlsxFileAdapter
 
             if (CellPatchBaseline is null)
                 return IsCellPatchBaselineLazy
-                    ? this with { ModelFingerprint = rebasedFingerprint }
+                    ? this with
+                    {
+                        ModelFingerprint = rebasedFingerprint,
+                        SourceDrawingModelFingerprint = CreateDrawingModelFingerprint(workbook)
+                    }
                     : this;
 
             return this with
             {
                 ModelFingerprint = rebasedFingerprint,
+                SourceDrawingModelFingerprint = CreateDrawingModelFingerprint(workbook),
                 CellPatchBaseline = CellPatchBaseline.Rebase(workbook, CreatePatchValidationModelFingerprint(workbook)),
                 CellPatchBaselineBlockReason = null
             };
@@ -739,11 +939,18 @@ public sealed partial class XlsxFileAdapter
             if (!IsCellPatchEligibilityLazy)
                 return AllowsCellPatchSave;
 
+            var preserveSourceDrawingPackageParts =
+                SourceDrawingModelFingerprint is not null &&
+                string.Equals(
+                    SourceDrawingModelFingerprint,
+                    CreateDrawingModelFingerprint(workbook),
+                    StringComparison.Ordinal);
             var allowsCellPatchSave = AllowsCellPatchSaveForPackage(
                 Buffer,
                 Offset,
                 Count,
                 workbook,
+                preserveSourceDrawingPackageParts,
                 out blockReason,
                 out var officeRevisionAttributes);
             preparedPackage = this with
@@ -804,6 +1011,7 @@ public sealed partial class XlsxFileAdapter
                 workbook,
                 out var eligibilityPreparedPackage,
                 out var cellPatchEligibilityBlockReason);
+            var preparedPackage = eligibilityPreparedPackage;
             if (!ReferenceEquals(eligibilityPreparedPackage, this))
             {
                 SourcePackages.Remove(workbook);
@@ -813,14 +1021,32 @@ public sealed partial class XlsxFileAdapter
             if (!allowsCellPatchSave)
                 return Fail(cellPatchEligibilityBlockReason ?? "patch_blocked_package_or_workbook_requires_full_save", out diagnostics);
 
-            if (CellPatchBaseline is null)
+            if (preparedPackage.CellPatchBaseline is null &&
+                preparedPackage.IsCellPatchBaselineLazy)
+            {
+                var allowsBaseline = preparedPackage.TryEnsureCellPatchBaseline(
+                    workbook,
+                    out var baselinePreparedPackage,
+                    out _);
+                preparedPackage = baselinePreparedPackage;
+                SourcePackages.Remove(workbook);
+                SourcePackages.Add(workbook, preparedPackage);
+                if (!allowsBaseline)
+                {
+                    return Fail(
+                        preparedPackage.CellPatchBaselineBlockReason ?? "patch_blocked_baseline_unavailable",
+                        out diagnostics);
+                }
+            }
+
+            if (preparedPackage.CellPatchBaseline is not { } cellPatchBaseline)
                 return Fail(
-                    IsCellPatchBaselineLazy
+                    preparedPackage.IsCellPatchBaselineLazy
                         ? "patch_blocked_deferred_baseline_not_materialized"
-                        : CellPatchBaselineBlockReason ?? "patch_blocked_baseline_unavailable",
+                        : preparedPackage.CellPatchBaselineBlockReason ?? "patch_blocked_baseline_unavailable",
                     out diagnostics);
 
-            if (!CellPatchBaseline.TryGetPatchableValueChanges(
+            if (!cellPatchBaseline.TryGetPatchableValueChanges(
                     workbook,
                     CellPatchChangeLimit,
                     currentModelFingerprint,
@@ -1089,7 +1315,7 @@ public sealed partial class XlsxFileAdapter
                     HasUnsupportedConditionalFormatting,
                     allowsCellPatchSave,
                     cellPatchEligibilityBlockReason,
-                    CellPatchBaseline.WithAppliedChanges(
+                    cellPatchBaseline.WithAppliedChanges(
                         changes,
                         dimensionChanges,
                         mergeRegionChanges,
@@ -1097,10 +1323,11 @@ public sealed partial class XlsxFileAdapter
                         commentChanges,
                         worksheetViewChanges,
                         patchedPatchValidationFingerprint),
-                    CellPatchBaselineBlockReason,
+                    preparedPackage.CellPatchBaselineBlockReason,
                     SourceHasCustomViews: workbook.CustomViews.Count > 0,
                     SourceNeedsPackageGraphNormalization: false,
-                    SourceOfficeRevisionAttributes: null));
+                    SourceOfficeRevisionAttributes: null,
+                    SourceDrawingModelFingerprint: CreateDrawingModelFingerprint(workbook)));
             }
             else
             {
@@ -2218,7 +2445,14 @@ public sealed partial class XlsxFileAdapter
             int offset,
             int count,
             Workbook workbook)
-            => AllowsCellPatchSaveForPackage(package, offset, count, workbook, out _);
+            => AllowsCellPatchSaveForPackage(
+                package,
+                offset,
+                count,
+                workbook,
+                preserveSourceDrawingPackageParts: false,
+                out _,
+                out _);
 
         private static bool AllowsCellPatchSaveForPackage(
             byte[] package,
@@ -2226,13 +2460,21 @@ public sealed partial class XlsxFileAdapter
             int count,
             Workbook workbook,
             out string? blockReason)
-            => AllowsCellPatchSaveForPackage(package, offset, count, workbook, out blockReason, out _);
+            => AllowsCellPatchSaveForPackage(
+                package,
+                offset,
+                count,
+                workbook,
+                preserveSourceDrawingPackageParts: false,
+                out blockReason,
+                out _);
 
         private static bool AllowsCellPatchSaveForPackage(
             byte[] package,
             int offset,
             int count,
             Workbook workbook,
+            bool preserveSourceDrawingPackageParts,
             out string? blockReason,
             out XlsxOfficeRevisionAttributeFacts? officeRevisionAttributes)
         {
@@ -2248,6 +2490,7 @@ public sealed partial class XlsxFileAdapter
                 return PackageAllowsCellPatchSave(
                     archive,
                     workbook,
+                    preserveSourceDrawingPackageParts,
                     out blockReason,
                     out officeRevisionAttributes);
             }
@@ -2379,17 +2622,28 @@ public sealed partial class XlsxFileAdapter
         }
 
         private static bool PackageAllowsCellPatchSave(ZipArchive archive, Workbook workbook) =>
-            PackageAllowsCellPatchSave(archive, workbook, out _);
+            PackageAllowsCellPatchSave(
+                archive,
+                workbook,
+                preserveSourceDrawingPackageParts: false,
+                out _,
+                out _);
 
         private static bool PackageAllowsCellPatchSave(
             ZipArchive archive,
             Workbook workbook,
             out string? blockReason)
-            => PackageAllowsCellPatchSave(archive, workbook, out blockReason, out _);
+            => PackageAllowsCellPatchSave(
+                archive,
+                workbook,
+                preserveSourceDrawingPackageParts: false,
+                out blockReason,
+                out _);
 
         private static bool PackageAllowsCellPatchSave(
             ZipArchive archive,
             Workbook workbook,
+            bool preserveSourceDrawingPackageParts,
             out string? blockReason,
             out XlsxOfficeRevisionAttributeFacts? officeRevisionAttributes)
         {
@@ -2460,16 +2714,42 @@ public sealed partial class XlsxFileAdapter
                     return false;
                 }
 
-                if (worksheetGuardInfo.DrawingRelationshipIds.Count > 1 ||
-                    (worksheetGuardInfo.DrawingRelationshipIds.Count == 1 &&
-                     !TryAddPatchSafeDrawingPackagePaths(
-                         archive,
-                         worksheetPath,
-                         worksheetGuardInfo.DrawingRelationshipIds[0],
-                         sheet,
-                         allowedDrawingPackagePaths,
-                         allowedChartPaths,
-                         packageRelNs)))
+                if (worksheetGuardInfo.DrawingRelationshipIds.Count > 1 && !preserveSourceDrawingPackageParts)
+                {
+                    blockReason = "package_guard_drawing";
+                    return false;
+                }
+
+                foreach (var drawingRelationshipId in worksheetGuardInfo.DrawingRelationshipIds)
+                {
+                    var allowsDrawing = preserveSourceDrawingPackageParts
+                        ? TryAddPreservedDrawingPackagePaths(
+                            archive,
+                            worksheetPath,
+                            drawingRelationshipId,
+                            allowedDrawingPackagePaths,
+                            allowedChartPaths,
+                            packageRelNs)
+                        : TryAddPatchSafeDrawingPackagePaths(
+                            archive,
+                            worksheetPath,
+                            drawingRelationshipId,
+                            sheet,
+                            allowedDrawingPackagePaths,
+                            allowedChartPaths,
+                            packageRelNs);
+                    if (allowsDrawing)
+                        continue;
+
+                    blockReason = "package_guard_drawing";
+                    return false;
+                }
+
+                if (worksheetGuardInfo.DrawingRelationshipIds.Count == 0 &&
+                    (sheet.Charts.Count > 0 ||
+                     sheet.Pictures.Count > 0 ||
+                     sheet.TextBoxes.Count > 0 ||
+                     sheet.DrawingShapes.Count > 0))
                 {
                     blockReason = "package_guard_drawing";
                     return false;
@@ -2524,7 +2804,7 @@ public sealed partial class XlsxFileAdapter
 
                 if (worksheetGuardInfo.LegacyDrawingRelationshipIds.Count > 1 ||
                     (worksheetGuardInfo.LegacyDrawingRelationshipIds.Count == 1 &&
-                    !TryAddPatchSafeLegacyNoteVmlDrawingPath(
+                    !TryAddPatchPreservedLegacyDrawingVmlPaths(
                         archive,
                         worksheetPath,
                         worksheetGuardInfo.LegacyDrawingRelationshipIds[0],
@@ -2752,14 +3032,9 @@ public sealed partial class XlsxFileAdapter
                 .Where(element => string.Equals(element.Attribute("uri")?.Value, diagramGraphicDataUri, StringComparison.Ordinal))
                 .ToList();
             var pictureElements = drawingXml.Descendants(spreadsheetDrawingNs + "pic").ToList();
-            var sourceShapeElements = drawingXml
-                .Descendants(spreadsheetDrawingNs + "sp")
-                .Where(element => !element.Ancestors(markupCompatNs + "Fallback").Any())
-                .ToList();
             var (sourceTextBoxes, sourceShapes) = XlsxWorksheetDrawingPartReader.ReadShapeParts(drawingXml);
             if (chartElements.Count != sheet.Charts.Count ||
-                pictureElements.Count != sheet.Pictures.Count ||
-                sourceShapeElements.Count != sourceTextBoxes.Count + sourceShapes.Count ||
+                pictureElements.Count < sheet.Pictures.Count ||
                 sourceTextBoxes.Count != sheet.TextBoxes.Count ||
                 sourceShapes.Count != sheet.DrawingShapes.Count ||
                 sheet.Pictures.Any(picture => !IsPatchSafeSourcePicture(picture)) ||
@@ -2851,7 +3126,7 @@ public sealed partial class XlsxFileAdapter
                     if (!TryAddPatchSafeChartExPackagePaths(archive, chartPath, allowedChartPaths, packageRelNs))
                         return false;
                 }
-                else if (archive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(chartPath)) is not null)
+                else if (!TryAddPatchSafeChartPackagePaths(archive, chartPath, allowedChartPaths, packageRelNs))
                 {
                     return false;
                 }
@@ -2914,6 +3189,124 @@ public sealed partial class XlsxFileAdapter
             allowedDrawingPackagePaths.Add(drawingPath);
             allowedDrawingPackagePaths.Add(drawingRelsPath);
             return true;
+        }
+
+        private static bool TryAddPreservedDrawingPackagePaths(
+            ZipArchive archive,
+            string worksheetPath,
+            string relationshipId,
+            HashSet<string> allowedDrawingPackagePaths,
+            HashSet<string> allowedChartPaths,
+            XNamespace packageRelNs)
+        {
+            if (string.IsNullOrWhiteSpace(relationshipId))
+                return false;
+
+            var relationshipsEntry = archive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(worksheetPath));
+            if (relationshipsEntry is null)
+                return false;
+
+            var relationshipsXml = XlsxPackageXmlEditor.LoadXml(relationshipsEntry);
+            var relationshipsRoot = relationshipsXml.Root;
+            if (relationshipsRoot is null)
+                return false;
+
+            var drawingRelationship = FindInternalRelationshipByIdAndType(
+                relationshipsRoot.Elements(packageRelNs + "Relationship"),
+                relationshipId,
+                DrawingRelationshipType);
+            var drawingTarget = drawingRelationship?.Attribute("Target")?.Value;
+            if (string.IsNullOrWhiteSpace(drawingTarget))
+                return false;
+
+            var drawingPath = XlsxPackagePath.ResolveRelationshipTarget(worksheetPath, drawingTarget);
+            if (!drawingPath.StartsWith("xl/drawings/", StringComparison.OrdinalIgnoreCase) ||
+                drawingPath.Contains("/_rels/", StringComparison.OrdinalIgnoreCase) ||
+                !drawingPath.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) ||
+                archive.GetEntry(drawingPath) is null)
+            {
+                return false;
+            }
+
+            var seenPackagePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            return TryAddPreservedRelationshipPackageGraph(
+                archive,
+                drawingPath,
+                allowedDrawingPackagePaths,
+                allowedChartPaths,
+                packageRelNs,
+                seenPackagePaths);
+        }
+
+        private static bool TryAddPreservedRelationshipPackageGraph(
+            ZipArchive archive,
+            string sourcePartPath,
+            HashSet<string> allowedDrawingPackagePaths,
+            HashSet<string> allowedChartPaths,
+            XNamespace packageRelNs,
+            HashSet<string> seenPackagePaths)
+        {
+            if (!seenPackagePaths.Add(sourcePartPath))
+                return true;
+
+            if (archive.GetEntry(sourcePartPath) is null)
+                return false;
+
+            AddPreservedRelationshipPackagePath(sourcePartPath, allowedDrawingPackagePaths, allowedChartPaths);
+
+            var relationshipsPath = XlsxPackagePath.GetRelationshipPartPath(sourcePartPath);
+            var relationshipsEntry = archive.GetEntry(relationshipsPath);
+            if (relationshipsEntry is null)
+                return true;
+
+            AddPreservedRelationshipPackagePath(relationshipsPath, allowedDrawingPackagePaths, allowedChartPaths);
+
+            var relationshipsXml = XlsxPackageXmlEditor.LoadXml(relationshipsEntry);
+            var relationshipsRoot = relationshipsXml.Root;
+            if (relationshipsRoot is null)
+                return false;
+
+            foreach (var relationship in relationshipsRoot.Elements(packageRelNs + "Relationship"))
+            {
+                if (relationship.Attribute("TargetMode") is not null)
+                    return false;
+
+                var target = relationship.Attribute("Target")?.Value;
+                if (string.IsNullOrWhiteSpace(target))
+                    return false;
+
+                var targetPath = XlsxPackagePath.ResolveRelationshipTarget(sourcePartPath, target);
+                if (targetPath.Contains("/_rels/", StringComparison.OrdinalIgnoreCase) ||
+                    archive.GetEntry(targetPath) is null)
+                {
+                    return false;
+                }
+
+                AddPreservedRelationshipPackagePath(targetPath, allowedDrawingPackagePaths, allowedChartPaths);
+                if (!TryAddPreservedRelationshipPackageGraph(
+                        archive,
+                        targetPath,
+                        allowedDrawingPackagePaths,
+                        allowedChartPaths,
+                        packageRelNs,
+                        seenPackagePaths))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static void AddPreservedRelationshipPackagePath(
+            string path,
+            HashSet<string> allowedDrawingPackagePaths,
+            HashSet<string> allowedChartPaths)
+        {
+            if (path.StartsWith("xl/drawings/", StringComparison.OrdinalIgnoreCase))
+                allowedDrawingPackagePaths.Add(path);
+            else if (path.StartsWith("xl/charts/", StringComparison.OrdinalIgnoreCase))
+                allowedChartPaths.Add(path);
         }
 
         private static bool TryAddPatchSafeDiagramPackagePaths(
@@ -3032,6 +3425,70 @@ public sealed partial class XlsxFileAdapter
 
             return !string.IsNullOrWhiteSpace(expectedContentType) &&
                    string.Equals(contentType, expectedContentType, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool TryAddPatchSafeChartPackagePaths(
+            ZipArchive archive,
+            string chartPath,
+            HashSet<string> allowedChartPaths,
+            XNamespace packageRelNs)
+        {
+            var chartRelsPath = XlsxPackagePath.GetRelationshipPartPath(chartPath);
+            var chartRelsEntry = archive.GetEntry(chartRelsPath);
+            if (chartRelsEntry is null)
+                return true;
+
+            var contentTypes = TryReadPackageContentTypes(archive);
+            if (contentTypes is null)
+                return false;
+
+            var chartRelsXml = XlsxPackageXmlEditor.LoadXml(chartRelsEntry);
+            var relationships = chartRelsXml.Root?
+                .Elements(packageRelNs + "Relationship")
+                .ToArray();
+            if (relationships is null)
+                return false;
+
+            var referencedRelationshipIds = new HashSet<string>(StringComparer.Ordinal);
+            var themeOverrideRelationshipCount = 0;
+            foreach (var relationship in relationships)
+            {
+                var id = relationship.Attribute("Id")?.Value;
+                var type = relationship.Attribute("Type")?.Value;
+                var target = relationship.Attribute("Target")?.Value;
+                if (string.IsNullOrWhiteSpace(id) ||
+                    !referencedRelationshipIds.Add(id) ||
+                    !string.Equals(type, ChartThemeOverrideRelationshipType, StringComparison.OrdinalIgnoreCase) ||
+                    string.IsNullOrWhiteSpace(target) ||
+                    relationship.Attribute("TargetMode") is not null)
+                {
+                    return false;
+                }
+
+                themeOverrideRelationshipCount++;
+                var sidecarPath = XlsxPackagePath.ResolveRelationshipTarget(chartPath, target);
+                var sidecarFileName = sidecarPath[(sidecarPath.LastIndexOf('/') + 1)..];
+                if (themeOverrideRelationshipCount > 1 ||
+                    !sidecarPath.StartsWith("xl/theme/", StringComparison.OrdinalIgnoreCase) ||
+                    sidecarPath.Contains("/_rels/", StringComparison.OrdinalIgnoreCase) ||
+                    !sidecarFileName.StartsWith("themeOverride", StringComparison.OrdinalIgnoreCase) ||
+                    !sidecarPath.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) ||
+                    archive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(sidecarPath)) is not null ||
+                    archive.GetEntry(sidecarPath) is not { } sidecarEntry ||
+                    !contentTypes.TryGetValue(sidecarPath, out var contentType) ||
+                    !string.Equals(contentType, ChartThemeOverrideContentType, StringComparison.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
+
+                XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+                var sidecarXml = XlsxPackageXmlEditor.LoadXml(sidecarEntry);
+                if (sidecarXml.Root?.Name != drawingNs + "themeOverride")
+                    return false;
+            }
+
+            allowedChartPaths.Add(chartRelsPath);
+            return themeOverrideRelationshipCount == relationships.Length;
         }
 
         private static bool TryAddPatchSafeChartExPackagePaths(
@@ -3522,7 +3979,7 @@ public sealed partial class XlsxFileAdapter
             return null;
         }
 
-        private static bool TryAddPatchSafeLegacyNoteVmlDrawingPath(
+        private static bool TryAddPatchPreservedLegacyDrawingVmlPaths(
             ZipArchive archive,
             string worksheetPath,
             XElement legacyDrawing,
@@ -3533,14 +3990,14 @@ public sealed partial class XlsxFileAdapter
             if (string.IsNullOrWhiteSpace(relationshipId))
                 return false;
 
-            return TryAddPatchSafeLegacyNoteVmlDrawingPath(
+            return TryAddPatchPreservedLegacyDrawingVmlPaths(
                 archive,
                 worksheetPath,
                 relationshipId,
                 allowedVmlDrawingPaths);
         }
 
-        private static bool TryAddPatchSafeLegacyNoteVmlDrawingPath(
+        private static bool TryAddPatchPreservedLegacyDrawingVmlPaths(
             ZipArchive archive,
             string worksheetPath,
             string relationshipId,
@@ -3559,33 +4016,35 @@ public sealed partial class XlsxFileAdapter
             if (relationshipsRoot is null)
                 return false;
 
-            var vmlRelationship = FindRelationshipByIdAndType(
-                relationshipsRoot.Elements(packageRelNs + "Relationship"),
-                relationshipId,
-                VmlDrawingRelationshipType);
-            var target = vmlRelationship?.Attribute("Target")?.Value;
-            if (string.IsNullOrWhiteSpace(target))
+            var relationships = relationshipsRoot.Elements(packageRelNs + "Relationship").ToList();
+            if (!TryGetRelationship(relationships, relationshipId, VmlDrawingRelationshipType, out var target))
                 return false;
 
             var vmlPath = XlsxPackagePath.ResolveRelationshipTarget(worksheetPath, target);
             var fileName = vmlPath[(vmlPath.LastIndexOf('/') + 1)..];
             if (!vmlPath.StartsWith("xl/drawings/", StringComparison.OrdinalIgnoreCase) ||
+                vmlPath.Contains("/_rels/", StringComparison.OrdinalIgnoreCase) ||
                 !fileName.StartsWith("vmlDrawing", StringComparison.OrdinalIgnoreCase) ||
-                !vmlPath.EndsWith(".vml", StringComparison.OrdinalIgnoreCase) ||
-                archive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(vmlPath)) is not null)
+                !vmlPath.EndsWith(".vml", StringComparison.OrdinalIgnoreCase))
             {
                 return false;
             }
 
             var vmlEntry = archive.GetEntry(vmlPath);
+            var vmlRelsPath = XlsxPackagePath.GetRelationshipPartPath(vmlPath);
+            var vmlRelsEntry = archive.GetEntry(vmlRelsPath);
             if (vmlEntry is null ||
                 !TryReadWorksheetCommentReferences(archive, worksheetPath, relationshipsRoot, packageRelNs, out var commentReferences) ||
-                !IsPatchSafeLegacyNoteVmlDrawing(vmlEntry, commentReferences))
+                !IsPatchSafePreservedLegacyDrawingVml(vmlEntry, commentReferences) ||
+                (vmlRelsEntry is not null && !IsValidRelationshipPart(vmlRelsEntry)))
             {
                 return false;
             }
 
             allowedVmlDrawingPaths.Add(vmlPath);
+            if (vmlRelsEntry is not null)
+                allowedVmlDrawingPaths.Add(vmlRelsPath);
+
             return true;
         }
 
@@ -3695,7 +4154,10 @@ public sealed partial class XlsxFileAdapter
                 .Where(path => archive.GetEntry(path) is not null)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
-            if (commentPartPaths.Count != 1)
+            if (commentPartPaths.Count == 0)
+                return true;
+
+            if (commentPartPaths.Count > 1)
                 return false;
 
             var commentsEntry = archive.GetEntry(commentPartPaths[0]);
@@ -3719,7 +4181,7 @@ public sealed partial class XlsxFileAdapter
                 }
             }
 
-            return commentReferences.Count > 0;
+            return true;
         }
 
         private static bool TryParsePackageCellReference(string? reference, out uint row, out uint col)
@@ -3740,43 +4202,70 @@ public sealed partial class XlsxFileAdapter
             return true;
         }
 
-        private static bool IsPatchSafeLegacyNoteVmlDrawing(
+        private static bool IsPatchSafePreservedLegacyDrawingVml(
             ZipArchiveEntry vmlEntry,
             IReadOnlySet<(uint Row, uint Col)> commentReferences)
         {
             XNamespace vmlNs = "urn:schemas-microsoft-com:vml";
             XNamespace excelNs = "urn:schemas-microsoft-com:office:excel";
-            var vmlXml = XlsxPackageXmlEditor.LoadXml(vmlEntry);
-            var shapes = vmlXml.Descendants(vmlNs + "shape").ToList();
-            if (shapes.Count != commentReferences.Count)
+            XDocument vmlXml;
+            try
+            {
+                vmlXml = XlsxPackageXmlEditor.LoadXml(vmlEntry);
+            }
+            catch
+            {
                 return false;
+            }
 
             var shapeReferences = new HashSet<(uint Row, uint Col)>();
-            foreach (var shape in shapes)
+            foreach (var shape in vmlXml.Descendants(vmlNs + "shape"))
             {
-                if (shape.Descendants(vmlNs + "imagedata").Any())
+                if (!TryReadLegacyNoteShapeReference(shape, excelNs, out var reference))
                     return false;
 
-                var clientData = shape.Elements(excelNs + "ClientData").SingleOrDefault();
-                if (clientData is null ||
-                    !string.Equals(clientData.Attribute("ObjectType")?.Value, "Note", StringComparison.OrdinalIgnoreCase) ||
-                    !TryReadZeroBasedClientDataIndex(clientData.Element(excelNs + "Row"), out var zeroBasedRow) ||
-                    !TryReadZeroBasedClientDataIndex(clientData.Element(excelNs + "Column"), out var zeroBasedColumn))
-                {
-                    return false;
-                }
+                if (reference is null)
+                    continue;
 
-                var row = zeroBasedRow + 1;
-                var col = zeroBasedColumn + 1;
-                if (!IsValidWorksheetRow(row) ||
-                    !IsValidWorksheetColumn(col) ||
-                    !shapeReferences.Add((row, col)))
+                if (!shapeReferences.Add(reference.Value))
                 {
                     return false;
                 }
             }
 
             return shapeReferences.SetEquals(commentReferences);
+        }
+
+        private static bool TryReadLegacyNoteShapeReference(
+            XElement shape,
+            XNamespace excelNs,
+            out (uint Row, uint Col)? reference)
+        {
+            reference = null;
+            var noteClientData = shape
+                .Elements(excelNs + "ClientData")
+                .Where(element => string.Equals(element.Attribute("ObjectType")?.Value, "Note", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (noteClientData.Count == 0)
+                return true;
+
+            if (noteClientData.Count != 1)
+                return false;
+
+            var clientData = noteClientData[0];
+            if (!TryReadZeroBasedClientDataIndex(clientData.Element(excelNs + "Row"), out var zeroBasedRow) ||
+                !TryReadZeroBasedClientDataIndex(clientData.Element(excelNs + "Column"), out var zeroBasedColumn))
+            {
+                return false;
+            }
+
+            var row = zeroBasedRow + 1;
+            var col = zeroBasedColumn + 1;
+            if (!IsValidWorksheetRow(row) || !IsValidWorksheetColumn(col))
+                return false;
+
+            reference = (row, col);
+            return true;
         }
 
         private static bool TryReadZeroBasedClientDataIndex(XElement? element, out uint oneBasedIndex)
