@@ -279,6 +279,10 @@ internal static class FreeWRibbonCommands
 
         // Review tab — Comments: prompt for comment text and attach it over the current selection.
         registry.Register("freew.new-comment", new NewCommentCommand(editor));
+        // Review tab — Comments: reply to / resolve the comment thread covering the caret (modern threaded
+        // comments). Reply prompts for text and appends a child comment; Resolve toggles the thread's done flag.
+        registry.Register("freew.reply-comment", new ReplyCommentCommand(editor));
+        registry.Register("freew.resolve-comment", new ResolveCommentCommand(editor));
 
         // Review tab — Proofing: open the read-only Word Count / Statistics dialog. Commits pending
         // edits first so the counts reflect the current text, then computes from the model.
@@ -1563,21 +1567,64 @@ internal static class FreeWRibbonCommands
             if (string.IsNullOrWhiteSpace(text))
                 return; // cancelled or empty — nothing to attach
 
+            var author = CommentAuthor.Resolve(editor);
+            editor.Focus();
+            editor.InsertComment(text.Trim(), author, CommentAuthor.DeriveInitials(author));
+        }
+    }
+
+    // The author/initials a new comment or reply is stamped with: the document's Author property, falling
+    // back to the OS user, with initials derived from it. Shared by New Comment + Reply so the two stamp
+    // the same identity. Kept tiny + static so it carries no editor state.
+    private static class CommentAuthor
+    {
+        public static string Resolve(DocumentView editor)
+        {
             var author = editor.Model.Properties.Author;
             if (string.IsNullOrWhiteSpace(author))
                 author = Environment.UserName;
-            author = author?.Trim() ?? string.Empty;
-
-            editor.Focus();
-            editor.InsertComment(text.Trim(), author, DeriveInitials(author));
+            return author?.Trim() ?? string.Empty;
         }
 
         // Initials = the first letter of each whitespace-separated word, upper-cased (max 3).
-        private static string DeriveInitials(string author)
+        public static string DeriveInitials(string author)
         {
             var parts = author.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
             var initials = string.Concat(parts.Take(3).Select(p => char.ToUpperInvariant(p[0])));
             return initials.Length > 0 ? initials : "?";
+        }
+    }
+
+    // Review > Comments > Reply: prompt for reply text and append it to the comment thread covering the
+    // caret/selection. Warns when the caret is not inside a comment. The reply is stamped with the same
+    // author/initials a new comment uses.
+    private sealed class ReplyCommentCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var text = TextPrompt.Ask(Window.GetWindow(editor), "Reply", "Reply:", string.Empty);
+            if (string.IsNullOrWhiteSpace(text))
+                return; // cancelled or empty
+
+            var author = CommentAuthor.Resolve(editor);
+            editor.Focus();
+            if (!editor.ReplyToCommentAtCaret(text.Trim(), author, CommentAuthor.DeriveInitials(author)))
+                DialogMessageHelper.ShowWarning(Window.GetWindow(editor)!,
+                    "Place the cursor inside a comment, then choose Reply.", "Reply");
+        }
+    }
+
+    // Review > Comments > Resolve: toggle the resolved (done) state of the comment thread covering the
+    // caret/selection (resolved ranges render muted). Warns when the caret is not inside a comment.
+    private sealed class ResolveCommentCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            if (editor.ToggleResolveCommentAtCaret() is null)
+                DialogMessageHelper.ShowWarning(Window.GetWindow(editor)!,
+                    "Place the cursor inside a comment, then choose Resolve.", "Resolve");
         }
     }
 

@@ -213,6 +213,8 @@ internal static class FreeWRibbonIcons
             ["freew.spellcheck-toggle"] = RibbonCommandIconKind.Spelling,
             ["freew.add-to-dictionary"] = RibbonCommandIconKind.Book,
             ["freew.new-comment"] = RibbonCommandIconKind.Comment,
+            ["freew.reply-comment"] = RibbonCommandIconKind.Comment,
+            ["freew.resolve-comment"] = RibbonCommandIconKind.AcceptChange,
             ["freew.track-changes"] = RibbonCommandIconKind.History,
             ["freew.accept-all"] = RibbonCommandIconKind.AcceptChange,
             ["freew.reject-all"] = RibbonCommandIconKind.RejectChange,

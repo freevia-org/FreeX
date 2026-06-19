@@ -426,7 +426,17 @@ public static class DocxReader
         // Run.Image — which the writer re-emits as a comment media part + comments.xml.rels (see BuildComments).
         var commentRelationships = ReadPartImageRelationships(archive, "word/_rels/comments.xml.rels", "word/");
 
+        // Modern (threaded) comments: word/commentsExtended.xml threads replies via w15:paraId /
+        // w15:paraIdParent and marks resolved threads with w15:done. Parse it first so the comment loop
+        // can place each flat w:comment as either a top-level comment or a reply under its parent, and
+        // recover the resolved flag. Absent (classic comments) → every comment is treated as top-level.
+        var extended = ReadCommentsExtended(archive);
+
         var noNumbering = new Dictionary<int, ListKind>();
+
+        // First pass: build every flat comment and remember its last-paragraph paraId (the value
+        // commentsExtended threads on). Keep insertion order so reply threads keep their authored order.
+        var flat = new List<(Comment Comment, string? ParaId)>();
         foreach (var element in root.Elements(W + "comment"))
         {
             if (!int.TryParse(element.Attribute(W + "id")?.Value, out var id))
@@ -438,12 +448,67 @@ public static class DocxReader
                 Initials = element.Attribute(W + "initials")?.Value ?? string.Empty,
                 DateXml = element.Attribute(W + "date")?.Value
             };
+            string? paraId = null;
             foreach (var p in element.Elements(W + "p"))
+            {
                 comment.Content.Add(ReadParagraph(p, archive, commentRelationships, hyperlinkRelationships, noNumbering));
+                // The last paragraph's w14:paraId is what commentsExtended references for this comment.
+                if (p.Attribute(W14 + "paraId")?.Value is { Length: > 0 } pid)
+                    paraId = pid;
+            }
             if (comment.Content.Count == 0)
                 comment.Content.Add(new Paragraph());
-            document.Comments[id] = comment;
+            flat.Add((comment, paraId));
         }
+
+        // Second pass: thread. A flat comment whose paraId has a paraIdParent in commentsExtended is a
+        // reply — append it to the parent's Replies (matched by the parent's paraId); otherwise it is a
+        // top-level comment keyed in document.Comments. A top-level comment is resolved when its own
+        // commentEx is marked done. Comments whose parent cannot be resolved fall back to top-level so
+        // nothing is lost.
+        var byParaId = new Dictionary<string, Comment>(StringComparer.Ordinal);
+        foreach (var (comment, paraId) in flat)
+            if (paraId is { Length: > 0 })
+                byParaId[paraId] = comment;
+
+        foreach (var (comment, paraId) in flat)
+        {
+            var ex = paraId is { Length: > 0 } && extended.TryGetValue(paraId, out var e) ? e : default;
+            if (ex.ParentParaId is { Length: > 0 } parentParaId
+                && byParaId.TryGetValue(parentParaId, out var parent)
+                && !ReferenceEquals(parent, comment))
+            {
+                parent.Replies.Add(comment);
+            }
+            else
+            {
+                comment.Resolved = ex.Done;
+                document.Comments[comment.Id] = comment;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Loads word/commentsExtended.xml (if present), returning a map from each comment's w15:paraId to its
+    /// thread info: the w15:paraIdParent (null for a top-level comment) and whether w15:done marks it
+    /// resolved. Empty when the part is absent (a classic, non-threaded comments document).
+    /// </summary>
+    private static Dictionary<string, (string? ParentParaId, bool Done)> ReadCommentsExtended(ZipArchive archive)
+    {
+        var map = new Dictionary<string, (string?, bool)>(StringComparer.Ordinal);
+        var root = LoadPart(archive, "word/commentsExtended.xml")?.Root;
+        if (root is null)
+            return map;
+
+        foreach (var ex in root.Elements(W15 + "commentEx"))
+        {
+            if (ex.Attribute(W15 + "paraId")?.Value is not { Length: > 0 } paraId)
+                continue;
+            var parent = ex.Attribute(W15 + "paraIdParent")?.Value;
+            var done = ex.Attribute(W15 + "done")?.Value is "1" or "true";
+            map[paraId] = (string.IsNullOrEmpty(parent) ? null : parent, done);
+        }
+        return map;
     }
 
     /// <summary>

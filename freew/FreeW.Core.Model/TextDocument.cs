@@ -605,6 +605,14 @@ public sealed class Endnote(int id)
 /// and initials, an optional explicit date, and the comment's block content as a list of paragraphs.
 /// Maps onto a w:comment element inside word/comments.xml. The date is an explicit model value (never
 /// auto-stamped) so the writer stays deterministic — it is only emitted when set.
+///
+/// Modern (threaded) Word comments are modelled by nesting <see cref="Replies"/> — an ordered list of
+/// child comments, each a full <see cref="Comment"/> with its own globally-unique id — under the
+/// top-level comment that anchors the body range, and by a <see cref="Resolved"/> flag on the top-level
+/// comment. Only the top-level comment is keyed in <see cref="TextDocument.Comments"/> / referenced by
+/// body runs; replies live only inside their parent's list. In docx the parent and every reply are flat
+/// <c>w:comment</c> entries in comments.xml, with the thread shape (parent/child) and resolved state
+/// captured in word/commentsExtended.xml (w15:commentEx, via w15:paraId / w15:paraIdParent / w15:done).
 /// </summary>
 public sealed class Comment(int id)
 {
@@ -624,6 +632,19 @@ public sealed class Comment(int id)
 
     public List<Paragraph> Content { get; } = [];
 
+    /// <summary>
+    /// The ordered thread of replies to this comment (each a full <see cref="Comment"/> with its own
+    /// unique id). Only meaningful on a top-level comment; a reply itself carries an empty list. Maps to
+    /// child w15:commentEx entries (w15:paraIdParent pointing at this comment's last paragraph).
+    /// </summary>
+    public List<Comment> Replies { get; } = [];
+
+    /// <summary>
+    /// True when the comment thread is marked resolved/done (Word's "Resolve"). Maps to w15:done="1" on
+    /// this comment's w15:commentEx entry. Only meaningful on a top-level comment.
+    /// </summary>
+    public bool Resolved { get; set; }
+
     public Comment(int id, string text, string author = "", string initials = "") : this(id)
     {
         Author = author;
@@ -632,6 +653,25 @@ public sealed class Comment(int id)
     }
 
     public string PlainText => string.Join("\n", Content.Select(p => p.PlainText));
+
+    /// <summary>
+    /// Adds a reply with the given text/author to this comment's thread and returns it. The reply's id
+    /// must be unique across the whole document (use <see cref="TextDocument.NextCommentId"/>).
+    /// </summary>
+    public Comment AddReply(int id, string text, string author = "", string initials = "")
+    {
+        var reply = new Comment(id, text, author, initials);
+        Replies.Add(reply);
+        return reply;
+    }
+
+    /// <summary>This comment together with its replies, in thread order (parent first).</summary>
+    public IEnumerable<Comment> ThreadInOrder()
+    {
+        yield return this;
+        foreach (var reply in Replies)
+            yield return reply;
+    }
 }
 
 /// <summary>
@@ -1392,8 +1432,14 @@ public sealed class TextDocument
     /// </summary>
     public Dictionary<int, Comment> Comments { get; } = [];
 
-    /// <summary>The next unused comment id (0-based, as Word numbers comments from 0).</summary>
-    public int NextCommentId() => Comments.Count == 0 ? 0 : Comments.Keys.Max() + 1;
+    /// <summary>
+    /// The next unused comment id (0-based, as Word numbers comments from 0). Scans top-level comments
+    /// AND their replies, since every reply is also a flat w:comment with a globally-unique id.
+    /// </summary>
+    public int NextCommentId() =>
+        Comments.Count == 0
+            ? 0
+            : Comments.Values.SelectMany(c => c.ThreadInOrder()).Max(c => c.Id) + 1;
 
     /// <summary>
     /// The document's bibliographic sources, in insertion order. Citations reference a source's

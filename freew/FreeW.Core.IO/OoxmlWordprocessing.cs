@@ -154,6 +154,18 @@ internal static class Ooxml
     public const string CommentsRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments";
     public const string CommentsPartName = "/word/comments.xml";
 
+    /// <summary>
+    /// The Office 2012 (w15) WordprocessingML extension namespace, used by word/commentsExtended.xml
+    /// (w15:commentsEx / w15:commentEx) to thread modern comments (w15:paraId / w15:paraIdParent) and
+    /// mark them resolved (w15:done). The w14 paraId attributes on the comment paragraphs use <see cref="W14"/>.
+    /// </summary>
+    public static readonly XNamespace W15 = "http://schemas.microsoft.com/office/word/2012/wordml";
+
+    // word/commentsExtended.xml — the threading + resolved-state side-part for modern (threaded) comments.
+    public const string CommentsExtendedContentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.commentsExtended+xml";
+    public const string CommentsExtendedRelType = "http://schemas.microsoft.com/office/2011/relationships/commentsExtended";
+    public const string CommentsExtendedPartName = "/word/commentsExtended.xml";
+
     public const string SettingsContentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml";
     public const string SettingsRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings";
     public const string SettingsPartName = "/word/settings.xml";

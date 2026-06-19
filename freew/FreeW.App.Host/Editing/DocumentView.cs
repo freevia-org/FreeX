@@ -3172,6 +3172,9 @@ public sealed class DocumentView : RichTextBox
     /// <summary>Subtle highlight used to mark a commented text range (a pale review yellow).</summary>
     private static readonly Color CommentHighlight = Color.FromRgb(0xFF, 0xF4, 0xCE);
 
+    /// <summary>Muted highlight used to mark a RESOLVED comment range (a pale neutral grey).</summary>
+    private static readonly Color ResolvedCommentHighlight = Color.FromRgb(0xEC, 0xEC, 0xEC);
+
     /// <summary>The fixed colour tracked changes are rendered in (a Word-like revision maroon/red).</summary>
     private static readonly Color RevisionColor = Color.FromRgb(0xC0, 0x00, 0x40);
 
@@ -3212,14 +3215,33 @@ public sealed class DocumentView : RichTextBox
     private static void ApplyCommentMarker(WpfRun wpf, int commentId, TextDocument document)
     {
         AddMarker(wpf, m => m with { Comment = new CommentMarker(commentId, IsReference: false) });
+        document.Comments.TryGetValue(commentId, out var comment);
+        // Resolved comments render with a muted grey highlight; open comments keep the review yellow.
         if (wpf.Background is null)
-            wpf.Background = new SolidColorBrush(CommentHighlight);
-        if (document.Comments.TryGetValue(commentId, out var comment))
+            wpf.Background = new SolidColorBrush(comment?.Resolved == true ? ResolvedCommentHighlight : CommentHighlight);
+        if (comment is not null)
+            wpf.ToolTip = BuildCommentTooltip(comment);
+    }
+
+    /// <summary>
+    /// Builds the hover tooltip for a comment range: the comment (author: text), each reply on its own
+    /// "(author: text)" line, and a trailing "[Resolved]" marker when the thread is resolved. Mirrors the
+    /// pane-less, tooltip-based comment surface FreeW already uses.
+    /// </summary>
+    private static string BuildCommentTooltip(Comment comment)
+    {
+        static string Line(Comment c)
         {
-            var author = comment.Author.Length > 0 ? comment.Author : "Comment";
-            var body = comment.PlainText;
-            wpf.ToolTip = body.Length > 0 ? $"{author}: {body}" : author;
+            var author = c.Author.Length > 0 ? c.Author : "Comment";
+            var body = c.PlainText;
+            return body.Length > 0 ? $"{author}: {body}" : author;
         }
+
+        var lines = new List<string> { Line(comment) };
+        lines.AddRange(comment.Replies.Select(r => "↳ " + Line(r)));
+        if (comment.Resolved)
+            lines.Add("[Resolved]");
+        return string.Join("\n", lines);
     }
 
     /// <summary>
@@ -4610,6 +4632,88 @@ public sealed class DocumentView : RichTextBox
         _model.Comments[id].Content.Add(new ModelParagraph(text));
 
         Render();
+    }
+
+    /// <summary>
+    /// The id of the top-level comment whose range covers the caret/selection, or null when the caret is
+    /// not inside a comment. Resolves from the tagged WPF run at the selection (the common case); falling
+    /// back to scanning the committed caret paragraph's runs for any CommentId so a caret placed anywhere
+    /// in the range still finds its comment. A reply's id is mapped up to its owning top-level comment.
+    /// </summary>
+    private int? CommentIdAtCaret()
+    {
+        // Fast path: the run under the caret/selection start carries a CommentMarker tag.
+        if ((Selection.Start.Parent as WpfRun ?? CaretPosition?.Parent as WpfRun) is { Tag: RunMarkers { Comment: { } marker } })
+            return TopLevelCommentId(marker.CommentId);
+
+        // Fallback: commit and look for a commented run in the caret's model paragraph.
+        var caretParagraph = Selection.Start.Paragraph ?? CaretPosition?.Paragraph;
+        if (caretParagraph is null)
+            return null;
+        var indexOf = new Dictionary<WpfParagraph, int>();
+        var modelIndex = 0;
+        foreach (var block in Document.Blocks)
+            NumberLeafBlocks(block, indexOf, ref modelIndex);
+        if (!indexOf.TryGetValue(caretParagraph, out var paragraphIndex))
+            return null;
+
+        CommitToModel();
+        paragraphIndex = ModelIndexFromVisible(paragraphIndex);
+        if (paragraphIndex < 0 || paragraphIndex >= _model.Blocks.Count || _model.Blocks[paragraphIndex] is not ModelParagraph modelParagraph)
+            return null;
+        foreach (var run in modelParagraph.Runs)
+            if (run.CommentId is { } cid)
+                return TopLevelCommentId(cid);
+        return null;
+    }
+
+    /// <summary>
+    /// Maps a comment id (which may be a reply's id) to its owning top-level comment id — the one keyed in
+    /// <see cref="TextDocument.Comments"/> and referenced by body ranges. Returns the id unchanged when it
+    /// is already a top-level comment (or unknown).
+    /// </summary>
+    private int TopLevelCommentId(int commentId)
+    {
+        if (_model.Comments.ContainsKey(commentId))
+            return commentId;
+        foreach (var top in _model.Comments.Values)
+            if (top.Replies.Any(r => r.Id == commentId))
+                return top.Id;
+        return commentId;
+    }
+
+    /// <summary>
+    /// Adds <paramref name="text"/> as a reply (by <paramref name="author"/>/<paramref name="initials"/>) to
+    /// the comment thread covering the caret/selection, then re-renders so the thread tooltip updates. No-op
+    /// when the caret is not inside a comment or the reply text is blank. Returns true when a reply was added.
+    /// </summary>
+    public bool ReplyToCommentAtCaret(string text, string author, string initials)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+        Focus();
+        if (CommentIdAtCaret() is not { } id || !_model.Comments.TryGetValue(id, out var comment))
+            return false;
+
+        var reply = comment.AddReply(_model.NextCommentId(), text.Trim(), author, initials);
+        reply.DateXml = DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture);
+        Render();
+        return true;
+    }
+
+    /// <summary>
+    /// Toggles the resolved (done) state of the comment thread covering the caret/selection and re-renders
+    /// (resolved ranges show muted). No-op when the caret is not inside a comment. Returns the new resolved
+    /// state, or null when there was no comment to toggle.
+    /// </summary>
+    public bool? ToggleResolveCommentAtCaret()
+    {
+        Focus();
+        if (CommentIdAtCaret() is not { } id || !_model.Comments.TryGetValue(id, out var comment))
+            return null;
+        comment.Resolved = !comment.Resolved;
+        Render();
+        return comment.Resolved;
     }
 
     /// <summary>
