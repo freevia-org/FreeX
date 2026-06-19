@@ -296,9 +296,11 @@ internal static class FreeWRibbon
                 // Small toggle groups → labelled Medium toggles so Print Layout / Read Mode read clearly.
                 tab.Group("views", "Views", "V", 100, g =>
                 {
-                    g.MediumToggle("freew.print-layout", "Print Layout", RibbonCommandIconKind.PrintLayout);
                     g.MediumToggle("freew.read-mode", "Read Mode", RibbonCommandIconKind.ReadMode);
+                    g.MediumToggle("freew.print-layout", "Print Layout", RibbonCommandIconKind.PrintLayout);
+                    g.MediumToggle("freew.web-layout", "Web Layout", RibbonCommandIconKind.WebLayout);
                     g.MediumToggle("freew.outline-view", "Outline", RibbonCommandIconKind.MultilevelList);
+                    g.MediumToggle("freew.draft-view", "Draft", RibbonCommandIconKind.Draft);
                 });
                 tab.Group("show", "Show", "S", 90, g =>
                 {

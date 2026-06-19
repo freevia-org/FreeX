@@ -100,6 +100,13 @@ public sealed class MainWindow : Window
     private FrameworkElement _zoomItem = null!;
     private bool _readMode;
 
+    // Status-bar view-switch toggle buttons for the three mutually-exclusive print-family view modes
+    // (Print Layout / Web Layout / Draft). They mirror the same state as the View ribbon's Views group;
+    // RefreshViewModeChecks keeps exactly one of them checked to match _editor.ViewMode.
+    private ToggleButton _printLayoutSwitch = null!;
+    private ToggleButton _webLayoutSwitch = null!;
+    private ToggleButton _draftSwitch = null!;
+
     // Outline view (View > Outline). The outline surface overlays the normal editing surface; entering the
     // view hides the workspace (and its rulers) and shows the outline, exiting restores them verbatim —
     // the same save/restore shape as Read Mode. The model is never mutated by switching views.
@@ -172,7 +179,12 @@ public sealed class MainWindow : Window
         _stateStore = stateStore;
         var commands = FreeWRibbonCommands.Build(
             editor, stateStore, OpenPrintPreview, ToggleNavPane, () => _navPaneVisible, ToggleReadMode, () => _readMode,
-            TogglePrintLayout, () => _editor.PrintLayoutEnabled, ToggleOutlineView, () => _outlineMode, OpenZoomDialog);
+            () => SetViewMode(DocumentViewMode.PrintLayout), () => _editor.ViewMode == DocumentViewMode.PrintLayout,
+            ToggleOutlineView, () => _outlineMode, OpenZoomDialog,
+            onWebLayout: () => SetViewMode(DocumentViewMode.WebLayout),
+            isWebLayoutActive: () => !_outlineMode && _editor.ViewMode == DocumentViewMode.WebLayout,
+            onDraftView: () => SetViewMode(DocumentViewMode.Draft),
+            isDraftViewActive: () => !_outlineMode && _editor.ViewMode == DocumentViewMode.Draft);
         _file = new FileCommands(this, editor, UpdateTitle, _options);
         editor.TextChanged += (_, _) => { _file.MarkDirty(); UpdateCounts(); RefreshOutline(); RefreshContextualTabs(); };
         // Live selection stats: when the caret/selection moves, refresh the status-bar counts so a
@@ -285,9 +297,9 @@ public sealed class MainWindow : Window
         UpdateCounts();
         RefreshOutline();
 
-        // Print Layout is the default view (the Word default), so seed the View > Print Layout toggle as
-        // checked to match the editor's initial PrintLayoutEnabled state.
-        _stateStore.SetChecked("freew.print-layout", _editor.PrintLayoutEnabled);
+        // Print Layout is the default view (the Word default), so seed the View > Views toggles (Print
+        // Layout / Web Layout / Draft) to reflect the editor's initial view mode — exactly one is checked.
+        RefreshViewModeChecks();
 
         // The Word-style Backstage (File screen) is a full-window overlay above the document. It is
         // hidden by default; the File button (title bar) shows it, a back arrow / Esc hides it. It reuses
@@ -524,9 +536,11 @@ public sealed class MainWindow : Window
         return _status;
     }
 
-    // The Word-style view-switch cluster on the right of the status bar: a Read Mode toggle and a Print
-    // Layout toggle. They reuse the existing MainWindow toggles (ToggleReadMode / TogglePrintLayout), so the
-    // ribbon View tab and these buttons drive the same state. Uses the shared clean footer toggle style.
+    // The Word-style view-switch cluster on the right of the status bar: a Read Mode button plus the three
+    // mutually-exclusive print-family view toggles (Print Layout / Web Layout / Draft). They reuse the same
+    // MainWindow state the View ribbon drives (ToggleReadMode / SetViewMode), so the ribbon Views group and
+    // these buttons stay in lock-step. The print-family buttons are ChromeStatusToggleButtons so the active
+    // view reads as pressed; RefreshViewModeChecks keeps exactly one checked.
     private UIElement BuildViewSwitchControl()
     {
         var panel = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
@@ -545,8 +559,29 @@ public sealed class MainWindow : Window
             return button;
         }
 
+        ToggleButton ViewToggle(string label, string tip, DocumentViewMode mode)
+        {
+            var toggle = new ToggleButton
+            {
+                Content = label,
+                Style = (Style)FindResource("ChromeStatusToggleButtonStyle"),
+                Margin = new Thickness(2, 3, 2, 3),
+                ToolTip = tip
+            };
+            // Clicking always lands on this mode (re-checking the active one is a no-op); never let the
+            // toggle uncheck itself, since exactly one print-family view is always active.
+            toggle.Click += (_, _) => SetViewMode(mode);
+            return toggle;
+        }
+
+        _printLayoutSwitch = ViewToggle("Print Layout", "Print Layout page view", DocumentViewMode.PrintLayout);
+        _webLayoutSwitch = ViewToggle("Web Layout", "Web Layout: continuous, full-width view (no page chrome)", DocumentViewMode.WebLayout);
+        _draftSwitch = ViewToggle("Draft", "Draft: simplified continuous view for fast editing", DocumentViewMode.Draft);
+
         panel.Children.Add(ViewButton("Read Mode", "Toggle distraction-free Read Mode", ToggleReadMode));
-        panel.Children.Add(ViewButton("Print Layout", "Toggle Print Layout page view", TogglePrintLayout));
+        panel.Children.Add(_printLayoutSwitch);
+        panel.Children.Add(_webLayoutSwitch);
+        panel.Children.Add(_draftSwitch);
         return panel;
     }
 
@@ -788,14 +823,42 @@ public sealed class MainWindow : Window
         _stateStore.SetChecked("freew.read-mode", _readMode);
     }
 
-    // View > Print Layout: flip the editor between the Word-style page view (white page on the grey
-    // workspace, margins shown, drop shadow, page-break markers) and the plain/continuous flat view.
-    // DocumentView owns the page presentation; here we only mirror the new checked-state into the shared
-    // RibbonStateStore so the toggle button stays in sync, exactly like the read-mode / nav-pane toggles.
-    private void TogglePrintLayout()
+    // View > Views: switch the editing surface to one of the three mutually-exclusive print-family view
+    // modes — Print Layout (the Word page sheet), Web Layout (a continuous, full-width view with no page
+    // chrome, text wrapping to the window like a web page) or Draft (a simplified continuous view for fast
+    // editing). DocumentView owns the page presentation; here we drive that, leave any Outline overlay
+    // (which replaces the surface) so the chosen view is actually visible, and refresh the ribbon + status
+    // bar so exactly one mode reads as active. Switching never mutates the model.
+    private void SetViewMode(DocumentViewMode mode)
     {
-        var enabled = _editor.TogglePrintLayout();
-        _stateStore.SetChecked("freew.print-layout", enabled);
+        // Outline view swaps the whole surface out, so it would hide whichever print-family view is chosen.
+        // Picking Print Layout / Web Layout / Draft therefore leaves Outline first (Word's views are all
+        // mutually exclusive), mirroring how the ribbon's Views group behaves.
+        if (_outlineMode)
+            ToggleOutlineView();
+
+        _editor.SetViewMode(mode);
+        RefreshViewModeChecks();
+    }
+
+    // Push the active print-family view mode into the shared RibbonStateStore (so the View ribbon's Print
+    // Layout / Web Layout / Draft toggle buttons reflect it) and the status-bar toggle buttons. Exactly one
+    // is checked — unless Outline view is active, in which case none of the three is (Outline owns the
+    // surface). Mirrors how the read-mode / nav-pane toggles keep their buttons in sync.
+    private void RefreshViewModeChecks()
+    {
+        var mode = _editor.ViewMode;
+        var printLayout = !_outlineMode && mode == DocumentViewMode.PrintLayout;
+        var webLayout = !_outlineMode && mode == DocumentViewMode.WebLayout;
+        var draft = !_outlineMode && mode == DocumentViewMode.Draft;
+
+        _stateStore.SetChecked("freew.print-layout", printLayout);
+        _stateStore.SetChecked("freew.web-layout", webLayout);
+        _stateStore.SetChecked("freew.draft-view", draft);
+
+        if (_printLayoutSwitch is not null) _printLayoutSwitch.IsChecked = printLayout;
+        if (_webLayoutSwitch is not null) _webLayoutSwitch.IsChecked = webLayout;
+        if (_draftSwitch is not null) _draftSwitch.IsChecked = draft;
     }
 
     // View > Outline: swap the normal editing surface for the heading-structured outline view (and its
@@ -828,6 +891,10 @@ public sealed class MainWindow : Window
         }
 
         _stateStore.SetChecked("freew.outline-view", _outlineMode);
+
+        // Outline and the print-family views are mutually exclusive: entering Outline clears the Print
+        // Layout / Web Layout / Draft checks, and leaving it re-checks whichever the editor is still in.
+        RefreshViewModeChecks();
     }
 
     // Recompute the heading outline from the editor's committed model and repopulate the nav list.

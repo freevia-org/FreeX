@@ -214,6 +214,8 @@ internal static class FreeWRibbonIcons
             ["freew.nav-pane"] = RibbonCommandIconKind.NavigationPane,
             ["freew.formatting-marks"] = RibbonCommandIconKind.FormattingMarks,
             ["freew.read-mode"] = RibbonCommandIconKind.ReadMode,
+            ["freew.web-layout"] = RibbonCommandIconKind.WebLayout,
+            ["freew.draft-view"] = RibbonCommandIconKind.Draft,
             ["freew.outline-view"] = RibbonCommandIconKind.MultilevelList,
             ["freew.zoom-dialog"] = RibbonCommandIconKind.Zoom,
 

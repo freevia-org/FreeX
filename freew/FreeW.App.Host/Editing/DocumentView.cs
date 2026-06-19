@@ -29,6 +29,26 @@ using ModelTextAlignment = FreeW.Core.Model.TextAlignment;
 namespace FreeW.App.Host.Editing;
 
 /// <summary>
+/// Word's mutually-exclusive document view modes (View ▸ Views), as far as the live editing surface is
+/// concerned. Read Mode and Outline are separate host-level overlays (they swap the surface out entirely),
+/// so they are not part of this enum — these three all reuse the one editable surface and differ only in
+/// the page chrome they show.
+/// <list type="bullet">
+/// <item><see cref="PrintLayout"/> — the Word default: a white page sheet on the grey workspace, margins,
+/// drop shadow and page-break markers.</item>
+/// <item><see cref="WebLayout"/> — a continuous, full-width view with no page chrome (text wraps to the
+/// window like a web page).</item>
+/// <item><see cref="Draft"/> — a simplified continuous view with no page chrome, for fast editing.</item>
+/// </list>
+/// </summary>
+public enum DocumentViewMode
+{
+    PrintLayout,
+    WebLayout,
+    Draft
+}
+
+/// <summary>
 /// The FreeW editing surface: a RichTextBox that renders a <see cref="TextDocument"/> into a
 /// WPF FlowDocument (resolving run/paragraph formatting through styles + document defaults) and
 /// commits edits back into the model. Caret, selection, typing, delete and Enter come from the
@@ -144,19 +164,41 @@ public sealed class DocumentView : RichTextBox
     /// stays a single live, fully editable <see cref="RichTextBox"/> either way (see the limitation note in
     /// <see cref="ApplyPageChrome"/>). Re-applied on every <see cref="Render"/> and when page settings change.
     /// </summary>
-    public bool PrintLayoutEnabled { get; private set; } = true;
+    public bool PrintLayoutEnabled => ViewMode == DocumentViewMode.PrintLayout;
 
     /// <summary>
-    /// Turn Print-Layout page view on/off and return the new state. Used by the View ribbon's "Print
-    /// Layout" toggle. Re-applies the page chrome (padding/width/shadow) and the page-break overlay so the
-    /// change shows immediately; never mutates the model.
+    /// The active document view mode (View ▸ Views). Defaults to <see cref="DocumentViewMode.PrintLayout"/>
+    /// — the Word default. Web Layout and Draft both drop the page chrome (no sheet/margins/shadow/page
+    /// breaks) and let the editor fill the window width; Print Layout shows the page sheet. Switching is
+    /// purely visual (the model and saved document are untouched); use <see cref="SetViewMode"/> to change it
+    /// so the chrome and overlays re-apply.
     /// </summary>
-    public bool TogglePrintLayout()
+    public DocumentViewMode ViewMode { get; private set; } = DocumentViewMode.PrintLayout;
+
+    /// <summary>
+    /// Switch the editing surface to a new <see cref="DocumentViewMode"/> and re-apply the page chrome
+    /// (padding/width/shadow) plus the page-break and line-number overlays so the change shows immediately.
+    /// No-op (and no re-render) when already in that mode. Never mutates the model.
+    /// </summary>
+    public void SetViewMode(DocumentViewMode mode)
     {
-        PrintLayoutEnabled = !PrintLayoutEnabled;
+        if (ViewMode == mode)
+            return;
+        ViewMode = mode;
         ApplyPageChrome();
         SyncPageBreakAdorner();
         SyncLineNumberAdorner();
+    }
+
+    /// <summary>
+    /// Toggle the View ribbon's "Print Layout" button: flip between Print Layout and the plain continuous
+    /// (Draft) view, returning whether Print Layout is now on. Backward-compatible shim over
+    /// <see cref="SetViewMode"/> so existing callers keep working; the dedicated Web Layout / Draft commands
+    /// call <see cref="SetViewMode"/> directly.
+    /// </summary>
+    public bool TogglePrintLayout()
+    {
+        SetViewMode(PrintLayoutEnabled ? DocumentViewMode.Draft : DocumentViewMode.PrintLayout);
         return PrintLayoutEnabled;
     }
 
@@ -2213,8 +2255,10 @@ public sealed class DocumentView : RichTextBox
         }
         else
         {
-            // Plain / continuous view: the original flat editable text box — full width, fixed padding,
-            // no page shadow.
+            // Web Layout / Draft: a continuous, full-width editable surface with no page chrome — text
+            // wraps to the window width like a web page, no sheet, margins, shadow or page-break markers.
+            // (Both non-print modes share this flat presentation; they differ only in intent — Web Layout
+            // mirrors a web page, Draft is the simplified fast-editing view.)
             Width = double.NaN; // auto: stretch to the host
             HorizontalAlignment = HorizontalAlignment.Stretch;
             Padding = PlainPadding;

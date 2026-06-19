@@ -90,7 +90,11 @@ internal static class FreeWRibbonCommands
         Func<bool>? isPrintLayoutActive,
         Action? onToggleOutlineView,
         Func<bool>? isOutlineViewActive,
-        Action? onZoomDialog)
+        Action? onZoomDialog,
+        Action? onWebLayout = null,
+        Func<bool>? isWebLayoutActive = null,
+        Action? onDraftView = null,
+        Func<bool>? isDraftViewActive = null)
     {
         var registry = new RibbonCommandRegistry();
         var stateful = new List<(RibbonCommandId Id, IRibbonStatefulCommand Command)>();
@@ -539,6 +543,15 @@ internal static class FreeWRibbonCommands
         // whether the outline view is currently active.
         if (onToggleOutlineView is not null && isOutlineViewActive is not null)
             registry.Register("freew.outline-view", new ToggleActionCommand(onToggleOutlineView, isOutlineViewActive));
+
+        // View tab — switch to Web Layout (a continuous, full-width view with no page chrome, text wrapping
+        // to the window like a web page) and Draft (a simplified continuous view for fast editing). Both are
+        // mutually exclusive with Print Layout / Outline; the host owns the exclusivity and the stateful
+        // checked-state, so these are ToggleActionCommands reflecting which view mode is active.
+        if (onWebLayout is not null && isWebLayoutActive is not null)
+            registry.Register("freew.web-layout", new ToggleActionCommand(onWebLayout, isWebLayoutActive));
+        if (onDraftView is not null && isDraftViewActive is not null)
+            registry.Register("freew.draft-view", new ToggleActionCommand(onDraftView, isDraftViewActive));
 
         // View tab — open Word's Zoom dialog (presets / page fits / custom %). The host computes the
         // page-relative fit factors from the live viewport and applies the chosen factor to the editor.
