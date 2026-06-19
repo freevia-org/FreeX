@@ -14,6 +14,7 @@ preserve, render, and eventually edit:
 - footnotes and endnotes
 - multi-section headers and footers
 - images, drawings, charts, embedded documents, and attachments
+- text effects, WordArt, advanced typography, proofing anchors, bidi/RTL text, and page-layout variants
 - sizeable stress documents with mixed package parts
 
 The initial seed uses Apache POI's `test-data/document` and `test-data/integration` DOCX fixtures
@@ -43,7 +44,8 @@ pwsh tools/Fetch-FreeWFidelityCorpus.ps1 -Force
   `headers-footers`, `comments`, `tracked-changes`, `footnotes`, `endnotes`, `numbering`,
   `tables`, `images`, `drawings`, `charts`, `embedded-objects`, `attachments`, `styles`,
   `content-controls`, `smartart`, `custom-xml`, `vml`, `shapes`, `watermarks`, `altchunk`,
-  `mail-merge`, and `stress`.
+  `mail-merge`, `wordart`, `text-effects`, `advanced-typography`, `rtl`, `proofing`,
+  `document-background`, `page-layout`, and `stress`.
 
 ## Fidelity runs
 
