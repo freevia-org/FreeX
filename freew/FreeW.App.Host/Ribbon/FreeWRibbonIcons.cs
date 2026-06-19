@@ -106,6 +106,7 @@ internal static class FreeWRibbonIcons
             ["freew.table-header-row"] = RibbonCommandIconKind.Table,
             ["freew.table-banded-rows"] = RibbonCommandIconKind.Table,
             ["freew.table-repeat-header"] = RibbonCommandIconKind.Table,
+            ["freew.table-formula"] = RibbonCommandIconKind.Sum,
 
             // Insert: illustrations
             ["freew.picture"] = RibbonCommandIconKind.Picture,
@@ -155,6 +156,9 @@ internal static class FreeWRibbonIcons
             ["freew.index-insert"] = RibbonCommandIconKind.Index,
             ["freew.tof"] = RibbonCommandIconKind.TableOfContents,
             ["freew.tof-refresh"] = RibbonCommandIconKind.Refresh,
+            ["freew.mark-citation"] = RibbonCommandIconKind.Citation,
+            ["freew.table-of-authorities"] = RibbonCommandIconKind.Bibliography,
+            ["freew.table-of-authorities-refresh"] = RibbonCommandIconKind.Refresh,
 
             // Insert: controls
             ["freew.cc-text"] = RibbonCommandIconKind.TextBox,
@@ -194,6 +198,7 @@ internal static class FreeWRibbonIcons
 
             // Design
             ["freew.theme"] = RibbonCommandIconKind.Theme,
+            ["freew.page-color"] = RibbonCommandIconKind.Fill,
 
             // View
             ["freew.print-layout"] = RibbonCommandIconKind.PrintLayout,
@@ -212,6 +217,8 @@ internal static class FreeWRibbonIcons
             ["freew.spellcheck-toggle"] = RibbonCommandIconKind.Spelling,
             ["freew.add-to-dictionary"] = RibbonCommandIconKind.Book,
             ["freew.new-comment"] = RibbonCommandIconKind.Comment,
+            ["freew.reply-comment"] = RibbonCommandIconKind.Comment,
+            ["freew.resolve-comment"] = RibbonCommandIconKind.AcceptChange,
             ["freew.track-changes"] = RibbonCommandIconKind.History,
             ["freew.accept-all"] = RibbonCommandIconKind.AcceptChange,
             ["freew.reject-all"] = RibbonCommandIconKind.RejectChange,

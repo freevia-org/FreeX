@@ -1,4 +1,5 @@
 using System.Windows;
+using FreeX.App.Presentation.GridInteraction;
 using FreeX.Core.Model;
 
 namespace FreeX.App.UI;
@@ -20,7 +21,7 @@ public static class GridSelectionMovePlanner
         if (selectedRanges is { Count: > 0 })
             return false;
 
-        if (GridAutofillPlanner.IsOnHandle(viewport, range, pointer, rowHeaderWidth, columnHeaderHeight))
+        if (GridAutofillPlanner.IsOnHandle(viewport, range, new GridPoint(pointer.X, pointer.Y), rowHeaderWidth, columnHeaderHeight))
             return false;
 
         var layout = SelectionMarqueeLayoutPlanner.CalculateVisibleSelectionLayout(

@@ -1,11 +1,11 @@
 using FluentAssertions;
-using FreeX.App.Host;
+using FreeX.App.Services;
 
 namespace FreeX.App.Host.Tests;
 
 /// <summary>
 /// Unit tests for <see cref="SaveCompletionPlanner"/>.
-/// These cover the post-save decision matrix without requiring a live WPF window.
+/// These cover the post-save decision matrix without requiring a live window.
 /// </summary>
 public sealed class SaveCompletionPlannerTests
 {

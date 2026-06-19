@@ -409,6 +409,23 @@ public sealed class DocumentView : RichTextBox
         ApplyPageSettings(page => page.Watermark = string.IsNullOrWhiteSpace(text) ? null : text.Trim());
 
     /// <summary>
+    /// Set (or clear) the page background colour (Word's Design &gt; Page Color). A null/empty value
+    /// clears it back to the default white sheet. The hex is normalised to an "#RRGGBB" form. Re-renders
+    /// so the page sheet recolours immediately, and round-trips through the model's w:background on save.
+    /// Design-ribbon command.
+    /// </summary>
+    public void SetPageColor(string? colorHex) =>
+        ApplyPageSettings(page => page.BackgroundColorHex = NormalizePageColor(colorHex));
+
+    private static string? NormalizePageColor(string? colorHex)
+    {
+        if (string.IsNullOrWhiteSpace(colorHex))
+            return null;
+        var trimmed = colorHex.Trim();
+        return trimmed.StartsWith('#') ? trimmed : "#" + trimmed;
+    }
+
+    /// <summary>
     /// Apply a document theme (colour/font scheme) to the model's style catalog and re-render so the
     /// new heading colours/fonts and body face show immediately. This is a document-wide style change
     /// to the catalog (not the per-paragraph runs), so it is applied directly rather than through the
@@ -1349,12 +1366,23 @@ public sealed class DocumentView : RichTextBox
 
     /// <summary>
     /// Sort the paragraphs spanned by the current selection (or, with a bare caret, the paragraph the
-    /// caret sits in) by their text, in place. Tables interleaved in the selected span are left fixed at
-    /// their own positions — only the paragraph blocks are reordered among their own slots — so the
-    /// operation stays well-defined over a mixed body. Routes through the undo/redo bus (one reversible
-    /// <see cref="ReplaceBlocksCommand"/>) and re-renders. No-op without at least two sortable paragraphs.
+    /// caret sits in) by their text, ascending and case-insensitively. Convenience overload of
+    /// <see cref="SortSelectedParagraphs(SortKind, bool, bool, bool)"/>.
     /// </summary>
-    public void SortSelectedParagraphs(bool ascending, bool caseSensitive)
+    public void SortSelectedParagraphs(bool ascending, bool caseSensitive) =>
+        SortSelectedParagraphs(SortKind.Text, ascending, caseSensitive, hasHeaderRow: false);
+
+    /// <summary>
+    /// Sort the paragraphs spanned by the current selection (or, with a bare caret, the paragraph the
+    /// caret sits in) in place, interpreting each as <paramref name="kind"/>
+    /// (<see cref="SortKind.Text"/>/<see cref="SortKind.Number"/>/<see cref="SortKind.Date"/>). When
+    /// <paramref name="hasHeaderRow"/> is true the first selected paragraph stays put and only the rest
+    /// reorder. Tables interleaved in the selected span are left fixed at their own positions — only the
+    /// paragraph blocks are reordered among their own slots — so the operation stays well-defined over a
+    /// mixed body. Routes through the undo/redo bus (one reversible <see cref="ReplaceBlocksCommand"/>)
+    /// and re-renders. No-op without at least two sortable paragraphs.
+    /// </summary>
+    public void SortSelectedParagraphs(SortKind kind, bool ascending, bool caseSensitive, bool hasHeaderRow)
     {
         Focus();
         CommitToModel();
@@ -1379,7 +1407,7 @@ public sealed class DocumentView : RichTextBox
         if (paragraphs.Count < 2)
             return; // nothing to reorder
 
-        var sorted = ParagraphSort.Sort(paragraphs, ascending, caseSensitive);
+        var sorted = ParagraphSort.Sort(paragraphs, kind, ascending, caseSensitive, hasHeaderRow);
 
         // Rebuild the span: drop sorted paragraphs back into the paragraph slots, keeping any
         // interleaved tables fixed at their own positions.
@@ -1389,6 +1417,38 @@ public sealed class DocumentView : RichTextBox
             replacement.Add(_model.Blocks[i] is ModelParagraph ? sorted[nextSorted++] : _model.Blocks[i]);
 
         _commands.Execute(new ReplaceBlocksCommand(first, replacement.Count, replacement));
+    }
+
+    /// <summary>
+    /// Sort the rows of the table containing the caret by the caret's column (matching Word, which sorts
+    /// table rows by a chosen column when the selection is inside a table), interpreting each key as
+    /// <paramref name="kind"/>. When <paramref name="hasHeaderRow"/> is true the first row stays put and
+    /// only the body rows reorder. A fresh table with the same formatting, column grid, and row instances
+    /// (reordered) replaces the original through the undo/redo bus (one reversible
+    /// <see cref="ReplaceBlocksCommand"/>). No-op outside a table or with fewer than two sortable rows.
+    /// </summary>
+    public void SortCaretTableRows(SortKind kind, bool ascending, bool caseSensitive, bool hasHeaderRow)
+    {
+        Focus();
+        CommitToModel();
+
+        var (blockIndex, _, columnIndex) = CaretTableLocation();
+        if (blockIndex < 0 || blockIndex >= _model.Blocks.Count
+            || _model.Blocks[blockIndex] is not ModelTable table)
+            return;
+        if (table.Rows.Count < 2)
+            return;
+
+        var keyColumn = columnIndex < 0 ? 0 : columnIndex;
+        var sorted = ParagraphSort.SortRows(table.Rows, keyColumn, kind, ascending, caseSensitive, hasHeaderRow);
+
+        // Rebuild the table preserving its formatting and column grid; only the row order changes (the
+        // same TableRow instances are reused, so cell content/shading travels with each row).
+        var replacement = new ModelTable { Formatting = table.Formatting };
+        replacement.ColumnWidthsPt.AddRange(table.ColumnWidthsPt);
+        replacement.Rows.AddRange(sorted);
+
+        _commands.Execute(new ReplaceBlocksCommand(blockIndex, 1, new ModelBlock[] { replacement }));
     }
 
     /// <summary>
@@ -2010,9 +2070,14 @@ public sealed class DocumentView : RichTextBox
             BorderThickness = new Thickness(1);
         }
 
+        // The page sheet colour: the model's Design > Page Color (defaults to white). The watermark, when
+        // present, composes its faint diagonal text over that same base colour.
+        var pageColor = string.IsNullOrEmpty(_model.Page.BackgroundColorHex)
+            ? Colors.White
+            : ParseColor(_model.Page.BackgroundColorHex!, Colors.White);
         Background = string.IsNullOrEmpty(_model.Page.Watermark)
-            ? Brushes.White
-            : BuildWatermarkBrush(_model.Page.Watermark!);
+            ? new SolidColorBrush(pageColor)
+            : BuildWatermarkBrush(_model.Page.Watermark!, pageColor);
 
         if (PrintLayoutEnabled)
         {
@@ -2127,7 +2192,9 @@ public sealed class DocumentView : RichTextBox
     /// behind the document content. Used by the editor background; the print/preview path draws the
     /// same text per page so on-screen and printed output match.
     /// </summary>
-    internal static Brush BuildWatermarkBrush(string text)
+    internal static Brush BuildWatermarkBrush(string text) => BuildWatermarkBrush(text, Colors.White);
+
+    internal static Brush BuildWatermarkBrush(string text, Color pageColor)
     {
         var label = new TextBlock
         {
@@ -2151,9 +2218,9 @@ public sealed class DocumentView : RichTextBox
             AlignmentY = AlignmentY.Center
         };
 
-        // Compose the faint tiled watermark over an opaque white page so the editing surface stays
-        // white behind the text.
-        var canvas = new Grid { Background = Brushes.White };
+        // Compose the faint tiled watermark over the opaque page colour so the editing surface keeps the
+        // chosen page background behind the text.
+        var canvas = new Grid { Background = new SolidColorBrush(pageColor) };
         canvas.Children.Add(new System.Windows.Shapes.Rectangle { Fill = visual });
         return new VisualBrush(canvas) { Stretch = Stretch.Fill };
     }
@@ -2508,8 +2575,20 @@ public sealed class DocumentView : RichTextBox
             case WpfRun { Tag: PageBreakMarker }:
                 modelParagraph.Runs.Add(ModelRun.PageBreak());
                 break;
+            case WpfRun { Tag: CitationMarker citationMarker }:
+                // A hidden Mark Citation (TA) field round-trips as a textless citation-mark run.
+                modelParagraph.Runs.Add(ModelRun.CitationMark(citationMarker.Citation));
+                break;
             case WpfRun { Tag: EndnoteMarker endnoteMarker }:
                 modelParagraph.Runs.Add(ModelRun.EndnoteReference(endnoteMarker.EndnoteId));
+                break;
+            case WpfRun { Tag: TableFormulaMarker formulaMarker } formulaRun:
+                // A table-cell formula field round-trips its formula (expression + number format); the run's
+                // visible text is the last-computed result, kept as the cached fallback.
+                modelParagraph.Runs.Add(new ModelRun(formulaRun.Text, ReadRunFormatting(formulaRun))
+                {
+                    TableFormula = formulaMarker.Formula
+                });
                 break;
             case WpfRun { Tag: FieldMarker fieldMarker } fieldRun:
                 // A document field round-trips its kind; the run's visible text is the last-resolved
@@ -3007,6 +3086,9 @@ public sealed class DocumentView : RichTextBox
         if (run.EndnoteId is { } endnoteId)
             return BuildEndnoteReference(endnoteId, document);
 
+        if (run.TableFormula is not null)
+            return BuildTableFormulaRun(run, document);
+
         if (run.FieldKind != RunFieldKind.None)
         {
             // A field run can also carry a hyperlink (e.g. a PAGE/DATE field placed inside a link). Wrap
@@ -3023,6 +3105,12 @@ public sealed class DocumentView : RichTextBox
         // The textless comment anchor round-trips as an empty, tagged run carrying its reference flag.
         if (run is { IsCommentReference: true, CommentId: { } refId })
             return new WpfRun(string.Empty) { Tag = new RunMarkers(Comment: new CommentMarker(refId, IsReference: true)) };
+
+        // A hidden Mark Citation (TA) field renders as an empty, tagged run (no visible glyph, matching
+        // Word's hidden citation mark). The tag lets ReadInline recover the citation on commit so the mark
+        // survives an edit/commit cycle (mirroring the page-break/comment-anchor markers).
+        if (run.Citation is { } citationMark)
+            return new WpfRun(string.Empty) { Tag = new CitationMarker(citationMark) };
 
         // A manual page break renders as an empty, tagged run; the containing paragraph carries the actual
         // BreakPageBefore (set in BuildParagraph). The tag lets ReadInline recover it on commit so the break
@@ -3118,6 +3206,9 @@ public sealed class DocumentView : RichTextBox
     /// <summary>Subtle highlight used to mark a commented text range (a pale review yellow).</summary>
     private static readonly Color CommentHighlight = Color.FromRgb(0xFF, 0xF4, 0xCE);
 
+    /// <summary>Muted highlight used to mark a RESOLVED comment range (a pale neutral grey).</summary>
+    private static readonly Color ResolvedCommentHighlight = Color.FromRgb(0xEC, 0xEC, 0xEC);
+
     /// <summary>The fixed colour tracked changes are rendered in (a Word-like revision maroon/red).</summary>
     private static readonly Color RevisionColor = Color.FromRgb(0xC0, 0x00, 0x40);
 
@@ -3158,14 +3249,33 @@ public sealed class DocumentView : RichTextBox
     private static void ApplyCommentMarker(WpfRun wpf, int commentId, TextDocument document)
     {
         AddMarker(wpf, m => m with { Comment = new CommentMarker(commentId, IsReference: false) });
+        document.Comments.TryGetValue(commentId, out var comment);
+        // Resolved comments render with a muted grey highlight; open comments keep the review yellow.
         if (wpf.Background is null)
-            wpf.Background = new SolidColorBrush(CommentHighlight);
-        if (document.Comments.TryGetValue(commentId, out var comment))
+            wpf.Background = new SolidColorBrush(comment?.Resolved == true ? ResolvedCommentHighlight : CommentHighlight);
+        if (comment is not null)
+            wpf.ToolTip = BuildCommentTooltip(comment);
+    }
+
+    /// <summary>
+    /// Builds the hover tooltip for a comment range: the comment (author: text), each reply on its own
+    /// "(author: text)" line, and a trailing "[Resolved]" marker when the thread is resolved. Mirrors the
+    /// pane-less, tooltip-based comment surface FreeW already uses.
+    /// </summary>
+    private static string BuildCommentTooltip(Comment comment)
+    {
+        static string Line(Comment c)
         {
-            var author = comment.Author.Length > 0 ? comment.Author : "Comment";
-            var body = comment.PlainText;
-            wpf.ToolTip = body.Length > 0 ? $"{author}: {body}" : author;
+            var author = c.Author.Length > 0 ? c.Author : "Comment";
+            var body = c.PlainText;
+            return body.Length > 0 ? $"{author}: {body}" : author;
         }
+
+        var lines = new List<string> { Line(comment) };
+        lines.AddRange(comment.Replies.Select(r => "↳ " + Line(r)));
+        if (comment.Resolved)
+            lines.Add("[Resolved]");
+        return string.Join("\n", lines);
     }
 
     /// <summary>
@@ -3330,6 +3440,13 @@ public sealed class DocumentView : RichTextBox
     /// <summary>Carried on a footnote-marker WPF run's Tag so CommitToModel can round-trip its id.</summary>
     private sealed record FootnoteMarker(int FootnoteId);
 
+    /// <summary>
+    /// Carried on a hidden Mark Citation (TA) marker WPF run's Tag so CommitToModel can round-trip the
+    /// citation it records. Mirrors how <see cref="FootnoteMarker"/>/<see cref="PageBreakMarker"/> preserve
+    /// their marks across an edit/commit cycle.
+    /// </summary>
+    private sealed record CitationMarker(Citation Citation);
+
     /// <summary>Carried on a manual page-break WPF run's Tag so CommitToModel can round-trip it.</summary>
     private sealed record PageBreakMarker;
 
@@ -3410,10 +3527,68 @@ public sealed class DocumentView : RichTextBox
     private sealed record FieldMarker(RunFieldKind Kind, string Cached);
 
     /// <summary>
+    /// Carried on a table-formula WPF run's Tag so <see cref="CommitToModel"/> can round-trip the formula
+    /// (expression + number format). The WPF run's visible text is the cached computed result.
+    /// </summary>
+    private sealed record TableFormulaMarker(TableFormulaField Formula);
+
+    /// <summary>Builds a WPF run rendering a table-formula field's cached result, tagged for round-trip.</summary>
+    private static WpfRun BuildTableFormulaRun(ModelRun run, TextDocument document)
+    {
+        var fmt = run.Formatting ?? document.DefaultRun;
+        var wpf = new WpfRun(run.Text)
+        {
+            FontWeight = fmt.Bold ? FontWeights.Bold : FontWeights.Normal,
+            FontStyle = fmt.Italic ? FontStyles.Italic : FontStyles.Normal,
+            Tag = new TableFormulaMarker(run.TableFormula!)
+        };
+        if (fmt.FontFamily is { Length: > 0 } family)
+            wpf.FontFamily = new FontFamily(family);
+        if (fmt.FontSizePt is { } size)
+            wpf.FontSize = size * PxPerPoint;
+        if (TryParseColor(fmt.ColorHex, out var color))
+            wpf.Foreground = new SolidColorBrush(color);
+        wpf.ToolTip = "Formula: " + run.TableFormula!.Expression;
+        return wpf;
+    }
+
+    /// <summary>
     /// Inserts a document field run of the given <paramref name="kind"/> at the caret. The field is built
     /// with an initially-resolved cached value (DATE/TIME/AUTHOR/FILENAME) so it carries a sensible
     /// fallback even before the next render; it then round-trips through the model and docx as a field.
     /// </summary>
+    /// <summary>
+    /// Word's Table &gt; Data &gt; Formula. Inserts a computed table-cell formula field (e.g.
+    /// <c>=SUM(ABOVE)</c> with an optional number format) at the caret. The caret must be inside a table
+    /// cell; outside a table this is a no-op. The result is computed immediately from the table's cell
+    /// values and carried as the field's cached text, so it shows at once and round-trips through docx.
+    /// </summary>
+    public void InsertTableFormula(TableFormulaField formula)
+    {
+        Focus();
+        CommitToModel();
+        var (blockIndex, rowIndex, columnIndex) = CaretTableLocation();
+        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
+            return;
+
+        var result = TableFormulaEvaluator.Evaluate(table, rowIndex, columnIndex, formula);
+        var run = ModelRun.TableFormulaFieldRun(formula, result);
+        InsertInlineAtCaret(BuildTableFormulaRun(run, _model));
+    }
+
+    /// <summary>
+    /// The model table containing the caret, or null when the caret is not inside a table. Lets the app
+    /// layer (e.g. the Formula dialog) seed a default formula based on whether numbers sit above or to the
+    /// left of the caret cell.
+    /// </summary>
+    public (ModelTable Table, int RowIndex, int ColumnIndex)? CaretTableCell()
+    {
+        var (blockIndex, rowIndex, columnIndex) = CaretTableLocation();
+        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
+            return null;
+        return (table, rowIndex, columnIndex);
+    }
+
     public void InsertField(RunFieldKind kind)
     {
         Focus();
@@ -4501,6 +4676,88 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// The id of the top-level comment whose range covers the caret/selection, or null when the caret is
+    /// not inside a comment. Resolves from the tagged WPF run at the selection (the common case); falling
+    /// back to scanning the committed caret paragraph's runs for any CommentId so a caret placed anywhere
+    /// in the range still finds its comment. A reply's id is mapped up to its owning top-level comment.
+    /// </summary>
+    private int? CommentIdAtCaret()
+    {
+        // Fast path: the run under the caret/selection start carries a CommentMarker tag.
+        if ((Selection.Start.Parent as WpfRun ?? CaretPosition?.Parent as WpfRun) is { Tag: RunMarkers { Comment: { } marker } })
+            return TopLevelCommentId(marker.CommentId);
+
+        // Fallback: commit and look for a commented run in the caret's model paragraph.
+        var caretParagraph = Selection.Start.Paragraph ?? CaretPosition?.Paragraph;
+        if (caretParagraph is null)
+            return null;
+        var indexOf = new Dictionary<WpfParagraph, int>();
+        var modelIndex = 0;
+        foreach (var block in Document.Blocks)
+            NumberLeafBlocks(block, indexOf, ref modelIndex);
+        if (!indexOf.TryGetValue(caretParagraph, out var paragraphIndex))
+            return null;
+
+        CommitToModel();
+        paragraphIndex = ModelIndexFromVisible(paragraphIndex);
+        if (paragraphIndex < 0 || paragraphIndex >= _model.Blocks.Count || _model.Blocks[paragraphIndex] is not ModelParagraph modelParagraph)
+            return null;
+        foreach (var run in modelParagraph.Runs)
+            if (run.CommentId is { } cid)
+                return TopLevelCommentId(cid);
+        return null;
+    }
+
+    /// <summary>
+    /// Maps a comment id (which may be a reply's id) to its owning top-level comment id — the one keyed in
+    /// <see cref="TextDocument.Comments"/> and referenced by body ranges. Returns the id unchanged when it
+    /// is already a top-level comment (or unknown).
+    /// </summary>
+    private int TopLevelCommentId(int commentId)
+    {
+        if (_model.Comments.ContainsKey(commentId))
+            return commentId;
+        foreach (var top in _model.Comments.Values)
+            if (top.Replies.Any(r => r.Id == commentId))
+                return top.Id;
+        return commentId;
+    }
+
+    /// <summary>
+    /// Adds <paramref name="text"/> as a reply (by <paramref name="author"/>/<paramref name="initials"/>) to
+    /// the comment thread covering the caret/selection, then re-renders so the thread tooltip updates. No-op
+    /// when the caret is not inside a comment or the reply text is blank. Returns true when a reply was added.
+    /// </summary>
+    public bool ReplyToCommentAtCaret(string text, string author, string initials)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+        Focus();
+        if (CommentIdAtCaret() is not { } id || !_model.Comments.TryGetValue(id, out var comment))
+            return false;
+
+        var reply = comment.AddReply(_model.NextCommentId(), text.Trim(), author, initials);
+        reply.DateXml = DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture);
+        Render();
+        return true;
+    }
+
+    /// <summary>
+    /// Toggles the resolved (done) state of the comment thread covering the caret/selection and re-renders
+    /// (resolved ranges show muted). No-op when the caret is not inside a comment. Returns the new resolved
+    /// state, or null when there was no comment to toggle.
+    /// </summary>
+    public bool? ToggleResolveCommentAtCaret()
+    {
+        Focus();
+        if (CommentIdAtCaret() is not { } id || !_model.Comments.TryGetValue(id, out var comment))
+            return null;
+        comment.Resolved = !comment.Resolved;
+        Render();
+        return comment.Resolved;
+    }
+
+    /// <summary>
     /// The active bibliographic style (APA / MLA / Chicago) used when inserting in-text citations and the
     /// bibliography. Selected via the References group's "Citation Style" combo box; defaults to APA, which
     /// is the original author–year behaviour.
@@ -4606,6 +4863,104 @@ public sealed class DocumentView : RichTextBox
             index = _model.Blocks.Count;
 
         var entries = DocumentIndex.Build(_model);
+        foreach (var paragraph in entries)
+            _commands.Execute(new InsertParagraphCommand(index++, paragraph));
+    }
+
+    /// <summary>
+    /// Marks the selected text (or a supplied citation) as a legal citation for a Table of Authorities
+    /// (Word's References &gt; Mark Citation): drops a hidden <c>TA</c> field mark at the caret recording the
+    /// long/short forms and category. The mark is textless (no visible glyph) and round-trips through docx;
+    /// <see cref="InsertTableOfAuthorities"/> builds the visible table from these marks, mirroring how
+    /// <see cref="MarkIndexEntry"/>/<see cref="InsertIndex"/> relate. A citation with a blank long form is
+    /// ignored. The mark is inserted directly into the live flow (like a footnote marker) so it survives the
+    /// next commit.
+    /// </summary>
+    public void MarkCitation(Citation citation)
+    {
+        ArgumentNullException.ThrowIfNull(citation);
+        if (citation.LongCitation.Length == 0)
+            return;
+
+        CommitToModel();
+
+        var marker = BuildRun(ModelRun.CitationMark(citation), new ModelParagraph(), _model);
+        var caret = CaretPosition.GetInsertionPosition(LogicalDirection.Forward) ?? CaretPosition;
+        var paragraph = caret.Paragraph ?? Document.Blocks.OfType<WpfParagraph>().LastOrDefault();
+        if (paragraph is null)
+        {
+            paragraph = new WpfParagraph();
+            Document.Blocks.Add(paragraph);
+        }
+        paragraph.Inlines.Add(marker);
+
+        CommitToModel();
+        Render();
+    }
+
+    /// <summary>
+    /// Insert a Table of Authorities generated from the document's marked citations (the hidden <c>TA</c>
+    /// field marks, see <see cref="MarkCitation"/>) at the caret's block (else at the document end), routed
+    /// one-by-one through the undo/redo bus so the insert is reversible — mirroring <see cref="InsertIndex"/>.
+    /// The paragraphs carry dedicated styles (registered via <see cref="TableOfAuthorities.EnsureStyles"/>)
+    /// which both give them distinct formatting and mark the region for <see cref="RefreshTableOfAuthorities"/>.
+    /// </summary>
+    public void InsertTableOfAuthorities()
+    {
+        // Capture the user's in-progress edits before mutating the model out from under the view.
+        CommitToModel();
+        TableOfAuthorities.EnsureStyles(_model);
+
+        // Insert at the caret's block (the table reads as front-/back-matter); fall back to the document end.
+        var index = CaretBlockIndex();
+        if (index < 0 || index > _model.Blocks.Count)
+            index = _model.Blocks.Count;
+
+        InsertTableOfAuthoritiesAt(index);
+    }
+
+    /// <summary>
+    /// Rebuild the Table of Authorities: remove the previously inserted region (paragraphs carrying a
+    /// Table of Authorities style, see <see cref="TableOfAuthorities.IsTableOfAuthoritiesParagraph"/>) and
+    /// re-insert a freshly generated one at the same position. With no existing region this behaves like
+    /// <see cref="InsertTableOfAuthorities"/>, inserting at the document end. Every removal/insert is
+    /// reversible through the undo/redo bus. Mirrors <see cref="RefreshTableOfFigures"/>.
+    /// </summary>
+    public void RefreshTableOfAuthorities()
+    {
+        CommitToModel();
+        TableOfAuthorities.EnsureStyles(_model);
+
+        var first = -1;
+        for (var i = 0; i < _model.Blocks.Count; i++)
+        {
+            if (TableOfAuthorities.IsTableOfAuthoritiesParagraph(_model.Blocks[i]))
+            {
+                first = i;
+                break;
+            }
+        }
+
+        var insertAt = first >= 0 ? first : _model.Blocks.Count;
+
+        var indices = new List<int>();
+        for (var i = 0; i < _model.Blocks.Count; i++)
+        {
+            if (TableOfAuthorities.IsTableOfAuthoritiesParagraph(_model.Blocks[i]))
+                indices.Add(i);
+        }
+        for (var i = indices.Count - 1; i >= 0; i--)
+            _commands.Execute(new DeleteParagraphCommand(indices[i]));
+
+        InsertTableOfAuthoritiesAt(insertAt);
+    }
+
+    // Insert the freshly built Table of Authorities paragraphs starting at block index `at`, one reversible
+    // InsertParagraphCommand each (kept in order). The bus's Changed event redraws.
+    private void InsertTableOfAuthoritiesAt(int at)
+    {
+        var entries = TableOfAuthorities.Build(_model);
+        var index = Math.Clamp(at, 0, _model.Blocks.Count);
         foreach (var paragraph in entries)
             _commands.Execute(new InsertParagraphCommand(index++, paragraph));
     }
