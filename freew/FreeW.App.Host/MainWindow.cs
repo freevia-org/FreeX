@@ -95,16 +95,23 @@ public sealed class MainWindow : Window
     private Effect? _editorEffectBeforeReadMode;
 
     // FreeW's persisted settings (shared JsonSettingsStore). Defaults are used when none are supplied,
-    // so the window stays constructible in isolation; Program.Main passes the loaded options.
+    // so the window stays constructible in isolation; Program.Main passes the loaded options + the store
+    // that persists edits made from the backstage Options dialog. The options instance is mutated in place
+    // so settings read live by FileCommands (e.g. the recent-files cap) take effect without a restart.
     private readonly FreeWOptions _options;
+    private readonly FreeWOptionsStore _optionsStore;
 
     public MainWindow() : this(new FreeWOptions())
     {
     }
 
-    public MainWindow(FreeWOptions options)
+    public MainWindow(FreeWOptions options, FreeWOptionsStore? optionsStore = null)
     {
         _options = options ?? new FreeWOptions();
+        // No store supplied (e.g. constructed in isolation / tests) → a no-op in-memory store so editing
+        // still round-trips through the dialog and applies live, just without touching the real profile.
+        _optionsStore = optionsStore ?? FreeWOptionsStore.ForPath(
+            System.IO.Path.Combine(System.IO.Path.GetTempPath(), "FreeW", "settings.transient.json"));
         Title = "FreeW";
         Width = 1280;
         Height = 760;
@@ -261,7 +268,10 @@ public sealed class MainWindow : Window
             Save: () => _file.Save(),
             SaveAs: () => _file.SaveAs(),
             Print: Print,
+            ExportPdf: ExportToPdf,
             EditProperties: OpenProperties,
+            EditOptions: OpenOptions,
+            CurrentOptions: () => _options,
             OnClosed: () => SetEditorAdornersVisible(true),
             DataFolder: ResolveDataFolderLabel));
 
@@ -798,6 +808,53 @@ public sealed class MainWindow : Window
         preview.Show();
     }
 
+    /// <summary>
+    /// File &gt; Export: writes the document to a real PDF. Reuses the print pipeline
+    /// (<see cref="PrintLayout.BuildPaginator"/>) so the exported pages match Print / Print Preview
+    /// exactly (page geometry, header/footer, watermark, border, footnotes), renders them to PDF via
+    /// <see cref="PdfExport"/>, and flushes atomically through the shared
+    /// <see cref="Free.Shared.Shell.ExportAtomicWriter"/>.
+    /// </summary>
+    private void ExportToPdf()
+    {
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = "Export to PDF",
+            Filter = "PDF document (*.pdf)|*.pdf",
+            DefaultExt = ".pdf",
+            AddExtension = true,
+            OverwritePrompt = true,
+            FileName = _file.DisplayName + ".pdf"
+        };
+        if (dialog.ShowDialog(this) != true)
+            return;
+
+        var path = dialog.FileName;
+        try
+        {
+            // Render on the UI thread (walks the WPF visual tree), then write atomically.
+            var paginator = PrintLayout.BuildPaginator(_editor);
+            var bytes = PdfExport.RenderToBytes(paginator, _file.DisplayName);
+            Free.Shared.Shell.ExportAtomicWriter.WriteAllBytes(path, bytes);
+
+            MessageBox.Show(
+                this,
+                $"Exported to PDF:\n{path}",
+                "Export to PDF",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                this,
+                "The document could not be exported to PDF.\n\n" + ex.Message,
+                "Export to PDF",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
     private void OpenFindReplace()
     {
         if (_findDialog is null)
@@ -814,6 +871,25 @@ public sealed class MainWindow : Window
         var dialog = new PropertiesDialog(this, _editor.Model.Properties);
         if (dialog.ShowDialog() == true)
             _file.MarkDirty();
+    }
+
+    // Opens the modal FreeW Options editor. On OK it applies the edited settings live (by mutating the
+    // shared _options instance FileCommands reads) and persists them through the shared JsonSettingsStore
+    // so they survive a restart. Save is best-effort — a failure surfaces a message but never throws.
+    private void OpenOptions()
+    {
+        var dialog = new OptionsDialog(this, _options);
+        if (dialog.ShowDialog() != true)
+            return;
+
+        var edited = dialog.Result;
+        _options.RecentFilesCap = edited.RecentFilesCap;
+        _options.DefaultSaveFormat = edited.DefaultSaveFormat;
+        _options.UiLanguage = edited.UiLanguage;
+        _options.Normalize();
+
+        if (!_optionsStore.Save(_options))
+            DialogMessageHelper.ShowError(this, _optionsStore.LastError, "FreeW Options");
     }
 
     // Shows that AppProduct = "FreeW" routes the shared storage helpers to FreeW's own folder.

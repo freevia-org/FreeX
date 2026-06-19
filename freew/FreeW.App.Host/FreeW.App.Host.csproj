@@ -37,6 +37,9 @@
 
   <ItemGroup>
     <PackageReference Include="SharpVectors.Wpf" />
+    <!-- Real PDF export (PdfExport.cs). Same centrally-managed PDFsharp package FreeX uses for its
+         PDF exporter — reused rather than introducing a new PDF dependency. -->
+    <PackageReference Include="PDFsharp-WPF" />
   </ItemGroup>
 
   <ItemGroup>

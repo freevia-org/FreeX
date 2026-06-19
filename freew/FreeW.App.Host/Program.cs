@@ -35,7 +35,7 @@ public static class Program
         diagnostics.RegisterCrashHandlers();
         diagnostics.RecordEvent("app_start");
 
-        app.Run(new MainWindow(options));
+        app.Run(new MainWindow(options, optionsStore));
 
         diagnostics.RecordEvent("app_exit");
     }
