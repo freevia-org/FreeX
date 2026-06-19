@@ -7,7 +7,9 @@ namespace FreeW.Core.IO.Tests;
 
 /// <summary>
 /// Flat OPC (.xml) round-trips through the same engine as .docx via an in-memory transcode. Word 2003 WordML
-/// shares the extension but is a different format and is rejected with a clear message.
+/// shares the extension but is a different format; <see cref="WordXmlFileAdapter.Load"/> sniffs the root and
+/// dispatches it to the read-only <see cref="Wordml2003Reader"/> (see <see cref="Wordml2003ReaderTests"/>),
+/// while an unrecognised root still fails with a clear message.
 /// </summary>
 public class WordXmlFileAdapterTests
 {
@@ -48,13 +50,27 @@ public class WordXmlFileAdapterTests
     }
 
     [Fact]
-    public void Load_RejectsWord2003Wordml_WithClearMessage()
+    public void Load_DispatchesWord2003Wordml_ToReadOnlyReader()
     {
         const string wordml =
-            "<?xml version=\"1.0\"?><w:wordDocument xmlns:w=\"http://schemas.microsoft.com/office/word/2003/wordml\" />";
+            "<?xml version=\"1.0\"?>" +
+            "<w:wordDocument xmlns:w=\"http://schemas.microsoft.com/office/word/2003/wordml\">" +
+            "<w:body><w:p><w:r><w:t>2003 body</w:t></w:r></w:p></w:body>" +
+            "</w:wordDocument>";
         using var ms = new MemoryStream(Encoding.UTF8.GetBytes(wordml));
 
+        var document = new WordXmlFileAdapter().Load(ms);
+
+        document.Blocks.OfType<Paragraph>().Select(p => p.PlainText).Should().Contain("2003 body");
+    }
+
+    [Fact]
+    public void Load_RejectsUnrecognisedRoot_WithClearMessage()
+    {
+        const string notWord = "<?xml version=\"1.0\"?><workbook xmlns=\"urn:schemas-microsoft-com:office:spreadsheet\" />";
+        using var ms = new MemoryStream(Encoding.UTF8.GetBytes(notWord));
+
         var act = () => new WordXmlFileAdapter().Load(ms);
-        act.Should().Throw<InvalidDataException>().WithMessage("*Word 2003*");
+        act.Should().Throw<InvalidDataException>().WithMessage("*neither <pkg:package>*");
     }
 }

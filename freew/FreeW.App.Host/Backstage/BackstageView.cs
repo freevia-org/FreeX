@@ -147,6 +147,14 @@ internal sealed class BackstageView : UserControl
         panel.Children.Add(Kit.LinkButton("Export to PDF…", () => { Hide(); _actions.ExportPdf(); }));
         panel.Children.Add(new TextBlock
         {
+            Text = "Or export to XPS, which preserves selectable, searchable vector text.",
+            Foreground = Kit.Muted,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 18, 0, 8)
+        });
+        panel.Children.Add(Kit.LinkButton("Export to XPS…", () => { Hide(); _actions.ExportXps(); }));
+        panel.Children.Add(new TextBlock
+        {
             Text = "Or use Save As to write an editable Word document (.docx).",
             Foreground = Kit.Muted,
             TextWrapping = TextWrapping.Wrap,
@@ -265,6 +273,7 @@ internal sealed record BackstageActions(
     Action SaveAs,
     Action Print,
     Action ExportPdf,
+    Action ExportXps,
     Action EditProperties,
     Action EditOptions,
     Func<FreeWOptions> CurrentOptions,
