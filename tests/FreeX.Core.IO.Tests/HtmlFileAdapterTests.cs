@@ -25,6 +25,36 @@ public sealed class HtmlFileAdapterTests
         return Encoding.UTF8.GetString(stream.ToArray());
     }
 
+    /// <summary>Save <paramref name="wb"/> to HTML and re-load it, returning the reloaded workbook.</summary>
+    private static Workbook RoundTrip(Workbook wb)
+    {
+        var adapter = new HtmlFileAdapter();
+        using var stream = new MemoryStream();
+        adapter.Save(wb, stream);
+        stream.Position = 0;
+        return adapter.Load(stream);
+    }
+
+    /// <summary>The effective style of (row,col), consulting both value cells and style-only entries.</summary>
+    private static CellStyle StyleAt(Workbook wb, uint row, uint col)
+    {
+        var sheet = wb.Sheets.Single();
+        var cell = sheet.GetCell(row, col);
+        var id = cell?.StyleId ?? sheet.GetStyleOnly(row, col);
+        return id is { } sid ? wb.GetStyle(sid) : CellStyle.Default;
+    }
+
+    /// <summary>Build a single-sheet workbook with one styled, value-bearing cell at A1.</summary>
+    private static Workbook StyledCell(CellStyle style, ScalarValue value)
+    {
+        var wb = new Workbook("Untitled");
+        var sheet = wb.AddSheet("Sheet1");
+        var cell = Cell.FromValue(value);
+        cell.StyleId = wb.RegisterStyle(style);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), cell);
+        return wb;
+    }
+
     [Fact]
     public void Load_ParsesTableRowsAndCells()
     {
@@ -173,5 +203,128 @@ public sealed class HtmlFileAdapterTests
     {
         var wb = Load("<html><body><p>no tables here</p></body></html>");
         wb.Sheets.Single().CellCount.Should().Be(0);
+    }
+
+    // ---- inline-CSS style round-trip (xlsx->html->xlsx parity, asserted Lossy by the harness) ----------
+
+    [Fact]
+    public void RoundTrip_PreservesFontWeightStyleUnderlineSizeAndColor()
+    {
+        var style = new CellStyle
+        {
+            Bold = true,
+            Italic = true,
+            Underline = true,
+            FontName = "Arial",
+            FontSize = 14,
+            FontColor = new CellColor(0x12, 0x34, 0x56),
+        };
+        var got = RoundTrip(StyledCell(style, new TextValue("Hi")));
+        var s = StyleAt(got, 1, 1);
+
+        s.Bold.Should().BeTrue();
+        s.Italic.Should().BeTrue();
+        s.Underline.Should().BeTrue();
+        s.FontName.Should().Be("Arial");
+        s.FontSize.Should().Be(14);
+        s.FontColor.Should().Be(new CellColor(0x12, 0x34, 0x56));
+    }
+
+    [Fact]
+    public void RoundTrip_PreservesSolidFillColor()
+    {
+        var style = new CellStyle
+        {
+            FillColor = new CellColor(0xFF, 0xC0, 0x00),
+            FillPatternStyle = CellFillPatternStyle.Solid,
+        };
+        var got = RoundTrip(StyledCell(style, new TextValue("Filled")));
+        var s = StyleAt(got, 1, 1);
+
+        s.FillColor.Should().Be(new CellColor(0xFF, 0xC0, 0x00));
+        s.FillPatternStyle.Should().Be(CellFillPatternStyle.Solid);
+    }
+
+    [Fact]
+    public void RoundTrip_PreservesHorizontalAlignment()
+    {
+        foreach (var align in new[]
+        {
+            HorizontalAlignment.Left, HorizontalAlignment.Center,
+            HorizontalAlignment.Right, HorizontalAlignment.Justify,
+        })
+        {
+            var got = RoundTrip(StyledCell(new CellStyle { HorizontalAlignment = align }, new TextValue("x")));
+            StyleAt(got, 1, 1).HorizontalAlignment.Should().Be(align, "alignment {0} should round-trip", align);
+        }
+    }
+
+    [Fact]
+    public void RoundTrip_PreservesPerEdgeBorderStyleAndColor()
+    {
+        var red = new CellColor(0xCC, 0x00, 0x00);
+        var blue = new CellColor(0x00, 0x00, 0xCC);
+        var style = new CellStyle
+        {
+            BorderTop = new CellBorder(BorderStyle.Thin, red),
+            BorderRight = new CellBorder(BorderStyle.Medium, blue),
+            BorderBottom = new CellBorder(BorderStyle.Dashed, red),
+            BorderLeft = new CellBorder(BorderStyle.Double, blue),
+        };
+        var got = RoundTrip(StyledCell(style, new TextValue("Bordered")));
+        var s = StyleAt(got, 1, 1);
+
+        s.BorderTop.Should().Be(new CellBorder(BorderStyle.Thin, red));
+        s.BorderRight.Should().Be(new CellBorder(BorderStyle.Medium, blue));
+        s.BorderBottom.Should().Be(new CellBorder(BorderStyle.Dashed, red));
+        s.BorderLeft.Should().Be(new CellBorder(BorderStyle.Double, blue));
+    }
+
+    [Theory]
+    [InlineData(BorderStyle.Thin)]
+    [InlineData(BorderStyle.Medium)]
+    [InlineData(BorderStyle.Thick)]
+    [InlineData(BorderStyle.Dashed)]
+    [InlineData(BorderStyle.Dotted)]
+    [InlineData(BorderStyle.Double)]
+    public void RoundTrip_EveryModeledBorderStyleSurvives(BorderStyle bstyle)
+    {
+        var color = new CellColor(0x33, 0x66, 0x99);
+        var style = new CellStyle { BorderBottom = new CellBorder(bstyle, color) };
+        var got = RoundTrip(StyledCell(style, new TextValue("b")));
+
+        StyleAt(got, 1, 1).BorderBottom.Should().Be(new CellBorder(bstyle, color));
+    }
+
+    [Fact]
+    public void RoundTrip_PreservesStylingOnFormattedButEmptyCell()
+    {
+        // A formatted-but-empty (style-only) cell must still carry its CSS through the round-trip, so a
+        // styled-but-valueless cell does not silently lose its fill/border.
+        var wb = new Workbook("Untitled");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("anchor"));
+        var styleId = wb.RegisterStyle(new CellStyle
+        {
+            FillColor = new CellColor(0x00, 0x80, 0x00),
+            FillPatternStyle = CellFillPatternStyle.Solid,
+            Bold = true,
+        });
+        sheet.SetStyleOnly(2, 1, styleId); // empty, styled cell directly below the anchor
+
+        var got = RoundTrip(wb);
+        var s = StyleAt(got, 2, 1);
+
+        s.Bold.Should().BeTrue();
+        s.FillColor.Should().Be(new CellColor(0x00, 0x80, 0x00));
+    }
+
+    [Fact]
+    public void RoundTrip_DefaultStyledCellEmitsNoCssAndStaysDefault()
+    {
+        // A cell with the default style emits no inline CSS, so it must reload with the default style
+        // (no spurious style registration from an empty style attribute).
+        var got = RoundTrip(StyledCell(new CellStyle(), new TextValue("plain")));
+        StyleAt(got, 1, 1).Should().Be(CellStyle.Default);
     }
 }

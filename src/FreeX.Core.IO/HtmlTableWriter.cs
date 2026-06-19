@@ -37,7 +37,18 @@ internal static class HtmlTableWriter
         var used = sheet.GetUsedRange();
         writer.WriteLine("<table border=\"1\" style=\"border-collapse:collapse\">");
 
-        if (used is { } range)
+        // The emitted grid extent is the value used range EXTENDED to cover formatted-but-empty (style-only)
+        // cells: GetUsedRange() ignores them, but their CSS must still round-trip. A sheet with only
+        // style-only cells (no values) still emits a grid so that styling is not silently dropped.
+        uint endRow = used?.End.Row ?? 0;
+        uint endCol = used?.End.Col ?? 0;
+        foreach (var ((soRow, soCol), _) in sheet.GetStyleOnlyEntries())
+        {
+            if (soRow > endRow) endRow = soRow;
+            if (soCol > endCol) endCol = soCol;
+        }
+
+        if (endRow >= 1 && endCol >= 1)
         {
             // Map anchor → merge region, and mark covered non-anchor cells to skip.
             var anchors = new Dictionary<(uint, uint), GridRange>();
@@ -55,10 +66,10 @@ internal static class HtmlTableWriter
             // Emit from A1 (row 1, col 1) so the table's grid coordinates are ABSOLUTE: a sheet whose used
             // range starts below/right of A1 keeps that offset on re-import (leading empty rows/cells fill
             // the gap). Without this the first <tr> would reload at row 1 and shift every value.
-            for (uint r = 1; r <= range.End.Row; r++)
+            for (uint r = 1; r <= endRow; r++)
             {
                 writer.Write("<tr>");
-                for (uint c = 1; c <= range.End.Col; c++)
+                for (uint c = 1; c <= endCol; c++)
                 {
                     if (covered.Contains((r, c)))
                         continue;
