@@ -1495,4 +1495,13 @@
   <data name="TableLoc_QaSparklinesNeedTwoColumns" xml:space="preserve"><value>Quick Analysis sparklines need at least two columns of data.</value></data>
   <data name="TableLoc_QaInsertSparklineFailed" xml:space="preserve"><value>Insert Sparkline failed.</value></data>
   <data name="TableLoc_QaInsertedSparklines" xml:space="preserve"><value>Inserted {0} sparkline(s) beside {1}</value></data>
+  <data name="ShellLoc_CopySheetFailed" xml:space="preserve"><value>Copy Sheet failed.</value></data>
+  <data name="ShellLoc_MoveSheetFailed" xml:space="preserve"><value>Move Sheet failed.</value></data>
+  <data name="ShellLoc_FilterFailed" xml:space="preserve"><value>Filter failed.</value></data>
+  <data name="ShellLoc_ClearedFilter" xml:space="preserve"><value>Cleared filter</value></data>
+  <data name="ShellLoc_AppliedFilter" xml:space="preserve"><value>Applied filter</value></data>
+  <data name="ShellLoc_SortFailed" xml:space="preserve"><value>Sort failed.</value></data>
+  <data name="ShellLoc_SortedAToZ" xml:space="preserve"><value>Sorted A to Z</value></data>
+  <data name="ShellLoc_SortedZToA" xml:space="preserve"><value>Sorted Z to A</value></data>
+  <data name="ShellLoc_FilterUpdateFailed" xml:space="preserve"><value>Filter update failed.</value></data>
 </root>

@@ -1477,4 +1477,13 @@
   <data name="TableLoc_QaSparklinesNeedTwoColumns" xml:space="preserve"><value>Les graphiques sparkline de l'Analyse rapide nécessitent au moins deux colonnes de données.</value></data>
   <data name="TableLoc_QaInsertSparklineFailed" xml:space="preserve"><value>Échec de l'insertion du graphique sparkline.</value></data>
   <data name="TableLoc_QaInsertedSparklines" xml:space="preserve"><value>{0} graphique(s) sparkline inséré(s) à côté de {1}</value></data>
+  <data name="ShellLoc_CopySheetFailed" xml:space="preserve"><value>Échec de la copie de la feuille.</value></data>
+  <data name="ShellLoc_MoveSheetFailed" xml:space="preserve"><value>Échec du déplacement de la feuille.</value></data>
+  <data name="ShellLoc_FilterFailed" xml:space="preserve"><value>Échec du filtre.</value></data>
+  <data name="ShellLoc_ClearedFilter" xml:space="preserve"><value>Filtre effacé</value></data>
+  <data name="ShellLoc_AppliedFilter" xml:space="preserve"><value>Filtre appliqué</value></data>
+  <data name="ShellLoc_SortFailed" xml:space="preserve"><value>Échec du tri.</value></data>
+  <data name="ShellLoc_SortedAToZ" xml:space="preserve"><value>Trié de A à Z</value></data>
+  <data name="ShellLoc_SortedZToA" xml:space="preserve"><value>Trié de Z à A</value></data>
+  <data name="ShellLoc_FilterUpdateFailed" xml:space="preserve"><value>Échec de la mise à jour du filtre.</value></data>
 </root>
