@@ -492,6 +492,11 @@
   <data name="Drawing_PictureSentBackward" xml:space="preserve"><value>Sent picture backward.</value></data>
   <data name="Drawing_BringForwardLabel" xml:space="preserve"><value>Bring Forward</value></data>
   <data name="Drawing_SendBackwardLabel" xml:space="preserve"><value>Send Backward</value></data>
+  <!-- In-grid drawing-object interaction (DrawingInteract_*) -->
+  <data name="DrawingInteract_ChartSizeAndProperties" xml:space="preserve"><value>Chart Size and Properties</value></data>
+  <data name="DrawingInteract_Moved" xml:space="preserve"><value>Moved drawing object.</value></data>
+  <data name="DrawingInteract_Resized" xml:space="preserve"><value>Resized drawing object.</value></data>
+  <data name="DrawingInteract_PickListNoList" xml:space="preserve"><value>The active cell has no drop-down list to pick from.</value></data>
   <!-- Selection Pane dialog -->
   <data name="SelectionPane_Title" xml:space="preserve"><value>Selection Pane</value></data>
   <data name="SelectionPane_Hint" xml:space="preserve"><value>Select an object to rename it, toggle its visibility, or change its z-order.</value></data>
