@@ -44,6 +44,13 @@ public sealed class FreeWOptions
     /// </summary>
     public AutoFormatOptions AutoFormat { get; set; } = AutoFormatOptions.Default;
 
+    /// <summary>
+    /// The Word "AutoCorrect" tab settings — the two-initial-capitals fix, day-name capitalization, and the
+    /// user-editable replace-text table. A JSON-round-trippable, never-null sub-object; a missing value
+    /// degrades to <see cref="AutoCorrectOptions.Default"/> (every rule on, default replace table).
+    /// </summary>
+    public AutoCorrectOptions AutoCorrect { get; set; } = AutoCorrectOptions.Default;
+
     /// <summary>Normalizes loaded values to their valid ranges (called after a load).</summary>
     public void Normalize()
     {
@@ -52,5 +59,7 @@ public sealed class FreeWOptions
             DefaultSaveFormat = DocxDefaultFormat;
         UiLanguage = UiLanguage?.Trim() ?? SystemDefaultLanguage;
         AutoFormat ??= AutoFormatOptions.Default;
+        AutoCorrect ??= AutoCorrectOptions.Default;
+        AutoCorrect.Normalize();
     }
 }

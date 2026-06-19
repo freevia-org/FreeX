@@ -124,7 +124,8 @@ public sealed class FreeWOptionsTests : IDisposable
     {
         var result = OptionsDialogPlanner.BuildResult(
             recentFilesCap: 4, format: "  ", uiLanguage: "  en-GB  ",
-            autoCorrectEnabled: true, autoFormat: AutoFormatOptions.Default);
+            autoCorrectEnabled: true, autoFormat: AutoFormatOptions.Default,
+            autoCorrect: AutoCorrectOptions.Default);
 
         result.RecentFilesCap.Should().Be(4);
         // Blank format → the single shipped .docx default; language is trimmed by Normalize().
@@ -164,7 +165,8 @@ public sealed class FreeWOptionsTests : IDisposable
 
         var edited = OptionsDialogPlanner.BuildResult(
             recentFilesCap: 3, format: null, uiLanguage: "uk-UA",
-            autoCorrectEnabled: true, autoFormat: AutoFormatOptions.Default);
+            autoCorrectEnabled: true, autoFormat: AutoFormatOptions.Default,
+            autoCorrect: AutoCorrectOptions.Default);
         live.RecentFilesCap = edited.RecentFilesCap;
         live.DefaultSaveFormat = edited.DefaultSaveFormat;
         live.UiLanguage = edited.UiLanguage;

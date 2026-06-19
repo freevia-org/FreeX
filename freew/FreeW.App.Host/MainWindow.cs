@@ -1423,6 +1423,7 @@ public sealed class MainWindow : Window
         _options.UiLanguage = edited.UiLanguage;
         _options.AutoCorrectEnabled = edited.AutoCorrectEnabled;
         _options.AutoFormat = edited.AutoFormat;
+        _options.AutoCorrect = edited.AutoCorrect;
         _options.Normalize();
         ApplyAutoFormatOptions();
 
@@ -1436,6 +1437,7 @@ public sealed class MainWindow : Window
     {
         _editor.AutoCorrectEnabled = _options.AutoCorrectEnabled;
         _editor.AutoFormatOptions = _options.AutoFormat ?? AutoFormatOptions.Default;
+        _editor.AutoCorrectOptions = _options.AutoCorrect ?? AutoCorrectOptions.Default;
     }
 
     // Shows that AppProduct = "FreeW" routes the shared storage helpers to FreeW's own folder.

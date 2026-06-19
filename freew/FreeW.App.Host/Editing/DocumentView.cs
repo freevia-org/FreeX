@@ -225,6 +225,15 @@ public sealed class DocumentView : RichTextBox
     public AutoFormatOptions AutoFormatOptions { get; set; } = AutoFormatOptions.Default;
 
     /// <summary>
+    /// The Word "AutoCorrect"-tab settings consulted by
+    /// <see cref="AutoCorrectEngine.Evaluate(string?, char, AutoCorrectOptions)"/> — the two-initial-capitals
+    /// fix, day-name capitalization, and the user-editable replace-text table. Defaults to every rule on; the
+    /// host pushes the persisted <c>FreeWOptions.AutoCorrect</c> here so the user's choices take effect live.
+    /// Never null.
+    /// </summary>
+    public AutoCorrectOptions AutoCorrectOptions { get; set; } = AutoCorrectOptions.Default;
+
+    /// <summary>
     /// Whether the editor's built-in spell checking (red squiggles) is on. Mirrors
     /// <see cref="System.Windows.Controls.SpellCheck.IsEnabled"/> on this control so the Review ribbon's
     /// Spell Check toggle can flip it and read it back.
@@ -423,7 +432,13 @@ public sealed class DocumentView : RichTextBox
         var start = caret.Paragraph.ContentStart;
         var textBefore = new TextRange(start, caret).Text;
 
-        var result = AutoCorrect.Evaluate(textBefore, justTyped, AutoFormatOptions);
+        // Two engines share the delete-back/insert idiom below: the AutoCorrect-tab word-completion rules
+        // (replace-text table, two-initial-caps, day names) fire when a separator ends a word; the AutoFormat
+        // As-You-Type rules (smart quotes, dashes, lists, ordinals…) fire on their own trigger characters.
+        // Try AutoCorrect first (its corrections are the user's authoritative table); fall back to AutoFormat.
+        var result = AutoCorrectEngine.Evaluate(textBefore, justTyped, AutoCorrectOptions);
+        if (!result.Applies)
+            result = AutoCorrect.Evaluate(textBefore, justTyped, AutoFormatOptions);
         if (!result.Applies)
             return false;
 
