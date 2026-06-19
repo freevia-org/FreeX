@@ -30,7 +30,7 @@ public sealed partial class MainWindow
         var pivot = ResolveInsertControlPivot();
         if (pivot is null)
         {
-            RefreshShell("Select a cell inside a PivotTable to insert a PivotChart.");
+            RefreshShell(UiText.Get("PivotLoc_SelectCellForPivotChart"));
             return;
         }
 
@@ -41,7 +41,7 @@ public sealed partial class MainWindow
         var result = _session.ExecuteReviewCommand(command);
 
         RefreshShell(result.Success
-            ? $"Inserted PivotChart for \"{pivot.Name}\"."
-            : result.ErrorMessage ?? "Insert PivotChart failed.");
+            ? UiText.Format("PivotLoc_InsertedPivotChart", pivot.Name)
+            : result.ErrorMessage ?? UiText.Get("PivotLoc_InsertPivotChartFailed"));
     }
 }

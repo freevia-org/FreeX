@@ -387,6 +387,23 @@ public sealed class Run(string text, RunFormatting? formatting = null)
         new(string.Empty) { Citation = citation };
 
     /// <summary>
+    /// When non-null, this run is a cross-reference field (Word's References &gt; Cross-reference) — a
+    /// <c>REF</c>/<c>PAGEREF</c>/<c>NOTEREF</c> field over a bookmark name or note id, optionally as a
+    /// clickable hyperlink. It serialises as a <c>w:fldSimple</c> whose <c>w:instr</c> is the field
+    /// instruction (e.g. <c> REF _Ref1 \h </c>) wrapping a cached result run; the run's
+    /// <see cref="Text"/> doubles as that cached/last-resolved display text so field-unaware consumers
+    /// still render a value. Modelled as an optional run mark, mirroring <see cref="TableFormula"/> and
+    /// <see cref="Citation"/>, so it round-trips without a new block type.
+    /// </summary>
+    public CrossReferenceField? CrossReference { get; set; }
+
+    /// <summary>
+    /// Creates a cross-reference field run carrying the cached resolved text as its <see cref="Text"/>.
+    /// </summary>
+    public static Run CrossReferenceFieldRun(CrossReferenceField field, string cached = "", RunFormatting? formatting = null) =>
+        new(cached, formatting) { CrossReference = field };
+
+    /// <summary>
     /// When set, this run is a footnote reference marker pointing at the footnote with this id in
     /// <see cref="TextDocument.Footnotes"/>. It carries no literal text of its own; the marker number
     /// is the id. Serialises as a superscript run wrapping a w:footnoteReference w:id="N".
@@ -768,16 +785,39 @@ public sealed class Comment(int id)
 }
 
 /// <summary>
+/// The kind of work a <see cref="Source"/> describes, which selects how its bibliography entry is
+/// formatted (a journal article cites its journal/volume/pages, a web site its URL, etc.). The numeric
+/// values are stable so a chosen type can be persisted, and <see cref="SourceType.Book"/> is the default
+/// (value 0). The names match Word's bibliography source types (<c>b:SourceType</c>).
+/// </summary>
+public enum SourceType
+{
+    /// <summary>A book (author, title, publisher, year). The default.</summary>
+    Book = 0,
+
+    /// <summary>An article in a periodical (adds journal name, volume, issue and page range).</summary>
+    JournalArticle = 1,
+
+    /// <summary>A web page (adds its URL and an accessed date).</summary>
+    WebSite = 2,
+}
+
+/// <summary>
 /// A bibliographic source the document can cite: a short <see cref="Tag"/> (a stable identifier used
 /// to reference the source, e.g. <c>"Knuth1997"</c>) plus author/title/year and an optional publisher.
-/// Kept deliberately small and immutable-friendly (init-only properties) so it round-trips cleanly and
-/// the citation/bibliography formatting helpers (see <see cref="Citations"/>) can stay pure. Missing
-/// fields are represented as empty strings / null and handled gracefully by the formatters.
+/// A <see cref="SourceType"/> selects type-specific formatting and carries the extra fields that type
+/// needs (journal/volume/issue/pages for an article, url/accessed for a web site). Kept deliberately
+/// small and immutable-friendly (init-only properties) so it round-trips cleanly and the
+/// citation/bibliography formatting helpers (see <see cref="Citations"/>) can stay pure. Missing fields
+/// are represented as empty strings / null and handled gracefully by the formatters.
 /// </summary>
 public sealed class Source
 {
     /// <summary>A short, stable identifier for the source (used to reference it). May be empty.</summary>
     public string Tag { get; init; } = string.Empty;
+
+    /// <summary>The kind of work, selecting type-specific bibliography formatting. Defaults to <see cref="SourceType.Book"/>.</summary>
+    public SourceType Type { get; init; } = SourceType.Book;
 
     /// <summary>The author (or authors) of the work. Empty when unknown.</summary>
     public string Author { get; init; } = string.Empty;
@@ -790,6 +830,24 @@ public sealed class Source
 
     /// <summary>The publisher of the work, or null when unknown / not applicable.</summary>
     public string? Publisher { get; init; }
+
+    /// <summary>The periodical name for a <see cref="SourceType.JournalArticle"/>; null otherwise / when unknown.</summary>
+    public string? Journal { get; init; }
+
+    /// <summary>The volume number for a <see cref="SourceType.JournalArticle"/>; null when unknown.</summary>
+    public string? Volume { get; init; }
+
+    /// <summary>The issue number for a <see cref="SourceType.JournalArticle"/>; null when unknown.</summary>
+    public string? Issue { get; init; }
+
+    /// <summary>The page (range) for a <see cref="SourceType.JournalArticle"/>, e.g. <c>"12-20"</c>; null when unknown.</summary>
+    public string? Pages { get; init; }
+
+    /// <summary>The URL for a <see cref="SourceType.WebSite"/>; null otherwise / when unknown.</summary>
+    public string? Url { get; init; }
+
+    /// <summary>The accessed date for a <see cref="SourceType.WebSite"/>, free-text (e.g. <c>"3 May 2024"</c>); null when unknown.</summary>
+    public string? Accessed { get; init; }
 }
 
 /// <summary>
@@ -1151,7 +1209,14 @@ public sealed class HeaderFooter
 /// colour and width (points). Null on <see cref="PageSettings.PageBorder"/> means no page border, so
 /// existing documents are unaffected. Mirrors how <see cref="ParagraphBorder"/> is modelled.
 /// </summary>
-public sealed record PageBorder(string ColorHex = "#000000", double WidthPt = 1.0);
+public sealed record PageBorder(string ColorHex = "#000000", double WidthPt = 1.0)
+{
+    /// <summary>
+    /// The line style of every page-border edge (w:val). Defaults to <see cref="BorderLineStyle.Single"/>,
+    /// matching what the writer previously emitted, so existing documents round-trip byte-unchanged.
+    /// </summary>
+    public BorderLineStyle LineStyle { get; init; } = BorderLineStyle.Single;
+}
 
 /// <summary>
 /// How (and whether) lines are numbered in the page margin (w:sectPr/w:lnNumType).
@@ -1260,6 +1325,31 @@ public sealed class PageSettings
     public bool AutoHyphenation { get; set; }
 
     /// <summary>
+    /// The hyphenation zone in points (word/settings.xml's w:hyphenationZone, stored in twips). This is the
+    /// maximum amount of whitespace allowed at the end of a line before automatic hyphenation kicks in: a
+    /// word is only broken when the gap left at the line end would otherwise exceed this zone. A wider zone
+    /// means fewer hyphens (and a more ragged right edge); a narrower zone means more. Defaults to 0, which —
+    /// like Word — is treated as the default zone (0.25" / 360 twips) and is not emitted unless changed.
+    /// Only meaningful when <see cref="AutoHyphenation"/> is on.
+    /// </summary>
+    public double HyphenationZonePt { get; set; }
+
+    /// <summary>
+    /// The maximum number of consecutive lines that may end with a hyphen (word/settings.xml's
+    /// w:consecutiveHyphenLimit). 0 (the default) means no limit — Word's "Limit consecutive hyphens to: No
+    /// limit". Emitted only when greater than 0. Only meaningful when <see cref="AutoHyphenation"/> is on.
+    /// </summary>
+    public int ConsecutiveHyphenLimit { get; set; }
+
+    /// <summary>
+    /// When true, words in ALL CAPITALS are not automatically hyphenated (word/settings.xml's
+    /// w:doNotHyphenateCaps — Word's "Hyphenate words in CAPS" checkbox, inverted: checked = hyphenate caps =
+    /// this false). Defaults to false (caps are hyphenated) so existing documents are unaffected; emitted only
+    /// when true. Only meaningful when <see cref="AutoHyphenation"/> is on.
+    /// </summary>
+    public bool DoNotHyphenateCaps { get; set; }
+
+    /// <summary>
     /// How page content is aligned vertically within the text area (w:sectPr/w:vAlign). Defaults to
     /// <see cref="PageVerticalAlignment.Top"/> so existing documents round-trip unchanged — no
     /// w:vAlign is emitted. When not Top the writer emits w:vAlign with the matching value
@@ -1322,6 +1412,9 @@ public sealed class PageSettings
         LineNumberMode = LineNumberMode,
         LineNumberCountBy = LineNumberCountBy,
         AutoHyphenation = AutoHyphenation,
+        HyphenationZonePt = HyphenationZonePt,
+        ConsecutiveHyphenLimit = ConsecutiveHyphenLimit,
+        DoNotHyphenateCaps = DoNotHyphenateCaps,
         VerticalAlignment = VerticalAlignment,
         DifferentFirstPage = DifferentFirstPage,
         DifferentOddEvenPages = DifferentOddEvenPages,
@@ -1609,6 +1702,14 @@ public sealed class TextDocument
     /// in-text citations and the bibliography are ordinary text/paragraphs that already round-trip.
     /// </summary>
     public List<Source> Sources { get; } = [];
+
+    /// <summary>
+    /// The selected bibliographic <see cref="CitationStyle"/> (APA / MLA / Chicago / IEEE) governing how
+    /// in-text citations and the bibliography are formatted. Chosen from the References &gt; Citation Style
+    /// combo; persisted to / restored from the docx bibliography part (<c>b:Sources/@SelectedStyle</c>) so it
+    /// survives a save/load. Defaults to <see cref="CitationStyle.Apa"/>.
+    /// </summary>
+    public CitationStyle BibliographyStyle { get; set; } = CitationStyle.Apa;
 
     /// <summary>
     /// The terms marked for the document index, in mark order. <see cref="DocumentIndex.Build(TextDocument)"/>

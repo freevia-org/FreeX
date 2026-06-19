@@ -1,0 +1,84 @@
+using System.Linq;
+using FreeW.App.Host.Editing;
+using FreeW.Core.Model;
+using Xunit;
+
+namespace FreeW.App.Host.Tests;
+
+/// <summary>
+/// Editor-level coverage for <see cref="DocumentView.InsertCrossReference"/> (Word's References &gt;
+/// Cross-reference). Runs on STA because it drives the real WPF <see cref="DocumentView"/>. An inserted
+/// cross-reference must materialise as a model <see cref="Run.CrossReference"/> field carrying the chosen
+/// kind/insert-as/hyperlink, must auto-bookmark a body target that lacks an anchor (so REF/PAGEREF
+/// resolves), and must point a NOTEREF at the note id for foot/endnotes.
+/// </summary>
+public sealed class CrossReferenceEditorTests
+{
+    private static TextDocument HeadingModel()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Chapter One") { StyleId = "Heading1" });
+        doc.Blocks.Add(new Paragraph("Body where the reference goes."));
+        return doc;
+    }
+
+    private static Run InsertedField(DocumentView view) =>
+        view.Model.Blocks.OfType<Paragraph>()
+            .SelectMany(p => p.Runs)
+            .Single(r => r.CrossReference is not null);
+
+    [StaFact]
+    public void InsertCrossReference_Heading_WritesRefFieldAndAutoBookmarksTarget()
+    {
+        var view = new DocumentView();
+        view.LoadModel(HeadingModel());
+
+        var target = CrossReferences.Targets(view.Model, CrossRefType.Heading).Single();
+        view.InsertCrossReference(CrossRefType.Heading, target, CrossRefInsertAs.Text, hyperlink: true);
+        view.CommitToModel();
+
+        var field = InsertedField(view).CrossReference!;
+        field.Kind.Should().Be(CrossRefFieldKind.Ref);
+        field.InsertAs.Should().Be(CrossRefInsertAs.Text);
+        field.Hyperlink.Should().BeTrue();
+
+        // The heading paragraph (which had no bookmark) gets an auto "_Ref…" anchor the field targets.
+        var headingParagraph = (Paragraph)view.Model.Blocks[0];
+        headingParagraph.BookmarkName.Should().NotBeNullOrEmpty();
+        field.Target.Should().Be(headingParagraph.BookmarkName);
+    }
+
+    [StaFact]
+    public void InsertCrossReference_PageNumber_WritesPageRefField()
+    {
+        var view = new DocumentView();
+        view.LoadModel(HeadingModel());
+
+        var target = CrossReferences.Targets(view.Model, CrossRefType.Heading).Single();
+        view.InsertCrossReference(CrossRefType.Heading, target, CrossRefInsertAs.PageNumber, hyperlink: false);
+        view.CommitToModel();
+
+        InsertedField(view).CrossReference!.Kind.Should().Be(CrossRefFieldKind.PageRef);
+    }
+
+    [StaFact]
+    public void InsertCrossReference_Footnote_WritesNoteRefOverNoteId()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Body."));
+        doc.Footnotes[1] = new Footnote(1, "the note");
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var target = CrossReferences.Targets(view.Model, CrossRefType.Footnote).Single();
+        view.InsertCrossReference(CrossRefType.Footnote, target, CrossRefInsertAs.Text, hyperlink: true);
+        view.CommitToModel();
+
+        var field = InsertedField(view).CrossReference!;
+        field.Kind.Should().Be(CrossRefFieldKind.NoteRef);
+        field.Target.Should().Be("1");
+    }
+}

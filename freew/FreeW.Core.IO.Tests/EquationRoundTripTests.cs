@@ -120,6 +120,133 @@ public class EquationRoundTripTests
         oMath.Elements(M + "sSup").Should().ContainSingle();
     }
 
+    private static Equation RoundTripEquation(Equation equation)
+    {
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromEquation(equation));
+        doc.Blocks.Add(paragraph);
+
+        var read = RoundTrip(doc);
+        return read.Paragraphs.Single().Runs.Single(r => r.Equation is not null).Equation!;
+    }
+
+    [Fact]
+    public void SubscriptEquation_SurvivesRoundTrip()
+    {
+        var read = RoundTripEquation(new Equation([MathRun.Subscript("x", "i")]));
+
+        read.Runs.Should().ContainSingle();
+        read.Runs[0].Kind.Should().Be(MathRunKind.Subscript);
+        read.Runs[0].Base.Should().Be("x");
+        read.Runs[0].Sub.Should().Be("i");
+        read.LinearText.Should().Be("x_i");
+    }
+
+    [Fact]
+    public void SubSuperscriptEquation_SurvivesRoundTrip()
+    {
+        var read = RoundTripEquation(new Equation([MathRun.SubSuperscript("x", "i", "2")]));
+
+        read.Runs.Should().ContainSingle();
+        read.Runs[0].Kind.Should().Be(MathRunKind.SubSuperscript);
+        read.Runs[0].Base.Should().Be("x");
+        read.Runs[0].Sub.Should().Be("i");
+        read.Runs[0].Sup.Should().Be("2");
+    }
+
+    [Fact]
+    public void SquareRootEquation_SurvivesRoundTrip()
+    {
+        var read = RoundTripEquation(new Equation([MathRun.Radical("x + 1")]));
+
+        read.Runs.Should().ContainSingle();
+        read.Runs[0].Kind.Should().Be(MathRunKind.Radical);
+        read.Runs[0].Base.Should().Be("x + 1");
+        read.Runs[0].Degree.Should().BeEmpty();
+        read.LinearText.Should().Be("√(x + 1)");
+    }
+
+    [Fact]
+    public void NthRootEquation_SurvivesRoundTrip()
+    {
+        var read = RoundTripEquation(new Equation([MathRun.Radical("x", "3")]));
+
+        read.Runs.Should().ContainSingle();
+        read.Runs[0].Kind.Should().Be(MathRunKind.Radical);
+        read.Runs[0].Base.Should().Be("x");
+        read.Runs[0].Degree.Should().Be("3");
+        read.LinearText.Should().Be("3√(x)");
+    }
+
+    [Fact]
+    public void NAryEquation_SurvivesRoundTrip()
+    {
+        var read = RoundTripEquation(new Equation([MathRun.NAry("∑", "i=1", "n", "i")]));
+
+        read.Runs.Should().ContainSingle();
+        read.Runs[0].Kind.Should().Be(MathRunKind.NAry);
+        read.Runs[0].Operator.Should().Be("∑");
+        read.Runs[0].Sub.Should().Be("i=1");
+        read.Runs[0].Sup.Should().Be("n");
+        read.Runs[0].Base.Should().Be("i");
+    }
+
+    [Fact]
+    public void DelimiterEquation_SurvivesRoundTrip()
+    {
+        var read = RoundTripEquation(new Equation([MathRun.Delimiter("a, b", "[", "]")]));
+
+        read.Runs.Should().ContainSingle();
+        read.Runs[0].Kind.Should().Be(MathRunKind.Delimiter);
+        read.Runs[0].Base.Should().Be("a, b");
+        read.Runs[0].OpenChar.Should().Be("[");
+        read.Runs[0].CloseChar.Should().Be("]");
+    }
+
+    [Fact]
+    public void MatrixEquation_SurvivesRoundTrip()
+    {
+        var read = RoundTripEquation(new Equation([MathRun.MatrixOf(new MathMatrix([["1", "2"], ["3", "4"]]))]));
+
+        read.Runs.Should().ContainSingle();
+        read.Runs[0].Kind.Should().Be(MathRunKind.Matrix);
+        var matrix = read.Runs[0].Matrix!;
+        matrix.RowCount.Should().Be(2);
+        matrix.ColumnCount.Should().Be(2);
+        matrix.Rows[0].Should().Equal("1", "2");
+        matrix.Rows[1].Should().Equal("3", "4");
+        read.LinearText.Should().Be("[1, 2; 3, 4]");
+    }
+
+    [Fact]
+    public void Equation_EmitsNewStructureElements()
+    {
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromEquation(new Equation([
+            MathRun.Subscript("x", "i"),
+            MathRun.Radical("y"),
+            MathRun.NAry("∫", "a", "b", "f"),
+            MathRun.Delimiter("z"),
+            MathRun.MatrixOf(MathMatrix.Identity2x2())
+        ])));
+        doc.Blocks.Add(paragraph);
+
+        var xml = WriteDocumentXml(doc);
+        var oMath = xml.Descendants(M + "oMath").Single();
+
+        oMath.Elements(M + "sSub").Should().ContainSingle();
+        oMath.Elements(M + "rad").Should().ContainSingle();
+        oMath.Elements(M + "nary").Should().ContainSingle();
+        oMath.Elements(M + "d").Should().ContainSingle();
+        oMath.Elements(M + "m").Should().ContainSingle();
+        // The 2x2 matrix emits two rows of two cells each.
+        var matrix = oMath.Elements(M + "m").Single();
+        matrix.Elements(M + "mr").Should().HaveCount(2);
+        matrix.Elements(M + "mr").First().Elements(M + "e").Should().HaveCount(2);
+    }
+
     [Fact]
     public void Equation_RoundTripsInsideTableCell()
     {

@@ -29,6 +29,26 @@ using ModelTextAlignment = FreeW.Core.Model.TextAlignment;
 namespace FreeW.App.Host.Editing;
 
 /// <summary>
+/// Word's mutually-exclusive document view modes (View ▸ Views), as far as the live editing surface is
+/// concerned. Read Mode and Outline are separate host-level overlays (they swap the surface out entirely),
+/// so they are not part of this enum — these three all reuse the one editable surface and differ only in
+/// the page chrome they show.
+/// <list type="bullet">
+/// <item><see cref="PrintLayout"/> — the Word default: a white page sheet on the grey workspace, margins,
+/// drop shadow and page-break markers.</item>
+/// <item><see cref="WebLayout"/> — a continuous, full-width view with no page chrome (text wraps to the
+/// window like a web page).</item>
+/// <item><see cref="Draft"/> — a simplified continuous view with no page chrome, for fast editing.</item>
+/// </list>
+/// </summary>
+public enum DocumentViewMode
+{
+    PrintLayout,
+    WebLayout,
+    Draft
+}
+
+/// <summary>
 /// The FreeW editing surface: a RichTextBox that renders a <see cref="TextDocument"/> into a
 /// WPF FlowDocument (resolving run/paragraph formatting through styles + document defaults) and
 /// commits edits back into the model. Caret, selection, typing, delete and Enter come from the
@@ -144,19 +164,41 @@ public sealed class DocumentView : RichTextBox
     /// stays a single live, fully editable <see cref="RichTextBox"/> either way (see the limitation note in
     /// <see cref="ApplyPageChrome"/>). Re-applied on every <see cref="Render"/> and when page settings change.
     /// </summary>
-    public bool PrintLayoutEnabled { get; private set; } = true;
+    public bool PrintLayoutEnabled => ViewMode == DocumentViewMode.PrintLayout;
 
     /// <summary>
-    /// Turn Print-Layout page view on/off and return the new state. Used by the View ribbon's "Print
-    /// Layout" toggle. Re-applies the page chrome (padding/width/shadow) and the page-break overlay so the
-    /// change shows immediately; never mutates the model.
+    /// The active document view mode (View ▸ Views). Defaults to <see cref="DocumentViewMode.PrintLayout"/>
+    /// — the Word default. Web Layout and Draft both drop the page chrome (no sheet/margins/shadow/page
+    /// breaks) and let the editor fill the window width; Print Layout shows the page sheet. Switching is
+    /// purely visual (the model and saved document are untouched); use <see cref="SetViewMode"/> to change it
+    /// so the chrome and overlays re-apply.
     /// </summary>
-    public bool TogglePrintLayout()
+    public DocumentViewMode ViewMode { get; private set; } = DocumentViewMode.PrintLayout;
+
+    /// <summary>
+    /// Switch the editing surface to a new <see cref="DocumentViewMode"/> and re-apply the page chrome
+    /// (padding/width/shadow) plus the page-break and line-number overlays so the change shows immediately.
+    /// No-op (and no re-render) when already in that mode. Never mutates the model.
+    /// </summary>
+    public void SetViewMode(DocumentViewMode mode)
     {
-        PrintLayoutEnabled = !PrintLayoutEnabled;
+        if (ViewMode == mode)
+            return;
+        ViewMode = mode;
         ApplyPageChrome();
         SyncPageBreakAdorner();
         SyncLineNumberAdorner();
+    }
+
+    /// <summary>
+    /// Toggle the View ribbon's "Print Layout" button: flip between Print Layout and the plain continuous
+    /// (Draft) view, returning whether Print Layout is now on. Backward-compatible shim over
+    /// <see cref="SetViewMode"/> so existing callers keep working; the dedicated Web Layout / Draft commands
+    /// call <see cref="SetViewMode"/> directly.
+    /// </summary>
+    public bool TogglePrintLayout()
+    {
+        SetViewMode(PrintLayoutEnabled ? DocumentViewMode.Draft : DocumentViewMode.PrintLayout);
         return PrintLayoutEnabled;
     }
 
@@ -956,6 +998,28 @@ public sealed class DocumentView : RichTextBox
         });
 
     /// <summary>
+    /// Set (or clear, when <paramref name="border"/> is null) the box border on every selected paragraph,
+    /// honouring its line style, width, colour and per-edge flags. Used by the Borders and Shading dialog;
+    /// routes through the undo/redo bus and re-renders. The full <see cref="ParagraphBorder"/> survives an
+    /// edit/commit cycle (the model-only fields ride on the paragraph Tag — see BuildParagraph).
+    /// </summary>
+    public void SetParagraphBorder(ParagraphBorder? border) =>
+        FormatSelectedModelParagraphs(f => f with { Border = border });
+
+    /// <summary>
+    /// Set (or clear, when <paramref name="colorHex"/> is null/empty) paragraph shading over the selection
+    /// with the given fill colour and <paramref name="pattern"/>. Used by the Borders and Shading dialog;
+    /// routes through the undo/redo bus and re-renders. Mirrors <see cref="ToggleParagraphShading"/> but
+    /// applies an explicit colour+pattern rather than toggling.
+    /// </summary>
+    public void SetParagraphShading(string? colorHex, ShadingPattern pattern) =>
+        FormatSelectedModelParagraphs(f => f with
+        {
+            ShadingColorHex = string.IsNullOrEmpty(colorHex) ? null : colorHex,
+            ShadingPattern = string.IsNullOrEmpty(colorHex) ? ShadingPattern.Clear : pattern,
+        });
+
+    /// <summary>
     /// Toggle "keep with next" (pPr/w:keepNext) over the selected paragraphs. If any spanned paragraph
     /// lacks the flag, all get it; otherwise it is cleared. Reversible via the undo/redo bus.
     /// </summary>
@@ -1225,6 +1289,15 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void DemoteHeading(int modelBlockIndex) =>
         ShiftHeadingStyle(modelBlockIndex, OutlineTools.Demote);
+
+    /// <summary>
+    /// Set the paragraph at <paramref name="modelBlockIndex"/> directly to <c>Heading1</c> (Word's
+    /// outline "Promote to Heading 1" double-arrow). Routes through the same reversible
+    /// <see cref="SetParagraphStyleCommand"/> as Promote/Demote, so it is a single undoable step.
+    /// No-op when the index is not a paragraph or it is already Heading 1.
+    /// </summary>
+    public void PromoteHeadingToHeading1(int modelBlockIndex) =>
+        ShiftHeadingStyle(modelBlockIndex, _ => "Heading1");
 
     /// <summary>
     /// Move the heading at <paramref name="modelBlockIndex"/> — together with its whole subtree (every
@@ -2182,8 +2255,10 @@ public sealed class DocumentView : RichTextBox
         }
         else
         {
-            // Plain / continuous view: the original flat editable text box — full width, fixed padding,
-            // no page shadow.
+            // Web Layout / Draft: a continuous, full-width editable surface with no page chrome — text
+            // wraps to the window width like a web page, no sheet, margins, shadow or page-break markers.
+            // (Both non-print modes share this flat presentation; they differ only in intent — Web Layout
+            // mirrors a web page, Draft is the simplified fast-editing view.)
             Width = double.NaN; // auto: stretch to the host
             HorizontalAlignment = HorizontalAlignment.Stretch;
             Padding = PlainPadding;
@@ -2498,7 +2573,7 @@ public sealed class DocumentView : RichTextBox
     /// list level round-trip through an edit/commit cycle, which keeps the accumulated outline markers
     /// (1.1.1) stable after editing. Defaults to 0 (the non-list / top-level case).
     /// </para>
-    private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, string? BookmarkName, bool PageBreakBefore = false, bool WidowControl = false, string? StyleId = null, int ListLevel = 0);
+    private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, string? BookmarkName, bool PageBreakBefore = false, bool WidowControl = false, string? StyleId = null, int ListLevel = 0, ParagraphBorder? Border = null, ShadingPattern ShadingPattern = ShadingPattern.Clear, bool SuppressAutoHyphens = false);
 
     /// <summary>Read the edited FlowDocument back into the model (paragraphs + tables).</summary>
     public void CommitToModel()
@@ -2708,6 +2783,14 @@ public sealed class DocumentView : RichTextBox
                     TableFormula = formulaMarker.Formula
                 });
                 break;
+            case WpfRun { Tag: CrossReferenceMarker crossRefMarker } crossRefRun:
+                // A cross-reference field round-trips its field definition; the run's visible text is the
+                // last-resolved value, kept as the cached fallback (matching Word's cached-field behaviour).
+                modelParagraph.Runs.Add(new ModelRun(crossRefRun.Text, ReadRunFormatting(crossRefRun))
+                {
+                    CrossReference = crossRefMarker.Field
+                });
+                break;
             case WpfRun { Tag: FieldMarker fieldMarker } fieldRun:
                 // A document field round-trips its kind; the run's visible text is the last-resolved
                 // value, which we keep as the cached fallback (matching Word's cached-field behaviour).
@@ -2747,7 +2830,7 @@ public sealed class DocumentView : RichTextBox
                 if (control is { Kind: ContentControlKind.CheckBox })
                     control = control with { Checked = markedRun.Text == ModelContentControl.CheckedGlyph };
 
-                modelParagraph.Runs.Add(new ModelRun(markedRun.Text, markedFmt)
+                modelParagraph.Runs.Add(new ModelRun(StripSoftHyphens(markedRun.Text), markedFmt)
                 {
                     HyperlinkUrl = hyperlinkUrl,
                     HyperlinkAnchor = hyperlinkAnchor,
@@ -2760,7 +2843,7 @@ public sealed class DocumentView : RichTextBox
                 });
                 break;
             case WpfRun run when run.Text.Length > 0:
-                modelParagraph.Runs.Add(new ModelRun(run.Text, ReadRunFormatting(run)) { HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip });
+                modelParagraph.Runs.Add(new ModelRun(StripSoftHyphens(run.Text), ReadRunFormatting(run)) { HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip });
                 break;
         }
     }
@@ -3133,10 +3216,14 @@ public sealed class DocumentView : RichTextBox
         if (paraFmt.Border is { } border && TryParseColor(border.ColorHex, out var borderColor))
         {
             wpf.BorderBrush = new SolidColorBrush(borderColor);
-            // A bottom-only border (horizontal rule) draws just the bottom edge; a box draws all four.
-            // ReadParagraphFormatting recovers BottomOnly from the same asymmetric thickness.
+            // A bottom-only border (horizontal rule) draws just the bottom edge; otherwise the per-edge
+            // flags select which edges are drawn (all four = a box). The model-only line style/pattern can't
+            // be expressed on a WPF Border, so the full ParagraphBorder is also carried on the Tag (below)
+            // and recovered verbatim on commit.
             var w = border.WidthPt * PxPerPoint;
-            wpf.BorderThickness = border.BottomOnly ? new Thickness(0, 0, 0, w) : new Thickness(w);
+            wpf.BorderThickness = border.BottomOnly
+                ? new Thickness(0, 0, 0, w)
+                : new Thickness(border.Left ? w : 0, border.Top ? w : 0, border.Right ? w : 0, border.Bottom ? w : 0);
             wpf.Padding = new Thickness(2);
         }
         if (TryParseColor(paraFmt.ShadingColorHex, out var shading))
@@ -3166,14 +3253,75 @@ public sealed class DocumentView : RichTextBox
         // bookmark name and page-break-before; carried verbatim and recovered on commit.
         // The list nesting depth is carried on the Tag too: the editor flattens a list run into one WPF
         // List, so depth has no structural slot and would otherwise reset to 0 on commit (see ParagraphTag).
-        if (paraFmt.TabStops.Count > 0 || paragraph.BookmarkName is { Length: > 0 } || paraFmt.PageBreakBefore || paraFmt.WidowControl || paragraph.StyleId is { Length: > 0 } || paraFmt.ListLevel > 0)
-            wpf.Tag = new ParagraphTag(paraFmt.TabStops, paragraph.BookmarkName, paraFmt.PageBreakBefore, paraFmt.WidowControl, paragraph.StyleId, paraFmt.ListLevel);
+        // The border's line style / per-edge flags and the shading pattern have no WPF Border equivalent,
+        // so carry the full ParagraphBorder + shading pattern on the Tag whenever they are non-default; they
+        // are recovered verbatim on commit (see ReadParagraphFormatting) so the dialog's choices survive.
+        var borderNeedsTag = paraFmt.Border is { } b
+            && (b.LineStyle != BorderLineStyle.Single || !b.Top || !b.Left || !b.Bottom || !b.Right);
+        var shadingNeedsTag = paraFmt.ShadingColorHex is { Length: > 0 } && paraFmt.ShadingPattern != ShadingPattern.Clear;
+        if (paraFmt.TabStops.Count > 0 || paragraph.BookmarkName is { Length: > 0 } || paraFmt.PageBreakBefore || paraFmt.WidowControl || paragraph.StyleId is { Length: > 0 } || paraFmt.ListLevel > 0 || borderNeedsTag || shadingNeedsTag || paraFmt.SuppressAutoHyphens)
+            wpf.Tag = new ParagraphTag(
+                paraFmt.TabStops, paragraph.BookmarkName, paraFmt.PageBreakBefore, paraFmt.WidowControl,
+                paragraph.StyleId, paraFmt.ListLevel,
+                borderNeedsTag ? paraFmt.Border : null,
+                shadingNeedsTag ? paraFmt.ShadingPattern : ShadingPattern.Clear,
+                paraFmt.SuppressAutoHyphens);
 
         foreach (var run in paragraph.Runs)
             wpf.Inlines.Add(BuildRun(run, paragraph, document));
 
         return wpf;
     }
+
+    // Insert soft hyphens into a run's display text via the pure Hyphenator. When doNotHyphenateCaps is on,
+    // a whitespace-delimited token whose alphabetic characters are all uppercase is left whole. The result is
+    // display-only; the soft hyphens are stripped back off on commit (StripSoftHyphens) so the model is clean.
+    private static string HyphenateForDisplay(string text, bool doNotHyphenateCaps)
+    {
+        if (!doNotHyphenateCaps)
+            return Hyphenator.HyphenateText(text);
+
+        // Hyphenate token by token, skipping all-caps words. Splitting on whitespace keeps positions stable
+        // because soft hyphens are only ever inserted inside a token, never across a whitespace boundary.
+        var sb = new System.Text.StringBuilder(text.Length + 8);
+        var start = 0;
+        for (var i = 0; i <= text.Length; i++)
+        {
+            var atEnd = i == text.Length;
+            if (!atEnd && !char.IsWhiteSpace(text[i]))
+                continue;
+            if (i > start)
+            {
+                var token = text.Substring(start, i - start);
+                sb.Append(IsAllCaps(token) ? token : Hyphenator.HyphenateText(token));
+            }
+            if (!atEnd)
+                sb.Append(text[i]);
+            start = i + 1;
+        }
+        return sb.ToString();
+    }
+
+    // True when a token contains at least one letter and every letter is uppercase (digits/punctuation are
+    // ignored), e.g. "NASA" or "ASAP," — used to honour w:doNotHyphenateCaps.
+    private static bool IsAllCaps(string token)
+    {
+        var sawLetter = false;
+        foreach (var c in token)
+        {
+            if (!char.IsLetter(c))
+                continue;
+            sawLetter = true;
+            if (!char.IsUpper(c))
+                return false;
+        }
+        return sawLetter;
+    }
+
+    // Remove the display-only soft hyphens (U+00AD) the renderer inserts for automatic hyphenation, so a run
+    // read back on commit carries exactly the model text. A no-op for text without soft hyphens.
+    internal static string StripSoftHyphens(string text) =>
+        text.IndexOf(Hyphenator.SoftHyphen) < 0 ? text : text.Replace(Hyphenator.SoftHyphen.ToString(), string.Empty);
 
     private static Inline BuildRun(ModelRun run, ModelParagraph paragraph, TextDocument document)
     {
@@ -3207,6 +3355,9 @@ public sealed class DocumentView : RichTextBox
         if (run.TableFormula is not null)
             return BuildTableFormulaRun(run, document);
 
+        if (run.CrossReference is not null)
+            return BuildCrossReferenceRun(run, document);
+
         if (run.FieldKind != RunFieldKind.None)
         {
             // A field run can also carry a hyperlink (e.g. a PAGE/DATE field placed inside a link). Wrap
@@ -3237,7 +3388,15 @@ public sealed class DocumentView : RichTextBox
             return new WpfRun(string.Empty) { Tag = new PageBreakMarker() };
 
         var fmt = Resolve(run, paragraph, document);
-        var wpf = new WpfRun(run.Text)
+        // Automatic hyphenation: when the document has it on and this paragraph is not suppressed, insert
+        // soft hyphens (U+00AD) at the pure helper's break points so the layout engine can break long words
+        // at line ends. Soft hyphens are zero-width unless a line break lands on one, and are stripped on
+        // commit (see ReadInline / StripSoftHyphens) so they never enter the model. ALL-CAPS words are left
+        // whole when w:doNotHyphenateCaps is set, mirroring Word's "Hyphenate words in CAPS" option.
+        var runText = run.Text;
+        if (document.Page.AutoHyphenation && !paragraph.Formatting.SuppressAutoHyphens && runText.Length > 0)
+            runText = HyphenateForDisplay(runText, document.Page.DoNotHyphenateCaps);
+        var wpf = new WpfRun(runText)
         {
             FontWeight = fmt.Bold ? FontWeights.Bold : FontWeights.Normal,
             FontStyle = fmt.Italic ? FontStyles.Italic : FontStyles.Normal
@@ -3751,6 +3910,35 @@ public sealed class DocumentView : RichTextBox
     /// (expression + number format). The WPF run's visible text is the cached computed result.
     /// </summary>
     private sealed record TableFormulaMarker(TableFormulaField Formula);
+
+    /// <summary>
+    /// Carried on a cross-reference WPF run's Tag so <see cref="CommitToModel"/> can round-trip the field
+    /// (kind + target + insert-as + hyperlink). The WPF run's visible text is the cached resolved value.
+    /// </summary>
+    private sealed record CrossReferenceMarker(CrossReferenceField Field);
+
+    /// <summary>Builds a WPF run rendering a cross-reference field's cached text, tagged for round-trip.</summary>
+    private static WpfRun BuildCrossReferenceRun(ModelRun run, TextDocument document)
+    {
+        var fmt = run.Formatting ?? document.DefaultRun;
+        var wpf = new WpfRun(run.Text)
+        {
+            FontWeight = fmt.Bold ? FontWeights.Bold : FontWeights.Normal,
+            FontStyle = fmt.Italic ? FontStyles.Italic : FontStyles.Normal,
+            Tag = new CrossReferenceMarker(run.CrossReference!)
+        };
+        if (fmt.FontFamily is { Length: > 0 } family)
+            wpf.FontFamily = new FontFamily(family);
+        if (fmt.FontSizePt is { } size)
+            wpf.FontSize = size * PxPerPoint;
+        if (TryParseColor(fmt.ColorHex, out var color))
+            wpf.Foreground = new SolidColorBrush(color);
+        // A hyperlink cross-reference renders in the link colour so it reads as clickable, matching Word.
+        else if (run.CrossReference!.Hyperlink)
+            wpf.Foreground = new SolidColorBrush(Color.FromRgb(0x05, 0x63, 0xC1));
+        wpf.ToolTip = "Cross-reference: " + run.CrossReference!.Kind;
+        return wpf;
+    }
 
     /// <summary>Builds a WPF run rendering a table-formula field's cached result, tagged for round-trip.</summary>
     private static WpfRun BuildTableFormulaRun(ModelRun run, TextDocument document)
@@ -4895,10 +5083,86 @@ public sealed class DocumentView : RichTextBox
             paragraph = new WpfParagraph();
             Document.Blocks.Add(paragraph);
         }
-        paragraph.Inlines.Add(inline);
+        InsertInlineAt(paragraph, caret, inline);
+        CaretPosition = inline.ContentEnd.GetInsertionPosition(LogicalDirection.Forward) ?? inline.ElementEnd;
 
         CommitToModel();
         Render();
+    }
+
+    private static void InsertInlineAt(WpfParagraph paragraph, TextPointer caret, Inline inline)
+    {
+        if (paragraph.Inlines.FirstInline is null)
+        {
+            paragraph.Inlines.Add(inline);
+            return;
+        }
+
+        if (caret.Parent is WpfRun run && ReferenceEquals(run.Parent, paragraph))
+        {
+            InsertInlineIntoRun(paragraph, run, caret, inline);
+            return;
+        }
+
+        foreach (var existing in paragraph.Inlines)
+        {
+            if (caret.CompareTo(existing.ContentStart) <= 0)
+            {
+                paragraph.Inlines.InsertBefore(existing, inline);
+                return;
+            }
+
+            if (caret.CompareTo(existing.ContentEnd) <= 0)
+            {
+                paragraph.Inlines.InsertAfter(existing, inline);
+                return;
+            }
+        }
+
+        paragraph.Inlines.Add(inline);
+    }
+
+    private static void InsertInlineIntoRun(WpfParagraph paragraph, WpfRun run, TextPointer caret, Inline inline)
+    {
+        var before = new TextRange(run.ContentStart, caret).Text;
+        var after = new TextRange(caret, run.ContentEnd).Text;
+
+        if (before.Length == 0)
+        {
+            paragraph.Inlines.InsertBefore(run, inline);
+            return;
+        }
+
+        if (after.Length == 0)
+        {
+            paragraph.Inlines.InsertAfter(run, inline);
+            return;
+        }
+
+        run.Text = before;
+        var tail = CloneTextRun(run, after);
+        paragraph.Inlines.InsertAfter(run, inline);
+        paragraph.Inlines.InsertAfter(inline, tail);
+    }
+
+    private static WpfRun CloneTextRun(WpfRun source, string text)
+    {
+        var clone = new WpfRun(text)
+        {
+            FontWeight = source.FontWeight,
+            FontStyle = source.FontStyle,
+            FontFamily = source.FontFamily,
+            FontSize = source.FontSize,
+            Foreground = source.Foreground,
+            Background = source.Background,
+            BaselineAlignment = source.BaselineAlignment,
+            TextDecorations = source.TextDecorations,
+            FlowDirection = source.FlowDirection,
+            Tag = source.Tag,
+            ToolTip = source.ToolTip
+        };
+        Typography.SetCapitals(clone, Typography.GetCapitals(source));
+        return clone;
     }
 
     /// <summary>
@@ -5045,11 +5309,16 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
-    /// The active bibliographic style (APA / MLA / Chicago) used when inserting in-text citations and the
-    /// bibliography. Selected via the References group's "Citation Style" combo box; defaults to APA, which
-    /// is the original author–year behaviour.
+    /// The active bibliographic style (APA / MLA / Chicago / IEEE) used when inserting in-text citations and
+    /// the bibliography. Selected via the References group's "Citation Style" combo box; defaults to APA,
+    /// which is the original author–year behaviour. Backed by <see cref="TextDocument.BibliographyStyle"/> so
+    /// the choice is persisted to / restored from the document (it survives a save/load).
     /// </summary>
-    public CitationStyle ActiveCitationStyle { get; set; } = CitationStyle.Apa;
+    public CitationStyle ActiveCitationStyle
+    {
+        get => _model.BibliographyStyle;
+        set => _model.BibliographyStyle = value;
+    }
 
     /// <summary>The document's bibliographic sources (Insert &gt; Citation reads/writes this list).</summary>
     public IReadOnlyList<Source> Sources
@@ -5349,6 +5618,79 @@ public sealed class DocumentView : RichTextBox
         if (index < 0 || index > _model.Blocks.Count)
             index = _model.Blocks.Count;
         _commands.Execute(new InsertParagraphCommand(index, caption));
+    }
+
+    /// <summary>
+    /// Inserts a cross-reference field (Word's References &gt; Cross-reference) at the caret pointing at
+    /// <paramref name="target"/> of <paramref name="type"/>, showing <paramref name="insertAs"/> and
+    /// optionally as a clickable hyperlink. For a body target that lacks a bookmark anchor, a hidden
+    /// <c>_Ref…</c> bookmark is added to the target paragraph so the resulting REF/PAGEREF field resolves
+    /// (Word auto-bookmarks targets the same way). The inserted run carries a cached resolved value (the
+    /// target's text/number/position) so it renders sensibly before the next update, and round-trips
+    /// through the model and docx as a field. Routed through a single commit/render so it is undoable via
+    /// the normal text-edit flow.
+    /// </summary>
+    public void InsertCrossReference(CrossRefType type, CrossRefTarget target, CrossRefInsertAs insertAs, bool hyperlink)
+    {
+        Focus();
+        CommitToModel();
+
+        var sourceBlock = CaretBlockIndex();
+        var resolved = target;
+        var fieldKind = CrossReferences.FieldKindFor(type, insertAs);
+
+        // Body targets (REF/PAGEREF) need a bookmark anchor to resolve; ensure one on the target paragraph.
+        if (fieldKind != CrossRefFieldKind.NoteRef
+            && string.IsNullOrEmpty(resolved.Anchor)
+            && resolved.BlockIndex is { } targetBlock
+            && targetBlock >= 0 && targetBlock < _model.Blocks.Count
+            && _model.Blocks[targetBlock] is ModelParagraph targetParagraph)
+        {
+            var anchor = EnsureCrossReferenceAnchor(targetParagraph);
+            resolved = resolved with { Anchor = anchor };
+        }
+
+        var field = CrossReferences.BuildField(type, resolved, insertAs, hyperlink);
+        var cached = CrossReferences.ResolveText(_model, type, resolved, insertAs, sourceBlock);
+        var run = ModelRun.CrossReferenceFieldRun(field, cached);
+
+        // Append the field run to the caret's paragraph in the model (or the last paragraph / a fresh one),
+        // then re-render. Working at the model level keeps the just-added target bookmark from being clobbered
+        // by a view->model commit, and avoids losing the field marker that a view round-trip could.
+        var caretBlock = sourceBlock >= 0 && sourceBlock < _model.Blocks.Count ? sourceBlock : -1;
+        if (caretBlock < 0 || _model.Blocks[caretBlock] is not ModelParagraph host)
+        {
+            host = _model.Blocks.OfType<ModelParagraph>().LastOrDefault() ?? new ModelParagraph();
+            if (!_model.Blocks.Contains(host))
+                _model.Blocks.Add(host);
+        }
+        host.Runs.Add(run);
+        Render();
+    }
+
+    // Returns the target paragraph's existing bookmark name, or assigns a fresh hidden "_Ref<n>" one (the
+    // smallest unused index) so a cross-reference field can resolve to it — mirroring Word's auto-bookmarks.
+    private string EnsureCrossReferenceAnchor(ModelParagraph paragraph)
+    {
+        if (paragraph.BookmarkName is { Length: > 0 } existing)
+            return existing;
+
+        var used = new HashSet<string>(
+            _model.Blocks.OfType<ModelParagraph>()
+                .Select(p => p.BookmarkName)
+                .Where(n => n is { Length: > 0 })!,
+            StringComparer.Ordinal);
+        var index = 1;
+        string name;
+        do
+        {
+            name = "_Ref" + index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            index++;
+        }
+        while (used.Contains(name));
+
+        paragraph.BookmarkName = name;
+        return name;
     }
 
     /// <summary>
@@ -6024,8 +6366,11 @@ public sealed class DocumentView : RichTextBox
         // WidowControl rides on the Tag (no FlowDocument property); KeepWithNext/KeepLinesTogether read
         // straight back off the WPF Paragraph's native properties set in BuildParagraph.
         var widowControl = paragraph.Tag is ParagraphTag { WidowControl: true };
+        // SuppressAutoHyphens has no FlowDocument property either, so it rides on the Tag like WidowControl.
+        var suppressAutoHyphens = paragraph.Tag is ParagraphTag { SuppressAutoHyphens: true };
         return ParagraphFormatting.Default with
         {
+            SuppressAutoHyphens = suppressAutoHyphens,
             Alignment = FromWpfAlignment(paragraph.TextAlignment),
             // Right-to-left direction reads straight back off the WPF Paragraph's FlowDirection (set in
             // BuildParagraph), so an RTL paragraph survives an edit/commit cycle.
@@ -6050,9 +6395,17 @@ public sealed class DocumentView : RichTextBox
             IndentLeftPt = paragraph.Margin.Left / PxPerPoint,
             IndentRightPt = paragraph.Margin.Right / PxPerPoint,
             FirstLineIndentPt = paragraph.TextIndent / PxPerPoint,
-            Border = ReadParagraphBorder(paragraph, pageBreakBefore),
+            // A border whose line style / per-edge flags were set in the dialog has no WPF Border slot, so it
+            // is carried verbatim on the Tag and recovered here in preference to the WPF-derived border; an
+            // untagged paragraph (a plain quick-toggle box / horizontal rule) recovers from the WPF Border.
+            Border = paragraph.Tag is ParagraphTag { Border: { } taggedBorder }
+                ? taggedBorder
+                : ReadParagraphBorder(paragraph, pageBreakBefore),
             PageBreakBefore = pageBreakBefore,
             ShadingColorHex = paragraph.Background is SolidColorBrush shading ? ToHex(shading.Color) : null,
+            // The shading pattern (w:shd/@w:val) likewise has no WPF slot; recovered from the Tag (Clear when
+            // untagged) so a non-solid pattern set in the dialog survives an edit/commit cycle.
+            ShadingPattern = paragraph.Tag is ParagraphTag { ShadingPattern: var pattern } ? pattern : ShadingPattern.Clear,
             // Tab stops are not representable in the WPF FlowDocument Paragraph, so they are preserved
             // verbatim from the Tag stamped by BuildParagraph (see comment there); empty if none.
             TabStops = paragraph.Tag is ParagraphTag { TabStops: var tabStops } ? tabStops : []

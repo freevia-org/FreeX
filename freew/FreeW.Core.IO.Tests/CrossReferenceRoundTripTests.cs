@@ -1,0 +1,120 @@
+using System.IO;
+using System.IO.Compression;
+using System.Linq;
+using System.Xml.Linq;
+using FreeW.Core.Model;
+
+namespace FreeW.Core.IO.Tests;
+
+/// <summary>
+/// Round-trip coverage for cross-reference fields (Word's References &gt; Cross-reference). The field
+/// serialises as a <c>w:fldSimple</c> whose <c>w:instr</c> carries a <c>REF</c>/<c>PAGEREF</c>/<c>NOTEREF</c>
+/// instruction over a bookmark name or note id, with optional <c>\w</c>/<c>\n</c>/<c>\p</c> and <c>\h</c>
+/// switches, wrapping a run holding the cached resolved text.
+/// </summary>
+public class CrossReferenceRoundTripTests
+{
+    private static readonly XNamespace W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+
+    private static TextDocument RoundTrip(TextDocument document)
+    {
+        using var stream = new MemoryStream();
+        DocxWriter.Write(document, stream);
+        stream.Position = 0;
+        return DocxReader.Read(stream);
+    }
+
+    private static string Instruction(TextDocument document)
+    {
+        using var stream = new MemoryStream();
+        DocxWriter.Write(document, stream);
+        using var zip = new ZipArchive(new MemoryStream(stream.ToArray()), ZipArchiveMode.Read);
+        using var entry = zip.GetEntry("word/document.xml")!.Open();
+        var xml = XDocument.Load(entry);
+        return xml.Descendants(W + "fldSimple").Single().Attribute(W + "instr")!.Value;
+    }
+
+    private static TextDocument WithCrossReference(CrossReferenceField field, string cached)
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.CrossReferenceFieldRun(field, cached));
+        doc.Blocks.Add(paragraph);
+        return doc;
+    }
+
+    [Fact]
+    public void RefField_WithHyperlink_SurvivesRoundTrip()
+    {
+        var field = new CrossReferenceField(CrossRefFieldKind.Ref, "_Ref1", CrossRefInsertAs.Text, Hyperlink: true);
+
+        var result = RoundTrip(WithCrossReference(field, "Chapter One"));
+
+        var run = result.Blocks.OfType<Paragraph>().Single().Runs.Single();
+        run.CrossReference.Should().Be(field);
+        // The cached resolved text is preserved as the run text (fallback for field-unaware consumers).
+        run.Text.Should().Be("Chapter One");
+    }
+
+    [Fact]
+    public void PageRefField_RoundTripsAsPageNumber()
+    {
+        var field = new CrossReferenceField(CrossRefFieldKind.PageRef, "_Ref2", CrossRefInsertAs.PageNumber, Hyperlink: false);
+
+        var run = RoundTrip(WithCrossReference(field, "1")).Blocks.OfType<Paragraph>().Single().Runs.Single();
+
+        run.CrossReference.Should().Be(field);
+    }
+
+    [Fact]
+    public void NoteRefField_RoundTripsOverNoteId()
+    {
+        var field = new CrossReferenceField(CrossRefFieldKind.NoteRef, "3", CrossRefInsertAs.Text, Hyperlink: true);
+
+        var run = RoundTrip(WithCrossReference(field, "3")).Blocks.OfType<Paragraph>().Single().Runs.Single();
+
+        run.CrossReference.Should().Be(field);
+    }
+
+    [Fact]
+    public void HeadingNumberField_RoundTripsWithWSwitch()
+    {
+        var field = new CrossReferenceField(CrossRefFieldKind.Ref, "_Ref4", CrossRefInsertAs.HeadingNumber, Hyperlink: false);
+
+        var run = RoundTrip(WithCrossReference(field, "1.2")).Blocks.OfType<Paragraph>().Single().Runs.Single();
+
+        run.CrossReference.Should().Be(field);
+    }
+
+    [Fact]
+    public void AboveBelowField_RoundTripsWithPSwitch()
+    {
+        var field = new CrossReferenceField(CrossRefFieldKind.Ref, "_Ref5", CrossRefInsertAs.AboveBelow, Hyperlink: false);
+
+        var run = RoundTrip(WithCrossReference(field, "above")).Blocks.OfType<Paragraph>().Single().Runs.Single();
+
+        run.CrossReference.Should().Be(field);
+    }
+
+    [Fact]
+    public void RefField_EmitsExpectedInstruction()
+    {
+        var field = new CrossReferenceField(CrossRefFieldKind.Ref, "_Ref9", CrossRefInsertAs.HeadingNumber, Hyperlink: true);
+
+        var instr = Instruction(WithCrossReference(field, "1.2"));
+
+        instr.Should().Contain("REF");
+        instr.Should().Contain("_Ref9");
+        instr.Should().Contain("\\w");
+        instr.Should().Contain("\\h");
+    }
+
+    [Fact]
+    public void PageRefField_EmitsPageRefKeyword()
+    {
+        var field = new CrossReferenceField(CrossRefFieldKind.PageRef, "_Ref10", CrossRefInsertAs.PageNumber, Hyperlink: false);
+
+        Instruction(WithCrossReference(field, "1")).Should().Contain("PAGEREF").And.Contain("_Ref10");
+    }
+}

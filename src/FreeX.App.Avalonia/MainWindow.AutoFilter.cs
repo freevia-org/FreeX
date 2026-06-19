@@ -196,11 +196,11 @@ public sealed partial class MainWindow
             new FilterCommand(_session.ActiveSheet.Id, range, columnOffset, allowedValues));
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Filter failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("ShellLoc_FilterFailed"));
             return;
         }
 
-        RefreshShell(allowedValues.Count == 0 ? "Cleared filter" : "Applied filter");
+        RefreshShell(allowedValues.Count == 0 ? UiText.Get("ShellLoc_ClearedFilter") : UiText.Get("ShellLoc_AppliedFilter"));
     }
 
     private void RunAutoFilterSort(GridRange range, uint columnOffset, bool ascending)
@@ -212,11 +212,11 @@ public sealed partial class MainWindow
             new SortCommand(_session.ActiveSheet.Id, range, columnOffset, ascending));
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Sort failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("ShellLoc_SortFailed"));
             return;
         }
 
-        RefreshShell(ascending ? "Sorted A to Z" : "Sorted Z to A");
+        RefreshShell(ascending ? UiText.Get("ShellLoc_SortedAToZ") : UiText.Get("ShellLoc_SortedZToA"));
     }
 
     private static bool RangeHasActiveFilter(Sheet sheet, GridRange range)

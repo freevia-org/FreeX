@@ -390,6 +390,7 @@ public static class MailMerge
             Revision = source.Revision,
             Control = source.Control,
             Citation = source.Citation,
+            CrossReference = source.CrossReference,
             RevisionAuthor = source.RevisionAuthor,
             RevisionDateXml = source.RevisionDateXml
         };

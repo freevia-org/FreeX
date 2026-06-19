@@ -79,6 +79,7 @@ internal static class FreeWRibbon
                     });
                     g.Icon("freew.para-shading", "Shading", RibbonCommandIconKind.Fill);
                     g.Icon("freew.para-border", "Borders", RibbonCommandIconKind.Border);
+                    g.Icon("freew.borders-shading", "Borders and Shading…", RibbonCommandIconKind.Border, accent: RibbonCommandIconAccent.Border);
                     g.Icon("freew.space-before-toggle", "Add Space Before Paragraph", RibbonCommandIconKind.SpaceBefore);
                     g.Icon("freew.space-after-toggle", "Add Space After Paragraph", RibbonCommandIconKind.SpaceAfter);
                     g.Icon("freew.paragraph-dialog", "Paragraph Settings", RibbonCommandIconKind.TextFunction);
@@ -149,12 +150,33 @@ internal static class FreeWRibbon
                         m.Item("freew.shape-ellipse", "Ellipse", "E");
                         m.Item("freew.shape-textbox", "Text Box", "T");
                     });
+                    // Screenshot gallery: "Screen Clipping" drag-selects a screen region and inserts the
+                    // capture as an inline image (same path as Insert Picture). The top-level id only opens
+                    // the menu (no direct insert), mirroring the Shapes dropdown above.
+                    g.Icon("freew.screenshot", "Screenshot", RibbonCommandIconKind.Picture, "SC", menu: m =>
+                    {
+                        m.Item("freew.screen-clipping", "Screen Clipping", "C");
+                    });
                 });
                 // Media is a compact icon cluster (Word keeps these small), kept icon-only so the dense
                 // 12-group Insert tab fits without collapsing the trailing groups at ~1500-1600px.
                 tab.Group("media", "Media", "M", 78, g =>
                 {
-                    g.Icon("freew.equation", "Equation", RibbonCommandIconKind.Equation);
+                    // Equation gallery: the top-level id inserts the default sample equation (E = mc²),
+                    // and the dropdown offers Word's common structure presets — each a one-click insert
+                    // that drops the structure at the caret as a starting point the user can edit.
+                    g.Icon("freew.equation", "Equation", RibbonCommandIconKind.Equation, menu: m =>
+                    {
+                        m.Item("freew.equation-fraction", "Fraction", "F");
+                        m.Item("freew.equation-script", "Subscript / Superscript", "S");
+                        m.Item("freew.equation-radical", "Radical (Square Root)", "R");
+                        m.Item("freew.equation-nthroot", "Radical (nth Root)", "N");
+                        m.Item("freew.equation-integral", "Integral", "I");
+                        m.Item("freew.equation-summation", "Summation", "U");
+                        m.Item("freew.equation-product", "Product", "P");
+                        m.Item("freew.equation-bracket", "Bracket", "B");
+                        m.Item("freew.equation-matrix", "Matrix (2×2)", "M");
+                    });
                     g.Icon("freew.chart", "Chart", RibbonCommandIconKind.ChartColumn, RibbonCommandIconAccent.Chart);
                     g.Icon("freew.wordart", "WordArt", RibbonCommandIconKind.WordArt);
                     g.RowBreak();
@@ -178,6 +200,7 @@ internal static class FreeWRibbon
                 {
                     g.Icon("freew.insert-quickpart", "Insert Quick Part", RibbonCommandIconKind.QuickParts);
                     g.Icon("freew.save-quickpart", "Save Selection", RibbonCommandIconKind.QuickParts);
+                    g.Icon("freew.building-blocks-organizer", "Building Blocks Organizer", RibbonCommandIconKind.QuickParts);
                     g.Icon("freew.insert-file", "Text from File", RibbonCommandIconKind.TextFromFile);
                 });
                 tab.Group("references", "References", "R", 65, g =>
@@ -189,7 +212,7 @@ internal static class FreeWRibbon
                     g.Icon("freew.citation", "Citation", RibbonCommandIconKind.Citation);
                     g.ComboBox("freew.citation-style", "Citation Style", c => c with
                     {
-                        Items = new[] { "APA", "MLA", "Chicago" },
+                        Items = new[] { "APA", "MLA", "Chicago", "IEEE" },
                         Width = 90
                     });
                     g.RowBreak();
@@ -238,7 +261,16 @@ internal static class FreeWRibbon
                     g.Medium("freew.columns", "Columns", RibbonCommandIconKind.TextColumns, dropdown: true);
                     g.RowBreak();
                     g.Icon("freew.line-numbers", "Line Numbers", RibbonCommandIconKind.Number);
-                    g.Icon("freew.hyphenation", "Hyphenation", RibbonCommandIconKind.Hyphenation);
+                    // Hyphenation dropdown (Word's Layout > Page Setup > Hyphenation): None / Automatic /
+                    // Manual, plus the Hyphenation Options… dialog. The mode items set the document flag; the
+                    // options item opens the dialog (zone, consecutive-hyphen limit, hyphenate-caps).
+                    g.Icon("freew.hyphenation", "Hyphenation", RibbonCommandIconKind.Hyphenation, "HY", menu: m =>
+                    {
+                        m.Item("freew.hyphenation-none", "None", "N");
+                        m.Item("freew.hyphenation-auto", "Automatic", "A");
+                        m.Item("freew.hyphenation-manual", "Manual", "M");
+                        m.Item("freew.hyphenation-options", "Hyphenation Options…", "H");
+                    });
                     g.Icon("freew.page-valign", "Vertical Align", RibbonCommandIconKind.AlignJustify);
                     g.Icon("freew.different-first-page", "Different First Page", RibbonCommandIconKind.CoverPage);
                 });
@@ -277,6 +309,8 @@ internal static class FreeWRibbon
                 tab.Group("page-background", "Page Background", "B", 90, g =>
                 {
                     g.Medium("freew.page-color", "Page Color", RibbonCommandIconKind.Fill, accent: RibbonCommandIconAccent.Fill, dropdown: true);
+                    // Word's Design > Page Background > Page Borders: opens the full Borders and Shading dialog.
+                    g.Medium("freew.page-border", "Page Borders", RibbonCommandIconKind.Border, accent: RibbonCommandIconAccent.Border);
                 });
             })
             .Tab("view", "View", "W", tab =>
@@ -284,14 +318,19 @@ internal static class FreeWRibbon
                 // Small toggle groups → labelled Medium toggles so Print Layout / Read Mode read clearly.
                 tab.Group("views", "Views", "V", 100, g =>
                 {
-                    g.MediumToggle("freew.print-layout", "Print Layout", RibbonCommandIconKind.PrintLayout);
                     g.MediumToggle("freew.read-mode", "Read Mode", RibbonCommandIconKind.ReadMode);
+                    g.MediumToggle("freew.print-layout", "Print Layout", RibbonCommandIconKind.PrintLayout);
+                    g.MediumToggle("freew.web-layout", "Web Layout", RibbonCommandIconKind.WebLayout);
+                    g.MediumToggle("freew.outline-view", "Outline", RibbonCommandIconKind.MultilevelList);
+                    g.MediumToggle("freew.draft-view", "Draft", RibbonCommandIconKind.Draft);
                 });
                 tab.Group("show", "Show", "S", 90, g =>
                 {
                     g.MediumToggle("freew.nav-pane", "Navigation Pane", RibbonCommandIconKind.NavigationPane);
                     g.MediumToggle("freew.formatting-marks", "Show ¶", RibbonCommandIconKind.FormattingMarks);
                 });
+                // Zoom group → Word's View > Zoom hero, opening the Zoom dialog (presets / page fits / custom %).
+                tab.Group("zoom", "Zoom", "Z", 80, g => g.Large("freew.zoom-dialog", "Zoom", RibbonCommandIconKind.Zoom));
             })
             .Tab("mailings", "Mailings", "M", tab =>
             {

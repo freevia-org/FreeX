@@ -50,7 +50,7 @@ public sealed partial class MainWindow
                     new FilterCommand(sheetId, filterRange, (uint)column.ColumnId, column.Values));
                 if (!result.Success)
                 {
-                    ShowEditIssue(result.ErrorMessage ?? "Reapply filter failed.");
+                    ShowEditIssue(result.ErrorMessage ?? UiText.Get("TableLoc_ReapplyFilterFailed"));
                     return;
                 }
 
@@ -63,7 +63,7 @@ public sealed partial class MainWindow
             var result = _session.ExecuteReviewCommand(new SortCommand(sheetId, sortRange, sortKeys));
             if (!result.Success)
             {
-                ShowEditIssue(result.ErrorMessage ?? "Reapply sort failed.");
+                ShowEditIssue(result.ErrorMessage ?? UiText.Get("TableLoc_ReapplySortFailed"));
                 return;
             }
 
@@ -71,8 +71,10 @@ public sealed partial class MainWindow
         }
 
         RefreshShell(applied == 0
-            ? "No reapplyable filter or sort on the active sheet"
-            : $"Reapplied {applied} filter/sort {Pluralize("definition", applied)}");
+            ? UiText.Get("TableLoc_NoReapplyableFilterOrSort")
+            : UiText.Format(
+                applied == 1 ? "TableLoc_ReapplyedDefinitionsOne" : "TableLoc_ReapplyedDefinitionsMany",
+                applied));
     }
 
     private static bool TryGetAutoFilterReapplyRange(Sheet sheet, out GridRange range)
@@ -179,20 +181,22 @@ public sealed partial class MainWindow
         _validationCircleCells.AddRange(invalid);
 
         RefreshShell(invalid.Count == 0
-            ? "No invalid data found on the active sheet"
-            : $"Circled {invalid.Count} invalid {Pluralize("cell", invalid.Count)}");
+            ? UiText.Get("TableLoc_NoInvalidDataFound")
+            : UiText.Format(
+                invalid.Count == 1 ? "TableLoc_CircledInvalidCellsOne" : "TableLoc_CircledInvalidCellsMany",
+                invalid.Count));
     }
 
     private void ClearValidationCircles()
     {
         if (_validationCircleCells.Count == 0)
         {
-            RefreshShell("No validation circles to clear");
+            RefreshShell(UiText.Get("TableLoc_NoValidationCirclesToClear"));
             return;
         }
 
         _validationCircleCells.Clear();
-        RefreshShell("Cleared validation circles");
+        RefreshShell(UiText.Get("TableLoc_ClearedValidationCircles"));
     }
 
     // Called from BuildDrawingObjectOverlay so circles are painted onto the same overlay Canvas that hosts

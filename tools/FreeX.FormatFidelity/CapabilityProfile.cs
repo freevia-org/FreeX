@@ -100,20 +100,23 @@ internal sealed class CapabilityProfile
             .Set(Cap.Lossy, Dim.ConditionalFormat, Dim.Charts, Dim.Images)
             .Set(Cap.None, Dim.Vba));
 
-        // ---- xml (SpreadsheetML 2003): values/numfmt/structure Full; styling None; formulas Lossy
-        //      (R1C1 not converted, footnote 2); comments Lossy (author hard-coded, footnote 5);
-        //      defined names Lossy (single-area only, footnote 6); hyperlinks Lossy.
+        // ---- xml (SpreadsheetML 2003): values/numfmt/structure Full; styling None. Formulas are now
+        //      Full (footnote 2 retired): the adapter converts Excel's R1C1 to A1 on read and A1 back to
+        //      R1C1 on write, so formulas round-trip faithfully. Comments Lossy (author hard-coded,
+        //      footnote 5); defined names Lossy (single-area only, footnote 6); hyperlinks Lossy.
         profiles.Add(new CapabilityProfile { Key = "xml", Extension = ".xml" }
-            .Set(Cap.Full, Dim.CellValues, Dim.NumberFormats, Dim.MultiSheet, Dim.SheetNames,
+            .Set(Cap.Full, Dim.CellValues, Dim.Formulas, Dim.NumberFormats, Dim.MultiSheet, Dim.SheetNames,
                 Dim.MergedCells, Dim.ColumnWidths, Dim.RowHeights, Dim.FreezePanes)
-            .Set(Cap.Lossy, Dim.Formulas, Dim.Hyperlinks, Dim.Comments, Dim.DefinedNames)
+            .Set(Cap.Lossy, Dim.Hyperlinks, Dim.Comments, Dim.DefinedNames)
             .Set(Cap.None, Dim.Fonts, Dim.Fills, Dim.Borders, Dim.Alignment, Dim.DataValidation,
                 Dim.ConditionalFormat, Dim.Charts, Dim.Images, Dim.Vba));
 
         // ---- csv / txt(tab): single-sheet, values-only. CellValues Lossy (text↔typed coercion,
         //      footnote 1); formula written as TEXT not result, recovered on reload → Lossy (footnote 3).
         //      Everything else None (MultiSheet/SheetNames None — one sheet, name not preserved).
-        foreach (var (key, ext) in new[] { ("csv", ".csv"), ("txt", ".txt") })
+        //      The encoding variants (csv-utf8 BOM, txt-unicode UTF-16LE BOM) share the exact same engine
+        //      → identical capability ceiling; only the on-disk encoding differs.
+        foreach (var (key, ext) in new[] { ("csv", ".csv"), ("txt", ".txt"), ("csv-utf8", ".csv"), ("txt-unicode", ".txt") })
         {
             profiles.Add(new CapabilityProfile { Key = key, Extension = ext }
                 .Set(Cap.Lossy, Dim.CellValues, Dim.Formulas)
@@ -122,6 +125,34 @@ internal sealed class CapabilityProfile
                     Dim.FreezePanes, Dim.Hyperlinks, Dim.Comments, Dim.DefinedNames, Dim.DataValidation,
                     Dim.ConditionalFormat, Dim.Charts, Dim.Images, Dim.Vba));
         }
+
+        // ---- slk (SYLK): single-sheet line format. Values + R1C1 formulas round-trip (both Lossy: value
+        //      coercion + R1C1 notation). Number formats are a best-effort coarse subset preserved only on
+        //      value-bearing cells (formatted-but-empty cells cannot carry a format in SYLK), so the
+        //      dimension is None (the round-trip that DOES survive shows as a preserved-anyway bonus rather
+        //      than being a guaranteed-faithful assertion). Everything structural/visual is None.
+        profiles.Add(new CapabilityProfile { Key = "slk", Extension = ".slk" }
+            .Set(Cap.Lossy, Dim.CellValues, Dim.Formulas)
+            .Set(Cap.None, Dim.NumberFormats, Dim.Fonts, Dim.Fills, Dim.Borders, Dim.Alignment, Dim.MultiSheet,
+                Dim.SheetNames, Dim.MergedCells, Dim.ColumnWidths, Dim.RowHeights, Dim.FreezePanes, Dim.Hyperlinks,
+                Dim.Comments, Dim.DefinedNames, Dim.DataValidation, Dim.ConditionalFormat, Dim.Charts,
+                Dim.Images, Dim.Vba));
+
+        // ---- dif (Data Interchange Format): single-sheet, values only. Nothing else representable.
+        profiles.Add(new CapabilityProfile { Key = "dif", Extension = ".dif" }
+            .Set(Cap.Lossy, Dim.CellValues)
+            .Set(Cap.None, Dim.Formulas, Dim.NumberFormats, Dim.Fonts, Dim.Fills, Dim.Borders, Dim.Alignment,
+                Dim.MultiSheet, Dim.SheetNames, Dim.MergedCells, Dim.ColumnWidths, Dim.RowHeights,
+                Dim.FreezePanes, Dim.Hyperlinks, Dim.Comments, Dim.DefinedNames, Dim.DataValidation,
+                Dim.ConditionalFormat, Dim.Charts, Dim.Images, Dim.Vba));
+
+        // ---- xltx: the xlsx writer with the package content-type flipped to template. The harness runs
+        //      it through the verbatim source-copy/patch path (same as xlsx-preserved), so every modeled
+        //      dimension round-trips faithfully — the chain's job is to prove the content-type flip does
+        //      not corrupt the package. Identical ceiling to xlsx-preserved (all Full; Vba survives only
+        //      on the verbatim path).
+        profiles.Add(new CapabilityProfile { Key = "xltx", Extension = ".xltx" }
+            .Set(Cap.Full, all));
 
         return profiles.ToDictionary(p => p.Key, StringComparer.OrdinalIgnoreCase);
     }

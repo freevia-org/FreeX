@@ -1309,7 +1309,7 @@ public sealed partial class MainWindow : Window
         var versionSuffix = string.IsNullOrWhiteSpace(_stagedUpdateVersion)
             ? string.Empty
             : $" {_stagedUpdateVersion}";
-        RefreshShell($"Restarting to install FreeX{versionSuffix}...");
+        RefreshShell(UiText.Format("MainLoc_RestartingToInstall", versionSuffix));
         _updateService?.ApplyAndRestart();
     }
 
@@ -5178,7 +5178,7 @@ public sealed partial class MainWindow : Window
         if (_session.SelectSheet(sheetId))
         {
             ClearSelectedDrawingObject();
-            RefreshShell($"Selected {_session.ActiveSheet.Name}");
+            RefreshShell(UiText.Format("MainLoc_SelectedX", _session.ActiveSheet.Name));
         }
 
         return true;
@@ -5280,7 +5280,7 @@ public sealed partial class MainWindow : Window
         if (changed)
         {
             ClearSelectedDrawingObject();
-            RefreshShell($"Selected {_session.ActiveSheet.Name}");
+            RefreshShell(UiText.Format("MainLoc_SelectedX", _session.ActiveSheet.Name));
         }
 
         FocusActiveSheetTab();
@@ -5375,7 +5375,7 @@ public sealed partial class MainWindow : Window
             return;
 
         ClearSelectedDrawingObject();
-        RefreshShell($"Selected {_session.ActiveSheet.Name}");
+        RefreshShell(UiText.Format("MainLoc_SelectedX", _session.ActiveSheet.Name));
     }
 
     private void SelectAllVisibleSheets()
@@ -5416,7 +5416,7 @@ public sealed partial class MainWindow : Window
         var result = _session.AddSheet();
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "New Sheet failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_NewSheetFailed"));
             return;
         }
 
@@ -5484,7 +5484,7 @@ public sealed partial class MainWindow : Window
         var result = _session.RenameActiveSheet(newName);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Rename Sheet failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_RenameSheetFailed"));
             return;
         }
 
@@ -5506,7 +5506,7 @@ public sealed partial class MainWindow : Window
         var result = _session.DuplicateActiveSheet();
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Duplicate Sheet failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_DuplicateSheetFailed"));
             return;
         }
 
@@ -5526,7 +5526,7 @@ public sealed partial class MainWindow : Window
         var result = _session.MoveActiveSheetLeft();
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Move Sheet Left failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_MoveSheetLeftFailed"));
             return;
         }
 
@@ -5546,7 +5546,7 @@ public sealed partial class MainWindow : Window
         var result = _session.MoveActiveSheetRight();
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Move Sheet Right failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_MoveSheetRightFailed"));
             return;
         }
 
@@ -5566,7 +5566,7 @@ public sealed partial class MainWindow : Window
         var result = _session.SetShowGridlines(showGridlines);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Gridlines failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_GridlinesFailed"));
             return;
         }
 
@@ -5586,7 +5586,7 @@ public sealed partial class MainWindow : Window
         var result = _session.SetShowHeadings(showHeadings);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Headings failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_HeadingsFailed"));
             return;
         }
 
@@ -5666,7 +5666,7 @@ public sealed partial class MainWindow : Window
         var result = _session.SetShowFormulas(showFormulas);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Show Formulas failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_ShowFormulasFailed"));
             return;
         }
 
@@ -5686,7 +5686,7 @@ public sealed partial class MainWindow : Window
         var result = _session.HideActiveSheet();
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Hide Sheet failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_HideSheetFailed"));
             return;
         }
 
@@ -5704,7 +5704,7 @@ public sealed partial class MainWindow : Window
         var hiddenSheets = _session.HiddenSheets;
         if (hiddenSheets.Count == 0)
         {
-            ShowEditIssue("No hidden sheets.");
+            ShowEditIssue(UiText.Get("MainLoc_NoHiddenSheets"));
             return;
         }
 
@@ -5716,7 +5716,7 @@ public sealed partial class MainWindow : Window
         var result = _session.UnhideSheet(sheet.Id);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Unhide Sheet failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_UnhideSheetFailed"));
             return;
         }
 
@@ -5736,7 +5736,7 @@ public sealed partial class MainWindow : Window
         var result = _session.DeleteActiveSheet();
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Delete Sheet failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_DeleteSheetFailed"));
             return;
         }
 
@@ -5964,13 +5964,13 @@ public sealed partial class MainWindow : Window
         var result = _session.FindAll(search.FindText, search.Options, search.MatchCase, search.MatchEntireCell);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Find All failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_FindAllFailed"));
             return;
         }
 
         RefreshShell(result.MatchCount == 0
-            ? "No matches found."
-            : $"Found {result.MatchCount} cells");
+            ? UiText.Get("MainLoc_NoMatchesFound")
+            : UiText.Format("MainLoc_FoundCells", result.MatchCount));
         await ShowFindAllResultsDialogAsync(search.FindText, result.Matches);
     }
 
@@ -6130,11 +6130,11 @@ public sealed partial class MainWindow : Window
         var result = _session.FindNext(searchText, options, matchCase, matchEntireCell);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Find failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_FindFailed"));
             return;
         }
 
-        RefreshShell($"Found {FormatRangeReference(result.SelectedRange!.Value)} ({result.MatchIndex} of {result.MatchCount})");
+        RefreshShell(UiText.Format("MainLoc_FoundRangeOfCount", FormatRangeReference(result.SelectedRange!.Value), result.MatchIndex, result.MatchCount));
     }
 
     private async Task ShowFindAllResultsDialogAsync(string searchText, IReadOnlyList<WorkbookFindAllMatch> matches)
@@ -6216,11 +6216,11 @@ public sealed partial class MainWindow : Window
         var result = _session.GoToCell(match.Address);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Find result could not be selected.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_FindResultNotSelected"));
             return;
         }
 
-        RefreshShell($"Found {match.Sheet}!{match.Cell}");
+        RefreshShell(UiText.Format("MainLoc_FoundSheetCell", match.Sheet, match.Cell));
     }
 
     private async Task ShowReplaceDialogAsync()
@@ -6249,21 +6249,21 @@ public sealed partial class MainWindow : Window
                 replacement.ReplacementFormat);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Replace failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_ReplaceFailed"));
             return;
         }
 
         if (replacement.Action == ReplaceDialogAction.ReplaceAll)
         {
             RefreshShell(result.ReplacedCount == 0
-                ? result.MatchCount == 0 ? "No matches found." : "No replaceable match found."
-                : $"Replaced {result.ReplacedCount} cells");
+                ? result.MatchCount == 0 ? UiText.Get("MainLoc_NoMatchesFound") : UiText.Get("MainLoc_NoReplaceableMatch")
+                : UiText.Format("MainLoc_ReplacedCells", result.ReplacedCount));
             return;
         }
 
         RefreshShell(result.ReplacedCount == 0
-            ? result.MatchCount == 0 ? "No matches found." : "No replaceable match found."
-            : $"Replaced {FormatRangeReference(result.ReplacedRange!.Value)} ({result.MatchIndex} of {result.MatchCount})");
+            ? result.MatchCount == 0 ? UiText.Get("MainLoc_NoMatchesFound") : UiText.Get("MainLoc_NoReplaceableMatch")
+            : UiText.Format("MainLoc_ReplacedRangeOfCount", FormatRangeReference(result.ReplacedRange!.Value), result.MatchIndex, result.MatchCount));
     }
 
     private async Task<ReplaceDialogResult?> ShowReplaceInputDialogAsync(Action<ReplaceDialogSmokeProbe>? launchSmokeProbe = null)
@@ -6452,11 +6452,11 @@ public sealed partial class MainWindow : Window
         var result = _session.GoToReference(reference);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Go To failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_GoToFailed"));
             return;
         }
 
-        RefreshShell($"Selected {FormatRangeReference(result.SelectedRange!.Value)}");
+        RefreshShell(UiText.Format("MainLoc_SelectedX", FormatRangeReference(result.SelectedRange!.Value)));
     }
 
     private IReadOnlyList<string> BuildGoToReferenceChoices(string defaultReference) =>
@@ -6626,7 +6626,7 @@ public sealed partial class MainWindow : Window
 
         if (!_session.TryGetSelectedHyperlinkPlan(out var plan) || plan is null)
         {
-            ShowEditIssue("Hyperlink target was not found.");
+            ShowEditIssue(UiText.Get("MainLoc_HyperlinkTargetNotFound"));
             return;
         }
 
@@ -6645,18 +6645,18 @@ public sealed partial class MainWindow : Window
         var result = _session.OpenSelectedHyperlink();
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Open Hyperlink failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_OpenHyperlinkFailed"));
             return;
         }
 
-        RefreshShell($"Selected {FormatRangeReference(result.SelectedRange!.Value)}");
+        RefreshShell(UiText.Format("MainLoc_SelectedX", FormatRangeReference(result.SelectedRange!.Value)));
     }
 
     private async Task OpenLocalFileHyperlinkAsync(HyperlinkNavigationPlan plan)
     {
         if (string.IsNullOrWhiteSpace(plan.LocalPath))
         {
-            ShowEditIssue("Open Hyperlink requires a local file path.");
+            ShowEditIssue(UiText.Get("MainLoc_OpenHyperlinkRequiresLocalPath"));
             return;
         }
 
@@ -6664,7 +6664,7 @@ public sealed partial class MainWindow : Window
             target is null)
         {
             ShowEditIssue(string.IsNullOrWhiteSpace(message)
-                ? "Open Hyperlink requires a supported workbook file."
+                ? UiText.Get("MainLoc_OpenHyperlinkRequiresWorkbook")
                 : message);
             return;
         }
@@ -6680,14 +6680,14 @@ public sealed partial class MainWindow : Window
             case ExternalUriLaunchResult.Launched:
                 return;
             case ExternalUriLaunchResult.BlockedScheme:
-                ShowEditIssue("Open Hyperlink blocked this link because its scheme is not supported.");
+                ShowEditIssue(UiText.Get("MainLoc_OpenHyperlinkSchemeBlocked"));
                 return;
             case ExternalUriLaunchResult.LauncherUnavailable:
-                ShowEditIssue("Open Hyperlink cannot open external links on this platform.");
+                ShowEditIssue(UiText.Get("MainLoc_OpenHyperlinkNoExternal"));
                 return;
             case ExternalUriLaunchResult.LaunchFailed:
             default:
-                ShowEditIssue("Open Hyperlink could not open the link.");
+                ShowEditIssue(UiText.Get("MainLoc_OpenHyperlinkCouldNotOpen"));
                 return;
         }
     }
@@ -6906,14 +6906,14 @@ public sealed partial class MainWindow : Window
         var result = _session.GoToSpecial(kind, options);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Go To Special failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_GoToSpecialFailed"));
             return false;
         }
 
         var selectedText = result.SelectedRanges.Count == 1
             ? FormatRangeReference(result.SelectedRange!.Value)
             : $"{result.MatchCount} cells";
-        RefreshShell($"Selected {selectedText}");
+        RefreshShell(UiText.Format("MainLoc_SelectedX", selectedText));
         return true;
     }
 
@@ -6937,7 +6937,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        RefreshShell($"Inserted hyperlink for {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_InsertedHyperlinkFor", rangeReference));
     }
 
     private async Task<HyperlinkDialogPlan?> ShowInsertHyperlinkInputDialogAsync()
@@ -7395,7 +7395,7 @@ public sealed partial class MainWindow : Window
 
         if (result.SelectedRange is not { } selectedRange)
         {
-            ShowEditIssue("Review target was not selected.");
+            ShowEditIssue(UiText.Get("MainLoc_ReviewTargetNotSelected"));
             return;
         }
 
@@ -7565,11 +7565,11 @@ public sealed partial class MainWindow : Window
             mergeContentResolution);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Format Cells failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_FormatCellsFailed"));
             return;
         }
 
-        RefreshShell($"Formatted {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_FormattedX", rangeReference));
     }
 
     private async Task<FormatCellsDialogResult?> ShowFormatCellsInputDialogAsync(
@@ -9213,7 +9213,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        RefreshShell($"Flash filled {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_FlashFilledX", rangeReference));
     }
 
     private void SortSelectedRange(bool ascending)
@@ -9252,11 +9252,11 @@ public sealed partial class MainWindow : Window
         var result = _session.ToggleSelectedRangeAutoFilter();
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Toggle Filter failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_ToggleFilterFailed"));
             return;
         }
 
-        RefreshShell(wasEnabled ? "Removed filter" : "Added filter");
+        RefreshShell(wasEnabled ? UiText.Get("MainLoc_RemovedFilter") : UiText.Get("MainLoc_AddedFilter"));
     }
 
     private async Task ShowSortDialogAsync()
@@ -9281,7 +9281,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        RefreshShell($"Sorted {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_SortedX", rangeReference));
     }
 
     private async Task<SortDialogResult?> ShowSortInputDialogAsync()
@@ -9713,11 +9713,11 @@ public sealed partial class MainWindow : Window
                 var restoreResult = _session.UndoLastEdit();
                 if (!restoreResult.Success)
                 {
-                    ShowEditIssue(restoreResult.ErrorMessage ?? "Goal Seek restore failed.");
+                    ShowEditIssue(restoreResult.ErrorMessage ?? UiText.Get("MainLoc_GoalSeekRestoreFailed"));
                     return;
                 }
 
-                RefreshShell($"Restored original Goal Seek values for {FormatCellReference(result.Request.ChangingCell)}");
+                RefreshShell(UiText.Format("MainLoc_RestoredGoalSeekValues", FormatCellReference(result.Request.ChangingCell)));
                 return;
             }
 
@@ -10409,13 +10409,13 @@ public sealed partial class MainWindow : Window
             : _session.ExecuteSubtotalOptions(selection.Options!);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Subtotal failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_SubtotalFailed"));
             return;
         }
 
         RefreshShell(selection.Action == SubtotalDialogAction.RemoveAll
-            ? $"Removed subtotals from {rangeReference}"
-            : $"Added subtotals to {rangeReference}");
+            ? UiText.Format("MainLoc_RemovedSubtotalsFrom", rangeReference)
+            : UiText.Format("MainLoc_AddedSubtotalsTo", rangeReference));
     }
 
     private async Task<SubtotalDialogResult?> ShowSubtotalInputDialogAsync()
@@ -11010,7 +11010,7 @@ public sealed partial class MainWindow : Window
         var initialPlan = ScenarioManagerPlanner.CreateDialogPlan(_session.Workbook);
         if (!initialPlan.IsReady)
         {
-            ShowEditIssue(initialPlan.StatusText ?? "Scenario Manager failed.");
+            ShowEditIssue(initialPlan.StatusText ?? UiText.Get("MainLoc_ScenarioManagerFailed"));
             return;
         }
 
@@ -11845,13 +11845,13 @@ public sealed partial class MainWindow : Window
             var clearResult = _session.ClearSelectedRangeDataValidation();
             if (!clearResult.Success)
             {
-                ShowEditIssue(clearResult.ErrorMessage ?? "Clear Data Validation failed.");
+                ShowEditIssue(clearResult.ErrorMessage ?? UiText.Get("MainLoc_ClearDataValidationFailed"));
                 return;
             }
 
             RefreshShell(clearResult.Mutated
-                ? $"Cleared data validation from {rangeReference}"
-                : $"No data validation to clear from {rangeReference}");
+                ? UiText.Format("MainLoc_ClearedDataValidationFrom", rangeReference)
+                : UiText.Format("MainLoc_NoDataValidationToClear", rangeReference));
             return;
         }
 
@@ -11861,7 +11861,7 @@ public sealed partial class MainWindow : Window
         var result = _session.ApplyDataValidationToSelectedRange(rule);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Data Validation failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_DataValidationFailed"));
             return;
         }
 
@@ -12719,12 +12719,12 @@ public sealed partial class MainWindow : Window
         var cutResult = _session.TryCutSelectedRangeText();
         if (!cutResult.Success)
         {
-            ShowEditIssue(cutResult.ErrorMessage ?? "Cut failed.");
+            ShowEditIssue(cutResult.ErrorMessage ?? UiText.Get("MainLoc_CutFailed"));
             return;
         }
 
         await clipboard.SetTextAsync(cutResult.Text);
-        RefreshShell($"Cut {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_CutX", rangeReference));
     }
 
     private async Task CopySelectedRangeToClipboardAsync()
@@ -12746,12 +12746,12 @@ public sealed partial class MainWindow : Window
         var copyResult = _session.TryCopySelectedRangeText();
         if (!copyResult.Success)
         {
-            ShowEditIssue(copyResult.ErrorMessage ?? "Copy failed.");
+            ShowEditIssue(copyResult.ErrorMessage ?? UiText.Get("MainLoc_CopyFailed"));
             return;
         }
 
         await clipboard.SetTextAsync(copyResult.Text);
-        RefreshShell($"Copied {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_CopiedX", rangeReference));
     }
 
     private void SelectCurrentRegionOrAll()
@@ -12764,7 +12764,7 @@ public sealed partial class MainWindow : Window
 
         ClearSelectedDrawingObject();
         var range = _session.SelectCurrentRegionOrAll();
-        RefreshShell($"Selected {FormatRangeReference(range)}");
+        RefreshShell(UiText.Format("MainLoc_SelectedX", FormatRangeReference(range)));
     }
 
     private async Task PasteClipboardTextAsync()
@@ -12797,7 +12797,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        RefreshShell($"Pasted at {FormatCellReference(destination)}");
+        RefreshShell(UiText.Format("MainLoc_PastedAt", FormatCellReference(destination)));
     }
 
     private async Task<bool> TryPasteClipboardImageAsync(IClipboard clipboard, CellAddress destination)
@@ -12826,11 +12826,11 @@ public sealed partial class MainWindow : Window
         var result = _session.PasteClipboardImageAtActiveCell(pngBytes, pixelWidth, pixelHeight);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Paste Picture failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_PastePictureFailed"));
             return true;
         }
 
-        RefreshShell($"Pasted picture at {FormatCellReference(destination)}");
+        RefreshShell(UiText.Format("MainLoc_PastedPictureAt", FormatCellReference(destination)));
         return true;
     }
 
@@ -12883,7 +12883,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        RefreshShell($"Pasted {label} at {FormatCellReference(destination)}");
+        RefreshShell(UiText.Format("MainLoc_PastedLabelAt", label, FormatCellReference(destination)));
     }
 
     private async Task PasteColumnWidthsFromClipboardAsync(string label)
@@ -12906,11 +12906,11 @@ public sealed partial class MainWindow : Window
         var result = _session.PasteColumnWidthsFromClipboardAtActiveCell(text);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Paste Column Widths failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_PasteColumnWidthsFailed"));
             return;
         }
 
-        RefreshShell($"Pasted {label} at {FormatCellReference(destination)}");
+        RefreshShell(UiText.Format("MainLoc_PastedLabelAt", label, FormatCellReference(destination)));
     }
 
     private async Task PasteCommentsFromClipboardAsync(string label)
@@ -12933,11 +12933,11 @@ public sealed partial class MainWindow : Window
         var result = _session.PasteCommentsFromClipboardAtActiveCell(text);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Paste Comments failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_PasteCommentsFailed"));
             return;
         }
 
-        RefreshShell($"Pasted {label} at {FormatCellReference(destination)}");
+        RefreshShell(UiText.Format("MainLoc_PastedLabelAt", label, FormatCellReference(destination)));
     }
 
     private async Task PasteDataValidationFromClipboardAsync(string label)
@@ -12960,11 +12960,11 @@ public sealed partial class MainWindow : Window
         var result = _session.PasteDataValidationFromClipboardAtActiveCell(text);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Paste Validation failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_PasteValidationFailed"));
             return;
         }
 
-        RefreshShell($"Pasted {label} at {FormatCellReference(destination)}");
+        RefreshShell(UiText.Format("MainLoc_PastedLabelAt", label, FormatCellReference(destination)));
     }
 
     private async Task PasteLinkFromClipboardAsync(string label)
@@ -12987,11 +12987,11 @@ public sealed partial class MainWindow : Window
         var result = _session.PasteLinkFromClipboardAtActiveCell(text);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Paste Link failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_PasteLinkFailed"));
             return;
         }
 
-        RefreshShell($"Pasted {label} at {FormatCellReference(destination)}");
+        RefreshShell(UiText.Format("MainLoc_PastedLabelAt", label, FormatCellReference(destination)));
     }
 
     private async Task PasteSpecialExternalTextFromClipboardAsync(string label)
@@ -13014,11 +13014,11 @@ public sealed partial class MainWindow : Window
         var result = _session.PasteClipboardTextAtActiveCell(text, preserveText: true);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Paste Special Text failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_PasteSpecialTextFailed"));
             return;
         }
 
-        RefreshShell($"Pasted {label} at {FormatCellReference(destination)}");
+        RefreshShell(UiText.Format("MainLoc_PastedLabelAt", label, FormatCellReference(destination)));
     }
 
     private async Task PastePictureFromClipboardAsync(string label, bool linkedPicture)
@@ -13041,11 +13041,11 @@ public sealed partial class MainWindow : Window
         var result = _session.PastePictureFromClipboardAtActiveCell(text, linkedPicture);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Paste Picture failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_PastePictureFailed"));
             return;
         }
 
-        RefreshShell($"Pasted {label} at {FormatCellReference(destination)}");
+        RefreshShell(UiText.Format("MainLoc_PastedLabelAt", label, FormatCellReference(destination)));
     }
 
     private void ClearSelectedRangeContents()
@@ -13083,7 +13083,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        RefreshShell($"Cleared all from {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_ClearedAllFrom", rangeReference));
     }
 
     private void ClearSelectedRangeFormats()
@@ -13102,7 +13102,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        RefreshShell($"Cleared formats from {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_ClearedFormatsFrom", rangeReference));
     }
 
     private void ClearSelectedRangeComments()
@@ -13121,7 +13121,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        RefreshShell($"Cleared comments and notes from {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_ClearedCommentsAndNotesFrom", rangeReference));
     }
 
     private void ClearSelectedRangeHyperlinks()
@@ -13140,7 +13140,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        RefreshShell($"Cleared hyperlinks from {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_ClearedHyperlinksFrom", rangeReference));
     }
 
     private void CaptureFormatPainterSource(bool persistent)
@@ -13154,8 +13154,8 @@ public sealed partial class MainWindow : Window
         var rangeReference = FormatRangeReference(_session.SelectedRange);
         _session.CaptureFormatPainterSource(persistent);
         RefreshShell(persistent
-            ? $"Format Painter locked on {rangeReference}"
-            : $"Format Painter copied {rangeReference}");
+            ? UiText.Format("MainLoc_FormatPainterLockedOn", rangeReference)
+            : UiText.Format("MainLoc_FormatPainterCopied", rangeReference));
     }
 
     private void CancelFormatPainter()
@@ -13164,7 +13164,7 @@ public sealed partial class MainWindow : Window
             return;
 
         _session.CancelFormatPainter();
-        RefreshShell("Format Painter canceled");
+        RefreshShell(UiText.Get("MainLoc_FormatPainterCanceled"));
     }
 
     private void ApplyFormatPainterAfterTargetSelection()
@@ -13184,7 +13184,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        RefreshShell($"Applied Format Painter to {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_AppliedFormatPainterTo", rangeReference));
     }
 
     private void ToggleSelectedRangeBold()
@@ -13402,11 +13402,11 @@ public sealed partial class MainWindow : Window
         if (!result.Success)
         {
             RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "Set Font Size failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_SetFontSizeFailed"));
             return;
         }
 
-        RefreshShell($"Set font size {size:0.##} for {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_SetFontSizeFor", size, rangeReference));
     }
 
     /// <summary>
@@ -13429,11 +13429,11 @@ public sealed partial class MainWindow : Window
         if (!result.Success)
         {
             RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "Set Font failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_SetFontFailed"));
             return;
         }
 
-        RefreshShell($"Set font {fontName.Trim()} for {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_SetFontFor", fontName.Trim(), rangeReference));
     }
 
     private void IncreaseSelectedRangeFontSize()
@@ -15180,7 +15180,7 @@ public sealed partial class MainWindow : Window
         {
             _session.CancelFormulaEdit();
             _formulaBoxEditOriginalText = null;
-            ShowEditIssue(result.ErrorMessage ?? "Data validation dropdown failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_DataValidationDropdownFailed"));
             return;
         }
 
@@ -15477,7 +15477,7 @@ public sealed partial class MainWindow : Window
             return;
 
         if (_session.UpdateViewportSize(viewportHeight, viewportWidth))
-            RefreshShell(string.IsNullOrWhiteSpace(_statusText.Text) ? "Ready" : _statusText.Text);
+            RefreshShell(string.IsNullOrWhiteSpace(_statusText.Text) ? UiText.Get("MainLoc_Ready") : _statusText.Text);
     }
 
     private void WorksheetScrollBar_ValueChanged(object? sender, RangeBaseValueChangedEventArgs e)
@@ -15963,7 +15963,7 @@ public sealed partial class MainWindow : Window
 
         if (!StorageProvider.CanSave)
         {
-            ShowExportIssue("PDF export unavailable on this platform.");
+            ShowExportIssue(UiText.Get("MainLoc_PdfExportUnavailable"));
             return;
         }
 
@@ -15989,7 +15989,7 @@ public sealed partial class MainWindow : Window
             var path = storageFile.TryGetLocalPath();
             if (string.IsNullOrWhiteSpace(path))
             {
-                ShowExportIssue("PDF export requires a local file path.");
+                ShowExportIssue(UiText.Get("MainLoc_PdfExportRequiresLocalPath"));
                 return;
             }
 
@@ -15998,7 +15998,7 @@ public sealed partial class MainWindow : Window
             if (ExportPathPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, exportPathPlan, File.Exists) &&
                 !await ConfirmNormalizedPdfOverwriteAsync(exportPathPlan.Path))
             {
-                ShowExportIssue("PDF export canceled.");
+                ShowExportIssue(UiText.Get("MainLoc_PdfExportCanceled"));
                 return;
             }
 
@@ -16026,11 +16026,11 @@ public sealed partial class MainWindow : Window
                 var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, exportPlan, pdfBuffer);
                 await File.WriteAllBytesAsync(path, pdfBuffer.ToArray());
 
-                RefreshShell($"{outcome.Result.StatusText} {Path.GetFileName(path)}");
+                RefreshShell(UiText.Format("MainLoc_StatusFileName", outcome.Result.StatusText, Path.GetFileName(path)));
             }
             catch (Exception ex)
             {
-                ShowExportIssue($"PDF export failed: {ex.Message}");
+                ShowExportIssue(UiText.Format("MainLoc_PdfExportFailed", ex.Message));
             }
             finally
             {
@@ -16164,7 +16164,7 @@ public sealed partial class MainWindow : Window
 
         if (!StorageProvider.CanSave)
         {
-            ShowExportIssue("PDF export unavailable on this platform.");
+            ShowExportIssue(UiText.Get("MainLoc_PdfExportUnavailable"));
             return;
         }
 
@@ -16190,7 +16190,7 @@ public sealed partial class MainWindow : Window
             var path = storageFile.TryGetLocalPath();
             if (string.IsNullOrWhiteSpace(path))
             {
-                ShowExportIssue("PDF export requires a local file path.");
+                ShowExportIssue(UiText.Get("MainLoc_PdfExportRequiresLocalPath"));
                 return;
             }
 
@@ -16199,7 +16199,7 @@ public sealed partial class MainWindow : Window
             if (ExportPathPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, exportPathPlan, File.Exists) &&
                 !await ConfirmNormalizedPdfOverwriteAsync(exportPathPlan.Path))
             {
-                ShowExportIssue("PDF export canceled.");
+                ShowExportIssue(UiText.Get("MainLoc_PdfExportCanceled"));
                 return;
             }
 
@@ -16223,11 +16223,11 @@ public sealed partial class MainWindow : Window
                 var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, exportPlan, pdfBuffer);
                 await File.WriteAllBytesAsync(path, pdfBuffer.ToArray());
 
-                RefreshShell($"{outcome.Result.StatusText} {Path.GetFileName(path)}");
+                RefreshShell(UiText.Format("MainLoc_StatusFileName", outcome.Result.StatusText, Path.GetFileName(path)));
             }
             catch (Exception ex)
             {
-                ShowExportIssue($"PDF export failed: {ex.Message}");
+                ShowExportIssue(UiText.Format("MainLoc_PdfExportFailed", ex.Message));
             }
             finally
             {

@@ -207,6 +207,8 @@ public enum RibbonCommandIconKind
     NavigationPane,
     ReadMode,
     PrintLayout,
+    WebLayout,
+    Draft,
     OnePage,
     Field,
     QuickParts,

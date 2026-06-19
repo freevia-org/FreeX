@@ -180,6 +180,28 @@ public class OutlineToolsTests
     }
 
     [Fact]
+    public void MoveSubtree_Down_NestedLastChild_DoesNotLeaveParentSection()
+    {
+        var blocks = SampleDoc();
+
+        var moved = OutlineTools.MoveSubtree(blocks, 2, moveUp: false);
+
+        moved.Should().BeSameAs(blocks);
+        Texts(moved).Should().Equal("A", "a1", "A.1", "a11", "B", "b1");
+    }
+
+    [Fact]
+    public void MoveSubtree_Up_NestedFirstChild_DoesNotLeaveParentSection()
+    {
+        var blocks = SampleDoc();
+
+        var moved = OutlineTools.MoveSubtree(blocks, 2, moveUp: true);
+
+        moved.Should().BeSameAs(blocks);
+        Texts(moved).Should().Equal("A", "a1", "A.1", "a11", "B", "b1");
+    }
+
+    [Fact]
     public void MoveSubtree_NonHeadingIndex_IsNoOp()
     {
         var blocks = SampleDoc();

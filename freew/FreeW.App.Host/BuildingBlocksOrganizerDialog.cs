@@ -1,0 +1,190 @@
+using System;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+using FreeW.App.Host.Editing;
+using FreeW.Core.Model;
+
+namespace FreeW.App.Host;
+
+/// <summary>
+/// FreeW's Building Blocks Organizer (Word's Insert › Quick Parts › Building Blocks Organizer). It lists the
+/// saved building blocks from the shared <see cref="QuickPartLibrary"/> — the very same snippet store that
+/// "Save Selection to Quick Parts" writes and "Insert Quick Part" reads, persisted as
+/// <c>quickparts.json</c> under FreeW's data folder — showing each block's name, gallery and category, plus a
+/// read-only preview of the selected block's content. It offers two actions on the selected block:
+/// <b>Insert</b> drops the block's text at the caret (through <see cref="DocumentView.InsertText(string)"/>,
+/// so it is reversible) and closes; <b>Delete</b> removes the block from the library (persisting the change)
+/// and refreshes the list. View-only over the library: it touches no docx I/O and changes no model shapes.
+/// Mirrors <see cref="BookmarkManagerDialog"/>'s list + actions pattern and reuses the shared
+/// <see cref="Free.Shared.Ribbon.Wpf.DialogWindow"/> chrome.
+/// </summary>
+internal sealed class BuildingBlocksOrganizerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
+{
+    private readonly DocumentView _editor;
+    private readonly QuickPartLibrary _library;
+    private readonly ListBox _list = new() { MinWidth = 300, MinHeight = 240 };
+    private readonly TextBox _preview = new()
+    {
+        MinWidth = 300,
+        MinHeight = 240,
+        IsReadOnly = true,
+        TextWrapping = TextWrapping.Wrap,
+        VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+        FontFamily = new FontFamily("Segoe UI"),
+        Background = new SolidColorBrush(Color.FromRgb(0xF7, 0xF7, 0xF7))
+    };
+    private readonly TextBlock _status = new() { Foreground = Brushes.Gray, Margin = new Thickness(0, 8, 0, 0) };
+    private readonly Button _insertButton;
+    private readonly Button _deleteButton;
+
+    private BuildingBlocksOrganizerDialog(Window? owner, DocumentView editor, QuickPartLibrary library)
+    {
+        _editor = editor;
+        _library = library;
+        Owner = owner;
+        Title = "Building Blocks Organizer";
+        Width = 660;
+        SizeToContent = SizeToContent.Height;
+        WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner;
+        ResizeMode = ResizeMode.NoResize;
+        ShowInTaskbar = false;
+
+        var panel = new StackPanel { Margin = new Thickness(14) };
+        panel.Children.Add(new TextBlock { Text = "Building blocks:", FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 4) });
+
+        _list.SelectionChanged += (_, _) => OnSelectionChanged();
+        _list.MouseDoubleClick += (_, _) => Insert();
+
+        // Two side-by-side columns: the block list on the left, a read-only preview on the right.
+        var columns = new Grid();
+        columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(12) });
+        columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var leftColumn = new StackPanel();
+        leftColumn.Children.Add(_list);
+        Grid.SetColumn(leftColumn, 0);
+        columns.Children.Add(leftColumn);
+
+        var rightColumn = new StackPanel();
+        Grid.SetColumn(rightColumn, 2);
+        rightColumn.Children.Add(new TextBlock { Text = "Preview:", FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 4) });
+        rightColumn.Children.Add(_preview);
+        columns.Children.Add(rightColumn);
+
+        panel.Children.Add(columns);
+
+        _insertButton = MakeButton("Insert", (_, _) => Insert());
+        _insertButton.IsDefault = true;
+        _deleteButton = MakeButton("Delete", (_, _) => Delete());
+        var closeButton = MakeButton("Close", (_, _) => Close());
+        closeButton.IsCancel = true;
+
+        var buttons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = new Thickness(0, 10, 0, 0)
+        };
+        buttons.Children.Add(_insertButton);
+        buttons.Children.Add(_deleteButton);
+        buttons.Children.Add(closeButton);
+        panel.Children.Add(buttons);
+
+        panel.Children.Add(_status);
+        Content = panel;
+
+        RefreshList();
+    }
+
+    /// <summary>Opens the Building Blocks Organizer modally over <paramref name="owner"/>.</summary>
+    public static void Show(Window? owner, DocumentView editor, QuickPartLibrary library) =>
+        new BuildingBlocksOrganizerDialog(owner, editor, library).ShowDialog();
+
+    // A list entry wrapping a saved building block; shown by name + gallery/category in the list box.
+    private readonly record struct Item(QuickPart Part)
+    {
+        public override string ToString() => $"{Part.Name}  ({Part.Gallery} / {Part.Category})";
+    }
+
+    private void RefreshList()
+    {
+        var selectedName = (_list.SelectedItem as Item?)?.Part.Name;
+
+        _list.Items.Clear();
+        foreach (var part in _library.Snippets)
+            _list.Items.Add(new Item(part));
+
+        if (_list.Items.Count == 0)
+        {
+            _status.Text = "No building blocks saved yet. Select some text and choose Save Selection to Quick Parts first.";
+        }
+        else
+        {
+            // Re-select the previously selected name if it survived, else select the first entry.
+            var restored = -1;
+            if (selectedName is not null)
+            {
+                for (var i = 0; i < _list.Items.Count; i++)
+                {
+                    if (_list.Items[i] is Item item && string.Equals(item.Part.Name, selectedName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        restored = i;
+                        break;
+                    }
+                }
+            }
+            _list.SelectedIndex = restored >= 0 ? restored : 0;
+        }
+
+        OnSelectionChanged();
+    }
+
+    private void OnSelectionChanged()
+    {
+        var hasSelection = _list.SelectedItem is Item;
+        _insertButton.IsEnabled = hasSelection;
+        _deleteButton.IsEnabled = hasSelection;
+
+        if (_list.SelectedItem is Item item)
+        {
+            var part = item.Part;
+            _preview.Text = string.IsNullOrEmpty(part.Description)
+                ? part.Text
+                : $"{part.Description}\n\n{part.Text}";
+        }
+        else
+        {
+            _preview.Text = string.Empty;
+        }
+    }
+
+    private void Insert()
+    {
+        if (_list.SelectedItem is not Item item)
+            return;
+
+        // Insert through the editor's normal edit path so it is reversible, then close.
+        _editor.Focus();
+        _editor.InsertText(item.Part.Text);
+        Close();
+    }
+
+    private void Delete()
+    {
+        if (_list.SelectedItem is not Item item)
+            return;
+
+        _library.Remove(item.Part.Name);
+        RefreshList();
+        _status.Text = $"Removed \"{item.Part.Name}\".";
+    }
+
+    private static Button MakeButton(string content, RoutedEventHandler onClick)
+    {
+        var button = new Button { Content = content, MinWidth = 84, Margin = new Thickness(6, 0, 0, 0), Padding = new Thickness(6, 3, 6, 3) };
+        button.Click += onClick;
+        return button;
+    }
+}

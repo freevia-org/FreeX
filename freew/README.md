@@ -106,7 +106,8 @@ docx reader/writer; unsupported renderings are noted under [Known limitations](#
 - **Headers & footers** with a live **PAGE-number field** (`word/header1.xml`/`footer1.xml`, `w:fldSimple`).
 - Page borders + **watermark** (page border `w:pgBorders`; watermark stored as a `docProps/custom.xml` custom property).
 - **Line numbers** (continuous / restart-each-page, `sectPr/w:lnNumType`) drawn in the live editor margin and in print preview.
-- Auto-hyphenation (`w:autoHyphenation`), vertical page alignment (`sectPr/w:vAlign`), different-first-page (`w:titlePg`).
+- **Hyphenation** (Layout > Hyphenation: None / Automatic / Manual + Options…): a pure English syllable hyphenator inserts soft hyphens into the live document; document-level `w:autoHyphenation` / `w:hyphenationZone` / `w:consecutiveHyphenLimit` / `w:doNotHyphenateCaps` and per-paragraph `w:suppressAutoHyphens` round-trip via `settings.xml` / `pPr`.
+- Vertical page alignment (`sectPr/w:vAlign`), different-first-page (`w:titlePg`).
 - **Different odd & even page** headers/footers (`w:evenAndOddHeaders` + `header2.xml`/`footer2.xml`, `w:type="even"`).
 - **Page background colour** (`w:background` + `w:displayBackgroundShape`).
 - **Multiple sections** with per-section page setup and break kinds (continuous / next / even / odd page).
@@ -127,7 +128,9 @@ docx reader/writer; unsupported renderings are noted under [Known limitations](#
 - **Shapes & text boxes** — Rectangle / Rounded Rectangle / Ellipse / Text Box (`wps:wsp`, preset geometry,
   optional fill, `w:txbxContent` body).
 - **WordArt** — decorative text presets (fill / gradient / outline / shadow) via DrawingML text effects.
-- **Equations** — inline OMML (`m:oMath`; text, superscript, fractions).
+- **Equations** — inline OMML (`m:oMath`) with an Insert > Equation structure gallery: text, super/sub/sub-superscript
+  (`m:sSup`/`m:sSub`/`m:sSubSup`), fractions (`m:f`), radicals (square & nth root, `m:rad`), n-ary operators
+  (sum/integral/product with limits, `m:nary`), brackets/delimiters (`m:d`) and matrices (`m:m`) — each round-trips.
 - **Charts** — column / bar / line / pie as a self-contained `word/charts/chartN.xml` part (data in literal caches).
 - **SmartArt** — List / Process / Hierarchy diagrams (four `word/diagrams/*` parts; node text + structure).
 - **OLE embedded objects** — embed a binary payload + ProgID with an icon (`w:object` / `o:OLEObject` +
@@ -141,7 +144,7 @@ docx reader/writer; unsupported renderings are noted under [Known limitations](#
 - **Footnotes** (`word/footnotes.xml`, `w:footnoteReference`) and **endnotes** (`word/endnotes.xml`) — they coexist.
 - **Table of Contents** (built from the heading outline; Insert + Update).
 - **Index** (mark entry → build sorted/deduped index, `IndexHeading`/`IndexEntry` styles).
-- **Citations & bibliography** in **APA / MLA / Chicago** (in-text + a sorted bibliography under the right heading: References / Works Cited / Bibliography).
+- **Citations & bibliography** in **APA / MLA / Chicago / IEEE** (style- and source-type-aware: Book / Journal Article / Web Site each format per the chosen style, in-text + a sorted bibliography under the right heading: References / Works Cited / Bibliography). The selected style and the source data persist to `word/bibliography/sources.xml` and round-trip.
 - **Captions** ("Figure/Table N: …") with automatic figure/table numbering, plus a **Table of Figures**.
 - **Cross-references** to headings / bookmarks / captions / footnotes (clickable internal link when anchored).
 - **Bookmarks** + internal hyperlinks (`w:bookmarkStart/End`, `w:hyperlink w:anchor`) with a Bookmark Manager + Go To.
@@ -177,6 +180,9 @@ docx reader/writer; unsupported renderings are noted under [Known limitations](#
   Word-style status bar (Page X of Y, Section X of N, word count, zoom, view switches).
 - **Zoom** 50–200% (slider / ± / Ctrl+wheel).
 - **Read mode** (hides chrome, centered reading column) + live selection word/char count.
+- **Outline view** (View &gt; Outline) — the document as an indented heading/body outline with an Outlining
+  mini-toolbar (Show Level 1–9/All, Promote / Demote / Promote to Heading 1, Move Up/Down, Expand/Collapse,
+  Show First Line Only). Reuses the existing reversible heading operations; switching views never mutates the model.
 - **Show formatting marks** (¶ / · / →) drawn as a non-destructive adorner overlay.
 - Document properties dialog (`docProps/core.xml`, Dublin Core).
 

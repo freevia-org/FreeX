@@ -35,7 +35,7 @@ public sealed partial class MainWindow
 
         var dialog = new Window
         {
-            Title = "Consolidate",
+            Title = UiText.Get("TableLoc_ConsolidateDialogTitle"),
             Width = 460,
             Height = 520,
             MinWidth = 420,
@@ -53,15 +53,15 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(functionBox, "ConsolidateFunctionBox");
 
-        var referenceBox = new TextBox { PlaceholderText = "e.g. Sheet1!A1:B5", MinWidth = 220 };
+        var referenceBox = new TextBox { PlaceholderText = UiText.Get("TableLoc_ConsolidateReferencePlaceholder"), MinWidth = 220 };
         AutomationProperties.SetAutomationId(referenceBox, "ConsolidateReferenceBox");
 
         var referencesList = new ListBox { MinHeight = 96 };
         AutomationProperties.SetAutomationId(referencesList, "ConsolidateAllReferencesList");
 
-        var addButton = new Button { Content = "Add", MinWidth = 76 };
+        var addButton = new Button { Content = UiText.Get("TableLoc_Add"), MinWidth = 76 };
         AutomationProperties.SetAutomationId(addButton, "ConsolidateAddReferenceButton");
-        var removeButton = new Button { Content = "Remove", MinWidth = 76, IsEnabled = false };
+        var removeButton = new Button { Content = UiText.Get("TableLoc_Remove"), MinWidth = 76, IsEnabled = false };
         AutomationProperties.SetAutomationId(removeButton, "ConsolidateRemoveReferenceButton");
 
         var destinationBox = new TextBox
@@ -71,9 +71,9 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(destinationBox, "ConsolidateDestinationCellBox");
 
-        var topRowBox = new CheckBox { Content = "Top row" };
+        var topRowBox = new CheckBox { Content = UiText.Get("TableLoc_ConsolidateTopRow") };
         AutomationProperties.SetAutomationId(topRowBox, "ConsolidateTopRowLabelsBox");
-        var leftColumnBox = new CheckBox { Content = "Left column" };
+        var leftColumnBox = new CheckBox { Content = UiText.Get("TableLoc_ConsolidateLeftColumn") };
         AutomationProperties.SetAutomationId(leftColumnBox, "ConsolidateLeftColumnLabelsBox");
 
         var warningText = new TextBlock
@@ -102,14 +102,14 @@ public sealed partial class MainWindow
             var text = referenceBox.Text?.Trim() ?? string.Empty;
             if (!TryParseConsolidateReference(text, out _))
             {
-                warningText.Text = "Enter a valid source range (e.g. Sheet1!A1:B5).";
+                warningText.Text = UiText.Get("TableLoc_ConsolidateEnterValidSource");
                 warningText.IsVisible = true;
                 return;
             }
 
             if (references.Contains(text, StringComparer.OrdinalIgnoreCase))
             {
-                warningText.Text = "That source range is already in the list.";
+                warningText.Text = UiText.Get("TableLoc_ConsolidateSourceAlreadyListed");
                 warningText.IsVisible = true;
                 return;
             }
@@ -128,9 +128,9 @@ public sealed partial class MainWindow
             }
         };
 
-        var applyButton = new Button { Content = "Apply", IsDefault = true, MinWidth = 84 };
+        var applyButton = new Button { Content = UiText.Get("TableLoc_Apply"), IsDefault = true, MinWidth = 84 };
         AutomationProperties.SetAutomationId(applyButton, "ConsolidateApplyButton");
-        var cancelButton = new Button { Content = "Cancel", IsCancel = true, MinWidth = 84 };
+        var cancelButton = new Button { Content = UiText.Get("TableLoc_Cancel"), IsCancel = true, MinWidth = 84 };
         AutomationProperties.SetAutomationId(cancelButton, "ConsolidateCancelButton");
 
         applyButton.Click += (_, _) =>
@@ -139,7 +139,7 @@ public sealed partial class MainWindow
 
             if (references.Count == 0)
             {
-                warningText.Text = "Add at least one source range.";
+                warningText.Text = UiText.Get("TableLoc_ConsolidateAddAtLeastOne");
                 warningText.IsVisible = true;
                 return;
             }
@@ -149,7 +149,7 @@ public sealed partial class MainWindow
             {
                 if (!TryParseConsolidateReference(reference, out var sourceRange))
                 {
-                    warningText.Text = $"Cannot resolve source range '{reference}'.";
+                    warningText.Text = UiText.Format("TableLoc_ConsolidateCannotResolveSource", reference);
                     warningText.IsVisible = true;
                     return;
                 }
@@ -157,7 +157,7 @@ public sealed partial class MainWindow
                 var sheet = _session.Workbook.GetSheet(sourceRange.Start.Sheet);
                 if (sheet is null)
                 {
-                    warningText.Text = $"Cannot resolve source range '{reference}'.";
+                    warningText.Text = UiText.Format("TableLoc_ConsolidateCannotResolveSource", reference);
                     warningText.IsVisible = true;
                     return;
                 }
@@ -167,7 +167,7 @@ public sealed partial class MainWindow
 
             if (!TryParseConsolidateReference(destinationBox.Text?.Trim() ?? string.Empty, out var destinationRange))
             {
-                warningText.Text = "Enter a valid destination cell.";
+                warningText.Text = UiText.Get("TableLoc_ConsolidateEnterValidDestination");
                 warningText.IsVisible = true;
                 return;
             }
@@ -182,7 +182,7 @@ public sealed partial class MainWindow
             var result = ConsolidatePlanner.Plan(sources, options);
             if (result.IsEmpty)
             {
-                warningText.Text = "The current sources and options produce no output to write.";
+                warningText.Text = UiText.Get("TableLoc_ConsolidateNoOutput");
                 warningText.IsVisible = true;
                 return;
             }
@@ -191,7 +191,7 @@ public sealed partial class MainWindow
             var edits = ConsolidateShellPlanner.MapToEdits(destinationSheet.Id, result, destinationRange.Start);
             if (edits.Count == 0)
             {
-                warningText.Text = "The consolidated result falls outside the worksheet bounds.";
+                warningText.Text = UiText.Get("TableLoc_ConsolidateOutsideBounds");
                 warningText.IsVisible = true;
                 return;
             }
@@ -200,8 +200,7 @@ public sealed partial class MainWindow
             if (overwrites.Count > 0 && !overwriteConfirmed)
             {
                 overwriteConfirmed = true;
-                warningText.Text =
-                    $"This will overwrite data in {overwrites.Count} cell(s). Click Apply again to continue.";
+                warningText.Text = UiText.Format("TableLoc_ConsolidateOverwriteWarning", overwrites.Count);
                 warningText.IsVisible = true;
                 return;
             }
@@ -226,7 +225,7 @@ public sealed partial class MainWindow
             Spacing = 16,
             Children =
             {
-                new TextBlock { Text = "Use labels in:", VerticalAlignment = AvaloniaVerticalAlignment.Center },
+                new TextBlock { Text = UiText.Get("TableLoc_ConsolidateUseLabelsIn"), VerticalAlignment = AvaloniaVerticalAlignment.Center },
                 topRowBox,
                 leftColumnBox,
             },
@@ -255,13 +254,13 @@ public sealed partial class MainWindow
                         Spacing = 8,
                         Children =
                         {
-                            new TextBlock { Text = "Function", FontWeight = FontWeight.SemiBold },
+                            new TextBlock { Text = UiText.Get("TableLoc_ConsolidateFunctionLabel"), FontWeight = FontWeight.SemiBold },
                             functionBox,
-                            new TextBlock { Text = "Reference", FontWeight = FontWeight.SemiBold },
+                            new TextBlock { Text = UiText.Get("TableLoc_ConsolidateReferenceLabel"), FontWeight = FontWeight.SemiBold },
                             referenceRow,
-                            new TextBlock { Text = "All references", Foreground = HeaderForeground },
+                            new TextBlock { Text = UiText.Get("TableLoc_ConsolidateAllReferencesLabel"), Foreground = HeaderForeground },
                             referencesList,
-                            new TextBlock { Text = "Destination cell", FontWeight = FontWeight.SemiBold },
+                            new TextBlock { Text = UiText.Get("TableLoc_ConsolidateDestinationLabel"), FontWeight = FontWeight.SemiBold },
                             destinationBox,
                             labelRow,
                             warningText,
@@ -297,11 +296,11 @@ public sealed partial class MainWindow
         var result = _session.ExecuteReviewCommand(command);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Consolidate failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("TableLoc_ConsolidateFailed"));
             return false;
         }
 
-        RefreshShell($"Consolidated into {FormatCellReference(destination)}");
+        RefreshShell(UiText.Format("TableLoc_ConsolidatedInto", FormatCellReference(destination)));
         return true;
     }
 }

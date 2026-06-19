@@ -78,7 +78,7 @@ public sealed partial class MainWindow
         var members = ReadPivotFieldMembers(pivot, target.SourceFieldIndex);
         if (members.Count == 0)
         {
-            ShowEditIssue("This field has no items to filter.");
+            ShowEditIssue(UiText.Get("PivotLoc_NoItemsToFilter"));
             return;
         }
 
@@ -102,7 +102,7 @@ public sealed partial class MainWindow
 
         var selectAll = new CheckBox
         {
-            Content = "(Select All)",
+            Content = UiText.Get("PivotLoc_SelectAll"),
             IsChecked = checkBoxes.All(box => box.IsChecked == true),
         };
         selectAll.IsCheckedChanged += (_, _) =>
@@ -232,10 +232,10 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(kindBox, "PivotLabelFilterKindBox");
         AutomationProperties.SetName(kindBox, "Label filter kind");
 
-        var value1 = new TextBox { MinWidth = 200, Text = existing?.Value ?? string.Empty, PlaceholderText = "Value" };
+        var value1 = new TextBox { MinWidth = 200, Text = existing?.Value ?? string.Empty, PlaceholderText = UiText.Get("PivotLoc_ValuePlaceholder") };
         AutomationProperties.SetAutomationId(value1, "PivotLabelFilterValueBox");
         AutomationProperties.SetName(value1, "Value");
-        var value2 = new TextBox { MinWidth = 200, Text = existing?.Value2 ?? string.Empty, PlaceholderText = "Second value (Between)" };
+        var value2 = new TextBox { MinWidth = 200, Text = existing?.Value2 ?? string.Empty, PlaceholderText = UiText.Get("PivotLoc_SecondValuePlaceholder") };
         AutomationProperties.SetAutomationId(value2, "PivotLabelFilterValue2Box");
         AutomationProperties.SetName(value2, "Second value");
 
@@ -333,7 +333,7 @@ public sealed partial class MainWindow
 
         if (pivot.DataFields.Count == 0)
         {
-            ShowEditIssue("Add a value field before applying a value filter.");
+            ShowEditIssue(UiText.Get("PivotLoc_AddValueFieldBeforeFilter"));
             return;
         }
 
@@ -357,7 +357,7 @@ public sealed partial class MainWindow
         var primary = new TextBox
         {
             MinWidth = 200,
-            PlaceholderText = "Count / value",
+            PlaceholderText = UiText.Get("PivotLoc_CountOrValuePlaceholder"),
             Text = PivotFieldFilterPlanner.PrimaryInputText(existing),
         };
         AutomationProperties.SetAutomationId(primary, "PivotValueFilterPrimaryBox");
@@ -365,7 +365,7 @@ public sealed partial class MainWindow
         var secondary = new TextBox
         {
             MinWidth = 200,
-            PlaceholderText = "Second value (Between)",
+            PlaceholderText = UiText.Get("PivotLoc_SecondValuePlaceholder"),
             Text = PivotFieldFilterPlanner.SecondaryInputText(existing),
         };
         AutomationProperties.SetAutomationId(secondary, "PivotValueFilterSecondaryBox");
@@ -490,7 +490,7 @@ public sealed partial class MainWindow
         var result = _session.ExecuteReviewCommand(command);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "PivotTable filter failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("PivotLoc_FilterFailed"));
             return;
         }
 

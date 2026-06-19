@@ -414,6 +414,71 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void ParagraphBorder_PerEdgeStyleColourAndWidth_RoundTrip()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("custom border")
+        {
+            Formatting = ParagraphFormatting.Default with
+            {
+                Border = new ParagraphBorder("#00B050", 2.25)
+                {
+                    LineStyle = BorderLineStyle.Dashed,
+                    Top = true,
+                    Left = false,
+                    Bottom = true,
+                    Right = false,
+                }
+            }
+        });
+
+        var border = RoundTrip(doc).Paragraphs.First().Formatting.Border;
+
+        border.Should().NotBeNull();
+        border!.ColorHex.Should().Be("#00B050");
+        border.WidthPt.Should().BeApproximately(2.25, 0.001);
+        border.LineStyle.Should().Be(BorderLineStyle.Dashed);
+        border.Top.Should().BeTrue();
+        border.Left.Should().BeFalse();
+        border.Bottom.Should().BeTrue();
+        border.Right.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ParagraphShading_WithPattern_RoundTrips()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("shaded")
+        {
+            Formatting = ParagraphFormatting.Default with
+            {
+                ShadingColorHex = "#DDDDDD",
+                ShadingPattern = ShadingPattern.Pct25,
+            }
+        });
+
+        var formatting = RoundTrip(doc).Paragraphs.First().Formatting;
+
+        formatting.ShadingColorHex.Should().Be("#DDDDDD");
+        formatting.ShadingPattern.Should().Be(ShadingPattern.Pct25);
+    }
+
+    [Fact]
+    public void PageBorder_LineStyle_RoundTrips()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("page with dotted border"));
+        doc.Page.PageBorder = new PageBorder("#7030A0", 3.0) { LineStyle = BorderLineStyle.Dotted };
+
+        var page = RoundTrip(doc).Page;
+
+        page.PageBorder.Should().NotBeNull();
+        page.PageBorder!.ColorHex.Should().Be("#7030A0");
+        page.PageBorder.WidthPt.Should().BeApproximately(3.0, 0.001);
+        page.PageBorder.LineStyle.Should().Be(BorderLineStyle.Dotted);
+    }
+
+    [Fact]
     public void DefaultPage_HasNoPageBorderOrWatermark()
     {
         var doc = new TextDocument();
@@ -2228,6 +2293,32 @@ public class DocxRoundTripTests
     }
 
     [Theory]
+    [InlineData(RevisionKind.Inserted)]
+    [InlineData(RevisionKind.Deleted)]
+    public void RevisedContentControl_RoundTrips_ControlAndRevision(RevisionKind revisionKind)
+    {
+        var doc = new TextDocument();
+        var body = new Paragraph();
+        var control = Run.PlainTextControl("tracked control", tag: "Tracked", alias: "Tracked control");
+        control.Revision = revisionKind;
+        control.RevisionAuthor = "Alex Editor";
+        control.RevisionDateXml = "2026-06-19T08:00:00Z";
+        body.Runs.Add(control);
+        doc.Blocks.Add(body);
+
+        var result = RoundTrip(doc);
+
+        var run = result.Paragraphs.First().Runs.Single();
+        run.Text.Should().Be("tracked control");
+        run.Control.Should().NotBeNull();
+        run.Control!.Kind.Should().Be(ContentControlKind.PlainText);
+        run.Control.Tag.Should().Be("Tracked");
+        run.Revision.Should().Be(revisionKind);
+        run.RevisionAuthor.Should().Be("Alex Editor");
+        run.RevisionDateXml.Should().Be("2026-06-19T08:00:00Z");
+    }
+
+    [Theory]
     [InlineData(true, "☒")]
     [InlineData(false, "☐")]
     public void CheckBoxContentControl_RoundTrips_CheckedState(bool isChecked, string glyph)
@@ -2486,6 +2577,79 @@ public class DocxRoundTripTests
         var page = RoundTrip(doc).Page;
 
         page.AutoHyphenation.Should().BeTrue();
+    }
+
+    [Fact]
+    public void HyphenationOptions_RoundTrip_ZoneLimitAndCaps()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("hyphenate me"));
+        doc.Page.AutoHyphenation = true;
+        doc.Page.HyphenationZonePt = 18; // 360 twips
+        doc.Page.ConsecutiveHyphenLimit = 3;
+        doc.Page.DoNotHyphenateCaps = true;
+
+        var page = RoundTrip(doc).Page;
+
+        page.AutoHyphenation.Should().BeTrue();
+        page.HyphenationZonePt.Should().BeApproximately(18, 0.01);
+        page.ConsecutiveHyphenLimit.Should().Be(3);
+        page.DoNotHyphenateCaps.Should().BeTrue();
+    }
+
+    [Fact]
+    public void HyphenationOptions_EmitSettingsElements()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("hyphenate me"));
+        doc.Page.AutoHyphenation = true;
+        doc.Page.HyphenationZonePt = 18;
+        doc.Page.ConsecutiveHyphenLimit = 2;
+        doc.Page.DoNotHyphenateCaps = true;
+
+        using var optionsStream = new MemoryStream();
+        DocxWriter.Write(doc, optionsStream);
+        optionsStream.Position = 0;
+
+        using var optionsZip = new ZipArchive(optionsStream, ZipArchiveMode.Read);
+        using var optionsReader = new StreamReader(optionsZip.GetEntry("word/settings.xml")!.Open());
+        var settings = optionsReader.ReadToEnd();
+        settings.Should().Contain("autoHyphenation");
+        settings.Should().Contain("hyphenationZone");
+        settings.Should().Contain("consecutiveHyphenLimit");
+        settings.Should().Contain("doNotHyphenateCaps");
+    }
+
+    [Fact]
+    public void HyphenationSubOptions_NotEmitted_WhenAutoHyphenationOff()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("plain"));
+        // Sub-options set but automatic hyphenation off => they must not be emitted (and no settings part is
+        // forced into existence by them alone).
+        doc.Page.ConsecutiveHyphenLimit = 4;
+        doc.Page.DoNotHyphenateCaps = true;
+
+        using var offStream = new MemoryStream();
+        DocxWriter.Write(doc, offStream);
+        offStream.Position = 0;
+
+        using var offZip = new ZipArchive(offStream, ZipArchiveMode.Read);
+        offZip.GetEntry("word/settings.xml").Should().BeNull();
+    }
+
+    [Fact]
+    public void SuppressAutoHyphens_RoundTripsPerParagraph()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("normal"));
+        doc.Blocks.Add(new Paragraph("no hyphens") { Formatting = ParagraphFormatting.Default with { SuppressAutoHyphens = true } });
+
+        var result = RoundTrip(doc);
+
+        var paragraphs = result.Paragraphs.ToList();
+        paragraphs[0].Formatting.SuppressAutoHyphens.Should().BeFalse();
+        paragraphs[1].Formatting.SuppressAutoHyphens.Should().BeTrue();
     }
 
     [Fact]

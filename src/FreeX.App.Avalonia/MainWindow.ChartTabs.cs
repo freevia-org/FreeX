@@ -53,7 +53,7 @@ public sealed partial class MainWindow
         chart = null!;
         if (_selectedDrawingObjectKind != SelectionPaneObjectKind.Chart || _selectedDrawingObjectId is not { } id)
         {
-            RefreshShell($"Select a chart before using {commandLabel}.");
+            RefreshShell(UiText.Format("ChartLoc_SelectChartBeforeUsing", commandLabel));
             return false;
         }
 
@@ -66,7 +66,7 @@ public sealed partial class MainWindow
             }
         }
 
-        RefreshShell($"Select a chart before using {commandLabel}.");
+        RefreshShell(UiText.Format("ChartLoc_SelectChartBeforeUsing", commandLabel));
         return false;
     }
 
@@ -79,8 +79,8 @@ public sealed partial class MainWindow
     {
         var result = _session.ExecuteReviewCommand(new SetChartLayoutCommand(_session.ActiveSheet.Id, chart.Id, options));
         RefreshShell(result.Success
-            ? $"{commandLabel} applied."
-            : result.ErrorMessage ?? $"{commandLabel} failed.");
+            ? UiText.Format("ChartLoc_CommandApplied", commandLabel)
+            : result.ErrorMessage ?? UiText.Format("ChartLoc_CommandFailed", commandLabel));
     }
 
     // ---- Chart Design: Change Chart Type (real, ChangeChartTypeCommand) -------------------------------
@@ -101,7 +101,7 @@ public sealed partial class MainWindow
         var plan = ChartTypeChangePlanner.Plan(chart.Type, type);
         if (!plan.HasChange)
         {
-            RefreshShell(plan.Message ?? "Change Chart Type failed.");
+            RefreshShell(plan.Message ?? UiText.Get("ChartLoc_ChangeChartTypeFailed"));
             return;
         }
 
@@ -112,8 +112,8 @@ public sealed partial class MainWindow
 
         var result = _session.ExecuteReviewCommand(new ChangeChartTypeCommand(_session.ActiveSheet.Id, chart.Id, plan.AppliedType!.Value));
         RefreshShell(result.Success
-            ? $"Changed chart type to {ChartTypeChangePlanner.DisplayName(plan.AppliedType!.Value)}."
-            : result.ErrorMessage ?? "Change Chart Type failed.");
+            ? UiText.Format("ChartLoc_ChangedChartTypeTo", ChartTypeChangePlanner.DisplayName(plan.AppliedType!.Value))
+            : result.ErrorMessage ?? UiText.Get("ChartLoc_ChangeChartTypeFailed"));
     }
 
     /// <summary>
@@ -140,7 +140,7 @@ public sealed partial class MainWindow
 
         var dialog = new Window
         {
-            Title = "Change Chart Type",
+            Title = UiText.Get("ChartLoc_ChangeChartTypeTitle"),
             SizeToContent = SizeToContent.WidthAndHeight,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -148,11 +148,11 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(dialog, "ChangeChartTypeDialog");
 
-        var okButton = new Button { Content = "OK", Width = 80, IsDefault = true };
+        var okButton = new Button { Content = UiText.Get("Common_Ok"), Width = 80, IsDefault = true };
         AutomationProperties.SetAutomationId(okButton, "ChangeChartTypeOkButton");
         okButton.Click += (_, _) => dialog.Close(combo.SelectedItem is ChartTypeChoice picked ? (ChartType?)picked.Type : null);
 
-        var cancelButton = new Button { Content = "Cancel", Width = 80, IsCancel = true };
+        var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), Width = 80, IsCancel = true };
         AutomationProperties.SetAutomationId(cancelButton, "ChangeChartTypeCancelButton");
         cancelButton.Click += (_, _) => dialog.Close((ChartType?)null);
 
@@ -163,7 +163,7 @@ public sealed partial class MainWindow
             MinWidth = 292,
             Children =
             {
-                new TextBlock { Text = "Choose a chart type:" },
+                new TextBlock { Text = UiText.Get("ChartLoc_ChooseChartType") },
                 combo,
                 new StackPanel
                 {
@@ -195,7 +195,7 @@ public sealed partial class MainWindow
 
         if (!TryParseDefinedNameRange(choice.RangeText, out var dataRange))
         {
-            RefreshShell("Enter a valid chart data range (e.g. A1:C10).");
+            RefreshShell(UiText.Get("ChartLoc_EnterValidChartDataRange"));
             return;
         }
 
@@ -210,8 +210,8 @@ public sealed partial class MainWindow
             firstRowIsHeader: chart.FirstRowIsHeader,
             firstColIsCategories: choice.FirstColumnIsCategories));
         RefreshShell(commandResult.Success
-            ? $"Chart data source set to {FormatRangeReference(dataRange)}."
-            : commandResult.ErrorMessage ?? "Select Data failed.");
+            ? UiText.Format("ChartLoc_ChartDataSourceSetTo", FormatRangeReference(dataRange))
+            : commandResult.ErrorMessage ?? UiText.Get("ChartLoc_SelectDataFailed"));
     }
 
     private async Task<(string RangeText, bool FirstColumnIsCategories)?> ShowSelectDataDialogAsync(
@@ -222,21 +222,21 @@ public sealed partial class MainWindow
         {
             Text = initialRange,
             Width = 260,
-            PlaceholderText = "e.g. A1:C10",
+            PlaceholderText = UiText.Get("ChartLoc_RangePlaceholder"),
         };
         AutomationProperties.SetName(rangeBox, "Chart data range");
         AutomationProperties.SetAutomationId(rangeBox, "SelectChartDataRangeBox");
 
         var categoriesCheck = new CheckBox
         {
-            Content = "First column contains category labels",
+            Content = UiText.Get("ChartLoc_FirstColumnContainsCategories"),
             IsChecked = firstColumnIsCategories,
         };
         AutomationProperties.SetAutomationId(categoriesCheck, "SelectChartDataCategoriesCheck");
 
         var dialog = new Window
         {
-            Title = "Select Data Source",
+            Title = UiText.Get("ChartLoc_SelectDataSourceTitle"),
             SizeToContent = SizeToContent.WidthAndHeight,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -244,11 +244,11 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(dialog, "SelectChartDataDialog");
 
-        var okButton = new Button { Content = "OK", Width = 80, IsDefault = true };
+        var okButton = new Button { Content = UiText.Get("Common_Ok"), Width = 80, IsDefault = true };
         AutomationProperties.SetAutomationId(okButton, "SelectChartDataOkButton");
         okButton.Click += (_, _) => dialog.Close(((string, bool)?)(rangeBox.Text ?? string.Empty, categoriesCheck.IsChecked == true));
 
-        var cancelButton = new Button { Content = "Cancel", Width = 80, IsCancel = true };
+        var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), Width = 80, IsCancel = true };
         AutomationProperties.SetAutomationId(cancelButton, "SelectChartDataCancelButton");
         cancelButton.Click += (_, _) => dialog.Close(((string, bool)?)null);
 
@@ -259,7 +259,7 @@ public sealed partial class MainWindow
             MinWidth = 292,
             Children =
             {
-                new TextBlock { Text = "Chart data range:" },
+                new TextBlock { Text = UiText.Get("ChartLoc_ChartDataRangeLabel") },
                 rangeBox,
                 categoriesCheck,
                 new StackPanel
@@ -314,7 +314,7 @@ public sealed partial class MainWindow
 
         var dialog = new Window
         {
-            Title = "Chart Titles",
+            Title = UiText.Get("ChartLoc_ChartTitlesTitle"),
             SizeToContent = SizeToContent.WidthAndHeight,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -322,14 +322,14 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(dialog, "ChartTitlesDialog");
 
-        var okButton = new Button { Content = "OK", Width = 80, IsDefault = true };
+        var okButton = new Button { Content = UiText.Get("Common_Ok"), Width = 80, IsDefault = true };
         AutomationProperties.SetAutomationId(okButton, "ChartTitlesOkButton");
         okButton.Click += (_, _) => dialog.Close(((string, string, string)?)(
             chartTitleBox.Text ?? string.Empty,
             xAxisBox.Text ?? string.Empty,
             yAxisBox.Text ?? string.Empty));
 
-        var cancelButton = new Button { Content = "Cancel", Width = 80, IsCancel = true };
+        var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), Width = 80, IsCancel = true };
         AutomationProperties.SetAutomationId(cancelButton, "ChartTitlesCancelButton");
         cancelButton.Click += (_, _) => dialog.Close(((string, string, string)?)null);
 
@@ -340,11 +340,11 @@ public sealed partial class MainWindow
             MinWidth = 292,
             Children =
             {
-                new TextBlock { Text = "Chart title:" },
+                new TextBlock { Text = UiText.Get("ChartLoc_ChartTitleLabel") },
                 chartTitleBox,
-                new TextBlock { Text = "Horizontal (category) axis title:" },
+                new TextBlock { Text = UiText.Get("ChartLoc_HorizontalAxisTitleLabel") },
                 xAxisBox,
-                new TextBlock { Text = "Vertical (value) axis title:" },
+                new TextBlock { Text = UiText.Get("ChartLoc_VerticalAxisTitleLabel") },
                 yAxisBox,
                 new StackPanel
                 {
@@ -389,7 +389,7 @@ public sealed partial class MainWindow
     {
         var showCheck = new CheckBox
         {
-            Content = "Show legend",
+            Content = UiText.Get("ChartLoc_ShowLegend"),
             IsChecked = showLegend,
         };
         AutomationProperties.SetAutomationId(showCheck, "ChartLegendShowCheck");
@@ -409,7 +409,7 @@ public sealed partial class MainWindow
 
         var dialog = new Window
         {
-            Title = "Legend",
+            Title = UiText.Get("ChartLoc_LegendTitle"),
             SizeToContent = SizeToContent.WidthAndHeight,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -417,7 +417,7 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(dialog, "ChartLegendDialog");
 
-        var okButton = new Button { Content = "OK", Width = 80, IsDefault = true };
+        var okButton = new Button { Content = UiText.Get("Common_Ok"), Width = 80, IsDefault = true };
         AutomationProperties.SetAutomationId(okButton, "ChartLegendOkButton");
         okButton.Click += (_, _) =>
         {
@@ -427,7 +427,7 @@ public sealed partial class MainWindow
             dialog.Close((ChartLegendInput?)new ChartLegendInput(showCheck.IsChecked == true, chosenPosition));
         };
 
-        var cancelButton = new Button { Content = "Cancel", Width = 80, IsCancel = true };
+        var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), Width = 80, IsCancel = true };
         AutomationProperties.SetAutomationId(cancelButton, "ChartLegendCancelButton");
         cancelButton.Click += (_, _) => dialog.Close((ChartLegendInput?)null);
 
@@ -439,7 +439,7 @@ public sealed partial class MainWindow
             Children =
             {
                 showCheck,
-                new TextBlock { Text = "Legend position:" },
+                new TextBlock { Text = UiText.Get("ChartLoc_LegendPositionLabel") },
                 positionCombo,
                 new StackPanel
                 {
@@ -479,8 +479,8 @@ public sealed partial class MainWindow
         var next = current >= 45 ? 1 : current + 4;
         var result = _session.ExecuteReviewCommand(new SetChartStyleCommand(_session.ActiveSheet.Id, chart.Id, next));
         RefreshShell(result.Success
-            ? $"Applied chart style {next}."
-            : result.ErrorMessage ?? "Chart Styles failed.");
+            ? UiText.Format("ChartLoc_AppliedChartStyle", next)
+            : result.ErrorMessage ?? UiText.Get("ChartLoc_ChartStylesFailed"));
     }
 
     private void CycleChartSecondaryAxis()
@@ -492,7 +492,7 @@ public sealed partial class MainWindow
 
         if (!ChartTypeSupport.SupportsSecondaryAxis(chart.Type) || ChartTypeSupport.GetDataSeriesCount(chart) < 2)
         {
-            RefreshShell("Secondary axis needs a column/line/area/scatter chart with at least two data series.");
+            RefreshShell(UiText.Get("ChartLoc_SecondaryAxisNeeds"));
             return;
         }
 
@@ -512,7 +512,7 @@ public sealed partial class MainWindow
         if (!TryGetSelectedChart("Chart Shape Fill", out var chart))
             return;
 
-        var color = await ShowMoreColorsDialogAsync("Chart Area Fill", chart.ChartAreaFillColor ?? ChartCycleBlue);
+        var color = await ShowMoreColorsDialogAsync(UiText.Get("ChartLoc_ChartAreaFill"), chart.ChartAreaFillColor ?? ChartCycleBlue);
         if (color is { } chosen && TryGetSelectedChart("Chart Area Fill", out chart))
             ApplyChartLayout("Chart Area Fill", chart, new ChartLayoutOptions(ChartAreaFillColor: chosen));
     }
@@ -524,7 +524,7 @@ public sealed partial class MainWindow
         if (!TryGetSelectedChart("Chart Shape Outline", out var chart))
             return;
 
-        var color = await ShowMoreColorsDialogAsync("Plot Area Border", chart.PlotAreaBorderColor ?? ChartCycleBlue);
+        var color = await ShowMoreColorsDialogAsync(UiText.Get("ChartLoc_PlotAreaBorder"), chart.PlotAreaBorderColor ?? ChartCycleBlue);
         if (color is { } chosen && TryGetSelectedChart("Plot Area Border", out chart))
         {
             var thickness = chart.PlotAreaBorderThickness >= 3 ? 0.75 : chart.PlotAreaBorderThickness + 0.75;
@@ -541,7 +541,7 @@ public sealed partial class MainWindow
         if (!TryGetSelectedChart("Plot Area Fill", out var chart))
             return;
 
-        var color = await ShowMoreColorsDialogAsync("Plot Area Fill", chart.PlotAreaFillColor ?? ChartCycleBlue);
+        var color = await ShowMoreColorsDialogAsync(UiText.Get("ChartLoc_PlotAreaFill"), chart.PlotAreaFillColor ?? ChartCycleBlue);
         if (color is { } chosen && TryGetSelectedChart("Plot Area Fill", out chart))
             ApplyChartLayout("Plot Area Fill", chart, new ChartLayoutOptions(PlotAreaFillColor: chosen));
     }
@@ -555,12 +555,12 @@ public sealed partial class MainWindow
 
         if (ChartTypeSupport.GetDataSeriesCount(chart) <= 0)
         {
-            RefreshShell("This chart has no data series to color.");
+            RefreshShell(UiText.Get("ChartLoc_NoDataSeriesToColor"));
             return;
         }
 
         var existing = ResolveFirstSeriesFillColor(chart);
-        var color = await ShowMoreColorsDialogAsync("Series Color", existing ?? ChartCycleBlue);
+        var color = await ShowMoreColorsDialogAsync(UiText.Get("ChartLoc_SeriesColor"), existing ?? ChartCycleBlue);
         if (color is not { } chosen)
             return;
 
@@ -589,7 +589,7 @@ public sealed partial class MainWindow
 
         if (!ChartTypeSupport.SupportsAxes(chart.Type))
         {
-            RefreshShell("This chart type has no axes to show gridlines on.");
+            RefreshShell(UiText.Get("ChartLoc_NoAxesForGridlines"));
             return;
         }
 
@@ -608,7 +608,7 @@ public sealed partial class MainWindow
 
         if (!ChartTypeSupport.SupportsAxes(chart.Type))
         {
-            RefreshShell("This chart type has no axes to show gridlines on.");
+            RefreshShell(UiText.Get("ChartLoc_NoAxesForGridlines"));
             return;
         }
 
@@ -627,7 +627,7 @@ public sealed partial class MainWindow
 
         if (!ChartTypeSupport.SupportsAxes(chart.Type))
         {
-            RefreshShell("This chart type has no axes.");
+            RefreshShell(UiText.Get("ChartLoc_NoAxes"));
             return;
         }
 
@@ -643,7 +643,7 @@ public sealed partial class MainWindow
 
         if (!ChartTypeSupport.SupportsAxes(chart.Type))
         {
-            RefreshShell("This chart type has no axes.");
+            RefreshShell(UiText.Get("ChartLoc_NoAxes"));
             return;
         }
 
@@ -683,5 +683,5 @@ public sealed partial class MainWindow
 
     /// <summary>Reports that a Chart-tab command has no Core support yet (no silent no-op, no invented behavior).</summary>
     private void ReportChartCommandNotYetAvailable(string commandLabel)
-        => RefreshShell($"{commandLabel} is not yet available.");
+        => RefreshShell(UiText.Format("ChartLoc_CommandNotYetAvailable", commandLabel));
 }

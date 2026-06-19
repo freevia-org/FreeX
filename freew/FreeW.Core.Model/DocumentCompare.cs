@@ -375,6 +375,7 @@ public static class DocumentCompare
         CommentId = source.CommentId,
         IsCommentReference = source.IsCommentReference,
         Control = source.Control,
-        Citation = source.Citation
+        Citation = source.Citation,
+        CrossReference = source.CrossReference
     };
 }

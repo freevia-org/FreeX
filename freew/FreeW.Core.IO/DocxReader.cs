@@ -80,6 +80,7 @@ public static class DocxReader
         ReadEndnotes(archive, document, imageRelationships, hyperlinkRelationships);
         ReadComments(archive, document, hyperlinkRelationships);
         ReadSettings(archive, document);
+        ReadBibliography(archive, document);
         ReadTheme(archive, document);
         ReadEmbeddedFonts(archive, document);
         ReadPreservedParts(archive, document);
@@ -176,6 +177,16 @@ public static class DocxReader
 
         // Automatic hyphenation (w:autoHyphenation) is an on/off toggle: present + not explicitly off.
         document.Page.AutoHyphenation = ReadToggle(root, "autoHyphenation");
+        // Hyphenation sub-options: w:consecutiveHyphenLimit/@w:val (max consecutive hyphenated lines),
+        // w:hyphenationZone/@w:val (zone in twips) and the w:doNotHyphenateCaps toggle. Each is read whether
+        // or not autoHyphenation is on (so the value round-trips), defaulting to off/0 when absent.
+        if (int.TryParse(root.Element(W + "consecutiveHyphenLimit")?.Attribute(W + "val")?.Value,
+                System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var hyphenLimit) && hyphenLimit > 0)
+            document.Page.ConsecutiveHyphenLimit = hyphenLimit;
+        if (int.TryParse(root.Element(W + "hyphenationZone")?.Attribute(W + "val")?.Value,
+                System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var hyphenZone) && hyphenZone > 0)
+            document.Page.HyphenationZonePt = hyphenZone / 20.0;
+        document.Page.DoNotHyphenateCaps = ReadToggle(root, "doNotHyphenateCaps");
 
         // Different odd/even page headers/footers (w:evenAndOddHeaders): an on/off toggle. When set, the
         // even header/footer references in w:sectPr are honoured (see ReadHeaderFooter).
@@ -426,6 +437,85 @@ public static class DocxReader
                 continue;
             var target = rel.Attribute("Target")?.Value;
             if (!string.IsNullOrEmpty(target))
+                return "word/" + target.TrimStart('/');
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Loads word/bibliography/sources.xml (if present) into <see cref="TextDocument.Sources"/> and
+    /// <see cref="TextDocument.BibliographyStyle"/>: the b:Sources/@SelectedStyle attribute restores the
+    /// chosen citation style (via <see cref="Citations.ParseStyle"/>), and each b:Source restores a
+    /// <see cref="Source"/> with its tag, type and fields (the author read from the single corporate-author
+    /// the writer emits). A missing part leaves the document at its defaults (APA, no sources). Inverse of
+    /// <c>DocxWriter.BuildBibliographySources</c>.
+    /// </summary>
+    private static void ReadBibliography(ZipArchive archive, TextDocument document)
+    {
+        var xml = LoadPart(archive, ResolveBibliographyPartPath(archive) ?? "word/bibliography/sources.xml");
+        var root = xml?.Root;
+        if (root is null || root.Name != B + "Sources")
+            return;
+
+        document.BibliographyStyle = Citations.ParseStyle(root.Attribute("SelectedStyle")?.Value);
+
+        foreach (var element in root.Elements(B + "Source"))
+        {
+            // The author is stored as a single corporate author (b:Author/b:Author/b:Corporate); fall back
+            // to a plain b:Author text node so a hand-authored / Word-authored source still yields a name.
+            var author = element.Element(B + "Author")?.Element(B + "Author")?.Element(B + "Corporate")?.Value
+                ?? element.Element(B + "Author")?.Value
+                ?? string.Empty;
+
+            document.Sources.Add(new Source
+            {
+                Tag = Field(element, "Tag") ?? string.Empty,
+                Type = ParseSourceType(Field(element, "SourceType")),
+                Author = author.Trim(),
+                Title = Field(element, "Title") ?? string.Empty,
+                Year = Field(element, "Year") ?? string.Empty,
+                Publisher = Field(element, "Publisher"),
+                Journal = Field(element, "JournalName"),
+                Volume = Field(element, "Volume"),
+                Issue = Field(element, "Issue"),
+                Pages = Field(element, "Pages"),
+                Url = Field(element, "URL"),
+                Accessed = Field(element, "YearAccessed"),
+            });
+        }
+
+        static string? Field(XElement source, string localName)
+        {
+            var value = source.Element(B + localName)?.Value;
+            return string.IsNullOrEmpty(value) ? null : value;
+        }
+    }
+
+    // Maps Word's b:SourceType token back to a FreeW SourceType; unknown / missing -> Book.
+    private static SourceType ParseSourceType(string? token) => token switch
+    {
+        "JournalArticle" => SourceType.JournalArticle,
+        "DocumentFromInternetSite" => SourceType.WebSite,
+        _ => SourceType.Book,
+    };
+
+    /// <summary>
+    /// Finds the bibliography part path from the document relationships (the rel whose Target ends with
+    /// "bibliography/sources.xml"), resolved relative to the word/ folder. Returns null when no such
+    /// relationship exists so the caller can fall back to the conventional path.
+    /// </summary>
+    private static string? ResolveBibliographyPartPath(ZipArchive archive)
+    {
+        var relsXml = LoadPart(archive, "word/_rels/document.xml.rels");
+        var relationships = relsXml?.Root?.Elements(Rel + "Relationship");
+        if (relationships is null)
+            return null;
+
+        foreach (var rel in relationships)
+        {
+            var target = rel.Attribute("Target")?.Value;
+            if (!string.IsNullOrEmpty(target)
+                && target.EndsWith("bibliography/sources.xml", StringComparison.Ordinal))
                 return "word/" + target.TrimStart('/');
         }
         return null;
@@ -990,6 +1080,10 @@ public static class DocxReader
                         foreach (var r in revChild.Elements(W + "r"))
                             AddRun(paragraph, r, archive, imageRelationships, hUrl, hUrl is null ? hAnchor : null, commentId: activeCommentId, revision: revision, hyperlinkTooltip: hTooltip, preservedDrawingTarget: preservedDrawingTarget);
                     }
+                    else if (revChild.Name == W + "sdt")
+                    {
+                        AddContentControlRuns(paragraph, revChild, archive, imageRelationships, activeCommentId, revision, preservedDrawingTarget);
+                    }
                 }
             }
             else if (child.Name == W + "sdt")
@@ -997,14 +1091,7 @@ public static class DocxReader
                 // A content control (structured document tag): w:sdtPr describes the control (tag/alias +
                 // kind), w:sdtContent holds the wrapped run(s). Recover the control and stamp every content
                 // run with it (one shared instance so the writer re-coalesces them into one w:sdt).
-                var control = ReadContentControl(child.Element(W + "sdtPr"));
-                var sdtContent = child.Element(W + "sdtContent");
-                if (sdtContent is not null)
-                {
-                    foreach (var sdtChild in sdtContent.Elements(W + "r"))
-                        AddRun(paragraph, sdtChild, archive, imageRelationships,
-                            hyperlinkUrl: null, hyperlinkAnchor: null, commentId: activeCommentId, control: control, preservedDrawingTarget: preservedDrawingTarget);
-                }
+                AddContentControlRuns(paragraph, child, archive, imageRelationships, activeCommentId, revision: default, preservedDrawingTarget);
             }
             else if (child.Name == W + "fldSimple")
             {
@@ -1058,6 +1145,15 @@ public static class DocxReader
             return;
         }
 
+        // A cross-reference field: the leading keyword is REF, PAGEREF or NOTEREF (e.g. " REF _Ref1 \h ").
+        // Recover the field kind, target (bookmark name / note id), insert-as switch and \h hyperlink flag,
+        // and the cached resolved text (the wrapped run's text).
+        if (CrossReferenceFor(instruction) is { } crossReference)
+        {
+            paragraph.Runs.Add(Run.CrossReferenceFieldRun(crossReference, text, formatting));
+            return;
+        }
+
         if (FieldKindFor(instruction) is { } kind)
         {
             // PAGE keeps its historic "1" fallback when no cached value was written; the rest are happy
@@ -1073,9 +1169,10 @@ public static class DocxReader
 
     /// <summary>
     /// Parses an inline OMML equation (m:oMath) into an <see cref="Equation"/>. Recognises m:r (plain
-    /// text), m:sSup (superscript) and m:f (fraction); any other top-level child degrades to the plain
-    /// text of its descendant m:t runs so nothing is lost or throws. Mirrors how the writer emits these
-    /// (see <c>DocxWriter.BuildOMath</c>).
+    /// text), m:sSup / m:sSub / m:sSubSup (scripts), m:f (fraction), m:rad (radical), m:nary (n-ary),
+    /// m:d (delimiter) and m:m (matrix); any other top-level child degrades to the plain text of its
+    /// descendant m:t runs so nothing is lost or throws. Mirrors how the writer emits these (see
+    /// <c>DocxWriter.BuildMathRun</c>).
     /// </summary>
     private static Equation ReadOMath(XElement oMath)
     {
@@ -1088,10 +1185,27 @@ public static class DocxReader
                 equation.Runs.Add(MathRun.Superscript(
                     MathTextOf(child.Element(M + "e")),
                     MathTextOf(child.Element(M + "sup"))));
+            else if (child.Name == M + "sSub")
+                equation.Runs.Add(MathRun.Subscript(
+                    MathTextOf(child.Element(M + "e")),
+                    MathTextOf(child.Element(M + "sub"))));
+            else if (child.Name == M + "sSubSup")
+                equation.Runs.Add(MathRun.SubSuperscript(
+                    MathTextOf(child.Element(M + "e")),
+                    MathTextOf(child.Element(M + "sub")),
+                    MathTextOf(child.Element(M + "sup"))));
             else if (child.Name == M + "f")
                 equation.Runs.Add(MathRun.Fraction(
                     MathTextOf(child.Element(M + "num")),
                     MathTextOf(child.Element(M + "den"))));
+            else if (child.Name == M + "rad")
+                equation.Runs.Add(ReadRadical(child));
+            else if (child.Name == M + "nary")
+                equation.Runs.Add(ReadNAry(child));
+            else if (child.Name == M + "d")
+                equation.Runs.Add(ReadDelimiter(child));
+            else if (child.Name == M + "m")
+                equation.Runs.Add(MathRun.MatrixOf(ReadMatrix(child)));
             else
             {
                 // Unknown OMML construct: keep its text so the equation degrades rather than disappears.
@@ -1101,6 +1215,59 @@ public static class DocxReader
             }
         }
         return equation;
+    }
+
+    /// <summary>
+    /// Reads a radical (m:rad). When m:radPr/m:degHide is "1" (or m:deg is empty) it is a square root
+    /// (empty degree); otherwise the m:deg text is the nth-root degree. Mirrors <c>DocxWriter.BuildRadical</c>.
+    /// </summary>
+    private static MathRun ReadRadical(XElement rad)
+    {
+        var degHide = rad.Element(M + "radPr")?.Element(M + "degHide")?.Attribute(M + "val")?.Value;
+        var degText = MathTextOf(rad.Element(M + "deg"));
+        var degree = degHide == "1" ? string.Empty : degText;
+        return MathRun.Radical(MathTextOf(rad.Element(M + "e")), degree);
+    }
+
+    /// <summary>
+    /// Reads an n-ary operator (m:nary): the operator glyph from m:naryPr/m:chr (default ∑), the lower/
+    /// upper limits from m:sub / m:sup and the operand from m:e. Mirrors <c>DocxWriter.BuildNAry</c>.
+    /// </summary>
+    private static MathRun ReadNAry(XElement nary)
+    {
+        var chr = nary.Element(M + "naryPr")?.Element(M + "chr")?.Attribute(M + "val")?.Value;
+        return MathRun.NAry(
+            string.IsNullOrEmpty(chr) ? "∑" : chr,
+            MathTextOf(nary.Element(M + "sub")),
+            MathTextOf(nary.Element(M + "sup")),
+            MathTextOf(nary.Element(M + "e")));
+    }
+
+    /// <summary>
+    /// Reads a delimiter (m:d): the begin/end glyphs from m:dPr/m:begChr / m:endChr (default round
+    /// brackets) and the content from the first m:e. Mirrors <c>DocxWriter.BuildDelimiter</c>.
+    /// </summary>
+    private static MathRun ReadDelimiter(XElement d)
+    {
+        var dPr = d.Element(M + "dPr");
+        var open = dPr?.Element(M + "begChr")?.Attribute(M + "val")?.Value;
+        var close = dPr?.Element(M + "endChr")?.Attribute(M + "val")?.Value;
+        return MathRun.Delimiter(
+            MathTextOf(d.Element(M + "e")),
+            string.IsNullOrEmpty(open) ? "(" : open,
+            string.IsNullOrEmpty(close) ? ")" : close);
+    }
+
+    /// <summary>
+    /// Reads a matrix (m:m) into a <see cref="MathMatrix"/>: one row per m:mr, one cell per m:e.
+    /// Mirrors <c>DocxWriter.BuildMatrix</c>.
+    /// </summary>
+    private static MathMatrix ReadMatrix(XElement m)
+    {
+        var matrix = new MathMatrix();
+        foreach (var mr in m.Elements(M + "mr"))
+            matrix.Rows.Add([.. mr.Elements(M + "e").Select(MathTextOf)]);
+        return matrix;
     }
 
     /// <summary>The concatenated text of all descendant m:t runs under <paramref name="element"/> (empty if null).</summary>
@@ -1160,6 +1327,67 @@ public static class DocxReader
     }
 
     /// <summary>
+    /// Parses a cross-reference field instruction (leading keyword <c>REF</c>/<c>PAGEREF</c>/<c>NOTEREF</c>)
+    /// into a <see cref="CrossReferenceField"/>: the field kind, the target (the first token after the
+    /// keyword — a bookmark name or note id), the "insert reference to" switch (<c>\w</c> heading number,
+    /// <c>\n</c> paragraph number, <c>\p</c> above/below; otherwise text/page) and the <c>\h</c> hyperlink
+    /// flag. Returns null for any other field. A target-less instruction yields an empty target so nothing
+    /// throws.
+    /// </summary>
+    private static CrossReferenceField? CrossReferenceFor(string instruction)
+    {
+        var trimmed = instruction.Trim();
+        var tokens = trimmed.Split(' ', '\t');
+        if (tokens.Length == 0)
+            return null;
+
+        var kind = tokens[0].ToUpperInvariant() switch
+        {
+            "REF" => CrossRefFieldKind.Ref,
+            "PAGEREF" => CrossRefFieldKind.PageRef,
+            "NOTEREF" => CrossRefFieldKind.NoteRef,
+            _ => (CrossRefFieldKind?)null
+        };
+        if (kind is not { } fieldKind)
+            return null;
+
+        // The target is the first token after the keyword that is not a switch (does not start with '\').
+        var target = string.Empty;
+        for (var i = 1; i < tokens.Length; i++)
+        {
+            if (tokens[i].Length == 0 || tokens[i].StartsWith('\\'))
+                continue;
+            target = tokens[i];
+            break;
+        }
+
+        var insertAs = CrossRefInsertAs.Text;
+        if (HasSwitch(trimmed, 'w'))
+            insertAs = CrossRefInsertAs.HeadingNumber;
+        else if (HasSwitch(trimmed, 'n'))
+            insertAs = CrossRefInsertAs.ParagraphNumber;
+        else if (HasSwitch(trimmed, 'p'))
+            insertAs = CrossRefInsertAs.AboveBelow;
+        else if (fieldKind == CrossRefFieldKind.PageRef)
+            insertAs = CrossRefInsertAs.PageNumber;
+
+        return new CrossReferenceField(fieldKind, target, insertAs, HasSwitch(trimmed, 'h'));
+    }
+
+    // True when the field instruction carries a "\<letter>" switch (e.g. "\h"), matched case-insensitively
+    // as a whitespace-delimited token so it is not confused with a letter inside the bookmark name.
+    private static bool HasSwitch(string instruction, char switchLetter)
+    {
+        foreach (var token in instruction.Split(' ', '\t'))
+        {
+            if (token.Length == 2 && token[0] == '\\'
+                && char.ToLowerInvariant(token[1]) == char.ToLowerInvariant(switchLetter))
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
     /// Parses a Mark Citation (TA) field instruction (one whose leading keyword is <c>TA</c>) into a
     /// <see cref="Citation"/>: the long form from the <c>\l</c> switch, the short form from <c>\s</c>, and
     /// the category from the numeric <c>\c</c> switch (defaulting to <see cref="CitationCategory.Cases"/>
@@ -1216,6 +1444,30 @@ public static class DocxReader
     /// (recovering its w:listItem choices); a w:richText marks a rich-text control; anything else is a
     /// plain-text control. A null/absent w:sdtPr yields a default plain-text control.
     /// </summary>
+    private static void AddContentControlRuns(
+        Paragraph paragraph,
+        XElement sdt,
+        ZipArchive archive,
+        IReadOnlyDictionary<string, string> imageRelationships,
+        int? commentId,
+        RevisionInfo revision,
+        TextDocument? preservedDrawingTarget)
+    {
+        var control = ReadContentControl(sdt.Element(W + "sdtPr"));
+        var sdtContent = sdt.Element(W + "sdtContent");
+        if (sdtContent is null)
+            return;
+
+        foreach (var sdtChild in sdtContent.Elements(W + "r"))
+            AddRun(paragraph, sdtChild, archive, imageRelationships,
+                hyperlinkUrl: null,
+                hyperlinkAnchor: null,
+                commentId: commentId,
+                revision: revision,
+                control: control,
+                preservedDrawingTarget: preservedDrawingTarget);
+    }
+
     private static ContentControl ReadContentControl(XElement? sdtPr)
     {
         var tag = sdtPr?.Element(W + "tag")?.Attribute(W + "val")?.Value;
@@ -2519,7 +2771,9 @@ public static class DocxReader
         var spacing = pPr.Element(W + "spacing");
         var indent = pPr.Element(W + "ind");
         var jc = pPr.Element(W + "jc")?.Attribute(W + "val")?.Value;
-        var shading = pPr.Element(W + "shd")?.Attribute(W + "fill")?.Value;
+        var shd = pPr.Element(W + "shd");
+        var shading = shd?.Attribute(W + "fill")?.Value;
+        var shadingPattern = ShadingPatterns.FromToken(shd?.Attribute(W + "val")?.Value);
 
         // A list paragraph references a numbering definition via pPr/w:numPr (w:numId + w:ilvl).
         // Resolve the numId to a ListKind through numbering.xml; the ilvl becomes the ListLevel.
@@ -2543,6 +2797,8 @@ public static class DocxReader
         var keepWithNext = ReadToggle(pPr, "keepNext");
         var keepLinesTogether = ReadToggle(pPr, "keepLines");
         var widowControl = ReadToggle(pPr, "widowControl");
+        // Suppress automatic hyphenation for this paragraph (w:suppressAutoHyphens), read as a toggle.
+        var suppressAutoHyphens = ReadToggle(pPr, "suppressAutoHyphens");
         // Right-to-left paragraph direction (w:bidi), read as a toggle like the flow-control flags.
         var rtl = ReadToggle(pPr, "bidi");
 
@@ -2594,6 +2850,7 @@ public static class DocxReader
             KeepWithNext = keepWithNext,
             KeepLinesTogether = keepLinesTogether,
             WidowControl = widowControl,
+            SuppressAutoHyphens = suppressAutoHyphens,
             Rtl = rtl,
             LineRule = lineRule,
             LineSpacing = lineSpacing,
@@ -2608,6 +2865,7 @@ public static class DocxReader
             SpaceBeforeIsSet = beforeAuto || spacing?.Attribute(W + "before") is not null,
             SpaceAfterIsSet = afterAuto || spacing?.Attribute(W + "after") is not null,
             ShadingColorHex = shading is null or "auto" ? null : "#" + shading.TrimStart('#'),
+            ShadingPattern = shadingPattern,
             Alignment = jc switch
             {
                 "center" => TextAlignment.Center,
@@ -2672,17 +2930,30 @@ public static class DocxReader
 
         var color = edge.Attribute(W + "color")?.Value;
         var width = EighthPointsToPoints(edge.Attribute(W + "sz")?.Value);
+        var lineStyle = BorderLineStyles.FromToken(edge.Attribute(W + "val")?.Value);
+
+        bool Drawn(string name) =>
+            (pBdr.Element(W + name)?.Attribute(W + "val")?.Value ?? "none") is not ("none" or "nil");
+        var top = Drawn("top");
+        var left = Drawn("left");
+        var bottom = Drawn("bottom");
+        var right = Drawn("right");
 
         // A bottom-only rule: the only drawn edge is w:bottom (top/left/right absent or off). This is how
         // CreateHorizontalRule writes itself; recovering the flag keeps the round-trip lossless.
-        bool Drawn(string name) =>
-            (pBdr.Element(W + name)?.Attribute(W + "val")?.Value ?? "none") is not ("none" or "nil");
-        var bottomOnly = Drawn("bottom") && !Drawn("top") && !Drawn("left") && !Drawn("right");
+        var bottomOnly = bottom && !top && !left && !right;
 
         return new ParagraphBorder(
             color is null or "auto" ? "#000000" : "#" + color.TrimStart('#'),
             width > 0 ? width : 0.5,
-            bottomOnly);
+            bottomOnly)
+        {
+            LineStyle = lineStyle,
+            Top = top,
+            Left = left,
+            Bottom = bottom,
+            Right = right,
+        };
     }
 
     /// <summary>Reads a page border (w:pgBorders) into a <see cref="PageBorder"/>, or null if absent/off.</summary>
@@ -2698,10 +2969,14 @@ public static class DocxReader
 
         var color = edge.Attribute(W + "color")?.Value;
         var width = EighthPointsToPoints(edge.Attribute(W + "sz")?.Value);
+        var lineStyle = BorderLineStyles.FromToken(edge.Attribute(W + "val")?.Value);
 
         return new PageBorder(
             color is null or "auto" ? "#000000" : "#" + color.TrimStart('#'),
-            width > 0 ? width : 1.0);
+            width > 0 ? width : 1.0)
+        {
+            LineStyle = lineStyle,
+        };
     }
 
     /// <summary>

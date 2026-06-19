@@ -271,6 +271,48 @@ public sealed class DocumentViewRoundTripTests
     }
 
     [StaFact]
+    public void StructuredEquation_RoundTripsThroughView()
+    {
+        // A radical + n-ary + 2x2 matrix must survive the view's render → CommitToModel path (the
+        // structure is carried on the inline container's Tag, mirroring shapes).
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var para = new Paragraph();
+        para.Runs.Add(Run.FromEquation(new Equation([
+            MathRun.Radical("x", "3"),
+            MathRun.NAry("∑", "i=1", "n", "i"),
+            MathRun.MatrixOf(MathMatrix.Identity2x2())
+        ])));
+        doc.Blocks.Add(para);
+
+        var run = FirstRun(RoundTrip(doc));
+
+        run.Equation.Should().NotBeNull();
+        var runs = run.Equation!.Runs;
+        runs.Should().HaveCount(3);
+        runs[0].Kind.Should().Be(MathRunKind.Radical);
+        runs[0].Degree.Should().Be("3");
+        runs[1].Kind.Should().Be(MathRunKind.NAry);
+        runs[2].Kind.Should().Be(MathRunKind.Matrix);
+        runs[2].Matrix!.RowCount.Should().Be(2);
+    }
+
+    [StaFact]
+    public void InsertEquation_PlacesStructuredEquationAtCaret()
+    {
+        var view = new DocumentView();
+        view.LoadModel(TextDocument.CreateEmpty());
+
+        view.InsertEquation(new Equation([MathRun.MatrixOf(MathMatrix.Identity2x2())]));
+        view.CommitToModel();
+
+        var equationRun = view.Model.Blocks.OfType<Paragraph>()
+            .SelectMany(p => p.Runs).Single(r => r.Equation is not null);
+        equationRun.Equation!.Runs[0].Kind.Should().Be(MathRunKind.Matrix);
+        equationRun.Equation!.LinearText.Should().Be("[1, 0; 0, 1]");
+    }
+
+    [StaFact]
     public void Chart_RoundTrips()
     {
         var doc = TextDocument.CreateEmpty();

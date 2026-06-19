@@ -39,9 +39,9 @@ public sealed partial class MainWindow
         if (findings.Count == 0)
         {
             await ShowSpellingMessageDialogAsync(
-                "Spelling",
-                "Spelling check complete. No misspellings were found.");
-            RefreshShell("Spelling check complete. 0 corrections.");
+                UiText.Get("ShellLoc_SpellingTitle"),
+                UiText.Get("ShellLoc_SpellingNoMisspellings"));
+            RefreshShell(UiText.Get("ShellLoc_SpellingCompleteZero"));
             return;
         }
 
@@ -110,7 +110,7 @@ public sealed partial class MainWindow
         }
 
         await ShowSpellingMessageDialogAsync(
-            "Spelling",
+            UiText.Get("ShellLoc_SpellingTitle"),
             FormatSpellingSummary(corrections, completed: true));
         RefreshShell(FormatSpellingSummary(corrections, completed: true));
     }
@@ -230,7 +230,7 @@ public sealed partial class MainWindow
     {
         var dialog = new Window
         {
-            Title = "Spelling",
+            Title = UiText.Get("ShellLoc_SpellingTitle"),
             Width = 460,
             Height = 360,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -247,7 +247,7 @@ public sealed partial class MainWindow
 
         layout.Children.Add(new TextBlock
         {
-            Text = "Not in Dictionary:",
+            Text = UiText.Get("ShellLoc_SpellingNotInDictionary"),
             FontWeight = FontWeight.SemiBold,
         });
 
@@ -262,7 +262,7 @@ public sealed partial class MainWindow
 
         layout.Children.Add(new TextBlock
         {
-            Text = "Suggestions:",
+            Text = UiText.Get("ShellLoc_SpellingSuggestions"),
             FontWeight = FontWeight.SemiBold,
             Margin = new Thickness(0, 6, 0, 0),
         });
@@ -275,7 +275,7 @@ public sealed partial class MainWindow
         foreach (var suggestion in suggestions)
             suggestionList.Items.Add(suggestion);
         if (suggestions.Count == 0)
-            suggestionList.Items.Add("(no suggestions)");
+            suggestionList.Items.Add(UiText.Get("ShellLoc_SpellingNoSuggestions"));
         layout.Children.Add(suggestionList);
 
         // Editable replacement box, prefilled with the top suggestion when available.
@@ -283,20 +283,20 @@ public sealed partial class MainWindow
         {
             Text = suggestions.Count > 0 ? suggestions[0] : word,
         };
-        layout.Children.Add(new TextBlock { Text = "Change to:" });
+        layout.Children.Add(new TextBlock { Text = UiText.Get("ShellLoc_SpellingChangeTo") });
         layout.Children.Add(replacementBox);
 
         suggestionList.SelectionChanged += (_, _) =>
         {
-            if (suggestionList.SelectedItem is string picked && picked != "(no suggestions)")
+            if (suggestionList.SelectedItem is string picked && picked != UiText.Get("ShellLoc_SpellingNoSuggestions"))
                 replacementBox.Text = picked;
         };
 
-        var ignoreButton = new Button { Content = "Ignore", Width = 96 };
-        var ignoreAllButton = new Button { Content = "Ignore All", Width = 96 };
-        var changeButton = new Button { Content = "Change", Width = 96 };
-        var changeAllButton = new Button { Content = "Change All", Width = 96 };
-        var closeButton = new Button { Content = "Close", Width = 96 };
+        var ignoreButton = new Button { Content = UiText.Get("ShellLoc_SpellingIgnore"), Width = 96 };
+        var ignoreAllButton = new Button { Content = UiText.Get("ShellLoc_SpellingIgnoreAll"), Width = 96 };
+        var changeButton = new Button { Content = UiText.Get("ShellLoc_SpellingChange"), Width = 96 };
+        var changeAllButton = new Button { Content = UiText.Get("ShellLoc_SpellingChangeAll"), Width = 96 };
+        var closeButton = new Button { Content = UiText.Get("Common_Close"), Width = 96 };
 
         ignoreButton.Click += (_, _) => { decision = new SpellingDecision(SpellingAction.Ignore, null); dialog.Close(); };
         ignoreAllButton.Click += (_, _) => { decision = new SpellingDecision(SpellingAction.IgnoreAll, null); dialog.Close(); };
@@ -363,7 +363,7 @@ public sealed partial class MainWindow
 
         var okButton = new Button
         {
-            Content = "OK",
+            Content = UiText.Get("Common_Ok"),
             Width = 90,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
         };
@@ -376,9 +376,11 @@ public sealed partial class MainWindow
 
     private static string FormatSpellingSummary(int corrections, bool completed)
     {
-        var noun = corrections == 1 ? "correction" : "corrections";
+        var noun = corrections == 1
+            ? UiText.Get("ShellLoc_SpellingCorrectionSingular")
+            : UiText.Get("ShellLoc_SpellingCorrectionPlural");
         return completed
-            ? $"Spelling check complete. {corrections} {noun}."
-            : $"Spelling check stopped. {corrections} {noun}.";
+            ? UiText.Format("ShellLoc_SpellingComplete", corrections, noun)
+            : UiText.Format("ShellLoc_SpellingStopped", corrections, noun);
     }
 }

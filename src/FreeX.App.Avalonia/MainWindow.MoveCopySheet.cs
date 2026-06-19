@@ -130,7 +130,7 @@ public sealed partial class MainWindow
             var copyResult = _session.DuplicateActiveSheet();
             if (!copyResult.Success)
             {
-                ShowEditIssue(copyResult.ErrorMessage ?? "Copy Sheet failed.");
+                ShowEditIssue(copyResult.ErrorMessage ?? UiText.Get("ShellLoc_CopySheetFailed"));
                 return;
             }
 
@@ -163,7 +163,7 @@ public sealed partial class MainWindow
         var result = _session.MoveActiveSheetTo(targetIndex);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Move Sheet failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("ShellLoc_MoveSheetFailed"));
             return false;
         }
 

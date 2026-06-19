@@ -97,19 +97,106 @@ public enum NumberForm { Default, Lining, OldStyle }
 public enum NumberSpacing { Default, Proportional, Tabular }
 
 /// <summary>
+/// Border line style (the <c>w:val</c> token shared by <c>w:pBdr</c>/<c>w:pgBorders</c>/<c>w:tblBorders</c>
+/// edges). <see cref="Single"/> is the default thin solid rule; the others map to Word's common
+/// Borders-and-Shading line styles. Modelled as an enum so the value round-trips losslessly through the
+/// edge's <c>w:val</c> attribute (see <see cref="BorderLineStyles"/> for the token mapping).
+/// </summary>
+public enum BorderLineStyle { Single, Dotted, Dashed, Double, Thick, Wave }
+
+/// <summary>
+/// Maps <see cref="BorderLineStyle"/> values to/from the OOXML <c>w:val</c> tokens used on border edges.
+/// Centralised here so the writer, reader and any edge (paragraph/page/table) agree on one mapping.
+/// </summary>
+public static class BorderLineStyles
+{
+    /// <summary>The <c>w:val</c> token for a line style (e.g. <see cref="BorderLineStyle.Dotted"/> → "dotted").</summary>
+    public static string ToToken(BorderLineStyle style) => style switch
+    {
+        BorderLineStyle.Dotted => "dotted",
+        BorderLineStyle.Dashed => "dashed",
+        BorderLineStyle.Double => "double",
+        BorderLineStyle.Thick => "thick",
+        BorderLineStyle.Wave => "wave",
+        _ => "single",
+    };
+
+    /// <summary>Parses a <c>w:val</c> token back into a line style; unknown/solid tokens fall back to single.</summary>
+    public static BorderLineStyle FromToken(string? token) => token switch
+    {
+        "dotted" => BorderLineStyle.Dotted,
+        "dashed" => BorderLineStyle.Dashed,
+        "double" => BorderLineStyle.Double,
+        "thick" => BorderLineStyle.Thick,
+        "wave" => BorderLineStyle.Wave,
+        _ => BorderLineStyle.Single,
+    };
+}
+
+/// <summary>
+/// The fill pattern of paragraph/cell shading (the <c>w:shd/@w:val</c> token). <see cref="Clear"/> is a
+/// solid fill of the <c>w:fill</c> colour (Word's default for "Shading"); the percentage values are the
+/// classic dithered patterns. Modelled as an enum so the pattern round-trips through <c>w:shd/@w:val</c>
+/// while the colour stays in <see cref="ParagraphFormatting.ShadingColorHex"/>.
+/// </summary>
+public enum ShadingPattern { Clear, Solid, Pct10, Pct25, Pct50 }
+
+/// <summary>Maps <see cref="ShadingPattern"/> values to/from the OOXML <c>w:shd/@w:val</c> tokens.</summary>
+public static class ShadingPatterns
+{
+    /// <summary>The <c>w:val</c> token for a shading pattern (e.g. <see cref="ShadingPattern.Pct25"/> → "pct25").</summary>
+    public static string ToToken(ShadingPattern pattern) => pattern switch
+    {
+        ShadingPattern.Solid => "solid",
+        ShadingPattern.Pct10 => "pct10",
+        ShadingPattern.Pct25 => "pct25",
+        ShadingPattern.Pct50 => "pct50",
+        _ => "clear",
+    };
+
+    /// <summary>Parses a <c>w:shd/@w:val</c> token back into a pattern; unknown tokens fall back to clear.</summary>
+    public static ShadingPattern FromToken(string? token) => token switch
+    {
+        "solid" => ShadingPattern.Solid,
+        "pct10" => ShadingPattern.Pct10,
+        "pct25" => ShadingPattern.Pct25,
+        "pct50" => ShadingPattern.Pct50,
+        _ => ShadingPattern.Clear,
+    };
+}
+
+/// <summary>
 /// Immutable paragraph box border (pPr/w:pBdr). By default all four edges are drawn with the given
-/// colour and width; when <paramref name="BottomOnly"/> is set only the bottom edge is drawn, which
-/// models a horizontal rule under the paragraph. Round-trips to docx as the <c>w:pBdr</c> edges (each
-/// <c>w:val="single"</c>) — all four for a box, or just <c>w:bottom</c> for a bottom-only rule —
-/// mirroring how table borders map to <c>w:tblBorders</c>.
+/// colour, width and <see cref="LineStyle"/>; the per-edge flags (<see cref="Top"/>/<see cref="Left"/>/
+/// <see cref="Bottom"/>/<see cref="Right"/>) select which edges are drawn (all four = a box). When
+/// <paramref name="BottomOnly"/> is set only the bottom edge is drawn, which models a horizontal rule under
+/// the paragraph. Round-trips to docx as the <c>w:pBdr</c> edges, mirroring how table borders map to
+/// <c>w:tblBorders</c>.
 /// </summary>
 /// <param name="ColorHex">Border colour as an RRGGBB hex (e.g. <c>"#000000"</c>).</param>
 /// <param name="WidthPt">Border width in points (docx stores this as eighths of a point in <c>w:sz</c>).</param>
 /// <param name="BottomOnly">
 /// When true, only the bottom edge is drawn (a horizontal rule). Defaults to false so existing callers
-/// keep the full box and their docx round-trip is unchanged.
+/// keep the full box and their docx round-trip is unchanged. Equivalent to clearing the top/left/right
+/// per-edge flags; kept as a distinct flag so the existing horizontal-rule round-trip stays lossless.
 /// </param>
-public sealed record ParagraphBorder(string ColorHex = "#000000", double WidthPt = 0.5, bool BottomOnly = false);
+public sealed record ParagraphBorder(string ColorHex = "#000000", double WidthPt = 0.5, bool BottomOnly = false)
+{
+    /// <summary>The line style of every drawn edge (w:val). Defaults to <see cref="BorderLineStyle.Single"/>.</summary>
+    public BorderLineStyle LineStyle { get; init; } = BorderLineStyle.Single;
+
+    /// <summary>Whether the top edge is drawn. Defaults to true (a full box) so existing callers are unaffected.</summary>
+    public bool Top { get; init; } = true;
+
+    /// <summary>Whether the left edge is drawn. Defaults to true (a full box).</summary>
+    public bool Left { get; init; } = true;
+
+    /// <summary>Whether the bottom edge is drawn. Defaults to true (a full box).</summary>
+    public bool Bottom { get; init; } = true;
+
+    /// <summary>Whether the right edge is drawn. Defaults to true (a full box).</summary>
+    public bool Right { get; init; } = true;
+}
 
 /// <summary>
 /// Immutable character formatting for a run. Null members inherit from the paragraph style /
@@ -327,11 +414,28 @@ public sealed record ParagraphFormatting
     public bool WidowControl { get; init; }
 
     /// <summary>
+    /// When true, automatic hyphenation is suppressed for this paragraph (pPr/w:suppressAutoHyphens), even
+    /// when the document has <see cref="PageSettings.AutoHyphenation"/> on. Defaults to false so existing
+    /// paragraphs are unaffected; round-trips to docx as the <c>w:suppressAutoHyphens</c> toggle, mirroring
+    /// <see cref="WidowControl"/>. The live editor honours it by skipping soft-hyphen insertion for the
+    /// paragraph's runs.
+    /// </summary>
+    public bool SuppressAutoHyphens { get; init; }
+
+    /// <summary>
     /// Paragraph shading (background fill) as an RRGGBB hex (e.g. <c>"#FFFF00"</c>). Null means no
     /// shading. Round-trips to docx as paragraph shading (<c>pPr/w:shd w:fill</c>), mirroring run
     /// <see cref="RunFormatting.HighlightColorHex"/>.
     /// </summary>
     public string? ShadingColorHex { get; init; }
+
+    /// <summary>
+    /// The fill pattern of <see cref="ShadingColorHex"/> (pPr/w:shd/@w:val). Defaults to
+    /// <see cref="ShadingPattern.Clear"/> — a solid fill of the colour — which is what the existing
+    /// writer emitted, so paragraphs round-trip byte-unchanged. Only meaningful when
+    /// <see cref="ShadingColorHex"/> is set.
+    /// </summary>
+    public ShadingPattern ShadingPattern { get; init; } = ShadingPattern.Clear;
 
     /// <summary>
     /// Paragraph tab stops (pPr/w:tabs), in document order. Never null; defaults to an empty list so

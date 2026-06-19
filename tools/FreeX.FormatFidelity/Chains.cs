@@ -10,7 +10,7 @@ namespace FreeX.FormatFidelity;
 /// <see cref="CapabilityProfile"/> row (e.g. "xlsx-rebuilt" vs "xlsx-preserved"), which may differ
 /// from a bare extension. <see cref="Extension"/> is what resolves the adapter.
 /// </summary>
-internal sealed record Hop(string ProfileKey, string Extension)
+internal sealed record Hop(string ProfileKey, string Extension, string? FormatName = null)
 {
     public CapabilityProfile Profile => CapabilityProfile.All[ProfileKey];
 }
@@ -83,17 +83,15 @@ internal static class Chains
                 Hops = new[] { new Hop("xlsx-rebuilt", x) },
                 MutateBeforeSnapshot = true,
             },
-            // SpreadsheetML round-trip — merges/widths/numfmt Full; styles None; R1C1/comment bugs surface.
-            // Terminates at the xml reload (single hop): the chain capability intersection is identical to
-            // adding a trailing ->xlsx hop (xml already collapses styling to None, so a later xlsx hop can't
-            // resurrect it), and stopping at xml avoids a ClosedXML AddHyperlinkRelationship(null) crash that
-            // the xml adapter triggers when its null-URI hyperlinks are re-serialized to xlsx. The compared
-            // surface is exactly what the spec asks for: styles EXPECTED-LOSS, structure Full, formulas Lossy.
+            // SpreadsheetML full round-trip — merges/widths/numfmt/formulas Full; styles None.
+            // The trailing ->xlsx hop is back now that (a) R1C1<->A1 conversion makes formulas round-trip
+            // faithfully (xml Formulas promoted to Full) and (b) the xml adapter no longer emits null-URI
+            // hyperlinks, so re-serializing to xlsx no longer hits ClosedXML AddHyperlinkRelationship(null).
             new Chain
             {
-                Name = "xlsx -> xml (reload)",
+                Name = "xlsx -> xml -> xlsx",
                 SourcePath = sourcePath,
-                Hops = new[] { new Hop("xml", ".xml") },
+                Hops = new[] { new Hop("xml", ".xml"), new Hop("xlsx-rebuilt", x) },
             },
             // CSV round-trip — values + formula-text only; styles/sheets EXPECTED-LOSS.
             new Chain
@@ -109,6 +107,68 @@ internal static class Chains
                 Name = "xlsx -> txt -> xlsx",
                 SourcePath = sourcePath,
                 Hops = new[] { new Hop("txt", ".txt"), new Hop("xlsx-rebuilt", x) },
+                PromoteDataSheet = true,
+            },
+        };
+    }
+
+    /// <summary>
+    /// Phase 2 — easy net-new formats (audit §4 Phase 2). Each new adapter ships with its chain here so
+    /// it is gated from day one. The encoding variants test the BOM-bearing CSV/TXT writers; slk/dif/xltx
+    /// test the new line-based and template adapters.
+    /// </summary>
+    public static List<Chain> Phase2(string sourcePath)
+    {
+        var x = ".xlsx";
+        return new List<Chain>
+        {
+            // CSV UTF-8 (BOM) round-trip — same value/formula ceiling as plain csv; verifies the BOM
+            // encoding path reads back losslessly.
+            new Chain
+            {
+                Name = "xlsx -> csv-utf8 -> xlsx",
+                SourcePath = sourcePath,
+                Hops = new[]
+                {
+                    new Hop("csv-utf8", ".csv", "CSV UTF-8 (Comma delimited)"),
+                    new Hop("xlsx-rebuilt", x),
+                },
+                PromoteDataSheet = true,
+            },
+            // Unicode Text (UTF-16LE BOM) round-trip — same ceiling as tab-delimited txt.
+            new Chain
+            {
+                Name = "xlsx -> txt-unicode -> xlsx",
+                SourcePath = sourcePath,
+                Hops = new[]
+                {
+                    new Hop("txt-unicode", ".txt", "Unicode Text"),
+                    new Hop("xlsx-rebuilt", x),
+                },
+                PromoteDataSheet = true,
+            },
+            // XLTX save — xlsx writer with template content-type. Same engine as a full rebuild, so all
+            // modeled dimensions must round-trip exactly (it IS the xlsx writer).
+            new Chain
+            {
+                Name = "xltx -> xltx",
+                SourcePath = sourcePath,
+                Hops = new[] { new Hop("xltx", ".xltx") },
+            },
+            // SLK round-trip — values + R1C1 formulas + coarse number formats survive a single sheet.
+            new Chain
+            {
+                Name = "xlsx -> slk -> xlsx",
+                SourcePath = sourcePath,
+                Hops = new[] { new Hop("slk", ".slk"), new Hop("xlsx-rebuilt", x) },
+                PromoteDataSheet = true,
+            },
+            // DIF round-trip — values only, single sheet.
+            new Chain
+            {
+                Name = "xlsx -> dif -> xlsx",
+                SourcePath = sourcePath,
+                Hops = new[] { new Hop("dif", ".dif"), new Hop("xlsx-rebuilt", x) },
                 PromoteDataSheet = true,
             },
         };

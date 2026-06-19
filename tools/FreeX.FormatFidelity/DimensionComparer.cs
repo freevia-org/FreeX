@@ -62,8 +62,7 @@ internal static class DimensionComparer
         {
             Dim.CellValues => CompareCells(d, cap, sheetPairs, valuesOnly: true),
             Dim.Formulas => CompareFormulas(d, cap, sheetPairs),
-            Dim.NumberFormats => CompareCellStyle(d, cap, sheetPairs,
-                (a, b) => string.Equals(Canonical(a.NumberFormat), Canonical(b.NumberFormat), StringComparison.Ordinal)),
+            Dim.NumberFormats => CompareNumberFormats(d, cap, sheetPairs),
             Dim.Fonts => CompareFonts(d, cap, sheetPairs),
             Dim.Fills => CompareCellStyle(d, cap, sheetPairs, FillsEqual),
             Dim.Borders => CompareCellStyle(d, cap, sheetPairs, BordersEqual),
@@ -285,6 +284,50 @@ internal static class DimensionComparer
         return Classify(d, cap, matched, total, samples, "styled cells");
     }
 
+    // Number-format comparison. Unlike the other style dimensions, only cells that actually carry a
+    // NON-default ("General") number format hold any number-format information. A formatted-but-empty
+    // (style-only) cell whose format is General has nothing to lose: if a format drops it entirely (e.g.
+    // SpreadsheetML cannot carry its font/fill, so the empty cell is not emitted), the reloaded sheet's
+    // implied format for that position is still General — an exact match, not a loss. Asserting such
+    // cells would mis-score an EXPECTED styling drop (a None-cap dimension) as a NumberFormat BUG. So we
+    // assert a ref cell only when its canonical format is non-General; a missing got cell then implies
+    // General and is a genuine loss only for a non-General ref.
+    private static DimensionResult CompareNumberFormats(Dim d, Cap cap, List<SheetPair> pairs)
+    {
+        if (cap == Cap.None)
+        {
+            bool anyChange = false;
+            foreach (var pair in pairs)
+                foreach (var ((row, col), refCell) in pair.Ref.Cells)
+                {
+                    if (Canonical(refCell.Style.NumberFormat) == "General") continue;
+                    pair.Got.Cells.TryGetValue((row, col), out var gotCell);
+                    var gotFmt = gotCell is null ? "General" : Canonical(gotCell.Style.NumberFormat);
+                    if (gotFmt != Canonical(refCell.Style.NumberFormat)) { anyChange = true; break; }
+                }
+            return MakeNoneResult(d, cap, anyChange);
+        }
+
+        int total = 0, matched = 0;
+        var samples = new List<string>();
+        foreach (var pair in pairs)
+        {
+            foreach (var ((row, col), refCell) in pair.Ref.Cells)
+            {
+                var refFmt = Canonical(refCell.Style.NumberFormat);
+                if (refFmt == "General") continue; // no number-format information to preserve
+                total++;
+                pair.Got.Cells.TryGetValue((row, col), out var gotCell);
+                // A dropped cell implies the default General format at that position.
+                var gotFmt = gotCell is null ? "General" : Canonical(gotCell.Style.NumberFormat);
+                if (string.Equals(refFmt, gotFmt, StringComparison.Ordinal)) matched++;
+                else if (samples.Count < 6)
+                    samples.Add($"{pair.Ref.Name}!{FidelityCompare.ColToLetter(col)}{row} [{refFmt} -> {gotFmt}]");
+            }
+        }
+        return Classify(d, cap, matched, total, samples, "number-format cells");
+    }
+
     private static bool FillsEqual(CellStyle a, CellStyle b) =>
         Nullable.Equals(a.FillColor, b.FillColor) && a.FillPatternStyle == b.FillPatternStyle &&
         Nullable.Equals(a.FillPatternColor, b.FillPatternColor);
@@ -410,17 +453,18 @@ internal static class DimensionComparer
         if (cap == Cap.None)
             return MakeNoneResult(d, cap, anyChange: refVal != gotVal);
 
-        bool ok = refVal == gotVal;
-        // Lossy counts (e.g. xlsx-rebuilt CF/charts): the modeled subset should survive, so a DROP below
-        // reference is tolerated as lossy, an INCREASE is unexpected. Treat <= as within-tolerance.
-        if (!ok && cap == Cap.Lossy && gotVal <= refVal) ok = true;
+        var kind = refVal == gotVal
+            ? ResultKind.Ok
+            : cap == Cap.Lossy && gotVal < refVal
+                ? ResultKind.ExpectedLoss
+                : ResultKind.Bug;
         return new DimensionResult
         {
             Dimension = d,
             ChainCap = cap,
-            Kind = ok ? ResultKind.Ok : ResultKind.Bug,
+            Kind = kind,
             Detail = detail,
-            Matched = ok ? 1 : 0,
+            Matched = kind == ResultKind.Ok ? 1 : 0,
             Total = 1,
         };
     }

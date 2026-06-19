@@ -37,7 +37,8 @@ public sealed class NumberFormatDecimalAdjusterTests
     [Fact]
     public void DecimalAdjustmentRegexes_AreGeneratedAndCached()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("NumberFormatDecimalAdjuster.cs");
+        // NumberFormatDecimalAdjuster was extracted from the host into Free.Shared.AppServices.
+        var source = DialogSourceTestSupport.ReadSharedAppServicesSource("NumberFormatDecimalAdjuster.cs");
 
         source.Should().Contain("[GeneratedRegex");
         source.Should().NotMatchRegex(@"\bRegex\.Match\s*\(");

@@ -121,9 +121,20 @@ internal static class FreeWRibbonIcons
             ["freew.shape-rounded"] = RibbonCommandIconKind.Rectangle,
             ["freew.shape-ellipse"] = RibbonCommandIconKind.Ellipse,
             ["freew.shape-textbox"] = RibbonCommandIconKind.TextBox,
+            ["freew.screenshot"] = RibbonCommandIconKind.Picture,
+            ["freew.screen-clipping"] = RibbonCommandIconKind.Picture,
 
             // Insert: media (equation / chart / WordArt / SmartArt / OLE object)
             ["freew.equation"] = RibbonCommandIconKind.Equation,
+            ["freew.equation-fraction"] = RibbonCommandIconKind.Equation,
+            ["freew.equation-script"] = RibbonCommandIconKind.Equation,
+            ["freew.equation-radical"] = RibbonCommandIconKind.Equation,
+            ["freew.equation-nthroot"] = RibbonCommandIconKind.Equation,
+            ["freew.equation-integral"] = RibbonCommandIconKind.Equation,
+            ["freew.equation-summation"] = RibbonCommandIconKind.Equation,
+            ["freew.equation-product"] = RibbonCommandIconKind.Equation,
+            ["freew.equation-bracket"] = RibbonCommandIconKind.Equation,
+            ["freew.equation-matrix"] = RibbonCommandIconKind.Equation,
             ["freew.chart"] = RibbonCommandIconKind.ChartColumn,
             ["freew.wordart"] = RibbonCommandIconKind.WordArt,
             ["freew.smartart"] = RibbonCommandIconKind.SmartArt,
@@ -141,6 +152,7 @@ internal static class FreeWRibbonIcons
             // Insert: quick parts
             ["freew.save-quickpart"] = RibbonCommandIconKind.QuickParts,
             ["freew.insert-quickpart"] = RibbonCommandIconKind.QuickParts,
+            ["freew.building-blocks-organizer"] = RibbonCommandIconKind.QuickParts,
             ["freew.insert-file"] = RibbonCommandIconKind.TextFromFile,
 
             // Insert: references
@@ -186,6 +198,10 @@ internal static class FreeWRibbonIcons
             ["freew.columns"] = RibbonCommandIconKind.TextColumns,
             ["freew.line-numbers"] = RibbonCommandIconKind.Number,
             ["freew.hyphenation"] = RibbonCommandIconKind.Hyphenation,
+            ["freew.hyphenation-none"] = RibbonCommandIconKind.Hyphenation,
+            ["freew.hyphenation-auto"] = RibbonCommandIconKind.Hyphenation,
+            ["freew.hyphenation-manual"] = RibbonCommandIconKind.Hyphenation,
+            ["freew.hyphenation-options"] = RibbonCommandIconKind.Hyphenation,
             ["freew.page-valign"] = RibbonCommandIconKind.AlignJustify,
             ["freew.different-first-page"] = RibbonCommandIconKind.CoverPage,
 
@@ -210,6 +226,10 @@ internal static class FreeWRibbonIcons
             ["freew.nav-pane"] = RibbonCommandIconKind.NavigationPane,
             ["freew.formatting-marks"] = RibbonCommandIconKind.FormattingMarks,
             ["freew.read-mode"] = RibbonCommandIconKind.ReadMode,
+            ["freew.web-layout"] = RibbonCommandIconKind.WebLayout,
+            ["freew.draft-view"] = RibbonCommandIconKind.Draft,
+            ["freew.outline-view"] = RibbonCommandIconKind.MultilevelList,
+            ["freew.zoom-dialog"] = RibbonCommandIconKind.Zoom,
 
             // Mailings
             ["freew.merge-data"] = RibbonCommandIconKind.Recipients,

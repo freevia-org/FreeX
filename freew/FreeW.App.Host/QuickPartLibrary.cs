@@ -29,6 +29,9 @@ internal sealed class QuickPartLibrary
     /// <summary>The snippet names (case-insensitive alphabetical order) currently in the library.</summary>
     public IReadOnlyList<string> Names => _store.Names;
 
+    /// <summary>All stored snippets, in case-insensitive name order (for the Building Blocks Organizer).</summary>
+    public IReadOnlyList<QuickPart> Snippets => _store.Snippets;
+
     /// <summary>True when no snippets are stored.</summary>
     public bool IsEmpty => _store.Count == 0;
 
@@ -70,7 +73,8 @@ internal sealed class QuickPartLibrary
             {
                 if (string.IsNullOrWhiteSpace(entry.Name))
                     continue;
-                _store.Add(new QuickPart(entry.Name, entry.Lines ?? []));
+                _store.Add(new QuickPart(
+                    entry.Name, entry.Lines ?? [], entry.Gallery, entry.Category, entry.Description));
             }
         }
         catch
@@ -107,7 +111,14 @@ internal sealed class QuickPartLibrary
                 Directory.CreateDirectory(directory);
 
             var entries = _store.Snippets
-                .Select(p => new PersistedQuickPart { Name = p.Name, Lines = [.. p.Lines] })
+                .Select(p => new PersistedQuickPart
+                {
+                    Name = p.Name,
+                    Lines = [.. p.Lines],
+                    Gallery = p.Gallery,
+                    Category = p.Category,
+                    Description = p.Description
+                })
                 .ToList();
             File.WriteAllText(_storePath, JsonSerializer.Serialize(entries, JsonOptions));
         }
@@ -117,10 +128,15 @@ internal sealed class QuickPartLibrary
         }
     }
 
-    // The on-disk shape of a stored snippet: just a name and its plain-text paragraph lines.
+    // The on-disk shape of a stored snippet: a name, its plain-text paragraph lines, and the optional
+    // building-block metadata (gallery/category/description). The metadata is nullable so files written by
+    // older builds (name + lines only) still load — QuickPart fills in the defaults.
     private sealed class PersistedQuickPart
     {
         public string Name { get; set; } = string.Empty;
         public List<string>? Lines { get; set; }
+        public string? Gallery { get; set; }
+        public string? Category { get; set; }
+        public string? Description { get; set; }
     }
 }

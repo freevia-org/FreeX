@@ -124,6 +124,9 @@ public sealed class Workbook
     /// <summary>External workbook link metadata loaded from XLSX packages.</summary>
     public List<ExternalLinkModel> ExternalLinks { get; } = [];
 
+    /// <summary>Whether the loaded workbook package contained an xl/vbaProject.bin macro project.</summary>
+    public bool HasVbaProjectPackage { get; set; }
+
     /// <summary>Custom PivotTable style metadata loaded from XLSX stylesheet tableStyle definitions.</summary>
     public List<PivotTableStyleModel> PivotTableStyles { get; } = [];
 

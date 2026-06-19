@@ -135,7 +135,7 @@ public sealed partial class MainWindow
 
         if (!ChartAxisPlanner.SupportsAxes(chart.Type))
         {
-            RefreshShell("This chart type has no axes to format.");
+            RefreshShell(UiText.Get("ChartLoc_AxisNoAxesToFormat"));
             return;
         }
 
@@ -159,13 +159,13 @@ public sealed partial class MainWindow
 
     private async Task<ChartAxisInput?> ShowChartAxisFormatDialogAsync(ChartAxisInput current, string commandLabel)
     {
-        var minimumBox = new TextBox { Text = FormatNullableDouble(current.Minimum), Width = 260, PlaceholderText = "Auto" };
+        var minimumBox = new TextBox { Text = FormatNullableDouble(current.Minimum), Width = 260, PlaceholderText = UiText.Get("ChartLoc_AutoPlaceholder") };
         AutomationProperties.SetName(minimumBox, "Axis minimum");
         AutomationProperties.SetAutomationId(minimumBox, "ChartAxisMinimumBox");
-        var maximumBox = new TextBox { Text = FormatNullableDouble(current.Maximum), Width = 260, PlaceholderText = "Auto" };
+        var maximumBox = new TextBox { Text = FormatNullableDouble(current.Maximum), Width = 260, PlaceholderText = UiText.Get("ChartLoc_AutoPlaceholder") };
         AutomationProperties.SetName(maximumBox, "Axis maximum");
         AutomationProperties.SetAutomationId(maximumBox, "ChartAxisMaximumBox");
-        var majorUnitBox = new TextBox { Text = FormatNullableDouble(current.MajorUnit), Width = 260, PlaceholderText = "Auto" };
+        var majorUnitBox = new TextBox { Text = FormatNullableDouble(current.MajorUnit), Width = 260, PlaceholderText = UiText.Get("ChartLoc_AutoPlaceholder") };
         AutomationProperties.SetName(majorUnitBox, "Axis major unit");
         AutomationProperties.SetAutomationId(majorUnitBox, "ChartAxisMajorUnitBox");
 
@@ -199,7 +199,7 @@ public sealed partial class MainWindow
                 || !TryParseAutoDouble(maximumBox.Text, out var maximum)
                 || !TryParseAutoDouble(majorUnitBox.Text, out var majorUnit))
             {
-                RefreshShell("Enter a number or leave blank for Auto.");
+                RefreshShell(UiText.Get("ChartLoc_EnterNumberOrBlankAuto"));
                 return;
             }
 
@@ -254,7 +254,7 @@ public sealed partial class MainWindow
 
         if (ChartTypeSupport.GetDataSeriesCount(chart) <= 0)
         {
-            RefreshShell("This chart has no data series to format.");
+            RefreshShell(UiText.Get("ChartLoc_NoDataSeriesToFormat"));
             return;
         }
 
@@ -297,7 +297,7 @@ public sealed partial class MainWindow
         var strokeButton = new Button { Content = DescribeColor(UiText.Get("ChartSeries_LineColor"),current.StrokeColor), Width = 260 };
         AutomationProperties.SetAutomationId(strokeButton, "ChartSeriesFormatLineButton");
 
-        var strokeThicknessBox = new TextBox { Text = FormatNullableDouble(current.StrokeThickness), Width = 260, PlaceholderText = "Auto" };
+        var strokeThicknessBox = new TextBox { Text = FormatNullableDouble(current.StrokeThickness), Width = 260, PlaceholderText = UiText.Get("ChartLoc_AutoPlaceholder") };
         AutomationProperties.SetName(strokeThicknessBox, "Line width");
         AutomationProperties.SetAutomationId(strokeThicknessBox, "ChartSeriesFormatLineWidthBox");
 
@@ -307,7 +307,7 @@ public sealed partial class MainWindow
         AutomationProperties.SetName(markerCombo, "Marker style");
         AutomationProperties.SetAutomationId(markerCombo, "ChartSeriesFormatMarkerCombo");
 
-        var markerSizeBox = new TextBox { Text = FormatNullableDouble(current.MarkerSize), Width = 260, PlaceholderText = "Auto" };
+        var markerSizeBox = new TextBox { Text = FormatNullableDouble(current.MarkerSize), Width = 260, PlaceholderText = UiText.Get("ChartLoc_AutoPlaceholder") };
         AutomationProperties.SetName(markerSizeBox, "Marker size");
         AutomationProperties.SetAutomationId(markerSizeBox, "ChartSeriesFormatMarkerSizeBox");
 
@@ -356,7 +356,7 @@ public sealed partial class MainWindow
             if (!TryParseAutoDouble(strokeThicknessBox.Text, out var thickness)
                 || !TryParseAutoDouble(markerSizeBox.Text, out var markerSize))
             {
-                RefreshShell("Enter a number or leave blank for Auto.");
+                RefreshShell(UiText.Get("ChartLoc_EnterNumberOrBlankAuto"));
                 return;
             }
 
@@ -410,7 +410,7 @@ public sealed partial class MainWindow
 
         if (!ChartTrendlinePlanner.SupportsTrendlines(chart.Type))
         {
-            RefreshShell("Trendlines are available on column, line, bar, scatter, bubble and area charts.");
+            RefreshShell(UiText.Get("ChartLoc_TrendlinesAvailableOn"));
             return;
         }
 
@@ -462,13 +462,13 @@ public sealed partial class MainWindow
         {
             if (!TryParseIntInRange(periodBox.Text, ChartTrendlinePlanner.MinPeriod, ChartTrendlinePlanner.MaxPeriod, out var period))
             {
-                RefreshShell($"Enter a moving-average period between {ChartTrendlinePlanner.MinPeriod} and {ChartTrendlinePlanner.MaxPeriod}.");
+                RefreshShell(UiText.Format("ChartLoc_EnterMovingAveragePeriod", ChartTrendlinePlanner.MinPeriod, ChartTrendlinePlanner.MaxPeriod));
                 return;
             }
 
             if (!TryParseIntInRange(orderBox.Text, ChartTrendlinePlanner.MinOrder, ChartTrendlinePlanner.MaxOrder, out var order))
             {
-                RefreshShell($"Enter a polynomial order between {ChartTrendlinePlanner.MinOrder} and {ChartTrendlinePlanner.MaxOrder}.");
+                RefreshShell(UiText.Format("ChartLoc_EnterPolynomialOrder", ChartTrendlinePlanner.MinOrder, ChartTrendlinePlanner.MaxOrder));
                 return;
             }
 
@@ -517,7 +517,7 @@ public sealed partial class MainWindow
 
         if (!ChartErrorBarsPlanner.SupportsErrorBars(chart.Type))
         {
-            RefreshShell("Error bars are available on column, line, bar, scatter, bubble and area charts.");
+            RefreshShell(UiText.Get("ChartLoc_ErrorBarsAvailableOn"));
             return;
         }
 
@@ -578,7 +578,7 @@ public sealed partial class MainWindow
             if (!TryParseAutoDouble(valueBox.Text, out var value) || value is not { } amount
                 || amount < ChartErrorBarsPlanner.MinValue || amount > ChartErrorBarsPlanner.MaxValue)
             {
-                RefreshShell($"Enter an error-bar amount between {ChartErrorBarsPlanner.MinValue} and {ChartErrorBarsPlanner.MaxValue}.");
+                RefreshShell(UiText.Format("ChartLoc_EnterErrorBarAmount", ChartErrorBarsPlanner.MinValue, ChartErrorBarsPlanner.MaxValue));
                 return;
             }
 

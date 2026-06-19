@@ -18,12 +18,12 @@ namespace FreeX.App.Avalonia;
 public sealed partial class MainWindow
 {
     /// <summary>The per-column format choices the dialog offers, in dropdown order.</summary>
-    private static readonly IReadOnlyList<(TextToColumnsColumnFormat Format, string Label)> TextToColumnsFormatChoices =
+    private static IReadOnlyList<(TextToColumnsColumnFormat Format, string Label)> TextToColumnsFormatChoices =>
     [
-        (TextToColumnsColumnFormat.General, "General"),
-        (TextToColumnsColumnFormat.Text, "Text"),
-        (TextToColumnsColumnFormat.DateMDY, "Date"),
-        (TextToColumnsColumnFormat.Skip, "Skip"),
+        (TextToColumnsColumnFormat.General, UiText.Get("TableLoc_TtcFormatGeneral")),
+        (TextToColumnsColumnFormat.Text, UiText.Get("TableLoc_TtcFormatText")),
+        (TextToColumnsColumnFormat.DateMDY, UiText.Get("TableLoc_TtcFormatDate")),
+        (TextToColumnsColumnFormat.Skip, UiText.Get("TableLoc_TtcFormatSkip")),
     ];
 
     /// <summary>Opens the Text-to-Columns dialog (invoked from the Data menu and the Data-tab ribbon button).</summary>
@@ -46,20 +46,20 @@ public sealed partial class MainWindow
         var range = _session.SelectedRange;
         if (range.ColCount != 1)
         {
-            ShowEditIssue("Select a single column of cells to convert with Text to Columns.");
+            ShowEditIssue(UiText.Get("TableLoc_TtcSelectSingleColumn"));
             return;
         }
 
         var sources = ReadTextToColumnsSources(sheet, range);
         if (sources.Count == 0)
         {
-            ShowEditIssue($"No text to split in {FormatRangeReference(range)}.");
+            ShowEditIssue(UiText.Format("TableLoc_TtcNoTextToSplit", FormatRangeReference(range)));
             return;
         }
 
         var dialog = new Window
         {
-            Title = "Text to Columns",
+            Title = UiText.Get("TableLoc_TtcDialogTitle"),
             Width = 520,
             Height = 520,
             MinWidth = 460,
@@ -69,36 +69,36 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(dialog, "TextToColumnsDialog");
 
-        var delimitedButton = new RadioButton { Content = "Delimited", IsChecked = true, GroupName = "TtcMode" };
+        var delimitedButton = new RadioButton { Content = UiText.Get("TableLoc_TtcDelimited"), IsChecked = true, GroupName = "TtcMode" };
         AutomationProperties.SetAutomationId(delimitedButton, "TextToColumnsDelimitedButton");
-        var fixedWidthButton = new RadioButton { Content = "Fixed width", GroupName = "TtcMode" };
+        var fixedWidthButton = new RadioButton { Content = UiText.Get("TableLoc_TtcFixedWidth"), GroupName = "TtcMode" };
         AutomationProperties.SetAutomationId(fixedWidthButton, "TextToColumnsFixedWidthButton");
 
-        var tabBox = new CheckBox { Content = "Tab" };
+        var tabBox = new CheckBox { Content = UiText.Get("TableLoc_TtcDelimTab") };
         AutomationProperties.SetAutomationId(tabBox, "TextToColumnsTabBox");
-        var semicolonBox = new CheckBox { Content = "Semicolon" };
+        var semicolonBox = new CheckBox { Content = UiText.Get("TableLoc_TtcDelimSemicolon") };
         AutomationProperties.SetAutomationId(semicolonBox, "TextToColumnsSemicolonBox");
-        var commaBox = new CheckBox { Content = "Comma", IsChecked = true };
+        var commaBox = new CheckBox { Content = UiText.Get("TableLoc_TtcDelimComma"), IsChecked = true };
         AutomationProperties.SetAutomationId(commaBox, "TextToColumnsCommaBox");
-        var spaceBox = new CheckBox { Content = "Space" };
+        var spaceBox = new CheckBox { Content = UiText.Get("TableLoc_TtcDelimSpace") };
         AutomationProperties.SetAutomationId(spaceBox, "TextToColumnsSpaceBox");
-        var otherBox = new CheckBox { Content = "Other" };
+        var otherBox = new CheckBox { Content = UiText.Get("TableLoc_TtcDelimOther") };
         AutomationProperties.SetAutomationId(otherBox, "TextToColumnsOtherBox");
         var otherCharBox = new TextBox { Width = 44, MaxLength = 1 };
         AutomationProperties.SetAutomationId(otherCharBox, "TextToColumnsOtherCharBox");
 
-        var treatConsecutiveBox = new CheckBox { Content = "Treat consecutive delimiters as one" };
+        var treatConsecutiveBox = new CheckBox { Content = UiText.Get("TableLoc_TtcTreatConsecutive") };
         AutomationProperties.SetAutomationId(treatConsecutiveBox, "TextToColumnsTreatConsecutiveBox");
 
         var qualifierBox = new ComboBox
         {
-            ItemsSource = new[] { "\"", "'", "(none)" },
+            ItemsSource = new[] { "\"", "'", UiText.Get("TableLoc_TtcQualifierNone") },
             SelectedIndex = 0,
             MinWidth = 90,
         };
         AutomationProperties.SetAutomationId(qualifierBox, "TextToColumnsQualifierBox");
 
-        var breaksBox = new TextBox { PlaceholderText = "e.g. 5, 12, 20", MinWidth = 160 };
+        var breaksBox = new TextBox { PlaceholderText = UiText.Get("TableLoc_TtcBreaksPlaceholder"), MinWidth = 160 };
         AutomationProperties.SetAutomationId(breaksBox, "TextToColumnsBreaksBox");
 
         var formatColumnBox = new ComboBox { MinWidth = 110 };
@@ -184,7 +184,7 @@ public sealed partial class MainWindow
 
             var preview = TextToColumnsPlanner.Preview(sources, options);
             previewColumnCount = Math.Max(1, preview.ColumnCount);
-            statusText.Text = $"Splitting {sources.Count} cell(s) into {previewColumnCount} column(s).";
+            statusText.Text = UiText.Format("TableLoc_TtcSplittingStatus", sources.Count, previewColumnCount);
 
             previewHost.Child = BuildTextToColumnsPreviewGrid(preview, previewColumnCount, columnFormats);
             RefreshFormatColumnChoices();
@@ -194,7 +194,7 @@ public sealed partial class MainWindow
         {
             var previousIndex = formatColumnBox.SelectedIndex;
             formatColumnBox.ItemsSource = Enumerable.Range(1, previewColumnCount)
-                .Select(n => $"Column {n}")
+                .Select(n => UiText.Format("TableLoc_TtcColumnN", n))
                 .ToList();
             formatColumnBox.SelectedIndex = previousIndex >= 0 && previousIndex < previewColumnCount
                 ? previousIndex
@@ -253,9 +253,9 @@ public sealed partial class MainWindow
             RefreshPreview();
         };
 
-        var applyButton = new Button { Content = "Apply", IsDefault = true, MinWidth = 84 };
+        var applyButton = new Button { Content = UiText.Get("TableLoc_Apply"), IsDefault = true, MinWidth = 84 };
         AutomationProperties.SetAutomationId(applyButton, "TextToColumnsApplyButton");
-        var cancelButton = new Button { Content = "Cancel", IsCancel = true, MinWidth = 84 };
+        var cancelButton = new Button { Content = UiText.Get("TableLoc_Cancel"), IsCancel = true, MinWidth = 84 };
         AutomationProperties.SetAutomationId(cancelButton, "TextToColumnsCancelButton");
 
         applyButton.Click += (_, _) =>
@@ -276,7 +276,7 @@ public sealed partial class MainWindow
             var edits = TextToColumnsDialogPlanner.MapToEdits(sheet.Id, result, range);
             if (edits.Count == 0)
             {
-                warningText.Text = "The current options produce no columns to write.";
+                warningText.Text = UiText.Get("TableLoc_TtcNoColumnsToWrite");
                 warningText.IsVisible = true;
                 return;
             }
@@ -285,8 +285,7 @@ public sealed partial class MainWindow
             if (overwrites.Count > 0 && !overwriteConfirmed)
             {
                 overwriteConfirmed = true;
-                warningText.Text =
-                    $"This will overwrite data in {overwrites.Count} cell(s) to the right. Click Apply again to continue.";
+                warningText.Text = UiText.Format("TableLoc_TtcOverwriteWarning", overwrites.Count);
                 warningText.IsVisible = true;
                 return;
             }
@@ -310,14 +309,14 @@ public sealed partial class MainWindow
         {
             Orientation = Orientation.Horizontal,
             Spacing = 8,
-            Children = { new TextBlock { Text = "Text qualifier:", VerticalAlignment = AvaloniaVerticalAlignment.Center }, qualifierBox },
+            Children = { new TextBlock { Text = UiText.Get("TableLoc_TtcTextQualifierLabel"), VerticalAlignment = AvaloniaVerticalAlignment.Center }, qualifierBox },
         };
 
         var breaksRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             Spacing = 8,
-            Children = { new TextBlock { Text = "Break positions:", VerticalAlignment = AvaloniaVerticalAlignment.Center }, breaksBox },
+            Children = { new TextBlock { Text = UiText.Get("TableLoc_TtcBreakPositionsLabel"), VerticalAlignment = AvaloniaVerticalAlignment.Center }, breaksBox },
         };
 
         var formatRow = new StackPanel
@@ -326,7 +325,7 @@ public sealed partial class MainWindow
             Spacing = 8,
             Children =
             {
-                new TextBlock { Text = "Column format:", VerticalAlignment = AvaloniaVerticalAlignment.Center },
+                new TextBlock { Text = UiText.Get("TableLoc_TtcColumnFormatLabel"), VerticalAlignment = AvaloniaVerticalAlignment.Center },
                 formatColumnBox,
                 formatBox,
             },
@@ -357,7 +356,7 @@ public sealed partial class MainWindow
                         {
                             new TextBlock
                             {
-                                Text = $"Source: {FormatRangeReference(range)}",
+                                Text = UiText.Format("TableLoc_TtcSourceLabel", FormatRangeReference(range)),
                                 Foreground = HeaderForeground,
                                 TextWrapping = TextWrapping.Wrap,
                             },
@@ -371,7 +370,7 @@ public sealed partial class MainWindow
                             treatConsecutiveBox,
                             qualifierRow,
                             breaksRow,
-                            new TextBlock { Text = "Preview", FontWeight = FontWeight.SemiBold },
+                            new TextBlock { Text = UiText.Get("TableLoc_TtcPreviewLabel"), FontWeight = FontWeight.SemiBold },
                             previewHost,
                             formatRow,
                             statusText,
@@ -411,11 +410,11 @@ public sealed partial class MainWindow
         var result = _session.ExecuteReviewCommand(command);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Text to Columns failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("TableLoc_TtcFailed"));
             return false;
         }
 
-        RefreshShell($"Split {FormatRangeReference(range)} into columns");
+        RefreshShell(UiText.Format("TableLoc_TtcSplitIntoColumns", FormatRangeReference(range)));
         return true;
     }
 
@@ -456,7 +455,9 @@ public sealed partial class MainWindow
         for (var c = 0; c < columnCount; c++)
         {
             var skipped = columnFormats.TryGetValue(c, out var f) && f == TextToColumnsColumnFormat.Skip;
-            var header = skipped ? $"Column {c + 1} (skip)" : $"Column {c + 1}";
+            var header = skipped
+                ? UiText.Format("TableLoc_TtcColumnNSkip", c + 1)
+                : UiText.Format("TableLoc_TtcColumnN", c + 1);
             AddTextToColumnsPreviewCell(grid, header, row: 0, column: c, isHeader: true, isSkipped: skipped);
         }
 

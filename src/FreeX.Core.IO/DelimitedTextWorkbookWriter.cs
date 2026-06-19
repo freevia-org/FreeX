@@ -27,7 +27,22 @@ internal static class DelimitedTextWorkbookWriter
         "#GETTING_DATA"
     };
 
-    public static void Save(Workbook workbook, Stream stream, char delimiter)
+    /// <summary>
+    /// UTF-8 without a byte-order mark — the default delimited-text encoding (matches Excel's plain
+    /// "CSV (Comma delimited)" / "Text (Tab delimited)" output, which carry no BOM).
+    /// </summary>
+    public static readonly Encoding Utf8NoBom = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+
+    /// <summary>UTF-8 with a BOM — Excel's "CSV UTF-8 (Comma delimited)" Save-As type.</summary>
+    public static readonly Encoding Utf8Bom = new UTF8Encoding(encoderShouldEmitUTF8Identifier: true);
+
+    /// <summary>UTF-16 little-endian with a BOM — Excel's "Unicode Text (*.txt)" Save-As type.</summary>
+    public static readonly Encoding Utf16LeBom = new UnicodeEncoding(bigEndian: false, byteOrderMark: true);
+
+    public static void Save(Workbook workbook, Stream stream, char delimiter) =>
+        Save(workbook, stream, delimiter, Utf8NoBom);
+
+    public static void Save(Workbook workbook, Stream stream, char delimiter, Encoding encoding)
     {
         SaveStreamPreparer.TruncateFromCurrentPosition(stream);
 
@@ -63,7 +78,7 @@ internal static class DelimitedTextWorkbookWriter
         foreach (var row in rows)
             row.Cells.Sort(static (left, right) => left.Col.CompareTo(right.Col));
 
-        using var writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), leaveOpen: true);
+        using var writer = new StreamWriter(stream, encoding, leaveOpen: true);
         var nextRow = 1u;
         foreach (var row in rows)
         {

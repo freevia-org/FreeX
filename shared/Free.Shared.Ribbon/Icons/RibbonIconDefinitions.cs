@@ -845,6 +845,22 @@ public static class RibbonIconDefinitions
             Line(9, 10, 15, 10, 1),
             Line(9, 13, 15, 13, 1));
 
+        // Web layout: a browser-style window (continuous, full-width web view) — a framed pane with a
+        // top chrome bar and content lines running edge to edge.
+        Add(RibbonCommandIconKind.WebLayout,
+            Rectangle(4, 5, 16, 14, radius: 1),
+            Line(4, 9, 20, 9, 1.2),
+            FilledCircle(6.5, 7, 1.2),
+            Line(6.5, 12, 17.5, 12, 1),
+            Line(6.5, 15, 17.5, 15, 1));
+
+        // Draft: a plain text flow with a pencil — the simplified fast-editing view (no page chrome).
+        Add(RibbonCommandIconKind.Draft,
+            Line(5, 7, 15, 7, 1.3),
+            Line(5, 11, 19, 11, 1.3),
+            Line(5, 15, 13, 15, 1.3),
+            Path("M14,18 L18,14 L20,16 L16,20 L13,20 Z", 1.2));
+
         // One page / page size: a single page outline.
         Add(RibbonCommandIconKind.OnePage,
             Rectangle(6, 3, 12, 18, radius: 1),

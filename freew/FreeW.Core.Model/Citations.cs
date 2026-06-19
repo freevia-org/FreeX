@@ -16,6 +16,9 @@ public enum CitationStyle
 
     /// <summary>Chicago (author–date variant).</summary>
     Chicago = 2,
+
+    /// <summary>Institute of Electrical and Electronics Engineers (numeric in-text; author-first entries).</summary>
+    Ieee = 3,
 }
 
 /// <summary>
@@ -60,7 +63,7 @@ public static class Citations
     public const string EntryStyleId = "BibliographyEntry";
 
     /// <summary>
-    /// The bibliography heading text for <paramref name="style"/>: <c>References</c> (APA),
+    /// The bibliography heading text for <paramref name="style"/>: <c>References</c> (APA / IEEE),
     /// <c>Works Cited</c> (MLA), or <c>Bibliography</c> (Chicago).
     /// </summary>
     public static string HeadingTextFor(CitationStyle style) => style switch
@@ -69,6 +72,35 @@ public static class Citations
         CitationStyle.Chicago => "Bibliography",
         _ => "References",
     };
+
+    /// <summary>
+    /// The stable style name for <paramref name="style"/> — <c>APA</c>, <c>MLA</c>, <c>Chicago</c> or
+    /// <c>IEEE</c> — as used by the References &gt; Citation Style combo and persisted to the docx
+    /// bibliography part (<c>b:Sources/@SelectedStyle</c>). Round-trips with <see cref="ParseStyle"/>.
+    /// </summary>
+    public static string StyleName(CitationStyle style) => style switch
+    {
+        CitationStyle.Mla => "MLA",
+        CitationStyle.Chicago => "Chicago",
+        CitationStyle.Ieee => "IEEE",
+        _ => "APA",
+    };
+
+    /// <summary>
+    /// Parses a style name (case-insensitively; <c>APA</c> / <c>MLA</c> / <c>Chicago</c> / <c>IEEE</c>) back
+    /// to a <see cref="CitationStyle"/>. An unrecognised or blank value yields the supplied
+    /// <paramref name="fallback"/> (default <see cref="CitationStyle.Apa"/>) so unknown persisted styles
+    /// degrade to the original behaviour. Inverse of <see cref="StyleName"/>.
+    /// </summary>
+    public static CitationStyle ParseStyle(string? name, CitationStyle fallback = CitationStyle.Apa) =>
+        (name?.Trim().ToUpperInvariant()) switch
+        {
+            "MLA" => CitationStyle.Mla,
+            "CHICAGO" => CitationStyle.Chicago,
+            "IEEE" => CitationStyle.Ieee,
+            "APA" => CitationStyle.Apa,
+            _ => fallback,
+        };
 
     /// <summary>
     /// Formats a source as an in-text citation using the default <see cref="CitationStyle.Apa"/> style:
@@ -84,6 +116,9 @@ public static class Citations
     /// <item><b>MLA</b>: <c>(Author)</c> — MLA is author–page, but FreeW's <see cref="Source"/> carries no
     /// page, so only the author appears; with no author it falls back to the year/tag.</item>
     /// <item><b>Chicago</b> (author–date): <c>(Author Year)</c> (author and year separated by a space).</item>
+    /// <item><b>IEEE</b>: numeric — <c>[Tag]</c> (or author/year), wrapped in square brackets. IEEE numbers
+    /// citations in reference order; use <see cref="FormatInText(int, CitationStyle)"/> for the numbered
+    /// form when the reference's position is known.</item>
     /// </list>
     /// All styles degrade gracefully: with only one of author/year present that value is used; with
     /// neither, the tag is used, else <c>Unknown</c>.
@@ -96,6 +131,19 @@ public static class Citations
         var year = source.Year?.Trim() ?? string.Empty;
 
         string inner;
+        if (style == CitationStyle.Ieee)
+        {
+            // IEEE is numeric and bracketed; without a known reference index, cite the tag (then author/year)
+            // inside square brackets so the in-text marker still resolves to a source.
+            if (author.Length > 0)
+                inner = author;
+            else if (year.Length > 0)
+                inner = year;
+            else
+                inner = FallbackTag(source);
+            return $"[{inner}]";
+        }
+
         if (style == CitationStyle.Mla)
         {
             // MLA is author–page; with no page field, cite the author alone, degrading to year/tag.
@@ -128,6 +176,15 @@ public static class Citations
     }
 
     /// <summary>
+    /// Formats a numbered in-text citation marker. For <see cref="CitationStyle.Ieee"/> this is the
+    /// bracketed reference number <c>[n]</c> (IEEE numbers references in the order they appear); for the
+    /// author–date styles, which do not number their citations, it returns an empty string so callers can
+    /// fall back to <see cref="FormatInText(Source, CitationStyle)"/>. <paramref name="number"/> is 1-based.
+    /// </summary>
+    public static string FormatInText(int number, CitationStyle style) =>
+        style == CitationStyle.Ieee ? $"[{number}]" : string.Empty;
+
+    /// <summary>
     /// Formats a source as a bibliography entry using the default <see cref="CitationStyle.Apa"/> style:
     /// <c>Author. (Year). Title. Publisher.</c> Each segment is emitted only when its field is non-empty,
     /// so missing fields are dropped cleanly. A source with no populated fields yields an empty string.
@@ -136,11 +193,14 @@ public static class Citations
         FormatBibliographyEntry(source, CitationStyle.Apa);
 
     /// <summary>
-    /// Formats a source as a bibliography entry in the given <paramref name="style"/>:
+    /// Formats a source as a bibliography entry in the given <paramref name="style"/>, taking the source's
+    /// <see cref="Source.Type"/> into account (a <see cref="SourceType.JournalArticle"/> cites its
+    /// journal/volume/issue/pages, a <see cref="SourceType.WebSite"/> its URL/accessed date, a
+    /// <see cref="SourceType.Book"/> its publisher):
     /// <list type="bullet">
-    /// <item><b>APA</b>: <c>Author. (Year). Title. Publisher.</c> (year, parenthesised, after the author).</item>
-    /// <item><b>MLA</b>: <c>Author. Title. Publisher, Year.</c> (publisher and year as the final segment).</item>
-    /// <item><b>Chicago</b>: <c>Author. Title. Publisher, Year.</c> (same ordering as MLA).</item>
+    /// <item><b>APA</b>: author–date — <c>Author. (Year). Title. &lt;type-specific&gt;.</c></item>
+    /// <item><b>MLA</b> / <b>Chicago</b>: author-first with the year last — <c>Author. Title. &lt;type-specific&gt;, Year.</c></item>
+    /// <item><b>IEEE</b>: author-first with the year near the end — <c>Author, "Title," &lt;type-specific&gt;, Year.</c></item>
     /// </list>
     /// Each segment is emitted only when its field is non-empty, so missing fields are dropped cleanly. A
     /// source with no populated fields yields an empty string.
@@ -149,12 +209,48 @@ public static class Citations
     {
         ArgumentNullException.ThrowIfNull(source);
 
-        return style == CitationStyle.Apa
-            ? FormatApaEntry(source)
-            : FormatAuthorTitlePublisherYearEntry(source);
+        return style switch
+        {
+            CitationStyle.Apa => FormatApaEntry(source),
+            CitationStyle.Ieee => FormatIeeeEntry(source),
+            _ => FormatAuthorTitlePublisherYearEntry(source),
+        };
     }
 
-    // APA: Author. (Year). Title. Publisher.
+    // The type-specific "source detail" common to several styles, comma-joined:
+    //  - Book:           Publisher
+    //  - JournalArticle: Journal, Volume, "no. Issue", "pp. Pages"
+    //  - WebSite:        Publisher, Url, "accessed Accessed"
+    // Returns an empty list when nothing applies so callers can drop the segment entirely.
+    private static List<string> SourceDetail(Source source)
+    {
+        var parts = new List<string>(4);
+        switch (source.Type)
+        {
+            case SourceType.JournalArticle:
+                AddIfPresent(parts, source.Journal);
+                if (NonEmpty(source.Volume) is { } vol)
+                    parts.Add($"vol. {vol}");
+                if (NonEmpty(source.Issue) is { } issue)
+                    parts.Add($"no. {issue}");
+                if (NonEmpty(source.Pages) is { } pages)
+                    parts.Add($"pp. {pages}");
+                break;
+            case SourceType.WebSite:
+                AddIfPresent(parts, source.Publisher);
+                AddIfPresent(parts, source.Url);
+                if (NonEmpty(source.Accessed) is { } accessed)
+                    parts.Add($"accessed {accessed}");
+                break;
+            default: // Book
+                AddIfPresent(parts, source.Publisher);
+                break;
+        }
+
+        return parts;
+    }
+
+    // APA: Author. (Year). Title. <detail>.
     private static string FormatApaEntry(Source source)
     {
         var segments = new List<string>(4);
@@ -171,15 +267,15 @@ public static class Citations
         if (title.Length > 0)
             segments.Add(WithPeriod(title));
 
-        var publisher = source.Publisher?.Trim() ?? string.Empty;
-        if (publisher.Length > 0)
-            segments.Add(WithPeriod(publisher));
+        var detail = SourceDetail(source);
+        if (detail.Count > 0)
+            segments.Add(WithPeriod(string.Join(", ", detail)));
 
         return string.Join(" ", segments);
     }
 
-    // MLA / Chicago: Author. Title. Publisher, Year.
-    // Publisher and Year combine into a single final segment ("Publisher, Year." / "Publisher." / "Year.").
+    // MLA / Chicago: Author. Title. <detail>, Year.
+    // The detail and Year combine into a single final segment so missing fields never leave a stray comma.
     private static string FormatAuthorTitlePublisherYearEntry(Source source)
     {
         var segments = new List<string>(3);
@@ -192,16 +288,64 @@ public static class Citations
         if (title.Length > 0)
             segments.Add(WithPeriod(title));
 
-        var publisher = source.Publisher?.Trim() ?? string.Empty;
+        var detail = string.Join(", ", SourceDetail(source));
         var year = source.Year?.Trim() ?? string.Empty;
-        if (publisher.Length > 0 && year.Length > 0)
-            segments.Add($"{publisher}, {year}.");
-        else if (publisher.Length > 0)
-            segments.Add(WithPeriod(publisher));
+        if (detail.Length > 0 && year.Length > 0)
+            segments.Add($"{detail}, {year}.");
+        else if (detail.Length > 0)
+            segments.Add(WithPeriod(detail));
         else if (year.Length > 0)
             segments.Add($"{year}.");
 
         return string.Join(" ", segments);
+    }
+
+    // IEEE: Author, "Title," <detail>, Year.
+    // Author/detail/year are plain comma-joined segments; the title is quoted with IEEE's punctuation INSIDE
+    // the closing quote (a comma when more segments follow, else the terminating period), e.g.
+    //   Author, "Title," Journal, vol. V, Year.   /   only-title -> "Title."
+    private static string FormatIeeeEntry(Source source)
+    {
+        var before = new List<string>(1);
+        var after = new List<string>(4);
+
+        var author = source.Author?.Trim() ?? string.Empty;
+        if (author.Length > 0)
+            before.Add(author);
+
+        after.AddRange(SourceDetail(source));
+        var year = source.Year?.Trim() ?? string.Empty;
+        if (year.Length > 0)
+            after.Add(year);
+
+        var title = source.Title?.Trim() ?? string.Empty;
+        if (title.Length == 0)
+        {
+            // No title: just the plain segments, period-terminated.
+            var plain = before.Concat(after).ToList();
+            return plain.Count == 0 ? string.Empty : WithPeriod(string.Join(", ", plain));
+        }
+
+        // Title present: the punctuation that would follow the title goes inside its closing quote — a comma
+        // when more segments follow, else the final period.
+        var quotedTitle = after.Count > 0 ? $"\"{title},\"" : $"\"{title}.\"";
+        var tail = after.Count > 0 ? WithPeriod(string.Join(", ", after)) : string.Empty;
+
+        var head = before.Count > 0 ? string.Join(", ", before) + ", " : string.Empty;
+        var body = tail.Length > 0 ? $"{quotedTitle} {tail}" : quotedTitle;
+        return head + body;
+    }
+
+    private static string? NonEmpty(string? value)
+    {
+        var trimmed = value?.Trim();
+        return string.IsNullOrEmpty(trimmed) ? null : trimmed;
+    }
+
+    private static void AddIfPresent(List<string> parts, string? value)
+    {
+        if (NonEmpty(value) is { } v)
+            parts.Add(v);
     }
 
     // Append a terminating period to a free-text segment, unless it already ends with sentence-ending

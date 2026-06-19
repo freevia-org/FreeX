@@ -134,7 +134,7 @@ public sealed partial class MainWindow
         var command = ConditionalFormatPresetFactory.BuildApplyCommand(preset, _session.ActiveSheet.Id, range);
         RunConditionalFormatCommand(
             command,
-            $"Applied {ConditionalFormatPresetFactory.DisplayName(preset)} to {FormatRangeReference(range)}");
+            UiText.Format("InsertLoc_CfAppliedPreset", ConditionalFormatPresetFactory.DisplayName(preset), FormatRangeReference(range)));
     }
 
     /// <summary>Applies an icon-set conditional format of the given catalog style to the selection.</summary>
@@ -146,7 +146,7 @@ public sealed partial class MainWindow
         var range = _session.SelectedRange;
         var command = ConditionalFormatPresetFactory.BuildIconSetApplyCommand(
             iconSetStyle, _session.ActiveSheet.Id, range);
-        RunConditionalFormatCommand(command, $"Applied icon set to {FormatRangeReference(range)}");
+        RunConditionalFormatCommand(command, UiText.Format("InsertLoc_CfAppliedIconSet", FormatRangeReference(range)));
     }
 
     /// <summary>Prompts for a threshold and applies the Highlight &gt; Greater Than preset.</summary>
@@ -156,8 +156,8 @@ public sealed partial class MainWindow
             return;
 
         var value = await ShowConditionalFormatValuePromptAsync(
-            "Greater Than",
-            "Format cells that are GREATER THAN:",
+            UiText.Get("InsertLoc_CfGreaterThanTitle"),
+            UiText.Get("InsertLoc_CfGreaterThanPrompt"),
             "0");
         if (value is null)
             return;
@@ -168,7 +168,7 @@ public sealed partial class MainWindow
             _session.ActiveSheet.Id,
             range,
             value);
-        RunConditionalFormatCommand(command, $"Applied highlight rule to {FormatRangeReference(range)}");
+        RunConditionalFormatCommand(command, UiText.Format("InsertLoc_CfAppliedHighlight", FormatRangeReference(range)));
     }
 
     /// <summary>Clears every conditional-format rule overlapping the current selection (one undo step).</summary>
@@ -180,7 +180,7 @@ public sealed partial class MainWindow
         var range = _session.SelectedRange;
         RunConditionalFormatCommand(
             new ClearConditionalFormatsCommand(_session.ActiveSheet.Id, range),
-            $"Cleared conditional formatting from {FormatRangeReference(range)}");
+            UiText.Format("InsertLoc_CfCleared", FormatRangeReference(range)));
     }
 
     /// <summary>Runs a conditional-format command through the shared session command path and refreshes.</summary>
@@ -189,7 +189,7 @@ public sealed partial class MainWindow
         var result = _session.ExecuteReviewCommand(command);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Conditional Formatting failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("InsertLoc_CfFailed"));
             return;
         }
 
@@ -216,7 +216,7 @@ public sealed partial class MainWindow
         var range = built.AppliesTo;
         RunConditionalFormatCommand(
             ConditionalFormatRuleBuilder.ToApplyCommand(_session.ActiveSheet.Id, built),
-            $"Applied conditional formatting to {FormatRangeReference(range)}");
+            UiText.Format("InsertLoc_CfAppliedRule", FormatRangeReference(range)));
     }
 
     private Task<ConditionalFormat?> ShowConditionalFormatRuleEditorAsync(ConditionalFormat? existingRule) =>
@@ -655,8 +655,8 @@ public sealed partial class MainWindow
         var valueBox = new TextBox { Text = initial, MinWidth = 240 };
         AutomationProperties.SetAutomationId(valueBox, "ConditionalFormatValuePromptBox");
 
-        var okButton = new Button { Content = "OK", IsDefault = true, MinWidth = 84 };
-        var cancelButton = new Button { Content = "Cancel", IsCancel = true, MinWidth = 84 };
+        var okButton = new Button { Content = UiText.Get("InsertLoc_OkButton"), IsDefault = true, MinWidth = 84 };
+        var cancelButton = new Button { Content = UiText.Get("InsertLoc_CancelButton"), IsCancel = true, MinWidth = 84 };
         okButton.Click += (_, _) =>
         {
             result = valueBox.Text ?? string.Empty;
@@ -796,7 +796,7 @@ public sealed partial class MainWindow
 
             RunConditionalFormatCommand(
                 ConditionalFormatRuleBuilder.ToApplyCommand(_session.ActiveSheet.Id, built),
-                "Added conditional formatting rule");
+                UiText.Get("InsertLoc_CfAddedRule"));
             Reload(built.Id);
         };
 
@@ -814,7 +814,7 @@ public sealed partial class MainWindow
             if (command is null)
                 return;
 
-            RunConditionalFormatCommand(command, "Edited conditional formatting rule");
+            RunConditionalFormatCommand(command, UiText.Get("InsertLoc_CfEditedRule"));
             Reload(edited.Id);
         };
 
@@ -828,7 +828,7 @@ public sealed partial class MainWindow
             if (command is null)
                 return;
 
-            RunConditionalFormatCommand(command, "Deleted conditional formatting rule");
+            RunConditionalFormatCommand(command, UiText.Get("InsertLoc_CfDeletedRule"));
             Reload();
         };
 
@@ -842,7 +842,7 @@ public sealed partial class MainWindow
             if (command is null)
                 return;
 
-            RunConditionalFormatCommand(command, "Reordered conditional formatting rules");
+            RunConditionalFormatCommand(command, UiText.Get("InsertLoc_CfReorderedRules"));
             Reload(item.Id);
         }
 
@@ -858,7 +858,7 @@ public sealed partial class MainWindow
             if (string.IsNullOrWhiteSpace(reference)
                 || !_session.TryResolveReferenceRange(reference, out var range))
             {
-                ShowEditIssue("Applies-to range is not valid.");
+                ShowEditIssue(UiText.Get("InsertLoc_CfAppliesToInvalid"));
                 return;
             }
 
@@ -867,7 +867,7 @@ public sealed partial class MainWindow
             if (command is null)
                 return;
 
-            RunConditionalFormatCommand(command, $"Changed rule range to {FormatRangeReference(range)}");
+            RunConditionalFormatCommand(command, UiText.Format("InsertLoc_CfChangedRuleRange", FormatRangeReference(range)));
             Reload(item.Id);
         };
 
