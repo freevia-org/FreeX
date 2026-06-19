@@ -1838,6 +1838,23 @@ public static class DocxWriter
         _ => null
     };
 
+    /// <summary>
+    /// Builds the <c>w:fldSimple/@w:instr</c> for a table-cell formula field: the formula expression
+    /// (with a leading <c>=</c>) plus, when a number format is set, a <c>\#</c> numeric-picture switch with
+    /// the quoted format — e.g. <c> =SUM(ABOVE) \# "#,##0.00" </c>. The surrounding spaces match how Word
+    /// writes field instructions.
+    /// </summary>
+    private static string TableFormulaInstruction(TableFormulaField formula)
+    {
+        var expression = formula.Expression.TrimStart().StartsWith('=')
+            ? formula.Expression.Trim()
+            : "=" + formula.Expression.Trim();
+        var instr = " " + expression + " ";
+        if (formula.NumberFormat is { Length: > 0 } format)
+            instr += "\\# \"" + format + "\" ";
+        return instr;
+    }
+
     private static XElement BuildRun(Run run, RunDrawings drawings)
     {
         // An inline equation serialises as an m:oMath emitted in place of the run (a paragraph-level
@@ -1867,6 +1884,15 @@ public static class DocxWriter
             wr.Add(BuildWordArtDrawing(wordArt, drawings.Ids));
             return wr;
         }
+
+        // A table-cell formula field (Word's Table > Data > Formula) emits a w:fldSimple whose w:instr is
+        // the formula plus an optional number-format switch (e.g. " =SUM(ABOVE) \# "#,##0.00" "), wrapping a
+        // run whose w:t is the cached computed result. The reader recovers the formula + format from the
+        // instruction and the cached result from the wrapped run.
+        if (run.TableFormula is { } formula)
+            return new XElement(W + "fldSimple",
+                new XAttribute(W + "instr", TableFormulaInstruction(formula)),
+                BuildTextRun(run, drawings));
 
         // A document field emits a self-contained w:fldSimple wrapping a run; the wrapped run's w:t
         // carries the last-known/cached value as fallback text for field-unaware consumers. The

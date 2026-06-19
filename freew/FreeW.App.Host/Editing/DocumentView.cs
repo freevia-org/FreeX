@@ -2554,6 +2554,14 @@ public sealed class DocumentView : RichTextBox
             case WpfRun { Tag: EndnoteMarker endnoteMarker }:
                 modelParagraph.Runs.Add(ModelRun.EndnoteReference(endnoteMarker.EndnoteId));
                 break;
+            case WpfRun { Tag: TableFormulaMarker formulaMarker } formulaRun:
+                // A table-cell formula field round-trips its formula (expression + number format); the run's
+                // visible text is the last-computed result, kept as the cached fallback.
+                modelParagraph.Runs.Add(new ModelRun(formulaRun.Text, ReadRunFormatting(formulaRun))
+                {
+                    TableFormula = formulaMarker.Formula
+                });
+                break;
             case WpfRun { Tag: FieldMarker fieldMarker } fieldRun:
                 // A document field round-trips its kind; the run's visible text is the last-resolved
                 // value, which we keep as the cached fallback (matching Word's cached-field behaviour).
@@ -3050,6 +3058,9 @@ public sealed class DocumentView : RichTextBox
         if (run.EndnoteId is { } endnoteId)
             return BuildEndnoteReference(endnoteId, document);
 
+        if (run.TableFormula is not null)
+            return BuildTableFormulaRun(run, document);
+
         if (run.FieldKind != RunFieldKind.None)
         {
             // A field run can also carry a hyperlink (e.g. a PAGE/DATE field placed inside a link). Wrap
@@ -3453,10 +3464,68 @@ public sealed class DocumentView : RichTextBox
     private sealed record FieldMarker(RunFieldKind Kind, string Cached);
 
     /// <summary>
+    /// Carried on a table-formula WPF run's Tag so <see cref="CommitToModel"/> can round-trip the formula
+    /// (expression + number format). The WPF run's visible text is the cached computed result.
+    /// </summary>
+    private sealed record TableFormulaMarker(TableFormulaField Formula);
+
+    /// <summary>Builds a WPF run rendering a table-formula field's cached result, tagged for round-trip.</summary>
+    private static WpfRun BuildTableFormulaRun(ModelRun run, TextDocument document)
+    {
+        var fmt = run.Formatting ?? document.DefaultRun;
+        var wpf = new WpfRun(run.Text)
+        {
+            FontWeight = fmt.Bold ? FontWeights.Bold : FontWeights.Normal,
+            FontStyle = fmt.Italic ? FontStyles.Italic : FontStyles.Normal,
+            Tag = new TableFormulaMarker(run.TableFormula!)
+        };
+        if (fmt.FontFamily is { Length: > 0 } family)
+            wpf.FontFamily = new FontFamily(family);
+        if (fmt.FontSizePt is { } size)
+            wpf.FontSize = size * PxPerPoint;
+        if (TryParseColor(fmt.ColorHex, out var color))
+            wpf.Foreground = new SolidColorBrush(color);
+        wpf.ToolTip = "Formula: " + run.TableFormula!.Expression;
+        return wpf;
+    }
+
+    /// <summary>
     /// Inserts a document field run of the given <paramref name="kind"/> at the caret. The field is built
     /// with an initially-resolved cached value (DATE/TIME/AUTHOR/FILENAME) so it carries a sensible
     /// fallback even before the next render; it then round-trips through the model and docx as a field.
     /// </summary>
+    /// <summary>
+    /// Word's Table &gt; Data &gt; Formula. Inserts a computed table-cell formula field (e.g.
+    /// <c>=SUM(ABOVE)</c> with an optional number format) at the caret. The caret must be inside a table
+    /// cell; outside a table this is a no-op. The result is computed immediately from the table's cell
+    /// values and carried as the field's cached text, so it shows at once and round-trips through docx.
+    /// </summary>
+    public void InsertTableFormula(TableFormulaField formula)
+    {
+        Focus();
+        CommitToModel();
+        var (blockIndex, rowIndex, columnIndex) = CaretTableLocation();
+        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
+            return;
+
+        var result = TableFormulaEvaluator.Evaluate(table, rowIndex, columnIndex, formula);
+        var run = ModelRun.TableFormulaFieldRun(formula, result);
+        InsertInlineAtCaret(BuildTableFormulaRun(run, _model));
+    }
+
+    /// <summary>
+    /// The model table containing the caret, or null when the caret is not inside a table. Lets the app
+    /// layer (e.g. the Formula dialog) seed a default formula based on whether numbers sit above or to the
+    /// left of the caret cell.
+    /// </summary>
+    public (ModelTable Table, int RowIndex, int ColumnIndex)? CaretTableCell()
+    {
+        var (blockIndex, rowIndex, columnIndex) = CaretTableLocation();
+        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
+            return null;
+        return (table, rowIndex, columnIndex);
+    }
+
     public void InsertField(RunFieldKind kind)
     {
         Focus();

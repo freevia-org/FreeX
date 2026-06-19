@@ -358,6 +358,20 @@ public sealed class Run(string text, RunFormatting? formatting = null)
     public RunFieldKind FieldKind { get; set; } = RunFieldKind.None;
 
     /// <summary>
+    /// When non-null, this run is a table-cell formula field (Word's Table &gt; Data &gt; Formula) — e.g.
+    /// <c>=SUM(ABOVE)</c> with an optional number format. It serialises as a <c>w:fldSimple</c> whose
+    /// <c>w:instr</c> is <c> =SUM(ABOVE) \# "#,##0.00" </c> wrapping a cached result run; the run's
+    /// <see cref="Text"/> doubles as that cached/last-computed result so field-unaware consumers still render
+    /// a value. Modelled as an optional run mark, mirroring <see cref="FieldKind"/>, so the field round-trips
+    /// through the existing run flow without a new block type.
+    /// </summary>
+    public TableFormulaField? TableFormula { get; set; }
+
+    /// <summary>Creates a table-formula field run carrying the cached result as its <see cref="Text"/>.</summary>
+    public static Run TableFormulaFieldRun(TableFormulaField formula, string cachedResult = "", RunFormatting? formatting = null) =>
+        new(cachedResult, formatting) { TableFormula = formula };
+
+    /// <summary>
     /// When set, this run is a footnote reference marker pointing at the footnote with this id in
     /// <see cref="TextDocument.Footnotes"/>. It carries no literal text of its own; the marker number
     /// is the id. Serialises as a superscript run wrapping a w:footnoteReference w:id="N".

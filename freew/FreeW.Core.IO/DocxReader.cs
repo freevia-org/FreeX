@@ -938,6 +938,14 @@ public static class DocxReader
         var text = string.Concat(fldSimple.Descendants(W + "t").Select(t => t.Value));
         var formatting = ReadRunFormatting(inner?.Element(W + "rPr"));
 
+        // A table-cell formula field: the instruction starts with '=' (e.g. " =SUM(ABOVE) \# "#,##0.00" ").
+        // Recover the formula expression + optional number-format switch and the cached result (the run text).
+        if (TableFormulaFor(instruction) is { } formula)
+        {
+            paragraph.Runs.Add(Run.TableFormulaFieldRun(formula, text, formatting));
+            return;
+        }
+
         if (FieldKindFor(instruction) is { } kind)
         {
             // PAGE keeps its historic "1" fallback when no cached value was written; the rest are happy
@@ -1004,6 +1012,39 @@ public static class DocxReader
             "NUMPAGES" => RunFieldKind.NumPages,
             _ => null
         };
+    }
+
+    /// <summary>
+    /// Parses a table-cell formula field instruction (one that starts with <c>=</c>) into a
+    /// <see cref="TableFormulaField"/>: the formula expression up to an optional <c>\#</c> numeric-picture
+    /// switch, and the quoted format from that switch. Returns null for any non-formula field.
+    /// </summary>
+    private static TableFormulaField? TableFormulaFor(string instruction)
+    {
+        var trimmed = instruction.Trim();
+        if (!trimmed.StartsWith('='))
+            return null;
+
+        string? format = null;
+        var switchIndex = trimmed.IndexOf("\\#", StringComparison.Ordinal);
+        var expression = trimmed;
+        if (switchIndex >= 0)
+        {
+            expression = trimmed[..switchIndex].Trim();
+            var rest = trimmed[(switchIndex + 2)..].Trim();
+            // The format follows the \# switch, optionally double-quoted (Word quotes pictures with spaces).
+            if (rest.StartsWith('"'))
+            {
+                var close = rest.IndexOf('"', 1);
+                format = close > 0 ? rest[1..close] : rest[1..];
+            }
+            else if (rest.Length > 0)
+            {
+                format = rest.Split(' ', '\t')[0];
+            }
+        }
+
+        return new TableFormulaField(expression, string.IsNullOrWhiteSpace(format) ? null : format);
     }
 
     /// <summary>

@@ -106,6 +106,7 @@ internal static class FreeWRibbonIcons
             ["freew.table-header-row"] = RibbonCommandIconKind.Table,
             ["freew.table-banded-rows"] = RibbonCommandIconKind.Table,
             ["freew.table-repeat-header"] = RibbonCommandIconKind.Table,
+            ["freew.table-formula"] = RibbonCommandIconKind.Sum,
 
             // Insert: illustrations
             ["freew.picture"] = RibbonCommandIconKind.Picture,

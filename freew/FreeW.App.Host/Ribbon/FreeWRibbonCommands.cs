@@ -148,6 +148,8 @@ internal static class FreeWRibbonCommands
         // Insert tab — Table Tools: pick/clear a fill colour for the caret's cell (sets model + re-renders).
         registry.Register("freew.cell-shading", new CellShadingCommand(editor));
         // Insert tab — Table Tools: table-style toggles applied to the caret's table (sets model + re-renders).
+        // Table Tools — Data: insert a computed formula field (=SUM(ABOVE) etc.) into the caret's cell.
+        registry.Register("freew.table-formula", new TableFormulaCommand(editor));
         registry.Register("freew.table-header-row", new ActionCommand(() => { editor.Focus(); editor.ToggleTableHeaderRow(); }));
         registry.Register("freew.table-banded-rows", new ActionCommand(() => { editor.Focus(); editor.ToggleTableBandedRows(); }));
         registry.Register("freew.table-repeat-header", new ActionCommand(() => { editor.Focus(); editor.ToggleTableRepeatHeaderRow(); }));
@@ -972,6 +974,68 @@ internal static class FreeWRibbonCommands
 
     // Insert > Table Tools > Cell Shading: pick a fill colour from a small palette and apply it to the
     // caret's table cell; "No Color" clears shading. Mirrors ParagraphShadingCommand's swatch picker.
+    // Table Tools — Data > Formula (Word's Table > Data > Formula): insert a computed formula field into the
+    // caret's cell. Requires the caret to be inside a table; otherwise warns and does nothing. Seeds a
+    // default formula (=SUM(ABOVE) or =SUM(LEFT)) by looking at where numbers sit relative to the cell, opens
+    // the Formula dialog, and inserts/recomputes the field.
+    private sealed class TableFormulaCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var owner = Window.GetWindow(editor);
+            var location = editor.CaretTableCell();
+            if (location is null)
+            {
+                DialogMessageHelper.ShowWarning(owner!, "The cursor must be inside a table cell to insert a formula.", "Formula");
+                return;
+            }
+
+            var (table, rowIndex, columnIndex) = location.Value;
+            var formula = TableFormulaDialog.Prompt(owner, DefaultFormula(table, rowIndex, columnIndex));
+            if (formula is null)
+                return; // cancelled — leave the model untouched
+
+            editor.Focus();
+            editor.InsertTableFormula(formula);
+        }
+
+        // Word's default: =SUM(ABOVE) when numeric cells sit above the formula cell; otherwise =SUM(LEFT)
+        // when numbers sit to the left; falling back to =SUM(ABOVE).
+        private static string DefaultFormula(FreeW.Core.Model.Table table, int rowIndex, int columnIndex)
+        {
+            if (HasNumberAbove(table, rowIndex, columnIndex))
+                return "=SUM(ABOVE)";
+            if (HasNumberLeft(table, rowIndex, columnIndex))
+                return "=SUM(LEFT)";
+            return "=SUM(ABOVE)";
+        }
+
+        private static bool HasNumberAbove(FreeW.Core.Model.Table table, int rowIndex, int columnIndex)
+        {
+            for (var r = rowIndex - 1; r >= 0; r--)
+            {
+                var cells = table.Rows[r].Cells;
+                if (columnIndex < cells.Count && TableFormulaEvaluator.TryParseCellNumber(cells[columnIndex].PlainText, out _))
+                    return true;
+            }
+            return false;
+        }
+
+        private static bool HasNumberLeft(FreeW.Core.Model.Table table, int rowIndex, int columnIndex)
+        {
+            if (rowIndex < 0 || rowIndex >= table.Rows.Count)
+                return false;
+            var cells = table.Rows[rowIndex].Cells;
+            for (var c = columnIndex - 1; c >= 0; c--)
+            {
+                if (c < cells.Count && TableFormulaEvaluator.TryParseCellNumber(cells[c].PlainText, out _))
+                    return true;
+            }
+            return false;
+        }
+    }
+
     private sealed class CellShadingCommand(DocumentView editor) : IRibbonCommand
     {
         private static readonly string[] Palette =
