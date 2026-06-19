@@ -479,4 +479,39 @@
   <data name="PageBreak_RemovePageBreak" xml:space="preserve"><value>Supprimer le saut de page</value></data>
   <data name="PageBreak_ResetAllPageBreaks" xml:space="preserve"><value>Rétablir tous les sauts de page</value></data>
   <data name="PageBreak_Failed" xml:space="preserve"><value>Impossible de mettre à jour les sauts de page.</value></data>
+  <data name="Options_Title" xml:space="preserve"><value>Options FreeX</value></data>
+  <data name="Options_CategoryGeneral" xml:space="preserve"><value>Général</value></data>
+  <data name="Options_CategoryFormulas" xml:space="preserve"><value>Formules</value></data>
+  <data name="Options_CategoryProofing" xml:space="preserve"><value>Vérification</value></data>
+  <data name="Options_CategoryView" xml:space="preserve"><value>Affichage</value></data>
+  <data name="Options_CategorySave" xml:space="preserve"><value>Enregistrement</value></data>
+  <data name="Options_NewWorkbooksHeader" xml:space="preserve"><value>Lors de la création de nouveaux classeurs</value></data>
+  <data name="Options_DefaultFontLabel" xml:space="preserve"><value>Police par défaut :</value></data>
+  <data name="Options_DefaultFontSizeLabel" xml:space="preserve"><value>Taille de police par défaut :</value></data>
+  <data name="Options_DefaultSheetCountLabel" xml:space="preserve"><value>Inclure ce nombre de feuilles :</value></data>
+  <data name="Options_PersonalizeHeader" xml:space="preserve"><value>Personnaliser votre copie de FreeX</value></data>
+  <data name="Options_UserNameLabel" xml:space="preserve"><value>Nom d'utilisateur :</value></data>
+  <data name="Options_ShowScreenTips" xml:space="preserve"><value>Afficher les info-bulles</value></data>
+  <data name="Options_CalculationHeader" xml:space="preserve"><value>Options de calcul</value></data>
+  <data name="Options_CalcAutomatic" xml:space="preserve"><value>Automatique</value></data>
+  <data name="Options_CalcManual" xml:space="preserve"><value>Manuel</value></data>
+  <data name="Options_FormulasWorkingHeader" xml:space="preserve"><value>Manipulation des formules</value></data>
+  <data name="Options_R1C1ReferenceStyle" xml:space="preserve"><value>Style de référence L1C1</value></data>
+  <data name="Options_ErrorCheckingHeader" xml:space="preserve"><value>Vérification des erreurs</value></data>
+  <data name="Options_EnableErrorChecking" xml:space="preserve"><value>Activer la vérification des erreurs en arrière-plan</value></data>
+  <data name="Options_ProofingHeader" xml:space="preserve"><value>Lors de la correction orthographique des classeurs</value></data>
+  <data name="Options_IgnoreUppercase" xml:space="preserve"><value>Ignorer les mots en MAJUSCULES</value></data>
+  <data name="Options_IgnoreNumbers" xml:space="preserve"><value>Ignorer les mots contenant des chiffres</value></data>
+  <data name="Options_ViewDisplayHeader" xml:space="preserve"><value>Options d'affichage de ce classeur</value></data>
+  <data name="Options_ShowFormulaBar" xml:space="preserve"><value>Afficher la barre de formule</value></data>
+  <data name="Options_ShowGridlines" xml:space="preserve"><value>Afficher le quadrillage</value></data>
+  <data name="Options_ShowHeadings" xml:space="preserve"><value>Afficher les en-têtes de ligne et de colonne</value></data>
+  <data name="Options_SaveHeader" xml:space="preserve"><value>Enregistrer les classeurs</value></data>
+  <data name="Options_DefaultFormatLabel" xml:space="preserve"><value>Enregistrer les fichiers au format suivant :</value></data>
+  <data name="Options_DefaultFormatXlsx" xml:space="preserve"><value>Classeur Excel (*.xlsx)</value></data>
+  <data name="Options_DefaultFormatNative" xml:space="preserve"><value>Classeur FreeX (*.fxl)</value></data>
+  <data name="Options_InvalidFontSizeMessage" xml:space="preserve"><value>Entrez une taille de police comprise entre 1 et 409.</value></data>
+  <data name="Options_InvalidSheetCountMessage" xml:space="preserve"><value>Entrez un nombre de feuilles compris entre 1 et 255.</value></data>
+  <data name="Options_Saved" xml:space="preserve"><value>Options enregistrées.</value></data>
+  <data name="Options_SaveFailed" xml:space="preserve"><value>Impossible d'enregistrer les options.</value></data>
 </root>

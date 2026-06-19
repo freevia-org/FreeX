@@ -287,6 +287,37 @@ public sealed class AvaloniaShellSourceTests
     }
 
     [Fact]
+    public void MainWindow_WiresOptionsDialogToSharedAppOptionsStore()
+    {
+        var menuSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var optionsSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.Options.cs"));
+
+        // Wired into the native File menu with an Options entry that calls ShowOptions.
+        menuSource.Should().Contain("private readonly NativeMenuItem _optionsMenuItem = new();");
+        menuSource.Should().Contain("_optionsMenuItem.Header = UiText.Get(\"Options_Title\");");
+        menuSource.Should().Contain("_optionsMenuItem.Click += (_, _) => ShowOptions();");
+        menuSource.Should().Contain("fileMenu.Items.Add(_optionsMenuItem);");
+
+        // The dialog edits the shared AppOptions via the portable store and planner — no bespoke model.
+        optionsSource.Should().Contain("var current = AppOptionsStore.Load();");
+        optionsSource.Should().Contain("OptionsDialogPlanner.TryBuildInput(");
+        optionsSource.Should().Contain("var projected = OptionsDialogPlanner.Project(current, input);");
+        optionsSource.Should().Contain("AppOptionsStore.Save(projected)");
+        optionsSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"OptionsDialog\");");
+        optionsSource.Should().Contain("AutomationProperties.SetAutomationId(okButton, \"OptionsOkButton\");");
+        optionsSource.Should().Contain("AutomationProperties.SetAutomationId(applyButton, \"OptionsApplyButton\");");
+        optionsSource.Should().Contain("AutomationProperties.SetAutomationId(cancelButton, \"OptionsCancelButton\");");
+
+        // Live application of the cheap view/calc settings to the running session.
+        optionsSource.Should().Contain("private void ApplyLiveOptions(OptionsDialogPlanner.OptionsDialogInput input)");
+        optionsSource.Should().Contain("_session.SetShowGridlines(input.ShowGridlines);");
+        optionsSource.Should().Contain("_session.SetShowHeadings(input.ShowHeadings);");
+
+        // PresentationPortabilityGuard forbids these tokens in portable shell source — make sure we stayed clean.
+        optionsSource.Should().NotContain("System.Windows");
+    }
+
+    [Fact]
     public void MainWindow_WiresNativeFileMenuToSharedOpenSavePipeline()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));

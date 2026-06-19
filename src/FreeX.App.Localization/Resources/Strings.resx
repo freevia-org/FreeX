@@ -497,4 +497,39 @@
   <data name="PageBreak_RemovePageBreak" xml:space="preserve"><value>Remove Page Break</value></data>
   <data name="PageBreak_ResetAllPageBreaks" xml:space="preserve"><value>Reset All Page Breaks</value></data>
   <data name="PageBreak_Failed" xml:space="preserve"><value>Could not update page breaks.</value></data>
+  <data name="Options_Title" xml:space="preserve"><value>FreeX Options</value></data>
+  <data name="Options_CategoryGeneral" xml:space="preserve"><value>General</value></data>
+  <data name="Options_CategoryFormulas" xml:space="preserve"><value>Formulas</value></data>
+  <data name="Options_CategoryProofing" xml:space="preserve"><value>Proofing</value></data>
+  <data name="Options_CategoryView" xml:space="preserve"><value>View</value></data>
+  <data name="Options_CategorySave" xml:space="preserve"><value>Save</value></data>
+  <data name="Options_NewWorkbooksHeader" xml:space="preserve"><value>When creating new workbooks</value></data>
+  <data name="Options_DefaultFontLabel" xml:space="preserve"><value>Default font:</value></data>
+  <data name="Options_DefaultFontSizeLabel" xml:space="preserve"><value>Default font size:</value></data>
+  <data name="Options_DefaultSheetCountLabel" xml:space="preserve"><value>Include this many sheets:</value></data>
+  <data name="Options_PersonalizeHeader" xml:space="preserve"><value>Personalize your copy of FreeX</value></data>
+  <data name="Options_UserNameLabel" xml:space="preserve"><value>User name:</value></data>
+  <data name="Options_ShowScreenTips" xml:space="preserve"><value>Show ScreenTips</value></data>
+  <data name="Options_CalculationHeader" xml:space="preserve"><value>Calculation options</value></data>
+  <data name="Options_CalcAutomatic" xml:space="preserve"><value>Automatic</value></data>
+  <data name="Options_CalcManual" xml:space="preserve"><value>Manual</value></data>
+  <data name="Options_FormulasWorkingHeader" xml:space="preserve"><value>Working with formulas</value></data>
+  <data name="Options_R1C1ReferenceStyle" xml:space="preserve"><value>R1C1 reference style</value></data>
+  <data name="Options_ErrorCheckingHeader" xml:space="preserve"><value>Error checking</value></data>
+  <data name="Options_EnableErrorChecking" xml:space="preserve"><value>Enable background error checking</value></data>
+  <data name="Options_ProofingHeader" xml:space="preserve"><value>When correcting spelling in workbooks</value></data>
+  <data name="Options_IgnoreUppercase" xml:space="preserve"><value>Ignore words in UPPERCASE</value></data>
+  <data name="Options_IgnoreNumbers" xml:space="preserve"><value>Ignore words that contain numbers</value></data>
+  <data name="Options_ViewDisplayHeader" xml:space="preserve"><value>Display options for this workbook</value></data>
+  <data name="Options_ShowFormulaBar" xml:space="preserve"><value>Show formula bar</value></data>
+  <data name="Options_ShowGridlines" xml:space="preserve"><value>Show gridlines</value></data>
+  <data name="Options_ShowHeadings" xml:space="preserve"><value>Show row and column headings</value></data>
+  <data name="Options_SaveHeader" xml:space="preserve"><value>Save workbooks</value></data>
+  <data name="Options_DefaultFormatLabel" xml:space="preserve"><value>Save files in this format:</value></data>
+  <data name="Options_DefaultFormatXlsx" xml:space="preserve"><value>Excel Workbook (*.xlsx)</value></data>
+  <data name="Options_DefaultFormatNative" xml:space="preserve"><value>FreeX Workbook (*.fxl)</value></data>
+  <data name="Options_InvalidFontSizeMessage" xml:space="preserve"><value>Enter a font size between 1 and 409.</value></data>
+  <data name="Options_InvalidSheetCountMessage" xml:space="preserve"><value>Enter a sheet count between 1 and 255.</value></data>
+  <data name="Options_Saved" xml:space="preserve"><value>Options saved.</value></data>
+  <data name="Options_SaveFailed" xml:space="preserve"><value>Could not save options.</value></data>
 </root>
