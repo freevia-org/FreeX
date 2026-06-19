@@ -2554,6 +2554,79 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void HyphenationOptions_RoundTrip_ZoneLimitAndCaps()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("hyphenate me"));
+        doc.Page.AutoHyphenation = true;
+        doc.Page.HyphenationZonePt = 18; // 360 twips
+        doc.Page.ConsecutiveHyphenLimit = 3;
+        doc.Page.DoNotHyphenateCaps = true;
+
+        var page = RoundTrip(doc).Page;
+
+        page.AutoHyphenation.Should().BeTrue();
+        page.HyphenationZonePt.Should().BeApproximately(18, 0.01);
+        page.ConsecutiveHyphenLimit.Should().Be(3);
+        page.DoNotHyphenateCaps.Should().BeTrue();
+    }
+
+    [Fact]
+    public void HyphenationOptions_EmitSettingsElements()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("hyphenate me"));
+        doc.Page.AutoHyphenation = true;
+        doc.Page.HyphenationZonePt = 18;
+        doc.Page.ConsecutiveHyphenLimit = 2;
+        doc.Page.DoNotHyphenateCaps = true;
+
+        using var optionsStream = new MemoryStream();
+        DocxWriter.Write(doc, optionsStream);
+        optionsStream.Position = 0;
+
+        using var optionsZip = new ZipArchive(optionsStream, ZipArchiveMode.Read);
+        using var optionsReader = new StreamReader(optionsZip.GetEntry("word/settings.xml")!.Open());
+        var settings = optionsReader.ReadToEnd();
+        settings.Should().Contain("autoHyphenation");
+        settings.Should().Contain("hyphenationZone");
+        settings.Should().Contain("consecutiveHyphenLimit");
+        settings.Should().Contain("doNotHyphenateCaps");
+    }
+
+    [Fact]
+    public void HyphenationSubOptions_NotEmitted_WhenAutoHyphenationOff()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("plain"));
+        // Sub-options set but automatic hyphenation off => they must not be emitted (and no settings part is
+        // forced into existence by them alone).
+        doc.Page.ConsecutiveHyphenLimit = 4;
+        doc.Page.DoNotHyphenateCaps = true;
+
+        using var offStream = new MemoryStream();
+        DocxWriter.Write(doc, offStream);
+        offStream.Position = 0;
+
+        using var offZip = new ZipArchive(offStream, ZipArchiveMode.Read);
+        offZip.GetEntry("word/settings.xml").Should().BeNull();
+    }
+
+    [Fact]
+    public void SuppressAutoHyphens_RoundTripsPerParagraph()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("normal"));
+        doc.Blocks.Add(new Paragraph("no hyphens") { Formatting = ParagraphFormatting.Default with { SuppressAutoHyphens = true } });
+
+        var result = RoundTrip(doc);
+
+        var paragraphs = result.Paragraphs.ToList();
+        paragraphs[0].Formatting.SuppressAutoHyphens.Should().BeFalse();
+        paragraphs[1].Formatting.SuppressAutoHyphens.Should().BeTrue();
+    }
+
+    [Fact]
     public void AutoHyphenation_EmitsSettingsPart_WithAutoHyphenationToggle()
     {
         var doc = new TextDocument();

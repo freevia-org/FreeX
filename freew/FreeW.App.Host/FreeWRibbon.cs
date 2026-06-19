@@ -239,7 +239,16 @@ internal static class FreeWRibbon
                     g.Medium("freew.columns", "Columns", RibbonCommandIconKind.TextColumns, dropdown: true);
                     g.RowBreak();
                     g.Icon("freew.line-numbers", "Line Numbers", RibbonCommandIconKind.Number);
-                    g.Icon("freew.hyphenation", "Hyphenation", RibbonCommandIconKind.Hyphenation);
+                    // Hyphenation dropdown (Word's Layout > Page Setup > Hyphenation): None / Automatic /
+                    // Manual, plus the Hyphenation Options… dialog. The mode items set the document flag; the
+                    // options item opens the dialog (zone, consecutive-hyphen limit, hyphenate-caps).
+                    g.Icon("freew.hyphenation", "Hyphenation", RibbonCommandIconKind.Hyphenation, "HY", menu: m =>
+                    {
+                        m.Item("freew.hyphenation-none", "None", "N");
+                        m.Item("freew.hyphenation-auto", "Automatic", "A");
+                        m.Item("freew.hyphenation-manual", "Manual", "M");
+                        m.Item("freew.hyphenation-options", "Hyphenation Options…", "H");
+                    });
                     g.Icon("freew.page-valign", "Vertical Align", RibbonCommandIconKind.AlignJustify);
                     g.Icon("freew.different-first-page", "Different First Page", RibbonCommandIconKind.CoverPage);
                 });

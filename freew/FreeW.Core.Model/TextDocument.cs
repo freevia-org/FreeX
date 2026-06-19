@@ -1308,6 +1308,31 @@ public sealed class PageSettings
     public bool AutoHyphenation { get; set; }
 
     /// <summary>
+    /// The hyphenation zone in points (word/settings.xml's w:hyphenationZone, stored in twips). This is the
+    /// maximum amount of whitespace allowed at the end of a line before automatic hyphenation kicks in: a
+    /// word is only broken when the gap left at the line end would otherwise exceed this zone. A wider zone
+    /// means fewer hyphens (and a more ragged right edge); a narrower zone means more. Defaults to 0, which —
+    /// like Word — is treated as the default zone (0.25" / 360 twips) and is not emitted unless changed.
+    /// Only meaningful when <see cref="AutoHyphenation"/> is on.
+    /// </summary>
+    public double HyphenationZonePt { get; set; }
+
+    /// <summary>
+    /// The maximum number of consecutive lines that may end with a hyphen (word/settings.xml's
+    /// w:consecutiveHyphenLimit). 0 (the default) means no limit — Word's "Limit consecutive hyphens to: No
+    /// limit". Emitted only when greater than 0. Only meaningful when <see cref="AutoHyphenation"/> is on.
+    /// </summary>
+    public int ConsecutiveHyphenLimit { get; set; }
+
+    /// <summary>
+    /// When true, words in ALL CAPITALS are not automatically hyphenated (word/settings.xml's
+    /// w:doNotHyphenateCaps — Word's "Hyphenate words in CAPS" checkbox, inverted: checked = hyphenate caps =
+    /// this false). Defaults to false (caps are hyphenated) so existing documents are unaffected; emitted only
+    /// when true. Only meaningful when <see cref="AutoHyphenation"/> is on.
+    /// </summary>
+    public bool DoNotHyphenateCaps { get; set; }
+
+    /// <summary>
     /// How page content is aligned vertically within the text area (w:sectPr/w:vAlign). Defaults to
     /// <see cref="PageVerticalAlignment.Top"/> so existing documents round-trip unchanged — no
     /// w:vAlign is emitted. When not Top the writer emits w:vAlign with the matching value
@@ -1370,6 +1395,9 @@ public sealed class PageSettings
         LineNumberMode = LineNumberMode,
         LineNumberCountBy = LineNumberCountBy,
         AutoHyphenation = AutoHyphenation,
+        HyphenationZonePt = HyphenationZonePt,
+        ConsecutiveHyphenLimit = ConsecutiveHyphenLimit,
+        DoNotHyphenateCaps = DoNotHyphenateCaps,
         VerticalAlignment = VerticalAlignment,
         DifferentFirstPage = DifferentFirstPage,
         DifferentOddEvenPages = DifferentOddEvenPages,

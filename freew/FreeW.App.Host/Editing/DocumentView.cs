@@ -2529,7 +2529,7 @@ public sealed class DocumentView : RichTextBox
     /// list level round-trip through an edit/commit cycle, which keeps the accumulated outline markers
     /// (1.1.1) stable after editing. Defaults to 0 (the non-list / top-level case).
     /// </para>
-    private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, string? BookmarkName, bool PageBreakBefore = false, bool WidowControl = false, string? StyleId = null, int ListLevel = 0, ParagraphBorder? Border = null, ShadingPattern ShadingPattern = ShadingPattern.Clear);
+    private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, string? BookmarkName, bool PageBreakBefore = false, bool WidowControl = false, string? StyleId = null, int ListLevel = 0, ParagraphBorder? Border = null, ShadingPattern ShadingPattern = ShadingPattern.Clear, bool SuppressAutoHyphens = false);
 
     /// <summary>Read the edited FlowDocument back into the model (paragraphs + tables).</summary>
     public void CommitToModel()
@@ -2778,7 +2778,7 @@ public sealed class DocumentView : RichTextBox
                 if (control is { Kind: ContentControlKind.CheckBox })
                     control = control with { Checked = markedRun.Text == ModelContentControl.CheckedGlyph };
 
-                modelParagraph.Runs.Add(new ModelRun(markedRun.Text, markedFmt)
+                modelParagraph.Runs.Add(new ModelRun(StripSoftHyphens(markedRun.Text), markedFmt)
                 {
                     HyperlinkUrl = hyperlinkUrl,
                     HyperlinkAnchor = hyperlinkAnchor,
@@ -2791,7 +2791,7 @@ public sealed class DocumentView : RichTextBox
                 });
                 break;
             case WpfRun run when run.Text.Length > 0:
-                modelParagraph.Runs.Add(new ModelRun(run.Text, ReadRunFormatting(run)) { HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip });
+                modelParagraph.Runs.Add(new ModelRun(StripSoftHyphens(run.Text), ReadRunFormatting(run)) { HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip });
                 break;
         }
     }
@@ -3207,18 +3207,69 @@ public sealed class DocumentView : RichTextBox
         var borderNeedsTag = paraFmt.Border is { } b
             && (b.LineStyle != BorderLineStyle.Single || !b.Top || !b.Left || !b.Bottom || !b.Right);
         var shadingNeedsTag = paraFmt.ShadingColorHex is { Length: > 0 } && paraFmt.ShadingPattern != ShadingPattern.Clear;
-        if (paraFmt.TabStops.Count > 0 || paragraph.BookmarkName is { Length: > 0 } || paraFmt.PageBreakBefore || paraFmt.WidowControl || paragraph.StyleId is { Length: > 0 } || paraFmt.ListLevel > 0 || borderNeedsTag || shadingNeedsTag)
+        if (paraFmt.TabStops.Count > 0 || paragraph.BookmarkName is { Length: > 0 } || paraFmt.PageBreakBefore || paraFmt.WidowControl || paragraph.StyleId is { Length: > 0 } || paraFmt.ListLevel > 0 || borderNeedsTag || shadingNeedsTag || paraFmt.SuppressAutoHyphens)
             wpf.Tag = new ParagraphTag(
                 paraFmt.TabStops, paragraph.BookmarkName, paraFmt.PageBreakBefore, paraFmt.WidowControl,
                 paragraph.StyleId, paraFmt.ListLevel,
                 borderNeedsTag ? paraFmt.Border : null,
-                shadingNeedsTag ? paraFmt.ShadingPattern : ShadingPattern.Clear);
+                shadingNeedsTag ? paraFmt.ShadingPattern : ShadingPattern.Clear,
+                paraFmt.SuppressAutoHyphens);
 
         foreach (var run in paragraph.Runs)
             wpf.Inlines.Add(BuildRun(run, paragraph, document));
 
         return wpf;
     }
+
+    // Insert soft hyphens into a run's display text via the pure Hyphenator. When doNotHyphenateCaps is on,
+    // a whitespace-delimited token whose alphabetic characters are all uppercase is left whole. The result is
+    // display-only; the soft hyphens are stripped back off on commit (StripSoftHyphens) so the model is clean.
+    private static string HyphenateForDisplay(string text, bool doNotHyphenateCaps)
+    {
+        if (!doNotHyphenateCaps)
+            return Hyphenator.HyphenateText(text);
+
+        // Hyphenate token by token, skipping all-caps words. Splitting on whitespace keeps positions stable
+        // because soft hyphens are only ever inserted inside a token, never across a whitespace boundary.
+        var sb = new System.Text.StringBuilder(text.Length + 8);
+        var start = 0;
+        for (var i = 0; i <= text.Length; i++)
+        {
+            var atEnd = i == text.Length;
+            if (!atEnd && !char.IsWhiteSpace(text[i]))
+                continue;
+            if (i > start)
+            {
+                var token = text.Substring(start, i - start);
+                sb.Append(IsAllCaps(token) ? token : Hyphenator.HyphenateText(token));
+            }
+            if (!atEnd)
+                sb.Append(text[i]);
+            start = i + 1;
+        }
+        return sb.ToString();
+    }
+
+    // True when a token contains at least one letter and every letter is uppercase (digits/punctuation are
+    // ignored), e.g. "NASA" or "ASAP," — used to honour w:doNotHyphenateCaps.
+    private static bool IsAllCaps(string token)
+    {
+        var sawLetter = false;
+        foreach (var c in token)
+        {
+            if (!char.IsLetter(c))
+                continue;
+            sawLetter = true;
+            if (!char.IsUpper(c))
+                return false;
+        }
+        return sawLetter;
+    }
+
+    // Remove the display-only soft hyphens (U+00AD) the renderer inserts for automatic hyphenation, so a run
+    // read back on commit carries exactly the model text. A no-op for text without soft hyphens.
+    internal static string StripSoftHyphens(string text) =>
+        text.IndexOf(Hyphenator.SoftHyphen) < 0 ? text : text.Replace(Hyphenator.SoftHyphen.ToString(), string.Empty);
 
     private static Inline BuildRun(ModelRun run, ModelParagraph paragraph, TextDocument document)
     {
@@ -3282,7 +3333,15 @@ public sealed class DocumentView : RichTextBox
             return new WpfRun(string.Empty) { Tag = new PageBreakMarker() };
 
         var fmt = Resolve(run, paragraph, document);
-        var wpf = new WpfRun(run.Text)
+        // Automatic hyphenation: when the document has it on and this paragraph is not suppressed, insert
+        // soft hyphens (U+00AD) at the pure helper's break points so the layout engine can break long words
+        // at line ends. Soft hyphens are zero-width unless a line break lands on one, and are stripped on
+        // commit (see ReadInline / StripSoftHyphens) so they never enter the model. ALL-CAPS words are left
+        // whole when w:doNotHyphenateCaps is set, mirroring Word's "Hyphenate words in CAPS" option.
+        var runText = run.Text;
+        if (document.Page.AutoHyphenation && !paragraph.Formatting.SuppressAutoHyphens && runText.Length > 0)
+            runText = HyphenateForDisplay(runText, document.Page.DoNotHyphenateCaps);
+        var wpf = new WpfRun(runText)
         {
             FontWeight = fmt.Bold ? FontWeights.Bold : FontWeights.Normal,
             FontStyle = fmt.Italic ? FontStyles.Italic : FontStyles.Normal
@@ -6074,8 +6133,11 @@ public sealed class DocumentView : RichTextBox
         // WidowControl rides on the Tag (no FlowDocument property); KeepWithNext/KeepLinesTogether read
         // straight back off the WPF Paragraph's native properties set in BuildParagraph.
         var widowControl = paragraph.Tag is ParagraphTag { WidowControl: true };
+        // SuppressAutoHyphens has no FlowDocument property either, so it rides on the Tag like WidowControl.
+        var suppressAutoHyphens = paragraph.Tag is ParagraphTag { SuppressAutoHyphens: true };
         return ParagraphFormatting.Default with
         {
+            SuppressAutoHyphens = suppressAutoHyphens,
             Alignment = FromWpfAlignment(paragraph.TextAlignment),
             // Right-to-left direction reads straight back off the WPF Paragraph's FlowDirection (set in
             // BuildParagraph), so an RTL paragraph survives an edit/commit cycle.

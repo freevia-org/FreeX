@@ -106,7 +106,8 @@ docx reader/writer; unsupported renderings are noted under [Known limitations](#
 - **Headers & footers** with a live **PAGE-number field** (`word/header1.xml`/`footer1.xml`, `w:fldSimple`).
 - Page borders + **watermark** (page border `w:pgBorders`; watermark stored as a `docProps/custom.xml` custom property).
 - **Line numbers** (continuous / restart-each-page, `sectPr/w:lnNumType`) drawn in the live editor margin and in print preview.
-- Auto-hyphenation (`w:autoHyphenation`), vertical page alignment (`sectPr/w:vAlign`), different-first-page (`w:titlePg`).
+- **Hyphenation** (Layout > Hyphenation: None / Automatic / Manual + Options…): a pure English syllable hyphenator inserts soft hyphens into the live document; document-level `w:autoHyphenation` / `w:hyphenationZone` / `w:consecutiveHyphenLimit` / `w:doNotHyphenateCaps` and per-paragraph `w:suppressAutoHyphens` round-trip via `settings.xml` / `pPr`.
+- Vertical page alignment (`sectPr/w:vAlign`), different-first-page (`w:titlePg`).
 - **Different odd & even page** headers/footers (`w:evenAndOddHeaders` + `header2.xml`/`footer2.xml`, `w:type="even"`).
 - **Page background colour** (`w:background` + `w:displayBackgroundShape`).
 - **Multiple sections** with per-section page setup and break kinds (continuous / next / even / odd page).

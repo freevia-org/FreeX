@@ -414,6 +414,15 @@ public sealed record ParagraphFormatting
     public bool WidowControl { get; init; }
 
     /// <summary>
+    /// When true, automatic hyphenation is suppressed for this paragraph (pPr/w:suppressAutoHyphens), even
+    /// when the document has <see cref="PageSettings.AutoHyphenation"/> on. Defaults to false so existing
+    /// paragraphs are unaffected; round-trips to docx as the <c>w:suppressAutoHyphens</c> toggle, mirroring
+    /// <see cref="WidowControl"/>. The live editor honours it by skipping soft-hyphen insertion for the
+    /// paragraph's runs.
+    /// </summary>
+    public bool SuppressAutoHyphens { get; init; }
+
+    /// <summary>
     /// Paragraph shading (background fill) as an RRGGBB hex (e.g. <c>"#FFFF00"</c>). Null means no
     /// shading. Round-trips to docx as paragraph shading (<c>pPr/w:shd w:fill</c>), mirroring run
     /// <see cref="RunFormatting.HighlightColorHex"/>.

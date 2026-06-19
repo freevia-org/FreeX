@@ -177,6 +177,16 @@ public static class DocxReader
 
         // Automatic hyphenation (w:autoHyphenation) is an on/off toggle: present + not explicitly off.
         document.Page.AutoHyphenation = ReadToggle(root, "autoHyphenation");
+        // Hyphenation sub-options: w:consecutiveHyphenLimit/@w:val (max consecutive hyphenated lines),
+        // w:hyphenationZone/@w:val (zone in twips) and the w:doNotHyphenateCaps toggle. Each is read whether
+        // or not autoHyphenation is on (so the value round-trips), defaulting to off/0 when absent.
+        if (int.TryParse(root.Element(W + "consecutiveHyphenLimit")?.Attribute(W + "val")?.Value,
+                System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var hyphenLimit) && hyphenLimit > 0)
+            document.Page.ConsecutiveHyphenLimit = hyphenLimit;
+        if (int.TryParse(root.Element(W + "hyphenationZone")?.Attribute(W + "val")?.Value,
+                System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var hyphenZone) && hyphenZone > 0)
+            document.Page.HyphenationZonePt = hyphenZone / 20.0;
+        document.Page.DoNotHyphenateCaps = ReadToggle(root, "doNotHyphenateCaps");
 
         // Different odd/even page headers/footers (w:evenAndOddHeaders): an on/off toggle. When set, the
         // even header/footer references in w:sectPr are honoured (see ReadHeaderFooter).
@@ -2599,6 +2609,8 @@ public static class DocxReader
         var keepWithNext = ReadToggle(pPr, "keepNext");
         var keepLinesTogether = ReadToggle(pPr, "keepLines");
         var widowControl = ReadToggle(pPr, "widowControl");
+        // Suppress automatic hyphenation for this paragraph (w:suppressAutoHyphens), read as a toggle.
+        var suppressAutoHyphens = ReadToggle(pPr, "suppressAutoHyphens");
         // Right-to-left paragraph direction (w:bidi), read as a toggle like the flow-control flags.
         var rtl = ReadToggle(pPr, "bidi");
 
@@ -2650,6 +2662,7 @@ public static class DocxReader
             KeepWithNext = keepWithNext,
             KeepLinesTogether = keepLinesTogether,
             WidowControl = widowControl,
+            SuppressAutoHyphens = suppressAutoHyphens,
             Rtl = rtl,
             LineRule = lineRule,
             LineSpacing = lineSpacing,

@@ -160,7 +160,7 @@ public static class DocxWriter
         WritePart(archive, "word/styles.xml", BuildStyles(document, preservedNumbering));
         WritePart(archive, ThemePartName.TrimStart('/'), BuildTheme(document.Theme));
         if (hasSettings)
-            WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.Page.AutoHyphenation, document.Page.DifferentOddEvenPages, hasBackground, hasEmbeddedFonts, document.Preserved.OriginalSettings));
+            WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.Page, hasBackground, hasEmbeddedFonts, document.Preserved.OriginalSettings));
         if (hasBibliography)
             WritePart(archive, BibliographyPartName.TrimStart('/'), BuildBibliographySources(document));
         // Embedded fonts: word/fontTable.xml + its rels + one obfuscated .odttf per embedded style.
@@ -1867,6 +1867,10 @@ public static class DocxWriter
         if (f.TabStops.Count > 0)
             pPr.Add(new XElement(W + "tabs",
                 f.TabStops.Select(BuildTabStop)));
+        // Suppress automatic hyphenation for this paragraph (w:suppressAutoHyphens); emitted only when set,
+        // like the other pPr toggles. In CT_PPr schema order it follows w:tabs.
+        if (f.SuppressAutoHyphens)
+            pPr.Add(new XElement(W + "suppressAutoHyphens"));
         // w:spacing carries before/after AND line spacing. Line spacing is emitted only when it differs
         // from the model default (a multiple of 1.15), so paragraphs with inherited/default spacing stay
         // byte-unchanged; explicit single/1.5/double (auto) and exact/atLeast heights round-trip.
@@ -3748,8 +3752,23 @@ public static class DocxWriter
     /// FreeW's features still apply.
     /// </para>
     /// </summary>
-    private static XDocument BuildSettings(ProtectionSettings protection, bool autoHyphenation, bool differentOddEvenPages, bool displayBackground, bool embedTrueTypeFonts, XElement? original)
+    private static XDocument BuildSettings(ProtectionSettings protection, PageSettings page, bool displayBackground, bool embedTrueTypeFonts, XElement? original)
     {
+        var autoHyphenation = page.AutoHyphenation;
+        var differentOddEvenPages = page.DifferentOddEvenPages;
+        // The hyphenation sub-options only apply when automatic hyphenation is on, and each is emitted only
+        // when it differs from Word's default (zone 0 = default, limit 0 = no limit, caps hyphenated): a
+        // limit > 0, an explicit zone > 0, and the do-not-hyphenate-caps toggle.
+        var consecutiveLimit = autoHyphenation && page.ConsecutiveHyphenLimit > 0
+            ? new XElement(W + "consecutiveHyphenLimit", new XAttribute(W + "val", page.ConsecutiveHyphenLimit))
+            : null;
+        var hyphenationZone = autoHyphenation && page.HyphenationZonePt > 0
+            ? new XElement(W + "hyphenationZone", new XAttribute(W + "val", PointsToDxa(page.HyphenationZonePt)))
+            : null;
+        var doNotHyphenateCaps = autoHyphenation && page.DoNotHyphenateCaps
+            ? new XElement(W + "doNotHyphenateCaps")
+            : null;
+
         // Authored-from-scratch (no preserved settings): emit a fresh minimal part with exactly FreeW's modelled
         // children in the historical emission order, byte-for-byte as before — no overlay machinery involved.
         if (original is null)
@@ -3762,6 +3781,13 @@ public static class DocxWriter
                 fresh.Add(new XElement(W + "displayBackgroundShape"));
             if (autoHyphenation)
                 fresh.Add(new XElement(W + "autoHyphenation"));
+            // Hyphenation sub-options follow autoHyphenation in CT_Settings schema order.
+            if (consecutiveLimit is not null)
+                fresh.Add(consecutiveLimit);
+            if (hyphenationZone is not null)
+                fresh.Add(hyphenationZone);
+            if (doNotHyphenateCaps is not null)
+                fresh.Add(doNotHyphenateCaps);
             if (differentOddEvenPages)
                 fresh.Add(new XElement(W + "evenAndOddHeaders"));
             if (ProtectionEditToken(protection.Mode) is { } freshEdit)
@@ -3774,11 +3800,14 @@ public static class DocxWriter
         // Preserved settings: overlay each modelled element onto a clone of the original (never mutating the
         // model). Each is removed (so we replace, not duplicate) then re-inserted at its CT_Settings schema
         // position; an element whose feature is off is simply removed, since the modelled value — not the
-        // preserved one — is authoritative for these five. Unmodelled settings keep their place.
+        // preserved one — is authoritative for these. Unmodelled settings keep their place.
         var settings = new XElement(original);
         OverlaySetting(settings, "embedTrueTypeFonts", embedTrueTypeFonts ? new XElement(W + "embedTrueTypeFonts") : null);
         OverlaySetting(settings, "displayBackgroundShape", displayBackground ? new XElement(W + "displayBackgroundShape") : null);
         OverlaySetting(settings, "autoHyphenation", autoHyphenation ? new XElement(W + "autoHyphenation") : null);
+        OverlaySetting(settings, "consecutiveHyphenLimit", consecutiveLimit);
+        OverlaySetting(settings, "hyphenationZone", hyphenationZone);
+        OverlaySetting(settings, "doNotHyphenateCaps", doNotHyphenateCaps);
         OverlaySetting(settings, "evenAndOddHeaders", differentOddEvenPages ? new XElement(W + "evenAndOddHeaders") : null);
         OverlaySetting(settings, "documentProtection",
             ProtectionEditToken(protection.Mode) is { } edit
