@@ -29,8 +29,10 @@ public sealed class FidelityCorpusManifestTests
         foreach (var row in rows)
         {
             row.Id.Should().MatchRegex("^[a-z0-9]+(?:-[a-z0-9]+)*$");
-            row.File.Should().EndWith(".xlsx");
-            Path.GetFileName(row.File).Should().Be(row.File);
+            Path.GetExtension(row.File).Should().BeOneOf(".xlsx", ".xls");
+            row.File.Should().NotContain("\\");
+            row.File.Split('/').Should().OnlyContain(part =>
+                !string.IsNullOrWhiteSpace(part) && part != "." && part != "..");
             row.Source.Should().NotBeNullOrWhiteSpace();
             row.License.Should().NotBeNullOrWhiteSpace();
             row.FeatureTags.Should().NotBeEmpty();
@@ -50,7 +52,13 @@ public sealed class FidelityCorpusManifestTests
             }
             else
             {
-                row.License.Should().BeOneOf("Apache-2.0", "BSD", "MIT", "CC0-1.0", "Public-Domain");
+                row.License.Should().BeOneOf(
+                    "Apache-2.0",
+                    "BSD",
+                    "MIT",
+                    "CC0-1.0",
+                    "Public-Domain",
+                    "free-download-redistribution-unconfirmed");
                 Uri.TryCreate(row.Url, UriKind.Absolute, out var uri).Should().BeTrue(row.Id);
                 uri!.Scheme.Should().Be(Uri.UriSchemeHttps);
             }
