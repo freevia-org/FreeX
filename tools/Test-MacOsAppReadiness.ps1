@@ -10,6 +10,8 @@ param(
         "src\FreeX.App.Services",
         "src\FreeX.Ribbon.Avalonia",
         "shared\Free.Shared.AppServices",
+        "shared\Free.Shared.Pdf",
+        "shared\Free.Shared.Pdf.Skia",
         "shared\Free.Shared.Ribbon"
     )
 )
@@ -412,6 +414,8 @@ function Test-AvaloniaProject {
     Assert-True -Condition ((Get-ProjectNodeCondition $macOsDefineConstants[0]) -eq "'`$(TargetFramework)' == 'net10.0-macos'") -Message "Avalonia app FREEX_MACOS_SHARE_SHEET constant must be scoped to net10.0-macos."
 
     $allowedProjectReferences = @(
+        "Free.Shared.Pdf",
+        "Free.Shared.Pdf.Skia",
         "Free.Shared.Ribbon",
         "Free.Shared.Shell",
         "FreeX.App.Localization",
@@ -2109,11 +2113,18 @@ function Test-SourceWiring {
             Path = "src\FreeX.App.Services\PortablePdfDocumentExporter.cs"
             Markers = @(
                 "public static class PortablePdfDocumentExporter",
+                "PortablePdfTextCapabilityPlanner.CreatePlan(workbook, exportPlan, options)",
+                "WorkbookPdfContentBuilder.Build(workbook, exportPlan, options)",
+                "PortablePdfWriter.WriteToBytes(document, `"FreeX portable PDF`")"
+            )
+            OrderedPairs = @()
+        },
+        @{
+            Path = "src\FreeX.App.Services\WorkbookPdfContentBuilder.cs"
+            Markers = @(
+                "public static class WorkbookPdfContentBuilder",
                 "PortablePdfPageContentPlanner.CreatePlan(workbook, request)",
-                "/Encoding /WinAnsiEncoding",
-                "EncodeWinAnsiHexText(normalized)",
-                "private static byte EncodeWinAnsiByte(char ch)",
-                "built-in Helvetica/WinAnsi set"
+                "PortablePdfWinAnsiTextCapability.Truncate(cell.DisplayText, options.MaximumCellTextLength)"
             )
             OrderedPairs = @()
         },
