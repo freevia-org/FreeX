@@ -419,6 +419,31 @@
   <data name="Drawing_SelectShapeFirst" xml:space="preserve"><value>Select a shape first.</value></data>
   <data name="Drawing_SelectObjectFirst" xml:space="preserve"><value>Select a picture or shape first.</value></data>
   <data name="Drawing_ObjectNoLongerAvailable" xml:space="preserve"><value>The selected object is no longer available.</value></data>
+  <!-- Selection Pane dialog -->
+  <data name="SelectionPane_Title" xml:space="preserve"><value>Selection Pane</value></data>
+  <data name="SelectionPane_Hint" xml:space="preserve"><value>Select an object to rename it, toggle its visibility, or change its z-order.</value></data>
+  <data name="SelectionPane_ObjectListLabel" xml:space="preserve"><value>Objects on this sheet</value></data>
+  <data name="SelectionPane_NameLabel" xml:space="preserve"><value>Object name</value></data>
+  <data name="SelectionPane_VisibilityToggle" xml:space="preserve"><value>Show or hide this object</value></data>
+  <data name="SelectionPane_BringForward" xml:space="preserve"><value>Bring Forward</value></data>
+  <data name="SelectionPane_SendBackward" xml:space="preserve"><value>Send Backward</value></data>
+  <data name="SelectionPane_ShowAll" xml:space="preserve"><value>Show All</value></data>
+  <data name="SelectionPane_HideAll" xml:space="preserve"><value>Hide All</value></data>
+  <data name="SelectionPane_NoObjects" xml:space="preserve"><value>There are no objects on this sheet.</value></data>
+  <data name="SelectionPane_NoChanges" xml:space="preserve"><value>No changes to apply.</value></data>
+  <data name="SelectionPane_Applied" xml:space="preserve"><value>Selection Pane changes applied.</value></data>
+  <data name="SelectionPane_ApplyFailed" xml:space="preserve"><value>Selection Pane changes could not be applied.</value></data>
+  <data name="SelectionPane_KindChart" xml:space="preserve"><value>Chart</value></data>
+  <data name="SelectionPane_KindPicture" xml:space="preserve"><value>Picture</value></data>
+  <data name="SelectionPane_KindShape" xml:space="preserve"><value>Shape</value></data>
+  <data name="SelectionPane_KindTextBox" xml:space="preserve"><value>Text Box</value></data>
+  <data name="SelectionPane_DefaultChartName" xml:space="preserve"><value>Chart {0}</value></data>
+  <data name="SelectionPane_DefaultPictureName" xml:space="preserve"><value>Picture {0}</value></data>
+  <data name="SelectionPane_DefaultTextBoxName" xml:space="preserve"><value>Text Box {0}</value></data>
+  <data name="SelectionPane_DefaultShapeNameFormat" xml:space="preserve"><value>{0} {1}</value></data>
+  <data name="SelectionPane_DefaultEllipseName" xml:space="preserve"><value>Ellipse</value></data>
+  <data name="SelectionPane_DefaultLineName" xml:space="preserve"><value>Line</value></data>
+  <data name="SelectionPane_DefaultRectangleName" xml:space="preserve"><value>Rectangle</value></data>
   <!-- Format Picture / Format Shape dialog -->
   <data name="FormatPicture_PictureTitle" xml:space="preserve"><value>Format Picture</value></data>
   <data name="FormatPicture_ShapeTitle" xml:space="preserve"><value>Format Shape</value></data>
