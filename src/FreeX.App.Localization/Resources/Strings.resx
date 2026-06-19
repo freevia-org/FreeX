@@ -419,6 +419,10 @@
   <data name="Drawing_SelectShapeFirst" xml:space="preserve"><value>Select a shape first.</value></data>
   <data name="Drawing_SelectObjectFirst" xml:space="preserve"><value>Select a picture or shape first.</value></data>
   <data name="Drawing_ObjectNoLongerAvailable" xml:space="preserve"><value>The selected object is no longer available.</value></data>
+  <data name="Drawing_PictureBroughtForward" xml:space="preserve"><value>Brought picture forward.</value></data>
+  <data name="Drawing_PictureSentBackward" xml:space="preserve"><value>Sent picture backward.</value></data>
+  <data name="Drawing_BringForwardLabel" xml:space="preserve"><value>Bring Forward</value></data>
+  <data name="Drawing_SendBackwardLabel" xml:space="preserve"><value>Send Backward</value></data>
   <!-- Selection Pane dialog -->
   <data name="SelectionPane_Title" xml:space="preserve"><value>Selection Pane</value></data>
   <data name="SelectionPane_Hint" xml:space="preserve"><value>Select an object to rename it, toggle its visibility, or change its z-order.</value></data>
