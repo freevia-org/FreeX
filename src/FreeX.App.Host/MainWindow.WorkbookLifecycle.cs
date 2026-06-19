@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Windows;
+using FreeX.App.Services;
 using FreeX.App.UI;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
