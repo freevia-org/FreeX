@@ -35,7 +35,7 @@ internal static class AvaloniaRibbonHost
     /// <paramref name="contextSource"/> so contextual tabs (Chart/Picture/Shape/Table/Pivot) appear and
     /// disappear with the selection. A null source falls back to the static tab strip.
     /// </summary>
-    public static Control Build(
+    public static (Control Ribbon, Action RefreshToggleStates) Build(
         Func<WorkbookSession?> session,
         Action<string> setStatus,
         AvaloniaRibbonHostCallbacks callbacks,
@@ -43,7 +43,8 @@ internal static class AvaloniaRibbonHost
     {
         var registry = AvaloniaRibbonComposition.BuildRegistry(session, setStatus, callbacks);
         var definition = AvaloniaRibbonComposition.BuildDefinition();
-        return AvaloniaRibbonRenderer.BuildRibbon(definition, registry, contextSource);
+        var ribbon = AvaloniaRibbonRenderer.BuildRibbon(definition, registry, contextSource);
+        return (ribbon, () => AvaloniaRibbonRenderer.SyncToggleStates(ribbon, registry));
     }
 
     /// <summary>

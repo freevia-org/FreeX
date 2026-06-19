@@ -6,6 +6,8 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
+using Avalonia.VisualTree;
+using Free.Shared.Ribbon;
 
 namespace FreeX.Ribbon.Avalonia;
 
@@ -65,6 +67,26 @@ public static class AvaloniaRibbonRenderer
     private static readonly IBrush TabHoverBrush = new SolidColorBrush(TabHoverColor);
     private static readonly IBrush TabStripBrush = new SolidColorBrush(TabStripColor);
     private static readonly IBrush TabTextBrush = new SolidColorBrush(TabTextColor);
+
+    /// <summary>
+    /// Syncs every <see cref="ToggleButton"/> in the ribbon's live visual tree with its command's
+    /// current <see cref="IRibbonStatefulCommand.GetState"/>. Call from the host's RefreshShell so
+    /// Bold/Italic/Underline and other format-state buttons reflect the active-cell state.
+    /// </summary>
+    public static void SyncToggleStates(Control ribbon, IRibbonCommandRegistry? registry)
+    {
+        if (registry is null)
+            return;
+        foreach (var toggle in ribbon.GetVisualDescendants().OfType<ToggleButton>())
+        {
+            if (toggle.Tag is string id && !string.IsNullOrEmpty(id)
+                && registry.TryGet(new RibbonCommandId(id), out var cmd)
+                && cmd is IRibbonStatefulCommand stateful)
+            {
+                toggle.IsChecked = stateful.GetState().IsChecked;
+            }
+        }
+    }
 
     /// <summary>Builds the content panel for one tab (the body shown under the tab header).</summary>
     public static Control BuildTabContent(RibbonTab tab, IRibbonCommandRegistry? registry = null)

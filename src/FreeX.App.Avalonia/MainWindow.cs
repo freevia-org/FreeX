@@ -583,6 +583,7 @@ public sealed partial class MainWindow : Window
     private SelectionPaneObjectKind? _selectedDrawingObjectKind;
     private Guid? _selectedDrawingObjectId;
     private readonly AvaloniaRibbonContextSource _ribbonContextSource = new();
+    private Action? _refreshRibbonToggleStates;
 
     public MainWindow(IReadOnlyList<string> startupArguments)
         : this(
@@ -1146,11 +1147,12 @@ public sealed partial class MainWindow : Window
         }
         ribbonCallbacks = ribbonCallbacks with { ExtraCommands = ribbonExtraCommands };
 
-        var ribbon = FreeX.App.Avalonia.Ribbon.AvaloniaRibbonHost.Build(
+        var (ribbon, refreshRibbonToggleStates) = FreeX.App.Avalonia.Ribbon.AvaloniaRibbonHost.Build(
             () => _session,
             RefreshShell,
             ribbonCallbacks,
             _ribbonContextSource);
+        _refreshRibbonToggleStates = refreshRibbonToggleStates;
         DockPanel.SetDock(ribbon, Dock.Top);
         root.Children.Add(ribbon);
 
@@ -2611,6 +2613,7 @@ public sealed partial class MainWindow : Window
         _ribbonContextSource.OnPivotActive(
             FreeX.App.Avalonia.Pivot.PivotSourceContext.FindActivePivot(_session.ActiveSheet, _session.ActiveCell) is not null);
         UpdateSaveButton();
+        _refreshRibbonToggleStates?.Invoke();
     }
 
     private void UpdateViewportScrollBars()
