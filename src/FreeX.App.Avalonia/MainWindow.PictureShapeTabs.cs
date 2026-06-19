@@ -46,9 +46,10 @@ public sealed partial class MainWindow
             ["pictureFormat.crop"] = () => RefreshShell(UiText.Get("PictureCrop_Title")),
             ["Crop"] = () => RunGuarded(OpenPictureCropDialogAsync),
             ["Reset Crop"] = () => ResetSelectedPictureCrop(),
-            // Picture z-order has no Core command yet (Core's z-order commands are shape-only); honest stub.
-            ["pictureFormat.bringForward"] = () => ReportContextualNotYetAvailable("Bring Forward (pictures)"),
-            ["pictureFormat.sendBackward"] = () => ReportContextualNotYetAvailable("Send Backward (pictures)"),
+            // Picture z-order: real, via the cross-kind MoveSelectionPaneObjectCommand (same Core path the
+            // Selection Pane uses for one-step z-order moves), preserving undo/redo.
+            ["pictureFormat.bringForward"] = () => BringSelectedPictureForward(),
+            ["pictureFormat.sendBackward"] = () => SendSelectedPictureBackward(),
             ["pictureFormat.selectionPane"] = () => RunGuarded(OpenSelectionPaneDialogAsync),
             ["pictureFormat.rotate"] = () => RunGuarded(RotateSelectedDrawingObjectAsync),
             ["pictureFormat.size"] = () => RunGuarded(ResizeSelectedDrawingObjectAsync),
@@ -161,6 +162,33 @@ public sealed partial class MainWindow
             new SendDrawingShapeBackwardCommand(_session.ActiveSheet.Id, shape.Id),
             "Sent shape backward.",
             "Send Backward");
+    }
+
+    // -------------------------------------------------------------------------------------------------------
+    // Picture z-order (real: cross-kind MoveSelectionPaneObjectCommand, the same Core path as the Selection
+    // Pane's one-step bring-forward / send-backward — so undo/redo and mixed-stack ordering behave identically)
+    // -------------------------------------------------------------------------------------------------------
+
+    private void BringSelectedPictureForward()
+    {
+        if (ResolveSelectedPicture() is not { } picture)
+            return;
+
+        RunDrawingObjectCommand(
+            new MoveSelectionPaneObjectCommand(_session.ActiveSheet.Id, SelectionPaneObjectKind.Picture, picture.Id, forward: true),
+            UiText.Get("Drawing_PictureBroughtForward"),
+            UiText.Get("Drawing_BringForwardLabel"));
+    }
+
+    private void SendSelectedPictureBackward()
+    {
+        if (ResolveSelectedPicture() is not { } picture)
+            return;
+
+        RunDrawingObjectCommand(
+            new MoveSelectionPaneObjectCommand(_session.ActiveSheet.Id, SelectionPaneObjectKind.Picture, picture.Id, forward: false),
+            UiText.Get("Drawing_PictureSentBackward"),
+            UiText.Get("Drawing_SendBackwardLabel"));
     }
 
     // -------------------------------------------------------------------------------------------------------

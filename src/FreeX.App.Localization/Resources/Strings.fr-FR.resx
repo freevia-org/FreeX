@@ -401,6 +401,10 @@
   <data name="Drawing_SelectShapeFirst" xml:space="preserve"><value>Sélectionnez d'abord une forme.</value></data>
   <data name="Drawing_SelectObjectFirst" xml:space="preserve"><value>Sélectionnez d'abord une image ou une forme.</value></data>
   <data name="Drawing_ObjectNoLongerAvailable" xml:space="preserve"><value>L'objet sélectionné n'est plus disponible.</value></data>
+  <data name="Drawing_PictureBroughtForward" xml:space="preserve"><value>Image avancée d'un plan.</value></data>
+  <data name="Drawing_PictureSentBackward" xml:space="preserve"><value>Image reculée d'un plan.</value></data>
+  <data name="Drawing_BringForwardLabel" xml:space="preserve"><value>Avancer</value></data>
+  <data name="Drawing_SendBackwardLabel" xml:space="preserve"><value>Reculer</value></data>
   <!-- Selection Pane dialog -->
   <data name="SelectionPane_Title" xml:space="preserve"><value>Volet Sélection</value></data>
   <data name="SelectionPane_Hint" xml:space="preserve"><value>Sélectionnez un objet pour le renommer, afficher/masquer ou modifier son ordre de superposition.</value></data>
