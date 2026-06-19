@@ -1,5 +1,6 @@
 using System.Windows;
 using FreeX.App.Presentation.Charts;
+using FreeX.App.Presentation.GridInteraction;
 using FreeX.Core.Model;
 
 namespace FreeX.App.UI;
@@ -29,7 +30,7 @@ public partial class GridView
         => GridAutofillPlanner.IsOnHandle(
             Viewport,
             SelectedRange,
-            pos,
+            new GridPoint(pos.X, pos.Y),
             ActualRowHeaderWidth,
             EffectiveColHeaderHeight);
 

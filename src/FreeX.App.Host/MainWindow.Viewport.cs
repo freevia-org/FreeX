@@ -130,7 +130,7 @@ public partial class MainWindow
         e.Handled = true;
     }
 
-    private void OnAutofillEdgeScrollRequested(FreeX.App.UI.GridAutoScrollRequest request)
+    private void OnAutofillEdgeScrollRequested(FreeX.App.Presentation.GridInteraction.GridAutoScrollRequest request)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (request.HorizontalDirection != 0)
