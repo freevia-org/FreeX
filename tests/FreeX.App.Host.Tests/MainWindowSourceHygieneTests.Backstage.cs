@@ -147,11 +147,17 @@ public sealed partial class MainWindowSourceHygieneTests
             .BeLessThan(saveTargetMethod.IndexOf("ConfirmUnsupportedXlsxFeatureSave()", StringComparison.Ordinal));
         saveTargetMethod.Should().Contain("UiText.Get(\"Progress_SavingWorkbook\")");
         saveTargetMethod.Should().Contain("UiText.Get(\"Progress_SavingFilePreparing\")");
+        saveTargetMethod.Should().Contain("using var operationCancellation = BeginFileOperationCancellation();");
+        saveTargetMethod.Should().Contain("SetFileOperationInputEnabled(false);");
+        saveTargetMethod.Should().Contain("operationCancellation.Token");
+        saveTargetMethod.Should().Contain("catch (OperationCanceledException) when (operationCancellation.IsCancellationRequested)");
+        saveTargetMethod.Should().Contain("SetFileOperationInputEnabled(true);");
         saveTargetMethod.Should().Contain("MarkWorkbookSaved();");
         saveTargetMethod.Should().Contain("UiText.Format(\"MainWindowMessage_SaveFileFailed\", ex.Message)");
         saveTargetMethod.Should().Contain("UiText.Get(\"MainWindowMessage_SaveErrorTitle\")");
         saveTargetMethod.Should().Contain("finally");
         saveTargetMethod.Should().Contain("HideSaveProgress();");
+        saveTargetMethod.Should().NotContain("RootGrid.IsEnabled = false");
         saveTargetMethod.Should().NotContain("MessageBox.Show(");
 
         var confirmMethod = ExtractMethodSource(lifecycleSource, "private async Task<SaveChangesConfirmation> ConfirmSaveBeforeDestructiveActionAsync(");
@@ -420,7 +426,11 @@ public sealed partial class MainWindowSourceHygieneTests
 
         openMethod.Should().Contain("OpenWorkbookProgressPlanner.ProgressTitle()");
         openMethod.Should().Contain("OpenWorkbookProgressPlanner.FormatLoadingFileDetail(\"preparing\", TimeSpan.Zero)");
+        openMethod.Should().Contain("using var operationCancellation = BeginFileOperationCancellation();");
+        openMethod.Should().Contain("loader.LoadAsync(path, adapter, ext, format!, progress, operationCancellation.Token)");
         openMethod.Should().Contain("ShowOpenProgress(update.Title, update.Detail, update.Percent)");
+        openMethod.Should().Contain("OpenWorkbookProgressPlanner.FormatLoadingFileDetail(\"preparing view\", TimeSpan.Zero)");
+        openMethod.Should().Contain("catch (OperationCanceledException) when (operationCancellation.IsCancellationRequested)");
         openMethod.Should().Contain("OpenWorkbookProgressPlanner.FormatLoadingFileDetail(\"done\", TimeSpan.Zero)");
         openMethod.Should().Contain("ShowUnsupportedXlsxFeatureOpenWarningIfNeeded();");
         openMethod.Should().Contain("UiText.Format(\"MainWindowMessage_OpenFileFailed\", ex.Message)");
@@ -437,6 +447,27 @@ public sealed partial class MainWindowSourceHygieneTests
         openWarningMethod.Should().Contain("DeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(_currentXlsxFeatureReport)");
         openWarningMethod.Should().Contain("ShowOwnedMessage(");
         openWarningMethod.Should().NotContain("MessageBox.Show(");
+    }
+
+    [Fact]
+    public void FooterOperationProgress_HidesReadyAndRoutesCancel()
+    {
+        var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
+        var showProgressMethod = ExtractMethodSource(backstageSource, "private void ShowOperationFooterProgress(");
+        var hideProgressMethod = ExtractMethodSource(backstageSource, "private void HideOperationFooterProgress()");
+        var cancelMethod = ExtractMethodSource(backstageSource, "private void CancelFileOperation_Click(");
+        var inputLockMethod = ExtractMethodSource(backstageSource, "private void SetFileOperationInputEnabled(");
+
+        showProgressMethod.Should().Contain("StatusSaveProgressCancelButton.Visibility = Visibility.Visible;");
+        showProgressMethod.Should().Contain("StatusSaveProgressCancelButton.IsEnabled = true;");
+        showProgressMethod.Should().Contain("StatusReadyText.Visibility = Visibility.Collapsed;");
+        showProgressMethod.Should().Contain("StatusStatsPanel.Visibility = Visibility.Collapsed;");
+        hideProgressMethod.Should().Contain("StatusSaveProgressCancelButton.Visibility = Visibility.Collapsed;");
+        hideProgressMethod.Should().Contain("RefreshStatusBar();");
+        cancelMethod.Should().Contain("_fileOperationCancellation?.Cancel();");
+        cancelMethod.Should().Contain("StatusSaveProgressCancelButton.IsEnabled = false;");
+        inputLockMethod.Should().Contain("ReferenceEquals(child, StatusBarRoot)");
+        inputLockMethod.Should().Contain("StatusInteractiveControls.IsEnabled = false;");
     }
 
     [Fact]

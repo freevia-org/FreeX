@@ -13,7 +13,8 @@ public sealed class SaveWorkbookWriter
         string path,
         IFileAdapter adapter,
         Workbook workbook,
-        IProgress<SaveProgressUpdate> progress)
+        IProgress<SaveProgressUpdate> progress,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(progress);
         return await _saveService.SaveAsync(
@@ -21,7 +22,8 @@ public sealed class SaveWorkbookWriter
             adapter,
             workbook,
             new Progress<WorkbookSaveProgressUpdate>(
-                update => progress.Report(ToHostProgressUpdate(update))));
+                update => progress.Report(ToHostProgressUpdate(update))),
+            cancellationToken);
     }
 
     private static SaveProgressUpdate ToHostProgressUpdate(WorkbookSaveProgressUpdate update) =>

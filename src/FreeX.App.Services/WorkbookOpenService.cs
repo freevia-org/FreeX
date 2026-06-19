@@ -28,11 +28,13 @@ public sealed class WorkbookOpenService
         IFileAdapter adapter,
         string extension,
         FileFormatDescriptor format,
-        IProgress<WorkbookOpenProgressUpdate>? progress = null)
+        IProgress<WorkbookOpenProgressUpdate>? progress = null,
+        CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentNullException.ThrowIfNull(adapter);
         ArgumentNullException.ThrowIfNull(format);
+        cancellationToken.ThrowIfCancellationRequested();
 
         var fileBytes = new FileInfo(path).Length;
         WorkbookOpenSizeGuard.EnsureFileWithinLimit(fileBytes, _maxFileBytes);
@@ -49,8 +51,10 @@ public sealed class WorkbookOpenService
                 8,
                 16,
                 EstimateStageDuration(fileBytes, secondsPerMegabyte: 0.5, floorSeconds: 0.4),
+                cancellationToken,
                 () =>
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     using var fileStream = OpenFileStream(path);
                     return _inspectXlsx(fileStream);
                 }).ConfigureAwait(false);
@@ -64,19 +68,25 @@ public sealed class WorkbookOpenService
             parseStartPercent,
             90,
             EstimateStageDuration(fileBytes, secondsPerMegabyte: 1.4, floorSeconds: 0.5),
+            cancellationToken,
             () =>
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 using var fileStream = OpenFileStream(path);
                 if (adapter is XlsxFileAdapter xlsxAdapter)
                 {
                     var result = xlsxAdapter.LoadWithWarnings(fileStream, inspectFeaturesDuringLoad);
+                    cancellationToken.ThrowIfCancellationRequested();
                     loadWarnings = result.Warnings;
                     featureReport ??= result.FeatureReport;
                     return result.Workbook;
                 }
 
-                return adapter.Load(fileStream);
+                var loadedWorkbook = adapter.Load(fileStream);
+                cancellationToken.ThrowIfCancellationRequested();
+                return loadedWorkbook;
             }).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
         WorkbookOpenNormalizer.ApplyTextWorkbookSheetName(workbook, extension, Path.GetFileNameWithoutExtension(path));
 
         // Excel applies pivot table AND structured table styles (PivotStyleLight16, TableStyleMedium2,
@@ -100,9 +110,12 @@ public sealed class WorkbookOpenService
                 90,
                 98,
                 EstimateStageDuration(fileBytes, secondsPerMegabyte: 0.9, floorSeconds: 0.4),
+                cancellationToken,
                 () =>
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     _recalculateAllFormulas(workbook);
+                    cancellationToken.ThrowIfCancellationRequested();
                     if (adapter is XlsxFileAdapter xlsxAdapter)
                         xlsxAdapter.RebaseLoadedPackageSnapshot(workbook);
                     return true;
@@ -110,10 +123,12 @@ public sealed class WorkbookOpenService
         }
         else
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (materializedDynamicStyles && adapter is XlsxFileAdapter dynamicStyleAdapter)
                 dynamicStyleAdapter.RebaseLoadedPackageSnapshot(workbook);
             ReportProgress(progress, WorkbookOpenPhase.Calculating, TimeSpan.Zero, 98);
         }
+        cancellationToken.ThrowIfCancellationRequested();
 
         return new WorkbookOpenResult(
             workbook,
@@ -129,31 +144,34 @@ public sealed class WorkbookOpenService
         double startPercent,
         double endPercent,
         TimeSpan expectedDuration,
+        CancellationToken cancellationToken,
         Func<T> work)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         ReportProgress(progress, phase, TimeSpan.Zero, startPercent);
         if (progress is null)
-            return await Task.Run(work).ConfigureAwait(false);
+            return await Task.Run(work, cancellationToken).ConfigureAwait(false);
 
-        using var cancellation = new CancellationTokenSource();
+        using var progressCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var progressTask = ReportStageProgressAsync(
             progress,
             phase,
             startPercent,
             endPercent,
             expectedDuration,
-            cancellation.Token);
+            progressCancellation.Token);
 
         try
         {
-            return await Task.Run(work).ConfigureAwait(false);
+            return await Task.Run(work, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
-            cancellation.Cancel();
+            progressCancellation.Cancel();
             try { await progressTask.ConfigureAwait(false); }
             catch (OperationCanceledException) { }
-            ReportProgress(progress, phase, TimeSpan.Zero, endPercent);
+            if (!cancellationToken.IsCancellationRequested)
+                ReportProgress(progress, phase, TimeSpan.Zero, endPercent);
         }
     }
 
@@ -205,7 +223,7 @@ public sealed class WorkbookOpenService
         return TimeSpan.FromSeconds(Math.Max(floorSeconds, megabytes * secondsPerMegabyte));
     }
 
-    private static double CalculateStageProgress(
+    private static double? CalculateStageProgress(
         double startPercent,
         double endPercent,
         TimeSpan elapsed,
@@ -214,7 +232,11 @@ public sealed class WorkbookOpenService
         if (expectedDuration <= TimeSpan.Zero)
             return endPercent;
 
-        var ratio = Math.Clamp(elapsed.TotalMilliseconds / expectedDuration.TotalMilliseconds, 0, 0.92);
+        var ratio = elapsed.TotalMilliseconds / expectedDuration.TotalMilliseconds;
+        if (ratio >= 1)
+            return null;
+
+        ratio = Math.Clamp(ratio, 0, 0.92);
         return startPercent + ((endPercent - startPercent) * ratio);
     }
 

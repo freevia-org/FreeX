@@ -22,7 +22,8 @@ public sealed class OpenWorkbookLoader
         IFileAdapter adapter,
         string extension,
         FileFormatDescriptor format,
-        IProgress<OpenProgressUpdate> progress)
+        IProgress<OpenProgressUpdate> progress,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(progress);
 
@@ -32,7 +33,8 @@ public sealed class OpenWorkbookLoader
             extension,
             format,
             new Progress<WorkbookOpenProgressUpdate>(
-                update => progress.Report(ToHostProgressUpdate(update)))).ConfigureAwait(false);
+                update => progress.Report(ToHostProgressUpdate(update))),
+            cancellationToken).ConfigureAwait(false);
 
         return new OpenWorkbookResult(
             result.Workbook,
