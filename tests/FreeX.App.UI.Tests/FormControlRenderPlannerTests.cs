@@ -1,5 +1,7 @@
 using System.Windows;
 using FluentAssertions;
+using FreeX.App.Presentation.Charts;
+using FreeX.App.Presentation.Drawing;
 using FreeX.App.UI;
 using FreeX.Core.Model;
 
@@ -166,7 +168,7 @@ public sealed class FormControlRenderPlannerTests
     [Fact]
     public void GetDropDownButtonRect_PlacesSquareButtonFlushAgainstRightEdge()
     {
-        var rect = new Rect(10, 20, 120, 21);
+        var rect = new LayoutRect(10, 20, 120, 21);
 
         var button = FormControlRenderPlanner.GetDropDownButtonRect(rect);
 
@@ -181,7 +183,7 @@ public sealed class FormControlRenderPlannerTests
     public void GetDropDownButtonRect_ClampsButtonWidthToHalfWhenControlIsNarrow()
     {
         // A short, tall control: the button must not consume the whole box.
-        var rect = new Rect(0, 0, 12, 40);
+        var rect = new LayoutRect(0, 0, 12, 40);
 
         var button = FormControlRenderPlanner.GetDropDownButtonRect(rect);
 
@@ -192,7 +194,7 @@ public sealed class FormControlRenderPlannerTests
     [Fact]
     public void GetDropDownTextRect_OccupiesAreaLeftOfButton()
     {
-        var rect = new Rect(10, 20, 120, 21);
+        var rect = new LayoutRect(10, 20, 120, 21);
         var button = FormControlRenderPlanner.GetDropDownButtonRect(rect);
 
         var textRect = FormControlRenderPlanner.GetDropDownTextRect(rect, button);

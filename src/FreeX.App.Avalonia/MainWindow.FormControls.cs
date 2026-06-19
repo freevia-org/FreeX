@@ -3,6 +3,7 @@ using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
+using FreeX.App.Presentation.Drawing;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia;
@@ -25,7 +26,7 @@ public sealed partial class MainWindow
         {
             if (!FormControlVisual.IsRenderable(control.Kind))
                 continue;
-            if (!FormControlVisual.TryCreateAnchorRange(control, out var anchor) || anchor is null)
+            if (!FormControlRenderPlanner.TryCreateAnchorRange(control, out var anchor) || anchor is null)
                 continue;
             if (!TryResolveAnchorBounds(viewport, anchor, showHeadings, zoomFactor, out var bounds))
                 continue;
@@ -62,32 +63,12 @@ internal sealed class FormControlVisual : Control
         IsHitTestVisible = false;
     }
 
-    // Inlined from the shared FormControlRenderPlanner (which lives in the WPF-only App.UI
-    // assembly the Avalonia project can't reference); kept byte-equivalent so both platforms match.
+    // The subset of FormControlRenderPlanner.IsRenderable that this Avalonia renderer actually draws
+    // (the Render switch below). DropDown/ListBox/Button — which the shared planner also flags — are
+    // not yet drawn here, so they are excluded to keep behavior identical to before the dedup.
     public static bool IsRenderable(FormControlKind kind) =>
         kind is FormControlKind.CheckBox or FormControlKind.OptionButton or FormControlKind.Spinner
             or FormControlKind.ScrollBar or FormControlKind.Label or FormControlKind.GroupBox;
-
-    public static bool TryCreateAnchorRange(FormControlModel control, out DrawingAnchorRange? anchor)
-    {
-        anchor = null;
-        if (control.AnchorOffsets is { } offsets)
-        {
-            anchor = offsets;
-            return true;
-        }
-
-        if (control.Anchor is not { } range)
-            return false;
-
-        anchor = new DrawingAnchorRange(
-            new DrawingAnchorPoint(range.Start.Col - 1, 0, range.Start.Row - 1, 0),
-            new DrawingAnchorPoint(range.End.Col - 1, 0, range.End.Row - 1, 0));
-        return true;
-    }
-
-    private static string GetCaption(FormControlModel control) =>
-        string.IsNullOrWhiteSpace(control.Caption) ? string.Empty : control.Caption!.Trim();
 
     private double GlyphSize => Math.Min(13 * _zoom, Math.Min(Bounds.Width, Bounds.Height));
     private IPen BoxBorderPen => new Pen(ShadowBrush, 1);
@@ -231,7 +212,7 @@ internal sealed class FormControlVisual : Control
 
     private void DrawCaption(DrawingContext context, Rect rect, double textLeft)
     {
-        var caption = GetCaption(_control);
+        var caption = FormControlRenderPlanner.GetCaption(_control);
         if (string.IsNullOrWhiteSpace(caption))
             return;
 
