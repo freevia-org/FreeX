@@ -610,4 +610,13 @@
   <data name="Sparkline_Updated" xml:space="preserve"><value>Sparkline updated.</value></data>
   <data name="Sparkline_Cleared" xml:space="preserve"><value>Sparkline cleared.</value></data>
   <data name="Sparkline_EditFailed" xml:space="preserve"><value>Edit Sparkline failed.</value></data>
+  <data name="RowColumn_RowsHidden" xml:space="preserve"><value>Hid {0} row(s).</value></data>
+  <data name="RowColumn_RowsUnhidden" xml:space="preserve"><value>Unhid rows in selection.</value></data>
+  <data name="RowColumn_ColumnsHidden" xml:space="preserve"><value>Hid {0} column(s).</value></data>
+  <data name="RowColumn_ColumnsUnhidden" xml:space="preserve"><value>Unhid columns in selection.</value></data>
+  <data name="RowColumn_HideRowsFailed" xml:space="preserve"><value>Could not hide rows.</value></data>
+  <data name="RowColumn_UnhideRowsFailed" xml:space="preserve"><value>Could not unhide rows.</value></data>
+  <data name="RowColumn_HideColumnsFailed" xml:space="preserve"><value>Could not hide columns.</value></data>
+  <data name="RowColumn_UnhideColumnsFailed" xml:space="preserve"><value>Could not unhide columns.</value></data>
+  <data name="RowColumn_NoSelection" xml:space="preserve"><value>Select rows or columns first.</value></data>
 </root>

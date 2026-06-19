@@ -783,11 +783,17 @@ public sealed partial class MainWindow : Window
                     ["Rotate Text Down"] = () => ApplySelectedRangeTextRotation(-90, "Rotated text down for", "Rotate Text Down failed."),
                     // Home ▸ Cells ▸ Insert / Delete / Format dropdown items that map to existing handlers
                     // (canonical ids from HomeRibbonMenus.Insert/Delete/Format). Row-height/column-width/AutoFit/
-                    // hide-row-column/lock-cell items stay NoOp until those operations exist in the shell.
+                    // lock-cell items stay NoOp until those operations exist in the shell.
                     ["Insert Cells"] = () => _ = ShowInsertCellsDialogAsync(),
                     ["Insert Sheet"] = AddNewSheet,
                     ["Delete Cells"] = () => _ = ShowDeleteCellsDialogAsync(),
                     ["Format Cells"] = () => _ = ShowFormatCellsDialogAsync(),
+                    // Home ▸ Cells ▸ Format ▸ Hide & Unhide (ids from HomeRibbonMenus.Format) → shared
+                    // Set{Rows,Columns}HiddenCommand on the current selection.
+                    ["Hide Rows"] = HideSelectedRows,
+                    ["Unhide Rows"] = UnhideSelectedRows,
+                    ["Hide Columns"] = HideSelectedColumns,
+                    ["Unhide Columns"] = UnhideSelectedColumns,
                     ["Protect Sheet"] = () => _ = ShowProtectSheetDialogAsync(),
                     ["Unhide Sheet"] = () => _ = UnhideSheetAsync(),
                     // Home ▸ Styles ▸ Conditional Formatting dropdown items backed by existing presets/handlers
@@ -2841,7 +2847,7 @@ public sealed partial class MainWindow : Window
             {
                 var col = viewport.ColMetrics[colIndex].Col;
                 var selected = IsSelectedColumn(col);
-                AddGridChild(grid, CreateHeaderCell(CellAddress.NumberToColumnName(col), selected, zoomFactor), 0, colIndex + headerOffset);
+                AddGridChild(grid, CreateColumnHeaderCell(col, selected, zoomFactor), 0, colIndex + headerOffset);
             }
         }
 
@@ -2853,7 +2859,7 @@ public sealed partial class MainWindow : Window
             if (showHeadings)
             {
                 var selectedRow = IsSelectedRow(row);
-                AddGridChild(grid, CreateHeaderCell(row.ToString(), selectedRow, zoomFactor), rowIndex + headerOffset, 0);
+                AddGridChild(grid, CreateRowHeaderCell(row, selectedRow, zoomFactor), rowIndex + headerOffset, 0);
             }
 
             for (var colIndex = 0; colIndex < viewport.ColMetrics.Count; colIndex++)
@@ -3623,6 +3629,60 @@ public sealed partial class MainWindow : Window
             zoomFactor: zoomFactor);
 
     /// <summary>
+    /// Builds a clickable column header. Left-click selects the whole column (Shift extends from the
+    /// active cell); right-click selects then opens the shared column-header context menu, so Hide/
+    /// Unhide Columns and the other column commands act on the column the user clicked.
+    /// </summary>
+    private Control CreateColumnHeaderCell(uint col, bool selected, double zoomFactor)
+    {
+        var header = CreateHeaderCell(CellAddress.NumberToColumnName(col), selected, zoomFactor);
+        header.Cursor = new Cursor(StandardCursorType.Hand);
+        header.PointerPressed += (_, args) =>
+        {
+            var point = args.GetCurrentPoint(header);
+            if (point.Properties.IsRightButtonPressed)
+            {
+                if (!IsSelectedColumn(col))
+                    SelectEntireColumn(col);
+                OpenColumnHeaderContextMenu(header);
+                args.Handled = true;
+                return;
+            }
+
+            SelectEntireColumn(col, extend: args.KeyModifiers.HasFlag(KeyModifiers.Shift));
+            args.Handled = true;
+        };
+        return header;
+    }
+
+    /// <summary>
+    /// Builds a clickable row header. Left-click selects the whole row (Shift extends from the active
+    /// cell); right-click selects then opens the shared row-header context menu, so Hide/Unhide Rows
+    /// and the other row commands act on the row the user clicked.
+    /// </summary>
+    private Control CreateRowHeaderCell(uint row, bool selected, double zoomFactor)
+    {
+        var header = CreateHeaderCell(row.ToString(), selected, zoomFactor);
+        header.Cursor = new Cursor(StandardCursorType.Hand);
+        header.PointerPressed += (_, args) =>
+        {
+            var point = args.GetCurrentPoint(header);
+            if (point.Properties.IsRightButtonPressed)
+            {
+                if (!IsSelectedRow(row))
+                    SelectEntireRow(row);
+                OpenRowHeaderContextMenu(header);
+                args.Handled = true;
+                return;
+            }
+
+            SelectEntireRow(row, extend: args.KeyModifiers.HasFlag(KeyModifiers.Shift));
+            args.Handled = true;
+        };
+        return header;
+    }
+
+    /// <summary>
     /// Reads every sparkline on <paramref name="sheet"/> into a per-cell lookup keyed by its anchor
     /// <see cref="SparklineModel.Location"/>, using the same numeric series read as the Windows host
     /// (<see cref="SparklineRenderPlanner.BuildValues"/>). Empty series are dropped so cells without
@@ -3871,6 +3931,30 @@ public sealed partial class MainWindow : Window
                 break;
             case WorksheetContextMenuAction.ClearHyperlinks:
                 ClearSelectedRangeHyperlinks();
+                break;
+            case WorksheetContextMenuAction.HideRows:
+                HideSelectedRows();
+                break;
+            case WorksheetContextMenuAction.UnhideRows:
+                UnhideSelectedRows();
+                break;
+            case WorksheetContextMenuAction.HideColumns:
+                HideSelectedColumns();
+                break;
+            case WorksheetContextMenuAction.UnhideColumns:
+                UnhideSelectedColumns();
+                break;
+            case WorksheetContextMenuAction.InsertRowAbove:
+            case WorksheetContextMenuAction.InsertCells:
+                _ = ShowInsertCellsDialogAsync();
+                break;
+            case WorksheetContextMenuAction.InsertColumnLeft:
+                _ = ShowInsertCellsDialogAsync();
+                break;
+            case WorksheetContextMenuAction.DeleteRows:
+            case WorksheetContextMenuAction.DeleteColumns:
+            case WorksheetContextMenuAction.DeleteCells:
+                _ = ShowDeleteCellsDialogAsync();
                 break;
             default:
                 // TODO(avalonia-shell): wire remaining context-menu actions as Avalonia document commands land (ref: docs/parity/command-surface.md#deferred-architectural-features)
@@ -14455,6 +14539,9 @@ public sealed partial class MainWindow : Window
             SelectGoToSpecial(GoToSpecialKind.VisibleCellsOnly);
             return;
         }
+
+        if (TryHandleRowColumnVisibilityShortcut(e))
+            return;
 
         if (!e.KeyModifiers.HasFlag(KeyModifiers.Control) &&
             !e.KeyModifiers.HasFlag(KeyModifiers.Meta))
