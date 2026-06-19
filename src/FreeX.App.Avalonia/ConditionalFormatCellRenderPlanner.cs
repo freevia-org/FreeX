@@ -45,10 +45,10 @@ public readonly record struct CfIconRenderInstruction(
 public static class ConditionalFormatCellRenderPlanner
 {
     /// <summary>Horizontal inset (device pixels at 100% zoom) of a data bar from the cell edges.</summary>
-    public const double DataBarHorizontalInset = 2d;
+    public const double DataBarHorizontalInset = ConditionalDataBarLayoutPlanner.HorizontalInset;
 
     /// <summary>Vertical inset (device pixels at 100% zoom) of a data bar from the cell edges.</summary>
-    public const double DataBarVerticalInset = 3d;
+    public const double DataBarVerticalInset = ConditionalDataBarLayoutPlanner.VerticalInset;
 
     /// <summary>Width (device pixels at 100% zoom) of the gutter reserved for an icon-set glyph.</summary>
     public const double IconGutterWidth = 20d;
@@ -62,22 +62,18 @@ public static class ConditionalFormatCellRenderPlanner
         if (dataBar is not { } bar)
             return null;
 
-        var start = Math.Clamp(bar.StartFraction, 0d, 1d);
-        var end = Math.Clamp(bar.EndFraction, 0d, 1d);
-        if (end < start)
-            (start, end) = (end, start);
-
-        if (end - start <= 0d)
+        if (ConditionalDataBarLayoutPlanner.Plan(bar.StartFraction, bar.EndFraction)
+                is not { } layout)
             return null;
 
         return new CfDataBarRenderInstruction(
-            start,
-            end,
+            layout.Start,
+            layout.End,
             PresentationRgb.FromRgbColor(bar.FillColor),
             bar.Gradient,
             bar.Border,
-            DataBarHorizontalInset,
-            DataBarVerticalInset);
+            layout.HorizontalInset,
+            layout.VerticalInset);
     }
 
     /// <summary>
