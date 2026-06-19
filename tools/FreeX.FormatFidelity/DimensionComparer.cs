@@ -41,20 +41,22 @@ internal static class DimensionComparer
         WorkbookSnapshot got,
         IReadOnlyList<CapabilityProfile> hopProfiles)
     {
+        // Sheet pairing is governed by the MULTI-SHEET chain cap, not each dimension's own cap: csv/txt
+        // collapse to a single sheet (pair positionally), every other format keeps all sheets (pair by name).
+        var multiSheetCap = ChainCapability.Min(hopProfiles, Dim.MultiSheet);
+
         var results = new List<DimensionResult>();
         foreach (Dim d in Enum.GetValues<Dim>())
         {
             var cap = ChainCapability.Min(hopProfiles, d);
-            results.Add(CompareDimension(d, cap, reference, got));
+            results.Add(CompareDimension(d, cap, multiSheetCap, reference, got));
         }
         return results;
     }
 
-    private static DimensionResult CompareDimension(Dim d, Cap cap, WorkbookSnapshot refSnap, WorkbookSnapshot gotSnap)
+    private static DimensionResult CompareDimension(Dim d, Cap cap, Cap multiSheetCap, WorkbookSnapshot refSnap, WorkbookSnapshot gotSnap)
     {
-        // Pair sheets. When MultiSheet collapses to None (csv/txt), only the first sheet survives;
-        // compare reference sheet[0] against got sheet[0] positionally.
-        var sheetPairs = PairSheets(refSnap, gotSnap, cap);
+        var sheetPairs = PairSheets(refSnap, gotSnap, multiSheetCap);
 
         return d switch
         {
@@ -62,7 +64,7 @@ internal static class DimensionComparer
             Dim.Formulas => CompareFormulas(d, cap, sheetPairs),
             Dim.NumberFormats => CompareCellStyle(d, cap, sheetPairs,
                 (a, b) => string.Equals(Canonical(a.NumberFormat), Canonical(b.NumberFormat), StringComparison.Ordinal)),
-            Dim.Fonts => CompareCellStyle(d, cap, sheetPairs, FontsEqual),
+            Dim.Fonts => CompareFonts(d, cap, sheetPairs),
             Dim.Fills => CompareCellStyle(d, cap, sheetPairs, FillsEqual),
             Dim.Borders => CompareCellStyle(d, cap, sheetPairs, BordersEqual),
             Dim.Alignment => CompareCellStyle(d, cap, sheetPairs, AlignmentEqual),
@@ -132,6 +134,10 @@ internal static class DimensionComparer
             {
                 // Skip pure style-only blanks (no value, no formula) for the VALUE dimension.
                 if (refCell.Value is BlankValue && !refCell.HasFormula) continue;
+                // A Lossy (csv/txt) hop writes a formula's TEXT, not its cached value (footnote 3). The
+                // value of such a cell is asserted by the Formulas dimension, not here — counting it as a
+                // value mismatch would double-penalize an expected, documented behavior.
+                if (cap == Cap.Lossy && refCell.HasFormula) continue;
                 total++;
                 pair.Got.Cells.TryGetValue((row, col), out var gotCell);
                 bool ok = cap == Cap.Lossy
@@ -175,11 +181,15 @@ internal static class DimensionComparer
                          string.Equals(NormalizeFormula(refCell.FormulaText), NormalizeFormula(gotCell.FormulaText),
                              StringComparison.OrdinalIgnoreCase);
                 }
-                else // Lossy (csv writes text; xml may store R1C1) — require formula text to survive recoverably.
-                {
-                    ok = gotCell is not null && gotCell.HasFormula && !string.IsNullOrEmpty(gotCell.FormulaText)
-                         && string.Equals(NormalizeFormula(refCell.FormulaText), NormalizeFormula(gotCell.FormulaText),
-                             StringComparison.OrdinalIgnoreCase);
+                else // Lossy: require the formula TEXT to survive recoverably. csv/txt reload it as a text
+                {    // value ("=IF(...)"); xml may keep it as a formula (possibly R1C1). Accept either form.
+                    var refNorm = NormalizeFormula(refCell.FormulaText);
+                    string? gotText =
+                        gotCell?.HasFormula == true ? gotCell.FormulaText
+                        : gotCell?.Value is TextValue tv ? tv.Value
+                        : null;
+                    ok = gotText is not null &&
+                         string.Equals(refNorm, NormalizeFormula(gotText), StringComparison.OrdinalIgnoreCase);
                 }
                 if (ok) matched++;
                 else if (samples.Count < 6)
@@ -193,7 +203,11 @@ internal static class DimensionComparer
     private static string NormalizeFormula(string? f)
     {
         if (string.IsNullOrEmpty(f)) return "";
-        var s = f.TrimStart('=').Trim();
+        // Strip a leading formula-injection guard apostrophe (csv writer prepends ' to =,+,-,@) and the
+        // leading '=', then collapse whitespace so a text-reloaded formula matches the source formula text.
+        var s = f.Trim();
+        if (s.StartsWith('\'')) s = s[1..];
+        s = s.TrimStart('=').Trim();
         return s.Replace(" ", "");
     }
 
@@ -231,10 +245,45 @@ internal static class DimensionComparer
         return Classify(d, cap, matched, total, samples, "styled cells");
     }
 
-    private static bool FontsEqual(CellStyle a, CellStyle b) =>
-        a.FontName == b.FontName && Math.Abs(a.FontSize - b.FontSize) < 1e-6 &&
-        a.Bold == b.Bold && a.Italic == b.Italic && a.Underline == b.Underline &&
-        a.Strikethrough == b.Strikethrough && a.FontColor == b.FontColor && a.FontScheme == b.FontScheme;
+    // Fonts compare by the EFFECTIVE rendered font (theme-resolved name) plus weight/style/color, not by
+    // the raw FontName/FontScheme representation: a cell stored as scheme=Minor and one stored as an
+    // explicit name render identically when the theme resolves to that same name, so that is NOT a loss.
+    // A genuine substitution (e.g. effective "Aptos Narrow" -> "Calibri") still fails.
+    private static DimensionResult CompareFonts(Dim d, Cap cap, List<SheetPair> pairs)
+    {
+        Func<WorkbookSnapshot.CellEntry, WorkbookSnapshot.CellEntry, bool> eq = (a, b) =>
+            string.Equals(a.EffectiveFontName, b.EffectiveFontName, StringComparison.Ordinal) &&
+            Math.Abs(a.Style.FontSize - b.Style.FontSize) < 1e-6 &&
+            a.Style.Bold == b.Style.Bold && a.Style.Italic == b.Style.Italic &&
+            a.Style.Underline == b.Style.Underline && a.Style.Strikethrough == b.Style.Strikethrough &&
+            a.Style.FontColor == b.Style.FontColor;
+
+        if (cap == Cap.None)
+        {
+            bool anyChange = false;
+            foreach (var pair in pairs)
+                foreach (var ((row, col), refCell) in pair.Ref.Cells)
+                {
+                    pair.Got.Cells.TryGetValue((row, col), out var gotCell);
+                    if (gotCell is null || !eq(refCell, gotCell)) { anyChange = true; break; }
+                }
+            return MakeNoneResult(d, cap, anyChange);
+        }
+
+        int total = 0, matched = 0;
+        var samples = new List<string>();
+        foreach (var pair in pairs)
+            foreach (var ((row, col), refCell) in pair.Ref.Cells)
+            {
+                total++;
+                pair.Got.Cells.TryGetValue((row, col), out var gotCell);
+                if (gotCell is not null && eq(refCell, gotCell)) matched++;
+                else if (samples.Count < 6)
+                    samples.Add($"{pair.Ref.Name}!{FidelityCompare.ColToLetter(col)}{row}"
+                        + (gotCell is null ? "" : $" [{refCell.EffectiveFontName}->{gotCell.EffectiveFontName}]"));
+            }
+        return Classify(d, cap, matched, total, samples, "styled cells");
+    }
 
     private static bool FillsEqual(CellStyle a, CellStyle b) =>
         Nullable.Equals(a.FillColor, b.FillColor) && a.FillPatternStyle == b.FillPatternStyle &&

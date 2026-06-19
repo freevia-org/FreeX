@@ -23,7 +23,8 @@ internal sealed class WorkbookSnapshot
         ScalarValue Value,
         bool HasFormula,
         string? FormulaText,
-        CellStyle Style);
+        CellStyle Style,
+        string EffectiveFontName);
 
     /// <summary>Per-sheet, ordered cell entries keyed by (row,col). Sheet order preserved.</summary>
     public List<SheetSnapshot> Sheets { get; } = new();
@@ -60,11 +61,13 @@ internal sealed class WorkbookSnapshot
 
             foreach (var ((row, col), cell) in sheet.GetOccupiedCellMap())
             {
+                var style = wb.GetStyle(cell.StyleId);
                 ss.Cells[(row, col)] = new CellEntry(
                     cell.Value,
                     cell.HasFormula,
                     cell.FormulaText,
-                    wb.GetStyle(cell.StyleId));
+                    style,
+                    style.ResolveEffectiveFontName(wb.Theme));
             }
 
             // Style-only cells (formatted-but-empty) carry styling we must still compare for Full-cap
@@ -73,11 +76,13 @@ internal sealed class WorkbookSnapshot
             {
                 if (!ss.Cells.ContainsKey(key))
                 {
+                    var soStyle = wb.GetStyle(styleId);
                     ss.Cells[key] = new CellEntry(
                         BlankValue.Instance,
                         HasFormula: false,
                         FormulaText: null,
-                        wb.GetStyle(styleId));
+                        soStyle,
+                        soStyle.ResolveEffectiveFontName(wb.Theme));
                 }
             }
 
