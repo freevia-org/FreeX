@@ -413,6 +413,7 @@ public sealed partial class MainWindow : Window
     private readonly NativeMenuItem _exportPdfMenuItem = new();
     private readonly NativeMenuItem _shareWorkbookMenuItem = new();
     private readonly NativeMenuItem _workbookStatisticsMenuItem = new();
+    private readonly NativeMenuItem _optionsMenuItem = new();
     private readonly NativeMenuItem _closeWorkbookMenuItem = new();
     private readonly NativeMenuItem _newSheetMenuItem = new();
     private readonly NativeMenuItem _renameSheetMenuItem = new();
@@ -1138,6 +1139,10 @@ public sealed partial class MainWindow : Window
         _workbookStatisticsMenuItem.Gesture = new KeyGesture(Key.G, KeyModifiers.Control | KeyModifiers.Shift);
         _workbookStatisticsMenuItem.Click += async (_, _) => await ShowWorkbookStatisticsDialogAsync();
 
+        _optionsMenuItem.Header = UiText.Get("Options_Title");
+        _optionsMenuItem.Gesture = new KeyGesture(Key.OemComma, KeyModifiers.Meta);
+        _optionsMenuItem.Click += (_, _) => ShowOptions();
+
         _closeWorkbookMenuItem.Header = "Close Workbook";
         _closeWorkbookMenuItem.Gesture = new KeyGesture(Key.W, KeyModifiers.Meta);
         _closeWorkbookMenuItem.Click += async (_, _) => await CloseWorkbookAsync();
@@ -1619,6 +1624,8 @@ public sealed partial class MainWindow : Window
         fileMenu.Items.Add(_exportPdfMenuItem);
         fileMenu.Items.Add(_shareWorkbookMenuItem);
         fileMenu.Items.Add(_workbookStatisticsMenuItem);
+        fileMenu.Items.Add(new NativeMenuItemSeparator());
+        fileMenu.Items.Add(_optionsMenuItem);
         fileMenu.Items.Add(new NativeMenuItemSeparator());
         fileMenu.Items.Add(_pageSetupMenuItem);
         fileMenu.Items.Add(_printPreviewMenuItem);
