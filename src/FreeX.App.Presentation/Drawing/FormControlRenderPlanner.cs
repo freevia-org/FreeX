@@ -1,16 +1,18 @@
-using System.Windows;
+using FreeX.App.Presentation.Charts;
 using FreeX.Core.Model;
 
-namespace FreeX.App.UI;
+namespace FreeX.App.Presentation.Drawing;
 
 /// <summary>
-/// Pure layout/state helpers for rendering legacy Excel form controls
-/// (<see cref="FormControlModel"/>) as static chrome on the GridView. Maps a control's
-/// 1-based cell-range <see cref="FormControlModel.Anchor"/> to the 0-based
-/// <see cref="DrawingAnchorRange"/> understood by <see cref="GridDrawingObjectPlanner"/>,
-/// decides which kinds get drawn, and resolves the caption text.
+/// Pure, framework-free layout/state helpers for rendering legacy Excel form controls
+/// (<see cref="FormControlModel"/>) as static chrome on the desktop hosts' drawing surfaces. Maps a
+/// control's 1-based cell-range <see cref="FormControlModel.Anchor"/> to the 0-based
+/// <see cref="DrawingAnchorRange"/> understood by the drawing-object anchor planner, decides which
+/// kinds get drawn, computes the drop-down sub-rects, and resolves the caption/selected text. Shared
+/// by the desktop hosts; carries no platform-specific rectangle types — rectangles are expressed
+/// with <see cref="LayoutRect"/> and converted at each host's rendering boundary.
 /// </summary>
-internal static class FormControlRenderPlanner
+public static class FormControlRenderPlanner
 {
     /// <summary>
     /// Converts the control's 1-based <see cref="GridRange"/> anchor into the 0-based
@@ -66,20 +68,20 @@ internal static class FormControlRenderPlanner
     /// sized to the control height and flush against the right edge, but never wider than half the
     /// control so a short/tall box still shows a text area. Mirrors Excel's drop-down chrome.
     /// </summary>
-    public static Rect GetDropDownButtonRect(Rect rect)
+    public static LayoutRect GetDropDownButtonRect(LayoutRect rect)
     {
         var size = Math.Max(1, Math.Min(rect.Height, rect.Width / 2));
-        return new Rect(rect.Right - size, rect.Top, size, rect.Height);
+        return new LayoutRect(rect.Right - size, rect.Top, size, rect.Height);
     }
 
     /// <summary>
     /// The text area of a drop-down (the white field to the left of the <paramref name="button"/>),
     /// where the selected item text is drawn when resolvable.
     /// </summary>
-    public static Rect GetDropDownTextRect(Rect rect, Rect button)
+    public static LayoutRect GetDropDownTextRect(LayoutRect rect, LayoutRect button)
     {
         var width = Math.Max(0, button.Left - rect.Left);
-        return new Rect(rect.Left, rect.Top, width, rect.Height);
+        return new LayoutRect(rect.Left, rect.Top, width, rect.Height);
     }
 
     /// <summary>
