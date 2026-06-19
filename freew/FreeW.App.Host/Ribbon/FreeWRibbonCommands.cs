@@ -317,6 +317,8 @@ internal static class FreeWRibbonCommands
         var quickParts = QuickPartLibrary.Load();
         registry.Register("freew.save-quickpart", new SaveQuickPartCommand(editor, quickParts));
         registry.Register("freew.insert-quickpart", new InsertQuickPartCommand(editor, quickParts));
+        // "Building Blocks Organizer" opens a manager over that same library: list + preview, Insert, Delete.
+        registry.Register("freew.building-blocks-organizer", new BuildingBlocksOrganizerCommand(editor, quickParts));
 
         // Insert tab — Controls: insert a content control (w:sdt) around the selection. The plain-text
         // control wraps the selection (or a placeholder) as an editable region; the checkbox control
@@ -2511,6 +2513,18 @@ internal static class FreeWRibbonCommands
 
             editor.Focus();
             editor.InsertText(part.Text);
+        }
+    }
+
+    // Insert > Quick Parts > Building Blocks Organizer: open a modal organizer over the shared snippet
+    // library, listing every saved building block (name + gallery/category) with a preview, and offering
+    // Insert (drops the block at the caret) and Delete (removes it from the persisted library).
+    private sealed class BuildingBlocksOrganizerCommand(DocumentView editor, QuickPartLibrary library) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            BuildingBlocksOrganizerDialog.Show(Window.GetWindow(editor), editor, library);
         }
     }
 

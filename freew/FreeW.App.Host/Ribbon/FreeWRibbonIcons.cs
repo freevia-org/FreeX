@@ -143,6 +143,7 @@ internal static class FreeWRibbonIcons
             // Insert: quick parts
             ["freew.save-quickpart"] = RibbonCommandIconKind.QuickParts,
             ["freew.insert-quickpart"] = RibbonCommandIconKind.QuickParts,
+            ["freew.building-blocks-organizer"] = RibbonCommandIconKind.QuickParts,
             ["freew.insert-file"] = RibbonCommandIconKind.TextFromFile,
 
             // Insert: references

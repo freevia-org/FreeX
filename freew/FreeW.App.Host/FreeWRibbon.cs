@@ -186,6 +186,7 @@ internal static class FreeWRibbon
                 {
                     g.Icon("freew.insert-quickpart", "Insert Quick Part", RibbonCommandIconKind.QuickParts);
                     g.Icon("freew.save-quickpart", "Save Selection", RibbonCommandIconKind.QuickParts);
+                    g.Icon("freew.building-blocks-organizer", "Building Blocks Organizer", RibbonCommandIconKind.QuickParts);
                     g.Icon("freew.insert-file", "Text from File", RibbonCommandIconKind.TextFromFile);
                 });
                 tab.Group("references", "References", "R", 65, g =>
