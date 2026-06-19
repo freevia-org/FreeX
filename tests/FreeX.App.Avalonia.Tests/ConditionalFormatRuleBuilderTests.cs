@@ -1,6 +1,7 @@
 using FluentAssertions;
 
 using FreeX.App.Avalonia.Dialogs;
+using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.Dialogs;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
