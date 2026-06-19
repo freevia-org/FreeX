@@ -21,7 +21,29 @@ namespace Free.Shared.Pdf.Wpf;
 public static class WpfRasterPdfWriter
 {
     /// <summary>Writes <paramref name="document"/> to <paramref name="stream"/>; returns the page count.</summary>
-    public static int Write(PdfRasterDocument document, Stream stream)
+    /// <param name="drawPageContent">
+    /// Optional per-page hook invoked after the raster image is placed but before the selectable-text
+    /// overlays, so a host can paint extra vector content (e.g. FreeX gridline/border/shape overlays)
+    /// beneath the text/link layers. Arguments are the page's <see cref="XGraphics"/> (user space in
+    /// points), the <see cref="PdfPage"/>, and the zero-based page index.
+    /// </param>
+    /// <param name="configureDocument">
+    /// Optional document-level hook invoked after every page has been drawn and overlays added, but
+    /// before the PDF is saved. A host uses it to stamp catalog/viewer extras the neutral model does not
+    /// cover (bookmarks/outlines, viewer preferences, <c>/Lang</c>, internal cross-page link
+    /// destinations, etc.).
+    /// </param>
+    /// <param name="uncompressedContent">
+    /// When <see langword="true"/>, content-stream compression is disabled even if the document carries
+    /// no overlays. Hosts pass this when the output must stay greppable/inspectable (e.g. FreeX's
+    /// selectable-text export, whose vector-only pages would otherwise be Flate-compressed).
+    /// </param>
+    public static int Write(
+        PdfRasterDocument document,
+        Stream stream,
+        Action<XGraphics, PdfPage, int>? drawPageContent = null,
+        Action<PdfDocument>? configureDocument = null,
+        bool uncompressedContent = false)
     {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(stream);
@@ -33,24 +55,32 @@ public static class WpfRasterPdfWriter
 
         var hasOverlays = document.Pages.Any(p =>
             (p.TextOverlays is { Count: > 0 }) || (p.LinkOverlays is { Count: > 0 }));
-        if (hasOverlays)
+        if (hasOverlays || uncompressedContent)
             pdf.Options.CompressContentStreams = false;
 
-        foreach (var rasterPage in document.Pages)
+        for (var i = 0; i < document.Pages.Count; i++)
         {
+            var rasterPage = document.Pages[i];
             var page = pdf.AddPage();
             page.Width = XUnit.FromPoint(rasterPage.WidthPoints);
             page.Height = XUnit.FromPoint(rasterPage.HeightPoints);
 
-            using var gfx = XGraphics.FromPdfPage(page);
-            using var image = XImage.FromBitmapSource(DecodeBitmap(rasterPage.ImageBytes));
-            gfx.DrawImage(image, 0, 0, page.Width.Point, page.Height.Point);
+            using (var gfx = XGraphics.FromPdfPage(page))
+            {
+                using (var image = XImage.FromBitmapSource(DecodeBitmap(rasterPage.ImageBytes)))
+                    gfx.DrawImage(image, 0, 0, page.Width.Point, page.Height.Point);
 
-            if (rasterPage.TextOverlays is { Count: > 0 } textOverlays)
-                DrawTextOverlays(gfx, textOverlays);
+                drawPageContent?.Invoke(gfx, page, i);
+
+                if (rasterPage.TextOverlays is { Count: > 0 } textOverlays)
+                    DrawTextOverlays(gfx, textOverlays);
+            }
+
             if (rasterPage.LinkOverlays is { Count: > 0 } linkOverlays)
                 AddLinkAnnotations(page, linkOverlays);
         }
+
+        configureDocument?.Invoke(pdf);
 
         var pageCount = pdf.PageCount;
         pdf.Save(stream);
