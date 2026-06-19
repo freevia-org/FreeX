@@ -51,7 +51,7 @@ public static class ConditionalFormatCellRenderPlanner
     public const double DataBarVerticalInset = ConditionalDataBarLayoutPlanner.VerticalInset;
 
     /// <summary>Width (device pixels at 100% zoom) of the gutter reserved for an icon-set glyph.</summary>
-    public const double IconGutterWidth = 20d;
+    public const double IconGutterWidth = ConditionalIconCellLayoutPlanner.GutterWidth;
 
     /// <summary>
     /// Build a data-bar render instruction from the model record, or <c>null</c> when the bar would
