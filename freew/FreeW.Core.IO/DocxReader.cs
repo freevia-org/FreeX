@@ -35,7 +35,7 @@ public static class DocxReader
         ReadStyles(archive, document);
         var imageRelationships = ReadImageRelationships(archive);
         var hyperlinkRelationships = ReadHyperlinkRelationships(archive);
-        var numbering = ReadNumbering(archive, document);
+        var (numbering, startOverrides) = ReadNumbering(archive, document);
 
         var body = documentXml.Root?.Element(W + "body");
         if (body is not null)
@@ -48,7 +48,7 @@ public static class DocxReader
             Paragraph? prevPara = null;
             var prevAfterAuto = false;
             foreach (var element in body.Elements())
-                AddBodyBlock(element, document, archive, imageRelationships, hyperlinkRelationships, numbering, ref prevPara, ref prevAfterAuto);
+                AddBodyBlock(element, document, archive, imageRelationships, hyperlinkRelationships, numbering, startOverrides, ref prevPara, ref prevAfterAuto);
         }
 
         if (document.Blocks.Count == 0)
@@ -1048,7 +1048,8 @@ public static class DocxReader
         IReadOnlyDictionary<int, ListKind> numbering,
         bool capturePreservedNumbering = false,
         TextDocument? preservedDrawingTarget = null,
-        ContentControl? inheritedControl = null)
+        ContentControl? inheritedControl = null,
+        IReadOnlyDictionary<(int NumId, int Level), int>? startOverrides = null)
     {
         var paragraph = new Paragraph();
         var pPr = p.Element(W + "pPr");
@@ -1058,7 +1059,7 @@ public static class DocxReader
         if (pPr is not null)
         {
             paragraph.StyleId = pPr.Element(W + "pStyle")?.Attribute(W + "val")?.Value;
-            paragraph.Formatting = ReadParagraphFormatting(pPr, numbering, docDefaults);
+            paragraph.Formatting = ReadParagraphFormatting(pPr, numbering, docDefaults, startOverrides);
             // When the paragraph carries a w:numPr that FreeW did NOT map to one of its own ListKinds, keep
             // the original numId+ilvl so the writer can re-emit it against the preserved numbering.xml (only
             // for body / table-cell paragraphs — header/footer/footnote numbering is not modelled).
@@ -1194,6 +1195,7 @@ public static class DocxReader
         IReadOnlyDictionary<string, string> imageRelationships,
         IReadOnlyDictionary<string, string> hyperlinkRelationships,
         IReadOnlyDictionary<int, ListKind> numbering,
+        IReadOnlyDictionary<(int NumId, int Level), int> startOverrides,
         ref Paragraph? prevPara,
         ref bool prevAfterAuto,
         ContentControl? inheritedControl = null)
@@ -1208,7 +1210,8 @@ public static class DocxReader
                 numbering,
                 capturePreservedNumbering: true,
                 preservedDrawingTarget: document,
-                inheritedControl);
+                inheritedControl,
+                startOverrides: startOverrides);
             document.Blocks.Add(para);
             var sp = element.Element(W + "pPr")?.Element(W + "spacing");
             var beforeAuto = sp?.Attribute(W + "beforeAutospacing")?.Value is "1" or "true" or "on";
@@ -1222,7 +1225,7 @@ public static class DocxReader
         }
         else if (element.Name == W + "tbl")
         {
-            document.Blocks.Add(ReadTable(element, archive, imageRelationships, hyperlinkRelationships, numbering, document, inheritedControl));
+            document.Blocks.Add(ReadTable(element, archive, imageRelationships, hyperlinkRelationships, numbering, startOverrides, document, inheritedControl));
             prevPara = null;
             prevAfterAuto = false;
         }
@@ -1230,7 +1233,7 @@ public static class DocxReader
         {
             var control = ReadContentControl(element.Element(W + "sdtPr"));
             foreach (var child in element.Element(W + "sdtContent")?.Elements() ?? [])
-                AddBodyBlock(child, document, archive, imageRelationships, hyperlinkRelationships, numbering, ref prevPara, ref prevAfterAuto, control);
+                AddBodyBlock(child, document, archive, imageRelationships, hyperlinkRelationships, numbering, startOverrides, ref prevPara, ref prevAfterAuto, control);
         }
     }
 
@@ -2079,6 +2082,7 @@ public static class DocxReader
         IReadOnlyDictionary<string, string> imageRelationships,
         IReadOnlyDictionary<string, string> hyperlinkRelationships,
         IReadOnlyDictionary<int, ListKind> numbering,
+        IReadOnlyDictionary<(int NumId, int Level), int> startOverrides,
         TextDocument? preservedDrawingTarget = null,
         ContentControl? inheritedControl = null)
     {
@@ -2232,7 +2236,8 @@ public static class DocxReader
                             numbering,
                             capturePreservedNumbering: true,
                             preservedDrawingTarget: preservedDrawingTarget,
-                            inheritedControl));
+                            inheritedControl: inheritedControl,
+                            startOverrides: startOverrides));
                     }
                     else if (child.Name == W + "sdt")
                     {
@@ -2247,7 +2252,8 @@ public static class DocxReader
                                 numbering,
                                 capturePreservedNumbering: true,
                                 preservedDrawingTarget: preservedDrawingTarget,
-                                control));
+                                inheritedControl: control,
+                                startOverrides: startOverrides));
                         }
                     }
                 }
@@ -3241,7 +3247,10 @@ public static class DocxReader
     /// paragraphs).
     /// </summary>
     internal static ParagraphFormatting ReadParagraphFormatting(
-        XElement pPr, IReadOnlyDictionary<int, ListKind> numbering, ParagraphFormatting? docDefaults)
+        XElement pPr,
+        IReadOnlyDictionary<int, ListKind> numbering,
+        ParagraphFormatting? docDefaults,
+        IReadOnlyDictionary<(int NumId, int Level), int>? startOverrides = null)
     {
         var spacing = pPr.Element(W + "spacing");
         var indent = pPr.Element(W + "ind");
@@ -3254,6 +3263,7 @@ public static class DocxReader
         // Resolve the numId to a ListKind through numbering.xml; the ilvl becomes the ListLevel.
         var listKind = ListKind.None;
         var listLevel = 0;
+        int? listStartOverride = null;
         var numPr = pPr.Element(W + "numPr");
         if (numPr is not null)
         {
@@ -3262,6 +3272,8 @@ public static class DocxReader
             {
                 listKind = kind;
                 listLevel = ParseInt(numPr.Element(W + "ilvl")?.Attribute(W + "val")?.Value);
+                if (startOverrides is not null && startOverrides.TryGetValue((numId, listLevel), out var startAt))
+                    listStartOverride = startAt;
             }
         }
 
@@ -3353,6 +3365,7 @@ public static class DocxReader
             FirstLineIndentPt = DxaToPoints(indent?.Attribute(W + "firstLine")?.Value),
             ListKind = listKind,
             ListLevel = listLevel,
+            ListStartOverride = listStartOverride,
             TabStops = ReadTabStops(pPr.Element(W + "tabs"))
         };
     }
@@ -3506,13 +3519,15 @@ public static class DocxReader
         return new PreservedNumbering(numId, ilvl);
     }
 
-    private static Dictionary<int, ListKind> ReadNumbering(ZipArchive archive, TextDocument document)
+    private static (Dictionary<int, ListKind> KindByNumId, Dictionary<(int NumId, int Level), int> StartOverrideByNumIdLevel) ReadNumbering(
+        ZipArchive archive, TextDocument document)
     {
         var map = new Dictionary<int, ListKind>();
+        var startOverrides = new Dictionary<(int, int), int>();
         var numberingXml = LoadPart(archive, "word/numbering.xml");
         var root = numberingXml?.Root;
         if (root is null)
-            return map;
+            return (map, startOverrides);
 
         // Preserve the ORIGINAL numbering element so the writer can merge its definitions alongside FreeW's
         // own (under a disjoint numId range) and re-emit the paragraphs' w:numPr that FreeW does not model.
@@ -3539,8 +3554,20 @@ public static class DocxReader
             var abstractNumId = ParseInt(num.Element(W + "abstractNumId")?.Attribute(W + "val")?.Value);
             if (abstractKinds.TryGetValue(abstractNumId, out var kind))
                 map[numId] = kind;
+
+            // Detect restart-override w:num elements: each w:lvlOverride/w:startOverride pair is a
+            // counter-reset override for one list level, emitted by FreeW or by Word for the same purpose.
+            foreach (var lvlOverride in num.Elements(W + "lvlOverride"))
+            {
+                var startOverrideEl = lvlOverride.Element(W + "startOverride");
+                if (startOverrideEl is null)
+                    continue;
+                var level = ParseInt(lvlOverride.Attribute(W + "ilvl")?.Value);
+                var startVal = ParseInt(startOverrideEl.Attribute(W + "val")?.Value);
+                startOverrides[(numId, level)] = startVal;
+            }
         }
-        return map;
+        return (map, startOverrides);
     }
 
     /// <summary>

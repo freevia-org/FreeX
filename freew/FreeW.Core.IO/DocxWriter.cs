@@ -82,6 +82,13 @@ public static class DocxWriter
         // Null for an authored-from-scratch / FreeW-only-lists document, so such a document is unaffected.
         var preservedNumbering = BuildPreservedNumberingPlan(document);
 
+        // List restart overrides: each distinct (ListKind, ListLevel, StartAt) tuple on a paragraph with
+        // ListStartOverride set gets a dedicated w:num that clones the base abstractNumId and adds a
+        // w:lvlOverride/@w:startOverride. The override numIds occupy the range immediately above the preserved
+        // numIds (so they remain disjoint from both FreeW's fixed 1/2/3 and the preserved 4..N). BuildNumbering
+        // emits the extra w:num elements; BuildParagraphProperties references them instead of the base numId.
+        var restartOverrides = BuildRestartOverrides(document, preservedNumbering);
+
         // A numbering part is emitted when FreeW authored a list OR preserved numbering must be re-emitted.
         var emitNumbering = hasLists || preservedNumbering is not null;
 
@@ -174,7 +181,7 @@ public static class DocxWriter
         if (hasCustomProps)
             WritePart(archive, "docProps/custom.xml", BuildCustomProperties(document.Page.Watermark, document.MarkedAsFinal));
         WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, emitNumbering, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasSettings, hasBibliography, charts, embeddedObjects, smartArts, hasEmbeddedFonts, preservedParts));
-        WritePart(archive, "word/document.xml", BuildDocument(document, images, charts, embeddedObjects, smartArts, hyperlinks, headerFooterParts, preservedNumbering, preservedParts));
+        WritePart(archive, "word/document.xml", BuildDocument(document, images, charts, embeddedObjects, smartArts, hyperlinks, headerFooterParts, preservedNumbering, restartOverrides, preservedParts));
         WritePart(archive, "word/styles.xml", BuildStyles(document, preservedNumbering));
         WritePart(archive, ThemePartName.TrimStart('/'), BuildTheme(document.Theme));
         if (hasSettings)
@@ -190,7 +197,7 @@ public static class DocxWriter
                 WriteBinaryPart(archive, "word/fonts/" + part.FileName, ObfuscateFont(part.FontBytes, part.FontKey));
         }
         if (emitNumbering)
-            WritePart(archive, "word/numbering.xml", BuildNumbering(hasLists, preservedNumbering));
+            WritePart(archive, "word/numbering.xml", BuildNumbering(hasLists, preservedNumbering, restartOverrides));
         // One part per (section × header/footer × type) slot with content. Each part XML carries its inline
         // images via PART-LOCAL r:embed ids resolved against its own word/_rels/<part>.xml.rels, and its
         // image media bytes go under word/media/.
@@ -997,6 +1004,7 @@ public static class DocxWriter
         IReadOnlyDictionary<string, string> hyperlinks,
         IReadOnlyList<HeaderFooterPart> headerFooterParts,
         PreservedNumberingPlan? preservedNumbering,
+        IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int> restartOverrides,
         IReadOnlyList<PreservedPart> preservedParts)
     {
         // Group header/footer parts by their owning section: the final/body-level section (Section == null)
@@ -1046,7 +1054,7 @@ public static class DocxWriter
 
         var body = new XElement(W + "body");
         foreach (var block in document.Blocks)
-            body.Add(BuildBlock(block, drawings, hyperlinks, partsBySection, preservedNumbering));
+            body.Add(BuildBlock(block, drawings, hyperlinks, partsBySection, preservedNumbering, restartOverrides));
         body.Add(BuildSectionProperties(document.Page, finalSectionParts));
 
         // Page background colour (w:background): it is positionally the FIRST child of w:document, before
@@ -1405,12 +1413,13 @@ public static class DocxWriter
         RunDrawings drawings,
         IReadOnlyDictionary<string, string> hyperlinks,
         IReadOnlyDictionary<Section, IReadOnlyList<HeaderFooterPart>> partsBySection,
-        PreservedNumberingPlan? preservedNumbering = null) => block switch
+        PreservedNumberingPlan? preservedNumbering = null,
+        IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int>? restartOverrides = null) => block switch
     {
-        Table table => BuildTable(table, drawings, hyperlinks, preservedNumbering),
+        Table table => BuildTable(table, drawings, hyperlinks, preservedNumbering, restartOverrides),
         // Only top-level body paragraphs can end a non-final section, so the per-section header/footer map
         // is threaded here (and nowhere else); table-cell/header/footer/footnote paragraphs pass no map.
-        Paragraph paragraph => BuildParagraph(paragraph, drawings, hyperlinks, partsBySection, preservedNumbering),
+        Paragraph paragraph => BuildParagraph(paragraph, drawings, hyperlinks, partsBySection, preservedNumbering, restartOverrides),
         _ => new XElement(W + "p")
     };
 
@@ -1420,7 +1429,7 @@ public static class DocxWriter
     private const string HeaderFill = "D9E2F3";
     private const string BandedFill = "F2F2F2";
 
-    private static XElement BuildTable(Table table, RunDrawings drawings, IReadOnlyDictionary<string, string> hyperlinks, PreservedNumberingPlan? preservedNumbering = null)
+    private static XElement BuildTable(Table table, RunDrawings drawings, IReadOnlyDictionary<string, string> hyperlinks, PreservedNumberingPlan? preservedNumbering = null, IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int>? restartOverrides = null)
     {
         var tbl = new XElement(W + "tbl", BuildTableProperties(table));
 
@@ -1477,7 +1486,7 @@ public static class DocxWriter
                     tc.Add(new XElement(W + "p"));
                 else
                     foreach (var paragraph in cell.Paragraphs)
-                        tc.Add(BuildParagraph(isHeaderRow ? BoldHeaderParagraph(paragraph) : paragraph, drawings, hyperlinks, preservedNumbering: preservedNumbering));
+                        tc.Add(BuildParagraph(isHeaderRow ? BoldHeaderParagraph(paragraph) : paragraph, drawings, hyperlinks, preservedNumbering: preservedNumbering, restartOverrides: restartOverrides));
                 tr.Add(tc);
             }
             tbl.Add(tr);
@@ -1776,10 +1785,11 @@ public static class DocxWriter
         RunDrawings drawings,
         IReadOnlyDictionary<string, string> hyperlinks,
         IReadOnlyDictionary<Section, IReadOnlyList<HeaderFooterPart>>? partsBySection = null,
-        PreservedNumberingPlan? preservedNumbering = null)
+        PreservedNumberingPlan? preservedNumbering = null,
+        IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int>? restartOverrides = null)
     {
         var p = new XElement(W + "p");
-        var pPr = BuildParagraphProperties(paragraph, partsBySection, preservedNumbering);
+        var pPr = BuildParagraphProperties(paragraph, partsBySection, preservedNumbering, restartOverrides);
         if (pPr is not null)
             p.Add(pPr);
 
@@ -1955,7 +1965,8 @@ public static class DocxWriter
     private static XElement? BuildParagraphProperties(
         Paragraph paragraph,
         IReadOnlyDictionary<Section, IReadOnlyList<HeaderFooterPart>>? partsBySection = null,
-        PreservedNumberingPlan? preservedNumbering = null)
+        PreservedNumberingPlan? preservedNumbering = null,
+        IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int>? restartOverrides = null)
     {
         var pPr = new XElement(W + "pPr");
         if (!string.IsNullOrEmpty(paragraph.StyleId))
@@ -1982,13 +1993,21 @@ public static class DocxWriter
             pPr.Add(new XElement(W + "bidi"));
         if (f.ListKind != ListKind.None)
         {
-            var numId = f.ListKind switch
+            var baseNumId = f.ListKind switch
             {
                 ListKind.Number => NumberNumId,
                 ListKind.MultiLevel => MultiLevelNumId,
                 _ => BulletNumId
             };
             var level = Math.Clamp(f.ListLevel, 0, ListLevelCount - 1);
+            // When the paragraph carries a list restart override (ListStartOverride != null), look up the
+            // dedicated override w:num emitted by BuildNumbering; fall back to the base numId when the map
+            // does not contain this combination (e.g. bullets where override is ignored).
+            var numId = baseNumId;
+            if (f.ListStartOverride.HasValue
+                && restartOverrides is not null
+                && restartOverrides.TryGetValue((f.ListKind, level, f.ListStartOverride.Value), out var overrideId))
+                numId = overrideId;
             pPr.Add(new XElement(W + "numPr",
                 new XElement(W + "ilvl", new XAttribute(W + "val", level)),
                 new XElement(W + "numId", new XAttribute(W + "val", numId))));
@@ -3968,6 +3987,34 @@ public static class DocxWriter
     }
 
     /// <summary>
+    /// Builds the restart-override map: for every paragraph that carries a non-null
+    /// <see cref="ParagraphFormatting.ListStartOverride"/> on a Number or MultiLevel list, assigns a
+    /// unique <c>w:numId</c> (above the preserved block) so <c>BuildNumbering</c> can emit the matching
+    /// <c>w:num</c> with <c>w:lvlOverride/w:startOverride</c>, and <c>BuildParagraphProperties</c> can
+    /// reference it. Returns an empty dictionary (never null) so callers always have a valid lookup.
+    /// </summary>
+    private static IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int> BuildRestartOverrides(
+        TextDocument document, PreservedNumberingPlan? preserved)
+    {
+        var result = new Dictionary<(ListKind, int, int), int>();
+        // Override numIds must be clear of FreeW's fixed 1/2/3 AND the preserved range (4..4+preserved.Nums.Count-1).
+        var nextOverrideNumId = PreservedNumIdStart + (preserved?.Nums.Count ?? 0);
+        foreach (var paragraph in EnumerateParagraphs(document))
+        {
+            var f = paragraph.Formatting;
+            if (f.ListKind is not (ListKind.Number or ListKind.MultiLevel))
+                continue;
+            if (!f.ListStartOverride.HasValue)
+                continue;
+            var level = Math.Clamp(f.ListLevel, 0, ListLevelCount - 1);
+            var key = (f.ListKind, level, f.ListStartOverride.Value);
+            if (!result.ContainsKey(key))
+                result[key] = nextOverrideNumId++;
+        }
+        return result;
+    }
+
+    /// <summary>
     /// Builds word/numbering.xml: three abstract numbering definitions — bullet (abstractNumId 0),
     /// decimal (abstractNumId 1) and a multilevel/legal outline (abstractNumId 2) — each with
     /// <see cref="ListLevelCount"/> levels, mapped to w:num ids <see cref="BulletNumId"/>/
@@ -3982,7 +4029,10 @@ public static class DocxWriter
     /// the familiar outline form (1, 1.1, 1.1.1). Every multilevel level is w:numFmt="decimal" and the
     /// indent grows one step (18pt) per level.
     /// </remarks>
-    private static XDocument BuildNumbering(bool includeFreeWNumbering, PreservedNumberingPlan? preserved)
+    private static XDocument BuildNumbering(
+        bool includeFreeWNumbering,
+        PreservedNumberingPlan? preserved,
+        IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int>? restartOverrides = null)
     {
         XElement Lvl(int level, string numFmt, string lvlText) =>
             new(W + "lvl",
@@ -4048,6 +4098,30 @@ public static class DocxWriter
         // collide with FreeW's fixed 1/2/3 and the body paragraphs' re-emitted numPr resolve to a valid w:num.
         if (preserved is not null)
             numbering.Add(preserved.Nums.Select(n => new XElement(n)));
+
+        // Restart-override w:num elements: one per distinct (ListKind, level, startAt) group, each
+        // referencing the same abstractNumId as the base kind (0=bullet, 1=decimal, 2=multilevel) but adding
+        // a w:lvlOverride/@startOverride so Word resets the counter at that paragraph. Word requires that
+        // these extra w:num elements reference an existing w:abstractNum — FreeW's fixed 0/1/2 always exist
+        // when includeFreeWNumbering is true (i.e. when there are any FreeW-authored lists), which is the
+        // only time a paragraph can carry ListStartOverride. Bullets are excluded by BuildRestartOverrides.
+        if (restartOverrides is not null && includeFreeWNumbering)
+        {
+            foreach (var ((kind, level, startAt), overrideNumId) in restartOverrides)
+            {
+                var abstractNumId = kind switch
+                {
+                    ListKind.MultiLevel => 2,
+                    _ => 1  // Number → decimal abstractNum
+                };
+                numbering.Add(new XElement(W + "num",
+                    new XAttribute(W + "numId", overrideNumId),
+                    new XElement(W + "abstractNumId", new XAttribute(W + "val", abstractNumId)),
+                    new XElement(W + "lvlOverride",
+                        new XAttribute(W + "ilvl", level),
+                        new XElement(W + "startOverride", new XAttribute(W + "val", startAt)))));
+            }
+        }
 
         return new XDocument(numbering);
     }

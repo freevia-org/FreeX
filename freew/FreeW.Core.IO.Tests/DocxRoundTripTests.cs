@@ -1529,6 +1529,69 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void NumberedList_StartOverride_RoundTripsAndEmitsLvlOverride()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("first")
+        {
+            Formatting = ParagraphFormatting.Default with { ListKind = ListKind.Number }
+        });
+        doc.Blocks.Add(new Paragraph("restart at five")
+        {
+            Formatting = ParagraphFormatting.Default with
+            {
+                ListKind = ListKind.Number,
+                ListStartOverride = 5
+            }
+        });
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
+        using (var reader = new StreamReader(zip.GetEntry("word/numbering.xml")!.Open()))
+        {
+            var numbering = reader.ReadToEnd();
+            numbering.Should().Contain("<w:lvlOverride w:ilvl=\"0\">");
+            numbering.Should().Contain("<w:startOverride w:val=\"5\" />");
+        }
+
+        stream.Position = 0;
+        var paragraphs = DocxReader.Read(stream).Paragraphs.ToList();
+
+        paragraphs[0].Formatting.ListStartOverride.Should().BeNull();
+        paragraphs[1].Formatting.ListKind.Should().Be(ListKind.Number);
+        paragraphs[1].Formatting.ListStartOverride.Should().Be(5);
+    }
+
+    [Fact]
+    public void TableCellList_StartOverride_RoundTrips()
+    {
+        var doc = new TextDocument();
+        var table = new Table();
+        table.Rows.Add(new TableRow());
+        table.Rows[0].Cells.Add(new TableCell());
+        table.Rows[0].Cells[0].Paragraphs.Add(new Paragraph("restart in table")
+        {
+            Formatting = ParagraphFormatting.Default with
+            {
+                ListKind = ListKind.MultiLevel,
+                ListLevel = 1,
+                ListStartOverride = 3
+            }
+        });
+        doc.Blocks.Add(table);
+
+        var paragraph = RoundTrip(doc).Blocks.OfType<Table>().Single()
+            .Rows.Single().Cells.Single().Paragraphs.Single();
+
+        paragraph.Formatting.ListKind.Should().Be(ListKind.MultiLevel);
+        paragraph.Formatting.ListLevel.Should().Be(1);
+        paragraph.Formatting.ListStartOverride.Should().Be(3);
+    }
+
+    [Fact]
     public void NonListParagraph_HasNoListKind()
     {
         var doc = new TextDocument();

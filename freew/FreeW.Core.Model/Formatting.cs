@@ -370,6 +370,20 @@ public sealed record ParagraphFormatting
     public int ListLevel { get; init; }
 
     /// <summary>
+    /// When set, this paragraph restarts its list counter at the given value (1-based, Word's "Restart
+    /// at 1" is value 1). Null means "continue" — the counter runs on from the previous list item.
+    /// Maps to <c>w:lvlOverride/w:startOverride</c> on a dedicated <c>w:num</c> in numbering.xml; only
+    /// meaningful when <see cref="ListKind"/> is <see cref="ListKind.Number"/> or
+    /// <see cref="ListKind.MultiLevel"/>; silently ignored for bullets.
+    /// <para>
+    /// Round-trips end-to-end: the writer emits a per-restart <c>w:num</c> clone pointing at the same
+    /// <c>w:abstractNum</c> with <c>w:lvlOverride/@startOverride</c>; the reader detects such a num and
+    /// maps it back, restoring this property on the paragraph.
+    /// </para>
+    /// </summary>
+    public int? ListStartOverride { get; init; }
+
+    /// <summary>
     /// Box border around the paragraph (pPr/w:pBdr), or null for no border. Mirrors how table
     /// borders are modelled; round-trips to docx as the four <c>w:pBdr</c> edges.
     /// </summary>

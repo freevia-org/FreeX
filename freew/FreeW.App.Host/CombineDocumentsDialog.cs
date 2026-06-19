@@ -138,19 +138,23 @@ internal sealed class CombineDocumentsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         grid.Children.Add(block);
     }
 
-    private void Accept()
+    private void Accept() => TryAccept(showWarnings: true);
+
+    private void TryAccept(bool showWarnings)
     {
         var authorA = _authorABox.Text.Trim();
         if (string.IsNullOrEmpty(authorA))
         {
-            DialogMessageHelper.ShowWarning(this, "Enter a name for Reviewer A to label their tracked changes.");
+            if (showWarnings)
+                DialogMessageHelper.ShowWarning(this, "Enter a name for Reviewer A to label their tracked changes.");
             return;
         }
 
         var authorB = _authorBBox.Text.Trim();
         if (string.IsNullOrEmpty(authorB))
         {
-            DialogMessageHelper.ShowWarning(this, "Enter a name for Reviewer B to label their tracked changes.");
+            if (showWarnings)
+                DialogMessageHelper.ShowWarning(this, "Enter a name for Reviewer B to label their tracked changes.");
             return;
         }
 
@@ -191,7 +195,7 @@ internal sealed class CombineDocumentsDialog : Free.Shared.Ribbon.Wpf.DialogWind
     /// </summary>
     internal Result? AcceptForTest()
     {
-        Accept();
+        TryAccept(showWarnings: false);
         return _result;
     }
 
