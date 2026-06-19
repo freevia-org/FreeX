@@ -429,8 +429,9 @@ internal static class FreeWRibbonCommands
             var isLetter = Math.Abs(page.WidthPt - 612) < 1 && Math.Abs(page.HeightPt - 792) < 1;
             (page.WidthPt, page.HeightPt) = isLetter ? (595.0, 842.0) : (612.0, 792.0); // toggle Letter <-> A4
         }));
-        // Columns: cycle 1 -> 2 -> 3 -> 1 equal-width columns, re-rendering so the layout shows at once.
-        registry.Register("freew.columns", new ColumnCountCommand(editor));
+        // Columns: open the Columns dialog (One/Two/Three/Left/Right + spacing/line-between/More), applying
+        // the chosen column layout to PageSettings and re-rendering so the flow shows at once.
+        registry.Register("freew.columns", new ColumnsCommand(editor));
         // Line Numbers: cycle None -> Continuous -> RestartEachPage -> None (shown in print preview).
         registry.Register("freew.line-numbers", new LineNumberCommand(editor));
 
@@ -1123,12 +1124,27 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context) => apply(editor.Model.Page);
     }
 
-    // Cycles the page through 1 -> 2 -> 3 -> 1 equal-width columns. Routes through ApplyPageSettings so
-    // the editor commits pending edits, mutates PageSettings.ColumnCount, and re-renders immediately.
-    private sealed class ColumnCountCommand(DocumentView editor) : IRibbonCommand
+    // Opens the Columns dialog (One/Two/Three/Left/Right presets + custom count, spacing, line-between) and
+    // applies the chosen layout to PageSettings. Routes through ApplyPageSettings so the editor commits
+    // pending edits, mutates the page columns, and re-renders the multi-column flow immediately. Equal
+    // presets clear any explicit per-column widths; the Left/Right presets set them (w:cols/@w:equalWidth).
+    private sealed class ColumnsCommand(DocumentView editor) : IRibbonCommand
     {
-        public void Execute(RibbonCommandContext context) =>
-            editor.ApplyPageSettings(page => page.ColumnCount = page.ColumnCount >= 3 ? 1 : page.ColumnCount + 1);
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var result = ColumnsDialog.Prompt(Window.GetWindow(editor), editor.Model.Page);
+            if (result is null)
+                return;
+
+            editor.ApplyPageSettings(page =>
+            {
+                page.ColumnCount = result.Count;
+                page.ColumnSpacingPt = result.SpacingPt;
+                page.ColumnsLineBetween = result.LineBetween;
+                page.ColumnWidthsPt = result.WidthsPt;
+            });
+        }
     }
 
     // Cycles page line numbering None -> Continuous -> RestartEachPage -> None. Routes through

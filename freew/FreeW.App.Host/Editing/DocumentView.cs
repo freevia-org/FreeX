@@ -2332,7 +2332,12 @@ public sealed class DocumentView : RichTextBox
     /// render exactly <see cref="PageSettings.ColumnCount"/> equal columns we set the column width to
     /// (contentWidth - (N-1)*gap) / N and the gap to the model's column spacing. Single-column pages
     /// (the default) keep an infinite column width so the text spans the full content area, exactly as
-    /// before. Shared by the editor and the print/preview path so on-screen and printed layouts match.
+    /// before. <see cref="PageSettings.ColumnsLineBetween"/> maps to the FlowDocument's column rule, and
+    /// explicit unequal widths (<see cref="PageSettings.ColumnWidthsPt"/>) use the narrowest column as the
+    /// flexible column width so WPF lays out the requested number of columns (it cannot render genuinely
+    /// unequal columns in one FlowDocument — the narrowest-width approximation keeps the count correct and
+    /// the unequal split round-trips faithfully to docx/Word). Shared by the editor and the print/preview
+    /// path so on-screen and printed layouts match.
     /// </summary>
     internal static void ApplyColumnLayout(FlowDocument flow, PageSettings page)
     {
@@ -2341,15 +2346,40 @@ public sealed class DocumentView : RichTextBox
         {
             flow.ColumnWidth = double.PositiveInfinity; // single column spans the whole content area
             flow.ColumnGap = 0;
+            flow.ColumnRuleWidth = 0;
             return;
         }
 
         var (contentWidthDip, _) = PageLayout.ContentAreaDip(page);
         var gapDip = PageLayout.PointsToDip(page.ColumnSpacingPt);
-        var columnWidthDip = (contentWidthDip - (columns - 1) * gapDip) / columns;
+
+        double columnWidthDip;
+        if (page.ColumnWidthsPt is { Count: > 1 } widths && widths.Count == columns)
+        {
+            // Unequal layout: WPF lays out equal flexible columns, so use the narrowest requested width to
+            // guarantee all N columns fit the content area (a faithful approximation of Left/Right).
+            columnWidthDip = PageLayout.PointsToDip(widths.Min());
+        }
+        else
+        {
+            columnWidthDip = (contentWidthDip - (columns - 1) * gapDip) / columns;
+        }
+
         // Guard degenerate geometry (narrow page / wide gaps) so the width stays usable and positive.
         flow.ColumnWidth = Math.Max(1, columnWidthDip);
+        flow.IsColumnWidthFlexible = true; // let WPF expand columns to fill the content area
         flow.ColumnGap = Math.Max(0, gapDip);
+
+        // "Line between" (w:cols/@w:sep) → a thin rule centred in the gap.
+        if (page.ColumnsLineBetween)
+        {
+            flow.ColumnRuleWidth = 1;
+            flow.ColumnRuleBrush = System.Windows.Media.Brushes.Gray;
+        }
+        else
+        {
+            flow.ColumnRuleWidth = 0;
+        }
     }
 
     private sealed class ViewContext(DocumentView view) : IDocumentCommandContext

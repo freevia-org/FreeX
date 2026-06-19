@@ -101,7 +101,7 @@ docx reader/writer; unsupported renderings are noted under [Known limitations](#
 
 ### Page & section layout
 - Margins, orientation, page size; honoured by docx save and print.
-- **Multi-column** layout (1/2/3 equal columns, `sectPr/w:cols`).
+- **Multi-column** layout via the **Columns** dialog (One/Two/Three/Left/Right presets, custom count, spacing, line-between; `sectPr/w:cols` with `w:num`/`w:space`/`w:sep` and explicit `w:col` widths for the unequal Left/Right presets).
 - **Headers & footers** with a live **PAGE-number field** (`word/header1.xml`/`footer1.xml`, `w:fldSimple`).
 - Page borders + **watermark** (page border `w:pgBorders`; watermark stored as a `docProps/custom.xml` custom property).
 - **Line numbers** (continuous / restart-each-page, `sectPr/w:lnNumType`) drawn in the live editor margin and in print preview.

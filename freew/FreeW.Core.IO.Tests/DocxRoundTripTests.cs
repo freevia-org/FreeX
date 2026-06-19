@@ -2066,6 +2066,56 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void ColumnsLineBetween_RoundTripsAndEmitsSep()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Two columns with a divider line."));
+        doc.Page.ColumnCount = 2;
+        doc.Page.ColumnsLineBetween = true;
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Read))
+        using (var reader = new StreamReader(zip.GetEntry("word/document.xml")!.Open()))
+            reader.ReadToEnd().Should().Contain("w:sep=\"1\"");
+
+        var result = RoundTrip(doc);
+        result.Page.ColumnsLineBetween.Should().BeTrue();
+    }
+
+    [Fact]
+    public void UnequalColumns_RoundTripWidthsAndEqualWidthOff()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("A narrow column beside a wide one (Word's Left preset)."));
+        doc.Page.ColumnCount = 2;
+        doc.Page.ColumnSpacingPt = 36;
+        doc.Page.ColumnWidthsPt = [108.0, 360.0];
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Read))
+        using (var reader = new StreamReader(zip.GetEntry("word/document.xml")!.Open()))
+        {
+            var xml = reader.ReadToEnd();
+            xml.Should().Contain("w:equalWidth=\"0\"");
+            // 108 pt -> 2160 dxa, 360 pt -> 7200 dxa.
+            xml.Should().Contain("w:w=\"2160\"");
+            xml.Should().Contain("w:w=\"7200\"");
+        }
+
+        var result = RoundTrip(doc);
+        result.Page.ColumnCount.Should().Be(2);
+        result.Page.ColumnWidthsPt.Should().NotBeNull();
+        result.Page.ColumnWidthsPt![0].Should().BeApproximately(108, 0.001);
+        result.Page.ColumnWidthsPt![1].Should().BeApproximately(360, 0.001);
+    }
+
+    [Fact]
     public void InsertedRun_RoundTrips_KindAuthorAndDate()
     {
         var doc = new TextDocument();

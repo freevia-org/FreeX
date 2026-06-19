@@ -679,7 +679,8 @@ public static class DocxReader
                 page.MarginBottomPt = DxaToPoints(bottom.Value);
         }
 
-        // Equal-width column layout (w:cols/@w:num + @w:space).
+        // Column layout (w:cols): @w:num + @w:space (equal-width), @w:sep (line between), and optional
+        // explicit per-column w:col children (@w:equalWidth="0", Left/Right presets / custom widths).
         var cols = sectPr.Element(W + "cols");
         if (cols is not null)
         {
@@ -687,6 +688,18 @@ public static class DocxReader
                 page.ColumnCount = num;
             if (cols.Attribute(W + "space") is { } space)
                 page.ColumnSpacingPt = DxaToPoints(space.Value);
+            // @w:sep is an on/off attribute: present and not explicitly "0"/"false"/"off" → draw the line.
+            page.ColumnsLineBetween = cols.Attribute(W + "sep")?.Value is "1" or "true" or "on";
+
+            var colElements = cols.Elements(W + "col").ToList();
+            var equalWidthOff = cols.Attribute(W + "equalWidth")?.Value is "0" or "false" or "off";
+            if (equalWidthOff && colElements.Count > 1
+                && colElements.All(c => c.Attribute(W + "w") is not null))
+            {
+                var widths = colElements.Select(c => DxaToPoints(c.Attribute(W + "w")!.Value)).ToList();
+                page.ColumnCount = widths.Count;
+                page.ColumnWidthsPt = widths;
+            }
         }
 
         // Page border (w:pgBorders) → PageSettings.PageBorder (null when absent/off).

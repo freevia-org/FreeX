@@ -1122,8 +1122,27 @@ public sealed class PageSettings
     /// <summary>
     /// The gap between adjacent columns in points (w:sectPr/w:cols w:space). Defaults to 36 points
     /// (half an inch), Word's default column spacing. Only meaningful when <see cref="ColumnCount"/> &gt; 1.
+    /// Ignored when <see cref="ColumnWidthsPt"/> carries explicit unequal columns (each column then
+    /// supplies its own trailing space).
     /// </summary>
     public double ColumnSpacingPt { get; set; } = 36;
+
+    /// <summary>
+    /// Whether a vertical line is drawn between adjacent columns (w:sectPr/w:cols w:sep). Defaults to
+    /// false so existing documents round-trip unchanged — no w:sep is emitted. Only meaningful when
+    /// <see cref="ColumnCount"/> &gt; 1; the print preview draws the divider lines when set.
+    /// </summary>
+    public bool ColumnsLineBetween { get; set; }
+
+    /// <summary>
+    /// Optional explicit per-column widths in points for an <em>unequal</em> column layout (Word's
+    /// "Left" / "Right" presets and custom widths). Null — the default — means equal-width columns
+    /// derived from <see cref="ColumnCount"/> and <see cref="ColumnSpacingPt"/>, so existing documents
+    /// are unaffected. When non-null it holds exactly <see cref="ColumnCount"/> widths and the writer
+    /// emits w:cols/@w:equalWidth="0" with one w:col (w:w + trailing w:space) per column. The trailing
+    /// space of all but the last column is <see cref="ColumnSpacingPt"/>.
+    /// </summary>
+    public IReadOnlyList<double>? ColumnWidthsPt { get; set; }
 
     /// <summary>
     /// Optional page border drawn around the whole page (w:sectPr/w:pgBorders), or null for none.
@@ -1218,6 +1237,8 @@ public sealed class PageSettings
         Landscape = Landscape,
         ColumnCount = ColumnCount,
         ColumnSpacingPt = ColumnSpacingPt,
+        ColumnsLineBetween = ColumnsLineBetween,
+        ColumnWidthsPt = ColumnWidthsPt is null ? null : new List<double>(ColumnWidthsPt),
         PageBorder = PageBorder,
         Watermark = Watermark,
         LineNumberMode = LineNumberMode,
