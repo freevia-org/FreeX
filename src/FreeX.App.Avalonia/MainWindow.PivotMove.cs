@@ -1,0 +1,122 @@
+using Avalonia;
+using Avalonia.Automation;
+using Avalonia.Controls;
+using Avalonia.Layout;
+
+using FreeX.Core.Commands;
+using FreeX.Core.Model;
+
+using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
+
+namespace FreeX.App.Avalonia;
+
+/// <summary>
+/// Windows-parity "Move PivotTable" dialog for the Avalonia/macOS shell: a single reference box seeded with
+/// the active pivot's current top-left cell. The typed destination is resolved through the shared
+/// <see cref="WorkbookSession.TryResolveReferenceRange"/> seam (the same parser Go To / Change Data Source
+/// editing use); the move round-trips through <see cref="MovePivotTableCommand"/> (the same command the
+/// desktop host's PivotTableMoveBtn handler uses, which retargets dependent charts/slicers/timelines). Like
+/// the WPF host the move is restricted to a cell on the current sheet. Reached from the Analyze ▸ Actions ▸
+/// Move PivotTable ribbon command (<c>pivotAnalyze.move</c>).
+/// </summary>
+public sealed partial class MainWindow
+{
+    /// <summary>Analyze ▸ Move PivotTable — opens the destination dialog for the active pivot.</summary>
+    private void OpenPivotMove()
+    {
+        if (!TryBeginPivotOption(out var pivot))
+            return;
+
+        _ = OpenPivotMoveDialogAsync(pivot!);
+    }
+
+    private async Task OpenPivotMoveDialogAsync(PivotTableModel pivot)
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        var destinationBox = new TextBox
+        {
+            Text = FormatCellReference(pivot.TargetRange.Start),
+            MinWidth = 280,
+        };
+        AutomationProperties.SetAutomationId(destinationBox, "MovePivotDestinationBox");
+        AutomationProperties.SetName(destinationBox, UiText.Get("MovePivot_RangeName"));
+
+        var dialog = new Window
+        {
+            Title = UiText.Get("MovePivot_Title"),
+            Width = 380,
+            SizeToContent = SizeToContent.Height,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            CanResize = false,
+            ShowInTaskbar = false,
+        };
+        AutomationProperties.SetAutomationId(dialog, "MovePivotDialog");
+
+        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 80 };
+        AutomationProperties.SetAutomationId(ok, "MovePivotOkButton");
+        var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 80 };
+        AutomationProperties.SetAutomationId(cancel, "MovePivotCancelButton");
+        cancel.Click += (_, _) => dialog.Close(false);
+        ok.Click += (_, _) =>
+        {
+            if (!TryResolveMoveDestination(destinationBox.Text, out _, out var error))
+            {
+                ShowEditIssue(error);
+                return;
+            }
+
+            dialog.Close(true);
+        };
+
+        var content = new StackPanel { Spacing = 6, Margin = new Thickness(16) };
+        content.Children.Add(new TextBlock { Text = UiText.Get("MovePivot_Label"), Foreground = HeaderForeground });
+        content.Children.Add(destinationBox);
+        content.Children.Add(new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Spacing = 8,
+            Margin = new Thickness(0, 12, 0, 0),
+            Children = { ok, cancel },
+        });
+        dialog.Content = content;
+
+        var confirmed = await dialog.ShowDialog<bool>(this);
+        if (!confirmed)
+            return;
+
+        if (!TryResolveMoveDestination(destinationBox.Text, out var targetStart, out var lateError))
+        {
+            ShowEditIssue(lateError);
+            return;
+        }
+
+        ExecutePivotTabCommand(
+            new MovePivotTableCommand(_session.ActiveSheet.Id, pivot.Name, targetStart),
+            UiText.Format("MovePivot_Moved", FormatCellReference(targetStart)));
+    }
+
+    /// <summary>
+    /// Resolves the typed destination text into a single top-left cell on the active sheet, rejecting empty
+    /// input, unparseable references, and cells on a different sheet (matching the WPF host's restriction).
+    /// </summary>
+    private bool TryResolveMoveDestination(string? text, out CellAddress targetStart, out string error)
+    {
+        targetStart = default;
+        error = UiText.Get("MovePivot_InvalidDestination");
+
+        if (string.IsNullOrWhiteSpace(text) || !_session.TryResolveReferenceRange(text, out var range))
+            return false;
+
+        if (!range.Start.Sheet.Equals(_session.ActiveSheet.Id))
+        {
+            error = UiText.Get("MovePivot_CurrentSheetOnly");
+            return false;
+        }
+
+        targetStart = range.Start;
+        return true;
+    }
+}

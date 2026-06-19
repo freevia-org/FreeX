@@ -54,6 +54,8 @@ public static class InsertChartCommandFactory
         "Doughnut Chart" => ChartType.Doughnut,
         "Scatter Chart" => ChartType.Scatter,
         "Stock Chart" => ChartType.Stock,
+        "Bubble Chart" => ChartType.Bubble,
+        "Radar Chart" => ChartType.Radar,
         _ => null,
     };
 

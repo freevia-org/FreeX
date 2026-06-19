@@ -292,6 +292,8 @@ public sealed class WorkbookSession
 
     public bool IsSelectedRangeStartWrapText => GetCellStyle(SelectedRange.Start).WrapText;
 
+    public bool IsSelectedRangeStartLocked => GetCellStyle(SelectedRange.Start).Locked;
+
     public bool IsSelectedRangeMerged => CellMergePlanner.IsSelectionMerged(ActiveSheet, SelectedRange);
 
     public HorizontalAlignment SelectedRangeStartHorizontalAlignment =>
@@ -1422,6 +1424,25 @@ public sealed class WorkbookSession
             ActiveSheet.ShowGridlines,
             showHeadings,
             ActiveSheet.ShowRulers);
+    }
+
+    public bool IsShowingRulers => ActiveSheet.ShowRulers;
+
+    public WorkbookCellEditResult SetShowRulers(bool showRulers)
+    {
+        if (ActiveSheet.ShowRulers == showRulers)
+        {
+            return new WorkbookCellEditResult(
+                true,
+                null,
+                [],
+                RecalcReport: null);
+        }
+
+        return SetWorksheetViewOptions(
+            ActiveSheet.ShowGridlines,
+            ActiveSheet.ShowHeadings,
+            showRulers);
     }
 
     public WorkbookCellEditResult SetZoomPercent(int zoomPercent)

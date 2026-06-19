@@ -34,58 +34,15 @@ public static class SparklineRenderPlanner
     /// Mirrors the Windows host's <c>SparklineValuePlanner.BuildValues</c>: data ranges over the
     /// supported cell cap are reported as empty, and only number / date / bool cells contribute.
     /// </summary>
-    public static IReadOnlyDictionary<Guid, IReadOnlyList<double>> BuildValues(Sheet sheet)
-    {
-        ArgumentNullException.ThrowIfNull(sheet);
-
-        var values = new Dictionary<Guid, IReadOnlyList<double>>();
-        foreach (var sparkline in sheet.Sparklines)
-            values[sparkline.Id] = ReadSeries(sheet, sparkline);
-
-        return values;
-    }
+    public static IReadOnlyDictionary<Guid, IReadOnlyList<double>> BuildValues(Sheet sheet) =>
+        SparklineSeriesReader.BuildValues(sheet);
 
     /// <summary>
     /// Reads a single sparkline's data range into its numeric series. Hidden rows and columns are
     /// skipped; non-numeric cells are ignored.
     /// </summary>
-    public static IReadOnlyList<double> ReadSeries(Sheet sheet, SparklineModel sparkline)
-    {
-        ArgumentNullException.ThrowIfNull(sheet);
-        ArgumentNullException.ThrowIfNull(sparkline);
-
-        if (!SparklineRangeLimits.IsSupportedDataRange(sparkline.DataRange))
-            return [];
-
-        var series = new List<double>();
-        var range = sparkline.DataRange;
-        for (var row = range.Start.Row; row <= range.End.Row; row++)
-        {
-            if (sheet.IsRowEffectivelyHidden(row))
-                continue;
-
-            for (var col = range.Start.Col; col <= range.End.Col; col++)
-            {
-                if (sheet.IsColEffectivelyHidden(col))
-                    continue;
-
-                switch (sheet.GetValue(row, col))
-                {
-                    case NumberValue number:
-                        series.Add(number.Value);
-                        break;
-                    case DateTimeValue date:
-                        series.Add(date.Value);
-                        break;
-                    case BoolValue boolean:
-                        series.Add(boolean.Value ? 1 : 0);
-                        break;
-                }
-            }
-        }
-
-        return series;
-    }
+    public static IReadOnlyList<double> ReadSeries(Sheet sheet, SparklineModel sparkline) =>
+        SparklineSeriesReader.ReadSeries(sheet, sparkline);
 
     /// <summary>
     /// Builds the cell-local draw instructions for every sparkline whose <see cref="SparklineModel.Location"/>
