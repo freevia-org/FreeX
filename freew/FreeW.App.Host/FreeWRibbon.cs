@@ -286,6 +286,7 @@ internal static class FreeWRibbon
                 {
                     g.MediumToggle("freew.print-layout", "Print Layout", RibbonCommandIconKind.PrintLayout);
                     g.MediumToggle("freew.read-mode", "Read Mode", RibbonCommandIconKind.ReadMode);
+                    g.MediumToggle("freew.outline-view", "Outline", RibbonCommandIconKind.MultilevelList);
                 });
                 tab.Group("show", "Show", "S", 90, g =>
                 {

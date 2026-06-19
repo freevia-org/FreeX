@@ -1227,6 +1227,15 @@ public sealed class DocumentView : RichTextBox
         ShiftHeadingStyle(modelBlockIndex, OutlineTools.Demote);
 
     /// <summary>
+    /// Set the paragraph at <paramref name="modelBlockIndex"/> directly to <c>Heading1</c> (Word's
+    /// outline "Promote to Heading 1" double-arrow). Routes through the same reversible
+    /// <see cref="SetParagraphStyleCommand"/> as Promote/Demote, so it is a single undoable step.
+    /// No-op when the index is not a paragraph or it is already Heading 1.
+    /// </summary>
+    public void PromoteHeadingToHeading1(int modelBlockIndex) =>
+        ShiftHeadingStyle(modelBlockIndex, _ => "Heading1");
+
+    /// <summary>
     /// Move the heading at <paramref name="modelBlockIndex"/> — together with its whole subtree (every
     /// block down to the next same-or-higher heading) — one position toward the document start
     /// (<paramref name="moveUp"/> = true) or end (false), swapping it with the adjacent sibling subtree.

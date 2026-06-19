@@ -210,6 +210,7 @@ internal static class FreeWRibbonIcons
             ["freew.nav-pane"] = RibbonCommandIconKind.NavigationPane,
             ["freew.formatting-marks"] = RibbonCommandIconKind.FormattingMarks,
             ["freew.read-mode"] = RibbonCommandIconKind.ReadMode,
+            ["freew.outline-view"] = RibbonCommandIconKind.MultilevelList,
 
             // Mailings
             ["freew.merge-data"] = RibbonCommandIconKind.Recipients,

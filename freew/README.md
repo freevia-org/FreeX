@@ -177,6 +177,9 @@ docx reader/writer; unsupported renderings are noted under [Known limitations](#
   Word-style status bar (Page X of Y, Section X of N, word count, zoom, view switches).
 - **Zoom** 50–200% (slider / ± / Ctrl+wheel).
 - **Read mode** (hides chrome, centered reading column) + live selection word/char count.
+- **Outline view** (View &gt; Outline) — the document as an indented heading/body outline with an Outlining
+  mini-toolbar (Show Level 1–9/All, Promote / Demote / Promote to Heading 1, Move Up/Down, Expand/Collapse,
+  Show First Line Only). Reuses the existing reversible heading operations; switching views never mutates the model.
 - **Show formatting marks** (¶ / · / →) drawn as a non-destructive adorner overlay.
 - Document properties dialog (`docProps/core.xml`, Dublin Core).
 

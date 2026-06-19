@@ -99,6 +99,14 @@ public sealed class MainWindow : Window
     private FrameworkElement _viewSwitchItem = null!;
     private FrameworkElement _zoomItem = null!;
     private bool _readMode;
+
+    // Outline view (View > Outline). The outline surface overlays the normal editing surface; entering the
+    // view hides the workspace (and its rulers) and shows the outline, exiting restores them verbatim —
+    // the same save/restore shape as Read Mode. The model is never mutated by switching views.
+    private OutlineView _outlineView = null!;
+    private bool _outlineMode;
+    private Visibility _hRulerVisibilityBeforeOutline;
+    private Visibility _vRulerVisibilityBeforeOutline;
     private bool _navPaneVisibleBeforeReadMode;
     private Thickness _editorMarginBeforeReadMode;
     private double _editorMaxWidthBeforeReadMode = double.PositiveInfinity;
@@ -164,7 +172,7 @@ public sealed class MainWindow : Window
         _stateStore = stateStore;
         var commands = FreeWRibbonCommands.Build(
             editor, stateStore, OpenPrintPreview, ToggleNavPane, () => _navPaneVisible, ToggleReadMode, () => _readMode,
-            TogglePrintLayout, () => _editor.PrintLayoutEnabled);
+            TogglePrintLayout, () => _editor.PrintLayoutEnabled, ToggleOutlineView, () => _outlineMode);
         _file = new FileCommands(this, editor, UpdateTitle, _options);
         editor.TextChanged += (_, _) => { _file.MarkDirty(); UpdateCounts(); RefreshOutline(); RefreshContextualTabs(); };
         // Live selection stats: when the caret/selection moves, refresh the status-bar counts so a
@@ -242,7 +250,16 @@ public sealed class MainWindow : Window
             Background = WorkspaceBrush,
             Child = workspaceGrid
         };
-        body.Children.Add(_workspace);
+
+        // Outline view (View > Outline): an indented heading/body outline with the Outlining mini-toolbar.
+        // It overlays the normal editing surface and is collapsed until the view is switched on; both share
+        // one host grid so toggling between Print Layout and Outline just flips which child is visible —
+        // the editor model is never disturbed (mirrors the Read-Mode enter/exit pattern).
+        _outlineView = new OutlineView(_editor) { Visibility = Visibility.Collapsed };
+        var contentHost = new Grid();
+        contentHost.Children.Add(_workspace);
+        contentHost.Children.Add(_outlineView);
+        body.Children.Add(contentHost);
 
         // Keep the indent/tab markers on the horizontal ruler following the caret/selection.
         editor.SelectionChanged += (_, _) => _hRuler.Refresh();
@@ -779,6 +796,38 @@ public sealed class MainWindow : Window
     {
         var enabled = _editor.TogglePrintLayout();
         _stateStore.SetChecked("freew.print-layout", enabled);
+    }
+
+    // View > Outline: swap the normal editing surface for the heading-structured outline view (and its
+    // Outlining mini-toolbar), or back again. Entering hides the workspace + rulers and shows the outline,
+    // populated from the live model; exiting restores everything verbatim — the same save/restore shape as
+    // Read Mode. Switching views never mutates the model, so toggling back lands on an untouched document.
+    // The checked-state is mirrored into the shared RibbonStateStore so the View > Outline button stays in
+    // sync, exactly like the Print Layout / Read Mode toggles.
+    private void ToggleOutlineView()
+    {
+        _outlineMode = !_outlineMode;
+        if (_outlineMode)
+        {
+            _hRulerVisibilityBeforeOutline = _hRuler.Visibility;
+            _vRulerVisibilityBeforeOutline = _vRuler.Visibility;
+
+            _workspace.Visibility = Visibility.Collapsed;
+            _hRuler.Visibility = Visibility.Collapsed;
+            _vRuler.Visibility = Visibility.Collapsed;
+
+            _outlineView.Visibility = Visibility.Visible;
+            _outlineView.Refresh();
+        }
+        else
+        {
+            _outlineView.Visibility = Visibility.Collapsed;
+            _workspace.Visibility = Visibility.Visible;
+            _hRuler.Visibility = _hRulerVisibilityBeforeOutline;
+            _vRuler.Visibility = _vRulerVisibilityBeforeOutline;
+        }
+
+        _stateStore.SetChecked("freew.outline-view", _outlineMode);
     }
 
     // Recompute the heading outline from the editor's committed model and repopulate the nav list.

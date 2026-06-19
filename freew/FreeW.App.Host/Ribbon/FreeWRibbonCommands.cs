@@ -57,7 +57,23 @@ internal static class FreeWRibbonCommands
         Action? onToggleReadMode,
         Func<bool>? isReadModeActive,
         Action? onTogglePrintLayout,
-        Func<bool>? isPrintLayoutActive)
+        Func<bool>? isPrintLayoutActive) =>
+        Build(editor, stateStore, onPrintPreview, onToggleNavPane, isNavPaneVisible,
+            onToggleReadMode, isReadModeActive, onTogglePrintLayout, isPrintLayoutActive,
+            onToggleOutlineView: null, isOutlineViewActive: null);
+
+    public static RibbonCommandRegistry Build(
+        DocumentView editor,
+        RibbonStateStore stateStore,
+        Action? onPrintPreview,
+        Action? onToggleNavPane,
+        Func<bool>? isNavPaneVisible,
+        Action? onToggleReadMode,
+        Func<bool>? isReadModeActive,
+        Action? onTogglePrintLayout,
+        Func<bool>? isPrintLayoutActive,
+        Action? onToggleOutlineView,
+        Func<bool>? isOutlineViewActive)
     {
         var registry = new RibbonCommandRegistry();
         var stateful = new List<(RibbonCommandId Id, IRibbonStatefulCommand Command)>();
@@ -491,6 +507,12 @@ internal static class FreeWRibbonCommands
         // on (the Word default); the host seeds the checked state to match.
         if (onTogglePrintLayout is not null && isPrintLayoutActive is not null)
             registry.Register("freew.print-layout", new ToggleActionCommand(onTogglePrintLayout, isPrintLayoutActive));
+
+        // View tab — toggle Outline view (the heading-structured outline surface with the Outlining
+        // mini-toolbar) vs the normal editing surface. Stateful so the ribbon's toggle button reflects
+        // whether the outline view is currently active.
+        if (onToggleOutlineView is not null && isOutlineViewActive is not null)
+            registry.Register("freew.outline-view", new ToggleActionCommand(onToggleOutlineView, isOutlineViewActive));
 
         // View tab — Show Formatting Marks: a stateful toggle over the editor's display-only pilcrow /
         // space-dot / tab-arrow overlay. The marks are drawn as a non-editable adorner computed from the
