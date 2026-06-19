@@ -1413,9 +1413,25 @@ public static class DocxWriter
             var bandedShade = fmt.BandedRows && !isHeaderRow && IsBandedBodyRow(rowIndex, fmt.HeaderRow);
 
             var tr = new XElement(W + "tr");
+            // Row properties (w:trPr): cantSplit / trHeight / tblHeader, in CT_TrPr schema order. Emitted
+            // only when a non-default row property is set, so plain rows stay unchanged.
+            var trPr = new XElement(W + "trPr");
+            if (!row.AllowBreakAcrossPages)
+                trPr.Add(new XElement(W + "cantSplit"));
+            if (row.HeightPt is { } heightPt)
+                trPr.Add(new XElement(W + "trHeight",
+                    new XAttribute(W + "val", PointsToDxa(heightPt)),
+                    new XAttribute(W + "hRule", row.HeightRule switch
+                    {
+                        TableRowHeightRule.Exact => "exact",
+                        TableRowHeightRule.AtLeast => "atLeast",
+                        _ => "auto"
+                    })));
             // Repeat the header row across page breaks (w:trPr/w:tblHeader) when requested.
             if (isHeaderRow && fmt.RepeatHeaderRow)
-                tr.Add(new XElement(W + "trPr", new XElement(W + "tblHeader")));
+                trPr.Add(new XElement(W + "tblHeader"));
+            if (trPr.HasElements)
+                tr.Add(trPr);
 
             foreach (var cell in row.Cells)
             {
@@ -1501,8 +1517,40 @@ public static class DocxWriter
 
     private static XElement BuildTableProperties(Table table)
     {
-        var tblPr = new XElement(W + "tblPr",
-            new XElement(W + "tblW", new XAttribute(W + "w", 0), new XAttribute(W + "type", "auto")));
+        // Children must follow the CT_TblPr schema order, else Word's strict validator rejects the table:
+        // tblpPr, tblW, jc, tblCellSpacing, tblInd, tblBorders, tblCellMar, tblLook.
+        var tblPr = new XElement(W + "tblPr");
+
+        // Floating-table position (w:tblpPr): a minimal anchor so Word treats the table as floating
+        // ("Text wrapping: Around"). Emitted only when text wrapping is on.
+        if (table.TextWrapping)
+            tblPr.Add(new XElement(W + "tblpPr",
+                new XAttribute(W + "leftFromText", 180),
+                new XAttribute(W + "rightFromText", 180),
+                new XAttribute(W + "vertAnchor", "text"),
+                new XAttribute(W + "horzAnchor", "text"),
+                new XAttribute(W + "tblpY", 1)));
+
+        // Preferred table width (w:tblW): a fixed dxa width when set, else automatic (the historical default).
+        tblPr.Add(table.PreferredWidthPt is { } widthPt
+            ? new XElement(W + "tblW", new XAttribute(W + "w", PointsToDxa(widthPt)), new XAttribute(W + "type", "dxa"))
+            : new XElement(W + "tblW", new XAttribute(W + "w", 0), new XAttribute(W + "type", "auto")));
+
+        // Table alignment (w:jc): emitted only when not Left (the default).
+        if (table.Alignment != TableAlignment.Left)
+            tblPr.Add(new XElement(W + "jc", new XAttribute(W + "val",
+                table.Alignment == TableAlignment.Center ? "center" : "right")));
+
+        // Spacing between cells (w:tblCellSpacing), emitted only when set.
+        if (table.CellSpacingPt is { } spacingPt)
+            tblPr.Add(new XElement(W + "tblCellSpacing",
+                new XAttribute(W + "w", PointsToDxa(spacingPt)), new XAttribute(W + "type", "dxa")));
+
+        // Indent from the left margin (w:tblInd), emitted only when set.
+        if (table.IndentFromLeftPt is { } indentPt)
+            tblPr.Add(new XElement(W + "tblInd",
+                new XAttribute(W + "w", PointsToDxa(indentPt)), new XAttribute(W + "type", "dxa")));
+
         if (table.Formatting.Borders)
         {
             XElement Border(string name) => new(W + name,
@@ -1524,6 +1572,11 @@ public static class DocxWriter
                 new XElement(W + "insideH", new XAttribute(W + "val", "none")),
                 new XElement(W + "insideV", new XAttribute(W + "val", "none"))));
         }
+
+        // Default cell margins (w:tblCellMar): inside padding applied to cells with no own override.
+        // Emitted only when set, so plain tables stay unchanged. Follows tblBorders in CT_TblPr order.
+        if (table.DefaultCellMargins is { } cellMar)
+            tblPr.Add(BuildCellMarginsElement("tblCellMar", cellMar));
 
         // w:tblLook carries the table-style toggles so they round-trip without a full table-style part:
         // w:firstRow="1" persists HeaderRow; w:noHBand="0" persists BandedRows (banding on). The flags are
@@ -1568,7 +1621,27 @@ public static class DocxWriter
                 new XAttribute(W + "val", "clear"),
                 new XAttribute(W + "color", "auto"),
                 new XAttribute(W + "fill", fill)));
+        // Per-cell margin override (w:tcMar) and vertical alignment (w:vAlign), in CT_TcPr schema order
+        // (tcMar before vAlign, both after shd). Emitted only when set, so plain cells stay unchanged.
+        if (cell.Margins is { } margins)
+            tcPr.Add(BuildCellMarginsElement("tcMar", margins));
+        if (cell.VerticalAlignment != TableCellVerticalAlignment.Top)
+            tcPr.Add(new XElement(W + "vAlign", new XAttribute(W + "val",
+                cell.VerticalAlignment == TableCellVerticalAlignment.Center ? "center" : "bottom")));
         return tcPr.HasElements ? tcPr : null;
+    }
+
+    // Builds a cell-margins container (w:tblCellMar for the table default, or w:tcMar for a per-cell
+    // override) with the four edge elements in top/left/bottom/right order, each a dxa width.
+    private static XElement BuildCellMarginsElement(string name, TableCellMargins margins)
+    {
+        XElement Edge(string edge, double pt) => new(W + edge,
+            new XAttribute(W + "w", PointsToDxa(pt)), new XAttribute(W + "type", "dxa"));
+        return new XElement(W + name,
+            Edge("top", margins.TopPt),
+            Edge("left", margins.LeftPt),
+            Edge("bottom", margins.BottomPt),
+            Edge("right", margins.RightPt));
     }
 
     /// <summary>True when two runs carry the same tracked-change kind, author and date (so they coalesce).</summary>

@@ -7,6 +7,7 @@ using System.Windows.Media;
 using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
 using FreeW.Core.Model;
+using FreeW.App.Host;
 using System.Diagnostics;
 using WpfParagraph = System.Windows.Documents.Paragraph;
 using WpfRun = System.Windows.Documents.Run;
@@ -3995,6 +3996,76 @@ public sealed class DocumentView : RichTextBox
         if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
             return null;
         return (table, rowIndex, columnIndex);
+    }
+
+    /// <summary>
+    /// The caret's table plus its current row and cell, for seeding the Table Properties dialog, or null when
+    /// the caret is not inside a table. Commits pending edits first so the model reflects current content.
+    /// </summary>
+    public ModelTableContext? CaretTableContext()
+    {
+        CommitToModel();
+        var (blockIndex, rowIndex, columnIndex) = CaretTableLocation();
+        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
+            return null;
+        var row = rowIndex >= 0 && rowIndex < table.Rows.Count ? table.Rows[rowIndex] : null;
+        var cell = row is not null && columnIndex >= 0 && columnIndex < row.Cells.Count ? row.Cells[columnIndex] : null;
+        return new ModelTableContext(table, row, cell);
+    }
+
+    /// <summary>
+    /// Apply the values from the Table Properties dialog onto the caret's table / current row / current cell
+    /// (direct model set + re-render, mirroring <see cref="SetCaretCellShading"/>). Table-level properties go
+    /// on the table; row-level properties on the caret's row; cell-level properties on the caret's cell.
+    /// No-op outside a table.
+    /// </summary>
+    public void ApplyTableProperties(TablePropertiesValues values)
+    {
+        CommitToModel();
+        var (blockIndex, rowIndex, columnIndex) = CaretTableLocation();
+        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
+            return;
+
+        // Table tab.
+        table.PreferredWidthPt = values.PreferredWidthPt;
+        table.Alignment = values.Alignment;
+        table.IndentFromLeftPt = values.IndentFromLeftPt;
+        table.TextWrapping = values.TextWrapping;
+        table.DefaultCellMargins = values.DefaultCellMargins;
+        table.CellSpacingPt = values.CellSpacingPt;
+        // "Repeat as header row" lives on the Row tab in Word but is a table-level flag in the model.
+        table.Formatting = table.Formatting with { RepeatHeaderRow = values.RepeatHeaderRow };
+
+        // Row tab → caret's row.
+        if (rowIndex >= 0 && rowIndex < table.Rows.Count)
+        {
+            var row = table.Rows[rowIndex];
+            row.HeightPt = values.RowHeightPt;
+            row.HeightRule = values.RowHeightRule;
+            row.AllowBreakAcrossPages = values.AllowRowBreak;
+        }
+
+        // Column tab → preferred width of every cell in the caret's column.
+        if (values.ColumnWidthPt is { } columnWidthPt && columnIndex >= 0)
+            foreach (var r in table.Rows)
+                if (columnIndex < r.Cells.Count)
+                    r.Cells[columnIndex].WidthPt = columnWidthPt;
+
+        // Cell tab → caret's cell.
+        if (rowIndex >= 0 && rowIndex < table.Rows.Count)
+        {
+            var cells = table.Rows[rowIndex].Cells;
+            if (columnIndex >= 0 && columnIndex < cells.Count)
+            {
+                var cell = cells[columnIndex];
+                if (values.CellPreferredWidthPt is { } cellWidthPt)
+                    cell.WidthPt = cellWidthPt;
+                cell.VerticalAlignment = values.CellVerticalAlignment;
+                cell.Margins = values.CellMargins;
+            }
+        }
+
+        Render();
     }
 
     public void InsertField(RunFieldKind kind)

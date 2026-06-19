@@ -1032,6 +1032,19 @@ public sealed class TableCell
     /// </summary>
     public VerticalMergeState VerticalMerge { get; set; } = VerticalMergeState.None;
 
+    /// <summary>
+    /// Vertical alignment of the cell's content (<c>tc/tcPr/w:vAlign</c>): top, center or bottom.
+    /// <see cref="TableCellVerticalAlignment.Top"/> is the docx default, so it is not emitted and existing
+    /// cells round-trip unchanged. Set by the Table Properties dialog's Cell tab.
+    /// </summary>
+    public TableCellVerticalAlignment VerticalAlignment { get; set; } = TableCellVerticalAlignment.Top;
+
+    /// <summary>
+    /// Per-cell margin override (<c>tc/tcPr/w:tcMar</c>), or null to inherit the table default
+    /// (<see cref="Table.DefaultCellMargins"/>). Null is the default so existing cells are unaffected.
+    /// </summary>
+    public TableCellMargins? Margins { get; set; }
+
     public TableCell() { }
 
     public TableCell(string text) => Paragraphs.Add(new Paragraph(text));
@@ -1051,10 +1064,68 @@ public enum VerticalMergeState
     Continue
 }
 
+/// <summary>
+/// Vertical alignment of a table cell's content (<c>tc/tcPr/w:vAlign</c>). <see cref="Top"/> is the docx
+/// default (no element emitted); <see cref="Center"/> and <see cref="Bottom"/> map to the "center"/"bottom"
+/// tokens.
+/// </summary>
+public enum TableCellVerticalAlignment
+{
+    Top,
+    Center,
+    Bottom
+}
+
+/// <summary>
+/// How a table row's height is interpreted (<c>tr/trPr/w:trHeight/@w:hRule</c>). <see cref="Auto"/> is the
+/// docx default — the row grows to fit its content and no explicit height is emitted. <see cref="AtLeast"/>
+/// is a minimum height the row may exceed; <see cref="Exact"/> fixes the height (content may be clipped).
+/// </summary>
+public enum TableRowHeightRule
+{
+    Auto,
+    AtLeast,
+    Exact
+}
+
+/// <summary>
+/// The four inside margins (cell padding) of a table cell, in points, mapping onto a <c>w:tcMar</c>
+/// (per-cell override) or <c>w:tblCellMar</c> (table default) element. Immutable so it round-trips cleanly.
+/// Word's default cell margins are 0 top/bottom and ~5.4pt (108 dxa) left/right.
+/// </summary>
+public sealed record TableCellMargins(
+    double TopPt = 0,
+    double LeftPt = 5.4,
+    double BottomPt = 0,
+    double RightPt = 5.4)
+{
+    /// <summary>Word's default table cell margins (0 top/bottom, 5.4pt left/right).</summary>
+    public static readonly TableCellMargins Default = new();
+}
+
 /// <summary>A table row: an ordered sequence of cells (w:tr).</summary>
 public sealed class TableRow
 {
     public List<TableCell> Cells { get; } = [];
+
+    /// <summary>
+    /// Explicit row height in points (<c>tr/trPr/w:trHeight/@w:val</c>), interpreted per <see cref="HeightRule"/>.
+    /// Null (the default) means automatic height, so no <c>w:trHeight</c> is emitted and existing rows are
+    /// unaffected.
+    /// </summary>
+    public double? HeightPt { get; set; }
+
+    /// <summary>
+    /// How <see cref="HeightPt"/> is interpreted (<c>@w:hRule</c>). <see cref="TableRowHeightRule.Auto"/> is
+    /// the default; it is irrelevant unless <see cref="HeightPt"/> is set.
+    /// </summary>
+    public TableRowHeightRule HeightRule { get; set; } = TableRowHeightRule.Auto;
+
+    /// <summary>
+    /// Whether the row's contents may break across a page boundary (Word's "Allow row to break across pages").
+    /// True (the default) lets the row split; false emits <c>tr/trPr/w:cantSplit</c> to keep the row whole.
+    /// </summary>
+    public bool AllowBreakAcrossPages { get; set; } = true;
 }
 
 /// <summary>
@@ -1088,6 +1159,18 @@ public sealed record TableFormatting
     public static readonly TableFormatting Default = new();
 }
 
+/// <summary>
+/// Horizontal alignment of a table within its column / page width (<c>tbl/tblPr/w:jc</c>). <see cref="Left"/>
+/// is the docx default (no element emitted); <see cref="Center"/> and <see cref="Right"/> map to the
+/// "center"/"right" tokens. Set by the Table Properties dialog's Table tab.
+/// </summary>
+public enum TableAlignment
+{
+    Left,
+    Center,
+    Right
+}
+
 /// <summary>A table block: rows of cells, each cell holding paragraphs (w:tbl / w:tr / w:tc).</summary>
 public sealed class Table : Block
 {
@@ -1100,6 +1183,45 @@ public sealed class Table : Block
     /// existing tables are unaffected.
     /// </summary>
     public List<double> ColumnWidthsPt { get; } = [];
+
+    /// <summary>
+    /// Preferred total table width in points (<c>tbl/tblPr/w:tblW</c> with <c>type="dxa"</c>), or null for
+    /// automatic width (<c>type="auto"</c>, the historical default), so existing tables are unaffected. Set
+    /// by the Table Properties dialog's Table tab.
+    /// </summary>
+    public double? PreferredWidthPt { get; set; }
+
+    /// <summary>
+    /// Horizontal alignment of the table (<c>tbl/tblPr/w:jc</c>). <see cref="TableAlignment.Left"/> is the
+    /// default, so it is not emitted and existing tables are unaffected.
+    /// </summary>
+    public TableAlignment Alignment { get; set; } = TableAlignment.Left;
+
+    /// <summary>
+    /// Indent of the table from the left margin in points (<c>tbl/tblPr/w:tblInd</c>), or null for none
+    /// (the default). Word's "Indent from left" on the Table tab.
+    /// </summary>
+    public double? IndentFromLeftPt { get; set; }
+
+    /// <summary>
+    /// True when the table floats with text wrapping around it (Word's "Text wrapping: Around"). Emits a
+    /// minimal <c>tbl/tblPr/w:tblpPr</c> floating-position element so Word treats the table as floating.
+    /// False (the default) keeps the table inline, so existing tables are unaffected.
+    /// </summary>
+    public bool TextWrapping { get; set; }
+
+    /// <summary>
+    /// Default inside margins (cell padding) applied to every cell that has no <see cref="TableCell.Margins"/>
+    /// override (<c>tbl/tblPr/w:tblCellMar</c>), or null to use the implicit docx default, so existing tables
+    /// are unaffected. Set by the Table tab's "Options… &gt; Default cell margins".
+    /// </summary>
+    public TableCellMargins? DefaultCellMargins { get; set; }
+
+    /// <summary>
+    /// Spacing between cells in points (<c>tbl/tblPr/w:tblCellSpacing</c>), or null for none (the default).
+    /// Word's "Allow spacing between cells" on the Table Options dialog.
+    /// </summary>
+    public double? CellSpacingPt { get; set; }
 
     public Table() { }
 

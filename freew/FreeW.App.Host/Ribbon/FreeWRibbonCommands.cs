@@ -187,6 +187,8 @@ internal static class FreeWRibbonCommands
         // Insert tab — Table Tools: table-style toggles applied to the caret's table (sets model + re-renders).
         // Table Tools — Data: insert a computed formula field (=SUM(ABOVE) etc.) into the caret's cell.
         registry.Register("freew.table-formula", new TableFormulaCommand(editor));
+        // Table Tools — Properties: open the four-tab Table Properties dialog for the caret's table.
+        registry.Register("freew.table-properties", new TablePropertiesCommand(editor));
         registry.Register("freew.table-header-row", new ActionCommand(() => { editor.Focus(); editor.ToggleTableHeaderRow(); }));
         registry.Register("freew.table-banded-rows", new ActionCommand(() => { editor.Focus(); editor.ToggleTableBandedRows(); }));
         registry.Register("freew.table-repeat-header", new ActionCommand(() => { editor.Focus(); editor.ToggleTableRepeatHeaderRow(); }));
@@ -1184,6 +1186,31 @@ internal static class FreeWRibbonCommands
                     return true;
             }
             return false;
+        }
+    }
+
+    // Table Tools — Layout > Properties (Word's Table Properties dialog). Requires the caret to be inside a
+    // table; otherwise warns. Seeds the four-tab dialog from the caret's table/row/cell and applies the chosen
+    // values through the editor (which round-trips via w:tblPr / w:trPr / w:tcPr).
+    private sealed class TablePropertiesCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var owner = Window.GetWindow(editor);
+            var tableContext = editor.CaretTableContext();
+            if (tableContext is null)
+            {
+                DialogMessageHelper.ShowWarning(owner!, "The cursor must be inside a table to edit its properties.", "Table Properties");
+                return;
+            }
+
+            var values = TablePropertiesDialog.Prompt(owner, tableContext);
+            if (values is null)
+                return; // cancelled — leave the model untouched
+
+            editor.Focus();
+            editor.ApplyTableProperties(values);
         }
     }
 

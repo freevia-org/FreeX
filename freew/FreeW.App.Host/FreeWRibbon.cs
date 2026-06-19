@@ -131,6 +131,7 @@ internal static class FreeWRibbon
                     g.Icon("freew.table-banded-rows", "Banded Rows", RibbonCommandIconKind.Table, RibbonCommandIconAccent.Green);
                     g.Icon("freew.table-repeat-header", "Repeat Header", RibbonCommandIconKind.Table, RibbonCommandIconAccent.Green);
                     g.Icon("freew.table-formula", "Formula", RibbonCommandIconKind.Sum, RibbonCommandIconAccent.Green);
+                    g.Icon("freew.table-properties", "Table Properties", RibbonCommandIconKind.Table, RibbonCommandIconAccent.Green);
                 });
                 tab.Group("illustrations", "Illustrations", "I", 80, g =>
                 {
@@ -459,6 +460,8 @@ internal static class FreeWRibbon
                 });
                 tab.Group("table-data", "Data", "D", 70, g =>
                     g.Large("freew.table-formula", "Formula", RibbonCommandIconKind.Sum, accent: RibbonCommandIconAccent.Green));
+                tab.Group("table-properties", "Properties", "P", 60, g =>
+                    g.Large("freew.table-properties", "Properties", RibbonCommandIconKind.Table, accent: RibbonCommandIconAccent.Green));
             })
             .Build();
     }
