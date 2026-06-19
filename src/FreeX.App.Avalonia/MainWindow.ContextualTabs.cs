@@ -48,6 +48,9 @@ public sealed partial class MainWindow
             // (ChartComboPlanner); Move Chart opens the new-sheet / existing-sheet target dialog
             // (ChartMovePlanner -> MoveChartCommand / MoveChartToNewSheetCommand).
             ["chartDesign.comboChart"] = () => RunGuarded(ShowChartComboDialog),
+            // Combo Chart Series is the quick per-click toggle (mirrors the dialog's first-series step);
+            // Combo Chart opens the full per-series grid (ChartComboPlanner).
+            ["chartDesign.comboChartSeries"] = CycleChartComboSeries,
             ["chartDesign.moveChart"] = () => RunGuarded(ShowMoveChartDialog),
 
             // --- Chart Format (chart.selected) — real handlers via SetChartLayoutCommand. ---
@@ -71,6 +74,25 @@ public sealed partial class MainWindow
             // The Format Chart Area button opens the chart-area / plot-area fill + border dialog
             // (ChartAreaFormatPlanner -> SetChartLayoutCommand).
             ["chartFormat.formatChartArea"] = () => RunGuarded(ShowFormatChartAreaDialog),
+            // Current Selection ▸ Format: the type-specific format dialogs (each guarded to its chart family).
+            ["chartFormat.formatBarColumn"] = () => RunGuarded(ShowChartBarFormatDialog),
+            ["chartFormat.formatPieDoughnut"] = () => RunGuarded(ShowChartPieFormatDialog),
+            ["chartFormat.formatBubble"] = () => RunGuarded(ShowChartBubbleFormatDialog),
+            ["chartFormat.formatStock"] = () => RunGuarded(ShowChartStockFormatDialog),
+            // Shape Styles ▸ Series Dash / Marker Size quick cycles; Series Marker opens the full series dialog
+            // (same ChartSeriesFormatPlanner dialog as Series Width).
+            ["chartFormat.seriesDash"] = CycleChartSeriesDash,
+            ["chartFormat.seriesMarker"] = () => RunGuarded(ShowChartSeriesFormatDialog),
+            ["chartFormat.markerSize"] = CycleChartMarkerSize,
+            // Text group quick cycles: title/axis-title color & size, legend font size, data-label text/fill/border.
+            ["chartFormat.chartTitleColor"] = CycleChartTitleColor,
+            ["chartFormat.chartTitleSize"] = CycleChartTitleSize,
+            ["chartFormat.axisTitleColor"] = CycleChartAxisTitleColor,
+            ["chartFormat.axisTitleSize"] = CycleChartAxisTitleSize,
+            ["chartFormat.legendFontSize"] = CycleChartLegendFontSize,
+            ["chartFormat.dataLabelText"] = CycleChartDataLabelText,
+            ["chartFormat.dataLabelFill"] = CycleChartDataLabelFill,
+            ["chartFormat.dataLabelBorder"] = CycleChartDataLabelBorder,
 
             // --- Table Design (table.active) — real handlers via the structured-table Core commands
             // (MainWindow.TableDesignTab). ---
