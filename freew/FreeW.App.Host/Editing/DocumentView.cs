@@ -409,6 +409,23 @@ public sealed class DocumentView : RichTextBox
         ApplyPageSettings(page => page.Watermark = string.IsNullOrWhiteSpace(text) ? null : text.Trim());
 
     /// <summary>
+    /// Set (or clear) the page background colour (Word's Design &gt; Page Color). A null/empty value
+    /// clears it back to the default white sheet. The hex is normalised to an "#RRGGBB" form. Re-renders
+    /// so the page sheet recolours immediately, and round-trips through the model's w:background on save.
+    /// Design-ribbon command.
+    /// </summary>
+    public void SetPageColor(string? colorHex) =>
+        ApplyPageSettings(page => page.BackgroundColorHex = NormalizePageColor(colorHex));
+
+    private static string? NormalizePageColor(string? colorHex)
+    {
+        if (string.IsNullOrWhiteSpace(colorHex))
+            return null;
+        var trimmed = colorHex.Trim();
+        return trimmed.StartsWith('#') ? trimmed : "#" + trimmed;
+    }
+
+    /// <summary>
     /// Apply a document theme (colour/font scheme) to the model's style catalog and re-render so the
     /// new heading colours/fonts and body face show immediately. This is a document-wide style change
     /// to the catalog (not the per-paragraph runs), so it is applied directly rather than through the
@@ -2053,9 +2070,14 @@ public sealed class DocumentView : RichTextBox
             BorderThickness = new Thickness(1);
         }
 
+        // The page sheet colour: the model's Design > Page Color (defaults to white). The watermark, when
+        // present, composes its faint diagonal text over that same base colour.
+        var pageColor = string.IsNullOrEmpty(_model.Page.BackgroundColorHex)
+            ? Colors.White
+            : ParseColor(_model.Page.BackgroundColorHex!, Colors.White);
         Background = string.IsNullOrEmpty(_model.Page.Watermark)
-            ? Brushes.White
-            : BuildWatermarkBrush(_model.Page.Watermark!);
+            ? new SolidColorBrush(pageColor)
+            : BuildWatermarkBrush(_model.Page.Watermark!, pageColor);
 
         if (PrintLayoutEnabled)
         {
@@ -2170,7 +2192,9 @@ public sealed class DocumentView : RichTextBox
     /// behind the document content. Used by the editor background; the print/preview path draws the
     /// same text per page so on-screen and printed output match.
     /// </summary>
-    internal static Brush BuildWatermarkBrush(string text)
+    internal static Brush BuildWatermarkBrush(string text) => BuildWatermarkBrush(text, Colors.White);
+
+    internal static Brush BuildWatermarkBrush(string text, Color pageColor)
     {
         var label = new TextBlock
         {
@@ -2194,9 +2218,9 @@ public sealed class DocumentView : RichTextBox
             AlignmentY = AlignmentY.Center
         };
 
-        // Compose the faint tiled watermark over an opaque white page so the editing surface stays
-        // white behind the text.
-        var canvas = new Grid { Background = Brushes.White };
+        // Compose the faint tiled watermark over the opaque page colour so the editing surface keeps the
+        // chosen page background behind the text.
+        var canvas = new Grid { Background = new SolidColorBrush(pageColor) };
         canvas.Children.Add(new System.Windows.Shapes.Rectangle { Fill = visual });
         return new VisualBrush(canvas) { Stretch = Stretch.Fill };
     }

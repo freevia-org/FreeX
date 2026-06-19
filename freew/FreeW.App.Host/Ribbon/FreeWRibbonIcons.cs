@@ -198,6 +198,7 @@ internal static class FreeWRibbonIcons
 
             // Design
             ["freew.theme"] = RibbonCommandIconKind.Theme,
+            ["freew.page-color"] = RibbonCommandIconKind.Fill,
 
             // View
             ["freew.print-layout"] = RibbonCommandIconKind.PrintLayout,

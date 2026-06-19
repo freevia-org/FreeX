@@ -266,6 +266,13 @@ internal static class FreeWRibbon
                         Width = 140
                     });
                 });
+                // Design > Page Background: set the whole-page background colour (Word's Page Color). The
+                // command opens a swatch palette (+ No Color + More Colours…) and writes the model's page
+                // BackgroundColorHex, which already round-trips as w:background in docx.
+                tab.Group("page-background", "Page Background", "B", 90, g =>
+                {
+                    g.Medium("freew.page-color", "Page Color", RibbonCommandIconKind.Fill, accent: RibbonCommandIconAccent.Fill, dropdown: true);
+                });
             })
             .Tab("view", "View", "W", tab =>
             {

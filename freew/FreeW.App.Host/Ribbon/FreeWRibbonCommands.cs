@@ -449,6 +449,11 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.page-border", new ActionCommand(() => { editor.Focus(); editor.TogglePageBorder(); }));
         registry.Register("freew.watermark", new WatermarkCommand(editor));
 
+        // Design tab — Page Background: pick the whole-page background colour (Word's Page Color). Opens a
+        // swatch palette + No Color + More Colours… and sets the model's page BackgroundColorHex (which
+        // already round-trips as w:background in docx); the editor recolours the page sheet immediately.
+        registry.Register("freew.page-color", new PageColorCommand(editor));
+
         // Layout tab — open the modeless print-preview window (paginated, page-settings-aware).
         if (onPrintPreview is not null)
             registry.Register("freew.print-preview", new ActionCommand(onPrintPreview));
@@ -2778,6 +2783,118 @@ internal static class FreeWRibbonCommands
 
             editor.SetWatermark(text);
             editor.Focus();
+        }
+    }
+
+    // Design > Page Background > Page Color (Word's Page Color): pick the whole-page background colour from
+    // a theme-style swatch palette, clear it with "No Color", or open "More Colours…" to type a hex value.
+    // The chosen value sets the model's page BackgroundColorHex through DocumentView.SetPageColor (commit +
+    // re-render via ApplyPageSettings); it already round-trips as w:background in docx. Mirrors the swatch
+    // picker used by Cell Shading / Paragraph Shading.
+    private sealed class PageColorCommand(DocumentView editor) : IRibbonCommand
+    {
+        // Word's "Theme Colors" top row plus standard colours — a sensible page-tint palette.
+        private static readonly string[] Palette =
+        [
+            "#FFFFFF", "#F2F2F2", "#DDD9C3", "#C6D9F1", "#DBE5F1", "#F2DCDB",
+            "#EBF1DE", "#E5E0EC", "#FDE9D9", "#FFF2CC", "#DEEBF7", "#E2EFDA",
+            "#FCE4D6", "#D9E1F2", "#FFFFCC", "#E2F0D9", "#000000", "#1F1F1F",
+        ];
+
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var owner = Window.GetWindow(editor);
+            var (chosen, hex) = ShowPicker(owner);
+            if (!chosen)
+                return; // cancelled — leave the model untouched
+            editor.Focus();
+            editor.SetPageColor(hex); // null clears back to the default white sheet
+        }
+
+        private (bool Chosen, string? Hex) ShowPicker(Window? owner)
+        {
+            var chosen = false;
+            string? hex = null;
+            var window = new Window
+            {
+                Title = "Page Color",
+                SizeToContent = SizeToContent.WidthAndHeight,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = owner is null
+                    ? WindowStartupLocation.CenterScreen
+                    : WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ShowInTaskbar = false
+            };
+
+            var panel = new StackPanel { Margin = new Thickness(8) };
+            var grid = new WrapPanel { Width = 6 * 26 };
+            foreach (var swatchHex in Palette)
+            {
+                var swatch = new Button
+                {
+                    Width = 22,
+                    Height = 22,
+                    Margin = new Thickness(2),
+                    Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(swatchHex)),
+                    BorderBrush = new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80)),
+                    BorderThickness = new Thickness(1),
+                    ToolTip = swatchHex
+                };
+                swatch.Click += (_, _) => { chosen = true; hex = swatchHex; window.Close(); };
+                grid.Children.Add(swatch);
+            }
+            panel.Children.Add(grid);
+
+            var noColor = new Button
+            {
+                Content = "No Color",
+                Margin = new Thickness(2, 6, 2, 0),
+                Padding = new Thickness(8, 2, 8, 2)
+            };
+            noColor.Click += (_, _) => { chosen = true; hex = null; window.Close(); };
+            panel.Children.Add(noColor);
+
+            var more = new Button
+            {
+                Content = "More Colors…",
+                Margin = new Thickness(2, 4, 2, 0),
+                Padding = new Thickness(8, 2, 8, 2)
+            };
+            more.Click += (_, _) =>
+            {
+                var seed = editor.Model.Page.BackgroundColorHex ?? "#";
+                var typed = TextPrompt.Ask(window, "More Colors", "Hex colour (e.g. #FFCC00):", seed);
+                if (typed is null)
+                    return; // stay on the palette
+                var normalized = NormalizeHex(typed);
+                if (normalized is null)
+                {
+                    DialogMessageHelper.ShowWarning(window, "Enter a colour as a 6-digit hex value, e.g. #FFCC00.", "Page Color");
+                    return;
+                }
+                chosen = true; hex = normalized; window.Close();
+            };
+            panel.Children.Add(more);
+
+            window.Content = panel;
+            window.ShowDialog();
+            return (chosen, hex);
+        }
+
+        // Accept "#RRGGBB" / "RRGGBB" (case-insensitive); return a normalised "#RRGGBB" or null if invalid.
+        private static string? NormalizeHex(string raw)
+        {
+            var value = raw.Trim().TrimStart('#');
+            if (value.Length != 6)
+                return null;
+            foreach (var c in value)
+            {
+                if (!Uri.IsHexDigit(c))
+                    return null;
+            }
+            return "#" + value.ToUpperInvariant();
         }
     }
 
