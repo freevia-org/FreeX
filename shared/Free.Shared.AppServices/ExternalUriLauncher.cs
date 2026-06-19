@@ -1,6 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 
-namespace FreeX.App.Services;
+namespace Free.Shared.AppServices;
 
 /// <summary>Outcome of attempting to open an external URI through a platform launcher.</summary>
 public enum ExternalUriLaunchResult
@@ -21,9 +21,17 @@ public enum ExternalUriLaunchResult
 /// <summary>
 /// Shared guard for opening external URIs. Platform hosts provide the actual
 /// launch delegate so macOS can use Avalonia's launcher while WPF keeps shell execution.
+/// Domain-neutral: lives in the shared tier so FreeX and FreeW route every external
+/// URL launch through one scheme allowlist.
 /// </summary>
 public static class ExternalUriLauncher
 {
+    /// <summary>Schemes safe to hand to a platform launcher (mirrors the hyperlink allowlist).</summary>
+    private static readonly HashSet<string> AllowedSchemes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "http", "https", "mailto", "ftp"
+    };
+
     public static ExternalUriLaunchResult Open(string target, Action<Uri>? launch)
     {
         if (!TryCreateAllowedUri(target, out var uri))
@@ -73,7 +81,7 @@ public static class ExternalUriLauncher
 
         var normalizedTarget = target.Trim();
         if (!Uri.TryCreate(normalizedTarget, UriKind.Absolute, out var candidate) ||
-            !HyperlinkNavigationPlanner.IsAllowedScheme(normalizedTarget))
+            !AllowedSchemes.Contains(candidate.Scheme))
         {
             return false;
         }

@@ -2828,7 +2828,7 @@ public sealed class AvaloniaShellSourceTests
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "HyperlinkNavigationPlanner.cs"));
-        var launcherSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "ExternalUriLauncher.cs"));
+        var launcherSource = File.ReadAllText(RepositoryFileLocator.Find("shared", "Free.Shared.AppServices", "ExternalUriLauncher.cs"));
 
         plannerSource.Should().Contain("public enum HyperlinkNavigationKind");
         plannerSource.Should().Contain("HyperlinkTargetKind.PlaceInThisDocument");
@@ -2837,7 +2837,7 @@ public sealed class AvaloniaShellSourceTests
         plannerSource.Should().Contain("\"http\", \"https\", \"mailto\", \"ftp\"");
         launcherSource.Should().Contain("public static class ExternalUriLauncher");
         launcherSource.Should().Contain("Func<Uri, Task<bool>>? launchAsync");
-        launcherSource.Should().Contain("HyperlinkNavigationPlanner.IsAllowedScheme(normalizedTarget)");
+        launcherSource.Should().Contain("\"http\", \"https\", \"mailto\", \"ftp\"");
 
         sessionSource.Should().Contain("public bool CanOpenSelectedHyperlink");
         sessionSource.Should().Contain("HyperlinkNavigationPlanner.TryCreatePlan(ActiveSheet, SelectedRange.Start, CurrentFilePath, out _)");
