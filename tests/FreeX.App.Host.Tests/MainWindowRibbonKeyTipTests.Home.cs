@@ -211,41 +211,34 @@ public sealed partial class MainWindowRibbonKeyTipTests
     }
 
     [Fact]
-    public void CollapsedInsertChartsKeyTip_RoutesThroughVisibleOverflowGroup()
+    public void InsertChartsKeyTip_RoutesThroughVisibleChartCommand()
     {
         RunSta(() =>
         {
             using var harness = MainWindowHarness.Create();
-            // At width 800 the Insert tab collapses several lower-priority groups to single overflow
-            // buttons. We route through the Symbols overflow group rather than Charts: Charts also
-            // collapses (keytip CH, correct command menu) but its overflow button currently renders at
-            // zero width and so never surfaces as a routable keytip target — a live layout defect flagged
-            // in this iteration's report. Symbols is the lowest-priority group that paints a real overflow
-            // button here, so it exercises the same 2-state "collapsed group keytip -> visible overflow
-            // button -> open its commands" routing path the engine provides.
+            // Charts is a primary Insert group and must stay visible through its overflow at this width.
             harness.SelectRibbonTab("Insert", 800);
-
-            harness.RibbonGroupIsCollapsed("Symbols").Should().BeTrue();
-            harness.CollapsedRibbonGroupOverflowWidth("Symbols").Should().BeGreaterThan(0,
-                "the Symbols overflow button must actually paint to be reachable by keytip");
 
             harness.EnterKeyTipScope("TopLevel");
             harness.HandleKeyTip(Key.N);
 
             harness.SelectedRibbonTabHeader.Should().Be("Insert");
-            harness.VisibleCommandKeyTips("SY").Should().ContainSingle("Symbols");
+            harness.RibbonGroupIsCollapsed("Charts").Should().BeTrue(
+                "the wide Charts group may compact, but the overflow button must be visible");
+            harness.CollapsedRibbonGroupOverflowWidth("Charts").Should().BeGreaterThan(0,
+                "the Charts overflow button must paint so chart commands are reachable");
+            harness.VisibleCommandKeyTips("CH").Should().ContainSingle("Charts");
 
-            // S is the first character of the collapsed Symbols group keytip SY — keytip mode stays in the
-            // Commands scope (no menu yet) until the second character resolves the overflow group.
-            harness.HandleKeyTip(Key.S);
+            // C is the first character of the collapsed Charts group keytip CH.
+            harness.HandleKeyTip(Key.C);
             harness.KeyTipScope.Should().Be("Commands");
             harness.ActiveMenuIsOpen.Should().BeFalse();
 
-            // Y resolves SY -> opens the Symbols overflow group and routes into its command menu.
-            harness.HandleKeyTip(Key.Y);
+            // H resolves CH -> opens the Charts overflow group and routes into its command menu.
+            harness.HandleKeyTip(Key.H);
             harness.KeyTipScope.Should().Be("Menu");
             harness.ActiveMenuIsOpen.Should().BeTrue();
-            harness.ActiveMenuItemGestureText("Symbol").Should().Be("SY");
+            harness.ActiveMenuItemGestureText("Column Chart").Should().Be("CC");
         });
     }
 

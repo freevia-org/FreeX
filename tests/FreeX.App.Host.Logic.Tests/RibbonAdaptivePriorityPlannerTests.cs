@@ -5,7 +5,7 @@ namespace FreeX.App.Host.Tests;
 public sealed class RibbonAdaptivePriorityPlannerTests
 {
     [Fact]
-    public void ApplyRuntimePriorityStates_CollapsesInsertChartsAtNarrowWidths()
+    public void ApplyRuntimePriorityStates_KeepsInsertChartsVisibleAtNarrowWidths()
     {
         var groupNames = new[] { "Tables", "Charts", "Sparklines" };
 
@@ -14,7 +14,7 @@ public sealed class RibbonAdaptivePriorityPlannerTests
             groupNames,
             Enumerable.Repeat(RibbonAdaptiveGroupState.Full, groupNames.Length).ToArray());
 
-        states[Array.IndexOf(groupNames, "Charts")].Should().Be(RibbonAdaptiveGroupState.Collapsed);
+        states[Array.IndexOf(groupNames, "Charts")].Should().Be(RibbonAdaptiveGroupState.Full);
         states[Array.IndexOf(groupNames, "Tables")].Should().Be(RibbonAdaptiveGroupState.Full);
     }
 
@@ -29,7 +29,7 @@ public sealed class RibbonAdaptivePriorityPlannerTests
             Enumerable.Repeat(RibbonAdaptiveGroupState.Full, groupKeys.Length).ToArray(),
             selectedTabHeader: "InsertTab");
 
-        states[Array.IndexOf(groupKeys, "InsertChartsGroup")].Should().Be(RibbonAdaptiveGroupState.Collapsed);
+        states[Array.IndexOf(groupKeys, "InsertChartsGroup")].Should().Be(RibbonAdaptiveGroupState.Full);
         states[Array.IndexOf(groupKeys, "InsertTablesGroup")].Should().Be(RibbonAdaptiveGroupState.Full);
     }
 

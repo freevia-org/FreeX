@@ -656,8 +656,14 @@ public partial class MainWindow
 
         foreach (var button in surface.Buttons)
         {
+            if (RibbonMetadata.IsCollapsedGroupButton(button))
+                continue;
+
             var title = GetRibbonButtonCommandName(button);
             var groupName = FindRibbonOwningGroupName(button);
+            if (string.Equals(title, groupName, StringComparison.Ordinal))
+                continue;
+
             if ((string.Equals(groupName, "Charts", StringComparison.Ordinal) &&
                  !RibbonCommandPresentationPlanner.IsInsertRibbonChartCommand(title)) ||
                 RibbonCommandPresentationPlanner.ShouldHideFromInsertRibbon(title))
