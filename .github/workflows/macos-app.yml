@@ -1208,7 +1208,8 @@ jobs:
             --runtime "$FREEX_RUNTIME" \
             -p:EnableMacOsTargetFramework=true \
             -p:ApplicationId=io.github.tony-xmelon.freex \
-            -p:ILLinkTreatWarningsAsErrors=false
+            -p:ILLinkTreatWarningsAsErrors=false \
+            -p:NoWarn=IL2026
 
           dotnet msbuild src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj \
             -p:Configuration=Release \

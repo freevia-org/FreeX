@@ -492,12 +492,13 @@ foreach ($workflow in $workflows) {
                                 $_ -match "(?m)(?:^|\s)-p:EnableMacOsTargetFramework=true(?:\s|$)" -and
                                 $_ -match "(?m)(?:^|\s)-p:ApplicationId=io\.github\.tony-xmelon\.freex(?:\s|$)" -and
                                 $_ -match "(?m)(?:^|\s)-p:ILLinkTreatWarningsAsErrors=false(?:\s|$)" -and
+                                $_ -match "(?m)(?:^|\s)-p:NoWarn=IL2026(?:\s|$)" -and
                                 $_.Contains('--runtime "$FREEX_RUNTIME"') -and
                                 $frameworkTargetsMacOsTfm
                         }
                 )
                 if ($macOsTfmBuildCommands.Count -ne 1) {
-                    $errors.Add("$($workflow.Name): macOS TFM validation job must build FreeX.App.Avalonia with -p:EnableMacOsTargetFramework=true, -p:ApplicationId=io.github.tony-xmelon.freex, -p:ILLinkTreatWarningsAsErrors=false, --framework net10.0-macos, and --runtime `$FREEX_RUNTIME.")
+                    $errors.Add("$($workflow.Name): macOS TFM validation job must build FreeX.App.Avalonia with -p:EnableMacOsTargetFramework=true, -p:ApplicationId=io.github.tony-xmelon.freex, -p:ILLinkTreatWarningsAsErrors=false, -p:NoWarn=IL2026, --framework net10.0-macos, and --runtime `$FREEX_RUNTIME.")
                 }
 
                 if ($macOsTfmValidationJobBlock -match "\bdotnet\s+publish\b") {

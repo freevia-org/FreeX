@@ -107,6 +107,7 @@ public sealed class GitHubWorkflowPreflightTests
         script.Should().Contain("-p:EnableMacOsTargetFramework=true");
         script.Should().Contain("-p:ApplicationId=io.github.tony-xmelon.freex");
         script.Should().Contain("-p:ILLinkTreatWarningsAsErrors=false");
+        script.Should().Contain("-p:NoWarn=IL2026");
         script.Should().Contain("--framework net10.0-macos");
         script.Should().Contain("--runtime");
         script.Should().Contain("macOS TFM validation job must be gated to workflow_dispatch validate_macos_tfm runs");
@@ -764,7 +765,7 @@ public sealed class GitHubWorkflowPreflightTests
 
         result.ExitCode.Should().NotBe(0);
         result.NormalizedCombinedOutput.Should().Contain("macOS TFM validation job must install the pinned macOS workload set");
-        result.NormalizedCombinedOutput.Should().Contain("macOS TFM validation job must build FreeX.App.Avalonia with -p:EnableMacOsTargetFramework=true, -p:ApplicationId=io.github.tony-xmelon.freex, -p:ILLinkTreatWarningsAsErrors=false, --framework net10.0-macos, and --runtime");
+        result.NormalizedCombinedOutput.Should().Contain("macOS TFM validation job must build FreeX.App.Avalonia with -p:EnableMacOsTargetFramework=true, -p:ApplicationId=io.github.tony-xmelon.freex, -p:ILLinkTreatWarningsAsErrors=false, -p:NoWarn=IL2026, --framework net10.0-macos, and --runtime");
         result.CombinedOutput.Should().Contain("macos-app.yml");
     }
 
@@ -1162,7 +1163,8 @@ public sealed class GitHubWorkflowPreflightTests
                         --runtime "$FREEX_RUNTIME" \
                         -p:EnableMacOsTargetFramework=true \
                         -p:ApplicationId=io.github.tony-xmelon.freex \
-                        -p:ILLinkTreatWarningsAsErrors=false
+                        -p:ILLinkTreatWarningsAsErrors=false \
+                        -p:NoWarn=IL2026
                       {
                         echo "macos_tfm_build=passed"
                         echo "macos_tfm=$FREEX_MACOS_TFM"
