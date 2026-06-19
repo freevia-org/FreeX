@@ -1,4 +1,3 @@
-using System.IO;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
 
@@ -22,6 +21,11 @@ public interface IAutosaveWorkbookSource
 /// <see cref="NativeJsonAdapter"/>. Timer-driven; the Tick fires on the dispatcher
 /// thread so workbook access is safe without additional synchronisation.
 ///
+/// The neutral orchestration (dirty/generation gating, atomic snapshot + sidecar write,
+/// emergency-save, delete) lives in the shared <see cref="AutosaveSnapshotCoordinator"/>; this
+/// type binds it to FreeX's <see cref="IAutosaveWorkbookSource"/> and supplies the workbook
+/// serialization via <see cref="NativeJsonAdapter"/>.
+///
 /// Thread note: NativeJsonAdapter.Save serializes synchronously on the dispatcher thread.
 /// For typical workbooks (&lt;50k cells) this is imperceptible; for very large workbooks it
 /// may stall the UI for a fraction of a second. A proper clone-then-background-serialize
@@ -31,14 +35,12 @@ public interface IAutosaveWorkbookSource
 public sealed class AutosaveService : IDisposable
 {
     public static readonly TimeSpan DefaultInterval = TimeSpan.FromMinutes(5);
-    private const int BufferSize = 1024 * 128;
 
     private readonly AutosaveSnapshotStore _store;
     private readonly NativeJsonAdapter _adapter = new();
 
-    private IAutosaveWorkbookSource? _source;
-    private string _snapshotId = string.Empty;
-    private int _lastSnapshotGeneration = -1;
+    private AutosaveSnapshotCoordinator? _coordinator;
+    private IAutosaveWorkbookSource? _boundSource;
     private bool _disposed;
 
     public AutosaveService(AutosaveSnapshotStore store)
@@ -55,9 +57,8 @@ public sealed class AutosaveService : IDisposable
         ArgumentNullException.ThrowIfNull(source);
         ArgumentException.ThrowIfNullOrWhiteSpace(snapshotId);
 
-        _source = source;
-        _snapshotId = snapshotId;
-        _lastSnapshotGeneration = -1;
+        _coordinator = new AutosaveSnapshotCoordinator(_store, snapshotId);
+        _boundSource = source;
     }
 
     /// <summary>
@@ -66,10 +67,10 @@ public sealed class AutosaveService : IDisposable
     /// </summary>
     public void OnTimerTick()
     {
-        if (_disposed || _source is null)
+        if (_disposed || _coordinator is null || _boundSource is null)
             return;
 
-        TryWriteSnapshot(_source);
+        _coordinator.Snapshot(Wrap(_boundSource));
     }
 
     /// <summary>
@@ -78,89 +79,49 @@ public sealed class AutosaveService : IDisposable
     /// </summary>
     public void TryEmergencySnapshot(IAutosaveWorkbookSource source)
     {
-        try
-        {
-            if (_disposed)
-                return;
+        if (_disposed || _coordinator is null)
+            return;
 
-            TryWriteSnapshot(source);
-        }
-        catch
-        {
-            // Crash handlers must never throw.
-        }
+        _coordinator.TryEmergencySnapshot(Wrap(source));
     }
 
     /// <summary>
     /// Deletes the recovery snapshot for this session. Call after a clean save or normal close.
     /// </summary>
-    public void DeleteSnapshot()
-    {
-        if (string.IsNullOrWhiteSpace(_snapshotId))
-            return;
+    public void DeleteSnapshot() => _coordinator?.DeleteSnapshot();
 
-        _store.DeleteSnapshot(_snapshotId);
-    }
-
-    private void TryWriteSnapshot(IAutosaveWorkbookSource source)
-    {
-        try
-        {
-            if (!AutosaveSnapshotStore.ShouldSnapshot(
-                    source.IsWorkbookDirty,
-                    source.WorkbookDirtyGeneration,
-                    _lastSnapshotGeneration))
-            {
-                return;
-            }
-
-            var snapshotPath = _store.GetSnapshotPath(_snapshotId);
-            var sidecarPath = _store.GetSidecarPath(_snapshotId);
-
-            Directory.CreateDirectory(Path.GetDirectoryName(snapshotPath)!);
-
-            // Write snapshot atomically: serialize to temp, then move.
-            var tempSnapshot = snapshotPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
-            try
-            {
-                using (var fs = new FileStream(
-                    tempSnapshot,
-                    FileMode.Create,
-                    FileAccess.ReadWrite,
-                    FileShare.None,
-                    BufferSize))
-                {
-                    _adapter.Save(source.Workbook, fs);
-                }
-
-                File.Move(tempSnapshot, snapshotPath, overwrite: true);
-            }
-            finally
-            {
-                if (File.Exists(tempSnapshot))
-                    try { File.Delete(tempSnapshot); } catch { /* best-effort */ }
-            }
-
-            // Write sidecar.
-            var sidecar = new AutosaveSidecar
-            {
-                OriginalFilePath = source.CurrentFilePath,
-                DisplayName = source.DisplayName,
-                TimestampUtc = DateTimeOffset.UtcNow.ToString("O"),
-                SnapshotId = _snapshotId
-            };
-            AtomicFileWriter.WriteAllText(sidecarPath, AutosaveSnapshotStore.SerializeSidecar(sidecar));
-
-            _lastSnapshotGeneration = source.WorkbookDirtyGeneration;
-        }
-        catch
-        {
-            // Autosave is best-effort and must never affect app behavior.
-        }
-    }
+    private WorkbookSnapshotSource Wrap(IAutosaveWorkbookSource source) => new(source, _adapter);
 
     public void Dispose()
     {
         _disposed = true;
+        _coordinator?.Dispose();
+    }
+
+    /// <summary>
+    /// Adapts FreeX's <see cref="IAutosaveWorkbookSource"/> to the neutral
+    /// <see cref="IAutosaveSnapshotSource"/>, serializing the workbook via NativeJsonAdapter.
+    /// </summary>
+    private sealed class WorkbookSnapshotSource : IAutosaveSnapshotSource
+    {
+        private readonly IAutosaveWorkbookSource _source;
+        private readonly NativeJsonAdapter _adapter;
+
+        public WorkbookSnapshotSource(IAutosaveWorkbookSource source, NativeJsonAdapter adapter)
+        {
+            _source = source;
+            _adapter = adapter;
+        }
+
+        public string? OriginalFilePath => _source.CurrentFilePath;
+        public string DisplayName => _source.DisplayName;
+        public bool IsDirty => _source.IsWorkbookDirty;
+        public int DirtyGeneration => _source.WorkbookDirtyGeneration;
+
+        public void WriteSnapshot(string snapshotPath)
+        {
+            using var fs = AutosaveSnapshotCoordinator.OpenSnapshotStream(snapshotPath);
+            _adapter.Save(_source.Workbook, fs);
+        }
     }
 }
