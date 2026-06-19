@@ -2,6 +2,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using FluentAssertions;
 using FreeX.App.Host;
+using FreeX.App.Services;
 
 namespace FreeX.App.Host.Tests;
 

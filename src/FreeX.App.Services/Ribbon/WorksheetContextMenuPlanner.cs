@@ -43,6 +43,23 @@ public static class WorksheetContextMenuPlanner
         };
     }
 
+    /// <summary>
+    /// Maps a selected drawing object's <see cref="FreeX.Core.Model.SelectionPaneObjectKind"/> to the
+    /// matching per-target context-menu kind, so the shells can raise the right object menu
+    /// (Picture / Shape / TextBox / Chart) when a drawing object is right-clicked in the grid.
+    /// Kinds without a dedicated drawing menu (slicers, timelines, form controls) fall back to the
+    /// generic worksheet menu.
+    /// </summary>
+    public static WorksheetContextMenuTargetKind TargetKindForObject(FreeX.Core.Model.SelectionPaneObjectKind kind) =>
+        kind switch
+        {
+            FreeX.Core.Model.SelectionPaneObjectKind.Picture => WorksheetContextMenuTargetKind.Picture,
+            FreeX.Core.Model.SelectionPaneObjectKind.Shape => WorksheetContextMenuTargetKind.Shape,
+            FreeX.Core.Model.SelectionPaneObjectKind.TextBox => WorksheetContextMenuTargetKind.TextBox,
+            FreeX.Core.Model.SelectionPaneObjectKind.Chart => WorksheetContextMenuTargetKind.Chart,
+            _ => WorksheetContextMenuTargetKind.Worksheet
+        };
+
     private static IReadOnlyList<WorksheetContextMenuCommand>[] CreateWorksheetCommandCache()
     {
         var cache = new IReadOnlyList<WorksheetContextMenuCommand>[WorksheetStateCacheSize];

@@ -142,7 +142,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private const string WorkbookShareSheetLabel = \"macOS Share Sheet\";");
         source.Should().Contain("private readonly IWorkbookShareSheetService _workbookShareSheetService;");
         source.Should().Contain("WorkbookShareSheetServiceFactory.Create(WorkbookShareSheetLabel),");
-        source.Should().Contain("WorkbookFileAccessServiceFactory.Create(App.Diagnostics))");
+        source.Should().Contain("WorkbookFileAccessServiceFactory.Create(App.Diagnostics),");
         source.Should().Contain("ArgumentNullException.ThrowIfNull(workbookShareSheetService);");
         source.Should().Contain("private readonly NativeMenuItem _shareWorkbookMenuItem = new();");
         source.Should().Contain("_shareWorkbookMenuItem.Header = \"Share Workbook...\";");
@@ -4507,6 +4507,38 @@ public sealed class AvaloniaShellSourceTests
         customViewsSource.Should().Contain("_session.ExecuteReviewCommand(");
         // Applying a view that changes the active sheet re-syncs the session's cached active sheet.
         customViewsSource.Should().Contain("ResyncActiveSheetToWorkbook();");
+    }
+
+    [Fact]
+    public void GetData_FromTextCsv_RoutesThroughPortablePlannerAndImportCommand()
+    {
+        var windowSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var getDataSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.GetData.cs"));
+
+        // The Data-tab Get Data button + Refresh route to the new file-based import, not the old stubs.
+        windowSource.Should().Contain("[\"data.getData\"] = GetDataFromText,");
+        windowSource.Should().Contain("[\"data.refresh\"] = RefreshImportedData,");
+        windowSource.Should().NotContain("GetDataNotSupported");
+        windowSource.Should().NotContain("RefreshAllNotSupported");
+
+        // The dialog gathers options and previews via the portable ImportDataPlanner.
+        getDataSource.Should().Contain("private void GetDataFromText() => _ = ShowGetDataDialogAsync();");
+        getDataSource.Should().Contain("ImportDataPlanner.DecodeBytes(bytes, encodingKind)");
+        getDataSource.Should().Contain("ImportDataPlanner.PreviewText(decodedText, options");
+        getDataSource.Should().Contain("ImportDataPlanner.ResolveDelimiter(options, decodedText)");
+
+        // The parse reuses the existing delimited-text reader and applies via ImportSheetCommand on the
+        // shared session command path; the source is remembered so Refresh can re-run it.
+        getDataSource.Should().Contain("new DelimitedTextFileAdapter(\".csv\", \"Text\", delimiter).Load(stream)");
+        getDataSource.Should().Contain("new ImportSheetCommand(targetSheetId, destination, sourceSheet)");
+        getDataSource.Should().Contain("_session.ExecuteReviewCommand(command)");
+        getDataSource.Should().Contain("_session.AddSheet()");
+        getDataSource.Should().Contain("_lastImportSource = new ImportDataSource(filePath, options, resolvedDestination)");
+        getDataSource.Should().Contain("private void RefreshImportedData()");
+
+        // User-facing strings go through UiText with the unique GetData_ key prefix.
+        getDataSource.Should().Contain("UiText.Get(\"GetData_DialogTitle\")");
+        getDataSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"GetDataDialog\");");
     }
 
     private static string ExtractSourceBlock(string source, string startMarker, string endMarker)

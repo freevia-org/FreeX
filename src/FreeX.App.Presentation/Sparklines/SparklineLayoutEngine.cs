@@ -33,6 +33,27 @@ public readonly record struct SparklineColumnBar(LayoutRect Rect, bool IsNegativ
 public readonly record struct SparklineColumnLayout(IReadOnlyList<SparklineColumnBar> Bars);
 
 /// <summary>
+/// Receives line-sparkline geometry as it is computed, without materializing a list. Lets a renderer
+/// stream points/segments straight into its drawing surface; the engine's list-producing
+/// <see cref="SparklineLayoutEngine.CalculateLineLayout"/> is itself a thin collector over this path.
+/// </summary>
+public interface ISparklineLineLayoutConsumer
+{
+    void AcceptSinglePoint(LayoutPoint point);
+
+    void AcceptSegment(LayoutPoint start, LayoutPoint end);
+}
+
+/// <summary>
+/// Receives column / win-loss bar geometry as it is computed, without materializing a list. See
+/// <see cref="ISparklineLineLayoutConsumer"/> for the rationale.
+/// </summary>
+public interface ISparklineColumnLayoutConsumer
+{
+    void AcceptBar(LayoutRect rect, bool isNegative);
+}
+
+/// <summary>
 /// Portable, framework-free sparkline layout math shared by the desktop hosts. Maps a sequence of
 /// data values into point/bar geometry within a cell-sized rectangle, faithful to the source
 /// (line: min/max normalization with even horizontal spacing; column: per-value bars scaled by the
@@ -49,8 +70,23 @@ public static class SparklineLayoutEngine
     /// </summary>
     public static SparklineLineLayout CalculateLineLayout(IReadOnlyList<double> values, LayoutRect rect)
     {
+        var consumer = new LineLayoutCollector(values.Count);
+        VisitLineLayout(values, rect, ref consumer);
+        return consumer.ToLayout();
+    }
+
+    /// <summary>
+    /// Streams a line sparkline's geometry into <paramref name="consumer"/> without allocating a list.
+    /// Same math as <see cref="CalculateLineLayout"/>; a renderer can consume points/segments directly.
+    /// </summary>
+    public static void VisitLineLayout<TConsumer>(
+        IReadOnlyList<double> values,
+        LayoutRect rect,
+        ref TConsumer consumer)
+        where TConsumer : struct, ISparklineLineLayoutConsumer
+    {
         if (values.Count == 0 || rect.Width <= 0 || rect.Height <= 0)
-            return new SparklineLineLayout(null, []);
+            return;
 
         var firstIndex = -1;
         var min = 0d;
@@ -68,12 +104,12 @@ public static class SparklineLayoutEngine
         }
 
         if (firstIndex < 0)
-            return new SparklineLineLayout(null, []);
+            return;
 
         if (values.Count == 1)
         {
-            var center = new LayoutPoint(rect.Left + (rect.Width / 2), rect.Top + (rect.Height / 2));
-            return new SparklineLineLayout(center, []);
+            consumer.AcceptSinglePoint(new LayoutPoint(rect.Left + (rect.Width / 2), rect.Top + (rect.Height / 2)));
+            return;
         }
 
         for (var i = firstIndex + 1; i < values.Count; i++)
@@ -90,7 +126,6 @@ public static class SparklineLayoutEngine
 
         var span = Math.Abs(max - min) < Epsilon ? 1 : max - min;
         LayoutPoint? previous = null;
-        List<SparklineSegment>? segments = null;
         var visiblePointCount = 0;
         LayoutPoint lastPoint = default;
         for (var i = firstIndex; i < values.Count; i++)
@@ -107,10 +142,7 @@ public static class SparklineLayoutEngine
                 rect.Bottom - ((value - min) / span * rect.Height));
 
             if (previous is { } start)
-            {
-                segments ??= new List<SparklineSegment>(values.Count - 1);
-                segments.Add(new SparklineSegment(start, point));
-            }
+                consumer.AcceptSegment(start, point);
 
             previous = point;
             lastPoint = point;
@@ -118,9 +150,7 @@ public static class SparklineLayoutEngine
         }
 
         if (visiblePointCount == 1)
-            return new SparklineLineLayout(lastPoint, []);
-
-        return new SparklineLineLayout(null, segments ?? []);
+            consumer.AcceptSinglePoint(lastPoint);
     }
 
     /// <summary>
@@ -131,8 +161,24 @@ public static class SparklineLayoutEngine
     /// </summary>
     public static SparklineColumnLayout CalculateColumnLayout(IReadOnlyList<double> values, LayoutRect rect, bool winLoss)
     {
+        var consumer = new ColumnLayoutCollector(values.Count);
+        VisitColumnLayout(values, rect, winLoss, ref consumer);
+        return consumer.ToLayout();
+    }
+
+    /// <summary>
+    /// Streams a column / win-loss sparkline's bar geometry into <paramref name="consumer"/> without
+    /// allocating a list. Same math as <see cref="CalculateColumnLayout(IReadOnlyList{double}, LayoutRect, bool)"/>.
+    /// </summary>
+    public static void VisitColumnLayout<TConsumer>(
+        IReadOnlyList<double> values,
+        LayoutRect rect,
+        bool winLoss,
+        ref TConsumer consumer)
+        where TConsumer : struct, ISparklineColumnLayoutConsumer
+    {
         if (values.Count == 0 || rect.Width <= 0 || rect.Height <= 0)
-            return new SparklineColumnLayout([]);
+            return;
 
         var maxAbs = 0d;
         foreach (var value in values)
@@ -153,7 +199,6 @@ public static class SparklineLayoutEngine
         var barWidth = Math.Min(slot, Math.Max(1, slot * 0.65));
         var maxBarHeight = rect.Height / 2;
 
-        List<SparklineColumnBar>? bars = null;
         for (var i = 0; i < values.Count; i++)
         {
             if (!double.IsFinite(values[i]))
@@ -169,11 +214,8 @@ public static class SparklineLayoutEngine
             var x = rect.Left + (i * slot) + ((slot - barWidth) / 2);
             var y = value >= 0 ? axis - height : axis;
 
-            bars ??= new List<SparklineColumnBar>(values.Count);
-            bars.Add(new SparklineColumnBar(new LayoutRect(x, y, barWidth, height), value < 0));
+            consumer.AcceptBar(new LayoutRect(x, y, barWidth, height), value < 0);
         }
-
-        return new SparklineColumnLayout(bars ?? []);
     }
 
     /// <summary>
@@ -181,4 +223,35 @@ public static class SparklineLayoutEngine
     /// </summary>
     public static SparklineColumnLayout CalculateColumnLayout(IReadOnlyList<double> values, LayoutRect rect, SparklineKind kind) =>
         CalculateColumnLayout(values, rect, kind == SparklineKind.WinLoss);
+
+    private struct LineLayoutCollector(int valueCount) : ISparklineLineLayoutConsumer
+    {
+        private readonly int _segmentCapacity = Math.Max(0, valueCount - 1);
+        private LayoutPoint? _singlePoint;
+        private List<SparklineSegment>? _segments;
+
+        public void AcceptSinglePoint(LayoutPoint point) => _singlePoint = point;
+
+        public void AcceptSegment(LayoutPoint start, LayoutPoint end)
+        {
+            _segments ??= new List<SparklineSegment>(_segmentCapacity);
+            _segments.Add(new SparklineSegment(start, end));
+        }
+
+        public readonly SparklineLineLayout ToLayout() => new(_singlePoint, _segments ?? []);
+    }
+
+    private struct ColumnLayoutCollector(int valueCount) : ISparklineColumnLayoutConsumer
+    {
+        private readonly int _barCapacity = valueCount;
+        private List<SparklineColumnBar>? _bars;
+
+        public void AcceptBar(LayoutRect rect, bool isNegative)
+        {
+            _bars ??= new List<SparklineColumnBar>(_barCapacity);
+            _bars.Add(new SparklineColumnBar(rect, isNegative));
+        }
+
+        public readonly SparklineColumnLayout ToLayout() => new(_bars ?? []);
+    }
 }

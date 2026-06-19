@@ -492,6 +492,11 @@
   <data name="Drawing_PictureSentBackward" xml:space="preserve"><value>Sent picture backward.</value></data>
   <data name="Drawing_BringForwardLabel" xml:space="preserve"><value>Bring Forward</value></data>
   <data name="Drawing_SendBackwardLabel" xml:space="preserve"><value>Send Backward</value></data>
+  <!-- In-grid drawing-object interaction (DrawingInteract_*) -->
+  <data name="DrawingInteract_ChartSizeAndProperties" xml:space="preserve"><value>Chart Size and Properties</value></data>
+  <data name="DrawingInteract_Moved" xml:space="preserve"><value>Moved drawing object.</value></data>
+  <data name="DrawingInteract_Resized" xml:space="preserve"><value>Resized drawing object.</value></data>
+  <data name="DrawingInteract_PickListNoList" xml:space="preserve"><value>The active cell has no drop-down list to pick from.</value></data>
   <!-- Selection Pane dialog -->
   <data name="SelectionPane_Title" xml:space="preserve"><value>Selection Pane</value></data>
   <data name="SelectionPane_Hint" xml:space="preserve"><value>Select an object to rename it, toggle its visibility, or change its z-order.</value></data>
@@ -819,6 +824,33 @@
   <data name="Backstage_Export_CreateButton" xml:space="preserve"><value>Export</value></data>
   <data name="Backstage_Export_CancelButton" xml:space="preserve"><value>Cancel</value></data>
   <data name="Backstage_Export_Unavailable" xml:space="preserve"><value>No visible worksheets are available to export.</value></data>
+  <data name="Print_MenuItem" xml:space="preserve"><value>Print...</value></data>
+  <data name="Print_Title" xml:space="preserve"><value>Print</value></data>
+  <data name="Print_PrinterHeader" xml:space="preserve"><value>Printer</value></data>
+  <data name="Print_NoPrinterNote" xml:space="preserve"><value>No printer was found on this device. Print will save a print-ready PDF instead.</value></data>
+  <data name="Print_ScopeHeader" xml:space="preserve"><value>What to print</value></data>
+  <data name="Print_ScopeSelection" xml:space="preserve"><value>Selection</value></data>
+  <data name="Print_ScopeSelectionUnavailable" xml:space="preserve"><value>Selection (select a range first)</value></data>
+  <data name="Print_ScopeActiveSheet" xml:space="preserve"><value>Active sheet</value></data>
+  <data name="Print_ScopeWorkbook" xml:space="preserve"><value>Entire workbook</value></data>
+  <data name="Print_PagesHeader" xml:space="preserve"><value>Pages</value></data>
+  <data name="Print_PagesAll" xml:space="preserve"><value>All pages</value></data>
+  <data name="Print_PagesRange" xml:space="preserve"><value>Page range</value></data>
+  <data name="Print_PagesFrom" xml:space="preserve"><value>From</value></data>
+  <data name="Print_PagesTo" xml:space="preserve"><value>To</value></data>
+  <data name="Print_CopiesHeader" xml:space="preserve"><value>Copies</value></data>
+  <data name="Print_CopiesLabel" xml:space="preserve"><value>Number of copies</value></data>
+  <data name="Print_Collate" xml:space="preserve"><value>Collate</value></data>
+  <data name="Print_PrintButton" xml:space="preserve"><value>Print</value></data>
+  <data name="Print_SaveAsPdfButton" xml:space="preserve"><value>Save as PDF...</value></data>
+  <data name="Print_CancelButton" xml:space="preserve"><value>Cancel</value></data>
+  <data name="Print_Unavailable" xml:space="preserve"><value>No visible worksheets are available to print.</value></data>
+  <data name="Print_Spooling" xml:space="preserve"><value>Sending to printer...</value></data>
+  <data name="Print_Sent" xml:space="preserve"><value>Printed. {0}</value></data>
+  <data name="Print_SavedPdf" xml:space="preserve"><value>Saved print-ready PDF {0}</value></data>
+  <data name="Print_RenderFailed" xml:space="preserve"><value>Print failed: {0}</value></data>
+  <data name="Print_RequiresLocalPath" xml:space="preserve"><value>Printing to PDF requires a local file path.</value></data>
+  <data name="Print_NoSpoolerNoSave" xml:space="preserve"><value>No printer or file destination is available on this host.</value></data>
   <data name="Backstage_Account_MenuItem" xml:space="preserve"><value>Account...</value></data>
   <data name="Backstage_Account_Title" xml:space="preserve"><value>Account</value></data>
   <data name="Backstage_Account_ProductSectionHeader" xml:space="preserve"><value>Product information</value></data>
@@ -832,4 +864,91 @@
   <data name="Backstage_Account_OptionsButton" xml:space="preserve"><value>FreeX Options...</value></data>
   <data name="Backstage_Account_LegalNoticesButton" xml:space="preserve"><value>Legal Notices...</value></data>
   <data name="Backstage_Account_CloseButton" xml:space="preserve"><value>Close</value></data>
+  <data name="GetData_DialogTitle" xml:space="preserve"><value>Get Data — From Text/CSV</value></data>
+  <data name="GetData_MenuItem" xml:space="preserve"><value>From Text/CSV...</value></data>
+  <data name="GetData_FilePickerTitle" xml:space="preserve"><value>Import Text or CSV File</value></data>
+  <data name="GetData_FileTypeName" xml:space="preserve"><value>Text and CSV Files</value></data>
+  <data name="GetData_FileLabel" xml:space="preserve"><value>Source file:</value></data>
+  <data name="GetData_BrowseButton" xml:space="preserve"><value>Browse...</value></data>
+  <data name="GetData_DelimiterHeader" xml:space="preserve"><value>Delimiter</value></data>
+  <data name="GetData_DelimiterDetect" xml:space="preserve"><value>Detect automatically</value></data>
+  <data name="GetData_DelimiterComma" xml:space="preserve"><value>Comma</value></data>
+  <data name="GetData_DelimiterTab" xml:space="preserve"><value>Tab</value></data>
+  <data name="GetData_DelimiterSemicolon" xml:space="preserve"><value>Semicolon</value></data>
+  <data name="GetData_DelimiterSpace" xml:space="preserve"><value>Space</value></data>
+  <data name="GetData_DelimiterPipe" xml:space="preserve"><value>Pipe</value></data>
+  <data name="GetData_DelimiterCustom" xml:space="preserve"><value>Custom</value></data>
+  <data name="GetData_EncodingHeader" xml:space="preserve"><value>File origin (encoding)</value></data>
+  <data name="GetData_EncodingDetect" xml:space="preserve"><value>Detect automatically</value></data>
+  <data name="GetData_EncodingUtf8" xml:space="preserve"><value>Unicode (UTF-8)</value></data>
+  <data name="GetData_EncodingUtf16Le" xml:space="preserve"><value>Unicode (UTF-16 LE)</value></data>
+  <data name="GetData_EncodingUtf16Be" xml:space="preserve"><value>Unicode (UTF-16 BE)</value></data>
+  <data name="GetData_EncodingWindows1252" xml:space="preserve"><value>Western European (Windows-1252)</value></data>
+  <data name="GetData_EncodingLatin1" xml:space="preserve"><value>Western European (ISO-8859-1)</value></data>
+  <data name="GetData_DestinationHeader" xml:space="preserve"><value>Load to</value></data>
+  <data name="GetData_DestinationCurrentSheet" xml:space="preserve"><value>Existing sheet (at active cell)</value></data>
+  <data name="GetData_DestinationNewSheet" xml:space="preserve"><value>New sheet</value></data>
+  <data name="GetData_TreatConsecutive" xml:space="preserve"><value>Treat consecutive delimiters as one</value></data>
+  <data name="GetData_PreviewHeader" xml:space="preserve"><value>Preview</value></data>
+  <data name="GetData_PreviewEmpty" xml:space="preserve"><value>Choose a file to preview its contents.</value></data>
+  <data name="GetData_PreviewSummary" xml:space="preserve"><value>Delimiter: {0}   Encoding: {1}   Rows: {2}   Columns: {3}</value></data>
+  <data name="GetData_LoadButton" xml:space="preserve"><value>Load</value></data>
+  <data name="GetData_CancelButton" xml:space="preserve"><value>Cancel</value></data>
+  <data name="GetData_NoFileSelected" xml:space="preserve"><value>Select a file to import first.</value></data>
+  <data name="GetData_ReadError" xml:space="preserve"><value>Could not read the file: {0}</value></data>
+  <data name="GetData_EmptyFile" xml:space="preserve"><value>The selected file contains no data to import.</value></data>
+  <data name="GetData_ImportFailed" xml:space="preserve"><value>Import failed: {0}</value></data>
+  <data name="GetData_ImportedStatus" xml:space="preserve"><value>Imported {0} ({1} rows × {2} columns)</value></data>
+  <data name="GetData_RefreshNoSource" xml:space="preserve"><value>No imported data source to refresh. Use Get Data first.</value></data>
+  <data name="GetData_RefreshedStatus" xml:space="preserve"><value>Refreshed {0}</value></data>
+  <data name="GetData_DelimiterTabGlyph" xml:space="preserve"><value>Tab</value></data>
+  <data name="GetData_DelimiterSpaceGlyph" xml:space="preserve"><value>Space</value></data>
+  <data name="WfTranslate_Title" xml:space="preserve"><value>Translate</value></data>
+  <data name="WfTranslate_FromLabel" xml:space="preserve"><value>From:</value></data>
+  <data name="WfTranslate_ToLabel" xml:space="preserve"><value>To:</value></data>
+  <data name="WfTranslate_SourceLabel" xml:space="preserve"><value>Selected text:</value></data>
+  <data name="WfTranslate_EmptyCell" xml:space="preserve"><value>(empty cell)</value></data>
+  <data name="WfTranslate_TranslationLabel" xml:space="preserve"><value>Translation:</value></data>
+  <data name="WfTranslate_TranslationWatermark" xml:space="preserve"><value>Type the translation here</value></data>
+  <data name="WfTranslate_TargetLabel" xml:space="preserve"><value>Write to cell or range:</value></data>
+  <data name="WfTranslate_ManualNote" xml:space="preserve"><value>No offline translation engine is available, so this is a manual helper: type the translation above and it is written to the chosen target. A multi-line translation fills successive cells of a multi-cell target range.</value></data>
+  <data name="WfTranslate_InsertButton" xml:space="preserve"><value>Insert Translation</value></data>
+  <data name="WfTranslate_CloseButton" xml:space="preserve"><value>Close</value></data>
+  <data name="WfTranslate_StatusInserted" xml:space="preserve"><value>Translation written to {0}.</value></data>
+  <data name="WfTranslate_ErrorEmptyTranslation" xml:space="preserve"><value>Translate: enter the translation text first.</value></data>
+  <data name="WfTranslate_ErrorMissingTarget" xml:space="preserve"><value>Translate: enter a target cell or range.</value></data>
+  <data name="WfTranslate_ErrorInvalidTarget" xml:space="preserve"><value>Translate: the target reference is not a valid cell or range.</value></data>
+  <data name="WfTranslate_ErrorSameTarget" xml:space="preserve"><value>Translate: choose a target other than the source cell.</value></data>
+  <data name="WfTranslate_ErrorGeneric" xml:space="preserve"><value>Translate: could not write the translation.</value></data>
+  <data name="WfTranslate_LangAuto" xml:space="preserve"><value>Detect source</value></data>
+  <data name="WfTranslate_LangEnglish" xml:space="preserve"><value>English</value></data>
+  <data name="WfTranslate_LangFrench" xml:space="preserve"><value>French</value></data>
+  <data name="WfTranslate_LangSpanish" xml:space="preserve"><value>Spanish</value></data>
+  <data name="WfTranslate_LangGerman" xml:space="preserve"><value>German</value></data>
+  <data name="WfTranslate_LangItalian" xml:space="preserve"><value>Italian</value></data>
+  <data name="WfTranslate_LangPortuguese" xml:space="preserve"><value>Portuguese</value></data>
+  <data name="WfTranslate_LangDutch" xml:space="preserve"><value>Dutch</value></data>
+  <data name="WfTranslate_LangChinese" xml:space="preserve"><value>Chinese</value></data>
+  <data name="WfTranslate_LangJapanese" xml:space="preserve"><value>Japanese</value></data>
+  <data name="WfTranslate_LangArabic" xml:space="preserve"><value>Arabic</value></data>
+  <data name="WfTranslate_LangRussian" xml:space="preserve"><value>Russian</value></data>
+  <data name="WfInsertObject_Title" xml:space="preserve"><value>Insert Object</value></data>
+  <data name="WfInsertObject_Heading" xml:space="preserve"><value>Create object from file</value></data>
+  <data name="WfInsertObject_BrowseButton" xml:space="preserve"><value>Browse...</value></data>
+  <data name="WfInsertObject_NoFileChosen" xml:space="preserve"><value>No file chosen.</value></data>
+  <data name="WfInsertObject_LinkLabel" xml:space="preserve"><value>Link to file (record the source path on the object)</value></data>
+  <data name="WfInsertObject_Note" xml:space="preserve"><value>Image files are embedded as pictures. Other files are placed as an icon placeholder labelled with the file name; the original file content is not embedded (this build has no OLE-object model).</value></data>
+  <data name="WfInsertObject_InsertButton" xml:space="preserve"><value>Insert</value></data>
+  <data name="WfInsertObject_CancelButton" xml:space="preserve"><value>Cancel</value></data>
+  <data name="WfInsertObject_Unavailable" xml:space="preserve"><value>Insert Object is unavailable on this platform.</value></data>
+  <data name="WfInsertObject_IconLinkedCaption" xml:space="preserve"><value>{0} (linked)</value></data>
+  <data name="WfInsertObject_AltLinked" xml:space="preserve"><value>Linked object: {0}</value></data>
+  <data name="WfInsertObject_AltEmbedded" xml:space="preserve"><value>Embedded object: {0}</value></data>
+  <data name="WfInsertObject_StatusEmbedded" xml:space="preserve"><value>Inserted "{0}" as an embedded picture.</value></data>
+  <data name="WfInsertObject_StatusPlaceholder" xml:space="preserve"><value>Inserted "{0}" as an icon placeholder.</value></data>
+  <data name="WfInsertObject_ErrorMissingFile" xml:space="preserve"><value>Insert Object: choose a file first.</value></data>
+  <data name="WfInsertObject_ErrorFileNotFound" xml:space="preserve"><value>Insert Object: the chosen file could not be found.</value></data>
+  <data name="WfInsertObject_ErrorRead" xml:space="preserve"><value>Could not read the file: {0}</value></data>
+  <data name="WfInsertObject_ErrorEmptyFile" xml:space="preserve"><value>The selected file is empty.</value></data>
+  <data name="WfInsertObject_ErrorGeneric" xml:space="preserve"><value>Insert Object failed.</value></data>
 </root>
