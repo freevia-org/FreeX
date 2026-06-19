@@ -635,4 +635,17 @@
   <data name="RowColumn_ColumnWidthAutoFitted" xml:space="preserve"><value>AutoFit column width applied.</value></data>
   <data name="RowColumn_AutoFitRowFailed" xml:space="preserve"><value>Could not AutoFit row height.</value></data>
   <data name="RowColumn_AutoFitColumnFailed" xml:space="preserve"><value>Could not AutoFit column width.</value></data>
+  <!-- Comments and Notes: edit / resolve context actions -->
+  <data name="Comment_EditNoteTitle" xml:space="preserve"><value>Edit Note</value></data>
+  <data name="Comment_EditCommentTitle" xml:space="preserve"><value>Edit Comment</value></data>
+  <data name="Comment_NoteLabel" xml:space="preserve"><value>Note text</value></data>
+  <data name="Comment_CommentLabel" xml:space="preserve"><value>Comment text</value></data>
+  <data name="Comment_NoNote" xml:space="preserve"><value>The active cell does not have a note to edit.</value></data>
+  <data name="Comment_NoComment" xml:space="preserve"><value>The active cell does not have a comment to edit.</value></data>
+  <data name="Comment_NoteUpdated" xml:space="preserve"><value>Updated note on {0}</value></data>
+  <data name="Comment_CommentUpdated" xml:space="preserve"><value>Updated comment on {0}</value></data>
+  <data name="Comment_NoteFailed" xml:space="preserve"><value>Could not edit note.</value></data>
+  <data name="Comment_CommentFailed" xml:space="preserve"><value>Could not edit comment.</value></data>
+  <data name="Comment_Resolved" xml:space="preserve"><value>Resolved comment on {0}</value></data>
+  <data name="Comment_Unresolved" xml:space="preserve"><value>Reopened comment on {0}</value></data>
 </root>
