@@ -168,6 +168,25 @@
   <data name="ChartErrorBars_DirectionLabel" xml:space="preserve"><value>Direction :</value></data>
   <data name="ChartErrorBars_ValueLabel" xml:space="preserve"><value>Valeur fixe ou pourcentage :</value></data>
   <data name="ChartErrorBars_EndCaps" xml:space="preserve"><value>Afficher les extrémités</value></data>
+  <!-- Chart: Combo Chart dialog -->
+  <data name="ChartCombo_Title" xml:space="preserve"><value>Graphique combiné</value></data>
+  <data name="ChartCombo_Instruction" xml:space="preserve"><value>Choisissez le mode de tracé de chaque série :</value></data>
+  <data name="ChartCombo_SeriesRow" xml:space="preserve"><value>Série {0}</value></data>
+  <data name="ChartCombo_AsLine" xml:space="preserve"><value>Tracer en courbe</value></data>
+  <data name="ChartCombo_SecondaryAxis" xml:space="preserve"><value>Axe secondaire</value></data>
+  <!-- Chart: Move Chart dialog -->
+  <data name="MoveChart_Title" xml:space="preserve"><value>Déplacer le graphique</value></data>
+  <data name="MoveChart_ObjectInSheet" xml:space="preserve"><value>Objet dans une feuille existante</value></data>
+  <data name="MoveChart_NewChartSheet" xml:space="preserve"><value>Nouvelle feuille de graphique</value></data>
+  <data name="MoveChart_TargetNameLabel" xml:space="preserve"><value>Nom de la feuille :</value></data>
+  <!-- Chart: Format Chart Area dialog -->
+  <data name="ChartArea_Title" xml:space="preserve"><value>Mettre en forme la zone de graphique</value></data>
+  <data name="ChartArea_FillLabel" xml:space="preserve"><value>Remplissage :</value></data>
+  <data name="ChartArea_ChartAreaFill" xml:space="preserve"><value>Remplissage de la zone de graphique</value></data>
+  <data name="ChartArea_PlotAreaFill" xml:space="preserve"><value>Remplissage de la zone de traçage</value></data>
+  <data name="ChartArea_BorderLabel" xml:space="preserve"><value>Bordure de la zone de traçage :</value></data>
+  <data name="ChartArea_PlotAreaBorder" xml:space="preserve"><value>Bordure de la zone de traçage</value></data>
+  <data name="ChartArea_BorderWidthLabel" xml:space="preserve"><value>Largeur de la bordure de la zone de traçage :</value></data>
   <data name="ConditionalFormat_NewRuleTitle" xml:space="preserve"><value>Nouvelle règle de mise en forme</value></data>
   <data name="ConditionalFormat_EditRuleTitle" xml:space="preserve"><value>Modifier la règle de mise en forme</value></data>
   <data name="ConditionalFormat_AppliesToFormat" xml:space="preserve"><value>S'applique à {0}</value></data>

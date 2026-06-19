@@ -552,6 +552,191 @@ public sealed class ChartEditingPlannerTests
         chart.ErrorBarEndCaps.Should().BeFalse();
     }
 
+    // ---- ChartComboPlanner ---------------------------------------------------------------------------
+
+    [Fact]
+    public void Combo_SupportsCombo_RequiresColumnOrAreaFamilyWithTwoSeries()
+    {
+        ChartComboPlanner.SupportsCombo(MakeChartWithSeries(ChartType.Column, columns: 3)).Should().BeTrue();
+        ChartComboPlanner.SupportsCombo(MakeChartWithSeries(ChartType.Column, columns: 2)).Should().BeFalse();
+        ChartComboPlanner.SupportsCombo(MakeChartWithSeries(ChartType.Pie, columns: 3)).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Combo_Read_AnchorsBaseSeries_AndReflectsStoredTreatment()
+    {
+        var chart = MakeChartWithSeries(ChartType.Column, columns: 4); // 3 series: 0,1,2
+        chart.ComboLineSeriesIndexes = [2];
+        chart.SecondaryAxisSeriesIndexes = [1];
+
+        var input = ChartComboPlanner.Read(chart);
+
+        input.Series.Should().HaveCount(3);
+        input.Series[0].Should().Be(new ChartComboSeriesInput(0, AsLine: false, OnSecondaryAxis: false));
+        input.Series[1].AsLine.Should().BeFalse();
+        input.Series[1].OnSecondaryAxis.Should().BeTrue();
+        input.Series[2].AsLine.Should().BeTrue();
+        input.Series[2].OnSecondaryAxis.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Combo_Plan_ProjectsLineAndSecondarySets_DroppingBaseSeries()
+    {
+        var input = new ChartComboInput(new[]
+        {
+            new ChartComboSeriesInput(0, AsLine: true, OnSecondaryAxis: true), // base must be ignored
+            new ChartComboSeriesInput(1, AsLine: true, OnSecondaryAxis: false),
+            new ChartComboSeriesInput(2, AsLine: false, OnSecondaryAxis: true),
+        });
+
+        var options = ChartComboPlanner.Plan(input);
+
+        options.ComboLineSeriesIndexes.Should().Equal(1);
+        options.UseComboLineForSecondarySeries.Should().BeTrue();
+        options.SecondaryAxisSeriesIndexes.Should().Equal(2);
+        options.ShowSecondaryAxis.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Combo_Plan_ClearsOverlayFlags_WhenNothingSelected()
+    {
+        var input = new ChartComboInput(new[]
+        {
+            new ChartComboSeriesInput(0, false, false),
+            new ChartComboSeriesInput(1, false, false),
+        });
+
+        var options = ChartComboPlanner.Plan(input);
+
+        options.ComboLineSeriesIndexes.Should().BeEmpty();
+        options.UseComboLineForSecondarySeries.Should().BeFalse();
+        options.SecondaryAxisSeriesIndexes.Should().BeEmpty();
+        options.ShowSecondaryAxis.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Combo_Plan_AppliesToChart_ViaSetChartLayoutCommand()
+    {
+        var chart = new ChartModel { Type = ChartType.Column };
+        var input = new ChartComboInput(new[]
+        {
+            new ChartComboSeriesInput(0, false, false),
+            new ChartComboSeriesInput(1, AsLine: true, OnSecondaryAxis: false),
+        });
+
+        ApplyLayout(chart, ChartComboPlanner.Plan(input));
+
+        chart.ComboLineSeriesIndexes.Should().Contain(1);
+        chart.UseComboLineForSecondarySeries.Should().BeTrue();
+    }
+
+    // ---- ChartMovePlanner ----------------------------------------------------------------------------
+
+    [Fact]
+    public void Move_Plan_TrimsName_AndAllowsNewSheetWithoutResolving()
+    {
+        var plan = ChartMovePlanner.Plan(
+            new ChartMoveInput(ChartMoveTargetKind.NewSheet, "  Chart1  "),
+            _ => false);
+
+        plan.IsValid.Should().BeTrue();
+        plan.TargetName.Should().Be("Chart1");
+        plan.TargetKind.Should().Be(ChartMoveTargetKind.NewSheet);
+    }
+
+    [Fact]
+    public void Move_Plan_RejectsBlankName()
+    {
+        var plan = ChartMovePlanner.Plan(
+            new ChartMoveInput(ChartMoveTargetKind.ObjectInSheet, "   "),
+            _ => true);
+
+        plan.IsValid.Should().BeFalse();
+        plan.Error.Should().NotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
+    public void Move_Plan_RejectsExistingSheetTarget_WhenNameDoesNotResolve()
+    {
+        var plan = ChartMovePlanner.Plan(
+            new ChartMoveInput(ChartMoveTargetKind.ObjectInSheet, "Ghost"),
+            name => name == "Sheet1");
+
+        plan.IsValid.Should().BeFalse();
+        plan.Error.Should().Contain("Ghost");
+    }
+
+    [Fact]
+    public void Move_Plan_AcceptsExistingSheetTarget_WhenNameResolves()
+    {
+        var plan = ChartMovePlanner.Plan(
+            new ChartMoveInput(ChartMoveTargetKind.ObjectInSheet, "Sheet1"),
+            name => name == "Sheet1");
+
+        plan.IsValid.Should().BeTrue();
+        plan.TargetName.Should().Be("Sheet1");
+    }
+
+    // ---- ChartAreaFormatPlanner ----------------------------------------------------------------------
+
+    [Fact]
+    public void ChartArea_Read_CapturesFillAndBorderState()
+    {
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            ChartAreaFillColor = new CellColor(10, 20, 30),
+            PlotAreaFillColor = new CellColor(40, 50, 60),
+            PlotAreaBorderColor = new CellColor(70, 80, 90),
+            PlotAreaBorderThickness = 2.5,
+        };
+
+        var input = ChartAreaFormatPlanner.Read(chart);
+
+        input.ChartAreaFillColor.Should().Be(new CellColor(10, 20, 30));
+        input.PlotAreaFillColor.Should().Be(new CellColor(40, 50, 60));
+        input.PlotAreaBorderColor.Should().Be(new CellColor(70, 80, 90));
+        input.PlotAreaBorderThickness.Should().Be(2.5);
+    }
+
+    [Fact]
+    public void ChartArea_Validate_RejectsOutOfRangeOrNonFiniteWidth()
+    {
+        ChartAreaFormatPlanner.Validate(new ChartAreaFormatInput(null, null, null, -1)).Should().NotBeNull();
+        ChartAreaFormatPlanner.Validate(new ChartAreaFormatInput(null, null, null, 99)).Should().NotBeNull();
+        ChartAreaFormatPlanner.Validate(new ChartAreaFormatInput(null, null, null, double.NaN)).Should().NotBeNull();
+        ChartAreaFormatPlanner.Validate(new ChartAreaFormatInput(null, null, null, 1.5)).Should().BeNull();
+    }
+
+    [Fact]
+    public void ChartArea_Plan_AppliesFillAndBorder_ViaSetChartLayoutCommand()
+    {
+        var chart = new ChartModel { Type = ChartType.Column };
+        var options = ChartAreaFormatPlanner.Plan(new ChartAreaFormatInput(
+            new CellColor(1, 2, 3), new CellColor(4, 5, 6), new CellColor(7, 8, 9), 3));
+
+        ApplyLayout(chart, options);
+
+        chart.ChartAreaFillColor.Should().Be(new CellColor(1, 2, 3));
+        chart.PlotAreaFillColor.Should().Be(new CellColor(4, 5, 6));
+        chart.PlotAreaBorderColor.Should().Be(new CellColor(7, 8, 9));
+        chart.PlotAreaBorderThickness.Should().Be(3);
+    }
+
+    private static ChartModel MakeChartWithSeries(ChartType type, int columns)
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Series");
+        return new ChartModel
+        {
+            Type = type,
+            FirstColIsCategories = true,
+            DataRange = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 6, (uint)columns)),
+        };
+    }
+
     private static void ApplyLayout(ChartModel chart, ChartLayoutOptions options)
     {
         var workbook = new Workbook("test");

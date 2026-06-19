@@ -44,9 +44,11 @@ public sealed partial class MainWindow
             ["chartDesign.chartStyles"] = CycleChartStyle,
             ["chartDesign.selectData"] = () => RunGuarded(ShowSelectChartDataDialog),
             ["chartDesign.changeType"] = () => RunGuarded(ShowChangeChartTypeDialog),
-            // No Core support yet (combo overlays, move-chart sheet target dialog) — honest stubs.
-            ["chartDesign.comboChart"] = () => ReportChartCommandNotYetAvailable("Combo Chart"),
-            ["chartDesign.moveChart"] = () => ReportChartCommandNotYetAvailable("Move Chart"),
+            // The Combo Chart button opens the per-series line-overlay + secondary-axis grid
+            // (ChartComboPlanner); Move Chart opens the new-sheet / existing-sheet target dialog
+            // (ChartMovePlanner -> MoveChartCommand / MoveChartToNewSheetCommand).
+            ["chartDesign.comboChart"] = () => RunGuarded(ShowChartComboDialog),
+            ["chartDesign.moveChart"] = () => RunGuarded(ShowMoveChartDialog),
 
             // --- Chart Format (chart.selected) — real handlers via SetChartLayoutCommand. ---
             ["chartFormat.chartAreaFill"] = () => RunGuarded(ShowChartShapeFillDialog),
@@ -66,8 +68,9 @@ public sealed partial class MainWindow
             ["chartFormat.yGridlines"] = CycleChartYAxisGridlines,
             ["chartFormat.xLabels"] = ToggleChartXAxisLabels,
             ["chartFormat.yLabels"] = ToggleChartYAxisLabels,
-            // Type-specific format dialogs have no Core support yet — honest stub.
-            ["chartFormat.formatChartArea"] = () => ReportChartCommandNotYetAvailable("Format Chart Area"),
+            // The Format Chart Area button opens the chart-area / plot-area fill + border dialog
+            // (ChartAreaFormatPlanner -> SetChartLayoutCommand).
+            ["chartFormat.formatChartArea"] = () => RunGuarded(ShowFormatChartAreaDialog),
 
             // --- Table Design (table.active) — real handlers via the structured-table Core commands
             // (MainWindow.TableDesignTab). ---
