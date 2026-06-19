@@ -473,7 +473,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("HasNativeMergeAndCenterMenuItem &&");
         script.Should().Contain("HasNativeUnmergeCellsMenuItem &&");
         script.Should().Contain("private readonly NativeMenuItem _workbookStatisticsMenuItem = new();");
-        script.Should().Contain("_workbookStatisticsMenuItem.Header = `\"Workbook Statistics...`\";");
+        script.Should().Contain("_workbookStatisticsMenuItem.Header = UiText.Get(`\"AvaloniaNativeMenu_WorkbookStatistics`\");");
         script.Should().Contain("_workbookStatisticsMenuItem.Gesture = new KeyGesture(Key.G, KeyModifiers.Control | KeyModifiers.Shift);");
         script.Should().Contain("_workbookStatisticsMenuItem.Click += async (_, _) => await ShowWorkbookStatisticsDialogAsync();");
         script.Should().Contain("fileMenu.Items.Add(_workbookStatisticsMenuItem);");
@@ -766,7 +766,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("private static bool HasVisibleCellBorder(CellStyle? style)");
         script.Should().Contain("private readonly RecentFilesStore _recentFiles = RecentFilesStore.Load();");
         script.Should().Contain("_newWorkbookMenuItem.Click += (_, _) => CreateNewWorkbook();");
-        script.Should().Contain("_openRecentMenuItem.Header = `\"Open Recent`\";");
+        script.Should().Contain("_openRecentMenuItem.Header = UiText.Get(`\"AvaloniaNativeMenu_OpenRecent`\");");
         script.Should().Contain("_selectAllMenuItem.Header = `\"Select All`\";");
         script.Should().Contain("_fillCellsButton.Content = `\"Fill Cells`\";");
         script.Should().Contain("_fillDownMenuItem.Gesture = new KeyGesture(Key.D, KeyModifiers.Control);");
@@ -2147,7 +2147,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     AddStyledCellBorderOverlay(content, style);
                     private readonly RecentFilesStore _recentFiles = RecentFilesStore.Load();
                     _newWorkbookMenuItem.Click += (_, _) => CreateNewWorkbook();
-                    _openRecentMenuItem.Header = "Open Recent";
+                    _openRecentMenuItem.Header = UiText.Get("AvaloniaNativeMenu_OpenRecent");
                     _openRecentMenuItem.Menu = CreateNativeOpenRecentMenu(isIdle: true);
                     fileMenu.Items.Add(_openRecentMenuItem);
                     RefreshNativeOpenRecentMenu(isIdle);
@@ -2158,11 +2158,11 @@ public sealed class MacOsAppReadinessPreflightTests
                     path = target!.Path;
                     private readonly NativeMenuItem _workbookStatisticsMenuItem = new();
                     private readonly NativeMenuItem _exportPdfMenuItem = new();
-                    _exportPdfMenuItem.Header = "Export to PDF...";
+                    _exportPdfMenuItem.Header = UiText.Get("AvaloniaNativeMenu_ExportPdf");
                     _exportPdfMenuItem.Click += async (_, _) => await ExportActiveSheetPdfAsync();
                     fileMenu.Items.Add(_exportPdfMenuItem);
                     _exportPdfMenuItem.IsEnabled = isIdle && StorageProvider.CanSave;
-                    HasNativeExportPdfMenuItem: HasNativeMenuItem(_exportPdfMenuItem, "Export to PDF...", requireGesture: false)
+                    HasNativeExportPdfMenuItem: HasNativeMenuItem(_exportPdfMenuItem, UiText.Get("AvaloniaNativeMenu_ExportPdf"), requireGesture: false)
                     private async Task ExportActiveSheetPdfAsync()
                     var exportPathPlan = ExportPathPlanner.Plan(requestedPath, ExportFileFormat.Pdf);
                     ExportPathPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, exportPathPlan, File.Exists)
@@ -2175,7 +2175,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     AutomationProperties.SetAutomationId(cancelButton, "PdfExportOverwriteCancelButton");
                     var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, exportPlan, pdfBuffer);
                     await File.WriteAllBytesAsync(path, pdfBuffer.ToArray());
-                    _workbookStatisticsMenuItem.Header = "Workbook Statistics...";
+                    _workbookStatisticsMenuItem.Header = UiText.Get("AvaloniaNativeMenu_WorkbookStatistics");
                     _workbookStatisticsMenuItem.Gesture = new KeyGesture(Key.G, KeyModifiers.Control | KeyModifiers.Shift);
                     _workbookStatisticsMenuItem.Click += async (_, _) => await ShowWorkbookStatisticsDialogAsync();
                     fileMenu.Items.Add(_workbookStatisticsMenuItem);
@@ -2206,10 +2206,10 @@ public sealed class MacOsAppReadinessPreflightTests
                     _printMenuItem.Click += async (_, _) => await ShowPrintDialogAsync();
                     fileMenu.Items.Add(_printMenuItem);
                     private readonly NativeMenuItem _printPreviewMenuItem = new();
-                    _printPreviewMenuItem.Header = "Print Preview...";
+                    _printPreviewMenuItem.Header = UiText.Get("AvaloniaNativeMenu_PrintPreview");
                     _printPreviewMenuItem.Gesture = new KeyGesture(Key.P, KeyModifiers.Meta | KeyModifiers.Shift);
                     _printPreviewMenuItem.Click += async (_, _) => await ShowPrintPreviewDialogAsync();
-                    HasNativeWorkbookStatisticsMenuItem: HasNativeMenuItem(_workbookStatisticsMenuItem, "Workbook Statistics...")
+                    HasNativeWorkbookStatisticsMenuItem: HasNativeMenuItem(_workbookStatisticsMenuItem, UiText.Get("AvaloniaNativeMenu_WorkbookStatistics"))
                     e.Key == Key.G && e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift)
                     private async Task ShowWorkbookStatisticsDialogAsync()
                     WorkbookStatisticsService.GetStatistics(_session.Workbook)
@@ -4253,13 +4253,61 @@ public sealed class MacOsAppReadinessPreflightTests
             {
                 private static void Export()
                 {
+                    PortablePdfTextCapabilityPlanner.CreatePlan(workbook, exportPlan, options);
+                    var document = WorkbookPdfContentBuilder.Build(workbook, exportPlan, options);
+                    PortablePdfWriter.WriteToBytes(document, "FreeX portable PDF");
+                }
+            }
+            """);
+
+        WriteFile(
+            root,
+            "src/FreeX.App.Services/WorkbookPdfContentBuilder.cs",
+            """
+            namespace FreeX.App.Services;
+
+            public static class WorkbookPdfContentBuilder
+            {
+                public static object Build(object workbook, object exportPlan, object options)
+                {
                     PortablePdfPageContentPlanner.CreatePlan(workbook, request);
+                    PortablePdfWinAnsiTextCapability.Truncate(cell.DisplayText, options.MaximumCellTextLength);
+                    return new object();
+                }
+            }
+            """);
+
+        WriteFile(
+            root,
+            "shared/Free.Shared.Pdf/PortablePdfWriter.cs",
+            """
+            namespace Free.Shared.Pdf;
+
+            public static class PortablePdfWriter
+            {
+                public static byte[] WriteToBytes(object document, string title)
+                {
                     "/Encoding /WinAnsiEncoding".ToString();
                     EncodeWinAnsiHexText(normalized);
                     _ = "built-in Helvetica/WinAnsi set";
+                    return [];
                 }
 
                 private static byte EncodeWinAnsiByte(char ch) => 0;
+            }
+            """);
+
+        WriteFile(
+            root,
+            "shared/Free.Shared.Pdf.Skia/SkiaPdfDocumentExporter.cs",
+            """
+            namespace Free.Shared.Pdf.Skia;
+
+            public static class SkiaPdfDocumentExporter
+            {
+                public static void Save(object workbook, object exportPlan, object stream)
+                {
+                }
             }
             """);
 
