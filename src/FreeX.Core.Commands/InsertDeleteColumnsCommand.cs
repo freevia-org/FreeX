@@ -89,7 +89,11 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RewriteAllFormulas(
             ctx.Workbook, new InsertColsOp(sheet.Name, _beforeCol, _count), _formulaSnapshot);
 
-        return new CommandOutcome(true);
+        return new CommandOutcome(
+            true,
+            AffectedCells: RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
+                Enumerable.Empty<CellAddress>(),
+                _formulaSnapshot));
     }
 
     public void Revert(ICommandContext ctx)
@@ -298,7 +302,11 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RewriteAllFormulas(
             ctx.Workbook, new DeleteColsOp(sheet.Name, _startCol, _count), _formulaSnapshot);
 
-        return new CommandOutcome(true);
+        return new CommandOutcome(
+            true,
+            AffectedCells: RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
+                Enumerable.Empty<CellAddress>(),
+                _formulaSnapshot));
     }
 
     public void Revert(ICommandContext ctx)

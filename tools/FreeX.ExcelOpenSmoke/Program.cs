@@ -453,6 +453,7 @@ internal static class ExcelOpenSmoke
             {
                 var freeXSave = SaveThroughFreeX(input.SourcePath, freeXSavedDirectory);
                 AssertFreeXLoadWarnings(input, "FreeX source load", freeXSave.LoadWarnings);
+                AssertFreeXSaveWarnings(input, "FreeX source save", freeXSave.SaveWarnings);
                 AssertPackageHealth(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertNoExcelRecoveryLog(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertOpenXmlValid(freeXSave.SavedPath, "FreeX-saved workbook");
@@ -523,7 +524,7 @@ internal static class ExcelOpenSmoke
                 sourceForExcel = freeXSave.SavedPath;
                 freeXSavedPath = freeXSave.SavedPath;
                 freeXPreSave = freeXSave.Summary;
-                freeXPreSaveWarnings = freeXSave.LoadWarnings;
+                freeXPreSaveWarnings = CombineFreeXWarnings(freeXSave.LoadWarnings, freeXSave.SaveWarnings);
             }
 
             var stagedPath = CopyToStagingDirectory(sourceForExcel, stagingDirectory);
@@ -16926,10 +16927,9 @@ internal static class ExcelOpenSmoke
         var outputPath = CreateDerivedOutputPath(outputDirectory, sourcePath, "freex-saved");
         using (var output = File.Create(outputPath))
         {
-            adapter.Save(workbook, output);
+            var saveResult = adapter.SaveWithWarnings(workbook, output);
+            return new FreeXSaveResult(outputPath, summary, loadResult.Warnings, saveResult.Warnings);
         }
-
-        return new FreeXSaveResult(outputPath, summary, loadResult.Warnings);
     }
 
     private static FreeXLoadSummaryResult LoadWorkbookSummary(string sourcePath)
@@ -18983,6 +18983,33 @@ internal static class ExcelOpenSmoke
 
         throw new InvalidDataException(
             $"{label} produced {warnings.Count} warning(s) for {input.Description}: {FormatWarnings(warnings)}");
+    }
+
+    private static void AssertFreeXSaveWarnings(
+        WorkbookSmokeInput input,
+        string label,
+        IReadOnlyList<string> warnings)
+    {
+        if (input.Expectations?.RequireNoFreeXLoadWarnings != true || warnings.Count == 0)
+            return;
+
+        throw new InvalidDataException(
+            $"{label} produced {warnings.Count} warning(s) for {input.Description}: {FormatWarnings(warnings)}");
+    }
+
+    private static IReadOnlyList<string> CombineFreeXWarnings(
+        IReadOnlyList<string> loadWarnings,
+        IReadOnlyList<string> saveWarnings)
+    {
+        if (loadWarnings.Count == 0)
+            return saveWarnings;
+        if (saveWarnings.Count == 0)
+            return loadWarnings;
+
+        var combined = new List<string>(loadWarnings.Count + saveWarnings.Count);
+        combined.AddRange(loadWarnings.Select(warning => "Load: " + warning));
+        combined.AddRange(saveWarnings.Select(warning => "Save: " + warning));
+        return combined;
     }
 
     private static string FormatWarnings(IReadOnlyList<string> warnings)
