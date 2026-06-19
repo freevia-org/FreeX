@@ -1,5 +1,6 @@
 using System.Globalization;
 
+using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -139,10 +140,10 @@ public static class PageSetupDialogModel
         if (!TryParsePrintArea(fields.PrintAreaText, sheet.Id, out _))
             return PageSetupCommandBuildResult.Fail("Print area must be a cell range like A1:D20.");
 
-        if (!PageSetupRangeParser.TryParseRepeatRows(fields.RepeatRowsText, out var repeatRows))
+        if (!PageLayoutInputParser.TryParseRepeatRows(fields.RepeatRowsText, out var repeatRows))
             return PageSetupCommandBuildResult.Fail("Rows to repeat at top must be a row range like 1:2.");
 
-        if (!PageSetupRangeParser.TryParseRepeatColumns(fields.RepeatColumnsText, out var repeatColumns))
+        if (!PageLayoutInputParser.TryParseRepeatColumns(fields.RepeatColumnsText, out var repeatColumns))
             return PageSetupCommandBuildResult.Fail("Columns to repeat at left must be a column range like A:B.");
 
         var command = new SetPageSetupCommand(
@@ -223,7 +224,7 @@ public static class PageSetupDialogModel
 
     /// <summary>Parses the print-area free-text field; blank input yields a null range (clear).</summary>
     public static bool TryParsePrintArea(string input, SheetId sheetId, out GridRange? printArea) =>
-        PageSetupRangeParser.TryParsePrintArea(input, sheetId, out printArea);
+        PageLayoutInputParser.TryParseOptionalPrintArea(input, sheetId, out printArea);
 
     private static bool TryParseFitToPages(string input, out int? pages)
     {

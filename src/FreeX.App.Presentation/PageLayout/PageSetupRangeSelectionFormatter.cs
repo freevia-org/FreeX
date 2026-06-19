@@ -1,8 +1,8 @@
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Presentation.PageLayout;
 
-internal static class PageSetupRangeSelectionFormatter
+public static class PageSetupRangeSelectionFormatter
 {
     public static string Format(
         PageSetupRangeSelectionTarget target,

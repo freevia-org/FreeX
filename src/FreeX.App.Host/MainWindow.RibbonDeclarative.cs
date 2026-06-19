@@ -10,6 +10,8 @@ using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Free.Shared.Ribbon;
 
+using FreeX.App.Presentation.PageLayout;
+
 namespace FreeX.App.Host;
 
 public partial class MainWindow

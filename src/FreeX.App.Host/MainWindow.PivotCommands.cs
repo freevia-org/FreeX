@@ -4,6 +4,7 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.App.Presentation;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
