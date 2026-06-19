@@ -80,6 +80,7 @@ public static class DocxReader
         ReadEndnotes(archive, document, imageRelationships, hyperlinkRelationships);
         ReadComments(archive, document, hyperlinkRelationships);
         ReadSettings(archive, document);
+        ReadBibliography(archive, document);
         ReadTheme(archive, document);
         ReadEmbeddedFonts(archive, document);
         ReadPreservedParts(archive, document);
@@ -400,6 +401,85 @@ public static class DocxReader
                 continue;
             var target = rel.Attribute("Target")?.Value;
             if (!string.IsNullOrEmpty(target))
+                return "word/" + target.TrimStart('/');
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Loads word/bibliography/sources.xml (if present) into <see cref="TextDocument.Sources"/> and
+    /// <see cref="TextDocument.BibliographyStyle"/>: the b:Sources/@SelectedStyle attribute restores the
+    /// chosen citation style (via <see cref="Citations.ParseStyle"/>), and each b:Source restores a
+    /// <see cref="Source"/> with its tag, type and fields (the author read from the single corporate-author
+    /// the writer emits). A missing part leaves the document at its defaults (APA, no sources). Inverse of
+    /// <c>DocxWriter.BuildBibliographySources</c>.
+    /// </summary>
+    private static void ReadBibliography(ZipArchive archive, TextDocument document)
+    {
+        var xml = LoadPart(archive, ResolveBibliographyPartPath(archive) ?? "word/bibliography/sources.xml");
+        var root = xml?.Root;
+        if (root is null || root.Name != B + "Sources")
+            return;
+
+        document.BibliographyStyle = Citations.ParseStyle(root.Attribute("SelectedStyle")?.Value);
+
+        foreach (var element in root.Elements(B + "Source"))
+        {
+            // The author is stored as a single corporate author (b:Author/b:Author/b:Corporate); fall back
+            // to a plain b:Author text node so a hand-authored / Word-authored source still yields a name.
+            var author = element.Element(B + "Author")?.Element(B + "Author")?.Element(B + "Corporate")?.Value
+                ?? element.Element(B + "Author")?.Value
+                ?? string.Empty;
+
+            document.Sources.Add(new Source
+            {
+                Tag = Field(element, "Tag") ?? string.Empty,
+                Type = ParseSourceType(Field(element, "SourceType")),
+                Author = author.Trim(),
+                Title = Field(element, "Title") ?? string.Empty,
+                Year = Field(element, "Year") ?? string.Empty,
+                Publisher = Field(element, "Publisher"),
+                Journal = Field(element, "JournalName"),
+                Volume = Field(element, "Volume"),
+                Issue = Field(element, "Issue"),
+                Pages = Field(element, "Pages"),
+                Url = Field(element, "URL"),
+                Accessed = Field(element, "YearAccessed"),
+            });
+        }
+
+        static string? Field(XElement source, string localName)
+        {
+            var value = source.Element(B + localName)?.Value;
+            return string.IsNullOrEmpty(value) ? null : value;
+        }
+    }
+
+    // Maps Word's b:SourceType token back to a FreeW SourceType; unknown / missing -> Book.
+    private static SourceType ParseSourceType(string? token) => token switch
+    {
+        "JournalArticle" => SourceType.JournalArticle,
+        "DocumentFromInternetSite" => SourceType.WebSite,
+        _ => SourceType.Book,
+    };
+
+    /// <summary>
+    /// Finds the bibliography part path from the document relationships (the rel whose Target ends with
+    /// "bibliography/sources.xml"), resolved relative to the word/ folder. Returns null when no such
+    /// relationship exists so the caller can fall back to the conventional path.
+    /// </summary>
+    private static string? ResolveBibliographyPartPath(ZipArchive archive)
+    {
+        var relsXml = LoadPart(archive, "word/_rels/document.xml.rels");
+        var relationships = relsXml?.Root?.Elements(Rel + "Relationship");
+        if (relationships is null)
+            return null;
+
+        foreach (var rel in relationships)
+        {
+            var target = rel.Attribute("Target")?.Value;
+            if (!string.IsNullOrEmpty(target)
+                && target.EndsWith("bibliography/sources.xml", StringComparison.Ordinal))
                 return "word/" + target.TrimStart('/');
         }
         return null;

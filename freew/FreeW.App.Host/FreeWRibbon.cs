@@ -190,7 +190,7 @@ internal static class FreeWRibbon
                     g.Icon("freew.citation", "Citation", RibbonCommandIconKind.Citation);
                     g.ComboBox("freew.citation-style", "Citation Style", c => c with
                     {
-                        Items = new[] { "APA", "MLA", "Chicago" },
+                        Items = new[] { "APA", "MLA", "Chicago", "IEEE" },
                         Width = 90
                     });
                     g.RowBreak();

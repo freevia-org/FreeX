@@ -768,16 +768,39 @@ public sealed class Comment(int id)
 }
 
 /// <summary>
+/// The kind of work a <see cref="Source"/> describes, which selects how its bibliography entry is
+/// formatted (a journal article cites its journal/volume/pages, a web site its URL, etc.). The numeric
+/// values are stable so a chosen type can be persisted, and <see cref="SourceType.Book"/> is the default
+/// (value 0). The names match Word's bibliography source types (<c>b:SourceType</c>).
+/// </summary>
+public enum SourceType
+{
+    /// <summary>A book (author, title, publisher, year). The default.</summary>
+    Book = 0,
+
+    /// <summary>An article in a periodical (adds journal name, volume, issue and page range).</summary>
+    JournalArticle = 1,
+
+    /// <summary>A web page (adds its URL and an accessed date).</summary>
+    WebSite = 2,
+}
+
+/// <summary>
 /// A bibliographic source the document can cite: a short <see cref="Tag"/> (a stable identifier used
 /// to reference the source, e.g. <c>"Knuth1997"</c>) plus author/title/year and an optional publisher.
-/// Kept deliberately small and immutable-friendly (init-only properties) so it round-trips cleanly and
-/// the citation/bibliography formatting helpers (see <see cref="Citations"/>) can stay pure. Missing
-/// fields are represented as empty strings / null and handled gracefully by the formatters.
+/// A <see cref="SourceType"/> selects type-specific formatting and carries the extra fields that type
+/// needs (journal/volume/issue/pages for an article, url/accessed for a web site). Kept deliberately
+/// small and immutable-friendly (init-only properties) so it round-trips cleanly and the
+/// citation/bibliography formatting helpers (see <see cref="Citations"/>) can stay pure. Missing fields
+/// are represented as empty strings / null and handled gracefully by the formatters.
 /// </summary>
 public sealed class Source
 {
     /// <summary>A short, stable identifier for the source (used to reference it). May be empty.</summary>
     public string Tag { get; init; } = string.Empty;
+
+    /// <summary>The kind of work, selecting type-specific bibliography formatting. Defaults to <see cref="SourceType.Book"/>.</summary>
+    public SourceType Type { get; init; } = SourceType.Book;
 
     /// <summary>The author (or authors) of the work. Empty when unknown.</summary>
     public string Author { get; init; } = string.Empty;
@@ -790,6 +813,24 @@ public sealed class Source
 
     /// <summary>The publisher of the work, or null when unknown / not applicable.</summary>
     public string? Publisher { get; init; }
+
+    /// <summary>The periodical name for a <see cref="SourceType.JournalArticle"/>; null otherwise / when unknown.</summary>
+    public string? Journal { get; init; }
+
+    /// <summary>The volume number for a <see cref="SourceType.JournalArticle"/>; null when unknown.</summary>
+    public string? Volume { get; init; }
+
+    /// <summary>The issue number for a <see cref="SourceType.JournalArticle"/>; null when unknown.</summary>
+    public string? Issue { get; init; }
+
+    /// <summary>The page (range) for a <see cref="SourceType.JournalArticle"/>, e.g. <c>"12-20"</c>; null when unknown.</summary>
+    public string? Pages { get; init; }
+
+    /// <summary>The URL for a <see cref="SourceType.WebSite"/>; null otherwise / when unknown.</summary>
+    public string? Url { get; init; }
+
+    /// <summary>The accessed date for a <see cref="SourceType.WebSite"/>, free-text (e.g. <c>"3 May 2024"</c>); null when unknown.</summary>
+    public string? Accessed { get; init; }
 }
 
 /// <summary>
@@ -1616,6 +1657,14 @@ public sealed class TextDocument
     /// in-text citations and the bibliography are ordinary text/paragraphs that already round-trip.
     /// </summary>
     public List<Source> Sources { get; } = [];
+
+    /// <summary>
+    /// The selected bibliographic <see cref="CitationStyle"/> (APA / MLA / Chicago / IEEE) governing how
+    /// in-text citations and the bibliography are formatted. Chosen from the References &gt; Citation Style
+    /// combo; persisted to / restored from the docx bibliography part (<c>b:Sources/@SelectedStyle</c>) so it
+    /// survives a save/load. Defaults to <see cref="CitationStyle.Apa"/>.
+    /// </summary>
+    public CitationStyle BibliographyStyle { get; set; } = CitationStyle.Apa;
 
     /// <summary>
     /// The terms marked for the document index, in mark order. <see cref="DocumentIndex.Build(TextDocument)"/>

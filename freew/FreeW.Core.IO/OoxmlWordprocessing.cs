@@ -170,6 +170,18 @@ internal static class Ooxml
     public const string SettingsRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings";
     public const string SettingsPartName = "/word/settings.xml";
 
+    /// <summary>
+    /// The bibliography namespace (b), used by word/bibliography/sources.xml — Word's store for the
+    /// document's citation sources (b:Sources/b:Source) and the selected bibliography style
+    /// (b:Sources/@SelectedStyle). FreeW persists its <see cref="Source"/> list and
+    /// <see cref="TextDocument.BibliographyStyle"/> here so both survive a save/load. The part is referenced
+    /// from word/document.xml.rels via the bibliography relationship type.
+    /// </summary>
+    public static readonly XNamespace B = "http://schemas.openxmlformats.org/officeDocument/2006/bibliography";
+    public const string BibliographyContentType = "application/vnd.openxmlformats-officedocument.bibliography+xml";
+    public const string BibliographyRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/bibliography";
+    public const string BibliographyPartName = "/word/bibliography/sources.xml";
+
     // word/webSettings.xml carries web-page-export settings FreeW does not model; preserved verbatim.
     public const string WebSettingsContentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.webSettings+xml";
     public const string WebSettingsRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/webSettings";

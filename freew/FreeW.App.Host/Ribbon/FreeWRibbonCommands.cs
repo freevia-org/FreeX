@@ -3387,9 +3387,10 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // Applies a value chosen from a ribbon combo (font family/size) to the current selection.
-    // Insert > References > Citation Style: set the editor's active citation style from the combo box
-    // label ("APA"/"MLA"/"Chicago"). Unrecognised labels leave the current style unchanged.
+    // References > Citation Style: set the editor's active citation style from the combo box label
+    // ("APA"/"MLA"/"Chicago"/"IEEE"). The style is stored on the document (TextDocument.BibliographyStyle via
+    // DocumentView.ActiveCitationStyle) so it persists and reformats subsequently inserted in-text citations
+    // and bibliographies. Unrecognised labels leave the current style unchanged.
     private sealed class CitationStyleCommand(DocumentView editor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
@@ -3397,13 +3398,7 @@ internal static class FreeWRibbonCommands
             if (!context.Parameters.TryGetValue("value", out var raw) || raw is not string value)
                 return;
 
-            editor.ActiveCitationStyle = value.Trim().ToUpperInvariant() switch
-            {
-                "MLA" => CitationStyle.Mla,
-                "CHICAGO" => CitationStyle.Chicago,
-                "APA" => CitationStyle.Apa,
-                _ => editor.ActiveCitationStyle,
-            };
+            editor.ActiveCitationStyle = Citations.ParseStyle(value, editor.ActiveCitationStyle);
         }
     }
 

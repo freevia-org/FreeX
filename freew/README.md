@@ -141,7 +141,7 @@ docx reader/writer; unsupported renderings are noted under [Known limitations](#
 - **Footnotes** (`word/footnotes.xml`, `w:footnoteReference`) and **endnotes** (`word/endnotes.xml`) — they coexist.
 - **Table of Contents** (built from the heading outline; Insert + Update).
 - **Index** (mark entry → build sorted/deduped index, `IndexHeading`/`IndexEntry` styles).
-- **Citations & bibliography** in **APA / MLA / Chicago** (in-text + a sorted bibliography under the right heading: References / Works Cited / Bibliography).
+- **Citations & bibliography** in **APA / MLA / Chicago / IEEE** (style- and source-type-aware: Book / Journal Article / Web Site each format per the chosen style, in-text + a sorted bibliography under the right heading: References / Works Cited / Bibliography). The selected style and the source data persist to `word/bibliography/sources.xml` and round-trip.
 - **Captions** ("Figure/Table N: …") with automatic figure/table numbering, plus a **Table of Figures**.
 - **Cross-references** to headings / bookmarks / captions / footnotes (clickable internal link when anchored).
 - **Bookmarks** + internal hyperlinks (`w:bookmarkStart/End`, `w:hyperlink w:anchor`) with a Bookmark Manager + Go To.

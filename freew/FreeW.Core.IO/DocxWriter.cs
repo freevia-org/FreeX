@@ -32,6 +32,7 @@ public static class DocxWriter
     private const string CommentsExtendedRelationshipId = "rIdCommentsExtended";
     private const string SettingsRelationshipId = "rIdSettings";
     private const string FontTableRelationshipId = "rIdFontTable";
+    private const string BibliographyRelationshipId = "rIdBibliography";
     private const string ThemeRelationshipId = "rIdTheme1";
 
     // Minimal numbering scheme: one abstract num per list kind, mapped 1:1 to a w:num. Bullets use
@@ -130,6 +131,11 @@ public static class DocxWriter
             || hasEmbeddedFonts
             || hasPreservedSettings;
 
+        // The bibliography part (word/bibliography/sources.xml) persists the document's citation Sources and
+        // selected BibliographyStyle. Emitted whenever there are sources or a non-default style to record, so a
+        // document that has never touched citations round-trips exactly as before (no bibliography part).
+        var hasBibliography = document.Sources.Count > 0 || document.BibliographyStyle != CitationStyle.Apa;
+
         // A word/theme/theme1.xml part is always emitted (real Word documents always carry one); it
         // serialises the document's DocumentTheme as a real clrScheme/fontScheme/fmtScheme.
         // [Content_Types].xml needs a Default for every image extension actually used by ANY part — body
@@ -144,17 +150,19 @@ public static class DocxWriter
             .ToList();
 
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true);
-        WritePart(archive, "[Content_Types].xml", BuildContentTypes(imageExtensions, emitNumbering, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasWatermark, hasSettings, charts, embeddedObjects.Count > 0, smartArts, hasEmbeddedFonts, document.Preserved.Parts, document.Preserved.ContentTypeDefaults));
+        WritePart(archive, "[Content_Types].xml", BuildContentTypes(imageExtensions, emitNumbering, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasWatermark, hasSettings, hasBibliography, charts, embeddedObjects.Count > 0, smartArts, hasEmbeddedFonts, document.Preserved.Parts, document.Preserved.ContentTypeDefaults));
         WritePart(archive, "_rels/.rels", BuildPackageRels(hasWatermark));
         WritePart(archive, "docProps/core.xml", BuildCoreProperties(document.Properties));
         if (hasWatermark)
             WritePart(archive, "docProps/custom.xml", BuildCustomProperties(document.Page.Watermark!));
-        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, emitNumbering, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasSettings, charts, embeddedObjects, smartArts, hasEmbeddedFonts, document.Preserved.Parts));
+        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, emitNumbering, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasSettings, hasBibliography, charts, embeddedObjects, smartArts, hasEmbeddedFonts, document.Preserved.Parts));
         WritePart(archive, "word/document.xml", BuildDocument(document, images, charts, embeddedObjects, smartArts, hyperlinks, headerFooterParts, preservedNumbering));
         WritePart(archive, "word/styles.xml", BuildStyles(document, preservedNumbering));
         WritePart(archive, ThemePartName.TrimStart('/'), BuildTheme(document.Theme));
         if (hasSettings)
             WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.Page.AutoHyphenation, document.Page.DifferentOddEvenPages, hasBackground, hasEmbeddedFonts, document.Preserved.OriginalSettings));
+        if (hasBibliography)
+            WritePart(archive, BibliographyPartName.TrimStart('/'), BuildBibliographySources(document));
         // Embedded fonts: word/fontTable.xml + its rels + one obfuscated .odttf per embedded style.
         if (hasEmbeddedFonts)
         {
@@ -594,7 +602,7 @@ public static class DocxWriter
         entryStream.Write(content, 0, content.Length);
     }
 
-    private static XDocument BuildContentTypes(IReadOnlyList<string> imageExtensions, bool includeNumbering, IReadOnlyList<HeaderFooterPart> headerFooterParts, bool hasFootnotes, bool hasEndnotes, bool hasComments, bool hasWatermark, bool hasSettings, IReadOnlyList<ChartPart> charts, bool hasEmbeddedObjects, IReadOnlyList<SmartArtPart> smartArts, bool hasEmbeddedFonts, IReadOnlyList<PreservedPart> preservedParts, IReadOnlyDictionary<string, string> preservedContentTypeDefaults) => new(
+    private static XDocument BuildContentTypes(IReadOnlyList<string> imageExtensions, bool includeNumbering, IReadOnlyList<HeaderFooterPart> headerFooterParts, bool hasFootnotes, bool hasEndnotes, bool hasComments, bool hasWatermark, bool hasSettings, bool hasBibliography, IReadOnlyList<ChartPart> charts, bool hasEmbeddedObjects, IReadOnlyList<SmartArtPart> smartArts, bool hasEmbeddedFonts, IReadOnlyList<PreservedPart> preservedParts, IReadOnlyDictionary<string, string> preservedContentTypeDefaults) => new(
         new XElement(Ct + "Types",
             new XElement(Ct + "Default", new XAttribute("Extension", "rels"),
                 new XAttribute("ContentType", "application/vnd.openxmlformats-package.relationships+xml")),
@@ -663,6 +671,11 @@ public static class DocxWriter
             hasSettings
                 ? new XElement(Ct + "Override", new XAttribute("PartName", SettingsPartName),
                     new XAttribute("ContentType", SettingsContentType))
+                : null,
+            // word/bibliography/sources.xml declares the citation-sources store (b:Sources/@SelectedStyle).
+            hasBibliography
+                ? new XElement(Ct + "Override", new XAttribute("PartName", BibliographyPartName),
+                    new XAttribute("ContentType", BibliographyContentType))
                 : null,
             // word/fontTable.xml declares the embedded-font table (the .odttf parts use the odttf Default above).
             hasEmbeddedFonts
@@ -787,6 +800,7 @@ public static class DocxWriter
         bool hasEndnotes,
         bool hasComments,
         bool hasSettings,
+        bool hasBibliography,
         IReadOnlyList<ChartPart> charts,
         IReadOnlyList<EmbeddedObjectPart> embeddedObjects,
         IReadOnlyList<SmartArtPart> smartArts,
@@ -803,6 +817,12 @@ public static class DocxWriter
                 new XAttribute("Id", SettingsRelationshipId),
                 new XAttribute("Type", SettingsRelType),
                 new XAttribute("Target", "settings.xml")));
+        // The document→bibliography relationship (word/bibliography/sources.xml, target relative to word/).
+        if (hasBibliography)
+            relationships.Add(new XElement(Rel + "Relationship",
+                new XAttribute("Id", BibliographyRelationshipId),
+                new XAttribute("Type", BibliographyRelType),
+                new XAttribute("Target", "bibliography/sources.xml")));
         // The document→fontTable relationship (the fontTable's own rels reference the .odttf font parts).
         if (hasEmbeddedFonts)
             relationships.Add(new XElement(Rel + "Relationship",
@@ -3801,6 +3821,61 @@ public static class DocxWriter
             settings.AddFirst(replacement);
         else
             insertAfter.AddAfterSelf(replacement);
+    }
+
+    // The b:SourceType token Word uses for each FreeW SourceType.
+    private static string BibliographySourceTypeName(SourceType type) => type switch
+    {
+        SourceType.JournalArticle => "JournalArticle",
+        SourceType.WebSite => "DocumentFromInternetSite",
+        _ => "Book",
+    };
+
+    /// <summary>
+    /// Builds word/bibliography/sources.xml: a b:Sources element carrying the document's selected
+    /// <see cref="TextDocument.BibliographyStyle"/> (its <c>SelectedStyle</c> attribute as the style name)
+    /// and one b:Source per <see cref="Source"/>. Each source records its tag, type and populated fields —
+    /// the author as a single corporate author (b:Author/b:Author/b:Corporate) since FreeW models author as
+    /// one string — so both the chosen style and every source field round-trip via
+    /// <c>DocxReader.ReadBibliography</c>. Only non-empty fields are emitted.
+    /// </summary>
+    private static XDocument BuildBibliographySources(TextDocument document)
+    {
+        var sources = new XElement(B + "Sources",
+            new XAttribute(XNamespace.Xmlns + "b", B.NamespaceName),
+            new XAttribute("SelectedStyle", Citations.StyleName(document.BibliographyStyle)));
+
+        foreach (var source in document.Sources)
+        {
+            var element = new XElement(B + "Source",
+                new XElement(B + "Tag", source.Tag),
+                new XElement(B + "SourceType", BibliographySourceTypeName(source.Type)));
+
+            if (!string.IsNullOrEmpty(source.Author))
+                element.Add(new XElement(B + "Author",
+                    new XElement(B + "Author",
+                        new XElement(B + "Corporate", source.Author))));
+
+            AddBibliographyField(element, "Title", source.Title);
+            AddBibliographyField(element, "Year", source.Year);
+            AddBibliographyField(element, "Publisher", source.Publisher);
+            AddBibliographyField(element, "JournalName", source.Journal);
+            AddBibliographyField(element, "Volume", source.Volume);
+            AddBibliographyField(element, "Issue", source.Issue);
+            AddBibliographyField(element, "Pages", source.Pages);
+            AddBibliographyField(element, "URL", source.Url);
+            AddBibliographyField(element, "YearAccessed", source.Accessed);
+
+            sources.Add(element);
+        }
+
+        return new XDocument(sources);
+
+        static void AddBibliographyField(XElement parent, string localName, string? value)
+        {
+            if (!string.IsNullOrEmpty(value))
+                parent.Add(new XElement(B + localName, value));
+        }
     }
 
     /// <summary>

@@ -5090,11 +5090,16 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
-    /// The active bibliographic style (APA / MLA / Chicago) used when inserting in-text citations and the
-    /// bibliography. Selected via the References group's "Citation Style" combo box; defaults to APA, which
-    /// is the original author–year behaviour.
+    /// The active bibliographic style (APA / MLA / Chicago / IEEE) used when inserting in-text citations and
+    /// the bibliography. Selected via the References group's "Citation Style" combo box; defaults to APA,
+    /// which is the original author–year behaviour. Backed by <see cref="TextDocument.BibliographyStyle"/> so
+    /// the choice is persisted to / restored from the document (it survives a save/load).
     /// </summary>
-    public CitationStyle ActiveCitationStyle { get; set; } = CitationStyle.Apa;
+    public CitationStyle ActiveCitationStyle
+    {
+        get => _model.BibliographyStyle;
+        set => _model.BibliographyStyle = value;
+    }
 
     /// <summary>The document's bibliographic sources (Insert &gt; Citation reads/writes this list).</summary>
     public IReadOnlyList<Source> Sources
