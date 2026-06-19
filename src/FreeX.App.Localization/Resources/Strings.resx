@@ -89,6 +89,33 @@
   <data name="PivotDataSource_RangeLabel" xml:space="preserve"><value>Table/Range:</value></data>
   <data name="PivotDataSource_RangeName" xml:space="preserve"><value>PivotTable source range</value></data>
   <data name="PivotDataSource_Changed" xml:space="preserve"><value>PivotTable data source changed to {0}.</value></data>
+  <!-- PivotTable Name (rename) dialog -->
+  <data name="PivotName_Title" xml:space="preserve"><value>PivotTable Name</value></data>
+  <data name="PivotName_Label" xml:space="preserve"><value>PivotTable name:</value></data>
+  <data name="PivotName_NameAutomation" xml:space="preserve"><value>PivotTable name</value></data>
+  <data name="PivotName_Renamed" xml:space="preserve"><value>PivotTable renamed to {0}.</value></data>
+  <!-- Group Field / Ungroup dialog -->
+  <data name="PivotGroup_Title" xml:space="preserve"><value>Grouping ({0})</value></data>
+  <data name="PivotGroup_FieldLabel" xml:space="preserve"><value>Field:</value></data>
+  <data name="PivotGroup_GroupByLabel" xml:space="preserve"><value>Group by:</value></data>
+  <data name="PivotGroup_StartingAtLabel" xml:space="preserve"><value>Starting at:</value></data>
+  <data name="PivotGroup_EndingAtLabel" xml:space="preserve"><value>Ending at:</value></data>
+  <data name="PivotGroup_ByLabel" xml:space="preserve"><value>By:</value></data>
+  <data name="PivotGroup_Grouped" xml:space="preserve"><value>Grouped field “{0}”.</value></data>
+  <data name="PivotGroup_Ungrouped" xml:space="preserve"><value>Ungrouped field “{0}”.</value></data>
+  <data name="PivotGroup_NoField" xml:space="preserve"><value>Add a field to the PivotTable layout, then group it.</value></data>
+  <!-- Calculated Field dialog -->
+  <data name="PivotCalcField_Title" xml:space="preserve"><value>Insert Calculated Field</value></data>
+  <data name="PivotCalcField_ExistingLabel" xml:space="preserve"><value>Existing calculated field:</value></data>
+  <data name="PivotCalcField_ExistingNone" xml:space="preserve"><value>(New calculated field)</value></data>
+  <data name="PivotCalcField_NameLabel" xml:space="preserve"><value>Name:</value></data>
+  <data name="PivotCalcField_FormulaLabel" xml:space="preserve"><value>Formula:</value></data>
+  <data name="PivotCalcField_FieldsLabel" xml:space="preserve"><value>Fields:</value></data>
+  <data name="PivotCalcField_InsertField" xml:space="preserve"><value>Insert Field</value></data>
+  <data name="PivotCalcField_FieldsAutomation" xml:space="preserve"><value>Available fields</value></data>
+  <data name="PivotCalcField_Delete" xml:space="preserve"><value>Delete</value></data>
+  <data name="PivotCalcField_Saved" xml:space="preserve"><value>Calculated field “{0}” saved.</value></data>
+  <data name="PivotCalcField_Deleted" xml:space="preserve"><value>Calculated field “{0}” deleted.</value></data>
   <!-- Value Field Settings dialog -->
   <data name="PivotValueField_Title" xml:space="preserve"><value>Value Field Settings ({0})</value></data>
   <data name="PivotValueField_CustomName" xml:space="preserve"><value>Custom Name:</value></data>
@@ -347,4 +374,25 @@
   <data name="FillSeries_NoSeed" xml:space="preserve"><value>The first cell of the selection must contain a number (or a date for a date series).</value></data>
   <data name="FillSeries_Filled" xml:space="preserve"><value>Filled series in {0}</value></data>
   <data name="FillSeries_Failed" xml:space="preserve"><value>Fill Series failed.</value></data>
+  <!-- Table Design: Table Name dialog -->
+  <data name="TableName_Title" xml:space="preserve"><value>Table Name</value></data>
+  <data name="TableName_Label" xml:space="preserve"><value>Table name:</value></data>
+  <data name="TableName_BoxName" xml:space="preserve"><value>Table name</value></data>
+  <data name="TableName_NoTable" xml:space="preserve"><value>Table Name: the active cell is not inside a table.</value></data>
+  <data name="TableName_Renamed" xml:space="preserve"><value>Renamed table to '{0}'.</value></data>
+  <data name="TableName_Failed" xml:space="preserve"><value>Table Name failed.</value></data>
+  <!-- Table Design: Resize Table dialog -->
+  <data name="TableResize_Title" xml:space="preserve"><value>Resize Table</value></data>
+  <data name="TableResize_Label" xml:space="preserve"><value>Select the new data range for your table:</value></data>
+  <data name="TableResize_BoxName" xml:space="preserve"><value>Resized table range</value></data>
+  <data name="TableResize_NoTable" xml:space="preserve"><value>Resize Table: the active cell is not inside a table.</value></data>
+  <data name="TableResize_Resized" xml:space="preserve"><value>Resized table '{0}' to {1}.</value></data>
+  <data name="TableResize_Failed" xml:space="preserve"><value>Resize Table failed.</value></data>
+  <!-- Table Design: Table Styles gallery -->
+  <data name="TableStyleGallery_Title" xml:space="preserve"><value>Table Styles</value></data>
+  <data name="TableStyleGallery_StyleLabel" xml:space="preserve"><value>Table style:</value></data>
+  <data name="TableStyleGallery_GalleryName" xml:space="preserve"><value>Table style gallery</value></data>
+  <data name="TableStyleGallery_NoTable" xml:space="preserve"><value>Table Styles: the active cell is not inside a table.</value></data>
+  <data name="TableStyleGallery_Applied" xml:space="preserve"><value>Table style: {0}.</value></data>
+  <data name="TableStyleGallery_Failed" xml:space="preserve"><value>Table Styles failed.</value></data>
 </root>
