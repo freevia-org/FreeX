@@ -3,57 +3,10 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
 
-public enum HyperlinkNavigationKind
-{
-    External,
-    WorksheetCell
-}
-
-public sealed record HyperlinkNavigationPlan(
-    HyperlinkNavigationKind Kind,
-    string Target,
-    CellAddress? Address);
-
-public static class HyperlinkNavigationPlanner
-{
-    // Scheme whitelist for external hyperlink navigation.
-    // "file:" is intentionally excluded to prevent local filesystem access via crafted spreadsheets.
-    private static readonly HashSet<string> AllowedSchemes = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "http", "https", "mailto", "ftp"
-    };
-
-    /// <summary>
-    /// Returns true only if <paramref name="url"/> is an absolute URI with an allowed scheme.
-    /// Rejects javascript:, data:, vbscript:, file:, and relative URLs.
-    /// </summary>
-    public static bool IsAllowedScheme(string url)
-    {
-        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
-            return false;
-        return AllowedSchemes.Contains(uri.Scheme);
-    }
-
-    public static bool TryCreatePlan(Sheet? sheet, CellAddress address, out HyperlinkNavigationPlan? plan)
-    {
-        plan = null;
-        if (sheet is null || !sheet.Hyperlinks.TryGetValue(address, out var target) || string.IsNullOrWhiteSpace(target))
-            return false;
-
-        sheet.HyperlinkMetadata.TryGetValue(address, out var metadata);
-        var kind = metadata?.LinkType ?? HyperlinkTargetKind.ExistingFileOrWebPage;
-        var normalizedTarget = target.Trim();
-
-        if (kind == HyperlinkTargetKind.PlaceInThisDocument)
-        {
-            plan = new HyperlinkNavigationPlan(HyperlinkNavigationKind.WorksheetCell, normalizedTarget, null);
-            return true;
-        }
-
-        plan = new HyperlinkNavigationPlan(HyperlinkNavigationKind.External, normalizedTarget, null);
-        return true;
-    }
-}
+// The hyperlink navigation planner/plan/kind live in the shared FreeX.App.Services tier
+// (FreeX.App.Services.HyperlinkNavigationPlanner) as a superset that also resolves local-file
+// targets; every shell consumes that single source. Only the WPF-specific dialog prefill,
+// which depends on SpreadsheetDisplayFormatter, remains here.
 
 public sealed record HyperlinkDialogPrefill(string Target, string DisplayText)
 {

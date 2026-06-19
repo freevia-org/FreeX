@@ -97,6 +97,63 @@ public sealed class FreeWOptionsTests : IDisposable
         options.UiLanguage.Should().Be("en-GB");
     }
 
+    [Theory]
+    [InlineData("0", 0)]
+    [InlineData("15", 15)]
+    [InlineData("  7  ", 7)]
+    public void Planner_TryParseRecentFilesCap_AcceptsInRange(string text, int expected)
+    {
+        OptionsDialogPlanner.TryParseRecentFilesCap(text, out var cap).Should().BeTrue();
+        cap.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("abc")]
+    [InlineData("-1")]
+    [InlineData("99999")]
+    [InlineData("3.5")]
+    public void Planner_TryParseRecentFilesCap_RejectsInvalidOrOutOfRange(string text)
+    {
+        OptionsDialogPlanner.TryParseRecentFilesCap(text, out _).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Planner_BuildResult_NormalizesAndDefaults()
+    {
+        var result = OptionsDialogPlanner.BuildResult(recentFilesCap: 4, format: "  ", uiLanguage: "  en-GB  ");
+
+        result.RecentFilesCap.Should().Be(4);
+        // Blank format → the single shipped .docx default; language is trimmed by Normalize().
+        result.DefaultSaveFormat.Should().Be(FreeWOptions.DocxDefaultFormat);
+        result.UiLanguage.Should().Be("en-GB");
+    }
+
+    [Fact]
+    public void EditFlow_AppliesLiveAndPersists()
+    {
+        // Mirrors MainWindow.OpenOptions: the dialog produces a normalized result, the host copies it onto
+        // the live options instance (so FileCommands sees the new cap immediately) and saves via the store.
+        var path = Path.Combine(_tempDir, "settings.json");
+        var store = FreeWOptionsStore.ForPath(path);
+        var live = new FreeWOptions { RecentFilesCap = FreeWOptions.DefaultRecentFilesCap };
+
+        var edited = OptionsDialogPlanner.BuildResult(recentFilesCap: 3, format: null, uiLanguage: "uk-UA");
+        live.RecentFilesCap = edited.RecentFilesCap;
+        live.DefaultSaveFormat = edited.DefaultSaveFormat;
+        live.UiLanguage = edited.UiLanguage;
+        live.Normalize();
+        store.Save(live).Should().BeTrue();
+
+        // Applied live on the shared instance...
+        live.RecentFilesCap.Should().Be(3);
+        // ...and survives a restart (fresh store load).
+        var reloaded = FreeWOptionsStore.ForPath(path).Load();
+        reloaded.RecentFilesCap.Should().Be(3);
+        reloaded.UiLanguage.Should().Be("uk-UA");
+        reloaded.DefaultSaveFormat.Should().Be(FreeWOptions.DocxDefaultFormat);
+    }
+
     [Fact]
     public void Create_ResolvesUnderFreeWProductFolder()
     {

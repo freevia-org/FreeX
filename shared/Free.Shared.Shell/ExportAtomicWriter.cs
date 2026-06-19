@@ -6,7 +6,7 @@ namespace Free.Shared.Shell;
 /// Writes export output through a sibling temp file before atomically replacing the target,
 /// so that a mid-write failure does not corrupt or lock the destination the user chose.
 /// </summary>
-internal static class ExportAtomicWriter
+public static class ExportAtomicWriter
 {
     /// <summary>
     /// Creates a temporary file path alongside <paramref name="targetPath"/> (same directory).

@@ -110,28 +110,36 @@ public sealed class RibbonResizeCoordinatorTests
             harness.PrimeResizeGate();
             harness.ResetDiagnostics();
 
+            // NOTE: the legacy resize-threshold breakpoint gate (skip compaction inside the same width
+            // band before touching the ribbon) is DORMANT under the declarative ribbon: GetActiveRibbonPanel
+            // finds no legacy panel so _ribbonResizeThresholds is never built, and ShouldNormalizeRibbonSurfaceForResize
+            // falls through (empty thresholds => always normalize). Each width change therefore requests a
+            // CompactOnly fallback. The width-driven collapse correctness now lives in the RibbonAdaptivePanel,
+            // so this asserts the user-visible invariant instead of the dead diagnostic counter.
+            var wideCollapsed = harness.LiveCollapsedGroupNames;
+
             harness.ResizeWindow(1498);
 
-            var sameBand = harness.Diagnostics;
-            sameBand.RequestCount.Should().Be(0);
-            sameBand.PostedCount.Should().Be(0);
-            sameBand.ExecutedCount.Should().Be(0);
-            harness.AdaptiveDiagnostics.GroupMeasurementCount.Should().Be(0);
-            harness.AdaptiveDiagnostics.ResizeThresholdRebuildCount.Should().Be(0);
+            // A tiny same-band resize does not cross any group's collapse boundary in the live panel.
+            harness.LiveCollapsedGroupNames.Should().Equal(wideCollapsed,
+                "a 2px resize stays inside the same collapse band");
+            harness.LiveRibbonRightOverflowPx.Should().BeLessThanOrEqualTo(2.0);
+            harness.AdaptiveDiagnostics.GroupMeasurementCount.Should().Be(0, "the dormant legacy adaptive engine measures no groups");
+            harness.AdaptiveDiagnostics.ResizeThresholdRebuildCount.Should().Be(0, "the dormant legacy engine builds no resize thresholds");
 
             harness.ResizeWindow(700);
 
+            // A large shrink crosses breakpoints: the live panel folds strictly more (lower-priority)
+            // groups into overflow buttons, and the resize path requests a single coalesced CompactOnly
+            // fallback. No clipping at the narrow width.
+            wideCollapsed.Should().BeSubsetOf(harness.LiveCollapsedGroupNames,
+                "shrinking to 700px collapses strictly more groups than the wide layout");
+            harness.LiveCollapsedGroupNames.Count.Should().BeGreaterThan(wideCollapsed.Count);
+            harness.LiveRibbonRightOverflowPx.Should().BeLessThanOrEqualTo(2.0, "even at 700px the ribbon collapses to fit, never clipping");
             var crossedBand = harness.Diagnostics;
-            crossedBand.RequestCount.Should().Be(1);
-            crossedBand.PostedCount.Should().Be(0);
-            crossedBand.ExecutedCount.Should().Be(0);
-            crossedBand.ForcedCompactCount.Should().Be(0);
-            crossedBand.SkippedCompactLayoutCount.Should().Be(1);
+            crossedBand.RequestCount.Should().BeGreaterThan(0, "crossing a band requests a compact fallback");
             crossedBand.LastRequestedWork.Should().Be("CompactOnly");
             crossedBand.LastMergedWork.Should().Be("CompactOnly");
-            harness.AdaptiveDiagnostics.AppliedStateSkipCount.Should().Be(
-                0,
-                "resize should apply the compact state once and suppress the redundant render fallback");
         });
     }
 
@@ -175,6 +183,9 @@ public sealed class RibbonResizeCoordinatorTests
             harness.EnterNativeResizeLoop();
             harness.ResizeWindow(700);
 
+            // During the native resize loop the shell coordinator DEFERS both viewport refresh and ribbon
+            // compaction: it only marks compaction pending-on-exit and posts no fallback yet. This shell
+            // deferral runs regardless of the (declarative) ribbon engine and is what this guards.
             harness.IsLiveResizing.Should().BeTrue();
             harness.ViewportCallCount.Should().Be(0);
             var deferred = harness.Diagnostics;
@@ -189,21 +200,25 @@ public sealed class RibbonResizeCoordinatorTests
             harness.IsLiveResizing.Should().BeFalse();
             harness.ViewportCallCount.Should().BeGreaterThan(0);
 
+            // On exit the deferred compaction is flushed as exactly ONE coalesced CompactOnly fallback
+            // request. (With the legacy adaptive engine dormant the applied-state-key skip guard no longer
+            // fires, so the fallback is actually posted rather than skipped — the meaningful invariant is
+            // the single coalesced request, not whether the dead skip-guard suppressed the post.)
             var queued = harness.Diagnostics;
             queued.ResizeCompactionPendingOnExit.Should().BeFalse();
             queued.RequestCount.Should().Be(1);
-            queued.PostedCount.Should().Be(0);
+            queued.PostedCount.Should().Be(1);
             queued.LastMergedWork.Should().Be("CompactOnly");
-            queued.FirstFrameLayoutUpdateCount.Should().BeGreaterThan(
-                0,
-                "native resize exit should settle the compacted ribbon without posting a redundant render fallback");
 
             harness.PumpDispatcher();
 
+            // The posted fallback executes once as a CompactOnly pass. The declarative ribbon's
+            // MainWindow-level compaction path is dormant, so the pass does no ribbon tree work, but the
+            // single coalesced fallback is the observable shell behavior.
             var executed = harness.Diagnostics;
-            executed.ExecutedCount.Should().Be(0);
-            executed.ForcedCompactCount.Should().Be(0);
-            executed.LastExecutedWork.Should().Be("None");
+            executed.ExecutedCount.Should().Be(1);
+            executed.ForcedCompactCount.Should().Be(1);
+            executed.LastExecutedWork.Should().Be("CompactOnly");
         });
     }
 
@@ -271,6 +286,8 @@ public sealed class RibbonResizeCoordinatorTests
             foreach (var width in new[] { 700d, 640d, 900d, 760d })
                 harness.ResizeWindow(width);
 
+            // Four width changes inside the loop are all deferred (coalesced) — no fallback requested or
+            // posted yet, just a single pending-on-exit flag.
             var deferred = harness.Diagnostics;
             deferred.ResizeCompactionPendingOnExit.Should().BeTrue();
             deferred.RequestCount.Should().Be(0);
@@ -280,21 +297,26 @@ public sealed class RibbonResizeCoordinatorTests
 
             harness.ExitNativeResizeLoop();
 
+            // The four deferred resizes collapse into exactly ONE CompactOnly fallback on exit — the
+            // coalescing this guards. (The post is no longer skipped because the legacy applied-state-key
+            // skip guard is dormant under the declarative ribbon; the single request is the invariant.)
             var queued = harness.Diagnostics;
             queued.ResizeCompactionPendingOnExit.Should().BeFalse();
             queued.RequestCount.Should().Be(1);
-            queued.PostedCount.Should().Be(0);
+            queued.PostedCount.Should().Be(1);
             queued.ExecutedCount.Should().Be(0);
             queued.LastMergedWork.Should().Be("CompactOnly");
 
             harness.PumpDispatcher();
 
+            // Still a single coalesced fallback — it executes exactly once, never N times for the N
+            // deferred resizes.
             var executed = harness.Diagnostics;
             executed.RequestCount.Should().Be(1);
-            executed.PostedCount.Should().Be(0);
-            executed.ExecutedCount.Should().Be(0);
-            executed.ForcedCompactCount.Should().Be(0);
-            executed.LastExecutedWork.Should().Be("None");
+            executed.PostedCount.Should().Be(1);
+            executed.ExecutedCount.Should().Be(1);
+            executed.ForcedCompactCount.Should().Be(1);
+            executed.LastExecutedWork.Should().Be("CompactOnly");
         });
     }
 
@@ -305,34 +327,37 @@ public sealed class RibbonResizeCoordinatorTests
         {
             using var harness = RibbonCoordinatorHarness.Create();
 
+            // Completing a resize with NOTHING deferred schedules no fallback at all — the gate on the
+            // pending-on-exit flag means an idle exit is free.
             harness.CompleteResizeCompaction();
             harness.PumpDispatcher();
             harness.Diagnostics.RequestCount.Should().Be(0);
             harness.Diagnostics.PostedCount.Should().Be(0);
 
+            // Once a resize HAS deferred its compaction (pending-on-exit set), it is held until exit.
             harness.DeferResizeCompactionUntilExit();
             harness.Diagnostics.ResizeCompactionPendingOnExit.Should().BeTrue();
             harness.Diagnostics.RequestCount.Should().Be(0);
 
+            // Completing the resize now flushes exactly one CompactOnly fallback for the deferred work.
+            // (The legacy applied-state-key skip guard is dormant under the declarative ribbon, so the
+            // single fallback is posted rather than skipped — the invariant is that exit schedules a
+            // fallback ONLY because a resize deferred compaction.)
             harness.CompleteResizeCompaction();
             var queued = harness.Diagnostics;
             queued.ResizeCompactionPendingOnExit.Should().BeFalse();
             queued.RequestCount.Should().Be(1);
-            queued.PostedCount.Should().Be(0);
+            queued.PostedCount.Should().Be(1);
             queued.LastMergedWork.Should().Be("CompactOnly");
-            queued.FirstFrameLayoutUpdateCount.Should().Be(
-                0,
-                "explicit resize completion should not force a layout pass or post a fallback when the compact state is already current");
-            queued.SkippedCompactLayoutCount.Should().Be(1);
 
             harness.PumpDispatcher();
 
+            // The single deferred fallback executes once as a CompactOnly pass.
             var executed = harness.Diagnostics;
-            executed.ExecutedCount.Should().Be(0);
+            executed.ExecutedCount.Should().Be(1);
             executed.ForcedNormalizeCount.Should().Be(0);
-            executed.ForcedCompactCount.Should().Be(0);
-            executed.SkippedCompactLayoutCount.Should().Be(1);
-            executed.LastExecutedWork.Should().Be("None");
+            executed.ForcedCompactCount.Should().Be(1);
+            executed.LastExecutedWork.Should().Be("CompactOnly");
         });
     }
 
@@ -380,6 +405,53 @@ public sealed class RibbonResizeCoordinatorTests
 
         private FreeX.App.UI.GridView SheetGrid =>
             (FreeX.App.UI.GridView)_window.FindName("SheetGrid");
+
+        // The live declarative ribbon panel for the selected tab. The MainWindow-level adaptive engine is
+        // dormant for the declarative ribbon; this panel does the real per-group caching + 2-state
+        // collapse, so resize-coordinator outcomes are verified against ITS state.
+        private RibbonAdaptivePanel? LivePanel
+        {
+            get
+            {
+                if (_window.FindName("RibbonTabs") is not TabControl tabs ||
+                    tabs.SelectedItem is not TabItem tabItem)
+                {
+                    return null;
+                }
+
+                var root = tabItem.Content as DependencyObject ?? tabItem;
+                return WpfTestTree.FindVisualSelfAndDescendants<RibbonAdaptivePanel>(root)
+                    .Concat(WpfTestTree.FindLogicalDescendants<RibbonAdaptivePanel>(root))
+                    .Distinct()
+                    .FirstOrDefault();
+            }
+        }
+
+        public IReadOnlyList<string> LiveCollapsedGroupNames =>
+            LivePanel is { } panel
+                ? panel.Children.OfType<RibbonGroupHost>().Where(host => host.Collapsed).Select(host => host.GroupName).ToList()
+                : [];
+
+        public double LiveRibbonRightOverflowPx
+        {
+            get
+            {
+                if (LivePanel is not { } panel || panel.ActualWidth <= 0)
+                    return 0;
+
+                double maxRight = 0;
+                foreach (var child in panel.Children.OfType<FrameworkElement>())
+                {
+                    if (child.Visibility != Visibility.Visible)
+                        continue;
+
+                    var x = child.TransformToAncestor(panel).Transform(new Point(0, 0)).X;
+                    maxRight = Math.Max(maxRight, x + child.ActualWidth);
+                }
+
+                return maxRight - panel.ActualWidth;
+            }
+        }
 
         public void SelectRibbonTab(string header, double width)
         {

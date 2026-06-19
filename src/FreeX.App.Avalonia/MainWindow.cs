@@ -12,6 +12,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using System.Globalization;
+using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Services;
 using FreeX.App.Services.Ribbon;
 using FreeX.App.Services.Updates;
@@ -4411,8 +4412,8 @@ public sealed partial class MainWindow : Window
 
     private static Control CreateConditionalIconLayer(CfIconRenderInstruction icon, double zoomFactor)
     {
-        const double iconSize = 10d;
-        const double iconLeftInset = 4d;
+        const double iconSize = ConditionalIconCellLayoutPlanner.IconSize;
+        const double iconLeftInset = ConditionalIconCellLayoutPlanner.IconLeftInset;
         var size = iconSize * zoomFactor;
         var glyph = ConditionalFormatIconGlyphFactory.Create(icon, size);
         return new Border

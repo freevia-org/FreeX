@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Last Column">
+  <rect width="32" height="32" fill="none"/>
+  <rect x="5.5" y="6.5" width="21" height="20" rx="1" fill="#ffffff" stroke="#242424" stroke-width="1.4"/>
+  <rect x="19.5" y="6.8" width="6.7" height="19.4" fill="#ffdf80"/>
+  <path d="M5.5 11.5h21M5.5 16.5h21M5.5 21.5h21M12.5 6.5v20M19.5 6.5v20" fill="none" stroke="#242424" stroke-width="1"/>
+  <path d="M23.5 4v25" fill="none" stroke="#217346" stroke-width="1.6" stroke-linecap="round"/>
+</svg>
