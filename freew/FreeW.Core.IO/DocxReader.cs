@@ -1042,6 +1042,18 @@ public static class DocxReader
         // and the trailing w:commentReference run anchors the comment. We track the open range id so
         // every covered run gets its CommentId, and recover the reference run as a textless anchor.
         var activeCommentId = (int?)null;
+
+        // Complex-field accumulator (Word's w:fldChar begin / w:instrText / separate / result / end run
+        // sequence). When a begin fldChar is seen we collect the instruction (instrText) and the result
+        // text (runs after the separate) until the matching end, then collapse the whole span into one
+        // ComplexField run. Nesting is tracked by depth so an inner field's begin/end does not close the
+        // outer one. The instruction's leading keyword is parsed (see ReadParagraphRun for the AddRun side).
+        var fieldDepth = 0;
+        var fieldInstr = new System.Text.StringBuilder();
+        var fieldResult = new System.Text.StringBuilder();
+        var fieldPastSeparate = false;
+        XElement? fieldFormattingSource = null;
+
         foreach (var child in p.Elements())
         {
             if (child.Name == W + "commentRangeStart")
@@ -1052,6 +1064,65 @@ public static class DocxReader
             else if (child.Name == W + "commentRangeEnd")
             {
                 activeCommentId = null;
+            }
+            else if (fieldDepth > 0 && child.Name == W + "r")
+            {
+                // Inside a complex field: consume this run into the accumulator instead of emitting it.
+                var fldChar = child.Element(W + "fldChar")?.Attribute(W + "fldCharType")?.Value;
+                if (fldChar == "begin")
+                {
+                    fieldDepth++; // a nested field; its instruction/result text still feeds the accumulator
+                    // (begin char carries no text; nothing to accumulate here)
+                }
+                else if (fldChar == "separate")
+                {
+                    fieldPastSeparate = true;
+                }
+                else if (fldChar == "end")
+                {
+                    fieldDepth--;
+                    if (fieldDepth == 0)
+                    {
+                        // The outermost field closed: collapse to a single ComplexField run, mapping a
+                        // recognised leading keyword (PAGE/DATE/…) to the existing RunFieldKind so update
+                        // and rendering reuse that path, otherwise preserving the raw instruction.
+                        var instruction = fieldInstr.ToString();
+                        var result = fieldResult.ToString();
+                        var formatting = ReadRunFormatting(fieldFormattingSource?.Element(W + "rPr"));
+                        var complexField = Run.ComplexFieldRun(instruction, result, showCode: false, formatting);
+                        complexField.CommentId = activeCommentId;
+                        complexField.Control = inheritedControl;
+                        paragraph.Runs.Add(complexField);
+                        fieldInstr.Clear();
+                        fieldResult.Clear();
+                        fieldPastSeparate = false;
+                        fieldFormattingSource = null;
+                    }
+                    // A nested field's end fldChar just decrements the depth (no text to accumulate).
+                }
+                else if (!fieldPastSeparate)
+                {
+                    // Before the separate: accumulate the instruction text (w:instrText, occasionally w:t).
+                    fieldInstr.Append(string.Concat(child.Elements(W + "instrText").Select(t => t.Value)));
+                    fieldInstr.Append(string.Concat(child.Elements(W + "t").Select(t => t.Value)));
+                }
+                else
+                {
+                    // After the separate: accumulate the cached result text and remember its formatting.
+                    fieldFormattingSource ??= child;
+                    fieldResult.Append(string.Concat(child.Elements(W + "t").Select(t => t.Value)));
+                }
+            }
+            else if (child.Name == W + "r" && child.Element(W + "fldChar")?.Attribute(W + "fldCharType")?.Value == "begin"
+                && child.Element(W + "fldChar")?.Element(W + "ffData") is null)
+            {
+                // A complex field begins here (and it is not a legacy form field, which AddRun handles).
+                // Open the accumulator; subsequent runs feed it until the matching end fldChar.
+                fieldDepth = 1;
+                fieldPastSeparate = false;
+                fieldInstr.Clear();
+                fieldResult.Clear();
+                fieldFormattingSource = null;
             }
             else
             {
@@ -1274,7 +1345,8 @@ public static class DocxReader
     /// <summary>
     /// Parses an inline OMML equation (m:oMath) into an <see cref="Equation"/>. Recognises m:r (plain
     /// text), m:sSup / m:sSub / m:sSubSup (scripts), m:f (fraction), m:rad (radical), m:nary (n-ary),
-    /// m:d (delimiter) and m:m (matrix); any other top-level child degrades to the plain text of its
+    /// m:acc (accent), m:bar (over/under-bar), m:d (delimiter) and m:m (matrix); any other top-level child
+    /// degrades to the plain text of its
     /// descendant m:t runs so nothing is lost or throws. Mirrors how the writer emits these (see
     /// <c>DocxWriter.BuildMathRun</c>).
     /// </summary>
@@ -1306,6 +1378,10 @@ public static class DocxReader
                 equation.Runs.Add(ReadRadical(child));
             else if (child.Name == M + "nary")
                 equation.Runs.Add(ReadNAry(child));
+            else if (child.Name == M + "acc")
+                equation.Runs.Add(ReadAccent(child));
+            else if (child.Name == M + "bar")
+                equation.Runs.Add(ReadBar(child));
             else if (child.Name == M + "d")
                 equation.Runs.Add(ReadDelimiter(child));
             else if (child.Name == M + "m")
@@ -1345,6 +1421,27 @@ public static class DocxReader
             MathTextOf(nary.Element(M + "sub")),
             MathTextOf(nary.Element(M + "sup")),
             MathTextOf(nary.Element(M + "e")));
+    }
+
+    /// <summary>
+    /// Reads an accent (m:acc): the accent glyph from m:accPr/m:chr (default a combining circumflex/hat)
+    /// and the accented base from m:e. Mirrors <c>DocxWriter.BuildAccent</c>.
+    /// </summary>
+    private static MathRun ReadAccent(XElement acc)
+    {
+        var chr = acc.Element(M + "accPr")?.Element(M + "chr")?.Attribute(M + "val")?.Value;
+        return MathRun.AccentOf(MathTextOf(acc.Element(M + "e")), string.IsNullOrEmpty(chr) ? "̂" : chr);
+    }
+
+    /// <summary>
+    /// Reads a bar (m:bar): m:barPr/m:pos "bot" is an underbar (top = false); anything else (including the
+    /// default "top" or an absent m:pos) is an overbar. The barred base comes from m:e. Mirrors
+    /// <c>DocxWriter.BuildBar</c>.
+    /// </summary>
+    private static MathRun ReadBar(XElement bar)
+    {
+        var pos = bar.Element(M + "barPr")?.Element(M + "pos")?.Attribute(M + "val")?.Value;
+        return MathRun.BarOf(MathTextOf(bar.Element(M + "e")), top: pos != "bot");
     }
 
     /// <summary>
@@ -1816,8 +1913,10 @@ public static class DocxReader
             text += "\t";
         if (text.Length == 0)
             return;
-        var textRun = new Run(text, ReadRunFormatting(r.Element(W + "rPr"))) { HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip, CommentId = commentId, Control = control };
+        var rPr = r.Element(W + "rPr");
+        var textRun = new Run(text, ReadRunFormatting(rPr)) { HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip, CommentId = commentId, Control = control };
         ApplyRevision(textRun);
+        ApplyFormatRevision(textRun, rPr);
         paragraph.Runs.Add(textRun);
     }
 
@@ -3306,6 +3405,23 @@ public static class DocxReader
         return level1Text is not null && level1Text.Contains("%1") && level1Text.Contains("%2");
     }
 
+    /// <summary>
+    /// Reads a tracked formatting change (w:rPrChange) from a run's <paramref name="rPr"/> and stamps it
+    /// onto <paramref name="run"/> as a <see cref="FormatRevision"/>. The rPrChange carries the run's
+    /// <em>previous</em> formatting in a nested w:rPr plus the w:author/w:date of the change. A run with no
+    /// rPrChange is left untouched.
+    /// </summary>
+    private static void ApplyFormatRevision(Run run, XElement? rPr)
+    {
+        var rPrChange = rPr?.Element(W + "rPrChange");
+        if (rPrChange is null)
+            return;
+        var previous = ReadRunFormatting(rPrChange.Element(W + "rPr"));
+        var author = rPrChange.Attribute(W + "author")?.Value;
+        var date = rPrChange.Attribute(W + "date")?.Value;
+        run.FormatRevision = new FormatRevision(previous, author, date);
+    }
+
     internal static RunFormatting ReadRunFormatting(XElement? rPr)
     {
         if (rPr is null)
@@ -3442,6 +3558,9 @@ public static class DocxReader
                 Name = s.Element(W + "name")?.Attribute(W + "val")?.Value ?? id,
                 Type = s.Attribute(W + "type")?.Value == "character" ? StyleType.Character : StyleType.Paragraph,
                 BasedOnStyleId = s.Element(W + "basedOn")?.Attribute(W + "val")?.Value,
+                // The "Style for following paragraph" (w:next): the style applied to the paragraph created
+                // when Enter is pressed at the end of one carrying this style (e.g. Heading1 -> Normal).
+                NextStyleId = s.Element(W + "next")?.Attribute(W + "val")?.Value,
                 Run = rPr is null ? RunFormatting.Default : ReadRunFormatting(rPr),
                 Paragraph = pPr is null ? ParagraphFormatting.Default : ReadParagraphFormatting(pPr),
                 // A table style (e.g. the built-in TableGrid) defines its cell borders in w:tblPr/w:tblBorders;

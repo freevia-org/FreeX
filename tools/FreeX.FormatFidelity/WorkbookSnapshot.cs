@@ -24,7 +24,9 @@ internal sealed class WorkbookSnapshot
         bool HasFormula,
         string? FormulaText,
         CellStyle Style,
-        string EffectiveFontName);
+        string EffectiveFontName,
+        CellColor ResolvedFontColor,
+        CellColor? ResolvedFillColor);
 
     /// <summary>Per-sheet, ordered cell entries keyed by (row,col). Sheet order preserved.</summary>
     public List<SheetSnapshot> Sheets { get; } = new();
@@ -70,7 +72,9 @@ internal sealed class WorkbookSnapshot
                     cell.HasFormula,
                     cell.FormulaText,
                     style,
-                    style.ResolveEffectiveFontName(wb.Theme));
+                    style.ResolveEffectiveFontName(wb.Theme),
+                    style.ResolveFontColor(wb.Theme),
+                    style.ResolveFillColor(wb.Theme));
             }
 
             // Style-only cells (formatted-but-empty) carry styling we must still compare for Full-cap
@@ -89,7 +93,9 @@ internal sealed class WorkbookSnapshot
                         HasFormula: false,
                         FormulaText: null,
                         soStyle,
-                        soStyle.ResolveEffectiveFontName(wb.Theme));
+                        soStyle.ResolveEffectiveFontName(wb.Theme),
+                        soStyle.ResolveFontColor(wb.Theme),
+                        soStyle.ResolveFillColor(wb.Theme));
                 }
             }
 

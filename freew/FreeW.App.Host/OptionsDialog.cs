@@ -1,5 +1,8 @@
 using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Globalization;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using FreeW.Core.Model;
@@ -41,6 +44,22 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly CheckBox _fractions = new() { Content = "Fractions (1/2) with fraction character (½)" };
     private readonly CheckBox _hyperlinks = new() { Content = "Internet and network paths with hyperlinks" };
 
+    // AutoCorrect tab (Word's Proofing > AutoCorrect Options): the word-completion rules plus the editable
+    // "replace text as you type" table. Distinct from the AutoFormat-As-You-Type tab above.
+    private readonly CheckBox _correctTwoInitialCaps = new() { Content = "Correct TWo INitial CApitals" };
+    private readonly CheckBox _capitalizeDayNames = new() { Content = "Capitalize names of days" };
+    private readonly CheckBox _replaceText = new() { Content = "Replace text as you type" };
+    private readonly DataGrid _replacements = new()
+    {
+        AutoGenerateColumns = false,
+        CanUserAddRows = true,
+        CanUserDeleteRows = true,
+        HeadersVisibility = DataGridHeadersVisibility.Column,
+        Height = 180,
+        Margin = new Thickness(0, 6, 0, 0),
+    };
+    private readonly ObservableCollection<ReplacementRow> _replacementRows = new();
+
     /// <summary>The normalized options produced on OK; equals the input options on Cancel.</summary>
     public FreeWOptions Result { get; private set; }
 
@@ -67,6 +86,7 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
         var tabs = new TabControl { Margin = new Thickness(14, 14, 14, 0) };
         tabs.Items.Add(new TabItem { Header = "General", Content = BuildGeneralTab() });
+        tabs.Items.Add(new TabItem { Header = "AutoCorrect", Content = BuildAutoCorrectTab() });
         tabs.Items.Add(new TabItem { Header = "AutoFormat As You Type", Content = BuildAutoFormatTab() });
 
         var buttons = DialogButtonRowFactory.Create(Commit, buttonWidth: 84, rowMargin: new Thickness(16, 8, 16, 12));
@@ -145,6 +165,63 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         return panel;
     }
 
+    private FrameworkElement BuildAutoCorrectTab()
+    {
+        var ac = _options.AutoCorrect ?? AutoCorrectOptions.Default;
+        _correctTwoInitialCaps.IsChecked = ac.CorrectTwoInitialCapitals;
+        _capitalizeDayNames.IsChecked = ac.CapitalizeDayNames;
+        _replaceText.IsChecked = ac.ReplaceText;
+
+        foreach (var r in ac.Replacements ?? new List<AutoCorrectReplacement>())
+            _replacementRows.Add(new ReplacementRow { Replace = r.Replace, With = r.With });
+
+        _replacements.Columns.Add(new DataGridTextColumn
+        {
+            Header = "Replace",
+            Binding = new System.Windows.Data.Binding(nameof(ReplacementRow.Replace)) { Mode = System.Windows.Data.BindingMode.TwoWay },
+            Width = new DataGridLength(1, DataGridLengthUnitType.Star),
+        });
+        _replacements.Columns.Add(new DataGridTextColumn
+        {
+            Header = "With",
+            Binding = new System.Windows.Data.Binding(nameof(ReplacementRow.With)) { Mode = System.Windows.Data.BindingMode.TwoWay },
+            Width = new DataGridLength(2, DataGridLengthUnitType.Star),
+        });
+        _replacements.ItemsSource = _replacementRows;
+
+        var toggles = new[] { _correctTwoInitialCaps, _capitalizeDayNames, _replaceText };
+
+        var panel = new StackPanel { Margin = new Thickness(16, 16, 16, 12) };
+        foreach (var box in toggles)
+        {
+            box.Margin = new Thickness(0, 4, 0, 0);
+            panel.Children.Add(box);
+        }
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Replace text as you type:",
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 12, 0, 0),
+        });
+        panel.Children.Add(_replacements);
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Type the misspelling/abbreviation under \"Replace\" and its replacement under \"With\". Blank rows are ignored; matching is case-insensitive on a word boundary.",
+            FontSize = 11,
+            Foreground = System.Windows.Media.Brushes.Gray,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 6, 0, 0),
+        });
+
+        // The replace table only applies when "Replace text as you type" is on; mirror that in the UI.
+        void SyncTable() => _replacements.IsEnabled = _replaceText.IsChecked == true;
+        _replaceText.Checked += (_, _) => SyncTable();
+        _replaceText.Unchecked += (_, _) => SyncTable();
+        SyncTable();
+
+        return panel;
+    }
+
     private void Commit()
     {
         if (!OptionsDialogPlanner.TryParseRecentFilesCap(_recentFilesCap.Text, out var cap))
@@ -171,9 +248,31 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             Fractions = _fractions.IsChecked == true,
             Hyperlinks = _hyperlinks.IsChecked == true,
         };
+        // Commit any in-progress cell edit so the last-typed row is captured before we read the rows.
+        _replacements.CommitEdit(DataGridEditingUnit.Row, true);
+
+        var autoCorrect = new AutoCorrectOptions
+        {
+            CorrectTwoInitialCapitals = _correctTwoInitialCaps.IsChecked == true,
+            CapitalizeDayNames = _capitalizeDayNames.IsChecked == true,
+            ReplaceText = _replaceText.IsChecked == true,
+            Replacements = _replacementRows
+                .Where(r => !string.IsNullOrWhiteSpace(r.Replace) && !string.IsNullOrEmpty(r.With))
+                .Select(r => new AutoCorrectReplacement(r.Replace!.Trim(), r.With!))
+                .ToList(),
+        };
+
         Result = OptionsDialogPlanner.BuildResult(
-            cap, format, _uiLanguage.Text, _autoCorrectEnabled.IsChecked == true, autoFormat);
+            cap, format, _uiLanguage.Text, _autoCorrectEnabled.IsChecked == true, autoFormat, autoCorrect);
         DialogResult = true;
+    }
+
+    // A mutable two-property row backing the AutoCorrect replace-table DataGrid (DataGrid edits need a
+    // settable, public class; the immutable AutoCorrectReplacement record is built from these on Commit).
+    private sealed class ReplacementRow
+    {
+        public string? Replace { get; set; }
+        public string? With { get; set; }
     }
 
     private static string SystemLanguageLabel()

@@ -15,7 +15,8 @@ internal sealed record StyleDefinition(
     string Name,
     string? BasedOnId,
     RunFormatting Run,
-    ParagraphFormatting Paragraph);
+    ParagraphFormatting Paragraph,
+    string? NextStyleId);
 
 /// <summary>
 /// A small modal form that captures (or edits) a custom paragraph style: name, a few formatting options
@@ -56,7 +57,7 @@ internal static class StyleDialog
         IReadOnlyDictionary<string, string> styleNamesById,
         string? defaultBasedOnId) =>
         Show(owner, "New Style", styleNamesById, fixedName: null, defaultBasedOnId,
-            RunFormatting.Default, ParagraphFormatting.Default, isModify: false);
+            RunFormatting.Default, ParagraphFormatting.Default, defaultNextStyleId: null, isModify: false);
 
     /// <summary>
     /// Show the Modify Style dialog seeded with an existing style's name/based-on/formatting. The name is
@@ -67,7 +68,7 @@ internal static class StyleDialog
         IReadOnlyDictionary<string, string> styleNamesById,
         DocumentStyle existing) =>
         Show(owner, $"Modify Style — {existing.Name}", styleNamesById, fixedName: existing.Name,
-            existing.BasedOnStyleId, existing.Run, existing.Paragraph, isModify: true);
+            existing.BasedOnStyleId, existing.Run, existing.Paragraph, existing.NextStyleId, isModify: true);
 
     private static StyleDefinition? Show(
         Window? owner,
@@ -77,6 +78,7 @@ internal static class StyleDialog
         string? defaultBasedOnId,
         RunFormatting seedRun,
         ParagraphFormatting seedPara,
+        string? defaultNextStyleId,
         bool isModify)
     {
         StyleDefinition? result = null;
@@ -108,6 +110,23 @@ internal static class StyleDialog
             var match = basedOnEntries.FindIndex(kv => kv.Value == defaultBasedOnId);
             if (match >= 0)
                 basedOn.SelectedIndex = match;
+        }
+
+        // "Style for following paragraph" (Word's w:next): the style the next paragraph takes when Enter is
+        // pressed at the end of one carrying this style. "(same style)" maps to null (keep this style).
+        var nextStyle = new ComboBox { MinWidth = 280 };
+        var nextEntries = new List<KeyValuePair<string, string>> { new("(same style)", string.Empty) };
+        nextEntries.AddRange(styleNamesById
+            .OrderBy(kv => kv.Value, System.StringComparer.OrdinalIgnoreCase)
+            .Select(kv => new KeyValuePair<string, string>(kv.Value, kv.Key)));
+        nextStyle.ItemsSource = nextEntries;
+        nextStyle.DisplayMemberPath = "Key";
+        nextStyle.SelectedIndex = 0;
+        if (defaultNextStyleId is { Length: > 0 })
+        {
+            var match = nextEntries.FindIndex(kv => kv.Value == defaultNextStyleId);
+            if (match >= 0)
+                nextStyle.SelectedIndex = match;
         }
 
         var bold = new CheckBox { Content = "Bold", IsChecked = seedRun.Bold, Margin = new Thickness(0, 0, 12, 0) };
@@ -155,8 +174,11 @@ internal static class StyleDialog
             var chosenBasedOn = (basedOn.SelectedItem is KeyValuePair<string, string> kv && kv.Value.Length > 0)
                 ? kv.Value
                 : null;
+            var chosenNext = (nextStyle.SelectedItem is KeyValuePair<string, string> nkv && nkv.Value.Length > 0)
+                ? nkv.Value
+                : null;
 
-            result = new StyleDefinition(styleName, chosenBasedOn, run, para);
+            result = new StyleDefinition(styleName, chosenBasedOn, run, para, chosenNext);
             dialog.DialogResult = true;
         }
 
@@ -167,6 +189,7 @@ internal static class StyleDialog
         var panel = new StackPanel { Margin = new Thickness(16) };
         AddRow(panel, "Name:", name);
         AddRow(panel, "Style based on:", basedOn);
+        AddRow(panel, "Style for following paragraph:", nextStyle);
         AddRow(panel, "Formatting:", effects);
         AddRow(panel, "Font size:", size);
         AddRow(panel, "Text colour:", color);

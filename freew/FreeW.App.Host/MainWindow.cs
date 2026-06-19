@@ -339,6 +339,16 @@ public sealed class MainWindow : Window
         CommandBindings.Add(new CommandBinding(revealFormatting, (_, _) => ToggleRevealFormatting()));
         InputBindings.Add(new KeyBinding(revealFormatting, new KeyGesture(Key.F1, ModifierKeys.Shift)));
 
+        // Alt+F9: toggle field codes vs results across the document (Word's field-code toggle).
+        var toggleFieldCodes = new RoutedUICommand("Toggle Field Codes", "ToggleFieldCodes", typeof(MainWindow));
+        CommandBindings.Add(new CommandBinding(toggleFieldCodes, (_, _) => _editor.ToggleFieldCodes()));
+        InputBindings.Add(new KeyBinding(toggleFieldCodes, new KeyGesture(Key.F9, ModifierKeys.Alt)));
+
+        // F9: update (recompute) every field's result (Word's Update Field shortcut).
+        var updateFields = new RoutedUICommand("Update Fields", "UpdateFields", typeof(MainWindow));
+        CommandBindings.Add(new CommandBinding(updateFields, (_, _) => _editor.UpdateFields()));
+        InputBindings.Add(new KeyBinding(updateFields, new KeyGesture(Key.F9)));
+
         UpdateTitle();
         UpdateCounts();
         RefreshOutline();
@@ -1423,6 +1433,7 @@ public sealed class MainWindow : Window
         _options.UiLanguage = edited.UiLanguage;
         _options.AutoCorrectEnabled = edited.AutoCorrectEnabled;
         _options.AutoFormat = edited.AutoFormat;
+        _options.AutoCorrect = edited.AutoCorrect;
         _options.Normalize();
         ApplyAutoFormatOptions();
 
@@ -1436,6 +1447,7 @@ public sealed class MainWindow : Window
     {
         _editor.AutoCorrectEnabled = _options.AutoCorrectEnabled;
         _editor.AutoFormatOptions = _options.AutoFormat ?? AutoFormatOptions.Default;
+        _editor.AutoCorrectOptions = _options.AutoCorrect ?? AutoCorrectOptions.Default;
     }
 
     // Shows that AppProduct = "FreeW" routes the shared storage helpers to FreeW's own folder.

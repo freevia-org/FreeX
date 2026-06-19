@@ -238,17 +238,18 @@ internal static class Chains
 
     /// <summary>
     /// Phase 4 — Tier-B heavy lifts (audit §4 Phase 4). HTML is a read+write table format: the
-    /// xlsx->html->xlsx chain proves values + merge geometry round-trip (both Lossy), while styles/formulas/
-    /// number-formats/multi-sheet drop as the documented HTML-table ceiling. (DBF is read-only and therefore
-    /// has no round-trip chain — it is gated by a focused unit test loading a .dbf fixture instead.)
+    /// xlsx->html->xlsx chain proves values + merge geometry AND the inline-CSS styling
+    /// (fonts/fills/borders/alignment) round-trip (all Lossy — the CSS mapping is approximate), while
+    /// formulas/number-formats/multi-sheet drop as the documented HTML-table ceiling. (DBF is read-only and
+    /// therefore has no round-trip chain — it is gated by a focused unit test loading a .dbf fixture instead.)
     /// </summary>
     public static List<Chain> Phase4(string sourcePath)
     {
         var x = ".xlsx";
         return new List<Chain>
         {
-            // HTML round-trip — values + colspan/rowspan merge geometry survive; styling/structure is the
-            // single-table ceiling (None). Gate: BUGS:0.
+            // HTML round-trip — values + colspan/rowspan merge geometry + inline-CSS styling survive
+            // (Lossy); formulas/number-formats/structure are the single-table ceiling (None). Gate: BUGS:0.
             new Chain
             {
                 Name = "xlsx -> html -> xlsx",

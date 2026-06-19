@@ -134,6 +134,8 @@ internal static class FreeWRibbonIcons
             ["freew.equation-integral"] = RibbonCommandIconKind.Equation,
             ["freew.equation-summation"] = RibbonCommandIconKind.Equation,
             ["freew.equation-product"] = RibbonCommandIconKind.Equation,
+            ["freew.equation-accent"] = RibbonCommandIconKind.Equation,
+            ["freew.equation-bar"] = RibbonCommandIconKind.Equation,
             ["freew.equation-bracket"] = RibbonCommandIconKind.Equation,
             ["freew.equation-matrix"] = RibbonCommandIconKind.Equation,
             ["freew.chart"] = RibbonCommandIconKind.ChartColumn,

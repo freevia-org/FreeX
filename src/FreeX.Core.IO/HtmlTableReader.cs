@@ -8,11 +8,14 @@ namespace FreeX.Core.IO;
 /// Parses the first <c>&lt;table&gt;</c> of an HTML document into a sheet: rows from <c>&lt;tr&gt;</c>,
 /// cells from <c>&lt;td&gt;</c>/<c>&lt;th&gt;</c>, with <c>colspan</c>/<c>rowspan</c> turned into merged
 /// regions. Cell text is entity-decoded and tag-stripped, then coerced to a typed value when numeric.
+/// Each cell's inline <c>style</c> attribute is parsed back into a <see cref="CellStyle"/> (the inverse
+/// of <see cref="HtmlTableWriter"/>'s CSS mapping): font weight/style/underline, family/size/color,
+/// background fill, horizontal alignment, and per-edge border style+color.
 /// Hand-rolled (no external HTML dependency) and tolerant of unclosed tags / stray markup.
 /// </summary>
 internal static class HtmlTableReader
 {
-    public static void Populate(string html, Sheet sheet)
+    public static void Populate(string html, Workbook workbook, Sheet sheet)
     {
         var tableInner = ExtractFirstTableInner(html);
         if (tableInner is null)
@@ -42,8 +45,21 @@ internal static class HtmlTableReader
                     break;
 
                 var text = HtmlText.DecodeEntities(StripTags(cell.InnerHtml)).Trim();
+                // A cell exists in the grid if it has text OR carries styling (a formatted-but-empty cell
+                // still round-trips its CSS). Parse the inline style once and register it on the workbook.
+                var style = HtmlCssParser.Parse(cell.Style);
+                var addr = new CellAddress(sheet.Id, row, col);
                 if (text.Length > 0)
-                    sheet.SetCell(new CellAddress(sheet.Id, row, col), Cell.FromValue(Coerce(text)));
+                {
+                    var newCell = Cell.FromValue(Coerce(text));
+                    if (style is not null)
+                        newCell.StyleId = workbook.RegisterStyle(style);
+                    sheet.SetCell(addr, newCell);
+                }
+                else if (style is not null)
+                {
+                    sheet.SetStyleOnly(row, col, workbook.RegisterStyle(style));
+                }
 
                 int colspan = Math.Max(1, cell.ColSpan);
                 int rowspan = Math.Max(1, cell.RowSpan);
@@ -119,7 +135,7 @@ internal static class HtmlTableReader
 
     // ---- tiny HTML scanner ------------------------------------------------------------------------
 
-    private sealed record HtmlCell(string InnerHtml, int ColSpan, int RowSpan);
+    private sealed record HtmlCell(string InnerHtml, int ColSpan, int RowSpan, string? Style);
 
     private static IEnumerable<HtmlCell> EnumerateCells(string rowInner)
     {
@@ -140,12 +156,13 @@ internal static class HtmlTableReader
                 var attrs = rowInner.Substring(lt, tagEnd - lt + 1);
                 int colspan = ReadIntAttr(attrs, "colspan");
                 int rowspan = ReadIntAttr(attrs, "rowspan");
+                string? style = ReadStringAttr(attrs, "style");
 
                 int closeStart = FindMatchingClose(rowInner, tagEnd + 1, name);
                 string inner = closeStart < 0
                     ? rowInner.Substring(tagEnd + 1)
                     : rowInner.Substring(tagEnd + 1, closeStart - (tagEnd + 1));
-                yield return new HtmlCell(inner, colspan, rowspan);
+                yield return new HtmlCell(inner, colspan, rowspan, style);
 
                 i = closeStart < 0 ? rowInner.Length : SkipClosingTag(rowInner, closeStart);
             }
@@ -276,6 +293,42 @@ internal static class HtmlTableReader
         while (j < tag.Length && char.IsDigit(tag[j]))
             j++;
         return j > start && int.TryParse(tag.AsSpan(start, j - start), out var v) && v > 0 ? v : 1;
+    }
+
+    /// <summary>Read a quoted string attribute value (e.g. <c>style="…"</c>), or null when absent.</summary>
+    private static string? ReadStringAttr(string tag, string attr)
+    {
+        int search = 0;
+        while (true)
+        {
+            int idx = tag.IndexOf(attr, search, StringComparison.OrdinalIgnoreCase);
+            if (idx < 0)
+                return null;
+            // Require a word boundary before the name and an '=' (possibly after spaces) after it, so we
+            // don't match the attribute name embedded inside another token.
+            bool boundaryBefore = idx == 0 || tag[idx - 1] == ' ' || tag[idx - 1] == '<';
+            int after = idx + attr.Length;
+            int k = after;
+            while (k < tag.Length && tag[k] == ' ') k++;
+            if (boundaryBefore && k < tag.Length && tag[k] == '=')
+            {
+                int q = k + 1;
+                while (q < tag.Length && tag[q] == ' ') q++;
+                if (q >= tag.Length)
+                    return null;
+                char quote = tag[q];
+                if (quote is '"' or '\'')
+                {
+                    int end = tag.IndexOf(quote, q + 1);
+                    return end < 0 ? null : tag.Substring(q + 1, end - (q + 1));
+                }
+                // Unquoted value: read up to whitespace or '>'.
+                int e = q;
+                while (e < tag.Length && tag[e] != ' ' && tag[e] != '>' && tag[e] != '/') e++;
+                return tag.Substring(q, e - q);
+            }
+            search = idx + attr.Length;
+        }
     }
 
     /// <summary>Strip all tags from a fragment, replacing &lt;br&gt; with a newline.</summary>

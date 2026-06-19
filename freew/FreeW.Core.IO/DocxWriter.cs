@@ -1696,6 +1696,24 @@ public static class DocxWriter
     }
 
     /// <summary>
+    /// Builds a w:rPrChange (tracked formatting change) carrying a unique w:id plus the author/date, with a
+    /// nested w:rPr holding the run's <em>previous</em> formatting. The nested w:rPr is always present (even
+    /// when empty) because that empty element is how Word records "the run previously had default
+    /// formatting". This element is the last child of the run's w:rPr.
+    /// </summary>
+    private static XElement BuildRprChange(FormatRevision revision, IdAllocator ids)
+    {
+        var change = new XElement(W + "rPrChange",
+            new XAttribute(W + "id", ids.NextRevisionId()));
+        if (revision.Author is { Length: > 0 } author)
+            change.Add(new XAttribute(W + "author", author));
+        if (revision.DateXml is { Length: > 0 } date)
+            change.Add(new XAttribute(W + "date", date));
+        change.Add(BuildRunProperties(revision.PreviousFormatting) ?? new XElement(W + "rPr"));
+        return change;
+    }
+
+    /// <summary>
     /// Builds the w:sdtPr (content-control properties) for a content control. Emits w:tag / w:alias when
     /// set, then the control-kind element: w:text for a plain-text control; a w14:checkbox carrying the
     /// checked state (w14:checked val="1"/"0") for a checkbox; w:richText for a rich-text control; a
@@ -1859,6 +1877,35 @@ public static class DocxWriter
                     content.Add(BuildRun(runs[i++], drawings));
                 var sdt = new XElement(W + "sdt", BuildSdtProperties(control), content);
                 Content(head, sdt);
+                continue;
+            }
+
+            // A complex field (Word's w:fldChar begin / w:instrText / separate / result / end sequence)
+            // emits FIVE runs rather than one: a begin fldChar, an instrText run carrying the raw field
+            // instruction, a separate fldChar, the cached-result run, then an end fldChar. The reader
+            // collapses this sequence back into a single ComplexField run. Routed through Content so it
+            // sits correctly inside an open revision/comment context, like any other run.
+            var complex = runs[i].ComplexField;
+            if (complex is not null)
+            {
+                var fieldRun = runs[i++];
+                var rPr = BuildRunProperties(fieldRun.Formatting);
+                XElement WithProps(params object[] children)
+                {
+                    var r = new XElement(W + "r");
+                    if (rPr is not null)
+                        r.Add(new XElement(rPr));
+                    r.Add(children);
+                    return r;
+                }
+                Content(fieldRun, WithProps(new XElement(W + "fldChar", new XAttribute(W + "fldCharType", "begin"))));
+                Content(fieldRun, WithProps(new XElement(W + "instrText",
+                    new XAttribute(XNamespace.Xml + "space", "preserve"), complex.Instruction)));
+                Content(fieldRun, WithProps(new XElement(W + "fldChar", new XAttribute(W + "fldCharType", "separate"))));
+                if (fieldRun.Text.Length > 0)
+                    Content(fieldRun, WithProps(new XElement(W + "t",
+                        new XAttribute(XNamespace.Xml + "space", "preserve"), fieldRun.Text)));
+                Content(fieldRun, WithProps(new XElement(W + "fldChar", new XAttribute(W + "fldCharType", "end"))));
                 continue;
             }
 
@@ -2272,6 +2319,15 @@ public static class DocxWriter
     {
         var r = new XElement(W + "r");
         var rPr = BuildRunProperties(run.Formatting);
+        // A tracked formatting change (w:rPrChange) is the LAST child of the run's run-properties and
+        // carries a nested w:rPr of the run's *previous* formatting (what reject restores). When the run
+        // has a format revision but no other run properties, an empty w:rPr must still be created to host
+        // it (an rPr that is null/empty would otherwise be dropped).
+        if (run.FormatRevision is { } formatRevision)
+        {
+            rPr ??= new XElement(W + "rPr");
+            rPr.Add(BuildRprChange(formatRevision, drawings.Ids));
+        }
         if (rPr is not null)
             r.Add(rPr);
         if (run.PreservedDrawing is { } preservedDrawing)
@@ -2310,7 +2366,8 @@ public static class DocxWriter
 
     /// <summary>
     /// Builds the OMML element for a single math fragment: m:sSup / m:sSub / m:sSubSup / m:f / m:rad /
-    /// m:nary / m:d / m:m, or a plain m:r for text. Mirrors the reader (see <c>DocxReader.ReadOMath</c>).
+    /// m:nary / m:acc / m:bar / m:d / m:m, or a plain m:r for text. Mirrors the reader (see
+    /// <c>DocxReader.ReadOMath</c>).
     /// </summary>
     private static XElement BuildMathRun(MathRun run) => run.Kind switch
     {
@@ -2329,6 +2386,8 @@ public static class DocxWriter
             new XElement(M + "den", MathText(run.Denominator))),
         MathRunKind.Radical => BuildRadical(run),
         MathRunKind.NAry => BuildNAry(run),
+        MathRunKind.Accent => BuildAccent(run),
+        MathRunKind.Bar => BuildBar(run),
         MathRunKind.Delimiter => BuildDelimiter(run),
         MathRunKind.Matrix => BuildMatrix(run.Matrix),
         _ => MathText(run.Text)
@@ -2369,6 +2428,31 @@ public static class DocxWriter
             new XElement(M + "sup", MathText(run.Sup)),
             new XElement(M + "e", MathText(run.Base)));
     }
+
+    /// <summary>
+    /// Builds an accent (m:acc): m:accPr/m:chr carries the accent glyph (hat/bar/vec/dot/tilde); the
+    /// accented base is the m:e element. The reader keys off m:accPr/m:chr to recover
+    /// <see cref="MathRun.Accent"/>. Mirrors <c>DocxReader.ReadAccent</c>.
+    /// </summary>
+    private static XElement BuildAccent(MathRun run)
+    {
+        var pr = new XElement(M + "accPr");
+        if (!string.IsNullOrEmpty(run.Accent))
+            pr.Add(new XElement(M + "chr", new XAttribute(M + "val", run.Accent)));
+        return new XElement(M + "acc",
+            pr,
+            new XElement(M + "e", MathText(run.Base)));
+    }
+
+    /// <summary>
+    /// Builds a bar (m:bar): m:barPr/m:pos carries "top" (overbar) or "bot" (underbar); the barred base
+    /// is the m:e element. Mirrors <c>DocxReader.ReadBar</c>.
+    /// </summary>
+    private static XElement BuildBar(MathRun run) =>
+        new(M + "bar",
+            new XElement(M + "barPr",
+                new XElement(M + "pos", new XAttribute(M + "val", run.BarTop ? "top" : "bot"))),
+            new XElement(M + "e", MathText(run.Base)));
 
     /// <summary>
     /// Builds a delimiter (m:d): m:dPr carries the begin/end glyphs (m:begChr / m:endChr); a single
@@ -4272,19 +4356,34 @@ public static class DocxWriter
                 new XElement(W + "name", new XAttribute(W + "val", style.Name)));
             if (!string.IsNullOrEmpty(style.BasedOnStyleId))
                 element.Add(new XElement(W + "basedOn", new XAttribute(W + "val", style.BasedOnStyleId)));
-            // Style-level numbering FreeW does not model: when the style carried an original w:numPr and the
-            // merge plan remapped that numId (a definition exists in the preserved numbering.xml), re-emit a
-            // w:pPr/w:numPr pointing at the REMAPPED numId (disjoint from FreeW's fixed ids), keeping the
-            // original ilvl. w:pPr precedes w:rPr in CT_Style schema order. A numPr whose numId the plan did
-            // not remap (no matching w:num) is dropped, exactly like a paragraph's preserved numPr.
-            if (preservedNumbering is not null
-                && style.PreservedNumbering is { } sn
-                && preservedNumbering.NumIdRemap.TryGetValue(sn.NumId, out var mappedNumId))
+            // The "Style for following paragraph" (w:next, after w:basedOn in CT_Style order): which style
+            // the paragraph after this one takes (e.g. a Heading's body-text follow-on). Emitted only for
+            // paragraph styles that specify one.
+            if (style.Type != StyleType.Character && !string.IsNullOrEmpty(style.NextStyleId))
+                element.Add(new XElement(W + "next", new XAttribute(W + "val", style.NextStyleId)));
+            // A single w:pPr (which precedes w:rPr in CT_Style order) carrying the style's paragraph
+            // formatting (alignment / indents / spacing) and, for a preserved style-level list, its numPr.
+            // Built only for paragraph styles, and only when there is something to emit, so character styles
+            // and formatting-only paragraph styles are unaffected.
+            if (style.Type != StyleType.Character)
             {
-                element.Add(new XElement(W + "pPr",
-                    new XElement(W + "numPr",
+                var pPr = BuildStyleParagraphProperties(style.Paragraph);
+                // Style-level numbering FreeW does not model: when the style carried an original w:numPr and
+                // the merge plan remapped that numId (a definition exists in the preserved numbering.xml),
+                // re-emit a numPr pointing at the REMAPPED numId (disjoint from FreeW's fixed ids), keeping
+                // the original ilvl. A numPr whose numId the plan did not remap (no matching w:num) is
+                // dropped, exactly like a paragraph's preserved numPr.
+                if (preservedNumbering is not null
+                    && style.PreservedNumbering is { } sn
+                    && preservedNumbering.NumIdRemap.TryGetValue(sn.NumId, out var mappedNumId))
+                {
+                    pPr ??= new XElement(W + "pPr");
+                    pPr.Add(new XElement(W + "numPr",
                         new XElement(W + "ilvl", new XAttribute(W + "val", sn.Ilvl)),
-                        new XElement(W + "numId", new XAttribute(W + "val", mappedNumId)))));
+                        new XElement(W + "numId", new XAttribute(W + "val", mappedNumId))));
+                }
+                if (pPr is not null)
+                    element.Add(pPr);
             }
             var rPr = BuildRunProperties(style.Run);
             if (rPr is not null)
@@ -4293,5 +4392,64 @@ public static class DocxWriter
         }
 
         return new XDocument(styles);
+    }
+
+    /// <summary>
+    /// Build a style-scope <c>w:pPr</c> carrying only the paragraph formatting a custom style can define
+    /// (alignment, left/right/first-line indents, space-before/after, line spacing). Returns null when the
+    /// style's paragraph formatting is the default (nothing to emit), so a formatting-only or run-only style
+    /// adds no empty <c>w:pPr</c>. This is deliberately narrower than the per-paragraph
+    /// <see cref="BuildParagraphProperties"/>, which also handles instance-only concerns (pStyle, section
+    /// breaks, FreeW's modelled lists) that have no place on a style definition.
+    /// </summary>
+    private static XElement? BuildStyleParagraphProperties(ParagraphFormatting f)
+    {
+        var pPr = new XElement(W + "pPr");
+
+        if (f.Alignment != TextAlignment.Left)
+            pPr.Add(new XElement(W + "jc", new XAttribute(W + "val", f.Alignment switch
+            {
+                TextAlignment.Center => "center",
+                TextAlignment.Right => "right",
+                TextAlignment.Justify => "both",
+                _ => "left"
+            })));
+
+        // w:spacing carries before/after and line spacing, mirroring the per-paragraph writer: before/after
+        // are emitted only when non-zero, line spacing only when it differs from the model default. Schema
+        // order places w:spacing before w:ind in CT_PPr.
+        var hasLineSpacing = f.LineRule != LineSpacingRule.Multiple
+            || System.Math.Abs(f.LineSpacing - ParagraphFormatting.Default.LineSpacing) > 0.0001;
+        if (f.SpaceBeforePt > 0 || f.SpaceAfterPt > 0 || hasLineSpacing)
+        {
+            var spacing = new XElement(W + "spacing");
+            if (f.SpaceBeforePt > 0 || f.SpaceAfterPt > 0)
+            {
+                spacing.Add(new XAttribute(W + "before", PointsToDxa(f.SpaceBeforePt)));
+                spacing.Add(new XAttribute(W + "after", PointsToDxa(f.SpaceAfterPt)));
+            }
+            if (hasLineSpacing)
+            {
+                var (line, rule) = f.LineRule switch
+                {
+                    LineSpacingRule.Exact => ((int)System.Math.Round(f.LineHeightPt * 20), "exact"),
+                    LineSpacingRule.AtLeast => ((int)System.Math.Round(f.LineHeightPt * 20), "atLeast"),
+                    _ => ((int)System.Math.Round(f.LineSpacing * 240), "auto")
+                };
+                spacing.Add(new XAttribute(W + "line", line));
+                spacing.Add(new XAttribute(W + "lineRule", rule));
+            }
+            pPr.Add(spacing);
+        }
+
+        // Indents (w:ind), in dxa; emitted as a group only when any edge is non-zero, exactly like the
+        // per-paragraph writer.
+        if (f.IndentLeftPt > 0 || f.IndentRightPt > 0 || f.FirstLineIndentPt > 0)
+            pPr.Add(new XElement(W + "ind",
+                new XAttribute(W + "left", PointsToDxa(f.IndentLeftPt)),
+                new XAttribute(W + "right", PointsToDxa(f.IndentRightPt)),
+                new XAttribute(W + "firstLine", PointsToDxa(f.FirstLineIndentPt))));
+
+        return pPr.HasElements ? pPr : null;
     }
 }

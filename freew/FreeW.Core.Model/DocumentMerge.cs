@@ -92,6 +92,7 @@ public static class DocumentMerge
         Control = source.Control, // immutable record — safe to share
         Citation = source.Citation, // immutable — safe to share
         CrossReference = source.CrossReference, // immutable record — safe to share
+        ComplexField = source.ComplexField, // immutable record — safe to share
         RevisionAuthor = source.RevisionAuthor,
         RevisionDateXml = source.RevisionDateXml
     };

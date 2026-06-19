@@ -606,8 +606,19 @@ public sealed partial class MainWindow : Window
         _workbookShareSheetService = workbookShareSheetService;
         _workbookFileAccessService = workbookFileAccessService;
         _platformPrinter = platformPrinter;
-        var source = new StartupWorkbookLoader().Load(startupArguments);
-        _session = _sessionFactory.Create(source, InitialViewportHeight, InitialViewportWidth, includeObjects: true);
+        // The headless --parity-capture mode renders the fixed parity demo workbook (the same content the WPF
+        // host adopts) so the cross-platform grid.demo comparison reflects only rendering differences, not the
+        // built-in macOS-preview demo. Every other startup path keeps the normal loader/fallback behavior.
+        StartupWorkbookLoadResult? source = null;
+        if (App.ParityCaptureOptions is not null)
+        {
+            _session = _sessionFactory.CreateParityDemo(InitialViewportHeight, InitialViewportWidth, includeObjects: true);
+        }
+        else
+        {
+            source = new StartupWorkbookLoader().Load(startupArguments);
+            _session = _sessionFactory.Create(source, InitialViewportHeight, InitialViewportWidth, includeObjects: true);
+        }
 
         Title = $"FreeX - {_session.DisplayName}";
         Width = 1120;
@@ -617,7 +628,8 @@ public sealed partial class MainWindow : Window
         Background = WindowBackground;
         Content = BuildContent();
         ConfigureNativeMenu();
-        RecordStartupRecentWorkbook(source);
+        if (source is not null)
+            RecordStartupRecentWorkbook(source);
         ConfigureWorkbookDropTarget();
         KeyDown += MainWindow_KeyDown;
         TextInput += MainWindow_TextInput;

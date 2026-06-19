@@ -39,7 +39,8 @@ internal static class OptionsDialogPlanner
         string? format,
         string? uiLanguage,
         bool autoCorrectEnabled,
-        AutoFormatOptions autoFormat)
+        AutoFormatOptions autoFormat,
+        AutoCorrectOptions autoCorrect)
     {
         var result = new FreeWOptions
         {
@@ -48,6 +49,7 @@ internal static class OptionsDialogPlanner
             UiLanguage = uiLanguage ?? FreeWOptions.SystemDefaultLanguage,
             AutoCorrectEnabled = autoCorrectEnabled,
             AutoFormat = autoFormat ?? AutoFormatOptions.Default,
+            AutoCorrect = autoCorrect ?? AutoCorrectOptions.Default,
         };
         result.Normalize();
         return result;

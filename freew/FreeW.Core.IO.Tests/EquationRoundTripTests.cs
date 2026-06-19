@@ -193,6 +193,64 @@ public class EquationRoundTripTests
     }
 
     [Fact]
+    public void AccentEquation_SurvivesRoundTrip()
+    {
+        var read = RoundTripEquation(new Equation([MathRun.AccentOf("x", "→")]));
+
+        read.Runs.Should().ContainSingle();
+        read.Runs[0].Kind.Should().Be(MathRunKind.Accent);
+        read.Runs[0].Base.Should().Be("x");
+        read.Runs[0].Accent.Should().Be("→");
+        read.LinearText.Should().Be("x→");
+    }
+
+    [Fact]
+    public void OverbarEquation_SurvivesRoundTrip()
+    {
+        var read = RoundTripEquation(new Equation([MathRun.BarOf("AB")]));
+
+        read.Runs.Should().ContainSingle();
+        read.Runs[0].Kind.Should().Be(MathRunKind.Bar);
+        read.Runs[0].Base.Should().Be("AB");
+        read.Runs[0].BarTop.Should().BeTrue();
+    }
+
+    [Fact]
+    public void UnderbarEquation_SurvivesRoundTrip()
+    {
+        var read = RoundTripEquation(new Equation([MathRun.BarOf("AB", top: false)]));
+
+        read.Runs.Should().ContainSingle();
+        read.Runs[0].Kind.Should().Be(MathRunKind.Bar);
+        read.Runs[0].Base.Should().Be("AB");
+        read.Runs[0].BarTop.Should().BeFalse();
+    }
+
+    [Fact]
+    public void AccentAndBar_EmitTheirOmmlElements()
+    {
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromEquation(new Equation([
+            MathRun.AccentOf("x"),
+            MathRun.BarOf("y"),
+            MathRun.BarOf("z", top: false)
+        ])));
+        doc.Blocks.Add(paragraph);
+
+        var xml = WriteDocumentXml(doc);
+        var oMath = xml.Descendants(M + "oMath").Single();
+
+        var acc = oMath.Elements(M + "acc").Single();
+        acc.Element(M + "accPr")!.Element(M + "chr")!.Attribute(M + "val")!.Value.Should().Be("̂");
+
+        var bars = oMath.Elements(M + "bar").ToList();
+        bars.Should().HaveCount(2);
+        bars[0].Element(M + "barPr")!.Element(M + "pos")!.Attribute(M + "val")!.Value.Should().Be("top");
+        bars[1].Element(M + "barPr")!.Element(M + "pos")!.Attribute(M + "val")!.Value.Should().Be("bot");
+    }
+
+    [Fact]
     public void DelimiterEquation_SurvivesRoundTrip()
     {
         var read = RoundTripEquation(new Equation([MathRun.Delimiter("a, b", "[", "]")]));

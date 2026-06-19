@@ -8,8 +8,9 @@ namespace FreeW.Core.Model;
 // round-trip through docx as an inline m:oMath emitted in place of the run's w:t. An equation is a flat,
 // ordered list of MathRun parts; each part is either plain math text (m:r/m:t) or one of the common OMML
 // structures — superscript (m:sSup), subscript (m:sSub), sub-superscript (m:sSubSup), fraction (m:f),
-// radical (m:rad), n-ary (m:nary, sum/integral/product with limits), a bracketed delimiter (m:d) or a
-// matrix (m:m). Each structure stores its component slots as plain math text (mirroring how Superscript
+// radical (m:rad), n-ary (m:nary, sum/integral/product with limits), an accented character (m:acc),
+// an over/under-bar (m:bar), a bracketed delimiter (m:d) or a matrix (m:m). Each structure stores its
+// component slots as plain math text (mirroring how Superscript
 // already stores Base/Sup as strings); a Matrix additionally carries a small grid of text cells. That
 // covers the high-value structures from Word's Equation tools while staying well short of the full
 // (recursive) OMML schema — richer constructs degrade to their plain math text on read so nothing throws.
@@ -24,6 +25,8 @@ namespace FreeW.Core.Model;
 /// <item><see cref="Fraction"/> — a numerator over a denominator (m:f).</item>
 /// <item><see cref="Radical"/> — a (square or nth) root (m:rad).</item>
 /// <item><see cref="NAry"/> — an n-ary operator (sum/integral/product) with limits (m:nary).</item>
+/// <item><see cref="Accent"/> — a base with an accent mark (hat/bar/vec/dot/tilde) over it (m:acc).</item>
+/// <item><see cref="Bar"/> — a base with an over- or under-bar (m:bar).</item>
 /// <item><see cref="Delimiter"/> — a bracketed/parenthesised expression (m:d).</item>
 /// <item><see cref="Matrix"/> — a grid of cells (m:m).</item>
 /// </list>
@@ -37,6 +40,8 @@ public enum MathRunKind
     Fraction,
     Radical,
     NAry,
+    Accent,
+    Bar,
     Delimiter,
     Matrix
 }
@@ -53,6 +58,8 @@ public enum MathRunKind
 /// <item><see cref="MathRunKind.Fraction"/> → <see cref="Numerator"/> over <see cref="Denominator"/>.</item>
 /// <item><see cref="MathRunKind.Radical"/> → <see cref="Base"/> under a root of degree <see cref="Degree"/> (empty = square root).</item>
 /// <item><see cref="MathRunKind.NAry"/> → operator <see cref="Operator"/> from <see cref="Sub"/> to <see cref="Sup"/> over <see cref="Base"/>.</item>
+/// <item><see cref="MathRunKind.Accent"/> → <see cref="Base"/> with the accent glyph <see cref="Accent"/> over it.</item>
+/// <item><see cref="MathRunKind.Bar"/> → <see cref="Base"/> with a bar above (<see cref="BarTop"/> true) or below it.</item>
 /// <item><see cref="MathRunKind.Delimiter"/> → <see cref="Base"/> wrapped in <see cref="OpenChar"/>/<see cref="CloseChar"/>.</item>
 /// <item><see cref="MathRunKind.Matrix"/> → <see cref="Matrix"/>.</item>
 /// </list>
@@ -88,6 +95,18 @@ public sealed record MathRun
 
     /// <summary>The n-ary operator glyph (∑, ∫, ∏…). Only for <see cref="MathRunKind.NAry"/>.</summary>
     public string Operator { get; init; } = string.Empty;
+
+    /// <summary>
+    /// The accent glyph placed over the base (hat ̂, bar ̄, vector →, dot ̇, tilde ̃…). Only meaningful for
+    /// <see cref="MathRunKind.Accent"/>; the default is a combining circumflex (hat).
+    /// </summary>
+    public string Accent { get; init; } = "̂";
+
+    /// <summary>
+    /// Whether a <see cref="MathRunKind.Bar"/> sits above the base (true → OMML m:pos "top", an overbar) or
+    /// below it (false → "bot", an underbar). Only meaningful for <see cref="MathRunKind.Bar"/>.
+    /// </summary>
+    public bool BarTop { get; init; } = true;
 
     /// <summary>The opening delimiter glyph (default "("). Only for <see cref="MathRunKind.Delimiter"/>.</summary>
     public string OpenChar { get; init; } = "(";
@@ -131,6 +150,20 @@ public sealed record MathRun
     public static MathRun NAry(string @operator, string sub, string sup, string operand) =>
         new() { Kind = MathRunKind.NAry, Operator = @operator, Sub = sub, Sup = sup, Base = operand };
 
+    /// <summary>
+    /// Creates an accent fragment (m:acc): <paramref name="@base"/> with the accent glyph
+    /// <paramref name="accent"/> over it (default a combining circumflex/hat).
+    /// </summary>
+    public static MathRun AccentOf(string @base, string accent = "̂") =>
+        new() { Kind = MathRunKind.Accent, Base = @base, Accent = string.IsNullOrEmpty(accent) ? "̂" : accent };
+
+    /// <summary>
+    /// Creates a bar fragment (m:bar): <paramref name="@base"/> with an overbar (<paramref name="top"/> true,
+    /// the default) or an underbar (<paramref name="top"/> false).
+    /// </summary>
+    public static MathRun BarOf(string @base, bool top = true) =>
+        new() { Kind = MathRunKind.Bar, Base = @base, BarTop = top };
+
     /// <summary>Creates a delimiter fragment (m:d): <paramref name="content"/> wrapped in <paramref name="open"/>/<paramref name="close"/>.</summary>
     public static MathRun Delimiter(string content, string open = "(", string close = ")") =>
         new() { Kind = MathRunKind.Delimiter, Base = content, OpenChar = open, CloseChar = close };
@@ -151,6 +184,8 @@ public sealed record MathRun
         MathRunKind.Fraction => $"{Numerator}/{Denominator}",
         MathRunKind.Radical => string.IsNullOrEmpty(Degree) ? $"√({Base})" : $"{Degree}√({Base})",
         MathRunKind.NAry => $"{Operator}({Sub}..{Sup}) {Base}".TrimEnd(),
+        MathRunKind.Accent => $"{Base}{Accent}",
+        MathRunKind.Bar => BarTop ? $"‾{Base}‾" : $"_{Base}_",
         MathRunKind.Delimiter => $"{OpenChar}{Base}{CloseChar}",
         MathRunKind.Matrix => Matrix?.LinearText ?? string.Empty,
         _ => Text
@@ -193,8 +228,8 @@ public sealed class MathMatrix
 /// <summary>
 /// A basic inline mathematical equation: an ordered list of <see cref="MathRun"/> fragments that maps onto
 /// an OMML <c>m:oMath</c>. Carried by a <see cref="Run"/> via <see cref="Run.Equation"/>. Stores the OMML
-/// subset FreeW round-trips (plain text, sub/super-scripts, fraction, radical, n-ary, delimiter, matrix);
-/// richer structures degrade to plain math text on read so nothing throws.
+/// subset FreeW round-trips (plain text, sub/super-scripts, fraction, radical, n-ary, accent, bar,
+/// delimiter, matrix); richer structures degrade to plain math text on read so nothing throws.
 /// </summary>
 public sealed class Equation
 {
