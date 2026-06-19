@@ -713,9 +713,10 @@ public sealed partial class MainWindow : Window
                     ["data.reapply"] = ReapplyCurrentFilterSort,
                     ["data.circleInvalid"] = CircleInvalidData,
                     ["data.clearCircles"] = ClearValidationCircles,
-                    ["data.getData"] = GetDataNotSupported,
-                    // Data ▸ Connections ▸ Refresh All: WPF aliases this to Calculate Now (recalc workbook).
-                    ["data.refresh"] = CalculateNow,
+                    ["data.getData"] = GetDataFromText,
+                    // Data ▸ Connections ▸ Refresh All: re-import the remembered file source in place; with
+                    // no remembered source there is nothing to refresh (no external DB/web connection engine).
+                    ["data.refresh"] = RefreshImportedData,
                     // Page Layout sheet options (view + print) and Review ▸ Show Notes.
                     ["pageLayout.gridlines"] = () => _ = ShowGridlinesSheetOptionsAsync(),
                     ["pageLayout.headings"] = () => _ = ShowHeadingsSheetOptionsAsync(),
