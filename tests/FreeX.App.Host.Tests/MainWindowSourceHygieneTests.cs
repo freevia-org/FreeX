@@ -134,8 +134,11 @@ public sealed partial class MainWindowSourceHygieneTests
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
 
         source.Should().Contain("ScreenshotTourCaptureHeight = 300");
-        source.Should().Contain("rtb.Render(this)");
-        source.Should().Contain("CroppedBitmap");
+        // The capture path was de-duplicated into the shared CaptureCurrentWindowAsync helper: it renders the
+        // whole window in-process and crops to the top ribbon-band sliver (Int32Rect) rather than the old
+        // inline rtb.Render(this)/CroppedBitmap. The "window-top-band" capture method is the 300px sliver.
+        source.Should().Contain("new RenderTargetBitmap");
+        source.Should().Contain("RenderTargetBitmap-window-top-band");
         source.Should().Contain("File.Create(path)");
         source.Should().NotContain("File.OpenWrite(path)");
         source.Should().NotContain("rtb.Render(RibbonTabs)");
