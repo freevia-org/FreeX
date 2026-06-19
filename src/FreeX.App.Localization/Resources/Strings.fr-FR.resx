@@ -85,6 +85,30 @@
   <data name="PivotDataSource_RangeLabel" xml:space="preserve"><value>Tableau/Plage :</value></data>
   <data name="PivotDataSource_RangeName" xml:space="preserve"><value>Plage source du tableau croisé dynamique</value></data>
   <data name="PivotDataSource_Changed" xml:space="preserve"><value>Source de données du tableau croisé dynamique modifiée en {0}.</value></data>
+  <data name="PivotName_Title" xml:space="preserve"><value>Nom du tableau croisé dynamique</value></data>
+  <data name="PivotName_Label" xml:space="preserve"><value>Nom du tableau croisé dynamique :</value></data>
+  <data name="PivotName_NameAutomation" xml:space="preserve"><value>Nom du tableau croisé dynamique</value></data>
+  <data name="PivotName_Renamed" xml:space="preserve"><value>Tableau croisé dynamique renommé en {0}.</value></data>
+  <data name="PivotGroup_Title" xml:space="preserve"><value>Groupement ({0})</value></data>
+  <data name="PivotGroup_FieldLabel" xml:space="preserve"><value>Champ :</value></data>
+  <data name="PivotGroup_GroupByLabel" xml:space="preserve"><value>Grouper par :</value></data>
+  <data name="PivotGroup_StartingAtLabel" xml:space="preserve"><value>À partir de :</value></data>
+  <data name="PivotGroup_EndingAtLabel" xml:space="preserve"><value>Jusqu'à :</value></data>
+  <data name="PivotGroup_ByLabel" xml:space="preserve"><value>Par :</value></data>
+  <data name="PivotGroup_Grouped" xml:space="preserve"><value>Champ « {0} » groupé.</value></data>
+  <data name="PivotGroup_Ungrouped" xml:space="preserve"><value>Champ « {0} » dégroupé.</value></data>
+  <data name="PivotGroup_NoField" xml:space="preserve"><value>Ajoutez un champ à la disposition du tableau croisé dynamique, puis groupez-le.</value></data>
+  <data name="PivotCalcField_Title" xml:space="preserve"><value>Insérer un champ calculé</value></data>
+  <data name="PivotCalcField_ExistingLabel" xml:space="preserve"><value>Champ calculé existant :</value></data>
+  <data name="PivotCalcField_ExistingNone" xml:space="preserve"><value>(Nouveau champ calculé)</value></data>
+  <data name="PivotCalcField_NameLabel" xml:space="preserve"><value>Nom :</value></data>
+  <data name="PivotCalcField_FormulaLabel" xml:space="preserve"><value>Formule :</value></data>
+  <data name="PivotCalcField_FieldsLabel" xml:space="preserve"><value>Champs :</value></data>
+  <data name="PivotCalcField_InsertField" xml:space="preserve"><value>Insérer le champ</value></data>
+  <data name="PivotCalcField_FieldsAutomation" xml:space="preserve"><value>Champs disponibles</value></data>
+  <data name="PivotCalcField_Delete" xml:space="preserve"><value>Supprimer</value></data>
+  <data name="PivotCalcField_Saved" xml:space="preserve"><value>Champ calculé « {0} » enregistré.</value></data>
+  <data name="PivotCalcField_Deleted" xml:space="preserve"><value>Champ calculé « {0} » supprimé.</value></data>
   <data name="PivotValueField_Title" xml:space="preserve"><value>Paramètres des champs de valeurs ({0})</value></data>
   <data name="PivotValueField_CustomName" xml:space="preserve"><value>Nom personnalisé :</value></data>
   <data name="PivotValueField_SummarizeBy" xml:space="preserve"><value>Synthétiser le champ de valeurs par :</value></data>

@@ -113,12 +113,19 @@ public sealed partial class MainWindow
             // PivotTable Styles gallery — picks a built-in style via PivotStyleGalleryPlanner and applies it
             // through ConfigurePivotTableOptionsCommand (MainWindow.PivotStyleGallery).
             ["pivotDesign.pivotStyles"] = OpenPivotStyleGallery,
-            // No Core support yet (name dialog, field settings, group/ungroup, calculated field) — honest stubs.
-            ["pivotAnalyze.name"] = () => ReportPivotNotYetAvailable("PivotTable Name"),
+            // PivotTable Name dialog — renames the active pivot via PivotNamePlanner + RenamePivotTableCommand
+            // (MainWindow.PivotName).
+            ["pivotAnalyze.name"] = OpenPivotName,
+            // Group Field / Ungroup dialogs — date/number-range grouping via PivotGroupFieldPlanner, applied
+            // through ConfigurePivotTableCalculatedItemsCommand (MainWindow.PivotGroupField).
+            ["pivotAnalyze.groupField"] = OpenPivotGroupField,
+            ["pivotAnalyze.ungroup"] = UngroupPivotField,
+            // Calculated Field dialog — add/modify/delete a calculated field via PivotCalculatedFieldPlanner,
+            // applied through ConfigurePivotTableCalculatedItemsCommand (MainWindow.PivotCalculatedField).
+            ["pivotAnalyze.calculatedField"] = OpenPivotCalculatedField,
+            // Field Settings opens per-field value/sort dialogs from the header dropdown (MainWindow.PivotFieldSettings);
+            // the ribbon button has no current-field selection at the ribbon level yet, so it stays an honest stub here.
             ["pivotAnalyze.fieldSettings"] = () => ReportPivotNotYetAvailable("Field Settings"),
-            ["pivotAnalyze.groupField"] = () => ReportPivotNotYetAvailable("Group Field"),
-            ["pivotAnalyze.ungroup"] = () => ReportPivotNotYetAvailable("Ungroup"),
-            ["pivotAnalyze.calculatedField"] = () => ReportPivotNotYetAvailable("Calculated Field"),
 
             // Shape Effects is a dropdown: clicking the parent opens its menu (No Effect / Shadow, wired via
             // BuildPictureShapeTabCommands). Register the parent id too so the renderer keeps it enabled
