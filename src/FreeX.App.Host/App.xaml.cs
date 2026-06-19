@@ -278,23 +278,11 @@ public partial class App : Application
 
     private static void RegisterCrashHandlers(IAppDiagnostics diagnostics, AutosaveSnapshotStore snapshotStore)
     {
-        Current.DispatcherUnhandledException += (_, args) =>
-        {
-            diagnostics.RecordCrash(args.Exception, "dispatcher");
-            TryEmergencySaveAllWindows(snapshotStore);
-        };
-
-        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
-        {
-            if (args.ExceptionObject is Exception exception)
-                diagnostics.RecordCrash(exception, "appdomain");
-            TryEmergencySaveAllWindows(snapshotStore);
-        };
-
-        TaskScheduler.UnobservedTaskException += (_, args) =>
-        {
-            diagnostics.RecordCrash(args.Exception, "task");
-        };
+        Free.Shared.AppServices.AppCrashHandlers.Register(
+            recordCrash: (exception, source) => diagnostics.RecordCrash(exception, source),
+            subscribeDispatcher: handler =>
+                Current.DispatcherUnhandledException += (_, args) => handler(args.Exception),
+            onAfterFault: () => TryEmergencySaveAllWindows(snapshotStore));
     }
 
     /// <summary>
