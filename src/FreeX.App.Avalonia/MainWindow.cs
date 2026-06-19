@@ -4004,6 +4004,7 @@ public sealed partial class MainWindow : Window
                 DefineName();
                 break;
             case WorksheetContextMenuAction.CreateTable:
+            case WorksheetContextMenuAction.FormatAsTable:
                 InsertTableFromSelection();
                 break;
             case WorksheetContextMenuAction.TextToColumns:
@@ -4022,13 +4023,26 @@ public sealed partial class MainWindow : Window
             case WorksheetContextMenuAction.Ungroup:
                 ClearWorksheetOutline();
                 break;
-            // Comments and Notes submenu (create/delete/show route to existing handlers; the in-place
-            // edit/resolve variants stay deferred — the shell has no session API for them yet).
+            // Comments and Notes submenu (create/edit/delete/resolve/show route through WorkbookSession
+            // comment APIs; SetThreadedCommentCommand / UpdateThreadedCommentTextCommand /
+            // ResolveThreadedCommentCommand / SetCommentCommand all carry undo/redo).
             case WorksheetContextMenuAction.NewComment:
                 _ = ShowNewThreadedCommentDialogAsync();
                 break;
             case WorksheetContextMenuAction.NewNote:
                 _ = ShowNewNoteDialogAsync();
+                break;
+            case WorksheetContextMenuAction.EditComment:
+                _ = ShowEditThreadedCommentDialogAsync();
+                break;
+            case WorksheetContextMenuAction.EditNote:
+                _ = ShowEditNoteDialogAsync();
+                break;
+            case WorksheetContextMenuAction.ResolveComment:
+                ResolveActiveCellThreadedComment(resolved: true);
+                break;
+            case WorksheetContextMenuAction.UnresolveComment:
+                ResolveActiveCellThreadedComment(resolved: false);
                 break;
             case WorksheetContextMenuAction.DeleteComment:
             case WorksheetContextMenuAction.DeleteNote:
@@ -4055,8 +4069,7 @@ public sealed partial class MainWindow : Window
                 break;
             default:
                 // TODO(avalonia-shell): wire remaining context-menu actions as Avalonia document commands land (ref: docs/parity/command-surface.md#deferred-architectural-features)
-                // Honestly-deferred only: Pick From Drop-down List, Format as Table, in-place Edit/Resolve
-                // Comment and Edit Note — no backing shell/session API exists for these yet.
+                // Honestly-deferred only: Pick From Drop-down List — no backing shell/session API exists for it yet.
                 break;
         }
     }

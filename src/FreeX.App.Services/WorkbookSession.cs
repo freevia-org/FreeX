@@ -2135,6 +2135,46 @@ public sealed class WorkbookSession
         return result;
     }
 
+    /// <summary>Current legacy note text on the active cell, or <c>null</c> when there is none.</summary>
+    public string? GetActiveCellNote() =>
+        ActiveSheet.Comments.TryGetValue(ActiveCell, out var note) ? note : null;
+
+    /// <summary>Current root text of the active cell threaded comment, or <c>null</c> when there is none.</summary>
+    public string? GetActiveCellThreadedCommentText() =>
+        ActiveSheet.ThreadedComments.TryGetValue(ActiveCell, out var comment) ? comment.Text : null;
+
+    /// <summary>Whether the active cell's threaded comment exists and is currently resolved.</summary>
+    public bool IsActiveCellThreadedCommentResolved() =>
+        ActiveSheet.ThreadedComments.TryGetValue(ActiveCell, out var comment) && comment.IsResolved;
+
+    /// <summary>Replace the root text of the active cell's existing threaded comment.</summary>
+    public WorkbookCellEditResult EditActiveCellThreadedComment(string text)
+    {
+        var range = SelectedRange;
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new UpdateThreadedCommentTextCommand(ActiveSheet.Id, ActiveCell, text));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulRangeEditResult(result, range);
+        return result;
+    }
+
+    /// <summary>Toggle the resolved state of the active cell's existing threaded comment.</summary>
+    public WorkbookCellEditResult SetActiveCellThreadedCommentResolved(bool resolved)
+    {
+        var range = SelectedRange;
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new ResolveThreadedCommentCommand(ActiveSheet.Id, ActiveCell, resolved));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulRangeEditResult(result, range);
+        return result;
+    }
+
     public WorkbookCellEditResult ClearSelectedRangeHyperlinks()
     {
         var range = SelectedRange;
