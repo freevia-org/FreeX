@@ -218,6 +218,37 @@ public class XlsxCorpusScaffoldTests
     }
 
     [Fact]
+    public void CorpusManifest_IncludesCoinToolLocalPrivateOpenPerformanceFixture()
+    {
+        var manifestRows = ReadManifestRows();
+
+        manifestRows.Should().Contain(row =>
+            row.Path == "local-private/COIN_Tool_v1_FULL_exampledata.xlsm" &&
+            row.SourceType == "local-private" &&
+            row.SourceUrl == "user-approved-local" &&
+            row.License == "private-local" &&
+            row.ExpectedWarnings == "excluded VBA macro disclosed" &&
+            row.ExpectedStatus == "supported-known-gap" &&
+            row.FeatureTags.Contains("performance", StringComparison.Ordinal) &&
+            row.FeatureTags.Contains("open-load", StringComparison.Ordinal) &&
+            row.Notes.Contains("large private workbook open/load performance profiling", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void ExcelOpenSmokeCorpusResolver_TreatsXlsmRowsAsOpenableAndMissingPrivateFilesAsSkips()
+    {
+        var resolverSource = TestWorkspaceFiles.ReadWorkspaceText(
+            "tools",
+            "FreeX.ExcelOpenSmoke",
+            "CorpusManifestResolver.cs");
+
+        resolverSource.Should().Contain("IsSupportedOpenXmlSpreadsheetWorkbook(fullPath)");
+        resolverSource.Should().Contain("extension.Equals(\".xlsm\", StringComparison.OrdinalIgnoreCase)");
+        resolverSource.Should().Contain("skipped.Add(new CorpusManifestSkip(row, \"missing-file\", fullPath));");
+        resolverSource.Should().Contain("Path.GetFullPath(Path.Combine(manifestDirectory, row.RelativePath))");
+    }
+
+    [Fact]
     public void CorpusManifest_PreservesBidirectionalCoverageForSupportedFeatureTags()
     {
         var supportedRows = ReadManifestRows()
@@ -593,7 +624,7 @@ public class XlsxCorpusScaffoldTests
         var regressionCount = manifestRows.Count(row => row.SourceType == "regression");
 
         outstandingBuild.Should().Contain(
-            $"Current manifest has {manifestRows.Count} rows: {generatedCount} generated rows, {publicCount} public Tealeg rows, {localPrivateCount} optional local-private rows, and {regressionCount} regression formula-cache workbooks.");
+            $"Current manifest has {manifestRows.Count} rows: {generatedCount} generated rows, {publicCount} public rows, {localPrivateCount} optional local-private rows, and {regressionCount} regression formula-cache workbooks.");
         nextPhasesPlan.Should().Contain($"current {manifestRows.Count}-row manifest baseline");
         nextPhasesPlan.Should().NotContain("prior 90-row manifest baseline");
     }
