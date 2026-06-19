@@ -96,7 +96,13 @@ internal static class FreeWRibbonCommands
         Action? onDraftView = null,
         Func<bool>? isDraftViewActive = null,
         Action? onToggleRevealFormatting = null,
-        Func<bool>? isRevealFormattingVisible = null)
+        Func<bool>? isRevealFormattingVisible = null,
+        Action? onToggleReviewingPane = null,
+        Func<bool>? isReviewingPaneVisible = null,
+        Action? onAcceptThisChange = null,
+        Action? onRejectThisChange = null,
+        Action? onPreviousChange = null,
+        Action? onNextChange = null)
     {
         var registry = new RibbonCommandRegistry();
         var stateful = new List<(RibbonCommandId Id, IRibbonStatefulCommand Command)>();
@@ -400,6 +406,21 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.track-changes", new TrackChangesToggleCommand(editor));
         registry.Register("freew.accept-all", new ActionCommand(() => { editor.Focus(); editor.AcceptAllRevisions(); }));
         registry.Register("freew.reject-all", new ActionCommand(() => { editor.Focus(); editor.RejectAllRevisions(); }));
+
+        // Review tab — single-revision reviewing surface (the Reviewing Pane). The toggle shows/hides the
+        // dockable revisions list; Accept/Reject act on the SELECTED single change and Previous/Next step
+        // through them. All four delegate to the host, which owns the pane and drives the pure RevisionList.
+        if (onToggleReviewingPane is not null && isReviewingPaneVisible is not null)
+            registry.Register("freew.reviewing-pane",
+                new ToggleActionCommand(onToggleReviewingPane, isReviewingPaneVisible));
+        if (onAcceptThisChange is not null)
+            registry.Register("freew.accept-this", new ActionCommand(onAcceptThisChange));
+        if (onRejectThisChange is not null)
+            registry.Register("freew.reject-this", new ActionCommand(onRejectThisChange));
+        if (onPreviousChange is not null)
+            registry.Register("freew.previous-change", new ActionCommand(onPreviousChange));
+        if (onNextChange is not null)
+            registry.Register("freew.next-change", new ActionCommand(onNextChange));
 
         // Review tab — Protect: Mark as Final. A stateful toggle over Word's advisory read-only flag:
         // turning it on makes the editor read-only, shows the "Marked as Final" banner and persists the

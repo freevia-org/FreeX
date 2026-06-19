@@ -6205,6 +6205,73 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Every tracked change in the committed document, in reading order — the model behind the Reviewing
+    /// Pane. Commits pending edits first so the list reflects the current text, then defers to the pure
+    /// <see cref="RevisionList"/>. Re-call after any single accept/reject to get a fresh, non-stale list.
+    /// </summary>
+    public IReadOnlyList<RevisionEntry> ListRevisions()
+    {
+        CommitToModel();
+        return RevisionList.Enumerate(_model);
+    }
+
+    /// <summary>
+    /// Accept exactly one tracked change (the one described by <paramref name="entry"/>), leaving every
+    /// other revision pending. Re-renders so the resolved text shows immediately. Returns true when the
+    /// entry resolved (false when it was already stale). The caller must re-list revisions afterwards.
+    /// </summary>
+    public bool AcceptRevision(RevisionEntry entry)
+    {
+        var resolved = RevisionList.Accept(_model, entry);
+        if (resolved)
+            Render();
+        return resolved;
+    }
+
+    /// <summary>
+    /// Reject exactly one tracked change (the one described by <paramref name="entry"/>), leaving every
+    /// other revision pending. Re-renders so the resolved text shows immediately. Returns true when the
+    /// entry resolved (false when it was already stale). The caller must re-list revisions afterwards.
+    /// </summary>
+    public bool RejectRevision(RevisionEntry entry)
+    {
+        var resolved = RevisionList.Reject(_model, entry);
+        if (resolved)
+            Render();
+        return resolved;
+    }
+
+    /// <summary>
+    /// Scroll the editor to (and place the caret at the start of) the top-level block that owns the given
+    /// revision — the click-to-navigate / Previous-Next target. For a revision inside a table cell this
+    /// lands on the table (the granularity <see cref="BringBlockIntoView"/> supports). A no-op when the
+    /// owning block can no longer be found.
+    /// </summary>
+    public void NavigateToRevision(RevisionEntry entry)
+    {
+        var topLevelIndex = TopLevelBlockIndexOf(entry.Paragraph);
+        if (topLevelIndex >= 0)
+            BringBlockIntoView(topLevelIndex);
+    }
+
+    // The index, among the committed model's top-level blocks, of the block that owns paragraph
+    // <paramref name="target"/> — itself if it is a top-level paragraph, or the containing table. Returns
+    // -1 if it is not found. Matches the leaf-numbering BringBlockIntoView uses (a table is one leaf).
+    private int TopLevelBlockIndexOf(ModelParagraph target)
+    {
+        for (var i = 0; i < _model.Blocks.Count; i++)
+        {
+            var block = _model.Blocks[i];
+            if (ReferenceEquals(block, target))
+                return i;
+            if (block is ModelTable table &&
+                table.Rows.Any(r => r.Cells.Any(c => c.Paragraphs.Any(p => ReferenceEquals(p, target)))))
+                return i;
+        }
+        return -1;
+    }
+
+    /// <summary>
     /// Apply the Document Inspector's selected removal operations to the model and re-render. Pending
     /// edits are committed first so the removals run over the current text, then each selected category
     /// is stripped via the pure <see cref="DocumentInspector"/> ops (which mutate the model in place),
