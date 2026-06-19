@@ -681,6 +681,7 @@ public sealed partial class MainWindow : Window
                     ["review.protectWorkbook"] = () => _ = ShowProtectWorkbookDialogAsync(),
                     ["Allow Users to Edit Ranges"] = AllowEditRanges,
                     // View tab.
+                    ["Custom Views"] = () => RunGuarded(OpenCustomViewsDialogAsync),
                     ["view.gridlines"] = ToggleShowGridlines,
                     ["view.headings"] = ToggleShowHeadings,
                     ["view.zoom"] = ZoomIn,

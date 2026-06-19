@@ -426,6 +426,33 @@
   <data name="SelectionPane_DefaultEllipseName" xml:space="preserve"><value>Ellipse</value></data>
   <data name="SelectionPane_DefaultLineName" xml:space="preserve"><value>Ligne</value></data>
   <data name="SelectionPane_DefaultRectangleName" xml:space="preserve"><value>Rectangle</value></data>
+  <!-- Custom Views manager (Affichage ▸ Vues du classeur ▸ Affichages personnalisés) -->
+  <data name="CustomViews_Title" xml:space="preserve"><value>Affichages personnalisés</value></data>
+  <data name="CustomViews_Hint" xml:space="preserve"><value>Un affichage personnalisé enregistre les paramètres d'affichage actuels (mode d'affichage, volets figés/fractionnés, quadrillage, en-têtes, zoom et position de défilement) ainsi que la feuille active, afin que vous puissiez y revenir ultérieurement.</value></data>
+  <data name="CustomViews_ListLabel" xml:space="preserve"><value>Affichages</value></data>
+  <data name="CustomViews_ColumnName" xml:space="preserve"><value>Nom</value></data>
+  <data name="CustomViews_Show" xml:space="preserve"><value>Afficher</value></data>
+  <data name="CustomViews_Add" xml:space="preserve"><value>Ajouter...</value></data>
+  <data name="CustomViews_Delete" xml:space="preserve"><value>Supprimer</value></data>
+  <data name="CustomViews_DefaultNameFormat" xml:space="preserve"><value>Affichage {0}</value></data>
+  <data name="CustomViews_RowFormat" xml:space="preserve"><value>{0}    ({1} feuille(s))</value></data>
+  <data name="CustomViews_NoViews" xml:space="preserve"><value>Ce classeur n'a pas encore d'affichage personnalisé.</value></data>
+  <data name="CustomViews_Applied" xml:space="preserve"><value>Affichage personnalisé « {0} » appliqué.</value></data>
+  <data name="CustomViews_ApplyFailed" xml:space="preserve"><value>L'affichage personnalisé n'a pas pu être appliqué.</value></data>
+  <data name="CustomViews_Saved" xml:space="preserve"><value>Affichage personnalisé « {0} » enregistré.</value></data>
+  <data name="CustomViews_SaveFailed" xml:space="preserve"><value>L'affichage personnalisé n'a pas pu être enregistré.</value></data>
+  <data name="CustomViews_Deleted" xml:space="preserve"><value>Affichage personnalisé « {0} » supprimé.</value></data>
+  <data name="CustomViews_DeleteFailed" xml:space="preserve"><value>L'affichage personnalisé n'a pas pu être supprimé.</value></data>
+  <!-- Add Custom View name dialog -->
+  <data name="CustomViews_AddTitle" xml:space="preserve"><value>Ajouter un affichage</value></data>
+  <data name="CustomViews_NameLabel" xml:space="preserve"><value>Nom :</value></data>
+  <data name="CustomViews_NameInputLabel" xml:space="preserve"><value>Nom de l'affichage</value></data>
+  <data name="CustomViews_IncludePrintSettings" xml:space="preserve"><value>Paramètres d'impression</value></data>
+  <data name="CustomViews_IncludeHiddenFilter" xml:space="preserve"><value>Lignes et colonnes masquées et paramètres de filtre</value></data>
+  <data name="CustomViews_IncludeHeader" xml:space="preserve"><value>Inclure dans l'affichage</value></data>
+  <data name="CustomViews_NameBlank" xml:space="preserve"><value>Entrez un nom pour l'affichage.</value></data>
+  <data name="CustomViews_NameTooLong" xml:space="preserve"><value>Le nom de l'affichage est trop long (255 caractères maximum).</value></data>
+  <data name="CustomViews_NameDuplicate" xml:space="preserve"><value>Un affichage portant ce nom existe déjà.</value></data>
   <!-- Format Picture / Format Shape dialog -->
   <data name="FormatPicture_PictureTitle" xml:space="preserve"><value>Format de l'image</value></data>
   <data name="FormatPicture_ShapeTitle" xml:space="preserve"><value>Format de la forme</value></data>
