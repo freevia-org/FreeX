@@ -268,6 +268,7 @@ public sealed class MainWindow : Window
             Save: () => _file.Save(),
             SaveAs: () => _file.SaveAs(),
             Print: Print,
+            ExportPdf: ExportToPdf,
             EditProperties: OpenProperties,
             EditOptions: OpenOptions,
             CurrentOptions: () => _options,
@@ -800,6 +801,53 @@ public sealed class MainWindow : Window
     {
         var preview = new PrintPreviewWindow(_editor) { Owner = this };
         preview.Show();
+    }
+
+    /// <summary>
+    /// File &gt; Export: writes the document to a real PDF. Reuses the print pipeline
+    /// (<see cref="PrintLayout.BuildPaginator"/>) so the exported pages match Print / Print Preview
+    /// exactly (page geometry, header/footer, watermark, border, footnotes), renders them to PDF via
+    /// <see cref="PdfExport"/>, and flushes atomically through the shared
+    /// <see cref="Free.Shared.Shell.ExportAtomicWriter"/>.
+    /// </summary>
+    private void ExportToPdf()
+    {
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = "Export to PDF",
+            Filter = "PDF document (*.pdf)|*.pdf",
+            DefaultExt = ".pdf",
+            AddExtension = true,
+            OverwritePrompt = true,
+            FileName = _file.DisplayName + ".pdf"
+        };
+        if (dialog.ShowDialog(this) != true)
+            return;
+
+        var path = dialog.FileName;
+        try
+        {
+            // Render on the UI thread (walks the WPF visual tree), then write atomically.
+            var paginator = PrintLayout.BuildPaginator(_editor);
+            var bytes = PdfExport.RenderToBytes(paginator, _file.DisplayName);
+            Free.Shared.Shell.ExportAtomicWriter.WriteAllBytes(path, bytes);
+
+            MessageBox.Show(
+                this,
+                $"Exported to PDF:\n{path}",
+                "Export to PDF",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                this,
+                "The document could not be exported to PDF.\n\n" + ex.Message,
+                "Export to PDF",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
     }
 
     private void OpenFindReplace()
