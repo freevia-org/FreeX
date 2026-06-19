@@ -106,7 +106,9 @@ internal static class DialogSourceTestSupport
         string.Join(Environment.NewLine, fileNames.Select(ReadShellSource));
 
     private static string ReadShellSource(string fileName) =>
-        WorkspaceFileLocator.ReadAllText("shared", "Free.Shared.Shell", fileName);
+        // The WPF-facing shell helpers (dialog button rows, message helper, dialog sizing/focus) live in
+        // Free.Shared.Shell.Wpf after the shared-shell split; the platform-neutral core is Free.Shared.Shell.
+        WorkspaceFileLocator.ReadAllText("shared", "Free.Shared.Shell.Wpf", fileName);
 
     public static string ReadAppServicesSource(string fileName) =>
         WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Services", fileName);
