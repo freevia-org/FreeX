@@ -3,28 +3,27 @@ using System.Windows;
 using System.Windows.Documents;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using PdfSharp.Drawing;
-using PdfSharp.Pdf;
+using Free.Shared.Pdf;
+using Free.Shared.Pdf.Wpf;
 
 namespace FreeW.App.Host;
 
 /// <summary>
-/// Renders a paginated FreeW document to a real PDF.
+/// Renders a paginated FreeW document to a real PDF through the shared PDF tier.
 ///
 /// <para>
-/// Reuses the existing print pipeline: <see cref="PrintLayout.BuildPaginator"/> already breaks the
-/// editor's content into pages at the model's <see cref="FreeW.Core.Model.PageSettings"/> geometry and
-/// composites the header/footer (with live page numbers), watermark, page border and footnotes onto
-/// each page — exactly what Print and Print Preview show. Each produced <see cref="DocumentPage"/> is
-/// rasterised to a bitmap and drawn onto a page of a PDFsharp <see cref="PdfDocument"/>. This mirrors
-/// FreeX's <c>PdfDocumentExporter</c> (same PDFsharp + RenderTargetBitmap technique) without dragging
-/// in its worksheet-specific bookmark / scope / link machinery, which FreeW has no model for.
+/// FreeW's app-specific half is the Document → page adapter: it reuses the existing print pipeline
+/// (<see cref="PrintLayout.BuildPaginator"/>) — which already breaks the editor's content into pages
+/// at the model's <see cref="FreeW.Core.Model.PageSettings"/> geometry and composites the
+/// header/footer (with live page numbers), watermark, page border and footnotes — and rasterizes each
+/// <see cref="DocumentPage"/> to a bitmap. The bitmaps are handed to the shared
+/// <see cref="WpfRasterPdfWriter"/> (PDFsharp) as a <see cref="PdfRasterDocument"/>, so FreeW and FreeX
+/// share one rasterized-page → PDF emitter rather than each carrying its own PDFsharp plumbing.
 /// </para>
 ///
 /// <para>
-/// PDFsharp (the centrally-managed <c>PDFsharp-WPF</c> package, already used by FreeX) is the only PDF
-/// dependency; no print-to-file driver or external tool is required, so export is fully deterministic
-/// and works headless (e.g. in tests).
+/// No print-to-file driver or external tool is required, so export is fully deterministic and works
+/// headless (e.g. in tests).
 /// </para>
 /// </summary>
 internal static class PdfExport
@@ -44,10 +43,7 @@ internal static class PdfExport
     public static byte[] RenderToBytes(DocumentPaginator paginator, string? title = null)
     {
         ArgumentNullException.ThrowIfNull(paginator);
-
-        using var stream = new MemoryStream();
-        Write(paginator, stream, title);
-        return stream.ToArray();
+        return WpfRasterPdfWriter.WriteToBytes(BuildDocument(paginator, title));
     }
 
     /// <summary>Renders the paginator to PDF and writes it directly to <paramref name="path"/>.</summary>
@@ -55,16 +51,10 @@ internal static class PdfExport
     {
         ArgumentNullException.ThrowIfNull(paginator);
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
-
-        var directory = Path.GetDirectoryName(Path.GetFullPath(path));
-        if (!string.IsNullOrEmpty(directory))
-            Directory.CreateDirectory(directory);
-
-        using var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
-        Write(paginator, stream, title);
+        WpfRasterPdfWriter.Save(BuildDocument(paginator, title), path);
     }
 
-    private static void Write(DocumentPaginator paginator, Stream output, string? title)
+    private static PdfRasterDocument BuildDocument(DocumentPaginator paginator, string? title)
     {
         // Force a valid page count so GetPage covers the whole document.
         if (!paginator.IsPageCountValid)
@@ -74,11 +64,7 @@ internal static class PdfExport
         if (pageCount <= 0)
             throw new InvalidOperationException("The document produced no printable pages.");
 
-        using var pdf = new PdfDocument();
-        pdf.Info.Creator = "FreeW";
-        if (!string.IsNullOrWhiteSpace(title))
-            pdf.Info.Title = title;
-
+        var pages = new List<PdfRasterPage>(pageCount);
         for (var i = 0; i < pageCount; i++)
         {
             using var docPage = paginator.GetPage(i);
@@ -90,21 +76,17 @@ internal static class PdfExport
             var widthDip = Math.Max(1.0, sizeDip.Width);
             var heightDip = Math.Max(1.0, sizeDip.Height);
 
-            var bitmap = RenderPage(docPage.Visual, widthDip, heightDip);
-
-            var page = pdf.AddPage();
-            page.Width = XUnit.FromPoint(widthDip * DipToPoint);
-            page.Height = XUnit.FromPoint(heightDip * DipToPoint);
-
-            using var gfx = XGraphics.FromPdfPage(page);
-            using var image = XImage.FromBitmapSource(bitmap);
-            gfx.DrawImage(image, 0, 0, page.Width.Point, page.Height.Point);
+            var imageBytes = RenderPagePng(docPage.Visual, widthDip, heightDip);
+            pages.Add(new PdfRasterPage(widthDip * DipToPoint, heightDip * DipToPoint, imageBytes));
         }
 
-        pdf.Save(output);
+        var properties = new PdfDocumentProperties(
+            Title: string.IsNullOrWhiteSpace(title) ? null : title,
+            Creator: "FreeW");
+        return new PdfRasterDocument(pages, properties);
     }
 
-    private static BitmapSource RenderPage(Visual pageVisual, double widthDip, double heightDip)
+    private static byte[] RenderPagePng(Visual pageVisual, double widthDip, double heightDip)
     {
         var target = new RenderTargetBitmap(
             Math.Max(1, (int)Math.Ceiling(widthDip)),
@@ -127,6 +109,11 @@ internal static class PdfExport
 
         target.Render(pageVisual);
         target.Freeze();
-        return target;
+
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(target));
+        using var ms = new MemoryStream();
+        encoder.Save(ms);
+        return ms.ToArray();
     }
 }

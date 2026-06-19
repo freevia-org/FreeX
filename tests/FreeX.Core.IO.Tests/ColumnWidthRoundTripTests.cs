@@ -34,6 +34,38 @@ public sealed class ColumnWidthRoundTripTests
         got.Should().BeApproximately(width, 1e-6);
     }
 
+    // A narrow column whose width sits in the near-default "carrier" band (<= 9.2) and that ALSO carries
+    // real cell formatting (so ClosedXML stamps a non-default style index on its <col>) must still
+    // round-trip its width. Previously the loader discarded any styled column at <= 9.2 as a styling-only
+    // carrier, silently dropping these widths on a full rebuild (e.g. ExcelExamples1 Calendar gutters at
+    // 1.71 / 5.71 and Inputs columns at 8.14 / 8.71). The save path now strips the ClosedXML-stamped
+    // style from a genuinely-modelled width in that band so the loader keeps it.
+    [Theory]
+    [InlineData(1.71)]
+    [InlineData(5.71)]
+    [InlineData(8.14)]
+    [InlineData(8.43)]
+    [InlineData(8.71)]
+    public void StyledColumnWithNarrowOrNearDefaultWidth_RoundTripsExactly(double width)
+    {
+        var wb = new Workbook("T");
+        var sheet = wb.AddSheet("S");
+        sheet.ColumnWidths[3] = width;
+        // Give the column real cell formatting so ClosedXML stamps a non-default style index on its <col>.
+        var styled = wb.RegisterStyle(new CellStyle { FillColor = new CellColor(200, 220, 240) });
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new Cell { Value = new NumberValue(1), StyleId = styled });
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 3), new Cell { Value = new BlankValue(), StyleId = styled });
+
+        using var ms = new MemoryStream();
+        new XlsxFileAdapter().Save(wb, ms);
+        ms.Position = 0;
+        var reloaded = new XlsxFileAdapter().Load(ms);
+
+        reloaded.Sheets[0].ColumnWidths.TryGetValue(3, out var got)
+            .Should().BeTrue($"styled width {width} in the carrier band must survive round-trip");
+        got.Should().BeApproximately(width, 1e-6);
+    }
+
     [Fact]
     public void NarrowAndWideColumnWidths_AllRoundTripWithoutLossOrExtras()
     {

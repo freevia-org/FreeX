@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- App-agnostic PDF page/document model + the dependency-free WinAnsi emitter shared by
+         FreeX and FreeW (and future app#3). The portable WinAnsi writer was moved here verbatim
+         from FreeX.App.Services so FreeX's byte-exact PDF tests stay green. -->
+    <InternalsVisibleTo Include="Free.Shared.Pdf.Tests" />
+    <InternalsVisibleTo Include="Free.Shared.Pdf.Skia" />
+    <InternalsVisibleTo Include="FreeX.App.Services" />
+    <InternalsVisibleTo Include="FreeX.App.Services.Tests" />
+  </ItemGroup>
+
+</Project>

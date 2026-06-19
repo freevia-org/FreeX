@@ -190,6 +190,132 @@ public sealed class DocumentView : Control
     public int PlacedGlyphCount => _placed.Count(p => !p.Sentinel);
     public string PlainText => _doc.PlainText;
 
+    // ---- PDF export ------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Builds the app-agnostic shared <see cref="Free.Shared.Pdf.PdfContentDocument"/> draw-op model
+    /// from the current layout (the same placed glyphs the editor renders). This is FreeW Avalonia's
+    /// Document → shared-page adapter: <see cref="FreeWAvaloniaPdfExport"/> hands the result to the
+    /// shared Skia or portable WinAnsi backend. The export reuses the laid-out glyph positions so it
+    /// matches what is on screen; it paginates the single continuous column by the page height from
+    /// <see cref="TextDocument.Page"/>.
+    /// <para>
+    /// NOTE: This is a first, faithful-enough text export. Tables/images/decorations and true
+    /// print-pipeline pagination (headers/footers/footnotes) are not yet modeled here — see M4 notes.
+    /// </para>
+    /// </summary>
+    public Free.Shared.Pdf.PdfContentDocument BuildPdfContent()
+    {
+        // Ensure a layout exists (tests/headless may export before a Render pass).
+        if (_laidOutWidth < 0 || _placed.Count == 0)
+            Relayout(FallbackWidth);
+
+        var pageWidthPt = _doc.Page.WidthPt > 0 ? _doc.Page.WidthPt : 612;
+        var pageHeightPt = _doc.Page.HeightPt > 0 ? _doc.Page.HeightPt : 792;
+        var pageHeightPx = pageHeightPt * PxPerPoint;
+
+        // Group consecutive same-line, same-format glyphs (excluding the page-left offset) into runs.
+        var glyphs = _placed
+            .Where(p => !p.Sentinel && p.Ch != '\0')
+            .OrderBy(p => p.Y)
+            .ThenBy(p => p.X)
+            .ToList();
+
+        // Bucket glyphs by page index (continuous column split at page height).
+        var pagesOps = new List<List<Free.Shared.Pdf.PdfDrawOp>>();
+
+        var runStartX = 0.0;
+        var runY = 0.0;
+        var runText = new StringBuilder();
+        RunFormatting? runFmt = null;
+        var runPageIndex = -1;
+
+        void Flush()
+        {
+            if (runFmt is null || runText.Length == 0)
+            {
+                runText.Clear();
+                runFmt = null;
+                return;
+            }
+
+            while (pagesOps.Count <= runPageIndex)
+                pagesOps.Add(new List<Free.Shared.Pdf.PdfDrawOp>());
+
+            var fontSizePt = runFmt.FontSizePt ?? DefaultFontSizePt;
+            var face = runFmt.Bold ? Free.Shared.Pdf.PdfFontFace.Bold : Free.Shared.Pdf.PdfFontFace.Regular;
+            var color = ParseColor(runFmt.ColorHex);
+
+            // Convert px -> pt and flip to PDF y-up. The glyph Y is the top of the line box; the text
+            // baseline sits roughly at top + fontSize, so the PDF baseline (y-up) is page bottom minus that.
+            var xPt = (runStartX - _contentLeft) / PxPerPoint + _doc.Page.MarginLeftPt;
+            var yWithinPagePx = runY - (runPageIndex * pageHeightPx);
+            var baselineFromTopPt = yWithinPagePx / PxPerPoint + fontSizePt;
+            var yPt = pageHeightPt - baselineFromTopPt;
+
+            pagesOps[runPageIndex].Add(new Free.Shared.Pdf.PdfText(
+                Math.Max(0, xPt), yPt, fontSizePt, face, color, runText.ToString()));
+
+            runText.Clear();
+            runFmt = null;
+        }
+
+        foreach (var g in glyphs)
+        {
+            var pageIndex = (int)(g.Y / pageHeightPx);
+            var sameRun = runFmt is not null
+                && runPageIndex == pageIndex
+                && Math.Abs(g.Y - runY) < 0.5
+                && FormatKey(g.Fmt) == FormatKey(runFmt)
+                && g.X >= runStartX; // left-to-right on the line
+
+            if (!sameRun)
+            {
+                Flush();
+                runStartX = g.X;
+                runY = g.Y;
+                runFmt = g.Fmt;
+                runPageIndex = pageIndex;
+            }
+
+            runText.Append(g.Ch);
+        }
+
+        Flush();
+
+        if (pagesOps.Count == 0)
+            pagesOps.Add(new List<Free.Shared.Pdf.PdfDrawOp>());
+
+        var pages = pagesOps
+            .Select(ops => new Free.Shared.Pdf.PdfContentPage(pageWidthPt, pageHeightPt, ops))
+            .ToList();
+        var properties = new Free.Shared.Pdf.PdfDocumentProperties(
+            Title: string.IsNullOrWhiteSpace(_doc.Properties.Title) ? null : _doc.Properties.Title,
+            Author: string.IsNullOrWhiteSpace(_doc.Properties.Author) ? null : _doc.Properties.Author,
+            Creator: "FreeW");
+        return new Free.Shared.Pdf.PdfContentDocument(pages, properties);
+    }
+
+    private static string FormatKey(RunFormatting fmt) =>
+        $"{fmt.Bold}|{fmt.Italic}|{fmt.FontSizePt}|{fmt.ColorHex}";
+
+    private static Free.Shared.Pdf.PdfColor ParseColor(string? hex)
+    {
+        if (string.IsNullOrWhiteSpace(hex))
+            return Free.Shared.Pdf.PdfColor.Black;
+
+        var s = hex.TrimStart('#');
+        if (s.Length == 6 &&
+            byte.TryParse(s.AsSpan(0, 2), System.Globalization.NumberStyles.HexNumber, null, out var r) &&
+            byte.TryParse(s.AsSpan(2, 2), System.Globalization.NumberStyles.HexNumber, null, out var g) &&
+            byte.TryParse(s.AsSpan(4, 2), System.Globalization.NumberStyles.HexNumber, null, out var b))
+        {
+            return new Free.Shared.Pdf.PdfColor(r, g, b);
+        }
+
+        return Free.Shared.Pdf.PdfColor.Black;
+    }
+
     // ---- Layout ---------------------------------------------------------------------------------
 
     protected override Size MeasureOverride(Size availableSize)

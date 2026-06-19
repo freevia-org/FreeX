@@ -19,6 +19,8 @@ public static class WorkbookFileAdapterCatalog
         new OdsFileAdapter(),
         new SlkFileAdapter(),
         new DifFileAdapter(),
+        new DbfFileAdapter(),
+        new HtmlFileAdapter(),
         new NativeJsonAdapter(),
     ];
 }
