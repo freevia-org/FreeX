@@ -1575,9 +1575,11 @@ public static class DocxWriter
 
     /// <summary>
     /// Builds the w:sdtPr (content-control properties) for a content control. Emits w:tag / w:alias when
-    /// set, then the control-kind element: w:text for a plain-text control, or a w14:checkbox carrying the
-    /// checked state (w14:checked val="1"/"0") for a checkbox. This is the minimal valid shape FreeW's own
-    /// reader recovers (see <see cref="DocxReader"/>).
+    /// set, then the control-kind element: w:text for a plain-text control; a w14:checkbox carrying the
+    /// checked state (w14:checked val="1"/"0") for a checkbox; w:richText for a rich-text control; a
+    /// w:date carrying the w:dateFormat for a date picker; or a w:dropDownList / w:comboBox carrying a
+    /// w:listItem (w:displayText/w:value) per choice for a list control. This is the minimal valid shape
+    /// FreeW's own reader recovers (see <see cref="DocxReader"/>).
     /// </summary>
     private static XElement BuildSdtProperties(ContentControl control)
     {
@@ -1586,12 +1588,45 @@ public static class DocxWriter
             sdtPr.Add(new XElement(W + "alias", new XAttribute(W + "val", alias)));
         if (control.Tag is { Length: > 0 } tag)
             sdtPr.Add(new XElement(W + "tag", new XAttribute(W + "val", tag)));
-        if (control.Kind == ContentControlKind.CheckBox)
-            sdtPr.Add(new XElement(W14 + "checkbox",
-                new XElement(W14 + "checked", new XAttribute(W14 + "val", control.Checked ? "1" : "0"))));
-        else
-            sdtPr.Add(new XElement(W + "text"));
+        switch (control.Kind)
+        {
+            case ContentControlKind.CheckBox:
+                sdtPr.Add(new XElement(W14 + "checkbox",
+                    new XElement(W14 + "checked", new XAttribute(W14 + "val", control.Checked ? "1" : "0"))));
+                break;
+            case ContentControlKind.RichText:
+                sdtPr.Add(new XElement(W + "richText"));
+                break;
+            case ContentControlKind.DatePicker:
+                sdtPr.Add(new XElement(W + "date",
+                    new XElement(W + "dateFormat",
+                        new XAttribute(W + "val", control.DateFormat ?? ContentControl.DefaultDateFormat))));
+                break;
+            case ContentControlKind.DropDownList:
+                sdtPr.Add(BuildListElement(W + "dropDownList", control.Items));
+                break;
+            case ContentControlKind.ComboBox:
+                sdtPr.Add(BuildListElement(W + "comboBox", control.Items));
+                break;
+            default:
+                sdtPr.Add(new XElement(W + "text"));
+                break;
+        }
         return sdtPr;
+    }
+
+    /// <summary>
+    /// Builds the w:dropDownList / w:comboBox element for a list content control: a w:listItem
+    /// (w:displayText + w:value) for each <paramref name="items"/> choice.
+    /// </summary>
+    private static XElement BuildListElement(XName listName, IReadOnlyList<ContentControlListItem> items)
+    {
+        var list = new XElement(listName);
+        foreach (var item in items)
+            list.Add(new XElement(W + "listItem",
+                new XAttribute(W + "displayText", item.DisplayText),
+                new XAttribute(W + "value", item.Value)));
+        return list;
     }
 
     private static XElement BuildParagraph(

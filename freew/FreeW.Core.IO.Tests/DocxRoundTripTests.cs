@@ -2248,6 +2248,76 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void RichTextContentControl_RoundTrips_KindTagAndText()
+    {
+        var doc = new TextDocument();
+        var body = new Paragraph();
+        body.Runs.Add(new Run("Before "));
+        body.Runs.Add(Run.RichTextControl("rich content", tag: "Bio", alias: "Biography"));
+        body.Runs.Add(new Run(" after"));
+        doc.Blocks.Add(body);
+
+        var result = RoundTrip(doc);
+
+        var paragraph = result.Paragraphs.First();
+        paragraph.PlainText.Should().Be("Before rich content after");
+
+        var control = paragraph.Runs.Single(r => r.Control is not null);
+        control.Text.Should().Be("rich content");
+        control.Control!.Kind.Should().Be(ContentControlKind.RichText);
+        control.Control.Tag.Should().Be("Bio");
+        control.Control.Alias.Should().Be("Biography");
+    }
+
+    [Fact]
+    public void DatePickerContentControl_RoundTrips_DateFormatAndText()
+    {
+        var doc = new TextDocument();
+        var body = new Paragraph();
+        body.Runs.Add(Run.DatePickerControl("2026-06-19", tag: "Signed", alias: "Signed on", dateFormat: "yyyy-MM-dd"));
+        doc.Blocks.Add(body);
+
+        var result = RoundTrip(doc);
+
+        var control = result.Paragraphs.First().Runs.Single(r => r.Control is { Kind: ContentControlKind.DatePicker });
+        control.Text.Should().Be("2026-06-19");
+        control.Control!.Tag.Should().Be("Signed");
+        control.Control.Alias.Should().Be("Signed on");
+        control.Control.DateFormat.Should().Be("yyyy-MM-dd");
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ListContentControl_RoundTrips_ItemsAndSelection(bool combo)
+    {
+        var items = new[]
+        {
+            new ContentControlListItem("Red", "R"),
+            new ContentControlListItem("Green", "G"),
+            new ContentControlListItem("Blue", "B")
+        };
+
+        var doc = new TextDocument();
+        var body = new Paragraph();
+        body.Runs.Add(combo
+            ? Run.ComboBoxControl(items, selectedText: "Green", tag: "Color", alias: "Favourite colour")
+            : Run.DropDownListControl(items, selectedText: "Green", tag: "Color", alias: "Favourite colour"));
+        doc.Blocks.Add(body);
+
+        var result = RoundTrip(doc);
+
+        var control = result.Paragraphs.First().Runs.Single(r => r.Control is not null);
+        control.Control!.Kind.Should().Be(combo ? ContentControlKind.ComboBox : ContentControlKind.DropDownList);
+        control.Text.Should().Be("Green");
+        control.Control.Tag.Should().Be("Color");
+        control.Control.Alias.Should().Be("Favourite colour");
+        control.Control.Items.Should().HaveCount(3);
+        control.Control.Items.Select(i => i.DisplayText).Should().ContainInOrder("Red", "Green", "Blue");
+        control.Control.Items.Select(i => i.Value).Should().ContainInOrder("R", "G", "B");
+    }
+
+    [Fact]
     public void ContentControls_EmitSdtInDocumentXml()
     {
         var doc = new TextDocument();
@@ -2273,6 +2343,37 @@ public class DocxRoundTripTests
         documentXml.Should().Contain("w:val=\"T1\"");
         documentXml.Should().Contain("w14:checkbox");
         documentXml.Should().Contain("w14:val=\"1\"");
+    }
+
+    [Fact]
+    public void NewContentControls_EmitTheirSdtPrElements()
+    {
+        var doc = new TextDocument();
+        var body = new Paragraph();
+        body.Runs.Add(Run.RichTextControl("rich", tag: "R1"));
+        body.Runs.Add(Run.DatePickerControl("6/19/2026", tag: "D1", dateFormat: "M/d/yyyy"));
+        body.Runs.Add(Run.DropDownListControl(
+            new[] { new ContentControlListItem("One", "1"), new ContentControlListItem("Two", "2") }, tag: "DD1"));
+        body.Runs.Add(Run.ComboBoxControl(
+            new[] { new ContentControlListItem("A", "a") }, tag: "CB1"));
+        doc.Blocks.Add(body);
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        using var docReader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
+        var documentXml = docReader.ReadToEnd();
+
+        documentXml.Should().Contain("<w:richText");
+        documentXml.Should().Contain("<w:date");
+        documentXml.Should().Contain("<w:dateFormat");
+        documentXml.Should().Contain("<w:dropDownList");
+        documentXml.Should().Contain("<w:comboBox");
+        documentXml.Should().Contain("<w:listItem");
+        documentXml.Should().Contain("w:displayText=\"One\"");
+        documentXml.Should().Contain("w:value=\"2\"");
     }
 
     [Fact]

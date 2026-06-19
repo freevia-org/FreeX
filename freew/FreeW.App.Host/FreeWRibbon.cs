@@ -207,7 +207,11 @@ internal static class FreeWRibbon
                 tab.Group("controls", "Controls", "O", 62, g =>
                 {
                     g.Medium("freew.cc-text", "Text Control", RibbonCommandIconKind.TextBox);
+                    g.Medium("freew.cc-richtext", "Rich Text", RibbonCommandIconKind.QuickParts);
                     g.Medium("freew.cc-checkbox", "Check Box", RibbonCommandIconKind.CheckBox);
+                    g.Medium("freew.cc-date", "Date Picker", RibbonCommandIconKind.Date);
+                    g.Medium("freew.cc-dropdown", "Drop-Down List", RibbonCommandIconKind.List);
+                    g.Medium("freew.cc-combo", "Combo Box", RibbonCommandIconKind.ChevronDown);
                 });
                 tab.Group("header-footer", "Header & Footer", "H", 60, g =>
                 {

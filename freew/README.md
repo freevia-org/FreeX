@@ -161,7 +161,9 @@ docx reader/writer; unsupported renderings are noted under [Known limitations](#
 - **Mail merge**: `«Field»` placeholders, CSV data source, insert field, preview record (next/prev), Finish & Merge (records concatenated, page-broken).
 
 ### Content & navigation
-- **Content controls** (`w:sdt`): plain-text and clickable checkbox (`w14:checkbox`).
+- **Content controls** (`w:sdt`): plain-text, rich-text (`w:richText`), clickable checkbox (`w14:checkbox`),
+  date picker (`w:date`), drop-down list (`w:dropDownList`) and combo box (`w:comboBox`) — the list controls
+  offer their `w:listItem` choices on click.
 - **Quick Parts / AutoText**: save selection + insert, persisted as `quickparts.json`.
 - **Navigation pane** (heading outline; click to scroll) and **Outline tools** (promote/demote, collapse/expand).
 - **Cross-document insert**: "Text from File" deep-clones another `.docx`'s blocks at the caret (bringing missing styles).

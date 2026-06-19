@@ -3388,22 +3388,58 @@ public sealed class DocumentView : RichTextBox
     {
         AddMarker(wpf, m => m with { Control = new ContentControlMarker(control) });
         wpf.Background = new SolidColorBrush(ContentControlShade);
-        wpf.ToolTip = control.Kind == ContentControlKind.CheckBox
-            ? (control.Alias is { Length: > 0 } a ? $"Checkbox: {a}" : "Checkbox content control (click to toggle)")
-            : (control.Alias is { Length: > 0 } a2 ? $"Content control: {a2}" : "Plain-text content control");
+        wpf.ToolTip = ContentControlTooltip(control);
 
-        if (control.Kind == ContentControlKind.CheckBox)
+        switch (control.Kind)
         {
-            // Synthesise the checkbox glyph from the control's checked state and render it in a symbol font.
-            // Word stores the box glyph in the SDT content run using a symbol font (often a Wingdings/MS
-            // Gothic codepoint), so the raw run text rendered in the body font showed nothing. Driving the
-            // glyph from the state (☒/☐ in Segoe UI Symbol, which has U+2610/U+2612) guarantees a visible,
-            // correct checkbox and matches how FreeW renders its own inserted checkboxes.
-            wpf.Text = control.Checked ? ModelContentControl.CheckedGlyph : ModelContentControl.UncheckedGlyph;
-            wpf.FontFamily = new System.Windows.Media.FontFamily("Segoe UI Symbol");
-            wpf.Cursor = System.Windows.Input.Cursors.Hand;
-            wpf.MouseLeftButtonUp += OnCheckBoxControlClicked;
+            case ContentControlKind.CheckBox:
+                // Synthesise the checkbox glyph from the control's checked state and render it in a symbol
+                // font. Word stores the box glyph in the SDT content run using a symbol font (often a
+                // Wingdings/MS Gothic codepoint), so the raw run text rendered in the body font showed
+                // nothing. Driving the glyph from the state (☒/☐ in Segoe UI Symbol, which has U+2610/U+2612)
+                // guarantees a visible, correct checkbox and matches how FreeW renders its own checkboxes.
+                wpf.Text = control.Checked ? ModelContentControl.CheckedGlyph : ModelContentControl.UncheckedGlyph;
+                wpf.FontFamily = new System.Windows.Media.FontFamily("Segoe UI Symbol");
+                wpf.Cursor = System.Windows.Input.Cursors.Hand;
+                wpf.MouseLeftButtonUp += OnCheckBoxControlClicked;
+                break;
+
+            case ContentControlKind.DropDownList:
+            case ContentControlKind.ComboBox:
+                // A list control offers its choices via a context menu on click; picking one swaps the run
+                // text in place (the chosen item's display text). A combo box additionally allows free text,
+                // so it stays editable; a drop-down list is pick-only and read-only inside the run.
+                wpf.Cursor = System.Windows.Input.Cursors.Hand;
+                wpf.MouseLeftButtonUp += OnListControlClicked;
+                break;
+
+            case ContentControlKind.DatePicker:
+                // A date picker offers a small set of relative dates (today/yesterday/tomorrow) on click,
+                // each formatted with the control's date format, swapping the run text in place.
+                wpf.Cursor = System.Windows.Input.Cursors.Hand;
+                wpf.MouseLeftButtonUp += OnDatePickerClicked;
+                break;
         }
+    }
+
+    /// <summary>The hover tooltip shown for a content-control run, by kind (surfacing the alias when set).</summary>
+    private static string ContentControlTooltip(ModelContentControl control)
+    {
+        var label = control.Alias is { Length: > 0 } a ? a : null;
+        return control.Kind switch
+        {
+            ContentControlKind.CheckBox => label is null
+                ? "Checkbox content control (click to toggle)" : $"Checkbox: {label}",
+            ContentControlKind.RichText => label is null
+                ? "Rich-text content control" : $"Rich-text control: {label}",
+            ContentControlKind.DatePicker => label is null
+                ? "Date picker content control (click to pick a date)" : $"Date picker: {label}",
+            ContentControlKind.DropDownList => label is null
+                ? "Drop-down list content control (click to choose)" : $"Drop-down list: {label}",
+            ContentControlKind.ComboBox => label is null
+                ? "Combo box content control (click to choose or type)" : $"Combo box: {label}",
+            _ => label is null ? "Plain-text content control" : $"Content control: {label}"
+        };
     }
 
     /// <summary>
@@ -3424,6 +3460,72 @@ public sealed class DocumentView : RichTextBox
 
         // Persist the new state into the model so a subsequent save reflects the toggle.
         FindOwnerView(wpf)?.CommitToModel();
+    }
+
+    /// <summary>
+    /// Opens the choice list of a drop-down / combo content control when its run is clicked: a context
+    /// menu offers each <see cref="ModelContentControl.Items"/> display text; selecting one swaps the run
+    /// text in place and re-commits so the choice round-trips on save.
+    /// </summary>
+    private static void OnListControlClicked(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (sender is not WpfRun { Tag: RunMarkers { Control: { } marker } } wpf)
+            return;
+        var control = marker.Control;
+        if (control.Kind is not (ContentControlKind.DropDownList or ContentControlKind.ComboBox)
+            || control.Items.Count == 0)
+            return;
+
+        var menu = new ContextMenu();
+        foreach (var item in control.Items)
+        {
+            var display = item.DisplayText;
+            var entry = new MenuItem { Header = display, IsChecked = display == wpf.Text };
+            entry.Click += (_, _) =>
+            {
+                wpf.Text = display;
+                FindOwnerView(wpf)?.CommitToModel();
+            };
+            menu.Items.Add(entry);
+        }
+        menu.PlacementTarget = wpf.Parent as UIElement;
+        menu.IsOpen = true;
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// Opens a small relative-date menu for a date-picker content control when its run is clicked: Today,
+    /// Yesterday and Tomorrow, each formatted with the control's <see cref="ModelContentControl.DateFormat"/>.
+    /// Selecting one swaps the displayed date text in place and re-commits so it round-trips on save.
+    /// </summary>
+    private static void OnDatePickerClicked(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (sender is not WpfRun { Tag: RunMarkers { Control: { } marker } } wpf
+            || marker.Control.Kind != ContentControlKind.DatePicker)
+            return;
+
+        var format = string.IsNullOrEmpty(marker.Control.DateFormat)
+            ? ModelContentControl.DefaultDateFormat : marker.Control.DateFormat!;
+        var menu = new ContextMenu();
+        foreach (var (label, date) in new[]
+                 {
+                     ("Today", System.DateTime.Today),
+                     ("Yesterday", System.DateTime.Today.AddDays(-1)),
+                     ("Tomorrow", System.DateTime.Today.AddDays(1))
+                 })
+        {
+            var text = date.ToString(format, System.Globalization.CultureInfo.CurrentCulture);
+            var entry = new MenuItem { Header = $"{label} ({text})" };
+            entry.Click += (_, _) =>
+            {
+                wpf.Text = text;
+                FindOwnerView(wpf)?.CommitToModel();
+            };
+            menu.Items.Add(entry);
+        }
+        menu.PlacementTarget = wpf.Parent as UIElement;
+        menu.IsOpen = true;
+        e.Handled = true;
     }
 
     /// <summary>Walks up from an inline to the hosting <see cref="DocumentView"/>, if any.</summary>
@@ -4673,6 +4775,73 @@ public sealed class DocumentView : RichTextBox
         var run = BuildControlRun(ModelRun.CheckBoxControl(@checked: false, tag, alias));
         InsertInlineAtCaret(run);
     }
+
+    /// <summary>
+    /// Inserts a rich-text content control (w:sdt/w:richText) at the caret. Mirrors
+    /// <see cref="InsertPlainTextControl"/> — the selection's text (or a placeholder) becomes the control's
+    /// content and it renders as a shaded region. Re-renders so the control round-trips on the next save.
+    /// </summary>
+    public void InsertRichTextControl(string? tag = null, string? alias = null)
+    {
+        Focus();
+
+        var selected = Selection?.Text;
+        var text = string.IsNullOrEmpty(selected) ? "Click to enter text" : selected;
+        if (Selection is { IsEmpty: false })
+            Selection.Text = string.Empty;
+
+        var run = BuildControlRun(ModelRun.RichTextControl(text, tag, alias));
+        InsertInlineAtCaret(run);
+    }
+
+    /// <summary>
+    /// Inserts a date-picker content control (w:sdt/w:date) at the caret, pre-filled with today's date in
+    /// the control's date format. Clicking the rendered region offers relative dates. Re-renders so the
+    /// control round-trips on the next save.
+    /// </summary>
+    public void InsertDatePickerControl(string? tag = null, string? alias = null, string? dateFormat = null)
+    {
+        Focus();
+        var fmt = string.IsNullOrEmpty(dateFormat) ? ModelContentControl.DefaultDateFormat : dateFormat!;
+        var today = System.DateTime.Today.ToString(fmt, System.Globalization.CultureInfo.CurrentCulture);
+        var run = BuildControlRun(ModelRun.DatePickerControl(today, tag, alias, fmt));
+        InsertInlineAtCaret(run);
+    }
+
+    /// <summary>
+    /// Inserts a drop-down-list content control (w:sdt/w:dropDownList) at the caret offering
+    /// <paramref name="items"/> (a small default sample when none is given). Clicking the rendered region
+    /// lets the user pick one. Re-renders so the control round-trips on the next save.
+    /// </summary>
+    public void InsertDropDownListControl(
+        IReadOnlyList<ContentControlListItem>? items = null, string? tag = null, string? alias = null)
+    {
+        Focus();
+        var run = BuildControlRun(ModelRun.DropDownListControl(items ?? DefaultListItems, tag: tag, alias: alias));
+        InsertInlineAtCaret(run);
+    }
+
+    /// <summary>
+    /// Inserts a combo-box content control (w:sdt/w:comboBox) at the caret offering <paramref name="items"/>
+    /// (a small default sample when none is given) and allowing free text. Clicking the rendered region lets
+    /// the user pick one. Re-renders so the control round-trips on the next save.
+    /// </summary>
+    public void InsertComboBoxControl(
+        IReadOnlyList<ContentControlListItem>? items = null, string? tag = null, string? alias = null)
+    {
+        Focus();
+        var run = BuildControlRun(ModelRun.ComboBoxControl(items ?? DefaultListItems, tag: tag, alias: alias));
+        InsertInlineAtCaret(run);
+    }
+
+    /// <summary>A small default choice sample used when a list/combo control is inserted without items.</summary>
+    private static readonly IReadOnlyList<ContentControlListItem> DefaultListItems =
+    [
+        new ContentControlListItem("Choose an item"),
+        new ContentControlListItem("Item 1"),
+        new ContentControlListItem("Item 2"),
+        new ContentControlListItem("Item 3")
+    ];
 
     /// <summary>Builds the WPF inline for a content-control model run (shaded region + marker tag).</summary>
     private Inline BuildControlRun(ModelRun run) => BuildRun(run, new ModelParagraph(), _model);

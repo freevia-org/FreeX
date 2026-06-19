@@ -163,7 +163,11 @@ internal static class FreeWRibbonIcons
 
             // Insert: controls
             ["freew.cc-text"] = RibbonCommandIconKind.TextBox,
+            ["freew.cc-richtext"] = RibbonCommandIconKind.QuickParts,
             ["freew.cc-checkbox"] = RibbonCommandIconKind.CheckBox,
+            ["freew.cc-date"] = RibbonCommandIconKind.Date,
+            ["freew.cc-dropdown"] = RibbonCommandIconKind.List,
+            ["freew.cc-combo"] = RibbonCommandIconKind.ChevronDown,
 
             // Insert: header & footer
             ["freew.header"] = RibbonCommandIconKind.Header,

@@ -1185,13 +1185,17 @@ public static class DocxReader
     /// <summary>
     /// Reads a content control's w:sdtPr into a <see cref="ContentControl"/>: recovers the optional
     /// w:tag / w:alias and the control kind. A w14:checkbox (or w:checkbox) marks a checkbox control,
-    /// whose checked state comes from the nested w14:checked/@val ("1"/"true"/"on"); anything else is a
+    /// whose checked state comes from the nested w14:checked/@val ("1"/"true"/"on"); a w:date marks a
+    /// date picker (recovering its w:dateFormat); a w:dropDownList / w:comboBox marks a list control
+    /// (recovering its w:listItem choices); a w:richText marks a rich-text control; anything else is a
     /// plain-text control. A null/absent w:sdtPr yields a default plain-text control.
     /// </summary>
     private static ContentControl ReadContentControl(XElement? sdtPr)
     {
         var tag = sdtPr?.Element(W + "tag")?.Attribute(W + "val")?.Value;
         var alias = sdtPr?.Element(W + "alias")?.Attribute(W + "val")?.Value;
+        var normTag = string.IsNullOrEmpty(tag) ? null : tag;
+        var normAlias = string.IsNullOrEmpty(alias) ? null : alias;
 
         var checkbox = sdtPr?.Element(W14 + "checkbox") ?? sdtPr?.Element(W + "checkbox");
         if (checkbox is not null)
@@ -1200,15 +1204,50 @@ public static class DocxReader
                 ?.Attribute(W14 + "val")?.Value
                 ?? (checkbox.Element(W14 + "checked") ?? checkbox.Element(W + "checked"))?.Attribute(W + "val")?.Value;
             var isChecked = val is "1" or "true" or "on";
-            return new ContentControl(ContentControlKind.CheckBox,
-                string.IsNullOrEmpty(tag) ? null : tag,
-                string.IsNullOrEmpty(alias) ? null : alias,
-                isChecked);
+            return new ContentControl(ContentControlKind.CheckBox, normTag, normAlias, isChecked);
         }
 
-        return new ContentControl(ContentControlKind.PlainText,
-            string.IsNullOrEmpty(tag) ? null : tag,
-            string.IsNullOrEmpty(alias) ? null : alias);
+        var date = sdtPr?.Element(W + "date");
+        if (date is not null)
+        {
+            var format = date.Element(W + "dateFormat")?.Attribute(W + "val")?.Value;
+            return new ContentControl(ContentControlKind.DatePicker, normTag, normAlias,
+                DateFormat: string.IsNullOrEmpty(format) ? ContentControl.DefaultDateFormat : format);
+        }
+
+        var dropDown = sdtPr?.Element(W + "dropDownList");
+        if (dropDown is not null)
+            return new ContentControl(ContentControlKind.DropDownList, normTag, normAlias,
+                ListItems: ReadListItems(dropDown));
+
+        var combo = sdtPr?.Element(W + "comboBox");
+        if (combo is not null)
+            return new ContentControl(ContentControlKind.ComboBox, normTag, normAlias,
+                ListItems: ReadListItems(combo));
+
+        if (sdtPr?.Element(W + "richText") is not null)
+            return new ContentControl(ContentControlKind.RichText, normTag, normAlias);
+
+        return new ContentControl(ContentControlKind.PlainText, normTag, normAlias);
+    }
+
+    /// <summary>
+    /// Reads the w:listItem choices (w:displayText / w:value) of a w:dropDownList / w:comboBox element
+    /// into <see cref="ContentControlListItem"/>s. A listItem with only a w:value uses it for both fields;
+    /// one with only a w:displayText mirrors it into the value.
+    /// </summary>
+    private static IReadOnlyList<ContentControlListItem> ReadListItems(XElement list)
+    {
+        var items = new List<ContentControlListItem>();
+        foreach (var li in list.Elements(W + "listItem"))
+        {
+            var display = li.Attribute(W + "displayText")?.Value;
+            var value = li.Attribute(W + "value")?.Value;
+            if (display is null && value is null)
+                continue;
+            items.Add(new ContentControlListItem(display ?? value!, value ?? display!));
+        }
+        return items;
     }
 
     /// <summary>Carries a tracked-change kind plus its author/date while reading runs inside a w:ins/w:del.</summary>
