@@ -70,6 +70,7 @@ internal static class FreeWRibbon
                     g.Icon("freew.align-center", "Center", RibbonCommandIconKind.AlignCenter);
                     g.Icon("freew.align-right", "Align Right", RibbonCommandIconKind.AlignRight);
                     g.Icon("freew.align-justify", "Justify", RibbonCommandIconKind.AlignJustify);
+                    g.Icon("freew.sort", "Sort", RibbonCommandIconKind.Sort);
                     g.ComboBox("freew.line-spacing", "Line and Paragraph Spacing", c => c with
                     {
                         Items = new[] { "1.0", "1.15", "1.5", "2.0" },
@@ -127,6 +128,7 @@ internal static class FreeWRibbon
                     g.Icon("freew.table-header-row", "Header Row", RibbonCommandIconKind.Table, RibbonCommandIconAccent.Green);
                     g.Icon("freew.table-banded-rows", "Banded Rows", RibbonCommandIconKind.Table, RibbonCommandIconAccent.Green);
                     g.Icon("freew.table-repeat-header", "Repeat Header", RibbonCommandIconKind.Table, RibbonCommandIconAccent.Green);
+                    g.Icon("freew.table-formula", "Formula", RibbonCommandIconKind.Sum, RibbonCommandIconAccent.Green);
                 });
                 tab.Group("illustrations", "Illustrations", "I", 80, g =>
                 {
@@ -197,6 +199,9 @@ internal static class FreeWRibbon
                     g.Icon("freew.index-insert", "Insert Index", RibbonCommandIconKind.Index);
                     g.Icon("freew.tof", "Table of Figures", RibbonCommandIconKind.TableOfContents);
                     g.Icon("freew.tof-refresh", "Update Figures", RibbonCommandIconKind.Refresh);
+                    g.Icon("freew.mark-citation", "Mark Citation", RibbonCommandIconKind.Citation);
+                    g.Icon("freew.table-of-authorities", "Table of Authorities", RibbonCommandIconKind.Bibliography);
+                    g.Icon("freew.table-of-authorities-refresh", "Update Authorities", RibbonCommandIconKind.Refresh);
                 });
                 tab.Group("controls", "Controls", "O", 62, g =>
                 {
@@ -245,8 +250,7 @@ internal static class FreeWRibbon
                 });
                 tab.Group("data", "Data", "D", 88, g =>
                 {
-                    // Small group → labelled Medium buttons.
-                    g.Medium("freew.sort", "Sort", RibbonCommandIconKind.Sort);
+                    // Small group → labelled Medium buttons. (Sort lives in Home > Paragraph, matching Word.)
                     g.Medium("freew.text-to-table", "Text to Table", RibbonCommandIconKind.Table, accent: RibbonCommandIconAccent.Green);
                     g.Medium("freew.table-to-text", "Table to Text", RibbonCommandIconKind.TextFunction);
                 });
@@ -261,6 +265,13 @@ internal static class FreeWRibbon
                         Icon = new RibbonCommandIcon(RibbonCommandIconKind.Theme, RibbonCommandIconAccent.Theme),
                         Width = 140
                     });
+                });
+                // Design > Page Background: set the whole-page background colour (Word's Page Color). The
+                // command opens a swatch palette (+ No Color + More Colours…) and writes the model's page
+                // BackgroundColorHex, which already round-trips as w:background in docx.
+                tab.Group("page-background", "Page Background", "B", 90, g =>
+                {
+                    g.Medium("freew.page-color", "Page Color", RibbonCommandIconKind.Fill, accent: RibbonCommandIconAccent.Fill, dropdown: true);
                 });
             })
             .Tab("view", "View", "W", tab =>
@@ -309,7 +320,11 @@ internal static class FreeWRibbon
                 // Single-command group → Large.
                 tab.Group("comments", "Comments", "C", 95, g =>
                 {
+                    // New Comment is the hero; Reply / Resolve act on the comment thread covering the caret
+                    // (modern threaded comments) and read as labelled Medium rows beside it.
                     g.Large("freew.new-comment", "New Comment", RibbonCommandIconKind.Comment);
+                    g.Medium("freew.reply-comment", "Reply", RibbonCommandIconKind.Comment);
+                    g.Medium("freew.resolve-comment", "Resolve", RibbonCommandIconKind.AcceptChange);
                 });
                 tab.Group("tracking", "Tracking", "G", 90, g =>
                 {
@@ -379,6 +394,8 @@ internal static class FreeWRibbon
                     g.Medium("freew.table-banded-rows", "Banded Rows", RibbonCommandIconKind.Table, accent: RibbonCommandIconAccent.Green);
                     g.Medium("freew.table-repeat-header", "Repeat Header Row", RibbonCommandIconKind.Table, accent: RibbonCommandIconAccent.Green);
                 });
+                tab.Group("table-data", "Data", "D", 70, g =>
+                    g.Large("freew.table-formula", "Formula", RibbonCommandIconKind.Sum, accent: RibbonCommandIconAccent.Green));
             })
             .Build();
     }

@@ -148,6 +148,8 @@ internal static class FreeWRibbonCommands
         // Insert tab — Table Tools: pick/clear a fill colour for the caret's cell (sets model + re-renders).
         registry.Register("freew.cell-shading", new CellShadingCommand(editor));
         // Insert tab — Table Tools: table-style toggles applied to the caret's table (sets model + re-renders).
+        // Table Tools — Data: insert a computed formula field (=SUM(ABOVE) etc.) into the caret's cell.
+        registry.Register("freew.table-formula", new TableFormulaCommand(editor));
         registry.Register("freew.table-header-row", new ActionCommand(() => { editor.Focus(); editor.ToggleTableHeaderRow(); }));
         registry.Register("freew.table-banded-rows", new ActionCommand(() => { editor.Focus(); editor.ToggleTableBandedRows(); }));
         registry.Register("freew.table-repeat-header", new ActionCommand(() => { editor.Focus(); editor.ToggleTableRepeatHeaderRow(); }));
@@ -255,6 +257,11 @@ internal static class FreeWRibbonCommands
         // caret, and rebuild it in place (remove the prior region + re-insert). Both route through the bus.
         registry.Register("freew.tof", new ActionCommand(() => { editor.Focus(); editor.InsertTableOfFigures(); }));
         registry.Register("freew.tof-refresh", new ActionCommand(() => { editor.Focus(); editor.RefreshTableOfFigures(); }));
+        // Insert tab — References: mark the selection as a legal citation (a hidden TA field), and insert /
+        // rebuild a Table of Authorities built from those marks, grouped by category (reversibly via the bus).
+        registry.Register("freew.mark-citation", new MarkCitationCommand(editor));
+        registry.Register("freew.table-of-authorities", new ActionCommand(() => { editor.Focus(); editor.InsertTableOfAuthorities(); }));
+        registry.Register("freew.table-of-authorities-refresh", new ActionCommand(() => { editor.Focus(); editor.RefreshTableOfAuthorities(); }));
         // Insert tab — Links: name the caret's paragraph as a bookmark target (an invisible marker).
         registry.Register("freew.bookmark", new InsertBookmarkCommand(editor));
         // Insert tab — Links: apply an internal link (to an existing bookmark) over the selection.
@@ -277,6 +284,10 @@ internal static class FreeWRibbonCommands
 
         // Review tab — Comments: prompt for comment text and attach it over the current selection.
         registry.Register("freew.new-comment", new NewCommentCommand(editor));
+        // Review tab — Comments: reply to / resolve the comment thread covering the caret (modern threaded
+        // comments). Reply prompts for text and appends a child comment; Resolve toggles the thread's done flag.
+        registry.Register("freew.reply-comment", new ReplyCommentCommand(editor));
+        registry.Register("freew.resolve-comment", new ResolveCommentCommand(editor));
 
         // Review tab — Proofing: open the read-only Word Count / Statistics dialog. Commits pending
         // edits first so the counts reflect the current text, then computes from the model.
@@ -437,6 +448,11 @@ internal static class FreeWRibbonCommands
         // round-trip through docx save.
         registry.Register("freew.page-border", new ActionCommand(() => { editor.Focus(); editor.TogglePageBorder(); }));
         registry.Register("freew.watermark", new WatermarkCommand(editor));
+
+        // Design tab — Page Background: pick the whole-page background colour (Word's Page Color). Opens a
+        // swatch palette + No Color + More Colours… and sets the model's page BackgroundColorHex (which
+        // already round-trips as w:background in docx); the editor recolours the page sheet immediately.
+        registry.Register("freew.page-color", new PageColorCommand(editor));
 
         // Layout tab — open the modeless print-preview window (paginated, page-settings-aware).
         if (onPrintPreview is not null)
@@ -972,6 +988,68 @@ internal static class FreeWRibbonCommands
 
     // Insert > Table Tools > Cell Shading: pick a fill colour from a small palette and apply it to the
     // caret's table cell; "No Color" clears shading. Mirrors ParagraphShadingCommand's swatch picker.
+    // Table Tools — Data > Formula (Word's Table > Data > Formula): insert a computed formula field into the
+    // caret's cell. Requires the caret to be inside a table; otherwise warns and does nothing. Seeds a
+    // default formula (=SUM(ABOVE) or =SUM(LEFT)) by looking at where numbers sit relative to the cell, opens
+    // the Formula dialog, and inserts/recomputes the field.
+    private sealed class TableFormulaCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var owner = Window.GetWindow(editor);
+            var location = editor.CaretTableCell();
+            if (location is null)
+            {
+                DialogMessageHelper.ShowWarning(owner!, "The cursor must be inside a table cell to insert a formula.", "Formula");
+                return;
+            }
+
+            var (table, rowIndex, columnIndex) = location.Value;
+            var formula = TableFormulaDialog.Prompt(owner, DefaultFormula(table, rowIndex, columnIndex));
+            if (formula is null)
+                return; // cancelled — leave the model untouched
+
+            editor.Focus();
+            editor.InsertTableFormula(formula);
+        }
+
+        // Word's default: =SUM(ABOVE) when numeric cells sit above the formula cell; otherwise =SUM(LEFT)
+        // when numbers sit to the left; falling back to =SUM(ABOVE).
+        private static string DefaultFormula(FreeW.Core.Model.Table table, int rowIndex, int columnIndex)
+        {
+            if (HasNumberAbove(table, rowIndex, columnIndex))
+                return "=SUM(ABOVE)";
+            if (HasNumberLeft(table, rowIndex, columnIndex))
+                return "=SUM(LEFT)";
+            return "=SUM(ABOVE)";
+        }
+
+        private static bool HasNumberAbove(FreeW.Core.Model.Table table, int rowIndex, int columnIndex)
+        {
+            for (var r = rowIndex - 1; r >= 0; r--)
+            {
+                var cells = table.Rows[r].Cells;
+                if (columnIndex < cells.Count && TableFormulaEvaluator.TryParseCellNumber(cells[columnIndex].PlainText, out _))
+                    return true;
+            }
+            return false;
+        }
+
+        private static bool HasNumberLeft(FreeW.Core.Model.Table table, int rowIndex, int columnIndex)
+        {
+            if (rowIndex < 0 || rowIndex >= table.Rows.Count)
+                return false;
+            var cells = table.Rows[rowIndex].Cells;
+            for (var c = columnIndex - 1; c >= 0; c--)
+            {
+                if (c < cells.Count && TableFormulaEvaluator.TryParseCellNumber(cells[c].PlainText, out _))
+                    return true;
+            }
+            return false;
+        }
+    }
+
     private sealed class CellShadingCommand(DocumentView editor) : IRibbonCommand
     {
         private static readonly string[] Palette =
@@ -1499,21 +1577,64 @@ internal static class FreeWRibbonCommands
             if (string.IsNullOrWhiteSpace(text))
                 return; // cancelled or empty — nothing to attach
 
+            var author = CommentAuthor.Resolve(editor);
+            editor.Focus();
+            editor.InsertComment(text.Trim(), author, CommentAuthor.DeriveInitials(author));
+        }
+    }
+
+    // The author/initials a new comment or reply is stamped with: the document's Author property, falling
+    // back to the OS user, with initials derived from it. Shared by New Comment + Reply so the two stamp
+    // the same identity. Kept tiny + static so it carries no editor state.
+    private static class CommentAuthor
+    {
+        public static string Resolve(DocumentView editor)
+        {
             var author = editor.Model.Properties.Author;
             if (string.IsNullOrWhiteSpace(author))
                 author = Environment.UserName;
-            author = author?.Trim() ?? string.Empty;
-
-            editor.Focus();
-            editor.InsertComment(text.Trim(), author, DeriveInitials(author));
+            return author?.Trim() ?? string.Empty;
         }
 
         // Initials = the first letter of each whitespace-separated word, upper-cased (max 3).
-        private static string DeriveInitials(string author)
+        public static string DeriveInitials(string author)
         {
             var parts = author.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
             var initials = string.Concat(parts.Take(3).Select(p => char.ToUpperInvariant(p[0])));
             return initials.Length > 0 ? initials : "?";
+        }
+    }
+
+    // Review > Comments > Reply: prompt for reply text and append it to the comment thread covering the
+    // caret/selection. Warns when the caret is not inside a comment. The reply is stamped with the same
+    // author/initials a new comment uses.
+    private sealed class ReplyCommentCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var text = TextPrompt.Ask(Window.GetWindow(editor), "Reply", "Reply:", string.Empty);
+            if (string.IsNullOrWhiteSpace(text))
+                return; // cancelled or empty
+
+            var author = CommentAuthor.Resolve(editor);
+            editor.Focus();
+            if (!editor.ReplyToCommentAtCaret(text.Trim(), author, CommentAuthor.DeriveInitials(author)))
+                DialogMessageHelper.ShowWarning(Window.GetWindow(editor)!,
+                    "Place the cursor inside a comment, then choose Reply.", "Reply");
+        }
+    }
+
+    // Review > Comments > Resolve: toggle the resolved (done) state of the comment thread covering the
+    // caret/selection (resolved ranges render muted). Warns when the caret is not inside a comment.
+    private sealed class ResolveCommentCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            if (editor.ToggleResolveCommentAtCaret() is null)
+                DialogMessageHelper.ShowWarning(Window.GetWindow(editor)!,
+                    "Place the cursor inside a comment, then choose Resolve.", "Resolve");
         }
     }
 
@@ -1846,6 +1967,91 @@ internal static class FreeWRibbonCommands
             if (string.IsNullOrWhiteSpace(term))
                 return; // cancelled or empty — nothing to mark
             editor.MarkIndexEntry(term.Trim());
+        }
+    }
+
+    // Insert > References > Mark Citation: mark the selection (seeding the long form) as a legal citation
+    // for a Table of Authorities. Opens a small dialog to pick the category and confirm the long/short
+    // forms, then drops a hidden TA field at the caret (the visible table is built later by Table of
+    // Authorities). Cancelling or an empty long form marks nothing.
+    private sealed class MarkCitationCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var seed = editor.Selection.Text?.Trim() ?? string.Empty;
+            var citation = MarkCitationDialog.Ask(Window.GetWindow(editor), seed);
+            if (citation is null)
+                return; // cancelled or empty — nothing to mark
+            editor.MarkCitation(citation);
+        }
+    }
+
+    // A small modal form capturing a citation's category, long form and short form. Returns the citation,
+    // or null if cancelled (or if the long form is left blank).
+    private static class MarkCitationDialog
+    {
+        public static Citation? Ask(Window? owner, string seedLong)
+        {
+            var category = new System.Windows.Controls.ComboBox { MinWidth = 320, Margin = new Thickness(0, 0, 0, 10) };
+            foreach (var value in System.Enum.GetValues<CitationCategory>())
+                category.Items.Add(new CategoryItem(value));
+            category.SelectedIndex = 0;
+
+            var longForm = new System.Windows.Controls.TextBox { MinWidth = 320, Margin = new Thickness(0, 0, 0, 10), Text = seedLong };
+            var shortForm = new System.Windows.Controls.TextBox { MinWidth = 320, Margin = new Thickness(0, 0, 0, 10) };
+
+            Citation? result = null;
+            var dialog = new Window
+            {
+                Title = "Mark Citation",
+                SizeToContent = SizeToContent.WidthAndHeight,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ShowInTaskbar = false
+            };
+
+            var ok = new System.Windows.Controls.Button { Content = "Mark", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+            ok.Click += (_, _) =>
+            {
+                var longText = longForm.Text.Trim();
+                if (longText.Length == 0)
+                    return; // nothing to mark — keep the dialog open
+                var chosen = (category.SelectedItem as CategoryItem)?.Value ?? CitationCategory.Cases;
+                result = new Citation(longText, chosen, shortForm.Text.Trim());
+                dialog.DialogResult = true;
+            };
+
+            var buttons = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(0, 4, 0, 0)
+            };
+            buttons.Children.Add(ok);
+            buttons.Children.Add(cancel);
+
+            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Category:", Margin = new Thickness(0, 0, 0, 4) });
+            panel.Children.Add(category);
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Selected text (long citation):", Margin = new Thickness(0, 0, 0, 4) });
+            panel.Children.Add(longForm);
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Short citation (optional):", Margin = new Thickness(0, 0, 0, 4) });
+            panel.Children.Add(shortForm);
+            panel.Children.Add(buttons);
+            dialog.Content = panel;
+
+            longForm.Focus();
+            longForm.SelectAll();
+            return dialog.ShowDialog() == true ? result : null;
+        }
+
+        // Wraps a CitationCategory so the combo shows Word's friendly heading text (e.g. "Other Authorities").
+        private sealed record CategoryItem(CitationCategory Value)
+        {
+            public override string ToString() => TableOfAuthorities.CategoryHeading(Value);
         }
     }
 
@@ -2580,6 +2786,118 @@ internal static class FreeWRibbonCommands
         }
     }
 
+    // Design > Page Background > Page Color (Word's Page Color): pick the whole-page background colour from
+    // a theme-style swatch palette, clear it with "No Color", or open "More Colours…" to type a hex value.
+    // The chosen value sets the model's page BackgroundColorHex through DocumentView.SetPageColor (commit +
+    // re-render via ApplyPageSettings); it already round-trips as w:background in docx. Mirrors the swatch
+    // picker used by Cell Shading / Paragraph Shading.
+    private sealed class PageColorCommand(DocumentView editor) : IRibbonCommand
+    {
+        // Word's "Theme Colors" top row plus standard colours — a sensible page-tint palette.
+        private static readonly string[] Palette =
+        [
+            "#FFFFFF", "#F2F2F2", "#DDD9C3", "#C6D9F1", "#DBE5F1", "#F2DCDB",
+            "#EBF1DE", "#E5E0EC", "#FDE9D9", "#FFF2CC", "#DEEBF7", "#E2EFDA",
+            "#FCE4D6", "#D9E1F2", "#FFFFCC", "#E2F0D9", "#000000", "#1F1F1F",
+        ];
+
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var owner = Window.GetWindow(editor);
+            var (chosen, hex) = ShowPicker(owner);
+            if (!chosen)
+                return; // cancelled — leave the model untouched
+            editor.Focus();
+            editor.SetPageColor(hex); // null clears back to the default white sheet
+        }
+
+        private (bool Chosen, string? Hex) ShowPicker(Window? owner)
+        {
+            var chosen = false;
+            string? hex = null;
+            var window = new Window
+            {
+                Title = "Page Color",
+                SizeToContent = SizeToContent.WidthAndHeight,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = owner is null
+                    ? WindowStartupLocation.CenterScreen
+                    : WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ShowInTaskbar = false
+            };
+
+            var panel = new StackPanel { Margin = new Thickness(8) };
+            var grid = new WrapPanel { Width = 6 * 26 };
+            foreach (var swatchHex in Palette)
+            {
+                var swatch = new Button
+                {
+                    Width = 22,
+                    Height = 22,
+                    Margin = new Thickness(2),
+                    Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(swatchHex)),
+                    BorderBrush = new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80)),
+                    BorderThickness = new Thickness(1),
+                    ToolTip = swatchHex
+                };
+                swatch.Click += (_, _) => { chosen = true; hex = swatchHex; window.Close(); };
+                grid.Children.Add(swatch);
+            }
+            panel.Children.Add(grid);
+
+            var noColor = new Button
+            {
+                Content = "No Color",
+                Margin = new Thickness(2, 6, 2, 0),
+                Padding = new Thickness(8, 2, 8, 2)
+            };
+            noColor.Click += (_, _) => { chosen = true; hex = null; window.Close(); };
+            panel.Children.Add(noColor);
+
+            var more = new Button
+            {
+                Content = "More Colors…",
+                Margin = new Thickness(2, 4, 2, 0),
+                Padding = new Thickness(8, 2, 8, 2)
+            };
+            more.Click += (_, _) =>
+            {
+                var seed = editor.Model.Page.BackgroundColorHex ?? "#";
+                var typed = TextPrompt.Ask(window, "More Colors", "Hex colour (e.g. #FFCC00):", seed);
+                if (typed is null)
+                    return; // stay on the palette
+                var normalized = NormalizeHex(typed);
+                if (normalized is null)
+                {
+                    DialogMessageHelper.ShowWarning(window, "Enter a colour as a 6-digit hex value, e.g. #FFCC00.", "Page Color");
+                    return;
+                }
+                chosen = true; hex = normalized; window.Close();
+            };
+            panel.Children.Add(more);
+
+            window.Content = panel;
+            window.ShowDialog();
+            return (chosen, hex);
+        }
+
+        // Accept "#RRGGBB" / "RRGGBB" (case-insensitive); return a normalised "#RRGGBB" or null if invalid.
+        private static string? NormalizeHex(string raw)
+        {
+            var value = raw.Trim().TrimStart('#');
+            if (value.Length != 6)
+                return null;
+            foreach (var c in value)
+            {
+                if (!Uri.IsHexDigit(c))
+                    return null;
+            }
+            return "#" + value.ToUpperInvariant();
+        }
+    }
+
     // Insert > Header & Footer > Page Number: drop a centered page-number field into the footer.
     private sealed class InsertPageNumberCommand(DocumentView editor) : IRibbonCommand
     {
@@ -2688,83 +3006,25 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // Layout > Sort: open the sort dialog (order + case option) and sort the selected paragraphs in
-    // place. The view reorders the paragraph blocks through its undo/redo bus and re-renders.
+    // Home > Paragraph > Sort: open the Sort dialog (type + order + case + header-row) and sort either
+    // the rows of the table at the caret (by the caret's column, matching Word) or the selected
+    // paragraphs. The view routes the reorder through its undo/redo bus and re-renders.
     private sealed class SortCommand(DocumentView editor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            var options = SortDialog.Ask(Window.GetWindow(editor));
-            if (options is null)
+            var inTable = editor.IsCaretInTable();
+            var choice = SortDialog.Prompt(Window.GetWindow(editor), forTable: inTable);
+            if (choice is null)
                 return; // cancelled
+
             editor.Focus();
-            editor.SortSelectedParagraphs(options.Value.Ascending, options.Value.CaseSensitive);
-        }
-    }
-
-    // The options captured by the sort dialog: sort direction and whether the comparison is case-sensitive.
-    private readonly record struct SortOptions(bool Ascending, bool CaseSensitive);
-
-    // A small modal dialog for Sort: A→Z / Z→A radios plus a "Case sensitive" checkbox. Returns the
-    // chosen options, or null if cancelled.
-    private static class SortDialog
-    {
-        public static SortOptions? Ask(Window? owner)
-        {
-            var ascending = new System.Windows.Controls.RadioButton
-            {
-                Content = "Ascending (A → Z)",
-                IsChecked = true,
-                Margin = new Thickness(0, 0, 0, 4)
-            };
-            var descending = new System.Windows.Controls.RadioButton
-            {
-                Content = "Descending (Z → A)",
-                Margin = new Thickness(0, 0, 0, 8)
-            };
-            var caseSensitive = new System.Windows.Controls.CheckBox
-            {
-                Content = "Case sensitive",
-                Margin = new Thickness(0, 0, 0, 12)
-            };
-
-            SortOptions? result = null;
-            var dialog = new Window
-            {
-                Title = "Sort",
-                SizeToContent = SizeToContent.WidthAndHeight,
-                ResizeMode = ResizeMode.NoResize,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                Owner = owner,
-                ShowInTaskbar = false
-            };
-
-            var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
-            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
-            ok.Click += (_, _) =>
-            {
-                result = new SortOptions(ascending.IsChecked == true, caseSensitive.IsChecked == true);
-                dialog.DialogResult = true;
-            };
-
-            var buttons = new System.Windows.Controls.StackPanel
-            {
-                Orientation = System.Windows.Controls.Orientation.Horizontal,
-                HorizontalAlignment = HorizontalAlignment.Right
-            };
-            buttons.Children.Add(ok);
-            buttons.Children.Add(cancel);
-
-            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16), MinWidth = 240 };
-            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Sort selected paragraphs by text:", Margin = new Thickness(0, 0, 0, 8) });
-            panel.Children.Add(ascending);
-            panel.Children.Add(descending);
-            panel.Children.Add(caseSensitive);
-            panel.Children.Add(buttons);
-            dialog.Content = panel;
-
-            return dialog.ShowDialog() == true ? result : null;
+            var c = choice.Value;
+            if (inTable)
+                editor.SortCaretTableRows(c.Kind, c.Ascending, c.CaseSensitive, c.HasHeaderRow);
+            else
+                editor.SortSelectedParagraphs(c.Kind, c.Ascending, c.CaseSensitive, c.HasHeaderRow);
         }
     }
 

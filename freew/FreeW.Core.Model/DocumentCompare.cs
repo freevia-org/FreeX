@@ -372,6 +372,7 @@ public static class DocumentCompare
         EndnoteId = source.EndnoteId,
         CommentId = source.CommentId,
         IsCommentReference = source.IsCommentReference,
-        Control = source.Control
+        Control = source.Control,
+        Citation = source.Citation
     };
 }

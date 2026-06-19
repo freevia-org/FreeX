@@ -78,6 +78,74 @@ public class SortConvertTests
         sorted.Select(p => p.PlainText).Should().Equal("Apple", "Banana", "banana");
     }
 
+    [Fact]
+    public void Sort_Number_OrdersNumerically_NotLexically()
+    {
+        // Lexical text order would put "10" before "2"; numeric order must not.
+        var paragraphs = new[]
+        {
+            new Paragraph("10"),
+            new Paragraph("2"),
+            new Paragraph("1"),
+        };
+
+        var sorted = ParagraphSort.Sort(
+            paragraphs, SortKind.Number, ascending: true, caseSensitive: false, hasHeaderRow: false);
+
+        sorted.Select(p => p.PlainText).Should().Equal("1", "2", "10");
+    }
+
+    [Fact]
+    public void Sort_Number_UnparseableKeysSortAfterNumbers()
+    {
+        var paragraphs = new[]
+        {
+            new Paragraph("apple"),
+            new Paragraph("3"),
+            new Paragraph("1"),
+        };
+
+        var sorted = ParagraphSort.Sort(
+            paragraphs, SortKind.Number, ascending: true, caseSensitive: false, hasHeaderRow: false);
+
+        sorted.Select(p => p.PlainText).Should().Equal("1", "3", "apple");
+    }
+
+    [Fact]
+    public void Sort_Date_OrdersChronologically()
+    {
+        var paragraphs = new[]
+        {
+            new Paragraph("2024-12-01"),
+            new Paragraph("2024-01-15"),
+            new Paragraph("2024-06-30"),
+        };
+
+        var sorted = ParagraphSort.Sort(
+            paragraphs, SortKind.Date, ascending: true, caseSensitive: false, hasHeaderRow: false);
+
+        sorted.Select(p => p.PlainText).Should().Equal("2024-01-15", "2024-06-30", "2024-12-01");
+    }
+
+    [Fact]
+    public void Sort_HasHeaderRow_PinsFirstParagraphInPlace()
+    {
+        var header = new Paragraph("Name");
+        var paragraphs = new[]
+        {
+            header,
+            new Paragraph("Charlie"),
+            new Paragraph("alpha"),
+            new Paragraph("Bravo"),
+        };
+
+        var sorted = ParagraphSort.Sort(
+            paragraphs, SortKind.Text, ascending: true, caseSensitive: false, hasHeaderRow: true);
+
+        sorted[0].Should().BeSameAs(header);
+        sorted.Select(p => p.PlainText).Should().Equal("Name", "alpha", "Bravo", "Charlie");
+    }
+
     // --- ParagraphSort.SortRows ---
 
     [Fact]
@@ -119,6 +187,37 @@ public class SortConvertTests
         var sorted = ParagraphSort.SortRows(table.Rows, keyColumn: 1, ascending: true, caseSensitive: false);
 
         sorted.Select(r => r.Cells[0].PlainText).Should().Equal("z", "b", "a");
+    }
+
+    [Fact]
+    public void SortRows_HasHeaderRow_PinsFirstRowAndSortsBody()
+    {
+        var table = Table.Create(0, 0);
+        var header = RowOf("Rank", "Fruit");
+        table.Rows.Add(header);
+        table.Rows.Add(RowOf("3", "Cherry"));
+        table.Rows.Add(RowOf("1", "Apple"));
+        table.Rows.Add(RowOf("2", "Banana"));
+
+        var sorted = ParagraphSort.SortRows(
+            table.Rows, keyColumn: 0, SortKind.Number, ascending: true, caseSensitive: false, hasHeaderRow: true);
+
+        sorted[0].Should().BeSameAs(header);
+        sorted.Select(r => r.Cells[1].PlainText).Should().Equal("Fruit", "Apple", "Banana", "Cherry");
+    }
+
+    [Fact]
+    public void SortRows_NumberKind_OrdersNumerically()
+    {
+        var table = Table.Create(0, 0);
+        table.Rows.Add(RowOf("10"));
+        table.Rows.Add(RowOf("2"));
+        table.Rows.Add(RowOf("1"));
+
+        var sorted = ParagraphSort.SortRows(
+            table.Rows, keyColumn: 0, SortKind.Number, ascending: true, caseSensitive: false, hasHeaderRow: false);
+
+        sorted.Select(r => r.Cells[0].PlainText).Should().Equal("1", "2", "10");
     }
 
     // --- TextTableConvert.TextToTable ---

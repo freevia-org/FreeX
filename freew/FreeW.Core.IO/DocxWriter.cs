@@ -29,6 +29,7 @@ public static class DocxWriter
     private const string FootnotesRelationshipId = "rIdFootnotes";
     private const string EndnotesRelationshipId = "rIdEndnotes";
     private const string CommentsRelationshipId = "rIdComments";
+    private const string CommentsExtendedRelationshipId = "rIdCommentsExtended";
     private const string SettingsRelationshipId = "rIdSettings";
     private const string FontTableRelationshipId = "rIdFontTable";
     private const string ThemeRelationshipId = "rIdTheme1";
@@ -185,6 +186,10 @@ public static class DocxWriter
         if (hasComments)
         {
             WritePart(archive, CommentsPartName.TrimStart('/'), BuildComments(document, commentImages));
+            // word/commentsExtended.xml threads replies + carries resolved state. Always emitted alongside the
+            // comments part (it has an entry per comment even for a flat, single-comment document) so modern
+            // Word treats every comment as a thread root and the reply/resolve plumbing round-trips.
+            WritePart(archive, CommentsExtendedPartName.TrimStart('/'), BuildCommentsExtended(document));
             // Comment media + the comments part's own _rels (only when a comment carries an image).
             if (commentImages.Count > 0)
             {
@@ -650,6 +655,11 @@ public static class DocxWriter
                 ? new XElement(Ct + "Override", new XAttribute("PartName", CommentsPartName),
                     new XAttribute("ContentType", CommentsContentType))
                 : null,
+            // word/commentsExtended.xml (reply threading + resolved state) is emitted whenever comments are.
+            hasComments
+                ? new XElement(Ct + "Override", new XAttribute("PartName", CommentsExtendedPartName),
+                    new XAttribute("ContentType", CommentsExtendedContentType))
+                : null,
             hasSettings
                 ? new XElement(Ct + "Override", new XAttribute("PartName", SettingsPartName),
                     new XAttribute("ContentType", SettingsContentType))
@@ -828,10 +838,16 @@ public static class DocxWriter
                 new XAttribute("Type", EndnotesRelType),
                 new XAttribute("Target", "endnotes.xml")));
         if (hasComments)
+        {
             relationships.Add(new XElement(Rel + "Relationship",
                 new XAttribute("Id", CommentsRelationshipId),
                 new XAttribute("Type", CommentsRelType),
                 new XAttribute("Target", "comments.xml")));
+            relationships.Add(new XElement(Rel + "Relationship",
+                new XAttribute("Id", CommentsExtendedRelationshipId),
+                new XAttribute("Type", CommentsExtendedRelType),
+                new XAttribute("Target", "commentsExtended.xml")));
+        }
         foreach (var image in images)
             relationships.Add(new XElement(Rel + "Relationship",
                 new XAttribute("Id", image.RelationshipId),
@@ -1181,7 +1197,7 @@ public static class DocxWriter
     private static List<ImagePart> CollectCommentImages(TextDocument document)
     {
         var images = new List<ImagePart>();
-        foreach (var comment in document.Comments.Values.OrderBy(c => c.Id))
+        foreach (var comment in FlattenComments(document))
             foreach (var paragraph in comment.Content)
                 foreach (var run in paragraph.Runs)
                     if (run.Image is { } image)
@@ -1197,13 +1213,31 @@ public static class DocxWriter
     {
         var map = new Dictionary<Run, ImagePart>();
         var next = 0;
-        foreach (var comment in document.Comments.Values.OrderBy(c => c.Id))
+        foreach (var comment in FlattenComments(document))
             foreach (var paragraph in comment.Content)
                 foreach (var run in paragraph.Runs)
                     if (run.Image is not null && next < commentImages.Count)
                         map[run] = commentImages[next++];
         return map;
     }
+
+    /// <summary>
+    /// Flattens the document's comments — every top-level comment followed by its replies — in a stable
+    /// (ascending top-level id, then thread order) order. This is the single walk that comments.xml,
+    /// commentsExtended.xml and the comment-image collection all share, so every flat <c>w:comment</c>
+    /// entry, its w15:commentEx and any comment media stay in agreement. Replies serialise as ordinary
+    /// flat comments; their thread shape lives only in commentsExtended.xml.
+    /// </summary>
+    private static IEnumerable<Comment> FlattenComments(TextDocument document) =>
+        document.Comments.Values.OrderBy(c => c.Id).SelectMany(c => c.ThreadInOrder());
+
+    /// <summary>
+    /// A stable 8-hex-digit w14:paraId for a comment's last paragraph, derived deterministically from the
+    /// comment id (so the writer never stamps random ids). Comment paraIds live in their own high range
+    /// (0x10000000+) clear of any body paraId, and are the values commentsExtended.xml threads on.
+    /// </summary>
+    private static string CommentParaId(int commentId) =>
+        (0x10000000 + commentId).ToString("X8", System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>
     /// Builds word/comments.xml (w:comments): one w:comment w:id="N" per modelled comment (ascending
@@ -1234,7 +1268,14 @@ public static class DocxWriter
         var drawings = RunDrawings.Empty() with { Images = imagesByRun };
         var noHyperlinks = new Dictionary<string, string>(StringComparer.Ordinal);
 
-        foreach (var comment in document.Comments.Values.OrderBy(c => c.Id))
+        // The w14 namespace is declared on the root only when a comment paragraph carries a paraId (i.e.
+        // always, since every comment's last paragraph is stamped for commentsExtended threading). Mirrors
+        // how the wp/a/pic namespaces are added only when needed.
+        comments.Add(new XAttribute(XNamespace.Xmlns + "w14", W14.NamespaceName));
+
+        // Parent and replies serialise as flat w:comment entries (FlattenComments order). Each comment's
+        // LAST paragraph is stamped with a w14:paraId — the value commentsExtended.xml threads on.
+        foreach (var comment in FlattenComments(document))
         {
             var element = new XElement(W + "comment",
                 new XAttribute(W + "id", comment.Id),
@@ -1243,15 +1284,57 @@ public static class DocxWriter
             if (comment.DateXml is { Length: > 0 } date)
                 element.Add(new XAttribute(W + "date", date));
 
+            var paraId = CommentParaId(comment.Id);
             if (comment.Content.Count == 0)
-                element.Add(new XElement(W + "p"));
+                element.Add(new XElement(W + "p", new XAttribute(W14 + "paraId", paraId)));
             else
-                foreach (var paragraph in comment.Content)
-                    element.Add(BuildParagraph(paragraph, drawings, noHyperlinks));
+                for (var pi = 0; pi < comment.Content.Count; pi++)
+                {
+                    var built = BuildParagraph(comment.Content[pi], drawings, noHyperlinks);
+                    // commentsExtended.xml references the comment's LAST paragraph; stamp paraId there.
+                    if (pi == comment.Content.Count - 1)
+                        built.SetAttributeValue(W14 + "paraId", paraId);
+                    element.Add(built);
+                }
             comments.Add(element);
         }
 
         return new XDocument(comments);
+    }
+
+    /// <summary>
+    /// Builds word/commentsExtended.xml (w15:commentsEx): one w15:commentEx per flat comment (FlattenComments
+    /// order), each carrying its w15:paraId (the comment's last-paragraph paraId). A reply also carries
+    /// w15:paraIdParent (its parent comment's paraId), threading it under the parent; a resolved top-level
+    /// comment carries w15:done="1". This is the part Word reads to reconstruct reply threads + resolved state.
+    /// </summary>
+    private static XDocument BuildCommentsExtended(TextDocument document)
+    {
+        var root = new XElement(W15 + "commentsEx",
+            new XAttribute(XNamespace.Xmlns + "w15", W15.NamespaceName));
+
+        foreach (var parent in document.Comments.Values.OrderBy(c => c.Id))
+        {
+            var parentParaId = CommentParaId(parent.Id);
+            var parentEx = new XElement(W15 + "commentEx",
+                new XAttribute(W15 + "paraId", parentParaId));
+            if (parent.Resolved)
+                parentEx.Add(new XAttribute(W15 + "done", "1"));
+            root.Add(parentEx);
+
+            foreach (var reply in parent.Replies)
+            {
+                var replyEx = new XElement(W15 + "commentEx",
+                    new XAttribute(W15 + "paraId", CommentParaId(reply.Id)),
+                    new XAttribute(W15 + "paraIdParent", parentParaId));
+                // A resolved thread marks done on every entry in the thread (Word's behaviour).
+                if (parent.Resolved)
+                    replyEx.Add(new XAttribute(W15 + "done", "1"));
+                root.Add(replyEx);
+            }
+        }
+
+        return new XDocument(root);
     }
 
     /// <summary>Builds word/_rels/comments.xml.rels: one image relationship per comment media part.</summary>
@@ -1838,6 +1921,39 @@ public static class DocxWriter
         _ => null
     };
 
+    /// <summary>
+    /// Builds the <c>w:fldSimple/@w:instr</c> for a table-cell formula field: the formula expression
+    /// (with a leading <c>=</c>) plus, when a number format is set, a <c>\#</c> numeric-picture switch with
+    /// the quoted format — e.g. <c> =SUM(ABOVE) \# "#,##0.00" </c>. The surrounding spaces match how Word
+    /// writes field instructions.
+    /// </summary>
+    private static string TableFormulaInstruction(TableFormulaField formula)
+    {
+        var expression = formula.Expression.TrimStart().StartsWith('=')
+            ? formula.Expression.Trim()
+            : "=" + formula.Expression.Trim();
+        var instr = " " + expression + " ";
+        if (formula.NumberFormat is { Length: > 0 } format)
+            instr += "\\# \"" + format + "\" ";
+        return instr;
+    }
+
+    /// <summary>
+    /// Builds the <c>w:fldSimple/@w:instr</c> for a Mark Citation (TA) field: <c> TA \l "long" \s "short"
+    /// \c N </c>, where <c>\l</c> is the full citation, <c>\s</c> the short form (omitted when blank) and
+    /// <c>\c</c> Word's numeric category. The surrounding spaces match how Word writes field instructions.
+    /// Embedded double-quotes in the citation text are dropped so the instruction stays well-formed.
+    /// </summary>
+    private static string CitationInstruction(Citation citation)
+    {
+        static string Clean(string value) => value.Replace("\"", string.Empty);
+        var instr = " TA \\l \"" + Clean(citation.LongCitation) + "\"";
+        if (citation.ShortCitation.Length > 0)
+            instr += " \\s \"" + Clean(citation.ShortCitation) + "\"";
+        instr += " \\c " + (int)citation.Category + " ";
+        return instr;
+    }
+
     private static XElement BuildRun(Run run, RunDrawings drawings)
     {
         // An inline equation serialises as an m:oMath emitted in place of the run (a paragraph-level
@@ -1867,6 +1983,23 @@ public static class DocxWriter
             wr.Add(BuildWordArtDrawing(wordArt, drawings.Ids));
             return wr;
         }
+
+        // A Mark Citation (TA) field emits a hidden w:fldSimple whose w:instr is the TA instruction
+        // (" TA \l "long" \s "short" \c N "). It wraps an empty run so it produces no visible glyph, matching
+        // Word's hidden citation mark. The reader recovers the Citation from the instruction.
+        if (run.Citation is { } citation)
+            return new XElement(W + "fldSimple",
+                new XAttribute(W + "instr", CitationInstruction(citation)),
+                new XElement(W + "r"));
+
+        // A table-cell formula field (Word's Table > Data > Formula) emits a w:fldSimple whose w:instr is
+        // the formula plus an optional number-format switch (e.g. " =SUM(ABOVE) \# "#,##0.00" "), wrapping a
+        // run whose w:t is the cached computed result. The reader recovers the formula + format from the
+        // instruction and the cached result from the wrapped run.
+        if (run.TableFormula is { } formula)
+            return new XElement(W + "fldSimple",
+                new XAttribute(W + "instr", TableFormulaInstruction(formula)),
+                BuildTextRun(run, drawings));
 
         // A document field emits a self-contained w:fldSimple wrapping a run; the wrapped run's w:t
         // carries the last-known/cached value as fallback text for field-unaware consumers. The
