@@ -140,7 +140,11 @@ public sealed class InsertCellsCommand : IWorkbookCommand
                 _formulaSnapshot);
         }
 
-        return new CommandOutcome(true, AffectedCells: _range.AllCells().ToList());
+        return new CommandOutcome(
+            true,
+            AffectedCells: RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
+                _range.AllCells(),
+                _formulaSnapshot));
     }
 
     public void Revert(ICommandContext ctx)
@@ -588,7 +592,11 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
                 _formulaSnapshot);
         }
 
-        return new CommandOutcome(true, AffectedCells: _range.AllCells().ToList());
+        return new CommandOutcome(
+            true,
+            AffectedCells: RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
+                _range.AllCells(),
+                _formulaSnapshot));
     }
 
     public void Revert(ICommandContext ctx)

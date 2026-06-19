@@ -9022,7 +9022,15 @@ public sealed partial class MainWindow : Window
     {
         if (e.Key == Key.Enter)
         {
-            CommitFormulaBox();
+            if (_isOpening || _isSaving)
+            {
+                ShowSaveIssue("Finish saving before editing cells.");
+            }
+            else
+            {
+                CommitFormulaBox();
+            }
+
             e.Handled = true;
         }
         else if (e.Key == Key.Tab)
@@ -9047,6 +9055,12 @@ public sealed partial class MainWindow : Window
 
     private bool CommitFormulaBox()
     {
+        if (_isOpening || _isSaving)
+        {
+            ShowSaveIssue("Finish saving before editing cells.");
+            return false;
+        }
+
         var address = _session.FormulaEditAddress ?? _session.ActiveCell;
         var result = _session.CommitCellText(_formulaBox.Text ?? "");
 
@@ -16285,10 +16299,10 @@ public sealed partial class MainWindow : Window
                 target.Path,
                 existingIdentity: _session.CurrentFileAccessIdentity);
             using var fileAccess = await _workbookFileAccessService.BeginAccessAsync(StorageProvider, fileAccessIdentity);
-            await _saveService.SaveAsync(target.Path, target.Adapter, _session.Workbook, progress);
+            var saveWarnings = await _saveService.SaveAsync(target.Path, target.Adapter, _session.Workbook, progress);
             _session.TryMarkSavedIfNoEditsArrived(generationAtSaveStart, target.Path, fileAccessIdentity);
             RecordRecentWorkbook(target.Path, fileAccessIdentity);
-            RefreshShell($"Saved {Path.GetFileName(target.Path)}");
+            RefreshShell(FormatSaveCompletionStatus(target.Path, saveWarnings));
         }
         catch (Exception ex)
         {
@@ -16328,6 +16342,11 @@ public sealed partial class MainWindow : Window
         _statusText.Text = message;
         _statusText.Foreground = Brush(143, 74, 18);
     }
+
+    private static string FormatSaveCompletionStatus(string path, IReadOnlyList<string> warnings) =>
+        warnings.Count == 0
+            ? $"Saved {Path.GetFileName(path)}"
+            : $"Saved {Path.GetFileName(path)} with {warnings.Count} warning(s)";
 
     private void ShowExportIssue(string message)
     {
