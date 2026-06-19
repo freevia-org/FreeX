@@ -46,6 +46,16 @@ public sealed partial class NativeJsonAdapter
         public List<PivotCacheDto> PivotCaches { get; set; } = [];
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public List<CellStyleDto>? CellStyles { get; set; }
+
+        /// <summary>
+        /// The workbook's customized default style (style 0) when it differs from the hard-coded
+        /// <see cref="CellStyle.Default"/> (e.g. an XLSX whose workbook default font is "Aptos Narrow"
+        /// with FontScheme=Minor). Persisted so style-0 cells keep their font across an fxl round-trip;
+        /// absent/null means the workbook uses the built-in Calibri default.
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public CellStyleDto? DefaultStyle { get; set; }
+
         public List<SheetDto> Sheets { get; set; } = [];
     }
 
