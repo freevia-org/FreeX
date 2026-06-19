@@ -1226,6 +1226,40 @@ public sealed class DocumentView : RichTextBox
     public void DemoteHeading(int modelBlockIndex) =>
         ShiftHeadingStyle(modelBlockIndex, OutlineTools.Demote);
 
+    /// <summary>
+    /// Move the heading at <paramref name="modelBlockIndex"/> — together with its whole subtree (every
+    /// block down to the next same-or-higher heading) — one position toward the document start
+    /// (<paramref name="moveUp"/> = true) or end (false), swapping it with the adjacent sibling subtree.
+    /// The reorder is computed by the pure <see cref="OutlineTools.MoveSubtree"/> and applied through the
+    /// reversible <see cref="ReorderBlocksCommand"/> on the undo/redo bus, so it is a single undoable step.
+    /// Returns the new block index of the moved heading (so the nav pane can re-select it), or the original
+    /// index when nothing moved (already at an outline edge, or not a heading). Any collapsed-heading view
+    /// state is dropped first so the indices cannot become stale across the reorder.
+    /// </summary>
+    public int MoveHeading(int modelBlockIndex, bool moveUp)
+    {
+        CommitToModel();
+
+        // Collapse markers are tracked by model block index; a reorder invalidates them, so expand all
+        // first (purely a view concern — the model is unaffected) before relocating the subtree.
+        if (_collapsedHeadings.Count > 0)
+            _collapsedHeadings.Clear();
+
+        var reordered = OutlineTools.MoveSubtree(_model.Blocks, modelBlockIndex, moveUp);
+        if (ReferenceEquals(reordered, _model.Blocks))
+            return modelBlockIndex; // nothing to move
+
+        var heading = _model.Blocks[modelBlockIndex];
+        _commands.Execute(new ReorderBlocksCommand(reordered));
+
+        for (var i = 0; i < reordered.Count; i++)
+        {
+            if (ReferenceEquals(reordered[i], heading))
+                return i;
+        }
+        return modelBlockIndex;
+    }
+
     // Apply a pure style-id shift (promote/demote) to a single model paragraph via the undo/redo bus.
     private void ShiftHeadingStyle(int modelBlockIndex, Func<string?, string?> shift)
     {

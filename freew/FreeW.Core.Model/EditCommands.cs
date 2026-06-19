@@ -86,6 +86,38 @@ public sealed class ReplaceBlocksCommand(int index, int count, IReadOnlyList<Blo
     }
 }
 
+/// <summary>
+/// Reversibly reorder the whole body by replacing it with <paramref name="reordered"/> — a permutation
+/// of the current blocks (same instances, new order). Snapshots the prior block order so undo restores
+/// it exactly. Used by the navigation pane's "Move Up / Move Down" to relocate a heading-subtree
+/// (<see cref="OutlineTools.MoveSubtree"/>) in one undoable step. The replacement is applied as a clear
+/// + re-add of the existing <see cref="TextDocument.Blocks"/> list, so no block instance is recreated.
+/// </summary>
+public sealed class ReorderBlocksCommand(IReadOnlyList<Block> reordered) : IDocumentCommand
+{
+    private Block[]? _previous;
+
+    public string Label => "Move Heading";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        var blocks = context.Document.Blocks;
+        _previous = [.. blocks];
+        blocks.Clear();
+        blocks.AddRange(reordered);
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (_previous is null)
+            return;
+        var blocks = context.Document.Blocks;
+        blocks.Clear();
+        blocks.AddRange(_previous);
+        _previous = null;
+    }
+}
+
 /// <summary>Replace a paragraph's formatting, snapshotting the previous value for undo.</summary>
 public sealed class SetParagraphFormattingCommand(int index, ParagraphFormatting formatting) : IDocumentCommand
 {
