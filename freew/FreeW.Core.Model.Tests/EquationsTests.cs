@@ -21,6 +21,9 @@ public class EquationsTests
         MathRun.Delimiter("a, b").LinearText.Should().Be("(a, b)");
         MathRun.Delimiter("a", "[", "]").LinearText.Should().Be("[a]");
         MathRun.MatrixOf(MathMatrix.Identity2x2()).LinearText.Should().Be("[1, 0; 0, 1]");
+        MathRun.FunctionApply("sin", "x").LinearText.Should().Be("sin(x)");
+        MathRun.GroupCharOf("x+y").LinearText.Should().Be("\u23DEx+y");
+        MathRun.GroupCharOf("x+y", "\u23DF", "bot").LinearText.Should().Be("x+y\u23DF");
     }
 
     [Fact]

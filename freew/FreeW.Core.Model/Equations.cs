@@ -43,7 +43,9 @@ public enum MathRunKind
     Accent,
     Bar,
     Delimiter,
-    Matrix
+    Matrix,
+    FunctionApply,
+    GroupChar
 }
 
 /// <summary>
@@ -117,6 +119,15 @@ public sealed record MathRun
     /// <summary>The matrix grid (only meaningful for <see cref="MathRunKind.Matrix"/>).</summary>
     public MathMatrix? Matrix { get; init; }
 
+    /// <summary>The function name (only meaningful for <see cref="MathRunKind.FunctionApply"/>).</summary>
+    public string FuncName { get; init; } = string.Empty;
+
+    /// <summary>The grouping character (only meaningful for <see cref="MathRunKind.GroupChar"/>).</summary>
+    public string GroupChr { get; init; } = "\u23DE";
+
+    /// <summary>The grouping character position: "top" or "bot" (only meaningful for <see cref="MathRunKind.GroupChar"/>).</summary>
+    public string GroupChrPos { get; init; } = "top";
+
     /// <summary>Creates a plain math-text fragment (m:r/m:t).</summary>
     public static MathRun PlainText(string text) => new() { Kind = MathRunKind.Text, Text = text };
 
@@ -172,6 +183,20 @@ public sealed record MathRun
     public static MathRun MatrixOf(MathMatrix matrix) =>
         new() { Kind = MathRunKind.Matrix, Matrix = matrix };
 
+    /// <summary>Creates a function-application fragment (m:func): <paramref name="funcName"/> applied to <paramref name="argument"/>.</summary>
+    public static MathRun FunctionApply(string funcName, string argument) =>
+        new() { Kind = MathRunKind.FunctionApply, FuncName = funcName, Base = argument };
+
+    /// <summary>Creates a group-character fragment (m:groupChr): <paramref name="@base"/> grouped by <paramref name="groupChr"/>.</summary>
+    public static MathRun GroupCharOf(string @base, string groupChr = "\u23DE", string groupChrPos = "top") =>
+        new()
+        {
+            Kind = MathRunKind.GroupChar,
+            Base = @base,
+            GroupChr = string.IsNullOrEmpty(groupChr) ? "\u23DE" : groupChr,
+            GroupChrPos = string.IsNullOrEmpty(groupChrPos) ? "top" : groupChrPos
+        };
+
     /// <summary>
     /// A best-effort linear (plain-text) rendering of this fragment, used for the host run's fallback
     /// text and for the editor's lightweight visual stand-in.
@@ -188,6 +213,10 @@ public sealed record MathRun
         MathRunKind.Bar => BarTop ? $"‾{Base}‾" : $"_{Base}_",
         MathRunKind.Delimiter => $"{OpenChar}{Base}{CloseChar}",
         MathRunKind.Matrix => Matrix?.LinearText ?? string.Empty,
+        MathRunKind.FunctionApply => string.IsNullOrEmpty(FuncName) ? Base : $"{FuncName}({Base})",
+        MathRunKind.GroupChar => string.Equals(GroupChrPos, "bot", StringComparison.OrdinalIgnoreCase)
+            ? $"{Base}{GroupChr}"
+            : $"{GroupChr}{Base}",
         _ => Text
     };
 }

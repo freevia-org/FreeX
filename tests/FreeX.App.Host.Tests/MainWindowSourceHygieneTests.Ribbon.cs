@@ -574,8 +574,13 @@ public sealed partial class MainWindowSourceHygieneTests
         var scenarioSource = DialogSourceTestSupport.ReadHostSources("MainWindow.ScenarioCommands.cs");
 
         var createNewWorkbook = ExtractMethodSource(backstageSource, "private void CreateNewWorkbook()");
-        createNewWorkbook.Should().Contain("SetActiveCell(new CellAddress(_currentSheetId, 1, 1));");
+        createNewWorkbook.Should().Contain("InitializeNewWorkbook(workbookName: null);");
         createNewWorkbook.Should().NotContain("RefreshToolbar();");
+
+        var adoptWorkbookAsInitial = ExtractMethodSource(backstageSource, "private void AdoptWorkbookAsInitial(");
+        adoptWorkbookAsInitial.Should().Contain("SetActiveCell(new CellAddress(_currentSheetId, 1, 1));");
+        adoptWorkbookAsInitial.Should().NotContain("RefreshToolbar();");
+        adoptWorkbookAsInitial.Should().NotContain("RefreshStatusBar();");
 
         var adoptSharedWorkbook = ExtractMethodSource(multiWindowSource, "private void AdoptSharedWorkbook()");
         adoptSharedWorkbook.Should().Contain("SetActiveCell(new CellAddress(_currentSheetId, 1, 1));");
