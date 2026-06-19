@@ -11,6 +11,7 @@
     <Project Path="tests/FreeX.Core.Model.Tests/FreeX.Core.Model.Tests.csproj" />
     <Project Path="tests/FreeX.Fixtures/FreeX.Fixtures.csproj" />
     <Project Path="tests/FreeX.Integration.Tests/FreeX.Integration.Tests.csproj" />
+    <Project Path="tests/FreeX.ParityCompare.Tests/FreeX.ParityCompare.Tests.csproj" />
     <Project Path="tests/Free.Shared.Ribbon.Tests/Free.Shared.Ribbon.Tests.csproj" />
   </Folder>
 </Solution>
