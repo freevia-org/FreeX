@@ -307,8 +307,12 @@ public sealed partial class PivotTableRefreshServiceTests
     }
 
     [Fact]
-    public void Refresh_SuppressesPivotStyleFontComponentsWhenApplyFontFormatsIsFalse()
+    public void Refresh_AppliesPivotStyleFontEvenWhenApplyFontFormatsIsFalse()
     {
+        // applyFontFormats / applyPatternFormats / applyBorderFormats are legacy autoFormatId flags;
+        // the modern named pivot style (pivotTableStyleInfo) applies regardless of them, matching
+        // Excel. Real-world files persist these as "0", so gating on them dropped all pivot styling
+        // on load (Issue 123).
         var workbook = new Workbook("PivotApplyFontFormatsFalseTest");
         var sheet = workbook.AddSheet("Data");
         SeedSalesData(sheet);
@@ -327,15 +331,17 @@ public sealed partial class PivotTableRefreshServiceTests
         PivotTableRefreshService.Refresh(workbook, sheet, pivot);
 
         var headerStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "E2"))!.StyleId);
-        headerStyle.Bold.Should().BeFalse();
-        headerStyle.FontColor.Should().Be(CellColor.Black);
+        headerStyle.Bold.Should().BeTrue();
+        headerStyle.FontColor.Should().Be(CellColor.White);
         headerStyle.FillColor.Should().Be(new CellColor(91, 155, 213));
         headerStyle.BorderBottom.Style.Should().Be(BorderStyle.Thin);
     }
 
     [Fact]
-    public void Refresh_SuppressesPivotStylePatternComponentsWhenApplyPatternFormatsIsFalse()
+    public void Refresh_AppliesPivotStylePatternEvenWhenApplyPatternFormatsIsFalse()
     {
+        // The modern named pivot style applies its fills regardless of the legacy applyPatternFormats
+        // autoFormatId flag (Issue 123).
         var workbook = new Workbook("PivotApplyPatternFormatsFalseTest");
         var sheet = workbook.AddSheet("Data");
         SeedSalesData(sheet);
@@ -355,17 +361,17 @@ public sealed partial class PivotTableRefreshServiceTests
         PivotTableRefreshService.Refresh(workbook, sheet, pivot);
 
         var headerStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "E2"))!.StyleId);
-        headerStyle.FillColor.Should().BeNull();
+        headerStyle.FillColor.Should().Be(new CellColor(91, 155, 213));
         headerStyle.Bold.Should().BeTrue();
         headerStyle.FontColor.Should().Be(CellColor.White);
         headerStyle.BorderBottom.Style.Should().Be(BorderStyle.Thin);
-        workbook.GetStyle(sheet.GetCell(Addr(sheet, "E3"))!.StyleId).FillColor.Should().BeNull();
-        workbook.GetStyle(sheet.GetCell(Addr(sheet, "F5"))!.StyleId).FillColor.Should().BeNull();
     }
 
     [Fact]
-    public void Refresh_SuppressesPivotStyleBorderComponentsWhenApplyBorderFormatsIsFalse()
+    public void Refresh_AppliesPivotStyleBorderEvenWhenApplyBorderFormatsIsFalse()
     {
+        // The modern named pivot style applies its borders regardless of the legacy applyBorderFormats
+        // autoFormatId flag (Issue 123).
         var workbook = new Workbook("PivotApplyBorderFormatsFalseTest");
         var sheet = workbook.AddSheet("Data");
         SeedSalesData(sheet);
@@ -384,7 +390,7 @@ public sealed partial class PivotTableRefreshServiceTests
         PivotTableRefreshService.Refresh(workbook, sheet, pivot);
 
         var headerStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "E2"))!.StyleId);
-        headerStyle.BorderBottom.Style.Should().Be(BorderStyle.None);
+        headerStyle.BorderBottom.Style.Should().Be(BorderStyle.Thin);
         headerStyle.Bold.Should().BeTrue();
         headerStyle.FontColor.Should().Be(CellColor.White);
         headerStyle.FillColor.Should().Be(new CellColor(91, 155, 213));

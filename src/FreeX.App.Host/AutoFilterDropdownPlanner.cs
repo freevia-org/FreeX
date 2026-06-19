@@ -1,156 +1,17 @@
+using FreeX.App.Presentation;
+using FreeX.App.Presentation.Filtering;
+using FreeX.Core.Commands;
+using FreeX.App.Presentation.AutoFilter;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
-
-public sealed record AutoFilterDropdownPlan(GridRange Range, uint FilterColumnOffset);
-
-public sealed record AutoFilterChecklistItem(string DisplayText, string Value);
-
-public sealed record AutoFilterMenuPlan(
-    string HeaderText,
-    AutoFilterMenuFilterKind FilterKind,
-    IReadOnlyList<AutoFilterMenuEntry> Entries,
-    IReadOnlyList<AutoFilterColorOption>? ColorOptions = null,
-    IReadOnlyList<AutoFilterMenuSection>? Sections = null)
-{
-    public IReadOnlyList<AutoFilterMenuSection> Sections { get; init; } = Sections ?? [];
-}
-
-public sealed record AutoFilterMenuSection(
-    AutoFilterMenuSectionKind Kind,
-    string Label,
-    IReadOnlyList<AutoFilterMenuEntry> Entries);
-
-public enum AutoFilterMenuSectionKind
-{
-    Sort,
-    FilterCommands,
-    Search,
-    Checklist
-}
-
-public enum AutoFilterColorFilterKind
-{
-    None,
-    CellFillColor,
-    NoFill,
-    FontColor
-}
-
-public sealed record AutoFilterColorOption(
-    string Label,
-    AutoFilterColorFilterKind Kind,
-    CellColor? Color);
-
-public sealed record AutoFilterMenuEntry(
-    string Header,
-    AutoFilterMenuEntryKind Kind,
-    IReadOnlyList<string> CriteriaSuggestions,
-    string Value,
-    IReadOnlyList<AutoFilterMenuEntry> Children,
-    bool IsEnabled = true)
-{
-    public AutoFilterMenuEntry(string header, AutoFilterMenuEntryKind kind, bool isEnabled = true)
-        : this(header, kind, [], header, [], isEnabled)
-    {
-    }
-
-    public AutoFilterMenuEntry(
-        string header,
-        AutoFilterMenuEntryKind kind,
-        IReadOnlyList<string> criteriaSuggestions,
-        bool isEnabled = true)
-        : this(header, kind, criteriaSuggestions, header, [], isEnabled)
-    {
-    }
-
-    public AutoFilterMenuEntry(
-        string header,
-        AutoFilterMenuEntryKind kind,
-        IReadOnlyList<string> criteriaSuggestions,
-        string value,
-        bool isEnabled = true)
-        : this(header, kind, criteriaSuggestions, value, [], isEnabled)
-    {
-    }
-
-    public AutoFilterMenuEntry(AutoFilterChecklistItem item)
-        : this(item.DisplayText, AutoFilterMenuEntryKind.ChecklistItem, [], item.Value, [])
-    {
-    }
-}
-
-public enum AutoFilterMenuFilterKind
-{
-    Text,
-    Number,
-    Date
-}
-
-public enum AutoFilterMenuEntryKind
-{
-    SortAscending,
-    SortDescending,
-    Separator,
-    ClearFilter,
-    FilterByColor,
-    FilterFamily,
-    FilterFamilyCommand,
-    Search,
-    SelectAll,
-    ChecklistItem
-}
 
 public static class AutoFilterDropdownPlanner
 {
     public static string BlankDisplayText => UiText.Get("AutoFilter_BlankDisplayText");
 
-    public static bool TryGetAutoFilterRange(Sheet sheet, out GridRange range)
-    {
-        ArgumentNullException.ThrowIfNull(sheet);
-        range = default;
-
-        // A worksheet-level <autoFilter> takes precedence (an explicit AutoFilter applied to a range).
-        if (sheet.AutoFilter is { Reference: { } reference } &&
-            !string.IsNullOrWhiteSpace(reference))
-        {
-            try
-            {
-                range = GridRange.Parse(reference, sheet.Id);
-                return true;
-            }
-            catch (FormatException)
-            {
-                return false;
-            }
-            catch (ArgumentException)
-            {
-                return false;
-            }
-        }
-
-        // Excel structured tables carry their AutoFilter inside the table definition rather than as a
-        // worksheet <autoFilter>; surface the first filtered table's range so the header still shows
-        // filter-arrow buttons exactly as Excel renders them.
-        foreach (var table in sheet.StructuredTables)
-        {
-            if (!table.HasAutoFilter)
-                continue;
-
-            var tableRange = table.Range;
-            if (tableRange.Start.Sheet != sheet.Id ||
-                tableRange.End.Row < tableRange.Start.Row ||
-                tableRange.End.Col < tableRange.Start.Col)
-            {
-                continue;
-            }
-
-            range = tableRange;
-            return true;
-        }
-
-        return false;
-    }
+    public static bool TryGetAutoFilterRange(Sheet sheet, out GridRange range) =>
+        AutoFilterRangeResolver.TryGetAutoFilterRange(sheet, out range);
 
     public static bool TryPlan(GridRange currentRegion, CellAddress activeCell, out AutoFilterDropdownPlan plan)
     {
@@ -175,7 +36,9 @@ public static class AutoFilterDropdownPlanner
 
         for (var row = plan.Range.Start.Row + 1; row <= plan.Range.End.Row; row++)
         {
-            var value = SpreadsheetDisplayFormatter.FormatCellValue(sheet.GetValue(row, filterColumn));
+            // Use the canonical filter text (the single source of truth FilterCommand matches against)
+            // so the checklist Value the dropdown sends agrees exactly with what the filter applies.
+            var value = FilterValueFormatter.ToText(sheet.GetValue(row, filterColumn));
             if (!seenValues.Add(value))
                 continue;
 

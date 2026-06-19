@@ -3296,21 +3296,17 @@ public sealed class DocumentView : RichTextBox
         return link;
     }
 
-    // Opens the link target in the default handler. Only http/https are launched (safe + simple).
+    // Opens the link target in the default handler, routed through the shared launcher so the scheme
+    // allowlist lives in one place. Blocked schemes and launch failures are silently dropped —
+    // opening a link must never crash the editor.
     private static void OnHyperlinkRequestNavigate(object sender, System.Windows.Navigation.RequestNavigateEventArgs e)
     {
         e.Handled = true;
-        var uri = e.Uri;
-        if (uri is null || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        if (e.Uri is not { } uri)
             return;
-        try
-        {
-            Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true });
-        }
-        catch
-        {
-            // Ignore launch failures (no handler, blocked, etc.) — opening a link must never crash the editor.
-        }
+        ExternalUriLauncher.Open(
+            uri.AbsoluteUri,
+            target => Process.Start(new ProcessStartInfo(target.AbsoluteUri) { UseShellExecute = true }));
     }
 
     /// <summary>

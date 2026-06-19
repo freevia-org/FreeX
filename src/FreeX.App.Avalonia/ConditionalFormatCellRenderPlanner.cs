@@ -4,22 +4,6 @@ using FreeX.Core.Model;
 namespace FreeX.App.Avalonia;
 
 /// <summary>
-/// Framework-neutral classification of a conditional-format icon glyph. Mirrors the desktop
-/// <c>ConditionalIconGlyphKind</c> so the Avalonia renderer can draw the same shapes on macOS.
-/// </summary>
-public enum CfIconGlyphKind
-{
-    Arrow,
-    TrafficLight,
-    Sign,
-    Symbol,
-    Flag,
-    Rating,
-    Quarter,
-    Box,
-}
-
-/// <summary>
 /// Render instruction for a single data bar within a cell, expressed in fractions of the cell's
 /// drawable content width so the UI layer only has to scale by pixel size. The bar is inset from
 /// the cell edges by <see cref="HorizontalInset"/> / <see cref="VerticalInset"/> device pixels, the
@@ -44,7 +28,7 @@ public readonly record struct CfDataBarRenderInstruction(
 /// shift right to make room for the glyph (0 when the rule hides the value).
 /// </summary>
 public readonly record struct CfIconRenderInstruction(
-    CfIconGlyphKind GlyphKind,
+    ConditionalIconGlyphKind GlyphKind,
     int IconIndex,
     int IconCount,
     string ColorHex,
@@ -137,10 +121,10 @@ public static class ConditionalFormatCellRenderPlanner
 
         var index = Math.Clamp(resolved.IconIndex, 0, Math.Max(0, resolved.IconCount - 1));
         return new CfIconRenderInstruction(
-            ResolveGlyphKind(resolved.Style),
+            ConditionalIconGlyphResolver.ResolveGlyphKind(resolved.Style),
             index,
             resolved.IconCount,
-            ResolveIconColor(resolved.Style, index, resolved.IconCount),
+            ConditionalIconGlyphResolver.ResolveIconColor(resolved.Style, index, resolved.IconCount),
             resolved.ShowValue,
             resolved.ShowValue ? IconGutterWidth : 0d);
     }
@@ -169,67 +153,5 @@ public static class ConditionalFormatCellRenderPlanner
             icon.BucketIndex,
             icon.IconCount,
             icon.ShowValue));
-    }
-
-    /// <summary>
-    /// Resolve the framework-neutral glyph kind for an icon-set style name. Identical mapping to the
-    /// desktop <c>ConditionalIconLayoutPlanner.ResolveGlyphKind</c>.
-    /// </summary>
-    public static CfIconGlyphKind ResolveGlyphKind(string? style)
-    {
-        style ??= string.Empty;
-
-        if (style.Contains("TrafficLights", StringComparison.OrdinalIgnoreCase) ||
-            style.Contains("RedToBlack", StringComparison.OrdinalIgnoreCase))
-            return CfIconGlyphKind.TrafficLight;
-        if (style.Contains("Signs", StringComparison.OrdinalIgnoreCase))
-            return CfIconGlyphKind.Sign;
-        if (style.Contains("Symbols", StringComparison.OrdinalIgnoreCase))
-            return CfIconGlyphKind.Symbol;
-        if (style.Contains("Flags", StringComparison.OrdinalIgnoreCase))
-            return CfIconGlyphKind.Flag;
-        if (style.Contains("Rating", StringComparison.OrdinalIgnoreCase))
-            return CfIconGlyphKind.Rating;
-        if (style.Contains("Quarters", StringComparison.OrdinalIgnoreCase))
-            return CfIconGlyphKind.Quarter;
-        if (style.Contains("Boxes", StringComparison.OrdinalIgnoreCase))
-            return CfIconGlyphKind.Box;
-        return CfIconGlyphKind.Arrow;
-    }
-
-    /// <summary>
-    /// Resolve the icon fill color (hex) for a bucket. Identical mapping to the desktop
-    /// <c>ConditionalIconLayoutPlanner.ResolveColor</c>, including the gray-style override.
-    /// </summary>
-    public static string ResolveIconColor(string? style, int iconIndex, int iconCount)
-    {
-        if ((style ?? string.Empty).Contains("Gray", StringComparison.OrdinalIgnoreCase))
-            return "#666666";
-
-        var index = Math.Clamp(iconIndex, 0, Math.Max(0, iconCount - 1));
-        return iconCount switch
-        {
-            >= 5 => index switch
-            {
-                0 => "#C00000",
-                1 => "#ED7D31",
-                2 => "#FFC000",
-                3 => "#92D050",
-                _ => "#00B050",
-            },
-            4 => index switch
-            {
-                0 => "#C00000",
-                1 => "#FFC000",
-                2 => "#92D050",
-                _ => "#00B050",
-            },
-            _ => index switch
-            {
-                0 => "#C00000",
-                1 => "#FFC000",
-                _ => "#00B050",
-            },
-        };
     }
 }

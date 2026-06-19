@@ -57,6 +57,9 @@ internal sealed class FileCommands
 
     public bool IsDirty => _state.IsDirty;
 
+    /// <summary>Monotonic dirty-edit counter, used by autosave to suppress redundant snapshots.</summary>
+    public int DirtyGeneration => _state.DirtyGeneration;
+
     public string? CurrentPath => _state.CurrentFilePath;
 
     public string DisplayName =>

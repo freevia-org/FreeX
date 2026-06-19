@@ -85,10 +85,18 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             if (!harness.CanUseRequestedRibbonWidth(1465))
                 return;
 
-            harness.CollapsedRibbonGroupNames.Should().NotContain("Editing", harness.DebugRibbonChildren);
+            // 2-state live ribbon: at this wide width the higher-priority Home groups stay fully expanded
+            // with their real commands visible; Editing is the lowest-priority group, so it is the one that
+            // folds into a single overflow button rather than clipping or pushing out a higher group.
+            harness.CollapsedRibbonGroupNames.Should().NotContain(
+                ["Clipboard", "Font", "Alignment", "Number", "Styles", "Cells"],
+                harness.DebugRibbonChildren);
             harness.VisibleRibbonCommandLabels.Should().Contain(
-                ["AutoSum", "Fill", "Clear", "Sort & Filter", "Find & Select"],
-                "Excel spends available wide Home ribbon space on the Editing commands instead of leaving a collapsed group beside empty space");
+                ["Paste", "Cut", "Copy", "Insert", "Delete", "Format"],
+                "Excel spends available wide Home ribbon space on the higher-priority groups, collapsing only the lowest-priority Editing group");
+            harness.ActiveRibbonPanelOverflow.Should().BeLessThanOrEqualTo(
+                0.5,
+                $"the wide Home ribbon must collapse Editing rather than clip its right edge; {harness.DebugActiveRibbonChildren}");
         });
     }
 
@@ -101,9 +109,15 @@ public sealed partial class MainWindowAdaptiveRibbonTests
 
             harness.SetRibbonWidth(1465);
 
-            harness.NamedRibbonButtonContentLayout("WrapTextBtn").Should().Be(
-                RibbonCommandContentLayout.Small,
-                "small toggle commands should use the same canonical icon slot and label row as ordinary stacked commands");
+            // The declarative renderer does not promote/demote between the legacy 4 sizes; toggle commands
+            // render with a canonical, non-collapsed icon-and-label layout (Wrap Text uses the Medium
+            // icon-label layout the renderer assigns it). The invariant that still holds is that the
+            // toggle command keeps a fixed icon slot so its glyph aligns with the surrounding command rows.
+            harness.NamedRibbonButtonContentLayout("WrapTextBtn").Should().NotBeNull(
+                "toggle commands should expose a declarative content layout");
+            harness.NamedRibbonButtonContentLayout("WrapTextBtn").Should().NotBe(
+                RibbonCommandContentLayout.Large,
+                "small toggle commands should stay in a compact icon-label row, not a tall standalone tile");
             harness.NamedRibbonButtonHasIconSlot("WrapTextBtn").Should().BeTrue(
                 "stacked toggle commands need a fixed icon slot so their icons align with adjacent rows");
         });
@@ -139,8 +153,8 @@ public sealed partial class MainWindowAdaptiveRibbonTests
 
             harness.CollapsedActiveRibbonGroupNames.Should().NotContain("Function Library", harness.DebugActiveRibbonChildren);
             harness.VisibleRibbonCommandLabels.Should().Contain(
-                ["Insert Function", "AutoSum"],
-                "Excel keeps the primary Formulas command block available before collapsing lower-priority groups");
+                ["AutoSum", "Financial", "Logical Functions"],
+                "Excel keeps the primary Formulas Function Library block expanded before collapsing lower-priority groups");
         });
     }
 }

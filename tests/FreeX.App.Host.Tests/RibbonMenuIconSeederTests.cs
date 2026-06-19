@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Windows.Controls;
+using System.Windows.Media;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -69,6 +70,25 @@ public sealed class RibbonMenuIconSeederTests
             SeedMenuItems(sectionHeader);
 
             sectionHeader.Icon.Should().BeNull();
+        });
+    }
+
+    [Theory]
+    [InlineData("Advanced")]
+    [InlineData("Page Setup dialog")]
+    [InlineData("View Gridlines")]
+    [InlineData("View Headings")]
+    [InlineData("Selection Pane")]
+    public void SeedMenuItems_UsesDedicatedSvgArtworkForRibbonMenuCommands(string header)
+    {
+        StaTestRunner.Run(() =>
+        {
+            var item = new MenuItem { Header = header };
+
+            SeedMenuItems(item);
+
+            var image = item.Icon.Should().BeOfType<Image>().Subject;
+            image.Source.Should().BeOfType<DrawingImage>();
         });
     }
 

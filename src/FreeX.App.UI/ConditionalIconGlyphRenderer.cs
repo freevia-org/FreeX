@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Windows;
 using System.Windows.Media;
 
+using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.Core.Model;
 
 namespace FreeX.App.UI;

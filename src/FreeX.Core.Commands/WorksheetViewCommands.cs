@@ -112,6 +112,56 @@ public sealed class SetWorksheetOutlineSymbolsCommand : IWorkbookCommand
     }
 }
 
+/// <summary>
+/// Sets the worksheet outline "Settings": whether summary rows appear below detail rows, whether
+/// summary columns appear to the right of detail columns, and whether automatic outline styles are
+/// applied. Mirrors Excel's Data ▸ Outline ▸ Settings dialog. Undo restores every previous value.
+/// </summary>
+public sealed class SetWorksheetOutlineSettingsCommand : IWorkbookCommand
+{
+    private readonly SheetId _sheetId;
+    private readonly bool _summaryBelow;
+    private readonly bool _summaryRight;
+    private readonly bool _applyStyles;
+    private bool? _previousSummaryBelow;
+    private bool? _previousSummaryRight;
+    private bool? _previousApplyStyles;
+
+    public string Label => "Outline Settings";
+
+    public SetWorksheetOutlineSettingsCommand(
+        SheetId sheetId,
+        bool summaryBelow,
+        bool summaryRight,
+        bool applyStyles)
+    {
+        _sheetId = sheetId;
+        _summaryBelow = summaryBelow;
+        _summaryRight = summaryRight;
+        _applyStyles = applyStyles;
+    }
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        var sheet = ctx.GetSheet(_sheetId);
+        _previousSummaryBelow = sheet.OutlineSummaryBelow;
+        _previousSummaryRight = sheet.OutlineSummaryRight;
+        _previousApplyStyles = sheet.ApplyOutlineStyles;
+        sheet.OutlineSummaryBelow = _summaryBelow;
+        sheet.OutlineSummaryRight = _summaryRight;
+        sheet.ApplyOutlineStyles = _applyStyles;
+        return new CommandOutcome(true);
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        var sheet = ctx.GetSheet(_sheetId);
+        sheet.OutlineSummaryBelow = _previousSummaryBelow;
+        sheet.OutlineSummaryRight = _previousSummaryRight;
+        sheet.ApplyOutlineStyles = _previousApplyStyles;
+    }
+}
+
 /// <summary>Sets worksheet zoom with undo support.</summary>
 public sealed class SetWorksheetZoomCommand : IWorkbookCommand
 {

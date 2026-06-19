@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using FreeX.App.Presentation.Filtering;
 using FreeX.Core.Calc;
 using FreeX.Core.Model;
 
@@ -371,6 +372,9 @@ public partial class MainWindow
     private void UpdateViewport()
     {
         if (SheetGrid == null || _viewportService == null) return;
+
+        // Dismiss the AutoFilter dropdown flyout if we've moved to a different sheet.
+        CloseAutoFilterDropdownOnSheetChange();
 
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is not null)

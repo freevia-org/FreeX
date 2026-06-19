@@ -506,6 +506,115 @@ public sealed partial class MainWindow
         return await dialog.ShowDialog<ChartTrendlineInput?>(this);
     }
 
+    // ---- Error Bars (real, SetChartLayoutCommand via ChartErrorBarsPlanner) ---------------------------
+
+    private async Task ShowChartErrorBarsDialog()
+    {
+        if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
+            return;
+        if (!TryGetSelectedChart("Error Bars", out var chart))
+            return;
+
+        if (!ChartErrorBarsPlanner.SupportsErrorBars(chart.Type))
+        {
+            RefreshShell("Error bars are available on column, line, bar, scatter, bubble and area charts.");
+            return;
+        }
+
+        var current = ChartErrorBarsPlanner.Read(chart);
+        var result = await ShowChartErrorBarsDialogAsync(current);
+        if (result is not { } edited)
+            return;
+
+        if (!TryGetSelectedChart("Error Bars", out chart))
+            return;
+
+        ApplyChartLayout("Error Bars", chart, ChartErrorBarsPlanner.Plan(edited));
+    }
+
+    private async Task<ChartErrorBarsInput?> ShowChartErrorBarsDialogAsync(ChartErrorBarsInput current)
+    {
+        var showCheck = new CheckBox { Content = UiText.Get("ChartErrorBars_Show"), IsChecked = current.ShowErrorBars };
+        AutomationProperties.SetAutomationId(showCheck, "ChartErrorBarsShowCheck");
+
+        var kindChoices = ChartErrorBarsPlanner.GetKindChoices();
+        var kindCombo = new ComboBox
+        {
+            Width = 260,
+            ItemsSource = kindChoices,
+            DisplayMemberBinding = new global::Avalonia.Data.Binding(nameof(ChartErrorBarKindChoice.DisplayName)),
+        };
+        AutomationProperties.SetName(kindCombo, "Error amount");
+        AutomationProperties.SetAutomationId(kindCombo, "ChartErrorBarsKindCombo");
+        kindCombo.SelectedItem =
+            kindChoices.FirstOrDefault(c => c.Kind == current.Kind)
+            ?? (kindChoices.Count > 0 ? kindChoices[0] : null);
+
+        var directionChoices = ChartErrorBarsPlanner.GetDirectionChoices();
+        var directionCombo = new ComboBox
+        {
+            Width = 260,
+            ItemsSource = directionChoices,
+            DisplayMemberBinding = new global::Avalonia.Data.Binding(nameof(ChartErrorBarDirectionChoice.DisplayName)),
+        };
+        AutomationProperties.SetName(directionCombo, "Error bar direction");
+        AutomationProperties.SetAutomationId(directionCombo, "ChartErrorBarsDirectionCombo");
+        directionCombo.SelectedItem =
+            directionChoices.FirstOrDefault(c => c.Direction == current.Direction)
+            ?? (directionChoices.Count > 0 ? directionChoices[0] : null);
+
+        var valueBox = new TextBox { Text = current.Value.ToString(CultureInfo.InvariantCulture), Width = 260 };
+        AutomationProperties.SetName(valueBox, "Error bar amount");
+        AutomationProperties.SetAutomationId(valueBox, "ChartErrorBarsValueBox");
+
+        var endCapsCheck = new CheckBox { Content = UiText.Get("ChartErrorBars_EndCaps"), IsChecked = current.EndCaps };
+        AutomationProperties.SetAutomationId(endCapsCheck, "ChartErrorBarsEndCapsCheck");
+
+        var dialog = NewChartDialog(UiText.Get("ChartErrorBars_Title"), "ChartErrorBarsDialog");
+
+        var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("ChartErrorBars");
+        okButton.Click += (_, _) =>
+        {
+            if (!TryParseAutoDouble(valueBox.Text, out var value) || value is not { } amount
+                || amount < ChartErrorBarsPlanner.MinValue || amount > ChartErrorBarsPlanner.MaxValue)
+            {
+                RefreshShell($"Enter an error-bar amount between {ChartErrorBarsPlanner.MinValue} and {ChartErrorBarsPlanner.MaxValue}.");
+                return;
+            }
+
+            var kind = kindCombo.SelectedItem is ChartErrorBarKindChoice pickedKind ? pickedKind.Kind : ChartErrorBarKind.StandardError;
+            var direction = directionCombo.SelectedItem is ChartErrorBarDirectionChoice pickedDir ? pickedDir.Direction : ChartErrorBarDirection.Both;
+            dialog.Close((ChartErrorBarsInput?)new ChartErrorBarsInput(
+                showCheck.IsChecked == true,
+                kind,
+                direction,
+                amount,
+                endCapsCheck.IsChecked == true));
+        };
+        cancelButton.Click += (_, _) => dialog.Close((ChartErrorBarsInput?)null);
+
+        dialog.Content = new StackPanel
+        {
+            Margin = new Thickness(16),
+            Spacing = 8,
+            MinWidth = 300,
+            Children =
+            {
+                showCheck,
+                new TextBlock { Text = UiText.Get("ChartErrorBars_KindLabel") },
+                kindCombo,
+                new TextBlock { Text = UiText.Get("ChartErrorBars_DirectionLabel") },
+                directionCombo,
+                new TextBlock { Text = UiText.Get("ChartErrorBars_ValueLabel") },
+                valueBox,
+                endCapsCheck,
+                buttonRow,
+            },
+        };
+
+        return await dialog.ShowDialog<ChartErrorBarsInput?>(this);
+    }
+
     // ---- Shared dialog plumbing -----------------------------------------------------------------------
 
     private static Window NewChartDialog(string title, string automationId)

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.App.Presentation;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -1716,7 +1717,9 @@ public partial class MainWindow
             headers.Add(string.IsNullOrWhiteSpace(caption) ? $"Column {headers.Count + 1}" : caption);
         }
 
-        return headers;
+        // Cache-based pivots loaded from xlsx have no SourceRange; fall back to the cache field names
+        // so captions/dropdowns show real names instead of "Column N" (Issue 123).
+        return PivotSourceHeaderResolver.Resolve(_workbook, pivotTable, headers);
     }
 
     private IReadOnlyList<string> ReadPivotFieldItems(Sheet sheet, PivotTableModel pivotTable, int sourceFieldIndex)

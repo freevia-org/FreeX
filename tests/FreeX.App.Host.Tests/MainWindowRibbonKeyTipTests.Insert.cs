@@ -71,15 +71,26 @@ public sealed partial class MainWindowRibbonKeyTipTests
         RunSta(() =>
         {
             using var harness = MainWindowHarness.Create();
-            harness.SelectRibbonTab("Insert", 620);
+            // At a narrow Insert width the lowest-priority Charts group folds into the live 2-state
+            // overflow form: ONE collapsed button carrying the group's derived keytip (CH) + title and a
+            // dropdown of the group's real commands. (There is no intermediate IconOnly/SmallWithLabels
+            // state in the declarative engine — it is full group grid OR one overflow button.)
+            harness.SelectRibbonTab("Insert", 700);
 
-            harness.VisibleCommandKeyTipDump().Should().Contain(
-                "CH:Charts",
-                string.Join(", ", harness.VisibleCommandKeyTipDump()));
+            harness.RibbonGroupIsCollapsed("Charts").Should().BeTrue(
+                "the lowest-priority Insert group collapses first at a narrow width");
+            harness.CollapsedRibbonGroupOverflowKeyTip("Charts").Should().Be("CH");
+            harness.CollapsedRibbonGroupOverflowTitle("Charts").Should().Be("Charts");
+            harness.CollapsedRibbonGroupOverflowHasDropdownGlyph("Charts").Should().BeTrue(
+                "a collapsed group's overflow button shows the dropdown chevron so it reads as openable");
 
-            harness.OpenRibbonMenu(Key.N, Key.C, Key.H);
-            harness.ActiveMenuItemGestureText("Column Chart").Should().Be("CC");
-            harness.ActiveMenuItemGestureText("Map Chart").Should().BeNull();
+            // The collapsed overflow dropdown preserves the group's real command set and their keytips —
+            // and the regression this test guards: the deferred Map Chart is NOT surfaced anywhere in it.
+            var commands = harness.CollapsedRibbonGroupOverflowMenuKeyTips("Charts");
+            commands.Should().ContainKey("Recommended Charts").WhoseValue.Should().Be("RC");
+            commands.Should().ContainKey("Column Chart").WhoseValue.Should().Be("CC");
+            commands.Should().NotContainKey("Map Chart",
+                "the deferred Map Chart command must not be exposed by the Charts overflow menu");
         });
     }
 

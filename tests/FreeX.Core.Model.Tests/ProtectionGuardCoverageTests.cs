@@ -212,6 +212,7 @@ public class ProtectionGuardCoverageTests
         ["SetWorksheetViewOptionsCommand"] = "View options; not protection-blocked.",
         ["SetWorksheetZoomCommand"] = "Zoom level; not protection-blocked.",
         ["SetWorksheetOutlineSymbolsCommand"] = "Outline symbol visibility; not protection-blocked.",
+        ["SetWorksheetOutlineSettingsCommand"] = "Outline summary-direction + auto-style settings; not protection-blocked.",
         ["SetWorksheetShowFormulasCommand"] = "Show-formulas mode; not protection-blocked.",
         ["SetFreezePanesCommand"] = "Freeze panes; not protection-blocked.",
         ["SetSplitPanesCommand"] = "Split panes; not protection-blocked.",
@@ -579,6 +580,37 @@ public class ProtectionGuardCoverageTests
                     new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 1)),
                     new CellAddress(sheet.Id, 1, 2),
                     SparklineKind.Line),
+
+            ["ConfigureSparklineCommand"] = (wb, sheet) =>
+            {
+                var sparkline = new SparklineModel
+                {
+                    DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 1)),
+                    Location = new CellAddress(sheet.Id, 1, 2),
+                    Kind = SparklineKind.Line,
+                };
+                sheet.IsProtected = false;
+                sheet.Sparklines.Add(sparkline);
+                sheet.IsProtected = true;
+                return new ConfigureSparklineCommand(
+                    sheet.Id,
+                    sparkline.Id,
+                    SparklineSettings.Capture(sparkline) with { Kind = SparklineKind.Column });
+            },
+
+            ["ClearSparklineCommand"] = (wb, sheet) =>
+            {
+                var sparkline = new SparklineModel
+                {
+                    DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 1)),
+                    Location = new CellAddress(sheet.Id, 1, 2),
+                    Kind = SparklineKind.Line,
+                };
+                sheet.IsProtected = false;
+                sheet.Sparklines.Add(sparkline);
+                sheet.IsProtected = true;
+                return new ClearSparklineCommand(sheet.Id, sparkline.Id);
+            },
 
             // ---- Hyperlinks ----
             ["SetHyperlinkCommand"] = (wb, sheet) =>

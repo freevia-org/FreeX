@@ -287,6 +287,37 @@ public sealed class AvaloniaShellSourceTests
     }
 
     [Fact]
+    public void MainWindow_WiresOptionsDialogToSharedAppOptionsStore()
+    {
+        var menuSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var optionsSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.Options.cs"));
+
+        // Wired into the native File menu with an Options entry that calls ShowOptions.
+        menuSource.Should().Contain("private readonly NativeMenuItem _optionsMenuItem = new();");
+        menuSource.Should().Contain("_optionsMenuItem.Header = UiText.Get(\"Options_Title\");");
+        menuSource.Should().Contain("_optionsMenuItem.Click += (_, _) => ShowOptions();");
+        menuSource.Should().Contain("fileMenu.Items.Add(_optionsMenuItem);");
+
+        // The dialog edits the shared AppOptions via the portable store and planner — no bespoke model.
+        optionsSource.Should().Contain("var current = AppOptionsStore.Load();");
+        optionsSource.Should().Contain("OptionsDialogPlanner.TryBuildInput(");
+        optionsSource.Should().Contain("var projected = OptionsDialogPlanner.Project(current, input);");
+        optionsSource.Should().Contain("AppOptionsStore.Save(projected)");
+        optionsSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"OptionsDialog\");");
+        optionsSource.Should().Contain("AutomationProperties.SetAutomationId(okButton, \"OptionsOkButton\");");
+        optionsSource.Should().Contain("AutomationProperties.SetAutomationId(applyButton, \"OptionsApplyButton\");");
+        optionsSource.Should().Contain("AutomationProperties.SetAutomationId(cancelButton, \"OptionsCancelButton\");");
+
+        // Live application of the cheap view/calc settings to the running session.
+        optionsSource.Should().Contain("private void ApplyLiveOptions(OptionsDialogPlanner.OptionsDialogInput input)");
+        optionsSource.Should().Contain("_session.SetShowGridlines(input.ShowGridlines);");
+        optionsSource.Should().Contain("_session.SetShowHeadings(input.ShowHeadings);");
+
+        // PresentationPortabilityGuard forbids these tokens in portable shell source — make sure we stayed clean.
+        optionsSource.Should().NotContain("System.Windows");
+    }
+
+    [Fact]
     public void MainWindow_WiresNativeFileMenuToSharedOpenSavePipeline()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
@@ -1754,7 +1785,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_session.SelectedRange");
         source.Should().Contain("CreateDataValidationTypeChoices()");
         source.Should().Contain("DataValidationPresetPlanner.GetRuleTypeMetadata()");
-        source.Should().Contain(".Where(metadata => metadata.Type is DvType.WholeNumber or DvType.List or DvType.TextLength)");
+        source.Should().Contain(".Where(metadata => metadata.Type is DvType.WholeNumber or DvType.Decimal or DvType.List or DvType.Date or DvType.Time or DvType.TextLength or DvType.Custom or DvType.Any)");
         source.Should().Contain("CreateDefaultDataValidationRule(initialType, _session.SelectedRange)");
         source.Should().Contain("DataValidationPresetPlanner.CreateDefaultRule(type, _session.SelectedRange)");
         source.Should().Contain("DataValidationPresetPlanner.RequiresSecondFormula(type, op)");
@@ -2828,7 +2859,7 @@ public sealed class AvaloniaShellSourceTests
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "HyperlinkNavigationPlanner.cs"));
-        var launcherSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "ExternalUriLauncher.cs"));
+        var launcherSource = File.ReadAllText(RepositoryFileLocator.Find("shared", "Free.Shared.AppServices", "ExternalUriLauncher.cs"));
 
         plannerSource.Should().Contain("public enum HyperlinkNavigationKind");
         plannerSource.Should().Contain("HyperlinkTargetKind.PlaceInThisDocument");
@@ -2837,7 +2868,7 @@ public sealed class AvaloniaShellSourceTests
         plannerSource.Should().Contain("\"http\", \"https\", \"mailto\", \"ftp\"");
         launcherSource.Should().Contain("public static class ExternalUriLauncher");
         launcherSource.Should().Contain("Func<Uri, Task<bool>>? launchAsync");
-        launcherSource.Should().Contain("HyperlinkNavigationPlanner.IsAllowedScheme(normalizedTarget)");
+        launcherSource.Should().Contain("\"http\", \"https\", \"mailto\", \"ftp\"");
 
         sessionSource.Should().Contain("public bool CanOpenSelectedHyperlink");
         sessionSource.Should().Contain("HyperlinkNavigationPlanner.TryCreatePlan(ActiveSheet, SelectedRange.Start, CurrentFilePath, out _)");
@@ -4437,6 +4468,35 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("HasManageConditionalFormatsAppliesToControls &&");
         smokeSource.Should().Contain("conditional_format_rule_dialog={FormatBool(snapshot.DialogEvidence.HasConditionalFormatRuleDialog)}");
         smokeSource.Should().Contain("manage_conditional_formats_dialog={FormatBool(snapshot.DialogEvidence.HasManageConditionalFormatsDialog)}");
+    }
+
+    [Fact]
+    public void MainWindow_WiresCustomViewsManagerAndAddDialogsThroughPortablePlanner()
+    {
+        var customViewsSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.CustomViews.cs"));
+        var windowSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        // The View ▸ Workbook Views ▸ Custom Views ribbon button is wired to the dialog entry point.
+        windowSource.Should().Contain("[\"Custom Views\"] = () => RunGuarded(OpenCustomViewsDialogAsync),");
+
+        // Manager dialog + Add dialog carry stable automation ids.
+        customViewsSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"CustomViewsDialog\");");
+        customViewsSource.Should().Contain("AutomationProperties.SetAutomationId(viewsList, \"CustomViewsList\");");
+        customViewsSource.Should().Contain("AutomationProperties.SetAutomationId(showButton, \"CustomViewsShowButton\");");
+        customViewsSource.Should().Contain("AutomationProperties.SetAutomationId(addButton, \"CustomViewsAddButton\");");
+        customViewsSource.Should().Contain("AutomationProperties.SetAutomationId(deleteButton, \"CustomViewsDeleteButton\");");
+        customViewsSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"CustomViewAddDialog\");");
+        customViewsSource.Should().Contain("AutomationProperties.SetAutomationId(nameBox, \"CustomViewNameBox\");");
+
+        // All Custom Views logic flows through the portable planner + the shared session command path.
+        customViewsSource.Should().Contain("CustomViewsPlanner.BuildRows(_session.Workbook)");
+        customViewsSource.Should().Contain("CustomViewsPlanner.BuildApplyCommand(name)");
+        customViewsSource.Should().Contain("CustomViewsPlanner.BuildSaveCommand(");
+        customViewsSource.Should().Contain("CustomViewsPlanner.BuildDeleteCommand(name)");
+        customViewsSource.Should().Contain("CustomViewsPlanner.ValidateName(_session.Workbook,");
+        customViewsSource.Should().Contain("_session.ExecuteReviewCommand(");
+        // Applying a view that changes the active sheet re-syncs the session's cached active sheet.
+        customViewsSource.Should().Contain("ResyncActiveSheetToWorkbook();");
     }
 
     private static string ExtractSourceBlock(string source, string startMarker, string endMarker)

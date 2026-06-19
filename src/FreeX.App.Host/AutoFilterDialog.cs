@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using FreeX.App.Presentation.Filtering;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;

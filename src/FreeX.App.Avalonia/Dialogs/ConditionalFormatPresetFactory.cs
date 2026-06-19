@@ -1,3 +1,4 @@
+using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.Dialogs;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
