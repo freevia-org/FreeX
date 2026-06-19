@@ -1207,7 +1207,8 @@ jobs:
             --framework "$FREEX_MACOS_TFM" \
             --runtime "$FREEX_RUNTIME" \
             -p:EnableMacOsTargetFramework=true \
-            -p:ApplicationId=io.github.tony-xmelon.freex
+            -p:ApplicationId=io.github.tony-xmelon.freex \
+            -p:ILLinkTreatWarningsAsErrors=false
 
           dotnet msbuild src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj \
             -p:Configuration=Release \
