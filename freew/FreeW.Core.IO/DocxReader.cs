@@ -1003,6 +1003,14 @@ public static class DocxReader
         var text = string.Concat(fldSimple.Descendants(W + "t").Select(t => t.Value));
         var formatting = ReadRunFormatting(inner?.Element(W + "rPr"));
 
+        // A Mark Citation (TA) field: the instruction's leading keyword is "TA". Recover the long/short
+        // forms and category from its switches and re-add the hidden citation mark run (no visible text).
+        if (CitationFor(instruction) is { } citation)
+        {
+            paragraph.Runs.Add(Run.CitationMark(citation));
+            return;
+        }
+
         // A table-cell formula field: the instruction starts with '=' (e.g. " =SUM(ABOVE) \# "#,##0.00" ").
         // Recover the formula expression + optional number-format switch and the cached result (the run text).
         if (TableFormulaFor(instruction) is { } formula)
@@ -1110,6 +1118,55 @@ public static class DocxReader
         }
 
         return new TableFormulaField(expression, string.IsNullOrWhiteSpace(format) ? null : format);
+    }
+
+    /// <summary>
+    /// Parses a Mark Citation (TA) field instruction (one whose leading keyword is <c>TA</c>) into a
+    /// <see cref="Citation"/>: the long form from the <c>\l</c> switch, the short form from <c>\s</c>, and
+    /// the category from the numeric <c>\c</c> switch (defaulting to <see cref="CitationCategory.Cases"/>
+    /// when absent or unrecognised). Returns null for any non-TA field. A TA field with no <c>\l</c> form is
+    /// treated as having an empty long citation so nothing is lost.
+    /// </summary>
+    private static Citation? CitationFor(string instruction)
+    {
+        var trimmed = instruction.Trim();
+        var keyword = trimmed.Split(' ', '\t', '\\')[0];
+        if (!string.Equals(keyword, "TA", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        var longForm = SwitchValue(trimmed, 'l') ?? string.Empty;
+        var shortForm = SwitchValue(trimmed, 's');
+        var category = CitationCategory.Cases;
+        if (SwitchValue(trimmed, 'c') is { } categoryText
+            && int.TryParse(categoryText, out var categoryNumber)
+            && Enum.IsDefined(typeof(CitationCategory), categoryNumber))
+        {
+            category = (CitationCategory)categoryNumber;
+        }
+
+        return new Citation(longForm, category, shortForm);
+    }
+
+    /// <summary>
+    /// Extracts the value following a <c>\</c><paramref name="switchLetter"/> switch in a field
+    /// instruction: the double-quoted run when quoted (e.g. <c>\l "Brown v. Board"</c>), otherwise the next
+    /// whitespace-delimited token (e.g. <c>\c 1</c>). Returns null when the switch is absent.
+    /// </summary>
+    private static string? SwitchValue(string instruction, char switchLetter)
+    {
+        var token = "\\" + switchLetter;
+        var at = instruction.IndexOf(token, StringComparison.Ordinal);
+        if (at < 0)
+            return null;
+
+        var rest = instruction[(at + token.Length)..].TrimStart();
+        if (rest.StartsWith('"'))
+        {
+            var close = rest.IndexOf('"', 1);
+            return close > 0 ? rest[1..close] : rest[1..];
+        }
+        var end = rest.IndexOfAny(new[] { ' ', '\t', '\\' });
+        return end >= 0 ? rest[..end] : rest;
     }
 
     /// <summary>

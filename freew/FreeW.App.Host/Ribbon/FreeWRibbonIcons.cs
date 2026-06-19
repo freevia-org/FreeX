@@ -156,6 +156,9 @@ internal static class FreeWRibbonIcons
             ["freew.index-insert"] = RibbonCommandIconKind.Index,
             ["freew.tof"] = RibbonCommandIconKind.TableOfContents,
             ["freew.tof-refresh"] = RibbonCommandIconKind.Refresh,
+            ["freew.mark-citation"] = RibbonCommandIconKind.Citation,
+            ["freew.table-of-authorities"] = RibbonCommandIconKind.Bibliography,
+            ["freew.table-of-authorities-refresh"] = RibbonCommandIconKind.Refresh,
 
             // Insert: controls
             ["freew.cc-text"] = RibbonCommandIconKind.TextBox,

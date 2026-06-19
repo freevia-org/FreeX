@@ -1938,6 +1938,22 @@ public static class DocxWriter
         return instr;
     }
 
+    /// <summary>
+    /// Builds the <c>w:fldSimple/@w:instr</c> for a Mark Citation (TA) field: <c> TA \l "long" \s "short"
+    /// \c N </c>, where <c>\l</c> is the full citation, <c>\s</c> the short form (omitted when blank) and
+    /// <c>\c</c> Word's numeric category. The surrounding spaces match how Word writes field instructions.
+    /// Embedded double-quotes in the citation text are dropped so the instruction stays well-formed.
+    /// </summary>
+    private static string CitationInstruction(Citation citation)
+    {
+        static string Clean(string value) => value.Replace("\"", string.Empty);
+        var instr = " TA \\l \"" + Clean(citation.LongCitation) + "\"";
+        if (citation.ShortCitation.Length > 0)
+            instr += " \\s \"" + Clean(citation.ShortCitation) + "\"";
+        instr += " \\c " + (int)citation.Category + " ";
+        return instr;
+    }
+
     private static XElement BuildRun(Run run, RunDrawings drawings)
     {
         // An inline equation serialises as an m:oMath emitted in place of the run (a paragraph-level
@@ -1967,6 +1983,14 @@ public static class DocxWriter
             wr.Add(BuildWordArtDrawing(wordArt, drawings.Ids));
             return wr;
         }
+
+        // A Mark Citation (TA) field emits a hidden w:fldSimple whose w:instr is the TA instruction
+        // (" TA \l "long" \s "short" \c N "). It wraps an empty run so it produces no visible glyph, matching
+        // Word's hidden citation mark. The reader recovers the Citation from the instruction.
+        if (run.Citation is { } citation)
+            return new XElement(W + "fldSimple",
+                new XAttribute(W + "instr", CitationInstruction(citation)),
+                new XElement(W + "r"));
 
         // A table-cell formula field (Word's Table > Data > Formula) emits a w:fldSimple whose w:instr is
         // the formula plus an optional number-format switch (e.g. " =SUM(ABOVE) \# "#,##0.00" "), wrapping a

@@ -389,6 +389,7 @@ public static class MailMerge
             IsCommentReference = source.IsCommentReference,
             Revision = source.Revision,
             Control = source.Control,
+            Citation = source.Citation,
             RevisionAuthor = source.RevisionAuthor,
             RevisionDateXml = source.RevisionDateXml
         };

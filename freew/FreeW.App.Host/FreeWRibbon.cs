@@ -199,6 +199,9 @@ internal static class FreeWRibbon
                     g.Icon("freew.index-insert", "Insert Index", RibbonCommandIconKind.Index);
                     g.Icon("freew.tof", "Table of Figures", RibbonCommandIconKind.TableOfContents);
                     g.Icon("freew.tof-refresh", "Update Figures", RibbonCommandIconKind.Refresh);
+                    g.Icon("freew.mark-citation", "Mark Citation", RibbonCommandIconKind.Citation);
+                    g.Icon("freew.table-of-authorities", "Table of Authorities", RibbonCommandIconKind.Bibliography);
+                    g.Icon("freew.table-of-authorities-refresh", "Update Authorities", RibbonCommandIconKind.Refresh);
                 });
                 tab.Group("controls", "Controls", "O", 62, g =>
                 {

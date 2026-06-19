@@ -372,6 +372,21 @@ public sealed class Run(string text, RunFormatting? formatting = null)
         new(cachedResult, formatting) { TableFormula = formula };
 
     /// <summary>
+    /// When non-null, this run is a hidden Mark Citation field (Word's References &gt; Mark Citation) — the
+    /// invisible <c>TA</c> field that records a legal citation for a Table of Authorities. It serialises as a
+    /// <c>w:fldSimple</c> whose <c>w:instr</c> is the TA instruction (<c> TA \l "long" \s "short" \c N </c>)
+    /// wrapping a vanished run, so it round-trips like Word's and produces no visible glyph. The same data is
+    /// also mirrored into <see cref="TextDocument.Citations"/> for building the table. Modelled as an optional
+    /// run mark, mirroring <see cref="TableFormula"/>, so it round-trips without a new block type. The run
+    /// carries no literal text, so it produces no visible glyph — matching Word's hidden TA field.
+    /// </summary>
+    public Citation? Citation { get; set; }
+
+    /// <summary>Creates a hidden Mark Citation (TA) field run for <paramref name="citation"/>.</summary>
+    public static Run CitationMark(Citation citation) =>
+        new(string.Empty) { Citation = citation };
+
+    /// <summary>
     /// When set, this run is a footnote reference marker pointing at the footnote with this id in
     /// <see cref="TextDocument.Footnotes"/>. It carries no literal text of its own; the marker number
     /// is the id. Serialises as a superscript run wrapping a w:footnoteReference w:id="N".
@@ -712,6 +727,53 @@ public sealed class IndexEntry
     public string Term { get; }
 
     public IndexEntry(string term) => Term = (term ?? string.Empty).Trim();
+}
+
+/// <summary>
+/// The standard categories Word groups a Table of Authorities by (References &gt; Table of Authorities).
+/// The numeric values match Word's built-in category numbers (1 = Cases, 2 = Statutes, …) which are
+/// what the TA field's <c>\c</c> switch carries, so they round-trip faithfully.
+/// </summary>
+public enum CitationCategory
+{
+    Cases = 1,
+    Statutes = 2,
+    OtherAuthorities = 3,
+    Rules = 4,
+    Treatises = 5,
+    Regulations = 6,
+    ConstitutionalProvisions = 7
+}
+
+/// <summary>
+/// A marked legal citation for a Table of Authorities (Word's References &gt; Mark Citation). It carries
+/// the citation's <see cref="Category"/> plus its <see cref="LongCitation"/> (the full form listed in the
+/// table) and an optional <see cref="ShortCitation"/> (the abbreviated form). Modelled as a model
+/// side-store on <see cref="TextDocument.Citations"/>, mirroring <see cref="IndexEntry"/>: the generated
+/// Table of Authorities is ordinary styled paragraphs that already round-trip, and the marks themselves
+/// serialise as hidden <c>TA</c> fields (see <c>DocxWriter</c>/<c>DocxReader</c>) so they survive a
+/// save/open exactly like Word's.
+/// </summary>
+public sealed class Citation
+{
+    /// <summary>The legal-authority category this citation belongs to (Cases, Statutes, …).</summary>
+    public CitationCategory Category { get; }
+
+    /// <summary>The full citation text listed in the Table of Authorities. Trimmed at construction.</summary>
+    public string LongCitation { get; }
+
+    /// <summary>
+    /// The abbreviated/short form Word matches subsequent occurrences against, or empty when none was
+    /// given. Trimmed at construction. Not listed in the table; carried for faithful round-trip.
+    /// </summary>
+    public string ShortCitation { get; }
+
+    public Citation(string longCitation, CitationCategory category = CitationCategory.Cases, string? shortCitation = null)
+    {
+        LongCitation = (longCitation ?? string.Empty).Trim();
+        Category = category;
+        ShortCitation = (shortCitation ?? string.Empty).Trim();
+    }
 }
 
 /// <summary>
@@ -1458,6 +1520,15 @@ public sealed class TextDocument
     public List<IndexEntry> IndexEntries { get; } = [];
 
     /// <summary>
+    /// The legal citations marked for a Table of Authorities, in mark order.
+    /// <see cref="TableOfAuthorities.Build(TextDocument)"/> renders them grouped by
+    /// <see cref="CitationCategory"/> as ordinary styled paragraphs. Unlike <see cref="IndexEntries"/>, the
+    /// marks themselves also serialise as hidden <c>TA</c> fields in the body (so they round-trip like
+    /// Word's), and the reader rebuilds this list from those fields. Empty when nothing has been marked.
+    /// </summary>
+    public List<Citation> Citations { get; } = [];
+
+    /// <summary>
     /// The fonts embedded in the document, one <see cref="EmbeddedFont"/> per family. Empty (the default)
     /// means no fonts are embedded, so no <c>word/fontTable.xml</c> part is emitted and existing documents
     /// round-trip unchanged. When non-empty the writer emits the fontTable part, the obfuscated
@@ -1558,5 +1629,7 @@ public sealed class TextDocument
         DocumentIndex.EnsureStyles(this);
         // The built-in table-of-figures heading/entry styles used by TableOfFigures (round-trip via styles.xml).
         TableOfFigures.EnsureStyles(this);
+        // The built-in Table of Authorities heading/category/entry styles (round-trip via styles.xml).
+        TableOfAuthorities.EnsureStyles(this);
     }
 }

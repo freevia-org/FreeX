@@ -2551,6 +2551,10 @@ public sealed class DocumentView : RichTextBox
             case WpfRun { Tag: PageBreakMarker }:
                 modelParagraph.Runs.Add(ModelRun.PageBreak());
                 break;
+            case WpfRun { Tag: CitationMarker citationMarker }:
+                // A hidden Mark Citation (TA) field round-trips as a textless citation-mark run.
+                modelParagraph.Runs.Add(ModelRun.CitationMark(citationMarker.Citation));
+                break;
             case WpfRun { Tag: EndnoteMarker endnoteMarker }:
                 modelParagraph.Runs.Add(ModelRun.EndnoteReference(endnoteMarker.EndnoteId));
                 break;
@@ -3078,6 +3082,12 @@ public sealed class DocumentView : RichTextBox
         if (run is { IsCommentReference: true, CommentId: { } refId })
             return new WpfRun(string.Empty) { Tag = new RunMarkers(Comment: new CommentMarker(refId, IsReference: true)) };
 
+        // A hidden Mark Citation (TA) field renders as an empty, tagged run (no visible glyph, matching
+        // Word's hidden citation mark). The tag lets ReadInline recover the citation on commit so the mark
+        // survives an edit/commit cycle (mirroring the page-break/comment-anchor markers).
+        if (run.Citation is { } citationMark)
+            return new WpfRun(string.Empty) { Tag = new CitationMarker(citationMark) };
+
         // A manual page break renders as an empty, tagged run; the containing paragraph carries the actual
         // BreakPageBefore (set in BuildParagraph). The tag lets ReadInline recover it on commit so the break
         // survives an edit/commit cycle (mirroring the footnote/endnote markers).
@@ -3405,6 +3415,13 @@ public sealed class DocumentView : RichTextBox
 
     /// <summary>Carried on a footnote-marker WPF run's Tag so CommitToModel can round-trip its id.</summary>
     private sealed record FootnoteMarker(int FootnoteId);
+
+    /// <summary>
+    /// Carried on a hidden Mark Citation (TA) marker WPF run's Tag so CommitToModel can round-trip the
+    /// citation it records. Mirrors how <see cref="FootnoteMarker"/>/<see cref="PageBreakMarker"/> preserve
+    /// their marks across an edit/commit cycle.
+    /// </summary>
+    private sealed record CitationMarker(Citation Citation);
 
     /// <summary>Carried on a manual page-break WPF run's Tag so CommitToModel can round-trip it.</summary>
     private sealed record PageBreakMarker;
@@ -4822,6 +4839,104 @@ public sealed class DocumentView : RichTextBox
             index = _model.Blocks.Count;
 
         var entries = DocumentIndex.Build(_model);
+        foreach (var paragraph in entries)
+            _commands.Execute(new InsertParagraphCommand(index++, paragraph));
+    }
+
+    /// <summary>
+    /// Marks the selected text (or a supplied citation) as a legal citation for a Table of Authorities
+    /// (Word's References &gt; Mark Citation): drops a hidden <c>TA</c> field mark at the caret recording the
+    /// long/short forms and category. The mark is textless (no visible glyph) and round-trips through docx;
+    /// <see cref="InsertTableOfAuthorities"/> builds the visible table from these marks, mirroring how
+    /// <see cref="MarkIndexEntry"/>/<see cref="InsertIndex"/> relate. A citation with a blank long form is
+    /// ignored. The mark is inserted directly into the live flow (like a footnote marker) so it survives the
+    /// next commit.
+    /// </summary>
+    public void MarkCitation(Citation citation)
+    {
+        ArgumentNullException.ThrowIfNull(citation);
+        if (citation.LongCitation.Length == 0)
+            return;
+
+        CommitToModel();
+
+        var marker = BuildRun(ModelRun.CitationMark(citation), new ModelParagraph(), _model);
+        var caret = CaretPosition.GetInsertionPosition(LogicalDirection.Forward) ?? CaretPosition;
+        var paragraph = caret.Paragraph ?? Document.Blocks.OfType<WpfParagraph>().LastOrDefault();
+        if (paragraph is null)
+        {
+            paragraph = new WpfParagraph();
+            Document.Blocks.Add(paragraph);
+        }
+        paragraph.Inlines.Add(marker);
+
+        CommitToModel();
+        Render();
+    }
+
+    /// <summary>
+    /// Insert a Table of Authorities generated from the document's marked citations (the hidden <c>TA</c>
+    /// field marks, see <see cref="MarkCitation"/>) at the caret's block (else at the document end), routed
+    /// one-by-one through the undo/redo bus so the insert is reversible — mirroring <see cref="InsertIndex"/>.
+    /// The paragraphs carry dedicated styles (registered via <see cref="TableOfAuthorities.EnsureStyles"/>)
+    /// which both give them distinct formatting and mark the region for <see cref="RefreshTableOfAuthorities"/>.
+    /// </summary>
+    public void InsertTableOfAuthorities()
+    {
+        // Capture the user's in-progress edits before mutating the model out from under the view.
+        CommitToModel();
+        TableOfAuthorities.EnsureStyles(_model);
+
+        // Insert at the caret's block (the table reads as front-/back-matter); fall back to the document end.
+        var index = CaretBlockIndex();
+        if (index < 0 || index > _model.Blocks.Count)
+            index = _model.Blocks.Count;
+
+        InsertTableOfAuthoritiesAt(index);
+    }
+
+    /// <summary>
+    /// Rebuild the Table of Authorities: remove the previously inserted region (paragraphs carrying a
+    /// Table of Authorities style, see <see cref="TableOfAuthorities.IsTableOfAuthoritiesParagraph"/>) and
+    /// re-insert a freshly generated one at the same position. With no existing region this behaves like
+    /// <see cref="InsertTableOfAuthorities"/>, inserting at the document end. Every removal/insert is
+    /// reversible through the undo/redo bus. Mirrors <see cref="RefreshTableOfFigures"/>.
+    /// </summary>
+    public void RefreshTableOfAuthorities()
+    {
+        CommitToModel();
+        TableOfAuthorities.EnsureStyles(_model);
+
+        var first = -1;
+        for (var i = 0; i < _model.Blocks.Count; i++)
+        {
+            if (TableOfAuthorities.IsTableOfAuthoritiesParagraph(_model.Blocks[i]))
+            {
+                first = i;
+                break;
+            }
+        }
+
+        var insertAt = first >= 0 ? first : _model.Blocks.Count;
+
+        var indices = new List<int>();
+        for (var i = 0; i < _model.Blocks.Count; i++)
+        {
+            if (TableOfAuthorities.IsTableOfAuthoritiesParagraph(_model.Blocks[i]))
+                indices.Add(i);
+        }
+        for (var i = indices.Count - 1; i >= 0; i--)
+            _commands.Execute(new DeleteParagraphCommand(indices[i]));
+
+        InsertTableOfAuthoritiesAt(insertAt);
+    }
+
+    // Insert the freshly built Table of Authorities paragraphs starting at block index `at`, one reversible
+    // InsertParagraphCommand each (kept in order). The bus's Changed event redraws.
+    private void InsertTableOfAuthoritiesAt(int at)
+    {
+        var entries = TableOfAuthorities.Build(_model);
+        var index = Math.Clamp(at, 0, _model.Blocks.Count);
         foreach (var paragraph in entries)
             _commands.Execute(new InsertParagraphCommand(index++, paragraph));
     }
