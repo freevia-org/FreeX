@@ -58,9 +58,15 @@ internal sealed class ChainRunner
             hopIndex++;
             try
             {
-                var saveAdapter = FileFormatResolver.FindSaveAdapter(_adapters, hop.Extension, out _)
+                // When a hop names a specific Save-As type (e.g. "CSV UTF-8" vs plain ".csv"), resolve by
+                // format name so several adapters sharing one extension can each be exercised.
+                var saveAdapter = (hop.FormatName is { } sn
+                        ? FileFormatResolver.FindSaveAdapterByFormatName(_adapters, hop.Extension, sn, out _)
+                        : FileFormatResolver.FindSaveAdapter(_adapters, hop.Extension, out _))
                     ?? throw new InvalidOperationException($"no save adapter for {hop.Extension}");
-                var loadAdapter = FileFormatResolver.FindOpenAdapter(_adapters, hop.Extension, out _)
+                var loadAdapter = (hop.FormatName is { } ln
+                        ? FileFormatResolver.FindOpenAdapterByFormatName(_adapters, hop.Extension, ln, out _)
+                        : FileFormatResolver.FindOpenAdapter(_adapters, hop.Extension, out _))
                     ?? throw new InvalidOperationException($"no open adapter for {hop.Extension}");
 
                 var tempFile = Path.Combine(_scratchDir,

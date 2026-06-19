@@ -10,7 +10,7 @@ namespace FreeX.FormatFidelity;
 /// <see cref="CapabilityProfile"/> row (e.g. "xlsx-rebuilt" vs "xlsx-preserved"), which may differ
 /// from a bare extension. <see cref="Extension"/> is what resolves the adapter.
 /// </summary>
-internal sealed record Hop(string ProfileKey, string Extension)
+internal sealed record Hop(string ProfileKey, string Extension, string? FormatName = null)
 {
     public CapabilityProfile Profile => CapabilityProfile.All[ProfileKey];
 }
@@ -108,6 +108,130 @@ internal static class Chains
                 SourcePath = sourcePath,
                 Hops = new[] { new Hop("txt", ".txt"), new Hop("xlsx-rebuilt", x) },
                 PromoteDataSheet = true,
+            },
+        };
+    }
+
+    /// <summary>
+    /// Phase 2 — easy net-new formats (audit §4 Phase 2). Each new adapter ships with its chain here so
+    /// it is gated from day one. The encoding variants test the BOM-bearing CSV/TXT writers; slk/dif/xltx
+    /// test the new line-based and template adapters.
+    /// </summary>
+    public static List<Chain> Phase2(string sourcePath)
+    {
+        var x = ".xlsx";
+        return new List<Chain>
+        {
+            // CSV UTF-8 (BOM) round-trip — same value/formula ceiling as plain csv; verifies the BOM
+            // encoding path reads back losslessly.
+            new Chain
+            {
+                Name = "xlsx -> csv-utf8 -> xlsx",
+                SourcePath = sourcePath,
+                Hops = new[]
+                {
+                    new Hop("csv-utf8", ".csv", "CSV UTF-8 (Comma delimited)"),
+                    new Hop("xlsx-rebuilt", x),
+                },
+                PromoteDataSheet = true,
+            },
+            // Unicode Text (UTF-16LE BOM) round-trip — same ceiling as tab-delimited txt.
+            new Chain
+            {
+                Name = "xlsx -> txt-unicode -> xlsx",
+                SourcePath = sourcePath,
+                Hops = new[]
+                {
+                    new Hop("txt-unicode", ".txt", "Unicode Text"),
+                    new Hop("xlsx-rebuilt", x),
+                },
+                PromoteDataSheet = true,
+            },
+            // XLTX save — xlsx writer with template content-type. Same engine as a full rebuild, so all
+            // modeled dimensions must round-trip exactly (it IS the xlsx writer).
+            new Chain
+            {
+                Name = "xltx -> xltx",
+                SourcePath = sourcePath,
+                Hops = new[] { new Hop("xltx", ".xltx") },
+            },
+            // SLK round-trip — values + R1C1 formulas + coarse number formats survive a single sheet.
+            new Chain
+            {
+                Name = "xlsx -> slk -> xlsx",
+                SourcePath = sourcePath,
+                Hops = new[] { new Hop("slk", ".slk"), new Hop("xlsx-rebuilt", x) },
+                PromoteDataSheet = true,
+            },
+            // DIF round-trip — values only, single sheet.
+            new Chain
+            {
+                Name = "xlsx -> dif -> xlsx",
+                SourcePath = sourcePath,
+                Hops = new[] { new Hop("dif", ".dif"), new Hop("xlsx-rebuilt", x) },
+                PromoteDataSheet = true,
+            },
+        };
+    }
+
+    /// <summary>
+    /// Phase 3 — ODS (audit §4 Phase 3, the highest-ROI net-new format). The single-hop gate asserts that
+    /// styles/merges/structure/number-formats survive an xlsx->ods->xlsx round-trip exactly (all Full in
+    /// the ods profile). The multi-hop chains verify the intersection logic composes: once csv collapses
+    /// styling to None it stays None, and an ods hop after an xml hop cannot resurrect dropped styling.
+    /// </summary>
+    public static List<Chain> Phase3(string sourcePath)
+    {
+        var x = ".xlsx";
+        return new List<Chain>
+        {
+            // The ODS regression gate — styles/merges/structure/number-formats are Full and must survive.
+            new Chain
+            {
+                Name = "xlsx -> ods -> xlsx",
+                SourcePath = sourcePath,
+                Hops = new[] { new Hop("ods", ".ods"), new Hop("xlsx-rebuilt", x) },
+            },
+            // ODS then CSV — after the csv hop, values + formula-text are the only surviving dims.
+            new Chain
+            {
+                Name = "xlsx -> ods -> xlsx -> csv -> xlsx",
+                SourcePath = sourcePath,
+                Hops = new[]
+                {
+                    new Hop("ods", ".ods"),
+                    new Hop("xlsx-rebuilt", x),
+                    new Hop("csv", ".csv"),
+                    new Hop("xlsx-rebuilt", x),
+                },
+                PromoteDataSheet = true,
+            },
+            // SpreadsheetML then ODS — styling is None (xml can't hold it), but values/formulas/merges/
+            // widths/numfmt remain Full across both hops and must round-trip.
+            new Chain
+            {
+                Name = "xlsx -> xml -> xlsx -> ods -> xlsx",
+                SourcePath = sourcePath,
+                Hops = new[]
+                {
+                    new Hop("xml", ".xml"),
+                    new Hop("xlsx-rebuilt", x),
+                    new Hop("ods", ".ods"),
+                    new Hop("xlsx-rebuilt", x),
+                },
+            },
+            // ODS then SpreadsheetML — the reverse order; styling collapses at the xml hop.
+            new Chain
+            {
+                Name = "xlsx -> ods -> xlsx -> xml -> xlsx",
+                SourcePath = sourcePath,
+                Hops = new[]
+                {
+                    new Hop("ods", ".ods"),
+                    new Hop("xlsx-rebuilt", x),
+                    new Hop("xml", ".xml"),
+                    new Hop("xlsx-rebuilt", x),
+                },
             },
         };
     }

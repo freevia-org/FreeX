@@ -39,20 +39,25 @@ internal sealed class FileCommands
     // mechanism end-to-end. Defaults are used when no store is supplied (e.g. tests).
     private readonly FreeWOptions _options;
 
-    // FreeW ships a single .docx format; the filter/default-extension are composed by the shared
-    // FileDialogFilter so any future format additions stay a data change, not a string edit.
-    private static readonly IReadOnlyList<FileFormatChoice> Formats =
-        [new FileFormatChoice("Word documents", ".docx")];
+    // FreeW's supported formats are data: a catalog of IDocumentFileAdapter drives the open/save dialogs and
+    // the open/save dispatch, so adding a format is a catalog edit, not a string edit here.
+    private readonly IReadOnlyList<IDocumentFileAdapter> _adapters;
 
-    private static readonly string Filter = FileDialogFilter.Build(Formats);
-    private static readonly string DefaultExtension = FileDialogFilter.DefaultExtension(Formats);
+    // Default extension used when there is no current file (new-document Save-As) and for AddExtension.
+    private const string DefaultSaveExtension = ".docx";
 
-    public FileCommands(Window window, DocumentView editor, Action onChanged, FreeWOptions? options = null)
+    public FileCommands(
+        Window window,
+        DocumentView editor,
+        Action onChanged,
+        FreeWOptions? options = null,
+        IReadOnlyList<IDocumentFileAdapter>? adapters = null)
     {
         _window = window;
         _editor = editor;
         _onChanged = onChanged;
         _options = options ?? new FreeWOptions();
+        _adapters = adapters ?? DocumentFileAdapterCatalog.CreateDefaultAdapters();
     }
 
     public bool IsDirty => _state.IsDirty;
@@ -116,7 +121,7 @@ internal sealed class FileCommands
         if (!ConfirmDiscardOrSave("opening another document"))
             return false;
 
-        var dialog = new OpenFileDialog { Filter = Filter, DefaultExt = DefaultExtension };
+        var dialog = new OpenFileDialog { Filter = DocumentFileDialogFilterBuilder.BuildOpenFilter(_adapters) };
         if (dialog.ShowDialog(_window) != true)
             return false;
 
@@ -131,10 +136,34 @@ internal sealed class FileCommands
 
     private bool OpenPath(string path, bool suppressRecentFiles)
     {
+        var extension = Path.GetExtension(path);
+        var adapter = DocumentFileFormatResolver.FindOpenAdapter(_adapters, extension, out var format);
+        if (adapter is null)
+        {
+            ShowError(
+                "Unrecognized file type",
+                new InvalidOperationException($"FreeW has no reader for “{extension}” files."));
+            return false;
+        }
+
         try
         {
-            _editor.LoadModel(DocxReader.Read(path));
-            SetSaved(path, suppressRecentFiles);
+            using (var fs = File.OpenRead(path))
+                _editor.LoadModel(adapter.Load(fs));
+
+            if (format!.OpensAsTemplate)
+            {
+                // A template seeds a new untitled document: clear the path so the next Save becomes Save-As.
+                _state.ClearCurrentFilePath();
+                _state.MarkSaved();
+                _editor.CurrentFileName = null;
+                _onChanged();
+            }
+            else
+            {
+                SetSaved(path, suppressRecentFiles);
+            }
+
             return true;
         }
         catch (Exception ex)
@@ -167,23 +196,35 @@ internal sealed class FileCommands
     /// </summary>
     public bool Save() => FileLifecyclePlanner.PlanSave(_state.IsDirty, _state.CurrentFilePath) switch
     {
-        FileSaveIntent.UseExistingPath => SaveTo(_state.CurrentFilePath!),
-        FileSaveIntent.NothingToDo => SaveTo(_state.CurrentFilePath!),
+        FileSaveIntent.UseExistingPath => SaveToCurrentPath(),
+        FileSaveIntent.NothingToDo => SaveToCurrentPath(),
         _ => SaveAs(),
     };
 
     /// <summary>File &gt; Save As. Always prompts for a target. Returns true on a successful save.</summary>
-    public bool SaveAs()
+    public bool SaveAs() =>
+        TryPromptSaveTarget(out var path, out var adapter) && SaveTo(path, adapter);
+
+    /// <summary>
+    /// File &gt; Save a Copy. Writes to a chosen path WITHOUT changing the current file or dirty state,
+    /// reusing the same resolver + adapter plumbing as Save-As. Returns true on a successful save.
+    /// </summary>
+    public bool SaveCopy()
     {
-        var dialog = new SaveFileDialog
+        if (!TryPromptSaveTarget(out var path, out var adapter))
+            return false;
+        try
         {
-            Filter = Filter,
-            DefaultExt = DefaultExtension,
-            AddExtension = true,
-            OverwritePrompt = true,
-            FileName = _state.CurrentFilePath is null ? "Document" + DefaultExtension : Path.GetFileName(_state.CurrentFilePath)
-        };
-        return dialog.ShowDialog(_window) == true && SaveTo(dialog.FileName);
+            _editor.CommitToModel();
+            using var fs = File.Create(path);
+            adapter.Save(_editor.Model, fs);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            ShowError("Could not save a copy", ex);
+            return false;
+        }
     }
 
     /// <summary>
@@ -212,12 +253,24 @@ internal sealed class FileCommands
         };
     }
 
-    private bool SaveTo(string path)
+    /// <summary>
+    /// Save to the current path, resolving its format adapter. Falls back to Save-As when the current file is
+    /// a read-only format (e.g. a legacy format opened for viewing), so the user is steered to a writable one.
+    /// </summary>
+    private bool SaveToCurrentPath()
+    {
+        var path = _state.CurrentFilePath!;
+        var adapter = DocumentFileFormatResolver.FindSaveAdapter(_adapters, Path.GetExtension(path), out _);
+        return adapter is null ? SaveAs() : SaveTo(path, adapter);
+    }
+
+    private bool SaveTo(string path, IDocumentFileAdapter adapter)
     {
         try
         {
             _editor.CommitToModel();
-            DocxWriter.Write(_editor.Model, path);
+            using (var fs = File.Create(path))
+                adapter.Save(_editor.Model, fs);
             SetSaved(path, suppressRecentFiles: false);
             return true;
         }
@@ -226,6 +279,48 @@ internal sealed class FileCommands
             ShowError("Could not save the document", ex);
             return false;
         }
+    }
+
+    /// <summary>
+    /// Shows the Save dialog and resolves the chosen target path + writable adapter. The adapter is derived
+    /// from the CHOSEN filename's extension (not the selected filter row), so a user-typed extension wins.
+    /// Returns false on cancel or when the chosen extension is not a writable format.
+    /// </summary>
+    private bool TryPromptSaveTarget(out string path, out IDocumentFileAdapter adapter)
+    {
+        path = "";
+        adapter = null!;
+
+        var currentExtension = _state.CurrentFilePath is { } existing
+            ? Path.GetExtension(existing)
+            : DefaultSaveExtension;
+        var dialog = new SaveFileDialog
+        {
+            Filter = DocumentFileDialogFilterBuilder.BuildSaveFilter(_adapters),
+            FilterIndex = DocumentFileDialogFilterBuilder.FindSaveFilterIndex(_adapters, currentExtension),
+            DefaultExt = DefaultSaveExtension,
+            AddExtension = true,
+            OverwritePrompt = true,
+            FileName = _state.CurrentFilePath is null
+                ? "Document" + DefaultSaveExtension
+                : Path.GetFileName(_state.CurrentFilePath),
+        };
+        if (dialog.ShowDialog(_window) != true)
+            return false;
+
+        var chosenExtension = Path.GetExtension(dialog.FileName);
+        var resolved = DocumentFileFormatResolver.FindSaveAdapter(_adapters, chosenExtension, out _);
+        if (resolved is null)
+        {
+            ShowError(
+                "Cannot save",
+                new InvalidOperationException($"“{chosenExtension}” is not a writable format."));
+            return false;
+        }
+
+        path = dialog.FileName;
+        adapter = resolved;
+        return true;
     }
 
     private void SetSaved(string path, bool suppressRecentFiles)

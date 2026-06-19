@@ -22,7 +22,7 @@ public class FreeWFidelityCorpusManifestTests
     {
         var rows = ReadManifest();
 
-        rows.Should().HaveCountGreaterThanOrEqualTo(45);
+        rows.Should().HaveCountGreaterThanOrEqualTo(130);
         rows.Select(row => row.Id).Should().OnlyHaveUniqueItems();
         rows.Select(row => row.File).Should().OnlyHaveUniqueItems();
 
@@ -65,12 +65,14 @@ public class FreeWFidelityCorpusManifestTests
         tags.Should().Contain([
             "attachments",
             "altchunk",
+            "advanced-typography",
             "bookmarks",
             "charts",
             "checkboxes",
             "comments",
             "content-controls",
             "custom-xml",
+            "document-background",
             "drawings",
             "embedded-objects",
             "endnotes",
@@ -86,13 +88,20 @@ public class FreeWFidelityCorpusManifestTests
             "mail-merge",
             "nested-tables",
             "numbering",
+            "orientation",
             "page-breaks",
+            "page-color",
+            "page-layout",
+            "page-size",
+            "proofing",
+            "rtl",
             "settings",
             "shapes",
             "smartart",
             "styles",
             "tables",
             "text-boxes",
+            "text-effects",
             "theme",
             "tracked-changes",
             "vml",

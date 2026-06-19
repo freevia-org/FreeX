@@ -50,7 +50,10 @@ public static class DocxWriter
         Write(document, stream);
     }
 
-    public static void Write(TextDocument document, Stream stream)
+    public static void Write(TextDocument document, Stream stream) =>
+        Write(document, stream, DocxWriteOptions.Docx);
+
+    public static void Write(TextDocument document, Stream stream, DocxWriteOptions options)
     {
         // Assign a relationship + media id to every inline image up front so document.xml, the
         // document relationships and the media parts all agree on rId/imageN.png.
@@ -154,14 +157,22 @@ public static class DocxWriter
             .OrderBy(ext => ext, StringComparer.Ordinal)
             .ToList();
 
+        // Macro parts (vbaProject.bin + vbaData.xml + the part-local rels) are preserved verbatim on read but
+        // only re-emitted for macro-enabled targets (.docm/.dotm); a .docx/.dotx must not carry them. Filtered
+        // once here and used for the content types, document rels, the inline-drawing rel ids and the byte parts
+        // so the four stay in lock-step.
+        var preservedParts = options.IncludeMacroParts
+            ? (IReadOnlyList<PreservedPart>)document.Preserved.Parts
+            : document.Preserved.Parts.Where(p => !DocxWriteOptions.IsMacroPart(p.PartName)).ToList();
+
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true);
-        WritePart(archive, "[Content_Types].xml", BuildContentTypes(imageExtensions, emitNumbering, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasCustomProps, hasSettings, hasBibliography, charts, embeddedObjects.Count > 0, smartArts, hasEmbeddedFonts, document.Preserved.Parts, document.Preserved.ContentTypeDefaults));
+        WritePart(archive, "[Content_Types].xml", BuildContentTypes(imageExtensions, emitNumbering, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasCustomProps, hasSettings, hasBibliography, charts, embeddedObjects.Count > 0, smartArts, hasEmbeddedFonts, preservedParts, document.Preserved.ContentTypeDefaults, options.MainDocumentContentType));
         WritePart(archive, "_rels/.rels", BuildPackageRels(hasCustomProps));
         WritePart(archive, "docProps/core.xml", BuildCoreProperties(document.Properties));
         if (hasCustomProps)
             WritePart(archive, "docProps/custom.xml", BuildCustomProperties(document.Page.Watermark, document.MarkedAsFinal));
-        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, emitNumbering, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasSettings, hasBibliography, charts, embeddedObjects, smartArts, hasEmbeddedFonts, document.Preserved.Parts));
-        WritePart(archive, "word/document.xml", BuildDocument(document, images, charts, embeddedObjects, smartArts, hyperlinks, headerFooterParts, preservedNumbering));
+        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, emitNumbering, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasSettings, hasBibliography, charts, embeddedObjects, smartArts, hasEmbeddedFonts, preservedParts));
+        WritePart(archive, "word/document.xml", BuildDocument(document, images, charts, embeddedObjects, smartArts, hyperlinks, headerFooterParts, preservedNumbering, preservedParts));
         WritePart(archive, "word/styles.xml", BuildStyles(document, preservedNumbering));
         WritePart(archive, ThemePartName.TrimStart('/'), BuildTheme(document.Theme));
         if (hasSettings)
@@ -240,7 +251,7 @@ public static class DocxWriter
         // content-type Overrides and document relationships are added by BuildContentTypes / BuildDocumentRels;
         // their own _rels (e.g. customXml item rels) are themselves preserved parts, so the whole satellite set
         // round-trips. Authored-from-scratch documents have none, so nothing extra is written.
-        foreach (var part in document.Preserved.Parts)
+        foreach (var part in preservedParts)
             WriteBinaryPart(archive, part.PartName.TrimStart('/'), part.Bytes);
     }
 
@@ -607,7 +618,7 @@ public static class DocxWriter
         entryStream.Write(content, 0, content.Length);
     }
 
-    private static XDocument BuildContentTypes(IReadOnlyList<string> imageExtensions, bool includeNumbering, IReadOnlyList<HeaderFooterPart> headerFooterParts, bool hasFootnotes, bool hasEndnotes, bool hasComments, bool hasCustomProps, bool hasSettings, bool hasBibliography, IReadOnlyList<ChartPart> charts, bool hasEmbeddedObjects, IReadOnlyList<SmartArtPart> smartArts, bool hasEmbeddedFonts, IReadOnlyList<PreservedPart> preservedParts, IReadOnlyDictionary<string, string> preservedContentTypeDefaults) => new(
+    private static XDocument BuildContentTypes(IReadOnlyList<string> imageExtensions, bool includeNumbering, IReadOnlyList<HeaderFooterPart> headerFooterParts, bool hasFootnotes, bool hasEndnotes, bool hasComments, bool hasCustomProps, bool hasSettings, bool hasBibliography, IReadOnlyList<ChartPart> charts, bool hasEmbeddedObjects, IReadOnlyList<SmartArtPart> smartArts, bool hasEmbeddedFonts, IReadOnlyList<PreservedPart> preservedParts, IReadOnlyDictionary<string, string> preservedContentTypeDefaults, string mainDocumentContentType) => new(
         new XElement(Ct + "Types",
             new XElement(Ct + "Default", new XAttribute("Extension", "rels"),
                 new XAttribute("ContentType", "application/vnd.openxmlformats-package.relationships+xml")),
@@ -644,7 +655,7 @@ public static class DocxWriter
                     new XAttribute("ContentType", ObfuscatedFontContentType))
                 : null,
             new XElement(Ct + "Override", new XAttribute("PartName", "/word/document.xml"),
-                new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml")),
+                new XAttribute("ContentType", mainDocumentContentType)),
             new XElement(Ct + "Override", new XAttribute("PartName", "/word/styles.xml"),
                 new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml")),
             includeNumbering
@@ -983,7 +994,8 @@ public static class DocxWriter
         IReadOnlyList<SmartArtPart> smartArts,
         IReadOnlyDictionary<string, string> hyperlinks,
         IReadOnlyList<HeaderFooterPart> headerFooterParts,
-        PreservedNumberingPlan? preservedNumbering)
+        PreservedNumberingPlan? preservedNumbering,
+        IReadOnlyList<PreservedPart> preservedParts)
     {
         // Group header/footer parts by their owning section: the final/body-level section (Section == null)
         // feeds the body-level w:sectPr; each non-final section feeds its paragraph-level w:sectPr.
@@ -1025,7 +1037,7 @@ public static class DocxWriter
         // Map each document-referenced preserved part to its assigned rIdPreserved{N} (same order/ids as
         // BuildDocumentRels), so a verbatim-preserved inline drawing can re-point its chart r:id at the
         // re-emitted relationship. Empty for documents with no preserved drawings.
-        var preservedDrawingRelIds = PreservedPartRelIds(document.Preserved.Parts)
+        var preservedDrawingRelIds = PreservedPartRelIds(preservedParts)
             .ToDictionary(pair => pair.Part.PartName, pair => pair.RelId, StringComparer.Ordinal);
 
         var drawings = new RunDrawings(imagesByRun, chartsByRun, embeddedByRun, smartArtsByRun, ids, preservedDrawingRelIds);

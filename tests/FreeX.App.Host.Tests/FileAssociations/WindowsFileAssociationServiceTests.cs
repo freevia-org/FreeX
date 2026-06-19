@@ -1,5 +1,5 @@
 using FluentAssertions;
-using FreeX.App.Host.FileAssociations;
+using Free.Shared.AppServices.Windows;
 using FreeX.App.Services.FileAssociations;
 using Microsoft.Win32;
 using Xunit;
@@ -12,7 +12,7 @@ public class WindowsFileAssociationServiceTests : IDisposable
     private const string TestRoot = @"Software\FreeXTest\Classes";
 
     private static WindowsFileAssociationService NewService() =>
-        new(classesRootPath: TestRoot, logger: null);
+        new(FreeXFileAssociations.All, classesRootPath: TestRoot, logger: null);
 
     [Fact]
     public void RegisterAll_OwnsFxl_AsDefaultHandler()
@@ -49,7 +49,7 @@ public class WindowsFileAssociationServiceTests : IDisposable
         svc.RegisterAll(@"C:\Apps\FreeX\FreeX.App.Host.exe");
         svc.UnregisterAll();
 
-        foreach (var def in FileAssociationDefinition.All)
+        foreach (var def in FreeXFileAssociations.All)
         {
             using var progId = Registry.CurrentUser.OpenSubKey($@"{TestRoot}\{def.ProgId}");
             progId.Should().BeNull($"{def.ProgId} should be removed on uninstall");

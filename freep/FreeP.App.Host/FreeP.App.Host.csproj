@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <StartupObject>FreeP.App.Host.Program</StartupObject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Tests construct the shell window + backstage directly. -->
+    <InternalsVisibleTo Include="FreeP.App.Host.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\shared\Free.Shared.Ribbon\Free.Shared.Ribbon.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Ribbon.Wpf\Free.Shared.Ribbon.Wpf.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Shell\Free.Shared.Shell.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Shell.Wpf\Free.Shared.Shell.Wpf.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Commands\Free.Shared.Commands.csproj" />
+    <ProjectReference Include="..\FreeP.Core.Model\FreeP.Core.Model.csproj" />
+    <ProjectReference Include="..\FreeP.Core.IO\FreeP.Core.IO.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Free.Shared.Ribbon" />
+    <Using Include="Free.Shared.AppServices" />
+    <Using Include="Free.Shared.Shell" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="SharpVectors.Wpf" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Reuse FreeX's Office-quality command icons (single source of truth) so any FreeP command sharing a
+         FreeX equivalent draws the identical glyph. Linked, not copied — mirrors FreeW. -->
+    <Content Include="..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\**\*.svg"
+             Link="Resources\CommandIconsSvg\%(RecursiveDir)%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>
