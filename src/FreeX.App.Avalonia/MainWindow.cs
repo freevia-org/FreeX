@@ -737,7 +737,7 @@ public sealed partial class MainWindow : Window
                     ["review.thesaurus"] = () => _ = ShowThesaurusDialogAsync(),
                     ["review.translate"] = () => _ = ShowTranslateDialogAsync(),
                     ["insert.equation"] = () => _ = ShowEquationDialogAsync(),
-                    ["insert.object"] = ShowInsertObjectUnsupported,
+                    ["insert.object"] = () => _ = ShowInsertObjectDialogAsync(),
                     // Home tab (Editing group).
                     ["home.autoSum"] = () => InsertAutoSumFormula("SUM"),
                     ["home.fillDown"] = () => FillSelectedRange(FillCellsDirection.Down),
