@@ -122,6 +122,52 @@
   <data name="PivotSort_AscendingByValues" xml:space="preserve"><value>Croissant par valeurs</value></data>
   <data name="PivotSort_DescendingByValues" xml:space="preserve"><value>Décroissant par valeurs</value></data>
   <data name="PivotSort_ValueField" xml:space="preserve"><value>Champ de valeurs :</value></data>
+  <!-- PivotTable Analyze / PivotChart contextual-tab commands -->
+  <data name="PivotAnalyze_SelectPivotPrompt" xml:space="preserve"><value>Sélectionnez d'abord une cellule dans un tableau croisé dynamique.</value></data>
+  <data name="PivotAnalyze_FieldSettingsNoValueField" xml:space="preserve"><value>Ajoutez un champ de valeurs au tableau croisé dynamique, puis ouvrez les paramètres de champ.</value></data>
+  <data name="PivotAnalyze_Cleared" xml:space="preserve"><value>Tableau croisé dynamique « {0} » effacé.</value></data>
+  <data name="PivotAnalyze_Selected" xml:space="preserve"><value>Tableau croisé dynamique « {0} » sélectionné.</value></data>
+  <data name="PivotAnalyze_ShowDetailsPrompt" xml:space="preserve"><value>Sélectionnez une cellule de valeur dans un tableau croisé dynamique pour afficher ses détails.</value></data>
+  <data name="PivotAnalyze_ShowDetailsDone" xml:space="preserve"><value>Détails affichés pour le tableau croisé dynamique « {0} ».</value></data>
+  <data name="PivotAnalyze_PlusMinusOn" xml:space="preserve"><value>Boutons de développement/réduction affichés.</value></data>
+  <data name="PivotAnalyze_PlusMinusOff" xml:space="preserve"><value>Boutons de développement/réduction masqués.</value></data>
+  <!-- Move PivotTable dialog -->
+  <data name="MovePivot_Title" xml:space="preserve"><value>Déplacer le tableau croisé dynamique</value></data>
+  <data name="MovePivot_Label" xml:space="preserve"><value>Destination (cellule supérieure gauche) :</value></data>
+  <data name="MovePivot_RangeName" xml:space="preserve"><value>Cellule de destination du tableau croisé dynamique</value></data>
+  <data name="MovePivot_InvalidDestination" xml:space="preserve"><value>Entrez une cellule de destination valide pour le tableau croisé dynamique.</value></data>
+  <data name="MovePivot_CurrentSheetOnly" xml:space="preserve"><value>Déplacez le tableau croisé dynamique vers une cellule de la feuille active.</value></data>
+  <data name="MovePivot_Moved" xml:space="preserve"><value>Tableau croisé dynamique déplacé vers {0}.</value></data>
+  <!-- Calculated Item dialog -->
+  <data name="PivotCalcItem_Title" xml:space="preserve"><value>Insérer un élément calculé</value></data>
+  <data name="PivotCalcItem_FieldLabel" xml:space="preserve"><value>Champ :</value></data>
+  <data name="PivotCalcItem_ExistingLabel" xml:space="preserve"><value>Élément calculé existant :</value></data>
+  <data name="PivotCalcItem_ExistingNone" xml:space="preserve"><value>(Nouvel élément calculé)</value></data>
+  <data name="PivotCalcItem_NameLabel" xml:space="preserve"><value>Nom :</value></data>
+  <data name="PivotCalcItem_FormulaLabel" xml:space="preserve"><value>Formule :</value></data>
+  <data name="PivotCalcItem_FieldsLabel" xml:space="preserve"><value>Champs :</value></data>
+  <data name="PivotCalcItem_InsertField" xml:space="preserve"><value>Insérer un champ</value></data>
+  <data name="PivotCalcItem_FieldsAutomation" xml:space="preserve"><value>Champs disponibles</value></data>
+  <data name="PivotCalcItem_Delete" xml:space="preserve"><value>Supprimer</value></data>
+  <data name="PivotCalcItem_NoField" xml:space="preserve"><value>Ajoutez un champ de ligne ou de colonne au tableau croisé dynamique, puis ajoutez un élément calculé.</value></data>
+  <data name="PivotCalcItem_Saved" xml:space="preserve"><value>Élément calculé « {0} » enregistré.</value></data>
+  <data name="PivotCalcItem_Deleted" xml:space="preserve"><value>Élément calculé « {0} » supprimé.</value></data>
+  <!-- PivotChart contextual commands -->
+  <data name="PivotChart_ChangeTypeInsertFirst" xml:space="preserve"><value>Insérez un graphique croisé dynamique avant de modifier son type.</value></data>
+  <data name="PivotChart_TypeChanged" xml:space="preserve"><value>Type de graphique croisé dynamique changé en {0}.</value></data>
+  <data name="PivotChart_OptionsInsertFirst" xml:space="preserve"><value>Insérez un graphique croisé dynamique avant de modifier ses options.</value></data>
+  <data name="PivotChart_OptionsApplied" xml:space="preserve"><value>Options du graphique croisé dynamique appliquées.</value></data>
+  <!-- PivotChart Options dialog -->
+  <data name="PivotChartOptions_Title" xml:space="preserve"><value>Options du graphique croisé dynamique</value></data>
+  <data name="PivotChartOptions_ShowFieldButtons" xml:space="preserve"><value>Afficher tous les boutons de champ</value></data>
+  <data name="PivotChartOptions_ShowReportFilterButtons" xml:space="preserve"><value>Boutons de champ de filtre de rapport</value></data>
+  <data name="PivotChartOptions_ShowAxisFieldButtons" xml:space="preserve"><value>Boutons de champ d'axe</value></data>
+  <data name="PivotChartOptions_ShowValueFieldButtons" xml:space="preserve"><value>Boutons de champ de valeur</value></data>
+  <data name="PivotChartOptions_ShowDataTable" xml:space="preserve"><value>Afficher la table de données</value></data>
+  <data name="PivotChartOptions_ShowDataTableLegendKeys" xml:space="preserve"><value>Clés de légende de la table de données</value></data>
+  <data name="PivotChartOptions_RoundedCorners" xml:space="preserve"><value>Coins arrondis</value></data>
+  <!-- Summarize with PivotTable (Table Design) -->
+  <data name="PivotSummarize_NoTable" xml:space="preserve"><value>Sélectionnez une cellule dans un tableau pour le synthétiser avec un tableau croisé dynamique.</value></data>
   <data name="PivotFilter_ItemsTitle" xml:space="preserve"><value>Filtrer les éléments</value></data>
   <data name="PivotFilter_ItemsHeading" xml:space="preserve"><value>Filtrer « {0} »</value></data>
   <data name="PivotFilter_LabelTitle" xml:space="preserve"><value>Filtre d'étiquette ({0})</value></data>

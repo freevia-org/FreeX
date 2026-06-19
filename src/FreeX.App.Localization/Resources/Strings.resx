@@ -131,6 +131,52 @@
   <data name="PivotSort_AscendingByValues" xml:space="preserve"><value>Ascending by values</value></data>
   <data name="PivotSort_DescendingByValues" xml:space="preserve"><value>Descending by values</value></data>
   <data name="PivotSort_ValueField" xml:space="preserve"><value>Value field:</value></data>
+  <!-- PivotTable Analyze / PivotChart contextual-tab commands -->
+  <data name="PivotAnalyze_SelectPivotPrompt" xml:space="preserve"><value>Select a cell inside a PivotTable first.</value></data>
+  <data name="PivotAnalyze_FieldSettingsNoValueField" xml:space="preserve"><value>Add a value field to the PivotTable, then open Field Settings.</value></data>
+  <data name="PivotAnalyze_Cleared" xml:space="preserve"><value>PivotTable “{0}” cleared.</value></data>
+  <data name="PivotAnalyze_Selected" xml:space="preserve"><value>Selected PivotTable “{0}”.</value></data>
+  <data name="PivotAnalyze_ShowDetailsPrompt" xml:space="preserve"><value>Select a value cell in a PivotTable to show its details.</value></data>
+  <data name="PivotAnalyze_ShowDetailsDone" xml:space="preserve"><value>Showed details for PivotTable “{0}”.</value></data>
+  <data name="PivotAnalyze_PlusMinusOn" xml:space="preserve"><value>Expand/collapse buttons shown.</value></data>
+  <data name="PivotAnalyze_PlusMinusOff" xml:space="preserve"><value>Expand/collapse buttons hidden.</value></data>
+  <!-- Move PivotTable dialog -->
+  <data name="MovePivot_Title" xml:space="preserve"><value>Move PivotTable</value></data>
+  <data name="MovePivot_Label" xml:space="preserve"><value>Destination (top-left cell):</value></data>
+  <data name="MovePivot_RangeName" xml:space="preserve"><value>PivotTable destination cell</value></data>
+  <data name="MovePivot_InvalidDestination" xml:space="preserve"><value>Enter a valid destination cell for the PivotTable.</value></data>
+  <data name="MovePivot_CurrentSheetOnly" xml:space="preserve"><value>Move the PivotTable to a cell on the current sheet.</value></data>
+  <data name="MovePivot_Moved" xml:space="preserve"><value>Moved PivotTable to {0}.</value></data>
+  <!-- Calculated Item dialog -->
+  <data name="PivotCalcItem_Title" xml:space="preserve"><value>Insert Calculated Item</value></data>
+  <data name="PivotCalcItem_FieldLabel" xml:space="preserve"><value>Field:</value></data>
+  <data name="PivotCalcItem_ExistingLabel" xml:space="preserve"><value>Existing calculated item:</value></data>
+  <data name="PivotCalcItem_ExistingNone" xml:space="preserve"><value>(New calculated item)</value></data>
+  <data name="PivotCalcItem_NameLabel" xml:space="preserve"><value>Name:</value></data>
+  <data name="PivotCalcItem_FormulaLabel" xml:space="preserve"><value>Formula:</value></data>
+  <data name="PivotCalcItem_FieldsLabel" xml:space="preserve"><value>Fields:</value></data>
+  <data name="PivotCalcItem_InsertField" xml:space="preserve"><value>Insert Field</value></data>
+  <data name="PivotCalcItem_FieldsAutomation" xml:space="preserve"><value>Available fields</value></data>
+  <data name="PivotCalcItem_Delete" xml:space="preserve"><value>Delete</value></data>
+  <data name="PivotCalcItem_NoField" xml:space="preserve"><value>Add a row or column field to the PivotTable, then add a calculated item.</value></data>
+  <data name="PivotCalcItem_Saved" xml:space="preserve"><value>Calculated item “{0}” saved.</value></data>
+  <data name="PivotCalcItem_Deleted" xml:space="preserve"><value>Calculated item “{0}” deleted.</value></data>
+  <!-- PivotChart contextual commands -->
+  <data name="PivotChart_ChangeTypeInsertFirst" xml:space="preserve"><value>Insert a PivotChart before changing its type.</value></data>
+  <data name="PivotChart_TypeChanged" xml:space="preserve"><value>Changed PivotChart type to {0}.</value></data>
+  <data name="PivotChart_OptionsInsertFirst" xml:space="preserve"><value>Insert a PivotChart before changing its options.</value></data>
+  <data name="PivotChart_OptionsApplied" xml:space="preserve"><value>PivotChart options applied.</value></data>
+  <!-- PivotChart Options dialog -->
+  <data name="PivotChartOptions_Title" xml:space="preserve"><value>PivotChart Options</value></data>
+  <data name="PivotChartOptions_ShowFieldButtons" xml:space="preserve"><value>Show all field buttons</value></data>
+  <data name="PivotChartOptions_ShowReportFilterButtons" xml:space="preserve"><value>Report filter field buttons</value></data>
+  <data name="PivotChartOptions_ShowAxisFieldButtons" xml:space="preserve"><value>Axis field buttons</value></data>
+  <data name="PivotChartOptions_ShowValueFieldButtons" xml:space="preserve"><value>Value field buttons</value></data>
+  <data name="PivotChartOptions_ShowDataTable" xml:space="preserve"><value>Show data table</value></data>
+  <data name="PivotChartOptions_ShowDataTableLegendKeys" xml:space="preserve"><value>Data table legend keys</value></data>
+  <data name="PivotChartOptions_RoundedCorners" xml:space="preserve"><value>Rounded corners</value></data>
+  <!-- Summarize with PivotTable (Table Design) -->
+  <data name="PivotSummarize_NoTable" xml:space="preserve"><value>Select a cell inside a table to summarize it with a PivotTable.</value></data>
   <!-- Pivot Filter dialogs -->
   <data name="PivotFilter_ItemsTitle" xml:space="preserve"><value>Filter Items</value></data>
   <data name="PivotFilter_ItemsHeading" xml:space="preserve"><value>Filter “{0}”</value></data>

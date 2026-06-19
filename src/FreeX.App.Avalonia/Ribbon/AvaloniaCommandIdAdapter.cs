@@ -346,6 +346,7 @@ internal static class AvaloniaCommandIdAdapter
         ["tableDesign.bandedColumns"] = "Banded Columns#TableDesignBandedColumnsBtn_Click",
         ["tableDesign.filterButton"] = "Filter Button",
         ["tableDesign.tableStyles"] = "Table Styles",
+        ["tableDesign.summarizeWithPivot"] = "Summarize with PivotTable",
 
         // ── PivotTable Analyze (contextual: pivot.active) ───────────────────────────────────────────────
         ["pivotAnalyze.name"] = "PivotTable Name",
@@ -358,8 +359,17 @@ internal static class AvaloniaCommandIdAdapter
         ["pivotAnalyze.refresh"] = "Refresh",
         ["pivotAnalyze.changeDataSource"] = "Change Data Source",
         ["pivotAnalyze.calculatedField"] = "Calculated Field",
+        ["pivotAnalyze.calculatedItem"] = "Calculated Item",
         ["pivotAnalyze.fieldList"] = "Field List",
         ["pivotAnalyze.fieldHeaders"] = "Field Headers",
+        ["pivotAnalyze.showDetails"] = "Show Details",
+        ["pivotAnalyze.clear"] = "Clear#PivotTableClearBtn_Click",
+        ["pivotAnalyze.select"] = "Select",
+        ["pivotAnalyze.move"] = "Move PivotTable",
+        ["pivotAnalyze.plusMinusButtons"] = "+/- Buttons",
+        ["pivotAnalyze.pivotChart"] = "PivotChart",
+        ["pivotAnalyze.changeChartType"] = "Change Chart Type#PivotChartChangeTypeBtn_Click",
+        ["pivotAnalyze.pivotChartOptions"] = "PivotChart Options",
 
         // ── PivotTable Design (contextual: pivot.active) ────────────────────────────────────────────────
         ["pivotDesign.grandTotals"] = "Grand Totals",
