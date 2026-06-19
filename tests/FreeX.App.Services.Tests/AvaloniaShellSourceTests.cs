@@ -287,6 +287,23 @@ public sealed class AvaloniaShellSourceTests
     }
 
     [Fact]
+    public void MainWindow_PrintFallbackGuardsNormalizedPdfOverwriteAndCupsTimeouts()
+    {
+        var printSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.Print.cs"));
+        var cupsSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "CupsPlatformPrinter.cs"));
+
+        printSource.Should().Contain("var requestedPath = path;");
+        printSource.Should().Contain("ExportPathPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, exportPathPlan, File.Exists)");
+        printSource.Should().Contain("!await ConfirmNormalizedPdfOverwriteAsync(exportPathPlan.Path)");
+        printSource.Should().Contain("UiText.Get(\"Print_SaveCanceled\")");
+
+        cupsSource.Should().Contain("private static readonly TimeSpan CommandTimeout");
+        cupsSource.Should().Contain("timeout.CancelAfter(CommandTimeout)");
+        cupsSource.Should().Contain("process.Kill(entireProcessTree: true)");
+        cupsSource.Should().Contain("catch (TimeoutException)");
+    }
+
+    [Fact]
     public void App_UsesSharedReleaseChannelForPrereleaseUpdatePolicy()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "App.cs"));

@@ -66,6 +66,9 @@ internal sealed class ChainRunner
                 var tempFile = Path.Combine(_scratchDir,
                     $"{Sanitize(chain.Name)}.hop{hopIndex}{hop.Extension}");
 
+                if (saveAdapter is XlsxFileAdapter && string.Equals(hop.ProfileKey, "xlsx-rebuilt", StringComparison.OrdinalIgnoreCase))
+                    XlsxFileAdapter.DetachSourcePackage(current);
+
                 using (var outStream = File.Create(tempFile))
                     saveAdapter.Save(current, outStream);
 

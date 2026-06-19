@@ -53,7 +53,10 @@ internal sealed class WorkbookSnapshot
 
     public static WorkbookSnapshot Capture(Workbook wb)
     {
-        var snap = new WorkbookSnapshot();
+        var snap = new WorkbookSnapshot
+        {
+            HasVba = wb.HasVbaProjectPackage
+        };
 
         foreach (var sheet in wb.Sheets)
         {

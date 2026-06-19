@@ -410,17 +410,18 @@ internal static class DimensionComparer
         if (cap == Cap.None)
             return MakeNoneResult(d, cap, anyChange: refVal != gotVal);
 
-        bool ok = refVal == gotVal;
-        // Lossy counts (e.g. xlsx-rebuilt CF/charts): the modeled subset should survive, so a DROP below
-        // reference is tolerated as lossy, an INCREASE is unexpected. Treat <= as within-tolerance.
-        if (!ok && cap == Cap.Lossy && gotVal <= refVal) ok = true;
+        var kind = refVal == gotVal
+            ? ResultKind.Ok
+            : cap == Cap.Lossy && gotVal < refVal
+                ? ResultKind.ExpectedLoss
+                : ResultKind.Bug;
         return new DimensionResult
         {
             Dimension = d,
             ChainCap = cap,
-            Kind = ok ? ResultKind.Ok : ResultKind.Bug,
+            Kind = kind,
             Detail = detail,
-            Matched = ok ? 1 : 0,
+            Matched = kind == ResultKind.Ok ? 1 : 0,
             Total = 1,
         };
     }
