@@ -4,8 +4,8 @@ using System.Collections.Concurrent;
 namespace FreeX.App.Presentation.ConditionalFormatting;
 
 /// <summary>
-/// Framework-neutral classification of a conditional-format icon-set glyph. Shared by the WPF
-/// desktop renderer and the Avalonia renderer so both draw the same shapes.
+/// Framework-neutral classification of a conditional-format icon-set glyph. Shared by the desktop
+/// renderer and the cross-platform renderer so both draw the same shapes.
 /// </summary>
 public enum ConditionalIconGlyphKind
 {
@@ -22,9 +22,9 @@ public enum ConditionalIconGlyphKind
 /// <summary>
 /// Portable, single-source mapping from an icon-set <em>style name</em> (and the resolved bucket
 /// index/count) to the glyph kind and fill color a renderer should draw. Pure decision logic with no
-/// WPF / Avalonia dependencies, so it can be unit-tested and reused across hosts. This is the source
+/// UI-framework dependencies, so it can be unit-tested and reused across hosts. This is the source
 /// of truth previously inlined in the desktop <c>ConditionalIconLayoutPlanner</c> and re-declared in
-/// the Avalonia <c>ConditionalFormatCellRenderPlanner</c>.
+/// the cross-platform <c>ConditionalFormatCellRenderPlanner</c>.
 /// </summary>
 public static class ConditionalIconGlyphResolver
 {
