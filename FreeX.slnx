@@ -46,6 +46,7 @@
     <Project Path="tools/FreeX.ExcelExamplesCharts/FreeX.ExcelExamplesCharts.csproj" />
     <Project Path="tools/FreeX.ExcelOpenSmoke/FreeX.ExcelOpenSmoke.csproj" />
     <Project Path="tools/FreeX.FidelityCompare/FreeX.FidelityCompare.csproj" />
+    <Project Path="tools/FreeX.FormatFidelity/FreeX.FormatFidelity.csproj" />
     <Project Path="tools/FreeX.ForegroundCapture/FreeX.ForegroundCapture.csproj" />
     <Project Path="tools/FreeW.RenderCompare/FreeW.RenderCompare.csproj" />
     <Project Path="tools/FreeX.SheetFidelity/FreeX.SheetFidelity.csproj" />
