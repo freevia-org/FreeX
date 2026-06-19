@@ -122,6 +122,52 @@
   <data name="PivotSort_AscendingByValues" xml:space="preserve"><value>Croissant par valeurs</value></data>
   <data name="PivotSort_DescendingByValues" xml:space="preserve"><value>Décroissant par valeurs</value></data>
   <data name="PivotSort_ValueField" xml:space="preserve"><value>Champ de valeurs :</value></data>
+  <!-- PivotTable Analyze / PivotChart contextual-tab commands -->
+  <data name="PivotAnalyze_SelectPivotPrompt" xml:space="preserve"><value>Sélectionnez d'abord une cellule dans un tableau croisé dynamique.</value></data>
+  <data name="PivotAnalyze_FieldSettingsNoValueField" xml:space="preserve"><value>Ajoutez un champ de valeurs au tableau croisé dynamique, puis ouvrez les paramètres de champ.</value></data>
+  <data name="PivotAnalyze_Cleared" xml:space="preserve"><value>Tableau croisé dynamique « {0} » effacé.</value></data>
+  <data name="PivotAnalyze_Selected" xml:space="preserve"><value>Tableau croisé dynamique « {0} » sélectionné.</value></data>
+  <data name="PivotAnalyze_ShowDetailsPrompt" xml:space="preserve"><value>Sélectionnez une cellule de valeur dans un tableau croisé dynamique pour afficher ses détails.</value></data>
+  <data name="PivotAnalyze_ShowDetailsDone" xml:space="preserve"><value>Détails affichés pour le tableau croisé dynamique « {0} ».</value></data>
+  <data name="PivotAnalyze_PlusMinusOn" xml:space="preserve"><value>Boutons de développement/réduction affichés.</value></data>
+  <data name="PivotAnalyze_PlusMinusOff" xml:space="preserve"><value>Boutons de développement/réduction masqués.</value></data>
+  <!-- Move PivotTable dialog -->
+  <data name="MovePivot_Title" xml:space="preserve"><value>Déplacer le tableau croisé dynamique</value></data>
+  <data name="MovePivot_Label" xml:space="preserve"><value>Destination (cellule supérieure gauche) :</value></data>
+  <data name="MovePivot_RangeName" xml:space="preserve"><value>Cellule de destination du tableau croisé dynamique</value></data>
+  <data name="MovePivot_InvalidDestination" xml:space="preserve"><value>Entrez une cellule de destination valide pour le tableau croisé dynamique.</value></data>
+  <data name="MovePivot_CurrentSheetOnly" xml:space="preserve"><value>Déplacez le tableau croisé dynamique vers une cellule de la feuille active.</value></data>
+  <data name="MovePivot_Moved" xml:space="preserve"><value>Tableau croisé dynamique déplacé vers {0}.</value></data>
+  <!-- Calculated Item dialog -->
+  <data name="PivotCalcItem_Title" xml:space="preserve"><value>Insérer un élément calculé</value></data>
+  <data name="PivotCalcItem_FieldLabel" xml:space="preserve"><value>Champ :</value></data>
+  <data name="PivotCalcItem_ExistingLabel" xml:space="preserve"><value>Élément calculé existant :</value></data>
+  <data name="PivotCalcItem_ExistingNone" xml:space="preserve"><value>(Nouvel élément calculé)</value></data>
+  <data name="PivotCalcItem_NameLabel" xml:space="preserve"><value>Nom :</value></data>
+  <data name="PivotCalcItem_FormulaLabel" xml:space="preserve"><value>Formule :</value></data>
+  <data name="PivotCalcItem_FieldsLabel" xml:space="preserve"><value>Champs :</value></data>
+  <data name="PivotCalcItem_InsertField" xml:space="preserve"><value>Insérer un champ</value></data>
+  <data name="PivotCalcItem_FieldsAutomation" xml:space="preserve"><value>Champs disponibles</value></data>
+  <data name="PivotCalcItem_Delete" xml:space="preserve"><value>Supprimer</value></data>
+  <data name="PivotCalcItem_NoField" xml:space="preserve"><value>Ajoutez un champ de ligne ou de colonne au tableau croisé dynamique, puis ajoutez un élément calculé.</value></data>
+  <data name="PivotCalcItem_Saved" xml:space="preserve"><value>Élément calculé « {0} » enregistré.</value></data>
+  <data name="PivotCalcItem_Deleted" xml:space="preserve"><value>Élément calculé « {0} » supprimé.</value></data>
+  <!-- PivotChart contextual commands -->
+  <data name="PivotChart_ChangeTypeInsertFirst" xml:space="preserve"><value>Insérez un graphique croisé dynamique avant de modifier son type.</value></data>
+  <data name="PivotChart_TypeChanged" xml:space="preserve"><value>Type de graphique croisé dynamique changé en {0}.</value></data>
+  <data name="PivotChart_OptionsInsertFirst" xml:space="preserve"><value>Insérez un graphique croisé dynamique avant de modifier ses options.</value></data>
+  <data name="PivotChart_OptionsApplied" xml:space="preserve"><value>Options du graphique croisé dynamique appliquées.</value></data>
+  <!-- PivotChart Options dialog -->
+  <data name="PivotChartOptions_Title" xml:space="preserve"><value>Options du graphique croisé dynamique</value></data>
+  <data name="PivotChartOptions_ShowFieldButtons" xml:space="preserve"><value>Afficher tous les boutons de champ</value></data>
+  <data name="PivotChartOptions_ShowReportFilterButtons" xml:space="preserve"><value>Boutons de champ de filtre de rapport</value></data>
+  <data name="PivotChartOptions_ShowAxisFieldButtons" xml:space="preserve"><value>Boutons de champ d'axe</value></data>
+  <data name="PivotChartOptions_ShowValueFieldButtons" xml:space="preserve"><value>Boutons de champ de valeur</value></data>
+  <data name="PivotChartOptions_ShowDataTable" xml:space="preserve"><value>Afficher la table de données</value></data>
+  <data name="PivotChartOptions_ShowDataTableLegendKeys" xml:space="preserve"><value>Clés de légende de la table de données</value></data>
+  <data name="PivotChartOptions_RoundedCorners" xml:space="preserve"><value>Coins arrondis</value></data>
+  <!-- Summarize with PivotTable (Table Design) -->
+  <data name="PivotSummarize_NoTable" xml:space="preserve"><value>Sélectionnez une cellule dans un tableau pour le synthétiser avec un tableau croisé dynamique.</value></data>
   <data name="PivotFilter_ItemsTitle" xml:space="preserve"><value>Filtrer les éléments</value></data>
   <data name="PivotFilter_ItemsHeading" xml:space="preserve"><value>Filtrer « {0} »</value></data>
   <data name="PivotFilter_LabelTitle" xml:space="preserve"><value>Filtre d'étiquette ({0})</value></data>
@@ -187,6 +233,29 @@
   <data name="ChartArea_BorderLabel" xml:space="preserve"><value>Bordure de la zone de traçage :</value></data>
   <data name="ChartArea_PlotAreaBorder" xml:space="preserve"><value>Bordure de la zone de traçage</value></data>
   <data name="ChartArea_BorderWidthLabel" xml:space="preserve"><value>Largeur de la bordure de la zone de traçage :</value></data>
+  <!-- Chart Format contextual tab: type-specific Current Selection format dialogs -->
+  <data name="ChartFmt_BarTitle" xml:space="preserve"><value>Mettre en forme l'histogramme/la barre</value></data>
+  <data name="ChartFmt_BarGapWidthLabel" xml:space="preserve"><value>Largeur de l'intervalle (0–500) :</value></data>
+  <data name="ChartFmt_BarOverlapLabel" xml:space="preserve"><value>Superposition des séries (-100–100) :</value></data>
+  <data name="ChartFmt_PieTitle" xml:space="preserve"><value>Mettre en forme le secteur/l'anneau</value></data>
+  <data name="ChartFmt_PieFirstSliceAngleLabel" xml:space="preserve"><value>Angle du premier secteur (0–359°) :</value></data>
+  <data name="ChartFmt_PieExplodedIndexLabel" xml:space="preserve"><value>Index du secteur éclaté (base 0) :</value></data>
+  <data name="ChartFmt_PieExplodedDistanceLabel" xml:space="preserve"><value>Distance d'éclatement du secteur (0–50%) :</value></data>
+  <data name="ChartFmt_PieHoleSizeLabel" xml:space="preserve"><value>Taille du trou de l'anneau (10–90%) :</value></data>
+  <data name="ChartFmt_BubbleTitle" xml:space="preserve"><value>Mettre en forme le graphique en bulles</value></data>
+  <data name="ChartFmt_BubbleScaleLabel" xml:space="preserve"><value>Échelle des bulles (1–300) :</value></data>
+  <data name="ChartFmt_BubbleShowNegative" xml:space="preserve"><value>Afficher les bulles de valeurs négatives</value></data>
+  <data name="ChartFmt_BubbleSizeRepresentsLabel" xml:space="preserve"><value>La taille des bulles représente :</value></data>
+  <data name="ChartFmt_StockTitle" xml:space="preserve"><value>Mettre en forme le graphique boursier</value></data>
+  <data name="ChartFmt_StockGapWidthLabel" xml:space="preserve"><value>Largeur de l'intervalle des barres haut/bas (0–500) :</value></data>
+  <data name="ChartFmt_StockBarsLabel" xml:space="preserve"><value>Barres haut/bas :</value></data>
+  <data name="ChartFmt_StockUpBarFill" xml:space="preserve"><value>Remplissage de la barre haut</value></data>
+  <data name="ChartFmt_StockUpBarBorder" xml:space="preserve"><value>Bordure de la barre haut</value></data>
+  <data name="ChartFmt_StockDownBarFill" xml:space="preserve"><value>Remplissage de la barre bas</value></data>
+  <data name="ChartFmt_StockDownBarBorder" xml:space="preserve"><value>Bordure de la barre bas</value></data>
+  <data name="ChartFmt_StockHighLowLabel" xml:space="preserve"><value>Ligne haut-bas :</value></data>
+  <data name="ChartFmt_StockHighLowLineColor" xml:space="preserve"><value>Couleur de la ligne haut-bas</value></data>
+  <data name="ChartFmt_StockLineThicknessLabel" xml:space="preserve"><value>Épaisseur de la ligne haut-bas (0,5–10) :</value></data>
   <data name="ConditionalFormat_NewRuleTitle" xml:space="preserve"><value>Nouvelle règle de mise en forme</value></data>
   <data name="ConditionalFormat_EditRuleTitle" xml:space="preserve"><value>Modifier la règle de mise en forme</value></data>
   <data name="ConditionalFormat_AppliesToFormat" xml:space="preserve"><value>S'applique à {0}</value></data>
@@ -630,4 +699,54 @@
   <data name="Comment_CommentFailed" xml:space="preserve"><value>Impossible de modifier le commentaire.</value></data>
   <data name="Comment_Resolved" xml:space="preserve"><value>Commentaire résolu sur {0}</value></data>
   <data name="Comment_Unresolved" xml:space="preserve"><value>Commentaire rouvert sur {0}</value></data>
+  <!-- Éléments de menu du ruban nouvellement câblés (RibbonWire_*) -->
+  <data name="RibbonWire_RulerShown" xml:space="preserve"><value>Affichage de la règle</value></data>
+  <data name="RibbonWire_RulerHidden" xml:space="preserve"><value>Masquage de la règle</value></data>
+  <data name="RibbonWire_SwitchWindowsTitle" xml:space="preserve"><value>Changer de fenêtre</value></data>
+  <data name="RibbonWire_SwitchWindowsNone" xml:space="preserve"><value>Aucune autre fenêtre disponible.</value></data>
+  <data name="RibbonWire_SwitchWindowsActivated" xml:space="preserve"><value>Fenêtre changée.</value></data>
+  <data name="RibbonWire_WindowPositionReset" xml:space="preserve"><value>Position de la fenêtre réinitialisée.</value></data>
+  <data name="RibbonWire_CalculateSheetDone" xml:space="preserve"><value>Classeur recalculé.</value></data>
+  <data name="RibbonWire_NoPrecedentArrows" xml:space="preserve"><value>Aucune flèche d'antécédent à supprimer</value></data>
+  <data name="RibbonWire_NoDependentArrows" xml:space="preserve"><value>Aucune flèche de dépendant à supprimer</value></data>
+  <data name="RibbonWire_RemovedPrecedentArrows" xml:space="preserve"><value>Flèches d'antécédents supprimées</value></data>
+  <data name="RibbonWire_RemovedDependentArrows" xml:space="preserve"><value>Flèches de dépendants supprimées</value></data>
+  <data name="RibbonWire_InsertedSheetRows" xml:space="preserve"><value>Lignes de feuille insérées.</value></data>
+  <data name="RibbonWire_InsertSheetRowsFailed" xml:space="preserve"><value>Impossible d'insérer les lignes de feuille.</value></data>
+  <data name="RibbonWire_InsertedSheetColumns" xml:space="preserve"><value>Colonnes de feuille insérées.</value></data>
+  <data name="RibbonWire_InsertSheetColumnsFailed" xml:space="preserve"><value>Impossible d'insérer les colonnes de feuille.</value></data>
+  <data name="RibbonWire_DeletedSheetRows" xml:space="preserve"><value>Lignes de feuille supprimées.</value></data>
+  <data name="RibbonWire_DeleteSheetRowsFailed" xml:space="preserve"><value>Impossible de supprimer les lignes de feuille.</value></data>
+  <data name="RibbonWire_DeletedSheetColumns" xml:space="preserve"><value>Colonnes de feuille supprimées.</value></data>
+  <data name="RibbonWire_DeleteSheetColumnsFailed" xml:space="preserve"><value>Impossible de supprimer les colonnes de feuille.</value></data>
+  <data name="RibbonWire_CellLocked" xml:space="preserve"><value>Sélection verrouillée.</value></data>
+  <data name="RibbonWire_CellUnlocked" xml:space="preserve"><value>Sélection déverrouillée.</value></data>
+  <data name="RibbonWire_ShownDetail" xml:space="preserve"><value>Détail du plan affiché.</value></data>
+  <data name="RibbonWire_ShowDetailFailed" xml:space="preserve"><value>Impossible d'afficher le détail.</value></data>
+  <data name="RibbonWire_HidDetail" xml:space="preserve"><value>Détail du plan masqué.</value></data>
+  <data name="RibbonWire_HideDetailFailed" xml:space="preserve"><value>Impossible de masquer le détail.</value></data>
+  <data name="RibbonWire_MarginsNormal" xml:space="preserve"><value>Marges Normales appliquées.</value></data>
+  <data name="RibbonWire_MarginsWide" xml:space="preserve"><value>Marges Larges appliquées.</value></data>
+  <data name="RibbonWire_MarginsNarrow" xml:space="preserve"><value>Marges Étroites appliquées.</value></data>
+  <data name="RibbonWire_OrientationPortrait" xml:space="preserve"><value>Orientation définie sur Portrait.</value></data>
+  <data name="RibbonWire_OrientationLandscape" xml:space="preserve"><value>Orientation définie sur Paysage.</value></data>
+  <data name="RibbonWire_PaperLetter" xml:space="preserve"><value>Taille du papier définie sur Letter.</value></data>
+  <data name="RibbonWire_PaperLegal" xml:space="preserve"><value>Taille du papier définie sur Legal.</value></data>
+  <data name="RibbonWire_PaperA4" xml:space="preserve"><value>Taille du papier définie sur A4.</value></data>
+  <data name="RibbonWire_PrintAreaSet" xml:space="preserve"><value>Zone d'impression définie sur la sélection.</value></data>
+  <data name="RibbonWire_PrintAreaSetFailed" xml:space="preserve"><value>Impossible de définir la zone d'impression.</value></data>
+  <data name="RibbonWire_PrintAreaCleared" xml:space="preserve"><value>Zone d'impression effacée.</value></data>
+  <data name="RibbonWire_PrintAreaClearFailed" xml:space="preserve"><value>Impossible d'effacer la zone d'impression.</value></data>
+  <data name="RibbonWire_BackgroundUnavailable" xml:space="preserve"><value>Choisir l'arrière-plan n'est pas disponible sur cette plateforme.</value></data>
+  <data name="RibbonWire_BackgroundPickerTitle" xml:space="preserve"><value>Choisir l'arrière-plan de la feuille</value></data>
+  <data name="RibbonWire_BackgroundUnsupported" xml:space="preserve"><value>Format d'image non pris en charge.</value></data>
+  <data name="RibbonWire_BackgroundSet" xml:space="preserve"><value>Arrière-plan de la feuille défini.</value></data>
+  <data name="RibbonWire_BackgroundDeleted" xml:space="preserve"><value>Arrière-plan de la feuille supprimé.</value></data>
+  <data name="RibbonWire_TabColorTitle" xml:space="preserve"><value>Couleur de l'onglet</value></data>
+  <data name="RibbonWire_TabColorNone" xml:space="preserve"><value>Aucune couleur</value></data>
+  <data name="RibbonWire_WatchWindowTitle" xml:space="preserve"><value>Fenêtre Espion</value></data>
+  <data name="RibbonWire_WatchWindowHint" xml:space="preserve"><value>Ajoutez la sélection pour suivre sa valeur et sa formule ; les recalculs actualisent la liste.</value></data>
+  <data name="RibbonWire_WatchWindowAdd" xml:space="preserve"><value>Ajouter un espion</value></data>
+  <data name="RibbonWire_WatchWindowDelete" xml:space="preserve"><value>Supprimer l'espion</value></data>
+  <data name="RibbonWire_WatchWindowRefresh" xml:space="preserve"><value>Actualiser</value></data>
 </root>

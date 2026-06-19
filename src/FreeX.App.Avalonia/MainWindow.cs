@@ -705,7 +705,8 @@ public sealed partial class MainWindow : Window
                     ["data.circleInvalid"] = CircleInvalidData,
                     ["data.clearCircles"] = ClearValidationCircles,
                     ["data.getData"] = GetDataNotSupported,
-                    ["data.refresh"] = RefreshAllNotSupported,
+                    // Data ▸ Connections ▸ Refresh All: WPF aliases this to Calculate Now (recalc workbook).
+                    ["data.refresh"] = CalculateNow,
                     // Page Layout sheet options (view + print) and Review ▸ Show Notes.
                     ["pageLayout.gridlines"] = () => _ = ShowGridlinesSheetOptionsAsync(),
                     ["pageLayout.headings"] = () => _ = ShowHeadingsSheetOptionsAsync(),
@@ -917,6 +918,186 @@ public sealed partial class MainWindow : Window
                     // Formulas ▸ Calculation group.
                     ["formulas.calcOptions"] = ToggleCalculationMode,
                     ["formulas.calcNow"] = CalculateNow,
+
+                    // ─────────────────────────────────────────────────────────────────────────────
+                    // Ribbon dropdown / split-button menu items that were inert (canonical ids never
+                    // bound, so they fell through to the NoOp seed). Each reuses an existing handler.
+                    // ─────────────────────────────────────────────────────────────────────────────
+
+                    // Home ▸ Clipboard ▸ Paste menu.
+                    ["Paste Formulas"] = () => _ = PasteSpecialClipboardTextAsync(PasteCellsMode.Formulas, default, "Formulas"),
+                    ["Transpose Paste"] = () => _ = PasteSpecialClipboardTextAsync(PasteCellsMode.All, new PasteSpecialOptions(Transpose: true), "Transpose"),
+                    ["Picture"] = () => _ = PastePictureFromClipboardAsync("Picture", linkedPicture: false),
+                    ["Linked Picture"] = () => _ = PastePictureFromClipboardAsync("Linked Picture", linkedPicture: true),
+
+                    // Home ▸ Font ▸ Borders dropdown: compound / thick / double presets.
+                    ["Thick Bottom Border"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.ThickBottom),
+                    ["Bottom Double Border"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.DoubleBottom),
+                    ["Thick Outside Borders"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.ThickOutside),
+                    ["Top and Bottom Border"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.TopAndBottom),
+                    ["Top and Thick Bottom Border"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.TopAndThickBottom),
+                    ["Top and Double Bottom Border"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.TopAndDoubleBottom),
+                    // Draw-Border-Grid / Erase Border are selection-apply equivalents of All / No Border.
+                    ["Draw Border Grid"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.All),
+                    ["Erase Border"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.NoBorder),
+
+                    // Home ▸ Number ▸ Accounting dropdown. Euro/Pound/Yen share the single canonical id
+                    // "Accounting Number Format" in the shared def (already wired to home.accounting / USD),
+                    // so they cannot be distinctly bound from here without a ribbon-def change.
+                    ["More Accounting Formats"] = () => _ = ShowFormatCellsDialogAsync(),
+
+                    // Home ▸ Styles ▸ Conditional Formatting ▸ Highlight Cells Rules detail items.
+                    ["Less Than"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.HighlightLessThan),
+                    ["Between"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.HighlightBetween),
+                    ["Equal To"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.HighlightEqualTo),
+                    ["Text that Contains"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.HighlightTextContains),
+                    ["A Date Occurring"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.HighlightDateOccurring),
+                    ["Duplicate Values"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.HighlightDuplicateValues),
+
+                    // Home ▸ Styles ▸ Conditional Formatting ▸ Top/Bottom Rules detail items.
+                    ["Top 10%"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.Top10Percent),
+                    ["Bottom 10 Items"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.Bottom10Items),
+                    ["Bottom 10%"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.Bottom10Percent),
+                    ["Above Average"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.AboveAverage),
+                    ["Below Average"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.BelowAverage),
+
+                    // Home ▸ Styles ▸ Conditional Formatting ▸ Icon Sets submenu.
+                    ["3 Arrows"] = () => ApplyConditionalFormatIconSet("3Arrows"),
+                    ["3 Arrows (Gray)"] = () => ApplyConditionalFormatIconSet("3ArrowsGray"),
+                    ["4 Arrows"] = () => ApplyConditionalFormatIconSet("4Arrows"),
+                    ["4 Arrows (Gray)"] = () => ApplyConditionalFormatIconSet("4ArrowsGray"),
+                    ["5 Arrows"] = () => ApplyConditionalFormatIconSet("5Arrows"),
+                    ["5 Arrows (Gray)"] = () => ApplyConditionalFormatIconSet("5ArrowsGray"),
+                    ["3 Traffic Lights"] = () => ApplyConditionalFormatIconSet("3TrafficLights1"),
+                    ["3 Traffic Lights (Rimmed)"] = () => ApplyConditionalFormatIconSet("3TrafficLights2"),
+                    ["3 Signs"] = () => ApplyConditionalFormatIconSet("3Signs"),
+                    ["3 Symbols"] = () => ApplyConditionalFormatIconSet("3Symbols"),
+                    ["3 Symbols (Uncircled)"] = () => ApplyConditionalFormatIconSet("3Symbols2"),
+                    ["3 Flags"] = () => ApplyConditionalFormatIconSet("3Flags"),
+                    ["4 Traffic Lights"] = () => ApplyConditionalFormatIconSet("4TrafficLights"),
+                    ["4 Red To Black"] = () => ApplyConditionalFormatIconSet("4RedToBlack"),
+                    ["4 Ratings"] = () => ApplyConditionalFormatIconSet("4Rating"),
+                    ["5 Ratings"] = () => ApplyConditionalFormatIconSet("5Rating"),
+                    ["5 Quarters"] = () => ApplyConditionalFormatIconSet("5Quarters"),
+                    ["5 Boxes"] = () => ApplyConditionalFormatIconSet("5Boxes"),
+                    ["More Rules"] = () => _ = ShowConditionalFormatNewRuleDialogAsync(),
+
+                    // Home ▸ Styles ▸ Conditional Formatting ▸ New Formula Rule / Manage Rules.
+                    ["New Formula Rule"] = () => _ = ShowConditionalFormatNewRuleDialogAsync(CfRuleType.Formula),
+                    ["Manage Rules"] = () => _ = ShowManageConditionalFormatsDialogAsync(),
+
+                    // Home ▸ Cells ▸ Insert / Delete dropdowns.
+                    ["Insert Sheet Rows"] = InsertSheetRows,
+                    ["Insert Sheet Columns"] = InsertSheetColumns,
+                    ["Delete Sheet Rows"] = DeleteSheetRows,
+                    ["Delete Sheet Columns"] = DeleteSheetColumns,
+                    ["Delete Sheet"] = DeleteActiveSheet,
+
+                    // Home ▸ Cells ▸ Format dropdown.
+                    ["Rename Sheet"] = () => _ = RenameActiveSheetAsync(),
+                    ["Hide Sheet"] = HideActiveSheet,
+                    ["Tab Color"] = () => _ = ShowSheetTabColorPickerAsync(),
+                    ["Lock Cell"] = ToggleSelectedRangeLock,
+
+                    // Home ▸ Editing ▸ Sort & Filter dropdown.
+                    ["Sort A to Z"] = () => SortSelectedRange(ascending: true),
+                    ["Sort Z to A"] = () => SortSelectedRange(ascending: false),
+                    ["Custom Sort"] = () => _ = ShowSortDialogAsync(),
+                    ["Filter"] = ToggleAutoFilter,
+
+                    // Page Layout ▸ Page Setup ▸ Background.
+                    ["Choose Background"] = ChooseSheetBackground,
+                    ["Delete Background"] = DeleteSheetBackground,
+
+                    // Page Layout ▸ Page Setup ▸ Margins presets.
+                    ["Normal"] = () => ApplyPageMargins(WorksheetPageMargins.Normal, "RibbonWire_MarginsNormal"),
+                    ["Wide"] = () => ApplyPageMargins(WorksheetPageMargins.Wide, "RibbonWire_MarginsWide"),
+                    ["Narrow"] = () => ApplyPageMargins(WorksheetPageMargins.Narrow, "RibbonWire_MarginsNarrow"),
+                    ["Custom Margins"] = () => _ = ShowPageSetupDialogAsync(),
+
+                    // Page Layout ▸ Page Setup ▸ Orientation presets.
+                    ["Portrait"] = () => ApplyPageOrientation(WorksheetPageOrientation.Portrait, "RibbonWire_OrientationPortrait"),
+                    ["Landscape"] = () => ApplyPageOrientation(WorksheetPageOrientation.Landscape, "RibbonWire_OrientationLandscape"),
+
+                    // Page Layout ▸ Page Setup ▸ Paper Size presets. The Core enum models only
+                    // Letter / Legal / A4; other sizes open Page Setup (same partial behaviour as WPF).
+                    ["Letter"] = () => ApplyPaperSize(WorksheetPaperSize.Letter, "RibbonWire_PaperLetter"),
+                    ["Legal"] = () => ApplyPaperSize(WorksheetPaperSize.Legal, "RibbonWire_PaperLegal"),
+                    ["A4"] = () => ApplyPaperSize(WorksheetPaperSize.A4, "RibbonWire_PaperA4"),
+                    ["A3"] = () => _ = ShowPageSetupDialogAsync(),
+                    ["A5"] = () => _ = ShowPageSetupDialogAsync(),
+                    ["Executive"] = () => _ = ShowPageSetupDialogAsync(),
+                    ["Statement"] = () => _ = ShowPageSetupDialogAsync(),
+                    ["Tabloid"] = () => _ = ShowPageSetupDialogAsync(),
+                    ["B4"] = () => _ = ShowPageSetupDialogAsync(),
+                    ["B5"] = () => _ = ShowPageSetupDialogAsync(),
+
+                    // Page Layout ▸ Page Setup ▸ Print Area.
+                    ["Set Print Area"] = SetPrintAreaFromSelection,
+                    ["Clear Print Area"] = ClearPrintArea,
+
+                    // Formulas ▸ Formula Auditing ▸ Watch Window / Remove Arrows submenu.
+                    ["Watch Window"] = () => _ = ShowWatchWindowDialogAsync(),
+                    ["Remove Precedent Arrows"] = () => RemoveFormulaTraceArrowsOfKind(FormulaTraceArrowKind.Precedent),
+                    ["Remove Dependent Arrows"] = () => RemoveFormulaTraceArrowsOfKind(FormulaTraceArrowKind.Dependent),
+
+                    // Formulas ▸ Error Checking ▸ Error Checking Options.
+                    ["Error Checking Options"] = () => _ = ShowOptionsDialogAsync(),
+
+                    // Formulas ▸ Calculation ▸ Calculate Sheet + Calculation Options menu items.
+                    ["Calculate Sheet"] = CalculateSheet,
+                    ["Automatic"] = SetCalculationModeAutomatic,
+                    ["Manual"] = SetCalculationModeManual,
+                    ["Automatic Except Data Tables"] = SetCalculationModeAutomatic,
+
+                    // Data ▸ Connections ▸ Refresh All (parity: recalculates the workbook).
+                    ["data.refresh"] = CalculateNow,
+
+                    // Data ▸ Sort & Filter ▸ Sort button (canonical id "Sort", no dotted prefix).
+                    ["Sort"] = () => _ = ShowSortDialogAsync(),
+
+                    // Data ▸ Data Tools ▸ What-If Analysis dropdown.
+                    ["Goal Seek"] = () => _ = ShowGoalSeekDialogAsync(),
+                    ["Scenario Manager"] = () => _ = ShowScenarioManagerDialogAsync(),
+                    ["Data Table"] = () => _ = ShowDataTableDialogAsync(),
+
+                    // Data ▸ Outline ▸ Show / Hide Detail, Clear Outline, Group / Ungroup submenu items.
+                    ["Show Detail"] = ShowOutlineDetail,
+                    ["Hide Detail"] = HideOutlineDetail,
+                    ["Clear Outline"] = ClearWorksheetOutline,
+                    ["Group#GroupRowsMenuItem_Click"] = GroupSelectedRows,
+                    ["Ungroup#UngroupRowsMenuItem_Click"] = ClearWorksheetOutline,
+
+                    // Review ▸ Proofing / Comments / Notes / Share.
+                    ["Workbook Statistics"] = () => _ = ShowWorkbookStatisticsDialogAsync(),
+                    ["Next Comment"] = () => NavigateReviewThreadedComment(previous: false),
+                    ["Previous Comment"] = () => NavigateReviewThreadedComment(previous: true),
+                    ["Show Comments"] = () => _ = ShowNotesListAsync(),
+                    ["Edit Note"] = () => _ = ShowEditNoteDialogAsync(),
+                    ["Delete Note"] = DeleteActiveCellComment,
+                    ["Share"] = () => _ = ShareWorkbookAsync(),
+
+                    // View ▸ Show ▸ Ruler.
+                    ["Ruler"] = ToggleShowRulers,
+
+                    // View ▸ Window ▸ Switch Windows / Reset Window Position.
+                    ["Switch Windows"] = ShowSwitchWindowsDialog,
+                    ["Reset Window Position"] = ResetWindowPosition,
+
+                    // View ▸ Window ▸ Freeze Panes split-button menu items. The "Freeze Panes" menu item
+                    // keeps its handler suffix in the canonical id.
+                    ["Freeze Panes#FreezeAtSelectionMenuItem_Click"] = FreezePanesAtActiveCell,
+                    ["Freeze Top Row"] = FreezeTopRow,
+                    ["Freeze First Column"] = FreezeFirstColumn,
+                    ["Unfreeze Panes"] = UnfreezePanes,
+
+                    // View ▸ Zoom split-button preset menu items. The "100%" menu item keeps its handler
+                    // suffix in the canonical id.
+                    ["200%"] = () => ApplyZoomPercentPreset(200),
+                    ["100%#ZoomPresetMenuItem_Click"] = () => ApplyZoomPercentPreset(100),
+                    ["75%"] = () => ApplyZoomPercentPreset(75),
+                    ["50%"] = () => ApplyZoomPercentPreset(50),
+                    ["25%"] = () => ApplyZoomPercentPreset(25),
                 },
             };
 
@@ -13478,6 +13659,16 @@ public sealed partial class MainWindow : Window
     private void ApplySelectedRangeCurrencyFormat()
     {
         ApplySelectedRangeNumberFormat(CurrencyNumberFormat, "Applied currency format to", "Currency format failed.");
+    }
+
+    /// <summary>
+    /// Applies an accounting number format for the given currency symbol (e.g. "€"/"£"/"¥") to the
+    /// selection, reusing the shared <see cref="FormatCellsNumberFormatPlanner.BuildAccountingFormatFor"/>.
+    /// </summary>
+    private void ApplySelectedRangeAccountingFormat(string symbol)
+    {
+        var format = FormatCellsNumberFormatPlanner.BuildAccountingFormatFor(2, symbol);
+        ApplySelectedRangeNumberFormat(format, "Applied accounting format to", "Accounting format failed.");
     }
 
     private void ApplySelectedRangePercentFormat()

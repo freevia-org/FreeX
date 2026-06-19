@@ -255,6 +255,15 @@ public static class FormatCellsNumberFormatPlanner
         return ApplyNegativeFormat(format, negativeIndex);
     }
 
+    /// <summary>
+    /// Builds an accounting number-format string for the given currency <paramref name="symbol"/>
+    /// (e.g. <c>$</c>, <c>€</c>, <c>£</c>, <c>¥</c>) and decimal-place count. Public so ribbon
+    /// surfaces can apply the discrete Euro/Pound/Yen accounting choices without re-implementing the
+    /// Excel-compatible section layout.
+    /// </summary>
+    public static string BuildAccountingFormatFor(int decimals, string symbol) =>
+        BuildAccountingFormat(decimals, NormalizeSymbol(symbol));
+
     private static string BuildAccountingFormat(int decimals, string symbol)
     {
         var decimalPart = DecimalPart(decimals);

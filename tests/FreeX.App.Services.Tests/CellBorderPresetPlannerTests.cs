@@ -116,6 +116,12 @@ public sealed class CellBorderPresetPlannerTests
     [InlineData(CellBorderPreset.Right, "Right Border")]
     [InlineData(CellBorderPreset.Bottom, "Bottom Border")]
     [InlineData(CellBorderPreset.Left, "Left Border")]
+    [InlineData(CellBorderPreset.ThickBottom, "Thick Bottom Border")]
+    [InlineData(CellBorderPreset.DoubleBottom, "Bottom Double Border")]
+    [InlineData(CellBorderPreset.ThickOutside, "Thick Outside Borders")]
+    [InlineData(CellBorderPreset.TopAndBottom, "Top and Bottom Border")]
+    [InlineData(CellBorderPreset.TopAndThickBottom, "Top and Thick Bottom Border")]
+    [InlineData(CellBorderPreset.TopAndDoubleBottom, "Top and Double Bottom Border")]
     public void GetDisplayName_ReturnsMenuText(CellBorderPreset preset, string expected)
     {
         CellBorderPresetPlanner.GetDisplayName(preset).Should().Be(expected);
@@ -130,9 +136,44 @@ public sealed class CellBorderPresetPlannerTests
     [InlineData(CellBorderPreset.Right, false)]
     [InlineData(CellBorderPreset.Bottom, false)]
     [InlineData(CellBorderPreset.Left, false)]
+    [InlineData(CellBorderPreset.ThickBottom, false)]
+    [InlineData(CellBorderPreset.DoubleBottom, false)]
+    [InlineData(CellBorderPreset.ThickOutside, true)]
+    [InlineData(CellBorderPreset.TopAndBottom, true)]
+    [InlineData(CellBorderPreset.TopAndThickBottom, true)]
+    [InlineData(CellBorderPreset.TopAndDoubleBottom, true)]
     public void RequiresPerCellPlanning_IdentifiesRangeRelativePresets(CellBorderPreset preset, bool expected)
     {
         CellBorderPresetPlanner.RequiresPerCellPlanning(preset).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(CellBorderPreset.ThickBottom, BorderStyle.Thick)]
+    [InlineData(CellBorderPreset.DoubleBottom, BorderStyle.Double)]
+    public void Plan_CompoundBottomPresetsSetOnlyBottomEdgeWithExpectedStyle(CellBorderPreset preset, BorderStyle expectedStyle)
+    {
+        var range = Range(2, 3, 4, 5);
+
+        var diff = CellBorderPresetPlanner.Plan(preset, range, range.Start, color: Accent);
+
+        diff.BorderBottom.Should().Be(new CellBorder(expectedStyle, Accent));
+        diff.BorderTop.Should().BeNull();
+        diff.BorderLeft.Should().BeNull();
+        diff.BorderRight.Should().BeNull();
+    }
+
+    [Fact]
+    public void Plan_TopAndThickBottomCombinesThinTopWithThickBottomOnEdgeCells()
+    {
+        var range = Range(2, 3, 4, 5);
+
+        var topRow = CellBorderPresetPlanner.Plan(
+            CellBorderPreset.TopAndThickBottom, range, new CellAddress(range.Start.Sheet, 2, 4), color: Accent);
+        var bottomRow = CellBorderPresetPlanner.Plan(
+            CellBorderPreset.TopAndThickBottom, range, new CellAddress(range.Start.Sheet, 4, 4), color: Accent);
+
+        topRow.BorderTop.Should().Be(new CellBorder(BorderStyle.Thin, Accent));
+        bottomRow.BorderBottom.Should().Be(new CellBorder(BorderStyle.Thick, Accent));
     }
 
     private static GridRange Range(uint startRow, uint startCol, uint endRow, uint endCol)
