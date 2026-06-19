@@ -4390,19 +4390,31 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
-    /// F9: updates (recomputes) every field's cached result. PAGE keeps its last value (true pagination is
-    /// the paginator's job); DATE/TIME/AUTHOR/FILENAME/NUMPAGES re-resolve to their current values. Also
-    /// re-resolves the simple <see cref="RunFieldKind"/> fields so both field forms stay current.
+    /// F9: updates (recomputes) every field's cached result. DATE/TIME/AUTHOR/FILENAME/NUMPAGES re-resolve
+    /// to their current values; the reference/numbering fields FreeW models — <c>REF</c>/<c>PAGEREF</c>
+    /// (cross-references to a bookmark: text vs page number) and <c>SEQ</c> (sequence numbering, the basis
+    /// of captions) — re-evaluate against the current document via <see cref="ComplexFieldEngine"/>; and any
+    /// inserted Table of Contents is regenerated (Word's "Update entire table"). Also re-resolves the simple
+    /// <see cref="RunFieldKind"/> fields so both field forms stay current.
     /// </summary>
     public void UpdateFields()
     {
         CommitToModel();
-        foreach (var paragraph in _model.Blocks.OfType<ModelParagraph>())
-            foreach (var r in paragraph.Runs)
+        var blocks = _model.Blocks;
+        for (var b = 0; b < blocks.Count; b++)
+        {
+            if (blocks[b] is not ModelParagraph paragraph)
+                continue;
+            for (var i = 0; i < paragraph.Runs.Count; i++)
             {
+                var r = paragraph.Runs[i];
                 if (r.ComplexField is { } cf)
                 {
-                    var resolved = ResolveFieldText(ComplexFieldKindFor(cf.Keyword), r.Text, _model, CurrentFileName);
+                    // REF/PAGEREF/SEQ re-evaluate against current bookmarks/sequences; the rest reuse the
+                    // live DATE/AUTHOR/… resolver (PAGE/NUMPAGES keep their cached value here).
+                    var resolved = ComplexFieldEngine.CanRecompute(cf)
+                        ? ComplexFieldEngine.Recompute(_model, b, i)
+                        : ResolveFieldText(ComplexFieldKindFor(cf.Keyword), r.Text, _model, CurrentFileName);
                     if (resolved.Length > 0)
                         r.Text = resolved;
                 }
@@ -4413,6 +4425,17 @@ public sealed class DocumentView : RichTextBox
                         r.Text = resolved;
                 }
             }
+        }
+
+        // "Update entire table": regenerate any inserted TOC from the current heading outline. Only when a
+        // TOC region is present, so F9 on a TOC-less document is unaffected. RefreshTableOfContents commits
+        // and re-renders itself, so return afterwards rather than double-rendering.
+        if (_model.Blocks.Any(TableOfContents.IsTocParagraph))
+        {
+            RefreshTableOfContents();
+            return;
+        }
+
         Render();
     }
 
