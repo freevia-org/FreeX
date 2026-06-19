@@ -1,6 +1,5 @@
+using Free.Shared.AppServices.Updates;
 using Microsoft.Extensions.Logging;
-using Velopack;
-using Velopack.Sources;
 
 namespace FreeX.App.Services.Updates;
 
@@ -35,44 +34,23 @@ public sealed class VelopackUpdateService : IUpdateService
     }
 
     /// <summary>
-    /// Production factory: builds a service backed by a real Velopack <see cref="UpdateManager"/>
-    /// pointed at the GitHub repo. Returns a service whose probe yields null/Unavailable if the
-    /// app is not Velopack-installed.
+    /// Production factory: builds a service backed by the shared, app-neutral
+    /// <see cref="VelopackUpdateOrchestrator"/> pointed at the GitHub repo. Returns a service whose
+    /// probe yields null/Unavailable if the app is not Velopack-installed. The orchestration
+    /// (UpdateManager creation, check/download/apply) lives in the shared tier so other apps reuse
+    /// it; FreeX supplies only the feed/channel config and the releases-page fallback URL.
     /// </summary>
     public static VelopackUpdateService CreateForGitHub(string repoUrl, bool prerelease, string releasesPageUrl, ILogger? logger = null)
     {
-        UpdateManager? manager;
-        try
-        {
-            manager = new UpdateManager(new GithubSource(repoUrl, accessToken: null, prerelease: prerelease));
-        }
-        catch (Exception ex)
-        {
-            logger?.LogDebug(ex, "Velopack UpdateManager unavailable; self-update disabled.");
-            manager = null;
-        }
+        var orchestrator = VelopackUpdateOrchestrator.ForGitHub(repoUrl, prerelease, logger);
 
         async Task<DownloadedUpdate?> Probe(CancellationToken ct)
         {
-            if (manager is null || !manager.IsInstalled)
-                return null;
-            var info = await manager.CheckForUpdatesAsync().ConfigureAwait(false);
-            if (info is null)
-                return null;
-            await manager.DownloadUpdatesAsync(info, progress: null, ct).ConfigureAwait(false);
-            return new DownloadedUpdate(info.TargetFullRelease.Version.ToString());
+            var staged = await orchestrator.CheckAndDownloadAsync(ct).ConfigureAwait(false);
+            return staged is null ? null : new DownloadedUpdate(staged.Version);
         }
 
-        void Apply()
-        {
-            if (manager is null || !manager.IsInstalled)
-                return;
-            var info = manager.CheckForUpdates();
-            if (info is not null)
-                manager.ApplyUpdatesAndRestart(info.TargetFullRelease, restartArgs: null);
-        }
-
-        return new VelopackUpdateService(releasesPageUrl, Probe, Apply, logger);
+        return new VelopackUpdateService(releasesPageUrl, Probe, orchestrator.ApplyAndRestart, logger);
     }
 
     public async Task<UpdateCheckResult> CheckAndDownloadAsync(CancellationToken cancellationToken = default)
