@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Wpf;
+using Free.Shared.Shell.Wpf;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Host.Backstage;
@@ -24,10 +25,9 @@ internal sealed class BackstageView : UserControl
     private static readonly Color AccentHoverColor = Color.FromRgb(0xC9, 0x5A, 0x3D);
     private static readonly Color SeparatorColor = Color.FromRgb(0xCE, 0x6A, 0x4F);
 
-    private static readonly Brush HeadingBrush = Freeze(Color.FromRgb(0x33, 0x33, 0x33));
-    private static readonly Brush MutedBrush = Freeze(Color.FromRgb(0x70, 0x70, 0x70));
-    private static readonly Brush LinkBrush = Freeze(Color.FromRgb(0xB7, 0x47, 0x2A));
-    private static readonly Brush TileBorderBrush = Freeze(Color.FromRgb(0xD0, 0xD7, 0xE5));
+    // The code-built backstage-pane visual helpers (Heading/SubHeading/Field/TemplateTile/Scroll/Or) live in
+    // the shared Free.Shared.Shell.Wpf kit; FreeP supplies its link accent (brick) and the landscape slide tile.
+    private static readonly BackstageVisualKit Kit = new(Color.FromRgb(0xB7, 0x47, 0x2A), tileWidth: 190, tileHeight: 150);
 
     private readonly Func<Presentation> _getModel;
     private readonly FileCommands _file;
@@ -86,29 +86,29 @@ internal sealed class BackstageView : UserControl
         var properties = model.Properties;
 
         var panel = new StackPanel { MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left };
-        panel.Children.Add(Heading("Info"));
+        panel.Children.Add(Kit.HeadingText("Info"));
 
         var path = _file.CurrentPath;
-        panel.Children.Add(Field("Presentation", _file.DisplayName + (_file.IsDirty ? "  (unsaved changes)" : "")));
-        panel.Children.Add(Field("Location", path ?? "Not saved yet"));
+        panel.Children.Add(Kit.Field("Presentation", _file.DisplayName + (_file.IsDirty ? "  (unsaved changes)" : "")));
+        panel.Children.Add(Kit.Field("Location", path ?? "Not saved yet"));
 
-        panel.Children.Add(SubHeading("Properties"));
-        panel.Children.Add(Field("Title", Or(properties.Title)));
-        panel.Children.Add(Field("Author", Or(properties.Author)));
-        panel.Children.Add(Field("Subject", Or(properties.Subject)));
-        panel.Children.Add(Field("Keywords", Or(properties.Keywords)));
+        panel.Children.Add(Kit.SubHeading("Properties"));
+        panel.Children.Add(Kit.Field("Title", BackstageVisualKit.Or(properties.Title)));
+        panel.Children.Add(Kit.Field("Author", BackstageVisualKit.Or(properties.Author)));
+        panel.Children.Add(Kit.Field("Subject", BackstageVisualKit.Or(properties.Subject)));
+        panel.Children.Add(Kit.Field("Keywords", BackstageVisualKit.Or(properties.Keywords)));
 
-        panel.Children.Add(SubHeading("Statistics"));
-        panel.Children.Add(Field("Slides", model.Slides.Count.ToString()));
+        panel.Children.Add(Kit.SubHeading("Statistics"));
+        panel.Children.Add(Kit.Field("Slides", model.Slides.Count.ToString()));
 
-        return Scroll(panel);
+        return Kit.Scroll(panel);
     }
 
     // ── Recent pane ────────────────────────────────────────────────────────────
     private UIElement BuildRecentPane()
     {
         var panel = new StackPanel { MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left };
-        panel.Children.Add(Heading("Recent"));
+        panel.Children.Add(Kit.HeadingText("Recent"));
 
         var entries = _file.RecentEntries;
         if (entries.Count == 0)
@@ -116,7 +116,7 @@ internal sealed class BackstageView : UserControl
             panel.Children.Add(new TextBlock
             {
                 Text = "No recent presentations.",
-                Foreground = MutedBrush,
+                Foreground = Kit.Muted,
                 Margin = new Thickness(0, 4, 0, 0)
             });
             return panel;
@@ -126,11 +126,11 @@ internal sealed class BackstageView : UserControl
         {
             var path = entry.Path;
             var item = new StackPanel { Margin = new Thickness(0, 0, 0, 12), Cursor = System.Windows.Input.Cursors.Hand };
-            item.Children.Add(new TextBlock { Text = Path.GetFileName(path), Foreground = LinkBrush, FontSize = 14 });
+            item.Children.Add(new TextBlock { Text = Path.GetFileName(path), Foreground = Kit.Link, FontSize = 14 });
             item.Children.Add(new TextBlock
             {
                 Text = path,
-                Foreground = MutedBrush,
+                Foreground = Kit.Muted,
                 FontSize = 11,
                 TextTrimming = TextTrimming.CharacterEllipsis
             });
@@ -138,23 +138,23 @@ internal sealed class BackstageView : UserControl
             panel.Children.Add(item);
         }
 
-        return Scroll(panel);
+        return Kit.Scroll(panel);
     }
 
     // ── New pane ───────────────────────────────────────────────────────────────
     private UIElement BuildNewPane()
     {
         var panel = new StackPanel { HorizontalAlignment = HorizontalAlignment.Left };
-        panel.Children.Add(Heading("New"));
+        panel.Children.Add(Kit.HeadingText("New"));
 
         var gallery = new WrapPanel { Orientation = Orientation.Horizontal };
-        gallery.Children.Add(TemplateTile("Blank presentation", () => { Hide(); _actions.New(); }));
+        gallery.Children.Add(Kit.TemplateTile("Blank presentation", () => { Hide(); _actions.New(); }));
         panel.Children.Add(gallery);
 
         panel.Children.Add(new TextBlock
         {
             Text = "More templates are not available in this build.",
-            Foreground = MutedBrush,
+            Foreground = Kit.Muted,
             Margin = new Thickness(0, 18, 0, 0)
         });
         return panel;
@@ -166,112 +166,23 @@ internal sealed class BackstageView : UserControl
         var options = _actions.CurrentOptions();
 
         var panel = new StackPanel { MaxWidth = 560, HorizontalAlignment = HorizontalAlignment.Left };
-        panel.Children.Add(Heading("Options"));
+        panel.Children.Add(Kit.HeadingText("Options"));
         panel.Children.Add(new TextBlock
         {
             Text = "FreeP application settings. These persist between sessions.",
-            Foreground = MutedBrush,
+            Foreground = Kit.Muted,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 16)
         });
 
-        panel.Children.Add(Field("Recent files kept", options.RecentFilesCap.ToString()));
-        panel.Children.Add(Field("Default save format", options.DefaultSaveFormat));
-        panel.Children.Add(Field(
+        panel.Children.Add(Kit.Field("Recent files kept", options.RecentFilesCap.ToString()));
+        panel.Children.Add(Kit.Field("Default save format", options.DefaultSaveFormat));
+        panel.Children.Add(Kit.Field(
             "UI language",
             string.IsNullOrEmpty(options.UiLanguage) ? "System default" : options.UiLanguage));
-        panel.Children.Add(Field("Data folder", _actions.DataFolder()));
+        panel.Children.Add(Kit.Field("Data folder", _actions.DataFolder()));
 
         return panel;
-    }
-
-    // ── Small visual helpers ─────────────────────────────────────────────────────
-    private static TextBlock Heading(string text) => new()
-    {
-        Text = text,
-        FontSize = 26,
-        FontWeight = FontWeights.Light,
-        Foreground = HeadingBrush,
-        Margin = new Thickness(0, 0, 0, 18)
-    };
-
-    private static TextBlock SubHeading(string text) => new()
-    {
-        Text = text,
-        FontSize = 15,
-        FontWeight = FontWeights.SemiBold,
-        Foreground = HeadingBrush,
-        Margin = new Thickness(0, 16, 0, 6)
-    };
-
-    private static UIElement Field(string label, string value)
-    {
-        var grid = new Grid { Margin = new Thickness(0, 2, 0, 2) };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-        var name = new TextBlock { Text = label, Foreground = MutedBrush, FontSize = 12 };
-        Grid.SetColumn(name, 0);
-        grid.Children.Add(name);
-
-        var content = new TextBlock
-        {
-            Text = value,
-            Foreground = HeadingBrush,
-            FontSize = 12,
-            TextWrapping = TextWrapping.Wrap
-        };
-        Grid.SetColumn(content, 1);
-        grid.Children.Add(content);
-        return grid;
-    }
-
-    private static UIElement TemplateTile(string caption, Action onClick)
-    {
-        var preview = new Border
-        {
-            Width = 190,
-            Height = 150,
-            Background = Brushes.White,
-            BorderBrush = TileBorderBrush,
-            BorderThickness = new Thickness(1),
-            Child = new Border
-            {
-                Margin = new Thickness(18),
-                Background = Brushes.White,
-                BorderBrush = Freeze(Color.FromRgb(0xE2, 0xE6, 0xEF)),
-                BorderThickness = new Thickness(1)
-            }
-        };
-
-        var stack = new StackPanel { Margin = new Thickness(0, 0, 18, 0), Cursor = System.Windows.Input.Cursors.Hand };
-        stack.Children.Add(preview);
-        stack.Children.Add(new TextBlock
-        {
-            Text = caption,
-            Foreground = HeadingBrush,
-            FontSize = 13,
-            Margin = new Thickness(0, 8, 0, 0),
-            HorizontalAlignment = HorizontalAlignment.Center
-        });
-        stack.MouseLeftButtonUp += (_, _) => onClick();
-        return stack;
-    }
-
-    private static ScrollViewer Scroll(UIElement child) => new()
-    {
-        Content = child,
-        VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-        HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
-    };
-
-    private static string Or(string? value) => string.IsNullOrWhiteSpace(value) ? "—" : value!;
-
-    private static Brush Freeze(Color color)
-    {
-        var brush = new SolidColorBrush(color);
-        brush.Freeze();
-        return brush;
     }
 }
 

@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using Free.Shared.AppServices;
 
 namespace FreeW.App.Host;
@@ -10,20 +9,17 @@ namespace FreeW.App.Host;
 /// Mirrors FreeX's local-diagnostics wiring <em>minus Sentry</em> — FreeW does no remote telemetry.
 ///
 /// <para>
-/// Everything here is best-effort and swallows its own failures, so diagnostics can never disrupt
-/// launch, save, or shutdown. Disable for a run with <c>FREEW_DIAGNOSTICS=0</c> (the env var carried by
-/// FreeW's <see cref="AppProduct"/> identity).
+/// Everything here is best-effort and swallows its own failures (via the shared
+/// <see cref="LocalAppDiagnostics"/> base), so diagnostics can never disrupt launch, save, or shutdown.
+/// Disable for a run with <c>FREEW_DIAGNOSTICS=0</c> (the env var carried by FreeW's
+/// <see cref="AppProduct"/> identity).
 /// </para>
 /// </summary>
-public sealed class FreeWDiagnostics
+public sealed class FreeWDiagnostics : LocalAppDiagnostics
 {
-    private readonly AppDiagnosticsFileStore _fileStore;
-    private readonly AppDiagnosticsMetadata _metadata;
-
     private FreeWDiagnostics(AppDiagnosticsFileStore fileStore, AppDiagnosticsMetadata metadata)
+        : base(fileStore, metadata)
     {
-        _fileStore = fileStore;
-        _metadata = metadata;
     }
 
     /// <summary>
@@ -36,33 +32,6 @@ public sealed class FreeWDiagnostics
         var fileStore = new AppDiagnosticsFileStore(options);
         var metadata = AppDiagnosticsMetadata.Create(appVersion);
         return new FreeWDiagnostics(fileStore, metadata);
-    }
-
-    /// <summary>Records a usage event (best-effort; only whitelisted properties are persisted).</summary>
-    public void RecordEvent(string eventName, IReadOnlyDictionary<string, string?>? properties = null)
-    {
-        try
-        {
-            _fileStore.RecordEvent(eventName, _metadata, properties);
-        }
-        catch
-        {
-            // Diagnostics are best-effort and must never affect app behavior.
-        }
-    }
-
-    /// <summary>Writes a local crash report + a crash event; returns the report path (empty on failure).</summary>
-    public string RecordCrash(Exception exception, string source)
-    {
-        try
-        {
-            return _fileStore.RecordCrash(exception, source, _metadata);
-        }
-        catch
-        {
-            // Local crash reporting is best-effort; preserve the original failure path.
-            return string.Empty;
-        }
     }
 
     /// <summary>
