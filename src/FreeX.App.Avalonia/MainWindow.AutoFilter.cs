@@ -171,6 +171,22 @@ public sealed partial class MainWindow
         return button;
     }
 
+    // Worksheet context menu ▸ Sort and Filter ▸ Clear Filter. Unhides every row the active sheet's
+    // AutoFilter is currently hiding. FilterCommand with an empty allowed-value set clears the whole
+    // range's hidden rows in one undoable step (the same Core command the column dropdown's Clear uses),
+    // so this matches Excel's "remove all filters on this AutoFilter" behaviour.
+    private void ClearActiveSheetFilters()
+    {
+        var sheet = _session.ActiveSheet;
+        if (AutoFilterHeaderPlanner.TryGetAutoFilterRange(sheet) is not { } range)
+        {
+            RefreshShell(UiText.Get("WTA_ContextFilter_NoFilter"));
+            return;
+        }
+
+        RunAutoFilter(range, columnOffset: 0, allowedValues: []);
+    }
+
     private void RunAutoFilter(GridRange range, uint columnOffset, IReadOnlyList<string> allowedValues)
     {
         if (!TryCommitPendingFormulaEdit())

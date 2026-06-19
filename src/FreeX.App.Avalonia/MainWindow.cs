@@ -716,6 +716,12 @@ public sealed partial class MainWindow : Window
                     // View ▸ Window group (multi-window).
                     ["view.newWindow"] = NewWindow,
                     ["view.arrangeAll"] = ArrangeAllWindows,
+                    // View ▸ Window ▸ Arrange All submenu (canonical menu ids from the shared ribbon
+                    // definition). Each positions every visible window via the shared layout planner.
+                    ["Tiled"] = () => ArrangeAllWindows(WorkbookWindowArrangement.Tiled),
+                    ["Horizontal#ArrangeAllMenuItem_Click"] = () => ArrangeAllWindows(WorkbookWindowArrangement.Horizontal),
+                    ["Vertical"] = () => ArrangeAllWindows(WorkbookWindowArrangement.Vertical),
+                    ["Cascade"] = () => ArrangeAllWindows(WorkbookWindowArrangement.Cascade),
                     ["view.hide"] = HideActiveWindow,
                     // Review proofing (built-in thesaurus / offline-honest translate) + Insert equation/object.
                     ["review.thesaurus"] = () => _ = ShowThesaurusDialogAsync(),
@@ -899,9 +905,9 @@ public sealed partial class MainWindow : Window
                     ["insert.headerFooter"] = () => _ = ShowPageSetupDialogAsync(),
                     // Page Layout ▸ Themes (Office / Colorful / Grayscale picker).
                     ["pageLayout.themes"] = () => _ = ShowThemesGalleryAsync(),
-                    ["pageLayout.themeColors"] = () => _ = ShowThemesGalleryAsync(),
-                    ["pageLayout.themeFonts"] = () => _ = ShowThemesGalleryAsync(),
-                    ["pageLayout.themeEffects"] = () => _ = ShowThemesGalleryAsync(),
+                    ["pageLayout.themeColors"] = () => _ = ShowThemeColorsGalleryAsync(),
+                    ["pageLayout.themeFonts"] = () => _ = ShowThemeFontsGalleryAsync(),
+                    ["pageLayout.themeEffects"] = () => _ = ShowThemeEffectsGalleryAsync(),
                     // Insert ▸ Symbol.
                     ["insert.symbol"] = () => _ = ShowSymbolPickerAsync(),
                     // Insert ▸ Slicer / Timeline (field picker → AddSlicerCommand / AddTimelineCommand).
@@ -4087,9 +4093,13 @@ public sealed partial class MainWindow : Window
     /// <summary>
     /// Routes a worksheet context-menu command id back to the matching Avalonia document command.
     /// Every action that has a working shell handler (clipboard, clear, insert/delete, sort/filter,
-    /// data tools, outline grouping, comments/notes, hyperlinks, format cells, pivot options) is wired
-    /// to the same handler the ribbon uses. Only the genuinely-unbacked actions (Pick From Drop-down,
-    /// Format as Table, in-place Edit/Resolve Comment and Edit Note) fall through to the no-op default.
+    /// clear filter, data tools, outline grouping, comments/notes, hyperlinks, format cells, pivot
+    /// options) is wired to the same handler the ribbon uses. The drawing/chart/picture per-target
+    /// variants (Format Picture/Chart Area, Bring Forward, Selection Pane, etc.) are not reachable from
+    /// the worksheet cell menu — they belong to the Picture/Shape/Chart target-kind menus, which the
+    /// Avalonia grid does not yet raise (no in-grid drawing-object hit-testing). The only Worksheet-menu
+    /// action that falls through to the no-op default is Pick From Drop-down List, which has no backing
+    /// shell/session API yet.
     /// </summary>
     private void DispatchWorksheetContextMenuCommand(RibbonCommandId commandId)
     {
@@ -4174,6 +4184,9 @@ public sealed partial class MainWindow : Window
                 break;
             case WorksheetContextMenuAction.Filter:
                 ToggleAutoFilter();
+                break;
+            case WorksheetContextMenuAction.ClearFilter:
+                ClearActiveSheetFilters();
                 break;
             case WorksheetContextMenuAction.ReapplyFilter:
                 ReapplyCurrentFilterSort();

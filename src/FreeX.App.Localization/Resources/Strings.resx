@@ -767,4 +767,20 @@
   <data name="RibbonWire_WatchWindowAdd" xml:space="preserve"><value>Add Watch</value></data>
   <data name="RibbonWire_WatchWindowDelete" xml:space="preserve"><value>Delete Watch</value></data>
   <data name="RibbonWire_WatchWindowRefresh" xml:space="preserve"><value>Refresh</value></data>
+  <data name="WTA_ArrangeAll_NoWindows" xml:space="preserve"><value>No windows to arrange.</value></data>
+  <data name="WTA_ArrangeAll_Failed" xml:space="preserve"><value>Could not arrange the windows.</value></data>
+  <data name="WTA_ArrangeAll_Arranged" xml:space="preserve"><value>Arranged {0} window(s) ({1}).</value></data>
+  <data name="WTA_ArrangeAll_Tiled" xml:space="preserve"><value>Tiled</value></data>
+  <data name="WTA_ArrangeAll_Horizontal" xml:space="preserve"><value>Horizontal</value></data>
+  <data name="WTA_ArrangeAll_Vertical" xml:space="preserve"><value>Vertical</value></data>
+  <data name="WTA_ArrangeAll_Cascade" xml:space="preserve"><value>Cascade</value></data>
+  <data name="WTA_Theme_Applied" xml:space="preserve"><value>Applied the {0} theme</value></data>
+  <data name="WTA_Theme_ApplyFailed" xml:space="preserve"><value>Could not apply the theme.</value></data>
+  <data name="WTA_ThemeColors_Title" xml:space="preserve"><value>Theme Colors</value></data>
+  <data name="WTA_ThemeColors_Applied" xml:space="preserve"><value>Applied the {0} theme colors</value></data>
+  <data name="WTA_ThemeFonts_Title" xml:space="preserve"><value>Theme Fonts</value></data>
+  <data name="WTA_ThemeFonts_Applied" xml:space="preserve"><value>Applied the {0} theme fonts</value></data>
+  <data name="WTA_ThemeEffects_Title" xml:space="preserve"><value>Theme Effects</value></data>
+  <data name="WTA_ThemeEffects_Applied" xml:space="preserve"><value>Applied the {0} theme effects</value></data>
+  <data name="WTA_ContextFilter_NoFilter" xml:space="preserve"><value>The active sheet has no filter to clear.</value></data>
 </root>

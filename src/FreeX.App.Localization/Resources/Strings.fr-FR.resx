@@ -749,4 +749,20 @@
   <data name="RibbonWire_WatchWindowAdd" xml:space="preserve"><value>Ajouter un espion</value></data>
   <data name="RibbonWire_WatchWindowDelete" xml:space="preserve"><value>Supprimer l'espion</value></data>
   <data name="RibbonWire_WatchWindowRefresh" xml:space="preserve"><value>Actualiser</value></data>
+  <data name="WTA_ArrangeAll_NoWindows" xml:space="preserve"><value>Aucune fenêtre à organiser.</value></data>
+  <data name="WTA_ArrangeAll_Failed" xml:space="preserve"><value>Impossible d'organiser les fenêtres.</value></data>
+  <data name="WTA_ArrangeAll_Arranged" xml:space="preserve"><value>{0} fenêtre(s) organisée(s) ({1}).</value></data>
+  <data name="WTA_ArrangeAll_Tiled" xml:space="preserve"><value>Mosaïque</value></data>
+  <data name="WTA_ArrangeAll_Horizontal" xml:space="preserve"><value>Horizontal</value></data>
+  <data name="WTA_ArrangeAll_Vertical" xml:space="preserve"><value>Vertical</value></data>
+  <data name="WTA_ArrangeAll_Cascade" xml:space="preserve"><value>Cascade</value></data>
+  <data name="WTA_Theme_Applied" xml:space="preserve"><value>Thème {0} appliqué</value></data>
+  <data name="WTA_Theme_ApplyFailed" xml:space="preserve"><value>Impossible d'appliquer le thème.</value></data>
+  <data name="WTA_ThemeColors_Title" xml:space="preserve"><value>Couleurs du thème</value></data>
+  <data name="WTA_ThemeColors_Applied" xml:space="preserve"><value>Couleurs du thème {0} appliquées</value></data>
+  <data name="WTA_ThemeFonts_Title" xml:space="preserve"><value>Polices du thème</value></data>
+  <data name="WTA_ThemeFonts_Applied" xml:space="preserve"><value>Polices du thème {0} appliquées</value></data>
+  <data name="WTA_ThemeEffects_Title" xml:space="preserve"><value>Effets du thème</value></data>
+  <data name="WTA_ThemeEffects_Applied" xml:space="preserve"><value>Effets du thème {0} appliqués</value></data>
+  <data name="WTA_ContextFilter_NoFilter" xml:space="preserve"><value>La feuille active n'a aucun filtre à effacer.</value></data>
 </root>
