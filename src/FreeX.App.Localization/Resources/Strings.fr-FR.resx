@@ -474,6 +474,11 @@
   <data name="Drawing_PictureSentBackward" xml:space="preserve"><value>Image reculée d'un plan.</value></data>
   <data name="Drawing_BringForwardLabel" xml:space="preserve"><value>Avancer</value></data>
   <data name="Drawing_SendBackwardLabel" xml:space="preserve"><value>Reculer</value></data>
+  <!-- In-grid drawing-object interaction (DrawingInteract_*) -->
+  <data name="DrawingInteract_ChartSizeAndProperties" xml:space="preserve"><value>Taille et propriétés du graphique</value></data>
+  <data name="DrawingInteract_Moved" xml:space="preserve"><value>Objet de dessin déplacé.</value></data>
+  <data name="DrawingInteract_Resized" xml:space="preserve"><value>Objet de dessin redimensionné.</value></data>
+  <data name="DrawingInteract_PickListNoList" xml:space="preserve"><value>La cellule active n'a aucune liste déroulante.</value></data>
   <!-- Selection Pane dialog -->
   <data name="SelectionPane_Title" xml:space="preserve"><value>Volet Sélection</value></data>
   <data name="SelectionPane_Hint" xml:space="preserve"><value>Sélectionnez un objet pour le renommer, afficher/masquer ou modifier son ordre de superposition.</value></data>
@@ -801,6 +806,33 @@
   <data name="Backstage_Export_CreateButton" xml:space="preserve"><value>Exporter</value></data>
   <data name="Backstage_Export_CancelButton" xml:space="preserve"><value>Annuler</value></data>
   <data name="Backstage_Export_Unavailable" xml:space="preserve"><value>Aucune feuille de calcul visible n'est disponible pour l'exportation.</value></data>
+  <data name="Print_MenuItem" xml:space="preserve"><value>Imprimer...</value></data>
+  <data name="Print_Title" xml:space="preserve"><value>Imprimer</value></data>
+  <data name="Print_PrinterHeader" xml:space="preserve"><value>Imprimante</value></data>
+  <data name="Print_NoPrinterNote" xml:space="preserve"><value>Aucune imprimante n'a été trouvée sur cet appareil. L'impression enregistrera un PDF prêt à imprimer.</value></data>
+  <data name="Print_ScopeHeader" xml:space="preserve"><value>Que faut-il imprimer</value></data>
+  <data name="Print_ScopeSelection" xml:space="preserve"><value>Sélection</value></data>
+  <data name="Print_ScopeSelectionUnavailable" xml:space="preserve"><value>Sélection (sélectionnez d'abord une plage)</value></data>
+  <data name="Print_ScopeActiveSheet" xml:space="preserve"><value>Feuille active</value></data>
+  <data name="Print_ScopeWorkbook" xml:space="preserve"><value>Classeur entier</value></data>
+  <data name="Print_PagesHeader" xml:space="preserve"><value>Pages</value></data>
+  <data name="Print_PagesAll" xml:space="preserve"><value>Toutes les pages</value></data>
+  <data name="Print_PagesRange" xml:space="preserve"><value>Plage de pages</value></data>
+  <data name="Print_PagesFrom" xml:space="preserve"><value>De</value></data>
+  <data name="Print_PagesTo" xml:space="preserve"><value>À</value></data>
+  <data name="Print_CopiesHeader" xml:space="preserve"><value>Copies</value></data>
+  <data name="Print_CopiesLabel" xml:space="preserve"><value>Nombre de copies</value></data>
+  <data name="Print_Collate" xml:space="preserve"><value>Assembler</value></data>
+  <data name="Print_PrintButton" xml:space="preserve"><value>Imprimer</value></data>
+  <data name="Print_SaveAsPdfButton" xml:space="preserve"><value>Enregistrer au format PDF...</value></data>
+  <data name="Print_CancelButton" xml:space="preserve"><value>Annuler</value></data>
+  <data name="Print_Unavailable" xml:space="preserve"><value>Aucune feuille de calcul visible n'est disponible pour l'impression.</value></data>
+  <data name="Print_Spooling" xml:space="preserve"><value>Envoi à l'imprimante...</value></data>
+  <data name="Print_Sent" xml:space="preserve"><value>Imprimé. {0}</value></data>
+  <data name="Print_SavedPdf" xml:space="preserve"><value>PDF prêt à imprimer enregistré {0}</value></data>
+  <data name="Print_RenderFailed" xml:space="preserve"><value>Échec de l'impression : {0}</value></data>
+  <data name="Print_RequiresLocalPath" xml:space="preserve"><value>L'impression au format PDF nécessite un chemin de fichier local.</value></data>
+  <data name="Print_NoSpoolerNoSave" xml:space="preserve"><value>Aucune imprimante ni destination de fichier n'est disponible sur cet hôte.</value></data>
   <data name="Backstage_Account_MenuItem" xml:space="preserve"><value>Compte...</value></data>
   <data name="Backstage_Account_Title" xml:space="preserve"><value>Compte</value></data>
   <data name="Backstage_Account_ProductSectionHeader" xml:space="preserve"><value>Informations sur le produit</value></data>
@@ -814,4 +846,91 @@
   <data name="Backstage_Account_OptionsButton" xml:space="preserve"><value>Options FreeX...</value></data>
   <data name="Backstage_Account_LegalNoticesButton" xml:space="preserve"><value>Mentions légales...</value></data>
   <data name="Backstage_Account_CloseButton" xml:space="preserve"><value>Fermer</value></data>
+  <data name="GetData_DialogTitle" xml:space="preserve"><value>Obtenir des données — À partir d'un fichier texte/CSV</value></data>
+  <data name="GetData_MenuItem" xml:space="preserve"><value>À partir d'un fichier texte/CSV...</value></data>
+  <data name="GetData_FilePickerTitle" xml:space="preserve"><value>Importer un fichier texte ou CSV</value></data>
+  <data name="GetData_FileTypeName" xml:space="preserve"><value>Fichiers texte et CSV</value></data>
+  <data name="GetData_FileLabel" xml:space="preserve"><value>Fichier source :</value></data>
+  <data name="GetData_BrowseButton" xml:space="preserve"><value>Parcourir...</value></data>
+  <data name="GetData_DelimiterHeader" xml:space="preserve"><value>Séparateur</value></data>
+  <data name="GetData_DelimiterDetect" xml:space="preserve"><value>Détecter automatiquement</value></data>
+  <data name="GetData_DelimiterComma" xml:space="preserve"><value>Virgule</value></data>
+  <data name="GetData_DelimiterTab" xml:space="preserve"><value>Tabulation</value></data>
+  <data name="GetData_DelimiterSemicolon" xml:space="preserve"><value>Point-virgule</value></data>
+  <data name="GetData_DelimiterSpace" xml:space="preserve"><value>Espace</value></data>
+  <data name="GetData_DelimiterPipe" xml:space="preserve"><value>Barre verticale</value></data>
+  <data name="GetData_DelimiterCustom" xml:space="preserve"><value>Personnalisé</value></data>
+  <data name="GetData_EncodingHeader" xml:space="preserve"><value>Origine du fichier (encodage)</value></data>
+  <data name="GetData_EncodingDetect" xml:space="preserve"><value>Détecter automatiquement</value></data>
+  <data name="GetData_EncodingUtf8" xml:space="preserve"><value>Unicode (UTF-8)</value></data>
+  <data name="GetData_EncodingUtf16Le" xml:space="preserve"><value>Unicode (UTF-16 LE)</value></data>
+  <data name="GetData_EncodingUtf16Be" xml:space="preserve"><value>Unicode (UTF-16 BE)</value></data>
+  <data name="GetData_EncodingWindows1252" xml:space="preserve"><value>Europe occidentale (Windows-1252)</value></data>
+  <data name="GetData_EncodingLatin1" xml:space="preserve"><value>Europe occidentale (ISO-8859-1)</value></data>
+  <data name="GetData_DestinationHeader" xml:space="preserve"><value>Charger dans</value></data>
+  <data name="GetData_DestinationCurrentSheet" xml:space="preserve"><value>Feuille existante (à la cellule active)</value></data>
+  <data name="GetData_DestinationNewSheet" xml:space="preserve"><value>Nouvelle feuille</value></data>
+  <data name="GetData_TreatConsecutive" xml:space="preserve"><value>Traiter les séparateurs consécutifs comme un seul</value></data>
+  <data name="GetData_PreviewHeader" xml:space="preserve"><value>Aperçu</value></data>
+  <data name="GetData_PreviewEmpty" xml:space="preserve"><value>Choisissez un fichier pour afficher un aperçu de son contenu.</value></data>
+  <data name="GetData_PreviewSummary" xml:space="preserve"><value>Séparateur : {0}   Encodage : {1}   Lignes : {2}   Colonnes : {3}</value></data>
+  <data name="GetData_LoadButton" xml:space="preserve"><value>Charger</value></data>
+  <data name="GetData_CancelButton" xml:space="preserve"><value>Annuler</value></data>
+  <data name="GetData_NoFileSelected" xml:space="preserve"><value>Sélectionnez d'abord un fichier à importer.</value></data>
+  <data name="GetData_ReadError" xml:space="preserve"><value>Impossible de lire le fichier : {0}</value></data>
+  <data name="GetData_EmptyFile" xml:space="preserve"><value>Le fichier sélectionné ne contient aucune donnée à importer.</value></data>
+  <data name="GetData_ImportFailed" xml:space="preserve"><value>Échec de l'importation : {0}</value></data>
+  <data name="GetData_ImportedStatus" xml:space="preserve"><value>Importé {0} ({1} lignes × {2} colonnes)</value></data>
+  <data name="GetData_RefreshNoSource" xml:space="preserve"><value>Aucune source de données importée à actualiser. Utilisez Obtenir des données d'abord.</value></data>
+  <data name="GetData_RefreshedStatus" xml:space="preserve"><value>Actualisé {0}</value></data>
+  <data name="GetData_DelimiterTabGlyph" xml:space="preserve"><value>Tab</value></data>
+  <data name="GetData_DelimiterSpaceGlyph" xml:space="preserve"><value>Espace</value></data>
+  <data name="WfTranslate_Title" xml:space="preserve"><value>Traduire</value></data>
+  <data name="WfTranslate_FromLabel" xml:space="preserve"><value>De :</value></data>
+  <data name="WfTranslate_ToLabel" xml:space="preserve"><value>Vers :</value></data>
+  <data name="WfTranslate_SourceLabel" xml:space="preserve"><value>Texte sélectionné :</value></data>
+  <data name="WfTranslate_EmptyCell" xml:space="preserve"><value>(cellule vide)</value></data>
+  <data name="WfTranslate_TranslationLabel" xml:space="preserve"><value>Traduction :</value></data>
+  <data name="WfTranslate_TranslationWatermark" xml:space="preserve"><value>Saisissez la traduction ici</value></data>
+  <data name="WfTranslate_TargetLabel" xml:space="preserve"><value>Écrire dans la cellule ou la plage :</value></data>
+  <data name="WfTranslate_ManualNote" xml:space="preserve"><value>Aucun moteur de traduction hors ligne n'est disponible : il s'agit donc d'un assistant manuel. Saisissez la traduction ci-dessus, elle est écrite dans la cible choisie. Une traduction multiligne remplit les cellules successives d'une plage cible.</value></data>
+  <data name="WfTranslate_InsertButton" xml:space="preserve"><value>Insérer la traduction</value></data>
+  <data name="WfTranslate_CloseButton" xml:space="preserve"><value>Fermer</value></data>
+  <data name="WfTranslate_StatusInserted" xml:space="preserve"><value>Traduction écrite dans {0}.</value></data>
+  <data name="WfTranslate_ErrorEmptyTranslation" xml:space="preserve"><value>Traduire : saisissez d'abord le texte de la traduction.</value></data>
+  <data name="WfTranslate_ErrorMissingTarget" xml:space="preserve"><value>Traduire : saisissez une cellule ou une plage cible.</value></data>
+  <data name="WfTranslate_ErrorInvalidTarget" xml:space="preserve"><value>Traduire : la référence cible n'est pas une cellule ou une plage valide.</value></data>
+  <data name="WfTranslate_ErrorSameTarget" xml:space="preserve"><value>Traduire : choisissez une cible différente de la cellule source.</value></data>
+  <data name="WfTranslate_ErrorGeneric" xml:space="preserve"><value>Traduire : impossible d'écrire la traduction.</value></data>
+  <data name="WfTranslate_LangAuto" xml:space="preserve"><value>Détecter la source</value></data>
+  <data name="WfTranslate_LangEnglish" xml:space="preserve"><value>Anglais</value></data>
+  <data name="WfTranslate_LangFrench" xml:space="preserve"><value>Français</value></data>
+  <data name="WfTranslate_LangSpanish" xml:space="preserve"><value>Espagnol</value></data>
+  <data name="WfTranslate_LangGerman" xml:space="preserve"><value>Allemand</value></data>
+  <data name="WfTranslate_LangItalian" xml:space="preserve"><value>Italien</value></data>
+  <data name="WfTranslate_LangPortuguese" xml:space="preserve"><value>Portugais</value></data>
+  <data name="WfTranslate_LangDutch" xml:space="preserve"><value>Néerlandais</value></data>
+  <data name="WfTranslate_LangChinese" xml:space="preserve"><value>Chinois</value></data>
+  <data name="WfTranslate_LangJapanese" xml:space="preserve"><value>Japonais</value></data>
+  <data name="WfTranslate_LangArabic" xml:space="preserve"><value>Arabe</value></data>
+  <data name="WfTranslate_LangRussian" xml:space="preserve"><value>Russe</value></data>
+  <data name="WfInsertObject_Title" xml:space="preserve"><value>Insérer un objet</value></data>
+  <data name="WfInsertObject_Heading" xml:space="preserve"><value>Créer l'objet à partir d'un fichier</value></data>
+  <data name="WfInsertObject_BrowseButton" xml:space="preserve"><value>Parcourir...</value></data>
+  <data name="WfInsertObject_NoFileChosen" xml:space="preserve"><value>Aucun fichier choisi.</value></data>
+  <data name="WfInsertObject_LinkLabel" xml:space="preserve"><value>Lier au fichier (enregistrer le chemin source sur l'objet)</value></data>
+  <data name="WfInsertObject_Note" xml:space="preserve"><value>Les fichiers image sont incorporés comme images. Les autres fichiers sont placés comme un espace réservé avec icône portant le nom du fichier ; le contenu du fichier d'origine n'est pas incorporé (cette version n'a pas de modèle d'objet OLE).</value></data>
+  <data name="WfInsertObject_InsertButton" xml:space="preserve"><value>Insérer</value></data>
+  <data name="WfInsertObject_CancelButton" xml:space="preserve"><value>Annuler</value></data>
+  <data name="WfInsertObject_Unavailable" xml:space="preserve"><value>Insérer un objet n'est pas disponible sur cette plateforme.</value></data>
+  <data name="WfInsertObject_IconLinkedCaption" xml:space="preserve"><value>{0} (lié)</value></data>
+  <data name="WfInsertObject_AltLinked" xml:space="preserve"><value>Objet lié : {0}</value></data>
+  <data name="WfInsertObject_AltEmbedded" xml:space="preserve"><value>Objet incorporé : {0}</value></data>
+  <data name="WfInsertObject_StatusEmbedded" xml:space="preserve"><value>« {0} » inséré comme image incorporée.</value></data>
+  <data name="WfInsertObject_StatusPlaceholder" xml:space="preserve"><value>« {0} » inséré comme espace réservé avec icône.</value></data>
+  <data name="WfInsertObject_ErrorMissingFile" xml:space="preserve"><value>Insérer un objet : choisissez d'abord un fichier.</value></data>
+  <data name="WfInsertObject_ErrorFileNotFound" xml:space="preserve"><value>Insérer un objet : le fichier choisi est introuvable.</value></data>
+  <data name="WfInsertObject_ErrorRead" xml:space="preserve"><value>Impossible de lire le fichier : {0}</value></data>
+  <data name="WfInsertObject_ErrorEmptyFile" xml:space="preserve"><value>Le fichier sélectionné est vide.</value></data>
+  <data name="WfInsertObject_ErrorGeneric" xml:space="preserve"><value>Échec de l'insertion de l'objet.</value></data>
 </root>

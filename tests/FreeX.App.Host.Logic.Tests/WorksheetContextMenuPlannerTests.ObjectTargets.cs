@@ -75,4 +75,23 @@ public sealed partial class WorksheetContextMenuPlannerTests
         commands.Single(command => command.Header == "Selection Pane...")
             .Action.Should().Be(WorksheetContextMenuAction.SelectionPane);
     }
+
+    [Theory]
+    [InlineData(FreeX.Core.Model.SelectionPaneObjectKind.Picture, WorksheetContextMenuTargetKind.Picture)]
+    [InlineData(FreeX.Core.Model.SelectionPaneObjectKind.Shape, WorksheetContextMenuTargetKind.Shape)]
+    [InlineData(FreeX.Core.Model.SelectionPaneObjectKind.TextBox, WorksheetContextMenuTargetKind.TextBox)]
+    [InlineData(FreeX.Core.Model.SelectionPaneObjectKind.Chart, WorksheetContextMenuTargetKind.Chart)]
+    public void TargetKindForObject_MapsDrawingObjectKindsToTheirMenuTarget(
+        FreeX.Core.Model.SelectionPaneObjectKind kind,
+        WorksheetContextMenuTargetKind expected)
+    {
+        WorksheetContextMenuPlanner.TargetKindForObject(kind).Should().Be(expected);
+    }
+
+    [Fact]
+    public void TargetKindForObject_FallsBackToWorksheet_ForUnknownKinds()
+    {
+        WorksheetContextMenuPlanner.TargetKindForObject((FreeX.Core.Model.SelectionPaneObjectKind)999)
+            .Should().Be(WorksheetContextMenuTargetKind.Worksheet);
+    }
 }
