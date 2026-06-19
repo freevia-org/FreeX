@@ -723,6 +723,191 @@ public sealed class ChartEditingPlannerTests
         chart.PlotAreaBorderThickness.Should().Be(3);
     }
 
+    // ---- ChartBarFormatPlanner -----------------------------------------------------------------------
+
+    [Fact]
+    public void BarFormat_Supports_OnlyBarColumnFamilies()
+    {
+        ChartBarFormatPlanner.Supports(new ChartModel { Type = ChartType.Column }).Should().BeTrue();
+        ChartBarFormatPlanner.Supports(new ChartModel { Type = ChartType.Bar }).Should().BeTrue();
+        ChartBarFormatPlanner.Supports(new ChartModel { Type = ChartType.Line }).Should().BeFalse();
+    }
+
+    [Fact]
+    public void BarFormat_Read_FallsBackToExcelDefaults()
+    {
+        var read = ChartBarFormatPlanner.Read(new ChartModel { Type = ChartType.Column });
+        read.Should().Be(new ChartBarFormatInput(150, 0));
+    }
+
+    [Fact]
+    public void BarFormat_Plan_ClampsAndApplies()
+    {
+        var chart = new ChartModel { Type = ChartType.Column };
+        var options = ChartBarFormatPlanner.Plan(new ChartBarFormatInput(600, -200));
+        options.BarGapWidth.Should().Be(ChartBarFormatPlanner.MaxGapWidth);
+        options.BarOverlap.Should().Be(ChartBarFormatPlanner.MinOverlap);
+        ApplyLayout(chart, options);
+        chart.BarGapWidth.Should().Be(ChartBarFormatPlanner.MaxGapWidth);
+        chart.BarOverlap.Should().Be(ChartBarFormatPlanner.MinOverlap);
+    }
+
+    [Fact]
+    public void BarFormat_Validate_RejectsOutOfRange()
+    {
+        ChartBarFormatPlanner.Validate(new ChartBarFormatInput(100, 0)).Should().BeNull();
+        ChartBarFormatPlanner.Validate(new ChartBarFormatInput(600, 0)).Should().NotBeNull();
+        ChartBarFormatPlanner.Validate(new ChartBarFormatInput(100, 200)).Should().NotBeNull();
+    }
+
+    // ---- ChartPieFormatPlanner -----------------------------------------------------------------------
+
+    [Fact]
+    public void PieFormat_Supports_AndHoleSizeGating()
+    {
+        ChartPieFormatPlanner.Supports(new ChartModel { Type = ChartType.Pie }).Should().BeTrue();
+        ChartPieFormatPlanner.Supports(new ChartModel { Type = ChartType.Doughnut }).Should().BeTrue();
+        ChartPieFormatPlanner.Supports(new ChartModel { Type = ChartType.Column }).Should().BeFalse();
+        ChartPieFormatPlanner.SupportsHoleSize(new ChartModel { Type = ChartType.Doughnut }).Should().BeTrue();
+        ChartPieFormatPlanner.SupportsHoleSize(new ChartModel { Type = ChartType.Pie }).Should().BeFalse();
+    }
+
+    [Fact]
+    public void PieFormat_Plan_ClampsAndApplies()
+    {
+        var chart = new ChartModel { Type = ChartType.Doughnut };
+        var options = ChartPieFormatPlanner.Plan(new ChartPieFormatInput(400, 1, 0.9, 0.05));
+        ApplyLayout(chart, options);
+        chart.FirstSliceAngle.Should().Be(ChartPieFormatPlanner.MaxFirstSliceAngle);
+        chart.ExplodedSliceIndex.Should().Be(1);
+        chart.ExplodedSliceDistance.Should().Be(ChartPieFormatPlanner.MaxExplodedDistance);
+        chart.DoughnutHoleSize.Should().Be(ChartPieFormatPlanner.MinHoleSize);
+    }
+
+    [Fact]
+    public void PieFormat_Validate_RejectsOutOfRange()
+    {
+        ChartPieFormatPlanner.Validate(new ChartPieFormatInput(90, 0, 0.2, 0.5)).Should().BeNull();
+        ChartPieFormatPlanner.Validate(new ChartPieFormatInput(400, 0, 0.2, 0.5)).Should().NotBeNull();
+        ChartPieFormatPlanner.Validate(new ChartPieFormatInput(90, 0, 0.9, 0.5)).Should().NotBeNull();
+        ChartPieFormatPlanner.Validate(new ChartPieFormatInput(90, 0, 0.2, 0.95)).Should().NotBeNull();
+    }
+
+    // ---- ChartBubbleFormatPlanner --------------------------------------------------------------------
+
+    [Fact]
+    public void BubbleFormat_Supports_OnlyBubble()
+    {
+        ChartBubbleFormatPlanner.Supports(new ChartModel { Type = ChartType.Bubble }).Should().BeTrue();
+        ChartBubbleFormatPlanner.Supports(new ChartModel { Type = ChartType.Scatter }).Should().BeFalse();
+    }
+
+    [Fact]
+    public void BubbleFormat_Plan_ClampsAndApplies()
+    {
+        var chart = new ChartModel { Type = ChartType.Bubble };
+        var options = ChartBubbleFormatPlanner.Plan(new ChartBubbleFormatInput(500, true, ChartBubbleSizeRepresents.Width));
+        options.BubbleScale.Should().Be(ChartBubbleFormatPlanner.MaxBubbleScale);
+        ApplyLayout(chart, options);
+        chart.BubbleScale.Should().Be(ChartBubbleFormatPlanner.MaxBubbleScale);
+        chart.ShowNegativeBubbles.Should().BeTrue();
+        chart.BubbleSizeRepresents.Should().Be(ChartBubbleSizeRepresents.Width);
+    }
+
+    // ---- ChartStockFormatPlanner ---------------------------------------------------------------------
+
+    [Fact]
+    public void StockFormat_Supports_OnlyStock()
+    {
+        ChartStockFormatPlanner.Supports(new ChartModel { Type = ChartType.Stock }).Should().BeTrue();
+        ChartStockFormatPlanner.Supports(new ChartModel { Type = ChartType.Line }).Should().BeFalse();
+    }
+
+    [Fact]
+    public void StockFormat_Plan_ClampsAndApplies()
+    {
+        var chart = new ChartModel { Type = ChartType.Stock };
+        var up = new CellColor(10, 20, 30);
+        var options = ChartStockFormatPlanner.Plan(new ChartStockFormatInput(600, up, null, null, null, null, 50));
+        options.UpDownBarGapWidth.Should().Be(ChartStockFormatPlanner.MaxGapWidth);
+        ApplyLayout(chart, options);
+        chart.UpDownBarGapWidth.Should().Be(ChartStockFormatPlanner.MaxGapWidth);
+        chart.UpBarFillColor.Should().Be(up);
+        chart.HighLowLineThickness.Should().Be(ChartStockFormatPlanner.MaxLineThickness);
+    }
+
+    [Fact]
+    public void StockFormat_Validate_RejectsOutOfRange()
+    {
+        ChartStockFormatPlanner.Validate(new ChartStockFormatInput(100, null, null, null, null, null, 1)).Should().BeNull();
+        ChartStockFormatPlanner.Validate(new ChartStockFormatInput(600, null, null, null, null, null, 1)).Should().NotBeNull();
+        ChartStockFormatPlanner.Validate(new ChartStockFormatInput(100, null, null, null, null, null, 50)).Should().NotBeNull();
+    }
+
+    // ---- ChartQuickFormatCycler ----------------------------------------------------------------------
+
+    [Fact]
+    public void QuickCycler_SeriesColor_WalksPalette()
+    {
+        var first = ChartQuickFormatCycler.NextSeriesColor(null);
+        first.Should().Be(new CellColor(0, 114, 178));
+        ChartQuickFormatCycler.NextSeriesColor(first).Should().Be(new CellColor(213, 94, 0));
+    }
+
+    [Fact]
+    public void QuickCycler_FontSizes_StepAndWrap()
+    {
+        ChartQuickFormatCycler.NextChartTitleFontSize(16).Should().Be(18);
+        ChartQuickFormatCycler.NextChartTitleFontSize(24).Should().Be(12);
+        ChartQuickFormatCycler.NextAxisTitleFontSize(18).Should().Be(9);
+        ChartQuickFormatCycler.NextLegendFontSize(16).Should().Be(9);
+    }
+
+    [Fact]
+    public void QuickCycler_SeriesDash_Cycles()
+    {
+        ChartQuickFormatCycler.NextSeriesDash(null).Should().Be(ChartLineDashStyle.Dash);
+        ChartQuickFormatCycler.NextSeriesDash(ChartLineDashStyle.Dash).Should().Be(ChartLineDashStyle.Dot);
+        ChartQuickFormatCycler.NextSeriesDash(ChartLineDashStyle.Dot).Should().Be(ChartLineDashStyle.Solid);
+        ChartQuickFormatCycler.NextSeriesDash(ChartLineDashStyle.Solid).Should().BeNull();
+    }
+
+    [Fact]
+    public void QuickCycler_MarkerSize_StepAndWrap()
+    {
+        ChartQuickFormatCycler.NextMarkerSize(null).Should().Be(5);
+        ChartQuickFormatCycler.NextMarkerSize(5).Should().Be(7);
+        ChartQuickFormatCycler.NextMarkerSize(12).Should().Be(5);
+    }
+
+    [Fact]
+    public void QuickCycler_MergeFirstSeriesFormat_ReplacesOrAppends_AndPreservesOthers()
+    {
+        var chart = new ChartModel
+        {
+            Type = ChartType.Line,
+            SeriesFormats = { new ChartSeriesFormat(0), new ChartSeriesFormat(1) { MarkerSize = 3 } },
+        };
+        var updated = ChartQuickFormatCycler.ReadFirstSeriesFormat(chart) with { DashStyle = ChartLineDashStyle.Dot };
+        var merged = ChartQuickFormatCycler.MergeFirstSeriesFormat(chart, updated);
+        merged.Should().HaveCount(2);
+        merged.Single(f => f.SeriesIndex == 0).DashStyle.Should().Be(ChartLineDashStyle.Dot);
+        merged.Single(f => f.SeriesIndex == 1).MarkerSize.Should().Be(3);
+    }
+
+    [Fact]
+    public void QuickCycler_ComboLineSeries_StepsAndClears()
+    {
+        var chart = MakeChartWithSeries(ChartType.Column, columns: 4); // 3 series: 0,1,2
+        ChartQuickFormatCycler.NextComboLineSeries(chart).Should().Equal(1);
+        chart.UseComboLineForSecondarySeries = true;
+        chart.ComboLineSeriesIndexes.Add(1);
+        ChartQuickFormatCycler.NextComboLineSeries(chart).Should().Equal(2);
+        chart.ComboLineSeriesIndexes.Clear();
+        chart.ComboLineSeriesIndexes.Add(2);
+        ChartQuickFormatCycler.NextComboLineSeries(chart).Should().BeEmpty();
+    }
+
     private static ChartModel MakeChartWithSeries(ChartType type, int columns)
     {
         var workbook = new Workbook("test");

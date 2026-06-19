@@ -36,6 +36,8 @@ public sealed class InsertChartCommandFactoryTests
     [InlineData("Recommended Charts", ChartType.Column)]
     [InlineData("Line Chart", ChartType.Line)]
     [InlineData("Stock Chart", ChartType.Stock)]
+    [InlineData("Bubble Chart", ChartType.Bubble)]
+    [InlineData("Radar Chart", ChartType.Radar)]
     public void ChartTypeForRibbonCommand_MapsKnownIdsToType(string commandId, ChartType expected) =>
         InsertChartCommandFactory.ChartTypeForRibbonCommand(commandId).Should().Be(expected);
 

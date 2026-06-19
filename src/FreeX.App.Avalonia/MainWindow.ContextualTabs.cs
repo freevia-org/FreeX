@@ -48,6 +48,9 @@ public sealed partial class MainWindow
             // (ChartComboPlanner); Move Chart opens the new-sheet / existing-sheet target dialog
             // (ChartMovePlanner -> MoveChartCommand / MoveChartToNewSheetCommand).
             ["chartDesign.comboChart"] = () => RunGuarded(ShowChartComboDialog),
+            // Combo Chart Series is the quick per-click toggle (mirrors the dialog's first-series step);
+            // Combo Chart opens the full per-series grid (ChartComboPlanner).
+            ["chartDesign.comboChartSeries"] = CycleChartComboSeries,
             ["chartDesign.moveChart"] = () => RunGuarded(ShowMoveChartDialog),
 
             // --- Chart Format (chart.selected) — real handlers via SetChartLayoutCommand. ---
@@ -71,6 +74,25 @@ public sealed partial class MainWindow
             // The Format Chart Area button opens the chart-area / plot-area fill + border dialog
             // (ChartAreaFormatPlanner -> SetChartLayoutCommand).
             ["chartFormat.formatChartArea"] = () => RunGuarded(ShowFormatChartAreaDialog),
+            // Current Selection ▸ Format: the type-specific format dialogs (each guarded to its chart family).
+            ["chartFormat.formatBarColumn"] = () => RunGuarded(ShowChartBarFormatDialog),
+            ["chartFormat.formatPieDoughnut"] = () => RunGuarded(ShowChartPieFormatDialog),
+            ["chartFormat.formatBubble"] = () => RunGuarded(ShowChartBubbleFormatDialog),
+            ["chartFormat.formatStock"] = () => RunGuarded(ShowChartStockFormatDialog),
+            // Shape Styles ▸ Series Dash / Marker Size quick cycles; Series Marker opens the full series dialog
+            // (same ChartSeriesFormatPlanner dialog as Series Width).
+            ["chartFormat.seriesDash"] = CycleChartSeriesDash,
+            ["chartFormat.seriesMarker"] = () => RunGuarded(ShowChartSeriesFormatDialog),
+            ["chartFormat.markerSize"] = CycleChartMarkerSize,
+            // Text group quick cycles: title/axis-title color & size, legend font size, data-label text/fill/border.
+            ["chartFormat.chartTitleColor"] = CycleChartTitleColor,
+            ["chartFormat.chartTitleSize"] = CycleChartTitleSize,
+            ["chartFormat.axisTitleColor"] = CycleChartAxisTitleColor,
+            ["chartFormat.axisTitleSize"] = CycleChartAxisTitleSize,
+            ["chartFormat.legendFontSize"] = CycleChartLegendFontSize,
+            ["chartFormat.dataLabelText"] = CycleChartDataLabelText,
+            ["chartFormat.dataLabelFill"] = CycleChartDataLabelFill,
+            ["chartFormat.dataLabelBorder"] = CycleChartDataLabelBorder,
 
             // --- Table Design (table.active) — real handlers via the structured-table Core commands
             // (MainWindow.TableDesignTab). ---
@@ -91,6 +113,9 @@ public sealed partial class MainWindow
             // Table Styles gallery — picks a built-in style via TableStyleGalleryPlanner and applies it through
             // ApplyStructuredTableStyleCommand (MainWindow.TableStyleGallery).
             ["tableDesign.tableStyles"] = OpenTableStyleGallery,
+            // Summarize with PivotTable — opens the Insert PivotTable dialog seeded from the active table's range
+            // (MainWindow.TableSummarizeWithPivot), reusing the existing PivotCreatePlanner path.
+            ["tableDesign.summarizeWithPivot"] = SummarizeActiveTableWithPivot,
 
             // --- PivotTable Analyze / Design (pivot.active) — real handlers via
             // ConfigurePivotTableOptionsCommand / RefreshPivotTableCommand (MainWindow.PivotTabs). ---
@@ -126,9 +151,28 @@ public sealed partial class MainWindow
             // Calculated Field dialog — add/modify/delete a calculated field via PivotCalculatedFieldPlanner,
             // applied through ConfigurePivotTableCalculatedItemsCommand (MainWindow.PivotCalculatedField).
             ["pivotAnalyze.calculatedField"] = OpenPivotCalculatedField,
-            // Field Settings opens per-field value/sort dialogs from the header dropdown (MainWindow.PivotFieldSettings);
-            // the ribbon button has no current-field selection at the ribbon level yet, so it stays an honest stub here.
-            ["pivotAnalyze.fieldSettings"] = () => ReportPivotNotYetAvailable("Field Settings"),
+            // Field Settings opens the value-field-settings dialog (MainWindow.PivotFieldSettings) for the
+            // active pivot's first value field, reusing the same PivotValueFieldPlanner the header dropdown uses.
+            ["pivotAnalyze.fieldSettings"] = OpenActivePivotFieldSettings,
+            // Show Details drills the selected value cell into a new detail sheet via DrillDownPivotTableCommand.
+            ["pivotAnalyze.showDetails"] = ShowActivePivotDetails,
+            // Clear empties the active pivot's layout via ClearPivotTableViewCommand.
+            ["pivotAnalyze.clear"] = ClearActivePivotTable,
+            // Select moves the selection onto the active pivot's full target range.
+            ["pivotAnalyze.select"] = SelectActivePivotTable,
+            // Move PivotTable opens the destination dialog (MainWindow.PivotMove) -> MovePivotTableCommand.
+            ["pivotAnalyze.move"] = OpenPivotMove,
+            // Calculated Item opens the add/modify/delete dialog (MainWindow.PivotCalculatedItem) ->
+            // ConfigurePivotTableCalculatedItemsCommand.
+            ["pivotAnalyze.calculatedItem"] = OpenPivotCalculatedItem,
+            // +/- Buttons toggles PivotTableModel.ShowExpandCollapseButtons via ConfigurePivotTableOptionsCommand.
+            ["pivotAnalyze.plusMinusButtons"] = TogglePivotExpandCollapseButtons,
+            // PivotChart inserts a PivotChart over the active pivot (MainWindow.PivotChart).
+            ["pivotAnalyze.pivotChart"] = InsertPivotChart,
+            // Change Chart Type re-types the active pivot's chart (MainWindow.PivotChartCommands).
+            ["pivotAnalyze.changeChartType"] = () => RunGuarded(ChangeActivePivotChartTypeAsync),
+            // PivotChart Options opens the field-button / data-table options dialog (MainWindow.PivotChartOptions).
+            ["pivotAnalyze.pivotChartOptions"] = () => RunGuarded(OpenPivotChartOptionsAsync),
 
             // Shape Effects is a dropdown: clicking the parent opens its menu (No Effect / Shadow, wired via
             // BuildPictureShapeTabCommands). Register the parent id too so the renderer keeps it enabled
