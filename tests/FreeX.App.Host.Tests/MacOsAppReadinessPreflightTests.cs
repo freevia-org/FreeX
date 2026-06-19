@@ -2200,6 +2200,15 @@ public sealed class MacOsAppReadinessPreflightTests
                     fileMenu.Items.Add(_backstageExportMenuItem);
                     fileMenu.Items.Add(_backstageInfoMenuItem);
                     fileMenu.Items.Add(_backstageAccountMenuItem);
+                    private readonly NativeMenuItem _printMenuItem = new();
+                    _printMenuItem.Header = UiText.Get("Print_MenuItem");
+                    _printMenuItem.Gesture = new KeyGesture(Key.P, KeyModifiers.Meta);
+                    _printMenuItem.Click += async (_, _) => await ShowPrintDialogAsync();
+                    fileMenu.Items.Add(_printMenuItem);
+                    private readonly NativeMenuItem _printPreviewMenuItem = new();
+                    _printPreviewMenuItem.Header = "Print Preview...";
+                    _printPreviewMenuItem.Gesture = new KeyGesture(Key.P, KeyModifiers.Meta | KeyModifiers.Shift);
+                    _printPreviewMenuItem.Click += async (_, _) => await ShowPrintPreviewDialogAsync();
                     HasNativeWorkbookStatisticsMenuItem: HasNativeMenuItem(_workbookStatisticsMenuItem, "Workbook Statistics...")
                     e.Key == Key.G && e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift)
                     private async Task ShowWorkbookStatisticsDialogAsync()
