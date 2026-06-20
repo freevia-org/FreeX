@@ -106,7 +106,7 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
             LoadSheetLayout(sourceSheet, sheet, palette);
             LoadMergedRegions(sourceSheet, sheet);
             LoadCells(hssf, sourceSheet, workbook, sheet, styleCache);
-            LoadDrawingObjects(sourceSheet, sheet);
+            LoadDrawingObjects(hssf, workbook, sourceSheet, sheet);
         }
 
         if (workbook.Sheets.Count == 0)
@@ -996,7 +996,7 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         }
     }
 
-    private static void LoadDrawingObjects(ISheet sourceSheet, Sheet sheet)
+    private static void LoadDrawingObjects(HSSFWorkbook sourceWorkbook, Workbook workbook, ISheet sourceSheet, Sheet sheet)
     {
         if (sourceSheet is not HSSFSheet { DrawingPatriarch: HSSFPatriarch patriarch })
             return;
@@ -1011,6 +1011,12 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         {
             if (TryCreateTextBox(sourceTextBox, sheet, out var textBox))
                 sheet.TextBoxes.Add(textBox);
+        }
+
+        foreach (var sourceControl in EnumerateFormControls(patriarch.Children))
+        {
+            if (TryCreateFormControl(sourceWorkbook, workbook, sourceControl, sheet, out var control))
+                sheet.FormControls.Add(control);
         }
 
         foreach (var sourceShape in EnumerateSimpleShapes(patriarch.Children))
@@ -1057,7 +1063,8 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
             if (shape is HSSFSimpleShape simpleShape &&
                 shape is not HSSFTextbox &&
                 shape is not HSSFComment &&
-                shape is not HSSFPicture)
+                shape is not HSSFPicture &&
+                shape is not HSSFCombobox)
             {
                 yield return simpleShape;
             }
@@ -1066,6 +1073,27 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
             {
                 foreach (var nestedShape in EnumerateSimpleShapes(group.Children))
                     yield return nestedShape;
+            }
+        }
+    }
+
+    private static IEnumerable<HSSFSimpleShape> EnumerateFormControls(IEnumerable<HSSFShape> shapes)
+    {
+        foreach (var shape in shapes)
+        {
+            if (shape is HSSFCombobox comboBox)
+            {
+                yield return comboBox;
+            }
+            else if (shape is HSSFSimpleShape { ShapeType: HSSFSimpleShape.OBJECT_TYPE_COMBO_BOX } comboShape)
+            {
+                yield return comboShape;
+            }
+
+            if (shape is HSSFShapeGroup group)
+            {
+                foreach (var nestedControl in EnumerateFormControls(group.Children))
+                    yield return nestedControl;
             }
         }
     }
@@ -1146,6 +1174,86 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         return true;
     }
 
+    private static bool TryCreateFormControl(
+        HSSFWorkbook sourceWorkbook,
+        Workbook workbook,
+        HSSFSimpleShape sourceControl,
+        Sheet sheet,
+        out FormControlModel control)
+    {
+        control = new FormControlModel();
+        if (MapHssfFormControlKind(sourceControl.ShapeType) is not { } kind ||
+            sourceControl.Anchor is not HSSFClientAnchor anchor ||
+            anchor.Row1 < 0 ||
+            anchor.Col1 < 0 ||
+            IsAutoFilterDropDown(sourceWorkbook, workbook, anchor))
+        {
+            return false;
+        }
+
+        var fromRow = Math.Min(anchor.Row1, anchor.Row2);
+        var fromCol = Math.Min(anchor.Col1, anchor.Col2);
+        var toRow = Math.Max(anchor.Row1, anchor.Row2);
+        var toCol = Math.Max(anchor.Col1, anchor.Col2);
+        control = new FormControlModel
+        {
+            Kind = kind,
+            Name = FirstNonBlank(sourceControl.Name, sourceControl.ShapeName),
+            ShapeId = sourceControl.ShapeId > 0 ? (uint)sourceControl.ShapeId : null,
+            Anchor = new GridRange(
+                new ModelCellAddress(sheet.Id, ToModelIndex(fromRow), ToModelIndex(fromCol)),
+                new ModelCellAddress(sheet.Id, ToModelIndex(toRow), ToModelIndex(toCol))),
+            AnchorOffsets = new DrawingAnchorRange(
+                new DrawingAnchorPoint(
+                    (uint)fromCol,
+                    PixelsToEmus(HssfColumnOffsetToPixels(sheet, ToModelIndex(fromCol), Math.Min(anchor.Dx1, anchor.Dx2))),
+                    (uint)fromRow,
+                    PixelsToEmus(HssfRowOffsetToPixels(sheet, ToModelIndex(fromRow), Math.Min(anchor.Dy1, anchor.Dy2)))),
+                new DrawingAnchorPoint(
+                    (uint)toCol,
+                    PixelsToEmus(HssfColumnOffsetToPixels(sheet, ToModelIndex(toCol), Math.Max(anchor.Dx1, anchor.Dx2))),
+                    (uint)toRow,
+                    PixelsToEmus(HssfRowOffsetToPixels(sheet, ToModelIndex(toRow), Math.Max(anchor.Dy1, anchor.Dy2)))))
+        };
+
+        return true;
+    }
+
+    private static bool IsAutoFilterDropDown(HSSFWorkbook sourceWorkbook, Workbook workbook, HSSFClientAnchor anchor)
+    {
+        var anchorRow = ToModelIndex(Math.Min(anchor.Row1, anchor.Row2));
+        var anchorCol = ToModelIndex(Math.Min(anchor.Col1, anchor.Col2));
+
+        for (var index = 0; index < sourceWorkbook.NumberOfNames; index++)
+        {
+            var definedName = sourceWorkbook.GetNameAt(index);
+            if (definedName is null ||
+                definedName.IsDeleted ||
+                !IsAutoFilterDefinedName(definedName.NameName) ||
+                !TryParseNamedRangeRefersTo(workbook, definedName.RefersToFormula, out var range))
+            {
+                continue;
+            }
+
+            if (range.Start.Sheet == range.End.Sheet &&
+                anchorRow == range.Start.Row &&
+                anchorCol >= range.Start.Col &&
+                anchorCol <= range.End.Col)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static FormControlKind? MapHssfFormControlKind(int shapeType) =>
+        shapeType switch
+        {
+            HSSFSimpleShape.OBJECT_TYPE_COMBO_BOX => FormControlKind.DropDown,
+            _ => null
+        };
+
     private static bool TryCreateDrawingShape(HSSFSimpleShape sourceShape, Sheet sheet, out DrawingShapeModel shape)
     {
         shape = new DrawingShapeModel();
@@ -1208,6 +1316,9 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
             (byte)((value >> 16) & 0xFF));
         return true;
     }
+
+    private static long PixelsToEmus(double pixels) =>
+        (long)Math.Round(Math.Max(0, pixels) * 9525.0);
 
     private static string? FirstNonBlank(params string?[] values) =>
         values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
