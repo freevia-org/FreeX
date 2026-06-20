@@ -3754,6 +3754,83 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void EditActiveCellThreadedComment_ReplacesRootTextReadsBackAndUndoes()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.ThreadedComments[a1] = new ThreadedComment("Original", "Quinn");
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+
+        session.GetActiveCellThreadedCommentText().Should().Be("Original");
+
+        var result = session.EditActiveCellThreadedComment("Edited");
+
+        result.Success.Should().BeTrue();
+        sheet.ThreadedComments[a1].Text.Should().Be("Edited");
+        sheet.ThreadedComments[a1].Author.Should().Be("Quinn");
+        session.GetActiveCellThreadedCommentText().Should().Be("Edited");
+
+        session.UndoLastEdit().Success.Should().BeTrue();
+        sheet.ThreadedComments[a1].Text.Should().Be("Original");
+    }
+
+    [Fact]
+    public void SetActiveCellThreadedCommentResolved_TogglesResolvedFlagReadsBackAndUndoes()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.ThreadedComments[a1] = new ThreadedComment("Thread", "Quinn");
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+
+        session.IsActiveCellThreadedCommentResolved().Should().BeFalse();
+
+        var resolved = session.SetActiveCellThreadedCommentResolved(true);
+
+        resolved.Success.Should().BeTrue();
+        sheet.ThreadedComments[a1].IsResolved.Should().BeTrue();
+        session.IsActiveCellThreadedCommentResolved().Should().BeTrue();
+
+        session.SetActiveCellThreadedCommentResolved(false).Success.Should().BeTrue();
+        sheet.ThreadedComments[a1].IsResolved.Should().BeFalse();
+
+        session.UndoLastEdit().Success.Should().BeTrue();
+        sheet.ThreadedComments[a1].IsResolved.Should().BeTrue();
+    }
+
+    [Fact]
+    public void GetActiveCellNote_ReturnsExistingNoteTextOrNull()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        sheet.Comments[a1] = "A note";
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        session.SelectCell(a1);
+        session.GetActiveCellNote().Should().Be("A note");
+
+        session.SelectCell(b1);
+        session.GetActiveCellNote().Should().BeNull();
+    }
+
+    [Fact]
     public void ClearSelectedRangeHyperlinks_ClearsTargetsPreservesDisplayTextSelectionAndUndo()
     {
         var workbook = CreateWorkbook();

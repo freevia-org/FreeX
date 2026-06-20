@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Win Loss Sparkline">
+  <rect width="32" height="32" fill="none"/>
+  <rect x="4.5" y="8.5" width="23" height="15" rx="1" fill="#ffffff" stroke="#242424" stroke-width="1.4"/>
+  <path d="M7.5 16h18" fill="none" stroke="#242424" stroke-width="1"/>
+  <path d="M9 15v-5M14 17v5M19 15v-4M24 17v4" fill="none" stroke="#4472c4" stroke-width="2.4"/>
+  <path d="M14 17v5M24 17v4" fill="none" stroke="#c50f1f" stroke-width="2.4"/>
+</svg>

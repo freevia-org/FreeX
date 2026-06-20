@@ -1,0 +1,335 @@
+using System;
+using System.Linq;
+using System.Threading.Tasks;
+
+using Avalonia;
+using Avalonia.Automation;
+using Avalonia.Controls;
+using Avalonia.Platform.Storage;
+
+using FreeX.App.Services;
+using FreeX.Core.Commands;
+using FreeX.Core.Model;
+
+using FreeShellShell = Free.Shared.Shell;
+
+namespace FreeX.App.Avalonia;
+
+/// <summary>
+/// Handlers for ribbon dropdown / split-button menu items that previously fell through to the
+/// NoOpRibbonCommand seed because their canonical ids were never bound in the <c>ExtraCommands</c>
+/// dictionary (see <c>MainWindow.cs</c>). Each handler reuses an existing shared command / shell
+/// method; this file only adds the dispatch glue plus a few small View-tab surfaces (Ruler toggle,
+/// Switch Windows, Reset Window Position) that had no shell entry point at all.
+/// </summary>
+public sealed partial class MainWindow
+{
+    // ── View ▸ Show ▸ Ruler ─────────────────────────────────────────────────────
+    private void ToggleShowRulers()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        ClearSelectedDrawingObject();
+        var showRulers = !_session.IsShowingRulers;
+        var result = _session.SetShowRulers(showRulers);
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("InsertLoc_RulerFailed"));
+            return;
+        }
+
+        RefreshShell(showRulers ? UiText.Get("RibbonWire_RulerShown") : UiText.Get("RibbonWire_RulerHidden"));
+    }
+
+    // ── View ▸ Zoom split-button presets ────────────────────────────────────────
+    private void ApplyZoomPercentPreset(int zoomPercent) =>
+        ApplyZoomPercent(zoomPercent, UiText.Get("InsertLoc_ZoomFailed"));
+
+    // ── View ▸ Window ▸ Switch Windows ──────────────────────────────────────────
+    // Builds a chooser of every visible top-level window and activates the picked one. Self-contained
+    // (uses AllTopLevelWindows from MainWindow.WindowManagement.cs) — no shared multi-window service.
+    private void ShowSwitchWindowsDialog() => _ = ShowSwitchWindowsDialogAsync();
+
+    private async Task ShowSwitchWindowsDialogAsync()
+    {
+        var windows = AllTopLevelWindows.Where(static w => w.IsVisible).ToList();
+        if (windows.Count <= 1)
+        {
+            RefreshShell(UiText.Get("RibbonWire_SwitchWindowsNone"));
+            return;
+        }
+
+        Window? picked = null;
+        var dialog = new Window
+        {
+            Title = UiText.Get("RibbonWire_SwitchWindowsTitle"),
+            Width = 360,
+            Height = 260,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+            CanResize = false,
+        };
+        AutomationProperties.SetAutomationId(dialog, "SwitchWindowsDialog");
+
+        var panel = new StackPanel { Margin = new Thickness(12), Spacing = 6 };
+        for (var index = 0; index < windows.Count; index++)
+        {
+            var window = windows[index];
+            var label = string.IsNullOrWhiteSpace(window.Title) ? UiText.Format("InsertLoc_WindowLabel", index + 1) : window.Title!;
+            var button = new Button
+            {
+                Content = label,
+                MinWidth = 320,
+                Padding = new Thickness(8, 6),
+                IsDefault = ReferenceEquals(window, this),
+            };
+            button.Click += (_, _) => { picked = window; dialog.Close(); };
+            panel.Children.Add(button);
+        }
+
+        dialog.Content = new ScrollViewer { Content = panel };
+        await dialog.ShowDialog(this);
+
+        if (picked is null)
+            return;
+
+        if (picked.WindowState == WindowState.Minimized)
+            picked.WindowState = WindowState.Normal;
+        picked.Activate();
+        RefreshShell(UiText.Get("RibbonWire_SwitchWindowsActivated"));
+    }
+
+    // ── View ▸ Window ▸ Reset Window Position ────────────────────────────────────
+    // Reuses the portable Free.Shared.Shell.WindowResetPositionPlanner to compute a centered rect.
+    private void ResetWindowPosition()
+    {
+        var workArea = GetPrimaryWorkArea();
+        // The planner returns a rect relative to a (0,0) work-area origin; offset by the real origin.
+        var reset = FreeShellShell.WindowResetPositionPlanner.Compute(
+            workArea.Width, workArea.Height, windowIndex: 0);
+
+        WindowState = WindowState.Normal;
+        Width = reset.Width;
+        Height = reset.Height;
+        Position = new PixelPoint(
+            workArea.X + (int)reset.X,
+            workArea.Y + (int)reset.Y);
+        RefreshShell(UiText.Get("RibbonWire_WindowPositionReset"));
+    }
+
+    // ── Formulas ▸ Calculation ▸ Calculate Sheet ─────────────────────────────────
+    // The shared session exposes only a whole-workbook recalc (no per-sheet engine entry point), so
+    // Calculate Sheet recalculates the workbook — functionally a superset of recalculating the active
+    // sheet. Reported honestly via the status text.
+    private void CalculateSheet()
+    {
+        _session.RecalculateWorkbook();
+        RefreshShell(UiText.Get("RibbonWire_CalculateSheetDone"));
+    }
+
+    // ── Formulas ▸ Formula Auditing ▸ Remove Arrows submenu ──────────────────────
+    private void RemoveFormulaTraceArrowsOfKind(FormulaTraceArrowKind kind)
+    {
+        var removed = _formulaTraceArrows.RemoveAll(arrow => arrow.Kind == kind);
+        if (removed == 0)
+        {
+            RefreshShell(kind == FormulaTraceArrowKind.Precedent
+                ? UiText.Get("RibbonWire_NoPrecedentArrows")
+                : UiText.Get("RibbonWire_NoDependentArrows"));
+            return;
+        }
+
+        RefreshShell(kind == FormulaTraceArrowKind.Precedent
+            ? UiText.Get("RibbonWire_RemovedPrecedentArrows")
+            : UiText.Get("RibbonWire_RemovedDependentArrows"));
+    }
+
+    // ── Home ▸ Cells ▸ Insert / Delete sheet rows & columns ──────────────────────
+    private void InsertSheetRows()
+    {
+        var range = _session.SelectedRange;
+        var result = _session.ExecuteReviewCommand(
+            new InsertRowsCommand(_session.ActiveSheet.Id, range.Start.Row, range.RowCount));
+        RefreshShell(result.Success
+            ? UiText.Get("RibbonWire_InsertedSheetRows")
+            : result.ErrorMessage ?? UiText.Get("RibbonWire_InsertSheetRowsFailed"));
+    }
+
+    private void InsertSheetColumns()
+    {
+        var range = _session.SelectedRange;
+        var result = _session.ExecuteReviewCommand(
+            new InsertColumnsCommand(_session.ActiveSheet.Id, range.Start.Col, range.ColCount));
+        RefreshShell(result.Success
+            ? UiText.Get("RibbonWire_InsertedSheetColumns")
+            : result.ErrorMessage ?? UiText.Get("RibbonWire_InsertSheetColumnsFailed"));
+    }
+
+    private void DeleteSheetRows()
+    {
+        var range = _session.SelectedRange;
+        var result = _session.ExecuteReviewCommand(
+            new DeleteRowsCommand(_session.ActiveSheet.Id, range.Start.Row, range.RowCount));
+        RefreshShell(result.Success
+            ? UiText.Get("RibbonWire_DeletedSheetRows")
+            : result.ErrorMessage ?? UiText.Get("RibbonWire_DeleteSheetRowsFailed"));
+    }
+
+    private void DeleteSheetColumns()
+    {
+        var range = _session.SelectedRange;
+        var result = _session.ExecuteReviewCommand(
+            new DeleteColumnsCommand(_session.ActiveSheet.Id, range.Start.Col, range.ColCount));
+        RefreshShell(result.Success
+            ? UiText.Get("RibbonWire_DeletedSheetColumns")
+            : result.ErrorMessage ?? UiText.Get("RibbonWire_DeleteSheetColumnsFailed"));
+    }
+
+    // ── Home ▸ Cells ▸ Format ▸ Lock Cell ────────────────────────────────────────
+    private void ToggleSelectedRangeLock()
+    {
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var locked = _session.IsSelectedRangeStartLocked;
+        var result = _session.ApplySelectedRangeCompactFormat(new StyleDiff(Locked: !locked), borderPreset: null);
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("InsertLoc_LockCellFailed"));
+            return;
+        }
+
+        RefreshShell(!locked ? UiText.Get("RibbonWire_CellLocked") : UiText.Get("RibbonWire_CellUnlocked"));
+    }
+
+    // ── Data ▸ Outline ▸ Show / Hide Detail ──────────────────────────────────────
+    private void ShowOutlineDetail()
+    {
+        var result = _session.ExecuteReviewCommand(new ExpandRowGroupCommand(_session.ActiveSheet.Id, 1));
+        RefreshShell(result.Success
+            ? UiText.Get("RibbonWire_ShownDetail")
+            : result.ErrorMessage ?? UiText.Get("RibbonWire_ShowDetailFailed"));
+    }
+
+    private void HideOutlineDetail()
+    {
+        var result = _session.ExecuteReviewCommand(new CollapseRowGroupCommand(_session.ActiveSheet.Id, 1));
+        RefreshShell(result.Success
+            ? UiText.Get("RibbonWire_HidDetail")
+            : result.ErrorMessage ?? UiText.Get("RibbonWire_HideDetailFailed"));
+    }
+
+    // ── Page Layout ▸ Page Setup group quick presets ─────────────────────────────
+    private void ApplyPageMargins(WorksheetPageMargins margins, string statusKey)
+    {
+        var result = _session.ExecuteReviewCommand(new SetPageMarginsCommand(_session.ActiveSheet.Id, margins));
+        RefreshShell(result.Success ? UiText.Get(statusKey) : result.ErrorMessage ?? UiText.Get(statusKey));
+    }
+
+    private void ApplyPageOrientation(WorksheetPageOrientation orientation, string statusKey)
+    {
+        var result = _session.ExecuteReviewCommand(new SetPageOrientationCommand(_session.ActiveSheet.Id, orientation));
+        RefreshShell(result.Success ? UiText.Get(statusKey) : result.ErrorMessage ?? UiText.Get(statusKey));
+    }
+
+    private void ApplyPaperSize(WorksheetPaperSize paperSize, string statusKey)
+    {
+        var result = _session.ExecuteReviewCommand(new SetPaperSizeCommand(_session.ActiveSheet.Id, paperSize));
+        RefreshShell(result.Success ? UiText.Get(statusKey) : result.ErrorMessage ?? UiText.Get(statusKey));
+    }
+
+    private void SetPrintAreaFromSelection()
+    {
+        var result = _session.ExecuteReviewCommand(
+            new SetPrintAreaCommand(_session.ActiveSheet.Id, _session.SelectedRange));
+        RefreshShell(result.Success
+            ? UiText.Get("RibbonWire_PrintAreaSet")
+            : result.ErrorMessage ?? UiText.Get("RibbonWire_PrintAreaSetFailed"));
+    }
+
+    private void ClearPrintArea()
+    {
+        var result = _session.ExecuteReviewCommand(new ClearPrintAreaCommand(_session.ActiveSheet.Id));
+        RefreshShell(result.Success
+            ? UiText.Get("RibbonWire_PrintAreaCleared")
+            : result.ErrorMessage ?? UiText.Get("RibbonWire_PrintAreaClearFailed"));
+    }
+
+    // ── Page Layout ▸ Page Setup ▸ Background (Choose / Delete) ──────────────────
+    private void ChooseSheetBackground() => _ = ChooseSheetBackgroundAsync();
+
+    private async Task ChooseSheetBackgroundAsync()
+    {
+        if (!((IStorageProvider)StorageProvider).CanOpen)
+        {
+            ShowEditIssue(UiText.Get("RibbonWire_BackgroundUnavailable"));
+            return;
+        }
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = UiText.Get("RibbonWire_BackgroundPickerTitle"),
+            AllowMultiple = false,
+            FileTypeFilter = [PictureFileType],
+        });
+
+        IStorageFile? file = null;
+        foreach (var candidate in files)
+        {
+            file = candidate;
+            break;
+        }
+
+        if (file is null)
+            return;
+
+        var contentType = InsertPictureCommandFactory.ContentTypeForPath(file.Name);
+        if (contentType is null)
+        {
+            ShowEditIssue(UiText.Get("RibbonWire_BackgroundUnsupported"));
+            return;
+        }
+
+        byte[] imageBytes;
+        try
+        {
+            await using var stream = await file.OpenReadAsync();
+            using var memory = new MemoryStream();
+            await stream.CopyToAsync(memory);
+            imageBytes = memory.ToArray();
+        }
+        catch (IOException ex)
+        {
+            ShowEditIssue(UiText.Format("InsertLoc_CouldNotReadImage", ex.Message));
+            return;
+        }
+
+        if (imageBytes.Length == 0)
+        {
+            ShowEditIssue(UiText.Get("RibbonWire_BackgroundUnsupported"));
+            return;
+        }
+
+        var background = new WorksheetBackgroundImage(imageBytes, contentType, file.Name);
+        var result = _session.ExecuteReviewCommand(
+            new SetWorksheetBackgroundCommand(_session.ActiveSheet.Id, background));
+        RefreshShell(result.Success
+            ? UiText.Get("RibbonWire_BackgroundSet")
+            : result.ErrorMessage ?? UiText.Get("RibbonWire_BackgroundSet"));
+    }
+
+    private void DeleteSheetBackground()
+    {
+        var result = _session.ExecuteReviewCommand(new ClearWorksheetBackgroundCommand(_session.ActiveSheet.Id));
+        RefreshShell(result.Success
+            ? UiText.Get("RibbonWire_BackgroundDeleted")
+            : result.ErrorMessage ?? UiText.Get("RibbonWire_BackgroundDeleted"));
+    }
+}

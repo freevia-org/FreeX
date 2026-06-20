@@ -1,7 +1,15 @@
+using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia.Dialogs;
+
+/// <summary>The direction a rule moves in the priority order.</summary>
+public enum ConditionalFormatRuleMoveDirection
+{
+    Up,
+    Down
+}
 
 /// <summary>One row in the Manage Rules list: a rule plus a human-readable description.</summary>
 public sealed record ConditionalFormatRuleListItem(ConditionalFormat Rule, string Description)
@@ -74,6 +82,55 @@ public static class ConditionalFormatManageModel
 
         var updated = sheetRules.ToList();
         updated[index] = editedRule;
+        Reprioritize(updated);
+        return new ReplaceAllConditionalFormatsCommand(sheetId, updated);
+    }
+
+    /// <summary>
+    /// The command that moves a rule up or down in priority order (swapping it with its neighbour),
+    /// then replaces all rules atomically. Returns <c>null</c> when the move is a no-op (rule absent,
+    /// or already at the boundary in the requested direction).
+    /// </summary>
+    public static ReplaceAllConditionalFormatsCommand? BuildMoveCommand(
+        SheetId sheetId,
+        IReadOnlyList<ConditionalFormat> sheetRules,
+        Guid ruleId,
+        ConditionalFormatRuleMoveDirection direction)
+    {
+        ArgumentNullException.ThrowIfNull(sheetRules);
+
+        var ordered = sheetRules.OrderBy(rule => rule.Priority).ToList();
+        var index = IndexOf(ordered, ruleId);
+        if (index < 0)
+            return null;
+
+        var target = direction == ConditionalFormatRuleMoveDirection.Up ? index - 1 : index + 1;
+        if (target < 0 || target >= ordered.Count)
+            return null;
+
+        (ordered[index], ordered[target]) = (ordered[target], ordered[index]);
+        Reprioritize(ordered);
+        return new ReplaceAllConditionalFormatsCommand(sheetId, ordered);
+    }
+
+    /// <summary>
+    /// The command that changes a rule's applies-to range, then replaces all rules atomically.
+    /// Returns <c>null</c> when the rule id is not present (nothing to do).
+    /// </summary>
+    public static ReplaceAllConditionalFormatsCommand? BuildAppliesToCommand(
+        SheetId sheetId,
+        IReadOnlyList<ConditionalFormat> sheetRules,
+        Guid ruleId,
+        GridRange range)
+    {
+        ArgumentNullException.ThrowIfNull(sheetRules);
+
+        var index = IndexOf(sheetRules, ruleId);
+        if (index < 0)
+            return null;
+
+        var updated = sheetRules.ToList();
+        updated[index].AppliesTo = range;
         Reprioritize(updated);
         return new ReplaceAllConditionalFormatsCommand(sheetId, updated);
     }

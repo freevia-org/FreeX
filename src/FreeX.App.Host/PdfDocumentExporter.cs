@@ -5,19 +5,41 @@ using System.Windows.Documents;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using FreeX.Core.Model;
+using Free.Shared.Pdf.Wpf;
 using PdfSharp.Drawing;
 using PdfSharp.Pdf;
+using SharedPdf = Free.Shared.Pdf;
 
 namespace FreeX.App.Host;
 
 internal sealed record PdfBookmark(string Title, int PageIndex);
 
+/// <summary>
+/// Renders a paginated FreeX <see cref="FixedDocument"/> to a real PDF.
+///
+/// <para>
+/// The raster image, selectable-text overlays, external-URI link annotations and document Info
+/// metadata are emitted through the shared <see cref="WpfRasterPdfWriter"/> (PDFsharp) so FreeX and
+/// FreeW share one rasterized-page → PDF emitter rather than each carrying its own PDFsharp plumbing.
+/// FreeX layers its spreadsheet-specific extras on top through the writer's hooks: vector overlays
+/// (gridlines/borders/shapes and gradient fills) via the per-page draw hook, and bookmarks/outlines,
+/// viewer preferences, the catalog <c>/Lang</c>, the <c>/DisplayDocTitle</c> preference and internal
+/// cross-page <c>/Dest</c> link destinations via the document-configuration hook.
+/// </para>
+/// </summary>
 internal static class PdfDocumentExporter
 {
     private const double StandardDpi = 96.0;
     private const double MinimumSizeDpi = 72.0;
-    private sealed record ExportedPdfPage(PdfPage PdfPage, FixedPage FixedPage);
+
+    // WPF lays visuals out in device-independent pixels (1/96 inch); PDF user space is points (1/72 inch).
+    private const double DipToPoint = 72.0 / StandardDpi;
+
     private sealed record PdfInternalDestination(PdfPage Page, XPoint Point);
+
+    // A page selected for export: the laid-out source page plus the internal (place-in-this-document)
+    // link overlays that resolve to /Dest annotations once every PDF page exists.
+    private sealed record ExportPage(FixedPage FixedPage, IReadOnlyList<PdfLinkOverlay> InternalLinks);
 
     public static void Save(
         FixedDocument document,
@@ -128,15 +150,8 @@ internal static class PdfDocumentExporter
         if (firstPageIndex > lastPageIndexInclusive || document.Pages.Count == 0)
             throw new InvalidOperationException("The requested page range does not contain any exportable pages.");
 
-        using var pdf = new PdfDocument();
-        if (includeSelectableText)
-            pdf.Options.CompressContentStreams = false;
-        pdf.Info.Creator = "FreeX";
-        ApplyDefaultCatalogMetadata(pdf, pdfLanguage);
-        ApplyDefaultViewerPreferences(pdf, initialView);
-        ApplyProperties(pdf, properties);
-
-        var exportedPages = new List<ExportedPdfPage>();
+        var exportPages = new List<ExportPage>();
+        var rasterPages = new List<SharedPdf.PdfRasterPage>();
         for (int i = firstPageIndex; i <= lastPageIndexInclusive; i++)
         {
             var fixedPage = GetFixedPage(document.Pages[i]);
@@ -145,27 +160,130 @@ internal static class PdfDocumentExporter
             fixedPage.Arrange(new Rect(pageSize));
             fixedPage.UpdateLayout();
 
-            var bitmap = RenderPage(fixedPage, pageSize, dpi);
-            var page = pdf.AddPage();
-            page.Width = XUnit.FromPoint(pageSize.Width * 72.0 / StandardDpi);
-            page.Height = XUnit.FromPoint(pageSize.Height * 72.0 / StandardDpi);
+            var imageBytes = EncodePng(RenderPage(fixedPage, pageSize, dpi));
+            var textOverlays = includeSelectableText ? BuildTextOverlays(fixedPage) : null;
+            var (uriLinks, internalLinks) = BuildLinkOverlays(fixedPage);
 
-            using var gfx = XGraphics.FromPdfPage(page);
-            using var image = XImage.FromBitmapSource(bitmap);
-            gfx.DrawImage(image, 0, 0, page.Width.Point, page.Height.Point);
-            DrawVectorOverlays(gfx, fixedPage);
-            if (includeSelectableText)
-                DrawTextOverlay(gfx, fixedPage);
-            exportedPages.Add(new ExportedPdfPage(page, fixedPage));
+            rasterPages.Add(new SharedPdf.PdfRasterPage(
+                pageSize.Width * DipToPoint,
+                pageSize.Height * DipToPoint,
+                imageBytes,
+                textOverlays,
+                uriLinks));
+            exportPages.Add(new ExportPage(fixedPage, internalLinks));
         }
 
-        var internalDestinations = BuildInternalDestinationLookup(exportedPages);
-        foreach (var exportedPage in exportedPages)
-            AddLinkAnnotations(exportedPage.PdfPage, exportedPage.FixedPage, internalDestinations);
+        var rasterDocument = new SharedPdf.PdfRasterDocument(rasterPages, BuildProperties(properties));
+        var normalizedTitle = NormalizeProperty(properties?.Title);
+
+        WpfRasterPdfWriter.Write(
+            rasterDocument,
+            outputStream,
+            drawPageContent: (gfx, _, index) => DrawVectorOverlays(gfx, exportPages[index].FixedPage),
+            configureDocument: pdf => ConfigureDocument(
+                pdf, exportPages, bookmarks, firstPageIndex, lastPageIndexInclusive,
+                initialView, openMode, normalizedTitle, pdfLanguage),
+            uncompressedContent: includeSelectableText);
+    }
+
+    private static SharedPdf.PdfDocumentProperties BuildProperties(PdfDocumentProperties? properties) =>
+        new(
+            Title: properties?.Title,
+            Author: properties?.Author,
+            Subject: properties?.Subject,
+            Keywords: properties?.Keywords,
+            Creator: "FreeX");
+
+    private static void ConfigureDocument(
+        PdfDocument pdf,
+        IReadOnlyList<ExportPage> exportPages,
+        IReadOnlyList<PdfBookmark>? bookmarks,
+        int firstPageIndex,
+        int lastPageIndexInclusive,
+        PdfInitialView initialView,
+        PdfOpenMode openMode,
+        string? normalizedTitle,
+        string pdfLanguage)
+    {
+        ApplyDefaultCatalogMetadata(pdf, pdfLanguage);
+        ApplyDefaultViewerPreferences(pdf, initialView);
+        if (normalizedTitle is not null)
+            SetDisplayDocumentTitlePreference(pdf);
+
+        AddInternalLinkAnnotations(pdf, exportPages);
 
         var hasBookmarks = AddBookmarks(pdf, bookmarks, firstPageIndex, lastPageIndexInclusive);
         ApplyOpenMode(pdf, openMode, hasBookmarks);
-        pdf.Save(outputStream);
+    }
+
+    private static IReadOnlyList<SharedPdf.PdfTextOverlay>? BuildTextOverlays(FixedPage page)
+    {
+        var extracted = PdfTextOverlayExtractor.Extract(page);
+        if (extracted.Count == 0)
+            return null;
+
+        var overlays = new List<SharedPdf.PdfTextOverlay>(extracted.Count);
+        foreach (var overlay in extracted)
+        {
+            overlays.Add(new SharedPdf.PdfTextOverlay(
+                X: overlay.X * DipToPoint,
+                Y: overlay.Y * DipToPoint,
+                FontSize: overlay.FontSize * DipToPoint,
+                FontFamily: overlay.FontFamily,
+                Bold: overlay.Bold,
+                Italic: overlay.Italic,
+                Color: new SharedPdf.PdfColor(overlay.Color.R, overlay.Color.G, overlay.Color.B),
+                RotationDegrees: overlay.RotationDegrees,
+                Text: overlay.Text));
+        }
+
+        return overlays;
+    }
+
+    // Splits the page's hyperlink overlays into the external-URI links routed through the shared writer
+    // (converted to PDF points) and the internal place-in-this-document links FreeX resolves locally to
+    // /Dest annotations once every PDF page exists.
+    private static (IReadOnlyList<SharedPdf.PdfLinkOverlay>? Uri, IReadOnlyList<PdfLinkOverlay> Internal) BuildLinkOverlays(FixedPage page)
+    {
+        var extracted = PdfLinkOverlayExtractor.Extract(page);
+        if (extracted.Count == 0)
+            return (null, []);
+
+        List<SharedPdf.PdfLinkOverlay>? uriLinks = null;
+        List<PdfLinkOverlay>? internalLinks = null;
+        foreach (var overlay in extracted)
+        {
+            if (overlay.Width <= 0 || overlay.Height <= 0)
+                continue;
+
+            if (overlay.TargetKind == HyperlinkTargetKind.PlaceInThisDocument)
+            {
+                (internalLinks ??= []).Add(overlay);
+                continue;
+            }
+
+            if (NormalizeLinkAnnotationUri(overlay) is not { } uri)
+                continue;
+
+            (uriLinks ??= []).Add(new SharedPdf.PdfLinkOverlay(
+                X: overlay.X * DipToPoint,
+                Y: overlay.Y * DipToPoint,
+                Width: overlay.Width * DipToPoint,
+                Height: overlay.Height * DipToPoint,
+                Uri: uri,
+                Tooltip: null));
+        }
+
+        return (uriLinks, internalLinks ?? []);
+    }
+
+    private static byte[] EncodePng(BitmapSource bitmap)
+    {
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using var stream = new MemoryStream();
+        encoder.Save(stream);
+        return stream.ToArray();
     }
 
     private static bool AddBookmarks(
@@ -200,24 +318,6 @@ internal static class PdfDocumentExporter
         }
 
         return false;
-    }
-
-    private static void ApplyProperties(PdfDocument pdf, PdfDocumentProperties? properties)
-    {
-        if (properties is null)
-            return;
-
-        if (NormalizeProperty(properties.Title) is { } title)
-        {
-            pdf.Info.Title = title;
-            SetDisplayDocumentTitlePreference(pdf);
-        }
-        if (NormalizeProperty(properties.Author) is { } author)
-            pdf.Info.Author = author;
-        if (NormalizeProperty(properties.Subject) is { } subject)
-            pdf.Info.Subject = subject;
-        if (NormalizeProperty(properties.Keywords) is { } keywords)
-            pdf.Info.Keywords = keywords;
     }
 
     private static string? NormalizeProperty(string? value) =>
@@ -319,34 +419,6 @@ internal static class PdfDocumentExporter
         return target;
     }
 
-    private static void DrawTextOverlay(XGraphics gfx, FixedPage page)
-    {
-        foreach (var overlay in PdfTextOverlayExtractor.Extract(page))
-        {
-            var style = XFontStyleEx.Regular;
-            if (overlay.Bold && overlay.Italic)
-                style = XFontStyleEx.BoldItalic;
-            else if (overlay.Bold)
-                style = XFontStyleEx.Bold;
-            else if (overlay.Italic)
-                style = XFontStyleEx.Italic;
-
-            var font = new XFont(overlay.FontFamily, overlay.FontSize * 72.0 / StandardDpi, style);
-            var brush = new XSolidBrush(XColor.FromArgb(overlay.Color.A, overlay.Color.R, overlay.Color.G, overlay.Color.B));
-            var point = new XPoint(overlay.X * 72.0 / StandardDpi, (overlay.Y + overlay.FontSize) * 72.0 / StandardDpi);
-            if (IsZero(overlay.RotationDegrees))
-            {
-                gfx.DrawString(overlay.Text, font, brush, point);
-                continue;
-            }
-
-            var state = gfx.Save();
-            gfx.RotateAtTransform(overlay.RotationDegrees, point);
-            gfx.DrawString(overlay.Text, font, brush, point);
-            gfx.Restore(state);
-        }
-    }
-
     private static void DrawVectorOverlays(XGraphics gfx, FixedPage page)
     {
         var pageTransform = CreatePageTransform(0, 0);
@@ -430,7 +502,7 @@ internal static class PdfDocumentExporter
     }
 
     private static Matrix CreatePageTransform(double x, double y) =>
-        new(72.0 / StandardDpi, 0, 0, 72.0 / StandardDpi, x * 72.0 / StandardDpi, y * 72.0 / StandardDpi);
+        new(DipToPoint, 0, 0, DipToPoint, x * DipToPoint, y * DipToPoint);
 
     private static Matrix CreateElementTransform(UIElement element, Matrix parentTransform)
     {
@@ -581,7 +653,7 @@ internal static class PdfDocumentExporter
 
         return IsFinite(scale) && scale > 0
             ? scale
-            : 72.0 / StandardDpi;
+            : DipToPoint;
     }
 
     private static XColor ToXColor(Color color, double opacity)
@@ -657,22 +729,24 @@ internal static class PdfDocumentExporter
     }
 
     private static IReadOnlyDictionary<CellAddress, PdfInternalDestination> BuildInternalDestinationLookup(
-        IReadOnlyList<ExportedPdfPage> pages)
+        PdfDocument pdf,
+        IReadOnlyList<ExportPage> exportPages)
     {
         var result = new Dictionary<CellAddress, PdfInternalDestination>();
-        foreach (var page in pages)
+        for (int i = 0; i < exportPages.Count; i++)
         {
-            foreach (var overlay in PdfCellDestinationOverlayExtractor.Extract(page.FixedPage))
+            var pdfPage = pdf.Pages[i];
+            foreach (var overlay in PdfCellDestinationOverlayExtractor.Extract(exportPages[i].FixedPage))
             {
                 if (result.ContainsKey(overlay.Address) ||
                     overlay.Width <= 0 ||
                     overlay.Height <= 0 ||
-                    !TryCreateInternalDestinationPoint(page.PdfPage, overlay, out var point))
+                    !TryCreateInternalDestinationPoint(pdfPage, overlay, out var point))
                 {
                     continue;
                 }
 
-                result[overlay.Address] = new PdfInternalDestination(page.PdfPage, point);
+                result[overlay.Address] = new PdfInternalDestination(pdfPage, point);
             }
         }
 
@@ -684,8 +758,8 @@ internal static class PdfDocumentExporter
         PdfCellDestinationOverlay overlay,
         out XPoint point)
     {
-        var left = overlay.X * 72.0 / StandardDpi;
-        var top = pdfPage.Height.Point - overlay.Y * 72.0 / StandardDpi;
+        var left = overlay.X * DipToPoint;
+        var top = pdfPage.Height.Point - overlay.Y * DipToPoint;
 
         left = Math.Clamp(left, 0, pdfPage.Width.Point);
         top = Math.Clamp(top, 0, pdfPage.Height.Point);
@@ -700,23 +774,18 @@ internal static class PdfDocumentExporter
         return true;
     }
 
-    private static void AddLinkAnnotations(
-        PdfPage pdfPage,
-        FixedPage fixedPage,
-        IReadOnlyDictionary<CellAddress, PdfInternalDestination> internalDestinations)
+    // Internal (place-in-this-document) hyperlinks become PDF /Dest annotations once every page exists,
+    // so they are stamped here rather than through the shared writer's external-URI overlay path.
+    private static void AddInternalLinkAnnotations(PdfDocument pdf, IReadOnlyList<ExportPage> exportPages)
     {
-        foreach (var overlay in PdfLinkOverlayExtractor.Extract(fixedPage))
+        if (exportPages.All(page => page.InternalLinks.Count == 0))
+            return;
+
+        var internalDestinations = BuildInternalDestinationLookup(pdf, exportPages);
+        for (int i = 0; i < exportPages.Count; i++)
         {
-            if (overlay.Width <= 0 ||
-                overlay.Height <= 0)
-            {
-                continue;
-            }
-
-            if (!TryCreateLinkAnnotationRect(pdfPage, overlay, out var rect) || rect is null)
-                continue;
-
-            if (overlay.TargetKind == HyperlinkTargetKind.PlaceInThisDocument)
+            var pdfPage = pdf.Pages[i];
+            foreach (var overlay in exportPages[i].InternalLinks)
             {
                 if (overlay.TargetAddress is not { } targetAddress ||
                     !internalDestinations.TryGetValue(targetAddress, out var destination))
@@ -724,27 +793,12 @@ internal static class PdfDocumentExporter
                     continue;
                 }
 
+                if (!TryCreateLinkAnnotationRect(pdfPage, overlay, out var rect) || rect is null)
+                    continue;
+
                 AddInternalLinkAnnotation(pdfPage, overlay, rect, destination);
-                continue;
             }
-
-            var uri = NormalizeLinkAnnotationUri(overlay);
-            if (uri is null)
-                continue;
-
-            AddUriLinkAnnotation(pdfPage, overlay, rect, uri);
         }
-    }
-
-    private static void AddUriLinkAnnotation(PdfPage pdfPage, PdfLinkOverlay overlay, PdfRectangle rect, string uri)
-    {
-        var action = new PdfDictionary(pdfPage.Owner);
-        action.Elements.SetName("/S", "/URI");
-        action.Elements.SetString("/URI", uri);
-
-        var annotation = CreateBaseLinkAnnotation(pdfPage, rect, uri);
-        annotation.Elements["/A"] = action;
-        GetOrCreateAnnotations(pdfPage).Elements.Add(annotation);
     }
 
     private static void AddInternalLinkAnnotation(
@@ -791,10 +845,10 @@ internal static class PdfDocumentExporter
 
     private static bool TryCreateLinkAnnotationRect(PdfPage pdfPage, PdfLinkOverlay overlay, out PdfRectangle? rect)
     {
-        var left = overlay.X * 72.0 / StandardDpi;
-        var right = (overlay.X + overlay.Width) * 72.0 / StandardDpi;
-        var top = pdfPage.Height.Point - overlay.Y * 72.0 / StandardDpi;
-        var bottom = pdfPage.Height.Point - (overlay.Y + overlay.Height) * 72.0 / StandardDpi;
+        var left = overlay.X * DipToPoint;
+        var right = (overlay.X + overlay.Width) * DipToPoint;
+        var top = pdfPage.Height.Point - overlay.Y * DipToPoint;
+        var bottom = pdfPage.Height.Point - (overlay.Y + overlay.Height) * DipToPoint;
 
         left = Math.Clamp(left, 0, pdfPage.Width.Point);
         right = Math.Clamp(right, 0, pdfPage.Width.Point);

@@ -59,13 +59,19 @@ public class SectionsTests
             Landscape = true,
             ColumnCount = 3,
             ColumnSpacingPt = 18,
+            ColumnsLineBetween = true,
+            ColumnWidthsPt = [108.0, 144.0, 180.0],
             PageBorder = new PageBorder("#123456", 2.5),
             Watermark = "DRAFT",
             LineNumberMode = LineNumberMode.Continuous,
             LineNumberCountBy = 5,
             AutoHyphenation = true,
             VerticalAlignment = PageVerticalAlignment.Center,
-            DifferentFirstPage = true
+            DifferentFirstPage = true,
+            GutterPt = 21,
+            HeaderDistancePt = 33,
+            FooterDistancePt = 44,
+            MirrorMargins = true
         };
 
         var clone = original.Clone();
@@ -80,6 +86,9 @@ public class SectionsTests
         clone.Landscape.Should().BeTrue();
         clone.ColumnCount.Should().Be(3);
         clone.ColumnSpacingPt.Should().Be(18);
+        clone.ColumnsLineBetween.Should().BeTrue();
+        clone.ColumnWidthsPt.Should().Equal(108.0, 144.0, 180.0);
+        clone.ColumnWidthsPt.Should().NotBeSameAs(original.ColumnWidthsPt); // deep copy
         clone.PageBorder.Should().Be(new PageBorder("#123456", 2.5));
         clone.Watermark.Should().Be("DRAFT");
         clone.LineNumberMode.Should().Be(LineNumberMode.Continuous);
@@ -87,6 +96,10 @@ public class SectionsTests
         clone.AutoHyphenation.Should().BeTrue();
         clone.VerticalAlignment.Should().Be(PageVerticalAlignment.Center);
         clone.DifferentFirstPage.Should().BeTrue();
+        clone.GutterPt.Should().Be(21);
+        clone.HeaderDistancePt.Should().Be(33);
+        clone.FooterDistancePt.Should().Be(44);
+        clone.MirrorMargins.Should().BeTrue();
 
         // Mutating the clone does not affect the original.
         clone.WidthPt = 999;

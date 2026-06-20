@@ -721,7 +721,7 @@ public partial class MainWindow
 
     private void SelectCompletedAutofillRange(GridRange sourceRange, GridRange fillRange)
     {
-        var selectionRange = FreeX.App.UI.GridAutofillPlanner.CalculateCompletedSelectionRange(sourceRange, fillRange);
+        var selectionRange = FreeX.App.Presentation.GridInteraction.GridAutofillPlanner.CalculateCompletedSelectionRange(sourceRange, fillRange);
         _selectionAnchor = selectionRange.Start;
         _selectionCursor = selectionRange.End;
         if (_workbook.GetSheet(_currentSheetId) is { } sheet)

@@ -2,6 +2,7 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using FreeX.App.Presentation.Filtering;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -165,8 +166,45 @@ public partial class MainWindow
                 return;
             UpdateViewport();
         };
+
+        // Track the flyout so a sheet switch can dismiss it (it is a separate modeless window that
+        // otherwise keeps floating over the newly-activated sheet).
+        _autoFilterDropdown = dialog;
+        _autoFilterDropdownSheetId = _currentSheetId;
+        dialog.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(_autoFilterDropdown, dialog))
+                _autoFilterDropdown = null;
+        };
+
         dialog.Show();
         dialog.Activate();
+    }
+
+    /// <summary>
+    /// Closes the open AutoFilter dropdown flyout when the active sheet has changed since it was
+    /// opened. Called from <see cref="UpdateViewport"/>; the sheet-id guard means same-sheet
+    /// viewport refreshes (scroll, resize, filter apply) leave the flyout open.
+    /// </summary>
+    private void CloseAutoFilterDropdownOnSheetChange()
+    {
+        if (_autoFilterDropdown is not null && !_autoFilterDropdownSheetId.Equals(_currentSheetId))
+            CloseAutoFilterDropdown();
+    }
+
+    /// <summary>
+    /// Closes the open AutoFilter dropdown flyout, if any. The flyout self-dismisses on deactivation
+    /// (click anywhere outside it), but events that move the anchored cell without changing window
+    /// activation — scrolling the grid, a programmatic sheet switch — must dismiss it explicitly so it
+    /// never floats detached from its column header.
+    /// </summary>
+    private void CloseAutoFilterDropdown()
+    {
+        if (_autoFilterDropdown is { } dialog)
+        {
+            _autoFilterDropdown = null;
+            dialog.Close();
+        }
     }
 
     private AutoFilterDialog? CreateAutoFilterFlyoutDialog(

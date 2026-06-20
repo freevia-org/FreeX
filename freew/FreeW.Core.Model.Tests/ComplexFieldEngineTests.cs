@@ -1,0 +1,169 @@
+namespace FreeW.Core.Model.Tests;
+
+/// <summary>
+/// Unit coverage for <see cref="ComplexFieldEngine"/> — the model-side F9 / Update-Field recomputation of
+/// the reference/numbering complex fields FreeW models: <c>REF</c>/<c>PAGEREF</c> (cross-reference to a
+/// bookmark) and <c>SEQ</c> (running sequence numbering, the basis of "Figure 1"/"Table 2").
+/// </summary>
+public class ComplexFieldEngineTests
+{
+    // Adds a paragraph whose single run is a complex field with the given instruction + cached result,
+    // returning the paragraph so the caller can also set e.g. a bookmark on it.
+    private static Paragraph AddField(TextDocument doc, string instruction, string cached = "")
+    {
+        var p = new Paragraph();
+        p.Runs.Add(Run.ComplexFieldRun(instruction, cached));
+        doc.Blocks.Add(p);
+        return p;
+    }
+
+    [Fact]
+    public void CanRecompute_OnlyRefPageRefAndSeq()
+    {
+        new ComplexField(" REF mark ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
+        new ComplexField(" PAGEREF mark ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
+        new ComplexField(" SEQ Figure ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
+        new ComplexField(" PAGE ").Let(ComplexFieldEngine.CanRecompute).Should().BeFalse();
+        new ComplexField(" DATE ").Let(ComplexFieldEngine.CanRecompute).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(" REF mark ", "mark")]
+    [InlineData(" PAGEREF mark \\h ", "mark")]
+    [InlineData(" SEQ Figure \\* ARABIC ", "Figure")]
+    [InlineData(" REF \"My Mark\" ", "My Mark")]
+    public void Argument_ExtractsFirstNonSwitchToken(string instruction, string expected)
+    {
+        ComplexFieldEngine.Argument(instruction).Should().Be(expected);
+    }
+
+    [Fact]
+    public void Ref_ResolvesToBookmarkedParagraphText()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Chapter One — Origins") { BookmarkName = "ch1" }); // 0: target
+        var field = AddField(doc, " REF ch1 ", cached: "stale");                          // 1: REF field
+
+        ComplexFieldEngine.Recompute(doc, blockIndex: 1, runIndex: 0)
+            .Should().Be("Chapter One — Origins");
+    }
+
+    [Fact]
+    public void Ref_AfterTargetTextChanges_RecomputesToNewText()
+    {
+        var doc = new TextDocument();
+        var target = new Paragraph("Original heading") { BookmarkName = "h" };
+        doc.Blocks.Add(target);                                  // 0
+        AddField(doc, " REF h ", cached: "Original heading");    // 1
+
+        // Edit the bookmarked target, then re-run F9: the field must follow the new text.
+        target.Runs.Clear();
+        target.Runs.Add(new Run("Renamed heading"));
+
+        ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("Renamed heading");
+    }
+
+    [Fact]
+    public void Ref_UnknownBookmark_KeepsCachedText()
+    {
+        var doc = new TextDocument();
+        AddField(doc, " REF ghost ", cached: "last value"); // 0: dangling reference
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("last value");
+    }
+
+    [Fact]
+    public void PageRef_UsesPageResolver_ForTargetBlock()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Appendix A") { BookmarkName = "appx" }); // 0: target on page 7
+        AddField(doc, " PAGEREF appx \\h ", cached: "1");                       // 1: PAGEREF field
+
+        var result = ComplexFieldEngine.Recompute(doc, 1, 0, pageOf: block => block == 0 ? 7 : null);
+        result.Should().Be("7");
+    }
+
+    [Fact]
+    public void PageRef_NoResolver_FallsBackToPageOne()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Target") { BookmarkName = "t" });
+        AddField(doc, " PAGEREF t ", cached: "9");
+
+        ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("1");
+    }
+
+    [Fact]
+    public void Seq_NumbersRunningCountPerName()
+    {
+        var doc = new TextDocument();
+        AddField(doc, " SEQ Figure ", cached: "?"); // 0 → 1
+        AddField(doc, " SEQ Table ", cached: "?");  // 1 → 1 (independent name)
+        AddField(doc, " SEQ Figure ", cached: "?"); // 2 → 2
+        AddField(doc, " SEQ Figure ", cached: "?"); // 3 → 3
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("1");
+        ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("1");
+        ComplexFieldEngine.Recompute(doc, 2, 0).Should().Be("2");
+        ComplexFieldEngine.Recompute(doc, 3, 0).Should().Be("3");
+    }
+
+    [Fact]
+    public void Seq_InsertingEarlierField_RenumbersLaterFields()
+    {
+        var doc = new TextDocument();
+        AddField(doc, " SEQ Figure ", cached: "?"); // 0 → 1
+        AddField(doc, " SEQ Figure ", cached: "?"); // 1 → 2
+
+        // A figure is added between them: the originally-second field becomes the third.
+        var inserted = new Paragraph();
+        inserted.Runs.Add(Run.ComplexFieldRun(" SEQ Figure ", "?"));
+        doc.Blocks.Insert(1, inserted);              // now 0,1 are figures, old "1" is at index 2
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("1");
+        ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("2");
+        ComplexFieldEngine.Recompute(doc, 2, 0).Should().Be("3");
+    }
+
+    [Fact]
+    public void Seq_ResetSwitch_RestartsCounter()
+    {
+        var doc = new TextDocument();
+        AddField(doc, " SEQ Figure ", cached: "?");        // 0 → 1
+        AddField(doc, " SEQ Figure ", cached: "?");        // 1 → 2
+        AddField(doc, " SEQ Figure \\r 1 ", cached: "?");  // 2 → reset to 1
+        AddField(doc, " SEQ Figure ", cached: "?");        // 3 → 2
+
+        ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("2");
+        ComplexFieldEngine.Recompute(doc, 2, 0).Should().Be("1");
+        ComplexFieldEngine.Recompute(doc, 3, 0).Should().Be("2");
+    }
+
+    [Fact]
+    public void Seq_RepeatSwitch_RepeatsCurrentValueWithoutAdvancing()
+    {
+        var doc = new TextDocument();
+        AddField(doc, " SEQ Figure ", cached: "?");       // 0 → 1
+        AddField(doc, " SEQ Figure \\c ", cached: "?");   // 1 → 1 (repeat, no advance)
+        AddField(doc, " SEQ Figure ", cached: "?");       // 2 → 2
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("1");
+        ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("1");
+        ComplexFieldEngine.Recompute(doc, 2, 0).Should().Be("2");
+    }
+
+    [Fact]
+    public void Recompute_NonReferenceField_ReturnsCachedTextUnchanged()
+    {
+        var doc = new TextDocument();
+        AddField(doc, " MERGEFIELD FirstName ", cached: "John");
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("John");
+    }
+}
+
+// Small fluent helper so the CanRecompute assertions read top-to-bottom without temporaries.
+internal static class LetExtensions
+{
+    public static TResult Let<T, TResult>(this T value, Func<T, TResult> f) => f(value);
+}

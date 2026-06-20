@@ -105,10 +105,15 @@ internal static class XlsxWorksheetColumnWidthWriter
             col.SetAttributeValue("width", width.ToString("0.################", CultureInfo.InvariantCulture));
             col.SetAttributeValue("customWidth", "1");
 
-            // ClosedXML stamps the default style (index 0) on every <col>; the loader discards a styled
-            // near-default width as a styling-only entry, so drop the default style here to let a genuine
-            // modelled width round-trip. A real, non-default column style is preserved.
-            if (col.Attribute("style")?.Value == "0")
+            // ClosedXML stamps a style index on every <col> it emits (the default style "0" on plain
+            // columns, a real index when the column carries cell formatting). The loader treats a styled
+            // column at a near-default width (<= 9.2) as a styling-only carrier and discards its width.
+            // FreeX does not model a per-column style, so any style here is ClosedXML's stamp: drop it on
+            // a genuinely-modelled width that falls in that carrier band so the width is never mistaken
+            // for a carrier and round-trips intact (e.g. a narrow 1.71 / 5.71 gutter, or a real 8.14 /
+            // 8.71 column). Columns wider than the band keep their stamped style — the loader keeps those
+            // widths regardless, so a real column style still survives there.
+            if (col.Attribute("style") is not null && width <= ColumnWidthCarrierBandMax)
                 col.SetAttributeValue("style", null);
         }
 
@@ -129,6 +134,12 @@ internal static class XlsxWorksheetColumnWidthWriter
             InsertColsElement(root, ns, newCols);
         return true;
     }
+
+    // The upper bound of the near-default "carrier" width band the loader
+    // (XlsxWorksheetRowColumnLayoutReader.ReadColumnLayout) uses to discard styling-only columns. A
+    // genuinely-modelled width at or below this must have its ClosedXML-stamped style dropped on save so
+    // the loader does not mistake it for a carrier. Keep in sync with the loader's threshold.
+    private const double ColumnWidthCarrierBandMax = 9.2;
 
     // A <col> is worth keeping (without a width) only if it still carries hidden, outline, collapsed,
     // or a non-default (non-"0") style. A bare min/max (or default style="0") entry is dropped.

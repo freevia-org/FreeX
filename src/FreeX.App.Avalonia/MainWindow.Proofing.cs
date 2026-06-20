@@ -1,10 +1,13 @@
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using FreeX.App.Services;
 using FreeX.Core.Model;
 using AvaloniaProofingHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
 
@@ -46,7 +49,7 @@ public sealed partial class MainWindow
         var result = _session.CommitCellText(text);
         RefreshShell(result.Success
             ? successStatus
-            : result.ErrorMessage ?? "Could not update the cell.");
+            : result.ErrorMessage ?? UiText.Get("ShellLoc_CouldNotUpdateCell"));
         return result.Success;
     }
 
@@ -59,14 +62,14 @@ public sealed partial class MainWindow
 
         if (word is null)
         {
-            RefreshShell("Thesaurus: select a cell containing a word.");
+            RefreshShell(UiText.Get("ShellLoc_ThesaurusSelectWord"));
             return;
         }
 
         var synonyms = ThesaurusData.Lookup(word);
 
         var layout = new StackPanel { Margin = new Thickness(16), Spacing = 8 };
-        layout.Children.Add(new TextBlock { Text = $"Looked up: {word}", FontWeight = FontWeight.SemiBold });
+        layout.Children.Add(new TextBlock { Text = UiText.Format("ShellLoc_ThesaurusLookedUp", word), FontWeight = FontWeight.SemiBold });
 
         var list = new ListBox
         {
@@ -74,13 +77,13 @@ public sealed partial class MainWindow
             ItemsSource = synonyms,
         };
         if (synonyms.Count == 0)
-            layout.Children.Add(new TextBlock { Text = "No synonyms found in the built-in word list.", TextWrapping = TextWrapping.Wrap });
+            layout.Children.Add(new TextBlock { Text = UiText.Get("ShellLoc_ThesaurusNoSynonyms"), TextWrapping = TextWrapping.Wrap });
         else
             layout.Children.Add(list);
 
         var dialog = new Window
         {
-            Title = "Thesaurus",
+            Title = UiText.Get("ShellLoc_ThesaurusTitle"),
             Width = 320,
             Height = 280,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -93,8 +96,8 @@ public sealed partial class MainWindow
             Spacing = 8,
             HorizontalAlignment = AvaloniaProofingHorizontalAlignment.Right,
         };
-        var replace = new Button { Content = "Replace", Width = 90, IsEnabled = synonyms.Count > 0 };
-        var close = new Button { Content = "Close", Width = 90 };
+        var replace = new Button { Content = UiText.Get("ShellLoc_ReplaceButton"), Width = 90, IsEnabled = synonyms.Count > 0 };
+        var close = new Button { Content = UiText.Get("Common_Close"), Width = 90 };
         replace.Click += (_, _) =>
         {
             var chosen = list.SelectedItem as string ?? (synonyms.Count > 0 ? synonyms[0] : null);
@@ -104,7 +107,7 @@ public sealed partial class MainWindow
                 var updated = index >= 0
                     ? cellText.Remove(index, word.Length).Insert(index, chosen)
                     : chosen;
-                CommitProofingText(updated, $"Replaced \"{word}\" with \"{chosen}\".");
+                CommitProofingText(updated, UiText.Format("ShellLoc_ThesaurusReplaced", word, chosen));
             }
             dialog.Close();
         };
@@ -117,45 +120,169 @@ public sealed partial class MainWindow
         await dialog.ShowDialog(this);
     }
 
-    /// <summary>Review ▸ Translate — offline-honest notice (no translation service in this build).</summary>
+    /// <summary>
+    /// Review ▸ Translate — honest manual-translation helper. There is no offline translation engine in
+    /// this build, so instead of faking an auto-translator this surfaces the selected source text, From/To
+    /// language pickers, and a manual translation entry that writes back to a chosen target cell/range. All
+    /// option/validation/write-planning logic lives in the portable <see cref="TranslateDialogPlanner"/> so
+    /// macOS inherits it; this method is only the Avalonia chrome + commit glue.
+    /// </summary>
     private async Task ShowTranslateDialogAsync()
     {
-        var address = _session.ActiveCell;
-        var cellText = FormatEditText(_session.ActiveSheet.GetCell(address), address);
+        var source = _session.ActiveCell;
+        var cellText = FormatEditText(_session.ActiveSheet.GetCell(source), source);
 
-        var layout = new StackPanel { Margin = new Thickness(16), Spacing = 10, Width = 360 };
-        layout.Children.Add(new TextBlock { Text = "Translate", FontWeight = FontWeight.SemiBold });
+        var layout = new StackPanel { Margin = new Thickness(16), Spacing = 10, Width = 380 };
+        layout.Children.Add(new TextBlock { Text = UiText.Get("WfTranslate_Title"), FontWeight = FontWeight.SemiBold });
+
+        // From / To language pickers (the planner owns the language list; we resolve display labels).
+        var languages = TranslateDialogPlanner.Languages;
+        var fromBox = CreateTranslateLanguageBox("WfTranslateFromLanguage", languages, TranslateDialogPlanner.DefaultFromCode);
+        var toBox = CreateTranslateLanguageBox("WfTranslateToLanguage", languages, TranslateDialogPlanner.DefaultToCode);
+        var languagesRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
+        languagesRow.Children.Add(new StackPanel
+        {
+            Spacing = 2,
+            Children = { new TextBlock { Text = UiText.Get("WfTranslate_FromLabel") }, fromBox },
+        });
+        languagesRow.Children.Add(new StackPanel
+        {
+            Spacing = 2,
+            Children = { new TextBlock { Text = UiText.Get("WfTranslate_ToLabel") }, toBox },
+        });
+        layout.Children.Add(languagesRow);
+
+        layout.Children.Add(new TextBlock { Text = UiText.Get("WfTranslate_SourceLabel") });
         layout.Children.Add(new SelectableTextBlock
         {
-            Text = string.IsNullOrEmpty(cellText) ? "(empty cell)" : cellText,
+            Text = string.IsNullOrEmpty(cellText) ? UiText.Get("WfTranslate_EmptyCell") : cellText,
             TextWrapping = TextWrapping.Wrap,
         });
+
+        layout.Children.Add(new TextBlock { Text = UiText.Get("WfTranslate_TranslationLabel") });
+        var translationBox = new TextBox
+        {
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.Wrap,
+            Height = 70,
+            PlaceholderText = UiText.Get("WfTranslate_TranslationWatermark"),
+        };
+        AutomationProperties.SetAutomationId(translationBox, "WfTranslateTranslationBox");
+        AutomationProperties.SetName(translationBox, UiText.Get("WfTranslate_TranslationLabel"));
+        layout.Children.Add(translationBox);
+
+        layout.Children.Add(new TextBlock { Text = UiText.Get("WfTranslate_TargetLabel") });
+        var targetBox = new TextBox { Text = TranslateDialogPlanner.SuggestTargetReference(source) };
+        AutomationProperties.SetAutomationId(targetBox, "WfTranslateTargetBox");
+        AutomationProperties.SetName(targetBox, UiText.Get("WfTranslate_TargetLabel"));
+        layout.Children.Add(targetBox);
+
         layout.Children.Add(new TextBlock
         {
-            Text = "Online translation isn't available in this build (no network service). " +
-                   "The cell text is shown above for reference.",
+            Text = UiText.Get("WfTranslate_ManualNote"),
             TextWrapping = TextWrapping.Wrap,
             Foreground = Brush(120, 120, 120),
         });
 
-        var close = new Button
-        {
-            Content = "Close",
-            Width = 90,
-            HorizontalAlignment = AvaloniaProofingHorizontalAlignment.Right,
-        };
         var dialog = new Window
         {
-            Title = "Translate",
-            Width = 400,
-            Height = 220,
+            Title = UiText.Get("WfTranslate_Title"),
+            Width = 420,
+            Height = 380,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
+        AutomationProperties.SetAutomationId(dialog, "WfTranslateDialog");
+
+        var buttons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            HorizontalAlignment = AvaloniaProofingHorizontalAlignment.Right,
+        };
+        var insert = new Button { Content = UiText.Get("WfTranslate_InsertButton"), Width = 110 };
+        var close = new Button { Content = UiText.Get("WfTranslate_CloseButton"), Width = 90 };
+        AutomationProperties.SetAutomationId(insert, "WfTranslateInsertButton");
+        AutomationProperties.SetAutomationId(close, "WfTranslateCloseButton");
+        insert.Click += (_, _) =>
+        {
+            var fromCode = (fromBox.SelectedItem as TranslateLanguageItem)?.Code ?? TranslateDialogPlanner.DefaultFromCode;
+            var toCode = (toBox.SelectedItem as TranslateLanguageItem)?.Code ?? TranslateDialogPlanner.DefaultToCode;
+            if (CommitManualTranslation(source, translationBox.Text, targetBox.Text, fromCode, toCode))
+                dialog.Close();
+        };
         close.Click += (_, _) => dialog.Close();
-        layout.Children.Add(close);
+        buttons.Children.Add(insert);
+        buttons.Children.Add(close);
+        layout.Children.Add(buttons);
+
         dialog.Content = layout;
         await dialog.ShowDialog(this);
+    }
+
+    private static ComboBox CreateTranslateLanguageBox(
+        string automationId,
+        IReadOnlyList<TranslateLanguageOption> options,
+        string defaultCode)
+    {
+        var items = options
+            .Select(o => new TranslateLanguageItem(o.Code, UiText.Get(o.DisplayKey)))
+            .ToList();
+        var box = new ComboBox { ItemsSource = items, Width = 150 };
+        box.SelectedItem = items.FirstOrDefault(i => i.Code == defaultCode) ?? items.FirstOrDefault();
+        AutomationProperties.SetAutomationId(box, automationId);
+        return box;
+    }
+
+    private sealed record TranslateLanguageItem(string Code, string Label)
+    {
+        public override string ToString() => Label;
+    }
+
+    /// <summary>
+    /// Validates the manual translation via the portable planner and commits the resulting cell writes
+    /// through the normal session edit path (undo/redo + protection apply). Returns true when the write
+    /// succeeded so the caller can close the dialog; surfaces a localized status otherwise.
+    /// </summary>
+    private bool CommitManualTranslation(
+        CellAddress source,
+        string? translation,
+        string? targetReference,
+        string fromCode,
+        string toCode)
+    {
+        if (_isOpening || _isSaving)
+            return false;
+
+        if (!TranslateDialogPlanner.TryPlan(
+                _session.ActiveSheet.Id, source, translation, targetReference, fromCode, toCode,
+                out var plan, out var error))
+        {
+            RefreshShell(error switch
+            {
+                TranslateDialogValidationError.EmptyTranslation => UiText.Get("WfTranslate_ErrorEmptyTranslation"),
+                TranslateDialogValidationError.MissingTargetReference => UiText.Get("WfTranslate_ErrorMissingTarget"),
+                TranslateDialogValidationError.InvalidTargetReference => UiText.Get("WfTranslate_ErrorInvalidTarget"),
+                TranslateDialogValidationError.SameSourceAndTarget => UiText.Get("WfTranslate_ErrorSameTarget"),
+                _ => UiText.Get("WfTranslate_ErrorGeneric"),
+            });
+            return false;
+        }
+
+        foreach (var write in plan.Writes)
+        {
+            _session.SelectCell(write.Address);
+            var result = _session.CommitCellText(write.Text);
+            if (!result.Success)
+            {
+                RefreshShell(result.ErrorMessage ?? UiText.Get("WfTranslate_ErrorGeneric"));
+                return false;
+            }
+        }
+
+        _session.SelectCell(plan.TargetRange.Start);
+        RefreshShell(UiText.Format("WfTranslate_StatusInserted", plan.TargetRange.ToString()));
+        return true;
     }
 
     /// <summary>Insert ▸ Equation — type an equation; it is inserted into the active cell as text.</summary>
@@ -184,7 +311,7 @@ public sealed partial class MainWindow
         }
 
         var layout = new StackPanel { Margin = new Thickness(16), Spacing = 10 };
-        layout.Children.Add(new TextBlock { Text = "Equation (inserted into the cell as text):", FontWeight = FontWeight.SemiBold });
+        layout.Children.Add(new TextBlock { Text = UiText.Get("ShellLoc_EquationLabel"), FontWeight = FontWeight.SemiBold });
         layout.Children.Add(input);
         layout.Children.Add(symbols);
 
@@ -194,15 +321,15 @@ public sealed partial class MainWindow
             Spacing = 8,
             HorizontalAlignment = AvaloniaProofingHorizontalAlignment.Right,
         };
-        var ok = new Button { Content = "Insert", Width = 90 };
-        var cancel = new Button { Content = "Cancel", Width = 90 };
+        var ok = new Button { Content = UiText.Get("ShellLoc_InsertButton"), Width = 90 };
+        var cancel = new Button { Content = UiText.Get("Common_Cancel"), Width = 90 };
         // Captured below once the dialog exists. layout is the Window's Content, so the previous
         // layout.Parent.Parent walked one level too far (Parent is the Window, Parent.Parent null).
         Window? dialog = null;
         ok.Click += (_, _) =>
         {
             var text = input.Text ?? string.Empty;
-            CommitProofingText(text, "Inserted equation as cell text.");
+            CommitProofingText(text, UiText.Get("ShellLoc_InsertedEquation"));
             input.Tag = "ok";
             dialog?.Close();
         };
@@ -213,7 +340,7 @@ public sealed partial class MainWindow
 
         dialog = new Window
         {
-            Title = "Insert Equation",
+            Title = UiText.Get("ShellLoc_InsertEquationTitle"),
             Width = 410,
             Height = 240,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -223,7 +350,4 @@ public sealed partial class MainWindow
         await dialog.ShowDialog(this);
     }
 
-    /// <summary>Insert ▸ Object — embedding external OLE objects is not supported in this build.</summary>
-    private void ShowInsertObjectUnsupported() =>
-        RefreshShell("Embedding external objects isn't supported in this build.");
 }

@@ -3,6 +3,12 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
   <ItemGroup>
+    <!-- Legacy binary Word (.doc/.dot) read-only import via transcode to in-memory .docx (MIT). -->
+    <PackageVersion Include="DocSharp.Binary.Doc" Version="0.20.0" />
+    <PackageVersion Include="DocSharp.Binary.Common" Version="0.20.0" />
+    <!-- PDF text import (read-only) for FreeW. Pinned to the exact (prerelease) version the package ships. -->
+    <PackageVersion Include="UglyToad.PdfPig" Version="1.7.0-custom-5" />
+    <PackageVersion Include="UglyToad.PdfPig.DocumentLayoutAnalysis" Version="1.7.0-custom-5" />
     <!-- Avalonia UI framework -->
     <PackageVersion Include="Avalonia" Version="12.0.4" />
     <PackageVersion Include="Avalonia.Desktop" Version="12.0.4" />
@@ -13,6 +19,9 @@
     <PackageVersion Include="ClosedXML" Version="0.105.0" />
     <PackageVersion Include="DocumentFormat.OpenXml" Version="3.1.1" />
     <PackageVersion Include="ExcelDataReader" Version="3.8.0" />
+    <!-- In-box Windows text-to-speech for Review > Read Aloud. Microsoft-published; the modern .NET home
+         of the classic System.Speech.Synthesis API (Windows-only, local synthesis — no cloud). -->
+    <PackageVersion Include="System.Speech" Version="10.0.0" />
     <!-- Microsoft extensions -->
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.7" />
     <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.7" />
@@ -21,6 +30,8 @@
     <PackageVersion Include="OxyPlot.Wpf" Version="2.2.0" />
     <PackageVersion Include="PDFsharp-WPF" Version="6.2.4" />
     <PackageVersion Include="SharpVectors.Wpf" Version="1.8.5" />
+    <!-- Skia PDF backend for the shared PDF tier (matches the SkiaSharp Avalonia 12.0.4 resolves). -->
+    <PackageVersion Include="SkiaSharp" Version="3.119.4" />
     <!-- Crash analytics -->
     <PackageVersion Include="Sentry" Version="6.5.0" />
     <!-- Self-update -->

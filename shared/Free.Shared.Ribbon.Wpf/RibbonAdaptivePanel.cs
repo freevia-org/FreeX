@@ -55,6 +55,16 @@ public sealed class RibbonGroupHost : ContentControl
             if (_collapsed == value)
                 return;
             _collapsed = value;
+            if (value)
+            {
+                Width = CollapsedWidth;
+                MinWidth = CollapsedWidth;
+            }
+            else
+            {
+                ClearValue(WidthProperty);
+                ClearValue(MinWidthProperty);
+            }
             Content = value ? (_collapsedButton ??= BuildCollapsedButton()) : _full;
         }
     }
@@ -112,7 +122,7 @@ public sealed class RibbonGroupHost : ContentControl
             popup.IsOpen = true;
         };
 
-        var container = new Grid();
+        var container = new Grid { Width = CollapsedWidth, MinWidth = CollapsedWidth };
         container.Children.Add(button);
         container.Children.Add(popup);
         return container;
@@ -120,7 +130,7 @@ public sealed class RibbonGroupHost : ContentControl
 
     private static FrameworkElement Wrap(FrameworkElement element)
     {
-        var grid = new Grid();
+        var grid = new Grid { Width = CollapsedWidth, MinWidth = CollapsedWidth };
         grid.Children.Add(element);
         return grid;
     }
@@ -156,32 +166,40 @@ public sealed class RibbonAdaptivePanel : Panel
             host.Collapsed = wasCollapsed;
         }
 
-        var available = double.IsInfinity(availableSize.Width) ? double.MaxValue : availableSize.Width;
+        var available = ResolveAvailableWidth(this, availableSize.Width);
 
         // Decide the collapse set from the cached widths (lowest priority collapses first — Office
         // behaviour) WITHOUT touching Content yet, then apply only the hosts whose state actually flips.
         // The Collapsed setter no-ops when unchanged, so resizing within one band swaps nothing.
-        var collapsed = new HashSet<RibbonGroupHost>();
-        var total = hosts.Sum(h => h.FullWidth) + GroupSpacing * Math.Max(0, children.Count - 1);
-        foreach (var host in hosts.OrderBy(h => h.Priority))
+        if (!double.IsInfinity(available))
         {
-            if (total <= available)
-                break;
-            collapsed.Add(host);
-            total += RibbonGroupHost.CollapsedWidth - host.FullWidth;
-        }
+            var collapsed = new HashSet<RibbonGroupHost>();
+            var total = hosts.Sum(h => h.FullWidth) + GroupSpacing * Math.Max(0, children.Count - 1);
+            foreach (var host in hosts.OrderBy(h => h.Priority))
+            {
+                if (total <= available)
+                    break;
+                collapsed.Add(host);
+                total += RibbonGroupHost.CollapsedWidth - host.FullWidth;
+            }
 
-        foreach (var host in hosts)
-            host.Collapsed = collapsed.Contains(host);
+            foreach (var host in hosts)
+                host.Collapsed = collapsed.Contains(host);
+        }
 
         // Measure children in their final (post-flip) state. Hosts whose state did not change are already
         // measure-valid, so WPF short-circuits these — only the flipped ones do real work.
         foreach (var child in children)
-            child.Measure(infinite);
+        {
+            if (child is RibbonGroupHost { Collapsed: true } collapsedHost)
+                collapsedHost.Measure(new Size(RibbonGroupHost.CollapsedWidth, availableSize.Height));
+            else
+                child.Measure(infinite);
+        }
 
-        var width = children.Sum(c => c.DesiredSize.Width) + GroupSpacing * Math.Max(0, children.Count - 1);
+        var width = children.Sum(GetChildLayoutWidth) + GroupSpacing * Math.Max(0, children.Count - 1);
         var height = children.Count > 0 ? children.Max(c => c.DesiredSize.Height) : 0;
-        return new Size(double.IsInfinity(availableSize.Width) ? width : Math.Min(width, availableSize.Width), height);
+        return new Size(double.IsInfinity(available) ? width : Math.Min(width, available), height);
     }
 
     protected override Size ArrangeOverride(Size finalSize)
@@ -189,11 +207,51 @@ public sealed class RibbonAdaptivePanel : Panel
         double x = 0;
         foreach (var child in Children.Cast<UIElement>())
         {
-            var w = child.DesiredSize.Width;
+            var w = GetChildLayoutWidth(child);
             child.Arrange(new Rect(x, 0, w, finalSize.Height));
             x += w + GroupSpacing;
         }
 
         return finalSize;
+    }
+
+    private static double GetChildLayoutWidth(UIElement child)
+    {
+        if (child is RibbonGroupHost host && host.FullWidth > 0)
+            return host.Collapsed ? RibbonGroupHost.CollapsedWidth : host.FullWidth;
+
+        return child.DesiredSize.Width;
+    }
+
+    private static double ResolveAvailableWidth(FrameworkElement element, double measuredWidth)
+    {
+        if (!double.IsInfinity(measuredWidth))
+            return measuredWidth;
+
+        var current = VisualTreeHelper.GetParent(element);
+        while (current is not null)
+        {
+            if (current is ScrollViewer { ViewportWidth: > 0 } scrollViewer)
+                return scrollViewer.ViewportWidth;
+
+            current = VisualTreeHelper.GetParent(current);
+        }
+
+        if (element.ActualWidth > 0)
+            return element.ActualWidth;
+
+        if (element.Parent is FrameworkElement parent && parent.ActualWidth > 0)
+            return parent.ActualWidth;
+
+        current = VisualTreeHelper.GetParent(element);
+        while (current is not null)
+        {
+            if (current is FrameworkElement { ActualWidth: > 0 } ancestor)
+                return ancestor.ActualWidth;
+
+            current = VisualTreeHelper.GetParent(current);
+        }
+
+        return double.PositiveInfinity;
     }
 }

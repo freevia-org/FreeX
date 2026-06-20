@@ -12,18 +12,48 @@ namespace FreeW.Core.Model;
 public sealed class QuickPart
 {
     public QuickPart(string name, IReadOnlyList<string> lines)
+        : this(name, lines, gallery: null, category: null, description: null)
+    {
+    }
+
+    /// <summary>
+    /// Build a snippet with the optional building-block metadata Word's Building Blocks Organizer shows:
+    /// the <paramref name="gallery"/> it belongs to (e.g. "Quick Parts", "AutoText"), a <paramref name="category"/>
+    /// (e.g. "General"), and a free-text <paramref name="description"/>. All three are trimmed and default to
+    /// sensible values when null/blank (gallery → "Quick Parts", category → "General", description → ""), so
+    /// older snippets that carry only a name + lines still organise cleanly.
+    /// </summary>
+    public QuickPart(string name, IReadOnlyList<string> lines, string? gallery, string? category, string? description)
     {
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(lines);
         Name = name.Trim();
         Lines = lines.ToList();
+        Gallery = string.IsNullOrWhiteSpace(gallery) ? DefaultGallery : gallery.Trim();
+        Category = string.IsNullOrWhiteSpace(category) ? DefaultCategory : category.Trim();
+        Description = description?.Trim() ?? string.Empty;
     }
+
+    /// <summary>The gallery a building block lands in when no other is given.</summary>
+    public const string DefaultGallery = "Quick Parts";
+
+    /// <summary>The category a building block lands in when no other is given.</summary>
+    public const string DefaultCategory = "General";
 
     /// <summary>The snippet's entry name (trimmed). Quick Parts are looked up by this, case-insensitively.</summary>
     public string Name { get; }
 
     /// <summary>The snippet body, one plain-text string per paragraph. May be empty (an empty snippet).</summary>
     public IReadOnlyList<string> Lines { get; }
+
+    /// <summary>The building-block gallery this snippet belongs to (never blank; defaults to "Quick Parts").</summary>
+    public string Gallery { get; }
+
+    /// <summary>The building-block category this snippet belongs to (never blank; defaults to "General").</summary>
+    public string Category { get; }
+
+    /// <summary>A free-text description of the snippet (may be empty).</summary>
+    public string Description { get; }
 
     /// <summary>The snippet rendered as a single string, paragraphs joined by newlines.</summary>
     public string Text => string.Join("\n", Lines);
@@ -35,21 +65,26 @@ public sealed class QuickPart
     /// Capture a snippet from a sequence of paragraphs (e.g. the current selection), flattening each
     /// paragraph to its plain text. The <paramref name="name"/> is trimmed by the constructor.
     /// </summary>
-    public static QuickPart FromParagraphs(string name, IEnumerable<Paragraph> paragraphs)
+    public static QuickPart FromParagraphs(
+        string name, IEnumerable<Paragraph> paragraphs,
+        string? gallery = null, string? category = null, string? description = null)
     {
         ArgumentNullException.ThrowIfNull(paragraphs);
-        return new QuickPart(name, paragraphs.Select(p => p.PlainText).ToList());
+        return new QuickPart(name, paragraphs.Select(p => p.PlainText).ToList(), gallery, category, description);
     }
 
     /// <summary>
     /// Capture a snippet from a block of text, splitting on newlines into one line per paragraph.
-    /// CR/LF and lone-LF line endings are both honoured.
+    /// CR/LF and lone-LF line endings are both honoured. Optional building-block metadata
+    /// (<paramref name="gallery"/>/<paramref name="category"/>/<paramref name="description"/>) is carried through.
     /// </summary>
-    public static QuickPart FromText(string name, string text)
+    public static QuickPart FromText(
+        string name, string text,
+        string? gallery = null, string? category = null, string? description = null)
     {
         ArgumentNullException.ThrowIfNull(text);
         var lines = text.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
-        return new QuickPart(name, lines);
+        return new QuickPart(name, lines, gallery, category, description);
     }
 }
 

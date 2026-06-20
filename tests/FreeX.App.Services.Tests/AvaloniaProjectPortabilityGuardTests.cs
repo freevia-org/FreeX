@@ -18,13 +18,17 @@ public sealed class AvaloniaProjectPortabilityGuardTests
 
     private static readonly string[] AllowedProjectReferences =
     [
+        "FreeX.App.Localization",
         "FreeX.App.Presentation",
         "FreeX.App.Services",
         "FreeX.Core.Calc",
         "FreeX.Core.Commands",
         "FreeX.Core.IO",
         "FreeX.Core.Model",
+        "Free.Shared.Pdf",
+        "Free.Shared.Pdf.Skia",
         "Free.Shared.Ribbon",
+        "Free.Shared.Shell",
         "FreeX.Ribbon.Definitions",
         "FreeX.Ribbon.Avalonia"
     ];

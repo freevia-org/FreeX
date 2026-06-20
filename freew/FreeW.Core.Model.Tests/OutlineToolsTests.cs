@@ -94,4 +94,118 @@ public class OutlineToolsTests
 
         paragraph.StyleId.Should().Be("Heading1");
     }
+
+    // --- SubtreeRange: the heading plus its descendants (down to the next same-or-higher heading) ---
+
+    private static Paragraph H(int level, string text) =>
+        new(text) { StyleId = level == 0 ? "Title" : "Heading" + level };
+
+    private static Paragraph Body(string text) => new(text);
+
+    // [H1 "A", body a1, H2 "A.1", body a11, H1 "B", body b1]
+    private static List<Block> SampleDoc() => new()
+    {
+        H(1, "A"), Body("a1"), H(2, "A.1"), Body("a11"), H(1, "B"), Body("b1"),
+    };
+
+    [Fact]
+    public void SubtreeRange_CoversHeadingAndDescendants()
+    {
+        var blocks = SampleDoc();
+
+        // "A" (index 0) owns through its H2 subtree, stopping at "B" (index 4).
+        OutlineTools.SubtreeRange(blocks, 0).Should().Be((0, 4));
+        // "A.1" (index 2) owns only its own body, stopping at the next H1 "B".
+        OutlineTools.SubtreeRange(blocks, 2).Should().Be((2, 4));
+        // "B" (index 4) owns to the end of the document.
+        OutlineTools.SubtreeRange(blocks, 4).Should().Be((4, 6));
+    }
+
+    [Fact]
+    public void SubtreeRange_NonHeading_IsEmpty()
+    {
+        var blocks = SampleDoc();
+        OutlineTools.SubtreeRange(blocks, 1).Should().Be((1, 1)); // a body paragraph: empty span
+    }
+
+    // --- MoveSubtree: relocate a heading subtree by one sibling position (pure; returns a new list) ---
+
+    private static IEnumerable<string> Texts(IReadOnlyList<Block> blocks) =>
+        blocks.OfType<Paragraph>().Select(p => p.PlainText);
+
+    [Fact]
+    public void MoveSubtree_Down_SwapsWithFollowingSiblingSubtree()
+    {
+        var blocks = SampleDoc();
+
+        // Move "A" (and its A.1 subtree) down past sibling "B".
+        var moved = OutlineTools.MoveSubtree(blocks, 0, moveUp: false);
+
+        Texts(moved).Should().Equal("B", "b1", "A", "a1", "A.1", "a11");
+        // Original block instances are preserved (a permutation, nothing recreated).
+        moved.Should().HaveCount(blocks.Count);
+        moved.Should().OnlyContain(b => blocks.Contains(b));
+    }
+
+    [Fact]
+    public void MoveSubtree_Up_IsTheInverseOfDown()
+    {
+        var blocks = SampleDoc();
+
+        var down = OutlineTools.MoveSubtree(blocks, 0, moveUp: false);
+        // "A" now starts at index 2 in the moved list; moving it back up restores the original order.
+        var back = OutlineTools.MoveSubtree(down, 2, moveUp: true);
+
+        Texts(back).Should().Equal("A", "a1", "A.1", "a11", "B", "b1");
+    }
+
+    [Fact]
+    public void MoveSubtree_Up_AtFirstSibling_IsNoOp()
+    {
+        var blocks = SampleDoc();
+
+        var moved = OutlineTools.MoveSubtree(blocks, 0, moveUp: true);
+
+        moved.Should().BeSameAs(blocks); // nothing above to move past
+    }
+
+    [Fact]
+    public void MoveSubtree_Down_AtLastSibling_IsNoOp()
+    {
+        var blocks = SampleDoc();
+
+        var moved = OutlineTools.MoveSubtree(blocks, 4, moveUp: false);
+
+        moved.Should().BeSameAs(blocks); // nothing below to move past
+    }
+
+    [Fact]
+    public void MoveSubtree_Down_NestedLastChild_DoesNotLeaveParentSection()
+    {
+        var blocks = SampleDoc();
+
+        var moved = OutlineTools.MoveSubtree(blocks, 2, moveUp: false);
+
+        moved.Should().BeSameAs(blocks);
+        Texts(moved).Should().Equal("A", "a1", "A.1", "a11", "B", "b1");
+    }
+
+    [Fact]
+    public void MoveSubtree_Up_NestedFirstChild_DoesNotLeaveParentSection()
+    {
+        var blocks = SampleDoc();
+
+        var moved = OutlineTools.MoveSubtree(blocks, 2, moveUp: true);
+
+        moved.Should().BeSameAs(blocks);
+        Texts(moved).Should().Equal("A", "a1", "A.1", "a11", "B", "b1");
+    }
+
+    [Fact]
+    public void MoveSubtree_NonHeadingIndex_IsNoOp()
+    {
+        var blocks = SampleDoc();
+
+        OutlineTools.MoveSubtree(blocks, 1, moveUp: false).Should().BeSameAs(blocks);
+    }
 }

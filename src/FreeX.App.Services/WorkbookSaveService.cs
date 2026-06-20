@@ -23,11 +23,13 @@ public sealed class WorkbookSaveService
         string path,
         IFileAdapter adapter,
         Workbook workbook,
-        IProgress<WorkbookSaveProgressUpdate>? progress = null)
+        IProgress<WorkbookSaveProgressUpdate>? progress = null,
+        CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentNullException.ThrowIfNull(adapter);
         ArgumentNullException.ThrowIfNull(workbook);
+        cancellationToken.ThrowIfCancellationRequested();
 
         ReportProgress(progress, WorkbookSavePhase.Preparing, TimeSpan.Zero, 1);
         var tempPath = CreateTemporaryPath(path, ".tmp");
@@ -42,8 +44,10 @@ public sealed class WorkbookSaveService
                 1,
                 99,
                 EstimateStageDuration(estimatedBytes, secondsPerMegabyte: 1.0, floorSeconds: 0.4),
+                cancellationToken,
                 () =>
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     using var file = new FileStream(
                         tempPath,
                         FileMode.Create,
@@ -54,13 +58,16 @@ public sealed class WorkbookSaveService
                     if (adapter is XlsxFileAdapter xlsxAdapter)
                     {
                         var result = xlsxAdapter.SaveWithWarnings(workbook, file);
+                        cancellationToken.ThrowIfCancellationRequested();
                         return result.Warnings;
                     }
 
                     adapter.Save(workbook, file);
+                    cancellationToken.ThrowIfCancellationRequested();
                     return [];
                 }).ConfigureAwait(false);
 
+            cancellationToken.ThrowIfCancellationRequested();
             ReplaceTargetFile(tempPath, path);
         }
         finally
@@ -163,31 +170,34 @@ public sealed class WorkbookSaveService
         double startPercent,
         double endPercent,
         TimeSpan expectedDuration,
+        CancellationToken cancellationToken,
         Func<T> work)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         ReportProgress(progress, phase, TimeSpan.Zero, startPercent);
         if (progress is null)
-            return await Task.Run(work).ConfigureAwait(false);
+            return await Task.Run(work, cancellationToken).ConfigureAwait(false);
 
-        using var cancellation = new CancellationTokenSource();
+        using var progressCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var progressTask = ReportStageProgressAsync(
             progress,
             phase,
             startPercent,
             endPercent,
             expectedDuration,
-            cancellation.Token);
+            progressCancellation.Token);
 
         try
         {
-            return await Task.Run(work).ConfigureAwait(false);
+            return await Task.Run(work, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
-            cancellation.Cancel();
+            progressCancellation.Cancel();
             try { await progressTask.ConfigureAwait(false); }
             catch (OperationCanceledException) { }
-            ReportProgress(progress, phase, TimeSpan.Zero, endPercent);
+            if (!cancellationToken.IsCancellationRequested)
+                ReportProgress(progress, phase, TimeSpan.Zero, endPercent);
         }
     }
 
@@ -238,7 +248,7 @@ public sealed class WorkbookSaveService
         return TimeSpan.FromSeconds(Math.Max(floorSeconds, megabytes * secondsPerMegabyte));
     }
 
-    private static double CalculateStageProgress(
+    private static double? CalculateStageProgress(
         double startPercent,
         double endPercent,
         TimeSpan elapsed,
@@ -247,7 +257,11 @@ public sealed class WorkbookSaveService
         if (expectedDuration <= TimeSpan.Zero)
             return endPercent;
 
-        var ratio = Math.Clamp(elapsed.TotalMilliseconds / expectedDuration.TotalMilliseconds, 0, 0.92);
+        var ratio = elapsed.TotalMilliseconds / expectedDuration.TotalMilliseconds;
+        if (ratio >= 1)
+            return null;
+
+        ratio = Math.Clamp(ratio, 0, 0.92);
         return startPercent + ((endPercent - startPercent) * ratio);
     }
 

@@ -6,48 +6,127 @@ namespace FreeW.Core.Model;
 // fields) is already carried on Run, so equations flow through the existing run sequence, hyperlink/
 // comment/revision wrapping, table cells, headers and footers with zero new plumbing — and they
 // round-trip through docx as an inline m:oMath emitted in place of the run's w:t. An equation is a flat,
-// ordered list of MathRun parts; each part is either plain math text (m:r/m:t), a superscript
-// (base^exponent, m:sSup) or a fraction (numerator/denominator, m:f). That covers the linear forms the
-// roadmap calls out ("E = mc^2") while staying well short of the full OMML schema.
+// ordered list of MathRun parts; each part is either plain math text (m:r/m:t) or one of the common OMML
+// structures — superscript (m:sSup), subscript (m:sSub), sub-superscript (m:sSubSup), fraction (m:f),
+// radical (m:rad), n-ary (m:nary, sum/integral/product with limits), an accented character (m:acc),
+// an over/under-bar (m:bar), a bracketed delimiter (m:d) or a matrix (m:m). Each structure stores its
+// component slots as plain math text (mirroring how Superscript
+// already stores Base/Sup as strings); a Matrix additionally carries a small grid of text cells. That
+// covers the high-value structures from Word's Equation tools while staying well short of the full
+// (recursive) OMML schema — richer constructs degrade to their plain math text on read so nothing throws.
 
 /// <summary>
-/// The kind of an OMML math fragment carried by a <see cref="MathRun"/>. <see cref="Text"/> is a plain
-/// run of math text (m:r/m:t); <see cref="Superscript"/> is a base raised to an exponent (m:sSup);
-/// <see cref="Fraction"/> is a numerator over a denominator (m:f).
+/// The kind of an OMML math fragment carried by a <see cref="MathRun"/>.
+/// <list type="bullet">
+/// <item><see cref="Text"/> — a plain run of math text (m:r/m:t).</item>
+/// <item><see cref="Superscript"/> — a base raised to an exponent (m:sSup).</item>
+/// <item><see cref="Subscript"/> — a base with a subscript (m:sSub).</item>
+/// <item><see cref="SubSuperscript"/> — a base with both sub- and super-script (m:sSubSup).</item>
+/// <item><see cref="Fraction"/> — a numerator over a denominator (m:f).</item>
+/// <item><see cref="Radical"/> — a (square or nth) root (m:rad).</item>
+/// <item><see cref="NAry"/> — an n-ary operator (sum/integral/product) with limits (m:nary).</item>
+/// <item><see cref="Accent"/> — a base with an accent mark (hat/bar/vec/dot/tilde) over it (m:acc).</item>
+/// <item><see cref="Bar"/> — a base with an over- or under-bar (m:bar).</item>
+/// <item><see cref="Delimiter"/> — a bracketed/parenthesised expression (m:d).</item>
+/// <item><see cref="Matrix"/> — a grid of cells (m:m).</item>
+/// </list>
 /// </summary>
 public enum MathRunKind
 {
     Text,
     Superscript,
-    Fraction
+    Subscript,
+    SubSuperscript,
+    Fraction,
+    Radical,
+    NAry,
+    Accent,
+    Bar,
+    Delimiter,
+    Matrix,
+    FunctionApply,
+    GroupChar
 }
 
 /// <summary>
-/// One fragment of an <see cref="Equation"/>. A <see cref="MathRunKind.Text"/> part carries its content
-/// in <see cref="Text"/>. A <see cref="MathRunKind.Superscript"/> part raises <see cref="Base"/> to
-/// <see cref="Sup"/> (e.g. base "x", sup "2" → x²). A <see cref="MathRunKind.Fraction"/> part divides
-/// <see cref="Numerator"/> by <see cref="Denominator"/>. Kept deliberately small and immutable so it
-/// round-trips cleanly and so consumers can pattern-match on <see cref="Kind"/>.
+/// One fragment of an <see cref="Equation"/>. Each <see cref="Kind"/> uses the slots meaningful to it;
+/// the rest stay empty. Kept deliberately small and immutable so it round-trips cleanly and so consumers
+/// can pattern-match on <see cref="Kind"/>.
+/// <list type="bullet">
+/// <item><see cref="MathRunKind.Text"/> → <see cref="Text"/>.</item>
+/// <item><see cref="MathRunKind.Superscript"/> → <see cref="Base"/> raised to <see cref="Sup"/>.</item>
+/// <item><see cref="MathRunKind.Subscript"/> → <see cref="Base"/> with subscript <see cref="Sub"/>.</item>
+/// <item><see cref="MathRunKind.SubSuperscript"/> → <see cref="Base"/> with <see cref="Sub"/> and <see cref="Sup"/>.</item>
+/// <item><see cref="MathRunKind.Fraction"/> → <see cref="Numerator"/> over <see cref="Denominator"/>.</item>
+/// <item><see cref="MathRunKind.Radical"/> → <see cref="Base"/> under a root of degree <see cref="Degree"/> (empty = square root).</item>
+/// <item><see cref="MathRunKind.NAry"/> → operator <see cref="Operator"/> from <see cref="Sub"/> to <see cref="Sup"/> over <see cref="Base"/>.</item>
+/// <item><see cref="MathRunKind.Accent"/> → <see cref="Base"/> with the accent glyph <see cref="Accent"/> over it.</item>
+/// <item><see cref="MathRunKind.Bar"/> → <see cref="Base"/> with a bar above (<see cref="BarTop"/> true) or below it.</item>
+/// <item><see cref="MathRunKind.Delimiter"/> → <see cref="Base"/> wrapped in <see cref="OpenChar"/>/<see cref="CloseChar"/>.</item>
+/// <item><see cref="MathRunKind.Matrix"/> → <see cref="Matrix"/>.</item>
+/// </list>
 /// </summary>
 public sealed record MathRun
 {
-    /// <summary>The fragment kind (plain text, superscript, or fraction).</summary>
+    /// <summary>The fragment kind.</summary>
     public MathRunKind Kind { get; init; } = MathRunKind.Text;
 
     /// <summary>Plain math text (only meaningful when <see cref="Kind"/> is <see cref="MathRunKind.Text"/>).</summary>
     public string Text { get; init; } = string.Empty;
 
-    /// <summary>The base of a superscript (only meaningful for <see cref="MathRunKind.Superscript"/>).</summary>
+    /// <summary>
+    /// The base/operand: the base of a sub/superscript, the radicand of a radical, the operand of an
+    /// n-ary operator, or the content of a delimiter.
+    /// </summary>
     public string Base { get; init; } = string.Empty;
 
-    /// <summary>The exponent of a superscript (only meaningful for <see cref="MathRunKind.Superscript"/>).</summary>
+    /// <summary>The superscript / upper-limit slot (superscript, sub-superscript, n-ary).</summary>
     public string Sup { get; init; } = string.Empty;
+
+    /// <summary>The subscript / lower-limit slot (subscript, sub-superscript, n-ary).</summary>
+    public string Sub { get; init; } = string.Empty;
 
     /// <summary>The numerator of a fraction (only meaningful for <see cref="MathRunKind.Fraction"/>).</summary>
     public string Numerator { get; init; } = string.Empty;
 
     /// <summary>The denominator of a fraction (only meaningful for <see cref="MathRunKind.Fraction"/>).</summary>
     public string Denominator { get; init; } = string.Empty;
+
+    /// <summary>The radical's degree (empty = square root; non-empty = nth root). Only for <see cref="MathRunKind.Radical"/>.</summary>
+    public string Degree { get; init; } = string.Empty;
+
+    /// <summary>The n-ary operator glyph (∑, ∫, ∏…). Only for <see cref="MathRunKind.NAry"/>.</summary>
+    public string Operator { get; init; } = string.Empty;
+
+    /// <summary>
+    /// The accent glyph placed over the base (hat ̂, bar ̄, vector →, dot ̇, tilde ̃…). Only meaningful for
+    /// <see cref="MathRunKind.Accent"/>; the default is a combining circumflex (hat).
+    /// </summary>
+    public string Accent { get; init; } = "̂";
+
+    /// <summary>
+    /// Whether a <see cref="MathRunKind.Bar"/> sits above the base (true → OMML m:pos "top", an overbar) or
+    /// below it (false → "bot", an underbar). Only meaningful for <see cref="MathRunKind.Bar"/>.
+    /// </summary>
+    public bool BarTop { get; init; } = true;
+
+    /// <summary>The opening delimiter glyph (default "("). Only for <see cref="MathRunKind.Delimiter"/>.</summary>
+    public string OpenChar { get; init; } = "(";
+
+    /// <summary>The closing delimiter glyph (default ")"). Only for <see cref="MathRunKind.Delimiter"/>.</summary>
+    public string CloseChar { get; init; } = ")";
+
+    /// <summary>The matrix grid (only meaningful for <see cref="MathRunKind.Matrix"/>).</summary>
+    public MathMatrix? Matrix { get; init; }
+
+    /// <summary>The function name (only meaningful for <see cref="MathRunKind.FunctionApply"/>).</summary>
+    public string FuncName { get; init; } = string.Empty;
+
+    /// <summary>The grouping character (only meaningful for <see cref="MathRunKind.GroupChar"/>).</summary>
+    public string GroupChr { get; init; } = "\u23DE";
+
+    /// <summary>The grouping character position: "top" or "bot" (only meaningful for <see cref="MathRunKind.GroupChar"/>).</summary>
+    public string GroupChrPos { get; init; } = "top";
 
     /// <summary>Creates a plain math-text fragment (m:r/m:t).</summary>
     public static MathRun PlainText(string text) => new() { Kind = MathRunKind.Text, Text = text };
@@ -56,27 +135,130 @@ public sealed record MathRun
     public static MathRun Superscript(string @base, string sup) =>
         new() { Kind = MathRunKind.Superscript, Base = @base, Sup = sup };
 
+    /// <summary>Creates a subscript fragment (m:sSub): <paramref name="@base"/> with subscript <paramref name="sub"/>.</summary>
+    public static MathRun Subscript(string @base, string sub) =>
+        new() { Kind = MathRunKind.Subscript, Base = @base, Sub = sub };
+
+    /// <summary>Creates a sub-superscript fragment (m:sSubSup): <paramref name="@base"/> with both <paramref name="sub"/> and <paramref name="sup"/>.</summary>
+    public static MathRun SubSuperscript(string @base, string sub, string sup) =>
+        new() { Kind = MathRunKind.SubSuperscript, Base = @base, Sub = sub, Sup = sup };
+
     /// <summary>Creates a fraction fragment (m:f): <paramref name="numerator"/> over <paramref name="denominator"/>.</summary>
     public static MathRun Fraction(string numerator, string denominator) =>
         new() { Kind = MathRunKind.Fraction, Numerator = numerator, Denominator = denominator };
 
     /// <summary>
+    /// Creates a radical fragment (m:rad): the root of <paramref name="radicand"/>. A null/empty
+    /// <paramref name="degree"/> is a square root (no m:deg); otherwise an nth root.
+    /// </summary>
+    public static MathRun Radical(string radicand, string degree = "") =>
+        new() { Kind = MathRunKind.Radical, Base = radicand, Degree = degree ?? string.Empty };
+
+    /// <summary>
+    /// Creates an n-ary fragment (m:nary): <paramref name="@operator"/> (e.g. ∑/∫/∏) applied to
+    /// <paramref name="operand"/> with lower limit <paramref name="sub"/> and upper limit <paramref name="sup"/>.
+    /// </summary>
+    public static MathRun NAry(string @operator, string sub, string sup, string operand) =>
+        new() { Kind = MathRunKind.NAry, Operator = @operator, Sub = sub, Sup = sup, Base = operand };
+
+    /// <summary>
+    /// Creates an accent fragment (m:acc): <paramref name="@base"/> with the accent glyph
+    /// <paramref name="accent"/> over it (default a combining circumflex/hat).
+    /// </summary>
+    public static MathRun AccentOf(string @base, string accent = "̂") =>
+        new() { Kind = MathRunKind.Accent, Base = @base, Accent = string.IsNullOrEmpty(accent) ? "̂" : accent };
+
+    /// <summary>
+    /// Creates a bar fragment (m:bar): <paramref name="@base"/> with an overbar (<paramref name="top"/> true,
+    /// the default) or an underbar (<paramref name="top"/> false).
+    /// </summary>
+    public static MathRun BarOf(string @base, bool top = true) =>
+        new() { Kind = MathRunKind.Bar, Base = @base, BarTop = top };
+
+    /// <summary>Creates a delimiter fragment (m:d): <paramref name="content"/> wrapped in <paramref name="open"/>/<paramref name="close"/>.</summary>
+    public static MathRun Delimiter(string content, string open = "(", string close = ")") =>
+        new() { Kind = MathRunKind.Delimiter, Base = content, OpenChar = open, CloseChar = close };
+
+    /// <summary>Creates a matrix fragment (m:m) from a grid.</summary>
+    public static MathRun MatrixOf(MathMatrix matrix) =>
+        new() { Kind = MathRunKind.Matrix, Matrix = matrix };
+
+    /// <summary>Creates a function-application fragment (m:func): <paramref name="funcName"/> applied to <paramref name="argument"/>.</summary>
+    public static MathRun FunctionApply(string funcName, string argument) =>
+        new() { Kind = MathRunKind.FunctionApply, FuncName = funcName, Base = argument };
+
+    /// <summary>Creates a group-character fragment (m:groupChr): <paramref name="@base"/> grouped by <paramref name="groupChr"/>.</summary>
+    public static MathRun GroupCharOf(string @base, string groupChr = "\u23DE", string groupChrPos = "top") =>
+        new()
+        {
+            Kind = MathRunKind.GroupChar,
+            Base = @base,
+            GroupChr = string.IsNullOrEmpty(groupChr) ? "\u23DE" : groupChr,
+            GroupChrPos = string.IsNullOrEmpty(groupChrPos) ? "top" : groupChrPos
+        };
+
+    /// <summary>
     /// A best-effort linear (plain-text) rendering of this fragment, used for the host run's fallback
-    /// text: text → itself, superscript → <c>base^sup</c>, fraction → <c>num/den</c>.
+    /// text and for the editor's lightweight visual stand-in.
     /// </summary>
     public string LinearText => Kind switch
     {
         MathRunKind.Superscript => $"{Base}^{Sup}",
+        MathRunKind.Subscript => $"{Base}_{Sub}",
+        MathRunKind.SubSuperscript => $"{Base}_{Sub}^{Sup}",
         MathRunKind.Fraction => $"{Numerator}/{Denominator}",
+        MathRunKind.Radical => string.IsNullOrEmpty(Degree) ? $"√({Base})" : $"{Degree}√({Base})",
+        MathRunKind.NAry => $"{Operator}({Sub}..{Sup}) {Base}".TrimEnd(),
+        MathRunKind.Accent => $"{Base}{Accent}",
+        MathRunKind.Bar => BarTop ? $"‾{Base}‾" : $"_{Base}_",
+        MathRunKind.Delimiter => $"{OpenChar}{Base}{CloseChar}",
+        MathRunKind.Matrix => Matrix?.LinearText ?? string.Empty,
+        MathRunKind.FunctionApply => string.IsNullOrEmpty(FuncName) ? Base : $"{FuncName}({Base})",
+        MathRunKind.GroupChar => string.Equals(GroupChrPos, "bot", StringComparison.OrdinalIgnoreCase)
+            ? $"{Base}{GroupChr}"
+            : $"{GroupChr}{Base}",
         _ => Text
     };
 }
 
 /// <summary>
+/// A small dense grid of plain-math-text cells backing a <see cref="MathRunKind.Matrix"/> fragment
+/// (OMML m:m). Rows are equal-length lists of cell strings. Kept text-only (no nested fragments) to match
+/// the rest of the equation model's flat shape; Word re-lays-out the matrix on open.
+/// </summary>
+public sealed class MathMatrix
+{
+    /// <summary>The matrix rows, each an ordered list of cell strings (all rows the same length).</summary>
+    public List<List<string>> Rows { get; } = [];
+
+    public MathMatrix() { }
+
+    /// <summary>Creates a matrix from rows of cell strings (rows are copied).</summary>
+    public MathMatrix(IEnumerable<IEnumerable<string>> rows)
+    {
+        foreach (var row in rows)
+            Rows.Add([.. row]);
+    }
+
+    /// <summary>The number of rows.</summary>
+    public int RowCount => Rows.Count;
+
+    /// <summary>The number of columns (the longest row's length; 0 for an empty matrix).</summary>
+    public int ColumnCount => Rows.Count == 0 ? 0 : Rows.Max(r => r.Count);
+
+    /// <summary>A 2×2 identity matrix (1 0 / 0 1) — the Insert > Equation matrix preset.</summary>
+    public static MathMatrix Identity2x2() => new([["1", "0"], ["0", "1"]]);
+
+    /// <summary>A best-effort linear rendering: rows joined by "; ", cells within a row by ", ", in brackets.</summary>
+    public string LinearText =>
+        "[" + string.Join("; ", Rows.Select(r => string.Join(", ", r))) + "]";
+}
+
+/// <summary>
 /// A basic inline mathematical equation: an ordered list of <see cref="MathRun"/> fragments that maps onto
-/// an OMML <c>m:oMath</c>. Carried by a <see cref="Run"/> via <see cref="Run.Equation"/>. Stores only the
-/// minimal OMML subset FreeW round-trips (plain text, superscript, fraction); richer structures degrade to
-/// plain math text on read so nothing throws.
+/// an OMML <c>m:oMath</c>. Carried by a <see cref="Run"/> via <see cref="Run.Equation"/>. Stores the OMML
+/// subset FreeW round-trips (plain text, sub/super-scripts, fraction, radical, n-ary, accent, bar,
+/// delimiter, matrix); richer structures degrade to plain math text on read so nothing throws.
 /// </summary>
 public sealed class Equation
 {

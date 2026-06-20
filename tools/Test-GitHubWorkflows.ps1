@@ -479,8 +479,8 @@ foreach ($workflow in $workflows) {
                     }
                 }
 
-                if (-not $macOsTfmValidationJobBlock.Contains('dotnet workload install macos --version "$FREEX_DOTNET_WORKLOAD_SET_VERSION" --skip-manifest-update')) {
-                    $errors.Add("$($workflow.Name): macOS TFM validation job must install the pinned macOS workload set with 'dotnet workload install macos --version `"`${FREEX_DOTNET_WORKLOAD_SET_VERSION}`" --skip-manifest-update'.")
+                if (-not $macOsTfmValidationJobBlock.Contains('dotnet workload install macos --version "$FREEX_DOTNET_WORKLOAD_SET_VERSION"')) {
+                    $errors.Add("$($workflow.Name): macOS TFM validation job must install the pinned macOS workload set with 'dotnet workload install macos --version `"`${FREEX_DOTNET_WORKLOAD_SET_VERSION}`"'.")
                 }
 
                 $macOsTfmBuildCommands = @(
@@ -490,12 +490,15 @@ foreach ($workflow in $workflows) {
                                 $_.Contains('--framework "$FREEX_MACOS_TFM"')
                             $_.Contains("src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj") -and
                                 $_ -match "(?m)(?:^|\s)-p:EnableMacOsTargetFramework=true(?:\s|$)" -and
+                                $_ -match "(?m)(?:^|\s)-p:ApplicationId=io\.github\.tony-xmelon\.freex(?:\s|$)" -and
+                                $_ -match "(?m)(?:^|\s)-p:ILLinkTreatWarningsAsErrors=false(?:\s|$)" -and
+                                $_ -match "(?m)(?:^|\s)-p:NoWarn=IL2026(?:\s|$)" -and
                                 $_.Contains('--runtime "$FREEX_RUNTIME"') -and
                                 $frameworkTargetsMacOsTfm
                         }
                 )
                 if ($macOsTfmBuildCommands.Count -ne 1) {
-                    $errors.Add("$($workflow.Name): macOS TFM validation job must build FreeX.App.Avalonia with -p:EnableMacOsTargetFramework=true, --framework net10.0-macos, and --runtime `$FREEX_RUNTIME.")
+                    $errors.Add("$($workflow.Name): macOS TFM validation job must build FreeX.App.Avalonia with -p:EnableMacOsTargetFramework=true, -p:ApplicationId=io.github.tony-xmelon.freex, -p:ILLinkTreatWarningsAsErrors=false, -p:NoWarn=IL2026, --framework net10.0-macos, and --runtime `$FREEX_RUNTIME.")
                 }
 
                 if ($macOsTfmValidationJobBlock -match "\bdotnet\s+publish\b") {

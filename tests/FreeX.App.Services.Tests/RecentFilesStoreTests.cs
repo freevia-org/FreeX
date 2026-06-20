@@ -51,6 +51,26 @@ public sealed class RecentFilesStoreTests
     }
 
     [Fact]
+    public void AddOrUpdate_WithCustomCap_RetainsOnlyCappedUnpinnedEntries()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var path = Path.Combine(temp.Path, "recent.json");
+        var now = new DateTimeOffset(2026, 6, 18, 9, 0, 0, TimeSpan.Zero);
+        var clockTicks = 0;
+        var store = RecentFilesStore.Load(path, () => now.AddMinutes(clockTicks++));
+
+        // Register five files but cap retention at two unpinned entries (an app-configured cap).
+        for (var i = 0; i < 5; i++)
+            store.AddOrUpdate(Path.Combine(temp.Path, $"file{i}.docx"), maxRecentEntries: 2);
+
+        var reloaded = RecentFilesStore.Load(path);
+        reloaded.Entries.Should().HaveCount(2);
+        // Newest-first: the two most recently added survive.
+        reloaded.Entries[0].Path.Should().EndWith("file4.docx");
+        reloaded.Entries[1].Path.Should().EndWith("file3.docx");
+    }
+
+    [Fact]
     public void AddOrUpdate_PersistsBookmarkedFileAccessIdentityAndPreservesPinnedState()
     {
         using var temp = new TestTemporaryDirectory();

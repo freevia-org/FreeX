@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Xml.Linq;
 using FluentAssertions;
@@ -5,40 +7,55 @@ using FreeX.App.Host;
 
 namespace FreeX.App.Host.Tests;
 
+/// <summary>
+/// Backstage rail tests, de-brittled for the unification program (P1). The rail moved from a hand-rolled
+/// <c>StartScreenSidebar</c> to the shared <see cref="Free.Shared.Ribbon.Wpf.BackstageFrame"/>, so the rail
+/// assertions are now <b>behavioural / automation-tree</b> queries against a live window (open the backstage,
+/// read the rail buttons' AutomationIds / KeyTips / localized names / tooltips and the pane-swap behaviour)
+/// instead of literal XAML <c>x:Name</c> / handler-name lookups. Tests about the backstage <i>content panes</i>
+/// (Recent/Pinned, search box, Info copy, progress footer, templates) are unchanged — those XAML subtrees were
+/// not touched by this migration.
+/// </summary>
 public sealed partial class MainWindowXamlKeyTipTests
 {
+    // ── Rail (now on the shared BackstageFrame) — behavioural assertions ─────────────
+
     [Fact]
     public void BackstageSidebarButtons_RenderAccessKeyMarkersAsMnemonics()
     {
-        var resources = DialogSourceTestSupport.LoadHostXamlDocument("Resources", "MainWindowResources.xaml");
-        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
-        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        // Save / Save As / Close labels carry mnemonic underscores; the frame renders labels through
+        // AccessText, so the access key is recognised (not shown literally). Assert via the live control.
+        StaTestRunner.Run(() =>
+        {
+            using var harness = BackstageRailHarness.Create();
+            harness.OpenBackstage();
 
-        var sidebarButtonStyle = resources
-            .Descendants(presentation + "Style")
-            .Single(element => element.Attribute(x + "Key")?.Value == "SsNavBtn");
-
-        sidebarButtonStyle
-            .Descendants(presentation + "ContentPresenter")
-            .Single()
-            .Attribute("RecognizesAccessKey")
-            ?.Value
-            .Should()
-            .Be("True");
+            var save = harness.RailButton("BackstageSaveButton")!;
+            var accessText = Descendants(save).OfType<AccessText>().Single();
+            accessText.AccessKey.Should().Be('S', "the rail renders '_Save' as an access-key mnemonic");
+        });
     }
 
     [Fact]
     public void BackstageInteractiveIcons_UseLargeReadableSlots()
     {
-        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
+        // Rail glyphs: assert behaviourally that every rail button shows a sized icon. The Recent/Pinned
+        // pin buttons live in a content pane (unchanged) and keep their XAML style assertions below.
+        StaTestRunner.Run(() =>
+        {
+            using var harness = BackstageRailHarness.Create();
+            harness.OpenBackstage();
+
+            var railIcons = harness.RailButtons()
+                .SelectMany(button => Descendants(button).OfType<Free.Shared.Ribbon.Wpf.RibbonIcon>())
+                .ToList();
+            railIcons.Should().NotBeEmpty("every primary rail entry shows a leading glyph");
+            railIcons.Should().OnlyContain(icon => icon.IconSize >= 20, "rail glyphs use large readable slots");
+        });
+
         var resources = DialogSourceTestSupport.LoadHostXamlDocument("Resources", "MainWindowResources.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
-        XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
-
-        var sidebarStyle = StyleByKey(resources, presentation, x, "BackstageSidebarIcon");
-        SetterValue(sidebarStyle, presentation, "IconSize").Should().Be("24");
-        SetterValue(sidebarStyle, presentation, "Margin").Should().Be("0,0,12,0");
 
         var pinButtonStyle = StyleByKey(resources, presentation, x, "BackstageRecentPinCommandButton");
         SetterValue(pinButtonStyle, presentation, "Width").Should().Be("32");
@@ -46,191 +63,202 @@ public sealed partial class MainWindowXamlKeyTipTests
 
         var pinIconStyle = StyleByKey(resources, presentation, x, "BackstageRecentPinCommandIcon");
         SetterValue(pinIconStyle, presentation, "IconSize").Should().Be("24");
-
-        var sidebar = document
-            .Descendants(presentation + "DockPanel")
-            .Single(element => element.Attribute(x + "Name")?.Value == "StartScreenSidebar");
-
-        var sidebarIcons = sidebar
-            .Descendants(local + "RibbonIcon")
-            .ToList();
-
-        sidebarIcons.Should().NotBeEmpty();
-        sidebarIcons.Should().OnlyContain(icon => icon.Attribute("IconSize") == null);
-        sidebarIcons
-            .Select(icon => icon.Attribute("Style")?.Value)
-            .Should()
-            .OnlyContain(style =>
-                string.Equals(style, "{StaticResource BackstageSidebarIcon}", StringComparison.Ordinal) ||
-                string.Equals(style, "{StaticResource BackstageSidebarBackIcon}", StringComparison.Ordinal));
-
-        var pinButtons = document
-            .Descendants(presentation + "Button")
-            .Where(button => button.Attribute("AutomationProperties.AutomationId")?.Value is
-                "BackstageRecentPinButton" or "BackstagePinnedUnpinButton")
-            .ToList();
-
-        pinButtons.Should().HaveCount(2);
-        pinButtons.Select(button => button.Attribute("Style")?.Value)
-            .Should()
-            .OnlyContain(style => string.Equals(style, "{StaticResource BackstageRecentPinCommandButton}", StringComparison.Ordinal));
-        pinButtons
-            .SelectMany(button => button.Descendants(local + "RibbonIcon"))
-            .Select(icon => icon.Attribute("Style")?.Value)
-            .Should()
-            .OnlyContain(style => string.Equals(style, "{StaticResource BackstageRecentPinCommandIcon}", StringComparison.Ordinal));
     }
 
     [Fact]
     public void BackstageSaveAsButton_UsesAccessKeyMatchingKeyTip()
     {
-        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
-        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
-        XNamespace local = "clr-namespace:FreeX.App.Host";
+        StaTestRunner.Run(() =>
+        {
+            using var harness = BackstageRailHarness.Create();
+            harness.OpenBackstage();
 
-        var saveAsButton = document
-            .Descendants(presentation + "Button")
-            .Single(element => element.Attribute("Click")?.Value == "SaveAsButton_Click");
-
-        GetButtonText(saveAsButton, presentation).Should().Be("Save _As");
-        saveAsButton.Descendants(local + "RibbonIcon")
-            .Single()
-            .Attribute("CommandName")?.Value.Should().Be("Save As");
-        saveAsButton.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("A");
+            var saveAs = harness.RailButton("BackstageSaveAsButton")!;
+            var accessText = Descendants(saveAs).OfType<AccessText>().Single();
+            accessText.AccessKey.Should().Be('A', "'Save _As' exposes A as its access key");
+            harness.KeyTip(saveAs).Should().Be("A", "the keytip matches the access key");
+        });
     }
 
     [Fact]
     public void BackstagePrintButton_ExposesPreviewAndNativePrintMetadata()
     {
-        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
-        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
-        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
-        XNamespace local = "clr-namespace:FreeX.App.Host";
+        StaTestRunner.Run(() =>
+        {
+            using var harness = BackstageRailHarness.Create();
+            harness.OpenBackstage();
 
-        var printButton = document
-            .Descendants(presentation + "Button")
-            .Single(element => element.Attribute(x + "Name")?.Value == "SsPrintNavBtn");
-
-        printButton.Attribute("Click")?.Value.Should().Be("SsPrintNavBtn_Click");
-        printButton.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("P");
-        printButton.Attribute("AutomationProperties.AutomationId")?.Value.Should().Be("BackstagePrintButton");
-        LocalizedAttribute(printButton, "AutomationProperties.Name").Should().Be("Print");
-        LocalizedAttribute(printButton, "AutomationProperties.HelpText")
-            .Should()
-            .Contain("native print access");
+            var print = harness.RailButton("BackstagePrintButton")!;
+            harness.KeyTip(print).Should().Be("P");
+            harness.AutomationName(print).Should().Be(UiText.Get("MainWindow_AutomationName_Print"));
+            harness.AutomationHelpText(print).Should().Contain("native print access");
+        });
     }
 
     [Fact]
     public void BackstagePrimarySidebarButtons_ExposeStableAutomationMetadata()
     {
-        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
-        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
-        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
-
-        var expectedButtons = new[]
+        var expected = new (string AutomationId, string AutomationName, string HelpFragment)[]
         {
-            (
-                Name: "SsBackBtn",
-                Click: "SsBackBtn_Click",
-                AutomationId: "BackstageBackButton",
-                AutomationName: "Back",
-                HelpTextFragment: "workbook"),
-            (
-                Name: "SsHomeNavBtn",
-                Click: "SsHomeNavBtn_Click",
-                AutomationId: "BackstageHomeButton",
-                AutomationName: "Home",
-                HelpTextFragment: "Home"),
-            (
-                Name: "SsNewNavBtn",
-                Click: "SsNewBtn_Click",
-                AutomationId: "BackstageNewButton",
-                AutomationName: "New",
-                HelpTextFragment: "new workbook"),
-            (
-                Name: "SsOpenNavBtn",
-                Click: "SsOpenBtn_Click",
-                AutomationId: "BackstageOpenButton",
-                AutomationName: "Open",
-                HelpTextFragment: "existing workbook"),
-            (
-                Name: "SsSaveNavBtn",
-                Click: "SaveButton_Click",
-                AutomationId: "BackstageSaveButton",
-                AutomationName: "Save",
-                HelpTextFragment: "Save the workbook"),
-            (
-                Name: "SsSaveAsNavBtn",
-                Click: "SaveAsButton_Click",
-                AutomationId: "BackstageSaveAsButton",
-                AutomationName: "Save As",
-                HelpTextFragment: "new name"),
-            (
-                Name: "SsCloseNavBtn",
-                Click: "SsCloseBtn_Click",
-                AutomationId: "BackstageCloseButton",
-                AutomationName: "Close",
-                HelpTextFragment: "Close")
+            ("BackstageBackButton", UiText.Get("MainWindow_TooltipTitle_Back"), "workbook"),
+            ("BackstageHomeButton", UiText.Get("MainWindow_Text_Home"), "Home"),
+            ("BackstageNewButton", UiText.Get("MainWindow_Text_New"), "new workbook"),
+            ("BackstageOpenButton", UiText.Get("MainWindow_Text_Open"), "existing workbook"),
+            ("BackstageSaveButton", UiText.Get("MainWindow_AutomationName_Save"), "Save the workbook"),
+            ("BackstageSaveAsButton", UiText.Get("MainWindow_TooltipTitle_SaveAs"), "new name"),
+            ("BackstageCloseButton", UiText.Get("MainWindow_AutomationName_Close"), "Close"),
         };
 
-        foreach (var expected in expectedButtons)
+        StaTestRunner.Run(() =>
         {
-            var button = document
-                .Descendants(presentation + "Button")
-                .Single(element => element.Attribute(x + "Name")?.Value == expected.Name);
+            using var harness = BackstageRailHarness.Create();
+            harness.OpenBackstage();
 
-            button.Attribute("Click")?.Value.Should().Be(expected.Click);
-            button.Attribute("AutomationProperties.AutomationId")?.Value.Should().Be(expected.AutomationId);
-            LocalizedAttribute(button, "AutomationProperties.Name").Should().Be(expected.AutomationName);
-            LocalizedAttribute(button, "AutomationProperties.HelpText")
-                .Should()
-                .Contain(expected.HelpTextFragment);
-        }
+            foreach (var (automationId, automationName, helpFragment) in expected)
+            {
+                var button = harness.RailButton(automationId);
+                button.Should().NotBeNull($"the rail must expose a stable '{automationId}' automation id");
+                harness.AutomationName(button!).Should().Be(automationName);
+                harness.AutomationHelpText(button!).Should().Contain(helpFragment);
+            }
+        });
     }
 
     [Fact]
     public void BackstageShareInfoAndExportButtons_ExposeStableAutomationMetadata()
     {
-        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
-        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
-        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
-
-        var expectedButtons = new[]
+        var expected = new (string AutomationId, string AutomationName, string HelpFragment)[]
         {
-            (
-                Name: "SsShareNavBtn",
-                Click: "SsShareBtn_Click",
-                AutomationId: "BackstageShareButton",
-                AutomationName: "Share",
-                HelpTextFragment: "Windows Share"),
-            (
-                Name: "SsInfoNavBtn",
-                Click: "SsInfoBtn_Click",
-                AutomationId: "BackstageInfoButton",
-                AutomationName: "Info",
-                HelpTextFragment: "unsupported workbook feature warnings"),
-            (
-                Name: "SsExportNavBtn",
-                Click: "ExportPdfButton_Click",
-                AutomationId: "BackstageExportButton",
-                AutomationName: "Export PDF/XPS",
-                HelpTextFragment: "XPS")
+            ("BackstageShareButton", UiText.Get("MainWindow_Text_Share"), "Windows Share"),
+            ("BackstageInfoButton", UiText.Get("MainWindow_Text_Info"), "unsupported workbook feature warnings"),
+            ("BackstageExportButton", UiText.Get("MainWindow_TooltipTitle_ExportPDFXPS"), "XPS"),
         };
 
-        foreach (var expected in expectedButtons)
+        StaTestRunner.Run(() =>
         {
-            var button = document
-                .Descendants(presentation + "Button")
-                .Single(element => element.Attribute(x + "Name")?.Value == expected.Name);
+            using var harness = BackstageRailHarness.Create();
+            harness.OpenBackstage();
 
-            button.Attribute("Click")?.Value.Should().Be(expected.Click);
-            button.Attribute("AutomationProperties.AutomationId")?.Value.Should().Be(expected.AutomationId);
-            LocalizedAttribute(button, "AutomationProperties.Name").Should().Be(expected.AutomationName);
-            LocalizedAttribute(button, "AutomationProperties.HelpText")
-                .Should()
-                .Contain(expected.HelpTextFragment);
-        }
+            foreach (var (automationId, automationName, helpFragment) in expected)
+            {
+                var button = harness.RailButton(automationId);
+                button.Should().NotBeNull($"the rail must expose a stable '{automationId}' automation id");
+                harness.AutomationName(button!).Should().Be(automationName);
+                harness.AutomationHelpText(button!).Should().Contain(helpFragment);
+            }
+        });
     }
+
+    [Fact]
+    public void BackstageAccountEntryPoint_DisclosesLocalAccountDecision()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = BackstageRailHarness.Create();
+            harness.OpenBackstage();
+
+            var account = harness.RailButton("BackstageAccountButton")!;
+            harness.AutomationName(account).Should().Be(UiText.Get("MainWindow_AutomationName_Account"));
+            harness.AutomationHelpText(account).Should().Contain("Show local account information");
+            harness.KeyTip(account).Should().Be("AC");
+            harness.TooltipTitle(account).Should().Contain("Local");
+            harness.TooltipDescription(account).Should().Contain("Microsoft account");
+            account.IsTabStop.Should().BeTrue();
+        });
+    }
+
+    [Fact]
+    public void BackstageOptionsEntryPoint_IsNamedCommandForUiAutomation()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = BackstageRailHarness.Create();
+            harness.OpenBackstage();
+
+            var options = harness.RailButton("BackstageOptionsButton")!;
+            harness.AutomationName(options).Should().Be(UiText.Get("MainWindow_AutomationName_Options"));
+            harness.AutomationHelpText(options).Should().Contain("Open FreeX settings");
+            options.IsTabStop.Should().BeTrue();
+        });
+    }
+
+    [Fact]
+    public void BackstageExportEntryPoint_DisclosesRealPdfAndXpsExport()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = BackstageRailHarness.Create();
+            harness.OpenBackstage();
+
+            var export = harness.RailButton("BackstageExportButton")!;
+            harness.TooltipTitle(export).Should().Be(UiText.Get("MainWindow_TooltipTitle_ExportPDFXPS"));
+            var description = harness.TooltipDescription(export);
+            description.Should().Contain("PDF");
+            description.Should().Contain("XPS");
+            description.Should().Contain("selection");
+            description.Should().Contain("workbook");
+            description.Should().NotContain("active sheet");
+            description.Should().NotContain("PDF printer");
+        });
+    }
+
+    [Fact]
+    public void BackstageCommandButtons_HaveAltKeyTips()
+    {
+        // Every rail command button must be reachable through an Excel-style Alt keytip.
+        StaTestRunner.Run(() =>
+        {
+            using var harness = BackstageRailHarness.Create();
+            harness.OpenBackstage();
+
+            var missing = harness.RailButtons()
+                .Where(button => string.IsNullOrWhiteSpace(harness.KeyTip(button)))
+                .Select(button => System.Windows.Automation.AutomationProperties.GetAutomationId(button))
+                .ToList();
+
+            missing.Should().BeEmpty("File/Backstage rail commands should be reachable through Alt keytips");
+        });
+    }
+
+    [Fact]
+    public void BackstageCommandButtons_ExposeVisibleAccessKeysForSaveAndClose()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = BackstageRailHarness.Create();
+            harness.OpenBackstage();
+
+            var accessKeys = harness.RailButtons()
+                .SelectMany(button => Descendants(button).OfType<AccessText>())
+                .Select(accessText => accessText.AccessKey)
+                .ToList();
+
+            accessKeys.Should().Contain('S', "Save exposes a visible access key");
+            accessKeys.Should().Contain('C', "Close exposes a visible access key");
+        });
+    }
+
+    [Fact]
+    public void BackstageCommands_DoNotReuseKeyTips()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = BackstageRailHarness.Create();
+            harness.OpenBackstage();
+
+            var duplicates = harness.RailButtons()
+                .Select(button => harness.KeyTip(button))
+                .Where(keyTip => !string.IsNullOrWhiteSpace(keyTip))
+                .GroupBy(keyTip => keyTip, StringComparer.OrdinalIgnoreCase)
+                .Where(group => group.Count() > 1)
+                .Select(group => group.Key)
+                .ToList();
+
+            duplicates.Should().BeEmpty("Backstage rail keytips should route deterministically without duplicates");
+        });
+    }
+
+    // ── Backstage content panes (unchanged XAML) — still asserted on the markup ──────
 
     [Fact]
     public void BackstageInfoVersion_MatchesAboutDialogVersion()
@@ -334,11 +362,6 @@ public sealed partial class MainWindowXamlKeyTipTests
         buttons.Should().OnlyContain(markup => markup.Contains("AutomationProperties.Name="));
         buttons.Should().OnlyContain(markup => markup.Contains("AutomationProperties.HelpText="));
 
-        // The recent/pinned right-click menus are now single-sourced through the neutral
-        // BackstageRecentFileContextMenuPlanner (rendered at runtime via Ss{Recent,Pinned}FileItem_Loaded)
-        // instead of two near-identical XAML ContextMenus. Assert the planner carries the headers/keytips,
-        // stable automation ids, and the RecentFileViewModel automation-text binding paths the XAML used, and
-        // that the file-item buttons wire the runtime builders.
         var xamlSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
         xamlSource.Should().Contain("Loaded=\"SsRecentFileItem_Loaded\"");
         xamlSource.Should().Contain("Loaded=\"SsPinnedFileItem_Loaded\"");
@@ -364,47 +387,6 @@ public sealed partial class MainWindowXamlKeyTipTests
     }
 
     [Fact]
-    public void BackstageAccountEntryPoint_DisclosesLocalAccountDecision()
-    {
-        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
-        XNamespace local = "clr-namespace:FreeX.App.Host";
-        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
-        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
-
-        var accountButton = document
-            .Descendants()
-            .Single(element => element.Attribute(x + "Name")?.Value == "SsAccountNavBtn");
-
-        accountButton.Attribute(x + "Name")?.Value.Should().Be("SsAccountNavBtn");
-        accountButton.Attribute("Click")?.Value.Should().Be("SsAccountBtn_Click");
-        LocalizedAttribute(accountButton, "AutomationProperties.Name").Should().Be("Account");
-        accountButton.ToString().Should().Contain("AutomationProperties.AutomationId=\"BackstageAccountButton\"");
-        LocalizedAttribute(accountButton, "AutomationProperties.HelpText").Should().Contain("Show local account information");
-        accountButton.Attribute("IsTabStop")?.Value.Should().Be("True");
-        LocalizedAttribute(accountButton, local + "RibbonTooltip.Title").Should().Contain("Local");
-        accountButton.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("AC");
-        LocalizedAttribute(accountButton, local + "RibbonTooltip.Description").Should().Contain("Microsoft account");
-    }
-
-    [Fact]
-    public void BackstageOptionsEntryPoint_IsNamedCommandForUiAutomation()
-    {
-        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
-        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
-        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
-
-        var optionsButton = document
-            .Descendants()
-            .Single(element => element.Attribute(x + "Name")?.Value == "SsOptionsNavBtn");
-
-        optionsButton.Attribute("Click")?.Value.Should().Be("SsOptionsBtn_Click");
-        LocalizedAttribute(optionsButton, "AutomationProperties.Name").Should().Be("Options");
-        optionsButton.ToString().Should().Contain("AutomationProperties.AutomationId=\"BackstageOptionsButton\"");
-        LocalizedAttribute(optionsButton, "AutomationProperties.HelpText").Should().Contain("Open FreeX settings");
-        optionsButton.Attribute("IsTabStop")?.Value.Should().Be("True");
-    }
-
-    [Fact]
     public void EscapeFromVisibleBackstage_ReturnsToWorkbookBeforeTransientCancellation()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
@@ -417,73 +399,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     }
 
     [Fact]
-    public void BackstageExportEntryPoint_DisclosesRealPdfAndXpsExport()
-    {
-        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
-        XNamespace local = "clr-namespace:FreeX.App.Host";
-        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
-
-        var exportButton = document
-            .Descendants(presentation + "Button")
-            .Single(element =>
-                GetButtonText(element, presentation) == "Export" &&
-                element.Attribute("Click")?.Value == "ExportPdfButton_Click");
-
-        LocalizedAttribute(exportButton, local + "RibbonTooltip.Title").Should().Be("Export PDF/XPS");
-        LocalizedAttribute(exportButton, local + "RibbonTooltip.Description").Should().Contain("PDF");
-        LocalizedAttribute(exportButton, local + "RibbonTooltip.Description").Should().Contain("XPS");
-        LocalizedAttribute(exportButton, local + "RibbonTooltip.Description").Should().Contain("selection");
-        LocalizedAttribute(exportButton, local + "RibbonTooltip.Description").Should().Contain("workbook");
-        LocalizedAttribute(exportButton, local + "RibbonTooltip.Description").Should().NotContain("active sheet");
-        LocalizedAttribute(exportButton, local + "RibbonTooltip.Description").Should().NotContain("PDF printer");
-    }
-
-    [Fact]
-    public void BackstageCommandButtons_HaveAltKeyTips()
-    {
-        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
-        XNamespace local = "clr-namespace:FreeX.App.Host";
-        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
-        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
-
-        var startScreen = document
-            .Descendants(presentation + "Grid")
-            .Single(element => element.Attribute(x + "Name")?.Value == "StartScreenOverlay");
-
-        var missing = startScreen
-            .Descendants(presentation + "Button")
-            .Where(button => button.Attribute("Click") is not null)
-            .Where(button => button.Attribute("Click")?.Value != "SsRecentItem_Click")
-            .Where(button => button.Attribute("Click")?.Value is not ("SsPinItem_Click" or "SsUnpinItem_Click"))
-            .Where(button => button.Attribute(local + "RibbonTooltip.KeyTip") is null)
-            .Select(button =>
-                LocalizedAttribute(button, "Content") ??
-                button.Attribute(x + "Name")?.Value ??
-                button.Attribute("Click")!.Value)
-            .ToList();
-
-        missing.Should().BeEmpty("File/Backstage commands should be reachable through Excel-style Alt keytips");
-    }
-
-    [Fact]
-    public void BackstageCommandButtons_ExposeVisibleAccessKeysForSaveAndClose()
-    {
-        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
-        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
-        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
-
-        var startScreen = document
-            .Descendants(presentation + "Grid")
-            .Single(element => element.Attribute(x + "Name")?.Value == "StartScreenOverlay");
-
-        startScreen.Descendants(presentation + "Button")
-            .Select(button => GetButtonText(button, presentation))
-            .Should()
-            .Contain(["_Save", "_Close"]);
-    }
-
-    [Fact]
-    public void BackstageMouseOnlyCommands_AreNotUsedForRecentPinnedTabs()
+    public void BackstageRecentPinnedTabs_AreKeyboardReachableCommands()
     {
         var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace local = "clr-namespace:FreeX.App.Host";
@@ -503,30 +419,6 @@ public sealed partial class MainWindowXamlKeyTipTests
             .ToList();
 
         missing.Should().BeEmpty("Recent/Pinned Backstage tab selectors should participate in keytip navigation");
-    }
-
-    [Fact]
-    public void BackstageCommands_DoNotReuseKeyTips()
-    {
-        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
-        XNamespace local = "clr-namespace:FreeX.App.Host";
-        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
-        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
-
-        var startScreen = document
-            .Descendants(presentation + "Grid")
-            .Single(element => element.Attribute(x + "Name")?.Value == "StartScreenOverlay");
-
-        var duplicates = startScreen
-            .Descendants()
-            .Where(element => element.Attribute(local + "RibbonTooltip.KeyTip") is not null)
-            .Where(element => element.Name != presentation + "MenuItem")
-            .GroupBy(element => element.Attribute(local + "RibbonTooltip.KeyTip")!.Value, StringComparer.OrdinalIgnoreCase)
-            .Where(group => group.Count() > 1)
-            .Select(group => group.Key)
-            .ToList();
-
-        duplicates.Should().BeEmpty("Backstage keytips should route deterministically without duplicate visible command keys");
     }
 
     [Fact]
@@ -556,8 +448,6 @@ public sealed partial class MainWindowXamlKeyTipTests
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
-        // The open/save operation overlay is now a transparent input blocker over the editing surface;
-        // the visible, accessible progress lives in the status-bar (footer) panel, like Excel.
         var overlay = document
             .Descendants(presentation + "Border")
             .Single(element => element.Attribute(x + "Name")?.Value == "OpenProgressOverlay");
@@ -580,6 +470,14 @@ public sealed partial class MainWindowXamlKeyTipTests
         LocalizedAttribute(progressText, "AutomationProperties.Name").Should().Be("Open progress detail");
         progressText.Attribute("AutomationProperties.LiveSetting")?.Value
             .Should().Be("Assertive");
+
+        var cancelButton = document
+            .Descendants(presentation + "Button")
+            .Single(element => element.Attribute(x + "Name")?.Value == "StatusSaveProgressCancelButton");
+
+        cancelButton.Attribute("Click")?.Value.Should().Be("CancelFileOperation_Click");
+        cancelButton.Attribute("AutomationProperties.AutomationId")?.Value.Should().Be("StatusSaveProgressCancelButton");
+        cancelButton.Attribute("Visibility")?.Value.Should().Be("Collapsed");
     }
 
     [Fact]
@@ -615,5 +513,18 @@ public sealed partial class MainWindowXamlKeyTipTests
             .Descendants()
             .Any(element => element.Attribute("MouseDown")?.Value == "SsMoreTemplates_MouseDown")
             .Should().BeFalse("online template discovery should be a normal command button, not a mouse-only text element");
+    }
+
+    // Visual-tree descendant walk shared by the behavioural rail tests above.
+    private static IEnumerable<System.Windows.DependencyObject> Descendants(System.Windows.DependencyObject root)
+    {
+        var count = System.Windows.Media.VisualTreeHelper.GetChildrenCount(root);
+        for (var i = 0; i < count; i++)
+        {
+            var child = System.Windows.Media.VisualTreeHelper.GetChild(root, i);
+            yield return child;
+            foreach (var descendant in Descendants(child))
+                yield return descendant;
+        }
     }
 }

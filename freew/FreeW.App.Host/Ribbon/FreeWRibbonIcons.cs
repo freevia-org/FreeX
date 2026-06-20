@@ -73,6 +73,7 @@ internal static class FreeWRibbonIcons
             ["freew.indent-increase"] = RibbonCommandIconKind.IndentIncrease,
             ["freew.indent-decrease"] = RibbonCommandIconKind.IndentDecrease,
             ["freew.paragraph-dialog"] = RibbonCommandIconKind.LineSpacing,
+            ["freew.tabs-dialog"] = RibbonCommandIconKind.Ruler,
             ["freew.para-border"] = RibbonCommandIconKind.Border,
             ["freew.para-shading"] = RibbonCommandIconKind.Fill,
             ["freew.keep-with-next"] = RibbonCommandIconKind.Wrap,
@@ -106,6 +107,8 @@ internal static class FreeWRibbonIcons
             ["freew.table-header-row"] = RibbonCommandIconKind.Table,
             ["freew.table-banded-rows"] = RibbonCommandIconKind.Table,
             ["freew.table-repeat-header"] = RibbonCommandIconKind.Table,
+            ["freew.table-formula"] = RibbonCommandIconKind.Sum,
+            ["freew.table-properties"] = RibbonCommandIconKind.Table,
 
             // Insert: illustrations
             ["freew.picture"] = RibbonCommandIconKind.Picture,
@@ -119,9 +122,24 @@ internal static class FreeWRibbonIcons
             ["freew.shape-rounded"] = RibbonCommandIconKind.Rectangle,
             ["freew.shape-ellipse"] = RibbonCommandIconKind.Ellipse,
             ["freew.shape-textbox"] = RibbonCommandIconKind.TextBox,
+            ["freew.screenshot"] = RibbonCommandIconKind.Picture,
+            ["freew.screen-clipping"] = RibbonCommandIconKind.Picture,
 
             // Insert: media (equation / chart / WordArt / SmartArt / OLE object)
             ["freew.equation"] = RibbonCommandIconKind.Equation,
+            ["freew.equation-fraction"] = RibbonCommandIconKind.Equation,
+            ["freew.equation-script"] = RibbonCommandIconKind.Equation,
+            ["freew.equation-radical"] = RibbonCommandIconKind.Equation,
+            ["freew.equation-nthroot"] = RibbonCommandIconKind.Equation,
+            ["freew.equation-integral"] = RibbonCommandIconKind.Equation,
+            ["freew.equation-summation"] = RibbonCommandIconKind.Equation,
+            ["freew.equation-product"] = RibbonCommandIconKind.Equation,
+            ["freew.equation-accent"] = RibbonCommandIconKind.Equation,
+            ["freew.equation-bar"] = RibbonCommandIconKind.Equation,
+            ["freew.equation-bracket"] = RibbonCommandIconKind.Equation,
+            ["freew.equation-matrix"] = RibbonCommandIconKind.Equation,
+            ["freew.equation-func"] = RibbonCommandIconKind.Equation,
+            ["freew.equation-groupchr"] = RibbonCommandIconKind.Equation,
             ["freew.chart"] = RibbonCommandIconKind.ChartColumn,
             ["freew.wordart"] = RibbonCommandIconKind.WordArt,
             ["freew.smartart"] = RibbonCommandIconKind.SmartArt,
@@ -139,11 +157,13 @@ internal static class FreeWRibbonIcons
             // Insert: quick parts
             ["freew.save-quickpart"] = RibbonCommandIconKind.QuickParts,
             ["freew.insert-quickpart"] = RibbonCommandIconKind.QuickParts,
+            ["freew.building-blocks-organizer"] = RibbonCommandIconKind.QuickParts,
             ["freew.insert-file"] = RibbonCommandIconKind.TextFromFile,
 
             // Insert: references
             ["freew.footnote"] = RibbonCommandIconKind.Footnote,
             ["freew.endnote"] = RibbonCommandIconKind.Endnote,
+            ["freew.footnote-endnote-options"] = RibbonCommandIconKind.Footnote,
             ["freew.toc"] = RibbonCommandIconKind.TableOfContents,
             ["freew.toc-refresh"] = RibbonCommandIconKind.Refresh,
             ["freew.citation"] = RibbonCommandIconKind.Citation,
@@ -155,10 +175,17 @@ internal static class FreeWRibbonIcons
             ["freew.index-insert"] = RibbonCommandIconKind.Index,
             ["freew.tof"] = RibbonCommandIconKind.TableOfContents,
             ["freew.tof-refresh"] = RibbonCommandIconKind.Refresh,
+            ["freew.mark-citation"] = RibbonCommandIconKind.Citation,
+            ["freew.table-of-authorities"] = RibbonCommandIconKind.Bibliography,
+            ["freew.table-of-authorities-refresh"] = RibbonCommandIconKind.Refresh,
 
             // Insert: controls
             ["freew.cc-text"] = RibbonCommandIconKind.TextBox,
+            ["freew.cc-richtext"] = RibbonCommandIconKind.QuickParts,
             ["freew.cc-checkbox"] = RibbonCommandIconKind.CheckBox,
+            ["freew.cc-date"] = RibbonCommandIconKind.Date,
+            ["freew.cc-dropdown"] = RibbonCommandIconKind.List,
+            ["freew.cc-combo"] = RibbonCommandIconKind.ChevronDown,
 
             // Insert: header & footer
             ["freew.header"] = RibbonCommandIconKind.Header,
@@ -172,11 +199,18 @@ internal static class FreeWRibbonIcons
 
             // Layout: page setup
             ["freew.margins"] = RibbonCommandIconKind.Margins,
+            ["freew.custom-margins"] = RibbonCommandIconKind.Margins,
             ["freew.orientation"] = RibbonCommandIconKind.Orientation,
             ["freew.size"] = RibbonCommandIconKind.OnePage,
+            ["freew.more-paper-sizes"] = RibbonCommandIconKind.OnePage,
+            ["freew.page-setup"] = RibbonCommandIconKind.Margins,
             ["freew.columns"] = RibbonCommandIconKind.TextColumns,
             ["freew.line-numbers"] = RibbonCommandIconKind.Number,
             ["freew.hyphenation"] = RibbonCommandIconKind.Hyphenation,
+            ["freew.hyphenation-none"] = RibbonCommandIconKind.Hyphenation,
+            ["freew.hyphenation-auto"] = RibbonCommandIconKind.Hyphenation,
+            ["freew.hyphenation-manual"] = RibbonCommandIconKind.Hyphenation,
+            ["freew.hyphenation-options"] = RibbonCommandIconKind.Hyphenation,
             ["freew.page-valign"] = RibbonCommandIconKind.AlignJustify,
             ["freew.different-first-page"] = RibbonCommandIconKind.CoverPage,
 
@@ -194,12 +228,18 @@ internal static class FreeWRibbonIcons
 
             // Design
             ["freew.theme"] = RibbonCommandIconKind.Theme,
+            ["freew.page-color"] = RibbonCommandIconKind.Fill,
 
             // View
             ["freew.print-layout"] = RibbonCommandIconKind.PrintLayout,
             ["freew.nav-pane"] = RibbonCommandIconKind.NavigationPane,
             ["freew.formatting-marks"] = RibbonCommandIconKind.FormattingMarks,
+            ["freew.reveal-formatting"] = RibbonCommandIconKind.Info,
             ["freew.read-mode"] = RibbonCommandIconKind.ReadMode,
+            ["freew.web-layout"] = RibbonCommandIconKind.WebLayout,
+            ["freew.draft-view"] = RibbonCommandIconKind.Draft,
+            ["freew.outline-view"] = RibbonCommandIconKind.MultilevelList,
+            ["freew.zoom-dialog"] = RibbonCommandIconKind.Zoom,
 
             // Mailings
             ["freew.merge-data"] = RibbonCommandIconKind.Recipients,
@@ -209,12 +249,16 @@ internal static class FreeWRibbonIcons
 
             // Review
             ["freew.statistics"] = RibbonCommandIconKind.WordCount,
+            ["freew.read-aloud"] = RibbonCommandIconKind.ReadAloud,
             ["freew.spellcheck-toggle"] = RibbonCommandIconKind.Spelling,
             ["freew.add-to-dictionary"] = RibbonCommandIconKind.Book,
             ["freew.new-comment"] = RibbonCommandIconKind.Comment,
+            ["freew.reply-comment"] = RibbonCommandIconKind.Comment,
+            ["freew.resolve-comment"] = RibbonCommandIconKind.AcceptChange,
             ["freew.track-changes"] = RibbonCommandIconKind.History,
             ["freew.accept-all"] = RibbonCommandIconKind.AcceptChange,
             ["freew.reject-all"] = RibbonCommandIconKind.RejectChange,
+            ["freew.mark-as-final"] = RibbonCommandIconKind.Protect,
             ["freew.restrict-editing"] = RibbonCommandIconKind.Protect,
             ["freew.compare"] = RibbonCommandIconKind.Compare,
             ["freew.inspect-document"] = RibbonCommandIconKind.Search,

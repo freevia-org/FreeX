@@ -23,7 +23,7 @@ internal static class SmokeUsage
                                             a native PivotTable, then load/save it through FreeX.
               --freex-resave-before-excel   For user inputs, corpus rows, and generated FreeX fixtures,
                                             load/save through FreeX before Excel validation.
-              --corpus-manifest <csv>       Add existing .xlsx rows from the XLSX corpus manifest.
+              --corpus-manifest <csv>       Add existing .xlsx/.xlsm rows from the XLSX corpus manifest.
               --corpus-source <source_type> Filter corpus rows by source_type. Repeatable.
               --corpus-status <status>      Filter corpus rows by expected_status. Repeatable.
                                             Defaults to supported-pass, supported-metadata-pass,

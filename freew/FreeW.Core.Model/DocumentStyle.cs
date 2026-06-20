@@ -12,6 +12,16 @@ public sealed class DocumentStyle
     public required string Name { get; init; }
     public StyleType Type { get; init; } = StyleType.Paragraph;
     public string? BasedOnStyleId { get; init; }
+
+    /// <summary>
+    /// The style applied to the paragraph created when the user presses Enter at the end of a paragraph
+    /// carrying this style — Word's "Style for following paragraph" (<c>w:next</c> in styles.xml). For
+    /// example the built-in Heading styles set this to <c>Normal</c> so body text follows a heading. Null
+    /// when the style does not specify a follow-on (Word then keeps the same style). Only meaningful for
+    /// paragraph styles; ignored for character styles. A value that does not name an existing style is
+    /// dropped on read/create to avoid a dangling reference.
+    /// </summary>
+    public string? NextStyleId { get; init; }
     public RunFormatting Run { get; set; } = RunFormatting.Default;
     public ParagraphFormatting Paragraph { get; set; } = ParagraphFormatting.Default;
 

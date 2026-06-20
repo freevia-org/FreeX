@@ -90,6 +90,29 @@ public sealed class XlsxPackageHealthValidatorTests
     }
 
     [Fact]
+    public void Validate_FlagsXmlPartWithProhibitedDtd()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            extraEntries:
+            [
+                ("xl/sharedStrings.xml", """
+                    <!DOCTYPE sst [
+                      <!ELEMENT sst ANY>
+                    ]>
+                    <sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" />
+                    """)
+            ],
+            contentTypeOverrides:
+            [
+                $"""<Override PartName="/xl/sharedStrings.xml" ContentType="{SharedStringsContentType}" />"""
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains("xl/sharedStrings.xml is not parseable XML", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void Validate_FlagsMissingSharedStringTableForSharedStringCell()
     {
         using var package = CreateMinimalWorkbookPackage(
@@ -1287,6 +1310,30 @@ public sealed class XlsxPackageHealthValidatorTests
         XlsxPackageHealthValidator.Validate(package)
             .Should()
             .Contain(issue => issue.Contains("targets missing package part xl/worksheets/missing.xml", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Validate_PreservesEncodedPathSeparatorsWhenResolvingRelationshipTargets()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            workbookRelationships:
+            [
+                Relationship("rId1", WorksheetRelationshipType, "worksheets/sheet%2F1.xml")
+            ],
+            extraEntries:
+            [
+                ("xl/worksheets/sheet%2F1.xml", """
+                    <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+                      <sheetData />
+                    </worksheet>
+                    """)
+            ],
+            contentTypeOverrides:
+            [
+                """<Override PartName="/xl/worksheets/sheet%2F1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml" />"""
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package).Should().BeEmpty();
     }
 
     [Fact]

@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Globalization;
 using System.Resources;
+using FreeX.App.Localization;
 
 namespace FreeX.App.Host;
 

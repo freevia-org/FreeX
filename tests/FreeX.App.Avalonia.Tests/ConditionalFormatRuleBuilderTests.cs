@@ -1,6 +1,7 @@
 using FluentAssertions;
 
 using FreeX.App.Avalonia.Dialogs;
+using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.Dialogs;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
@@ -405,6 +406,97 @@ public sealed class ConditionalFormatRuleBuilderTests
             AppliesTo = RangeAt(sheet, 0, 0, 1, 1),
             RuleType = CfRuleType.DataBar,
         }).Should().Be("Data Bar");
+    }
+
+    [Fact]
+    public void Build_Top10_DefaultsToTop_SettingAboveAverageTrue()
+    {
+        var input = new CfRuleInput { RuleType = CfRuleType.Top10, Rank = "3" };
+
+        ConditionalFormatRuleBuilder.Build(input, Range()).AboveAverage.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Build_Top10_Bottom_SetsAboveAverageFalse()
+    {
+        var input = new CfRuleInput { RuleType = CfRuleType.Top10, Rank = "3", IsTop = false };
+
+        ConditionalFormatRuleBuilder.Build(input, Range()).AboveAverage.Should().BeFalse();
+    }
+
+    // ── Manage: reorder + applies-to command mapping ──────────────────────────
+
+    [Fact]
+    public void Manage_BuildMoveCommand_UnknownId_ReturnsNull()
+    {
+        var sheet = SheetId();
+        var rules = new List<ConditionalFormat> { RuleAt(sheet, 0, 0, 1, 1) };
+
+        ConditionalFormatManageModel.BuildMoveCommand(
+            sheet, rules, Guid.NewGuid(), ConditionalFormatRuleMoveDirection.Up).Should().BeNull();
+    }
+
+    [Fact]
+    public void Manage_BuildMoveCommand_AtBoundary_ReturnsNull()
+    {
+        var sheet = SheetId();
+        var first = RuleAt(sheet, 0, 0, 1, 1);
+        first.Priority = 1;
+        var rules = new List<ConditionalFormat> { first };
+
+        ConditionalFormatManageModel.BuildMoveCommand(
+            sheet, rules, first.Id, ConditionalFormatRuleMoveDirection.Up).Should().BeNull();
+    }
+
+    [Fact]
+    public void Manage_MoveCommand_SwapsPriorityThroughSession()
+    {
+        var session = CreateSession();
+        var sheetId = session.ActiveSheet.Id;
+        var range = SelectionRange(session);
+        var first = ConditionalFormatRuleBuilder.Build(new CfRuleInput { RuleType = CfRuleType.DataBar }, range);
+        var second = ConditionalFormatRuleBuilder.Build(new CfRuleInput { RuleType = CfRuleType.IconSet }, range);
+        session.ExecuteReviewCommand(ConditionalFormatRuleBuilder.ToApplyCommand(sheetId, first));
+        session.ExecuteReviewCommand(ConditionalFormatRuleBuilder.ToApplyCommand(sheetId, second));
+
+        var moveCommand = ConditionalFormatManageModel.BuildMoveCommand(
+            sheetId, session.ActiveSheet.ConditionalFormats, second.Id, ConditionalFormatRuleMoveDirection.Up);
+        moveCommand.Should().NotBeNull();
+        session.ExecuteReviewCommand(moveCommand!).Success.Should().BeTrue();
+
+        session.ActiveSheet.ConditionalFormats.Single(r => r.Id == second.Id).Priority
+            .Should().Be(1);
+        session.ActiveSheet.ConditionalFormats.Single(r => r.Id == first.Id).Priority
+            .Should().Be(2);
+    }
+
+    [Fact]
+    public void Manage_BuildAppliesToCommand_UnknownId_ReturnsNull()
+    {
+        var sheet = SheetId();
+        var rules = new List<ConditionalFormat> { RuleAt(sheet, 0, 0, 1, 1) };
+
+        ConditionalFormatManageModel.BuildAppliesToCommand(
+            sheet, rules, Guid.NewGuid(), RangeAt(sheet, 2, 2, 3, 3)).Should().BeNull();
+    }
+
+    [Fact]
+    public void Manage_AppliesToCommand_ChangesRangeThroughSession()
+    {
+        var session = CreateSession();
+        var sheetId = session.ActiveSheet.Id;
+        var rule = ConditionalFormatRuleBuilder.Build(
+            new CfRuleInput { RuleType = CfRuleType.DataBar }, SelectionRange(session));
+        session.ExecuteReviewCommand(ConditionalFormatRuleBuilder.ToApplyCommand(sheetId, rule));
+
+        var newRange = new GridRange(new CellAddress(sheetId, 9, 9), new CellAddress(sheetId, 12, 12));
+        var command = ConditionalFormatManageModel.BuildAppliesToCommand(
+            sheetId, session.ActiveSheet.ConditionalFormats, rule.Id, newRange);
+        command.Should().NotBeNull();
+        session.ExecuteReviewCommand(command!).Success.Should().BeTrue();
+
+        session.ActiveSheet.ConditionalFormats.Single(r => r.Id == rule.Id).AppliesTo
+            .Should().Be(newRange);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

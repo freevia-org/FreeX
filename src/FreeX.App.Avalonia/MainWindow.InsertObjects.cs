@@ -1,8 +1,16 @@
 using System.IO;
+using System.Threading.Tasks;
 
+using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Layout;
+using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using Avalonia.Platform.Storage;
+
+using FreeX.App.Services;
 
 namespace FreeX.App.Avalonia;
 
@@ -40,7 +48,7 @@ public sealed partial class MainWindow
     {
         if (!((IStorageProvider)StorageProvider).CanOpen)
         {
-            ShowEditIssue("Insert Picture is unavailable on this platform.");
+            ShowEditIssue(UiText.Get("InsertLoc_PictureUnavailable"));
             return;
         }
 
@@ -49,7 +57,7 @@ public sealed partial class MainWindow
 
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = "Insert Picture",
+            Title = UiText.Get("InsertLoc_InsertPictureTitle"),
             AllowMultiple = false,
             FileTypeFilter = [PictureFileType],
         });
@@ -67,7 +75,7 @@ public sealed partial class MainWindow
         var contentType = InsertPictureCommandFactory.ContentTypeForPath(file.Name);
         if (contentType is null)
         {
-            ShowEditIssue("Unsupported image format.");
+            ShowEditIssue(UiText.Get("InsertLoc_UnsupportedImageFormat"));
             return;
         }
 
@@ -81,13 +89,13 @@ public sealed partial class MainWindow
         }
         catch (IOException ex)
         {
-            ShowEditIssue($"Could not read the image: {ex.Message}");
+            ShowEditIssue(UiText.Format("InsertLoc_CouldNotReadImage", ex.Message));
             return;
         }
 
         if (imageBytes.Length == 0)
         {
-            ShowEditIssue("The selected image is empty.");
+            ShowEditIssue(UiText.Get("InsertLoc_SelectedImageEmpty"));
             return;
         }
 
@@ -98,12 +106,12 @@ public sealed partial class MainWindow
         var result = _session.ExecuteReviewCommand(command);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Insert Picture failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("InsertLoc_InsertPictureFailed"));
             return;
         }
 
         ClearSelectedDrawingObject();
-        RefreshShell($"Inserted picture at {FormatCellReference(anchor)}");
+        RefreshShell(UiText.Format("InsertLoc_InsertedPictureAt", FormatCellReference(anchor)));
     }
 
     /// <summary>
@@ -122,12 +130,12 @@ public sealed partial class MainWindow
         var result = _session.ExecuteReviewCommand(command);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Insert Shape failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("InsertLoc_InsertShapeFailed"));
             return;
         }
 
         ClearSelectedDrawingObject();
-        RefreshShell($"Inserted {kind} shape at {FormatCellReference(anchor)}");
+        RefreshShell(UiText.Format("InsertLoc_InsertedShapeAt", kind, FormatCellReference(anchor)));
     }
 
     /// <summary>
@@ -146,12 +154,12 @@ public sealed partial class MainWindow
         var result = _session.ExecuteReviewCommand(command);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Insert Text Box failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("InsertLoc_InsertTextBoxFailed"));
             return;
         }
 
         ClearSelectedDrawingObject();
-        RefreshShell($"Inserted text box at {FormatCellReference(anchor)}");
+        RefreshShell(UiText.Format("InsertLoc_InsertedTextBoxAt", FormatCellReference(anchor)));
     }
 
     /// <summary>Decodes the image's native pixel size via Avalonia, or (0,0) when decoding fails.</summary>
@@ -188,11 +196,268 @@ public sealed partial class MainWindow
         var result = _session.ExecuteReviewCommand(command);
         if (!result.Success)
         {
-            RefreshShell(result.ErrorMessage ?? "Insert Table failed.");
+            RefreshShell(result.ErrorMessage ?? UiText.Get("InsertLoc_InsertTableFailed"));
             return;
         }
 
         ClearSelectedDrawingObject();
-        RefreshShell($"Created table from {FormatRangeReference(range)}");
+        RefreshShell(UiText.Format("InsertLoc_CreatedTableFrom", FormatRangeReference(range)));
+    }
+
+    private static readonly FilePickerFileType AnyFileType = new("All Files")
+    {
+        Patterns = ["*.*"],
+    };
+
+    /// <summary>
+    /// Insert ▸ Object (create from file) — honest scope. The FreeX Core model has no editable embedded-OLE
+    /// part (OLE XML is only preserved on XLSX round-trip, never authored from the UI), so true OLE embedding
+    /// is NOT implemented. The realistic subset, decided by the portable <see cref="InsertObjectPlanner"/>:
+    /// an image file is embedded as a real picture; any other file is placed as an icon/label placeholder
+    /// picture carrying the file name (and, when "link" is chosen, the source path). The placeholder uses the
+    /// existing <see cref="FreeX.Core.Commands.InsertPictureCommand"/> rendering path, so it is selectable and
+    /// movable like other drawing objects. This method is only Avalonia chrome + platform glue.
+    /// </summary>
+    private async Task ShowInsertObjectDialogAsync()
+    {
+        if (!((IStorageProvider)StorageProvider).CanOpen)
+        {
+            ShowEditIssue(UiText.Get("WfInsertObject_Unavailable"));
+            return;
+        }
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var linkCheck = new CheckBox { Content = UiText.Get("WfInsertObject_LinkLabel") };
+        AutomationProperties.SetAutomationId(linkCheck, "WfInsertObjectLinkCheck");
+
+        var pathBlock = new TextBlock
+        {
+            Text = UiText.Get("WfInsertObject_NoFileChosen"),
+            TextWrapping = TextWrapping.Wrap,
+        };
+        AutomationProperties.SetAutomationId(pathBlock, "WfInsertObjectChosenPath");
+
+        IStorageFile? chosen = null;
+
+        var browse = new Button { Content = UiText.Get("WfInsertObject_BrowseButton"), Width = 110 };
+        AutomationProperties.SetAutomationId(browse, "WfInsertObjectBrowseButton");
+        var insert = new Button { Content = UiText.Get("WfInsertObject_InsertButton"), Width = 90, IsEnabled = false };
+        AutomationProperties.SetAutomationId(insert, "WfInsertObjectInsertButton");
+        var cancel = new Button { Content = UiText.Get("WfInsertObject_CancelButton"), Width = 90 };
+        AutomationProperties.SetAutomationId(cancel, "WfInsertObjectCancelButton");
+
+        browse.Click += async (_, _) =>
+        {
+            var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = UiText.Get("WfInsertObject_Title"),
+                AllowMultiple = false,
+                FileTypeFilter = [AnyFileType],
+            });
+            foreach (var candidate in files)
+            {
+                chosen = candidate;
+                break;
+            }
+
+            if (chosen is not null)
+            {
+                pathBlock.Text = chosen.Name;
+                insert.IsEnabled = true;
+            }
+        };
+
+        var layout = new StackPanel { Margin = new Thickness(16), Spacing = 10, Width = 380 };
+        layout.Children.Add(new TextBlock { Text = UiText.Get("WfInsertObject_Heading"), FontWeight = FontWeight.SemiBold });
+        layout.Children.Add(browse);
+        layout.Children.Add(pathBlock);
+        layout.Children.Add(linkCheck);
+        layout.Children.Add(new TextBlock
+        {
+            Text = UiText.Get("WfInsertObject_Note"),
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = Brush(120, 120, 120),
+        });
+
+        var dialog = new Window
+        {
+            Title = UiText.Get("WfInsertObject_Title"),
+            Width = 420,
+            Height = 280,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+        AutomationProperties.SetAutomationId(dialog, "WfInsertObjectDialog");
+
+        insert.Click += async (_, _) =>
+        {
+            if (chosen is null)
+                return;
+            if (await TryInsertObjectAsync(chosen, linkCheck.IsChecked == true))
+                dialog.Close();
+        };
+        cancel.Click += (_, _) => dialog.Close();
+
+        var buttons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Children = { insert, cancel },
+        };
+        layout.Children.Add(buttons);
+
+        dialog.Content = layout;
+        await dialog.ShowDialog(this);
+    }
+
+    /// <summary>
+    /// Validates the chosen file through the portable planner and inserts it: an image is embedded as a real
+    /// picture; anything else becomes a generated icon/label placeholder picture. Returns true on success.
+    /// </summary>
+    private async Task<bool> TryInsertObjectAsync(IStorageFile file, bool linkToFile)
+    {
+        if (_isOpening || _isSaving)
+            return false;
+
+        var path = file.TryGetLocalPath() ?? file.Name;
+        if (!InsertObjectPlanner.TryPlan(path, fileExists: true, linkToFile, out var plan, out var error))
+        {
+            ShowEditIssue(error switch
+            {
+                InsertObjectValidationError.MissingFilePath => UiText.Get("WfInsertObject_ErrorMissingFile"),
+                InsertObjectValidationError.FileNotFound => UiText.Get("WfInsertObject_ErrorFileNotFound"),
+                _ => UiText.Get("WfInsertObject_ErrorGeneric"),
+            });
+            return false;
+        }
+
+        byte[] imageBytes;
+        string contentType;
+        double width;
+        double height;
+
+        if (plan.Rendering == InsertObjectRendering.EmbedImageAsPicture && plan.ImageContentType is not null)
+        {
+            try
+            {
+                await using var stream = await file.OpenReadAsync();
+                using var memory = new MemoryStream();
+                await stream.CopyToAsync(memory);
+                imageBytes = memory.ToArray();
+            }
+            catch (IOException ex)
+            {
+                ShowEditIssue(UiText.Format("WfInsertObject_ErrorRead", ex.Message));
+                return false;
+            }
+
+            if (imageBytes.Length == 0)
+            {
+                ShowEditIssue(UiText.Get("WfInsertObject_ErrorEmptyFile"));
+                return false;
+            }
+
+            contentType = plan.ImageContentType;
+            (width, height) = DecodePictureSize(imageBytes);
+            if (width <= 0 || height <= 0)
+            {
+                width = InsertPictureCommandFactory.DefaultWidth;
+                height = InsertPictureCommandFactory.DefaultHeight;
+            }
+        }
+        else
+        {
+            // Non-image file: render an icon/label placeholder PNG standing in for the object.
+            imageBytes = RenderObjectIconPlaceholder(plan.DisplayName, plan.LinkToFile);
+            contentType = "image/png";
+            width = ObjectIconWidth;
+            height = ObjectIconHeight;
+        }
+
+        var anchor = _session.ActiveCell;
+        var command = InsertPictureCommandFactory.Build(
+            _session.ActiveSheet.Id, anchor, imageBytes, contentType, width, height);
+        var result = _session.ExecuteReviewCommand(command);
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("WfInsertObject_ErrorGeneric"));
+            return false;
+        }
+
+        // Record the object's identity on the inserted picture so the placeholder is self-describing and a
+        // future true-OLE implementation can recognise it. The picture is the last one added on the sheet.
+        var picture = _session.ActiveSheet.Pictures.LastOrDefault(p => p.Id == command.PictureId);
+        if (picture is not null)
+        {
+            picture.Name = plan.DisplayName;
+            picture.Title = plan.DisplayName;
+            picture.AltText = plan.LinkToFile && plan.LinkPath is not null
+                ? UiText.Format("WfInsertObject_AltLinked", plan.LinkPath)
+                : UiText.Format("WfInsertObject_AltEmbedded", plan.DisplayName);
+        }
+
+        ClearSelectedDrawingObject();
+        RefreshShell(plan.Rendering == InsertObjectRendering.EmbedImageAsPicture
+            ? UiText.Format("WfInsertObject_StatusEmbedded", plan.DisplayName)
+            : UiText.Format("WfInsertObject_StatusPlaceholder", plan.DisplayName));
+        return true;
+    }
+
+    private const double ObjectIconWidth = 160d;
+    private const double ObjectIconHeight = 120d;
+
+    /// <summary>
+    /// Renders a small document-icon-with-label PNG used as the placeholder for a non-image object. Drawn
+    /// with Avalonia so the placeholder is real picture content the existing drawing overlay paints.
+    /// </summary>
+    private static byte[] RenderObjectIconPlaceholder(string label, bool linked)
+    {
+        const int pixelWidth = (int)ObjectIconWidth;
+        const int pixelHeight = (int)ObjectIconHeight;
+        var pixelSize = new PixelSize(pixelWidth, pixelHeight);
+        using var target = new RenderTargetBitmap(pixelSize, new Vector(96, 96));
+        using (var ctx = target.CreateDrawingContext())
+        {
+            ctx.FillRectangle(Brushes.White, new Rect(0, 0, pixelWidth, pixelHeight));
+            ctx.DrawRectangle(null, new Pen(Brushes.Gray, 1), new Rect(0.5, 0.5, pixelWidth - 1, pixelHeight - 1));
+
+            // A simple "page with folded corner" glyph.
+            var pageFill = new SolidColorBrush(Color.FromRgb(0xE8, 0xEF, 0xF7));
+            var pageStroke = new Pen(new SolidColorBrush(Color.FromRgb(0x5B, 0x7A, 0xA6)), 1.5);
+            var page = new Rect(pixelWidth / 2.0 - 22, 14, 44, 56);
+            ctx.FillRectangle(pageFill, page);
+            ctx.DrawRectangle(null, pageStroke, page);
+            var foldStart = new Point(page.Right - 12, page.Top);
+            var fold = new PathGeometry();
+            using (var gctx = fold.Open())
+            {
+                gctx.BeginFigure(foldStart, isFilled: true);
+                gctx.LineTo(new Point(page.Right, page.Top + 12));
+                gctx.LineTo(new Point(page.Right - 12, page.Top + 12));
+                gctx.EndFigure(true);
+            }
+            ctx.DrawGeometry(new SolidColorBrush(Color.FromRgb(0xC6, 0xD6, 0xEA)), pageStroke, fold);
+
+            var caption = linked ? UiText.Format("WfInsertObject_IconLinkedCaption", label) : label;
+            var formatted = new FormattedText(
+                caption,
+                System.Globalization.CultureInfo.CurrentCulture,
+                FlowDirection.LeftToRight,
+                Typeface.Default,
+                11,
+                Brushes.Black)
+            {
+                TextAlignment = TextAlignment.Center,
+                MaxTextWidth = pixelWidth - 8,
+            };
+            ctx.DrawText(formatted, new Point(4, 78));
+        }
+
+        using var output = new MemoryStream();
+        target.Save(output);
+        return output.ToArray();
     }
 }

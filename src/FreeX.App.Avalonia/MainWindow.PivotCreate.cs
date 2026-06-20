@@ -14,11 +14,11 @@ namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
-    private static readonly IReadOnlyList<(PivotCreatePlanner.FieldRole Role, string Label)> PivotFieldRoleChoices =
+    private static IReadOnlyList<(PivotCreatePlanner.FieldRole Role, string Label)> PivotFieldRoleChoices =>
     [
-        (PivotCreatePlanner.FieldRole.Unused, "(Unused)"),
-        (PivotCreatePlanner.FieldRole.Row, "Row"),
-        (PivotCreatePlanner.FieldRole.Value, "Value"),
+        (PivotCreatePlanner.FieldRole.Unused, UiText.Get("PivotLoc_RoleUnused")),
+        (PivotCreatePlanner.FieldRole.Row, UiText.Get("PivotLoc_RoleRow")),
+        (PivotCreatePlanner.FieldRole.Value, UiText.Get("PivotLoc_RoleValue")),
     ];
 
     /// <summary>
@@ -36,7 +36,7 @@ public sealed partial class MainWindow
         var source = _session.SelectedRange;
         if (!PivotCreatePlanner.IsValidSource(source))
         {
-            ShowEditIssue("Select a range with a header row and at least one data row to insert a PivotTable.");
+            ShowEditIssue(UiText.Get("PivotLoc_SelectRangeForPivot"));
             return;
         }
 
@@ -45,7 +45,7 @@ public sealed partial class MainWindow
 
         var dialog = new Window
         {
-            Title = "Insert PivotTable",
+            Title = UiText.Get("PivotLoc_InsertPivotTableTitle"),
             Width = 420,
             Height = 460,
             MinWidth = 360,
@@ -84,7 +84,7 @@ public sealed partial class MainWindow
             });
         }
 
-        var newSheetBox = new CheckBox { Content = "Place on a new worksheet", IsChecked = true };
+        var newSheetBox = new CheckBox { Content = UiText.Get("PivotLoc_PlaceOnNewWorksheet"), IsChecked = true };
         AutomationProperties.SetAutomationId(newSheetBox, "PivotNewWorksheetBox");
 
         var errorText = new TextBlock
@@ -95,9 +95,9 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(errorText, "InsertPivotTableErrorText");
 
-        var okButton = new Button { Content = "OK", IsDefault = true, MinWidth = 84 };
+        var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 84 };
         AutomationProperties.SetAutomationId(okButton, "InsertPivotTableOkButton");
-        var cancelButton = new Button { Content = "Cancel", IsCancel = true, MinWidth = 84 };
+        var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 84 };
         AutomationProperties.SetAutomationId(cancelButton, "InsertPivotTableCancelButton");
 
         okButton.Click += (_, _) =>
@@ -110,7 +110,7 @@ public sealed partial class MainWindow
             var dataIndexes = PivotCreatePlanner.ValueIndexes(roles);
             if (dataIndexes.Count == 0)
             {
-                errorText.Text = "Assign at least one column to the Values area.";
+                errorText.Text = UiText.Get("PivotLoc_AssignAtLeastOneValue");
                 errorText.IsVisible = true;
                 return;
             }
@@ -130,13 +130,13 @@ public sealed partial class MainWindow
             var result = _session.ExecuteReviewCommand(command);
             if (!result.Success)
             {
-                errorText.Text = result.ErrorMessage ?? "Insert PivotTable failed.";
+                errorText.Text = result.ErrorMessage ?? UiText.Get("PivotLoc_InsertPivotTableFailed");
                 errorText.IsVisible = true;
                 return;
             }
 
             dialog.Close();
-            RefreshShell($"Inserted PivotTable from {FormatRangeReference(source)}");
+            RefreshShell(UiText.Format("PivotLoc_InsertedPivotTableFrom", FormatRangeReference(source)));
         };
         cancelButton.Click += (_, _) => dialog.Close();
 
@@ -163,7 +163,7 @@ public sealed partial class MainWindow
                     {
                         new TextBlock
                         {
-                            Text = $"Source: {FormatRangeReference(source)}. Assign each column to the Row or Values area.",
+                            Text = UiText.Format("PivotLoc_SourceAssignPrompt", FormatRangeReference(source)),
                             Foreground = HeaderForeground,
                             TextWrapping = TextWrapping.Wrap,
                         },

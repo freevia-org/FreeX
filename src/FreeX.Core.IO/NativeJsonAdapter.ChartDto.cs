@@ -9,6 +9,14 @@ public sealed partial class NativeJsonAdapter
         public string? Name { get; set; }
         public ChartType Type { get; set; } = ChartType.Column;
         public string? DataRange { get; set; }
+
+        /// <summary>
+        /// Name of the sheet that <see cref="DataRange"/> belongs to, when it differs from the
+        /// host sheet the chart is displayed on (a cross-sheet chart). Null/absent means the data
+        /// range is on the host sheet. Persisted so cross-sheet charts round-trip without losing
+        /// either the chart itself or its data-source sheet identity.
+        /// </summary>
+        public string? DataRangeSheetName { get; set; }
         public bool IsVisible { get; set; } = true;
         public bool IsPivotChart { get; set; }
         public string? PivotSourceSheetName { get; set; }
@@ -263,6 +271,7 @@ public sealed partial class NativeJsonAdapter
         public List<ChartSeriesFormat>? SeriesFormats { get; set; }
         public List<ChartSeriesDataLabelFormat>? SeriesDataLabelFormats { get; set; }
         public List<ChartPointDataLabelFormat>? PointDataLabelFormats { get; set; }
+        public List<ChartSeriesRangeDataLabels>? SeriesRangeDataLabels { get; set; }
         public bool UseComboLineForSecondarySeries { get; set; }
         public double Left { get; set; } = 50;
         public double Top { get; set; } = 50;

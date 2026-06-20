@@ -123,7 +123,11 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RewriteAllFormulas(
             ctx.Workbook, new DeleteRowsOp(sheet.Name, _startRow, _count), _formulaSnapshot);
 
-        return new CommandOutcome(true);
+        return new CommandOutcome(
+            true,
+            AffectedCells: RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
+                Enumerable.Empty<CellAddress>(),
+                _formulaSnapshot));
     }
 
     public void Revert(ICommandContext ctx)

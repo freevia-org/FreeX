@@ -201,12 +201,30 @@ internal static class XlsxWorksheetDrawingPartMerger
             .Select(GetDrawingAnchorIdentity)
             .ToHashSet(StringComparer.Ordinal);
 
+        // Chart anchors are de-duplicated by the chart relationship TARGET, not just by anchor identity.
+        // The chart writer replaces a chart sheet's drawing with its own graphicFrames before this merge
+        // runs; the source-package drawing still holds its original frame for the same chart, and that
+        // frame's identity (cNvPr name like "Chart 2" vs the writer's "Chart 14") can differ even though
+        // both point at the same chart part. Keying chart anchors on their resolved chart-part target
+        // ensures a chart already emitted by the writer is not re-added from the source drawing, which
+        // would otherwise yield two graphicFrames (one zero-sized) for a single chart.
+        var targetChartTargets = CollectAnchoredChartTargets(
+            targetDrawingXml.Root, targetArchive, targetDrawingPath, relNs, packageRelNs);
+
         var changed = false;
         foreach (var sourceAnchor in sourceDrawingXml.Root.Elements())
         {
             var anchorCopy = new XElement(sourceAnchor);
             RemapRelationshipReferences(anchorCopy, relNs, relIdMap);
             if (!existingAnchorKeys.Add(GetDrawingAnchorIdentity(anchorCopy)))
+                continue;
+
+            // After remap, a chart anchor's rel id points into the target drawing's rels. If that chart
+            // target is already anchored in the target, the writer already emitted this chart — skip the
+            // duplicate source frame.
+            var chartTarget = ResolveAnchorChartTarget(
+                anchorCopy, targetArchive, targetDrawingPath, relNs, packageRelNs);
+            if (chartTarget is not null && !targetChartTargets.Add(chartTarget))
                 continue;
 
             targetDrawingXml.Root.Add(anchorCopy);
@@ -347,6 +365,61 @@ internal static class XlsxWorksheetDrawingPartMerger
             if (relIdMap.TryGetValue(attribute.Value, out var replacementId))
                 attribute.Value = replacementId;
         }
+    }
+
+    // Resolved chart-part targets (e.g. "xl/charts/chart3.xml") for every chart graphicFrame already
+    // anchored in the given drawing root.
+    private static HashSet<string> CollectAnchoredChartTargets(
+        XElement drawingRoot,
+        ZipArchive archive,
+        string drawingPath,
+        XNamespace relNs,
+        XNamespace packageRelNs)
+    {
+        var targets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var rels = XlsxRelationshipReader.LoadTargets(
+            archive, XlsxPackagePath.GetRelationshipPartPath(drawingPath), drawingPath, packageRelNs);
+        foreach (var anchor in drawingRoot.Elements())
+        {
+            var target = ResolveAnchorChartTargetFromRels(anchor, rels, relNs);
+            if (target is not null)
+                targets.Add(target);
+        }
+
+        return targets;
+    }
+
+    private static string? ResolveAnchorChartTarget(
+        XElement anchor,
+        ZipArchive archive,
+        string drawingPath,
+        XNamespace relNs,
+        XNamespace packageRelNs)
+    {
+        var rels = XlsxRelationshipReader.LoadTargets(
+            archive, XlsxPackagePath.GetRelationshipPartPath(drawingPath), drawingPath, packageRelNs);
+        return ResolveAnchorChartTargetFromRels(anchor, rels, relNs);
+    }
+
+    // The relationship id a chart graphicFrame points at lives on the <c:chart>/<cx:chart> element under
+    // the anchor's graphicData. Resolve it against the drawing's rels to the chart part path; null when the
+    // anchor holds no chart (a picture/shape) or the rel id does not resolve.
+    private static string? ResolveAnchorChartTargetFromRels(
+        XElement anchor,
+        IReadOnlyDictionary<string, string> rels,
+        XNamespace relNs)
+    {
+        XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+        XNamespace chartExNs = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        foreach (var chartElement in anchor.Descendants()
+                     .Where(e => e.Name == chartNs + "chart" || e.Name == chartExNs + "chart"))
+        {
+            var relId = chartElement.Attribute(relNs + "id")?.Value;
+            if (!string.IsNullOrWhiteSpace(relId) && rels.TryGetValue(relId, out var target))
+                return target;
+        }
+
+        return null;
     }
 
     private static string GetDrawingAnchorIdentity(XElement anchor)

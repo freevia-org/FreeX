@@ -15,11 +15,11 @@ public partial class GridView
 {
     // Grid rendering for freeze dividers, selection, headers, cells, borders, and text decorations.
 
-    private PageMarginGuideLayout? GetPageMarginGuidePixels(GridRange printArea)
+    private FreeX.App.Presentation.PageLayout.PageMarginGuideLayout? GetPageMarginGuidePixels(GridRange printArea)
     {
         if (Viewport == null) return null;
 
-        return PageMarginGuideLayoutPlanner.CalculateGuide(
+        return FreeX.App.Presentation.PageLayout.PageMarginGuideLayoutPlanner.CalculateGuide(
             Viewport,
             printArea,
             ActualRowHeaderWidth,

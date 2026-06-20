@@ -68,6 +68,15 @@ public sealed class AvaloniaRibbonRendererTests
         return definition.FindTab("home")!;
     }
 
+    private sealed class StatefulCommand(RibbonCommandState state) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+        }
+
+        public RibbonCommandState GetState() => state;
+    }
+
     [Fact]
     public Task BuildTabContent_ProducesNonEmptyVisualTree() => RunOnUiThread(() =>
     {
@@ -240,6 +249,26 @@ public sealed class AvaloniaRibbonRendererTests
     });
 
     [Fact]
+    public Task StatefulCommand_DisabledState_RendersButtonAndToggleDisabled() => RunOnUiThread(() =>
+    {
+        var registry = new RibbonCommandRegistry();
+        registry.Register("cut", new StatefulCommand(new RibbonCommandState(IsEnabled: false)));
+        registry.Register("bold", new StatefulCommand(new RibbonCommandState(IsEnabled: false, IsChecked: true)));
+
+        var content = AvaloniaRibbonRenderer.BuildTabContent(BuildHomeTab(), registry);
+
+        var cut = content.GetLogicalDescendants()
+            .OfType<Button>()
+            .Single(b => Equals(b.Tag, "cut"));
+        var bold = content.GetLogicalDescendants()
+            .OfType<ToggleButton>()
+            .Single(b => Equals(b.Tag, "bold"));
+
+        Assert.False(cut.IsEnabled);
+        Assert.False(bold.IsEnabled);
+    });
+
+    [Fact]
     public Task IconBuild_ProducesVectorShapes_NotTextGlyphs() => RunOnUiThread(() =>
     {
         // Save is a multi-line vector icon: it must render as native Avalonia shapes, proving the
@@ -317,7 +346,24 @@ public sealed class AvaloniaRibbonRendererTests
     [InlineData("Paste")]
     [InlineData("Format Painter")]
     [InlineData("Conditional Formatting")]
-    public Task IconBuild_KnownCommand_LoadsSharedSvg(string commandName) => RunOnUiThread(() =>
+    [InlineData("Selection Pane#SelectionPaneBtn_Click")]
+    [InlineData("Remove Duplicates#RemoveDuplicatesBtn_Click")]
+        [InlineData("Advanced")]
+        [InlineData("Page Setup dialog")]
+        [InlineData("View Gridlines")]
+        [InlineData("View Headings")]
+        [InlineData("Clear#ClearFilterButton_Click")]
+        [InlineData("Sort A to Z#SortAscButton_Click")]
+        [InlineData("Sort Z to A#SortDescButton_Click")]
+        [InlineData("Insert Link")]
+        [InlineData("Header & Footer")]
+        [InlineData("Pictures")]
+        [InlineData("Scale Width")]
+        [InlineData("Scale Height")]
+        [InlineData("Scale Percent")]
+        [InlineData("Refresh")]
+        [InlineData("Select")]
+        public Task IconBuild_KnownCommand_LoadsSharedSvg(string commandName) => RunOnUiThread(() =>
     {
         // A command with a matching CommandIconsSvg/<slug>.svg must render the SAME shared SVG the WPF
         // host loads, parsed natively into an Avalonia Image backed by a DrawingImage (no external SVG

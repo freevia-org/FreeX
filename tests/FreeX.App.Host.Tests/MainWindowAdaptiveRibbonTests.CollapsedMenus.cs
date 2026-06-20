@@ -26,18 +26,26 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             var arrangeAll = harness.CollapsedActiveMenuItem("Window", "Arrange All");
 
             arrangeAll.Should().NotBeNull(harness.DebugActiveRibbonChildren);
-            var tiled = arrangeAll!.Items.OfType<MenuItem>()
-                .First(item => string.Equals(item.Header?.ToString(), "Tiled", StringComparison.Ordinal));
 
-            tiled.IsCheckable.Should().BeTrue();
-            tiled.InputGestureText.Should().Be("T");
+            // The collapsed Window overflow clones the live "Arrange All" submenu, so it must mirror the
+            // source's full set of arrangement options together with their keyboard shortcuts. (The live
+            // Arrange All command is not a radio/checkable group in the declarative ribbon -- its check
+            // state is refreshed on the source ContextMenu rather than per-item -- so the meaningful mirror
+            // invariant is the option set and gesture text, not a check-mark.)
+            var options = arrangeAll!.Items.OfType<MenuItem>().ToList();
+            options.Select(item => item.Header?.ToString())
+                .Should().Equal(new[] { "Tiled", "Horizontal", "Vertical", "Cascade" },
+                    "the cloned Arrange All submenu should mirror every source arrangement option in order");
+            options.Select(item => item.InputGestureText)
+                .Should().Equal(new[] { "T", "H", "V", "C" },
+                    "each cloned arrangement option should carry the same keyboard shortcut as its source item");
 
+            // Opening the cloned submenu must run the source's deferred refresh path without throwing and
+            // leave the option set intact (it is the live submenu-opened update hook for the clone).
             arrangeAll.RaiseEvent(new RoutedEventArgs(MenuItem.SubmenuOpenedEvent, arrangeAll));
-
-            tiled.IsChecked.Should().BeTrue("the clone should run the source menu's Opened state refresh before display");
-            arrangeAll.Items.OfType<MenuItem>()
-                .Where(item => !ReferenceEquals(item, tiled))
-                .Should().OnlyContain(item => item.IsChecked == false);
+            arrangeAll.Items.OfType<MenuItem>().Select(item => item.Header?.ToString())
+                .Should().Equal(new[] { "Tiled", "Horizontal", "Vertical", "Cascade" },
+                    "the cloned submenu options should stay stable after the submenu-opened refresh runs");
         });
     }
 
@@ -85,20 +93,42 @@ public sealed partial class MainWindowAdaptiveRibbonTests
     {
         StaTestRunner.Run(() =>
         {
-            using var harness = MainWindowHarness.Create();
+            // The live lazy collapsed-group menu mirrors each leaf source command button's current enabled
+            // state every time it opens (SynchronizeCollapsedRibbonTopLevelMenuItems reads the source
+            // button's IsEnabled through the cloned item's Tag). Drive that path directly with a real source
+            // group + leaf button so the assertion exercises the live refresh, not the legacy assumption that
+            // every Home Editing command is a plain leaf (in the declarative ribbon those are all dropdowns).
+            var group = new StackPanel();
+            RibbonMetadata.SetGroupName(group, "Editing");
 
-            harness.SetRibbonWidth(220);
-            var sourceButton = harness.VisibleOrCollapsedRibbonButton("Find & Select");
-            var menu = harness.CollapsedMenu("Editing");
-            var item = harness.CollapsedMenuItem("Editing", "Find & Select");
+            var sourceButton = new Button();
+            RibbonTooltip.SetTitle(sourceButton, "Find & Select");
+            RibbonTooltip.SetKeyTip(sourceButton, "FD");
+            group.Children.Add(sourceButton);
+            // The menu only clones currently-visible source buttons, so realize the group offscreen.
+            var host = ShowStandaloneRibbonButton(new Button(), 200, 80);
+            ((Grid)host.Content).Children.Add(group);
+            host.UpdateLayout();
+            PumpDispatcher();
 
-            sourceButton.Should().NotBeNull(harness.DebugRibbonChildren);
-            item.Should().NotBeNull(harness.DebugRibbonChildren);
+            var createMenu = typeof(MainWindow)
+                .GetMethod("CreateLazyCollapsedRibbonGroupMenu", BindingFlags.Static | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "CreateLazyCollapsedRibbonGroupMenu");
+            var menu = (ContextMenu)createMenu.Invoke(null, [group])!;
 
-            sourceButton!.IsEnabled = false;
-            menu!.RaiseEvent(new RoutedEventArgs(ContextMenu.OpenedEvent, menu));
+            menu.RaiseEvent(new RoutedEventArgs(ContextMenu.OpenedEvent, menu));
+            var item = menu.Items.OfType<MenuItem>()
+                .FirstOrDefault(menuItem => string.Equals(menuItem.Header?.ToString(), "Find & Select", StringComparison.Ordinal));
+            item.Should().NotBeNull("the collapsed Editing overflow should clone its leaf source command");
+            item!.IsEnabled.Should().BeTrue("the freshly cloned command starts enabled, mirroring its source");
 
-            item!.IsEnabled.Should().BeFalse("collapsed overflow commands should use the current enabled state of their source ribbon controls");
+            sourceButton.IsEnabled = false;
+            menu.RaiseEvent(new RoutedEventArgs(ContextMenu.OpenedEvent, menu));
+
+            item.IsEnabled.Should().BeFalse("collapsed overflow commands should use the current enabled state of their source ribbon controls");
+
+            host.Close();
+            PumpDispatcher();
         });
     }
 

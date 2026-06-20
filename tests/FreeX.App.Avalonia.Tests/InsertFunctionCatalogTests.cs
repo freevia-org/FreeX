@@ -1,5 +1,4 @@
 using FluentAssertions;
-using FreeX.App.Avalonia.Dialogs;
 using FreeX.App.Presentation.Dialogs;
 
 namespace FreeX.App.Avalonia.Tests;
@@ -14,7 +13,7 @@ public sealed class InsertFunctionCatalogTests
     [Fact]
     public void BuildCatalog_CoversCommonFunctions_WithCategoryAndDescription()
     {
-        var catalog = InsertFunctionCatalog.BuildCatalog();
+        var catalog = InsertFunctionCatalogPlanner.BuildCatalog();
 
         catalog.Should().NotBeEmpty();
         catalog.Select(entry => entry.Name).Should().BeInAscendingOrder(StringComparer.OrdinalIgnoreCase);
@@ -31,12 +30,12 @@ public sealed class InsertFunctionCatalogTests
     [Fact]
     public void BuildCategoryChoices_LeadsWithMostRecentlyUsedThenAll()
     {
-        var catalog = InsertFunctionCatalog.BuildCatalog();
+        var catalog = InsertFunctionCatalogPlanner.BuildCatalog();
 
-        var choices = InsertFunctionCatalog.BuildCategoryChoices(catalog);
+        var choices = InsertFunctionCatalogPlanner.BuildCategoryChoices(catalog);
 
-        choices[0].Should().Be(InsertFunctionCatalog.MostRecentlyUsedCategory);
-        choices[1].Should().Be(InsertFunctionCatalog.AllCategory);
+        choices[0].Should().Be(InsertFunctionCatalogPlanner.MostRecentlyUsedCategory);
+        choices[1].Should().Be(InsertFunctionCatalogPlanner.AllCategory);
         choices.Should().Contain("Logical");
         choices.Skip(2).Should().BeInAscendingOrder(StringComparer.Ordinal);
     }
@@ -44,24 +43,24 @@ public sealed class InsertFunctionCatalogTests
     [Fact]
     public void FilterCatalog_BySearchText_MatchesNameOrDescription()
     {
-        var catalog = InsertFunctionCatalog.BuildCatalog();
+        var catalog = InsertFunctionCatalogPlanner.BuildCatalog();
 
-        var byName = InsertFunctionCatalog.FilterCatalog(catalog, InsertFunctionCatalog.AllCategory, "vlook");
+        var byName = InsertFunctionCatalogPlanner.FilterCatalog(catalog, InsertFunctionCatalogPlanner.AllCategory, "vlook");
         byName.Should().Contain(entry => entry.Name == "VLOOKUP");
         byName.Should().OnlyContain(entry =>
             entry.Name.Contains("VLOOK", StringComparison.OrdinalIgnoreCase) ||
             entry.Description.Contains("vlook", StringComparison.OrdinalIgnoreCase));
 
-        var byDescription = InsertFunctionCatalog.FilterCatalog(catalog, InsertFunctionCatalog.AllCategory, "average");
+        var byDescription = InsertFunctionCatalogPlanner.FilterCatalog(catalog, InsertFunctionCatalogPlanner.AllCategory, "average");
         byDescription.Should().Contain(entry => entry.Name == "AVERAGE");
     }
 
     [Fact]
     public void FilterCatalog_ByCategory_KeepsOnlyThatCategory()
     {
-        var catalog = InsertFunctionCatalog.BuildCatalog();
+        var catalog = InsertFunctionCatalogPlanner.BuildCatalog();
 
-        var logical = InsertFunctionCatalog.FilterCatalog(catalog, "Logical", searchText: null);
+        var logical = InsertFunctionCatalogPlanner.FilterCatalog(catalog, "Logical", searchText: null);
 
         logical.Should().NotBeEmpty();
         logical.Should().OnlyContain(entry => entry.Category == "Logical");
@@ -71,12 +70,12 @@ public sealed class InsertFunctionCatalogTests
     [Fact]
     public void FilterCatalog_MostRecentlyUsed_NoSearch_KeepsRecentOrder()
     {
-        var catalog = InsertFunctionCatalog.BuildCatalog();
+        var catalog = InsertFunctionCatalogPlanner.BuildCatalog();
         IReadOnlyList<string> recent = ["IF", "SUM", "VLOOKUP"];
 
-        var filtered = InsertFunctionCatalog.FilterCatalog(
+        var filtered = InsertFunctionCatalogPlanner.FilterCatalog(
             catalog,
-            InsertFunctionCatalog.MostRecentlyUsedCategory,
+            InsertFunctionCatalogPlanner.MostRecentlyUsedCategory,
             searchText: null,
             recent);
 
@@ -86,13 +85,13 @@ public sealed class InsertFunctionCatalogTests
     [Fact]
     public void FilterCatalog_MostRecentlyUsed_WithSearch_SpansWholeCatalog()
     {
-        var catalog = InsertFunctionCatalog.BuildCatalog();
+        var catalog = InsertFunctionCatalogPlanner.BuildCatalog();
         IReadOnlyList<string> recent = ["IF", "SUM"];
 
         // CONCAT is not in the recent list; searching from the MRU category should still surface it.
-        var filtered = InsertFunctionCatalog.FilterCatalog(
+        var filtered = InsertFunctionCatalogPlanner.FilterCatalog(
             catalog,
-            InsertFunctionCatalog.MostRecentlyUsedCategory,
+            InsertFunctionCatalogPlanner.MostRecentlyUsedCategory,
             "concat",
             recent);
 
@@ -104,7 +103,7 @@ public sealed class InsertFunctionCatalogTests
     {
         IReadOnlyList<string> recent = ["SUM", "AVERAGE", "COUNT"];
 
-        var updated = InsertFunctionCatalog.UpdateMostRecentlyUsed(recent, "average");
+        var updated = InsertFunctionCatalogPlanner.UpdateMostRecentlyUsed(recent, "average");
 
         updated.Should().Equal("AVERAGE", "SUM", "COUNT");
     }
@@ -114,7 +113,7 @@ public sealed class InsertFunctionCatalogTests
     {
         IReadOnlyList<string> recent = ["SUM"];
 
-        var updated = InsertFunctionCatalog.UpdateMostRecentlyUsed(recent, "xlookup");
+        var updated = InsertFunctionCatalogPlanner.UpdateMostRecentlyUsed(recent, "xlookup");
 
         updated[0].Should().Be("XLOOKUP");
         updated.Should().HaveCount(2);
@@ -126,7 +125,7 @@ public sealed class InsertFunctionCatalogTests
         IReadOnlyList<string> recent =
             ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
 
-        var updated = InsertFunctionCatalog.UpdateMostRecentlyUsed(recent, "NEW");
+        var updated = InsertFunctionCatalogPlanner.UpdateMostRecentlyUsed(recent, "NEW");
 
         updated.Should().HaveCount(10);
         updated[0].Should().Be("NEW");
@@ -136,7 +135,7 @@ public sealed class InsertFunctionCatalogTests
     [Fact]
     public void CreateFormula_SeedsEmptyFunctionCall()
     {
-        InsertFunctionCatalog.CreateFormula("sum").Should().Be("=SUM()");
+        InsertFunctionCatalogPlanner.CreateFormula("sum").Should().Be("=SUM()");
     }
 
     [Fact]

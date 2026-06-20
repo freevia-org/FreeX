@@ -1,0 +1,94 @@
+using FluentAssertions;
+using FreeX.Core.Model;
+
+namespace FreeX.App.Services.Tests;
+
+public sealed class RecentColorsStoreTests
+{
+    [Fact]
+    public void NewStore_WithNoFile_StartsEmpty()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var store = new RecentColorsStore(StorePath(temp));
+
+        store.Colors.Should().BeEmpty();
+        store.Swatches.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Remember_MovesColorToFrontDedupesAndPersists()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var path = StorePath(temp);
+        var store = new RecentColorsStore(path);
+
+        store.Remember(new CellColor(0x10, 0x20, 0x30));
+        store.Remember(new CellColor(0xAA, 0xBB, 0xCC));
+        store.Remember(new CellColor(0x10, 0x20, 0x30));
+
+        store.Colors.Should().Equal(
+            new CellColor(0x10, 0x20, 0x30),
+            new CellColor(0xAA, 0xBB, 0xCC));
+
+        // A fresh store reading the same path sees the persisted, deduped list.
+        var reloaded = new RecentColorsStore(path);
+        reloaded.Colors.Should().Equal(
+            new CellColor(0x10, 0x20, 0x30),
+            new CellColor(0xAA, 0xBB, 0xCC));
+        reloaded.Swatches.Select(swatch => swatch.Hex).Should().Equal("#102030", "#AABBCC");
+    }
+
+    [Fact]
+    public void Remember_HonorsCapacity()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var store = new RecentColorsStore(StorePath(temp), capacity: 2);
+
+        store.Remember(new CellColor(1, 1, 1));
+        store.Remember(new CellColor(2, 2, 2));
+        store.Remember(new CellColor(3, 3, 3));
+
+        store.Capacity.Should().Be(2);
+        store.Colors.Should().Equal(
+            new CellColor(3, 3, 3),
+            new CellColor(2, 2, 2));
+    }
+
+    [Fact]
+    public void NewStore_LoadsAndCapsExistingFile()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var path = StorePath(temp);
+        File.WriteAllText(path, "[\"#010203\",\"#AABBCC\",\"#010203\",\"#112233\"]");
+
+        var store = new RecentColorsStore(path, capacity: 2);
+
+        store.Colors.Should().Equal(
+            new CellColor(0x01, 0x02, 0x03),
+            new CellColor(0xAA, 0xBB, 0xCC));
+    }
+
+    [Fact]
+    public void NewStore_WithCorruptFile_StartsEmptyWithoutThrowing()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var path = StorePath(temp);
+        File.WriteAllText(path, "{ not json ]");
+
+        var store = new RecentColorsStore(path);
+
+        store.Colors.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void NewStore_NonPositiveCapacity_FallsBackToDefault()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var store = new RecentColorsStore(StorePath(temp), capacity: 0);
+
+        store.Capacity.Should().Be(CellColorPalettePlanner.DefaultRecentColorCapacity);
+    }
+
+    private static string StorePath(TestTemporaryDirectory temp) =>
+        Path.Combine(temp.Path, "recent-colors.json");
+}

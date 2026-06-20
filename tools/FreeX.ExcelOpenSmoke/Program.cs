@@ -4,10 +4,12 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Threading;
+using System.Xml;
 using System.Xml.Linq;
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Validation;
+using Free.Shared.Opc;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
 using static ExcelSmokeCom;
@@ -323,7 +325,21 @@ internal static class ExcelOpenSmoke
 
             if (smokeInputs.Count == 0)
             {
-                Console.Error.WriteLine("No XLSX files matched the requested inputs.");
+                if (CorpusSelectionHasOnlyMissingOptionalPrivateRows(corpusSelection))
+                {
+                    var zeroInputSummary = new ExcelSmokeSummary(0, 0, 0, []);
+                    Console.WriteLine(options.SaveReopen ? "Excel save/reopen smoke" : "Excel open smoke");
+                    Console.WriteLine($"Run directory: {runDirectory}");
+                    Console.WriteLine("Input count: 0");
+                    Console.WriteLine($"Validation mode: {(options.SaveReopen ? "open -> SaveCopyAs -> close -> reopen" : "open only")}");
+                    Console.WriteLine($"Corpus manifest: {corpusSelection!.ManifestPath}");
+                    Console.WriteLine($"Corpus selected: {corpusSelection.Inputs.Count}; skipped: {corpusSelection.Skipped.Count}");
+                    WriteMachineReadableReport(runDirectory, options, zeroInputSummary, corpusSelection);
+                    Console.WriteLine("PASS: Corpus rows were skipped because optional private local workbooks are missing.");
+                    return 0;
+                }
+
+                Console.Error.WriteLine("No XLSX/XLSM files matched the requested inputs.");
                 return 2;
             }
 
@@ -356,6 +372,24 @@ internal static class ExcelOpenSmoke
             return 3;
         }
     }
+
+    private static bool CorpusSelectionHasOnlyMissingOptionalPrivateRows(CorpusManifestSelection? corpusSelection)
+    {
+        if (corpusSelection is null || corpusSelection.Inputs.Count > 0)
+            return false;
+
+        var selectedSkips = corpusSelection.Skipped
+            .Where(skip => !IsSelectionFilterSkip(skip.Reason))
+            .ToArray();
+
+        return selectedSkips.Length > 0 &&
+            selectedSkips.All(skip =>
+                skip.Reason == "missing-file" &&
+                string.Equals(skip.Row.SourceType, "local-private", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool IsSelectionFilterSkip(string reason) =>
+        reason is "id-filter" or "source-filter" or "status-filter";
 
     private static ExcelSmokeSummary RunExcelSmoke(
         IReadOnlyList<WorkbookSmokeInput> inputFiles,
@@ -451,6 +485,7 @@ internal static class ExcelOpenSmoke
             {
                 var freeXSave = SaveThroughFreeX(input.SourcePath, freeXSavedDirectory);
                 AssertFreeXLoadWarnings(input, "FreeX source load", freeXSave.LoadWarnings);
+                AssertFreeXSaveWarnings(input, "FreeX source save", freeXSave.SaveWarnings);
                 AssertPackageHealth(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertNoExcelRecoveryLog(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertOpenXmlValid(freeXSave.SavedPath, "FreeX-saved workbook");
@@ -521,7 +556,7 @@ internal static class ExcelOpenSmoke
                 sourceForExcel = freeXSave.SavedPath;
                 freeXSavedPath = freeXSave.SavedPath;
                 freeXPreSave = freeXSave.Summary;
-                freeXPreSaveWarnings = freeXSave.LoadWarnings;
+                freeXPreSaveWarnings = CombineFreeXWarnings(freeXSave.LoadWarnings, freeXSave.SaveWarnings);
             }
 
             var stagedPath = CopyToStagingDirectory(sourceForExcel, stagingDirectory);
@@ -1386,7 +1421,13 @@ internal static class ExcelOpenSmoke
     private static XDocument LoadPackageXml(ZipArchiveEntry entry)
     {
         using var stream = entry.Open();
-        return XDocument.Load(stream);
+        return LoadPackageXml(stream);
+    }
+
+    private static XDocument LoadPackageXml(Stream stream)
+    {
+        using var reader = XmlReader.Create(stream, SecureXmlReaderSettings.Create());
+        return XDocument.Load(reader);
     }
 
     private static void AssertRequiredExcelSavedPackageParts(
@@ -1484,7 +1525,7 @@ internal static class ExcelOpenSmoke
 
         XDocument contentTypesXml;
         using (var stream = contentTypesEntry.Open())
-            contentTypesXml = XDocument.Load(stream);
+            contentTypesXml = LoadPackageXml(stream);
 
         var missing = new List<string>();
         foreach (var expectation in requiredContentTypes)
@@ -1580,7 +1621,7 @@ internal static class ExcelOpenSmoke
 
         XDocument contentTypesXml;
         using (var stream = contentTypesEntry.Open())
-            contentTypesXml = XDocument.Load(stream);
+            contentTypesXml = LoadPackageXml(stream);
 
         if (contentTypesXml.Root?.Name != PackageContentTypeNs + "Types")
         {
@@ -1892,7 +1933,7 @@ internal static class ExcelOpenSmoke
 
             XDocument relationshipsXml;
             using (var stream = entry.Open())
-                relationshipsXml = XDocument.Load(stream);
+                relationshipsXml = LoadPackageXml(stream);
 
             if (relationshipsXml.Root?.Elements(PackageRelationshipNs + "Relationship")
                     .Any(relationship => PackageRelationshipMatches(relationshipPart, relationship, expectation)) != true)
@@ -15039,7 +15080,7 @@ internal static class ExcelOpenSmoke
             try
             {
                 using var stream = entry.Open();
-                relationshipsXml = XDocument.Load(stream);
+                relationshipsXml = LoadPackageXml(stream);
             }
             catch (Exception ex) when (ex is InvalidOperationException or System.Xml.XmlException)
             {
@@ -16918,10 +16959,9 @@ internal static class ExcelOpenSmoke
         var outputPath = CreateDerivedOutputPath(outputDirectory, sourcePath, "freex-saved");
         using (var output = File.Create(outputPath))
         {
-            adapter.Save(workbook, output);
+            var saveResult = adapter.SaveWithWarnings(workbook, output);
+            return new FreeXSaveResult(outputPath, summary, loadResult.Warnings, saveResult.Warnings);
         }
-
-        return new FreeXSaveResult(outputPath, summary, loadResult.Warnings);
     }
 
     private static FreeXLoadSummaryResult LoadWorkbookSummary(string sourcePath)
@@ -18975,6 +19015,33 @@ internal static class ExcelOpenSmoke
 
         throw new InvalidDataException(
             $"{label} produced {warnings.Count} warning(s) for {input.Description}: {FormatWarnings(warnings)}");
+    }
+
+    private static void AssertFreeXSaveWarnings(
+        WorkbookSmokeInput input,
+        string label,
+        IReadOnlyList<string> warnings)
+    {
+        if (input.Expectations?.RequireNoFreeXLoadWarnings != true || warnings.Count == 0)
+            return;
+
+        throw new InvalidDataException(
+            $"{label} produced {warnings.Count} warning(s) for {input.Description}: {FormatWarnings(warnings)}");
+    }
+
+    private static IReadOnlyList<string> CombineFreeXWarnings(
+        IReadOnlyList<string> loadWarnings,
+        IReadOnlyList<string> saveWarnings)
+    {
+        if (loadWarnings.Count == 0)
+            return saveWarnings;
+        if (saveWarnings.Count == 0)
+            return loadWarnings;
+
+        var combined = new List<string>(loadWarnings.Count + saveWarnings.Count);
+        combined.AddRange(loadWarnings.Select(warning => "Load: " + warning));
+        combined.AddRange(saveWarnings.Select(warning => "Save: " + warning));
+        return combined;
     }
 
     private static string FormatWarnings(IReadOnlyList<string> warnings)

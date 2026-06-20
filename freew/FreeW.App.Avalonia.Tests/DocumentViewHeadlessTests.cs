@@ -186,6 +186,31 @@ public sealed class DocumentViewHeadlessTests
         paragraphFmt.SpaceAfterPt.Should().Be(3);
     }
 
+    [Fact]
+    public async Task ExportPdf_through_shared_tier_produces_valid_pdf()
+    {
+        byte[]? bytes = null;
+        var ran = await OnUiThread(() =>
+        {
+            var view = new DocumentView();
+            view.LoadDocument(SampleDocument.Create());
+            view.Measure(new Size(800, 4000));
+
+            using var stream = new System.IO.MemoryStream();
+            var result = FreeW.App.Avalonia.Pdf.FreeWAvaloniaPdfExport.Save(view, stream);
+            result.PageCount.Should().BeGreaterThan(0);
+            bytes = stream.ToArray();
+        });
+
+        if (!ran)
+            return;
+
+        bytes.Should().NotBeNull();
+        bytes!.Length.Should().BeGreaterThan(0);
+        // Valid PDFs start with the "%PDF-" magic header (Skia or portable WinAnsi, both shared-tier).
+        System.Text.Encoding.ASCII.GetString(bytes, 0, 5).Should().Be("%PDF-");
+    }
+
     private static T InvokePrivate<T>(object instance, string name, params object[] args)
     {
         var method = instance.GetType().GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic)

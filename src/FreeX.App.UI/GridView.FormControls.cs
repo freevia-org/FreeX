@@ -1,5 +1,7 @@
 using System.Windows;
 using System.Windows.Media;
+using FreeX.App.Presentation.Charts;
+using FreeX.App.Presentation.Drawing;
 using FreeX.Core.Model;
 
 namespace FreeX.App.UI;
@@ -115,7 +117,8 @@ public partial class GridView
         // and the selected item text in the field when resolvable (best-effort: blank otherwise).
         dc.DrawRectangle(FormControlBoxFillBrush, FormControlBoxBorderPen, rect);
 
-        var button = FormControlRenderPlanner.GetDropDownButtonRect(rect);
+        var buttonLayout = FormControlRenderPlanner.GetDropDownButtonRect(ToLayoutRect(rect));
+        var button = ToWpfRect(buttonLayout);
         DrawFormControlRaisedButton(dc, button);
         DrawFormTriangle(dc, button, pointingUp: false);
 
@@ -124,7 +127,7 @@ public partial class GridView
         var text = FormControlRenderPlanner.GetSelectedText(control);
         if (!string.IsNullOrEmpty(text))
         {
-            var textRect = FormControlRenderPlanner.GetDropDownTextRect(rect, button);
+            var textRect = ToWpfRect(FormControlRenderPlanner.GetDropDownTextRect(ToLayoutRect(rect), buttonLayout));
             DrawFormControlCaption(dc, text, textRect, textRect.Left + 3, pixelsPerDip);
         }
     }
@@ -247,6 +250,13 @@ public partial class GridView
         DrawFormControlCaption(dc, FormControlRenderPlanner.GetCaption(control), rect, rect.Left + 2, pixelsPerDip);
     }
 
+    // Boundary conversions between the portable planner's LayoutRect and WPF's System.Windows.Rect.
+    private static LayoutRect ToLayoutRect(Rect rect) => new(rect.X, rect.Y, rect.Width, rect.Height);
+
+    private static Rect ToWpfRect(LayoutRect rect) => new(rect.X, rect.Y, rect.Width, rect.Height);
+
+    private static LayoutPoint ToLayoutPoint(Point point) => new(point.X, point.Y);
+
     private static Rect GetFormControlGlyphRect(Rect rect)
     {
         var size = Math.Min(FormControlGlyphSize, Math.Min(rect.Width, rect.Height));
@@ -256,7 +266,8 @@ public partial class GridView
 
     private static void DrawFormControlSunkenEdge(DrawingContext dc, Rect box)
     {
-        // Light bottom/right, dark top/left -> a slightly sunken well like Excel's checkbox.
+        // Dark shadow lines on the top/left edges give the box a slightly recessed look (the cell
+        // background supplies the lighter bottom/right), approximating Excel's sunken checkbox well.
         dc.DrawLine(FormControlShadowPen, box.TopLeft, box.TopRight);
         dc.DrawLine(FormControlShadowPen, box.TopLeft, box.BottomLeft);
     }

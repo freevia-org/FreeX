@@ -1,0 +1,127 @@
+using Avalonia;
+using Avalonia.Automation;
+using Avalonia.Controls;
+using Avalonia.Layout;
+
+using FreeX.App.Presentation.PivotUI;
+using FreeX.Core.Commands;
+using FreeX.Core.Model;
+
+using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
+
+namespace FreeX.App.Avalonia;
+
+/// <summary>
+/// Windows-parity "PivotTable Name" rename dialog for the Avalonia/macOS shell: a single name box seeded with
+/// the active pivot's current name, validated through the portable <see cref="PivotNamePlanner"/> (non-empty,
+/// not colliding with another PivotTable) so the behavior is single-sourced with the WPF host and reusable on
+/// macOS. The collision check is a closure over the workbook's pivot tables. The result round-trips through
+/// <see cref="RenamePivotTableCommand"/> (the same command the desktop host's rename uses, which also retargets
+/// dependent pivot charts/slicers/timelines). Reached from the Analyze ▸ PivotTable Name ribbon command
+/// (<c>pivotAnalyze.name</c>).
+/// </summary>
+public sealed partial class MainWindow
+{
+    /// <summary>
+    /// Analyze ▸ PivotTable Name — opens the rename dialog for the active pivot and applies the result through
+    /// the Core rename command. Reports an honest status when no pivot is active.
+    /// </summary>
+    private void OpenPivotName()
+    {
+        if (!TryBeginPivotOption(out var pivot))
+            return;
+
+        _ = OpenPivotNameDialogAsync(pivot!);
+    }
+
+    private async Task OpenPivotNameDialogAsync(PivotTableModel pivot)
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        var nameBox = new TextBox
+        {
+            Text = PivotNamePlanner.Capture(pivot),
+            MinWidth = 280,
+        };
+        AutomationProperties.SetAutomationId(nameBox, "PivotNameBox");
+        AutomationProperties.SetName(nameBox, UiText.Get("PivotName_NameAutomation"));
+
+        var dialog = new Window
+        {
+            Title = UiText.Get("PivotName_Title"),
+            Width = 360,
+            SizeToContent = SizeToContent.Height,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            CanResize = false,
+            ShowInTaskbar = false,
+        };
+        AutomationProperties.SetAutomationId(dialog, "PivotNameDialog");
+
+        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 80 };
+        AutomationProperties.SetAutomationId(ok, "PivotNameOkButton");
+        var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 80 };
+        AutomationProperties.SetAutomationId(cancel, "PivotNameCancelButton");
+        cancel.Click += (_, _) => dialog.Close(false);
+
+        // Collision check over every PivotTable in the workbook except the one being renamed (excluded by
+        // reference so a case-only rename of the active pivot is not flagged as a duplicate of itself).
+        bool IsNameInUse(string candidate) => IsPivotNameInUseByOther(pivot, candidate);
+
+        ok.Click += (_, _) =>
+        {
+            if (!PivotNamePlanner.TryCreateResult(pivot, nameBox.Text, IsNameInUse, out _, out var error))
+            {
+                ShowEditIssue(error ?? PivotNamePlanner.EmptyNameMessage);
+                return;
+            }
+
+            dialog.Close(true);
+        };
+
+        var content = new StackPanel { Spacing = 6, Margin = new Thickness(16) };
+        content.Children.Add(new TextBlock { Text = UiText.Get("PivotName_Label"), Foreground = HeaderForeground });
+        content.Children.Add(nameBox);
+        content.Children.Add(new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Spacing = 8,
+            Margin = new Thickness(0, 12, 0, 0),
+            Children = { ok, cancel },
+        });
+        dialog.Content = content;
+
+        var confirmed = await dialog.ShowDialog<bool>(this);
+        if (!confirmed)
+            return;
+
+        if (!PivotNamePlanner.TryCreateResult(pivot, nameBox.Text, IsNameInUse, out var result, out var lateError))
+        {
+            ShowEditIssue(lateError ?? PivotNamePlanner.EmptyNameMessage);
+            return;
+        }
+
+        ExecutePivotTabCommand(
+            new RenamePivotTableCommand(_session.ActiveSheet.Id, pivot.Name, result!.Name),
+            UiText.Format("PivotName_Renamed", result.Name));
+    }
+
+    // True when a PivotTable other than <paramref name="target"/> already uses <paramref name="candidate"/>.
+    private bool IsPivotNameInUseByOther(PivotTableModel target, string candidate)
+    {
+        foreach (var sheet in _session.Workbook.Sheets)
+        {
+            foreach (var pivot in sheet.PivotTables)
+            {
+                if (!ReferenceEquals(pivot, target) &&
+                    string.Equals(pivot.Name, candidate, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+}

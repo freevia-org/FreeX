@@ -373,7 +373,15 @@ internal static class FilterHiddenRowUpdater
     }
 }
 
-internal static class FilterValueFormatter
+/// <summary>
+/// Maps a <see cref="ScalarValue"/> to the canonical text a value filter matches against: text as-is,
+/// numbers in <see cref="CultureInfo.InvariantCulture"/>, bools <c>TRUE</c>/<c>FALSE</c>, dates
+/// <c>yyyy-MM-dd</c>, blanks empty, errors as their code. This is the single source of truth for the
+/// filter value text — both the desktop and Avalonia dropdown checklists format cell values with
+/// <see cref="ToText"/> so the values they show agree exactly with what <see cref="FilterCommand"/>
+/// matches.
+/// </summary>
+public static class FilterValueFormatter
 {
     public static string ToText(ScalarValue value) => value switch
     {

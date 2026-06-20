@@ -1,216 +1,21 @@
-using System.IO;
-using System.Windows;
 using System.Windows.Media;
-using System.Xml.Linq;
-using SharpVectors.Converters;
-using SharpVectors.Renderers.Wpf;
+using Free.Shared.Ribbon.Wpf;
 
 namespace FreeX.App.Host;
 
 public static partial class RibbonIconFactory
 {
-    private static readonly object CommandIconCacheGate = new();
-    private static readonly Dictionary<string, ImageSource> CommandIconCache = new(StringComparer.OrdinalIgnoreCase);
-    private static readonly HashSet<string> MissingCommandIcons = new(StringComparer.OrdinalIgnoreCase);
-    private static readonly WpfDrawingSettings SvgDrawingSettings = new()
-    {
-        IncludeRuntime = false,
-        OptimizePath = true,
-        TextAsGeometry = true
-    };
+    // Key the cache by the EXACT rendered size, not a coarse small/large bucket. The vector is re-wrapped
+    // per size (the shared loader scales stroke widths to the target), so sharing one drawing across e.g.
+    // 18/20/22px left strokes mis-scaled and the glyph looked soft/blurry.
+    private static readonly SvgCommandIconLoader CommandIconLoader = new(
+        resourceFolder: "CommandIconsSvg",
+        slugFromCommandName: name => ToCommandIconSlug(NormalizeCommandIconName(name)),
+        slugCandidates: GetCommandIconSlugCandidates,
+        sizeKeySelector: size => ((int)Math.Round(size)).ToString(System.Globalization.CultureInfo.InvariantCulture));
 
-    private static ImageSource? TryLoadCommandIcon(string commandName, Brush glyphBrush, double size)
-    {
-        var slug = ToCommandIconSlug(commandName);
-        if (slug.Length == 0)
-            return null;
-
-        foreach (var candidateSlug in GetCommandIconSlugCandidates(slug))
-        {
-            var monochromeBrush = IsWhiteBrush(glyphBrush) ? glyphBrush : null;
-            // Key the cache by the EXACT rendered size, not a coarse small/large bucket. The vector is
-            // re-wrapped per size (WrapDrawingInSvgViewBox scales stroke widths to the target), so sharing
-            // one drawing across e.g. 18/20/22px left strokes mis-scaled and the glyph looked soft/blurry.
-            var sizeKey = ((int)Math.Round(size)).ToString(System.Globalization.CultureInfo.InvariantCulture);
-            foreach (var fileSlug in GetSizeSpecificSlugCandidates(candidateSlug, size, monochromeBrush is not null))
-            {
-                var cacheKey = monochromeBrush is null
-                    ? $"{fileSlug}|{sizeKey}"
-                    : $"{fileSlug}|{sizeKey}|mono|{BrushCacheKey(monochromeBrush)}";
-                lock (CommandIconCacheGate)
-                {
-                    if (CommandIconCache.TryGetValue(cacheKey, out var cached))
-                        return cached;
-                    if (MissingCommandIcons.Contains(cacheKey))
-                        continue;
-                }
-
-                var filePath = System.IO.Path.Combine(
-                    AppContext.BaseDirectory,
-                    "Resources",
-                    "CommandIconsSvg",
-                    fileSlug + ".svg");
-                if (!File.Exists(filePath))
-                {
-                    lock (CommandIconCacheGate)
-                        MissingCommandIcons.Add(cacheKey);
-                    continue;
-                }
-
-                using var reader = new FileSvgReader(SvgDrawingSettings);
-                var drawing = reader.Read(filePath);
-                if (drawing is null)
-                {
-                    lock (CommandIconCacheGate)
-                        MissingCommandIcons.Add(cacheKey);
-                    continue;
-                }
-
-                if (monochromeBrush is not null)
-                    RecolorDrawing(drawing, monochromeBrush);
-
-                var vectorImage = new DrawingImage(WrapDrawingInSvgViewBox(drawing, filePath, size));
-                vectorImage.Freeze();
-
-                lock (CommandIconCacheGate)
-                    CommandIconCache[cacheKey] = vectorImage;
-                return vectorImage;
-            }
-        }
-
-        return null;
-    }
-
-    private static IEnumerable<string> GetSizeSpecificSlugCandidates(string slug, double size, bool monochrome)
-    {
-        if (size <= 22)
-            yield return slug + "-small";
-        else
-            yield return slug + "-large";
-
-        yield return slug;
-    }
-
-    private static Drawing WrapDrawingInSvgViewBox(Drawing drawing, string filePath, double targetSize)
-    {
-        var bounds = TryReadSvgViewBox(filePath) ?? drawing.Bounds;
-        if (bounds.IsEmpty || bounds.Width <= 0 || bounds.Height <= 0)
-            return drawing;
-
-        var designSize = bounds.Width;
-        var scale = targetSize / designSize;
-
-        var mutableDrawing = drawing.IsFrozen ? (Drawing)drawing.Clone() : drawing;
-        ScalePenThicknesses(mutableDrawing, 1.0 / scale);
-
-        var normalGroup = new DrawingGroup();
-        normalGroup.Children.Add(new GeometryDrawing(
-            Brushes.Transparent,
-            null,
-            new RectangleGeometry(bounds)));
-        normalGroup.Children.Add(mutableDrawing);
-        normalGroup.Freeze();
-        return normalGroup;
-    }
-
-    private static void ScalePenThicknesses(Drawing drawing, double factor)
-    {
-        if (drawing is DrawingGroup group)
-        {
-            foreach (var child in group.Children)
-                ScalePenThicknesses(child, factor);
-        }
-        else if (drawing is GeometryDrawing geometry && geometry.Pen is { } pen)
-        {
-            geometry.Pen = new Pen(pen.Brush, pen.Thickness * factor)
-            {
-                DashCap = pen.DashCap,
-                EndLineCap = pen.EndLineCap,
-                LineJoin = pen.LineJoin,
-                MiterLimit = pen.MiterLimit,
-                StartLineCap = pen.StartLineCap,
-                DashStyle = pen.DashStyle
-            };
-        }
-    }
-
-    private static Rect? TryReadSvgViewBox(string filePath)
-    {
-        try
-        {
-            var root = XDocument.Load(filePath).Root;
-            if (root is null)
-                return null;
-
-            var viewBox = root.Attribute("viewBox")?.Value;
-            if (!string.IsNullOrWhiteSpace(viewBox))
-            {
-                var parts = viewBox
-                    .Split([' ', ','], StringSplitOptions.RemoveEmptyEntries)
-                    .Select(part => double.Parse(part, System.Globalization.CultureInfo.InvariantCulture))
-                    .ToArray();
-                if (parts.Length == 4)
-                    return new Rect(parts[0], parts[1], parts[2], parts[3]);
-            }
-
-            var width = TryParseSvgLength(root.Attribute("width")?.Value);
-            var height = TryParseSvgLength(root.Attribute("height")?.Value);
-            return width is > 0 && height is > 0
-                ? new Rect(0, 0, width.Value, height.Value)
-                : null;
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static double? TryParseSvgLength(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-            return null;
-
-        var numeric = new string(value
-            .Trim()
-            .TakeWhile(ch => char.IsDigit(ch) || ch is '.' or '-')
-            .ToArray());
-        return double.TryParse(numeric, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var result)
-            ? result
-            : null;
-    }
-
-    private static string BrushCacheKey(Brush brush) =>
-        brush is SolidColorBrush solid
-            ? solid.Color.ToString(System.Globalization.CultureInfo.InvariantCulture)
-            : brush.ToString() ?? "brush";
-
-    private static void RecolorDrawing(Drawing drawing, Brush brush)
-    {
-        switch (drawing)
-        {
-            case DrawingGroup group:
-                foreach (var child in group.Children)
-                    RecolorDrawing(child, brush);
-                break;
-            case GeometryDrawing geometry:
-                if (geometry.Brush is not null)
-                    geometry.Brush = brush;
-                if (geometry.Pen is not null)
-                    geometry.Pen = new Pen(brush, geometry.Pen.Thickness)
-                    {
-                        DashCap = geometry.Pen.DashCap,
-                        EndLineCap = geometry.Pen.EndLineCap,
-                        LineJoin = geometry.Pen.LineJoin,
-                        MiterLimit = geometry.Pen.MiterLimit,
-                        StartLineCap = geometry.Pen.StartLineCap,
-                        DashStyle = geometry.Pen.DashStyle
-                    };
-                break;
-            case GlyphRunDrawing glyph:
-                glyph.ForegroundBrush = brush;
-                break;
-        }
-    }
+    private static ImageSource? TryLoadCommandIcon(string commandName, Brush glyphBrush, double size) =>
+        CommandIconLoader.TryLoad(commandName, glyphBrush, size);
 
     private static IEnumerable<string> GetCommandIconSlugCandidates(string slug)
     {
@@ -226,7 +31,17 @@ public static partial class RibbonIconFactory
             "merge-and-center" => "merge-center",
             "sort-and-filter" => "sort",
             "find-and-select" => "find",
+            "insert-link" => "hyperlink",
+            "header-and-footer" => "header-footer",
+            "pictures" => "picture",
             "percent-style" => "percent-style",
+            "advanced" => "advanced-filter",
+            "clear-filter" => "clear-filter",
+            "page-setup-dialog" => "page-setup",
+            "view-gridlines" => "gridlines",
+            "print-gridlines" => "print-gridlines",
+            "view-headings" => "headings",
+            "print-headings" => "print-headings",
             "object-fill" => "fill",
             "object-outline" => "outline-color",
             "object-size" => "size",
@@ -273,6 +88,8 @@ public static partial class RibbonIconFactory
             "delete-watch" => "watch-delete",
             "reapply" => "reapply-filter",
             "reapply-filter" => "reapply-filter",
+            "sort-a-to-z" => "sort-ascending",
+            "sort-z-to-a" => "sort-descending",
             "pick-from-drop-down-list" => "pick-from-dropdown",
             "macros" => "macros",
             "macro" => "macros",
@@ -283,11 +100,27 @@ public static partial class RibbonIconFactory
             "remove-from-list" => "remove-from-list",
             "rename" => "rename-sheet",
             "duplicate" => "duplicate-sheet",
+            "plus-minus-buttons" => "show-detail",
+            "buttons" => "show-detail",
             _ => ""
         };
 
         if (alias.Length > 0 && !string.Equals(alias, slug, StringComparison.Ordinal))
             yield return alias;
+    }
+
+    private static string NormalizeCommandIconName(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return string.Empty;
+
+        var handlerIndex = text.IndexOf('#', StringComparison.Ordinal);
+        if (handlerIndex >= 0 && text.Equals("Clear#ClearFilterButton_Click", StringComparison.OrdinalIgnoreCase))
+            return "Clear Filter";
+
+        return handlerIndex >= 0
+            ? text[..handlerIndex]
+            : text;
     }
 
     private static string ToCommandIconSlug(string text)

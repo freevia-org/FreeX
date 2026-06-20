@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.App.Presentation.Dialogs;
 
 namespace FreeX.App.Host.Tests;
 

@@ -14,7 +14,7 @@ internal static class DialogSourceTestSupport
         ReadHostSourcesWithSeparator(Environment.NewLine, fileNames);
 
     public static string ReadHostSourcesWithSeparator(string separator, params string[] fileNames) =>
-        string.Join(separator, fileNames.Select(ReadHostSource));
+        SourceTextTestSupport.ReadSources(ReadHostSource, separator, fileNames);
 
     public static string ReadHostSourceFile(params string[] relativeParts) =>
         WorkspaceFileLocator.ReadAllText(
@@ -37,52 +37,20 @@ internal static class DialogSourceTestSupport
     public static XDocument LoadHostXamlDocument(params string[] relativeParts) =>
         XDocument.Load(FindHostSourceFile(relativeParts));
 
-    public static string ReadClassSource(string fileName, string startMarker, string endMarker)
-    {
-        var source = ReadHostSource(fileName);
-        var start = source.IndexOf(startMarker, StringComparison.Ordinal);
-        start.Should().BeGreaterThanOrEqualTo(0);
-
-        var end = string.IsNullOrEmpty(endMarker)
-            ? source.Length
-            : source.IndexOf(endMarker, start, StringComparison.Ordinal);
-        if (end < 0)
-            end = source.Length;
-
-        end.Should().BeGreaterThan(start);
-        return source[start..end];
-    }
+    public static string ReadClassSource(string fileName, string startMarker, string endMarker) =>
+        SourceTextTestSupport.ExtractBetweenMarkers(ReadHostSource(fileName), startMarker, endMarker);
 
     public static T GetPrivateField<T>(object instance, string name)
-        where T : class
-    {
-        var type = instance.GetType();
-        FieldInfo? field = null;
-        while (type is not null && field is null)
-        {
-            field = type.GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
-            type = type.BaseType;
-        }
-
-        field.Should().NotBeNull();
-        return field!.GetValue(instance).Should().BeOfType<T>().Subject;
-    }
+        where T : class =>
+        SourceTextTestSupport.GetPrivateField<T>(instance, name);
 
     public static void InvokePrivateHandler(object instance, string methodName) =>
         InvokePrivateHandler(instance, methodName, instance);
 
     public static void InvokePrivateHandler(object instance, string methodName, object sender)
     {
-        var type = instance.GetType();
-        MethodInfo? method = null;
-        while (type is not null && method is null)
-        {
-            method = type.GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
-            type = type.BaseType;
-        }
-
-        method.Should().NotBeNull();
-        object[] parameters = method!.GetParameters().Length == 0
+        var method = SourceTextTestSupport.GetPrivateMethod(instance, methodName);
+        object[] parameters = method.GetParameters().Length == 0
             ? []
             : [sender, new RoutedEventArgs()];
         method.Invoke(instance, parameters);
@@ -127,12 +95,42 @@ internal static class DialogSourceTestSupport
     private static string ReadHostSource(string fileName) =>
         WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Host", fileName);
 
+    public static string ReadPresentationSources(params string[] relativeParts) =>
+        WorkspaceFileLocator.ReadAllText(
+            new[] { "src", "FreeX.App.Presentation" }.Concat(relativeParts).ToArray());
+
     private static string ReadAppUiSource(string fileName) =>
         WorkspaceFileLocator.ReadAllText("src", "FreeX.App.UI", fileName);
+
+    public static string ReadShellSources(params string[] fileNames) =>
+        string.Join(Environment.NewLine, fileNames.Select(ReadShellSource));
+
+    private static string ReadShellSource(string fileName) =>
+        // The WPF-facing shell helpers (dialog button rows, message helper, dialog sizing/focus) live in
+        // Free.Shared.Shell.Wpf after the shared-shell split; the platform-neutral core is Free.Shared.Shell.
+        WorkspaceFileLocator.ReadAllText("shared", "Free.Shared.Shell.Wpf", fileName);
+
+    public static string ReadAppServicesSource(string fileName) =>
+        WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Services", fileName);
+
+    public static string ReadSharedAppServicesSource(string fileName) =>
+        WorkspaceFileLocator.ReadAllText("shared", "Free.Shared.AppServices", fileName);
 
     public static string ReadAppServicesRibbonSource(string fileName) =>
         WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Services", "Ribbon", fileName);
 
     public static string ReadRibbonDefinitionSource(string fileName) =>
         WorkspaceFileLocator.ReadAllText("src", "FreeX.Ribbon.Definitions", fileName);
+
+    public static string ReadRibbonDefinitionFile(params string[] relativeParts) =>
+        WorkspaceFileLocator.ReadAllText(
+            new[] { "src", "FreeX.Ribbon.Definitions" }.Concat(relativeParts).ToArray());
+
+    public static string FindRibbonDefinitionFile(params string[] relativeParts) =>
+        WorkspaceFileLocator.Find(
+            new[] { "src", "FreeX.Ribbon.Definitions" }.Concat(relativeParts).ToArray());
+
+    public static string FindRibbonDefinitionDirectory(params string[] relativeParts) =>
+        Path.GetDirectoryName(FindRibbonDefinitionFile(relativeParts))
+        ?? throw new DirectoryNotFoundException("Could not locate FreeX.Ribbon.Definitions source directory.");
 }

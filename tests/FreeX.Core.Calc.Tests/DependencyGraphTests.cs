@@ -857,6 +857,35 @@ public class VolatileFunctionTests
     }
 
     [Fact]
+    public void FormulaRewriteOutcomeAffectedCells_RefreshesIncrementalDependencies()
+    {
+        var wb = new Workbook("Test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var engine = new RecalcEngine(new DependencyGraph(), new FormulaEvaluator());
+        var a2 = new CellAddress(sheet.Id, 2, 1);
+        var a3 = new CellAddress(sheet.Id, 3, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+
+        sheet.SetCell(a2, new NumberValue(2));
+        sheet.SetFormula(b1, "A2");
+        engine.RegisterFormulaDependencies(
+            b1,
+            new Parser(new Lexer("=A2").Tokenize()).Parse(),
+            sheet.Id,
+            wb);
+
+        var outcome = new InsertRowsCommand(sheet.Id, 2).Apply(ctx);
+
+        outcome.AffectedCells.Should().Contain(b1);
+        engine.Recalculate(wb, outcome.AffectedCells!);
+        sheet.SetCell(a3, new NumberValue(7));
+        engine.Recalculate(wb, [a3]);
+
+        sheet.GetValue(b1).Should().Be(new NumberValue(7));
+    }
+
+    [Fact]
     public void RecalculateAllFormulas_EvaluatesNonVolatileFormulaWithoutChangedCells()
     {
         var wb = new Workbook("Test");
@@ -1171,6 +1200,49 @@ public class AstCacheTests
         var volatileReport = engine.Recalculate(wb, []);
         volatileReport.Errors.Should().BeEmpty();
         volatileReport.RecalculatedCells.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Recalculate_NamedFormulaPrecedentEdit_RecalculatesDependentCell()
+    {
+        var wb = new Workbook("T");
+        var sheet = wb.AddSheet("S");
+        var engine = new RecalcEngine(new DependencyGraph(), new FormulaEvaluator());
+
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+
+        sheet.SetCell(a1, new NumberValue(2));
+        wb.NamedFormulas["DoubleInput"] = "A1*2";
+        sheet.SetFormula(b1, "DoubleInput");
+        engine.RebuildFormulaDependencies(wb);
+        engine.Recalculate(wb, [b1]);
+
+        sheet.GetValue(b1).Should().Be(new NumberValue(4));
+
+        sheet.SetCell(a1, new NumberValue(3));
+        var report = engine.Recalculate(wb, [a1]);
+
+        sheet.GetValue(b1).Should().Be(new NumberValue(6));
+        report.RecalculatedCells.Should().Contain(b1);
+    }
+
+    [Fact]
+    public void Recalculate_NamedFormulaVolatileFunction_RecalculatesWithoutChangedCells()
+    {
+        var wb = new Workbook("T");
+        var sheet = wb.AddSheet("S");
+        var engine = new RecalcEngine(new DependencyGraph(), new FormulaEvaluator());
+
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        wb.NamedFormulas["Clock"] = "NOW()";
+        sheet.SetFormula(a1, "Clock");
+        engine.RebuildFormulaDependencies(wb);
+
+        var report = engine.Recalculate(wb, []);
+
+        report.RecalculatedCells.Should().Contain(a1);
+        sheet.GetValue(a1).Should().BeOfType<DateTimeValue>();
     }
 }
 

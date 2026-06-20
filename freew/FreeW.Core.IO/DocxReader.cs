@@ -35,7 +35,7 @@ public static class DocxReader
         ReadStyles(archive, document);
         var imageRelationships = ReadImageRelationships(archive);
         var hyperlinkRelationships = ReadHyperlinkRelationships(archive);
-        var numbering = ReadNumbering(archive, document);
+        var (numbering, startOverrides) = ReadNumbering(archive, document);
 
         var body = documentXml.Root?.Element(W + "body");
         if (body is not null)
@@ -48,28 +48,7 @@ public static class DocxReader
             Paragraph? prevPara = null;
             var prevAfterAuto = false;
             foreach (var element in body.Elements())
-            {
-                if (element.Name == W + "p")
-                {
-                    var para = ReadParagraph(element, archive, imageRelationships, hyperlinkRelationships, numbering, capturePreservedNumbering: true, preservedDrawingTarget: document);
-                    document.Blocks.Add(para);
-                    var sp = element.Element(W + "pPr")?.Element(W + "spacing");
-                    var beforeAuto = sp?.Attribute(W + "beforeAutospacing")?.Value is "1" or "true" or "on";
-                    if (prevPara is not null && prevAfterAuto && beforeAuto)
-                    {
-                        prevPara.Formatting = prevPara.Formatting with { SpaceAfterPt = 0 };
-                        para.Formatting = para.Formatting with { SpaceBeforePt = 0 };
-                    }
-                    prevPara = para;
-                    prevAfterAuto = sp?.Attribute(W + "afterAutospacing")?.Value is "1" or "true" or "on";
-                }
-                else if (element.Name == W + "tbl")
-                {
-                    document.Blocks.Add(ReadTable(element, archive, imageRelationships, hyperlinkRelationships, numbering, document));
-                    prevPara = null;
-                    prevAfterAuto = false;
-                }
-            }
+                AddBodyBlock(element, document, archive, imageRelationships, hyperlinkRelationships, numbering, startOverrides, ref prevPara, ref prevAfterAuto);
         }
 
         if (document.Blocks.Count == 0)
@@ -80,6 +59,7 @@ public static class DocxReader
         ReadEndnotes(archive, document, imageRelationships, hyperlinkRelationships);
         ReadComments(archive, document, hyperlinkRelationships);
         ReadSettings(archive, document);
+        ReadBibliography(archive, document);
         ReadTheme(archive, document);
         ReadEmbeddedFonts(archive, document);
         ReadPreservedParts(archive, document);
@@ -176,10 +156,31 @@ public static class DocxReader
 
         // Automatic hyphenation (w:autoHyphenation) is an on/off toggle: present + not explicitly off.
         document.Page.AutoHyphenation = ReadToggle(root, "autoHyphenation");
+        // Hyphenation sub-options: w:consecutiveHyphenLimit/@w:val (max consecutive hyphenated lines),
+        // w:hyphenationZone/@w:val (zone in twips) and the w:doNotHyphenateCaps toggle. Each is read whether
+        // or not autoHyphenation is on (so the value round-trips), defaulting to off/0 when absent.
+        if (int.TryParse(root.Element(W + "consecutiveHyphenLimit")?.Attribute(W + "val")?.Value,
+                System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var hyphenLimit) && hyphenLimit > 0)
+            document.Page.ConsecutiveHyphenLimit = hyphenLimit;
+        if (int.TryParse(root.Element(W + "hyphenationZone")?.Attribute(W + "val")?.Value,
+                System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var hyphenZone) && hyphenZone > 0)
+            document.Page.HyphenationZonePt = hyphenZone / 20.0;
+        document.Page.DoNotHyphenateCaps = ReadToggle(root, "doNotHyphenateCaps");
 
         // Different odd/even page headers/footers (w:evenAndOddHeaders): an on/off toggle. When set, the
         // even header/footer references in w:sectPr are honoured (see ReadHeaderFooter).
         document.Page.DifferentOddEvenPages = ReadToggle(root, "evenAndOddHeaders");
+
+        // Mirror margins (w:mirrorMargins): an on/off toggle for double-sided printing (inside/outside margins).
+        document.Page.MirrorMargins = ReadToggle(root, "mirrorMargins");
+
+        // Footnote numbering options (w:footnotePr in settings.xml): number format, start-at, restart.
+        if (root.Element(W + "footnotePr") is { } footnotePr)
+            ReadNoteNumberingOptions(footnotePr, document.FootnoteNumbering);
+
+        // Endnote numbering options (w:endnotePr in settings.xml): mirrors footnote options.
+        if (root.Element(W + "endnotePr") is { } endnotePr)
+            ReadNoteNumberingOptions(endnotePr, document.EndnoteNumbering);
 
         var protection = root.Element(W + "documentProtection");
         if (protection is null)
@@ -195,6 +196,40 @@ public static class DocxReader
         if (mode != ProtectionMode.None)
             document.Protection = new ProtectionSettings(mode);
     }
+
+    /// <summary>
+    /// Reads footnote/endnote numbering properties (w:numFmt, w:numStart, w:numRestart) from a
+    /// w:footnotePr or w:endnotePr element into <paramref name="options"/>.
+    /// </summary>
+    private static void ReadNoteNumberingOptions(XElement pr, NoteNumberingOptions options)
+    {
+        if (pr.Element(W + "numFmt") is { } numFmt)
+            options.NumberFormat = NoteNumberFormatFromOoxml(numFmt.Attribute(W + "val")?.Value);
+        if (pr.Element(W + "numStart") is { } numStart &&
+            int.TryParse(numStart.Attribute(W + "val")?.Value,
+                System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture, out var startVal) && startVal >= 1)
+            options.StartAt = startVal;
+        if (pr.Element(W + "numRestart") is { } numRestart)
+            options.NumberRestart = NoteNumberRestartFromOoxml(numRestart.Attribute(W + "val")?.Value);
+    }
+
+    private static NoteNumberFormat NoteNumberFormatFromOoxml(string? val) => val switch
+    {
+        "lowerRoman" => NoteNumberFormat.LowerRoman,
+        "upperRoman" => NoteNumberFormat.UpperRoman,
+        "lowerLetter" => NoteNumberFormat.LowerLetter,
+        "upperLetter" => NoteNumberFormat.UpperLetter,
+        "chicago" => NoteNumberFormat.Chicago,
+        _ => NoteNumberFormat.Decimal   // "decimal" and anything unrecognised → default
+    };
+
+    private static NoteNumberRestart NoteNumberRestartFromOoxml(string? val) => val switch
+    {
+        "eachSect" => NoteNumberRestart.EachSection,
+        "eachPage" => NoteNumberRestart.EachPage,
+        _ => NoteNumberRestart.Continuous
+    };
 
     /// <summary>
     /// Captures the package parts FreeW does not model but preserves verbatim (preserve-and-re-emit):
@@ -225,6 +260,32 @@ public static class DocxReader
         if (archive.GetEntry("word/webSettings.xml") is not null)
             Capture("/word/webSettings.xml",
                 docRelTypesByTarget.GetValueOrDefault("webSettings.xml") ?? WebSettingsRelType);
+
+        // VBA macro project (.docm/.dotm): word/vbaProject.bin, its optional word/vbaData.xml, and the
+        // part-local word/_rels/vbaProject.bin.rels. Preserved verbatim and NEVER executed/deserialized. The
+        // content type is forced to a per-part Override (valid OPC, and wins over any source Default-by-
+        // extension) so a macro-only document re-emits a typed part even though FreeW emits no bin/vbaData
+        // Default. The writer drops these again for non-macro variants (.docx/.dotx) via DocxWriteOptions.
+        if (archive.GetEntry("word/vbaProject.bin") is not null)
+        {
+            var vbaProject = LoadMedia(archive, "word/vbaProject.bin");
+            if (vbaProject is not null)
+            {
+                document.Preserved.Parts.Add(new PreservedPart(
+                    "/word/vbaProject.bin",
+                    vbaProject,
+                    VbaProjectContentType,
+                    docRelTypesByTarget.GetValueOrDefault("vbaProject.bin") ?? VbaProjectRelType));
+
+                var vbaData = LoadMedia(archive, "word/vbaData.xml");
+                if (vbaData is not null)
+                    document.Preserved.Parts.Add(new PreservedPart("/word/vbaData.xml", vbaData, VbaDataContentType, null));
+
+                var vbaRels = LoadMedia(archive, "word/_rels/vbaProject.bin.rels");
+                if (vbaRels is not null)
+                    document.Preserved.Parts.Add(new PreservedPart("/word/_rels/vbaProject.bin.rels", vbaRels, null, null));
+            }
+        }
 
         // customXml/* — items, their props and the items' own _rels. The document→item relationships live in
         // document.xml.rels with a customXml-relative Target (e.g. "../customXml/item1.xml"); item→props
@@ -406,6 +467,107 @@ public static class DocxReader
     }
 
     /// <summary>
+    /// Loads word/bibliography/sources.xml (if present) into <see cref="TextDocument.Sources"/> and
+    /// <see cref="TextDocument.BibliographyStyle"/>: the b:Sources/@SelectedStyle attribute restores the
+    /// chosen citation style (via <see cref="Citations.ParseStyle"/>), and each b:Source restores a
+    /// <see cref="Source"/> with its tag, type and fields (the author read from the single corporate-author
+    /// the writer emits). A missing part leaves the document at its defaults (APA, no sources). Inverse of
+    /// <c>DocxWriter.BuildBibliographySources</c>.
+    /// </summary>
+    private static void ReadBibliography(ZipArchive archive, TextDocument document)
+    {
+        var xml = LoadPart(archive, ResolveBibliographyPartPath(archive) ?? "word/bibliography/sources.xml");
+        var root = xml?.Root;
+        if (root is null || root.Name != B + "Sources")
+            return;
+
+        document.BibliographyStyle = Citations.ParseStyle(root.Attribute("SelectedStyle")?.Value);
+
+        foreach (var element in root.Elements(B + "Source"))
+        {
+            document.Sources.Add(new Source
+            {
+                Tag = Field(element, "Tag") ?? string.Empty,
+                Type = ParseSourceType(Field(element, "SourceType")),
+                Author = ReadBibliographyAuthor(element),
+                Title = Field(element, "Title") ?? string.Empty,
+                Year = Field(element, "Year") ?? string.Empty,
+                Publisher = Field(element, "Publisher"),
+                Journal = Field(element, "JournalName"),
+                Volume = Field(element, "Volume"),
+                Issue = Field(element, "Issue"),
+                Pages = Field(element, "Pages"),
+                Url = Field(element, "URL"),
+                Accessed = Field(element, "YearAccessed"),
+            });
+        }
+
+        static string? Field(XElement source, string localName)
+        {
+            var value = source.Element(B + localName)?.Value;
+            return string.IsNullOrEmpty(value) ? null : value;
+        }
+    }
+
+    private static string ReadBibliographyAuthor(XElement source)
+    {
+        var author = source.Element(B + "Author");
+        if (author is null)
+            return string.Empty;
+
+        var corporate = author.Element(B + "Author")?.Element(B + "Corporate")?.Value;
+        if (!string.IsNullOrWhiteSpace(corporate))
+            return corporate.Trim();
+
+        var people = author.Descendants(B + "Person")
+            .Select(PersonName)
+            .Where(name => name.Length > 0)
+            .ToList();
+        if (people.Count > 0)
+            return string.Join("; ", people);
+
+        return (author.Value ?? string.Empty).Trim();
+
+        static string PersonName(XElement person)
+        {
+            var first = person.Element(B + "First")?.Value?.Trim();
+            var middle = person.Element(B + "Middle")?.Value?.Trim();
+            var last = person.Element(B + "Last")?.Value?.Trim();
+            return string.Join(" ", new[] { first, middle, last }.Where(part => !string.IsNullOrWhiteSpace(part)));
+        }
+    }
+
+    // Maps Word's b:SourceType token back to a FreeW SourceType; unknown / missing -> Book.
+    private static SourceType ParseSourceType(string? token) => token switch
+    {
+        "JournalArticle" => SourceType.JournalArticle,
+        "DocumentFromInternetSite" => SourceType.WebSite,
+        _ => SourceType.Book,
+    };
+
+    /// <summary>
+    /// Finds the bibliography part path from the document relationships (the rel whose Target ends with
+    /// "bibliography/sources.xml"), resolved relative to the word/ folder. Returns null when no such
+    /// relationship exists so the caller can fall back to the conventional path.
+    /// </summary>
+    private static string? ResolveBibliographyPartPath(ZipArchive archive)
+    {
+        var relsXml = LoadPart(archive, "word/_rels/document.xml.rels");
+        var relationships = relsXml?.Root?.Elements(Rel + "Relationship");
+        if (relationships is null)
+            return null;
+
+        foreach (var rel in relationships)
+        {
+            var target = rel.Attribute("Target")?.Value;
+            if (!string.IsNullOrEmpty(target)
+                && target.EndsWith("bibliography/sources.xml", StringComparison.Ordinal))
+                return "word/" + target.TrimStart('/');
+        }
+        return null;
+    }
+
+    /// <summary>
     /// Loads word/comments.xml (if present) into <see cref="TextDocument.Comments"/>, reconstructing
     /// each w:comment's author/initials/date and its paragraphs. Comments referenced by no body range
     /// are still kept; the body range markers are recovered separately in <see cref="ReadParagraph"/>.
@@ -426,7 +588,17 @@ public static class DocxReader
         // Run.Image — which the writer re-emits as a comment media part + comments.xml.rels (see BuildComments).
         var commentRelationships = ReadPartImageRelationships(archive, "word/_rels/comments.xml.rels", "word/");
 
+        // Modern (threaded) comments: word/commentsExtended.xml threads replies via w15:paraId /
+        // w15:paraIdParent and marks resolved threads with w15:done. Parse it first so the comment loop
+        // can place each flat w:comment as either a top-level comment or a reply under its parent, and
+        // recover the resolved flag. Absent (classic comments) → every comment is treated as top-level.
+        var extended = ReadCommentsExtended(archive);
+
         var noNumbering = new Dictionary<int, ListKind>();
+
+        // First pass: build every flat comment and remember its last-paragraph paraId (the value
+        // commentsExtended threads on). Keep insertion order so reply threads keep their authored order.
+        var flat = new List<(Comment Comment, string? ParaId)>();
         foreach (var element in root.Elements(W + "comment"))
         {
             if (!int.TryParse(element.Attribute(W + "id")?.Value, out var id))
@@ -438,12 +610,67 @@ public static class DocxReader
                 Initials = element.Attribute(W + "initials")?.Value ?? string.Empty,
                 DateXml = element.Attribute(W + "date")?.Value
             };
+            string? paraId = null;
             foreach (var p in element.Elements(W + "p"))
+            {
                 comment.Content.Add(ReadParagraph(p, archive, commentRelationships, hyperlinkRelationships, noNumbering));
+                // The last paragraph's w14:paraId is what commentsExtended references for this comment.
+                if (p.Attribute(W14 + "paraId")?.Value is { Length: > 0 } pid)
+                    paraId = pid;
+            }
             if (comment.Content.Count == 0)
                 comment.Content.Add(new Paragraph());
-            document.Comments[id] = comment;
+            flat.Add((comment, paraId));
         }
+
+        // Second pass: thread. A flat comment whose paraId has a paraIdParent in commentsExtended is a
+        // reply — append it to the parent's Replies (matched by the parent's paraId); otherwise it is a
+        // top-level comment keyed in document.Comments. A top-level comment is resolved when its own
+        // commentEx is marked done. Comments whose parent cannot be resolved fall back to top-level so
+        // nothing is lost.
+        var byParaId = new Dictionary<string, Comment>(StringComparer.Ordinal);
+        foreach (var (comment, paraId) in flat)
+            if (paraId is { Length: > 0 })
+                byParaId[paraId] = comment;
+
+        foreach (var (comment, paraId) in flat)
+        {
+            var ex = paraId is { Length: > 0 } && extended.TryGetValue(paraId, out var e) ? e : default;
+            if (ex.ParentParaId is { Length: > 0 } parentParaId
+                && byParaId.TryGetValue(parentParaId, out var parent)
+                && !ReferenceEquals(parent, comment))
+            {
+                parent.Replies.Add(comment);
+            }
+            else
+            {
+                comment.Resolved = ex.Done;
+                document.Comments[comment.Id] = comment;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Loads word/commentsExtended.xml (if present), returning a map from each comment's w15:paraId to its
+    /// thread info: the w15:paraIdParent (null for a top-level comment) and whether w15:done marks it
+    /// resolved. Empty when the part is absent (a classic, non-threaded comments document).
+    /// </summary>
+    private static Dictionary<string, (string? ParentParaId, bool Done)> ReadCommentsExtended(ZipArchive archive)
+    {
+        var map = new Dictionary<string, (string?, bool)>(StringComparer.Ordinal);
+        var root = LoadPart(archive, "word/commentsExtended.xml")?.Root;
+        if (root is null)
+            return map;
+
+        foreach (var ex in root.Elements(W15 + "commentEx"))
+        {
+            if (ex.Attribute(W15 + "paraId")?.Value is not { Length: > 0 } paraId)
+                continue;
+            var parent = ex.Attribute(W15 + "paraIdParent")?.Value;
+            var done = ex.Attribute(W15 + "done")?.Value is "1" or "true";
+            map[paraId] = (string.IsNullOrEmpty(parent) ? null : parent, done);
+        }
+        return map;
     }
 
     /// <summary>
@@ -612,9 +839,18 @@ public static class DocxReader
                 page.MarginTopPt = DxaToPoints(top.Value);
             if (pgMar.Attribute(W + "bottom") is { } bottom)
                 page.MarginBottomPt = DxaToPoints(bottom.Value);
+            // Header/footer distance from the page edge (@w:header / @w:footer) and the binding gutter
+            // (@w:gutter). Each is read only when present, leaving the model's "unspecified" 0 default otherwise.
+            if (pgMar.Attribute(W + "header") is { } header)
+                page.HeaderDistancePt = DxaToPoints(header.Value);
+            if (pgMar.Attribute(W + "footer") is { } footer)
+                page.FooterDistancePt = DxaToPoints(footer.Value);
+            if (pgMar.Attribute(W + "gutter") is { } gutter)
+                page.GutterPt = DxaToPoints(gutter.Value);
         }
 
-        // Equal-width column layout (w:cols/@w:num + @w:space).
+        // Column layout (w:cols): @w:num + @w:space (equal-width), @w:sep (line between), and optional
+        // explicit per-column w:col children (@w:equalWidth="0", Left/Right presets / custom widths).
         var cols = sectPr.Element(W + "cols");
         if (cols is not null)
         {
@@ -622,6 +858,18 @@ public static class DocxReader
                 page.ColumnCount = num;
             if (cols.Attribute(W + "space") is { } space)
                 page.ColumnSpacingPt = DxaToPoints(space.Value);
+            // @w:sep is an on/off attribute: present and not explicitly "0"/"false"/"off" → draw the line.
+            page.ColumnsLineBetween = cols.Attribute(W + "sep")?.Value is "1" or "true" or "on";
+
+            var colElements = cols.Elements(W + "col").ToList();
+            var equalWidthOff = cols.Attribute(W + "equalWidth")?.Value is "0" or "false" or "off";
+            if (equalWidthOff && colElements.Count > 1
+                && colElements.All(c => c.Attribute(W + "w") is not null))
+            {
+                var widths = colElements.Select(c => DxaToPoints(c.Attribute(W + "w")!.Value)).ToList();
+                page.ColumnCount = widths.Count;
+                page.ColumnWidthsPt = widths;
+            }
         }
 
         // Page border (w:pgBorders) → PageSettings.PageBorder (null when absent/off).
@@ -799,7 +1047,9 @@ public static class DocxReader
         IReadOnlyDictionary<string, string> hyperlinkRelationships,
         IReadOnlyDictionary<int, ListKind> numbering,
         bool capturePreservedNumbering = false,
-        TextDocument? preservedDrawingTarget = null)
+        TextDocument? preservedDrawingTarget = null,
+        ContentControl? inheritedControl = null,
+        IReadOnlyDictionary<(int NumId, int Level), int>? startOverrides = null)
     {
         var paragraph = new Paragraph();
         var pPr = p.Element(W + "pPr");
@@ -809,7 +1059,7 @@ public static class DocxReader
         if (pPr is not null)
         {
             paragraph.StyleId = pPr.Element(W + "pStyle")?.Attribute(W + "val")?.Value;
-            paragraph.Formatting = ReadParagraphFormatting(pPr, numbering, docDefaults);
+            paragraph.Formatting = ReadParagraphFormatting(pPr, numbering, docDefaults, startOverrides);
             // When the paragraph carries a w:numPr that FreeW did NOT map to one of its own ListKinds, keep
             // the original numId+ilvl so the writer can re-emit it against the preserved numbering.xml (only
             // for body / table-cell paragraphs — header/footer/footnote numbering is not modelled).
@@ -835,6 +1085,18 @@ public static class DocxReader
         // and the trailing w:commentReference run anchors the comment. We track the open range id so
         // every covered run gets its CommentId, and recover the reference run as a textless anchor.
         var activeCommentId = (int?)null;
+
+        // Complex-field accumulator (Word's w:fldChar begin / w:instrText / separate / result / end run
+        // sequence). When a begin fldChar is seen we collect the instruction (instrText) and the result
+        // text (runs after the separate) until the matching end, then collapse the whole span into one
+        // ComplexField run. Nesting is tracked by depth so an inner field's begin/end does not close the
+        // outer one. The instruction's leading keyword is parsed (see ReadParagraphRun for the AddRun side).
+        var fieldDepth = 0;
+        var fieldInstr = new System.Text.StringBuilder();
+        var fieldResult = new System.Text.StringBuilder();
+        var fieldPastSeparate = false;
+        XElement? fieldFormattingSource = null;
+
         foreach (var child in p.Elements())
         {
             if (child.Name == W + "commentRangeStart")
@@ -846,82 +1108,311 @@ public static class DocxReader
             {
                 activeCommentId = null;
             }
-            else if (child.Name == W + "r")
+            else if (fieldDepth > 0 && child.Name == W + "r")
             {
-                // A run carrying a w:commentReference is the textless comment anchor; recover it.
-                var commentRef = child.Element(W + "commentReference");
-                if (commentRef is not null && int.TryParse(commentRef.Attribute(W + "id")?.Value, out var refId))
-                    paragraph.Runs.Add(Run.CommentReference(refId));
-                else
-                    AddRun(paragraph, child, archive, imageRelationships, hyperlinkUrl: null, hyperlinkAnchor: null, commentId: activeCommentId, preservedDrawingTarget: preservedDrawingTarget);
-            }
-            else if (child.Name == W + "hyperlink")
-            {
-                var anchor = child.Attribute(W + "anchor")?.Value;
-                var id = child.Attribute(R + "id")?.Value;
-                var url = id is not null && hyperlinkRelationships.TryGetValue(id, out var target) ? target : null;
-                var tooltip = child.Attribute(W + "tooltip")?.Value;
-                foreach (var r in child.Elements(W + "r"))
-                    AddRun(paragraph, r, archive, imageRelationships, url, url is null ? anchor : null, commentId: activeCommentId, hyperlinkTooltip: tooltip, preservedDrawingTarget: preservedDrawingTarget);
-            }
-            else if (child.Name == W + "ins" || child.Name == W + "del")
-            {
-                // A tracked insertion (w:ins) or deletion (w:del) wraps one or more runs (and possibly
-                // hyperlinks). Recover the revision kind plus author/date and stamp every covered run.
-                var kind = child.Name == W + "del" ? RevisionKind.Deleted : RevisionKind.Inserted;
-                var author = child.Attribute(W + "author")?.Value;
-                var date = child.Attribute(W + "date")?.Value;
-                var revision = new RevisionInfo(kind, author, date);
-
-                foreach (var revChild in child.Elements())
+                // Inside a complex field: consume this run into the accumulator instead of emitting it.
+                var fldChar = child.Element(W + "fldChar")?.Attribute(W + "fldCharType")?.Value;
+                if (fldChar == "begin")
                 {
-                    if (revChild.Name == W + "r")
-                        AddRun(paragraph, revChild, archive, imageRelationships, hyperlinkUrl: null, hyperlinkAnchor: null, commentId: activeCommentId, revision: revision, preservedDrawingTarget: preservedDrawingTarget);
-                    else if (revChild.Name == W + "hyperlink")
+                    fieldDepth++; // a nested field; its instruction/result text still feeds the accumulator
+                    // (begin char carries no text; nothing to accumulate here)
+                }
+                else if (fldChar == "separate")
+                {
+                    fieldPastSeparate = true;
+                }
+                else if (fldChar == "end")
+                {
+                    fieldDepth--;
+                    if (fieldDepth == 0)
                     {
-                        var hAnchor = revChild.Attribute(W + "anchor")?.Value;
-                        var hId = revChild.Attribute(R + "id")?.Value;
-                        var hUrl = hId is not null && hyperlinkRelationships.TryGetValue(hId, out var hTarget) ? hTarget : null;
-                        var hTooltip = revChild.Attribute(W + "tooltip")?.Value;
-                        foreach (var r in revChild.Elements(W + "r"))
-                            AddRun(paragraph, r, archive, imageRelationships, hUrl, hUrl is null ? hAnchor : null, commentId: activeCommentId, revision: revision, hyperlinkTooltip: hTooltip, preservedDrawingTarget: preservedDrawingTarget);
+                        // The outermost field closed: collapse to a single ComplexField run, mapping a
+                        // recognised leading keyword (PAGE/DATE/…) to the existing RunFieldKind so update
+                        // and rendering reuse that path, otherwise preserving the raw instruction.
+                        var instruction = fieldInstr.ToString();
+                        var result = fieldResult.ToString();
+                        var formatting = ReadRunFormatting(fieldFormattingSource?.Element(W + "rPr"));
+                        var complexField = Run.ComplexFieldRun(instruction, result, showCode: false, formatting);
+                        complexField.CommentId = activeCommentId;
+                        complexField.Control = inheritedControl;
+                        paragraph.Runs.Add(complexField);
+                        fieldInstr.Clear();
+                        fieldResult.Clear();
+                        fieldPastSeparate = false;
+                        fieldFormattingSource = null;
                     }
+                    // A nested field's end fldChar just decrements the depth (no text to accumulate).
                 }
-            }
-            else if (child.Name == W + "sdt")
-            {
-                // A content control (structured document tag): w:sdtPr describes the control (tag/alias +
-                // kind), w:sdtContent holds the wrapped run(s). Recover the control and stamp every content
-                // run with it (one shared instance so the writer re-coalesces them into one w:sdt).
-                var control = ReadContentControl(child.Element(W + "sdtPr"));
-                var sdtContent = child.Element(W + "sdtContent");
-                if (sdtContent is not null)
+                else if (!fieldPastSeparate)
                 {
-                    foreach (var sdtChild in sdtContent.Elements(W + "r"))
-                        AddRun(paragraph, sdtChild, archive, imageRelationships,
-                            hyperlinkUrl: null, hyperlinkAnchor: null, commentId: activeCommentId, control: control, preservedDrawingTarget: preservedDrawingTarget);
+                    // Before the separate: accumulate the instruction text (w:instrText, occasionally w:t).
+                    fieldInstr.Append(string.Concat(child.Elements(W + "instrText").Select(t => t.Value)));
+                    fieldInstr.Append(string.Concat(child.Elements(W + "t").Select(t => t.Value)));
+                }
+                else
+                {
+                    // After the separate: accumulate the cached result text and remember its formatting.
+                    fieldFormattingSource ??= child;
+                    fieldResult.Append(string.Concat(child.Elements(W + "t").Select(t => t.Value)));
                 }
             }
-            else if (child.Name == W + "fldSimple")
+            else if (child.Name == W + "r" && child.Element(W + "fldChar")?.Attribute(W + "fldCharType")?.Value == "begin"
+                && child.Element(W + "fldChar")?.Element(W + "ffData") is null)
             {
-                AddSimpleField(paragraph, child);
+                // A complex field begins here (and it is not a legacy form field, which AddRun handles).
+                // Open the accumulator; subsequent runs feed it until the matching end fldChar.
+                fieldDepth = 1;
+                fieldPastSeparate = false;
+                fieldInstr.Clear();
+                fieldResult.Clear();
+                fieldFormattingSource = null;
             }
-            else if (child.Name == M + "oMath")
+            else
             {
-                // An inline equation: parse the OMML m:oMath into an Equation carried by a run.
-                paragraph.Runs.Add(Run.FromEquation(ReadOMath(child)));
-            }
-            else if (child.Name == W + "bookmarkStart")
-            {
-                // Capture the first non-internal bookmark name on the paragraph. Word emits an
-                // implicit "_GoBack" bookmark on the document; skip it so it is not mistaken for a target.
-                var name = child.Attribute(W + "name")?.Value;
-                if (paragraph.BookmarkName is null && name is { Length: > 0 } && name != "_GoBack")
-                    paragraph.BookmarkName = name;
+                AddParagraphContentElement(
+                    paragraph,
+                    child,
+                    archive,
+                    imageRelationships,
+                    hyperlinkRelationships,
+                    activeCommentId,
+                    revision: default,
+                    control: inheritedControl,
+                    hyperlinkUrl: null,
+                    hyperlinkAnchor: null,
+                    hyperlinkTooltip: null,
+                    preservedDrawingTarget);
             }
         }
 
         return paragraph;
+    }
+
+    private static void AddBodyBlock(
+        XElement element,
+        TextDocument document,
+        ZipArchive archive,
+        IReadOnlyDictionary<string, string> imageRelationships,
+        IReadOnlyDictionary<string, string> hyperlinkRelationships,
+        IReadOnlyDictionary<int, ListKind> numbering,
+        IReadOnlyDictionary<(int NumId, int Level), int> startOverrides,
+        ref Paragraph? prevPara,
+        ref bool prevAfterAuto,
+        ContentControl? inheritedControl = null)
+    {
+        if (element.Name == W + "p")
+        {
+            var para = ReadParagraph(
+                element,
+                archive,
+                imageRelationships,
+                hyperlinkRelationships,
+                numbering,
+                capturePreservedNumbering: true,
+                preservedDrawingTarget: document,
+                inheritedControl,
+                startOverrides: startOverrides);
+            document.Blocks.Add(para);
+            var sp = element.Element(W + "pPr")?.Element(W + "spacing");
+            var beforeAuto = sp?.Attribute(W + "beforeAutospacing")?.Value is "1" or "true" or "on";
+            if (prevPara is not null && prevAfterAuto && beforeAuto)
+            {
+                prevPara.Formatting = prevPara.Formatting with { SpaceAfterPt = 0 };
+                para.Formatting = para.Formatting with { SpaceBeforePt = 0 };
+            }
+            prevPara = para;
+            prevAfterAuto = sp?.Attribute(W + "afterAutospacing")?.Value is "1" or "true" or "on";
+        }
+        else if (element.Name == W + "tbl")
+        {
+            document.Blocks.Add(ReadTable(element, archive, imageRelationships, hyperlinkRelationships, numbering, startOverrides, document, inheritedControl));
+            prevPara = null;
+            prevAfterAuto = false;
+        }
+        else if (element.Name == W + "sdt")
+        {
+            var control = ReadContentControl(element.Element(W + "sdtPr"));
+            foreach (var child in element.Element(W + "sdtContent")?.Elements() ?? [])
+                AddBodyBlock(child, document, archive, imageRelationships, hyperlinkRelationships, numbering, startOverrides, ref prevPara, ref prevAfterAuto, control);
+        }
+    }
+
+    private static void AddParagraphRuns(
+        Paragraph paragraph,
+        XElement container,
+        ZipArchive archive,
+        IReadOnlyDictionary<string, string> imageRelationships,
+        IReadOnlyDictionary<string, string> hyperlinkRelationships,
+        int? commentId,
+        RevisionInfo revision,
+        ContentControl? control,
+        string? hyperlinkUrl,
+        string? hyperlinkAnchor,
+        string? hyperlinkTooltip,
+        TextDocument? preservedDrawingTarget)
+    {
+        var fieldDepth = 0;
+        var fieldInstr = new System.Text.StringBuilder();
+        var fieldResult = new System.Text.StringBuilder();
+        var fieldPastSeparate = false;
+        XElement? fieldFormattingSource = null;
+
+        foreach (var child in container.Elements())
+        {
+            if (fieldDepth > 0 && child.Name == W + "r")
+            {
+                var fldChar = child.Element(W + "fldChar")?.Attribute(W + "fldCharType")?.Value;
+                if (fldChar == "begin")
+                {
+                    fieldDepth++;
+                }
+                else if (fldChar == "separate")
+                {
+                    fieldPastSeparate = true;
+                }
+                else if (fldChar == "end")
+                {
+                    fieldDepth--;
+                    if (fieldDepth == 0)
+                    {
+                        AddComplexFieldRun(
+                            paragraph,
+                            fieldInstr.ToString(),
+                            fieldResult.ToString(),
+                            ReadRunFormatting(fieldFormattingSource?.Element(W + "rPr")),
+                            commentId,
+                            revision,
+                            control,
+                            hyperlinkUrl,
+                            hyperlinkAnchor,
+                            hyperlinkTooltip);
+                        fieldInstr.Clear();
+                        fieldResult.Clear();
+                        fieldPastSeparate = false;
+                        fieldFormattingSource = null;
+                    }
+                }
+                else if (!fieldPastSeparate)
+                {
+                    fieldInstr.Append(string.Concat(child.Elements(W + "instrText").Select(t => t.Value)));
+                    fieldInstr.Append(string.Concat(child.Elements(W + "t").Select(t => t.Value)));
+                }
+                else
+                {
+                    fieldFormattingSource ??= child;
+                    fieldResult.Append(string.Concat(child.Elements(W + "t").Select(t => t.Value)));
+                }
+
+                continue;
+            }
+
+            if (child.Name == W + "r" && child.Element(W + "fldChar")?.Attribute(W + "fldCharType")?.Value == "begin"
+                && child.Element(W + "fldChar")?.Element(W + "ffData") is null)
+            {
+                fieldDepth = 1;
+                fieldPastSeparate = false;
+                fieldInstr.Clear();
+                fieldResult.Clear();
+                fieldFormattingSource = null;
+                continue;
+            }
+
+            AddParagraphContentElement(paragraph, child, archive, imageRelationships, hyperlinkRelationships, commentId, revision, control, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip, preservedDrawingTarget);
+        }
+    }
+
+    private static void AddComplexFieldRun(
+        Paragraph paragraph,
+        string instruction,
+        string result,
+        RunFormatting? formatting,
+        int? commentId,
+        RevisionInfo revision,
+        ContentControl? control,
+        string? hyperlinkUrl,
+        string? hyperlinkAnchor,
+        string? hyperlinkTooltip)
+    {
+        var run = Run.ComplexFieldRun(instruction, result, showCode: false, formatting);
+        run.CommentId = commentId;
+        run.Control = control;
+        run.HyperlinkUrl = hyperlinkUrl;
+        run.HyperlinkAnchor = hyperlinkAnchor;
+        run.HyperlinkTooltip = hyperlinkTooltip;
+        if (revision.Kind != RevisionKind.None)
+        {
+            run.Revision = revision.Kind;
+            run.RevisionAuthor = revision.Author;
+            run.RevisionDateXml = revision.DateXml;
+        }
+
+        paragraph.Runs.Add(run);
+    }
+
+    private static void AddParagraphContentElement(
+        Paragraph paragraph,
+        XElement child,
+        ZipArchive archive,
+        IReadOnlyDictionary<string, string> imageRelationships,
+        IReadOnlyDictionary<string, string> hyperlinkRelationships,
+        int? commentId,
+        RevisionInfo revision,
+        ContentControl? control,
+        string? hyperlinkUrl,
+        string? hyperlinkAnchor,
+        string? hyperlinkTooltip,
+        TextDocument? preservedDrawingTarget)
+    {
+        if (child.Name == W + "r")
+        {
+            // A run carrying a w:commentReference is the textless comment anchor; recover it.
+            var commentRef = child.Element(W + "commentReference");
+            if (commentRef is not null && int.TryParse(commentRef.Attribute(W + "id")?.Value, out var refId))
+                paragraph.Runs.Add(Run.CommentReference(refId));
+            else
+                AddRun(paragraph, child, archive, imageRelationships, hyperlinkUrl, hyperlinkAnchor, commentId, revision, control, hyperlinkTooltip, preservedDrawingTarget);
+        }
+        else if (child.Name == W + "hyperlink")
+        {
+            var anchor = child.Attribute(W + "anchor")?.Value;
+            var id = child.Attribute(R + "id")?.Value;
+            var url = id is not null && hyperlinkRelationships.TryGetValue(id, out var target) ? target : null;
+            var tooltip = child.Attribute(W + "tooltip")?.Value;
+            AddParagraphRuns(paragraph, child, archive, imageRelationships, hyperlinkRelationships, commentId, revision, control, url, url is null ? anchor : null, tooltip, preservedDrawingTarget);
+        }
+        else if (child.Name == W + "ins" || child.Name == W + "del")
+        {
+            // A tracked insertion (w:ins) or deletion (w:del) wraps runs, hyperlinks, and sometimes SDTs.
+            var kind = child.Name == W + "del" ? RevisionKind.Deleted : RevisionKind.Inserted;
+            var childRevision = new RevisionInfo(kind, child.Attribute(W + "author")?.Value, child.Attribute(W + "date")?.Value);
+            AddParagraphRuns(paragraph, child, archive, imageRelationships, hyperlinkRelationships, commentId, childRevision, control, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip, preservedDrawingTarget);
+        }
+        else if (child.Name == W + "sdt")
+        {
+            AddContentControlRuns(paragraph, child, archive, imageRelationships, hyperlinkRelationships, commentId, revision, preservedDrawingTarget, control, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip);
+        }
+        else if (child.Name == W + "fldSimple")
+        {
+            AddSimpleField(paragraph, child);
+        }
+        else if (child.Name == M + "oMath")
+        {
+            // An inline equation: parse the OMML m:oMath into an Equation carried by a run.
+            var run = Run.FromEquation(ReadOMath(child));
+            run.Control = control;
+            run.HyperlinkUrl = hyperlinkUrl;
+            run.HyperlinkAnchor = hyperlinkAnchor;
+            run.HyperlinkTooltip = hyperlinkTooltip;
+            paragraph.Runs.Add(run);
+        }
+        else if (child.Name == W + "bookmarkStart")
+        {
+            // Capture the first non-internal bookmark name on the paragraph. Word emits an
+            // implicit "_GoBack" bookmark on the document; skip it so it is not mistaken for a target.
+            var name = child.Attribute(W + "name")?.Value;
+            if (paragraph.BookmarkName is null && name is { Length: > 0 } && name != "_GoBack")
+                paragraph.BookmarkName = name;
+        }
     }
 
     /// <summary>
@@ -938,6 +1429,31 @@ public static class DocxReader
         var text = string.Concat(fldSimple.Descendants(W + "t").Select(t => t.Value));
         var formatting = ReadRunFormatting(inner?.Element(W + "rPr"));
 
+        // A Mark Citation (TA) field: the instruction's leading keyword is "TA". Recover the long/short
+        // forms and category from its switches and re-add the hidden citation mark run (no visible text).
+        if (CitationFor(instruction) is { } citation)
+        {
+            paragraph.Runs.Add(Run.CitationMark(citation));
+            return;
+        }
+
+        // A table-cell formula field: the instruction starts with '=' (e.g. " =SUM(ABOVE) \# "#,##0.00" ").
+        // Recover the formula expression + optional number-format switch and the cached result (the run text).
+        if (TableFormulaFor(instruction) is { } formula)
+        {
+            paragraph.Runs.Add(Run.TableFormulaFieldRun(formula, text, formatting));
+            return;
+        }
+
+        // A cross-reference field: the leading keyword is REF, PAGEREF or NOTEREF (e.g. " REF _Ref1 \h ").
+        // Recover the field kind, target (bookmark name / note id), insert-as switch and \h hyperlink flag,
+        // and the cached resolved text (the wrapped run's text).
+        if (CrossReferenceFor(instruction) is { } crossReference)
+        {
+            paragraph.Runs.Add(Run.CrossReferenceFieldRun(crossReference, text, formatting));
+            return;
+        }
+
         if (FieldKindFor(instruction) is { } kind)
         {
             // PAGE keeps its historic "1" fallback when no cached value was written; the rest are happy
@@ -953,9 +1469,11 @@ public static class DocxReader
 
     /// <summary>
     /// Parses an inline OMML equation (m:oMath) into an <see cref="Equation"/>. Recognises m:r (plain
-    /// text), m:sSup (superscript) and m:f (fraction); any other top-level child degrades to the plain
-    /// text of its descendant m:t runs so nothing is lost or throws. Mirrors how the writer emits these
-    /// (see <c>DocxWriter.BuildOMath</c>).
+    /// text), m:sSup / m:sSub / m:sSubSup (scripts), m:f (fraction), m:rad (radical), m:nary (n-ary),
+    /// m:acc (accent), m:bar (over/under-bar), m:d (delimiter) and m:m (matrix); any other top-level child
+    /// degrades to the plain text of its
+    /// descendant m:t runs so nothing is lost or throws. Mirrors how the writer emits these (see
+    /// <c>DocxWriter.BuildMathRun</c>).
     /// </summary>
     private static Equation ReadOMath(XElement oMath)
     {
@@ -968,10 +1486,35 @@ public static class DocxReader
                 equation.Runs.Add(MathRun.Superscript(
                     MathTextOf(child.Element(M + "e")),
                     MathTextOf(child.Element(M + "sup"))));
+            else if (child.Name == M + "sSub")
+                equation.Runs.Add(MathRun.Subscript(
+                    MathTextOf(child.Element(M + "e")),
+                    MathTextOf(child.Element(M + "sub"))));
+            else if (child.Name == M + "sSubSup")
+                equation.Runs.Add(MathRun.SubSuperscript(
+                    MathTextOf(child.Element(M + "e")),
+                    MathTextOf(child.Element(M + "sub")),
+                    MathTextOf(child.Element(M + "sup"))));
             else if (child.Name == M + "f")
                 equation.Runs.Add(MathRun.Fraction(
                     MathTextOf(child.Element(M + "num")),
                     MathTextOf(child.Element(M + "den"))));
+            else if (child.Name == M + "rad")
+                equation.Runs.Add(ReadRadical(child));
+            else if (child.Name == M + "nary")
+                equation.Runs.Add(ReadNAry(child));
+            else if (child.Name == M + "acc")
+                equation.Runs.Add(ReadAccent(child));
+            else if (child.Name == M + "bar")
+                equation.Runs.Add(ReadBar(child));
+            else if (child.Name == M + "d")
+                equation.Runs.Add(ReadDelimiter(child));
+            else if (child.Name == M + "m")
+                equation.Runs.Add(MathRun.MatrixOf(ReadMatrix(child)));
+            else if (child.Name == M + "func")
+                equation.Runs.Add(ReadFunctionApply(child));
+            else if (child.Name == M + "groupChr")
+                equation.Runs.Add(ReadGroupChar(child));
             else
             {
                 // Unknown OMML construct: keep its text so the equation degrades rather than disappears.
@@ -981,6 +1524,107 @@ public static class DocxReader
             }
         }
         return equation;
+    }
+
+    /// <summary>
+    /// Reads a radical (m:rad). When m:radPr/m:degHide is "1" (or m:deg is empty) it is a square root
+    /// (empty degree); otherwise the m:deg text is the nth-root degree. Mirrors <c>DocxWriter.BuildRadical</c>.
+    /// </summary>
+    private static MathRun ReadRadical(XElement rad)
+    {
+        var degHide = rad.Element(M + "radPr")?.Element(M + "degHide")?.Attribute(M + "val")?.Value;
+        var degText = MathTextOf(rad.Element(M + "deg"));
+        var degree = degHide == "1" ? string.Empty : degText;
+        return MathRun.Radical(MathTextOf(rad.Element(M + "e")), degree);
+    }
+
+    /// <summary>
+    /// Reads an n-ary operator (m:nary): the operator glyph from m:naryPr/m:chr (default ∑), the lower/
+    /// upper limits from m:sub / m:sup and the operand from m:e. Mirrors <c>DocxWriter.BuildNAry</c>.
+    /// </summary>
+    private static MathRun ReadNAry(XElement nary)
+    {
+        var chr = nary.Element(M + "naryPr")?.Element(M + "chr")?.Attribute(M + "val")?.Value;
+        return MathRun.NAry(
+            string.IsNullOrEmpty(chr) ? "∑" : chr,
+            MathTextOf(nary.Element(M + "sub")),
+            MathTextOf(nary.Element(M + "sup")),
+            MathTextOf(nary.Element(M + "e")));
+    }
+
+    /// <summary>
+    /// Reads an accent (m:acc): the accent glyph from m:accPr/m:chr (default a combining circumflex/hat)
+    /// and the accented base from m:e. Mirrors <c>DocxWriter.BuildAccent</c>.
+    /// </summary>
+    private static MathRun ReadAccent(XElement acc)
+    {
+        var chr = acc.Element(M + "accPr")?.Element(M + "chr")?.Attribute(M + "val")?.Value;
+        return MathRun.AccentOf(MathTextOf(acc.Element(M + "e")), string.IsNullOrEmpty(chr) ? "̂" : chr);
+    }
+
+    /// <summary>
+    /// Reads a bar (m:bar): m:barPr/m:pos "bot" is an underbar (top = false); anything else (including the
+    /// default "top" or an absent m:pos) is an overbar. The barred base comes from m:e. Mirrors
+    /// <c>DocxWriter.BuildBar</c>.
+    /// </summary>
+    private static MathRun ReadBar(XElement bar)
+    {
+        var pos = bar.Element(M + "barPr")?.Element(M + "pos")?.Attribute(M + "val")?.Value;
+        return MathRun.BarOf(MathTextOf(bar.Element(M + "e")), top: pos != "bot");
+    }
+
+    /// <summary>
+    /// Reads a delimiter (m:d): the begin/end glyphs from m:dPr/m:begChr / m:endChr (default round
+    /// brackets) and the content from the first m:e. Mirrors <c>DocxWriter.BuildDelimiter</c>.
+    /// </summary>
+    private static MathRun ReadDelimiter(XElement d)
+    {
+        var dPr = d.Element(M + "dPr");
+        var open = dPr?.Element(M + "begChr")?.Attribute(M + "val")?.Value;
+        var close = dPr?.Element(M + "endChr")?.Attribute(M + "val")?.Value;
+        return MathRun.Delimiter(
+            MathTextOf(d.Element(M + "e")),
+            string.IsNullOrEmpty(open) ? "(" : open,
+            string.IsNullOrEmpty(close) ? ")" : close);
+    }
+
+    /// <summary>
+    /// Reads a matrix (m:m) into a <see cref="MathMatrix"/>: one row per m:mr, one cell per m:e.
+    /// Mirrors <c>DocxWriter.BuildMatrix</c>.
+    /// </summary>
+    private static MathMatrix ReadMatrix(XElement m)
+    {
+        var matrix = new MathMatrix();
+        foreach (var mr in m.Elements(M + "mr"))
+            matrix.Rows.Add([.. mr.Elements(M + "e").Select(MathTextOf)]);
+        return matrix;
+    }
+
+    /// <summary>
+    /// Reads a function-apply element (m:func): the function name from the first m:r/m:t text under
+    /// m:fName, and the argument from m:e. Mirrors <c>DocxWriter.BuildFunctionApply</c>.
+    /// </summary>
+    private static MathRun ReadFunctionApply(XElement func)
+    {
+        var funcName = MathTextOf(func.Element(M + "fName"));
+        var argument = MathTextOf(func.Element(M + "e"));
+        return MathRun.FunctionApply(funcName, argument);
+    }
+
+    /// <summary>
+    /// Reads a group-character element (m:groupChr): the spanning glyph from m:groupChrPr/m:chr
+    /// (default over-brace U+23DE when absent) and the position from m:groupChrPr/m:pos (default "top").
+    /// Mirrors <c>DocxWriter.BuildGroupChar</c>.
+    /// </summary>
+    private static MathRun ReadGroupChar(XElement groupChr)
+    {
+        var pr = groupChr.Element(M + "groupChrPr");
+        var chr = pr?.Element(M + "chr")?.Attribute(M + "val")?.Value;
+        var pos = pr?.Element(M + "pos")?.Attribute(M + "val")?.Value;
+        return MathRun.GroupCharOf(
+            MathTextOf(groupChr.Element(M + "e")),
+            string.IsNullOrEmpty(chr) ? "⏞" : chr,
+            string.IsNullOrEmpty(pos) ? "top" : pos);
     }
 
     /// <summary>The concatenated text of all descendant m:t runs under <paramref name="element"/> (empty if null).</summary>
@@ -1007,15 +1651,196 @@ public static class DocxReader
     }
 
     /// <summary>
+    /// Parses a table-cell formula field instruction (one that starts with <c>=</c>) into a
+    /// <see cref="TableFormulaField"/>: the formula expression up to an optional <c>\#</c> numeric-picture
+    /// switch, and the quoted format from that switch. Returns null for any non-formula field.
+    /// </summary>
+    private static TableFormulaField? TableFormulaFor(string instruction)
+    {
+        var trimmed = instruction.Trim();
+        if (!trimmed.StartsWith('='))
+            return null;
+
+        string? format = null;
+        var switchIndex = trimmed.IndexOf("\\#", StringComparison.Ordinal);
+        var expression = trimmed;
+        if (switchIndex >= 0)
+        {
+            expression = trimmed[..switchIndex].Trim();
+            var rest = trimmed[(switchIndex + 2)..].Trim();
+            // The format follows the \# switch, optionally double-quoted (Word quotes pictures with spaces).
+            if (rest.StartsWith('"'))
+            {
+                var close = rest.IndexOf('"', 1);
+                format = close > 0 ? rest[1..close] : rest[1..];
+            }
+            else if (rest.Length > 0)
+            {
+                format = rest.Split(' ', '\t')[0];
+            }
+        }
+
+        return new TableFormulaField(expression, string.IsNullOrWhiteSpace(format) ? null : format);
+    }
+
+    /// <summary>
+    /// Parses a cross-reference field instruction (leading keyword <c>REF</c>/<c>PAGEREF</c>/<c>NOTEREF</c>)
+    /// into a <see cref="CrossReferenceField"/>: the field kind, the target (the first token after the
+    /// keyword — a bookmark name or note id), the "insert reference to" switch (<c>\w</c> heading number,
+    /// <c>\n</c> paragraph number, <c>\p</c> above/below; otherwise text/page) and the <c>\h</c> hyperlink
+    /// flag. Returns null for any other field. A target-less instruction yields an empty target so nothing
+    /// throws.
+    /// </summary>
+    private static CrossReferenceField? CrossReferenceFor(string instruction)
+    {
+        var trimmed = instruction.Trim();
+        var tokens = trimmed.Split(' ', '\t');
+        if (tokens.Length == 0)
+            return null;
+
+        var kind = tokens[0].ToUpperInvariant() switch
+        {
+            "REF" => CrossRefFieldKind.Ref,
+            "PAGEREF" => CrossRefFieldKind.PageRef,
+            "NOTEREF" => CrossRefFieldKind.NoteRef,
+            _ => (CrossRefFieldKind?)null
+        };
+        if (kind is not { } fieldKind)
+            return null;
+
+        // The target is the first token after the keyword that is not a switch (does not start with '\').
+        var target = string.Empty;
+        for (var i = 1; i < tokens.Length; i++)
+        {
+            if (tokens[i].Length == 0 || tokens[i].StartsWith('\\'))
+                continue;
+            target = tokens[i];
+            break;
+        }
+
+        var insertAs = CrossRefInsertAs.Text;
+        if (HasSwitch(trimmed, 'w'))
+            insertAs = CrossRefInsertAs.HeadingNumber;
+        else if (HasSwitch(trimmed, 'n'))
+            insertAs = CrossRefInsertAs.ParagraphNumber;
+        else if (HasSwitch(trimmed, 'p'))
+            insertAs = CrossRefInsertAs.AboveBelow;
+        else if (fieldKind == CrossRefFieldKind.PageRef)
+            insertAs = CrossRefInsertAs.PageNumber;
+
+        return new CrossReferenceField(fieldKind, target, insertAs, HasSwitch(trimmed, 'h'));
+    }
+
+    // True when the field instruction carries a "\<letter>" switch (e.g. "\h"), matched case-insensitively
+    // as a whitespace-delimited token so it is not confused with a letter inside the bookmark name.
+    private static bool HasSwitch(string instruction, char switchLetter)
+    {
+        foreach (var token in instruction.Split(' ', '\t'))
+        {
+            if (token.Length == 2 && token[0] == '\\'
+                && char.ToLowerInvariant(token[1]) == char.ToLowerInvariant(switchLetter))
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Parses a Mark Citation (TA) field instruction (one whose leading keyword is <c>TA</c>) into a
+    /// <see cref="Citation"/>: the long form from the <c>\l</c> switch, the short form from <c>\s</c>, and
+    /// the category from the numeric <c>\c</c> switch (defaulting to <see cref="CitationCategory.Cases"/>
+    /// when absent or unrecognised). Returns null for any non-TA field. A TA field with no <c>\l</c> form is
+    /// treated as having an empty long citation so nothing is lost.
+    /// </summary>
+    private static Citation? CitationFor(string instruction)
+    {
+        var trimmed = instruction.Trim();
+        var keyword = trimmed.Split(' ', '\t', '\\')[0];
+        if (!string.Equals(keyword, "TA", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        var longForm = SwitchValue(trimmed, 'l') ?? string.Empty;
+        var shortForm = SwitchValue(trimmed, 's');
+        var category = CitationCategory.Cases;
+        if (SwitchValue(trimmed, 'c') is { } categoryText
+            && int.TryParse(categoryText, out var categoryNumber)
+            && Enum.IsDefined(typeof(CitationCategory), categoryNumber))
+        {
+            category = (CitationCategory)categoryNumber;
+        }
+
+        return new Citation(longForm, category, shortForm);
+    }
+
+    /// <summary>
+    /// Extracts the value following a <c>\</c><paramref name="switchLetter"/> switch in a field
+    /// instruction: the double-quoted run when quoted (e.g. <c>\l "Brown v. Board"</c>), otherwise the next
+    /// whitespace-delimited token (e.g. <c>\c 1</c>). Returns null when the switch is absent.
+    /// </summary>
+    private static string? SwitchValue(string instruction, char switchLetter)
+    {
+        var token = "\\" + switchLetter;
+        var at = instruction.IndexOf(token, StringComparison.Ordinal);
+        if (at < 0)
+            return null;
+
+        var rest = instruction[(at + token.Length)..].TrimStart();
+        if (rest.StartsWith('"'))
+        {
+            var close = rest.IndexOf('"', 1);
+            return close > 0 ? rest[1..close] : rest[1..];
+        }
+        var end = rest.IndexOfAny(new[] { ' ', '\t', '\\' });
+        return end >= 0 ? rest[..end] : rest;
+    }
+
+    /// <summary>
     /// Reads a content control's w:sdtPr into a <see cref="ContentControl"/>: recovers the optional
     /// w:tag / w:alias and the control kind. A w14:checkbox (or w:checkbox) marks a checkbox control,
-    /// whose checked state comes from the nested w14:checked/@val ("1"/"true"/"on"); anything else is a
+    /// whose checked state comes from the nested w14:checked/@val ("1"/"true"/"on"); a w:date marks a
+    /// date picker (recovering its w:dateFormat); a w:dropDownList / w:comboBox marks a list control
+    /// (recovering its w:listItem choices); a w:richText marks a rich-text control; anything else is a
     /// plain-text control. A null/absent w:sdtPr yields a default plain-text control.
     /// </summary>
+    private static void AddContentControlRuns(
+        Paragraph paragraph,
+        XElement sdt,
+        ZipArchive archive,
+        IReadOnlyDictionary<string, string> imageRelationships,
+        IReadOnlyDictionary<string, string> hyperlinkRelationships,
+        int? commentId,
+        RevisionInfo revision,
+        TextDocument? preservedDrawingTarget,
+        ContentControl? inheritedControl = null,
+        string? hyperlinkUrl = null,
+        string? hyperlinkAnchor = null,
+        string? hyperlinkTooltip = null)
+    {
+        var control = ReadContentControl(sdt.Element(W + "sdtPr"));
+        var sdtContent = sdt.Element(W + "sdtContent");
+        if (sdtContent is null)
+            return;
+
+        AddParagraphRuns(
+            paragraph,
+            sdtContent,
+            archive,
+            imageRelationships,
+            hyperlinkRelationships,
+            commentId,
+            revision,
+            control ?? inheritedControl,
+            hyperlinkUrl,
+            hyperlinkAnchor,
+            hyperlinkTooltip,
+            preservedDrawingTarget);
+    }
+
     private static ContentControl ReadContentControl(XElement? sdtPr)
     {
         var tag = sdtPr?.Element(W + "tag")?.Attribute(W + "val")?.Value;
         var alias = sdtPr?.Element(W + "alias")?.Attribute(W + "val")?.Value;
+        var normTag = string.IsNullOrEmpty(tag) ? null : tag;
+        var normAlias = string.IsNullOrEmpty(alias) ? null : alias;
 
         var checkbox = sdtPr?.Element(W14 + "checkbox") ?? sdtPr?.Element(W + "checkbox");
         if (checkbox is not null)
@@ -1024,15 +1849,50 @@ public static class DocxReader
                 ?.Attribute(W14 + "val")?.Value
                 ?? (checkbox.Element(W14 + "checked") ?? checkbox.Element(W + "checked"))?.Attribute(W + "val")?.Value;
             var isChecked = val is "1" or "true" or "on";
-            return new ContentControl(ContentControlKind.CheckBox,
-                string.IsNullOrEmpty(tag) ? null : tag,
-                string.IsNullOrEmpty(alias) ? null : alias,
-                isChecked);
+            return new ContentControl(ContentControlKind.CheckBox, normTag, normAlias, isChecked);
         }
 
-        return new ContentControl(ContentControlKind.PlainText,
-            string.IsNullOrEmpty(tag) ? null : tag,
-            string.IsNullOrEmpty(alias) ? null : alias);
+        var date = sdtPr?.Element(W + "date");
+        if (date is not null)
+        {
+            var format = date.Element(W + "dateFormat")?.Attribute(W + "val")?.Value;
+            return new ContentControl(ContentControlKind.DatePicker, normTag, normAlias,
+                DateFormat: string.IsNullOrEmpty(format) ? ContentControl.DefaultDateFormat : format);
+        }
+
+        var dropDown = sdtPr?.Element(W + "dropDownList");
+        if (dropDown is not null)
+            return new ContentControl(ContentControlKind.DropDownList, normTag, normAlias,
+                ListItems: ReadListItems(dropDown));
+
+        var combo = sdtPr?.Element(W + "comboBox");
+        if (combo is not null)
+            return new ContentControl(ContentControlKind.ComboBox, normTag, normAlias,
+                ListItems: ReadListItems(combo));
+
+        if (sdtPr?.Element(W + "richText") is not null)
+            return new ContentControl(ContentControlKind.RichText, normTag, normAlias);
+
+        return new ContentControl(ContentControlKind.PlainText, normTag, normAlias);
+    }
+
+    /// <summary>
+    /// Reads the w:listItem choices (w:displayText / w:value) of a w:dropDownList / w:comboBox element
+    /// into <see cref="ContentControlListItem"/>s. A listItem with only a w:value uses it for both fields;
+    /// one with only a w:displayText mirrors it into the value.
+    /// </summary>
+    private static IReadOnlyList<ContentControlListItem> ReadListItems(XElement list)
+    {
+        var items = new List<ContentControlListItem>();
+        foreach (var li in list.Elements(W + "listItem"))
+        {
+            var display = li.Attribute(W + "displayText")?.Value;
+            var value = li.Attribute(W + "value")?.Value;
+            if (display is null && value is null)
+                continue;
+            items.Add(new ContentControlListItem(display ?? value!, value ?? display!));
+        }
+        return items;
     }
 
     /// <summary>Carries a tracked-change kind plus its author/date while reading runs inside a w:ins/w:del.</summary>
@@ -1209,8 +2069,10 @@ public static class DocxReader
             text += "\t";
         if (text.Length == 0)
             return;
-        var textRun = new Run(text, ReadRunFormatting(r.Element(W + "rPr"))) { HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip, CommentId = commentId, Control = control };
+        var rPr = r.Element(W + "rPr");
+        var textRun = new Run(text, ReadRunFormatting(rPr)) { HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip, CommentId = commentId, Control = control };
         ApplyRevision(textRun);
+        ApplyFormatRevision(textRun, rPr);
         paragraph.Runs.Add(textRun);
     }
 
@@ -1220,7 +2082,9 @@ public static class DocxReader
         IReadOnlyDictionary<string, string> imageRelationships,
         IReadOnlyDictionary<string, string> hyperlinkRelationships,
         IReadOnlyDictionary<int, ListKind> numbering,
-        TextDocument? preservedDrawingTarget = null)
+        IReadOnlyDictionary<(int NumId, int Level), int> startOverrides,
+        TextDocument? preservedDrawingTarget = null,
+        ContentControl? inheritedControl = null)
     {
         var table = new Table();
 
@@ -1250,6 +2114,35 @@ public static class DocxReader
             RepeatHeaderRow = repeatHeader
         };
 
+        // Preferred table width (w:tblW type="dxa"); "auto"/absent stays null (automatic width).
+        var tblW = tblPr?.Element(W + "tblW");
+        if (tblW?.Attribute(W + "type")?.Value == "dxa")
+            table.PreferredWidthPt = DxaToPoints(tblW.Attribute(W + "w")?.Value);
+
+        // Table alignment (w:jc); absent → Left.
+        table.Alignment = (tblPr?.Element(W + "jc")?.Attribute(W + "val")?.Value) switch
+        {
+            "center" => TableAlignment.Center,
+            "right" or "end" => TableAlignment.Right,
+            _ => TableAlignment.Left
+        };
+
+        // Indent from the left margin (w:tblInd, dxa); absent → null.
+        var tblInd = tblPr?.Element(W + "tblInd");
+        if (tblInd is not null)
+            table.IndentFromLeftPt = DxaToPoints(tblInd.Attribute(W + "w")?.Value);
+
+        // Spacing between cells (w:tblCellSpacing, dxa); absent → null.
+        var tblCellSpacing = tblPr?.Element(W + "tblCellSpacing");
+        if (tblCellSpacing is not null)
+            table.CellSpacingPt = DxaToPoints(tblCellSpacing.Attribute(W + "w")?.Value);
+
+        // Floating table (text wrapping around) is signalled by a w:tblpPr position element.
+        table.TextWrapping = tblPr?.Element(W + "tblpPr") is not null;
+
+        // Default cell margins (w:tblCellMar); absent → null (use the implicit docx default).
+        table.DefaultCellMargins = ReadCellMargins(tblPr?.Element(W + "tblCellMar"));
+
         // The table grid (w:tblGrid/w:gridCol) carries per-column widths in dxa.
         var grid = tbl.Element(W + "tblGrid");
         if (grid is not null)
@@ -1262,6 +2155,27 @@ public static class DocxReader
         foreach (var tr in tbl.Elements(W + "tr"))
         {
             var row = new TableRow();
+
+            // Row properties (w:trPr): explicit height + rule (w:trHeight) and the cant-split flag.
+            var trPr = tr.Element(W + "trPr");
+            if (trPr is not null)
+            {
+                row.AllowBreakAcrossPages = trPr.Element(W + "cantSplit") is null;
+                var trHeight = trPr.Element(W + "trHeight");
+                if (trHeight is not null)
+                {
+                    var hVal = trHeight.Attribute(W + "val")?.Value;
+                    if (hVal is not null)
+                        row.HeightPt = DxaToPoints(hVal);
+                    row.HeightRule = (trHeight.Attribute(W + "hRule")?.Value) switch
+                    {
+                        "exact" => TableRowHeightRule.Exact,
+                        "atLeast" => TableRowHeightRule.AtLeast,
+                        _ => TableRowHeightRule.Auto
+                    };
+                }
+            }
+
             // Cells in styled rows carry the style fill (header/banded) we wrote; recognise and strip it so
             // it reads back as style-derived shading, not as an explicit per-cell colour.
             var isStyleHeader = headerRow && rowIndex == 0;
@@ -1298,9 +2212,51 @@ public static class DocxReader
                             ? VerticalMergeState.Restart
                             : VerticalMergeState.Continue;
                     }
+
+                    // Vertical alignment of the cell content (w:vAlign); absent → Top.
+                    cell.VerticalAlignment = (tcPr.Element(W + "vAlign")?.Attribute(W + "val")?.Value) switch
+                    {
+                        "center" => TableCellVerticalAlignment.Center,
+                        "bottom" => TableCellVerticalAlignment.Bottom,
+                        _ => TableCellVerticalAlignment.Top
+                    };
+
+                    // Per-cell margin override (w:tcMar); absent → null (inherit table default).
+                    cell.Margins = ReadCellMargins(tcPr.Element(W + "tcMar"));
                 }
-                foreach (var p in tc.Elements(W + "p"))
-                    cell.Paragraphs.Add(ReadParagraph(p, archive, imageRelationships, hyperlinkRelationships, numbering, capturePreservedNumbering: true, preservedDrawingTarget: preservedDrawingTarget));
+                foreach (var child in tc.Elements())
+                {
+                    if (child.Name == W + "p")
+                    {
+                        cell.Paragraphs.Add(ReadParagraph(
+                            child,
+                            archive,
+                            imageRelationships,
+                            hyperlinkRelationships,
+                            numbering,
+                            capturePreservedNumbering: true,
+                            preservedDrawingTarget: preservedDrawingTarget,
+                            inheritedControl: inheritedControl,
+                            startOverrides: startOverrides));
+                    }
+                    else if (child.Name == W + "sdt")
+                    {
+                        var control = ReadContentControl(child.Element(W + "sdtPr"));
+                        foreach (var sdtChild in child.Element(W + "sdtContent")?.Elements(W + "p") ?? [])
+                        {
+                            cell.Paragraphs.Add(ReadParagraph(
+                                sdtChild,
+                                archive,
+                                imageRelationships,
+                                hyperlinkRelationships,
+                                numbering,
+                                capturePreservedNumbering: true,
+                                preservedDrawingTarget: preservedDrawingTarget,
+                                inheritedControl: control,
+                                startOverrides: startOverrides));
+                        }
+                    }
+                }
                 if (cell.Paragraphs.Count == 0)
                     cell.Paragraphs.Add(new Paragraph());
                 row.Cells.Add(cell);
@@ -1322,6 +2278,24 @@ public static class DocxReader
     {
         var bodyIndex = hasHeader ? rowIndex - 1 : rowIndex;
         return bodyIndex >= 0 && bodyIndex % 2 == 1;
+    }
+
+    // Reads a cell-margins container (w:tblCellMar or w:tcMar) into a TableCellMargins, or null when the
+    // element is absent. Each edge defaults to the model's default if missing from the element.
+    private static TableCellMargins? ReadCellMargins(XElement? container)
+    {
+        if (container is null)
+            return null;
+        double Edge(string edge, double fallback)
+        {
+            var w = container.Element(W + edge)?.Attribute(W + "w")?.Value;
+            return w is null ? fallback : DxaToPoints(w);
+        }
+        return new TableCellMargins(
+            TopPt: Edge("top", TableCellMargins.Default.TopPt),
+            LeftPt: Edge("left", TableCellMargins.Default.LeftPt),
+            BottomPt: Edge("bottom", TableCellMargins.Default.BottomPt),
+            RightPt: Edge("right", TableCellMargins.Default.RightPt));
     }
 
     private static bool ReadBorders(XElement? tblBorders)
@@ -2273,17 +3247,23 @@ public static class DocxReader
     /// paragraphs).
     /// </summary>
     internal static ParagraphFormatting ReadParagraphFormatting(
-        XElement pPr, IReadOnlyDictionary<int, ListKind> numbering, ParagraphFormatting? docDefaults)
+        XElement pPr,
+        IReadOnlyDictionary<int, ListKind> numbering,
+        ParagraphFormatting? docDefaults,
+        IReadOnlyDictionary<(int NumId, int Level), int>? startOverrides = null)
     {
         var spacing = pPr.Element(W + "spacing");
         var indent = pPr.Element(W + "ind");
         var jc = pPr.Element(W + "jc")?.Attribute(W + "val")?.Value;
-        var shading = pPr.Element(W + "shd")?.Attribute(W + "fill")?.Value;
+        var shd = pPr.Element(W + "shd");
+        var shading = shd?.Attribute(W + "fill")?.Value;
+        var shadingPattern = ShadingPatterns.FromToken(shd?.Attribute(W + "val")?.Value);
 
         // A list paragraph references a numbering definition via pPr/w:numPr (w:numId + w:ilvl).
         // Resolve the numId to a ListKind through numbering.xml; the ilvl becomes the ListLevel.
         var listKind = ListKind.None;
         var listLevel = 0;
+        int? listStartOverride = null;
         var numPr = pPr.Element(W + "numPr");
         if (numPr is not null)
         {
@@ -2292,6 +3272,8 @@ public static class DocxReader
             {
                 listKind = kind;
                 listLevel = ParseInt(numPr.Element(W + "ilvl")?.Attribute(W + "val")?.Value);
+                if (startOverrides is not null && startOverrides.TryGetValue((numId, listLevel), out var startAt))
+                    listStartOverride = startAt;
             }
         }
 
@@ -2302,6 +3284,8 @@ public static class DocxReader
         var keepWithNext = ReadToggle(pPr, "keepNext");
         var keepLinesTogether = ReadToggle(pPr, "keepLines");
         var widowControl = ReadToggle(pPr, "widowControl");
+        // Suppress automatic hyphenation for this paragraph (w:suppressAutoHyphens), read as a toggle.
+        var suppressAutoHyphens = ReadToggle(pPr, "suppressAutoHyphens");
         // Right-to-left paragraph direction (w:bidi), read as a toggle like the flow-control flags.
         var rtl = ReadToggle(pPr, "bidi");
 
@@ -2353,6 +3337,7 @@ public static class DocxReader
             KeepWithNext = keepWithNext,
             KeepLinesTogether = keepLinesTogether,
             WidowControl = widowControl,
+            SuppressAutoHyphens = suppressAutoHyphens,
             Rtl = rtl,
             LineRule = lineRule,
             LineSpacing = lineSpacing,
@@ -2367,6 +3352,7 @@ public static class DocxReader
             SpaceBeforeIsSet = beforeAuto || spacing?.Attribute(W + "before") is not null,
             SpaceAfterIsSet = afterAuto || spacing?.Attribute(W + "after") is not null,
             ShadingColorHex = shading is null or "auto" ? null : "#" + shading.TrimStart('#'),
+            ShadingPattern = shadingPattern,
             Alignment = jc switch
             {
                 "center" => TextAlignment.Center,
@@ -2379,6 +3365,7 @@ public static class DocxReader
             FirstLineIndentPt = DxaToPoints(indent?.Attribute(W + "firstLine")?.Value),
             ListKind = listKind,
             ListLevel = listLevel,
+            ListStartOverride = listStartOverride,
             TabStops = ReadTabStops(pPr.Element(W + "tabs"))
         };
     }
@@ -2431,17 +3418,30 @@ public static class DocxReader
 
         var color = edge.Attribute(W + "color")?.Value;
         var width = EighthPointsToPoints(edge.Attribute(W + "sz")?.Value);
+        var lineStyle = BorderLineStyles.FromToken(edge.Attribute(W + "val")?.Value);
+
+        bool Drawn(string name) =>
+            (pBdr.Element(W + name)?.Attribute(W + "val")?.Value ?? "none") is not ("none" or "nil");
+        var top = Drawn("top");
+        var left = Drawn("left");
+        var bottom = Drawn("bottom");
+        var right = Drawn("right");
 
         // A bottom-only rule: the only drawn edge is w:bottom (top/left/right absent or off). This is how
         // CreateHorizontalRule writes itself; recovering the flag keeps the round-trip lossless.
-        bool Drawn(string name) =>
-            (pBdr.Element(W + name)?.Attribute(W + "val")?.Value ?? "none") is not ("none" or "nil");
-        var bottomOnly = Drawn("bottom") && !Drawn("top") && !Drawn("left") && !Drawn("right");
+        var bottomOnly = bottom && !top && !left && !right;
 
         return new ParagraphBorder(
             color is null or "auto" ? "#000000" : "#" + color.TrimStart('#'),
             width > 0 ? width : 0.5,
-            bottomOnly);
+            bottomOnly)
+        {
+            LineStyle = lineStyle,
+            Top = top,
+            Left = left,
+            Bottom = bottom,
+            Right = right,
+        };
     }
 
     /// <summary>Reads a page border (w:pgBorders) into a <see cref="PageBorder"/>, or null if absent/off.</summary>
@@ -2457,10 +3457,14 @@ public static class DocxReader
 
         var color = edge.Attribute(W + "color")?.Value;
         var width = EighthPointsToPoints(edge.Attribute(W + "sz")?.Value);
+        var lineStyle = BorderLineStyles.FromToken(edge.Attribute(W + "val")?.Value);
 
         return new PageBorder(
             color is null or "auto" ? "#000000" : "#" + color.TrimStart('#'),
-            width > 0 ? width : 1.0);
+            width > 0 ? width : 1.0)
+        {
+            LineStyle = lineStyle,
+        };
     }
 
     /// <summary>
@@ -2515,13 +3519,15 @@ public static class DocxReader
         return new PreservedNumbering(numId, ilvl);
     }
 
-    private static Dictionary<int, ListKind> ReadNumbering(ZipArchive archive, TextDocument document)
+    private static (Dictionary<int, ListKind> KindByNumId, Dictionary<(int NumId, int Level), int> StartOverrideByNumIdLevel) ReadNumbering(
+        ZipArchive archive, TextDocument document)
     {
         var map = new Dictionary<int, ListKind>();
+        var startOverrides = new Dictionary<(int, int), int>();
         var numberingXml = LoadPart(archive, "word/numbering.xml");
         var root = numberingXml?.Root;
         if (root is null)
-            return map;
+            return (map, startOverrides);
 
         // Preserve the ORIGINAL numbering element so the writer can merge its definitions alongside FreeW's
         // own (under a disjoint numId range) and re-emit the paragraphs' w:numPr that FreeW does not model.
@@ -2548,8 +3554,20 @@ public static class DocxReader
             var abstractNumId = ParseInt(num.Element(W + "abstractNumId")?.Attribute(W + "val")?.Value);
             if (abstractKinds.TryGetValue(abstractNumId, out var kind))
                 map[numId] = kind;
+
+            // Detect restart-override w:num elements: each w:lvlOverride/w:startOverride pair is a
+            // counter-reset override for one list level, emitted by FreeW or by Word for the same purpose.
+            foreach (var lvlOverride in num.Elements(W + "lvlOverride"))
+            {
+                var startOverrideEl = lvlOverride.Element(W + "startOverride");
+                if (startOverrideEl is null)
+                    continue;
+                var level = ParseInt(lvlOverride.Attribute(W + "ilvl")?.Value);
+                var startVal = ParseInt(startOverrideEl.Attribute(W + "val")?.Value);
+                startOverrides[(numId, level)] = startVal;
+            }
         }
-        return map;
+        return (map, startOverrides);
     }
 
     /// <summary>
@@ -2565,6 +3583,23 @@ public static class DocxReader
 
         var level1Text = levels.ElementAtOrDefault(1)?.Element(W + "lvlText")?.Attribute(W + "val")?.Value;
         return level1Text is not null && level1Text.Contains("%1") && level1Text.Contains("%2");
+    }
+
+    /// <summary>
+    /// Reads a tracked formatting change (w:rPrChange) from a run's <paramref name="rPr"/> and stamps it
+    /// onto <paramref name="run"/> as a <see cref="FormatRevision"/>. The rPrChange carries the run's
+    /// <em>previous</em> formatting in a nested w:rPr plus the w:author/w:date of the change. A run with no
+    /// rPrChange is left untouched.
+    /// </summary>
+    private static void ApplyFormatRevision(Run run, XElement? rPr)
+    {
+        var rPrChange = rPr?.Element(W + "rPrChange");
+        if (rPrChange is null)
+            return;
+        var previous = ReadRunFormatting(rPrChange.Element(W + "rPr"));
+        var author = rPrChange.Attribute(W + "author")?.Value;
+        var date = rPrChange.Attribute(W + "date")?.Value;
+        run.FormatRevision = new FormatRevision(previous, author, date);
     }
 
     internal static RunFormatting ReadRunFormatting(XElement? rPr)
@@ -2644,8 +3679,9 @@ public static class DocxReader
     }
 
     /// <summary>
-    /// Reads the FreeW page watermark from docProps/custom.xml into <see cref="PageSettings.Watermark"/>,
-    /// mirroring how the writer persists it as a named custom property. A missing part is fine.
+    /// Reads FreeW custom document properties from docProps/custom.xml: the page watermark into
+    /// <see cref="PageSettings.Watermark"/> and Word's "Mark as Final" flag (<c>_MarkAsFinal</c>) into
+    /// <see cref="TextDocument.MarkedAsFinal"/>, mirroring how the writer persists them. A missing part is fine.
     /// </summary>
     private static void ReadCustomProperties(ZipArchive archive, TextDocument document)
     {
@@ -2654,11 +3690,17 @@ public static class DocxReader
         if (root is null)
             return;
 
-        var property = root.Elements(CustomProps + "property")
-            .FirstOrDefault(p => p.Attribute("name")?.Value == WatermarkPropertyName);
-        var text = property?.Element(VtVariant + "lpwstr")?.Value;
+        var properties = root.Elements(CustomProps + "property").ToList();
+
+        var watermark = properties.FirstOrDefault(p => p.Attribute("name")?.Value == WatermarkPropertyName);
+        var text = watermark?.Element(VtVariant + "lpwstr")?.Value;
         if (!string.IsNullOrEmpty(text))
             document.Page.Watermark = text;
+
+        var markAsFinal = properties.FirstOrDefault(p => p.Attribute("name")?.Value == MarkAsFinalPropertyName);
+        var flag = markAsFinal?.Element(VtVariant + "bool")?.Value;
+        if (flag is not null && (flag.Equals("true", StringComparison.OrdinalIgnoreCase) || flag == "1"))
+            document.MarkedAsFinal = true;
     }
 
     private static void ReadStyles(ZipArchive archive, TextDocument document)
@@ -2696,6 +3738,9 @@ public static class DocxReader
                 Name = s.Element(W + "name")?.Attribute(W + "val")?.Value ?? id,
                 Type = s.Attribute(W + "type")?.Value == "character" ? StyleType.Character : StyleType.Paragraph,
                 BasedOnStyleId = s.Element(W + "basedOn")?.Attribute(W + "val")?.Value,
+                // The "Style for following paragraph" (w:next): the style applied to the paragraph created
+                // when Enter is pressed at the end of one carrying this style (e.g. Heading1 -> Normal).
+                NextStyleId = s.Element(W + "next")?.Attribute(W + "val")?.Value,
                 Run = rPr is null ? RunFormatting.Default : ReadRunFormatting(rPr),
                 Paragraph = pPr is null ? ParagraphFormatting.Default : ReadParagraphFormatting(pPr),
                 // A table style (e.g. the built-in TableGrid) defines its cell borders in w:tblPr/w:tblBorders;

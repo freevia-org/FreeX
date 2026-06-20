@@ -34,8 +34,7 @@ public partial class MainWindow
         try
         {
             ShowStartScreen();
-            SsNewNavBtn.Focus();
-            Keyboard.Focus(SsNewNavBtn);
+            _backstageFrame?.FocusEntry("BackstageNewButton");
             UpdateLayout();
             await WaitForRibbonScreenshotRenderPassAsync();
             captures.Add(await CaptureFileBackstageWorkflowWindowAsync(
@@ -62,8 +61,7 @@ public partial class MainWindow
 
             RestoreFileBackstageWorkflowsWorkbookContext(context);
             ShowStartScreen();
-            SsOpenNavBtn.Focus();
-            Keyboard.Focus(SsOpenNavBtn);
+            _backstageFrame?.FocusEntry("BackstageOpenButton");
             UpdateLayout();
             await WaitForRibbonScreenshotRenderPassAsync();
             captures.Add(await CaptureFileBackstageWorkflowWindowAsync(
@@ -86,8 +84,7 @@ public partial class MainWindow
                 "The Pinned tab shows seeded pinned workbooks with pin/unpin row affordances exposed through the backstage model."));
 
             ShowStartScreen();
-            SsSaveAsNavBtn.Focus();
-            Keyboard.Focus(SsSaveAsNavBtn);
+            _backstageFrame?.FocusEntry("BackstageSaveAsButton");
             UpdateLayout();
             await WaitForRibbonScreenshotRenderPassAsync();
             captures.Add(await CaptureFileBackstageWorkflowWindowAsync(
@@ -102,8 +99,7 @@ public partial class MainWindow
             var savedWorkbookBytes = await SaveFileBackstageWorkflowWorkbookAsync(savedWorkbookPath);
             ShowStartScreen();
             ShowInfoView();
-            SsSaveNavBtn.Focus();
-            Keyboard.Focus(SsSaveNavBtn);
+            _backstageFrame?.FocusEntry("BackstageSaveButton");
             UpdateLayout();
             await WaitForRibbonScreenshotRenderPassAsync();
             captures.Add(await CaptureFileBackstageWorkflowWindowAsync(
@@ -127,8 +123,7 @@ public partial class MainWindow
 
             ShowStartScreen();
             ShowPrintView();
-            SsPrintNavBtn.Focus();
-            Keyboard.Focus(SsPrintNavBtn);
+            _backstageFrame?.FocusEntry("BackstagePrintButton");
             UpdateLayout();
             await WaitForRibbonScreenshotRenderPassAsync();
             captures.Add(await CaptureFileBackstageWorkflowWindowAsync(
@@ -173,8 +168,7 @@ public partial class MainWindow
             printPreviewDialog = null;
 
             ShowStartScreen();
-            SsExportNavBtn.Focus();
-            Keyboard.Focus(SsExportNavBtn);
+            _backstageFrame?.FocusEntry("BackstageExportButton");
             UpdateLayout();
             await WaitForRibbonScreenshotRenderPassAsync();
             captures.Add(await CaptureFileBackstageWorkflowWindowAsync(

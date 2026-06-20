@@ -29,8 +29,10 @@ public static class DocxWriter
     private const string FootnotesRelationshipId = "rIdFootnotes";
     private const string EndnotesRelationshipId = "rIdEndnotes";
     private const string CommentsRelationshipId = "rIdComments";
+    private const string CommentsExtendedRelationshipId = "rIdCommentsExtended";
     private const string SettingsRelationshipId = "rIdSettings";
     private const string FontTableRelationshipId = "rIdFontTable";
+    private const string BibliographyRelationshipId = "rIdBibliography";
     private const string ThemeRelationshipId = "rIdTheme1";
 
     // Minimal numbering scheme: one abstract num per list kind, mapped 1:1 to a w:num. Bullets use
@@ -48,7 +50,10 @@ public static class DocxWriter
         Write(document, stream);
     }
 
-    public static void Write(TextDocument document, Stream stream)
+    public static void Write(TextDocument document, Stream stream) =>
+        Write(document, stream, DocxWriteOptions.Docx);
+
+    public static void Write(TextDocument document, Stream stream, DocxWriteOptions options)
     {
         // Assign a relationship + media id to every inline image up front so document.xml, the
         // document relationships and the media parts all agree on rId/imageN.png.
@@ -76,6 +81,13 @@ public static class DocxWriter
         // maps each original numId to its output numId so the preserved paragraphs' w:numPr re-emit consistently.
         // Null for an authored-from-scratch / FreeW-only-lists document, so such a document is unaffected.
         var preservedNumbering = BuildPreservedNumberingPlan(document);
+
+        // List restart overrides: each distinct (ListKind, ListLevel, StartAt) tuple on a paragraph with
+        // ListStartOverride set gets a dedicated w:num that clones the base abstractNumId and adds a
+        // w:lvlOverride/@w:startOverride. The override numIds occupy the range immediately above the preserved
+        // numIds (so they remain disjoint from both FreeW's fixed 1/2/3 and the preserved 4..N). BuildNumbering
+        // emits the extra w:num elements; BuildParagraphProperties references them instead of the base numId.
+        var restartOverrides = BuildRestartOverrides(document, preservedNumbering);
 
         // A numbering part is emitted when FreeW authored a list OR preserved numbering must be re-emitted.
         var emitNumbering = hasLists || preservedNumbering is not null;
@@ -105,6 +117,10 @@ public static class DocxWriter
         // emitted only when a watermark is set.
         var hasWatermark = !string.IsNullOrEmpty(document.Page.Watermark);
 
+        // A docProps/custom.xml part is emitted when the watermark OR Word's "Mark as Final" flag needs to
+        // round-trip; both ride in the same custom-properties part.
+        var hasCustomProps = hasWatermark || document.MarkedAsFinal;
+
         // A word/settings.xml part is emitted only when something needs it — document protection
         // (w:documentProtection), automatic hyphenation (w:autoHyphenation), the different-odd/even-headers
         // toggle (w:evenAndOddHeaders) and/or a page background to display (w:displayBackgroundShape) — so
@@ -125,9 +141,17 @@ public static class DocxWriter
         var hasSettings = hasProtection
             || document.Page.AutoHyphenation
             || document.Page.DifferentOddEvenPages
+            || document.Page.MirrorMargins
             || hasBackground
             || hasEmbeddedFonts
-            || hasPreservedSettings;
+            || hasPreservedSettings
+            || !document.FootnoteNumbering.IsDefault
+            || !document.EndnoteNumbering.IsDefault;
+
+        // The bibliography part (word/bibliography/sources.xml) persists the document's citation Sources and
+        // selected BibliographyStyle. Emitted whenever there are sources or a non-default style to record, so a
+        // document that has never touched citations round-trips exactly as before (no bibliography part).
+        var hasBibliography = document.Sources.Count > 0 || document.BibliographyStyle != CitationStyle.Apa;
 
         // A word/theme/theme1.xml part is always emitted (real Word documents always carry one); it
         // serialises the document's DocumentTheme as a real clrScheme/fontScheme/fmtScheme.
@@ -142,18 +166,28 @@ public static class DocxWriter
             .OrderBy(ext => ext, StringComparer.Ordinal)
             .ToList();
 
+        // Macro parts (vbaProject.bin + vbaData.xml + the part-local rels) are preserved verbatim on read but
+        // only re-emitted for macro-enabled targets (.docm/.dotm); a .docx/.dotx must not carry them. Filtered
+        // once here and used for the content types, document rels, the inline-drawing rel ids and the byte parts
+        // so the four stay in lock-step.
+        var preservedParts = options.IncludeMacroParts
+            ? (IReadOnlyList<PreservedPart>)document.Preserved.Parts
+            : document.Preserved.Parts.Where(p => !DocxWriteOptions.IsMacroPart(p.PartName)).ToList();
+
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true);
-        WritePart(archive, "[Content_Types].xml", BuildContentTypes(imageExtensions, emitNumbering, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasWatermark, hasSettings, charts, embeddedObjects.Count > 0, smartArts, hasEmbeddedFonts, document.Preserved.Parts, document.Preserved.ContentTypeDefaults));
-        WritePart(archive, "_rels/.rels", BuildPackageRels(hasWatermark));
+        WritePart(archive, "[Content_Types].xml", BuildContentTypes(imageExtensions, emitNumbering, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasCustomProps, hasSettings, hasBibliography, charts, embeddedObjects.Count > 0, smartArts, hasEmbeddedFonts, preservedParts, document.Preserved.ContentTypeDefaults, options.MainDocumentContentType));
+        WritePart(archive, "_rels/.rels", BuildPackageRels(hasCustomProps));
         WritePart(archive, "docProps/core.xml", BuildCoreProperties(document.Properties));
-        if (hasWatermark)
-            WritePart(archive, "docProps/custom.xml", BuildCustomProperties(document.Page.Watermark!));
-        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, emitNumbering, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasSettings, charts, embeddedObjects, smartArts, hasEmbeddedFonts, document.Preserved.Parts));
-        WritePart(archive, "word/document.xml", BuildDocument(document, images, charts, embeddedObjects, smartArts, hyperlinks, headerFooterParts, preservedNumbering));
+        if (hasCustomProps)
+            WritePart(archive, "docProps/custom.xml", BuildCustomProperties(document.Page.Watermark, document.MarkedAsFinal));
+        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, emitNumbering, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasSettings, hasBibliography, charts, embeddedObjects, smartArts, hasEmbeddedFonts, preservedParts));
+        WritePart(archive, "word/document.xml", BuildDocument(document, images, charts, embeddedObjects, smartArts, hyperlinks, headerFooterParts, preservedNumbering, restartOverrides, preservedParts));
         WritePart(archive, "word/styles.xml", BuildStyles(document, preservedNumbering));
         WritePart(archive, ThemePartName.TrimStart('/'), BuildTheme(document.Theme));
         if (hasSettings)
-            WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.Page.AutoHyphenation, document.Page.DifferentOddEvenPages, hasBackground, hasEmbeddedFonts, document.Preserved.OriginalSettings));
+            WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.Page, hasBackground, hasEmbeddedFonts, document.FootnoteNumbering, document.EndnoteNumbering, document.Preserved.OriginalSettings));
+        if (hasBibliography)
+            WritePart(archive, BibliographyPartName.TrimStart('/'), BuildBibliographySources(document));
         // Embedded fonts: word/fontTable.xml + its rels + one obfuscated .odttf per embedded style.
         if (hasEmbeddedFonts)
         {
@@ -163,7 +197,7 @@ public static class DocxWriter
                 WriteBinaryPart(archive, "word/fonts/" + part.FileName, ObfuscateFont(part.FontBytes, part.FontKey));
         }
         if (emitNumbering)
-            WritePart(archive, "word/numbering.xml", BuildNumbering(hasLists, preservedNumbering));
+            WritePart(archive, "word/numbering.xml", BuildNumbering(hasLists, preservedNumbering, restartOverrides));
         // One part per (section × header/footer × type) slot with content. Each part XML carries its inline
         // images via PART-LOCAL r:embed ids resolved against its own word/_rels/<part>.xml.rels, and its
         // image media bytes go under word/media/.
@@ -185,6 +219,10 @@ public static class DocxWriter
         if (hasComments)
         {
             WritePart(archive, CommentsPartName.TrimStart('/'), BuildComments(document, commentImages));
+            // word/commentsExtended.xml threads replies + carries resolved state. Always emitted alongside the
+            // comments part (it has an entry per comment even for a flat, single-comment document) so modern
+            // Word treats every comment as a thread root and the reply/resolve plumbing round-trips.
+            WritePart(archive, CommentsExtendedPartName.TrimStart('/'), BuildCommentsExtended(document));
             // Comment media + the comments part's own _rels (only when a comment carries an image).
             if (commentImages.Count > 0)
             {
@@ -222,7 +260,7 @@ public static class DocxWriter
         // content-type Overrides and document relationships are added by BuildContentTypes / BuildDocumentRels;
         // their own _rels (e.g. customXml item rels) are themselves preserved parts, so the whole satellite set
         // round-trips. Authored-from-scratch documents have none, so nothing extra is written.
-        foreach (var part in document.Preserved.Parts)
+        foreach (var part in preservedParts)
             WriteBinaryPart(archive, part.PartName.TrimStart('/'), part.Bytes);
     }
 
@@ -589,7 +627,7 @@ public static class DocxWriter
         entryStream.Write(content, 0, content.Length);
     }
 
-    private static XDocument BuildContentTypes(IReadOnlyList<string> imageExtensions, bool includeNumbering, IReadOnlyList<HeaderFooterPart> headerFooterParts, bool hasFootnotes, bool hasEndnotes, bool hasComments, bool hasWatermark, bool hasSettings, IReadOnlyList<ChartPart> charts, bool hasEmbeddedObjects, IReadOnlyList<SmartArtPart> smartArts, bool hasEmbeddedFonts, IReadOnlyList<PreservedPart> preservedParts, IReadOnlyDictionary<string, string> preservedContentTypeDefaults) => new(
+    private static XDocument BuildContentTypes(IReadOnlyList<string> imageExtensions, bool includeNumbering, IReadOnlyList<HeaderFooterPart> headerFooterParts, bool hasFootnotes, bool hasEndnotes, bool hasComments, bool hasCustomProps, bool hasSettings, bool hasBibliography, IReadOnlyList<ChartPart> charts, bool hasEmbeddedObjects, IReadOnlyList<SmartArtPart> smartArts, bool hasEmbeddedFonts, IReadOnlyList<PreservedPart> preservedParts, IReadOnlyDictionary<string, string> preservedContentTypeDefaults, string mainDocumentContentType) => new(
         new XElement(Ct + "Types",
             new XElement(Ct + "Default", new XAttribute("Extension", "rels"),
                 new XAttribute("ContentType", "application/vnd.openxmlformats-package.relationships+xml")),
@@ -626,7 +664,7 @@ public static class DocxWriter
                     new XAttribute("ContentType", ObfuscatedFontContentType))
                 : null,
             new XElement(Ct + "Override", new XAttribute("PartName", "/word/document.xml"),
-                new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml")),
+                new XAttribute("ContentType", mainDocumentContentType)),
             new XElement(Ct + "Override", new XAttribute("PartName", "/word/styles.xml"),
                 new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml")),
             includeNumbering
@@ -650,9 +688,19 @@ public static class DocxWriter
                 ? new XElement(Ct + "Override", new XAttribute("PartName", CommentsPartName),
                     new XAttribute("ContentType", CommentsContentType))
                 : null,
+            // word/commentsExtended.xml (reply threading + resolved state) is emitted whenever comments are.
+            hasComments
+                ? new XElement(Ct + "Override", new XAttribute("PartName", CommentsExtendedPartName),
+                    new XAttribute("ContentType", CommentsExtendedContentType))
+                : null,
             hasSettings
                 ? new XElement(Ct + "Override", new XAttribute("PartName", SettingsPartName),
                     new XAttribute("ContentType", SettingsContentType))
+                : null,
+            // word/bibliography/sources.xml declares the citation-sources store (b:Sources/@SelectedStyle).
+            hasBibliography
+                ? new XElement(Ct + "Override", new XAttribute("PartName", BibliographyPartName),
+                    new XAttribute("ContentType", BibliographyContentType))
                 : null,
             // word/fontTable.xml declares the embedded-font table (the .odttf parts use the odttf Default above).
             hasEmbeddedFonts
@@ -664,7 +712,7 @@ public static class DocxWriter
                 new XAttribute("ContentType", ThemeContentType)),
             new XElement(Ct + "Override", new XAttribute("PartName", CorePropertiesPartName),
                 new XAttribute("ContentType", CorePropertiesContentType)),
-            hasWatermark
+            hasCustomProps
                 ? new XElement(Ct + "Override", new XAttribute("PartName", CustomPropertiesPartName),
                     new XAttribute("ContentType", CustomPropertiesContentType))
                 : null,
@@ -701,7 +749,7 @@ public static class DocxWriter
                     new XAttribute("PartName", p.PartName),
                     new XAttribute("ContentType", p.ContentTypeOverride!)))));
 
-    private static XDocument BuildPackageRels(bool hasWatermark) => new(
+    private static XDocument BuildPackageRels(bool hasCustomProps) => new(
         new XElement(Rel + "Relationships",
             new XElement(Rel + "Relationship",
                 new XAttribute("Id", "rId1"),
@@ -711,7 +759,7 @@ public static class DocxWriter
                 new XAttribute("Id", "rIdCore"),
                 new XAttribute("Type", CorePropertiesRelType),
                 new XAttribute("Target", "docProps/core.xml")),
-            hasWatermark
+            hasCustomProps
                 ? new XElement(Rel + "Relationship",
                     new XAttribute("Id", "rIdCustom"),
                     new XAttribute("Type", CustomPropertiesRelType),
@@ -719,18 +767,30 @@ public static class DocxWriter
                 : null));
 
     /// <summary>
-    /// Builds docProps/custom.xml carrying the page watermark text as a single named custom property
-    /// (<see cref="WatermarkPropertyName"/>). This is a standards-compliant OPC custom-properties part,
-    /// so the watermark text round-trips even though it is not a true Word VML watermark.
+    /// Builds docProps/custom.xml carrying the page watermark text (<see cref="WatermarkPropertyName"/>,
+    /// vt:lpwstr) and/or Word's "Mark as Final" flag (<see cref="MarkAsFinalPropertyName"/>, vt:bool) as
+    /// named custom properties. This is a standards-compliant OPC custom-properties part. Properties get
+    /// sequential pids starting at 2 (pid 0/1 are reserved); only set properties are emitted.
     /// </summary>
-    private static XDocument BuildCustomProperties(string watermark) => new(
-        new XElement(CustomProps + "Properties",
-            new XAttribute(XNamespace.Xmlns + "vt", VtVariant.NamespaceName),
-            new XElement(CustomProps + "property",
+    private static XDocument BuildCustomProperties(string? watermark, bool markedAsFinal)
+    {
+        var properties = new XElement(CustomProps + "Properties",
+            new XAttribute(XNamespace.Xmlns + "vt", VtVariant.NamespaceName));
+        var pid = 2;
+        if (!string.IsNullOrEmpty(watermark))
+            properties.Add(new XElement(CustomProps + "property",
                 new XAttribute("fmtid", "{D5CDD505-2E9C-101B-9397-08002B2CF9AE}"),
-                new XAttribute("pid", "2"),
+                new XAttribute("pid", (pid++).ToString(System.Globalization.CultureInfo.InvariantCulture)),
                 new XAttribute("name", WatermarkPropertyName),
-                new XElement(VtVariant + "lpwstr", watermark))));
+                new XElement(VtVariant + "lpwstr", watermark)));
+        if (markedAsFinal)
+            properties.Add(new XElement(CustomProps + "property",
+                new XAttribute("fmtid", "{D5CDD505-2E9C-101B-9397-08002B2CF9AE}"),
+                new XAttribute("pid", (pid++).ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                new XAttribute("name", MarkAsFinalPropertyName),
+                new XElement(VtVariant + "bool", "true")));
+        return new XDocument(properties);
+    }
 
     /// <summary>Builds docProps/core.xml from <see cref="DocumentProperties"/>, emitting only set values.</summary>
     private static XDocument BuildCoreProperties(DocumentProperties properties)
@@ -777,6 +837,7 @@ public static class DocxWriter
         bool hasEndnotes,
         bool hasComments,
         bool hasSettings,
+        bool hasBibliography,
         IReadOnlyList<ChartPart> charts,
         IReadOnlyList<EmbeddedObjectPart> embeddedObjects,
         IReadOnlyList<SmartArtPart> smartArts,
@@ -793,6 +854,12 @@ public static class DocxWriter
                 new XAttribute("Id", SettingsRelationshipId),
                 new XAttribute("Type", SettingsRelType),
                 new XAttribute("Target", "settings.xml")));
+        // The document→bibliography relationship (word/bibliography/sources.xml, target relative to word/).
+        if (hasBibliography)
+            relationships.Add(new XElement(Rel + "Relationship",
+                new XAttribute("Id", BibliographyRelationshipId),
+                new XAttribute("Type", BibliographyRelType),
+                new XAttribute("Target", "bibliography/sources.xml")));
         // The document→fontTable relationship (the fontTable's own rels reference the .odttf font parts).
         if (hasEmbeddedFonts)
             relationships.Add(new XElement(Rel + "Relationship",
@@ -828,10 +895,16 @@ public static class DocxWriter
                 new XAttribute("Type", EndnotesRelType),
                 new XAttribute("Target", "endnotes.xml")));
         if (hasComments)
+        {
             relationships.Add(new XElement(Rel + "Relationship",
                 new XAttribute("Id", CommentsRelationshipId),
                 new XAttribute("Type", CommentsRelType),
                 new XAttribute("Target", "comments.xml")));
+            relationships.Add(new XElement(Rel + "Relationship",
+                new XAttribute("Id", CommentsExtendedRelationshipId),
+                new XAttribute("Type", CommentsExtendedRelType),
+                new XAttribute("Target", "commentsExtended.xml")));
+        }
         foreach (var image in images)
             relationships.Add(new XElement(Rel + "Relationship",
                 new XAttribute("Id", image.RelationshipId),
@@ -930,7 +1003,9 @@ public static class DocxWriter
         IReadOnlyList<SmartArtPart> smartArts,
         IReadOnlyDictionary<string, string> hyperlinks,
         IReadOnlyList<HeaderFooterPart> headerFooterParts,
-        PreservedNumberingPlan? preservedNumbering)
+        PreservedNumberingPlan? preservedNumbering,
+        IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int> restartOverrides,
+        IReadOnlyList<PreservedPart> preservedParts)
     {
         // Group header/footer parts by their owning section: the final/body-level section (Section == null)
         // feeds the body-level w:sectPr; each non-final section feeds its paragraph-level w:sectPr.
@@ -972,14 +1047,14 @@ public static class DocxWriter
         // Map each document-referenced preserved part to its assigned rIdPreserved{N} (same order/ids as
         // BuildDocumentRels), so a verbatim-preserved inline drawing can re-point its chart r:id at the
         // re-emitted relationship. Empty for documents with no preserved drawings.
-        var preservedDrawingRelIds = PreservedPartRelIds(document.Preserved.Parts)
+        var preservedDrawingRelIds = PreservedPartRelIds(preservedParts)
             .ToDictionary(pair => pair.Part.PartName, pair => pair.RelId, StringComparer.Ordinal);
 
         var drawings = new RunDrawings(imagesByRun, chartsByRun, embeddedByRun, smartArtsByRun, ids, preservedDrawingRelIds);
 
         var body = new XElement(W + "body");
         foreach (var block in document.Blocks)
-            body.Add(BuildBlock(block, drawings, hyperlinks, partsBySection, preservedNumbering));
+            body.Add(BuildBlock(block, drawings, hyperlinks, partsBySection, preservedNumbering, restartOverrides));
         body.Add(BuildSectionProperties(document.Page, finalSectionParts));
 
         // Page background colour (w:background): it is positionally the FIRST child of w:document, before
@@ -1181,7 +1256,7 @@ public static class DocxWriter
     private static List<ImagePart> CollectCommentImages(TextDocument document)
     {
         var images = new List<ImagePart>();
-        foreach (var comment in document.Comments.Values.OrderBy(c => c.Id))
+        foreach (var comment in FlattenComments(document))
             foreach (var paragraph in comment.Content)
                 foreach (var run in paragraph.Runs)
                     if (run.Image is { } image)
@@ -1197,13 +1272,31 @@ public static class DocxWriter
     {
         var map = new Dictionary<Run, ImagePart>();
         var next = 0;
-        foreach (var comment in document.Comments.Values.OrderBy(c => c.Id))
+        foreach (var comment in FlattenComments(document))
             foreach (var paragraph in comment.Content)
                 foreach (var run in paragraph.Runs)
                     if (run.Image is not null && next < commentImages.Count)
                         map[run] = commentImages[next++];
         return map;
     }
+
+    /// <summary>
+    /// Flattens the document's comments — every top-level comment followed by its replies — in a stable
+    /// (ascending top-level id, then thread order) order. This is the single walk that comments.xml,
+    /// commentsExtended.xml and the comment-image collection all share, so every flat <c>w:comment</c>
+    /// entry, its w15:commentEx and any comment media stay in agreement. Replies serialise as ordinary
+    /// flat comments; their thread shape lives only in commentsExtended.xml.
+    /// </summary>
+    private static IEnumerable<Comment> FlattenComments(TextDocument document) =>
+        document.Comments.Values.OrderBy(c => c.Id).SelectMany(c => c.ThreadInOrder());
+
+    /// <summary>
+    /// A stable 8-hex-digit w14:paraId for a comment's last paragraph, derived deterministically from the
+    /// comment id (so the writer never stamps random ids). Comment paraIds live in their own high range
+    /// (0x10000000+) clear of any body paraId, and are the values commentsExtended.xml threads on.
+    /// </summary>
+    private static string CommentParaId(int commentId) =>
+        (0x10000000 + commentId).ToString("X8", System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>
     /// Builds word/comments.xml (w:comments): one w:comment w:id="N" per modelled comment (ascending
@@ -1234,7 +1327,14 @@ public static class DocxWriter
         var drawings = RunDrawings.Empty() with { Images = imagesByRun };
         var noHyperlinks = new Dictionary<string, string>(StringComparer.Ordinal);
 
-        foreach (var comment in document.Comments.Values.OrderBy(c => c.Id))
+        // The w14 namespace is declared on the root only when a comment paragraph carries a paraId (i.e.
+        // always, since every comment's last paragraph is stamped for commentsExtended threading). Mirrors
+        // how the wp/a/pic namespaces are added only when needed.
+        comments.Add(new XAttribute(XNamespace.Xmlns + "w14", W14.NamespaceName));
+
+        // Parent and replies serialise as flat w:comment entries (FlattenComments order). Each comment's
+        // LAST paragraph is stamped with a w14:paraId — the value commentsExtended.xml threads on.
+        foreach (var comment in FlattenComments(document))
         {
             var element = new XElement(W + "comment",
                 new XAttribute(W + "id", comment.Id),
@@ -1243,15 +1343,57 @@ public static class DocxWriter
             if (comment.DateXml is { Length: > 0 } date)
                 element.Add(new XAttribute(W + "date", date));
 
+            var paraId = CommentParaId(comment.Id);
             if (comment.Content.Count == 0)
-                element.Add(new XElement(W + "p"));
+                element.Add(new XElement(W + "p", new XAttribute(W14 + "paraId", paraId)));
             else
-                foreach (var paragraph in comment.Content)
-                    element.Add(BuildParagraph(paragraph, drawings, noHyperlinks));
+                for (var pi = 0; pi < comment.Content.Count; pi++)
+                {
+                    var built = BuildParagraph(comment.Content[pi], drawings, noHyperlinks);
+                    // commentsExtended.xml references the comment's LAST paragraph; stamp paraId there.
+                    if (pi == comment.Content.Count - 1)
+                        built.SetAttributeValue(W14 + "paraId", paraId);
+                    element.Add(built);
+                }
             comments.Add(element);
         }
 
         return new XDocument(comments);
+    }
+
+    /// <summary>
+    /// Builds word/commentsExtended.xml (w15:commentsEx): one w15:commentEx per flat comment (FlattenComments
+    /// order), each carrying its w15:paraId (the comment's last-paragraph paraId). A reply also carries
+    /// w15:paraIdParent (its parent comment's paraId), threading it under the parent; a resolved top-level
+    /// comment carries w15:done="1". This is the part Word reads to reconstruct reply threads + resolved state.
+    /// </summary>
+    private static XDocument BuildCommentsExtended(TextDocument document)
+    {
+        var root = new XElement(W15 + "commentsEx",
+            new XAttribute(XNamespace.Xmlns + "w15", W15.NamespaceName));
+
+        foreach (var parent in document.Comments.Values.OrderBy(c => c.Id))
+        {
+            var parentParaId = CommentParaId(parent.Id);
+            var parentEx = new XElement(W15 + "commentEx",
+                new XAttribute(W15 + "paraId", parentParaId));
+            if (parent.Resolved)
+                parentEx.Add(new XAttribute(W15 + "done", "1"));
+            root.Add(parentEx);
+
+            foreach (var reply in parent.Replies)
+            {
+                var replyEx = new XElement(W15 + "commentEx",
+                    new XAttribute(W15 + "paraId", CommentParaId(reply.Id)),
+                    new XAttribute(W15 + "paraIdParent", parentParaId));
+                // A resolved thread marks done on every entry in the thread (Word's behaviour).
+                if (parent.Resolved)
+                    replyEx.Add(new XAttribute(W15 + "done", "1"));
+                root.Add(replyEx);
+            }
+        }
+
+        return new XDocument(root);
     }
 
     /// <summary>Builds word/_rels/comments.xml.rels: one image relationship per comment media part.</summary>
@@ -1271,12 +1413,13 @@ public static class DocxWriter
         RunDrawings drawings,
         IReadOnlyDictionary<string, string> hyperlinks,
         IReadOnlyDictionary<Section, IReadOnlyList<HeaderFooterPart>> partsBySection,
-        PreservedNumberingPlan? preservedNumbering = null) => block switch
+        PreservedNumberingPlan? preservedNumbering = null,
+        IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int>? restartOverrides = null) => block switch
     {
-        Table table => BuildTable(table, drawings, hyperlinks, preservedNumbering),
+        Table table => BuildTable(table, drawings, hyperlinks, preservedNumbering, restartOverrides),
         // Only top-level body paragraphs can end a non-final section, so the per-section header/footer map
         // is threaded here (and nowhere else); table-cell/header/footer/footnote paragraphs pass no map.
-        Paragraph paragraph => BuildParagraph(paragraph, drawings, hyperlinks, partsBySection, preservedNumbering),
+        Paragraph paragraph => BuildParagraph(paragraph, drawings, hyperlinks, partsBySection, preservedNumbering, restartOverrides),
         _ => new XElement(W + "p")
     };
 
@@ -1286,7 +1429,7 @@ public static class DocxWriter
     private const string HeaderFill = "D9E2F3";
     private const string BandedFill = "F2F2F2";
 
-    private static XElement BuildTable(Table table, RunDrawings drawings, IReadOnlyDictionary<string, string> hyperlinks, PreservedNumberingPlan? preservedNumbering = null)
+    private static XElement BuildTable(Table table, RunDrawings drawings, IReadOnlyDictionary<string, string> hyperlinks, PreservedNumberingPlan? preservedNumbering = null, IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int>? restartOverrides = null)
     {
         var tbl = new XElement(W + "tbl", BuildTableProperties(table));
 
@@ -1309,9 +1452,25 @@ public static class DocxWriter
             var bandedShade = fmt.BandedRows && !isHeaderRow && IsBandedBodyRow(rowIndex, fmt.HeaderRow);
 
             var tr = new XElement(W + "tr");
+            // Row properties (w:trPr): cantSplit / trHeight / tblHeader, in CT_TrPr schema order. Emitted
+            // only when a non-default row property is set, so plain rows stay unchanged.
+            var trPr = new XElement(W + "trPr");
+            if (!row.AllowBreakAcrossPages)
+                trPr.Add(new XElement(W + "cantSplit"));
+            if (row.HeightPt is { } heightPt)
+                trPr.Add(new XElement(W + "trHeight",
+                    new XAttribute(W + "val", PointsToDxa(heightPt)),
+                    new XAttribute(W + "hRule", row.HeightRule switch
+                    {
+                        TableRowHeightRule.Exact => "exact",
+                        TableRowHeightRule.AtLeast => "atLeast",
+                        _ => "auto"
+                    })));
             // Repeat the header row across page breaks (w:trPr/w:tblHeader) when requested.
             if (isHeaderRow && fmt.RepeatHeaderRow)
-                tr.Add(new XElement(W + "trPr", new XElement(W + "tblHeader")));
+                trPr.Add(new XElement(W + "tblHeader"));
+            if (trPr.HasElements)
+                tr.Add(trPr);
 
             foreach (var cell in row.Cells)
             {
@@ -1327,7 +1486,7 @@ public static class DocxWriter
                     tc.Add(new XElement(W + "p"));
                 else
                     foreach (var paragraph in cell.Paragraphs)
-                        tc.Add(BuildParagraph(isHeaderRow ? BoldHeaderParagraph(paragraph) : paragraph, drawings, hyperlinks, preservedNumbering: preservedNumbering));
+                        tc.Add(BuildParagraph(isHeaderRow ? BoldHeaderParagraph(paragraph) : paragraph, drawings, hyperlinks, preservedNumbering: preservedNumbering, restartOverrides: restartOverrides));
                 tr.Add(tc);
             }
             tbl.Add(tr);
@@ -1350,6 +1509,12 @@ public static class DocxWriter
     /// Returns a copy of <paramref name="paragraph"/> with every run forced bold, used to render a
     /// header-row cell's text bold without mutating the model. Non-text runs (images/fields) are copied
     /// with their marks preserved; only the run formatting's Bold flag is overridden.
+    ///
+    /// Runs that carry an inline drawing (image/chart/embedded object/SmartArt/preserved drawing) are kept
+    /// as the ORIGINAL instance, not cloned: <see cref="BuildRun"/> resolves a drawing's media part from the
+    /// per-write maps (imagesByRun/chartsByRun/…) keyed by run REFERENCE, so a clone would miss the lookup
+    /// and the drawing would be silently dropped. Bolding is meaningless for a drawing-only run anyway, so
+    /// preserving identity here costs nothing and keeps a header-row cell image (etc.) round-tripping.
     /// </summary>
     private static Paragraph BoldHeaderParagraph(Paragraph paragraph)
     {
@@ -1361,6 +1526,12 @@ public static class DocxWriter
         };
         foreach (var run in paragraph.Runs)
         {
+            if (run.Image is not null || run.Chart is not null || run.EmbeddedObject is not null
+                || run.SmartArt is not null || run.PreservedDrawing is not null)
+            {
+                copy.Runs.Add(run);
+                continue;
+            }
             copy.Runs.Add(new Run(run.Text, run.Formatting with { Bold = true })
             {
                 Image = run.Image,
@@ -1385,8 +1556,40 @@ public static class DocxWriter
 
     private static XElement BuildTableProperties(Table table)
     {
-        var tblPr = new XElement(W + "tblPr",
-            new XElement(W + "tblW", new XAttribute(W + "w", 0), new XAttribute(W + "type", "auto")));
+        // Children must follow the CT_TblPr schema order, else Word's strict validator rejects the table:
+        // tblpPr, tblW, jc, tblCellSpacing, tblInd, tblBorders, tblCellMar, tblLook.
+        var tblPr = new XElement(W + "tblPr");
+
+        // Floating-table position (w:tblpPr): a minimal anchor so Word treats the table as floating
+        // ("Text wrapping: Around"). Emitted only when text wrapping is on.
+        if (table.TextWrapping)
+            tblPr.Add(new XElement(W + "tblpPr",
+                new XAttribute(W + "leftFromText", 180),
+                new XAttribute(W + "rightFromText", 180),
+                new XAttribute(W + "vertAnchor", "text"),
+                new XAttribute(W + "horzAnchor", "text"),
+                new XAttribute(W + "tblpY", 1)));
+
+        // Preferred table width (w:tblW): a fixed dxa width when set, else automatic (the historical default).
+        tblPr.Add(table.PreferredWidthPt is { } widthPt
+            ? new XElement(W + "tblW", new XAttribute(W + "w", PointsToDxa(widthPt)), new XAttribute(W + "type", "dxa"))
+            : new XElement(W + "tblW", new XAttribute(W + "w", 0), new XAttribute(W + "type", "auto")));
+
+        // Table alignment (w:jc): emitted only when not Left (the default).
+        if (table.Alignment != TableAlignment.Left)
+            tblPr.Add(new XElement(W + "jc", new XAttribute(W + "val",
+                table.Alignment == TableAlignment.Center ? "center" : "right")));
+
+        // Spacing between cells (w:tblCellSpacing), emitted only when set.
+        if (table.CellSpacingPt is { } spacingPt)
+            tblPr.Add(new XElement(W + "tblCellSpacing",
+                new XAttribute(W + "w", PointsToDxa(spacingPt)), new XAttribute(W + "type", "dxa")));
+
+        // Indent from the left margin (w:tblInd), emitted only when set.
+        if (table.IndentFromLeftPt is { } indentPt)
+            tblPr.Add(new XElement(W + "tblInd",
+                new XAttribute(W + "w", PointsToDxa(indentPt)), new XAttribute(W + "type", "dxa")));
+
         if (table.Formatting.Borders)
         {
             XElement Border(string name) => new(W + name,
@@ -1408,6 +1611,11 @@ public static class DocxWriter
                 new XElement(W + "insideH", new XAttribute(W + "val", "none")),
                 new XElement(W + "insideV", new XAttribute(W + "val", "none"))));
         }
+
+        // Default cell margins (w:tblCellMar): inside padding applied to cells with no own override.
+        // Emitted only when set, so plain tables stay unchanged. Follows tblBorders in CT_TblPr order.
+        if (table.DefaultCellMargins is { } cellMar)
+            tblPr.Add(BuildCellMarginsElement("tblCellMar", cellMar));
 
         // w:tblLook carries the table-style toggles so they round-trip without a full table-style part:
         // w:firstRow="1" persists HeaderRow; w:noHBand="0" persists BandedRows (banding on). The flags are
@@ -1452,7 +1660,27 @@ public static class DocxWriter
                 new XAttribute(W + "val", "clear"),
                 new XAttribute(W + "color", "auto"),
                 new XAttribute(W + "fill", fill)));
+        // Per-cell margin override (w:tcMar) and vertical alignment (w:vAlign), in CT_TcPr schema order
+        // (tcMar before vAlign, both after shd). Emitted only when set, so plain cells stay unchanged.
+        if (cell.Margins is { } margins)
+            tcPr.Add(BuildCellMarginsElement("tcMar", margins));
+        if (cell.VerticalAlignment != TableCellVerticalAlignment.Top)
+            tcPr.Add(new XElement(W + "vAlign", new XAttribute(W + "val",
+                cell.VerticalAlignment == TableCellVerticalAlignment.Center ? "center" : "bottom")));
         return tcPr.HasElements ? tcPr : null;
+    }
+
+    // Builds a cell-margins container (w:tblCellMar for the table default, or w:tcMar for a per-cell
+    // override) with the four edge elements in top/left/bottom/right order, each a dxa width.
+    private static XElement BuildCellMarginsElement(string name, TableCellMargins margins)
+    {
+        XElement Edge(string edge, double pt) => new(W + edge,
+            new XAttribute(W + "w", PointsToDxa(pt)), new XAttribute(W + "type", "dxa"));
+        return new XElement(W + name,
+            Edge("top", margins.TopPt),
+            Edge("left", margins.LeftPt),
+            Edge("bottom", margins.BottomPt),
+            Edge("right", margins.RightPt));
     }
 
     /// <summary>True when two runs carry the same tracked-change kind, author and date (so they coalesce).</summary>
@@ -1479,10 +1707,30 @@ public static class DocxWriter
     }
 
     /// <summary>
+    /// Builds a w:rPrChange (tracked formatting change) carrying a unique w:id plus the author/date, with a
+    /// nested w:rPr holding the run's <em>previous</em> formatting. The nested w:rPr is always present (even
+    /// when empty) because that empty element is how Word records "the run previously had default
+    /// formatting". This element is the last child of the run's w:rPr.
+    /// </summary>
+    private static XElement BuildRprChange(FormatRevision revision, IdAllocator ids)
+    {
+        var change = new XElement(W + "rPrChange",
+            new XAttribute(W + "id", ids.NextRevisionId()));
+        if (revision.Author is { Length: > 0 } author)
+            change.Add(new XAttribute(W + "author", author));
+        if (revision.DateXml is { Length: > 0 } date)
+            change.Add(new XAttribute(W + "date", date));
+        change.Add(BuildRunProperties(revision.PreviousFormatting) ?? new XElement(W + "rPr"));
+        return change;
+    }
+
+    /// <summary>
     /// Builds the w:sdtPr (content-control properties) for a content control. Emits w:tag / w:alias when
-    /// set, then the control-kind element: w:text for a plain-text control, or a w14:checkbox carrying the
-    /// checked state (w14:checked val="1"/"0") for a checkbox. This is the minimal valid shape FreeW's own
-    /// reader recovers (see <see cref="DocxReader"/>).
+    /// set, then the control-kind element: w:text for a plain-text control; a w14:checkbox carrying the
+    /// checked state (w14:checked val="1"/"0") for a checkbox; w:richText for a rich-text control; a
+    /// w:date carrying the w:dateFormat for a date picker; or a w:dropDownList / w:comboBox carrying a
+    /// w:listItem (w:displayText/w:value) per choice for a list control. This is the minimal valid shape
+    /// FreeW's own reader recovers (see <see cref="DocxReader"/>).
     /// </summary>
     private static XElement BuildSdtProperties(ContentControl control)
     {
@@ -1491,12 +1739,45 @@ public static class DocxWriter
             sdtPr.Add(new XElement(W + "alias", new XAttribute(W + "val", alias)));
         if (control.Tag is { Length: > 0 } tag)
             sdtPr.Add(new XElement(W + "tag", new XAttribute(W + "val", tag)));
-        if (control.Kind == ContentControlKind.CheckBox)
-            sdtPr.Add(new XElement(W14 + "checkbox",
-                new XElement(W14 + "checked", new XAttribute(W14 + "val", control.Checked ? "1" : "0"))));
-        else
-            sdtPr.Add(new XElement(W + "text"));
+        switch (control.Kind)
+        {
+            case ContentControlKind.CheckBox:
+                sdtPr.Add(new XElement(W14 + "checkbox",
+                    new XElement(W14 + "checked", new XAttribute(W14 + "val", control.Checked ? "1" : "0"))));
+                break;
+            case ContentControlKind.RichText:
+                sdtPr.Add(new XElement(W + "richText"));
+                break;
+            case ContentControlKind.DatePicker:
+                sdtPr.Add(new XElement(W + "date",
+                    new XElement(W + "dateFormat",
+                        new XAttribute(W + "val", control.DateFormat ?? ContentControl.DefaultDateFormat))));
+                break;
+            case ContentControlKind.DropDownList:
+                sdtPr.Add(BuildListElement(W + "dropDownList", control.Items));
+                break;
+            case ContentControlKind.ComboBox:
+                sdtPr.Add(BuildListElement(W + "comboBox", control.Items));
+                break;
+            default:
+                sdtPr.Add(new XElement(W + "text"));
+                break;
+        }
         return sdtPr;
+    }
+
+    /// <summary>
+    /// Builds the w:dropDownList / w:comboBox element for a list content control: a w:listItem
+    /// (w:displayText + w:value) for each <paramref name="items"/> choice.
+    /// </summary>
+    private static XElement BuildListElement(XName listName, IReadOnlyList<ContentControlListItem> items)
+    {
+        var list = new XElement(listName);
+        foreach (var item in items)
+            list.Add(new XElement(W + "listItem",
+                new XAttribute(W + "displayText", item.DisplayText),
+                new XAttribute(W + "value", item.Value)));
+        return list;
     }
 
     private static XElement BuildParagraph(
@@ -1504,10 +1785,11 @@ public static class DocxWriter
         RunDrawings drawings,
         IReadOnlyDictionary<string, string> hyperlinks,
         IReadOnlyDictionary<Section, IReadOnlyList<HeaderFooterPart>>? partsBySection = null,
-        PreservedNumberingPlan? preservedNumbering = null)
+        PreservedNumberingPlan? preservedNumbering = null,
+        IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int>? restartOverrides = null)
     {
         var p = new XElement(W + "p");
-        var pPr = BuildParagraphProperties(paragraph, partsBySection, preservedNumbering);
+        var pPr = BuildParagraphProperties(paragraph, partsBySection, preservedNumbering, restartOverrides);
         if (pPr is not null)
             p.Add(pPr);
 
@@ -1610,6 +1892,35 @@ public static class DocxWriter
                 continue;
             }
 
+            // A complex field (Word's w:fldChar begin / w:instrText / separate / result / end sequence)
+            // emits FIVE runs rather than one: a begin fldChar, an instrText run carrying the raw field
+            // instruction, a separate fldChar, the cached-result run, then an end fldChar. The reader
+            // collapses this sequence back into a single ComplexField run. Routed through Content so it
+            // sits correctly inside an open revision/comment context, like any other run.
+            var complex = runs[i].ComplexField;
+            if (complex is not null)
+            {
+                var fieldRun = runs[i++];
+                var rPr = BuildRunProperties(fieldRun.Formatting);
+                XElement WithProps(params object[] children)
+                {
+                    var r = new XElement(W + "r");
+                    if (rPr is not null)
+                        r.Add(new XElement(rPr));
+                    r.Add(children);
+                    return r;
+                }
+                Content(fieldRun, WithProps(new XElement(W + "fldChar", new XAttribute(W + "fldCharType", "begin"))));
+                Content(fieldRun, WithProps(new XElement(W + "instrText",
+                    new XAttribute(XNamespace.Xml + "space", "preserve"), complex.Instruction)));
+                Content(fieldRun, WithProps(new XElement(W + "fldChar", new XAttribute(W + "fldCharType", "separate"))));
+                if (fieldRun.Text.Length > 0)
+                    Content(fieldRun, WithProps(new XElement(W + "t",
+                        new XAttribute(XNamespace.Xml + "space", "preserve"), fieldRun.Text)));
+                Content(fieldRun, WithProps(new XElement(W + "fldChar", new XAttribute(W + "fldCharType", "end"))));
+                continue;
+            }
+
             var url = runs[i].HyperlinkUrl;
             var anchor = runs[i].HyperlinkAnchor;
             var tooltip = runs[i].HyperlinkTooltip;
@@ -1654,7 +1965,8 @@ public static class DocxWriter
     private static XElement? BuildParagraphProperties(
         Paragraph paragraph,
         IReadOnlyDictionary<Section, IReadOnlyList<HeaderFooterPart>>? partsBySection = null,
-        PreservedNumberingPlan? preservedNumbering = null)
+        PreservedNumberingPlan? preservedNumbering = null,
+        IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int>? restartOverrides = null)
     {
         var pPr = new XElement(W + "pPr");
         if (!string.IsNullOrEmpty(paragraph.StyleId))
@@ -1681,13 +1993,21 @@ public static class DocxWriter
             pPr.Add(new XElement(W + "bidi"));
         if (f.ListKind != ListKind.None)
         {
-            var numId = f.ListKind switch
+            var baseNumId = f.ListKind switch
             {
                 ListKind.Number => NumberNumId,
                 ListKind.MultiLevel => MultiLevelNumId,
                 _ => BulletNumId
             };
             var level = Math.Clamp(f.ListLevel, 0, ListLevelCount - 1);
+            // When the paragraph carries a list restart override (ListStartOverride != null), look up the
+            // dedicated override w:num emitted by BuildNumbering; fall back to the base numId when the map
+            // does not contain this combination (e.g. bullets where override is ignored).
+            var numId = baseNumId;
+            if (f.ListStartOverride.HasValue
+                && restartOverrides is not null
+                && restartOverrides.TryGetValue((f.ListKind, level, f.ListStartOverride.Value), out var overrideId))
+                numId = overrideId;
             pPr.Add(new XElement(W + "numPr",
                 new XElement(W + "ilvl", new XAttribute(W + "val", level)),
                 new XElement(W + "numId", new XAttribute(W + "val", numId))));
@@ -1717,6 +2037,10 @@ public static class DocxWriter
         if (f.TabStops.Count > 0)
             pPr.Add(new XElement(W + "tabs",
                 f.TabStops.Select(BuildTabStop)));
+        // Suppress automatic hyphenation for this paragraph (w:suppressAutoHyphens); emitted only when set,
+        // like the other pPr toggles. In CT_PPr schema order it follows w:tabs.
+        if (f.SuppressAutoHyphens)
+            pPr.Add(new XElement(W + "suppressAutoHyphens"));
         // w:spacing carries before/after AND line spacing. Line spacing is emitted only when it differs
         // from the model default (a multiple of 1.15), so paragraphs with inherited/default spacing stay
         // byte-unchanged; explicit single/1.5/double (auto) and exact/atLeast heights round-trip.
@@ -1748,23 +2072,36 @@ public static class DocxWriter
                 new XAttribute(W + "left", PointsToDxa(f.IndentLeftPt)),
                 new XAttribute(W + "right", PointsToDxa(f.IndentRightPt)),
                 new XAttribute(W + "firstLine", PointsToDxa(f.FirstLineIndentPt))));
-        // Paragraph border (w:pBdr): a uniform box (all four edges) by default, or a bottom-only edge
-        // when the border is a horizontal rule. Each edge shares one colour/width, analogous to w:tblBorders.
+        // Paragraph border (w:pBdr): a box whose drawn edges are selected by the per-edge flags (all four =
+        // a box) with one shared colour/width/line-style, analogous to w:tblBorders. A horizontal rule is the
+        // bottom-only case. Each drawn edge carries the model's line style (w:val).
         if (f.Border is { } border)
         {
+            var styleToken = BorderLineStyles.ToToken(border.LineStyle);
             XElement Edge(string name) => new(W + name,
-                new XAttribute(W + "val", "single"),
+                new XAttribute(W + "val", styleToken),
                 new XAttribute(W + "sz", PointsToEighthPoints(border.WidthPt)),
                 new XAttribute(W + "space", 0),
                 new XAttribute(W + "color", border.ColorHex.TrimStart('#')));
-            pPr.Add(border.BottomOnly
-                ? new XElement(W + "pBdr", Edge("bottom"))
-                : new XElement(W + "pBdr", Edge("top"), Edge("left"), Edge("bottom"), Edge("right")));
+            // BottomOnly forces a bottom-only rule (the horizontal-rule case); otherwise honour the per-edge
+            // flags. An edge that is off is omitted entirely (a null is dropped by XElement) so the round-trip
+            // reads it back as off.
+            var drawBottom = border.BottomOnly || border.Bottom;
+            var drawTop = !border.BottomOnly && border.Top;
+            var drawLeft = !border.BottomOnly && border.Left;
+            var drawRight = !border.BottomOnly && border.Right;
+            if (drawTop || drawLeft || drawBottom || drawRight)
+                pPr.Add(new XElement(W + "pBdr",
+                    drawTop ? Edge("top") : null,
+                    drawLeft ? Edge("left") : null,
+                    drawBottom ? Edge("bottom") : null,
+                    drawRight ? Edge("right") : null));
         }
-        // Paragraph shading (background fill), mirroring run-level w:shd highlight.
+        // Paragraph shading (background fill), mirroring run-level w:shd highlight. The pattern (w:val) comes
+        // from the model; the default Clear preserves the byte-unchanged round-trip of existing documents.
         if (f.ShadingColorHex is { Length: > 0 } shading)
             pPr.Add(new XElement(W + "shd",
-                new XAttribute(W + "val", "clear"),
+                new XAttribute(W + "val", ShadingPatterns.ToToken(f.ShadingPattern)),
                 new XAttribute(W + "color", "auto"),
                 new XAttribute(W + "fill", shading.TrimStart('#'))));
 
@@ -1826,6 +2163,74 @@ public static class DocxWriter
         _ => null
     };
 
+    /// <summary>
+    /// Builds the <c>w:fldSimple/@w:instr</c> for a table-cell formula field: the formula expression
+    /// (with a leading <c>=</c>) plus, when a number format is set, a <c>\#</c> numeric-picture switch with
+    /// the quoted format — e.g. <c> =SUM(ABOVE) \# "#,##0.00" </c>. The surrounding spaces match how Word
+    /// writes field instructions.
+    /// </summary>
+    private static string TableFormulaInstruction(TableFormulaField formula)
+    {
+        var expression = formula.Expression.TrimStart().StartsWith('=')
+            ? formula.Expression.Trim()
+            : "=" + formula.Expression.Trim();
+        var instr = " " + expression + " ";
+        if (formula.NumberFormat is { Length: > 0 } format)
+            instr += "\\# \"" + format + "\" ";
+        return instr;
+    }
+
+    /// <summary>
+    /// Builds the <c>w:fldSimple/@w:instr</c> for a Mark Citation (TA) field: <c> TA \l "long" \s "short"
+    /// \c N </c>, where <c>\l</c> is the full citation, <c>\s</c> the short form (omitted when blank) and
+    /// <c>\c</c> Word's numeric category. The surrounding spaces match how Word writes field instructions.
+    /// Embedded double-quotes in the citation text are dropped so the instruction stays well-formed.
+    /// </summary>
+    private static string CitationInstruction(Citation citation)
+    {
+        static string Clean(string value) => value.Replace("\"", string.Empty);
+        var instr = " TA \\l \"" + Clean(citation.LongCitation) + "\"";
+        if (citation.ShortCitation.Length > 0)
+            instr += " \\s \"" + Clean(citation.ShortCitation) + "\"";
+        instr += " \\c " + (int)citation.Category + " ";
+        return instr;
+    }
+
+    /// <summary>
+    /// Builds the <c>w:fldSimple/@w:instr</c> for a cross-reference field: the keyword
+    /// (<c>REF</c>/<c>PAGEREF</c>/<c>NOTEREF</c>) and target (a bookmark name or note id), plus the
+    /// "insert reference to" switch (<c>\w</c> heading number, <c>\n</c> paragraph number, <c>\p</c>
+    /// above/below) and a trailing <c>\h</c> when the reference is a hyperlink — e.g.
+    /// <c> REF _Ref1 \w \h </c>. The surrounding spaces match how Word writes field instructions.
+    /// </summary>
+    private static string CrossReferenceInstruction(CrossReferenceField field)
+    {
+        var keyword = field.Kind switch
+        {
+            CrossRefFieldKind.PageRef => "PAGEREF",
+            CrossRefFieldKind.NoteRef => "NOTEREF",
+            _ => "REF"
+        };
+        var builder = new System.Text.StringBuilder(" ");
+        builder.Append(keyword).Append(' ').Append(field.Target);
+        switch (field.InsertAs)
+        {
+            case CrossRefInsertAs.HeadingNumber:
+                builder.Append(" \\w");
+                break;
+            case CrossRefInsertAs.ParagraphNumber:
+                builder.Append(" \\n");
+                break;
+            case CrossRefInsertAs.AboveBelow:
+                builder.Append(" \\p");
+                break;
+        }
+        if (field.Hyperlink)
+            builder.Append(" \\h");
+        builder.Append(' ');
+        return builder.ToString();
+    }
+
     private static XElement BuildRun(Run run, RunDrawings drawings)
     {
         // An inline equation serialises as an m:oMath emitted in place of the run (a paragraph-level
@@ -1855,6 +2260,32 @@ public static class DocxWriter
             wr.Add(BuildWordArtDrawing(wordArt, drawings.Ids));
             return wr;
         }
+
+        // A Mark Citation (TA) field emits a hidden w:fldSimple whose w:instr is the TA instruction
+        // (" TA \l "long" \s "short" \c N "). It wraps an empty run so it produces no visible glyph, matching
+        // Word's hidden citation mark. The reader recovers the Citation from the instruction.
+        if (run.Citation is { } citation)
+            return new XElement(W + "fldSimple",
+                new XAttribute(W + "instr", CitationInstruction(citation)),
+                new XElement(W + "r"));
+
+        // A cross-reference field (Word's References > Cross-reference) emits a w:fldSimple whose w:instr is
+        // a REF/PAGEREF/NOTEREF instruction over a bookmark name or note id, with optional \w/\n/\p and \h
+        // switches (e.g. " REF _Ref1 \h "), wrapping a run whose w:t is the cached resolved display text. The
+        // reader recovers the field from the instruction and the cached text from the wrapped run.
+        if (run.CrossReference is { } crossReference)
+            return new XElement(W + "fldSimple",
+                new XAttribute(W + "instr", CrossReferenceInstruction(crossReference)),
+                BuildTextRun(run, drawings));
+
+        // A table-cell formula field (Word's Table > Data > Formula) emits a w:fldSimple whose w:instr is
+        // the formula plus an optional number-format switch (e.g. " =SUM(ABOVE) \# "#,##0.00" "), wrapping a
+        // run whose w:t is the cached computed result. The reader recovers the formula + format from the
+        // instruction and the cached result from the wrapped run.
+        if (run.TableFormula is { } formula)
+            return new XElement(W + "fldSimple",
+                new XAttribute(W + "instr", TableFormulaInstruction(formula)),
+                BuildTextRun(run, drawings));
 
         // A document field emits a self-contained w:fldSimple wrapping a run; the wrapped run's w:t
         // carries the last-known/cached value as fallback text for field-unaware consumers. The
@@ -1909,6 +2340,15 @@ public static class DocxWriter
     {
         var r = new XElement(W + "r");
         var rPr = BuildRunProperties(run.Formatting);
+        // A tracked formatting change (w:rPrChange) is the LAST child of the run's run-properties and
+        // carries a nested w:rPr of the run's *previous* formatting (what reject restores). When the run
+        // has a format revision but no other run properties, an empty w:rPr must still be created to host
+        // it (an rPr that is null/empty would otherwise be dropped).
+        if (run.FormatRevision is { } formatRevision)
+        {
+            rPr ??= new XElement(W + "rPr");
+            rPr.Add(BuildRprChange(formatRevision, drawings.Ids));
+        }
         if (rPr is not null)
             r.Add(rPr);
         if (run.PreservedDrawing is { } preservedDrawing)
@@ -1945,17 +2385,147 @@ public static class DocxWriter
         return oMath;
     }
 
-    /// <summary>Builds the OMML element for a single math fragment (m:r, m:sSup or m:f).</summary>
+    /// <summary>
+    /// Builds the OMML element for a single math fragment: m:sSup / m:sSub / m:sSubSup / m:f / m:rad /
+    /// m:nary / m:acc / m:bar / m:d / m:m, or a plain m:r for text. Mirrors the reader (see
+    /// <c>DocxReader.ReadOMath</c>).
+    /// </summary>
     private static XElement BuildMathRun(MathRun run) => run.Kind switch
     {
         MathRunKind.Superscript => new XElement(M + "sSup",
             new XElement(M + "e", MathText(run.Base)),
             new XElement(M + "sup", MathText(run.Sup))),
+        MathRunKind.Subscript => new XElement(M + "sSub",
+            new XElement(M + "e", MathText(run.Base)),
+            new XElement(M + "sub", MathText(run.Sub))),
+        MathRunKind.SubSuperscript => new XElement(M + "sSubSup",
+            new XElement(M + "e", MathText(run.Base)),
+            new XElement(M + "sub", MathText(run.Sub)),
+            new XElement(M + "sup", MathText(run.Sup))),
         MathRunKind.Fraction => new XElement(M + "f",
             new XElement(M + "num", MathText(run.Numerator)),
             new XElement(M + "den", MathText(run.Denominator))),
+        MathRunKind.Radical => BuildRadical(run),
+        MathRunKind.NAry => BuildNAry(run),
+        MathRunKind.Accent => BuildAccent(run),
+        MathRunKind.Bar => BuildBar(run),
+        MathRunKind.Delimiter => BuildDelimiter(run),
+        MathRunKind.Matrix => BuildMatrix(run.Matrix),
+        MathRunKind.FunctionApply => BuildFunctionApply(run),
+        MathRunKind.GroupChar => BuildGroupChar(run),
         _ => MathText(run.Text)
     };
+
+    /// <summary>
+    /// Builds a radical (m:rad). A square root sets m:radPr/m:degHide and emits an empty m:deg; an nth
+    /// root carries the degree in m:deg. The radicand is the m:e element. The reader keys off m:degHide
+    /// and the m:deg text to recover <see cref="MathRun.Degree"/>.
+    /// </summary>
+    private static XElement BuildRadical(MathRun run)
+    {
+        var isSquare = string.IsNullOrEmpty(run.Degree);
+        var deg = isSquare
+            ? new XElement(M + "deg")
+            : new XElement(M + "deg", MathText(run.Degree));
+        return new XElement(M + "rad",
+            new XElement(M + "radPr",
+                new XElement(M + "degHide", new XAttribute(M + "val", isSquare ? "1" : "0"))),
+            deg,
+            new XElement(M + "e", MathText(run.Base)));
+    }
+
+    /// <summary>
+    /// Builds an n-ary operator (m:nary): m:naryPr carries the operator glyph (m:chr) plus subscript/
+    /// superscript-limit visibility; m:sub / m:sup hold the limits and m:e the operand.
+    /// </summary>
+    private static XElement BuildNAry(MathRun run)
+    {
+        var pr = new XElement(M + "naryPr");
+        if (!string.IsNullOrEmpty(run.Operator))
+            pr.Add(new XElement(M + "chr", new XAttribute(M + "val", run.Operator)));
+        pr.Add(new XElement(M + "subHide", new XAttribute(M + "val", string.IsNullOrEmpty(run.Sub) ? "1" : "0")));
+        pr.Add(new XElement(M + "supHide", new XAttribute(M + "val", string.IsNullOrEmpty(run.Sup) ? "1" : "0")));
+        return new XElement(M + "nary",
+            pr,
+            new XElement(M + "sub", MathText(run.Sub)),
+            new XElement(M + "sup", MathText(run.Sup)),
+            new XElement(M + "e", MathText(run.Base)));
+    }
+
+    /// <summary>
+    /// Builds an accent (m:acc): m:accPr/m:chr carries the accent glyph (hat/bar/vec/dot/tilde); the
+    /// accented base is the m:e element. The reader keys off m:accPr/m:chr to recover
+    /// <see cref="MathRun.Accent"/>. Mirrors <c>DocxReader.ReadAccent</c>.
+    /// </summary>
+    private static XElement BuildAccent(MathRun run)
+    {
+        var pr = new XElement(M + "accPr");
+        if (!string.IsNullOrEmpty(run.Accent))
+            pr.Add(new XElement(M + "chr", new XAttribute(M + "val", run.Accent)));
+        return new XElement(M + "acc",
+            pr,
+            new XElement(M + "e", MathText(run.Base)));
+    }
+
+    /// <summary>
+    /// Builds a bar (m:bar): m:barPr/m:pos carries "top" (overbar) or "bot" (underbar); the barred base
+    /// is the m:e element. Mirrors <c>DocxReader.ReadBar</c>.
+    /// </summary>
+    private static XElement BuildBar(MathRun run) =>
+        new(M + "bar",
+            new XElement(M + "barPr",
+                new XElement(M + "pos", new XAttribute(M + "val", run.BarTop ? "top" : "bot"))),
+            new XElement(M + "e", MathText(run.Base)));
+
+    /// <summary>
+    /// Builds a delimiter (m:d): m:dPr carries the begin/end glyphs (m:begChr / m:endChr); a single
+    /// m:e holds the bracketed content.
+    /// </summary>
+    private static XElement BuildDelimiter(MathRun run) =>
+        new(M + "d",
+            new XElement(M + "dPr",
+                new XElement(M + "begChr", new XAttribute(M + "val", run.OpenChar)),
+                new XElement(M + "endChr", new XAttribute(M + "val", run.CloseChar))),
+            new XElement(M + "e", MathText(run.Base)));
+
+    /// <summary>
+    /// Builds a matrix (m:m): one m:mr per row, each holding one m:e (cell) per column. An absent/empty
+    /// matrix degrades to an empty math run so nothing is lost.
+    /// </summary>
+    private static XElement BuildMatrix(MathMatrix? matrix)
+    {
+        var m = new XElement(M + "m");
+        if (matrix is not null)
+            foreach (var row in matrix.Rows)
+            {
+                var mr = new XElement(M + "mr");
+                foreach (var cell in row)
+                    mr.Add(new XElement(M + "e", MathText(cell)));
+                m.Add(mr);
+            }
+        return m;
+    }
+
+    /// <summary>
+    /// Builds a function-apply element (m:func): m:fName holds a plain text run with the function name
+    /// and m:e holds the argument. Mirrors <c>DocxReader.ReadFunctionApply</c>.
+    /// </summary>
+    private static XElement BuildFunctionApply(MathRun run) =>
+        new(M + "func",
+            new XElement(M + "fName", MathText(run.FuncName)),
+            new XElement(M + "e", MathText(run.Base)));
+
+    /// <summary>
+    /// Builds a group-character element (m:groupChr): m:groupChrPr carries the spanning glyph
+    /// (m:chr/@m:val) and its position (m:pos/@m:val, "top" or "bot"); m:e holds the base.
+    /// Mirrors <c>DocxReader.ReadGroupChar</c>.
+    /// </summary>
+    private static XElement BuildGroupChar(MathRun run) =>
+        new(M + "groupChr",
+            new XElement(M + "groupChrPr",
+                new XElement(M + "chr", new XAttribute(M + "val", run.GroupChr)),
+                new XElement(M + "pos", new XAttribute(M + "val", run.GroupChrPos))),
+            new XElement(M + "e", MathText(run.Base)));
 
     /// <summary>Builds an m:r run carrying <paramref name="text"/> in an m:t (xml:space preserved).</summary>
     private static XElement MathText(string text) =>
@@ -3155,7 +3725,13 @@ public static class DocxWriter
                 new XAttribute(W + "left", PointsToDxa(page.MarginLeftPt)),
                 new XAttribute(W + "right", PointsToDxa(page.MarginRightPt)),
                 new XAttribute(W + "top", PointsToDxa(page.MarginTopPt)),
-                new XAttribute(W + "bottom", PointsToDxa(page.MarginBottomPt))),
+                new XAttribute(W + "bottom", PointsToDxa(page.MarginBottomPt)),
+                // Header/footer distance from the page edge (@w:header / @w:footer) and the binding gutter
+                // (@w:gutter) are emitted only when set (> 0), so documents that never touched them round-trip
+                // byte-unchanged. @w:header/@w:footer carry the schema attribute order (after bottom, before gutter).
+                page.HeaderDistancePt > 0 ? new XAttribute(W + "header", PointsToDxa(page.HeaderDistancePt)) : null,
+                page.FooterDistancePt > 0 ? new XAttribute(W + "footer", PointsToDxa(page.FooterDistancePt)) : null,
+                page.GutterPt > 0 ? new XAttribute(W + "gutter", PointsToDxa(page.GutterPt)) : null),
             // Page border (w:pgBorders): a uniform box on all four edges, offset from the page edge.
             // Emitted only when set; w:sz is in eighths of a point, matching w:pBdr edges.
             BuildPageBorders(page.PageBorder),
@@ -3163,11 +3739,11 @@ public static class DocxWriter
             // pgBorders and before cols. @w:countBy is the numbering interval; @w:restart is
             // "continuous" (across pages) or "newPage" (restart each page).
             BuildLineNumbering(page),
-            // Equal-width columns: w:cols carries the count (w:num) and inter-column gap (w:space, dxa).
-            // Emitted unconditionally; w:num="1" is harmless and keeps the section shape stable.
-            new XElement(W + "cols",
-                new XAttribute(W + "num", Math.Max(1, page.ColumnCount)),
-                new XAttribute(W + "space", PointsToDxa(page.ColumnSpacingPt))),
+            // Columns: w:cols carries the count (w:num) and inter-column gap (w:space, dxa). Emitted
+            // unconditionally; w:num="1" is harmless and keeps the section shape stable. @w:sep draws a
+            // line between columns; explicit per-column widths (Left/Right presets) switch to
+            // @w:equalWidth="0" with one w:col per column (w:w + trailing w:space).
+            BuildColumns(page),
             // Vertical alignment of the page content (w:vAlign): emitted only when not Top, so existing
             // documents round-trip unchanged. Schema order places it after w:cols. Justified maps to "both".
             page.VerticalAlignment != PageVerticalAlignment.Top
@@ -3253,6 +3829,41 @@ public static class DocxWriter
     }
 
     /// <summary>
+    /// Builds the w:cols element (column layout). Always emitted so the section shape stays stable.
+    /// For equal-width columns it carries @w:num + @w:space; for explicit unequal widths
+    /// (<see cref="PageSettings.ColumnWidthsPt"/>) it carries @w:equalWidth="0" with one w:col per column
+    /// (each @w:w plus a trailing @w:space, except the last). @w:sep is added when a line is drawn between
+    /// columns. All measurements are dxa (twentieths of a point).
+    /// </summary>
+    private static XElement BuildColumns(PageSettings page)
+    {
+        var cols = new XElement(W + "cols", new XAttribute(W + "num", Math.Max(1, page.ColumnCount)));
+        if (page.ColumnsLineBetween)
+            cols.Add(new XAttribute(W + "sep", "1"));
+
+        var widths = page.ColumnWidthsPt;
+        if (widths is { Count: > 1 } && widths.Count == Math.Max(1, page.ColumnCount))
+        {
+            // Explicit unequal columns (Left/Right presets): equalWidth off + per-column w:col children.
+            cols.Add(new XAttribute(W + "equalWidth", "0"));
+            cols.Add(new XAttribute(W + "space", PointsToDxa(page.ColumnSpacingPt)));
+            for (var i = 0; i < widths.Count; i++)
+            {
+                var col = new XElement(W + "col", new XAttribute(W + "w", PointsToDxa(widths[i])));
+                if (i < widths.Count - 1)
+                    col.Add(new XAttribute(W + "space", PointsToDxa(page.ColumnSpacingPt)));
+                cols.Add(col);
+            }
+        }
+        else
+        {
+            cols.Add(new XAttribute(W + "space", PointsToDxa(page.ColumnSpacingPt)));
+        }
+
+        return cols;
+    }
+
+    /// <summary>
     /// Builds the w:pgBorders element (a uniform box on all four edges) for a page border, or null when
     /// no page border is set. w:offsetFrom="page" with w:space="24" places the border 24pt off the page
     /// edge — Word's default. Edge widths (w:sz) are in eighths of a point, like w:pBdr.
@@ -3262,8 +3873,9 @@ public static class DocxWriter
         if (border is null)
             return null;
 
+        var styleToken = BorderLineStyles.ToToken(border.LineStyle);
         XElement Edge(string name) => new(W + name,
-            new XAttribute(W + "val", "single"),
+            new XAttribute(W + "val", styleToken),
             new XAttribute(W + "sz", PointsToEighthPoints(border.WidthPt)),
             new XAttribute(W + "space", 24),
             new XAttribute(W + "color", border.ColorHex.TrimStart('#')));
@@ -3375,6 +3987,34 @@ public static class DocxWriter
     }
 
     /// <summary>
+    /// Builds the restart-override map: for every paragraph that carries a non-null
+    /// <see cref="ParagraphFormatting.ListStartOverride"/> on a Number or MultiLevel list, assigns a
+    /// unique <c>w:numId</c> (above the preserved block) so <c>BuildNumbering</c> can emit the matching
+    /// <c>w:num</c> with <c>w:lvlOverride/w:startOverride</c>, and <c>BuildParagraphProperties</c> can
+    /// reference it. Returns an empty dictionary (never null) so callers always have a valid lookup.
+    /// </summary>
+    private static IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int> BuildRestartOverrides(
+        TextDocument document, PreservedNumberingPlan? preserved)
+    {
+        var result = new Dictionary<(ListKind, int, int), int>();
+        // Override numIds must be clear of FreeW's fixed 1/2/3 AND the preserved range (4..4+preserved.Nums.Count-1).
+        var nextOverrideNumId = PreservedNumIdStart + (preserved?.Nums.Count ?? 0);
+        foreach (var paragraph in EnumerateParagraphs(document))
+        {
+            var f = paragraph.Formatting;
+            if (f.ListKind is not (ListKind.Number or ListKind.MultiLevel))
+                continue;
+            if (!f.ListStartOverride.HasValue)
+                continue;
+            var level = Math.Clamp(f.ListLevel, 0, ListLevelCount - 1);
+            var key = (f.ListKind, level, f.ListStartOverride.Value);
+            if (!result.ContainsKey(key))
+                result[key] = nextOverrideNumId++;
+        }
+        return result;
+    }
+
+    /// <summary>
     /// Builds word/numbering.xml: three abstract numbering definitions — bullet (abstractNumId 0),
     /// decimal (abstractNumId 1) and a multilevel/legal outline (abstractNumId 2) — each with
     /// <see cref="ListLevelCount"/> levels, mapped to w:num ids <see cref="BulletNumId"/>/
@@ -3389,7 +4029,10 @@ public static class DocxWriter
     /// the familiar outline form (1, 1.1, 1.1.1). Every multilevel level is w:numFmt="decimal" and the
     /// indent grows one step (18pt) per level.
     /// </remarks>
-    private static XDocument BuildNumbering(bool includeFreeWNumbering, PreservedNumberingPlan? preserved)
+    private static XDocument BuildNumbering(
+        bool includeFreeWNumbering,
+        PreservedNumberingPlan? preserved,
+        IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int>? restartOverrides = null)
     {
         XElement Lvl(int level, string numFmt, string lvlText) =>
             new(W + "lvl",
@@ -3456,6 +4099,30 @@ public static class DocxWriter
         if (preserved is not null)
             numbering.Add(preserved.Nums.Select(n => new XElement(n)));
 
+        // Restart-override w:num elements: one per distinct (ListKind, level, startAt) group, each
+        // referencing the same abstractNumId as the base kind (0=bullet, 1=decimal, 2=multilevel) but adding
+        // a w:lvlOverride/@startOverride so Word resets the counter at that paragraph. Word requires that
+        // these extra w:num elements reference an existing w:abstractNum — FreeW's fixed 0/1/2 always exist
+        // when includeFreeWNumbering is true (i.e. when there are any FreeW-authored lists), which is the
+        // only time a paragraph can carry ListStartOverride. Bullets are excluded by BuildRestartOverrides.
+        if (restartOverrides is not null && includeFreeWNumbering)
+        {
+            foreach (var ((kind, level, startAt), overrideNumId) in restartOverrides)
+            {
+                var abstractNumId = kind switch
+                {
+                    ListKind.MultiLevel => 2,
+                    _ => 1  // Number → decimal abstractNum
+                };
+                numbering.Add(new XElement(W + "num",
+                    new XAttribute(W + "numId", overrideNumId),
+                    new XElement(W + "abstractNumId", new XAttribute(W + "val", abstractNumId)),
+                    new XElement(W + "lvlOverride",
+                        new XAttribute(W + "ilvl", level),
+                        new XElement(W + "startOverride", new XAttribute(W + "val", startAt)))));
+            }
+        }
+
         return new XDocument(numbering);
     }
 
@@ -3466,7 +4133,7 @@ public static class DocxWriter
     /// for ordering — need listing; any unmodelled element not here keeps its relative position because the
     /// overlay only inserts FreeW's elements and never reorders the originals. The full schema order
     /// (ISO/IEC 29500 §17.15.1.78) places these as: displayBackgroundShape … embedTrueTypeFonts …
-    /// documentProtection … autoHyphenation … evenAndOddHeaders.
+    /// documentProtection … autoHyphenation … evenAndOddHeaders … footnotePr … endnotePr.
     /// </summary>
     private static readonly string[] CtSettingsOrder =
     [
@@ -3479,7 +4146,8 @@ public static class DocxWriter
         "mailMerge", "revisionView", "trackChanges", "doNotTrackMoves", "doNotTrackFormatting",
         "documentProtection", "autoFormatOverride", "styleLockTheme", "styleLockQFSet", "defaultTabStop",
         "autoHyphenation", "consecutiveHyphenLimit", "hyphenationZone", "doNotHyphenateCaps", "showEnvelope",
-        "summaryLength", "clickAndTypeStyle", "defaultTableStyle", "evenAndOddHeaders"
+        "summaryLength", "clickAndTypeStyle", "defaultTableStyle", "evenAndOddHeaders",
+        "footnotePr", "endnotePr"
     ];
 
     /// <summary>
@@ -3499,8 +4167,26 @@ public static class DocxWriter
     /// FreeW's features still apply.
     /// </para>
     /// </summary>
-    private static XDocument BuildSettings(ProtectionSettings protection, bool autoHyphenation, bool differentOddEvenPages, bool displayBackground, bool embedTrueTypeFonts, XElement? original)
+    private static XDocument BuildSettings(ProtectionSettings protection, PageSettings page, bool displayBackground, bool embedTrueTypeFonts, NoteNumberingOptions footnoteNumbering, NoteNumberingOptions endnoteNumbering, XElement? original)
     {
+        var autoHyphenation = page.AutoHyphenation;
+        var differentOddEvenPages = page.DifferentOddEvenPages;
+        var mirrorMargins = page.MirrorMargins;
+        // Fresh documents keep the historical minimal-settings behavior: dormant hyphenation sub-options do
+        // not create a settings part by themselves. Preserved settings are different: Word-authored documents
+        // can keep these values while auto hyphenation is off, and the reader captures them so they survive.
+        var preserveDormantHyphenationOptions = original is not null;
+        var writeHyphenationOptions = autoHyphenation || preserveDormantHyphenationOptions;
+        var consecutiveLimit = writeHyphenationOptions && page.ConsecutiveHyphenLimit > 0
+            ? new XElement(W + "consecutiveHyphenLimit", new XAttribute(W + "val", page.ConsecutiveHyphenLimit))
+            : null;
+        var hyphenationZone = writeHyphenationOptions && page.HyphenationZonePt > 0
+            ? new XElement(W + "hyphenationZone", new XAttribute(W + "val", PointsToDxa(page.HyphenationZonePt)))
+            : null;
+        var doNotHyphenateCaps = writeHyphenationOptions && page.DoNotHyphenateCaps
+            ? new XElement(W + "doNotHyphenateCaps")
+            : null;
+
         // Authored-from-scratch (no preserved settings): emit a fresh minimal part with exactly FreeW's modelled
         // children in the historical emission order, byte-for-byte as before — no overlay machinery involved.
         if (original is null)
@@ -3511,25 +4197,46 @@ public static class DocxWriter
                 fresh.Add(new XElement(W + "embedTrueTypeFonts"));
             if (displayBackground)
                 fresh.Add(new XElement(W + "displayBackgroundShape"));
+            // Mirror margins (w:mirrorMargins) sits after the font-embedding region and before autoHyphenation
+            // in CT_Settings schema order.
+            if (mirrorMargins)
+                fresh.Add(new XElement(W + "mirrorMargins"));
             if (autoHyphenation)
                 fresh.Add(new XElement(W + "autoHyphenation"));
+            // Hyphenation sub-options follow autoHyphenation in CT_Settings schema order.
+            if (consecutiveLimit is not null)
+                fresh.Add(consecutiveLimit);
+            if (hyphenationZone is not null)
+                fresh.Add(hyphenationZone);
+            if (doNotHyphenateCaps is not null)
+                fresh.Add(doNotHyphenateCaps);
             if (differentOddEvenPages)
                 fresh.Add(new XElement(W + "evenAndOddHeaders"));
             if (ProtectionEditToken(protection.Mode) is { } freshEdit)
                 fresh.Add(new XElement(W + "documentProtection",
                     new XAttribute(W + "edit", freshEdit),
                     new XAttribute(W + "enforcement", "1")));
+            // Footnote/endnote numbering options (w:footnotePr / w:endnotePr) follow evenAndOddHeaders in
+            // CT_Settings schema order. Only emit when non-default (keeps a freshly authored document minimal).
+            if (BuildNotePr(footnoteNumbering, "footnotePr") is { } freshFootnotePr)
+                fresh.Add(freshFootnotePr);
+            if (BuildNotePr(endnoteNumbering, "endnotePr") is { } freshEndnotePr)
+                fresh.Add(freshEndnotePr);
             return new XDocument(fresh);
         }
 
         // Preserved settings: overlay each modelled element onto a clone of the original (never mutating the
         // model). Each is removed (so we replace, not duplicate) then re-inserted at its CT_Settings schema
         // position; an element whose feature is off is simply removed, since the modelled value — not the
-        // preserved one — is authoritative for these five. Unmodelled settings keep their place.
+        // preserved one — is authoritative for these. Unmodelled settings keep their place.
         var settings = new XElement(original);
         OverlaySetting(settings, "embedTrueTypeFonts", embedTrueTypeFonts ? new XElement(W + "embedTrueTypeFonts") : null);
         OverlaySetting(settings, "displayBackgroundShape", displayBackground ? new XElement(W + "displayBackgroundShape") : null);
+        OverlaySetting(settings, "mirrorMargins", mirrorMargins ? new XElement(W + "mirrorMargins") : null);
         OverlaySetting(settings, "autoHyphenation", autoHyphenation ? new XElement(W + "autoHyphenation") : null);
+        OverlaySetting(settings, "consecutiveHyphenLimit", consecutiveLimit);
+        OverlaySetting(settings, "hyphenationZone", hyphenationZone);
+        OverlaySetting(settings, "doNotHyphenateCaps", doNotHyphenateCaps);
         OverlaySetting(settings, "evenAndOddHeaders", differentOddEvenPages ? new XElement(W + "evenAndOddHeaders") : null);
         OverlaySetting(settings, "documentProtection",
             ProtectionEditToken(protection.Mode) is { } edit
@@ -3537,8 +4244,49 @@ public static class DocxWriter
                     new XAttribute(W + "edit", edit),
                     new XAttribute(W + "enforcement", "1"))
                 : null);
+        // Overlay footnote/endnote numbering: non-default options replace any existing w:footnotePr /
+        // w:endnotePr from the preserved settings; default values remove the element (FreeW owns it now).
+        OverlaySetting(settings, "footnotePr", BuildNotePr(footnoteNumbering, "footnotePr"));
+        OverlaySetting(settings, "endnotePr", BuildNotePr(endnoteNumbering, "endnotePr"));
         return new XDocument(settings);
     }
+
+    /// <summary>
+    /// Builds a w:footnotePr or w:endnotePr child element for word/settings.xml from the given
+    /// <paramref name="options"/>. Returns null when all options are at their Word defaults (no element needed).
+    /// The <paramref name="localName"/> ("footnotePr" or "endnotePr") determines the element name.
+    /// </summary>
+    private static XElement? BuildNotePr(NoteNumberingOptions options, string localName = "footnotePr")
+    {
+        if (options.IsDefault)
+            return null;
+
+        var pr = new XElement(W + localName);
+        if (options.NumberFormat != NoteNumberFormat.Decimal)
+            pr.Add(new XElement(W + "numFmt", new XAttribute(W + "val", NoteNumberFormatToOoxml(options.NumberFormat))));
+        if (options.StartAt != 1)
+            pr.Add(new XElement(W + "numStart", new XAttribute(W + "val", options.StartAt)));
+        if (options.NumberRestart != NoteNumberRestart.Continuous)
+            pr.Add(new XElement(W + "numRestart", new XAttribute(W + "val", NoteNumberRestartToOoxml(options.NumberRestart))));
+        return pr;
+    }
+
+    private static string NoteNumberFormatToOoxml(NoteNumberFormat fmt) => fmt switch
+    {
+        NoteNumberFormat.LowerRoman => "lowerRoman",
+        NoteNumberFormat.UpperRoman => "upperRoman",
+        NoteNumberFormat.LowerLetter => "lowerLetter",
+        NoteNumberFormat.UpperLetter => "upperLetter",
+        NoteNumberFormat.Chicago => "chicago",
+        _ => "decimal"
+    };
+
+    private static string NoteNumberRestartToOoxml(NoteNumberRestart restart) => restart switch
+    {
+        NoteNumberRestart.EachSection => "eachSect",
+        NoteNumberRestart.EachPage => "eachPage",
+        _ => "continuous"
+    };
 
     /// <summary>
     /// Replaces (or removes) the w:&lt;localName&gt; child of a w:settings element with
@@ -3572,6 +4320,61 @@ public static class DocxWriter
             settings.AddFirst(replacement);
         else
             insertAfter.AddAfterSelf(replacement);
+    }
+
+    // The b:SourceType token Word uses for each FreeW SourceType.
+    private static string BibliographySourceTypeName(SourceType type) => type switch
+    {
+        SourceType.JournalArticle => "JournalArticle",
+        SourceType.WebSite => "DocumentFromInternetSite",
+        _ => "Book",
+    };
+
+    /// <summary>
+    /// Builds word/bibliography/sources.xml: a b:Sources element carrying the document's selected
+    /// <see cref="TextDocument.BibliographyStyle"/> (its <c>SelectedStyle</c> attribute as the style name)
+    /// and one b:Source per <see cref="Source"/>. Each source records its tag, type and populated fields —
+    /// the author as a single corporate author (b:Author/b:Author/b:Corporate) since FreeW models author as
+    /// one string — so both the chosen style and every source field round-trip via
+    /// <c>DocxReader.ReadBibliography</c>. Only non-empty fields are emitted.
+    /// </summary>
+    private static XDocument BuildBibliographySources(TextDocument document)
+    {
+        var sources = new XElement(B + "Sources",
+            new XAttribute(XNamespace.Xmlns + "b", B.NamespaceName),
+            new XAttribute("SelectedStyle", Citations.StyleName(document.BibliographyStyle)));
+
+        foreach (var source in document.Sources)
+        {
+            var element = new XElement(B + "Source",
+                new XElement(B + "Tag", source.Tag),
+                new XElement(B + "SourceType", BibliographySourceTypeName(source.Type)));
+
+            if (!string.IsNullOrEmpty(source.Author))
+                element.Add(new XElement(B + "Author",
+                    new XElement(B + "Author",
+                        new XElement(B + "Corporate", source.Author))));
+
+            AddBibliographyField(element, "Title", source.Title);
+            AddBibliographyField(element, "Year", source.Year);
+            AddBibliographyField(element, "Publisher", source.Publisher);
+            AddBibliographyField(element, "JournalName", source.Journal);
+            AddBibliographyField(element, "Volume", source.Volume);
+            AddBibliographyField(element, "Issue", source.Issue);
+            AddBibliographyField(element, "Pages", source.Pages);
+            AddBibliographyField(element, "URL", source.Url);
+            AddBibliographyField(element, "YearAccessed", source.Accessed);
+
+            sources.Add(element);
+        }
+
+        return new XDocument(sources);
+
+        static void AddBibliographyField(XElement parent, string localName, string? value)
+        {
+            if (!string.IsNullOrEmpty(value))
+                parent.Add(new XElement(B + localName, value));
+        }
     }
 
     /// <summary>
@@ -3700,19 +4503,34 @@ public static class DocxWriter
                 new XElement(W + "name", new XAttribute(W + "val", style.Name)));
             if (!string.IsNullOrEmpty(style.BasedOnStyleId))
                 element.Add(new XElement(W + "basedOn", new XAttribute(W + "val", style.BasedOnStyleId)));
-            // Style-level numbering FreeW does not model: when the style carried an original w:numPr and the
-            // merge plan remapped that numId (a definition exists in the preserved numbering.xml), re-emit a
-            // w:pPr/w:numPr pointing at the REMAPPED numId (disjoint from FreeW's fixed ids), keeping the
-            // original ilvl. w:pPr precedes w:rPr in CT_Style schema order. A numPr whose numId the plan did
-            // not remap (no matching w:num) is dropped, exactly like a paragraph's preserved numPr.
-            if (preservedNumbering is not null
-                && style.PreservedNumbering is { } sn
-                && preservedNumbering.NumIdRemap.TryGetValue(sn.NumId, out var mappedNumId))
+            // The "Style for following paragraph" (w:next, after w:basedOn in CT_Style order): which style
+            // the paragraph after this one takes (e.g. a Heading's body-text follow-on). Emitted only for
+            // paragraph styles that specify one.
+            if (style.Type != StyleType.Character && !string.IsNullOrEmpty(style.NextStyleId))
+                element.Add(new XElement(W + "next", new XAttribute(W + "val", style.NextStyleId)));
+            // A single w:pPr (which precedes w:rPr in CT_Style order) carrying the style's paragraph
+            // formatting (alignment / indents / spacing) and, for a preserved style-level list, its numPr.
+            // Built only for paragraph styles, and only when there is something to emit, so character styles
+            // and formatting-only paragraph styles are unaffected.
+            if (style.Type != StyleType.Character)
             {
-                element.Add(new XElement(W + "pPr",
-                    new XElement(W + "numPr",
+                var pPr = BuildStyleParagraphProperties(style.Paragraph);
+                // Style-level numbering FreeW does not model: when the style carried an original w:numPr and
+                // the merge plan remapped that numId (a definition exists in the preserved numbering.xml),
+                // re-emit a numPr pointing at the REMAPPED numId (disjoint from FreeW's fixed ids), keeping
+                // the original ilvl. A numPr whose numId the plan did not remap (no matching w:num) is
+                // dropped, exactly like a paragraph's preserved numPr.
+                if (preservedNumbering is not null
+                    && style.PreservedNumbering is { } sn
+                    && preservedNumbering.NumIdRemap.TryGetValue(sn.NumId, out var mappedNumId))
+                {
+                    pPr ??= new XElement(W + "pPr");
+                    pPr.Add(new XElement(W + "numPr",
                         new XElement(W + "ilvl", new XAttribute(W + "val", sn.Ilvl)),
-                        new XElement(W + "numId", new XAttribute(W + "val", mappedNumId)))));
+                        new XElement(W + "numId", new XAttribute(W + "val", mappedNumId))));
+                }
+                if (pPr is not null)
+                    element.Add(pPr);
             }
             var rPr = BuildRunProperties(style.Run);
             if (rPr is not null)
@@ -3721,5 +4539,64 @@ public static class DocxWriter
         }
 
         return new XDocument(styles);
+    }
+
+    /// <summary>
+    /// Build a style-scope <c>w:pPr</c> carrying only the paragraph formatting a custom style can define
+    /// (alignment, left/right/first-line indents, space-before/after, line spacing). Returns null when the
+    /// style's paragraph formatting is the default (nothing to emit), so a formatting-only or run-only style
+    /// adds no empty <c>w:pPr</c>. This is deliberately narrower than the per-paragraph
+    /// <see cref="BuildParagraphProperties"/>, which also handles instance-only concerns (pStyle, section
+    /// breaks, FreeW's modelled lists) that have no place on a style definition.
+    /// </summary>
+    private static XElement? BuildStyleParagraphProperties(ParagraphFormatting f)
+    {
+        var pPr = new XElement(W + "pPr");
+
+        if (f.Alignment != TextAlignment.Left)
+            pPr.Add(new XElement(W + "jc", new XAttribute(W + "val", f.Alignment switch
+            {
+                TextAlignment.Center => "center",
+                TextAlignment.Right => "right",
+                TextAlignment.Justify => "both",
+                _ => "left"
+            })));
+
+        // w:spacing carries before/after and line spacing, mirroring the per-paragraph writer: before/after
+        // are emitted only when non-zero, line spacing only when it differs from the model default. Schema
+        // order places w:spacing before w:ind in CT_PPr.
+        var hasLineSpacing = f.LineRule != LineSpacingRule.Multiple
+            || System.Math.Abs(f.LineSpacing - ParagraphFormatting.Default.LineSpacing) > 0.0001;
+        if (f.SpaceBeforePt > 0 || f.SpaceAfterPt > 0 || hasLineSpacing)
+        {
+            var spacing = new XElement(W + "spacing");
+            if (f.SpaceBeforePt > 0 || f.SpaceAfterPt > 0)
+            {
+                spacing.Add(new XAttribute(W + "before", PointsToDxa(f.SpaceBeforePt)));
+                spacing.Add(new XAttribute(W + "after", PointsToDxa(f.SpaceAfterPt)));
+            }
+            if (hasLineSpacing)
+            {
+                var (line, rule) = f.LineRule switch
+                {
+                    LineSpacingRule.Exact => ((int)System.Math.Round(f.LineHeightPt * 20), "exact"),
+                    LineSpacingRule.AtLeast => ((int)System.Math.Round(f.LineHeightPt * 20), "atLeast"),
+                    _ => ((int)System.Math.Round(f.LineSpacing * 240), "auto")
+                };
+                spacing.Add(new XAttribute(W + "line", line));
+                spacing.Add(new XAttribute(W + "lineRule", rule));
+            }
+            pPr.Add(spacing);
+        }
+
+        // Indents (w:ind), in dxa; emitted as a group only when any edge is non-zero, exactly like the
+        // per-paragraph writer.
+        if (f.IndentLeftPt > 0 || f.IndentRightPt > 0 || f.FirstLineIndentPt > 0)
+            pPr.Add(new XElement(W + "ind",
+                new XAttribute(W + "left", PointsToDxa(f.IndentLeftPt)),
+                new XAttribute(W + "right", PointsToDxa(f.IndentRightPt)),
+                new XAttribute(W + "firstLine", PointsToDxa(f.FirstLineIndentPt))));
+
+        return pPr.HasElements ? pPr : null;
     }
 }

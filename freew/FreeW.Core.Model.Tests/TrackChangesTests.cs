@@ -71,4 +71,75 @@ public class TrackChangesTests
         cellParagraph.PlainText.Should().Be("keep ");
         cellParagraph.Runs.Should().OnlyContain(r => r.Revision == RevisionKind.None);
     }
+
+    // --- Tracked formatting changes (w:rPrChange) ---
+
+    private static TextDocument BuildFormatRevisionDocument()
+    {
+        // Run is now bold (new formatting); it was previously plain, changed by Alice.
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("styled", new RunFormatting { Bold = true })
+        {
+            FormatRevision = new FormatRevision(RunFormatting.Default, "Alice", "2026-06-19T09:00:00Z")
+        });
+        doc.Blocks.Add(paragraph);
+        return doc;
+    }
+
+    [Fact]
+    public void HasRevisions_DetectsFormatOnlyRevision()
+    {
+        TrackChanges.HasRevisions(BuildFormatRevisionDocument()).Should().BeTrue();
+    }
+
+    [Fact]
+    public void AcceptAll_KeepsNewFormatting_AndClearsFormatRevision()
+    {
+        var doc = BuildFormatRevisionDocument();
+
+        TrackChanges.AcceptAll(doc);
+
+        var run = doc.Paragraphs.First().Runs.First();
+        // Accept keeps the current (new, bold) formatting and drops the mark.
+        run.Formatting.Bold.Should().BeTrue();
+        run.FormatRevision.Should().BeNull();
+        TrackChanges.HasRevisions(doc).Should().BeFalse();
+    }
+
+    [Fact]
+    public void RejectAll_RestoresPreviousFormatting_AndClearsFormatRevision()
+    {
+        var doc = BuildFormatRevisionDocument();
+
+        TrackChanges.RejectAll(doc);
+
+        var run = doc.Paragraphs.First().Runs.First();
+        // Reject restores the previous (plain) formatting and drops the mark; the text is unchanged.
+        run.Text.Should().Be("styled");
+        run.Formatting.Bold.Should().BeFalse();
+        run.FormatRevision.Should().BeNull();
+        TrackChanges.HasRevisions(doc).Should().BeFalse();
+    }
+
+    [Fact]
+    public void RejectAll_OnInsertedRunWithFormatRevision_RemovesRunEntirely()
+    {
+        // A run that is BOTH a tracked insertion and a tracked formatting change: rejecting the insertion
+        // removes the run, so the formatting reject is moot (no run left to restore).
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("ins", new RunFormatting { Bold = true })
+        {
+            Revision = RevisionKind.Inserted,
+            RevisionAuthor = "Alice",
+            FormatRevision = new FormatRevision(RunFormatting.Default, "Alice", null)
+        });
+        doc.Blocks.Add(paragraph);
+
+        TrackChanges.RejectAll(doc);
+
+        doc.Paragraphs.First().Runs.Should().BeEmpty();
+        TrackChanges.HasRevisions(doc).Should().BeFalse();
+    }
 }

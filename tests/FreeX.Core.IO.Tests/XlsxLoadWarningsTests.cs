@@ -118,6 +118,27 @@ public sealed class XlsxLoadWarningsTests
             adapterSource.Should().Contain($"\"{prefix}");
     }
 
+    [Fact]
+    public void XlsxFileAdapterSource_PassesWarningsIntoPerItemLoadMappers()
+    {
+        var adapterSource = TestWorkspaceFiles.ReadCoreIoSource("XlsxFileAdapter.cs");
+
+        adapterSource.Should().Contain("XlsxDataValidationClosedXmlMapper.Load(xlSheet, sheet, warnings)");
+        adapterSource.Should().Contain("XlsxNamedRangeMapper.Load(xlWorkbook, workbook, warnings)");
+    }
+
+    [Fact]
+    public void PerItemLoadMappers_ReportSkippedItemsThroughWarnings()
+    {
+        TestWorkspaceFiles.ReadCoreIoSource("XlsxDataValidationClosedXmlMapper.cs")
+            .Should()
+            .Contain("warnings?.Add($\"[data-validation]");
+
+        TestWorkspaceFiles.ReadCoreIoSource("XlsxNamedRangeMapper.cs")
+            .Should()
+            .Contain("warnings?.Add($\"[named-ranges]");
+    }
+
     private static Workbook CreateSimpleWorkbook()
     {
         var workbook = new Workbook("TestBook");

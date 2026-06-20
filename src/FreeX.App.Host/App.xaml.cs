@@ -21,7 +21,10 @@ public partial class App : Application
 {
     private static FreeXOptions? _startupOptions;
 
-    public static ServiceProvider Services { get; private set; } = null!;
+    private static ServiceProvider? _services;
+
+    public static ServiceProvider Services =>
+        _services ?? throw new InvalidOperationException("Application services are not initialized.");
 
     private void App_OnStartup(object sender, StartupEventArgs e)
     {
@@ -33,6 +36,13 @@ public partial class App : Application
         ShellStrings.Current = new FreeXShellStrings();
         BackstageStrings.Current = new FreeXBackstageStrings();
         DialogSizing.RegisterAppDialogSizing();
+
+        // Let the SHARED ribbon-icon factory (used by shared chrome — the BackstageFrame rail, QAT, …)
+        // resolve FreeX's branded Office SVGs, falling back to shared geometry when FreeX has no art. Without
+        // this the shared BackstageFrame rendered generic RibbonCommandIconKind glyphs instead of FreeX's
+        // command icons once the backstage rail moved onto the shared frame (unification P1).
+        Free.Shared.Ribbon.Wpf.RibbonIconFactory.CommandIconElementResolver =
+            RibbonIconFactory.TryCreateCommandIconElement;
 
         // Configure Serilog — resolve the log directory under LocalApplicationData so that
         // file-association launches (which may use System32 or a read-only install dir as cwd)
@@ -65,7 +75,26 @@ public partial class App : Application
         {
             _startupOptions = null;
         }
-        Services = serviceCollection.BuildServiceProvider();
+        _services = serviceCollection.BuildServiceProvider();
+
+        // Headless cross-platform visual-parity capture: render each app surface to a PNG and exit,
+        // without launching the interactive app. Additive and isolated — only engaged by the
+        // --parity-capture <outDir> switch (used by the WPF<->Avalonia visual-parity runner).
+        if (ParityCapture.TryGetOutputDirectory(e.Args) is { } parityOutDir)
+        {
+            try
+            {
+                ParityCapture.Run(parityOutDir, () => Services.GetRequiredService<MainWindow>());
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Parity capture failed");
+            }
+
+            Shutdown();
+            return;
+        }
+
         var crashAnalytics = Services.GetRequiredService<ICrashAnalytics>();
         var crashAnalyticsOptions = Services.GetRequiredService<AppCrashAnalyticsOptions>();
         var diagnosticsMetadata = Services.GetRequiredService<AppDiagnosticsMetadata>();
@@ -230,8 +259,9 @@ public partial class App : Application
         services.AddSingleton<NewWorkbookNameSequence>();
 
         // Self-update + file associations.
-        services.AddSingleton<FreeX.App.Services.FileAssociations.IFileAssociationService>(
-            new FreeX.App.Host.FileAssociations.WindowsFileAssociationService(logger: null));
+        services.AddSingleton<Free.Shared.AppServices.IFileAssociationService>(
+            new Free.Shared.AppServices.Windows.WindowsFileAssociationService(
+                FreeX.App.Services.FileAssociations.FreeXFileAssociations.All, logger: null));
         services.AddSingleton<FreeX.App.Services.Updates.IUpdateService>(sp =>
         {
             var channel = AppInfo.ReleaseChannel;
@@ -248,23 +278,11 @@ public partial class App : Application
 
     private static void RegisterCrashHandlers(IAppDiagnostics diagnostics, AutosaveSnapshotStore snapshotStore)
     {
-        Current.DispatcherUnhandledException += (_, args) =>
-        {
-            diagnostics.RecordCrash(args.Exception, "dispatcher");
-            TryEmergencySaveAllWindows(snapshotStore);
-        };
-
-        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
-        {
-            if (args.ExceptionObject is Exception exception)
-                diagnostics.RecordCrash(exception, "appdomain");
-            TryEmergencySaveAllWindows(snapshotStore);
-        };
-
-        TaskScheduler.UnobservedTaskException += (_, args) =>
-        {
-            diagnostics.RecordCrash(args.Exception, "task");
-        };
+        Free.Shared.AppServices.AppCrashHandlers.Register(
+            recordCrash: (exception, source) => diagnostics.RecordCrash(exception, source),
+            subscribeDispatcher: handler =>
+                Current.DispatcherUnhandledException += (_, args) => handler(args.Exception),
+            onAfterFault: () => TryEmergencySaveAllWindows(snapshotStore));
     }
 
     /// <summary>
@@ -486,14 +504,21 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
-        Services.GetService<IAppDiagnostics>()?.RecordEvent("app_exit", new Dictionary<string, string?>
+        try
         {
-            ["status"] = e.ApplicationExitCode.ToString()
-        });
-        Log.Information("FreeX shutting down");
-        Log.CloseAndFlush();
-        Services.Dispose();
-        base.OnExit(e);
+            _services?.GetService<IAppDiagnostics>()?.RecordEvent("app_exit", new Dictionary<string, string?>
+            {
+                ["status"] = e.ApplicationExitCode.ToString()
+            });
+            Log.Information("FreeX shutting down");
+            Log.CloseAndFlush();
+            _services?.Dispose();
+        }
+        finally
+        {
+            _services = null;
+            base.OnExit(e);
+        }
     }
 }
 

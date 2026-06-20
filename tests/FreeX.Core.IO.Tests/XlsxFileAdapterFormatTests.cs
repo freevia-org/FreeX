@@ -473,6 +473,12 @@ public sealed class XlsxFileAdapterFormatTests
         legacyDrawingHfDependencies.Should().NotContain(
             ".ToList()",
             "legacy header/footer drawing cleanup should stream relationship targets instead of allocating a target list");
+        adapterSource.Should().Contain("IsClosedXmlRelationshipLookupFailure(ex)",
+            "ClosedXML's .First() on pivot/table relationships throws InvalidOperationException when LibreOffice-authored files have unexpected part layouts — the guard must strip pivot metadata and retry");
+        adapterSource.Should().Contain("OpenPivotStripped()",
+            "the pivot-stripped fallback local function must exist and be reachable from the sanitization fallback path");
+        adapterSource.Should().Contain("IsClosedXmlRelationshipLookupFailure",
+            "the detection method for the pivot relationship lookup failure must exist in the adapter source");
     }
 
     [Fact]
@@ -517,6 +523,33 @@ public sealed class XlsxFileAdapterFormatTests
         stream.Position = 0;
         using var loaded = new ClosedXML.Excel.XLWorkbook(stream);
         loaded.Worksheet("Sheet1").Cell("A1").GetString().Should().Be("saved");
+    }
+
+    [Fact]
+    public void Save_TruncatesWriteOnlySeekableOutputStreamAfterWritingPackage()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("saved"));
+        var path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.xlsx");
+
+        try
+        {
+            File.WriteAllBytes(path, new byte[1024 * 1024]);
+            using (var stream = new FileStream(path, FileMode.Open, FileAccess.Write, FileShare.None))
+            {
+                new XlsxFileAdapter().Save(workbook, stream);
+            }
+
+            new FileInfo(path).Length.Should().BeLessThan(1024 * 1024);
+            using var readStream = File.OpenRead(path);
+            using var loaded = new ClosedXML.Excel.XLWorkbook(readStream);
+            loaded.Worksheet("Sheet1").Cell("A1").GetString().Should().Be("saved");
+        }
+        finally
+        {
+            try { File.Delete(path); } catch { }
+        }
     }
 
     [Fact]

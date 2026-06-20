@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Input;
+using FreeX.App.Presentation.GridInteraction;
 using FreeX.Core.Model;
 
 namespace FreeX.App.UI;
@@ -140,7 +141,7 @@ public partial class GridView
             if (GridAutofillPlanner.CalculateDragTarget(
                     Viewport,
                     src,
-                    pos,
+                    new GridPoint(pos.X, pos.Y),
                     ActualRowHeaderWidth,
                     EffectiveColHeaderHeight) is { } newTarget)
                 _autofillTarget = ConstrainAutofillTarget(src, newTarget);

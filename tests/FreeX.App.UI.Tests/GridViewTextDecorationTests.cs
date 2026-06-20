@@ -1,5 +1,6 @@
 using System.Windows;
 using FluentAssertions;
+using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.UI;
 using FreeX.Core.Model;
 

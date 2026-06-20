@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using FreeX.App.Presentation.Filtering;
 using FreeX.Core.Calc;
 using FreeX.Core.Model;
 
@@ -11,6 +12,10 @@ public partial class MainWindow
 {
     private void Scroll_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
+        // Scrolling the grid moves the column header the AutoFilter flyout is anchored to without
+        // changing window activation, so dismiss the flyout here (its own deactivation handler covers
+        // click-away cases). Scrolling within the flyout's own list does not raise this event.
+        CloseAutoFilterDropdown();
         UpdateViewport();
         BroadcastScrollOffsetToSideBySidePartner();
     }
@@ -129,7 +134,7 @@ public partial class MainWindow
         e.Handled = true;
     }
 
-    private void OnAutofillEdgeScrollRequested(FreeX.App.UI.GridAutoScrollRequest request)
+    private void OnAutofillEdgeScrollRequested(FreeX.App.Presentation.GridInteraction.GridAutoScrollRequest request)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (request.HorizontalDirection != 0)
@@ -371,6 +376,9 @@ public partial class MainWindow
     private void UpdateViewport()
     {
         if (SheetGrid == null || _viewportService == null) return;
+
+        // Dismiss the AutoFilter dropdown flyout if we've moved to a different sheet.
+        CloseAutoFilterDropdownOnSheetChange();
 
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is not null)

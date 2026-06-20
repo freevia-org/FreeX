@@ -171,6 +171,22 @@ public sealed partial class MainWindow
         return button;
     }
 
+    // Worksheet context menu ▸ Sort and Filter ▸ Clear Filter. Unhides every row the active sheet's
+    // AutoFilter is currently hiding. FilterCommand with an empty allowed-value set clears the whole
+    // range's hidden rows in one undoable step (the same Core command the column dropdown's Clear uses),
+    // so this matches Excel's "remove all filters on this AutoFilter" behaviour.
+    private void ClearActiveSheetFilters()
+    {
+        var sheet = _session.ActiveSheet;
+        if (AutoFilterHeaderPlanner.TryGetAutoFilterRange(sheet) is not { } range)
+        {
+            RefreshShell(UiText.Get("WTA_ContextFilter_NoFilter"));
+            return;
+        }
+
+        RunAutoFilter(range, columnOffset: 0, allowedValues: []);
+    }
+
     private void RunAutoFilter(GridRange range, uint columnOffset, IReadOnlyList<string> allowedValues)
     {
         if (!TryCommitPendingFormulaEdit())
@@ -180,11 +196,11 @@ public sealed partial class MainWindow
             new FilterCommand(_session.ActiveSheet.Id, range, columnOffset, allowedValues));
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Filter failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("ShellLoc_FilterFailed"));
             return;
         }
 
-        RefreshShell(allowedValues.Count == 0 ? "Cleared filter" : "Applied filter");
+        RefreshShell(allowedValues.Count == 0 ? UiText.Get("ShellLoc_ClearedFilter") : UiText.Get("ShellLoc_AppliedFilter"));
     }
 
     private void RunAutoFilterSort(GridRange range, uint columnOffset, bool ascending)
@@ -196,11 +212,11 @@ public sealed partial class MainWindow
             new SortCommand(_session.ActiveSheet.Id, range, columnOffset, ascending));
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Sort failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("ShellLoc_SortFailed"));
             return;
         }
 
-        RefreshShell(ascending ? "Sorted A to Z" : "Sorted Z to A");
+        RefreshShell(ascending ? UiText.Get("ShellLoc_SortedAToZ") : UiText.Get("ShellLoc_SortedZToA"));
     }
 
     private static bool RangeHasActiveFilter(Sheet sheet, GridRange range)

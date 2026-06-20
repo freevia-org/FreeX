@@ -1,3 +1,5 @@
+using FreeX.App.Presentation.Filtering;
+
 namespace FreeX.App.Host;
 
 internal static class AutoFilterMenuCatalog

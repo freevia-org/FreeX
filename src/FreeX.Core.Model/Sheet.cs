@@ -657,7 +657,11 @@ public sealed partial class Sheet
             for (int c = 0; c < cols; c++)
             {
                 if (r == 0 && c == 0) continue;
-                _spillValues[(anchor.Row + (uint)r, anchor.Col + (uint)c)] = rv.Cells[r, c];
+                var row = anchor.Row + (uint)r;
+                var col = anchor.Col + (uint)c;
+                _spillValues[(row, col)] = rv.Cells[r, c];
+                if (rv.Cells[r, c] is not BlankValue)
+                    TrackUsedRangeCellSet(row, col);
             }
         _spillAnchors[(anchor.Row, anchor.Col)] = ((uint)rows, (uint)cols);
         _contentVersion++;
@@ -690,7 +694,10 @@ public sealed partial class Sheet
                 for (uint c = 0; c < extent.Cols; c++)
                 {
                     if (r == 0 && c == 0) continue;
-                    _spillValues.Remove((anchor.Row + r, anchor.Col + c));
+                    var row = anchor.Row + r;
+                    var col = anchor.Col + c;
+                    if (_spillValues.Remove((row, col)))
+                        TrackUsedRangeCellCleared(row, col);
                 }
             _spillAnchors.Remove((anchor.Row, anchor.Col));
             hadSpillValues = true;
@@ -818,7 +825,7 @@ public sealed partial class Sheet
         if (!_usedRangeCacheDirty)
             return _usedRangeCache;
 
-        if (_cells.Count == 0)
+        if (_cells.Count == 0 && _spillValues.Count == 0)
         {
             _usedRangeCache = null;
             _usedRangeCacheDirty = false;
@@ -832,6 +839,23 @@ public sealed partial class Sheet
             if (row > maxRow) maxRow = row;
             if (col < minCol) minCol = col;
             if (col > maxCol) maxCol = col;
+        }
+        foreach (var ((row, col), value) in _spillValues)
+        {
+            if (value is BlankValue || _cells.ContainsKey((row, col)))
+                continue;
+
+            if (row < minRow) minRow = row;
+            if (row > maxRow) maxRow = row;
+            if (col < minCol) minCol = col;
+            if (col > maxCol) maxCol = col;
+        }
+
+        if (maxRow == 0)
+        {
+            _usedRangeCache = null;
+            _usedRangeCacheDirty = false;
+            return null;
         }
 
         _usedRangeCache = new GridRange(

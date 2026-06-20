@@ -287,5 +287,177 @@ public class CitationsTests
         Citations.BuildBibliography(doc, CitationStyle.Chicago).Select(p => p.PlainText).Should().Equal(
             "Bibliography",
             "Adams. Guide. Pan, 1979.");
+
+        Citations.BuildBibliography(doc, CitationStyle.Ieee).Select(p => p.PlainText).Should().Equal(
+            "References",
+            "Adams, \"Guide,\" Pan, 1979.");
+    }
+
+    // --- IEEE in-text (numeric) -----------------------------------------------------------------------
+
+    [Fact]
+    public void FormatInText_Ieee_Source_BracketsTheTagOrAuthor()
+    {
+        Citations.FormatInText(new Source { Author = "Knuth", Year = "1997" }, CitationStyle.Ieee)
+            .Should().Be("[Knuth]");
+        Citations.FormatInText(new Source { Tag = "Knuth1997" }, CitationStyle.Ieee).Should().Be("[Knuth1997]");
+        Citations.FormatInText(new Source(), CitationStyle.Ieee).Should().Be("[Unknown]");
+    }
+
+    [Fact]
+    public void FormatInText_Numbered_OnlyIeeeProducesBracketedNumber()
+    {
+        Citations.FormatInText(3, CitationStyle.Ieee).Should().Be("[3]");
+        // Author–date styles do not number their in-text citations -> empty so callers fall back.
+        Citations.FormatInText(3, CitationStyle.Apa).Should().BeEmpty();
+        Citations.FormatInText(3, CitationStyle.Mla).Should().BeEmpty();
+        Citations.FormatInText(3, CitationStyle.Chicago).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void HeadingTextFor_Ieee_IsReferences()
+    {
+        Citations.HeadingTextFor(CitationStyle.Ieee).Should().Be("References");
+    }
+
+    // --- Style name <-> CitationStyle round-trip ------------------------------------------------------
+
+    [Theory]
+    [InlineData(CitationStyle.Apa, "APA")]
+    [InlineData(CitationStyle.Mla, "MLA")]
+    [InlineData(CitationStyle.Chicago, "Chicago")]
+    [InlineData(CitationStyle.Ieee, "IEEE")]
+    public void StyleName_And_ParseStyle_RoundTrip(CitationStyle style, string name)
+    {
+        Citations.StyleName(style).Should().Be(name);
+        Citations.ParseStyle(name).Should().Be(style);
+        // Parsing is case-insensitive and trims.
+        Citations.ParseStyle($"  {name.ToLowerInvariant()}  ").Should().Be(style);
+    }
+
+    [Fact]
+    public void ParseStyle_UnknownOrBlank_FallsBackToProvidedDefault()
+    {
+        Citations.ParseStyle(null).Should().Be(CitationStyle.Apa);
+        Citations.ParseStyle("").Should().Be(CitationStyle.Apa);
+        Citations.ParseStyle("Harvard").Should().Be(CitationStyle.Apa);
+        Citations.ParseStyle("Harvard", CitationStyle.Chicago).Should().Be(CitationStyle.Chicago);
+    }
+
+    // --- Type-aware bibliography entries (Book / JournalArticle / WebSite) x each style ----------------
+
+    [Fact]
+    public void FormatBibliographyEntry_JournalArticle_PerStyle()
+    {
+        var article = new Source
+        {
+            Type = SourceType.JournalArticle,
+            Author = "Shannon, C.",
+            Title = "A Mathematical Theory of Communication",
+            Year = "1948",
+            Journal = "Bell System Technical Journal",
+            Volume = "27",
+            Issue = "3",
+            Pages = "379-423"
+        };
+
+        // APA: Author. (Year). Title. Journal, vol. V, no. I, pp. P.
+        Citations.FormatBibliographyEntry(article, CitationStyle.Apa).Should().Be(
+            "Shannon, C. (1948). A Mathematical Theory of Communication. " +
+            "Bell System Technical Journal, vol. 27, no. 3, pp. 379-423.");
+
+        // MLA / Chicago: Author. Title. Journal, vol. V, no. I, pp. P, Year.
+        Citations.FormatBibliographyEntry(article, CitationStyle.Mla).Should().Be(
+            "Shannon, C. A Mathematical Theory of Communication. " +
+            "Bell System Technical Journal, vol. 27, no. 3, pp. 379-423, 1948.");
+        Citations.FormatBibliographyEntry(article, CitationStyle.Chicago).Should().Be(
+            "Shannon, C. A Mathematical Theory of Communication. " +
+            "Bell System Technical Journal, vol. 27, no. 3, pp. 379-423, 1948.");
+
+        // IEEE: Author, "Title," Journal, vol. V, no. I, pp. P, Year.
+        Citations.FormatBibliographyEntry(article, CitationStyle.Ieee).Should().Be(
+            "Shannon, C., \"A Mathematical Theory of Communication,\" " +
+            "Bell System Technical Journal, vol. 27, no. 3, pp. 379-423, 1948.");
+    }
+
+    [Fact]
+    public void FormatBibliographyEntry_WebSite_PerStyle()
+    {
+        var site = new Source
+        {
+            Type = SourceType.WebSite,
+            Author = "Mozilla",
+            Title = "CSS Grid Layout",
+            Year = "2023",
+            Publisher = "MDN Web Docs",
+            Url = "https://developer.mozilla.org/grid",
+            Accessed = "3 May 2024"
+        };
+
+        // APA: Author. (Year). Title. Publisher, URL, accessed Accessed.
+        Citations.FormatBibliographyEntry(site, CitationStyle.Apa).Should().Be(
+            "Mozilla. (2023). CSS Grid Layout. " +
+            "MDN Web Docs, https://developer.mozilla.org/grid, accessed 3 May 2024.");
+
+        // MLA / Chicago: Author. Title. Publisher, URL, accessed Accessed, Year.
+        Citations.FormatBibliographyEntry(site, CitationStyle.Mla).Should().Be(
+            "Mozilla. CSS Grid Layout. " +
+            "MDN Web Docs, https://developer.mozilla.org/grid, accessed 3 May 2024, 2023.");
+
+        // IEEE: Author, "Title," Publisher, URL, accessed Accessed, Year.
+        Citations.FormatBibliographyEntry(site, CitationStyle.Ieee).Should().Be(
+            "Mozilla, \"CSS Grid Layout,\" " +
+            "MDN Web Docs, https://developer.mozilla.org/grid, accessed 3 May 2024, 2023.");
+    }
+
+    [Fact]
+    public void FormatBibliographyEntry_Book_AllStyles_UsePublisherAsDetail()
+    {
+        var book = new Source
+        {
+            Type = SourceType.Book,
+            Author = "Knuth, D.",
+            Title = "The Art of Computer Programming",
+            Year = "1997",
+            Publisher = "Addison-Wesley"
+        };
+
+        Citations.FormatBibliographyEntry(book, CitationStyle.Apa)
+            .Should().Be("Knuth, D. (1997). The Art of Computer Programming. Addison-Wesley.");
+        Citations.FormatBibliographyEntry(book, CitationStyle.Mla)
+            .Should().Be("Knuth, D. The Art of Computer Programming. Addison-Wesley, 1997.");
+        Citations.FormatBibliographyEntry(book, CitationStyle.Ieee)
+            .Should().Be("Knuth, D., \"The Art of Computer Programming,\" Addison-Wesley, 1997.");
+    }
+
+    [Fact]
+    public void FormatBibliographyEntry_Ieee_NoFields_IsEmpty_AndOmitsMissingSegments()
+    {
+        Citations.FormatBibliographyEntry(new Source { Type = SourceType.JournalArticle }, CitationStyle.Ieee)
+            .Should().BeEmpty();
+
+        // Only title + year present -> "Title," + Year, no stray journal/volume segments.
+        Citations.FormatBibliographyEntry(
+                new Source { Type = SourceType.JournalArticle, Title = "Untitled", Year = "2000" },
+                CitationStyle.Ieee)
+            .Should().Be("\"Untitled,\" 2000.");
+    }
+
+    [Fact]
+    public void FormatBibliographyEntry_JournalArticle_PartialDetail_OmitsCleanly()
+    {
+        // Journal + volume only (no issue/pages): "Journal, vol. V" — no empty "no."/"pp." segments.
+        Citations.FormatBibliographyEntry(
+                new Source
+                {
+                    Type = SourceType.JournalArticle,
+                    Author = "Doe",
+                    Title = "Study",
+                    Year = "2010",
+                    Journal = "Nature",
+                    Volume = "5"
+                },
+                CitationStyle.Apa)
+            .Should().Be("Doe. (2010). Study. Nature, vol. 5.");
     }
 }

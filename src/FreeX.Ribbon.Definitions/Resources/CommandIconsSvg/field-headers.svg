@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Field Headers">
+  <rect width="32" height="32" fill="none"/>
+  <rect x="5.5" y="7.5" width="21" height="18" rx="1" fill="#ffffff" stroke="#242424" stroke-width="1.4"/>
+  <rect x="5.8" y="7.8" width="20.4" height="5.7" fill="#ffdf80"/>
+  <path d="M5.5 13.5h21M5.5 19.5h21M12.5 7.5v18M19.5 7.5v18" fill="none" stroke="#242424" stroke-width="1"/>
+  <path d="M8.5 10.5h4M15.5 10.5h4M22.5 10.5h1.5" fill="none" stroke="#4472c4" stroke-width="1.2" stroke-linecap="round"/>
+</svg>

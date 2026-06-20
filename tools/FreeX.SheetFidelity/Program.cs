@@ -359,11 +359,22 @@ internal static class Program
 
         // Save
         Exception? saveException = null;
+        IReadOnlyList<string> saveWarnings = [];
         try
         {
             using var outStream = File.Create(roundTripPath);
-            new XlsxFileAdapter().Save(workbook, outStream);
+            saveWarnings = new XlsxFileAdapter().SaveWithWarnings(workbook, outStream).Warnings;
             Emit($"  Save: SUCCESS -> {roundTripPath}");
+            if (saveWarnings.Count == 0)
+            {
+                Emit("  Save warnings: none");
+            }
+            else
+            {
+                Emit($"  Save warnings ({saveWarnings.Count}):");
+                foreach (var warning in saveWarnings)
+                    Emit($"    - {warning}");
+            }
         }
         catch (Exception ex)
         {

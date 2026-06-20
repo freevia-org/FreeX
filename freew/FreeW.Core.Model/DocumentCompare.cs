@@ -303,6 +303,8 @@ public static class DocumentCompare
         target.Page.Landscape = source.Page.Landscape;
         target.Page.ColumnCount = source.Page.ColumnCount;
         target.Page.ColumnSpacingPt = source.Page.ColumnSpacingPt;
+        target.Page.ColumnsLineBetween = source.Page.ColumnsLineBetween;
+        target.Page.ColumnWidthsPt = source.Page.ColumnWidthsPt is null ? null : new List<double>(source.Page.ColumnWidthsPt);
         target.Page.PageBorder = source.Page.PageBorder;
         target.Page.Watermark = source.Page.Watermark;
         target.Page.LineNumberMode = source.Page.LineNumberMode;
@@ -372,6 +374,9 @@ public static class DocumentCompare
         EndnoteId = source.EndnoteId,
         CommentId = source.CommentId,
         IsCommentReference = source.IsCommentReference,
-        Control = source.Control
+        Control = source.Control,
+        Citation = source.Citation,
+        CrossReference = source.CrossReference,
+        ComplexField = source.ComplexField // immutable record — safe to share
     };
 }

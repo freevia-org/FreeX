@@ -142,6 +142,69 @@ public class QuickPartsTests
     }
 
     [Fact]
+    public void BuildingBlock_Metadata_DefaultsWhenOmitted()
+    {
+        var part = new QuickPart("Block", ["body"]);
+
+        part.Gallery.Should().Be(QuickPart.DefaultGallery);
+        part.Category.Should().Be(QuickPart.DefaultCategory);
+        part.Description.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void BuildingBlock_Metadata_IsTrimmedAndPreserved()
+    {
+        var part = new QuickPart("Block", ["body"], "  AutoText ", " Header ", "  A reusable header.  ");
+
+        part.Gallery.Should().Be("AutoText");
+        part.Category.Should().Be("Header");
+        part.Description.Should().Be("A reusable header.");
+    }
+
+    [Fact]
+    public void BuildingBlock_BlankMetadata_FallsBackToDefaults()
+    {
+        var part = new QuickPart("Block", ["body"], "   ", "", null);
+
+        part.Gallery.Should().Be(QuickPart.DefaultGallery);
+        part.Category.Should().Be(QuickPart.DefaultCategory);
+        part.Description.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void FromText_CarriesBuildingBlockMetadata()
+    {
+        var part = QuickPart.FromText("Sig", "Jane\nDoe", gallery: "AutoText", category: "Signatures", description: "My sign-off");
+
+        part.Lines.Should().Equal("Jane", "Doe");
+        part.Gallery.Should().Be("AutoText");
+        part.Category.Should().Be("Signatures");
+        part.Description.Should().Be("My sign-off");
+    }
+
+    [Fact]
+    public void Store_AddListDeleteGet_RoundTripsBlocksWithMetadata()
+    {
+        var store = new QuickPartStore();
+        store.Add(new QuickPart("Greeting", ["Hello"], "AutoText", "General", "A greeting"));
+        store.Add(new QuickPart("Footer", ["Page"], "Quick Parts", "Footers", "Standard footer"));
+
+        // List: snippets come back in case-insensitive name order, carrying their metadata.
+        store.Snippets.Select(p => p.Name).Should().Equal("Footer", "Greeting");
+        var footer = store.Snippets[0];
+        footer.Gallery.Should().Be("Quick Parts");
+        footer.Category.Should().Be("Footers");
+
+        // Get: retrieves a specific block with its description intact.
+        store.Get("greeting")!.Description.Should().Be("A greeting");
+
+        // Delete: drops just that block.
+        store.Remove("Greeting").Should().BeTrue();
+        store.Get("Greeting").Should().BeNull();
+        store.Snippets.Should().ContainSingle().Which.Name.Should().Be("Footer");
+    }
+
+    [Fact]
     public void Clear_RemovesEverything()
     {
         var store = new QuickPartStore();

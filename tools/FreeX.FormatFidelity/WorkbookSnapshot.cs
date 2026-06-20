@@ -1,0 +1,184 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+using FreeX.Core.Model;
+
+namespace FreeX.FormatFidelity;
+
+/// <summary>
+/// A flattened, comparable snapshot of a workbook (§3c). Extraction goes strictly through the model
+/// APIs named in the spec: <c>Sheet.GetOccupiedCellMap()</c>, <c>Cell.Value/HasFormula/FormulaText/
+/// StyleId</c>, <c>Workbook.GetStyle(StyleId)</c>, <c>Sheet.MergedRegions/DefaultColumnWidth/
+/// DefaultRowHeight</c>, <c>Workbook.NamedRanges</c>, <c>Sheet.GetStyleOnlyEntries()</c>.
+///
+/// Cells are keyed by <c>(sheetName, row, col)</c> rather than sheet id, because formats that drop
+/// multi-sheet support (csv/txt) reload into a single freshly-named "Sheet1": for those chains the
+/// chain cap collapses sheet structure to None and the per-cell comparison falls back to ordering by
+/// position within the single surviving sheet (handled by the comparer, not the snapshot).
+/// </summary>
+internal sealed class WorkbookSnapshot
+{
+    public sealed record CellEntry(
+        ScalarValue Value,
+        bool HasFormula,
+        string? FormulaText,
+        CellStyle Style,
+        string EffectiveFontName,
+        CellColor ResolvedFontColor,
+        CellColor? ResolvedFillColor);
+
+    /// <summary>Per-sheet, ordered cell entries keyed by (row,col). Sheet order preserved.</summary>
+    public List<SheetSnapshot> Sheets { get; } = new();
+
+    public sealed class SheetSnapshot
+    {
+        public required string Name { get; init; }
+        public Dictionary<(uint Row, uint Col), CellEntry> Cells { get; } = new();
+        public List<((uint, uint) Start, (uint, uint) End)> MergedRanges { get; } = new();
+        public double DefaultColumnWidth { get; set; }
+        public double DefaultRowHeight { get; set; }
+        public Dictionary<uint, double> ColumnWidths { get; } = new();
+        public Dictionary<uint, double> RowHeights { get; } = new();
+        public uint FrozenRows { get; set; }
+        public uint FrozenCols { get; set; }
+        public int HyperlinkCount { get; set; }
+        public int CommentCount { get; set; }
+        public int DataValidationCount { get; set; }
+        public int ConditionalFormatCount { get; set; }
+        public int ChartCount { get; set; }
+        public int ImageCount { get; set; }
+    }
+
+    public Dictionary<string, string> NamedRanges { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public bool HasVba { get; set; }
+
+    public static WorkbookSnapshot Capture(Workbook wb)
+    {
+        var snap = new WorkbookSnapshot
+        {
+            HasVba = wb.HasVbaProjectPackage
+        };
+
+        foreach (var sheet in wb.Sheets)
+        {
+            var ss = new SheetSnapshot { Name = sheet.Name };
+
+            foreach (var ((row, col), cell) in sheet.GetOccupiedCellMap())
+            {
+                var style = wb.GetStyle(cell.StyleId);
+                ss.Cells[(row, col)] = new CellEntry(
+                    cell.Value,
+                    cell.HasFormula,
+                    cell.FormulaText,
+                    style,
+                    style.ResolveEffectiveFontName(wb.Theme),
+                    style.ResolveFontColor(wb.Theme),
+                    style.ResolveFillColor(wb.Theme));
+            }
+
+            // Style-only cells (formatted-but-empty) carry styling we must still compare for Full-cap
+            // style chains; merge them in (value = blank) if not already present. A style-only cell that
+            // is covered by (but not the anchor of) a merged region is NOT independently stored by a
+            // spreadsheet — the anchor's style applies to the whole region — so adapters legitimately
+            // drop it on write. Excluding it here keeps the comparison honest (its loss is not a bug).
+            foreach (var (key, styleId) in sheet.GetStyleOnlyEntries())
+            {
+                if (IsCoveredByMergeNonAnchor(sheet, key.Row, key.Col)) continue;
+                if (!ss.Cells.ContainsKey(key))
+                {
+                    var soStyle = wb.GetStyle(styleId);
+                    ss.Cells[key] = new CellEntry(
+                        BlankValue.Instance,
+                        HasFormula: false,
+                        FormulaText: null,
+                        soStyle,
+                        soStyle.ResolveEffectiveFontName(wb.Theme),
+                        soStyle.ResolveFontColor(wb.Theme),
+                        soStyle.ResolveFillColor(wb.Theme));
+                }
+            }
+
+            foreach (var region in sheet.MergedRegions)
+            {
+                ss.MergedRanges.Add((
+                    (region.Start.Row, region.Start.Col),
+                    (region.End.Row, region.End.Col)));
+            }
+
+            ss.DefaultColumnWidth = sheet.DefaultColumnWidth;
+            ss.DefaultRowHeight = sheet.DefaultRowHeight;
+            foreach (var (k, v) in sheet.ColumnWidths) ss.ColumnWidths[k] = v;
+            foreach (var (k, v) in sheet.RowHeights) ss.RowHeights[k] = v;
+            ss.FrozenRows = sheet.FrozenRows;
+            ss.FrozenCols = sheet.FrozenCols;
+            // Count hyperlinks collapsed per merged region: a range hyperlink over a merged cell (e.g.
+            // ref="A3:M3" on merged A3:AM3) is expanded by ClosedXML's reader into one entry per covered
+            // cell, but only the merge anchor survives a write (Excel anchors a merged cell's hyperlink at
+            // its top-left). Counting one hyperlink per (anchor cell | merged-region) matches what the user
+            // actually sees and round-trips, so the merged-range expansion is not scored as a false loss.
+            ss.HyperlinkCount = CountEffectiveHyperlinks(sheet);
+            ss.CommentCount = sheet.Comments.Count;
+            ss.DataValidationCount = sheet.DataValidations.Count();
+            ss.ConditionalFormatCount = sheet.ConditionalFormats.Count;
+            ss.ChartCount = sheet.Charts.Count;
+            ss.ImageCount = CountImages(sheet);
+
+            snap.Sheets.Add(ss);
+        }
+
+        foreach (var (name, range) in wb.NamedRanges)
+            snap.NamedRanges[name] = RangeKey(range);
+
+        return snap;
+    }
+
+    private static bool IsCoveredByMergeNonAnchor(Sheet sheet, uint row, uint col)
+    {
+        var addr = new CellAddress(sheet.Id, row, col);
+        return sheet.GetMergeRegion(addr) is { } region &&
+               (region.Start.Row != row || region.Start.Col != col);
+    }
+
+    private static int CountImages(Sheet sheet) => sheet.Pictures.Count;
+
+    /// <summary>
+    /// Number of hyperlinks the workbook effectively carries, collapsing every hyperlink that lands on a
+    /// non-anchor cell of a merged region onto that region's anchor. A merged region therefore contributes
+    /// at most one hyperlink (its anchor's), and standalone hyperlinks each count once — which is exactly
+    /// the set Excel renders and what survives a full re-save.
+    /// </summary>
+    private static int CountEffectiveHyperlinks(Sheet sheet)
+    {
+        var merges = sheet.MergedRegions.ToList();
+        var anchored = new HashSet<(uint Row, uint Col)>();
+        int count = 0;
+        foreach (var addr in sheet.Hyperlinks.Keys)
+        {
+            var covering = FindCoveringMerge(merges, addr);
+            if (covering is { } region)
+            {
+                // Count this merged region only once (on its first encountered hyperlink).
+                if (anchored.Add((region.Start.Row, region.Start.Col)))
+                    count++;
+            }
+            else
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    private static GridRange? FindCoveringMerge(List<GridRange> merges, CellAddress addr)
+    {
+        foreach (var region in merges)
+            if (region.Contains(addr))
+                return region;
+        return null;
+    }
+
+    private static string RangeKey(GridRange r) =>
+        $"{r.Start.Row},{r.Start.Col}:{r.End.Row},{r.End.Col}";
+}

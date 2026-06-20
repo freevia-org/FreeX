@@ -34,18 +34,34 @@ public sealed partial class XlsxFileAdapter
                          !string.IsNullOrWhiteSpace(metadata.Bookmark)
             ? metadata.Bookmark
             : target;
+
+        // A "#…" prefix marks an in-document target (some adapters, e.g. SpreadsheetML, carry it that
+        // way). Strip it for the internal address and treat the link as internal even when the model's
+        // LinkType was not set, so we never hand ClosedXML a null external URI for it.
+        var isInternal = metadata.LinkType == HyperlinkTargetKind.PlaceInThisDocument ||
+                         linkTarget.StartsWith("#", StringComparison.Ordinal);
+        if (linkTarget.StartsWith("#", StringComparison.Ordinal))
+            linkTarget = linkTarget[1..];
+
         var hyperlink = new XLHyperlink(linkTarget);
 
-        if (metadata.LinkType == HyperlinkTargetKind.PlaceInThisDocument)
+        if (isInternal)
         {
             hyperlink.IsExternal = false;
             hyperlink.InternalAddress = linkTarget;
         }
-        else
+        else if (Uri.TryCreate(linkTarget, UriKind.Absolute, out var uri))
         {
             hyperlink.IsExternal = true;
-            if (Uri.TryCreate(linkTarget, UriKind.Absolute, out var uri))
-                hyperlink.ExternalAddress = uri;
+            hyperlink.ExternalAddress = uri;
+        }
+        else
+        {
+            // Not an absolute URI and not flagged internal: ClosedXML would crash building an external
+            // relationship with a null URI. Fall back to an internal link so the cell keeps a usable
+            // target (the visible text/value is unchanged) instead of aborting the whole save.
+            hyperlink.IsExternal = false;
+            hyperlink.InternalAddress = linkTarget;
         }
 
         if (!string.IsNullOrWhiteSpace(metadata.ScreenTip))

@@ -35,9 +35,59 @@ public sealed partial class MainWindow
             : result.ErrorMessage ?? "Could not add comment.");
     }
 
-    private async Task<string?> ShowCommentTextPromptAsync(string title, string label)
+    private async Task ShowEditNoteDialogAsync()
     {
-        var box = new TextBox { AcceptsReturn = true, MinWidth = 320, MinHeight = 72, TextWrapping = TextWrapping.Wrap };
+        var existing = _session.GetActiveCellNote();
+        if (existing is null)
+        {
+            RefreshShell(UiText.Get("Comment_NoNote"));
+            return;
+        }
+
+        var text = await ShowCommentTextPromptAsync(UiText.Get("Comment_EditNoteTitle"), UiText.Get("Comment_NoteLabel"), existing);
+        if (text is null)
+            return;
+        var result = _session.SetActiveCellNote(text);
+        RefreshShell(result.Success
+            ? UiText.Format("Comment_NoteUpdated", FormatCellReference(_session.ActiveCell))
+            : result.ErrorMessage ?? UiText.Get("Comment_NoteFailed"));
+    }
+
+    private async Task ShowEditThreadedCommentDialogAsync()
+    {
+        var existing = _session.GetActiveCellThreadedCommentText();
+        if (existing is null)
+        {
+            RefreshShell(UiText.Get("Comment_NoComment"));
+            return;
+        }
+
+        var text = await ShowCommentTextPromptAsync(UiText.Get("Comment_EditCommentTitle"), UiText.Get("Comment_CommentLabel"), existing);
+        if (string.IsNullOrWhiteSpace(text))
+            return;
+        var result = _session.EditActiveCellThreadedComment(text);
+        RefreshShell(result.Success
+            ? UiText.Format("Comment_CommentUpdated", FormatCellReference(_session.ActiveCell))
+            : result.ErrorMessage ?? UiText.Get("Comment_CommentFailed"));
+    }
+
+    private void ResolveActiveCellThreadedComment(bool resolved)
+    {
+        var result = _session.SetActiveCellThreadedCommentResolved(resolved);
+        if (!result.Success)
+        {
+            RefreshShell(result.ErrorMessage ?? UiText.Get("Comment_CommentFailed"));
+            return;
+        }
+
+        RefreshShell(UiText.Format(
+            resolved ? "Comment_Resolved" : "Comment_Unresolved",
+            FormatCellReference(_session.ActiveCell)));
+    }
+
+    private async Task<string?> ShowCommentTextPromptAsync(string title, string label, string? initialText = null)
+    {
+        var box = new TextBox { AcceptsReturn = true, MinWidth = 320, MinHeight = 72, TextWrapping = TextWrapping.Wrap, Text = initialText ?? string.Empty };
         AutomationProperties.SetName(box, label);
         AutomationProperties.SetAutomationId(box, "CommentTextBox");
 

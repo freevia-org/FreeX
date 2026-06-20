@@ -12,7 +12,7 @@ public sealed class UserTestPublishScriptTests
 
         script.Should().Contain("[string]$OutputRoot = \"artifacts\\releases\"");
         script.Should().Contain("[string]$Version = \"\"");
-        script.Should().Contain("[ValidateSet(\"SingleFile\", \"Folder\", \"Msix\")]");
+        script.Should().Contain("[ValidateSet(\"SingleFile\", \"Folder\", \"Msix\", \"Velopack\")]");
         script.Should().Contain("[string]$PublishMode = \"SingleFile\"");
         script.Should().Contain("function Get-MsBuildPropertyValue");
         script.Should().Contain("InformationalVersion");

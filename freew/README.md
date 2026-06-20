@@ -78,17 +78,21 @@ docx reader/writer; unsupported renderings are noted under [Known limitations](#
 - Find / Replace (modeless) with match-case, **whole-word**, wrap, Replace All, replace-all-in-selection,
   and **Go To** (heading / bookmark / doc start–end).
 - Spell-check (live red squiggles + suggestions) with a persistent **custom dictionary** (`.lex`) and a toggle.
-- AutoCorrect / smart typing (smart quotes, `--`→en dash, `(c)`/`(r)`/`(tm)`, `...`→…, sentence caps), toggleable.
+- AutoCorrect / smart typing (smart quotes, `--`→en/em dash, `(c)`/`(r)`/`(tm)`, `...`→…, sentence caps) plus
+  **AutoFormat As You Type** (automatic bulleted/numbered lists, ordinals→superscript, `1/2`→½, URLs/e-mail→hyperlinks);
+  each rule individually toggled in the **AutoCorrect Options** dialog (Options → *AutoFormat As You Type* tab) and persisted.
 - Paste Special: Paste Text Only / Merge Formatting (Ctrl+Shift+V).
 - Insert **Symbol** (glyph picker) and **Date & Time**.
 
 ### Paragraph formatting
 - Alignment (left/center/right/justify), line spacing, space before/after.
 - Indentation: increase/decrease step + explicit left/right/first-line (hanging) indents.
-- **Tab stops** (left/center/right/decimal) with **tab leaders** (dots/dashes/underline) — `w:tabs`/`w:tab`.
+- **Tab stops** (left/center/right/decimal) with **tab leaders** (dots/dashes/underline) — `w:tabs`/`w:tab`;
+  set/clear via the **Tabs dialog** (Home > Paragraph > Tabs…).
 - Paragraph **borders & shading** (`w:pBdr` + paragraph `w:shd`).
 - Flow control: keep-with-next, keep-lines-together, widow control (`w:keepNext`/`w:keepLines`/`w:widowControl`).
-- Bulleted / numbered / **multilevel** lists persisted to `word/numbering.xml` (`w:numPr`).
+- Bulleted / numbered / **multilevel** lists persisted to `word/numbering.xml` (`w:numPr`); multilevel
+  lists show Word's accumulated outline markers (`1`, `1.1`, `1.1.1`) live in the editor.
 - **Drop cap** (split first letter into an oversized run).
 
 ### Styles, themes & design
@@ -100,11 +104,12 @@ docx reader/writer; unsupported renderings are noted under [Known limitations](#
 
 ### Page & section layout
 - Margins, orientation, page size; honoured by docx save and print.
-- **Multi-column** layout (1/2/3 equal columns, `sectPr/w:cols`).
+- **Multi-column** layout via the **Columns** dialog (One/Two/Three/Left/Right presets, custom count, spacing, line-between; `sectPr/w:cols` with `w:num`/`w:space`/`w:sep` and explicit `w:col` widths for the unequal Left/Right presets).
 - **Headers & footers** with a live **PAGE-number field** (`word/header1.xml`/`footer1.xml`, `w:fldSimple`).
 - Page borders + **watermark** (page border `w:pgBorders`; watermark stored as a `docProps/custom.xml` custom property).
-- **Line numbers** (continuous / restart-each-page, `sectPr/w:lnNumType`) drawn in print preview.
-- Auto-hyphenation (`w:autoHyphenation`), vertical page alignment (`sectPr/w:vAlign`), different-first-page (`w:titlePg`).
+- **Line numbers** (continuous / restart-each-page, `sectPr/w:lnNumType`) drawn in the live editor margin and in print preview.
+- **Hyphenation** (Layout > Hyphenation: None / Automatic / Manual + Options…): a pure English syllable hyphenator inserts soft hyphens into the live document; document-level `w:autoHyphenation` / `w:hyphenationZone` / `w:consecutiveHyphenLimit` / `w:doNotHyphenateCaps` and per-paragraph `w:suppressAutoHyphens` round-trip via `settings.xml` / `pPr`.
+- Vertical page alignment (`sectPr/w:vAlign`), different-first-page (`w:titlePg`).
 - **Different odd & even page** headers/footers (`w:evenAndOddHeaders` + `header2.xml`/`footer2.xml`, `w:type="even"`).
 - **Page background colour** (`w:background` + `w:displayBackgroundShape`).
 - **Multiple sections** with per-section page setup and break kinds (continuous / next / even / odd page).
@@ -125,7 +130,9 @@ docx reader/writer; unsupported renderings are noted under [Known limitations](#
 - **Shapes & text boxes** — Rectangle / Rounded Rectangle / Ellipse / Text Box (`wps:wsp`, preset geometry,
   optional fill, `w:txbxContent` body).
 - **WordArt** — decorative text presets (fill / gradient / outline / shadow) via DrawingML text effects.
-- **Equations** — inline OMML (`m:oMath`; text, superscript, fractions).
+- **Equations** — inline OMML (`m:oMath`) with an Insert > Equation structure gallery: text, super/sub/sub-superscript
+  (`m:sSup`/`m:sSub`/`m:sSubSup`), fractions (`m:f`), radicals (square & nth root, `m:rad`), n-ary operators
+  (sum/integral/product with limits, `m:nary`), brackets/delimiters (`m:d`) and matrices (`m:m`) — each round-trips.
 - **Charts** — column / bar / line / pie as a self-contained `word/charts/chartN.xml` part (data in literal caches).
 - **SmartArt** — List / Process / Hierarchy diagrams (four `word/diagrams/*` parts; node text + structure).
 - **OLE embedded objects** — embed a binary payload + ProgID with an icon (`w:object` / `o:OLEObject` +
@@ -139,7 +146,7 @@ docx reader/writer; unsupported renderings are noted under [Known limitations](#
 - **Footnotes** (`word/footnotes.xml`, `w:footnoteReference`) and **endnotes** (`word/endnotes.xml`) — they coexist.
 - **Table of Contents** (built from the heading outline; Insert + Update).
 - **Index** (mark entry → build sorted/deduped index, `IndexHeading`/`IndexEntry` styles).
-- **Citations & bibliography** in **APA / MLA / Chicago** (in-text + a sorted bibliography under the right heading: References / Works Cited / Bibliography).
+- **Citations & bibliography** in **APA / MLA / Chicago / IEEE** (style- and source-type-aware: Book / Journal Article / Web Site each format per the chosen style, in-text + a sorted bibliography under the right heading: References / Works Cited / Bibliography). The selected style and the source data persist to `word/bibliography/sources.xml` and round-trip.
 - **Captions** ("Figure/Table N: …") with automatic figure/table numbering, plus a **Table of Figures**.
 - **Cross-references** to headings / bookmarks / captions / footnotes (clickable internal link when anchored).
 - **Bookmarks** + internal hyperlinks (`w:bookmarkStart/End`, `w:hyperlink w:anchor`) with a Bookmark Manager + Go To.
@@ -149,16 +156,20 @@ docx reader/writer; unsupported renderings are noted under [Known limitations](#
 - **Comments** (`word/comments.xml`, `w:commentRangeStart/End` + `w:commentReference`) with author/text tooltip.
 - **Track changes** (`w:ins`/`w:del`, author/date) with Track-Changes toggle and Accept All / Reject All.
 - **Compare documents** — two-level (paragraph-anchor + word-level) LCS diff producing tracked changes.
-- **Restrict editing / protection** (read-only / comments-only / track-changes-only, `w:documentProtection` in `settings.xml`).
+- **Restrict editing / protection** — Restrict Editing pane (No changes / Tracked changes / Comments / Filling in forms), enforced on the live editor (read-only, forced track-changes, comment-only) and persisted as `w:documentProtection` (`w:edit` + `w:enforcement`) in `settings.xml`; "Stop Protection" lifts it.
+- **Mark as Final** — Word's advisory read-only flag (`_MarkAsFinal` boolean custom property in `docProps/custom.xml`): locks the editor, shows a "Marked as Final" banner, and "Edit Anyway" clears it.
 - **Document Inspector** (count + selectively remove comments / revisions / properties / bookmarks).
 - **Check Accessibility** — alt-text, link-text, heading-order, table-header, and WCAG contrast rules with a grouped report.
 - Word count + live status bar; **Document Statistics** dialog (words/chars/sentences/syllables, reading time, Flesch reading ease).
+- **Read Aloud** (Review > Speech) — local, in-box text-to-speech (`System.Speech`) that reads from the caret to the end of the document, paragraph by paragraph (table cells included); robust when no voice is installed.
 
 ### Mailings
 - **Mail merge**: `«Field»` placeholders, CSV data source, insert field, preview record (next/prev), Finish & Merge (records concatenated, page-broken).
 
 ### Content & navigation
-- **Content controls** (`w:sdt`): plain-text and clickable checkbox (`w14:checkbox`).
+- **Content controls** (`w:sdt`): plain-text, rich-text (`w:richText`), clickable checkbox (`w14:checkbox`),
+  date picker (`w:date`), drop-down list (`w:dropDownList`) and combo box (`w:comboBox`) — the list controls
+  offer their `w:listItem` choices on click.
 - **Quick Parts / AutoText**: save selection + insert, persisted as `quickparts.json`.
 - **Navigation pane** (heading outline; click to scroll) and **Outline tools** (promote/demote, collapse/expand).
 - **Cross-document insert**: "Text from File" deep-clones another `.docx`'s blocks at the caret (bringing missing styles).
@@ -172,6 +183,9 @@ docx reader/writer; unsupported renderings are noted under [Known limitations](#
   Word-style status bar (Page X of Y, Section X of N, word count, zoom, view switches).
 - **Zoom** 50–200% (slider / ± / Ctrl+wheel).
 - **Read mode** (hides chrome, centered reading column) + live selection word/char count.
+- **Outline view** (View &gt; Outline) — the document as an indented heading/body outline with an Outlining
+  mini-toolbar (Show Level 1–9/All, Promote / Demote / Promote to Heading 1, Move Up/Down, Expand/Collapse,
+  Show First Line Only). Reuses the existing reversible heading operations; switching views never mutates the model.
 - **Show formatting marks** (¶ / · / →) drawn as a non-destructive adorner overlay.
 - Document properties dialog (`docProps/core.xml`, Dublin Core).
 
@@ -231,12 +245,10 @@ self-contained and does not pull in FreeX. The build treats warnings as errors, 
 FreeW renders into a WPF `FlowDocument`, which is excellent for live editing but cannot reproduce every
 print-layout detail. The model/IO still round-trip these faithfully; the live view is the approximation.
 
-- **Multilevel list markers** render best-effort decimal-per-level on screen, not Word's exact
-  `1.1.1` accumulated text (the accumulated level text is still written to `numbering.xml`).
 - **Tab leaders** are carried verbatim through round-trip but are **not drawn** live (FlowDocument has
   no tab-leader API); FreeW preserves them via a paragraph `Tag`.
-- **Tab stops** are likewise preserved via the paragraph `Tag` (FlowDocument has no tab-stop API).
-- **Line numbers** appear only in **print preview**, not in the live editing surface.
+- **Tab stops** are editable via the Tabs dialog (set/clear/clear-all, position + alignment + leader) and
+  preserved via the paragraph `Tag` (FlowDocument has no tab-stop API, so custom stops are not drawn live).
 - **Vertical page alignment** (`w:vAlign`) is persisted but not reflowed live.
 - **Widow/orphan control** is stored in the model/docx but is model-only on screen.
 - **Watermark** is stored as a `docProps/custom.xml` custom property (FreeW's own convention), not as a

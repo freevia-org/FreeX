@@ -2480,16 +2480,7 @@ public static class XlsxPackageHealthValidator
             return false;
         }
 
-        try
-        {
-            target = Uri.UnescapeDataString(target);
-        }
-        catch (UriFormatException ex)
-        {
-            error = ex.Message;
-            return false;
-        }
-
+        var ownerPart = GetRelationshipOwnerPart(relationshipPart);
         string combined;
         if (target.StartsWith("/", StringComparison.Ordinal))
         {
@@ -2497,7 +2488,6 @@ public static class XlsxPackageHealthValidator
         }
         else
         {
-            var ownerPart = GetRelationshipOwnerPart(relationshipPart);
             var ownerDirectory = ownerPart.Contains('/', StringComparison.Ordinal)
                 ? ownerPart[..ownerPart.LastIndexOf('/')]
                 : string.Empty;
@@ -2512,6 +2502,7 @@ public static class XlsxPackageHealthValidator
             return false;
         }
 
+        resolvedTarget = XlsxPackagePath.ResolveRelationshipTarget(ownerPart, target);
         return !string.IsNullOrWhiteSpace(resolvedTarget);
     }
 
@@ -2617,8 +2608,7 @@ public static class XlsxPackageHealthValidator
 
     private static XDocument LoadPackageXml(ZipArchiveEntry entry)
     {
-        using var stream = entry.Open();
-        return XDocument.Load(stream);
+        return XlsxPackageXmlEditor.LoadXml(entry);
     }
 
     private sealed record SharedStringCellReference(

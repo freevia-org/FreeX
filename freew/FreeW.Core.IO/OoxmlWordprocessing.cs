@@ -138,6 +138,12 @@ internal static class Ooxml
     /// <summary>The custom-property name under which the FreeW page watermark text is persisted.</summary>
     public const string WatermarkPropertyName = "FreeWWatermark";
 
+    /// <summary>
+    /// The custom-property name under which Word's "Mark as Final" flag is persisted (a boolean
+    /// <c>vt:bool</c> custom document property). This is the Word convention.
+    /// </summary>
+    public const string MarkAsFinalPropertyName = "_MarkAsFinal";
+
     public const string NumberingContentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml";
     public const string NumberingRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering";
     public const string NumberingPartName = "/word/numbering.xml";
@@ -154,9 +160,33 @@ internal static class Ooxml
     public const string CommentsRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments";
     public const string CommentsPartName = "/word/comments.xml";
 
+    /// <summary>
+    /// The Office 2012 (w15) WordprocessingML extension namespace, used by word/commentsExtended.xml
+    /// (w15:commentsEx / w15:commentEx) to thread modern comments (w15:paraId / w15:paraIdParent) and
+    /// mark them resolved (w15:done). The w14 paraId attributes on the comment paragraphs use <see cref="W14"/>.
+    /// </summary>
+    public static readonly XNamespace W15 = "http://schemas.microsoft.com/office/word/2012/wordml";
+
+    // word/commentsExtended.xml — the threading + resolved-state side-part for modern (threaded) comments.
+    public const string CommentsExtendedContentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.commentsExtended+xml";
+    public const string CommentsExtendedRelType = "http://schemas.microsoft.com/office/2011/relationships/commentsExtended";
+    public const string CommentsExtendedPartName = "/word/commentsExtended.xml";
+
     public const string SettingsContentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml";
     public const string SettingsRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings";
     public const string SettingsPartName = "/word/settings.xml";
+
+    /// <summary>
+    /// The bibliography namespace (b), used by word/bibliography/sources.xml — Word's store for the
+    /// document's citation sources (b:Sources/b:Source) and the selected bibliography style
+    /// (b:Sources/@SelectedStyle). FreeW persists its <see cref="Source"/> list and
+    /// <see cref="TextDocument.BibliographyStyle"/> here so both survive a save/load. The part is referenced
+    /// from word/document.xml.rels via the bibliography relationship type.
+    /// </summary>
+    public static readonly XNamespace B = "http://schemas.openxmlformats.org/officeDocument/2006/bibliography";
+    public const string BibliographyContentType = "application/vnd.openxmlformats-officedocument.bibliography+xml";
+    public const string BibliographyRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/bibliography";
+    public const string BibliographyPartName = "/word/bibliography/sources.xml";
 
     // word/webSettings.xml carries web-page-export settings FreeW does not model; preserved verbatim.
     public const string WebSettingsContentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.webSettings+xml";
@@ -167,6 +197,13 @@ internal static class Ooxml
     // own customXml/_rels/itemN.xml.rels. The document→item relationship uses the customXml rel type.
     public const string CustomXmlRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml";
     public const string CustomXmlPropsContentType = "application/vnd.openxmlformats-officedocument.customXmlProperties+xml";
+
+    // word/vbaProject.bin (+ word/vbaData.xml and the part-local word/_rels/vbaProject.bin.rels) carry a
+    // document's VBA macro project. FreeW does not model — let alone execute — macros; they are preserved
+    // verbatim so a .docm/.dotm round-trips its macros, and dropped when saving a non-macro variant.
+    public const string VbaProjectRelType = "http://schemas.microsoft.com/office/2006/relationships/vbaProject";
+    public const string VbaProjectContentType = "application/vnd.ms-office.vbaProject";
+    public const string VbaDataContentType = "application/vnd.ms-word.vbaData+xml";
 
     // word/fontTable.xml lists the embedded font families (w:font/w:embedRegular/…). Each embed references an
     // obfuscated font part (word/fonts/fontN.odttf, content type obfuscatedFont) via the fontTable's own rels.
@@ -294,25 +331,27 @@ internal static class Ooxml
     /// <summary>
     /// Maps a <see cref="ProtectionMode"/> to the w:documentProtection/@w:edit token, or null for
     /// <see cref="ProtectionMode.None"/> (no protection element is emitted). ReadOnly→"readOnly",
-    /// CommentsOnly→"comments", TrackChangesOnly→"trackedChanges".
+    /// CommentsOnly→"comments", TrackChangesOnly→"trackedChanges", FillingForms→"forms".
     /// </summary>
     public static string? ProtectionEditToken(ProtectionMode mode) => mode switch
     {
         ProtectionMode.ReadOnly => "readOnly",
         ProtectionMode.CommentsOnly => "comments",
         ProtectionMode.TrackChangesOnly => "trackedChanges",
+        ProtectionMode.FillingForms => "forms",
         _ => null
     };
 
     /// <summary>
     /// Maps a w:documentProtection/@w:edit token back to a <see cref="ProtectionMode"/>. Any unknown
-    /// or absent token (including "forms"/"none") maps to <see cref="ProtectionMode.None"/>.
+    /// or absent token (including "none") maps to <see cref="ProtectionMode.None"/>.
     /// </summary>
     public static ProtectionMode ProtectionModeFromEditToken(string? edit) => edit switch
     {
         "readOnly" => ProtectionMode.ReadOnly,
         "comments" => ProtectionMode.CommentsOnly,
         "trackedChanges" => ProtectionMode.TrackChangesOnly,
+        "forms" => ProtectionMode.FillingForms,
         _ => ProtectionMode.None
     };
 

@@ -69,7 +69,7 @@ public sealed partial class MainWindow
     {
         if (!TryGetActiveStructuredTable(out var table))
         {
-            RefreshShell("Convert to Range: the active cell is not inside a table.");
+            RefreshShell(UiText.Get("TableLoc_ConvertToRangeNotInTable"));
             return;
         }
 
@@ -80,11 +80,11 @@ public sealed partial class MainWindow
         {
             // The table is gone, so the contextual tab must retract.
             RefreshTableContextualTab();
-            RefreshShell($"Converted table '{TableDisplayName(table)}' to a range.");
+            RefreshShell(UiText.Format("TableLoc_ConvertedTableToRange", TableDisplayName(table)));
         }
         else
         {
-            RefreshShell(result.ErrorMessage ?? "Convert to Range failed.");
+            RefreshShell(result.ErrorMessage ?? UiText.Get("TableLoc_ConvertToRangeFailed"));
         }
     }
 
@@ -94,19 +94,19 @@ public sealed partial class MainWindow
         => ToggleActiveTableTotalsRow(table => !table.TotalsRowShown);
 
     private void ToggleActiveTableFirstColumn()
-        => ApplyActiveTableStyleOption("First Column", t => !t.ShowFirstColumn, showFirstColumn: true);
+        => ApplyActiveTableStyleOption(UiText.Get("TableLoc_StyleOptionFirstColumn"), t => !t.ShowFirstColumn, showFirstColumn: true);
 
     private void ToggleActiveTableLastColumn()
-        => ApplyActiveTableStyleOption("Last Column", t => !t.ShowLastColumn, showLastColumn: true);
+        => ApplyActiveTableStyleOption(UiText.Get("TableLoc_StyleOptionLastColumn"), t => !t.ShowLastColumn, showLastColumn: true);
 
     private void ToggleActiveTableBandedRows()
-        => ApplyActiveTableStyleOption("Banded Rows", t => !t.ShowRowStripes, showRowStripes: true);
+        => ApplyActiveTableStyleOption(UiText.Get("TableLoc_StyleOptionBandedRows"), t => !t.ShowRowStripes, showRowStripes: true);
 
     private void ToggleActiveTableBandedColumns()
-        => ApplyActiveTableStyleOption("Banded Columns", t => !t.ShowColumnStripes, showColumnStripes: true);
+        => ApplyActiveTableStyleOption(UiText.Get("TableLoc_StyleOptionBandedColumns"), t => !t.ShowColumnStripes, showColumnStripes: true);
 
     private void ToggleActiveTableFilterButton()
-        => ApplyActiveTableStyleOption("Filter Button", t => !t.HasAutoFilter, hasAutoFilter: true);
+        => ApplyActiveTableStyleOption(UiText.Get("TableLoc_StyleOptionFilterButton"), t => !t.HasAutoFilter, hasAutoFilter: true);
 
     /// <summary>
     /// Toggles the Total Row on the active cell's table. Unlike the four banding/filter flags (which live in
@@ -118,7 +118,7 @@ public sealed partial class MainWindow
     {
         if (!TryGetActiveStructuredTable(out var table))
         {
-            RefreshShell("Total Row: the active cell is not inside a table.");
+            RefreshShell(UiText.Get("TableLoc_TotalRowNotInTable"));
             return;
         }
 
@@ -134,11 +134,13 @@ public sealed partial class MainWindow
         if (result.Success)
         {
             RefreshTableContextualTab();
-            RefreshShell($"Total Row {(show ? "on" : "off")} for table '{TableDisplayName(table)}'.");
+            RefreshShell(UiText.Format(
+                show ? "TableLoc_TotalRowOnForTable" : "TableLoc_TotalRowOffForTable",
+                TableDisplayName(table)));
         }
         else
         {
-            RefreshShell(result.ErrorMessage ?? "Total Row failed.");
+            RefreshShell(result.ErrorMessage ?? UiText.Get("TableLoc_TotalRowFailed"));
         }
     }
 
@@ -159,7 +161,7 @@ public sealed partial class MainWindow
     {
         if (!TryGetActiveStructuredTable(out var table))
         {
-            RefreshShell($"{label}: the active cell is not inside a table.");
+            RefreshShell(UiText.Format("TableLoc_StyleOptionNotInTable", label));
             return;
         }
 
@@ -176,9 +178,12 @@ public sealed partial class MainWindow
 
         var result = _session.ExecuteReviewCommand(command);
         if (result.Success)
-            RefreshShell($"{label} {(value ? "on" : "off")} for table '{TableDisplayName(table)}'.");
+            RefreshShell(UiText.Format(
+                value ? "TableLoc_StyleOptionOnForTable" : "TableLoc_StyleOptionOffForTable",
+                label,
+                TableDisplayName(table)));
         else
-            RefreshShell(result.ErrorMessage ?? $"{label} failed.");
+            RefreshShell(result.ErrorMessage ?? UiText.Format("TableLoc_StyleOptionFailed", label));
     }
 
     private static string TableDisplayName(StructuredTableModel table)

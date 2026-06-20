@@ -28,6 +28,35 @@ public static class DataValidationDropdownPlanner
     public const double MaximumWidth = 160;
     public const double MinimumHeight = 18;
 
+    /// <summary>
+    /// True when <paramref name="activeCell"/> carries an in-cell list validation that shows a
+    /// dropdown with at least one selectable item. This is the layout-free predicate behind the
+    /// "Pick From Drop-down List" cell context-menu command: it answers "is there a list to pick from?"
+    /// without needing the cell's pixel bounds (which <see cref="TryPlan"/> requires for placement).
+    /// </summary>
+    public static bool HasDropdownList(Workbook workbook, Sheet sheet, CellAddress activeCell)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+        ArgumentNullException.ThrowIfNull(sheet);
+
+        if (activeCell.Sheet != sheet.Id)
+            return false;
+
+        var rule = FindDropdownRule(DataValidationService.GetApplicable(sheet, activeCell));
+        if (rule is null)
+            return false;
+
+        try
+        {
+            var items = DataValidationService.GetListItems(rule, sheet, workbook);
+            return items.Count > 0 && items.Count <= MaximumDropdownItems;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     public static bool TryPlan(
         Workbook workbook,
         Sheet sheet,

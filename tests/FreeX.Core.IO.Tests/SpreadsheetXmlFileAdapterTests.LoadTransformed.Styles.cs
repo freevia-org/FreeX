@@ -371,7 +371,8 @@ public sealed partial class SpreadsheetXmlFileAdapterTests
 
         var formulaCell = workbook.GetSheetAt(0).GetCell(1, 3);
         formulaCell.Should().NotBeNull();
-        formulaCell!.FormulaText.Should().Be("SUM(RC[-2]:RC[-1])");
+        // Excel-style R1C1 (=SUM(RC[-2]:RC[-1])) at C1 is converted to A1 on read.
+        formulaCell!.FormulaText.Should().Be("SUM(A1:B1)");
         formulaCell.Value.Should().Be(new NumberValue(19.75));
         workbook.GetStyle(formulaCell.StyleId).NumberFormat.Should().Be("$#,##0.00");
     }

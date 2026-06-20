@@ -1,15 +1,19 @@
-using System.Text.Json;
-
 namespace FreeX.App.Services;
 
+/// <summary>
+/// FreeX's <see cref="AppOptions"/> persistence. The generic JSON load/save/atomic-write/error-capture
+/// plumbing is delegated to the shared <see cref="JsonSettingsStore{T}"/>; this type owns only the
+/// FreeX-specific behaviour: the <c>options.json</c> store-path resolution, the
+/// <see cref="AppOptions.NormalizePersistedCollections"/> step (run on every load and save), the
+/// user-facing "options" wording in error messages, and surfacing failures via
+/// <see cref="AppOptions.SetPersistenceError"/> (cleared on a successful save).
+/// </summary>
 public static class AppOptionsStore
 {
     public const string OptionsPathEnvironmentVariable = "FREEX_OPTIONS_PATH";
 
-    private static readonly JsonSerializerOptions StoreJsonOptions = new()
-    {
-        WriteIndented = true
-    };
+    // FreeX surfaces errors as "Failed to load/save options …" (not the shared default "settings").
+    private const string PersistenceNoun = "options";
 
     public static string StorePath =>
         ResolveStorePath(
@@ -33,24 +37,15 @@ public static class AppOptionsStore
 
     public static AppOptions LoadFromPath(string storePath)
     {
-        try
+        var (options, error) = JsonSettingsStore<AppOptions>.LoadFromPath(storePath, noun: PersistenceNoun);
+        if (error is not null)
         {
-            if (File.Exists(storePath))
-            {
-                var json = File.ReadAllText(storePath);
-                var options = JsonSerializer.Deserialize<AppOptions>(json) ?? new();
-                options.NormalizePersistedCollections();
-                return options;
-            }
-        }
-        catch (Exception ex)
-        {
-            var options = new AppOptions();
-            options.SetPersistenceError($"Failed to load options from '{storePath}': {ex.Message}");
+            options.SetPersistenceError(error);
             return options;
         }
 
-        return new AppOptions();
+        options.NormalizePersistedCollections();
+        return options;
     }
 
     public static bool Save(AppOptions options) => SaveToPath(options, StorePath);
@@ -59,19 +54,9 @@ public static class AppOptionsStore
     {
         ArgumentNullException.ThrowIfNull(options);
 
-        try
-        {
-            options.NormalizePersistedCollections();
-            AtomicFileWriter.WriteAllText(
-                storePath,
-                JsonSerializer.Serialize(options, StoreJsonOptions));
-            options.SetPersistenceError(null);
-            return true;
-        }
-        catch (Exception ex)
-        {
-            options.SetPersistenceError($"Failed to save options to '{storePath}': {ex.Message}");
-            return false;
-        }
+        options.NormalizePersistedCollections();
+        var error = JsonSettingsStore<AppOptions>.SaveToPath(options, storePath, noun: PersistenceNoun);
+        options.SetPersistenceError(error);
+        return error is null;
     }
 }

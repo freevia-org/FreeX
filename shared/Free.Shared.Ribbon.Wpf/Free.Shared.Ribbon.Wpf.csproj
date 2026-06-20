@@ -11,4 +11,8 @@
     <ProjectReference Include="..\Free.Shared.Ribbon\Free.Shared.Ribbon.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="SharpVectors.Wpf" />
+  </ItemGroup>
+
 </Project>

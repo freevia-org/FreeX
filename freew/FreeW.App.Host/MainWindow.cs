@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Automation;
@@ -13,6 +14,7 @@ using Free.Shared.Ribbon.Wpf;
 using FreeW.App.Host.Backstage;
 using FreeW.App.Host.Editing;
 using FreeW.Core.Model;
+using TextSearch = FreeW.Core.Model.TextSearch;
 
 namespace FreeW.App.Host;
 
@@ -41,6 +43,39 @@ public sealed class MainWindow : Window
     private Border _navPane = null!;
     private ListBox _navList = null!;
     private bool _navPaneVisible;
+
+    // Reveal Formatting pane (Word's Shift+F1): a read-only side pane, docked on the right (Word's side),
+    // that mirrors the effective FONT / PARAGRAPH / SECTION formatting of the current selection. It updates
+    // on SelectionChanged from the pure FreeW.Core.Model.RevealFormatting describer, so the pane never
+    // touches the model and cannot interfere with editing. Mirrors the navigation pane's dock/toggle shape.
+    private Border _revealPane = null!;
+    private StackPanel _revealContent = null!;
+    private bool _revealPaneVisible;
+
+    // Reviewing Pane (Word's Review > Reviewing Pane): a dockable list of every tracked change in the
+    // document — author, date, type, and the affected text — with click-to-navigate (jumps the editor to
+    // the change) plus Accept / Reject of the SELECTED single revision and Previous/Next navigation. It is
+    // rebuilt from the pure FreeW.Core.Model.RevisionList whenever the document changes or the pane opens,
+    // so the surface never owns revision logic. Mirrors the navigation/reveal panes' dock + toggle shape.
+    private Border _reviewPane = null!;
+    private ListBox _reviewList = null!;
+    private TextBlock _reviewStatus = null!;
+    private bool _reviewPaneVisible;
+    private bool _reviewPaneVisibleBeforeReadMode;
+    // The revisions currently shown in the pane (the live snapshot the list items index into).
+    private System.Collections.Generic.IReadOnlyList<RevisionEntry> _reviewEntries = System.Array.Empty<RevisionEntry>();
+
+    // Navigation-pane search (the box at the top of the pane). Typing finds every occurrence of the term
+    // in the document body; the result label shows the count and Next/Prev step through the matches,
+    // jumping each into view in the editor. The heading outline below is filtered to entries that either
+    // match the term themselves or own a matching block in their subtree. All matching reuses the pure
+    // FreeW.Core.Model.TextSearch helper (the same one Find & Replace uses) — no bespoke search here.
+    private TextBox _navSearch = null!;
+    private TextBlock _navSearchStatus = null!;
+    private Button _navSearchPrev = null!;
+    private Button _navSearchNext = null!;
+    private readonly List<int> _navSearchHits = new(); // model block indices with a match, in order
+    private int _navSearchHitIndex = -1;                // current position within _navSearchHits
 
     // Identity/palette for the shared window shell (FreeX navy title bar; the real FreeW app icon as the
     // title-bar badge + window/taskbar icon).
@@ -80,12 +115,29 @@ public sealed class MainWindow : Window
     private int _lastRibbonTabIndex = 1;
     private bool _suppressFileTabRevert;
     private Border _status = null!;
+    private Border _markedAsFinalBanner = null!;
     private TextBlock _dataFolderText = null!;
     private FrameworkElement _dataFolderItem = null!;
     private FrameworkElement _viewSwitchItem = null!;
     private FrameworkElement _zoomItem = null!;
     private bool _readMode;
+
+    // Status-bar view-switch toggle buttons for the three mutually-exclusive print-family view modes
+    // (Print Layout / Web Layout / Draft). They mirror the same state as the View ribbon's Views group;
+    // RefreshViewModeChecks keeps exactly one of them checked to match _editor.ViewMode.
+    private ToggleButton _printLayoutSwitch = null!;
+    private ToggleButton _webLayoutSwitch = null!;
+    private ToggleButton _draftSwitch = null!;
+
+    // Outline view (View > Outline). The outline surface overlays the normal editing surface; entering the
+    // view hides the workspace (and its rulers) and shows the outline, exiting restores them verbatim —
+    // the same save/restore shape as Read Mode. The model is never mutated by switching views.
+    private OutlineView _outlineView = null!;
+    private bool _outlineMode;
+    private Visibility _hRulerVisibilityBeforeOutline;
+    private Visibility _vRulerVisibilityBeforeOutline;
     private bool _navPaneVisibleBeforeReadMode;
+    private bool _revealPaneVisibleBeforeReadMode;
     private Thickness _editorMarginBeforeReadMode;
     private double _editorMaxWidthBeforeReadMode = double.PositiveInfinity;
     private HorizontalAlignment _editorAlignmentBeforeReadMode = HorizontalAlignment.Stretch;
@@ -94,8 +146,24 @@ public sealed class MainWindow : Window
     private double _editorWidthBeforeReadMode = double.NaN;
     private Effect? _editorEffectBeforeReadMode;
 
-    public MainWindow()
+    // FreeW's persisted settings (shared JsonSettingsStore). Defaults are used when none are supplied,
+    // so the window stays constructible in isolation; Program.Main passes the loaded options + the store
+    // that persists edits made from the backstage Options dialog. The options instance is mutated in place
+    // so settings read live by FileCommands (e.g. the recent-files cap) take effect without a restart.
+    private readonly FreeWOptions _options;
+    private readonly FreeWOptionsStore _optionsStore;
+
+    public MainWindow() : this(new FreeWOptions())
     {
+    }
+
+    public MainWindow(FreeWOptions options, FreeWOptionsStore? optionsStore = null)
+    {
+        _options = options ?? new FreeWOptions();
+        // No store supplied (e.g. constructed in isolation / tests) → a no-op in-memory store so editing
+        // still round-trips through the dialog and applies live, just without touching the real profile.
+        _optionsStore = optionsStore ?? FreeWOptionsStore.ForPath(
+            System.IO.Path.Combine(System.IO.Path.GetTempPath(), "FreeW", "settings.transient.json"));
         Title = "FreeW";
         Width = 1280;
         Height = 760;
@@ -129,21 +197,48 @@ public sealed class MainWindow : Window
 
         var editor = new DocumentView { Margin = new Thickness(40, 24, 40, 24) };
         _editor = editor;
+        // Push the persisted AutoCorrect / AutoFormat-As-You-Type settings so the editor's as-you-type
+        // rules honour the user's toggles from the first keystroke (re-applied when Options is saved).
+        ApplyAutoFormatOptions();
         editor.LoadModel(CreateSampleDocument());
         var stateStore = new RibbonStateStore();
         _stateStore = stateStore;
         var commands = FreeWRibbonCommands.Build(
             editor, stateStore, OpenPrintPreview, ToggleNavPane, () => _navPaneVisible, ToggleReadMode, () => _readMode,
-            TogglePrintLayout, () => _editor.PrintLayoutEnabled);
-        _file = new FileCommands(this, editor, UpdateTitle);
-        editor.TextChanged += (_, _) => { _file.MarkDirty(); UpdateCounts(); RefreshOutline(); RefreshContextualTabs(); };
+            () => SetViewMode(DocumentViewMode.PrintLayout), () => _editor.ViewMode == DocumentViewMode.PrintLayout,
+            ToggleOutlineView, () => _outlineMode, OpenZoomDialog,
+            onWebLayout: () => SetViewMode(DocumentViewMode.WebLayout),
+            isWebLayoutActive: () => !_outlineMode && _editor.ViewMode == DocumentViewMode.WebLayout,
+            onDraftView: () => SetViewMode(DocumentViewMode.Draft),
+            isDraftViewActive: () => !_outlineMode && _editor.ViewMode == DocumentViewMode.Draft,
+            onToggleRevealFormatting: ToggleRevealFormatting,
+            isRevealFormattingVisible: () => _revealPaneVisible,
+            onToggleReviewingPane: ToggleReviewPane,
+            isReviewingPaneVisible: () => _reviewPaneVisible,
+            onAcceptThisChange: AcceptSelectedRevision,
+            onRejectThisChange: RejectSelectedRevision,
+            onPreviousChange: () => StepRevision(-1),
+            onNextChange: () => StepRevision(+1));
+        _file = new FileCommands(this, editor, UpdateTitle, _options);
+        editor.TextChanged += (_, _) => { _file.MarkDirty(); UpdateCounts(); RefreshOutline(); RefreshContextualTabs(); RefreshReviewPane(); };
         // Live selection stats: when the caret/selection moves, refresh the status-bar counts so a
         // non-empty selection shows its own word/character totals (and reverts when nothing is selected).
         // Also re-evaluate which contextual "Tools" tabs apply to the new selection.
         editor.SelectionChanged += (_, _) => { UpdateCounts(); RefreshContextualTabs(); };
         _autosave = new AutosaveCoordinator(editor, _file);
         Loaded += (_, _) => { _autosave.OfferRecovery(this); _autosave.Start(); };
-        Closing += (_, _) => _autosave.Stop();
+        Closing += (_, e) =>
+        {
+            // Save-before-close gate (shared FileLifecyclePlanner). Cancel the close if the user
+            // backs out; only stop autosave (which deletes the recovery snapshot) once we commit to
+            // closing. Previously FreeW closed without prompting and silently lost unsaved work.
+            if (!_file.ConfirmCloseAllowed())
+            {
+                e.Cancel = true;
+                return;
+            }
+            _autosave.Stop();
+        };
 
         // The title bar comes from the shared shell; the host fills its QAT slot and keeps the title text.
         // It is composed into the OUTER grid (below), in its own top row ABOVE the Backstage overlay, so
@@ -166,6 +261,18 @@ public sealed class MainWindow : Window
         var navPane = BuildNavPane();
         DockPanel.SetDock(navPane, Dock.Left);
         body.Children.Add(navPane);
+
+        // Reveal Formatting pane docks on the RIGHT (Word's side for the Shift+F1 pane), opposite the
+        // left navigation pane. Added before the fill child so the DockPanel reserves its edge first.
+        var revealPane = BuildRevealPane();
+        DockPanel.SetDock(revealPane, Dock.Right);
+        body.Children.Add(revealPane);
+
+        // Reviewing Pane also docks on the RIGHT (Word's side for the revisions list). Added before the
+        // fill child so the DockPanel reserves its edge; only one of reveal/review is typically open.
+        var reviewPane = BuildReviewPane();
+        DockPanel.SetDock(reviewPane, Dock.Right);
+        body.Children.Add(reviewPane);
 
         // Grey "workspace" behind the editor so the Print-Layout page reads as a white sheet floating on a
         // desk. The editor sizes/centres itself to the page width in Print-Layout mode (see
@@ -201,10 +308,39 @@ public sealed class MainWindow : Window
             Background = WorkspaceBrush,
             Child = workspaceGrid
         };
-        body.Children.Add(_workspace);
+
+        // Outline view (View > Outline): an indented heading/body outline with the Outlining mini-toolbar.
+        // It overlays the normal editing surface and is collapsed until the view is switched on; both share
+        // one host grid so toggling between Print Layout and Outline just flips which child is visible —
+        // the editor model is never disturbed (mirrors the Read-Mode enter/exit pattern).
+        _outlineView = new OutlineView(_editor) { Visibility = Visibility.Collapsed };
+        var contentHost = new Grid();
+        contentHost.Children.Add(_workspace);
+        contentHost.Children.Add(_outlineView);
+
+        // "Marked as Final" banner (Word's advisory read-only bar): a subtle amber strip docked above the
+        // editing surface, with an "Edit Anyway" button that clears the flag. Collapsed until the document
+        // is marked final; kept in sync via the editor's ProtectionStateChanged event.
+        _markedAsFinalBanner = BuildMarkedAsFinalBanner();
+        DockPanel.SetDock(_markedAsFinalBanner, Dock.Top);
+        body.Children.Add(_markedAsFinalBanner);
+
+        body.Children.Add(contentHost);
+
+        // Keep the banner and the Protect-group ribbon toggles in sync with the editor's protection /
+        // Mark-as-Final state, however it changes (ribbon command, load, or "Edit Anyway").
+        editor.ProtectionStateChanged += (_, _) =>
+        {
+            RefreshMarkedAsFinalBanner();
+            _stateStore.SetChecked("freew.mark-as-final", _editor.IsMarkedAsFinal);
+            _stateStore.SetChecked("freew.restrict-editing", _editor.IsProtected);
+        };
 
         // Keep the indent/tab markers on the horizontal ruler following the caret/selection.
         editor.SelectionChanged += (_, _) => _hRuler.Refresh();
+
+        // Keep the Reveal Formatting pane (when shown) reflecting the caret's current formatting.
+        editor.SelectionChanged += (_, _) => RefreshRevealFormatting();
 
         CommandBindings.Add(new CommandBinding(ApplicationCommands.New, (_, _) => _file.New()));
         CommandBindings.Add(new CommandBinding(ApplicationCommands.Open, (_, _) => _file.Open()));
@@ -223,13 +359,28 @@ public sealed class MainWindow : Window
         CommandBindings.Add(new CommandBinding(pastePlain, (_, _) => _editor.PastePlainText()));
         InputBindings.Add(new KeyBinding(pastePlain, new KeyGesture(Key.V, ModifierKeys.Control | ModifierKeys.Shift)));
 
+        // Shift+F1: toggle the Reveal Formatting pane (Word's keyboard shortcut for the Shift+F1 pane).
+        var revealFormatting = new RoutedUICommand("Reveal Formatting", "RevealFormatting", typeof(MainWindow));
+        CommandBindings.Add(new CommandBinding(revealFormatting, (_, _) => ToggleRevealFormatting()));
+        InputBindings.Add(new KeyBinding(revealFormatting, new KeyGesture(Key.F1, ModifierKeys.Shift)));
+
+        // Alt+F9: toggle field codes vs results across the document (Word's field-code toggle).
+        var toggleFieldCodes = new RoutedUICommand("Toggle Field Codes", "ToggleFieldCodes", typeof(MainWindow));
+        CommandBindings.Add(new CommandBinding(toggleFieldCodes, (_, _) => _editor.ToggleFieldCodes()));
+        InputBindings.Add(new KeyBinding(toggleFieldCodes, new KeyGesture(Key.F9, ModifierKeys.Alt)));
+
+        // F9: update (recompute) every field's result (Word's Update Field shortcut).
+        var updateFields = new RoutedUICommand("Update Fields", "UpdateFields", typeof(MainWindow));
+        CommandBindings.Add(new CommandBinding(updateFields, (_, _) => _editor.UpdateFields()));
+        InputBindings.Add(new KeyBinding(updateFields, new KeyGesture(Key.F9)));
+
         UpdateTitle();
         UpdateCounts();
         RefreshOutline();
 
-        // Print Layout is the default view (the Word default), so seed the View > Print Layout toggle as
-        // checked to match the editor's initial PrintLayoutEnabled state.
-        _stateStore.SetChecked("freew.print-layout", _editor.PrintLayoutEnabled);
+        // Print Layout is the default view (the Word default), so seed the View > Views toggles (Print
+        // Layout / Web Layout / Draft) to reflect the editor's initial view mode — exactly one is checked.
+        RefreshViewModeChecks();
 
         // The Word-style Backstage (File screen) is a full-window overlay above the document. It is
         // hidden by default; the File button (title bar) shows it, a back arrow / Esc hides it. It reuses
@@ -241,7 +392,11 @@ public sealed class MainWindow : Window
             Save: () => _file.Save(),
             SaveAs: () => _file.SaveAs(),
             Print: Print,
+            ExportPdf: ExportToPdf,
+            ExportXps: ExportToXps,
             EditProperties: OpenProperties,
+            EditOptions: OpenOptions,
+            CurrentOptions: () => _options,
             OnClosed: () => SetEditorAdornersVisible(true),
             DataFolder: ResolveDataFolderLabel));
 
@@ -337,9 +492,14 @@ public sealed class MainWindow : Window
 
     private void UpdateTitle()
     {
-        var name = _file.DisplayName + (_file.IsDirty ? " *" : "");
-        Title = $"{name} — FreeW";
-        _titleText.Text = $"{name} — FreeW";
+        var title = WindowTitlePlanner.Compose(
+            displayName: _file.DisplayName,
+            applicationName: "FreeW",
+            isDirty: _file.IsDirty,
+            dirtyMarker: " *",
+            separator: " — ");
+        Title = title;
+        _titleText.Text = title;
     }
 
     // Recompute the live status-bar counts. When there is a non-empty selection, show that selection's
@@ -386,6 +546,48 @@ public sealed class MainWindow : Window
     // is allowed to condense/ellipsize as the window narrows, while the right-side view + zoom controls are
     // pinned in Auto columns so they stay fully visible. The whole strip uses the same #2B579A surface as the
     // title bar with the shared clean (flat, hover-only) footer button styles.
+    // Word's "Marked as Final" advisory bar: a subtle amber strip above the editing surface with the
+    // information text and an "Edit Anyway" button that clears the flag (re-enabling editing). Collapsed
+    // until the document is marked final; see RefreshMarkedAsFinalBanner.
+    private Border BuildMarkedAsFinalBanner()
+    {
+        var text = new TextBlock
+        {
+            Text = "Marked as Final  An author has marked this document as final to discourage editing.",
+            Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x4D, 0x00)),
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            Margin = new Thickness(0, 0, 12, 0)
+        };
+
+        var editAnyway = new Button
+        {
+            Content = "Edit Anyway",
+            MinWidth = 96,
+            Padding = new Thickness(8, 2, 8, 2),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        editAnyway.Click += (_, _) => _editor.SetMarkedAsFinal(false);
+
+        var row = new DockPanel { LastChildFill = true, Margin = new Thickness(12, 4, 12, 4) };
+        DockPanel.SetDock(editAnyway, Dock.Right);
+        row.Children.Add(editAnyway);
+        row.Children.Add(text);
+
+        return new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(0xFD, 0xF3, 0xD0)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xE3, 0xC8, 0x70)),
+            BorderThickness = new Thickness(0, 0, 0, 1),
+            Visibility = Visibility.Collapsed,
+            Child = row
+        };
+    }
+
+    // Show the "Marked as Final" banner only while the document carries Word's advisory read-only flag.
+    private void RefreshMarkedAsFinalBanner() =>
+        _markedAsFinalBanner.Visibility = _editor.IsMarkedAsFinal ? Visibility.Visible : Visibility.Collapsed;
+
     private Border BuildStatusBar()
     {
         var grid = new Grid { VerticalAlignment = VerticalAlignment.Center, ClipToBounds = true };
@@ -458,9 +660,11 @@ public sealed class MainWindow : Window
         return _status;
     }
 
-    // The Word-style view-switch cluster on the right of the status bar: a Read Mode toggle and a Print
-    // Layout toggle. They reuse the existing MainWindow toggles (ToggleReadMode / TogglePrintLayout), so the
-    // ribbon View tab and these buttons drive the same state. Uses the shared clean footer toggle style.
+    // The Word-style view-switch cluster on the right of the status bar: a Read Mode button plus the three
+    // mutually-exclusive print-family view toggles (Print Layout / Web Layout / Draft). They reuse the same
+    // MainWindow state the View ribbon drives (ToggleReadMode / SetViewMode), so the ribbon Views group and
+    // these buttons stay in lock-step. The print-family buttons are ChromeStatusToggleButtons so the active
+    // view reads as pressed; RefreshViewModeChecks keeps exactly one checked.
     private UIElement BuildViewSwitchControl()
     {
         var panel = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
@@ -479,8 +683,29 @@ public sealed class MainWindow : Window
             return button;
         }
 
+        ToggleButton ViewToggle(string label, string tip, DocumentViewMode mode)
+        {
+            var toggle = new ToggleButton
+            {
+                Content = label,
+                Style = (Style)FindResource("ChromeStatusToggleButtonStyle"),
+                Margin = new Thickness(2, 3, 2, 3),
+                ToolTip = tip
+            };
+            // Clicking always lands on this mode (re-checking the active one is a no-op); never let the
+            // toggle uncheck itself, since exactly one print-family view is always active.
+            toggle.Click += (_, _) => SetViewMode(mode);
+            return toggle;
+        }
+
+        _printLayoutSwitch = ViewToggle("Print Layout", "Print Layout page view", DocumentViewMode.PrintLayout);
+        _webLayoutSwitch = ViewToggle("Web Layout", "Web Layout: continuous, full-width view (no page chrome)", DocumentViewMode.WebLayout);
+        _draftSwitch = ViewToggle("Draft", "Draft: simplified continuous view for fast editing", DocumentViewMode.Draft);
+
         panel.Children.Add(ViewButton("Read Mode", "Toggle distraction-free Read Mode", ToggleReadMode));
-        panel.Children.Add(ViewButton("Print Layout", "Toggle Print Layout page view", TogglePrintLayout));
+        panel.Children.Add(_printLayoutSwitch);
+        panel.Children.Add(_webLayoutSwitch);
+        panel.Children.Add(_draftSwitch);
         return panel;
     }
 
@@ -508,9 +733,13 @@ public sealed class MainWindow : Window
             Margin = new Thickness(10, 8, 10, 6)
         };
 
+        var searchArea = BuildNavSearch();
+
         var layout = new DockPanel { Width = 240 };
         DockPanel.SetDock(header, Dock.Top);
+        DockPanel.SetDock(searchArea, Dock.Top);
         layout.Children.Add(header);
+        layout.Children.Add(searchArea);
         layout.Children.Add(_navList);
 
         _navPane = new Border
@@ -524,6 +753,131 @@ public sealed class MainWindow : Window
         return _navPane;
     }
 
+    // The "Search document" area at the top of the navigation pane: a text box plus a Prev/Next/count
+    // row. Typing recomputes the document matches (TextSearch over every body paragraph) and jumps to
+    // the first; Prev/Next step through them. Built once and reused; wired to the live editor model.
+    private UIElement BuildNavSearch()
+    {
+        _navSearch = new TextBox
+        {
+            Margin = new Thickness(10, 0, 10, 4),
+            Padding = new Thickness(2, 1, 2, 1),
+            ToolTip = "Search document"
+        };
+        _navSearch.TextChanged += (_, _) => RunNavSearch();
+        _navSearch.KeyDown += (_, e) =>
+        {
+            // Enter advances to the next match (Shift+Enter to the previous), mirroring Word's nav search.
+            if (e.Key == Key.Enter)
+            {
+                StepNavSearch(forward: (Keyboard.Modifiers & ModifierKeys.Shift) == 0);
+                e.Handled = true;
+            }
+        };
+
+        _navSearchPrev = new Button { Content = "‹", Width = 22, Padding = new Thickness(0), ToolTip = "Previous match" };
+        _navSearchNext = new Button { Content = "›", Width = 22, Padding = new Thickness(0), ToolTip = "Next match" };
+        _navSearchPrev.Click += (_, _) => StepNavSearch(forward: false);
+        _navSearchNext.Click += (_, _) => StepNavSearch(forward: true);
+
+        _navSearchStatus = new TextBlock
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(6, 0, 0, 0),
+            Foreground = new SolidColorBrush(Color.FromRgb(0x60, 0x60, 0x60))
+        };
+
+        var controls = new DockPanel { Margin = new Thickness(10, 0, 10, 6) };
+        DockPanel.SetDock(_navSearchPrev, Dock.Left);
+        DockPanel.SetDock(_navSearchNext, Dock.Left);
+        controls.Children.Add(_navSearchPrev);
+        controls.Children.Add(_navSearchNext);
+        controls.Children.Add(_navSearchStatus);
+
+        var area = new StackPanel();
+        area.Children.Add(_navSearch);
+        area.Children.Add(controls);
+        UpdateNavSearchStatus();
+        return area;
+    }
+
+    // Recompute the set of body blocks that contain the search term (reusing the pure TextSearch helper),
+    // jump to the first hit, filter the outline to relevant headings, and refresh the Prev/Next/count row.
+    // An empty term clears the search and shows the full outline again.
+    private void RunNavSearch()
+    {
+        _navSearchHits.Clear();
+        _navSearchHitIndex = -1;
+
+        var term = _navSearch?.Text ?? string.Empty;
+        if (!string.IsNullOrEmpty(term))
+        {
+            _editor.CommitToModel();
+            var blocks = _editor.Model.Blocks;
+            for (var i = 0; i < blocks.Count; i++)
+            {
+                if (BlockMatches(blocks[i], term))
+                    _navSearchHits.Add(i);
+            }
+
+            if (_navSearchHits.Count > 0)
+            {
+                _navSearchHitIndex = 0;
+                _editor.BringBlockIntoView(_navSearchHits[0]);
+            }
+        }
+
+        RefreshOutline();
+        UpdateNavSearchStatus();
+    }
+
+    // Move to the next/previous document match (wrapping at the ends) and bring it into view. No-op when
+    // there are no matches.
+    private void StepNavSearch(bool forward)
+    {
+        if (_navSearchHits.Count == 0)
+            return;
+        _navSearchHitIndex = forward
+            ? (_navSearchHitIndex + 1) % _navSearchHits.Count
+            : (_navSearchHitIndex - 1 + _navSearchHits.Count) % _navSearchHits.Count;
+        _editor.BringBlockIntoView(_navSearchHits[_navSearchHitIndex]);
+        UpdateNavSearchStatus();
+    }
+
+    // Update the "n of m" / "No matches" status label and enable the Prev/Next buttons accordingly.
+    private void UpdateNavSearchStatus()
+    {
+        if (_navSearchStatus is null)
+            return;
+
+        var hasTerm = !string.IsNullOrEmpty(_navSearch?.Text);
+        var hasHits = _navSearchHits.Count > 0;
+        _navSearchStatus.Text = !hasTerm
+            ? string.Empty
+            : hasHits
+                ? $"{_navSearchHitIndex + 1} of {_navSearchHits.Count}"
+                : "No matches";
+        _navSearchPrev.IsEnabled = hasHits;
+        _navSearchNext.IsEnabled = hasHits;
+    }
+
+    // Whether a model block's plain text contains at least one match for the term (case-insensitive,
+    // whole-word off — the live "search as you type" behaviour), via the shared TextSearch helper.
+    private static bool BlockMatches(Block block, string term)
+    {
+        var text = block switch
+        {
+            Paragraph paragraph => paragraph.PlainText,
+            Table table => TableText(table),
+            _ => string.Empty
+        };
+        return TextSearch.FindAll(text, term, matchCase: false, wholeWord: false).Any();
+    }
+
+    // Flatten a table's cell text so a search term inside a table cell still registers as a hit.
+    private static string TableText(Table table) =>
+        string.Join(" ", table.Rows.SelectMany(row => row.Cells).Select(cell => cell.PlainText));
+
     // Show/hide the navigation pane and push the new checked-state into the ribbon state store so the
     // View > Navigation Pane toggle button stays in sync. Refreshes the outline when the pane appears.
     private void ToggleNavPane()
@@ -533,6 +887,284 @@ public sealed class MainWindow : Window
         _stateStore.SetChecked("freew.nav-pane", _navPaneVisible);
         if (_navPaneVisible)
             RefreshOutline();
+    }
+
+    // The Reveal Formatting pane: a header plus a scrollable, read-only list of the FONT / PARAGRAPH /
+    // SECTION formatting in effect at the caret. Collapsed by default; ToggleRevealFormatting shows/hides
+    // it. The content is rebuilt on every selection change from the pure RevealFormatting describer (see
+    // RefreshRevealFormatting), so the pane never touches the model. Mirrors BuildNavPane's dock/chrome.
+    private UIElement BuildRevealPane()
+    {
+        var header = new TextBlock
+        {
+            Text = "Reveal Formatting",
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(10, 8, 10, 6)
+        };
+
+        _revealContent = new StackPanel { Margin = new Thickness(10, 0, 10, 8) };
+        var scroll = new ScrollViewer
+        {
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Content = _revealContent
+        };
+
+        var layout = new DockPanel { Width = 240 };
+        DockPanel.SetDock(header, Dock.Top);
+        layout.Children.Add(header);
+        layout.Children.Add(scroll);
+
+        _revealPane = new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(0xFA, 0xFA, 0xFA)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xD0, 0xD0, 0xD0)),
+            BorderThickness = new Thickness(1, 0, 0, 0),
+            Visibility = Visibility.Collapsed,
+            Child = layout
+        };
+        return _revealPane;
+    }
+
+    // Show/hide the Reveal Formatting pane and keep the View > Reveal Formatting toggle button in sync.
+    // Rebuilds the pane's content when it appears so it shows the current selection immediately.
+    private void ToggleRevealFormatting()
+    {
+        _revealPaneVisible = !_revealPaneVisible;
+        _revealPane.Visibility = _revealPaneVisible ? Visibility.Visible : Visibility.Collapsed;
+        _stateStore.SetChecked("freew.reveal-formatting", _revealPaneVisible);
+        if (_revealPaneVisible)
+            RefreshRevealFormatting();
+    }
+
+    // Rebuild the Reveal Formatting pane from the effective formatting at the caret (run + paragraph +
+    // section), via the pure RevealFormatting describer. No-op when the pane is hidden, so selection
+    // churn while the pane is closed costs nothing. Read-only: never commits or mutates the model.
+    private void RefreshRevealFormatting()
+    {
+        if (_revealContent is null || !_revealPaneVisible)
+            return;
+
+        var sections = RevealFormatting.Describe(
+            _editor.CurrentRunFormatting, _editor.CurrentParagraphFormatting, _editor.Model.Page);
+
+        _revealContent.Children.Clear();
+        foreach (var section in sections)
+        {
+            _revealContent.Children.Add(new TextBlock
+            {
+                Text = section.Heading,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x17, 0x32, 0x4D)),
+                Margin = new Thickness(0, 10, 0, 4)
+            });
+
+            foreach (var item in section.Items)
+            {
+                _revealContent.Children.Add(new TextBlock
+                {
+                    Text = item.Label,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0x60, 0x60, 0x60)),
+                    Margin = new Thickness(0, 4, 0, 0)
+                });
+                _revealContent.Children.Add(new TextBlock
+                {
+                    Text = item.Value,
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(8, 0, 0, 2)
+                });
+            }
+        }
+    }
+
+    // The Reviewing Pane: a header, an Accept/Reject/Prev/Next toolbar, a status line ("N changes"), and a
+    // scrollable list of every tracked change (author • type, plus the affected text). Collapsed by default;
+    // ToggleReviewPane shows/hides it. Selecting an entry jumps the editor to that change (click-to-navigate)
+    // and the toolbar acts on the SELECTED single revision. Content is rebuilt from the pure RevisionList
+    // (see RefreshReviewPane), so the pane never owns revision logic. Mirrors BuildRevealPane's dock/chrome.
+    private UIElement BuildReviewPane()
+    {
+        var header = new TextBlock
+        {
+            Text = "Revisions",
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(10, 8, 10, 6)
+        };
+
+        Button MakeButton(string text, string tip, System.Action onClick)
+        {
+            var button = new Button
+            {
+                Content = text,
+                ToolTip = tip,
+                Padding = new Thickness(8, 2, 8, 2),
+                Margin = new Thickness(0, 0, 4, 0),
+                MinWidth = 28
+            };
+            button.Click += (_, _) => onClick();
+            return button;
+        }
+
+        var toolbar = new WrapPanel { Margin = new Thickness(10, 0, 10, 6) };
+        toolbar.Children.Add(MakeButton("Accept", "Accept the selected change", AcceptSelectedRevision));
+        toolbar.Children.Add(MakeButton("Reject", "Reject the selected change", RejectSelectedRevision));
+        toolbar.Children.Add(MakeButton("▲", "Previous change (jump up)", () => StepRevision(-1)));
+        toolbar.Children.Add(MakeButton("▼", "Next change (jump down)", () => StepRevision(+1)));
+
+        _reviewStatus = new TextBlock
+        {
+            Foreground = new SolidColorBrush(Color.FromRgb(0x60, 0x60, 0x60)),
+            Margin = new Thickness(10, 0, 10, 6)
+        };
+
+        _reviewList = new ListBox
+        {
+            BorderThickness = new Thickness(0),
+            Background = Brushes.Transparent,
+            Margin = new Thickness(4, 0, 4, 8)
+        };
+        // Selecting an entry navigates the editor to that change (click-to-navigate).
+        _reviewList.SelectionChanged += (_, _) =>
+        {
+            var index = _reviewList.SelectedIndex;
+            if (index >= 0 && index < _reviewEntries.Count)
+                _editor.NavigateToRevision(_reviewEntries[index]);
+        };
+
+        var layout = new DockPanel { Width = 260 };
+        DockPanel.SetDock(header, Dock.Top);
+        DockPanel.SetDock(toolbar, Dock.Top);
+        DockPanel.SetDock(_reviewStatus, Dock.Top);
+        layout.Children.Add(header);
+        layout.Children.Add(toolbar);
+        layout.Children.Add(_reviewStatus);
+        layout.Children.Add(_reviewList);
+
+        _reviewPane = new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(0xFA, 0xFA, 0xFA)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xD0, 0xD0, 0xD0)),
+            BorderThickness = new Thickness(1, 0, 0, 0),
+            Visibility = Visibility.Collapsed,
+            Child = layout
+        };
+        return _reviewPane;
+    }
+
+    // Show/hide the Reviewing Pane and keep the Review > Reviewing Pane toggle button in sync. Rebuilds the
+    // list when it appears so it reflects the current document immediately.
+    private void ToggleReviewPane()
+    {
+        _reviewPaneVisible = !_reviewPaneVisible;
+        _reviewPane.Visibility = _reviewPaneVisible ? Visibility.Visible : Visibility.Collapsed;
+        _stateStore.SetChecked("freew.reviewing-pane", _reviewPaneVisible);
+        if (_reviewPaneVisible)
+            RefreshReviewPane();
+    }
+
+    // Rebuild the Reviewing Pane's list from the document's tracked changes (the pure RevisionList via
+    // DocumentView.ListRevisions). No-op when the pane is hidden, so editing churn while it is closed costs
+    // nothing. Tries to preserve the selected position so Accept/Reject keeps focus on the next change.
+    private void RefreshReviewPane()
+    {
+        if (_reviewList is null || !_reviewPaneVisible)
+            return;
+
+        var previousIndex = _reviewList.SelectedIndex;
+        _reviewEntries = _editor.ListRevisions();
+
+        _reviewList.Items.Clear();
+        foreach (var entry in _reviewEntries)
+            _reviewList.Items.Add(BuildRevisionItem(entry));
+
+        _reviewStatus.Text = _reviewEntries.Count switch
+        {
+            0 => "No tracked changes",
+            1 => "1 change",
+            var n => $"{n} changes"
+        };
+
+        if (_reviewEntries.Count == 0)
+            return;
+        // Keep the cursor near where it was (the change that slid into the resolved slot, or the last one).
+        var next = previousIndex < 0 ? 0 : System.Math.Min(previousIndex, _reviewEntries.Count - 1);
+        _reviewList.SelectedIndex = next;
+    }
+
+    // One reviewing-pane row: a bold "Author • Type" caption over the affected text (wrapped, dimmed).
+    private static UIElement BuildRevisionItem(RevisionEntry entry)
+    {
+        var verb = entry.Kind switch
+        {
+            RevisionEntryKind.Insertion => "Inserted",
+            RevisionEntryKind.Deletion => "Deleted",
+            _ => "Formatted"
+        };
+        var author = string.IsNullOrWhiteSpace(entry.Author) ? "Unknown" : entry.Author;
+
+        var panel = new StackPanel { Margin = new Thickness(6, 4, 6, 4) };
+        panel.Children.Add(new TextBlock
+        {
+            Text = $"{author} • {verb}",
+            FontWeight = FontWeights.SemiBold,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x17, 0x32, 0x4D))
+        });
+        var preview = entry.Text.Replace("\r", " ").Replace("\n", " ").Trim();
+        if (preview.Length > 0)
+            panel.Children.Add(new TextBlock
+            {
+                Text = preview,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x50, 0x50, 0x50))
+            });
+        return panel;
+    }
+
+    // Accept the single revision selected in the Reviewing Pane, then rebuild the list (which slides the
+    // selection onto the next pending change). No-op when nothing is selected.
+    private void AcceptSelectedRevision()
+    {
+        var index = _reviewList.SelectedIndex;
+        if (index < 0 || index >= _reviewEntries.Count)
+            return;
+        if (_editor.AcceptRevision(_reviewEntries[index]))
+        {
+            _file.MarkDirty();
+            UpdateCounts();
+        }
+        RefreshReviewPane();
+    }
+
+    // Reject the single revision selected in the Reviewing Pane, then rebuild the list.
+    private void RejectSelectedRevision()
+    {
+        var index = _reviewList.SelectedIndex;
+        if (index < 0 || index >= _reviewEntries.Count)
+            return;
+        if (_editor.RejectRevision(_reviewEntries[index]))
+        {
+            _file.MarkDirty();
+            UpdateCounts();
+        }
+        RefreshReviewPane();
+    }
+
+    // Previous/Next change: step the selection through the list (and so navigate the editor, via the list's
+    // SelectionChanged handler). Opens the pane first if it is closed. Wraps at the ends.
+    private void StepRevision(int direction)
+    {
+        if (!_reviewPaneVisible)
+            ToggleReviewPane();
+        else
+            RefreshReviewPane();
+        if (_reviewEntries.Count == 0)
+            return;
+
+        var current = _reviewList.SelectedIndex;
+        var next = current < 0
+            ? (direction > 0 ? 0 : _reviewEntries.Count - 1)
+            : (current + direction + _reviewEntries.Count) % _reviewEntries.Count;
+        _reviewList.SelectedIndex = next;
+        _reviewList.ScrollIntoView(_reviewList.SelectedItem);
     }
 
     // Read mode (distraction-free view): hide the ribbon, title bar, navigation pane, and the status
@@ -563,6 +1195,14 @@ public sealed class MainWindow : Window
             // Collapse the navigation pane while reading (without disturbing its remembered state).
             _navPane.Visibility = Visibility.Collapsed;
 
+            // Likewise hide the Reveal Formatting pane while reading (its remembered state is untouched).
+            _revealPaneVisibleBeforeReadMode = _revealPaneVisible;
+            _revealPane.Visibility = Visibility.Collapsed;
+
+            // And hide the Reviewing Pane while reading (its remembered state is untouched).
+            _reviewPaneVisibleBeforeReadMode = _reviewPaneVisible;
+            _reviewPane.Visibility = Visibility.Collapsed;
+
             // A centered, comfortable reading column: cap the width and add generous breathing room.
             // Drop any Print-Layout page sizing/shadow so the reading column owns the surface width.
             _editor.HorizontalAlignment = HorizontalAlignment.Center;
@@ -588,19 +1228,89 @@ public sealed class MainWindow : Window
 
             // Restore the navigation pane to whatever it was before entering read mode.
             _navPane.Visibility = _navPaneVisibleBeforeReadMode ? Visibility.Visible : Visibility.Collapsed;
+
+            // Restore the Reveal Formatting pane to whatever it was before entering read mode.
+            _revealPane.Visibility = _revealPaneVisibleBeforeReadMode ? Visibility.Visible : Visibility.Collapsed;
+
+            // Restore the Reviewing Pane to whatever it was before entering read mode.
+            _reviewPane.Visibility = _reviewPaneVisibleBeforeReadMode ? Visibility.Visible : Visibility.Collapsed;
         }
 
         _stateStore.SetChecked("freew.read-mode", _readMode);
     }
 
-    // View > Print Layout: flip the editor between the Word-style page view (white page on the grey
-    // workspace, margins shown, drop shadow, page-break markers) and the plain/continuous flat view.
-    // DocumentView owns the page presentation; here we only mirror the new checked-state into the shared
-    // RibbonStateStore so the toggle button stays in sync, exactly like the read-mode / nav-pane toggles.
-    private void TogglePrintLayout()
+    // View > Views: switch the editing surface to one of the three mutually-exclusive print-family view
+    // modes — Print Layout (the Word page sheet), Web Layout (a continuous, full-width view with no page
+    // chrome, text wrapping to the window like a web page) or Draft (a simplified continuous view for fast
+    // editing). DocumentView owns the page presentation; here we drive that, leave any Outline overlay
+    // (which replaces the surface) so the chosen view is actually visible, and refresh the ribbon + status
+    // bar so exactly one mode reads as active. Switching never mutates the model.
+    private void SetViewMode(DocumentViewMode mode)
     {
-        var enabled = _editor.TogglePrintLayout();
-        _stateStore.SetChecked("freew.print-layout", enabled);
+        // Outline view swaps the whole surface out, so it would hide whichever print-family view is chosen.
+        // Picking Print Layout / Web Layout / Draft therefore leaves Outline first (Word's views are all
+        // mutually exclusive), mirroring how the ribbon's Views group behaves.
+        if (_outlineMode)
+            ToggleOutlineView();
+
+        _editor.SetViewMode(mode);
+        RefreshViewModeChecks();
+    }
+
+    // Push the active print-family view mode into the shared RibbonStateStore (so the View ribbon's Print
+    // Layout / Web Layout / Draft toggle buttons reflect it) and the status-bar toggle buttons. Exactly one
+    // is checked — unless Outline view is active, in which case none of the three is (Outline owns the
+    // surface). Mirrors how the read-mode / nav-pane toggles keep their buttons in sync.
+    private void RefreshViewModeChecks()
+    {
+        var mode = _editor.ViewMode;
+        var printLayout = !_outlineMode && mode == DocumentViewMode.PrintLayout;
+        var webLayout = !_outlineMode && mode == DocumentViewMode.WebLayout;
+        var draft = !_outlineMode && mode == DocumentViewMode.Draft;
+
+        _stateStore.SetChecked("freew.print-layout", printLayout);
+        _stateStore.SetChecked("freew.web-layout", webLayout);
+        _stateStore.SetChecked("freew.draft-view", draft);
+
+        if (_printLayoutSwitch is not null) _printLayoutSwitch.IsChecked = printLayout;
+        if (_webLayoutSwitch is not null) _webLayoutSwitch.IsChecked = webLayout;
+        if (_draftSwitch is not null) _draftSwitch.IsChecked = draft;
+    }
+
+    // View > Outline: swap the normal editing surface for the heading-structured outline view (and its
+    // Outlining mini-toolbar), or back again. Entering hides the workspace + rulers and shows the outline,
+    // populated from the live model; exiting restores everything verbatim — the same save/restore shape as
+    // Read Mode. Switching views never mutates the model, so toggling back lands on an untouched document.
+    // The checked-state is mirrored into the shared RibbonStateStore so the View > Outline button stays in
+    // sync, exactly like the Print Layout / Read Mode toggles.
+    private void ToggleOutlineView()
+    {
+        _outlineMode = !_outlineMode;
+        if (_outlineMode)
+        {
+            _hRulerVisibilityBeforeOutline = _hRuler.Visibility;
+            _vRulerVisibilityBeforeOutline = _vRuler.Visibility;
+
+            _workspace.Visibility = Visibility.Collapsed;
+            _hRuler.Visibility = Visibility.Collapsed;
+            _vRuler.Visibility = Visibility.Collapsed;
+
+            _outlineView.Visibility = Visibility.Visible;
+            _outlineView.Refresh();
+        }
+        else
+        {
+            _outlineView.Visibility = Visibility.Collapsed;
+            _workspace.Visibility = Visibility.Visible;
+            _hRuler.Visibility = _hRulerVisibilityBeforeOutline;
+            _vRuler.Visibility = _vRulerVisibilityBeforeOutline;
+        }
+
+        _stateStore.SetChecked("freew.outline-view", _outlineMode);
+
+        // Outline and the print-family views are mutually exclusive: entering Outline clears the Print
+        // Layout / Web Layout / Draft checks, and leaving it re-checks whichever the editor is still in.
+        RefreshViewModeChecks();
     }
 
     // Recompute the heading outline from the editor's committed model and repopulate the nav list.
@@ -614,12 +1324,38 @@ public sealed class MainWindow : Window
         _editor.CommitToModel();
         var outline = DocumentOutline.Of(_editor.Model);
 
+        // When a search term is active, narrow the outline to headings that are themselves a match or
+        // that own a matching block in their subtree, so the list doubles as a "results in this document"
+        // view (Word's navigation-pane search behaviour). With no term the full outline is shown.
+        var term = _navSearch?.Text ?? string.Empty;
+        if (!string.IsNullOrEmpty(term) && outline.Count > 0)
+            outline = FilterOutlineToMatches(outline, term);
+
         // Repopulate without triggering a navigation jump from the resulting selection reset.
         _navList.SelectionChanged -= OnOutlineSelected;
         _navList.Items.Clear();
         foreach (var entry in outline)
             _navList.Items.Add(new OutlineItem(entry));
         _navList.SelectionChanged += OnOutlineSelected;
+    }
+
+    // Keep only the outline entries relevant to the active search: a heading whose own text matches, or
+    // one that owns a matching block anywhere in its subtree (OutlineTools.SubtreeRange). Reuses the same
+    // TextSearch matching as the document scan so the filtered headings and the Next/Prev hits agree.
+    private IReadOnlyList<OutlineEntry> FilterOutlineToMatches(IReadOnlyList<OutlineEntry> outline, string term)
+    {
+        var blocks = _editor.Model.Blocks;
+        var kept = new List<OutlineEntry>(outline.Count);
+        foreach (var entry in outline)
+        {
+            var (start, end) = OutlineTools.SubtreeRange(blocks, entry.BlockIndex);
+            var matched = false;
+            for (var i = start; i < end && !matched; i++)
+                matched = BlockMatches(blocks[i], term);
+            if (matched)
+                kept.Add(entry);
+        }
+        return kept;
     }
 
     // Clicking an outline entry scrolls the matching heading into view and moves the caret there by
@@ -636,12 +1372,46 @@ public sealed class MainWindow : Window
     private ContextMenu BuildOutlineContextMenu()
     {
         var menu = new ContextMenu();
+        menu.Items.Add(MoveHeadingMenuItem("Move Up", moveUp: true));
+        menu.Items.Add(MoveHeadingMenuItem("Move Down", moveUp: false));
+        menu.Items.Add(new Separator());
         menu.Items.Add(OutlineMenuItem("Promote", entry => _editor.PromoteHeading(entry.BlockIndex)));
         menu.Items.Add(OutlineMenuItem("Demote", entry => _editor.DemoteHeading(entry.BlockIndex)));
         menu.Items.Add(new Separator());
         menu.Items.Add(OutlineMenuItem("Collapse", entry => _editor.CollapseHeading(entry.BlockIndex)));
         menu.Items.Add(OutlineMenuItem("Expand", entry => _editor.ExpandHeading(entry.BlockIndex)));
         return menu;
+    }
+
+    // A "Move Up / Move Down" context item: relocates the selected heading and its whole subtree by one
+    // sibling position via the editor's reversible MoveHeading (OutlineTools.MoveSubtree on the undo/redo
+    // bus), then refreshes the outline and re-selects the heading at its new index so it stays highlighted.
+    private MenuItem MoveHeadingMenuItem(string header, bool moveUp)
+    {
+        var item = new MenuItem { Header = header };
+        item.Click += (_, _) =>
+        {
+            if (_navList.SelectedItem is not OutlineItem selected)
+                return;
+            var newIndex = _editor.MoveHeading(selected.Entry.BlockIndex, moveUp);
+            RefreshOutline();
+            SelectOutlineEntry(newIndex);
+        };
+        return item;
+    }
+
+    // Select the nav-list row whose entry maps to model block index `blockIndex` (no jump beyond the one
+    // the selection already triggers). A no-op when no row matches (e.g. it was filtered out by a search).
+    private void SelectOutlineEntry(int blockIndex)
+    {
+        foreach (var listItem in _navList.Items)
+        {
+            if (listItem is OutlineItem outlineItem && outlineItem.Entry.BlockIndex == blockIndex)
+            {
+                _navList.SelectedItem = listItem;
+                return;
+            }
+        }
     }
 
     // Build one outline context-menu item that runs `action` against the selected outline entry. A no-op
@@ -728,8 +1498,42 @@ public sealed class MainWindow : Window
         panel.Children.Add(ZoomButton("−", () => _editor.ZoomLevel = ZoomLevels.StepDown(_editor.ZoomLevel)));
         panel.Children.Add(_zoomSlider);
         panel.Children.Add(ZoomButton("+", () => _editor.ZoomLevel = ZoomLevels.StepUp(_editor.ZoomLevel)));
-        panel.Children.Add(_zoomLabel);
+        // The percentage is clickable (Word does this): clicking it opens the Zoom dialog.
+        var zoomButton = new Button
+        {
+            Content = _zoomLabel,
+            Style = (Style)FindResource("ChromeStatusButtonStyle"),
+            Padding = new Thickness(2, 0, 2, 0),
+            ToolTip = "Zoom"
+        };
+        zoomButton.Click += (_, _) => OpenZoomDialog();
+        panel.Children.Add(zoomButton);
         return panel;
+    }
+
+    // View > Zoom (and the clickable status-bar percentage): open Word's Zoom dialog. The page-relative fit
+    // factors (Page width / Text width / Whole page) are computed from the live workspace viewport and the
+    // model page geometry via the pure ZoomFit helper, so "Page width"/"Whole page" honour the real page
+    // size + margins. The chosen factor drives DocumentView.ZoomLevel (clamped, shared with the slider).
+    private void OpenZoomDialog()
+    {
+        _editor.CommitToModel();
+        var page = _editor.Model.Page;
+        var (pageWidthDip, pageHeightDip) = PageLayout.PageSizeDip(page);
+        var (contentWidthDip, _) = PageLayout.ContentAreaDip(page);
+
+        // The viewport the page floats in: the grey workspace, minus the editor's own breathing-room margin.
+        var margin = _editor.Margin;
+        var viewportWidth = Math.Max(0, _workspace.ActualWidth - margin.Left - margin.Right);
+        var viewportHeight = Math.Max(0, _workspace.ActualHeight - margin.Top - margin.Bottom);
+
+        var pageWidthFactor = ZoomFit.PageWidth(pageWidthDip, viewportWidth);
+        var textWidthFactor = ZoomFit.TextWidth(contentWidthDip, viewportWidth);
+        var wholePageFactor = ZoomFit.WholePage(pageWidthDip, pageHeightDip, viewportWidth, viewportHeight);
+
+        var chosen = ZoomDialog.Prompt(this, _editor.ZoomLevel, pageWidthFactor, textWidthFactor, wholePageFactor);
+        if (chosen is { } factor)
+            _editor.ZoomLevel = factor;
     }
 
     // QAT Undo / Redo: focus the editing surface and run its built-in (RichTextBox) undo/redo, which is
@@ -773,6 +1577,100 @@ public sealed class MainWindow : Window
         preview.Show();
     }
 
+    /// <summary>
+    /// File &gt; Export: writes the document to a real PDF. Reuses the print pipeline
+    /// (<see cref="PrintLayout.BuildPaginator"/>) so the exported pages match Print / Print Preview
+    /// exactly (page geometry, header/footer, watermark, border, footnotes), renders them to PDF via
+    /// <see cref="PdfExport"/>, and flushes atomically through the shared
+    /// <see cref="Free.Shared.Shell.ExportAtomicWriter"/>.
+    /// </summary>
+    private void ExportToPdf()
+    {
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = "Export to PDF",
+            Filter = "PDF document (*.pdf)|*.pdf",
+            DefaultExt = ".pdf",
+            AddExtension = true,
+            OverwritePrompt = true,
+            FileName = _file.DisplayName + ".pdf"
+        };
+        if (dialog.ShowDialog(this) != true)
+            return;
+
+        var path = dialog.FileName;
+        try
+        {
+            // Render on the UI thread (walks the WPF visual tree), then write atomically.
+            var paginator = PrintLayout.BuildPaginator(_editor);
+            var bytes = PdfExport.RenderToBytes(paginator, _file.DisplayName);
+            Free.Shared.Shell.ExportAtomicWriter.WriteAllBytes(path, bytes);
+
+            MessageBox.Show(
+                this,
+                $"Exported to PDF:\n{path}",
+                "Export to PDF",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                this,
+                "The document could not be exported to PDF.\n\n" + ex.Message,
+                "Export to PDF",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
+    /// <summary>
+    /// File &gt; Export: writes the document to a real XPS package. Reuses the same print pipeline
+    /// (<see cref="PrintLayout.BuildPaginator"/>) as Print / Export to PDF so the exported pages match
+    /// exactly (page geometry, header/footer, watermark, border, footnotes), serialises them as vector
+    /// glyph runs via <see cref="XpsExport"/>, and flushes atomically through the shared
+    /// <see cref="Free.Shared.Shell.ExportAtomicWriter"/>.
+    /// </summary>
+    private void ExportToXps()
+    {
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = "Export to XPS",
+            Filter = "XPS document (*.xps)|*.xps",
+            DefaultExt = ".xps",
+            AddExtension = true,
+            OverwritePrompt = true,
+            FileName = _file.DisplayName + ".xps"
+        };
+        if (dialog.ShowDialog(this) != true)
+            return;
+
+        var path = dialog.FileName;
+        try
+        {
+            // Render on the UI thread (walks the WPF visual tree), then write atomically.
+            var paginator = PrintLayout.BuildPaginator(_editor);
+            var bytes = XpsExport.RenderToBytes(paginator);
+            Free.Shared.Shell.ExportAtomicWriter.WriteAllBytes(path, bytes);
+
+            MessageBox.Show(
+                this,
+                $"Exported to XPS:\n{path}",
+                "Export to XPS",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                this,
+                "The document could not be exported to XPS.\n\n" + ex.Message,
+                "Export to XPS",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
     private void OpenFindReplace()
     {
         if (_findDialog is null)
@@ -789,6 +1687,38 @@ public sealed class MainWindow : Window
         var dialog = new PropertiesDialog(this, _editor.Model.Properties);
         if (dialog.ShowDialog() == true)
             _file.MarkDirty();
+    }
+
+    // Opens the modal FreeW Options editor. On OK it applies the edited settings live (by mutating the
+    // shared _options instance FileCommands reads) and persists them through the shared JsonSettingsStore
+    // so they survive a restart. Save is best-effort — a failure surfaces a message but never throws.
+    private void OpenOptions()
+    {
+        var dialog = new OptionsDialog(this, _options);
+        if (dialog.ShowDialog() != true)
+            return;
+
+        var edited = dialog.Result;
+        _options.RecentFilesCap = edited.RecentFilesCap;
+        _options.DefaultSaveFormat = edited.DefaultSaveFormat;
+        _options.UiLanguage = edited.UiLanguage;
+        _options.AutoCorrectEnabled = edited.AutoCorrectEnabled;
+        _options.AutoFormat = edited.AutoFormat;
+        _options.AutoCorrect = edited.AutoCorrect;
+        _options.Normalize();
+        ApplyAutoFormatOptions();
+
+        if (!_optionsStore.Save(_options))
+            DialogMessageHelper.ShowError(this, _optionsStore.LastError, "FreeW Options");
+    }
+
+    // Push the persisted AutoCorrect master switch + per-rule AutoFormat toggles onto the live editor so the
+    // as-you-type rules honour the user's settings immediately (called at construction and after Options OK).
+    private void ApplyAutoFormatOptions()
+    {
+        _editor.AutoCorrectEnabled = _options.AutoCorrectEnabled;
+        _editor.AutoFormatOptions = _options.AutoFormat ?? AutoFormatOptions.Default;
+        _editor.AutoCorrectOptions = _options.AutoCorrect ?? AutoCorrectOptions.Default;
     }
 
     // Shows that AppProduct = "FreeW" routes the shared storage helpers to FreeW's own folder.

@@ -7,6 +7,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using FreeW.App.Avalonia.Editing;
+using FreeW.App.Avalonia.Pdf;
 using FreeW.App.Avalonia.Ribbon;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
@@ -16,12 +17,13 @@ namespace FreeW.App.Avalonia;
 
 public sealed class MainWindow : Window
 {
-    private static readonly FilePickerFileType DocxFileType = new("Word document")
+    private static readonly FilePickerFileType PdfFileType = new("PDF document")
     {
-        Patterns = ["*.docx"],
-        MimeTypes = ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
+        Patterns = ["*.pdf"],
+        MimeTypes = ["application/pdf"],
     };
 
+    private readonly IReadOnlyList<IDocumentFileAdapter> _adapters = DocumentFileAdapterCatalog.CreateDefaultAdapters();
     private readonly DocumentView _editor = new();
     private readonly TextBlock _status = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0) };
     private readonly TextBox _findBox = new() { Width = 200, VerticalAlignment = VerticalAlignment.Center };
@@ -204,6 +206,7 @@ public sealed class MainWindow : Window
             case Key.N: NewDocument(); e.Handled = true; break;
             case Key.O: _ = OpenAsync(); e.Handled = true; break;
             case Key.S: _ = SaveAsync(); e.Handled = true; break;
+            case Key.P when (e.KeyModifiers & KeyModifiers.Shift) != 0: _ = ExportPdfAsync(); e.Handled = true; break;
             case Key.OemPlus or Key.Add: ApplyZoom(_zoomScale + 0.1); e.Handled = true; break;
             case Key.OemMinus or Key.Subtract: ApplyZoom(_zoomScale - 0.1); e.Handled = true; break;
             case Key.D0 or Key.NumPad0: ApplyZoom(1.0); e.Handled = true; break;
@@ -300,7 +303,7 @@ public sealed class MainWindow : Window
         {
             Title = "Open document",
             AllowMultiple = false,
-            FileTypeFilter = [DocxFileType],
+            FileTypeFilter = [.. DocumentFilePickerTypes.BuildOpenTypes(_adapters)],
         });
 
         if (files.Count == 0)
@@ -310,11 +313,29 @@ public sealed class MainWindow : Window
         if (path is null)
             return;
 
+        var adapter = DocumentFileFormatResolver.FindOpenAdapter(_adapters, Path.GetExtension(path), out var format);
+        if (adapter is null)
+        {
+            _status.Text = $"Open failed: unsupported file type \"{Path.GetExtension(path)}\".";
+            return;
+        }
+
         try
         {
-            _editor.LoadDocument(DocxReader.Read(path));
-            _currentPath = path;
-            Title = $"FreeW - {Path.GetFileName(path)}";
+            using var stream = File.OpenRead(path);
+            _editor.LoadDocument(adapter.Load(stream));
+
+            if (format?.OpensAsTemplate == true)
+            {
+                // Templates seed a new untitled document: clearing the path makes the next Save a Save-As.
+                _currentPath = null;
+                Title = "FreeW";
+            }
+            else
+            {
+                _currentPath = path;
+                Title = $"FreeW - {Path.GetFileName(path)}";
+            }
         }
         catch (Exception ex)
         {
@@ -332,7 +353,7 @@ public sealed class MainWindow : Window
                 Title = "Save document",
                 DefaultExtension = "docx",
                 SuggestedFileName = "Document.docx",
-                FileTypeChoices = [DocxFileType],
+                FileTypeChoices = [.. DocumentFilePickerTypes.BuildSaveTypes(_adapters)],
             });
             path = file?.TryGetLocalPath();
         }
@@ -340,9 +361,17 @@ public sealed class MainWindow : Window
         if (path is null)
             return;
 
+        var adapter = DocumentFileFormatResolver.FindSaveAdapter(_adapters, Path.GetExtension(path), out _);
+        if (adapter is null)
+        {
+            _status.Text = $"Save failed: unsupported file type \"{Path.GetExtension(path)}\".";
+            return;
+        }
+
         try
         {
-            DocxWriter.Write(_editor.Document, path);
+            using (var stream = File.Create(path))
+                adapter.Save(_editor.Document, stream);
             _currentPath = path;
             Title = $"FreeW - {Path.GetFileName(path)}";
             _status.Text = $"Saved {Path.GetFileName(path)}";
@@ -350,6 +379,36 @@ public sealed class MainWindow : Window
         catch (Exception ex)
         {
             _status.Text = $"Save failed: {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// File → Export to PDF (Ctrl+Shift+P). Builds the shared app-agnostic PDF model from the editor
+    /// layout and writes a real PDF via <see cref="FreeWAvaloniaPdfExport"/> (Skia when available,
+    /// dependency-free WinAnsi fallback otherwise). Mirrors the FreeX Avalonia shell's File → Export
+    /// to PDF, on the shared PDF tier.
+    /// </summary>
+    private async Task ExportPdfAsync()
+    {
+        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "Export to PDF",
+            DefaultExtension = "pdf",
+            SuggestedFileName = (_currentPath is null ? "Document" : Path.GetFileNameWithoutExtension(_currentPath)) + ".pdf",
+            FileTypeChoices = [PdfFileType],
+        });
+        var path = file?.TryGetLocalPath();
+        if (path is null)
+            return;
+
+        try
+        {
+            var result = FreeWAvaloniaPdfExport.Save(_editor, path);
+            _status.Text = $"Exported PDF ({result.PageCount} page{(result.PageCount == 1 ? "" : "s")}, {result.Backend}): {Path.GetFileName(path)}";
+        }
+        catch (Exception ex)
+        {
+            _status.Text = $"PDF export failed: {ex.Message}";
         }
     }
 

@@ -6,6 +6,8 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
+using Avalonia.VisualTree;
+using Free.Shared.Ribbon;
 
 namespace FreeX.Ribbon.Avalonia;
 
@@ -66,6 +68,28 @@ public static class AvaloniaRibbonRenderer
     private static readonly IBrush TabStripBrush = new SolidColorBrush(TabStripColor);
     private static readonly IBrush TabTextBrush = new SolidColorBrush(TabTextColor);
 
+    /// <summary>
+    /// Syncs every <see cref="ToggleButton"/> in the ribbon's live visual tree with its command's
+    /// current <see cref="IRibbonStatefulCommand.GetState"/>. Call from the host's RefreshShell so
+    /// Bold/Italic/Underline and other format-state buttons reflect the active-cell state.
+    /// </summary>
+    public static void SyncToggleStates(Control ribbon, IRibbonCommandRegistry? registry)
+    {
+        if (registry is null)
+            return;
+        foreach (var toggle in ribbon.GetVisualDescendants().OfType<ToggleButton>())
+        {
+            if (toggle.Tag is string id && !string.IsNullOrEmpty(id)
+                && registry.TryGet(new RibbonCommandId(id), out var cmd)
+                && cmd is IRibbonStatefulCommand stateful)
+            {
+                var state = stateful.GetState();
+                toggle.IsChecked = state.IsChecked;
+                toggle.IsEnabled = state.IsEnabled;
+            }
+        }
+    }
+
     /// <summary>Builds the content panel for one tab (the body shown under the tab header).</summary>
     public static Control BuildTabContent(RibbonTab tab, IRibbonCommandRegistry? registry = null)
     {
@@ -118,15 +142,15 @@ public static class AvaloniaRibbonRenderer
     {
         ArgumentNullException.ThrowIfNull(definition);
 
-        // The WPF host's TabControl is a white body with a 1px FreeXBorderBrush bottom rule
-        // (MainWindow: Background=FreeXRibbonSurfaceBrush, BorderThickness="0,0,0,1"). That bottom rule is
-        // the SECOND line the user sees under the selected tab — the first being the accent underline the
-        // selected tab draws. Reproduce both: white body + a 1px divider bottom border on the control.
+        // WPF: white ribbon surface; no extra TabControl bottom border — the selected tab's 3px accent
+        // underline is the only visual divider between the tab strip and the content area below.
+        // Avalonia Fluent stacks the 1px control border and the 3px tab accent as two separate visible
+        // lines; removing the TabControl border leaves just the single accent underline, matching WPF.
         var tabControl = new TabControl
         {
             Background = SurfaceBrush,
-            BorderBrush = DividerBrush,
-            BorderThickness = new Thickness(0, 0, 0, 1),
+            BorderBrush = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
         };
         ApplyRibbonTheme(tabControl);
 
@@ -220,7 +244,10 @@ public static class AvaloniaRibbonRenderer
                 new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0, 0, 0, 3)),
                 new Setter(TemplatedControl.FontSizeProperty, 12d),
                 new Setter(TemplatedControl.ForegroundProperty, TabTextBrush),
-                new Setter(TemplatedControl.PaddingProperty, new Thickness(10, 4, 10, 4)),
+                // Avalonia Fluent default tab height is ~48px vs WPF ~28px; constrain to match.
+                new Setter(Layoutable.MinHeightProperty, 0d),
+                new Setter(Layoutable.HeightProperty, 28d),
+                new Setter(TemplatedControl.PaddingProperty, new Thickness(10, 2, 10, 2)),
                 new Setter(Layoutable.MarginProperty, new Thickness(0, 0, 1, 0)),
                 new Setter(InputElement.CursorProperty, new Cursor(StandardCursorType.Hand)),
             },
@@ -255,6 +282,13 @@ public static class AvaloniaRibbonRenderer
                 new Setter(TemplatedControl.BackgroundProperty, SurfaceBrush),
                 new Setter(TemplatedControl.ForegroundProperty, TabTextBrush),
             },
+        };
+
+        // Avalonia Fluent theme may override the TabItem Foreground via internal pseudo-class triggers;
+        // targeting the rendered TextBlock directly wins over any theme-level override.
+        var tabTextForeground = new Style(x => x.OfType<TabItem>().Descendant().OfType<TextBlock>())
+        {
+            Setters = { new Setter(TextBlock.ForegroundProperty, TabTextBrush) },
         };
 
         // ── Buttons: flat, transparent idle; light hover tint + subtle border on pointer-over. ──
@@ -303,15 +337,27 @@ public static class AvaloniaRibbonRenderer
             },
         };
 
+        // ComboBox: Avalonia Fluent default height ~34px vs WPF ~26px — constrain to match.
+        var comboBase = new Style(x => x.OfType<ComboBox>())
+        {
+            Setters =
+            {
+                new Setter(Layoutable.MaxHeightProperty, 26d),
+                new Setter(TemplatedControl.PaddingProperty, new Thickness(8, 2, 4, 2)),
+            },
+        };
+
         tabControl.Styles.Add(tabBase);
         tabControl.Styles.Add(tabHover);
         tabControl.Styles.Add(tabSelected);
         tabControl.Styles.Add(tabSelectedHover);
+        tabControl.Styles.Add(tabTextForeground);
         tabControl.Styles.Add(buttonBase);
         tabControl.Styles.Add(buttonHover);
         tabControl.Styles.Add(toggleBase);
         tabControl.Styles.Add(toggleHover);
         tabControl.Styles.Add(toggleChecked);
+        tabControl.Styles.Add(comboBase);
     }
 
     private static Control BuildGroup(RibbonGroup group, IRibbonCommandRegistry? registry)
@@ -682,7 +728,14 @@ public static class AvaloniaRibbonRenderer
             return;
         if (string.IsNullOrEmpty(control.CommandId.Value))
             return;
-        element.IsEnabled = registry.TryGet(control.CommandId, out _);
+        if (!registry.TryGet(control.CommandId, out var cmd))
+        {
+            element.IsEnabled = false;
+            return;
+        }
+        // Stateful commands expose IsEnabled in their state (e.g. Draw-tab commands disabled by
+        // default when no stylus/pen context is active). Respect that at build time.
+        element.IsEnabled = cmd is not IRibbonStatefulCommand stateful || stateful.GetState().IsEnabled;
     }
 
     private static RibbonMenu? BuildMenu(RibbonControl control) => control switch

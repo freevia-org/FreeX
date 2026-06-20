@@ -28,6 +28,7 @@
 
   <ItemGroup>
     <None Include="Fixtures\Simple.xls" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Fixtures\Simple.xlsb" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

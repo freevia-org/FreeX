@@ -1,3 +1,6 @@
+using FreeX.App.Presentation.FormatCells;
+using FreeX.App.Services;
+
 namespace FreeX.App.Host;
 
 public partial class FormatCellsDialog

@@ -279,6 +279,29 @@ public sealed record ChartPointFillFormat(
 /// </summary>
 public sealed record ChartRangeDataLabel(int SeriesIndex, int PointIndex, string Text);
 
+public sealed record ChartRangeDataLabelPoint(int PointIndex, string Text);
+
+/// <summary>
+/// Per-series "Value From Cells" data-label definition (OOXML <c>c15:datalabelsRange</c>),
+/// capturing the source <c>c15:f</c> formula, the cached <c>c15:ptCount</c> point count, and the
+/// cached per-point strings so the feature round-trips on XLSX and native (.fxl) save.
+/// </summary>
+public sealed record ChartSeriesRangeDataLabels(
+    int SeriesIndex, string? Formula, int? PointCount, IReadOnlyList<ChartRangeDataLabelPoint> Points)
+{
+    public bool Equals(ChartSeriesRangeDataLabels? other) =>
+        other is not null && SeriesIndex == other.SeriesIndex
+        && string.Equals(Formula, other.Formula, StringComparison.Ordinal)
+        && PointCount == other.PointCount && Points.SequenceEqual(other.Points);
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+        hash.Add(SeriesIndex); hash.Add(Formula, StringComparer.Ordinal); hash.Add(PointCount);
+        foreach (var p in Points) hash.Add(p);
+        return hash.ToHashCode();
+    }
+}
+
 public sealed record ChartSeriesFormat(
     int SeriesIndex,
     CellColor? FillColor = null,

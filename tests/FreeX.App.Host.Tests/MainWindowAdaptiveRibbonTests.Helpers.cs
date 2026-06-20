@@ -78,7 +78,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
         }
 
         public IReadOnlyList<string> CollapsedRibbonGroupNames =>
-            HomeRibbonChildren
+            ActiveRibbonGroupSurfaces
                 .OfType<Button>()
                 .Where(IsVisibleCollapsedGroupButton)
                 .Select(button => RibbonTooltip.GetTitle(button) ?? "")
@@ -86,7 +86,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 .ToList();
 
         public IReadOnlyList<string> CollapsedActiveRibbonGroupNames =>
-            (ActiveRibbonPanel?.Children.Cast<UIElement>() ?? [])
+            ActiveRibbonGroupSurfaces
                 .OfType<Button>()
                 .Where(IsVisibleCollapsedGroupButton)
                 .Select(button => RibbonTooltip.GetTitle(button) ?? "")
@@ -94,7 +94,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 .ToList();
 
         public IReadOnlyList<string> ActiveRibbonGroupNames =>
-            (ActiveRibbonPanel?.Children.Cast<UIElement>() ?? [])
+            ActiveRibbonGroupSurfaces
                 .OfType<DependencyObject>()
                 .Where(RibbonMetadata.IsRibbonGroup)
                 .Select(group => RibbonMetadata.TryGetGroupName(group, out var name) ? name : "")
@@ -102,7 +102,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 .ToList();
 
         public IReadOnlyList<string> ActiveRibbonPresentationGroupNames =>
-            (ActiveRibbonPanel?.Children.Cast<UIElement>() ?? [])
+            ActiveRibbonGroupSurfaces
                 .OfType<FrameworkElement>()
                 .Where(IsEffectivelyVisible)
                 .Select(GetRibbonPresentationGroupName)
@@ -110,14 +110,11 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 .ToList();
 
         public IReadOnlyList<string> CollapsedActiveRibbonGroupVisibleLabels =>
-            (ActiveRibbonPanel?.Children.Cast<UIElement>() ?? [])
+            ActiveRibbonGroupSurfaces
                 .OfType<Button>()
                 .Where(IsVisibleCollapsedGroupButton)
-                .Where(button => WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(button)
-                    .Concat(WpfTestTree.FindLogicalDescendants<DependencyObject>(button))
-                    .OfType<TextBlock>()
+                .Where(button => CollapsedGroupCaptionBlocks(button)
                     .Any(textBlock =>
-                        RibbonMetadata.IsCommandLabel(textBlock) &&
                         IsEffectivelyVisible(textBlock) &&
                         string.Equals(textBlock.Text, RibbonTooltip.GetTitle(button), StringComparison.Ordinal)))
                 .Select(button => RibbonTooltip.GetTitle(button) ?? "")
@@ -125,13 +122,10 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 .ToList();
 
         public IReadOnlyList<string> CollapsedActiveRibbonGroupWrappedVisibleLabels =>
-            (ActiveRibbonPanel?.Children.Cast<UIElement>() ?? [])
+            ActiveRibbonGroupSurfaces
                 .OfType<Button>()
                 .Where(IsVisibleCollapsedGroupButton)
-                .SelectMany(button => WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(button)
-                    .Concat(WpfTestTree.FindLogicalDescendants<DependencyObject>(button))
-                    .OfType<TextBlock>()
-                    .Where(RibbonMetadata.IsCommandLabel)
+                .SelectMany(button => CollapsedGroupCaptionBlocks(button)
                     .Where(IsEffectivelyVisible))
                 .Where(textBlock => textBlock.TextWrapping != TextWrapping.NoWrap ||
                                     textBlock.TextTrimming != TextTrimming.CharacterEllipsis)
@@ -139,8 +133,21 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 .Where(text => !string.IsNullOrWhiteSpace(text))
                 .ToList();
 
+        // The collapsed-group overflow button's caption TextBlock is the group header. The declarative
+        // RibbonGroupHost does not tag it with the CommandLabel role (tagging it perturbs the live
+        // collapse measurement), so identify it by its text matching the button's group title.
+        private static IEnumerable<TextBlock> CollapsedGroupCaptionBlocks(Button button)
+        {
+            var title = RibbonTooltip.GetTitle(button);
+            return WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(button)
+                .Concat(WpfTestTree.FindLogicalDescendants<DependencyObject>(button))
+                .OfType<TextBlock>()
+                .Where(textBlock => RibbonMetadata.IsCommandLabel(textBlock) ||
+                                    string.Equals(textBlock.Text, title, StringComparison.Ordinal));
+        }
+
         public IReadOnlyList<CollapsedGroupKeyTip> CollapsedActiveRibbonGroupKeyTips =>
-            (ActiveRibbonPanel?.Children.Cast<UIElement>() ?? [])
+            ActiveRibbonGroupSurfaces
                 .OfType<Button>()
                 .Where(IsVisibleCollapsedGroupButton)
                 .Select(button => new CollapsedGroupKeyTip(RibbonTooltip.GetTitle(button) ?? "", RibbonTooltip.GetKeyTip(button) ?? ""))
@@ -148,7 +155,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 .ToList();
 
         public IReadOnlyList<string> CollapsedActiveRibbonGroupsWithoutKeyTips =>
-            (ActiveRibbonPanel?.Children.Cast<UIElement>() ?? [])
+            ActiveRibbonGroupSurfaces
                 .OfType<Button>()
                 .Where(IsVisibleCollapsedGroupButton)
                 .Where(button => string.IsNullOrWhiteSpace(RibbonTooltip.GetKeyTip(button)))
@@ -157,7 +164,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 .ToList();
 
         public IReadOnlyList<string> CollapsedActiveRibbonGroupsWithoutDropdownGlyph =>
-            (ActiveRibbonPanel?.Children.Cast<UIElement>() ?? [])
+            ActiveRibbonGroupSurfaces
                 .OfType<Button>()
                 .Where(IsVisibleCollapsedGroupButton)
                 .Where(button => System.Windows.Documents.AdornerLayer.GetAdornerLayer(button)
@@ -168,7 +175,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 .ToList();
 
         public IReadOnlyList<string> CollapsedActiveRibbonGroupsWithoutIconSlots =>
-            (ActiveRibbonPanel?.Children.Cast<UIElement>() ?? [])
+            ActiveRibbonGroupSurfaces
                 .OfType<Button>()
                 .Where(IsVisibleCollapsedGroupButton)
                 .Where(button => !TryGetCommandIconSlot(button, out _))
@@ -176,8 +183,23 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 .Where(title => !string.IsNullOrWhiteSpace(title))
                 .ToList();
 
+        // A collapsed group "advertises its overflow" if clicking it opens a dropdown of its commands.
+        // In the live declarative ribbon the overflow affordance is the button's lazily-built ContextMenu
+        // (the chevron glyph itself is drawn by an adorner that only realizes once the button is loaded
+        // into an on-screen adorner layer, which an offscreen test window does not provide). This lists any
+        // collapsed group whose overflow dropdown is missing or empty after it is opened — i.e. a group the
+        // user could not actually expand from its overflow button.
+        public IReadOnlyList<string> CollapsedActiveRibbonGroupsWithoutOverflowMenu =>
+            ActiveRibbonGroupSurfaces
+                .OfType<Button>()
+                .Where(IsVisibleCollapsedGroupButton)
+                .Where(button => OpenCollapsedMenu(button.ContextMenu)?.Items.OfType<MenuItem>().Any() != true)
+                .Select(button => RibbonTooltip.GetTitle(button) ?? "")
+                .Where(title => !string.IsNullOrWhiteSpace(title))
+                .ToList();
+
         public IReadOnlyList<string> HiddenCollapsedRibbonGroupsWithVisibleDropdownGlyph =>
-            (ActiveRibbonPanel?.Children.Cast<UIElement>() ?? [])
+            ActiveRibbonGroupSurfaces
                 .OfType<Button>()
                 .Where(button => RibbonMetadata.IsCollapsedGroupButton(button) &&
                                  button.Visibility != Visibility.Visible)
@@ -187,7 +209,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 .ToList();
 
         public IReadOnlyList<ContextMenu> CollapsedRibbonGroupMenus =>
-            HomeRibbonChildren
+            ActiveRibbonGroupSurfaces
                 .OfType<Button>()
                 .Where(IsVisibleCollapsedGroupButton)
                 .Select(button => button.ContextMenu)
@@ -196,7 +218,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 .ToList();
 
         public IReadOnlyList<string> CollapsedMenuHeaders(string groupName) =>
-            HomeRibbonChildren
+            ActiveRibbonGroupSurfaces
                 .OfType<Button>()
                 .Where(IsVisibleCollapsedGroupButton)
                 .Where(button => string.Equals(RibbonTooltip.GetTitle(button), groupName, StringComparison.Ordinal))
@@ -206,7 +228,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 .ToList();
 
         public IReadOnlyList<string> CollapsedActiveMenuHeaders(string groupName) =>
-            (ActiveRibbonPanel?.Children.Cast<UIElement>() ?? [])
+            ActiveRibbonGroupSurfaces
                 .OfType<Button>()
                 .Where(IsVisibleCollapsedGroupButton)
                 .Where(button => string.Equals(RibbonTooltip.GetTitle(button), groupName, StringComparison.Ordinal))
@@ -216,7 +238,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 .ToList();
 
         public MenuItem? CollapsedActiveMenuItem(string groupName, string header) =>
-            (ActiveRibbonPanel?.Children.Cast<UIElement>() ?? [])
+            ActiveRibbonGroupSurfaces
                 .OfType<Button>()
                 .Where(IsVisibleCollapsedGroupButton)
                 .Where(button => string.Equals(RibbonTooltip.GetTitle(button), groupName, StringComparison.Ordinal))
@@ -224,7 +246,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 .FirstOrDefault(item => string.Equals(item.Header?.ToString(), header, StringComparison.Ordinal));
 
         public ContextMenu? CollapsedMenu(string groupName) =>
-            HomeRibbonChildren
+            ActiveRibbonGroupSurfaces
                 .OfType<Button>()
                 .Where(IsVisibleCollapsedGroupButton)
                 .Where(button => string.Equals(RibbonTooltip.GetTitle(button), groupName, StringComparison.Ordinal))
@@ -232,7 +254,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 .FirstOrDefault(menu => menu is not null);
 
         public ContextMenu? CollapsedActiveMenu(string groupName) =>
-            (ActiveRibbonPanel?.Children.Cast<UIElement>() ?? [])
+            ActiveRibbonGroupSurfaces
                 .OfType<Button>()
                 .Where(IsVisibleCollapsedGroupButton)
                 .Where(button => string.Equals(RibbonTooltip.GetTitle(button), groupName, StringComparison.Ordinal))
@@ -381,8 +403,14 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             return button.Content?.ToString() ?? button.GetType().Name;
         }
 
+        // The legacy ribbon hung every group/command off the (now-empty) HomeRibbonPanel StackPanel.
+        // The declarative ribbon renders the selected tab's groups into a RibbonAdaptivePanel, so the
+        // group-and-command surface is that panel's children (RibbonGroupHosts + dividers). Walking it
+        // surfaces both the expanded command buttons and the per-group collapsed overflow buttons.
         private IEnumerable<UIElement> HomeRibbonChildren =>
-            (_window.FindName("HomeRibbonPanel") as StackPanel)?.Children.Cast<UIElement>() ?? [];
+            ActiveRibbonPanel is { } panel
+                ? panel.Children.Cast<UIElement>()
+                : [];
 
         public string DebugRibbonChildren =>
             string.Join(", ", HomeRibbonChildren.Select(child =>
@@ -677,18 +705,35 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 .Where(IsEffectivelyVisible)
                 .ToList();
 
-        private StackPanel? ActiveRibbonPanel =>
+        // The declarative renderer hosts each ribbon group's grid inside a RibbonGroupHost
+        // (ContentControl) inside a RibbonAdaptivePanel (a Panel, not the legacy horizontal StackPanel).
+        // ActiveRibbonPanel resolves to that RibbonAdaptivePanel; the per-group surface queries below
+        // walk RibbonAdaptivePanel -> RibbonGroupHost -> (collapsed button | expanded group grid).
+        private RibbonAdaptivePanel? ActiveRibbonPanel =>
             SelectedRibbonTab is { } tabItem
-                ? WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(tabItem.Content as DependencyObject ?? tabItem)
-                    .Concat(WpfTestTree.FindLogicalDescendants<DependencyObject>(tabItem.Content as DependencyObject ?? tabItem))
-                    .OfType<StackPanel>()
+                ? WpfTestTree.FindVisualSelfAndDescendants<RibbonAdaptivePanel>(tabItem.Content as DependencyObject ?? tabItem)
+                    .Concat(WpfTestTree.FindLogicalDescendants<RibbonAdaptivePanel>(tabItem.Content as DependencyObject ?? tabItem))
                     .Distinct()
-                    .Where(panel => WpfTestTree.FindVisualAncestor<Button>(panel) is not { } button ||
-                                    !RibbonMetadata.IsCollapsedGroupButton(button))
-                    .OrderByDescending(panel => panel.Children.OfType<DependencyObject>().Count(RibbonMetadata.IsRibbonGroup))
-                    .FirstOrDefault(panel => panel.Orientation == Orientation.Horizontal &&
-                                             panel.Children.OfType<DependencyObject>().Any(RibbonMetadata.IsRibbonGroup))
+                    .FirstOrDefault()
                 : null;
+
+        private IReadOnlyList<RibbonGroupHost> ActiveRibbonGroupHosts =>
+            ActiveRibbonPanel is { } panel
+                ? panel.Children.OfType<RibbonGroupHost>().ToList()
+                : [];
+
+        // The effective per-group "surface" elements the legacy harness expected as the panel's direct
+        // children: for a collapsed group its overflow Button, for an expanded group its group Grid.
+        // Each RibbonGroupHost contributes exactly one (its currently-shown content's salient element),
+        // so OfType<Button>()/OfType<Grid>() filters on this sequence behave like the old flat tree.
+        private IReadOnlyList<UIElement> ActiveRibbonGroupSurfaces =>
+            ActiveRibbonGroupHosts
+                .SelectMany(host => host.Collapsed
+                    ? WpfTestTree.FindVisualSelfAndDescendants<Button>(host)
+                        .Where(RibbonMetadata.IsCollapsedGroupButton)
+                        .Cast<UIElement>()
+                    : new UIElement[] { host.GroupContent })
+                .ToList();
 
         private ScrollViewer? ActiveRibbonScrollViewer =>
             ActiveRibbonPanel is { } panel
@@ -696,7 +741,8 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 : null;
 
         private Grid? FindActiveRibbonGroup(string groupName) =>
-            (ActiveRibbonPanel?.Children.Cast<UIElement>() ?? [])
+            ActiveRibbonGroupHosts
+                .Select(host => host.GroupContent)
                 .OfType<Grid>()
                 .FirstOrDefault(grid => RibbonMetadata.TryGetGroupName(grid, out var candidate) &&
                                         string.Equals(candidate, groupName, StringComparison.Ordinal));

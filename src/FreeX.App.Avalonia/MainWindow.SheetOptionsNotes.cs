@@ -7,7 +7,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
-using FreeX.App.Avalonia.Dialogs;
+using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Model;
 
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
@@ -38,8 +38,8 @@ public sealed partial class MainWindow
     /// </summary>
     private async Task ShowGridlinesSheetOptionsAsync() =>
         await ShowSheetOptionTwoToggleAsync(
-            title: "Gridlines",
-            label: "Gridlines",
+            title: UiText.Get("ShellLoc_GridlinesTitle"),
+            label: UiText.Get("ShellLoc_GridlinesTitle"),
             getView: () => _session.IsShowingGridlines,
             getPrint: () => _session.ActiveSheet.PrintGridlines,
             setView: showView =>
@@ -48,7 +48,7 @@ public sealed partial class MainWindow
                     return true;
                 var result = _session.SetShowGridlines(showView);
                 if (!result.Success)
-                    ShowEditIssue(result.ErrorMessage ?? "Gridlines failed.");
+                    ShowEditIssue(result.ErrorMessage ?? UiText.Get("ShellLoc_GridlinesFailed"));
                 return result.Success;
             },
             buildPrintFields: (fields, print) => fields with { PrintGridlines = print });
@@ -58,8 +58,8 @@ public sealed partial class MainWindow
     /// </summary>
     private async Task ShowHeadingsSheetOptionsAsync() =>
         await ShowSheetOptionTwoToggleAsync(
-            title: "Headings",
-            label: "Headings",
+            title: UiText.Get("ShellLoc_HeadingsTitle"),
+            label: UiText.Get("ShellLoc_HeadingsTitle"),
             getView: () => _session.IsShowingHeadings,
             getPrint: () => _session.ActiveSheet.PrintHeadings,
             setView: showView =>
@@ -69,7 +69,7 @@ public sealed partial class MainWindow
                 var result = _session.SetShowHeadings(showView);
                 if (!result.Success)
                 {
-                    ShowEditIssue(result.ErrorMessage ?? "Headings failed.");
+                    ShowEditIssue(result.ErrorMessage ?? UiText.Get("ShellLoc_HeadingsFailed"));
                     return false;
                 }
 
@@ -94,16 +94,16 @@ public sealed partial class MainWindow
 
         ClearSelectedDrawingObject();
 
-        var viewCheck = new CheckBox { Content = "View", IsChecked = getView() };
+        var viewCheck = new CheckBox { Content = UiText.Get("ShellLoc_SheetOptionView"), IsChecked = getView() };
         AutomationProperties.SetAutomationId(viewCheck, "SheetOptionViewCheck");
-        var printCheck = new CheckBox { Content = "Print", IsChecked = getPrint() };
+        var printCheck = new CheckBox { Content = UiText.Get("ShellLoc_SheetOptionPrint"), IsChecked = getPrint() };
         AutomationProperties.SetAutomationId(printCheck, "SheetOptionPrintCheck");
 
-        var ok = new Button { Content = "OK", IsDefault = true, MinWidth = 84, Padding = new Thickness(10, 4) };
+        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 84, Padding = new Thickness(10, 4) };
         AutomationProperties.SetAutomationId(ok, "SheetOptionOkButton");
         var cancel = new Button
         {
-            Content = "Cancel",
+            Content = UiText.Get("Common_Cancel"),
             IsCancel = true,
             MinWidth = 84,
             Padding = new Thickness(10, 4),
@@ -160,19 +160,23 @@ public sealed partial class MainWindow
             var build = PageSetupDialogModel.TryBuildCommand(sheet, fields);
             if (!build.Success)
             {
-                ShowEditIssue(build.Error ?? "Could not update print options.");
+                ShowEditIssue(build.Error ?? UiText.Get("ShellLoc_CouldNotUpdatePrintOptions"));
                 return;
             }
 
             var result = _session.ExecuteReviewCommand(build.Command!);
             if (!result.Success)
             {
-                ShowEditIssue(result.ErrorMessage ?? "Could not update print options.");
+                ShowEditIssue(result.ErrorMessage ?? UiText.Get("ShellLoc_CouldNotUpdatePrintOptions"));
                 return;
             }
         }
 
-        RefreshShell($"{label}: View {(wantView ? "on" : "off")}, Print {(wantPrint ? "on" : "off")}");
+        RefreshShell(UiText.Format(
+            "ShellLoc_SheetOptionStatus",
+            label,
+            wantView ? UiText.Get("ShellLoc_OnState") : UiText.Get("ShellLoc_OffState"),
+            wantPrint ? UiText.Get("ShellLoc_OnState") : UiText.Get("ShellLoc_OffState")));
     }
 
     /// <summary>
@@ -200,17 +204,17 @@ public sealed partial class MainWindow
 
         var emptyText = new TextBlock
         {
-            Text = "There are no notes or comments on this sheet.",
+            Text = UiText.Get("ShellLoc_NoNotesOnSheet"),
             Foreground = Brush(110, 110, 110),
             IsVisible = notes.Count == 0,
             Margin = new Thickness(0, 0, 0, 8),
         };
 
-        var goToButton = new Button { Content = "Go To", MinWidth = 84, IsEnabled = false };
+        var goToButton = new Button { Content = UiText.Get("ShellLoc_GoToButton"), MinWidth = 84, IsEnabled = false };
         AutomationProperties.SetAutomationId(goToButton, "ShowNotesGoToButton");
         var closeButton = new Button
         {
-            Content = "Close",
+            Content = UiText.Get("Common_Close"),
             IsCancel = true,
             MinWidth = 84,
             Margin = new Thickness(8, 0, 0, 0),
@@ -219,7 +223,7 @@ public sealed partial class MainWindow
 
         var dialog = new Window
         {
-            Title = "Notes",
+            Title = UiText.Get("ShellLoc_NotesTitle"),
             Width = 520,
             Height = 380,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -234,7 +238,7 @@ public sealed partial class MainWindow
                 return;
 
             _session.SelectCell(notes[index].Address);
-            RefreshShell($"Selected {FormatCellReference(notes[index].Address)}");
+            RefreshShell(UiText.Format("ShellLoc_SelectedCell", FormatCellReference(notes[index].Address)));
             dialog.Close();
         }
 
@@ -285,7 +289,7 @@ public sealed partial class MainWindow
     private static string FormatNoteRow(SheetNoteEntry entry)
     {
         var cellRef = FormatCellReference(entry.Address);
-        var kind = entry.IsThreaded ? "Comment" : "Note";
+        var kind = entry.IsThreaded ? UiText.Get("ShellLoc_NoteKindComment") : UiText.Get("ShellLoc_NoteKindNote");
         var author = string.IsNullOrWhiteSpace(entry.Author) ? "" : $" — {entry.Author}";
         var body = (entry.Text ?? string.Empty).Replace("\r", " ").Replace("\n", " ").Trim();
         return $"{cellRef} [{kind}]{author}: {body}";

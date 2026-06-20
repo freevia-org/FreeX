@@ -1,3 +1,4 @@
+using System.Windows.Input;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -42,15 +43,28 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void BackstageSaveAs_ForcesSaveDialogInsteadOfExistingPathSave()
     {
-        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("MainWindow.xaml");
+        // The Save As handler still forces the dialog path (not the existing-path save) and closes the
+        // backstage — asserted on the unchanged MainWindow.Backstage.cs source. The rail button that fires
+        // it now lives on the shared frame, so its presence/keytip is asserted behaviourally.
         var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
 
-        xaml.ShouldContainLocalizedAttribute("Text", "Save _As");
-        xaml.Should().Contain("CommandName=\"Save As\"");
-        xaml.Should().Contain("Click=\"SaveAsButton_Click\"");
         backstageSource.Should().Contain("private async void SaveAsButton_Click(object sender, RoutedEventArgs e)");
-        backstageSource.Should().Contain("await SaveWorkbookWithDialogAsync();");
-        backstageSource.Should().Contain("HideStartScreen();");
+        // Save As forces the Save-As dialog directly (it does NOT route through the shared
+        // SaveResolvedAsync existing-path resolution that Save uses), then closes the backstage.
+        var saveAsMethod = ExtractMethodSource(backstageSource, "private async void SaveAsButton_Click(");
+        saveAsMethod.Should().Contain("await SaveWorkbookWithDialogAsync()");
+        saveAsMethod.Should().NotContain("SaveResolvedAsync");
+        saveAsMethod.Should().Contain("HideStartScreen();");
+
+        StaTestRunner.Run(() =>
+        {
+            using var harness = BackstageRailHarness.Create();
+            harness.OpenBackstage();
+
+            var saveAs = harness.RailButton("BackstageSaveAsButton");
+            saveAs.Should().NotBeNull("Save As is a first-class rail command");
+            harness.KeyTip(saveAs!).Should().Be("A");
+        });
     }
 
     [Fact]
@@ -98,7 +112,10 @@ public sealed partial class MainWindowSourceHygieneTests
         var newMethod = ExtractMethodSource(backstageSource, "private async Task RequestNewWorkbookAsync()");
         newMethod.Should().Contain("ConfirmSaveBeforeDestructiveActionAsync(UiText.Get(\"MainWindowMessage_SaveChangesBeforeCreatingWorkbook\"))");
         newMethod.Should().Contain("== SaveChangesConfirmation.Cancel");
-        newMethod.Should().Contain("CreateNewWorkbook();");
+        // File > New advances the session name sequence (Book2, Book3, …) via InitializeNewWorkbook
+        // rather than re-creating Book1 through CreateNewWorkbook() (Issue 121). (Also de-brittled for P2b:
+        // the dirty-gate now routes through PlanDirtyGate/ResolveDirtyGate — asserted below.)
+        newMethod.Should().Contain("InitializeNewWorkbook(_newWorkbookNameSequence.Next());");
         newMethod.Should().Contain("HideStartScreen();");
 
         var openMethod = ExtractMethodSource(backstageSource, "private async Task OpenFileAsync(");
@@ -111,10 +128,11 @@ public sealed partial class MainWindowSourceHygieneTests
             .Should()
             .BeLessThan(openMethod.IndexOf("_workbook = result.Workbook;", StringComparison.Ordinal));
 
+        // P2b: SaveButton_Click defers the Save-vs-Save-As resolution to the shared SaveResolvedAsync
+        // helper (asserted below against MainWindow.WorkbookLifecycle.cs) — the same single resolution path
+        // the dirty-gate uses — then hides the backstage on a successful save.
         var saveButtonMethod = ExtractMethodSource(backstageSource, "private async void SaveButton_Click(");
-        saveButtonMethod.Should().Contain("FileSavePlanner.TryResolveExistingPath(_currentFilePath, _fileAdapters, out var target)");
-        saveButtonMethod.Should().Contain("await SaveWorkbookToTargetAsync(target!)");
-        saveButtonMethod.Should().Contain("await SaveWorkbookWithDialogAsync();");
+        saveButtonMethod.Should().Contain("var saved = await SaveResolvedAsync();");
         saveButtonMethod.Should().Contain("if (saved && IsStartScreenVisible())");
         saveButtonMethod.Should().Contain("HideStartScreen();");
 
@@ -129,18 +147,40 @@ public sealed partial class MainWindowSourceHygieneTests
             .BeLessThan(saveTargetMethod.IndexOf("ConfirmUnsupportedXlsxFeatureSave()", StringComparison.Ordinal));
         saveTargetMethod.Should().Contain("UiText.Get(\"Progress_SavingWorkbook\")");
         saveTargetMethod.Should().Contain("UiText.Get(\"Progress_SavingFilePreparing\")");
+        saveTargetMethod.Should().Contain("using var operationCancellation = BeginFileOperationCancellation();");
+        saveTargetMethod.Should().Contain("SetFileOperationInputEnabled(false);");
+        saveTargetMethod.Should().Contain("operationCancellation.Token");
+        saveTargetMethod.Should().Contain("catch (OperationCanceledException) when (operationCancellation.IsCancellationRequested)");
+        saveTargetMethod.Should().Contain("SetFileOperationInputEnabled(true);");
         saveTargetMethod.Should().Contain("MarkWorkbookSaved();");
         saveTargetMethod.Should().Contain("UiText.Format(\"MainWindowMessage_SaveFileFailed\", ex.Message)");
         saveTargetMethod.Should().Contain("UiText.Get(\"MainWindowMessage_SaveErrorTitle\")");
         saveTargetMethod.Should().Contain("finally");
         saveTargetMethod.Should().Contain("HideSaveProgress();");
+        saveTargetMethod.Should().NotContain("RootGrid.IsEnabled = false");
         saveTargetMethod.Should().NotContain("MessageBox.Show(");
 
         var confirmMethod = ExtractMethodSource(lifecycleSource, "private async Task<SaveChangesConfirmation> ConfirmSaveBeforeDestructiveActionAsync(");
         confirmMethod.Should().Contain("ShowOwnedMessage(");
         confirmMethod.Should().Contain("SaveChangesConfirmation.DiscardWithoutSaving");
-        confirmMethod.Should().Contain("FileSavePlanner.TryResolveExistingPath(_currentFilePath, _fileAdapters, out var target)");
-        confirmMethod.Should().Contain("return await SaveWorkbookWithDialogAsync()");
+        // P2b: the dirty-gate DECISION now routes through the shared FileLifecyclePlanner. The dirty
+        // check and the Save/Don't-Save/Cancel answer mapping are the planner's PlanDirtyGate /
+        // ResolveDirtyGate; the WPF prompt + the FreeX-specific save mechanics stay host-side.
+        confirmMethod.Should().Contain("FileLifecyclePlanner.PlanDirtyGate(_workbookDirty)");
+        confirmMethod.Should().Contain("FileLifecyclePlanner.ResolveDirtyGate(prompt)");
+        confirmMethod.Should().Contain("DirtyGateAction.ProceedDiscardingChanges => SaveChangesConfirmation.DiscardWithoutSaving");
+        // The "Save then proceed" branch defers Save-vs-Save-As to the shared SaveResolvedAsync helper.
+        confirmMethod.Should().Contain("DirtyGateAction.SaveThenProceed => await SaveResolvedAsync()");
+
+        // Save-vs-Save-As resolution: the high-level branch is the shared planner's PlanSave decision;
+        // FreeX's adapter-resolving FileSavePlanner.TryResolveExistingPath realizes the concrete target,
+        // and the no-usable-path case falls through to the Save-As dialog. (Moved verbatim out of the
+        // dirty-gate into SaveResolvedAsync so both the gate and SaveButton share one resolution path.)
+        var saveResolvedMethod = ExtractMethodSource(lifecycleSource, "private async Task<bool> SaveResolvedAsync()");
+        saveResolvedMethod.Should().Contain("FileLifecyclePlanner.PlanSave(_workbookDirty, _currentFilePath) == FileSaveIntent.PromptSaveAs");
+        saveResolvedMethod.Should().Contain("FileSavePlanner.TryResolveExistingPath(_currentFilePath, _fileAdapters, out var target)");
+        saveResolvedMethod.Should().Contain("return await SaveWorkbookWithDialogAsync();");
+        saveResolvedMethod.Should().Contain("return await SaveWorkbookToTargetAsync(target!);");
 
         var closingMethod = ExtractMethodSource(lifecycleSource, "private async void MainWindow_Closing(");
         closingMethod.Should().Contain("ConfirmSaveBeforeDestructiveActionAsync(UiText.Get(\"MainWindowMessage_SaveChangesBeforeClosingWorkbook\"))");
@@ -180,39 +220,59 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void BackstageOpen_FocusesHomeNavigationForKeyboardUsers()
     {
-        var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
+        // Opening the backstage shows the overlay, lands on the Home pane, and gives keyboard focus to the
+        // Home rail entry so keyboard users start on a deterministic anchor.
+        StaTestRunner.Run(() =>
+        {
+            using var harness = BackstageRailHarness.Create();
+            harness.OpenBackstage();
 
-        backstageSource.Should().Contain("StartScreenOverlay.Visibility = Visibility.Visible;");
-        backstageSource.Should().Contain("FocusBackstageHomeNavigation();");
-        backstageSource.Should().Contain("private void FocusBackstageHomeNavigation()");
-        backstageSource.Should().Contain("SsHomeNavBtn.Focus();");
-        backstageSource.Should().Contain("Keyboard.Focus(SsHomeNavBtn);");
+            harness.IsBackstageVisible.Should().BeTrue();
+            harness.ContentHostShows("SsHomeView").Should().BeTrue("Home is the default landing pane");
+            harness.IsRailButtonFocused("BackstageHomeButton").Should().BeTrue("keyboard focus starts on Home");
+        });
     }
 
     [Fact]
     public void BackstageSidebar_UpDownKeysMoveThroughNavigation()
     {
-        var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
-        var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
+        // The shared frame owns rail arrow navigation now: Down moves to the next entry, Up to the
+        // previous. Assert the behaviour through the live focus tree rather than handler-name source text.
+        StaTestRunner.Run(() =>
+        {
+            using var harness = BackstageRailHarness.Create();
+            harness.OpenBackstage();
+            harness.FocusRailButton("BackstageHomeButton");
 
-        xaml.Should().Contain("PreviewKeyDown=\"StartScreenOverlay_PreviewKeyDown\"");
-        xaml.Should().Contain("x:Name=\"StartScreenSidebar\"");
-        backstageSource.Should().Contain("private void StartScreenOverlay_PreviewKeyDown(object sender, KeyEventArgs e)");
-        backstageSource.Should().Contain("IsDescendantOf(focusedElement, StartScreenSidebar)");
-        backstageSource.Should().Contain("e.Key is not (Key.Up or Key.Down or Key.Home or Key.End)");
-        backstageSource.Should().Contain("FocusNavigationDirection.Previous");
-        backstageSource.Should().Contain("FocusNavigationDirection.Next");
-        backstageSource.Should().Contain("focusedElement.MoveFocus(new TraversalRequest(direction));");
+            harness.PressKeyOnFrame(Key.Down);
+            harness.IsRailButtonFocused("BackstageHomeButton")
+                .Should().BeFalse("Down moves focus off the first entry");
+
+            harness.FocusRailButton("BackstageNewButton");
+            harness.PressKeyOnFrame(Key.Up);
+            harness.IsRailButtonFocused("BackstageNewButton")
+                .Should().BeFalse("Up moves focus off the current entry toward the previous one");
+        });
     }
 
     [Fact]
     public void BackstageSidebar_HomeEndKeysMoveToNavigationEdges()
     {
-        var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
+        // Home jumps to the first rail entry (the Back arrow), End jumps to the last (Options).
+        StaTestRunner.Run(() =>
+        {
+            using var harness = BackstageRailHarness.Create();
+            harness.OpenBackstage();
+            harness.FocusRailButton("BackstageNewButton");
 
-        backstageSource.Should().Contain("e.Key is not (Key.Up or Key.Down or Key.Home or Key.End)");
-        backstageSource.Should().Contain("Key.Home => FocusNavigationDirection.First");
-        backstageSource.Should().Contain("Key.End => FocusNavigationDirection.Last");
+            harness.PressKeyOnFrame(Key.End);
+            harness.IsRailButtonFocused("BackstageOptionsButton")
+                .Should().BeTrue("End moves focus to the last (bottom-docked) rail entry");
+
+            harness.PressKeyOnFrame(Key.Home);
+            harness.IsRailButtonFocused("BackstageBackButton")
+                .Should().BeTrue("Home moves focus to the first rail entry (the Back arrow)");
+        });
     }
 
     [Fact]
@@ -339,7 +399,6 @@ public sealed partial class MainWindowSourceHygieneTests
     public void ShareWorkbookWorkflow_RoutesUnsavedAndSavedFilesThroughPlannerAndShareService()
     {
         var reviewSource = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
-        var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
         var shareMethod = ExtractMethodSource(reviewSource, "private async Task ShareWorkbookAsync(");
 
         shareMethod.Should().Contain("ShareWorkbookPlanner.CreatePlan(_currentFilePath)");
@@ -350,7 +409,11 @@ public sealed partial class MainWindowSourceHygieneTests
         shareMethod.Should().Contain("_shareService.ShareFileAsync(this, sharePath, _workbook.Name)");
 
         reviewSource.Should().Contain("private async void ShareWorkbookBtn_Click(object sender, RoutedEventArgs e) => await ShareWorkbookAsync();");
-        backstageSource.Should().Contain("await ShareWorkbookAsync();");
+
+        // The backstage Share rail entry now lives on the shared frame and routes to ShareWorkbookAsync from
+        // the FreeX frame wrapper instead of a SsShareBtn_Click forwarder.
+        var frameSource = DialogSourceTestSupport.ReadHostSources("MainWindow.BackstageFrame.cs");
+        frameSource.Should().Contain("await ShareWorkbookAsync()");
     }
 
     [Fact]
@@ -363,7 +426,11 @@ public sealed partial class MainWindowSourceHygieneTests
 
         openMethod.Should().Contain("OpenWorkbookProgressPlanner.ProgressTitle()");
         openMethod.Should().Contain("OpenWorkbookProgressPlanner.FormatLoadingFileDetail(\"preparing\", TimeSpan.Zero)");
+        openMethod.Should().Contain("using var operationCancellation = BeginFileOperationCancellation();");
+        openMethod.Should().Contain("loader.LoadAsync(path, adapter, ext, format!, progress, operationCancellation.Token)");
         openMethod.Should().Contain("ShowOpenProgress(update.Title, update.Detail, update.Percent)");
+        openMethod.Should().Contain("OpenWorkbookProgressPlanner.FormatLoadingFileDetail(\"preparing view\", TimeSpan.Zero)");
+        openMethod.Should().Contain("catch (OperationCanceledException) when (operationCancellation.IsCancellationRequested)");
         openMethod.Should().Contain("OpenWorkbookProgressPlanner.FormatLoadingFileDetail(\"done\", TimeSpan.Zero)");
         openMethod.Should().Contain("ShowUnsupportedXlsxFeatureOpenWarningIfNeeded();");
         openMethod.Should().Contain("UiText.Format(\"MainWindowMessage_OpenFileFailed\", ex.Message)");
@@ -380,6 +447,27 @@ public sealed partial class MainWindowSourceHygieneTests
         openWarningMethod.Should().Contain("DeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(_currentXlsxFeatureReport)");
         openWarningMethod.Should().Contain("ShowOwnedMessage(");
         openWarningMethod.Should().NotContain("MessageBox.Show(");
+    }
+
+    [Fact]
+    public void FooterOperationProgress_HidesReadyAndRoutesCancel()
+    {
+        var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
+        var showProgressMethod = ExtractMethodSource(backstageSource, "private void ShowOperationFooterProgress(");
+        var hideProgressMethod = ExtractMethodSource(backstageSource, "private void HideOperationFooterProgress()");
+        var cancelMethod = ExtractMethodSource(backstageSource, "private void CancelFileOperation_Click(");
+        var inputLockMethod = ExtractMethodSource(backstageSource, "private void SetFileOperationInputEnabled(");
+
+        showProgressMethod.Should().Contain("StatusSaveProgressCancelButton.Visibility = Visibility.Visible;");
+        showProgressMethod.Should().Contain("StatusSaveProgressCancelButton.IsEnabled = true;");
+        showProgressMethod.Should().Contain("StatusReadyText.Visibility = Visibility.Collapsed;");
+        showProgressMethod.Should().Contain("StatusStatsPanel.Visibility = Visibility.Collapsed;");
+        hideProgressMethod.Should().Contain("StatusSaveProgressCancelButton.Visibility = Visibility.Collapsed;");
+        hideProgressMethod.Should().Contain("RefreshStatusBar();");
+        cancelMethod.Should().Contain("_fileOperationCancellation?.Cancel();");
+        cancelMethod.Should().Contain("StatusSaveProgressCancelButton.IsEnabled = false;");
+        inputLockMethod.Should().Contain("ReferenceEquals(child, StatusBarRoot)");
+        inputLockMethod.Should().Contain("StatusInteractiveControls.IsEnabled = false;");
     }
 
     [Fact]
@@ -456,27 +544,43 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void CtrlP_RoutesThroughBackstagePrintEntryPoint()
     {
+        // Ctrl+P routes through OpenPrintBackstage -> ShowPrintView (the print pane preview), not a stale
+        // PrintButton_Click. The print-pane content (preview viewer, options host, Print Now button) is
+        // unchanged XAML and still asserted on the markup; the rail Print entry is asserted behaviourally.
         var keyboardSource = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyboardCommands.cs");
         var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
         var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
 
         backstageSource.Should().Contain("private void OpenPrintBackstage()");
-        backstageSource.Should().Contain("SsBackstagePrintNowButton.Focus();");
         backstageSource.Should().Contain("RefreshBackstagePrintPreview();");
         backstageSource.Should().Contain("ShowPrintView();");
         backstageSource.Should().NotContain("PrintButton_Click(SsPrintNavBtn, new RoutedEventArgs())");
         keyboardSource.Should().Contain("KeyboardCommandShortcut.OpenPrintPreview, (_, _) => OpenPrintBackstage()");
         keyboardSource.Should().NotContain("KeyboardCommandShortcut.OpenPrintPreview, PrintButton_Click");
-        xaml.Should().Contain("x:Name=\"SsPrintNavBtn\"");
-        xaml.Should().Contain("Click=\"SsPrintNavBtn_Click\"");
+        // Print-pane content (kept verbatim through the migration):
         xaml.Should().Contain("x:Name=\"SsBackstagePrintNowButton\"");
         xaml.Should().Contain("x:Name=\"SsPrintOptionsHost\"");
         xaml.Should().Contain("x:Name=\"SsPrintPreviewViewer\"");
-        xaml.ShouldContainLocalizedAttribute("Content", "Print");
+        // The backstage Print button now carries the access-key label "_Print..." for its visible content,
+        // while its stable automation name stays "Print".
+        xaml.ShouldContainLocalizedAttribute("Content", "_Print...");
         xaml.ShouldContainLocalizedAttribute("AutomationProperties.Name", "Print");
         xaml.Should().Contain("Click=\"BackstagePrintNowButton_Click\"");
         xaml.Should().Contain("AutomationProperties.AutomationId=\"BackstagePrintPreviewViewer\"");
         xaml.Should().NotContain("x:Name=\"SsPrintPreviewButton\"");
+
+        // Behaviour: the Ctrl+P entry point lands the backstage on the Print pane via the shared rail.
+        StaTestRunner.Run(() =>
+        {
+            using var harness = BackstageRailHarness.Create();
+            harness.Invoke("OpenPrintBackstage");
+
+            harness.IsBackstageVisible.Should().BeTrue();
+            harness.ContentHostShows("SsPrintView").Should().BeTrue("Ctrl+P lands on the Print pane");
+            var print = harness.RailButton("BackstagePrintButton");
+            print.Should().NotBeNull();
+            harness.AutomationName(print!).Should().Be(UiText.Get("MainWindow_AutomationName_Print"));
+        });
     }
 
     [Fact]

@@ -74,6 +74,74 @@ public sealed class SelectionPaneCommandTests
     }
 
     [Fact]
+    public void MoveSelectionPaneObjectCommand_BringsPictureForwardAmongPicturesAndUndoRestores()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var back = new PictureModel { Anchor = new CellAddress(sheet.Id, 1, 1) };
+        var target = new PictureModel { Anchor = new CellAddress(sheet.Id, 1, 2) };
+        var front = new PictureModel { Anchor = new CellAddress(sheet.Id, 1, 3) };
+        sheet.Pictures.Add(back);
+        sheet.Pictures.Add(target);
+        sheet.Pictures.Add(front);
+
+        // Bring the middle picture forward: it should swap ahead of "front".
+        var bringForward = new MoveSelectionPaneObjectCommand(sheet.Id, SelectionPaneObjectKind.Picture, target.Id, forward: true);
+        bringForward.Apply(ctx).Success.Should().BeTrue();
+        sheet.DrawingObjectZOrder.Should().Equal(
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, back.Id),
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, front.Id),
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, target.Id));
+
+        // Undo restores the (previously implicit) order.
+        bringForward.Revert(ctx);
+        sheet.DrawingObjectZOrder.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void MoveSelectionPaneObjectCommand_SendsPictureBackwardAmongPicturesAndUndoRestores()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var back = new PictureModel { Anchor = new CellAddress(sheet.Id, 1, 1) };
+        var target = new PictureModel { Anchor = new CellAddress(sheet.Id, 1, 2) };
+        var front = new PictureModel { Anchor = new CellAddress(sheet.Id, 1, 3) };
+        sheet.Pictures.Add(back);
+        sheet.Pictures.Add(target);
+        sheet.Pictures.Add(front);
+
+        var sendBackward = new MoveSelectionPaneObjectCommand(sheet.Id, SelectionPaneObjectKind.Picture, target.Id, forward: false);
+        sendBackward.Apply(ctx).Success.Should().BeTrue();
+        sheet.DrawingObjectZOrder.Should().Equal(
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, target.Id),
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, back.Id),
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, front.Id));
+
+        sendBackward.Revert(ctx);
+        sheet.DrawingObjectZOrder.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void MoveSelectionPaneObjectCommand_BringPictureForwardAtTopIsNoOp()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var back = new PictureModel { Anchor = new CellAddress(sheet.Id, 1, 1) };
+        var top = new PictureModel { Anchor = new CellAddress(sheet.Id, 1, 2) };
+        sheet.Pictures.Add(back);
+        sheet.Pictures.Add(top);
+
+        var command = new MoveSelectionPaneObjectCommand(sheet.Id, SelectionPaneObjectKind.Picture, top.Id, forward: true);
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        // Already frontmost: order untouched and no explicit z-order was materialized.
+        sheet.DrawingObjectZOrder.Should().BeEmpty();
+    }
+
+    [Fact]
     public void MoveSelectionPaneObjectCommand_MovesTextBoxWithinMixedSupportedStack()
     {
         var wb = new Workbook("test");

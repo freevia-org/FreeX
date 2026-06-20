@@ -1,14 +1,21 @@
 <Solution>
   <Folder Name="/shared/">
     <Project Path="shared/Free.Shared.AppServices/Free.Shared.AppServices.csproj" />
+    <Project Path="shared/Free.Shared.AppServices.Windows/Free.Shared.AppServices.Windows.csproj" />
     <Project Path="shared/Free.Shared.Commands/Free.Shared.Commands.csproj" />
     <Project Path="shared/Free.Shared.Opc/Free.Shared.Opc.csproj" />
+    <Project Path="shared/Free.Shared.Pdf/Free.Shared.Pdf.csproj" />
+    <Project Path="shared/Free.Shared.Pdf.Skia/Free.Shared.Pdf.Skia.csproj" />
+    <Project Path="shared/Free.Shared.Pdf.Wpf/Free.Shared.Pdf.Wpf.csproj" />
     <Project Path="shared/Free.Shared.Ribbon/Free.Shared.Ribbon.csproj" />
+    <Project Path="shared/Free.Shared.Ribbon.Wpf/Free.Shared.Ribbon.Wpf.csproj" />
     <Project Path="shared/Free.Shared.Shell/Free.Shared.Shell.csproj" />
+    <Project Path="shared/Free.Shared.Shell.Wpf/Free.Shared.Shell.Wpf.csproj" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj" />
     <Project Path="src/FreeX.App.Host/FreeX.App.Host.csproj" />
+    <Project Path="src/FreeX.App.Localization/FreeX.App.Localization.csproj" />
     <Project Path="src/FreeX.App.Presentation/FreeX.App.Presentation.csproj" />
     <Project Path="src/FreeX.App.Services/FreeX.App.Services.csproj" />
     <Project Path="src/FreeX.App.UI/FreeX.App.UI.csproj" />
@@ -31,9 +38,12 @@
     <Project Path="tests/FreeX.App.UI.Tests/FreeX.App.UI.Tests.csproj" />
     <Project Path="tests/FreeX.App.Host.Tests/FreeX.App.Host.Tests.csproj" />
     <Project Path="tests/FreeX.App.Host.Logic.Tests/FreeX.App.Host.Logic.Tests.csproj" />
+    <Project Path="tests/FreeX.App.Localization.Tests/FreeX.App.Localization.Tests.csproj" />
     <Project Path="tests/Free.Shared.Ribbon.Tests/Free.Shared.Ribbon.Tests.csproj" />
+    <Project Path="tests/Free.Shared.Pdf.Tests/Free.Shared.Pdf.Tests.csproj" />
     <Project Path="tests/FreeX.Fixtures/FreeX.Fixtures.csproj" />
     <Project Path="tests/FreeX.Integration.Tests/FreeX.Integration.Tests.csproj" />
+    <Project Path="tests/FreeX.ParityCompare.Tests/FreeX.ParityCompare.Tests.csproj" />
   </Folder>
   <Folder Name="/tools/">
     <Project Path="tools/FreeX.AppIoBench/FreeX.AppIoBench.csproj" />
@@ -42,6 +52,10 @@
     <Project Path="tools/FreeX.ExcelExamplesCharts/FreeX.ExcelExamplesCharts.csproj" />
     <Project Path="tools/FreeX.ExcelOpenSmoke/FreeX.ExcelOpenSmoke.csproj" />
     <Project Path="tools/FreeX.FidelityCompare/FreeX.FidelityCompare.csproj" />
+    <Project Path="tools/FreeX.FormatCrossCheck/FreeX.FormatCrossCheck.csproj" />
+    <Project Path="tools/FreeX.FormatFidelity/FreeX.FormatFidelity.csproj" />
+    <Project Path="tools/FreeX.ParityCompare/FreeX.ParityCompare.csproj" />
+    <Project Path="tools/FreeX.ParityCompare.Core/FreeX.ParityCompare.Core.csproj" />
     <Project Path="tools/FreeX.ForegroundCapture/FreeX.ForegroundCapture.csproj" />
     <Project Path="tools/FreeW.RenderCompare/FreeW.RenderCompare.csproj" />
     <Project Path="tools/FreeX.SheetFidelity/FreeX.SheetFidelity.csproj" />

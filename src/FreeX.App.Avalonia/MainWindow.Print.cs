@@ -1,0 +1,514 @@
+using System.Globalization;
+using System.IO;
+using Avalonia;
+using Avalonia.Automation;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Layout;
+using Avalonia.Media;
+using Avalonia.Platform.Storage;
+using FreeX.App.Services;
+using FreeX.Core.Model;
+
+using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
+using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
+
+namespace FreeX.App.Avalonia;
+
+/// <summary>
+/// File ▸ Print for the Avalonia shell (the WPF host already prints; this brings the cross-platform shell
+/// to parity). All non-UI logic is shared and portable so macOS inherits it: scope selection comes from
+/// <see cref="WorkbookExportScopePlanner"/>, the page/copy/range/collate decisions from
+/// <see cref="PrintJobPlanner"/>, and the document is rendered through the same
+/// <see cref="PortablePdfExportPlanner"/> + <see cref="Pdf.AvaloniaPdfDocumentExporter"/> path that File ▸
+/// Export to PDF uses — Print is "render the print-ready document, then spool it" rather than a second
+/// rendering engine.
+///
+/// The OS spooler call sits behind the injectable <see cref="IPlatformPrinter"/> seam (Linux/macOS bind
+/// the CUPS <c>lp</c>/<c>lpstat</c> utilities via <see cref="CupsPlatformPrinter"/>; tests/headless hosts
+/// inject <see cref="NullPlatformPrinter"/>). When no spooler is available, Print degrades to writing the
+/// print-ready PDF to a file the user picks, so the feature still produces correct output everywhere.
+///
+/// This file is UI + platform glue only; it deliberately holds no selection/validation logic of its own.
+/// </summary>
+public sealed partial class MainWindow
+{
+    private async Task ShowPrintDialogAsync()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        ClearSelectedDrawingObject();
+
+        var hasSelection =
+            _session.SelectedRange.RowCount > 1 || _session.SelectedRange.ColCount > 1;
+        var scopePlan = WorkbookExportScopePlanner.Build(
+            _session.Workbook,
+            hasSelection,
+            WorkbookExportPrintSurface.MacOs);
+
+        if (!scopePlan.CanExport)
+        {
+            ShowEditIssue(UiText.Get("Print_Unavailable"));
+            return;
+        }
+
+        var printers = _platformPrinter.CanPrint
+            ? await _platformPrinter.GetPrintersAsync()
+            : [];
+
+        await ShowPrintDialogCoreAsync(scopePlan, printers);
+    }
+
+    private async Task ShowPrintDialogCoreAsync(
+        WorkbookExportScopePlan scopePlan,
+        IReadOnlyList<PrinterDescriptor> printers)
+    {
+        var dialog = new Window
+        {
+            Title = UiText.Get("Print_Title"),
+            Width = 420,
+            Height = 480,
+            MinWidth = 380,
+            MinHeight = 420,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+        AutomationProperties.SetAutomationId(dialog, "PrintDialog");
+
+        var content = new StackPanel { Spacing = 14 };
+
+        // ── Printer destination ───────────────────────────────────────────────
+        content.Children.Add(CreatePrintSectionHeader(UiText.Get("Print_PrinterHeader")));
+        var canSpool = _platformPrinter.CanPrint && printers.Count > 0;
+        var printerCombo = new ComboBox
+        {
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
+            IsEnabled = canSpool,
+        };
+        AutomationProperties.SetAutomationId(printerCombo, "PrintPrinterComboBox");
+        foreach (var printer in printers)
+            printerCombo.Items.Add(printer.DisplayName);
+
+        var defaultIndex = -1;
+        for (var i = 0; i < printers.Count; i++)
+        {
+            if (printers[i].IsDefault)
+            {
+                defaultIndex = i;
+                break;
+            }
+        }
+
+        if (printers.Count > 0)
+            printerCombo.SelectedIndex = defaultIndex >= 0 ? defaultIndex : 0;
+
+        content.Children.Add(printerCombo);
+
+        if (!canSpool)
+        {
+            content.Children.Add(new TextBlock
+            {
+                Text = UiText.Get("Print_NoPrinterNote"),
+                Foreground = HeaderForeground,
+                TextWrapping = TextWrapping.Wrap,
+                FontSize = 12,
+            });
+        }
+
+        // ── Scope ─────────────────────────────────────────────────────────────
+        content.Children.Add(CreatePrintSectionHeader(UiText.Get("Print_ScopeHeader")));
+        var selectedScope = scopePlan.DefaultScope;
+        foreach (var option in scopePlan.Scopes)
+        {
+            var radio = new RadioButton
+            {
+                GroupName = "PrintScope",
+                Content = FormatPrintScopeLabel(option.Scope, option.IsAvailable),
+                IsEnabled = option.IsAvailable,
+                IsChecked = option.IsDefault,
+                Margin = new Thickness(0, 2),
+            };
+            AutomationProperties.SetAutomationId(radio, "PrintScope_" + option.Scope);
+            var capturedScope = option.Scope;
+            radio.IsCheckedChanged += (_, _) =>
+            {
+                if (radio.IsChecked == true)
+                    selectedScope = capturedScope;
+            };
+            content.Children.Add(radio);
+        }
+
+        // ── Pages ─────────────────────────────────────────────────────────────
+        content.Children.Add(CreatePrintSectionHeader(UiText.Get("Print_PagesHeader")));
+        var pageRangeKind = PrintJobPageRangeKind.AllPages;
+
+        var allPagesRadio = new RadioButton
+        {
+            GroupName = "PrintPages",
+            Content = UiText.Get("Print_PagesAll"),
+            IsChecked = true,
+            Margin = new Thickness(0, 2),
+        };
+        AutomationProperties.SetAutomationId(allPagesRadio, "PrintPagesAll");
+
+        var rangeRadio = new RadioButton
+        {
+            GroupName = "PrintPages",
+            Content = UiText.Get("Print_PagesRange"),
+            Margin = new Thickness(0, 2),
+        };
+        AutomationProperties.SetAutomationId(rangeRadio, "PrintPagesRange");
+
+        var fromBox = new TextBox { Text = "1", Width = 64 };
+        AutomationProperties.SetAutomationId(fromBox, "PrintPagesFrom");
+        AutomationProperties.SetName(fromBox, UiText.Get("Print_PagesFrom"));
+        var toBox = new TextBox { Text = "1", Width = 64 };
+        AutomationProperties.SetAutomationId(toBox, "PrintPagesTo");
+        AutomationProperties.SetName(toBox, UiText.Get("Print_PagesTo"));
+        fromBox.IsEnabled = false;
+        toBox.IsEnabled = false;
+
+        allPagesRadio.IsCheckedChanged += (_, _) =>
+        {
+            if (allPagesRadio.IsChecked == true)
+            {
+                pageRangeKind = PrintJobPageRangeKind.AllPages;
+                fromBox.IsEnabled = false;
+                toBox.IsEnabled = false;
+            }
+        };
+        rangeRadio.IsCheckedChanged += (_, _) =>
+        {
+            if (rangeRadio.IsChecked == true)
+            {
+                pageRangeKind = PrintJobPageRangeKind.PageRange;
+                fromBox.IsEnabled = true;
+                toBox.IsEnabled = true;
+            }
+        };
+
+        content.Children.Add(allPagesRadio);
+        content.Children.Add(rangeRadio);
+        content.Children.Add(new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+            Margin = new Thickness(22, 0, 0, 0),
+            Children =
+            {
+                new TextBlock { Text = UiText.Get("Print_PagesFrom"), VerticalAlignment = AvaloniaVerticalAlignment.Center },
+                fromBox,
+                new TextBlock { Text = UiText.Get("Print_PagesTo"), VerticalAlignment = AvaloniaVerticalAlignment.Center },
+                toBox,
+            },
+        });
+
+        // ── Copies + collate ───────────────────────────────────────────────────
+        content.Children.Add(CreatePrintSectionHeader(UiText.Get("Print_CopiesHeader")));
+        var copiesBox = new TextBox { Text = "1", Width = 72 };
+        AutomationProperties.SetAutomationId(copiesBox, "PrintCopies");
+        AutomationProperties.SetName(copiesBox, UiText.Get("Print_CopiesHeader"));
+
+        var collateCheck = new CheckBox
+        {
+            Content = UiText.Get("Print_Collate"),
+            IsChecked = true,
+            Margin = new Thickness(0, 2),
+        };
+        AutomationProperties.SetAutomationId(collateCheck, "PrintCollate");
+
+        content.Children.Add(new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            Children =
+            {
+                new TextBlock { Text = UiText.Get("Print_CopiesLabel"), VerticalAlignment = AvaloniaVerticalAlignment.Center },
+                copiesBox,
+            },
+        });
+        content.Children.Add(collateCheck);
+
+        // ── Buttons ─────────────────────────────────────────────────────────────
+        var printButton = new Button
+        {
+            Content = canSpool ? UiText.Get("Print_PrintButton") : UiText.Get("Print_SaveAsPdfButton"),
+            MinWidth = 96,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(printButton, "PrintConfirmButton");
+
+        var cancelButton = new Button
+        {
+            Content = UiText.Get("Print_CancelButton"),
+            MinWidth = 96,
+            Padding = new Thickness(10, 4),
+            IsCancel = true,
+        };
+        AutomationProperties.SetAutomationId(cancelButton, "PrintCancelButton");
+        cancelButton.Click += (_, _) => dialog.Close();
+
+        printButton.Click += async (_, _) =>
+        {
+            var request = BuildPrintJobRequest(
+                selectedScope,
+                pageRangeKind,
+                ParsePositiveInt(fromBox.Text, fallback: 1),
+                ParsePositiveInt(toBox.Text, fallback: null),
+                ParsePositiveInt(copiesBox.Text, fallback: 1) ?? 1,
+                collateCheck.IsChecked == true);
+
+            var printerId = canSpool && printerCombo.SelectedIndex >= 0 && printerCombo.SelectedIndex < printers.Count
+                ? printers[printerCombo.SelectedIndex].Id
+                : null;
+
+            dialog.Close();
+            await ExecutePrintJobAsync(request, printerId, canSpool);
+        };
+
+        var buttonRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Children = { cancelButton, printButton },
+        };
+
+        var root = new DockPanel { Margin = new Thickness(18) };
+        DockPanel.SetDock(buttonRow, Dock.Bottom);
+        root.Children.Add(buttonRow);
+        root.Children.Add(new ScrollViewer
+        {
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Margin = new Thickness(0, 0, 0, 12),
+            Content = content,
+        });
+
+        dialog.Content = root;
+        dialog.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Escape)
+            {
+                dialog.Close();
+                e.Handled = true;
+            }
+        };
+        dialog.Opened += (_, _) => printButton.Focus();
+        await dialog.ShowDialog(this);
+    }
+
+    private PrintJobRequest BuildPrintJobRequest(
+        WorkbookExportPrintScope scope,
+        PrintJobPageRangeKind pageRangeKind,
+        int? fromPage,
+        int? toPage,
+        int copies,
+        bool collate)
+    {
+        var selectedRange = scope == WorkbookExportPrintScope.SelectedRange
+            ? _session.SelectedRange
+            : (GridRange?)null;
+
+        return new PrintJobRequest(
+            scope,
+            copies,
+            collate,
+            pageRangeKind,
+            fromPage,
+            toPage,
+            ActiveSheetIndex: ResolveActiveSheetIndex(),
+            SelectedRange: selectedRange);
+    }
+
+    /// <summary>
+    /// Renders the chosen scope to a print-ready PDF (the same exporter File ▸ Export uses), then either
+    /// spools it through <see cref="IPlatformPrinter"/> or, when no spooler is available, falls back to the
+    /// save-file picker so the print-ready document still reaches the user.
+    /// </summary>
+    private async Task ExecutePrintJobAsync(PrintJobRequest request, string? printerId, bool canSpool)
+    {
+        if (_isSaving)
+            return;
+
+        var jobPlan = PrintJobPlanner.CreatePlan(
+            _session.Workbook,
+            request,
+            new WorkbookExportPrintPageCapacity(PortablePdfRowsPerPage, PortablePdfColumnsPerPage),
+            WorkbookExportPrintSurface.MacOs);
+
+        if (!jobPlan.IsReady)
+        {
+            ShowExportIssue(jobPlan.StatusText);
+            return;
+        }
+
+        var exportPlan = PortablePdfExportPlanner.CreatePlan(jobPlan.ExportPrintPlan);
+        if (!exportPlan.IsReady)
+        {
+            ShowExportIssue(exportPlan.StatusText);
+            return;
+        }
+
+        byte[] documentBytes;
+        try
+        {
+            using var pdfBuffer = new MemoryStream();
+            Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, exportPlan, pdfBuffer);
+            documentBytes = pdfBuffer.ToArray();
+        }
+        catch (Exception ex)
+        {
+            ShowExportIssue(UiText.Format("Print_RenderFailed", ex.Message));
+            return;
+        }
+
+        if (canSpool)
+        {
+            await SpoolPrintJobAsync(jobPlan, printerId, documentBytes);
+            return;
+        }
+
+        await SavePrintReadyPdfAsync(documentBytes);
+    }
+
+    private async Task SpoolPrintJobAsync(PrintJobPlan jobPlan, string? printerId, byte[] documentBytes)
+    {
+        _isSaving = true;
+        UpdateSaveButton();
+        try
+        {
+            _statusText.Text = UiText.Get("Print_Spooling");
+            _statusText.Foreground = Brush(67, 113, 83);
+
+            var submission = new PrintJobSubmission(
+                printerId ?? "",
+                documentBytes,
+                jobPlan.Copies,
+                jobPlan.Collate,
+                jobPlan.FirstPage,
+                jobPlan.LastPage,
+                BuildPrintJobTitle());
+
+            var result = await _platformPrinter.SubmitAsync(submission);
+            if (result.Succeeded)
+                RefreshShell(UiText.Format("Print_Sent", result.StatusText));
+            else
+                ShowExportIssue(result.StatusText);
+        }
+        finally
+        {
+            _isSaving = false;
+            UpdateSaveButton();
+        }
+    }
+
+    /// <summary>
+    /// No-spooler fallback: write the print-ready PDF where the user chooses. This keeps Print useful on
+    /// hosts without CUPS (and is what tests exercise via <see cref="NullPlatformPrinter"/>).
+    /// </summary>
+    private async Task SavePrintReadyPdfAsync(byte[] documentBytes)
+    {
+        if (!TryBeginFileOperation())
+            return;
+
+        try
+        {
+            if (!StorageProvider.CanSave)
+            {
+                ShowExportIssue(UiText.Get("Print_NoSpoolerNoSave"));
+                return;
+            }
+
+            var pdfFileType = new FilePickerFileType("PDF Document")
+            {
+                Patterns = ["*.pdf"],
+            };
+            var storageFile = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+            {
+                Title = UiText.Get("Print_SaveAsPdfButton"),
+                SuggestedFileName = BuildSuggestedPdfExportFileName(),
+                DefaultExtension = "pdf",
+                FileTypeChoices = [pdfFileType],
+                SuggestedFileType = pdfFileType,
+                ShowOverwritePrompt = true,
+            });
+
+            if (storageFile is null)
+                return;
+
+            using (storageFile)
+            {
+                var path = storageFile.TryGetLocalPath();
+                if (string.IsNullOrWhiteSpace(path))
+                {
+                    ShowExportIssue(UiText.Get("Print_RequiresLocalPath"));
+                    return;
+                }
+
+                var requestedPath = path;
+                var exportPathPlan = ExportPathPlanner.Plan(requestedPath, ExportFileFormat.Pdf);
+                if (ExportPathPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, exportPathPlan, File.Exists) &&
+                    !await ConfirmNormalizedPdfOverwriteAsync(exportPathPlan.Path))
+                {
+                    ShowExportIssue(UiText.Get("Print_SaveCanceled"));
+                    return;
+                }
+
+                path = exportPathPlan.Path;
+
+                try
+                {
+                    await File.WriteAllBytesAsync(path, documentBytes);
+                    RefreshShell(UiText.Format("Print_SavedPdf", Path.GetFileName(path)));
+                }
+                catch (Exception ex)
+                {
+                    ShowExportIssue(UiText.Format("Print_RenderFailed", ex.Message));
+                }
+            }
+        }
+        finally
+        {
+            EndFileOperation();
+        }
+    }
+
+    private string BuildPrintJobTitle()
+    {
+        var name = Path.GetFileNameWithoutExtension(_session.DisplayName);
+        return string.IsNullOrWhiteSpace(name) ? "FreeX" : name;
+    }
+
+    private static int? ParsePositiveInt(string? text, int? fallback)
+    {
+        if (int.TryParse(text?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) && value >= 1)
+            return value;
+
+        return fallback;
+    }
+
+    private static string FormatPrintScopeLabel(WorkbookExportPrintScope scope, bool isAvailable) =>
+        scope switch
+        {
+            WorkbookExportPrintScope.SelectedRange => isAvailable
+                ? UiText.Get("Print_ScopeSelection")
+                : UiText.Get("Print_ScopeSelectionUnavailable"),
+            WorkbookExportPrintScope.VisibleWorkbook => UiText.Get("Print_ScopeWorkbook"),
+            _ => UiText.Get("Print_ScopeActiveSheet")
+        };
+
+    private TextBlock CreatePrintSectionHeader(string text) =>
+        new()
+        {
+            Text = text,
+            FontWeight = FontWeight.SemiBold,
+            Foreground = HeaderForeground,
+            Margin = new Thickness(0, 6, 0, 0),
+        };
+}

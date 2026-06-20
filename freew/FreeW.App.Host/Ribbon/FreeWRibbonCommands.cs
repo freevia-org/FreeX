@@ -57,7 +57,52 @@ internal static class FreeWRibbonCommands
         Action? onToggleReadMode,
         Func<bool>? isReadModeActive,
         Action? onTogglePrintLayout,
-        Func<bool>? isPrintLayoutActive)
+        Func<bool>? isPrintLayoutActive) =>
+        Build(editor, stateStore, onPrintPreview, onToggleNavPane, isNavPaneVisible,
+            onToggleReadMode, isReadModeActive, onTogglePrintLayout, isPrintLayoutActive,
+            onToggleOutlineView: null, isOutlineViewActive: null);
+
+    public static RibbonCommandRegistry Build(
+        DocumentView editor,
+        RibbonStateStore stateStore,
+        Action? onPrintPreview,
+        Action? onToggleNavPane,
+        Func<bool>? isNavPaneVisible,
+        Action? onToggleReadMode,
+        Func<bool>? isReadModeActive,
+        Action? onTogglePrintLayout,
+        Func<bool>? isPrintLayoutActive,
+        Action? onToggleOutlineView,
+        Func<bool>? isOutlineViewActive) =>
+        Build(editor, stateStore, onPrintPreview, onToggleNavPane, isNavPaneVisible,
+            onToggleReadMode, isReadModeActive, onTogglePrintLayout, isPrintLayoutActive,
+            onToggleOutlineView, isOutlineViewActive, onZoomDialog: null);
+
+    public static RibbonCommandRegistry Build(
+        DocumentView editor,
+        RibbonStateStore stateStore,
+        Action? onPrintPreview,
+        Action? onToggleNavPane,
+        Func<bool>? isNavPaneVisible,
+        Action? onToggleReadMode,
+        Func<bool>? isReadModeActive,
+        Action? onTogglePrintLayout,
+        Func<bool>? isPrintLayoutActive,
+        Action? onToggleOutlineView,
+        Func<bool>? isOutlineViewActive,
+        Action? onZoomDialog,
+        Action? onWebLayout = null,
+        Func<bool>? isWebLayoutActive = null,
+        Action? onDraftView = null,
+        Func<bool>? isDraftViewActive = null,
+        Action? onToggleRevealFormatting = null,
+        Func<bool>? isRevealFormattingVisible = null,
+        Action? onToggleReviewingPane = null,
+        Func<bool>? isReviewingPaneVisible = null,
+        Action? onAcceptThisChange = null,
+        Action? onRejectThisChange = null,
+        Action? onPreviousChange = null,
+        Action? onNextChange = null)
     {
         var registry = new RibbonCommandRegistry();
         var stateful = new List<(RibbonCommandId Id, IRibbonStatefulCommand Command)>();
@@ -148,6 +193,10 @@ internal static class FreeWRibbonCommands
         // Insert tab — Table Tools: pick/clear a fill colour for the caret's cell (sets model + re-renders).
         registry.Register("freew.cell-shading", new CellShadingCommand(editor));
         // Insert tab — Table Tools: table-style toggles applied to the caret's table (sets model + re-renders).
+        // Table Tools — Data: insert a computed formula field (=SUM(ABOVE) etc.) into the caret's cell.
+        registry.Register("freew.table-formula", new TableFormulaCommand(editor));
+        // Table Tools — Properties: open the four-tab Table Properties dialog for the caret's table.
+        registry.Register("freew.table-properties", new TablePropertiesCommand(editor));
         registry.Register("freew.table-header-row", new ActionCommand(() => { editor.Focus(); editor.ToggleTableHeaderRow(); }));
         registry.Register("freew.table-banded-rows", new ActionCommand(() => { editor.Focus(); editor.ToggleTableBandedRows(); }));
         registry.Register("freew.table-repeat-header", new ActionCommand(() => { editor.Focus(); editor.ToggleTableRepeatHeaderRow(); }));
@@ -156,6 +205,11 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.insert-file", new InsertFileCommand(editor));
         // Insert tab — Illustrations: pick an image file and insert it as an inline image run.
         registry.Register("freew.picture", new InsertPictureCommand(editor));
+        // Insert tab — Illustrations > Screenshot: the top-level "freew.screenshot" id only opens the
+        // dropdown (no direct insert, so it isn't registered — mirroring "freew.shapes" above). "Screen
+        // Clipping" drag-selects a screen region and inserts the captured PNG as an inline image through
+        // the exact same InsertImage path as Insert Picture.
+        registry.Register("freew.screen-clipping", new ScreenClippingCommand(editor));
         // Insert tab — Illustrations: resize the selected inline image (height scales proportionally).
         registry.Register("freew.image-size", new ImageSizeCommand(editor));
         // Insert tab — Illustrations: set the selected image's accessibility alt text (wp:docPr @descr),
@@ -197,6 +251,34 @@ internal static class FreeWRibbonCommands
             editor.Focus();
             editor.InsertEquation(SampleEquation());
         }));
+        // Equation gallery presets (Insert > Media > Equation dropdown). Each inserts one OMML structure
+        // at the caret as an editable starting point; all round-trip through the model/IO layer.
+        registry.Register("freew.equation-fraction", new ActionCommand(() => InsertEquationPreset(editor,
+            new Equation([MathRun.Fraction("a", "b")]))));
+        registry.Register("freew.equation-script", new ActionCommand(() => InsertEquationPreset(editor,
+            new Equation([MathRun.SubSuperscript("x", "n", "2")]))));
+        registry.Register("freew.equation-radical", new ActionCommand(() => InsertEquationPreset(editor,
+            new Equation([MathRun.Radical("x")]))));
+        registry.Register("freew.equation-nthroot", new ActionCommand(() => InsertEquationPreset(editor,
+            new Equation([MathRun.Radical("x", "n")]))));
+        registry.Register("freew.equation-integral", new ActionCommand(() => InsertEquationPreset(editor,
+            new Equation([MathRun.NAry("∫", "a", "b", "f(x) dx")]))));
+        registry.Register("freew.equation-summation", new ActionCommand(() => InsertEquationPreset(editor,
+            new Equation([MathRun.NAry("∑", "i=1", "n", "i")]))));
+        registry.Register("freew.equation-product", new ActionCommand(() => InsertEquationPreset(editor,
+            new Equation([MathRun.NAry("∏", "i=1", "n", "i")]))));
+        registry.Register("freew.equation-accent", new ActionCommand(() => InsertEquationPreset(editor,
+            new Equation([MathRun.AccentOf("x")]))));
+        registry.Register("freew.equation-bar", new ActionCommand(() => InsertEquationPreset(editor,
+            new Equation([MathRun.BarOf("x")]))));
+        registry.Register("freew.equation-bracket", new ActionCommand(() => InsertEquationPreset(editor,
+            new Equation([MathRun.Delimiter("a, b")]))));
+        registry.Register("freew.equation-matrix", new ActionCommand(() => InsertEquationPreset(editor,
+            new Equation([MathRun.MatrixOf(MathMatrix.Identity2x2())]))));
+        registry.Register("freew.equation-func", new ActionCommand(() => InsertEquationPreset(editor,
+            new Equation([MathRun.FunctionApply("sin", "x")]))));
+        registry.Register("freew.equation-groupchr", new ActionCommand(() => InsertEquationPreset(editor,
+            new Equation([MathRun.GroupCharOf("x+y")]))));
         registry.Register("freew.chart", new ActionCommand(() =>
         {
             editor.Focus();
@@ -232,6 +314,9 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.footnote", new InsertFootnoteCommand(editor));
         // Insert tab — References: prompt for endnote text and insert an endnote reference at the caret.
         registry.Register("freew.endnote", new InsertEndnoteCommand(editor));
+        // Insert tab — References: open the Footnote and Endnote numbering options dialog (number format,
+        // start-at, restart mode). Applies to w:footnotePr / w:endnotePr in settings.xml.
+        registry.Register("freew.footnote-endnote-options", new FootnoteEndnoteOptionsCommand(editor));
         // Insert tab — References: generate a Table of Contents from the heading outline at the caret,
         // and rebuild it in place (remove the prior TOC region + re-insert). Both route through the bus.
         registry.Register("freew.toc", new ActionCommand(() => { editor.Focus(); editor.InsertTableOfContents(); }));
@@ -255,6 +340,11 @@ internal static class FreeWRibbonCommands
         // caret, and rebuild it in place (remove the prior region + re-insert). Both route through the bus.
         registry.Register("freew.tof", new ActionCommand(() => { editor.Focus(); editor.InsertTableOfFigures(); }));
         registry.Register("freew.tof-refresh", new ActionCommand(() => { editor.Focus(); editor.RefreshTableOfFigures(); }));
+        // Insert tab — References: mark the selection as a legal citation (a hidden TA field), and insert /
+        // rebuild a Table of Authorities built from those marks, grouped by category (reversibly via the bus).
+        registry.Register("freew.mark-citation", new MarkCitationCommand(editor));
+        registry.Register("freew.table-of-authorities", new ActionCommand(() => { editor.Focus(); editor.InsertTableOfAuthorities(); }));
+        registry.Register("freew.table-of-authorities-refresh", new ActionCommand(() => { editor.Focus(); editor.RefreshTableOfAuthorities(); }));
         // Insert tab — Links: name the caret's paragraph as a bookmark target (an invisible marker).
         registry.Register("freew.bookmark", new InsertBookmarkCommand(editor));
         // Insert tab — Links: apply an internal link (to an existing bookmark) over the selection.
@@ -268,15 +358,25 @@ internal static class FreeWRibbonCommands
         var quickParts = QuickPartLibrary.Load();
         registry.Register("freew.save-quickpart", new SaveQuickPartCommand(editor, quickParts));
         registry.Register("freew.insert-quickpart", new InsertQuickPartCommand(editor, quickParts));
+        // "Building Blocks Organizer" opens a manager over that same library: list + preview, Insert, Delete.
+        registry.Register("freew.building-blocks-organizer", new BuildingBlocksOrganizerCommand(editor, quickParts));
 
         // Insert tab — Controls: insert a content control (w:sdt) around the selection. The plain-text
         // control wraps the selection (or a placeholder) as an editable region; the checkbox control
         // drops a toggleable ☐/☒ checkbox. Both round-trip through docx as a w:sdt.
         registry.Register("freew.cc-text", new ActionCommand(() => { editor.Focus(); editor.InsertPlainTextControl(); }));
+        registry.Register("freew.cc-richtext", new ActionCommand(() => { editor.Focus(); editor.InsertRichTextControl(); }));
         registry.Register("freew.cc-checkbox", new ActionCommand(() => { editor.Focus(); editor.InsertCheckBoxControl(); }));
+        registry.Register("freew.cc-date", new ActionCommand(() => { editor.Focus(); editor.InsertDatePickerControl(); }));
+        registry.Register("freew.cc-dropdown", new ActionCommand(() => { editor.Focus(); editor.InsertDropDownListControl(); }));
+        registry.Register("freew.cc-combo", new ActionCommand(() => { editor.Focus(); editor.InsertComboBoxControl(); }));
 
         // Review tab — Comments: prompt for comment text and attach it over the current selection.
         registry.Register("freew.new-comment", new NewCommentCommand(editor));
+        // Review tab — Comments: reply to / resolve the comment thread covering the caret (modern threaded
+        // comments). Reply prompts for text and appends a child comment; Resolve toggles the thread's done flag.
+        registry.Register("freew.reply-comment", new ReplyCommentCommand(editor));
+        registry.Register("freew.resolve-comment", new ResolveCommentCommand(editor));
 
         // Review tab — Proofing: open the read-only Word Count / Statistics dialog. Commits pending
         // edits first so the counts reflect the current text, then computes from the model.
@@ -294,6 +394,18 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.spellcheck-toggle", spellCheckToggle);
         stateful.Add(("freew.spellcheck-toggle", spellCheckToggle));
 
+        // Review tab — Speech > Read Aloud: a stateful toggle over an in-box text-to-speech read-through
+        // (System.Speech via SystemSpeechEngine, behind the model's ISpeechEngine so the controller stays
+        // testable). Toggling ON commits pending edits, maps the caret to the matching speakable segment,
+        // and starts reading from there to the end of the document; toggling OFF stops. The checked state
+        // reflects whether a read-through is active (so the ribbon shows it at a glance), and the controller
+        // pushes its state back into the store when reading finishes on its own. Construction is robust on a
+        // machine with no installed voice (the engine degrades to a no-op rather than crashing).
+        var readAloud = new ReadAloudToggleCommand(editor);
+        readAloud.StateChanged += () => stateStore.SetState("freew.read-aloud", readAloud.GetState());
+        registry.Register("freew.read-aloud", readAloud);
+        stateful.Add(("freew.read-aloud", readAloud));
+
         // Review tab — Tracking: toggle Track Changes mode (stateful so the ribbon reflects it). When
         // ON, marking the current selection as a tracked insertion/deletion is offered; turning it on
         // with a non-empty selection marks that selection as an insertion (a pragmatic stand-in for live
@@ -302,10 +414,33 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.accept-all", new ActionCommand(() => { editor.Focus(); editor.AcceptAllRevisions(); }));
         registry.Register("freew.reject-all", new ActionCommand(() => { editor.Focus(); editor.RejectAllRevisions(); }));
 
-        // Review tab — Protect: Restrict Editing. A stateful toggle over document protection: turning it
-        // on locks the document read-only (RichTextBox IsReadOnly) and emits word/settings.xml's
-        // w:documentProtection on save; turning it off clears protection. The toggle reflects whether
-        // the document is currently protected.
+        // Review tab — single-revision reviewing surface (the Reviewing Pane). The toggle shows/hides the
+        // dockable revisions list; Accept/Reject act on the SELECTED single change and Previous/Next step
+        // through them. All four delegate to the host, which owns the pane and drives the pure RevisionList.
+        if (onToggleReviewingPane is not null && isReviewingPaneVisible is not null)
+            registry.Register("freew.reviewing-pane",
+                new ToggleActionCommand(onToggleReviewingPane, isReviewingPaneVisible));
+        if (onAcceptThisChange is not null)
+            registry.Register("freew.accept-this", new ActionCommand(onAcceptThisChange));
+        if (onRejectThisChange is not null)
+            registry.Register("freew.reject-this", new ActionCommand(onRejectThisChange));
+        if (onPreviousChange is not null)
+            registry.Register("freew.previous-change", new ActionCommand(onPreviousChange));
+        if (onNextChange is not null)
+            registry.Register("freew.next-change", new ActionCommand(onNextChange));
+
+        // Review tab — Protect: Mark as Final. A stateful toggle over Word's advisory read-only flag:
+        // turning it on makes the editor read-only, shows the "Marked as Final" banner and persists the
+        // _MarkAsFinal custom property; "Edit Anyway" (or toggling off) clears it. The checked state
+        // reflects whether the document is currently marked final.
+        var markAsFinal = new MarkAsFinalToggleCommand(editor);
+        registry.Register("freew.mark-as-final", markAsFinal);
+        stateful.Add(("freew.mark-as-final", markAsFinal));
+
+        // Review tab — Protect: Restrict Editing. Opens the Restrict Editing pane to choose the allowed
+        // editing type (No changes / Tracked changes / Comments / Filling in forms) and start enforcing,
+        // or stop protection. The chosen mode is enforced on the live editor and emits word/settings.xml's
+        // w:documentProtection on save. The toggle reflects whether protection is currently enforced.
         var restrictEditing = new RestrictEditingToggleCommand(editor);
         registry.Register("freew.restrict-editing", restrictEditing);
         stateful.Add(("freew.restrict-editing", restrictEditing));
@@ -313,6 +448,11 @@ internal static class FreeWRibbonCommands
         // Review tab — Compare: open a second .docx and load a comparison of the current document against
         // it as tracked changes (insertions/deletions relative to the opened "original").
         registry.Register("freew.compare", new CompareDocumentsCommand(editor));
+
+        // Review tab — Combine: open the original (base) document plus a second reviewer's revised copy and
+        // merge BOTH reviewers' edits (the current document is reviewer A, the opened file is reviewer B)
+        // into one document whose tracked changes preserve each reviewer's authorship.
+        registry.Register("freew.combine", new CombineDocumentsCommand(editor));
 
         // Review tab — Inspect Document: report the metadata the document carries (comments, tracked
         // changes, document properties, bookmarks) via the pure DocumentInspector, and let the user
@@ -329,6 +469,8 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.footer", new HeaderFooterCommand(editor, isFooter: true));
         registry.Register("freew.page-number", new InsertPageNumberCommand(editor));
         registry.Register("freew.field", new InsertFieldCommand(editor));
+        registry.Register("freew.toggle-field-codes", new ToggleFieldCodesCommand(editor));
+        registry.Register("freew.update-fields", new UpdateFieldsCommand(editor));
 
         // Insert tab — Symbols: pick a glyph from a grid, or a formatted current date/time string, and
         // insert it at the caret as ordinary text (flows through the normal edit/undo path).
@@ -362,10 +504,13 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.indent-increase", new ActionCommand(() => { editor.Focus(); editor.IncreaseIndent(); }));
         registry.Register("freew.indent-decrease", new ActionCommand(() => { editor.Focus(); editor.DecreaseIndent(); }));
         registry.Register("freew.paragraph-dialog", new ParagraphIndentCommand(editor));
+        registry.Register("freew.tabs-dialog", new TabsCommand(editor));
 
         // Home > Paragraph: toggle a box border on the selected paragraph(s), and pick/clear shading.
         registry.Register("freew.para-border", new ActionCommand(() => editor.ToggleParagraphBorder()));
         registry.Register("freew.para-shading", new ParagraphShadingCommand(editor));
+        // Home / Design > Borders and Shading…: the full dialog (paragraph border, page border, shading).
+        registry.Register("freew.borders-shading", new BordersAndShadingCommand(editor));
 
         // Home > Paragraph (Line and Page Breaks): flow-control toggles over the selected paragraph(s).
         // Each flips its pPr flag (keepNext/keepLines/widowControl) reversibly through the undo/redo bus.
@@ -418,25 +563,43 @@ internal static class FreeWRibbonCommands
             var isLetter = Math.Abs(page.WidthPt - 612) < 1 && Math.Abs(page.HeightPt - 792) < 1;
             (page.WidthPt, page.HeightPt) = isLetter ? (595.0, 842.0) : (612.0, 792.0); // toggle Letter <-> A4
         }));
-        // Columns: cycle 1 -> 2 -> 3 -> 1 equal-width columns, re-rendering so the layout shows at once.
-        registry.Register("freew.columns", new ColumnCountCommand(editor));
+        // Columns: open the Columns dialog (One/Two/Three/Left/Right + spacing/line-between/More), applying
+        // the chosen column layout to PageSettings and re-rendering so the flow shows at once.
+        registry.Register("freew.columns", new ColumnsCommand(editor));
+        // Page Setup: the unified Margins / Paper / Layout dialog (Word's Layout > Page Setup launcher). The
+        // "Custom Margins…" / "More Paper Sizes…" entry points open the same dialog on the Margins / Paper tab.
+        registry.Register("freew.page-setup", new PageSetupCommand(editor, PageSetupDialog.Tab.Margins));
+        registry.Register("freew.custom-margins", new PageSetupCommand(editor, PageSetupDialog.Tab.Margins));
+        registry.Register("freew.more-paper-sizes", new PageSetupCommand(editor, PageSetupDialog.Tab.Paper));
         // Line Numbers: cycle None -> Continuous -> RestartEachPage -> None (shown in print preview).
         registry.Register("freew.line-numbers", new LineNumberCommand(editor));
 
-        // Page setup polish — all three mutate PageSettings via ApplyPageSettings (commit + re-render)
-        // and round-trip through docx save.
-        //  - Hyphenation: toggle automatic hyphenation (settings.xml w:autoHyphenation).
+        // Page setup polish — all mutate PageSettings via ApplyPageSettings (commit + re-render) and
+        // round-trip through docx save.
+        //  - Hyphenation: a dropdown (None / Automatic / Manual / Options…). The split-button default action
+        //    (freew.hyphenation) toggles automatic hyphenation; the menu items set an explicit mode, and the
+        //    Options item opens the Hyphenation Options dialog. Automatic hyphenation inserts soft hyphens in
+        //    the live document (settings.xml w:autoHyphenation + zone/limit/caps sub-options).
         //  - Page Vertical Alignment: cycle Top -> Center -> Justified (-> Bottom) (sectPr w:vAlign).
         //  - Different First Page: toggle a distinct first-page header/footer (sectPr w:titlePg).
         registry.Register("freew.hyphenation", new HyphenationCommand(editor));
+        registry.Register("freew.hyphenation-none", new HyphenationModeCommand(editor, auto: false));
+        registry.Register("freew.hyphenation-auto", new HyphenationModeCommand(editor, auto: true));
+        registry.Register("freew.hyphenation-manual", new HyphenationManualCommand(editor));
+        registry.Register("freew.hyphenation-options", new HyphenationOptionsCommand(editor));
         registry.Register("freew.page-valign", new PageVerticalAlignmentCommand(editor));
         registry.Register("freew.different-first-page", new DifferentFirstPageCommand(editor));
 
-        // Layout tab — Page Background: toggle a whole-page border (w:pgBorders) and set/clear the
-        // page watermark. Both mutate PageSettings via ApplyPageSettings (commit + re-render) and
-        // round-trip through docx save.
-        registry.Register("freew.page-border", new ActionCommand(() => { editor.Focus(); editor.TogglePageBorder(); }));
+        // Layout tab — Page Background: "Page Border" opens the full Borders and Shading dialog (Word's
+        // Page Borders button), and Watermark sets/clears the page watermark. Both ultimately mutate
+        // PageSettings via ApplyPageSettings (commit + re-render) and round-trip through docx save.
+        registry.Register("freew.page-border", new BordersAndShadingCommand(editor));
         registry.Register("freew.watermark", new WatermarkCommand(editor));
+
+        // Design tab — Page Background: pick the whole-page background colour (Word's Page Color). Opens a
+        // swatch palette + No Color + More Colours… and sets the model's page BackgroundColorHex (which
+        // already round-trips as w:background in docx); the editor recolours the page sheet immediately.
+        registry.Register("freew.page-color", new PageColorCommand(editor));
 
         // Layout tab — open the modeless print-preview window (paginated, page-settings-aware).
         if (onPrintPreview is not null)
@@ -457,6 +620,33 @@ internal static class FreeWRibbonCommands
         // on (the Word default); the host seeds the checked state to match.
         if (onTogglePrintLayout is not null && isPrintLayoutActive is not null)
             registry.Register("freew.print-layout", new ToggleActionCommand(onTogglePrintLayout, isPrintLayoutActive));
+
+        // View tab — toggle Outline view (the heading-structured outline surface with the Outlining
+        // mini-toolbar) vs the normal editing surface. Stateful so the ribbon's toggle button reflects
+        // whether the outline view is currently active.
+        if (onToggleOutlineView is not null && isOutlineViewActive is not null)
+            registry.Register("freew.outline-view", new ToggleActionCommand(onToggleOutlineView, isOutlineViewActive));
+
+        // View tab — switch to Web Layout (a continuous, full-width view with no page chrome, text wrapping
+        // to the window like a web page) and Draft (a simplified continuous view for fast editing). Both are
+        // mutually exclusive with Print Layout / Outline; the host owns the exclusivity and the stateful
+        // checked-state, so these are ToggleActionCommands reflecting which view mode is active.
+        if (onWebLayout is not null && isWebLayoutActive is not null)
+            registry.Register("freew.web-layout", new ToggleActionCommand(onWebLayout, isWebLayoutActive));
+        if (onDraftView is not null && isDraftViewActive is not null)
+            registry.Register("freew.draft-view", new ToggleActionCommand(onDraftView, isDraftViewActive));
+
+        // View tab — toggle the Reveal Formatting pane (Word's Shift+F1 pane), a read-only side pane
+        // showing the effective FONT / PARAGRAPH / SECTION formatting of the selection. Stateful so the
+        // ribbon's toggle button reflects whether the pane is currently shown.
+        if (onToggleRevealFormatting is not null && isRevealFormattingVisible is not null)
+            registry.Register("freew.reveal-formatting",
+                new ToggleActionCommand(onToggleRevealFormatting, isRevealFormattingVisible));
+
+        // View tab — open Word's Zoom dialog (presets / page fits / custom %). The host computes the
+        // page-relative fit factors from the live viewport and applies the chosen factor to the editor.
+        if (onZoomDialog is not null)
+            registry.Register("freew.zoom-dialog", new ActionCommand(onZoomDialog));
 
         // View tab — Show Formatting Marks: a stateful toggle over the editor's display-only pilcrow /
         // space-dot / tab-arrow overlay. The marks are drawn as a non-editable adorner computed from the
@@ -676,6 +866,27 @@ internal static class FreeWRibbonCommands
         }
     }
 
+    // Home > Paragraph > Tabs…: open the Tabs dialog seeded with the first selected paragraph's current
+    // tab stops, and apply the edited stop list to every selected paragraph through the view (reversible
+    // via the bus). The stops round-trip to docx via the existing w:tabs writer.
+    private sealed class TabsCommand(DocumentView editor) : IRibbonCommand
+    {
+        // Word's classic default tab-stop spacing (0.5in). The real value lives in word/settings.xml
+        // (w:defaultTabStop), which FreeW preserves verbatim but does not model; shown read-only for reference.
+        private const double DefaultTabStopPt = 36;
+
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var current = editor.CurrentParagraphFormatting.TabStops;
+            if (TabsDialog.Prompt(Window.GetWindow(editor), current, DefaultTabStopPt) is { } chosen)
+            {
+                editor.Focus();
+                editor.SetParagraphTabStops(chosen);
+            }
+        }
+    }
+
     // Applies a named paragraph style's formatting (size/weight/colour) to the current selection.
     private sealed class ApplyStyleCommand(DocumentView editor, double sizePt, bool bold, string? colorHex) : IRibbonCommand
     {
@@ -745,7 +956,7 @@ internal static class FreeWRibbonCommands
             if (def is null)
                 return;
 
-            var created = StyleManager.CreateStyle(editor.Model, def.Name, def.BasedOnId, def.Run, def.Paragraph);
+            var created = StyleManager.CreateStyle(editor.Model, def.Name, def.BasedOnId, def.Run, def.Paragraph, def.NextStyleId);
             editor.Focus();
             editor.SetParagraphStyle(created.Id);
         }
@@ -787,7 +998,8 @@ internal static class FreeWRibbonCommands
                             continue;
                         StyleManager.ModifyStyle(editor.Model, mod.StyleId,
                             run: def.Run, para: def.Paragraph, basedOnId: def.BasedOnId,
-                            clearBasedOn: def.BasedOnId is null);
+                            clearBasedOn: def.BasedOnId is null,
+                            nextStyleId: def.NextStyleId, clearNext: def.NextStyleId is null);
                         editor.RefreshStyles();
                         continue;
                 }
@@ -972,6 +1184,93 @@ internal static class FreeWRibbonCommands
 
     // Insert > Table Tools > Cell Shading: pick a fill colour from a small palette and apply it to the
     // caret's table cell; "No Color" clears shading. Mirrors ParagraphShadingCommand's swatch picker.
+    // Table Tools — Data > Formula (Word's Table > Data > Formula): insert a computed formula field into the
+    // caret's cell. Requires the caret to be inside a table; otherwise warns and does nothing. Seeds a
+    // default formula (=SUM(ABOVE) or =SUM(LEFT)) by looking at where numbers sit relative to the cell, opens
+    // the Formula dialog, and inserts/recomputes the field.
+    private sealed class TableFormulaCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var owner = Window.GetWindow(editor);
+            var location = editor.CaretTableCell();
+            if (location is null)
+            {
+                DialogMessageHelper.ShowWarning(owner!, "The cursor must be inside a table cell to insert a formula.", "Formula");
+                return;
+            }
+
+            var (table, rowIndex, columnIndex) = location.Value;
+            var formula = TableFormulaDialog.Prompt(owner, DefaultFormula(table, rowIndex, columnIndex));
+            if (formula is null)
+                return; // cancelled — leave the model untouched
+
+            editor.Focus();
+            editor.InsertTableFormula(formula);
+        }
+
+        // Word's default: =SUM(ABOVE) when numeric cells sit above the formula cell; otherwise =SUM(LEFT)
+        // when numbers sit to the left; falling back to =SUM(ABOVE).
+        private static string DefaultFormula(FreeW.Core.Model.Table table, int rowIndex, int columnIndex)
+        {
+            if (HasNumberAbove(table, rowIndex, columnIndex))
+                return "=SUM(ABOVE)";
+            if (HasNumberLeft(table, rowIndex, columnIndex))
+                return "=SUM(LEFT)";
+            return "=SUM(ABOVE)";
+        }
+
+        private static bool HasNumberAbove(FreeW.Core.Model.Table table, int rowIndex, int columnIndex)
+        {
+            for (var r = rowIndex - 1; r >= 0; r--)
+            {
+                var cells = table.Rows[r].Cells;
+                if (columnIndex < cells.Count && TableFormulaEvaluator.TryParseCellNumber(cells[columnIndex].PlainText, out _))
+                    return true;
+            }
+            return false;
+        }
+
+        private static bool HasNumberLeft(FreeW.Core.Model.Table table, int rowIndex, int columnIndex)
+        {
+            if (rowIndex < 0 || rowIndex >= table.Rows.Count)
+                return false;
+            var cells = table.Rows[rowIndex].Cells;
+            for (var c = columnIndex - 1; c >= 0; c--)
+            {
+                if (c < cells.Count && TableFormulaEvaluator.TryParseCellNumber(cells[c].PlainText, out _))
+                    return true;
+            }
+            return false;
+        }
+    }
+
+    // Table Tools — Layout > Properties (Word's Table Properties dialog). Requires the caret to be inside a
+    // table; otherwise warns. Seeds the four-tab dialog from the caret's table/row/cell and applies the chosen
+    // values through the editor (which round-trips via w:tblPr / w:trPr / w:tcPr).
+    private sealed class TablePropertiesCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var owner = Window.GetWindow(editor);
+            var tableContext = editor.CaretTableContext();
+            if (tableContext is null)
+            {
+                DialogMessageHelper.ShowWarning(owner!, "The cursor must be inside a table to edit its properties.", "Table Properties");
+                return;
+            }
+
+            var values = TablePropertiesDialog.Prompt(owner, tableContext);
+            if (values is null)
+                return; // cancelled — leave the model untouched
+
+            editor.Focus();
+            editor.ApplyTableProperties(values);
+        }
+    }
+
     private sealed class CellShadingCommand(DocumentView editor) : IRibbonCommand
     {
         private static readonly string[] Palette =
@@ -1045,12 +1344,91 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context) => apply(editor.Model.Page);
     }
 
-    // Cycles the page through 1 -> 2 -> 3 -> 1 equal-width columns. Routes through ApplyPageSettings so
-    // the editor commits pending edits, mutates PageSettings.ColumnCount, and re-renders immediately.
-    private sealed class ColumnCountCommand(DocumentView editor) : IRibbonCommand
+    // Home / Design > Borders and Shading…: opens the full dialog (paragraph border, page border, shading)
+    // seeded with the current paragraph's border/shading and the page border. Applies the chosen paragraph
+    // border/shading through DocumentView (the undo/redo bus) and the page border through ApplyPageSettings;
+    // everything round-trips through the existing w:pBdr / w:pgBorders / w:shd writers.
+    private sealed class BordersAndShadingCommand(DocumentView editor) : IRibbonCommand
     {
-        public void Execute(RibbonCommandContext context) =>
-            editor.ApplyPageSettings(page => page.ColumnCount = page.ColumnCount >= 3 ? 1 : page.ColumnCount + 1);
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var result = BordersAndShadingDialog.Prompt(
+                Window.GetWindow(editor), editor.CurrentParagraphFormatting, editor.Model.Page.PageBorder);
+            if (result is null)
+                return;
+
+            editor.SetParagraphBorder(result.ParagraphBorder);
+            editor.SetParagraphShading(result.ShadingHex, result.ShadingPattern);
+            editor.ApplyPageSettings(page => page.PageBorder = result.PageBorder);
+        }
+    }
+
+    // Opens the Columns dialog (One/Two/Three/Left/Right presets + custom count, spacing, line-between) and
+    // applies the chosen layout to PageSettings. Routes through ApplyPageSettings so the editor commits
+    // pending edits, mutates the page columns, and re-renders the multi-column flow immediately. Equal
+    // presets clear any explicit per-column widths; the Left/Right presets set them (w:cols/@w:equalWidth).
+    private sealed class ColumnsCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var result = ColumnsDialog.Prompt(Window.GetWindow(editor), editor.Model.Page);
+            if (result is null)
+                return;
+
+            editor.ApplyPageSettings(page =>
+            {
+                page.ColumnCount = result.Count;
+                page.ColumnSpacingPt = result.SpacingPt;
+                page.ColumnsLineBetween = result.LineBetween;
+                page.ColumnWidthsPt = result.WidthsPt;
+            });
+        }
+    }
+
+    // Opens the unified Page Setup dialog (Margins / Paper / Layout tabs) and applies the chosen geometry,
+    // orientation, gutter, mirror-margins, paper size, header/footer distance, vertical alignment and the
+    // different-first-page / odd-even toggles to PageSettings via ApplyPageSettings — the same single
+    // commit + re-render path the other page-setup commands use, round-tripping through the existing w:sectPr /
+    // settings.xml writers. The "Custom Margins…" / "More Paper Sizes…" entry points open the same dialog on the
+    // Margins / Paper tab. The dialog's Line Numbers… / Borders… launchers defer to FreeW's existing Line
+    // Numbers cycle and Borders and Shading dialog respectively, opened after the page settings are applied.
+    private sealed class PageSetupCommand(DocumentView editor, PageSetupDialog.Tab initialTab) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var outcome = PageSetupDialog.Prompt(Window.GetWindow(editor), editor.Model.Page, initialTab: initialTab);
+            if (outcome is not { } o)
+                return;
+
+            var settings = o.Settings;
+            editor.ApplyPageSettings(page =>
+            {
+                page.MarginTopPt = settings.MarginTopPt;
+                page.MarginBottomPt = settings.MarginBottomPt;
+                page.MarginLeftPt = settings.MarginLeftPt;
+                page.MarginRightPt = settings.MarginRightPt;
+                page.GutterPt = settings.GutterPt;
+                page.Landscape = settings.Landscape;
+                page.MirrorMargins = settings.MirrorMargins;
+                page.WidthPt = settings.WidthPt;
+                page.HeightPt = settings.HeightPt;
+                page.DifferentFirstPage = settings.DifferentFirstPage;
+                page.DifferentOddEvenPages = settings.DifferentOddEvenPages;
+                page.HeaderDistancePt = settings.HeaderDistancePt;
+                page.FooterDistancePt = settings.FooterDistancePt;
+                page.VerticalAlignment = settings.VerticalAlignment;
+            });
+
+            // Defer to the existing features for the Layout-tab launchers, so a single source of truth drives
+            // line numbering and page/paragraph borders.
+            if (o.LineNumbers)
+                new LineNumberCommand(editor).Execute(context);
+            else if (o.Borders)
+                new BordersAndShadingCommand(editor).Execute(context);
+        }
     }
 
     // Cycles page line numbering None -> Continuous -> RestartEachPage -> None. Routes through
@@ -1073,6 +1451,74 @@ internal static class FreeWRibbonCommands
     {
         public void Execute(RibbonCommandContext context) =>
             editor.ApplyPageSettings(page => page.AutoHyphenation = !page.AutoHyphenation);
+    }
+
+    // Hyphenation dropdown — None / Automatic: sets the document's automatic-hyphenation flag explicitly
+    // (Word's Hyphenation > None / Automatic). Routes through ApplyPageSettings (commit + re-render) so the
+    // soft-hyphen rendering shows at once and the flag round-trips through settings.xml.
+    private sealed class HyphenationModeCommand(DocumentView editor, bool auto) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context) =>
+            editor.ApplyPageSettings(page => page.AutoHyphenation = auto);
+    }
+
+    // Hyphenation dropdown — Manual: a simpler pass that proposes hyphenation points for long words. FreeW's
+    // editor uses the same pure Hyphenator the automatic mode does; "Manual" turns hyphenation on (so the
+    // proposed soft-hyphen break points render) and reports how many words it found break candidates for, so
+    // the user can see the pass ran. (Word's interactive per-break confirmation UI is out of scope.)
+    private sealed class HyphenationManualCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            editor.CommitToModel();
+            var candidates = CountHyphenationCandidates(editor.Model);
+            editor.ApplyPageSettings(page => page.AutoHyphenation = true);
+
+            var owner = Window.GetWindow(editor);
+            if (owner is not null)
+                DialogMessageHelper.ShowInfo(owner,
+                    candidates == 0
+                        ? "Manual hyphenation found no long words to hyphenate."
+                        : $"Manual hyphenation proposed break points for {candidates} word(s). They will hyphenate at line ends.",
+                    "Hyphenation");
+        }
+
+        // Count distinct word occurrences in the live document that the pure Hyphenator would break.
+        private static int CountHyphenationCandidates(TextDocument model)
+        {
+            var count = 0;
+            foreach (var block in model.Blocks)
+                if (block is FreeW.Core.Model.Paragraph { Formatting.SuppressAutoHyphens: false } paragraph)
+                    foreach (var run in paragraph.Runs)
+                        foreach (var token in run.Text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+                            if (Hyphenator.BreakPoints(token.Trim('(', ')', ',', '.', ';', ':', '"', '\'')).Count > 0)
+                                count++;
+            return count;
+        }
+    }
+
+    // Hyphenation dropdown — Hyphenation Options…: opens the dialog (auto toggle, zone, consecutive-hyphen
+    // limit, hyphenate-caps) and applies the chosen settings to PageSettings via ApplyPageSettings so they
+    // round-trip through settings.xml and the live rendering updates.
+    private sealed class HyphenationOptionsCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var owner = Window.GetWindow(editor);
+            var result = HyphenationOptionsDialog.Prompt(owner, editor.Model.Page);
+            if (result is null)
+                return;
+
+            editor.ApplyPageSettings(page =>
+            {
+                page.AutoHyphenation = result.AutoHyphenation;
+                page.HyphenationZonePt = result.ZonePt;
+                page.ConsecutiveHyphenLimit = result.ConsecutiveLimit;
+                page.DoNotHyphenateCaps = !result.HyphenateCaps;
+            });
+        }
     }
 
     // Cycles page vertical alignment Top -> Center -> Justified -> Top (sectPr w:vAlign). Routes through
@@ -1186,6 +1632,56 @@ internal static class FreeWRibbonCommands
                 widthPt = MaxWidthPt;
             }
             return new InlineImage(buffer.ToArray(), widthPt, heightPt);
+        }
+    }
+
+    // Insert > Illustrations > Screenshot > Screen Clipping: hide FreeW, let the user drag-select a screen
+    // region (ScreenClipOverlay), capture it to PNG (ScreenshotCapture), restore FreeW, and insert the clip
+    // as an inline image through the same DocumentView.InsertImage path Insert Picture uses. Escape / an
+    // empty drag cancels and inserts nothing (mirroring Word).
+    private sealed class ScreenClippingCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            var window = Window.GetWindow(editor);
+            var previousState = window?.WindowState ?? WindowState.Normal;
+            try
+            {
+                // Briefly hide FreeW so it isn't part of the captured region (Word does the same).
+                if (window is not null)
+                {
+                    window.WindowState = WindowState.Minimized;
+                    // Let the minimize animation settle before the overlay/capture so we grab the desktop,
+                    // not a half-faded FreeW frame.
+                    window.Dispatcher.Invoke(static () => { }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+                }
+
+                var region = ScreenClipOverlay.PromptForRegion();
+
+                if (window is not null)
+                {
+                    window.WindowState = previousState;
+                    window.Activate();
+                }
+
+                if (region is not { } captured)
+                    return;
+
+                var pngBytes = ScreenshotCapture.CaptureRegionPng(captured);
+                if (pngBytes is null)
+                    return;
+
+                var image = ScreenshotCapture.PngToInlineImage(pngBytes);
+                editor.Focus();
+                editor.InsertImage(image);
+            }
+            catch (Exception ex)
+            {
+                if (window is not null && window.WindowState == WindowState.Minimized)
+                    window.WindowState = previousState;
+                MessageBox.Show(window, $"Could not capture the screen clip:\n{ex.Message}",
+                    "FreeW", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
     }
 
@@ -1361,6 +1857,34 @@ internal static class FreeWRibbonCommands
         }
     }
 
+    // Insert > References > Footnote/Endnote Options: open the Footnote and Endnote numbering options
+    // dialog (number format, start-at, restart mode for both footnotes and endnotes). Applies the chosen
+    // settings to the document's FootnoteNumbering / EndnoteNumbering, which round-trip as w:footnotePr /
+    // w:endnotePr in word/settings.xml.
+    private sealed class FootnoteEndnoteOptionsCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var owner = Window.GetWindow(editor);
+            var model = editor.Model;
+            var result = FootnoteEndnoteOptionsDialog.Prompt(owner, model.FootnoteNumbering, model.EndnoteNumbering);
+            if (result is null)
+                return;
+
+            // Apply the chosen numbering options. The model properties are mutable; we mutate in-place
+            // and commit via ApplyPageSettings (a page-settings no-op) so the editor commits pending
+            // edits, re-renders (marking the document dirty) and the settings round-trip on next save.
+            model.FootnoteNumbering.NumberFormat = result.FootnoteFormat;
+            model.FootnoteNumbering.StartAt = result.FootnoteStartAt;
+            model.FootnoteNumbering.NumberRestart = result.FootnoteRestart;
+            model.EndnoteNumbering.NumberFormat = result.EndnoteFormat;
+            model.EndnoteNumbering.StartAt = result.EndnoteStartAt;
+            model.EndnoteNumbering.NumberRestart = result.EndnoteRestart;
+            editor.ApplyPageSettings(_ => { });  // commits pending edits + marks document dirty
+        }
+    }
+
     // Insert > References > Citation: insert an in-text citation at the caret. If the document already
     // has sources, the user picks one (or chooses "Add New Source…"); otherwise they go straight to the
     // new-source form. A new source is appended to the model, then its in-text citation is inserted.
@@ -1499,21 +2023,64 @@ internal static class FreeWRibbonCommands
             if (string.IsNullOrWhiteSpace(text))
                 return; // cancelled or empty — nothing to attach
 
+            var author = CommentAuthor.Resolve(editor);
+            editor.Focus();
+            editor.InsertComment(text.Trim(), author, CommentAuthor.DeriveInitials(author));
+        }
+    }
+
+    // The author/initials a new comment or reply is stamped with: the document's Author property, falling
+    // back to the OS user, with initials derived from it. Shared by New Comment + Reply so the two stamp
+    // the same identity. Kept tiny + static so it carries no editor state.
+    private static class CommentAuthor
+    {
+        public static string Resolve(DocumentView editor)
+        {
             var author = editor.Model.Properties.Author;
             if (string.IsNullOrWhiteSpace(author))
                 author = Environment.UserName;
-            author = author?.Trim() ?? string.Empty;
-
-            editor.Focus();
-            editor.InsertComment(text.Trim(), author, DeriveInitials(author));
+            return author?.Trim() ?? string.Empty;
         }
 
         // Initials = the first letter of each whitespace-separated word, upper-cased (max 3).
-        private static string DeriveInitials(string author)
+        public static string DeriveInitials(string author)
         {
             var parts = author.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
             var initials = string.Concat(parts.Take(3).Select(p => char.ToUpperInvariant(p[0])));
             return initials.Length > 0 ? initials : "?";
+        }
+    }
+
+    // Review > Comments > Reply: prompt for reply text and append it to the comment thread covering the
+    // caret/selection. Warns when the caret is not inside a comment. The reply is stamped with the same
+    // author/initials a new comment uses.
+    private sealed class ReplyCommentCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var text = TextPrompt.Ask(Window.GetWindow(editor), "Reply", "Reply:", string.Empty);
+            if (string.IsNullOrWhiteSpace(text))
+                return; // cancelled or empty
+
+            var author = CommentAuthor.Resolve(editor);
+            editor.Focus();
+            if (!editor.ReplyToCommentAtCaret(text.Trim(), author, CommentAuthor.DeriveInitials(author)))
+                DialogMessageHelper.ShowWarning(Window.GetWindow(editor)!,
+                    "Place the cursor inside a comment, then choose Reply.", "Reply");
+        }
+    }
+
+    // Review > Comments > Resolve: toggle the resolved (done) state of the comment thread covering the
+    // caret/selection (resolved ranges render muted). Warns when the caret is not inside a comment.
+    private sealed class ResolveCommentCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            if (editor.ToggleResolveCommentAtCaret() is null)
+                DialogMessageHelper.ShowWarning(Window.GetWindow(editor)!,
+                    "Place the cursor inside a comment, then choose Resolve.", "Resolve");
         }
     }
 
@@ -1541,6 +2108,14 @@ internal static class FreeWRibbonCommands
             var dialog = new AccessibilityReportDialog(Window.GetWindow(editor)!, report);
             dialog.ShowDialog();
         }
+    }
+
+    // Focuses the editor and drops an equation-gallery preset at the caret via the editor's undoable
+    // insert path (same path as the default Equation button). Used by the Insert > Equation dropdown.
+    private static void InsertEquationPreset(DocumentView editor, Equation equation)
+    {
+        editor.Focus();
+        editor.InsertEquation(equation);
     }
 
     // A sample equation ("E = mc^2") built from explicit math fragments so its linear form renders the
@@ -1629,65 +2204,178 @@ internal static class FreeWRibbonCommands
         public RibbonCommandState GetState() => new(IsEnabled: true, IsChecked: editor.TrackChangesEnabled);
     }
 
-    // Review > Protect > Restrict Editing: a stateful toggle over document protection. Executing flips
-    // the document between unprotected and read-only (the common restrict-editing gesture): turning it
-    // ON makes the RichTextBox read-only and emits word/settings.xml's w:documentProtection on save;
-    // turning it OFF clears protection and restores editing. The checked state reflects whether the
-    // document is currently protected, so the ribbon button shows the lock state at a glance.
+    // Review > Protect > Restrict Editing: opens the Restrict Editing pane to choose the allowed editing
+    // type and start enforcing (or stop protection). The chosen ProtectionMode is enforced on the live
+    // editor (read-only for No-changes/Comments/Forms, forced track-changes for Tracked) and emits
+    // word/settings.xml's w:documentProtection on save. The checked state reflects whether protection is
+    // currently enforced, so the ribbon button shows the lock state at a glance.
     private sealed class RestrictEditingToggleCommand(DocumentView editor) : IRibbonStatefulCommand
     {
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            editor.ToggleReadOnlyProtection();
+            var chosen = RestrictEditingDialog.Prompt(Window.GetWindow(editor), editor.ProtectionMode);
+            if (chosen is { } mode)
+                editor.SetProtection(mode);
         }
 
         public RibbonCommandState GetState() =>
-            new(IsEnabled: true, IsChecked: editor.Model.Protection.IsProtected);
+            new(IsEnabled: true, IsChecked: editor.IsProtected);
     }
 
-    // Review > Compare: prompt the user to open a second .docx, read it, and load a comparison of the
-    // current document against it into the editor. The opened document is treated as the "original" and
-    // the current document as the "revised"; differences load as tracked insertions/deletions (rendered
-    // with the existing track-changes styling). The author comes from the document Author property
-    // (falling back to the OS user); the revision date is stamped at compare time (UI side, not the pure
-    // helper). Pending edits are committed first so the comparison reflects the on-screen text.
-    private sealed class CompareDocumentsCommand(DocumentView editor) : IRibbonCommand
+    // Review > Protect > Mark as Final: a stateful toggle over Word's advisory read-only flag. Turning it
+    // ON makes the editor read-only, shows the "Marked as Final" banner and persists the _MarkAsFinal
+    // custom property on save; turning it OFF ("Edit Anyway") restores editing. The checked state reflects
+    // whether the document is currently marked final.
+    private sealed class MarkAsFinalToggleCommand(DocumentView editor) : IRibbonStatefulCommand
     {
-        private const string Filter = "Word documents (*.docx)|*.docx|All files (*.*)|*.*";
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            editor.SetMarkedAsFinal(!editor.IsMarkedAsFinal);
+        }
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: true, IsChecked: editor.IsMarkedAsFinal);
+    }
+
+    // Review > Speech > Read Aloud: a stateful toggle that starts/stops an in-box text-to-speech
+    // read-through of the document from the caret to the end. The pure ReadAloudController owns the
+    // play/stop state machine and segment extraction; the host wires it to a SystemSpeechEngine
+    // (System.Speech) and maps the caret to the start segment. The engine is created lazily on first use so
+    // construction is cheap, and the engine itself is robust when no voice is installed (degrades to a
+    // no-op). The toggle is checked while a read-through is active; the controller raises StateChanged when
+    // reading finishes on its own so the ribbon button clears.
+    private sealed class ReadAloudToggleCommand : IRibbonStatefulCommand
+    {
+        private readonly DocumentView _editor;
+        private SystemSpeechEngine? _engine;
+        private ReadAloudController? _controller;
+
+        // Re-raised to the registry so the ribbon state store refreshes when reading starts/stops — both on
+        // user toggle and when the read-through completes on its own.
+        public event Action? StateChanged;
+
+        public ReadAloudToggleCommand(DocumentView editor) => _editor = editor;
 
         public void Execute(RibbonCommandContext context)
         {
-            var owner = Window.GetWindow(editor);
-            var dialog = new OpenFileDialog
+            var controller = EnsureController();
+            if (controller.IsActive)
             {
-                Filter = Filter,
-                DefaultExt = ".docx",
-                Title = "Compare With Document"
-            };
-            if (dialog.ShowDialog(owner) != true)
+                controller.Stop();
+                return;
+            }
+
+            // Commit pending edits and read from the caret's paragraph to the end (Word's behaviour).
+            var start = _editor.ReadAloudStartSegmentIndex();
+            controller.Start(_editor.Model, start);
+        }
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: true, IsChecked: _controller?.IsActive ?? false);
+
+        private ReadAloudController EnsureController()
+        {
+            if (_controller is not null)
+                return _controller;
+
+            _engine = new SystemSpeechEngine();
+            _controller = new ReadAloudController(_engine);
+            _controller.StateChanged += () => StateChanged?.Invoke();
+            return _controller;
+        }
+    }
+
+    // Review > Compare: two-phase dialog — first pick the original .docx (file picker), then confirm
+    // and optionally override the reviewer name in the Compare Documents dialog — then load the legal
+    // blackline result into the editor. The opened document is treated as the "original" and the current
+    // document as the "revised"; differences appear as tracked insertions/deletions attributed to the
+    // chosen author. Pending edits are committed first so the comparison reflects the on-screen text.
+    private sealed class CompareDocumentsCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            var owner = Window.GetWindow(editor);
+
+            // Seed the author box from the document's Author property, falling back to the OS user.
+            editor.CommitToModel();
+            var revised = editor.Model;
+            var defaultAuthor = revised.Properties.Author?.Trim();
+            if (string.IsNullOrWhiteSpace(defaultAuthor))
+                defaultAuthor = Environment.UserName;
+
+            var revisedTitle = revised.Properties.Title?.Trim()
+                ?? System.IO.Path.GetFileName(editor.CurrentFileName ?? string.Empty);
+
+            var picked = CompareDocumentsDialog.Prompt(owner, defaultAuthor!, revisedTitle ?? string.Empty);
+            if (picked is null)
                 return;
 
             try
             {
-                editor.CommitToModel();
-                var original = DocxReader.Read(dialog.FileName);
-                var revised = editor.Model;
-
-                var author = revised.Properties.Author;
-                if (string.IsNullOrWhiteSpace(author))
-                    author = Environment.UserName;
-                author = author?.Trim() ?? string.Empty;
-
+                var original = DocxReader.Read(picked.OriginalFilePath);
                 var dateXml = DateTimeOffset.UtcNow.ToString(
                     "yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture);
 
-                var compared = DocumentCompare.Compare(original, revised, author, dateXml);
+                var compared = DocumentCompare.Compare(original, revised, picked.Author, dateXml);
                 editor.LoadModel(compared);
             }
             catch (Exception ex)
             {
                 MessageBox.Show(owner, $"Could not compare the documents:\n{ex.Message}",
+                    "FreeW", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+    }
+
+    // Review > Combine: merge the revisions of two reviewers (Word's Combine Documents). The current
+    // document is treated as reviewer A; the user picks the shared ORIGINAL (base) and reviewer B's revised
+    // copy via the CombineDocumentsDialog — which confirms paths and lets the user override each reviewer's
+    // author label — then the result loads as one document carrying BOTH reviewers' tracked insertions/
+    // deletions, each attributed to its own author, via the pure DocumentCombine helper. Pending edits are
+    // committed first so the combine reflects the on-screen text. Authors are seeded from each document's
+    // Author property (falling back to the OS user for A and to "Reviewer 2" for B); the revision date is
+    // stamped at combine time.
+    private sealed class CombineDocumentsCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            var owner = Window.GetWindow(editor);
+
+            // Seed author boxes from the current document (reviewer A) and fall back to the OS user.
+            editor.CommitToModel();
+            var revisedA = editor.Model;
+
+            var defaultAuthorA = revisedA.Properties.Author?.Trim();
+            if (string.IsNullOrWhiteSpace(defaultAuthorA))
+                defaultAuthorA = Environment.UserName;
+
+            var reviewerATitle = revisedA.Properties.Title?.Trim()
+                ?? System.IO.Path.GetFileName(editor.CurrentFileName ?? string.Empty);
+
+            var picked = CombineDocumentsDialog.Prompt(
+                owner,
+                defaultAuthorA!,
+                defaultAuthorB: "Reviewer 2",
+                reviewerATitle: reviewerATitle ?? string.Empty);
+            if (picked is null)
+                return;
+
+            try
+            {
+                var original = DocxReader.Read(picked.OriginalFilePath);
+                var revisedB = DocxReader.Read(picked.ReviewerBFilePath);
+
+                var dateXml = DateTimeOffset.UtcNow.ToString(
+                    "yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture);
+
+                var combined = DocumentCombine.Combine(original, revisedA, picked.AuthorA, revisedB, picked.AuthorB, dateXml);
+                editor.LoadModel(combined);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(owner, $"Could not combine the documents:\n{ex.Message}",
                     "FreeW", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
@@ -1817,18 +2505,12 @@ internal static class FreeWRibbonCommands
         {
             editor.Focus();
             var owner = Window.GetWindow(editor);
-            var doc = editor.Model;
 
-            var pick = CrossReferencePicker.Ask(owner, doc);
+            var pick = CrossReferenceDialog.Prompt(owner, editor.Model);
             if (pick is null)
                 return; // cancelled or nothing to reference
 
-            var text = CrossReferences.ReferenceText(pick.Value);
-            editor.Focus();
-            if (!string.IsNullOrWhiteSpace(pick.Value.Anchor))
-                editor.InsertInternalLink(text, pick.Value.Anchor!);
-            else
-                editor.InsertText(text);
+            editor.InsertCrossReference(pick.Type, pick.Target, pick.InsertAs, pick.Hyperlink);
         }
     }
 
@@ -1849,50 +2531,41 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // A modal dialog letting the user choose a cross-reference type and target. Returns the chosen
-    // target, or null if cancelled (or if there is nothing to reference).
-    private static class CrossReferencePicker
+    // Insert > References > Mark Citation: mark the selection (seeding the long form) as a legal citation
+    // for a Table of Authorities. Opens a small dialog to pick the category and confirm the long/short
+    // forms, then drops a hidden TA field at the caret (the visible table is built later by Table of
+    // Authorities). Cancelling or an empty long form marks nothing.
+    private sealed class MarkCitationCommand(DocumentView editor) : IRibbonCommand
     {
-        public static CrossRefTarget? Ask(Window? owner, TextDocument doc)
+        public void Execute(RibbonCommandContext context)
         {
-            var typeList = new System.Windows.Controls.ListBox
-            {
-                MinWidth = 150,
-                MinHeight = 150,
-                Margin = new Thickness(0, 0, 12, 0)
-            };
-            foreach (var t in new[] { CrossRefType.Heading, CrossRefType.Bookmark, CrossRefType.Caption, CrossRefType.Footnote })
-                typeList.Items.Add(t);
-            typeList.SelectedIndex = 0;
+            editor.Focus();
+            var seed = editor.Selection.Text?.Trim() ?? string.Empty;
+            var citation = MarkCitationDialog.Ask(Window.GetWindow(editor), seed);
+            if (citation is null)
+                return; // cancelled or empty — nothing to mark
+            editor.MarkCitation(citation);
+        }
+    }
 
-            var targetList = new System.Windows.Controls.ListBox
-            {
-                MinWidth = 320,
-                MinHeight = 150
-            };
+    // A small modal form capturing a citation's category, long form and short form. Returns the citation,
+    // or null if cancelled (or if the long form is left blank).
+    private static class MarkCitationDialog
+    {
+        public static Citation? Ask(Window? owner, string seedLong)
+        {
+            var category = new System.Windows.Controls.ComboBox { MinWidth = 320, Margin = new Thickness(0, 0, 0, 10) };
+            foreach (var value in System.Enum.GetValues<CitationCategory>())
+                category.Items.Add(new CategoryItem(value));
+            category.SelectedIndex = 0;
 
-            var targets = new List<CrossRefTarget>();
-            void ReloadTargets()
-            {
-                targets.Clear();
-                targetList.Items.Clear();
-                if (typeList.SelectedItem is CrossRefType type)
-                {
-                    foreach (var target in CrossReferences.Targets(doc, type))
-                    {
-                        targets.Add(target);
-                        targetList.Items.Add(target.Display);
-                    }
-                }
-                targetList.SelectedIndex = targetList.Items.Count > 0 ? 0 : -1;
-            }
-            typeList.SelectionChanged += (_, _) => ReloadTargets();
-            ReloadTargets();
+            var longForm = new System.Windows.Controls.TextBox { MinWidth = 320, Margin = new Thickness(0, 0, 0, 10), Text = seedLong };
+            var shortForm = new System.Windows.Controls.TextBox { MinWidth = 320, Margin = new Thickness(0, 0, 0, 10) };
 
-            CrossRefTarget? result = null;
+            Citation? result = null;
             var dialog = new Window
             {
-                Title = "Cross-reference",
+                Title = "Mark Citation",
                 SizeToContent = SizeToContent.WidthAndHeight,
                 ResizeMode = ResizeMode.NoResize,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -1900,45 +2573,46 @@ internal static class FreeWRibbonCommands
                 ShowInTaskbar = false
             };
 
-            var ok = new System.Windows.Controls.Button { Content = "Insert", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var ok = new System.Windows.Controls.Button { Content = "Mark", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
             var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
-            void Commit()
+            ok.Click += (_, _) =>
             {
-                var index = targetList.SelectedIndex;
-                if (index >= 0 && index < targets.Count)
-                {
-                    result = targets[index];
-                    dialog.DialogResult = true;
-                }
-            }
-            ok.Click += (_, _) => Commit();
-            targetList.MouseDoubleClick += (_, _) => Commit();
+                var longText = longForm.Text.Trim();
+                if (longText.Length == 0)
+                    return; // nothing to mark — keep the dialog open
+                var chosen = (category.SelectedItem as CategoryItem)?.Value ?? CitationCategory.Cases;
+                result = new Citation(longText, chosen, shortForm.Text.Trim());
+                dialog.DialogResult = true;
+            };
 
             var buttons = new System.Windows.Controls.StackPanel
             {
                 Orientation = System.Windows.Controls.Orientation.Horizontal,
                 HorizontalAlignment = HorizontalAlignment.Right,
-                Margin = new Thickness(0, 12, 0, 0)
+                Margin = new Thickness(0, 4, 0, 0)
             };
             buttons.Children.Add(ok);
             buttons.Children.Add(cancel);
 
-            var lists = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal };
-            var typeColumn = new System.Windows.Controls.StackPanel { Margin = new Thickness(0, 0, 12, 0) };
-            typeColumn.Children.Add(new System.Windows.Controls.TextBlock { Text = "Reference type:", Margin = new Thickness(0, 0, 0, 4) });
-            typeColumn.Children.Add(typeList);
-            var targetColumn = new System.Windows.Controls.StackPanel();
-            targetColumn.Children.Add(new System.Windows.Controls.TextBlock { Text = "Insert reference to:", Margin = new Thickness(0, 0, 0, 4) });
-            targetColumn.Children.Add(targetList);
-            lists.Children.Add(typeColumn);
-            lists.Children.Add(targetColumn);
-
             var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
-            panel.Children.Add(lists);
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Category:", Margin = new Thickness(0, 0, 0, 4) });
+            panel.Children.Add(category);
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Selected text (long citation):", Margin = new Thickness(0, 0, 0, 4) });
+            panel.Children.Add(longForm);
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Short citation (optional):", Margin = new Thickness(0, 0, 0, 4) });
+            panel.Children.Add(shortForm);
             panel.Children.Add(buttons);
             dialog.Content = panel;
 
+            longForm.Focus();
+            longForm.SelectAll();
             return dialog.ShowDialog() == true ? result : null;
+        }
+
+        // Wraps a CitationCategory so the combo shows Word's friendly heading text (e.g. "Other Authorities").
+        private sealed record CategoryItem(CitationCategory Value)
+        {
+            public override string ToString() => TableOfAuthorities.CategoryHeading(Value);
         }
     }
 
@@ -1994,6 +2668,18 @@ internal static class FreeWRibbonCommands
 
             editor.Focus();
             editor.InsertText(part.Text);
+        }
+    }
+
+    // Insert > Quick Parts > Building Blocks Organizer: open a modal organizer over the shared snippet
+    // library, listing every saved building block (name + gallery/category) with a preview, and offering
+    // Insert (drops the block at the caret) and Delete (removes it from the persisted library).
+    private sealed class BuildingBlocksOrganizerCommand(DocumentView editor, QuickPartLibrary library) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            BuildingBlocksOrganizerDialog.Show(Window.GetWindow(editor), editor, library);
         }
     }
 
@@ -2580,6 +3266,118 @@ internal static class FreeWRibbonCommands
         }
     }
 
+    // Design > Page Background > Page Color (Word's Page Color): pick the whole-page background colour from
+    // a theme-style swatch palette, clear it with "No Color", or open "More Colours…" to type a hex value.
+    // The chosen value sets the model's page BackgroundColorHex through DocumentView.SetPageColor (commit +
+    // re-render via ApplyPageSettings); it already round-trips as w:background in docx. Mirrors the swatch
+    // picker used by Cell Shading / Paragraph Shading.
+    private sealed class PageColorCommand(DocumentView editor) : IRibbonCommand
+    {
+        // Word's "Theme Colors" top row plus standard colours — a sensible page-tint palette.
+        private static readonly string[] Palette =
+        [
+            "#FFFFFF", "#F2F2F2", "#DDD9C3", "#C6D9F1", "#DBE5F1", "#F2DCDB",
+            "#EBF1DE", "#E5E0EC", "#FDE9D9", "#FFF2CC", "#DEEBF7", "#E2EFDA",
+            "#FCE4D6", "#D9E1F2", "#FFFFCC", "#E2F0D9", "#000000", "#1F1F1F",
+        ];
+
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var owner = Window.GetWindow(editor);
+            var (chosen, hex) = ShowPicker(owner);
+            if (!chosen)
+                return; // cancelled — leave the model untouched
+            editor.Focus();
+            editor.SetPageColor(hex); // null clears back to the default white sheet
+        }
+
+        private (bool Chosen, string? Hex) ShowPicker(Window? owner)
+        {
+            var chosen = false;
+            string? hex = null;
+            var window = new Window
+            {
+                Title = "Page Color",
+                SizeToContent = SizeToContent.WidthAndHeight,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = owner is null
+                    ? WindowStartupLocation.CenterScreen
+                    : WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ShowInTaskbar = false
+            };
+
+            var panel = new StackPanel { Margin = new Thickness(8) };
+            var grid = new WrapPanel { Width = 6 * 26 };
+            foreach (var swatchHex in Palette)
+            {
+                var swatch = new Button
+                {
+                    Width = 22,
+                    Height = 22,
+                    Margin = new Thickness(2),
+                    Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(swatchHex)),
+                    BorderBrush = new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80)),
+                    BorderThickness = new Thickness(1),
+                    ToolTip = swatchHex
+                };
+                swatch.Click += (_, _) => { chosen = true; hex = swatchHex; window.Close(); };
+                grid.Children.Add(swatch);
+            }
+            panel.Children.Add(grid);
+
+            var noColor = new Button
+            {
+                Content = "No Color",
+                Margin = new Thickness(2, 6, 2, 0),
+                Padding = new Thickness(8, 2, 8, 2)
+            };
+            noColor.Click += (_, _) => { chosen = true; hex = null; window.Close(); };
+            panel.Children.Add(noColor);
+
+            var more = new Button
+            {
+                Content = "More Colors…",
+                Margin = new Thickness(2, 4, 2, 0),
+                Padding = new Thickness(8, 2, 8, 2)
+            };
+            more.Click += (_, _) =>
+            {
+                var seed = editor.Model.Page.BackgroundColorHex ?? "#";
+                var typed = TextPrompt.Ask(window, "More Colors", "Hex colour (e.g. #FFCC00):", seed);
+                if (typed is null)
+                    return; // stay on the palette
+                var normalized = NormalizeHex(typed);
+                if (normalized is null)
+                {
+                    DialogMessageHelper.ShowWarning(window, "Enter a colour as a 6-digit hex value, e.g. #FFCC00.", "Page Color");
+                    return;
+                }
+                chosen = true; hex = normalized; window.Close();
+            };
+            panel.Children.Add(more);
+
+            window.Content = panel;
+            window.ShowDialog();
+            return (chosen, hex);
+        }
+
+        // Accept "#RRGGBB" / "RRGGBB" (case-insensitive); return a normalised "#RRGGBB" or null if invalid.
+        private static string? NormalizeHex(string raw)
+        {
+            var value = raw.Trim().TrimStart('#');
+            if (value.Length != 6)
+                return null;
+            foreach (var c in value)
+            {
+                if (!Uri.IsHexDigit(c))
+                    return null;
+            }
+            return "#" + value.ToUpperInvariant();
+        }
+    }
+
     // Insert > Header & Footer > Page Number: drop a centered page-number field into the footer.
     private sealed class InsertPageNumberCommand(DocumentView editor) : IRibbonCommand
     {
@@ -2606,36 +3404,51 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // Insert > Field: open a small picker listing the document field kinds (Date, Time, File Name,
-    // Author, Number of Pages, Page Number) and drop the chosen field run at the caret.
+    // Insert > Quick Parts > Field: open a categorised picker listing Word's common field codes and drop
+    // the chosen field at the caret as a generic complex field (w:fldChar/w:instrText), so it round-trips
+    // losslessly and supports Alt+F9 (toggle codes) / F9 (update). The picker returns the raw field
+    // instruction (e.g. " PAGE ", " DATE \@ \"M/d/yyyy\" ", " FILENAME ").
     private sealed class InsertFieldCommand(DocumentView editor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            var kind = FieldPickerDialog.Ask(Window.GetWindow(editor));
-            if (kind is not { } chosen)
+            var instruction = FieldPickerDialog.Ask(Window.GetWindow(editor));
+            if (instruction is not { } chosen)
                 return; // cancelled
-            editor.InsertField(chosen);
+            editor.InsertComplexField(chosen);
         }
     }
 
-    // A small modal dialog listing the insertable document field kinds. Returns the chosen
-    // RunFieldKind, or null if cancelled.
+    // Alt+F9: toggle whether the document's fields show their field codes or their results.
+    private sealed class ToggleFieldCodesCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context) => editor.ToggleFieldCodes();
+    }
+
+    // F9: update (recompute) every field's result in the document.
+    private sealed class UpdateFieldsCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context) => editor.UpdateFields();
+    }
+
+    // A small modal dialog listing the insertable document field codes, grouped by category (Date and
+    // Time / Document Information / Numbering). Returns the chosen raw field INSTRUCTION (e.g. " PAGE "),
+    // or null if cancelled.
     private static class FieldPickerDialog
     {
-        private sealed record Choice(string Label, RunFieldKind Kind);
+        private sealed record Choice(string Label, string Instruction);
 
-        public static RunFieldKind? Ask(Window? owner)
+        public static string? Ask(Window? owner)
         {
             var choices = new[]
             {
-                new Choice("Date", RunFieldKind.Date),
-                new Choice("Time", RunFieldKind.Time),
-                new Choice("File Name", RunFieldKind.FileName),
-                new Choice("Author", RunFieldKind.Author),
-                new Choice("Number of Pages", RunFieldKind.NumPages),
-                new Choice("Page Number", RunFieldKind.PageNumber),
+                new Choice("Date", " DATE "),
+                new Choice("Time", " TIME "),
+                new Choice("File Name", " FILENAME "),
+                new Choice("Author", " AUTHOR "),
+                new Choice("Number of Pages (NumPages)", " NUMPAGES "),
+                new Choice("Page Number (Page)", " PAGE "),
             };
 
             var list = new System.Windows.Controls.ListBox
@@ -2648,7 +3461,7 @@ internal static class FreeWRibbonCommands
                 list.Items.Add(choice.Label);
             list.SelectedIndex = 0;
 
-            RunFieldKind? result = null;
+            string? result = null;
             var dialog = new Window
             {
                 Title = "Insert Field",
@@ -2664,7 +3477,7 @@ internal static class FreeWRibbonCommands
             void Commit()
             {
                 if (list.SelectedIndex >= 0)
-                    result = choices[list.SelectedIndex].Kind;
+                    result = choices[list.SelectedIndex].Instruction;
                 dialog.DialogResult = true;
             }
             ok.Click += (_, _) => Commit();
@@ -2688,83 +3501,25 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // Layout > Sort: open the sort dialog (order + case option) and sort the selected paragraphs in
-    // place. The view reorders the paragraph blocks through its undo/redo bus and re-renders.
+    // Home > Paragraph > Sort: open the Sort dialog (type + order + case + header-row) and sort either
+    // the rows of the table at the caret (by the caret's column, matching Word) or the selected
+    // paragraphs. The view routes the reorder through its undo/redo bus and re-renders.
     private sealed class SortCommand(DocumentView editor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            var options = SortDialog.Ask(Window.GetWindow(editor));
-            if (options is null)
+            var inTable = editor.IsCaretInTable();
+            var choice = SortDialog.Prompt(Window.GetWindow(editor), forTable: inTable);
+            if (choice is null)
                 return; // cancelled
+
             editor.Focus();
-            editor.SortSelectedParagraphs(options.Value.Ascending, options.Value.CaseSensitive);
-        }
-    }
-
-    // The options captured by the sort dialog: sort direction and whether the comparison is case-sensitive.
-    private readonly record struct SortOptions(bool Ascending, bool CaseSensitive);
-
-    // A small modal dialog for Sort: A→Z / Z→A radios plus a "Case sensitive" checkbox. Returns the
-    // chosen options, or null if cancelled.
-    private static class SortDialog
-    {
-        public static SortOptions? Ask(Window? owner)
-        {
-            var ascending = new System.Windows.Controls.RadioButton
-            {
-                Content = "Ascending (A → Z)",
-                IsChecked = true,
-                Margin = new Thickness(0, 0, 0, 4)
-            };
-            var descending = new System.Windows.Controls.RadioButton
-            {
-                Content = "Descending (Z → A)",
-                Margin = new Thickness(0, 0, 0, 8)
-            };
-            var caseSensitive = new System.Windows.Controls.CheckBox
-            {
-                Content = "Case sensitive",
-                Margin = new Thickness(0, 0, 0, 12)
-            };
-
-            SortOptions? result = null;
-            var dialog = new Window
-            {
-                Title = "Sort",
-                SizeToContent = SizeToContent.WidthAndHeight,
-                ResizeMode = ResizeMode.NoResize,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                Owner = owner,
-                ShowInTaskbar = false
-            };
-
-            var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
-            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
-            ok.Click += (_, _) =>
-            {
-                result = new SortOptions(ascending.IsChecked == true, caseSensitive.IsChecked == true);
-                dialog.DialogResult = true;
-            };
-
-            var buttons = new System.Windows.Controls.StackPanel
-            {
-                Orientation = System.Windows.Controls.Orientation.Horizontal,
-                HorizontalAlignment = HorizontalAlignment.Right
-            };
-            buttons.Children.Add(ok);
-            buttons.Children.Add(cancel);
-
-            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16), MinWidth = 240 };
-            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Sort selected paragraphs by text:", Margin = new Thickness(0, 0, 0, 8) });
-            panel.Children.Add(ascending);
-            panel.Children.Add(descending);
-            panel.Children.Add(caseSensitive);
-            panel.Children.Add(buttons);
-            dialog.Content = panel;
-
-            return dialog.ShowDialog() == true ? result : null;
+            var c = choice.Value;
+            if (inTable)
+                editor.SortCaretTableRows(c.Kind, c.Ascending, c.CaseSensitive, c.HasHeaderRow);
+            else
+                editor.SortSelectedParagraphs(c.Kind, c.Ascending, c.CaseSensitive, c.HasHeaderRow);
         }
     }
 
@@ -2959,9 +3714,10 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // Applies a value chosen from a ribbon combo (font family/size) to the current selection.
-    // Insert > References > Citation Style: set the editor's active citation style from the combo box
-    // label ("APA"/"MLA"/"Chicago"). Unrecognised labels leave the current style unchanged.
+    // References > Citation Style: set the editor's active citation style from the combo box label
+    // ("APA"/"MLA"/"Chicago"/"IEEE"). The style is stored on the document (TextDocument.BibliographyStyle via
+    // DocumentView.ActiveCitationStyle) so it persists and reformats subsequently inserted in-text citations
+    // and bibliographies. Unrecognised labels leave the current style unchanged.
     private sealed class CitationStyleCommand(DocumentView editor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
@@ -2969,13 +3725,7 @@ internal static class FreeWRibbonCommands
             if (!context.Parameters.TryGetValue("value", out var raw) || raw is not string value)
                 return;
 
-            editor.ActiveCitationStyle = value.Trim().ToUpperInvariant() switch
-            {
-                "MLA" => CitationStyle.Mla,
-                "CHICAGO" => CitationStyle.Chicago,
-                "APA" => CitationStyle.Apa,
-                _ => editor.ActiveCitationStyle,
-            };
+            editor.ActiveCitationStyle = Citations.ParseStyle(value, editor.ActiveCitationStyle);
         }
     }
 

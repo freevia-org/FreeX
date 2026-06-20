@@ -1,4 +1,5 @@
 using System.Globalization;
+using FreeX.App.Presentation;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -164,14 +165,17 @@ public static class GetPivotDataFormulaPlanner
 
     private static IReadOnlyList<string> ReadPivotSourceHeaders(Workbook workbook, PivotTableModel pivotTable)
     {
-        var sourceSheet = workbook.GetSheet(pivotTable.SourceRange.Start.Sheet);
-        if (sourceSheet is null)
-            return [];
-
         var headers = new List<string>();
-        for (var col = pivotTable.SourceRange.Start.Col; col <= pivotTable.SourceRange.End.Col; col++)
-            headers.Add(PivotText(sourceSheet.GetCell(pivotTable.SourceRange.Start.Row, col)?.Value));
-        return headers;
+        var sourceSheet = workbook.GetSheet(pivotTable.SourceRange.Start.Sheet);
+        if (sourceSheet is not null)
+        {
+            for (var col = pivotTable.SourceRange.Start.Col; col <= pivotTable.SourceRange.End.Col; col++)
+                headers.Add(PivotText(sourceSheet.GetCell(pivotTable.SourceRange.Start.Row, col)?.Value));
+        }
+
+        // Fall back to the pivot cache field names when the source range did not resolve
+        // (cache-based pivot loaded from xlsx) so GETPIVOTDATA field names stay correct (Issue 123).
+        return PivotSourceHeaderResolver.Resolve(workbook, pivotTable, headers);
     }
 
     private static GridRange GetPivotMaterializedRange(Sheet sheet, PivotTableModel pivotTable)

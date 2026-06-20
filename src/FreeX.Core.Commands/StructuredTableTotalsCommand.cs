@@ -31,17 +31,19 @@ public sealed class RefreshStructuredTableTotalsCommand : IWorkbookCommand
 
         _previousCells.Clear();
         var totalsRow = table.Range.End.Row;
+        var affectedCells = new List<CellAddress>(table.Columns.Count);
         for (var index = 0; index < table.Columns.Count; index++)
         {
             var address = new CellAddress(_sheetId, totalsRow, table.Range.Start.Col + (uint)index);
+            affectedCells.Add(address);
             _previousCells[address] = sheet.GetCell(address.Row, address.Col)?.Clone();
-            if (ResolveTotalsValue(sheet, table, table.Columns[index], index) is { } value)
-                sheet.SetCell(address, value);
+            if (ResolveTotalsCell(sheet, table, table.Columns[index], index) is { } cell)
+                sheet.SetCell(address, cell);
             else
                 sheet.SetCell(address, BlankValue.Instance);
         }
 
-        return new CommandOutcome(true);
+        return new CommandOutcome(true, AffectedCells: affectedCells);
     }
 
     public void Revert(ICommandContext ctx)
@@ -60,35 +62,35 @@ public sealed class RefreshStructuredTableTotalsCommand : IWorkbookCommand
         _previousCells.Clear();
     }
 
-    private static ScalarValue? ResolveTotalsValue(
+    private static Cell? ResolveTotalsCell(
         Sheet sheet,
         StructuredTableModel table,
         StructuredTableColumnModel column,
         int columnIndex)
     {
         if (!string.IsNullOrWhiteSpace(column.TotalsRowLabel))
-            return new TextValue(column.TotalsRowLabel);
+            return Cell.FromValue(new TextValue(column.TotalsRowLabel));
         if (!string.IsNullOrWhiteSpace(column.TotalsRowFormula))
-            return new TextValue(column.TotalsRowFormula);
+            return Cell.FromFormula(column.TotalsRowFormula);
         if (string.IsNullOrWhiteSpace(column.TotalsRowFunction))
             return null;
 
         var function = column.TotalsRowFunction.Trim();
         if (string.Equals(function, "count", StringComparison.OrdinalIgnoreCase))
-            return new NumberValue(CountNonBlankColumnValues(sheet, table, columnIndex));
+            return Cell.FromValue(new NumberValue(CountNonBlankColumnValues(sheet, table, columnIndex)));
 
         var aggregate = CalculateColumnNumbers(sheet, table, columnIndex);
         if (string.Equals(function, "sum", StringComparison.OrdinalIgnoreCase))
-            return new NumberValue(aggregate.Sum);
+            return Cell.FromValue(new NumberValue(aggregate.Sum));
         if (string.Equals(function, "average", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(function, "avg", StringComparison.OrdinalIgnoreCase))
-            return new NumberValue(aggregate.Count == 0 ? 0 : aggregate.Sum / aggregate.Count);
+            return Cell.FromValue(new NumberValue(aggregate.Count == 0 ? 0 : aggregate.Sum / aggregate.Count));
         if (string.Equals(function, "countnums", StringComparison.OrdinalIgnoreCase))
-            return new NumberValue(aggregate.Count);
+            return Cell.FromValue(new NumberValue(aggregate.Count));
         if (string.Equals(function, "min", StringComparison.OrdinalIgnoreCase))
-            return new NumberValue(aggregate.Count == 0 ? 0 : aggregate.Min);
+            return Cell.FromValue(new NumberValue(aggregate.Count == 0 ? 0 : aggregate.Min));
         if (string.Equals(function, "max", StringComparison.OrdinalIgnoreCase))
-            return new NumberValue(aggregate.Count == 0 ? 0 : aggregate.Max);
+            return Cell.FromValue(new NumberValue(aggregate.Count == 0 ? 0 : aggregate.Max));
 
         return null;
     }

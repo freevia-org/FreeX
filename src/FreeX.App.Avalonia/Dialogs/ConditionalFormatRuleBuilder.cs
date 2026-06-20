@@ -1,5 +1,6 @@
 using System.Globalization;
 
+using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.Dialogs;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -48,18 +49,20 @@ public static class ConditionalFormatRuleBuilder
 
             case CfRuleType.CellValue:
                 cf.Operator = input.Operator;
-                cf.Value1 = NullIfBlank(input.Value1);
-                cf.Value2 = NullIfBlank(input.Value2);
+                cf.Value1 = ConditionalFormatInputParser.BlankToNull(input.Value1);
+                cf.Value2 = ConditionalFormatInputParser.BlankToNull(input.Value2);
                 break;
 
             case CfRuleType.Top10:
                 cf.TopBottomPercent = input.IsPercent;
+                // For Top 10 rules the model reuses AboveAverage to record top (true) vs bottom (false).
+                cf.AboveAverage = input.IsTop;
                 if (int.TryParse((input.Rank ?? string.Empty).Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var rank))
                     cf.TopBottomRank = rank;
                 break;
 
             case CfRuleType.IconSet:
-                cf.IconSetStyle = NullIfBlank(input.IconSetStyle) ?? ConditionalFormatIconSetCatalog.DefaultStyle;
+                cf.IconSetStyle = ConditionalFormatInputParser.BlankToNull(input.IconSetStyle) ?? ConditionalFormatIconSetCatalog.DefaultStyle;
                 cf.IconSetShowValue = true;
                 cf.IconSetReverse = false;
                 cf.IconSetThresholds.Clear();
@@ -73,11 +76,11 @@ public static class ConditionalFormatRuleBuilder
 
             case CfRuleType.ColorScale:
                 cf.UseThreeColorScale = input.UseThreeColorScale;
-                if (TryParseRgb(input.MinColor, out var minColor))
+                if (ConditionalFormatInputParser.TryParseRgbColor(input.MinColor, out var minColor))
                     cf.MinColor = minColor;
-                if (input.UseThreeColorScale && TryParseRgb(input.MidColor, out var midColor))
+                if (input.UseThreeColorScale && ConditionalFormatInputParser.TryParseRgbColor(input.MidColor, out var midColor))
                     cf.MidColor = midColor;
-                if (TryParseRgb(input.MaxColor, out var maxColor))
+                if (ConditionalFormatInputParser.TryParseRgbColor(input.MaxColor, out var maxColor))
                     cf.MaxColor = maxColor;
                 break;
 
@@ -85,11 +88,11 @@ public static class ConditionalFormatRuleBuilder
             case CfRuleType.NotContainsText:
             case CfRuleType.BeginsWith:
             case CfRuleType.EndsWith:
-                cf.TextRuleText = NullIfBlank(input.Text);
+                cf.TextRuleText = ConditionalFormatInputParser.BlankToNull(input.Text);
                 break;
 
             case CfRuleType.DateOccurring:
-                cf.DateOccurringPeriod = NullIfBlank(input.Text);
+                cf.DateOccurringPeriod = ConditionalFormatInputParser.BlankToNull(input.Text);
                 break;
 
             case CfRuleType.DuplicateValues:
@@ -134,26 +137,6 @@ public static class ConditionalFormatRuleBuilder
 
         var rule = Build(input, range, highlight, id);
         return CfRuleCommandResult.Ok(rule, ToApplyCommand(sheetId, rule));
-    }
-
-    private static string? NullIfBlank(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
-
-    private static bool TryParseRgb(string? text, out RgbColor color)
-    {
-        color = default;
-        if (string.IsNullOrWhiteSpace(text))
-            return false;
-
-        var parts = text.Trim().Split(',', StringSplitOptions.TrimEntries);
-        if (parts.Length != 3
-            || !byte.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var r)
-            || !byte.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var g)
-            || !byte.TryParse(parts[2], NumberStyles.Integer, CultureInfo.InvariantCulture, out var b))
-            return false;
-
-        color = new RgbColor(r, g, b);
-        return true;
     }
 }
 
@@ -222,60 +205,4 @@ public sealed record ConditionalFormatHighlightPreset(
 
     /// <summary>The default highlight (Light Red Fill with Dark Red Text), matching Excel.</summary>
     public static ConditionalFormatHighlightPreset Default => Presets[0];
-}
-
-/// <summary>
-/// Portable list of icon-set styles and their default per-bucket thresholds, mirroring the styles the
-/// Windows host's <c>ConditionalFormatIconSetPlanner</c> offers. Kept self-contained so the Avalonia
-/// editor does not depend on the WPF host project.
-/// </summary>
-public static class ConditionalFormatIconSetCatalog
-{
-    /// <summary>The default style applied when none is chosen.</summary>
-    public const string DefaultStyle = "3TrafficLights1";
-
-    /// <summary>Available icon-set styles paired with their icon (bucket) count, in gallery order.</summary>
-    public static IReadOnlyList<(string Style, int IconCount)> Styles { get; } =
-    [
-        ("3Arrows", 3),
-        ("3ArrowsGray", 3),
-        ("4Arrows", 4),
-        ("4ArrowsGray", 4),
-        ("5Arrows", 5),
-        ("5ArrowsGray", 5),
-        ("3TrafficLights1", 3),
-        ("3TrafficLights2", 3),
-        ("3Signs", 3),
-        ("3Symbols", 3),
-        ("3Symbols2", 3),
-        ("3Flags", 3),
-        ("4TrafficLights", 4),
-        ("4RedToBlack", 4),
-        ("4Rating", 4),
-        ("5Rating", 5),
-        ("5Quarters", 5),
-        ("5Boxes", 5),
-    ];
-
-    /// <summary>The icon (bucket) count for a style, defaulting to 3 for unknown styles.</summary>
-    public static int GetIconCount(string? style)
-    {
-        foreach (var (candidate, count) in Styles)
-            if (string.Equals(candidate, style, StringComparison.Ordinal))
-                return count;
-
-        return 3;
-    }
-
-    /// <summary>The default evenly spaced percent thresholds for a style's bucket count.</summary>
-    public static IReadOnlyList<CfThresholdModel> CreateThresholds(string? style)
-    {
-        var iconCount = GetIconCount(style);
-        var step = 100 / iconCount;
-        return Enumerable.Range(0, iconCount)
-            .Select(index => new CfThresholdModel(
-                CfThresholdType.Percent,
-                (index * step).ToString(CultureInfo.InvariantCulture)))
-            .ToList();
-    }
 }

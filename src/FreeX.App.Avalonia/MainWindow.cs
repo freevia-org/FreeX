@@ -12,6 +12,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using System.Globalization;
+using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Services;
 using FreeX.App.Services.Ribbon;
 using FreeX.App.Services.Updates;
@@ -160,6 +161,17 @@ public sealed partial class MainWindow : Window
         TextBox InputBox,
         Button AcceptButton,
         Button CancelButton);
+    private sealed record GoToDialogSmokeProbe(
+        Window Dialog,
+        ListBox HistoryList,
+        TextBox InputBox,
+        Button SpecialButton,
+        Button AcceptButton,
+        Button CancelButton);
+    private sealed record GoToDialogResult(
+        string? Reference,
+        GoToSpecialKind? SpecialKind,
+        GoToSpecialOptions? SpecialOptions);
     private sealed record GoToSpecialDialogSmokeProbe(
         Window Dialog,
         ComboBox KindBox,
@@ -240,16 +252,8 @@ public sealed partial class MainWindow : Window
         CellBorderPreset? BorderPreset,
         BorderStyle BorderStyle,
         CellColor? BorderColor);
-    private sealed record FormatCellsNumberFormatChoice(string Category, string FormatCode, string Preview)
-    {
-        public override string ToString() => FormatCode;
-    }
     private sealed record FormatCellsNullableChoice<T>(string Label, T? Value)
         where T : struct
-    {
-        public override string ToString() => Label;
-    }
-    private sealed record FormatCellsColorChoice(string Label, CellColor? Color, bool Clear)
     {
         public override string ToString() => Label;
     }
@@ -329,6 +333,7 @@ public sealed partial class MainWindow : Window
     private readonly WorkbookSaveService _saveService = new();
     private readonly IWorkbookShareSheetService _workbookShareSheetService;
     private readonly IWorkbookFileAccessService _workbookFileAccessService;
+    private readonly IPlatformPrinter _platformPrinter;
     private readonly RecentFilesStore _recentFiles = RecentFilesStore.Load();
     private readonly ContentControl _sheetGridHost = new();
     private readonly ContentControl _sheetTabsHost = new();
@@ -368,6 +373,7 @@ public sealed partial class MainWindow : Window
     private readonly MenuItem _fillRightFlyoutItem = new();
     private readonly MenuItem _fillUpFlyoutItem = new();
     private readonly MenuItem _fillLeftFlyoutItem = new();
+    private readonly MenuItem _fillSeriesFlyoutItem = new();
     private readonly DropDownButton _clearButton = new();
     private readonly MenuItem _clearAllFlyoutItem = new();
     private readonly MenuItem _clearFormatsFlyoutItem = new();
@@ -407,8 +413,13 @@ public sealed partial class MainWindow : Window
     private readonly NativeMenuItem _saveMenuItem = new();
     private readonly NativeMenuItem _saveAsMenuItem = new();
     private readonly NativeMenuItem _exportPdfMenuItem = new();
+    private readonly NativeMenuItem _printMenuItem = new();
+    private readonly NativeMenuItem _backstageExportMenuItem = new();
+    private readonly NativeMenuItem _backstageInfoMenuItem = new();
+    private readonly NativeMenuItem _backstageAccountMenuItem = new();
     private readonly NativeMenuItem _shareWorkbookMenuItem = new();
     private readonly NativeMenuItem _workbookStatisticsMenuItem = new();
+    private readonly NativeMenuItem _optionsMenuItem = new();
     private readonly NativeMenuItem _closeWorkbookMenuItem = new();
     private readonly NativeMenuItem _newSheetMenuItem = new();
     private readonly NativeMenuItem _renameSheetMenuItem = new();
@@ -489,6 +500,7 @@ public sealed partial class MainWindow : Window
     private readonly NativeMenuItem _fillRightMenuItem = new();
     private readonly NativeMenuItem _fillUpMenuItem = new();
     private readonly NativeMenuItem _fillLeftMenuItem = new();
+    private readonly NativeMenuItem _fillSeriesMenuItem = new();
     private readonly NativeMenuItem _clearMenuItem = new();
     private readonly NativeMenuItem _clearAllMenuItem = new();
     private readonly NativeMenuItem _clearFormatsMenuItem = new();
@@ -557,6 +569,7 @@ public sealed partial class MainWindow : Window
     private readonly NativeMenuItem _quitMenuItem = new();
     private NativeMenu? _nativeMenu;
     private WorkbookSession _session;
+    private readonly RecentColorsStore _recentColors = new();
     private MacOsLaunchSmokeDialogSnapshot _launchSmokeDialogEvidence = MacOsLaunchSmokeDialogSnapshot.Empty;
     private ComboBox? _activeDataValidationDropdown;
     private IReadOnlyDictionary<(uint Row, uint Col), (IReadOnlyList<double> Values, SparklineKind Kind)> _sparklinesByCell =
@@ -570,27 +583,43 @@ public sealed partial class MainWindow : Window
     private SelectionPaneObjectKind? _selectedDrawingObjectKind;
     private Guid? _selectedDrawingObjectId;
     private readonly AvaloniaRibbonContextSource _ribbonContextSource = new();
+    private Action? _refreshRibbonToggleStates;
 
     public MainWindow(IReadOnlyList<string> startupArguments)
         : this(
             startupArguments,
             WorkbookShareSheetServiceFactory.Create(WorkbookShareSheetLabel),
-            WorkbookFileAccessServiceFactory.Create(App.Diagnostics))
+            WorkbookFileAccessServiceFactory.Create(App.Diagnostics),
+            new CupsPlatformPrinter())
     {
     }
 
     internal MainWindow(
         IReadOnlyList<string> startupArguments,
         IWorkbookShareSheetService workbookShareSheetService,
-        IWorkbookFileAccessService workbookFileAccessService)
+        IWorkbookFileAccessService workbookFileAccessService,
+        IPlatformPrinter platformPrinter)
     {
         ArgumentNullException.ThrowIfNull(workbookShareSheetService);
         ArgumentNullException.ThrowIfNull(workbookFileAccessService);
+        ArgumentNullException.ThrowIfNull(platformPrinter);
 
         _workbookShareSheetService = workbookShareSheetService;
         _workbookFileAccessService = workbookFileAccessService;
-        var source = new StartupWorkbookLoader().Load(startupArguments);
-        _session = _sessionFactory.Create(source, InitialViewportHeight, InitialViewportWidth, includeObjects: true);
+        _platformPrinter = platformPrinter;
+        // The headless --parity-capture mode renders the fixed parity demo workbook (the same content the WPF
+        // host adopts) so the cross-platform grid.demo comparison reflects only rendering differences, not the
+        // built-in macOS-preview demo. Every other startup path keeps the normal loader/fallback behavior.
+        StartupWorkbookLoadResult? source = null;
+        if (App.ParityCaptureOptions is not null)
+        {
+            _session = _sessionFactory.CreateParityDemo(InitialViewportHeight, InitialViewportWidth, includeObjects: true);
+        }
+        else
+        {
+            source = new StartupWorkbookLoader().Load(startupArguments);
+            _session = _sessionFactory.Create(source, InitialViewportHeight, InitialViewportWidth, includeObjects: true);
+        }
 
         Title = $"FreeX - {_session.DisplayName}";
         Width = 1120;
@@ -600,7 +629,8 @@ public sealed partial class MainWindow : Window
         Background = WindowBackground;
         Content = BuildContent();
         ConfigureNativeMenu();
-        RecordStartupRecentWorkbook(source);
+        if (source is not null)
+            RecordStartupRecentWorkbook(source);
         ConfigureWorkbookDropTarget();
         KeyDown += MainWindow_KeyDown;
         TextInput += MainWindow_TextInput;
@@ -666,12 +696,15 @@ public sealed partial class MainWindow : Window
                     ["formulas.nameManager"] = NameManager,
                     ["formulas.defineName"] = DefineName,
                     ["formulas.createFromSelection"] = CreateNamesFromSelection,
+                    ["Use in Formula"] = PasteNames,
                     // Review tab.
                     ["review.spelling"] = () => _ = ShowSpellingDialogAsync(),
                     ["review.checkAccessibility"] = () => _ = ShowReviewSummaryDialogAsync(focusAccessibility: true),
                     ["review.protectSheet"] = () => _ = ShowProtectSheetDialogAsync(),
                     ["review.protectWorkbook"] = () => _ = ShowProtectWorkbookDialogAsync(),
+                    ["Allow Users to Edit Ranges"] = AllowEditRanges,
                     // View tab.
+                    ["Custom Views"] = () => RunGuarded(OpenCustomViewsDialogAsync),
                     ["view.gridlines"] = ToggleShowGridlines,
                     ["view.headings"] = ToggleShowHeadings,
                     ["view.zoom"] = ZoomIn,
@@ -693,8 +726,10 @@ public sealed partial class MainWindow : Window
                     ["data.reapply"] = ReapplyCurrentFilterSort,
                     ["data.circleInvalid"] = CircleInvalidData,
                     ["data.clearCircles"] = ClearValidationCircles,
-                    ["data.getData"] = GetDataNotSupported,
-                    ["data.refresh"] = RefreshAllNotSupported,
+                    ["data.getData"] = GetDataFromText,
+                    // Data ▸ Connections ▸ Refresh All: re-import the remembered file source in place; with
+                    // no remembered source there is nothing to refresh (no external DB/web connection engine).
+                    ["data.refresh"] = RefreshImportedData,
                     // Page Layout sheet options (view + print) and Review ▸ Show Notes.
                     ["pageLayout.gridlines"] = () => _ = ShowGridlinesSheetOptionsAsync(),
                     ["pageLayout.headings"] = () => _ = ShowHeadingsSheetOptionsAsync(),
@@ -704,17 +739,109 @@ public sealed partial class MainWindow : Window
                     // View ▸ Window group (multi-window).
                     ["view.newWindow"] = NewWindow,
                     ["view.arrangeAll"] = ArrangeAllWindows,
+                    // View ▸ Window ▸ Arrange All submenu (canonical menu ids from the shared ribbon
+                    // definition). Each positions every visible window via the shared layout planner.
+                    ["Tiled"] = () => ArrangeAllWindows(WorkbookWindowArrangement.Tiled),
+                    ["Horizontal#ArrangeAllMenuItem_Click"] = () => ArrangeAllWindows(WorkbookWindowArrangement.Horizontal),
+                    ["Vertical"] = () => ArrangeAllWindows(WorkbookWindowArrangement.Vertical),
+                    ["Cascade"] = () => ArrangeAllWindows(WorkbookWindowArrangement.Cascade),
                     ["view.hide"] = HideActiveWindow,
                     // Review proofing (built-in thesaurus / offline-honest translate) + Insert equation/object.
                     ["review.thesaurus"] = () => _ = ShowThesaurusDialogAsync(),
                     ["review.translate"] = () => _ = ShowTranslateDialogAsync(),
                     ["insert.equation"] = () => _ = ShowEquationDialogAsync(),
-                    ["insert.object"] = ShowInsertObjectUnsupported,
+                    ["insert.object"] = () => _ = ShowInsertObjectDialogAsync(),
                     // Home tab (Editing group).
                     ["home.autoSum"] = () => InsertAutoSumFormula("SUM"),
                     ["home.fillDown"] = () => FillSelectedRange(FillCellsDirection.Down),
                     ["home.clear"] = ClearSelectedRangeContents,
                     ["home.findSelect"] = () => _ = ShowFindDialogAsync(),
+                    // Home ▸ Editing ▸ Fill dropdown items (canonical menu ids from HomeRibbonMenus.Fill).
+                    // The split-button face is wired above (home.fillDown); these are its menu entries, which
+                    // otherwise stay on the NoOp seed. "Flash Fill" shares its canonical id with data.flashFill
+                    // (already wired), so it is not repeated here.
+                    ["Down"] = () => FillSelectedRange(FillCellsDirection.Down),
+                    ["Right"] = () => FillSelectedRange(FillCellsDirection.Right),
+                    ["Up"] = () => FillSelectedRange(FillCellsDirection.Up),
+                    ["Left"] = () => FillSelectedRange(FillCellsDirection.Left),
+                    ["Series"] = FillSeries,
+                    // Home ▸ Editing ▸ Clear dropdown items (canonical menu ids from HomeRibbonMenus.Clear).
+                    ["Clear All"] = ClearSelectedRangeAll,
+                    ["Clear Formats"] = ClearSelectedRangeFormats,
+                    ["Clear Contents"] = ClearSelectedRangeContents,
+                    ["Clear Comments and Notes"] = ClearSelectedRangeComments,
+                    ["Clear Hyperlinks"] = ClearSelectedRangeHyperlinks,
+                    // Home ▸ Editing ▸ AutoSum dropdown items (canonical ids from HomeRibbonMenus.AutoSum; the
+                    // Formulas-tab AutoSum picker shares these ids, so this covers both). Split-button face is
+                    // wired above (home.autoSum). Mirrors the native AutoSum submenu handlers.
+                    ["Sum"] = () => InsertAutoSumFormula("SUM"),
+                    ["Average"] = () => InsertAutoSumFormula("AVERAGE"),
+                    ["Count Numbers"] = () => InsertAutoSumFormula("COUNT"),
+                    ["Count All"] = () => InsertAutoSumFormula("COUNTA"),
+                    ["Max"] = () => InsertAutoSumFormula("MAX"),
+                    ["Min"] = () => InsertAutoSumFormula("MIN"),
+                    ["More Functions"] = InsertFunction,
+                    // Home ▸ Editing ▸ Find & Select dropdown items (canonical ids from HomeRibbonMenus.FindSelect).
+                    // Split-button face is wired above (home.findSelect). "Conditional Formatting" is intentionally
+                    // omitted: its canonical id is shared with the already-wired Home ▸ Conditional button.
+                    ["Find"] = () => _ = ShowFindDialogAsync(),
+                    ["Replace"] = () => _ = ShowReplaceDialogAsync(),
+                    ["Go To"] = () => _ = ShowGoToDialogAsync(),
+                    ["Go To Special"] = () => _ = ShowGoToSpecialDialogAsync(),
+                    ["Formulas"] = () => SelectGoToSpecial(GoToSpecialKind.Formulas),
+                    ["Notes"] = () => SelectGoToSpecial(GoToSpecialKind.Comments),
+                    ["Constants"] = () => SelectGoToSpecial(GoToSpecialKind.Constants),
+                    ["Data Validation"] = () => SelectGoToSpecial(GoToSpecialKind.DataValidation),
+                    ["Select Objects"] = () => SelectGoToSpecial(GoToSpecialKind.Objects),
+                    ["Selection Pane"] = () => RunGuarded(OpenSelectionPaneDialogAsync),
+                    // Home ▸ Font ▸ Borders dropdown items (canonical ids from HomeRibbonMenus.Borders). The
+                    // single-edge/inside presets map to CellBorderPreset; "More Borders" opens Format Cells
+                    // (Borders tab). All/Outside/No Border are wired above. Exotic thick/double/draw variants
+                    // stay on the NoOp seed until they have modeled presets.
+                    ["Inside Borders"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.Inside),
+                    ["Top Border"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.Top),
+                    ["Bottom Border"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.Bottom),
+                    ["Left Border"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.Left),
+                    ["Right Border"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.Right),
+                    ["More Borders"] = () => _ = ShowFormatCellsDialogAsync(),
+                    // Home ▸ Font ▸ Orientation dropdown items (canonical ids from HomeRibbonMenus.Orientation).
+                    // Same rotation values as the native Format ▸ Orientation flyout.
+                    ["Horizontal"] = () => ApplySelectedRangeTextRotation(0, "Set horizontal text for", "Horizontal Text failed."),
+                    ["Angle Counterclockwise"] = () => ApplySelectedRangeTextRotation(45, "Angled text counterclockwise for", "Angle Counterclockwise failed."),
+                    ["Angle Clockwise"] = () => ApplySelectedRangeTextRotation(-45, "Angled text clockwise for", "Angle Clockwise failed."),
+                    ["Vertical Text"] = () => ApplySelectedRangeTextRotation(255, "Set vertical text for", "Vertical Text failed."),
+                    ["Rotate Text Up"] = () => ApplySelectedRangeTextRotation(90, "Rotated text up for", "Rotate Text Up failed."),
+                    ["Rotate Text Down"] = () => ApplySelectedRangeTextRotation(-90, "Rotated text down for", "Rotate Text Down failed."),
+                    // Home ▸ Cells ▸ Insert / Delete / Format dropdown items that map to existing handlers
+                    // (canonical ids from HomeRibbonMenus.Insert/Delete/Format). The lock-cell item stays NoOp
+                    // until that operation exists in the shell.
+                    ["Insert Cells"] = () => _ = ShowInsertCellsDialogAsync(),
+                    ["Insert Sheet"] = AddNewSheet,
+                    ["Delete Cells"] = () => _ = ShowDeleteCellsDialogAsync(),
+                    ["Format Cells"] = () => _ = ShowFormatCellsDialogAsync(),
+                    // Home ▸ Cells ▸ Format ▸ Row Height / Column Width / AutoFit (ids from HomeRibbonMenus.Format)
+                    // → shared Set{Row,Column} commands + AutoFitSizingService on the current selection.
+                    ["Row Height"] = () => _ = ShowRowHeightDialogAsync(),
+                    ["AutoFit Row Height"] = AutoFitSelectedRowHeight,
+                    ["Column Width"] = () => _ = ShowColumnWidthDialogAsync(),
+                    ["AutoFit Column Width"] = AutoFitSelectedColumnWidth,
+                    // Home ▸ Cells ▸ Format ▸ Hide & Unhide (ids from HomeRibbonMenus.Format) → shared
+                    // Set{Rows,Columns}HiddenCommand on the current selection.
+                    ["Hide Rows"] = HideSelectedRows,
+                    ["Unhide Rows"] = UnhideSelectedRows,
+                    ["Hide Columns"] = HideSelectedColumns,
+                    ["Unhide Columns"] = UnhideSelectedColumns,
+                    ["Protect Sheet"] = () => _ = ShowProtectSheetDialogAsync(),
+                    ["Unhide Sheet"] = () => _ = UnhideSheetAsync(),
+                    // Home ▸ Styles ▸ Conditional Formatting dropdown items backed by existing presets/handlers
+                    // (canonical ids from HomeRibbonMenus.ConditionalFormatting). The remaining Highlight/Top-Bottom/
+                    // Icon-Set variants stay NoOp until their presets exist.
+                    ["New Rule"] = () => _ = ShowConditionalFormatNewRuleDialogAsync(),
+                    ["Clear Rules"] = ClearConditionalFormatsFromSelection,
+                    ["Data Bars"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.DataBar),
+                    ["Color Scales"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.ColorScale),
+                    ["Greater Than"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.HighlightGreaterThan),
+                    ["Top 10 Items"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.Top10),
                     // Insert tab (Links / Text groups).
                     ["insert.hyperlink"] = () => _ = ShowInsertHyperlinkDialogAsync(),
                     // Home Font group (added buttons).
@@ -765,13 +892,17 @@ public sealed partial class MainWindow : Window
                     // Dropdown parent buttons apply a sensible default (their menu items remain individually wired).
                     ["home.borders"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.All),
                     ["home.accounting"] = ApplySelectedRangeCurrencyFormat,
+                    ["Accounting Number Format US Dollar"] = () => ApplySelectedRangeAccountingFormat("$"),
+                    ["Accounting Number Format Euro"] = () => ApplySelectedRangeAccountingFormat("\u20AC"),
+                    ["Accounting Number Format British Pound"] = () => ApplySelectedRangeAccountingFormat("\u00A3"),
+                    ["Accounting Number Format Japanese Yen"] = () => ApplySelectedRangeAccountingFormat("\u00A5"),
                     ["home.fontColor"] = () => ApplySelectedRangeFontColor(new CellColor(0, 0, 0)),
                     ["home.fillColor"] = () => ApplySelectedRangeFillColor(new CellColor(255, 235, 132)),
                     ["home.numberFormat"] = () => _ = ShowFormatCellsDialogAsync(),
                     // Page Layout buttons covered by the Page Setup dialog.
                     ["pageLayout.printArea"] = () => _ = ShowPageSetupDialogAsync(),
                     ["pageLayout.printTitles"] = () => _ = ShowPageSetupDialogAsync(),
-                    ["pageLayout.breaks"] = () => _ = ShowPageSetupDialogAsync(),
+                    ["pageLayout.breaks"] = ShowPageBreaksMenu,
                     ["pageLayout.background"] = () => _ = ShowPageSetupDialogAsync(),
                     ["pageLayout.scale"] = () => _ = ShowPageSetupDialogAsync(),
                     ["pageLayout.width"] = () => _ = ShowPageSetupDialogAsync(),
@@ -779,10 +910,11 @@ public sealed partial class MainWindow : Window
                     // Review: New Note / New Comment on the active cell.
                     ["review.newNote"] = () => _ = ShowNewNoteDialogAsync(),
                     ["review.newComment"] = () => _ = ShowNewThreadedCommentDialogAsync(),
-                    // Insert: Sparklines — reuse the existing Quick-Analysis sparkline insertion.
-                    ["insert.sparklineLine"] = () => InsertQuickAnalysisSparklines(SparklineKind.Line),
-                    ["insert.sparklineColumn"] = () => InsertQuickAnalysisSparklines(SparklineKind.Column),
-                    ["insert.sparklineWinLoss"] = () => InsertQuickAnalysisSparklines(SparklineKind.WinLoss),
+                    // Insert: Sparklines — open the insert dialog (or edit, when the active cell already
+                    // anchors a sparkline) with the chosen kind preselected.
+                    ["insert.sparklineLine"] = () => InsertOrEditSparkline(SparklineKind.Line),
+                    ["insert.sparklineColumn"] = () => InsertOrEditSparkline(SparklineKind.Column),
+                    ["insert.sparklineWinLoss"] = () => InsertOrEditSparkline(SparklineKind.WinLoss),
                     // Data: Outline Group / Ungroup.
                     ["data.group"] = GroupSelectedRows,
                     ["data.ungroup"] = ClearWorksheetOutline,
@@ -800,9 +932,9 @@ public sealed partial class MainWindow : Window
                     ["insert.headerFooter"] = () => _ = ShowPageSetupDialogAsync(),
                     // Page Layout ▸ Themes (Office / Colorful / Grayscale picker).
                     ["pageLayout.themes"] = () => _ = ShowThemesGalleryAsync(),
-                    ["pageLayout.themeColors"] = () => _ = ShowThemesGalleryAsync(),
-                    ["pageLayout.themeFonts"] = () => _ = ShowThemesGalleryAsync(),
-                    ["pageLayout.themeEffects"] = () => _ = ShowThemesGalleryAsync(),
+                    ["pageLayout.themeColors"] = () => _ = ShowThemeColorsGalleryAsync(),
+                    ["pageLayout.themeFonts"] = () => _ = ShowThemeFontsGalleryAsync(),
+                    ["pageLayout.themeEffects"] = () => _ = ShowThemeEffectsGalleryAsync(),
                     // Insert ▸ Symbol.
                     ["insert.symbol"] = () => _ = ShowSymbolPickerAsync(),
                     // Insert ▸ Slicer / Timeline (field picker → AddSlicerCommand / AddTimelineCommand).
@@ -819,6 +951,184 @@ public sealed partial class MainWindow : Window
                     // Formulas ▸ Calculation group.
                     ["formulas.calcOptions"] = ToggleCalculationMode,
                     ["formulas.calcNow"] = CalculateNow,
+
+                    // ─────────────────────────────────────────────────────────────────────────────
+                    // Ribbon dropdown / split-button menu items that were inert (canonical ids never
+                    // bound, so they fell through to the NoOp seed). Each reuses an existing handler.
+                    // ─────────────────────────────────────────────────────────────────────────────
+
+                    // Home ▸ Clipboard ▸ Paste menu.
+                    ["Paste Formulas"] = () => _ = PasteSpecialClipboardTextAsync(PasteCellsMode.Formulas, default, "Formulas"),
+                    ["Transpose Paste"] = () => _ = PasteSpecialClipboardTextAsync(PasteCellsMode.All, new PasteSpecialOptions(Transpose: true), "Transpose"),
+                    ["Picture"] = () => _ = PastePictureFromClipboardAsync("Picture", linkedPicture: false),
+                    ["Linked Picture"] = () => _ = PastePictureFromClipboardAsync("Linked Picture", linkedPicture: true),
+
+                    // Home ▸ Font ▸ Borders dropdown: compound / thick / double presets.
+                    ["Thick Bottom Border"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.ThickBottom),
+                    ["Bottom Double Border"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.DoubleBottom),
+                    ["Thick Outside Borders"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.ThickOutside),
+                    ["Top and Bottom Border"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.TopAndBottom),
+                    ["Top and Thick Bottom Border"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.TopAndThickBottom),
+                    ["Top and Double Bottom Border"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.TopAndDoubleBottom),
+                    // Draw-Border-Grid / Erase Border are selection-apply equivalents of All / No Border.
+                    ["Draw Border Grid"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.All),
+                    ["Erase Border"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.NoBorder),
+
+                    // Home ▸ Number ▸ Accounting dropdown.
+                    ["More Accounting Formats"] = () => _ = ShowFormatCellsDialogAsync(),
+
+                    // Home ▸ Styles ▸ Conditional Formatting ▸ Highlight Cells Rules detail items.
+                    ["Less Than"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.HighlightLessThan),
+                    ["Between"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.HighlightBetween),
+                    ["Equal To"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.HighlightEqualTo),
+                    ["Text that Contains"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.HighlightTextContains),
+                    ["A Date Occurring"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.HighlightDateOccurring),
+                    ["Duplicate Values"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.HighlightDuplicateValues),
+
+                    // Home ▸ Styles ▸ Conditional Formatting ▸ Top/Bottom Rules detail items.
+                    ["Top 10%"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.Top10Percent),
+                    ["Bottom 10 Items"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.Bottom10Items),
+                    ["Bottom 10%"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.Bottom10Percent),
+                    ["Above Average"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.AboveAverage),
+                    ["Below Average"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.BelowAverage),
+
+                    // Home ▸ Styles ▸ Conditional Formatting ▸ Icon Sets submenu.
+                    ["3 Arrows"] = () => ApplyConditionalFormatIconSet("3Arrows"),
+                    ["3 Arrows (Gray)"] = () => ApplyConditionalFormatIconSet("3ArrowsGray"),
+                    ["4 Arrows"] = () => ApplyConditionalFormatIconSet("4Arrows"),
+                    ["4 Arrows (Gray)"] = () => ApplyConditionalFormatIconSet("4ArrowsGray"),
+                    ["5 Arrows"] = () => ApplyConditionalFormatIconSet("5Arrows"),
+                    ["5 Arrows (Gray)"] = () => ApplyConditionalFormatIconSet("5ArrowsGray"),
+                    ["3 Traffic Lights"] = () => ApplyConditionalFormatIconSet("3TrafficLights1"),
+                    ["3 Traffic Lights (Rimmed)"] = () => ApplyConditionalFormatIconSet("3TrafficLights2"),
+                    ["3 Signs"] = () => ApplyConditionalFormatIconSet("3Signs"),
+                    ["3 Symbols"] = () => ApplyConditionalFormatIconSet("3Symbols"),
+                    ["3 Symbols (Uncircled)"] = () => ApplyConditionalFormatIconSet("3Symbols2"),
+                    ["3 Flags"] = () => ApplyConditionalFormatIconSet("3Flags"),
+                    ["4 Traffic Lights"] = () => ApplyConditionalFormatIconSet("4TrafficLights"),
+                    ["4 Red To Black"] = () => ApplyConditionalFormatIconSet("4RedToBlack"),
+                    ["4 Ratings"] = () => ApplyConditionalFormatIconSet("4Rating"),
+                    ["5 Ratings"] = () => ApplyConditionalFormatIconSet("5Rating"),
+                    ["5 Quarters"] = () => ApplyConditionalFormatIconSet("5Quarters"),
+                    ["5 Boxes"] = () => ApplyConditionalFormatIconSet("5Boxes"),
+                    ["More Rules"] = () => _ = ShowConditionalFormatNewRuleDialogAsync(),
+
+                    // Home ▸ Styles ▸ Conditional Formatting ▸ New Formula Rule / Manage Rules.
+                    ["New Formula Rule"] = () => _ = ShowConditionalFormatNewRuleDialogAsync(CfRuleType.Formula),
+                    ["Manage Rules"] = () => _ = ShowManageConditionalFormatsDialogAsync(),
+
+                    // Home ▸ Cells ▸ Insert / Delete dropdowns.
+                    ["Insert Sheet Rows"] = InsertSheetRows,
+                    ["Insert Sheet Columns"] = InsertSheetColumns,
+                    ["Delete Sheet Rows"] = DeleteSheetRows,
+                    ["Delete Sheet Columns"] = DeleteSheetColumns,
+                    ["Delete Sheet"] = DeleteActiveSheet,
+
+                    // Home ▸ Cells ▸ Format dropdown.
+                    ["Rename Sheet"] = () => _ = RenameActiveSheetAsync(),
+                    ["Hide Sheet"] = HideActiveSheet,
+                    ["Tab Color"] = () => _ = ShowSheetTabColorPickerAsync(),
+                    ["Lock Cell"] = ToggleSelectedRangeLock,
+
+                    // Home ▸ Editing ▸ Sort & Filter dropdown.
+                    ["Sort A to Z"] = () => SortSelectedRange(ascending: true),
+                    ["Sort Z to A"] = () => SortSelectedRange(ascending: false),
+                    ["Custom Sort"] = () => _ = ShowSortDialogAsync(),
+                    ["Filter"] = ToggleAutoFilter,
+
+                    // Page Layout ▸ Page Setup ▸ Background.
+                    ["Choose Background"] = ChooseSheetBackground,
+                    ["Delete Background"] = DeleteSheetBackground,
+
+                    // Page Layout ▸ Page Setup ▸ Margins presets.
+                    ["Normal"] = () => ApplyPageMargins(WorksheetPageMargins.Normal, "RibbonWire_MarginsNormal"),
+                    ["Wide"] = () => ApplyPageMargins(WorksheetPageMargins.Wide, "RibbonWire_MarginsWide"),
+                    ["Narrow"] = () => ApplyPageMargins(WorksheetPageMargins.Narrow, "RibbonWire_MarginsNarrow"),
+                    ["Custom Margins"] = () => _ = ShowPageSetupDialogAsync(),
+
+                    // Page Layout ▸ Page Setup ▸ Orientation presets.
+                    ["Portrait"] = () => ApplyPageOrientation(WorksheetPageOrientation.Portrait, "RibbonWire_OrientationPortrait"),
+                    ["Landscape"] = () => ApplyPageOrientation(WorksheetPageOrientation.Landscape, "RibbonWire_OrientationLandscape"),
+
+                    // Page Layout ▸ Page Setup ▸ Paper Size presets. The Core enum models only
+                    // Letter / Legal / A4; other sizes open Page Setup (same partial behaviour as WPF).
+                    ["Letter"] = () => ApplyPaperSize(WorksheetPaperSize.Letter, "RibbonWire_PaperLetter"),
+                    ["Legal"] = () => ApplyPaperSize(WorksheetPaperSize.Legal, "RibbonWire_PaperLegal"),
+                    ["A4"] = () => ApplyPaperSize(WorksheetPaperSize.A4, "RibbonWire_PaperA4"),
+                    ["A3"] = () => _ = ShowPageSetupDialogAsync(),
+                    ["A5"] = () => _ = ShowPageSetupDialogAsync(),
+                    ["Executive"] = () => _ = ShowPageSetupDialogAsync(),
+                    ["Statement"] = () => _ = ShowPageSetupDialogAsync(),
+                    ["Tabloid"] = () => _ = ShowPageSetupDialogAsync(),
+                    ["B4"] = () => _ = ShowPageSetupDialogAsync(),
+                    ["B5"] = () => _ = ShowPageSetupDialogAsync(),
+
+                    // Page Layout ▸ Page Setup ▸ Print Area.
+                    ["Set Print Area"] = SetPrintAreaFromSelection,
+                    ["Clear Print Area"] = ClearPrintArea,
+
+                    // Formulas ▸ Formula Auditing ▸ Watch Window / Remove Arrows submenu.
+                    ["Watch Window"] = () => _ = ShowWatchWindowDialogAsync(),
+                    ["Remove Precedent Arrows"] = () => RemoveFormulaTraceArrowsOfKind(FormulaTraceArrowKind.Precedent),
+                    ["Remove Dependent Arrows"] = () => RemoveFormulaTraceArrowsOfKind(FormulaTraceArrowKind.Dependent),
+
+                    // Formulas ▸ Error Checking ▸ Error Checking Options.
+                    ["Error Checking Options"] = () => _ = ShowOptionsDialogAsync(),
+
+                    // Formulas ▸ Calculation ▸ Calculate Sheet + Calculation Options menu items.
+                    ["Calculate Sheet"] = CalculateSheet,
+                    ["Automatic"] = SetCalculationModeAutomatic,
+                    ["Manual"] = SetCalculationModeManual,
+                    ["Automatic Except Data Tables"] = SetCalculationModeAutomatic,
+
+                    // Data ▸ Connections ▸ Refresh All (parity: recalculates the workbook).
+                    ["data.refresh"] = CalculateNow,
+
+                    // Data ▸ Sort & Filter ▸ Sort button (canonical id "Sort", no dotted prefix).
+                    ["Sort"] = () => _ = ShowSortDialogAsync(),
+
+                    // Data ▸ Data Tools ▸ What-If Analysis dropdown.
+                    ["Goal Seek"] = () => _ = ShowGoalSeekDialogAsync(),
+                    ["Scenario Manager"] = () => _ = ShowScenarioManagerDialogAsync(),
+                    ["Data Table"] = () => _ = ShowDataTableDialogAsync(),
+
+                    // Data ▸ Outline ▸ Show / Hide Detail, Clear Outline, Group / Ungroup submenu items.
+                    ["Show Detail"] = ShowOutlineDetail,
+                    ["Hide Detail"] = HideOutlineDetail,
+                    ["Clear Outline"] = ClearWorksheetOutline,
+                    ["Group#GroupRowsMenuItem_Click"] = GroupSelectedRows,
+                    ["Ungroup#UngroupRowsMenuItem_Click"] = ClearWorksheetOutline,
+
+                    // Review ▸ Proofing / Comments / Notes / Share.
+                    ["Workbook Statistics"] = () => _ = ShowWorkbookStatisticsDialogAsync(),
+                    ["Next Comment"] = () => NavigateReviewThreadedComment(previous: false),
+                    ["Previous Comment"] = () => NavigateReviewThreadedComment(previous: true),
+                    ["Show Comments"] = () => _ = ShowNotesListAsync(),
+                    ["Edit Note"] = () => _ = ShowEditNoteDialogAsync(),
+                    ["Delete Note"] = DeleteActiveCellComment,
+                    ["Share"] = () => _ = ShareWorkbookAsync(),
+
+                    // View ▸ Show ▸ Ruler.
+                    ["Ruler"] = ToggleShowRulers,
+
+                    // View ▸ Window ▸ Switch Windows / Reset Window Position.
+                    ["Switch Windows"] = ShowSwitchWindowsDialog,
+                    ["Reset Window Position"] = ResetWindowPosition,
+
+                    // View ▸ Window ▸ Freeze Panes split-button menu items. The "Freeze Panes" menu item
+                    // keeps its handler suffix in the canonical id.
+                    ["Freeze Panes#FreezeAtSelectionMenuItem_Click"] = FreezePanesAtActiveCell,
+                    ["Freeze Top Row"] = FreezeTopRow,
+                    ["Freeze First Column"] = FreezeFirstColumn,
+                    ["Unfreeze Panes"] = UnfreezePanes,
+
+                    // View ▸ Zoom split-button preset menu items. The "100%" menu item keeps its handler
+                    // suffix in the canonical id.
+                    ["200%"] = () => ApplyZoomPercentPreset(200),
+                    ["100%#ZoomPresetMenuItem_Click"] = () => ApplyZoomPercentPreset(100),
+                    ["75%"] = () => ApplyZoomPercentPreset(75),
+                    ["50%"] = () => ApplyZoomPercentPreset(50),
+                    ["25%"] = () => ApplyZoomPercentPreset(25),
                 },
             };
 
@@ -827,19 +1137,33 @@ public sealed partial class MainWindow : Window
             ribbonCallbacks.ExtraCommands!, StringComparer.Ordinal);
         foreach (var (id, action) in BuildContextualTabCommands())
             ribbonExtraCommands[id] = action;
+        // Home ▸ Styles ▸ Cell Styles gallery items: each built-in preset's display name is its canonical
+        // ribbon menu id, so wire every one to apply that style to the selection.
+        foreach (var stylePreset in Enum.GetValues<CellStylePreset>())
+        {
+            var preset = stylePreset;
+            ribbonExtraCommands[CellStyleDiffPlanner.GetCellStylePresetDisplayName(preset)] =
+                () => ApplyCellStylePreset(preset);
+        }
         ribbonCallbacks = ribbonCallbacks with { ExtraCommands = ribbonExtraCommands };
 
-        var ribbon = FreeX.App.Avalonia.Ribbon.AvaloniaRibbonHost.Build(
+        var (ribbon, refreshRibbonToggleStates) = FreeX.App.Avalonia.Ribbon.AvaloniaRibbonHost.Build(
             () => _session,
             RefreshShell,
             ribbonCallbacks,
             _ribbonContextSource);
+        _refreshRibbonToggleStates = refreshRibbonToggleStates;
         DockPanel.SetDock(ribbon, Dock.Top);
         root.Children.Add(ribbon);
 
         var toolbar = BuildToolbar();
         DockPanel.SetDock(toolbar, Dock.Top);
         root.Children.Add(toolbar);
+
+        // Status bar at absolute bottom (added first among Dock.Bottom children → lowest position).
+        var statusBar = BuildStatusBar();
+        DockPanel.SetDock(statusBar, Dock.Bottom);
+        root.Children.Add(statusBar);
 
         var sheetTabs = BuildSheetTabsChrome();
         DockPanel.SetDock(sheetTabs, Dock.Bottom);
@@ -1006,53 +1330,70 @@ public sealed partial class MainWindow : Window
         var versionSuffix = string.IsNullOrWhiteSpace(_stagedUpdateVersion)
             ? string.Empty
             : $" {_stagedUpdateVersion}";
-        RefreshShell($"Restarting to install FreeX{versionSuffix}...");
+        RefreshShell(UiText.Format("MainLoc_RestartingToInstall", versionSuffix));
         _updateService?.ApplyAndRestart();
     }
 
     private void ConfigureNativeMenu()
     {
-        _newWorkbookMenuItem.Header = "New Workbook";
+        _newWorkbookMenuItem.Header = UiText.Get("AvaloniaNativeMenu_NewWorkbook");
         _newWorkbookMenuItem.Gesture = new KeyGesture(Key.N, KeyModifiers.Meta);
         _newWorkbookMenuItem.Click += (_, _) => CreateNewWorkbook();
 
-        _openMenuItem.Header = "Open...";
+        _openMenuItem.Header = UiText.Get("AvaloniaNativeMenu_Open");
         _openMenuItem.Gesture = new KeyGesture(Key.O, KeyModifiers.Meta);
         _openMenuItem.Click += async (_, _) => await OpenWorkbookAsync();
 
-        _openRecentMenuItem.Header = "Open Recent";
+        _openRecentMenuItem.Header = UiText.Get("AvaloniaNativeMenu_OpenRecent");
         _openRecentMenuItem.Menu = CreateNativeOpenRecentMenu(isIdle: true);
 
-        _saveMenuItem.Header = "Save";
+        _saveMenuItem.Header = UiText.Get("AvaloniaNativeMenu_Save");
         _saveMenuItem.Gesture = new KeyGesture(Key.S, KeyModifiers.Meta);
         _saveMenuItem.Click += async (_, _) => await SaveCurrentWorkbookAsync();
 
-        _saveAsMenuItem.Header = "Save As...";
+        _saveAsMenuItem.Header = UiText.Get("AvaloniaNativeMenu_SaveAs");
         _saveAsMenuItem.Gesture = new KeyGesture(Key.S, KeyModifiers.Meta | KeyModifiers.Shift);
         _saveAsMenuItem.Click += async (_, _) => await SaveWorkbookAsAsync();
 
-        _exportPdfMenuItem.Header = "Export to PDF...";
+        _exportPdfMenuItem.Header = UiText.Get("AvaloniaNativeMenu_ExportPdf");
         _exportPdfMenuItem.Click += async (_, _) => await ExportActiveSheetPdfAsync();
 
-        _pageSetupMenuItem.Header = "Page Setup...";
+        _printMenuItem.Header = UiText.Get("Print_MenuItem");
+        _printMenuItem.Gesture = new KeyGesture(Key.P, KeyModifiers.Meta);
+        _printMenuItem.Click += async (_, _) => await ShowPrintDialogAsync();
+
+        _pageSetupMenuItem.Header = UiText.Get("AvaloniaNativeMenu_PageSetup");
         _pageSetupMenuItem.Click += async (_, _) => await ShowPageSetupDialogAsync();
 
-        _printPreviewMenuItem.Header = "Print Preview...";
-        _printPreviewMenuItem.Gesture = new KeyGesture(Key.P, KeyModifiers.Meta);
+        _printPreviewMenuItem.Header = UiText.Get("AvaloniaNativeMenu_PrintPreview");
+        _printPreviewMenuItem.Gesture = new KeyGesture(Key.P, KeyModifiers.Meta | KeyModifiers.Shift);
         _printPreviewMenuItem.Click += async (_, _) => await ShowPrintPreviewDialogAsync();
 
-        _shareWorkbookMenuItem.Header = "Share Workbook...";
+        _shareWorkbookMenuItem.Header = UiText.Get("AvaloniaNativeMenu_ShareWorkbook");
         _shareWorkbookMenuItem.Click += async (_, _) => await ShareWorkbookAsync();
 
-        _workbookStatisticsMenuItem.Header = "Workbook Statistics...";
+        _workbookStatisticsMenuItem.Header = UiText.Get("AvaloniaNativeMenu_WorkbookStatistics");
         _workbookStatisticsMenuItem.Gesture = new KeyGesture(Key.G, KeyModifiers.Control | KeyModifiers.Shift);
         _workbookStatisticsMenuItem.Click += async (_, _) => await ShowWorkbookStatisticsDialogAsync();
 
-        _closeWorkbookMenuItem.Header = "Close Workbook";
+        _backstageInfoMenuItem.Header = UiText.Get("Backstage_Info_MenuItem");
+        _backstageInfoMenuItem.Click += (_, _) => ShowBackstageInfo();
+
+        _backstageExportMenuItem.Header = UiText.Get("Backstage_Export_MenuItem");
+        _backstageExportMenuItem.Click += (_, _) => ShowBackstageExport();
+
+        _backstageAccountMenuItem.Header = UiText.Get("Backstage_Account_MenuItem");
+        _backstageAccountMenuItem.Click += (_, _) => ShowBackstageAccount();
+
+        _optionsMenuItem.Header = UiText.Get("Options_Title");
+        _optionsMenuItem.Gesture = new KeyGesture(Key.OemComma, KeyModifiers.Meta);
+        _optionsMenuItem.Click += (_, _) => ShowOptions();
+
+        _closeWorkbookMenuItem.Header = UiText.Get("AvaloniaNativeMenu_CloseWorkbook");
         _closeWorkbookMenuItem.Gesture = new KeyGesture(Key.W, KeyModifiers.Meta);
         _closeWorkbookMenuItem.Click += async (_, _) => await CloseWorkbookAsync();
 
-        _newSheetMenuItem.Header = "New Sheet";
+        _newSheetMenuItem.Header = UiText.Get("AvaloniaNativeMenu_NewSheet");
         _newSheetMenuItem.Gesture = new KeyGesture(Key.F11, KeyModifiers.Shift);
         _newSheetMenuItem.Click += (_, _) => AddNewSheet();
 
@@ -1301,6 +1642,9 @@ public sealed partial class MainWindow : Window
         _fillLeftMenuItem.Header = "Left";
         _fillLeftMenuItem.Click += (_, _) => FillSelectedRange(FillCellsDirection.Left);
 
+        _fillSeriesMenuItem.Header = "Series...";
+        _fillSeriesMenuItem.Click += (_, _) => FillSeries();
+
         _clearMenuItem.Header = "Clear";
         _clearMenuItem.Menu = CreateNativeClearMenu();
 
@@ -1524,8 +1868,14 @@ public sealed partial class MainWindow : Window
         fileMenu.Items.Add(_saveMenuItem);
         fileMenu.Items.Add(_saveAsMenuItem);
         fileMenu.Items.Add(_exportPdfMenuItem);
+        fileMenu.Items.Add(_printMenuItem);
+        fileMenu.Items.Add(_backstageExportMenuItem);
         fileMenu.Items.Add(_shareWorkbookMenuItem);
         fileMenu.Items.Add(_workbookStatisticsMenuItem);
+        fileMenu.Items.Add(_backstageInfoMenuItem);
+        fileMenu.Items.Add(new NativeMenuItemSeparator());
+        fileMenu.Items.Add(_backstageAccountMenuItem);
+        fileMenu.Items.Add(_optionsMenuItem);
         fileMenu.Items.Add(new NativeMenuItemSeparator());
         fileMenu.Items.Add(_pageSetupMenuItem);
         fileMenu.Items.Add(_printPreviewMenuItem);
@@ -1814,13 +2164,6 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetName(_zoomText, "Zoom");
         AutomationProperties.SetHelpText(_zoomText, "Shows the active worksheet zoom.");
 
-        // The status-bar readouts share one "Customize Status Bar" right-click menu, attached to each of
-        // the three status controls so right-clicking anywhere in the footer readout opens it.
-        var statusBarCustomizeMenu = BuildStatusBarCustomizeContextMenu();
-        _statusText.ContextMenu = statusBarCustomizeMenu;
-        _selectionStatsText.ContextMenu = statusBarCustomizeMenu;
-        _zoomText.ContextMenu = statusBarCustomizeMenu;
-
         _openButton.Content = "Open";
         _openButton.Padding = new Thickness(10, 4);
         _openButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
@@ -1925,6 +2268,10 @@ public sealed partial class MainWindow : Window
 
         _fillLeftFlyoutItem.Header = "Left";
         _fillLeftFlyoutItem.Click += (_, _) => FillSelectedRange(FillCellsDirection.Left);
+
+        _fillSeriesFlyoutItem.Header = "Series...";
+        AutomationProperties.SetAutomationId(_fillSeriesFlyoutItem, "HomeFillSeriesMenuItem");
+        _fillSeriesFlyoutItem.Click += (_, _) => FillSeries();
 
         _clearButton.Content = "Clear";
         _clearButton.Padding = new Thickness(10, 4);
@@ -2147,67 +2494,67 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetName(_formulaBox, "Formula bar");
         AutomationProperties.SetHelpText(_formulaBox, "Edit the active cell value or formula.");
 
+        // Formula bar: [cell address (82px) | separator | formula box (fills remaining width)]
+        // Matches the WPF host layout — ribbon provides all Quick Access commands.
+        var cellAddressBorder = new Border
+        {
+            Width = 82,
+            BorderBrush = ToolbarBorder,
+            BorderThickness = new Thickness(0, 0, 1, 0),
+            Padding = new Thickness(4, 0),
+            Child = _cellAddressText,
+        };
+        DockPanel.SetDock(cellAddressBorder, Dock.Left);
+
+        var formulaFill = new Border
+        {
+            Padding = new Thickness(8, 0),
+            Child = _formulaBox,
+        };
+
+        var formulaDock = new DockPanel { LastChildFill = true };
+        formulaDock.Children.Add(cellAddressBorder);
+        formulaDock.Children.Add(formulaFill);
+
         return new Border
         {
             Background = Brushes.White,
             BorderBrush = ToolbarBorder,
             BorderThickness = new Thickness(0, 0, 0, 1),
-            Padding = new Thickness(16, 10),
-            Child = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Spacing = 12,
-                Children =
-                {
-                    _titleText,
-                    _detailText,
-                    _openButton,
-                    _saveButton,
-                    _saveAsButton,
-                    _undoButton,
-                    _redoButton,
-                    _cutButton,
-                    _copyButton,
-                    _pasteButton,
-                    _pasteSpecialButton,
-                    _formatPainterButton,
-                    _autoSumButton,
-                    _fillCellsButton,
-                    _clearButton,
-                    _boldButton,
-                    _italicButton,
-                    _underlineButton,
-                    _doubleUnderlineButton,
-                    _strikethroughButton,
-                    _increaseFontSizeButton,
-                    _decreaseFontSizeButton,
-                    _fillColorButton,
-                    _fontColorButton,
-                    _bordersButton,
-                    _cellStylesButton,
-                    _orientationButton,
-                    _currencyFormatButton,
-                    _percentFormatButton,
-                    _commaStyleButton,
-                    _increaseDecimalButton,
-                    _decreaseDecimalButton,
-                    _alignTopButton,
-                    _alignMiddleButton,
-                    _alignBottomButton,
-                    _wrapTextButton,
-                    _mergeAndCenterButton,
-                    _decreaseIndentButton,
-                    _increaseIndentButton,
-                    _alignLeftButton,
-                    _alignCenterButton,
-                    _alignRightButton,
-                    _cellAddressText,
-                    _formulaBox,
-                    _statusText,
-                    _selectionStatsText,
-                    _zoomText,
-                },
-            },
+            Height = 28,
+            Child = formulaDock,
+        };
+    }
+
+    private Control BuildStatusBar()
+    {
+        var statusBarCustomizeMenu = BuildStatusBarCustomizeContextMenu();
+        _statusText.ContextMenu = statusBarCustomizeMenu;
+        _selectionStatsText.ContextMenu = statusBarCustomizeMenu;
+        _zoomText.ContextMenu = statusBarCustomizeMenu;
+
+        var leftPanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 12,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+        };
+        leftPanel.Children.Add(_statusText);
+        leftPanel.Children.Add(_selectionStatsText);
+
+        DockPanel.SetDock(_zoomText, Dock.Right);
+        var dock = new DockPanel { LastChildFill = true };
+        dock.Children.Add(_zoomText);
+        dock.Children.Add(leftPanel);
+
+        return new Border
+        {
+            Background = ChromeSurface,
+            BorderBrush = ToolbarBorder,
+            BorderThickness = new Thickness(0, 1, 0, 0),
+            Height = 22,
+            Padding = new Thickness(8, 0),
+            Child = dock,
         };
     }
 
@@ -2226,8 +2573,7 @@ public sealed partial class MainWindow : Window
 
         _sheetGridHost.Content = BuildSheetGrid();
         _sheetTabsHost.Content = BuildSheetTabs();
-        _titleText.Text = FormatWindowWorkbookTitle();
-        _detailText.Text = $"{_session.ActiveSheet.Name}  |  {_session.Viewport.RowMetrics.Count} rows x {_session.Viewport.ColMetrics.Count} columns";
+        Title = $"FreeX - {FormatWindowWorkbookTitle()}";
         _cellAddressText.Text = FormatCellReference(_session.ActiveCell);
         _formulaBox.Text = preserveFormulaEdit
             ? formulaText
@@ -2267,6 +2613,7 @@ public sealed partial class MainWindow : Window
         _ribbonContextSource.OnPivotActive(
             FreeX.App.Avalonia.Pivot.PivotSourceContext.FindActivePivot(_session.ActiveSheet, _session.ActiveCell) is not null);
         UpdateSaveButton();
+        _refreshRibbonToggleStates?.Invoke();
     }
 
     private void UpdateViewportScrollBars()
@@ -2321,10 +2668,14 @@ public sealed partial class MainWindow : Window
         _fillRightFlyoutItem.IsEnabled = isIdle && _session.CanFillSelectedRange(FillCellsDirection.Right);
         _fillUpFlyoutItem.IsEnabled = isIdle && _session.CanFillSelectedRange(FillCellsDirection.Up);
         _fillLeftFlyoutItem.IsEnabled = isIdle && _session.CanFillSelectedRange(FillCellsDirection.Left);
+        _fillSeriesFlyoutItem.IsEnabled = isIdle &&
+            (_session.CanFillSelectedRange(FillCellsDirection.Down) ||
+             _session.CanFillSelectedRange(FillCellsDirection.Right));
         _fillCellsButton.IsEnabled = _fillDownFlyoutItem.IsEnabled ||
             _fillRightFlyoutItem.IsEnabled ||
             _fillUpFlyoutItem.IsEnabled ||
-            _fillLeftFlyoutItem.IsEnabled;
+            _fillLeftFlyoutItem.IsEnabled ||
+            _fillSeriesFlyoutItem.IsEnabled;
         _clearButton.IsEnabled = isIdle;
         _boldButton.IsEnabled = isIdle;
         _italicButton.IsEnabled = isIdle;
@@ -2361,8 +2712,12 @@ public sealed partial class MainWindow : Window
         _saveMenuItem.IsEnabled = _saveButton.IsEnabled;
         _saveAsMenuItem.IsEnabled = _saveAsButton.IsEnabled;
         _exportPdfMenuItem.IsEnabled = isIdle && StorageProvider.CanSave;
+        _printMenuItem.IsEnabled = isIdle;
+        _backstageExportMenuItem.IsEnabled = isIdle && StorageProvider.CanSave;
         _shareWorkbookMenuItem.IsEnabled = isIdle;
         _workbookStatisticsMenuItem.IsEnabled = isIdle;
+        _backstageInfoMenuItem.IsEnabled = isIdle;
+        _backstageAccountMenuItem.IsEnabled = isIdle;
         _closeWorkbookMenuItem.IsEnabled = isIdle;
         var activeSheetTabIndex = FindActiveSheetTabIndex();
         _newSheetMenuItem.IsEnabled = _newSheetButton.IsEnabled;
@@ -2447,6 +2802,7 @@ public sealed partial class MainWindow : Window
         _fillRightMenuItem.IsEnabled = _fillRightFlyoutItem.IsEnabled;
         _fillUpMenuItem.IsEnabled = _fillUpFlyoutItem.IsEnabled;
         _fillLeftMenuItem.IsEnabled = _fillLeftFlyoutItem.IsEnabled;
+        _fillSeriesMenuItem.IsEnabled = _fillSeriesFlyoutItem.IsEnabled;
         _clearMenuItem.IsEnabled = _clearButton.IsEnabled;
         _clearAllMenuItem.IsEnabled = _clearButton.IsEnabled;
         _clearFormatsMenuItem.IsEnabled = _clearButton.IsEnabled;
@@ -2608,11 +2964,14 @@ public sealed partial class MainWindow : Window
         yield return CreateSheetTabContextMenuItem(tab, "Rename...", async () => await RenameActiveSheetAsync(), isIdle);
         yield return CreateSheetTabContextMenuItem(tab, "Insert Sheet", AddNewSheet, isIdle);
         yield return CreateSheetTabContextMenuItem(tab, "Duplicate", DuplicateActiveSheet, isIdle);
+        yield return CreateSheetTabContextMenuItem(tab, UiText.Get("MoveCopySheet_MenuItem"), ShowMoveOrCopySheetDialog, isIdle);
         yield return CreateSheetTabContextMenuItem(tab, "Delete Sheet", DeleteActiveSheet, isIdle);
         yield return new Separator();
         yield return CreateSheetTabContextMenuItem(tab, "Hide", HideActiveSheet, isIdle && _session.SheetTabs.Count > 1);
         yield return CreateSheetTabContextMenuItem(tab, "Unhide...", async () => await UnhideSheetAsync(), isIdle && _session.HiddenSheets.Count > 0);
         yield return CreateSheetTabColorContextMenuItem(tab, isIdle);
+        yield return new Separator();
+        yield return CreateSheetTabContextMenuItem(tab, UiText.Get("OutlineSettings_MenuItem"), ShowOutlineSettingsDialog, isIdle);
         yield return new Separator();
         yield return CreateSheetTabContextMenuItem(tab, "Select All Sheets", SelectAllVisibleSheets, isIdle && _session.SheetTabs.Count > 1);
         yield return CreateSheetTabContextMenuItem(tab, "Ungroup Sheets", UngroupSheets, isIdle && _session.IsWorkbookGrouped);
@@ -2727,7 +3086,7 @@ public sealed partial class MainWindow : Window
             {
                 var col = viewport.ColMetrics[colIndex].Col;
                 var selected = IsSelectedColumn(col);
-                AddGridChild(grid, CreateHeaderCell(CellAddress.NumberToColumnName(col), selected, zoomFactor), 0, colIndex + headerOffset);
+                AddGridChild(grid, CreateColumnHeaderCell(col, selected, zoomFactor), 0, colIndex + headerOffset);
             }
         }
 
@@ -2739,7 +3098,7 @@ public sealed partial class MainWindow : Window
             if (showHeadings)
             {
                 var selectedRow = IsSelectedRow(row);
-                AddGridChild(grid, CreateHeaderCell(row.ToString(), selectedRow, zoomFactor), rowIndex + headerOffset, 0);
+                AddGridChild(grid, CreateRowHeaderCell(row, selectedRow, zoomFactor), rowIndex + headerOffset, 0);
             }
 
             for (var colIndex = 0; colIndex < viewport.ColMetrics.Count; colIndex++)
@@ -2923,6 +3282,13 @@ public sealed partial class MainWindow : Window
 
         container.PointerPressed += (_, args) =>
         {
+            if (args.GetCurrentPoint(container).Properties.IsRightButtonPressed)
+            {
+                // Right-click selects the object, then opens its per-target context menu.
+                HandleDrawingObjectPointerContext(drawingObject, container, args);
+                return;
+            }
+
             if (args.GetCurrentPoint(container).Properties.IsLeftButtonPressed)
             {
                 SelectDrawingObject(drawingObject);
@@ -2964,9 +3330,9 @@ public sealed partial class MainWindow : Window
     {
         _selectedDrawingObjectKind = null;
         _selectedDrawingObjectId = null;
-        // TODO: table/pivot active context is not yet signaled — no shell accessor exists for
-        // "active cell is inside a table/pivot" in the Avalonia shell. Chart/picture/shape
-        // selection (above) drives the contextual tabs for now; clearing drops them.
+        // TODO(avalonia-shell): signal table/pivot active context once a shell accessor exists (ref: docs/parity/subagent-contextual-table-pivot-ribbons-2026-06-07.md#remaining-gaps)
+        // No "active cell is inside a table/pivot" accessor exists in the Avalonia shell yet.
+        // Chart/picture/shape selection (above) drives the contextual tabs for now; clearing drops them.
         _ribbonContextSource.OnSelectionCleared();
     }
 
@@ -3509,6 +3875,60 @@ public sealed partial class MainWindow : Window
             zoomFactor: zoomFactor);
 
     /// <summary>
+    /// Builds a clickable column header. Left-click selects the whole column (Shift extends from the
+    /// active cell); right-click selects then opens the shared column-header context menu, so Hide/
+    /// Unhide Columns and the other column commands act on the column the user clicked.
+    /// </summary>
+    private Control CreateColumnHeaderCell(uint col, bool selected, double zoomFactor)
+    {
+        var header = CreateHeaderCell(CellAddress.NumberToColumnName(col), selected, zoomFactor);
+        header.Cursor = new Cursor(StandardCursorType.Hand);
+        header.PointerPressed += (_, args) =>
+        {
+            var point = args.GetCurrentPoint(header);
+            if (point.Properties.IsRightButtonPressed)
+            {
+                if (!IsSelectedColumn(col))
+                    SelectEntireColumn(col);
+                OpenColumnHeaderContextMenu(header);
+                args.Handled = true;
+                return;
+            }
+
+            SelectEntireColumn(col, extend: args.KeyModifiers.HasFlag(KeyModifiers.Shift));
+            args.Handled = true;
+        };
+        return header;
+    }
+
+    /// <summary>
+    /// Builds a clickable row header. Left-click selects the whole row (Shift extends from the active
+    /// cell); right-click selects then opens the shared row-header context menu, so Hide/Unhide Rows
+    /// and the other row commands act on the row the user clicked.
+    /// </summary>
+    private Control CreateRowHeaderCell(uint row, bool selected, double zoomFactor)
+    {
+        var header = CreateHeaderCell(row.ToString(), selected, zoomFactor);
+        header.Cursor = new Cursor(StandardCursorType.Hand);
+        header.PointerPressed += (_, args) =>
+        {
+            var point = args.GetCurrentPoint(header);
+            if (point.Properties.IsRightButtonPressed)
+            {
+                if (!IsSelectedRow(row))
+                    SelectEntireRow(row);
+                OpenRowHeaderContextMenu(header);
+                args.Handled = true;
+                return;
+            }
+
+            SelectEntireRow(row, extend: args.KeyModifiers.HasFlag(KeyModifiers.Shift));
+            args.Handled = true;
+        };
+        return header;
+    }
+
+    /// <summary>
     /// Reads every sparkline on <paramref name="sheet"/> into a per-cell lookup keyed by its anchor
     /// <see cref="SparklineModel.Location"/>, using the same numeric series read as the Windows host
     /// (<see cref="SparklineRenderPlanner.BuildValues"/>). Empty series are dropped so cells without
@@ -3709,23 +4129,36 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// Creates the worksheet cell <see cref="ContextMenu"/> from the shared neutral plan. The
-    /// <see cref="WorksheetContextMenuState"/> is left at its default for this slice — structure is
-    /// fully populated; state-driven enablement (comments/notes/hyperlinks/filter) is derivable
-    /// later once the Avalonia session exposes those flags.
+    /// dropdown-target flag is computed from the active cell so "Pick From Drop-down List" is enabled
+    /// exactly when the cell carries an in-cell list validation; the remaining state-driven enablement
+    /// (comments/notes/hyperlinks/filter) is derivable later once the Avalonia session exposes those
+    /// flags.
     /// </summary>
     private ContextMenu BuildWorksheetCellContextMenu()
     {
+        var state = WorksheetContextMenuState.Default with
+        {
+            HasDropdownTarget = DataValidationDropdownPlanner.HasDropdownList(
+                _session.Workbook,
+                _session.ActiveSheet,
+                _session.ActiveCell),
+        };
         var commands = WorksheetContextMenuPlanner.BuildCommands(
             WorksheetContextMenuTargetKind.Worksheet,
-            WorksheetContextMenuState.Default);
+            state);
         var ribbonMenu = WorksheetContextMenuRibbonAdapter.ToRibbonMenu(commands);
         return AvaloniaContextMenuRenderer.BuildContextMenu(ribbonMenu, DispatchWorksheetContextMenuCommand);
     }
 
     /// <summary>
     /// Routes a worksheet context-menu command id back to the matching Avalonia document command.
-    /// Actions with an existing Avalonia handler (clipboard + clear) are wired; the rest are no-ops
-    /// with a TODO until their Avalonia equivalents exist.
+    /// Every action that has a working shell handler (clipboard, clear, insert/delete, sort/filter,
+    /// clear filter, data tools, outline grouping, comments/notes, hyperlinks, format cells, pivot
+    /// options, pick-from-drop-down) is wired to the same handler the ribbon uses. The drawing/chart/
+    /// picture per-target variants (Format Picture/Chart Area, Bring Forward, Selection Pane, etc.) are
+    /// raised instead from the Picture/Shape/TextBox/Chart object menus (right-clicking a selected
+    /// drawing object) via <see cref="DispatchDrawingObjectContextMenuCommand"/>, so they do not appear
+    /// in this worksheet cell menu.
     /// </summary>
     private void DispatchWorksheetContextMenuCommand(RibbonCommandId commandId)
     {
@@ -3758,10 +4191,144 @@ public sealed partial class MainWindow : Window
             case WorksheetContextMenuAction.ClearHyperlinks:
                 ClearSelectedRangeHyperlinks();
                 break;
+            case WorksheetContextMenuAction.HideRows:
+                HideSelectedRows();
+                break;
+            case WorksheetContextMenuAction.UnhideRows:
+                UnhideSelectedRows();
+                break;
+            case WorksheetContextMenuAction.HideColumns:
+                HideSelectedColumns();
+                break;
+            case WorksheetContextMenuAction.UnhideColumns:
+                UnhideSelectedColumns();
+                break;
+            case WorksheetContextMenuAction.RowHeight:
+                _ = ShowRowHeightDialogAsync();
+                break;
+            case WorksheetContextMenuAction.AutoFitRowHeight:
+                AutoFitSelectedRowHeight();
+                break;
+            case WorksheetContextMenuAction.ColumnWidth:
+                _ = ShowColumnWidthDialogAsync();
+                break;
+            case WorksheetContextMenuAction.AutoFitColumnWidth:
+                AutoFitSelectedColumnWidth();
+                break;
+            case WorksheetContextMenuAction.InsertRowAbove:
+            case WorksheetContextMenuAction.InsertRowBelow:
+            case WorksheetContextMenuAction.InsertColumnLeft:
+            case WorksheetContextMenuAction.InsertColumnRight:
+            case WorksheetContextMenuAction.InsertCells:
+            case WorksheetContextMenuAction.InsertCopiedCells:
+                _ = ShowInsertCellsDialogAsync();
+                break;
+            case WorksheetContextMenuAction.DeleteRows:
+            case WorksheetContextMenuAction.DeleteColumns:
+            case WorksheetContextMenuAction.DeleteCells:
+                _ = ShowDeleteCellsDialogAsync();
+                break;
+            case WorksheetContextMenuAction.PasteSpecial:
+                _ = ShowPasteSpecialDialogAsync();
+                break;
+            // Sort & Filter submenu → existing sort/filter handlers (same ones the ribbon Data tab uses).
+            case WorksheetContextMenuAction.SortAscending:
+                SortSelectedRange(ascending: true);
+                break;
+            case WorksheetContextMenuAction.SortDescending:
+                SortSelectedRange(ascending: false);
+                break;
+            case WorksheetContextMenuAction.CustomSort:
+                _ = ShowSortDialogAsync();
+                break;
+            case WorksheetContextMenuAction.Filter:
+                ToggleAutoFilter();
+                break;
+            case WorksheetContextMenuAction.ClearFilter:
+                ClearActiveSheetFilters();
+                break;
+            case WorksheetContextMenuAction.ReapplyFilter:
+                ReapplyCurrentFilterSort();
+                break;
+            case WorksheetContextMenuAction.QuickAnalysis:
+                _ = ShowQuickAnalysisDialogAsync();
+                break;
+            // Data Tools submenu → existing data-tools dialogs/handlers.
+            case WorksheetContextMenuAction.DefineName:
+                DefineName();
+                break;
+            case WorksheetContextMenuAction.CreateTable:
+            case WorksheetContextMenuAction.FormatAsTable:
+                InsertTableFromSelection();
+                break;
+            case WorksheetContextMenuAction.TextToColumns:
+                TextToColumns();
+                break;
+            case WorksheetContextMenuAction.RemoveDuplicates:
+                _ = ShowRemoveDuplicatesDialogAsync();
+                break;
+            case WorksheetContextMenuAction.DataValidation:
+                _ = ShowDataValidationDialogAsync();
+                break;
+            // Outline grouping (Rows-and-Columns submenu on row/column selections).
+            case WorksheetContextMenuAction.Group:
+                GroupSelectedRows();
+                break;
+            case WorksheetContextMenuAction.Ungroup:
+                ClearWorksheetOutline();
+                break;
+            // Comments and Notes submenu (create/edit/delete/resolve/show route through WorkbookSession
+            // comment APIs; SetThreadedCommentCommand / UpdateThreadedCommentTextCommand /
+            // ResolveThreadedCommentCommand / SetCommentCommand all carry undo/redo).
+            case WorksheetContextMenuAction.NewComment:
+                _ = ShowNewThreadedCommentDialogAsync();
+                break;
+            case WorksheetContextMenuAction.NewNote:
+                _ = ShowNewNoteDialogAsync();
+                break;
+            case WorksheetContextMenuAction.EditComment:
+                _ = ShowEditThreadedCommentDialogAsync();
+                break;
+            case WorksheetContextMenuAction.EditNote:
+                _ = ShowEditNoteDialogAsync();
+                break;
+            case WorksheetContextMenuAction.ResolveComment:
+                ResolveActiveCellThreadedComment(resolved: true);
+                break;
+            case WorksheetContextMenuAction.UnresolveComment:
+                ResolveActiveCellThreadedComment(resolved: false);
+                break;
+            case WorksheetContextMenuAction.DeleteComment:
+            case WorksheetContextMenuAction.DeleteNote:
+                DeleteActiveCellComment();
+                break;
+            case WorksheetContextMenuAction.ShowNotes:
+                _ = ShowNotesListAsync();
+                break;
+            // Hyperlink submenu → existing hyperlink handlers.
+            case WorksheetContextMenuAction.Hyperlink:
+                _ = ShowInsertHyperlinkDialogAsync();
+                break;
+            case WorksheetContextMenuAction.OpenHyperlink:
+                _ = OpenSelectedHyperlinkAsync();
+                break;
+            case WorksheetContextMenuAction.RemoveHyperlinks:
+                ClearSelectedRangeHyperlinks();
+                break;
+            case WorksheetContextMenuAction.PivotTableOptions:
+                OpenPivotTableOptions();
+                break;
+            case WorksheetContextMenuAction.FormatCells:
+                _ = ShowFormatCellsDialogAsync();
+                break;
+            case WorksheetContextMenuAction.PickFromDropDown:
+                // Opens the active cell's in-cell data-validation dropdown overlay (the same dropdown
+                // Alt+Down opens). Reports honestly when the cell has no list to pick from.
+                if (!OpenActiveDataValidationDropdown())
+                    RefreshShell(UiText.Get("DrawingInteract_PickListNoList"));
+                break;
             default:
-                // TODO: no Avalonia equivalent yet (insert/delete cells, sort/filter, comments,
-                // notes, data tools, format cells, etc.). Menu structure is present; wire as the
-                // corresponding Avalonia document commands land.
+                // TODO(avalonia-shell): wire remaining context-menu actions as Avalonia document commands land (ref: docs/parity/command-surface.md#deferred-architectural-features)
                 break;
         }
     }
@@ -3922,8 +4489,8 @@ public sealed partial class MainWindow : Window
 
     private static Control CreateConditionalIconLayer(CfIconRenderInstruction icon, double zoomFactor)
     {
-        const double iconSize = 10d;
-        const double iconLeftInset = 4d;
+        const double iconSize = ConditionalIconCellLayoutPlanner.IconSize;
+        const double iconLeftInset = ConditionalIconCellLayoutPlanner.IconLeftInset;
         var size = iconSize * zoomFactor;
         var glyph = ConditionalFormatIconGlyphFactory.Create(icon, size);
         return new Border
@@ -4103,12 +4670,14 @@ public sealed partial class MainWindow : Window
     private MenuFlyout CreateFillCellsFlyout() =>
         new()
         {
-            ItemsSource = new[]
+            ItemsSource = new Control[]
             {
                 _fillDownFlyoutItem,
                 _fillRightFlyoutItem,
                 _fillUpFlyoutItem,
                 _fillLeftFlyoutItem,
+                new Separator(),
+                _fillSeriesFlyoutItem,
             },
         };
 
@@ -4151,6 +4720,8 @@ public sealed partial class MainWindow : Window
         menu.Items.Add(_fillRightMenuItem);
         menu.Items.Add(_fillUpMenuItem);
         menu.Items.Add(_fillLeftMenuItem);
+        menu.Items.Add(new NativeMenuItemSeparator());
+        menu.Items.Add(_fillSeriesMenuItem);
         return menu;
     }
 
@@ -4621,7 +5192,7 @@ public sealed partial class MainWindow : Window
         if (_session.SelectSheet(sheetId))
         {
             ClearSelectedDrawingObject();
-            RefreshShell($"Selected {_session.ActiveSheet.Name}");
+            RefreshShell(UiText.Format("MainLoc_SelectedX", _session.ActiveSheet.Name));
         }
 
         return true;
@@ -4723,7 +5294,7 @@ public sealed partial class MainWindow : Window
         if (changed)
         {
             ClearSelectedDrawingObject();
-            RefreshShell($"Selected {_session.ActiveSheet.Name}");
+            RefreshShell(UiText.Format("MainLoc_SelectedX", _session.ActiveSheet.Name));
         }
 
         FocusActiveSheetTab();
@@ -4818,7 +5389,7 @@ public sealed partial class MainWindow : Window
             return;
 
         ClearSelectedDrawingObject();
-        RefreshShell($"Selected {_session.ActiveSheet.Name}");
+        RefreshShell(UiText.Format("MainLoc_SelectedX", _session.ActiveSheet.Name));
     }
 
     private void SelectAllVisibleSheets()
@@ -4859,7 +5430,7 @@ public sealed partial class MainWindow : Window
         var result = _session.AddSheet();
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "New Sheet failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_NewSheetFailed"));
             return;
         }
 
@@ -4927,7 +5498,7 @@ public sealed partial class MainWindow : Window
         var result = _session.RenameActiveSheet(newName);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Rename Sheet failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_RenameSheetFailed"));
             return;
         }
 
@@ -4949,7 +5520,7 @@ public sealed partial class MainWindow : Window
         var result = _session.DuplicateActiveSheet();
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Duplicate Sheet failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_DuplicateSheetFailed"));
             return;
         }
 
@@ -4969,7 +5540,7 @@ public sealed partial class MainWindow : Window
         var result = _session.MoveActiveSheetLeft();
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Move Sheet Left failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_MoveSheetLeftFailed"));
             return;
         }
 
@@ -4989,7 +5560,7 @@ public sealed partial class MainWindow : Window
         var result = _session.MoveActiveSheetRight();
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Move Sheet Right failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_MoveSheetRightFailed"));
             return;
         }
 
@@ -5009,7 +5580,7 @@ public sealed partial class MainWindow : Window
         var result = _session.SetShowGridlines(showGridlines);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Gridlines failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_GridlinesFailed"));
             return;
         }
 
@@ -5029,7 +5600,7 @@ public sealed partial class MainWindow : Window
         var result = _session.SetShowHeadings(showHeadings);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Headings failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_HeadingsFailed"));
             return;
         }
 
@@ -5109,7 +5680,7 @@ public sealed partial class MainWindow : Window
         var result = _session.SetShowFormulas(showFormulas);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Show Formulas failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_ShowFormulasFailed"));
             return;
         }
 
@@ -5129,7 +5700,7 @@ public sealed partial class MainWindow : Window
         var result = _session.HideActiveSheet();
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Hide Sheet failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_HideSheetFailed"));
             return;
         }
 
@@ -5147,7 +5718,7 @@ public sealed partial class MainWindow : Window
         var hiddenSheets = _session.HiddenSheets;
         if (hiddenSheets.Count == 0)
         {
-            ShowEditIssue("No hidden sheets.");
+            ShowEditIssue(UiText.Get("MainLoc_NoHiddenSheets"));
             return;
         }
 
@@ -5159,7 +5730,7 @@ public sealed partial class MainWindow : Window
         var result = _session.UnhideSheet(sheet.Id);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Unhide Sheet failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_UnhideSheetFailed"));
             return;
         }
 
@@ -5179,7 +5750,7 @@ public sealed partial class MainWindow : Window
         var result = _session.DeleteActiveSheet();
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Delete Sheet failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_DeleteSheetFailed"));
             return;
         }
 
@@ -5407,13 +5978,13 @@ public sealed partial class MainWindow : Window
         var result = _session.FindAll(search.FindText, search.Options, search.MatchCase, search.MatchEntireCell);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Find All failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_FindAllFailed"));
             return;
         }
 
         RefreshShell(result.MatchCount == 0
-            ? "No matches found."
-            : $"Found {result.MatchCount} cells");
+            ? UiText.Get("MainLoc_NoMatchesFound")
+            : UiText.Format("MainLoc_FoundCells", result.MatchCount));
         await ShowFindAllResultsDialogAsync(search.FindText, result.Matches);
     }
 
@@ -5573,11 +6144,11 @@ public sealed partial class MainWindow : Window
         var result = _session.FindNext(searchText, options, matchCase, matchEntireCell);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Find failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_FindFailed"));
             return;
         }
 
-        RefreshShell($"Found {FormatRangeReference(result.SelectedRange!.Value)} ({result.MatchIndex} of {result.MatchCount})");
+        RefreshShell(UiText.Format("MainLoc_FoundRangeOfCount", FormatRangeReference(result.SelectedRange!.Value), result.MatchIndex, result.MatchCount));
     }
 
     private async Task ShowFindAllResultsDialogAsync(string searchText, IReadOnlyList<WorkbookFindAllMatch> matches)
@@ -5659,11 +6230,11 @@ public sealed partial class MainWindow : Window
         var result = _session.GoToCell(match.Address);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Find result could not be selected.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_FindResultNotSelected"));
             return;
         }
 
-        RefreshShell($"Found {match.Sheet}!{match.Cell}");
+        RefreshShell(UiText.Format("MainLoc_FoundSheetCell", match.Sheet, match.Cell));
     }
 
     private async Task ShowReplaceDialogAsync()
@@ -5692,21 +6263,21 @@ public sealed partial class MainWindow : Window
                 replacement.ReplacementFormat);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Replace failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_ReplaceFailed"));
             return;
         }
 
         if (replacement.Action == ReplaceDialogAction.ReplaceAll)
         {
             RefreshShell(result.ReplacedCount == 0
-                ? result.MatchCount == 0 ? "No matches found." : "No replaceable match found."
-                : $"Replaced {result.ReplacedCount} cells");
+                ? result.MatchCount == 0 ? UiText.Get("MainLoc_NoMatchesFound") : UiText.Get("MainLoc_NoReplaceableMatch")
+                : UiText.Format("MainLoc_ReplacedCells", result.ReplacedCount));
             return;
         }
 
         RefreshShell(result.ReplacedCount == 0
-            ? result.MatchCount == 0 ? "No matches found." : "No replaceable match found."
-            : $"Replaced {FormatRangeReference(result.ReplacedRange!.Value)} ({result.MatchIndex} of {result.MatchCount})");
+            ? result.MatchCount == 0 ? UiText.Get("MainLoc_NoMatchesFound") : UiText.Get("MainLoc_NoReplaceableMatch")
+            : UiText.Format("MainLoc_ReplacedRangeOfCount", FormatRangeReference(result.ReplacedRange!.Value), result.MatchIndex, result.MatchCount));
     }
 
     private async Task<ReplaceDialogResult?> ShowReplaceInputDialogAsync(Action<ReplaceDialogSmokeProbe>? launchSmokeProbe = null)
@@ -5878,23 +6449,188 @@ public sealed partial class MainWindow : Window
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var reference = await ShowSingleInputDialogAsync(
-            "Go To",
-            "Reference",
-            FormatRangeReference(_session.SelectedRange),
-            "Go",
-            "GoToReferenceBox");
+        var goTo = await ShowGoToInputDialogAsync();
+        if (goTo is null)
+            return;
+
+        if (goTo.SpecialKind is { } specialKind)
+        {
+            SelectGoToSpecial(specialKind, goTo.SpecialOptions);
+            return;
+        }
+
+        var reference = goTo.Reference;
         if (reference is null)
             return;
 
         var result = _session.GoToReference(reference);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Go To failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_GoToFailed"));
             return;
         }
 
-        RefreshShell($"Selected {FormatRangeReference(result.SelectedRange!.Value)}");
+        RefreshShell(UiText.Format("MainLoc_SelectedX", FormatRangeReference(result.SelectedRange!.Value)));
+    }
+
+    private IReadOnlyList<string> BuildGoToReferenceChoices(string defaultReference) =>
+        WorkbookReferenceNavigator.BuildReferenceChoices(
+            defaultReference,
+            recentReferences: null,
+            definedNames: _session.Workbook.NamedRanges.Keys);
+
+    private async Task<GoToDialogResult?> ShowGoToInputDialogAsync(
+        Action<GoToDialogSmokeProbe>? launchSmokeProbe = null)
+    {
+        GoToDialogResult? result = null;
+        var dialog = new Window
+        {
+            Title = "Go To",
+            Width = 380,
+            Height = 320,
+            MinWidth = 340,
+            MinHeight = 280,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+
+        var defaultReference = FormatRangeReference(_session.SelectedRange);
+
+        var historyList = new ListBox
+        {
+            ItemsSource = BuildGoToReferenceChoices(defaultReference),
+            MinHeight = 120,
+        };
+        AutomationProperties.SetName(historyList, "Go to");
+        AutomationProperties.SetHelpText(historyList, "Recent references and defined names");
+        AutomationProperties.SetAutomationId(historyList, "GoToHistoryList");
+
+        var inputBox = new TextBox
+        {
+            Text = defaultReference,
+            MinWidth = 280,
+        };
+        AutomationProperties.SetName(inputBox, "Reference");
+        AutomationProperties.SetAutomationId(inputBox, "GoToReferenceBox");
+
+        var specialButton = new Button
+        {
+            Content = "Special...",
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(specialButton, "GoToSpecialButton");
+
+        var acceptButton = new Button
+        {
+            Content = "Go",
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(acceptButton, "GoToReferenceBoxAcceptButton");
+
+        var cancelButton = new Button
+        {
+            Content = "Cancel",
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(cancelButton, "GoToReferenceBoxCancelButton");
+
+        historyList.SelectionChanged += (_, _) =>
+        {
+            if (historyList.SelectedItem is string reference)
+                inputBox.Text = reference;
+        };
+        historyList.DoubleTapped += (_, _) =>
+        {
+            if (historyList.SelectedItem is string reference)
+            {
+                inputBox.Text = reference;
+                AcceptReference();
+            }
+        };
+
+        void AcceptReference()
+        {
+            result = new GoToDialogResult(inputBox.Text ?? "", SpecialKind: null, SpecialOptions: null);
+            dialog.Close();
+        }
+
+        acceptButton.Click += (_, _) => AcceptReference();
+        cancelButton.Click += (_, _) => dialog.Close();
+        specialButton.Click += async (_, _) =>
+        {
+            var special = await ShowGoToSpecialInputDialogAsync();
+            if (special is null)
+                return;
+
+            result = new GoToDialogResult(Reference: null, special.Kind, special.Options);
+            dialog.Close();
+        };
+        inputBox.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter)
+            {
+                e.Handled = true;
+                AcceptReference();
+            }
+            else if (e.Key == Key.Escape)
+            {
+                e.Handled = true;
+                dialog.Close();
+            }
+        };
+
+        var buttonRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Children =
+            {
+                specialButton,
+                cancelButton,
+                acceptButton,
+            },
+        };
+
+        dialog.Content = new StackPanel
+        {
+            Margin = new Thickness(16),
+            Spacing = 8,
+            Children =
+            {
+                new TextBlock { Text = "Go to" },
+                historyList,
+                new TextBlock { Text = "Reference" },
+                inputBox,
+                buttonRow,
+            },
+        };
+        dialog.Opened += (_, _) =>
+        {
+            inputBox.Focus();
+            inputBox.SelectAll();
+        };
+        if (launchSmokeProbe is not null)
+        {
+            dialog.Opened += (_, _) =>
+            {
+                RunLaunchSmokeDialogProbe(
+                    dialog,
+                    () => launchSmokeProbe(new GoToDialogSmokeProbe(
+                        dialog,
+                        historyList,
+                        inputBox,
+                        specialButton,
+                        acceptButton,
+                        cancelButton)));
+            };
+        }
+
+        await dialog.ShowDialog(this);
+        return result;
     }
 
     private async Task OpenSelectedHyperlinkAsync()
@@ -5904,7 +6640,7 @@ public sealed partial class MainWindow : Window
 
         if (!_session.TryGetSelectedHyperlinkPlan(out var plan) || plan is null)
         {
-            ShowEditIssue("Hyperlink target was not found.");
+            ShowEditIssue(UiText.Get("MainLoc_HyperlinkTargetNotFound"));
             return;
         }
 
@@ -5923,18 +6659,18 @@ public sealed partial class MainWindow : Window
         var result = _session.OpenSelectedHyperlink();
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Open Hyperlink failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_OpenHyperlinkFailed"));
             return;
         }
 
-        RefreshShell($"Selected {FormatRangeReference(result.SelectedRange!.Value)}");
+        RefreshShell(UiText.Format("MainLoc_SelectedX", FormatRangeReference(result.SelectedRange!.Value)));
     }
 
     private async Task OpenLocalFileHyperlinkAsync(HyperlinkNavigationPlan plan)
     {
         if (string.IsNullOrWhiteSpace(plan.LocalPath))
         {
-            ShowEditIssue("Open Hyperlink requires a local file path.");
+            ShowEditIssue(UiText.Get("MainLoc_OpenHyperlinkRequiresLocalPath"));
             return;
         }
 
@@ -5942,7 +6678,7 @@ public sealed partial class MainWindow : Window
             target is null)
         {
             ShowEditIssue(string.IsNullOrWhiteSpace(message)
-                ? "Open Hyperlink requires a supported workbook file."
+                ? UiText.Get("MainLoc_OpenHyperlinkRequiresWorkbook")
                 : message);
             return;
         }
@@ -5958,14 +6694,14 @@ public sealed partial class MainWindow : Window
             case ExternalUriLaunchResult.Launched:
                 return;
             case ExternalUriLaunchResult.BlockedScheme:
-                ShowEditIssue("Open Hyperlink blocked this link because its scheme is not supported.");
+                ShowEditIssue(UiText.Get("MainLoc_OpenHyperlinkSchemeBlocked"));
                 return;
             case ExternalUriLaunchResult.LauncherUnavailable:
-                ShowEditIssue("Open Hyperlink cannot open external links on this platform.");
+                ShowEditIssue(UiText.Get("MainLoc_OpenHyperlinkNoExternal"));
                 return;
             case ExternalUriLaunchResult.LaunchFailed:
             default:
-                ShowEditIssue("Open Hyperlink could not open the link.");
+                ShowEditIssue(UiText.Get("MainLoc_OpenHyperlinkCouldNotOpen"));
                 return;
         }
     }
@@ -6184,14 +6920,14 @@ public sealed partial class MainWindow : Window
         var result = _session.GoToSpecial(kind, options);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Go To Special failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_GoToSpecialFailed"));
             return false;
         }
 
         var selectedText = result.SelectedRanges.Count == 1
             ? FormatRangeReference(result.SelectedRange!.Value)
             : $"{result.MatchCount} cells";
-        RefreshShell($"Selected {selectedText}");
+        RefreshShell(UiText.Format("MainLoc_SelectedX", selectedText));
         return true;
     }
 
@@ -6215,7 +6951,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        RefreshShell($"Inserted hyperlink for {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_InsertedHyperlinkFor", rangeReference));
     }
 
     private async Task<HyperlinkDialogPlan?> ShowInsertHyperlinkInputDialogAsync()
@@ -6673,7 +7409,7 @@ public sealed partial class MainWindow : Window
 
         if (result.SelectedRange is not { } selectedRange)
         {
-            ShowEditIssue("Review target was not selected.");
+            ShowEditIssue(UiText.Get("MainLoc_ReviewTargetNotSelected"));
             return;
         }
 
@@ -6843,11 +7579,11 @@ public sealed partial class MainWindow : Window
             mergeContentResolution);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Format Cells failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_FormatCellsFailed"));
             return;
         }
 
-        RefreshShell($"Formatted {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_FormattedX", rangeReference));
     }
 
     private async Task<FormatCellsDialogResult?> ShowFormatCellsInputDialogAsync(
@@ -6874,7 +7610,7 @@ public sealed partial class MainWindow : Window
 
         var dialog = new Window
         {
-            Title = "Format Cells",
+            Title = UiText.Get("FormatCells_Title"),
             Width = 560,
             Height = 560,
             MinWidth = 480,
@@ -6884,15 +7620,25 @@ public sealed partial class MainWindow : Window
         };
         AutomationProperties.SetAutomationId(dialog, "FormatCellsCompactDialog");
 
-        var numberChoices = CreateFormatCellsNumberFormatChoices(currentNumberFormat);
-        var currentNumberChoice =
-            FindFormatCellsNumberFormatChoice(numberChoices, currentNumberFormat) ?? numberChoices[0];
+        // The number-format catalog + format-code composition is the shared, portable
+        // FormatCellsNumberFormatPlanner (same source the WPF dialog uses), so the Avalonia
+        // Number tab composes Excel-style codes from decimal places / currency symbol /
+        // negative-number style rather than a narrow fixed list.
+        var numberCategories = FormatCellsNumberFormatPlanner.Categories;
+        var currentNumberOption = FormatCellsNumberFormatPlanner.FindOption(currentNumberFormat);
+        var currentNumberCategory = currentNumberOption?.Category
+            ?? (string.IsNullOrWhiteSpace(currentNumberFormat)
+                || string.Equals(currentNumberFormat, "General", StringComparison.OrdinalIgnoreCase)
+                    ? "General"
+                    : "Custom");
         var numberCategoryList = new ListBox
         {
-            ItemsSource = numberChoices.Select(choice => choice.Category).Distinct().ToArray(),
-            SelectedItem = currentNumberChoice.Category,
+            ItemsSource = numberCategories,
+            SelectedItem = numberCategories.Contains(currentNumberCategory)
+                ? currentNumberCategory
+                : numberCategories[0],
             MinWidth = 150,
-            MaxHeight = 180,
+            MaxHeight = 200,
         };
         AutomationProperties.SetName(numberCategoryList, "Category");
         AutomationProperties.SetAutomationId(numberCategoryList, "FormatCellsNumberCategoryList");
@@ -6902,37 +7648,128 @@ public sealed partial class MainWindow : Window
             MinWidth = 260,
         };
         AutomationProperties.SetName(numberFormatBox, "Type");
-        AutomationProperties.SetAutomationId(numberFormatBox, "FormatCellsNumberFormatCombo");
         AutomationProperties.SetAutomationId(numberFormatBox, "FormatCellsNumberFormatBox");
+
+        var numberDecimalPlacesBox = new TextBox
+        {
+            Text = FormatCellsNumberFormatPlanner.DecimalPlacesForFormat(currentNumberFormat)
+                .ToString(CultureInfo.InvariantCulture),
+            MinWidth = 100,
+        };
+        AutomationProperties.SetName(numberDecimalPlacesBox, "Decimal places");
+        AutomationProperties.SetAutomationId(numberDecimalPlacesBox, "FormatCellsNumberDecimalPlacesBox");
+
+        var numberSymbols = FormatCellsNumberFormatPlanner.Symbols;
+        var numberSymbolBox = new ComboBox
+        {
+            ItemsSource = numberSymbols,
+            SelectedItem = numberSymbols.Contains("$")
+                ? "$"
+                : (numberSymbols.Count > 0 ? numberSymbols[0] : null),
+            MinWidth = 220,
+        };
+        AutomationProperties.SetName(numberSymbolBox, "Symbol");
+        AutomationProperties.SetAutomationId(numberSymbolBox, "FormatCellsNumberSymbolBox");
+
+        var numberNegativeBox = new ComboBox
+        {
+            ItemsSource = FormatCellsNumberFormatPlanner.NegativeOptions,
+            SelectedIndex = 0,
+            MinWidth = 200,
+        };
+        AutomationProperties.SetName(numberNegativeBox, "Negative numbers");
+        AutomationProperties.SetAutomationId(numberNegativeBox, "FormatCellsNumberNegativeBox");
 
         var numberPreview = new TextBlock
         {
-            Text = currentNumberChoice.Preview,
+            Text = FormatCellsNumberFormatPlanner.PreviewForFormat(currentNumberFormat),
             MinHeight = 28,
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
         };
         AutomationProperties.SetAutomationId(numberPreview, "FormatCellsNumberPreview");
 
-        void RefreshNumberChoices()
+        var syncingNumberControls = false;
+
+        string? ResolveSelectedNumberFormatCode()
         {
-            var category = numberCategoryList.SelectedItem?.ToString() ?? currentNumberChoice.Category;
-            var filteredChoices = FilterFormatCellsNumberFormatChoices(numberChoices, category);
-            numberFormatBox.ItemsSource = filteredChoices;
-            if (numberFormatBox.SelectedItem is not FormatCellsNumberFormatChoice selected ||
-                !ContainsFormatCellsNumberFormatChoice(filteredChoices, selected))
-            {
-                numberFormatBox.SelectedItem = filteredChoices.Count > 0 ? filteredChoices[0] : currentNumberChoice;
-            }
+            return FormatCellsNumberFormatPlanner.ResolveSelectedNumberFormat(
+                numberCategoryList.SelectedItem as string,
+                numberFormatBox.SelectedItem as string ?? string.Empty,
+                numberFormatBox.SelectedIndex,
+                numberDecimalPlacesBox.Text,
+                numberSymbolBox.SelectedItem as string ?? numberSymbolBox.Text,
+                numberNegativeBox.SelectedIndex);
         }
 
-        numberCategoryList.SelectionChanged += (_, _) => RefreshNumberChoices();
+        void RefreshNumberPreview()
+        {
+            var typeText = numberFormatBox.SelectedItem as string ?? string.Empty;
+            var resolved = ResolveSelectedNumberFormatCode();
+            numberPreview.Text = FormatCellsNumberFormatPlanner.PreviewForFormat(
+                resolved ?? (string.IsNullOrEmpty(typeText) ? currentNumberFormat : typeText));
+        }
+
+        void ApplyNumberControlAvailability()
+        {
+            var availability = FormatCellsNumberControlPlanner.Plan(numberCategoryList.SelectedItem as string);
+            numberDecimalPlacesBox.IsEnabled = availability.UsesDecimals;
+            numberSymbolBox.IsEnabled = availability.UsesSymbol;
+            numberNegativeBox.IsEnabled = availability.UsesNegativeOptions;
+        }
+
+        void RefreshNumberTypeChoices()
+        {
+            var category = numberCategoryList.SelectedItem as string ?? currentNumberCategory;
+            var labels = FormatCellsNumberFormatPlanner.LabelsForCategory(category);
+            var previous = numberFormatBox.SelectedItem as string;
+            numberFormatBox.ItemsSource = labels;
+            numberFormatBox.SelectedItem = previous is not null && labels.Contains(previous)
+                ? previous
+                : (labels.Count > 0 ? labels[0] : null);
+        }
+
+        void SyncDecimalPlacesFromType()
+        {
+            if (syncingNumberControls || numberFormatBox.SelectedItem is not string label)
+                return;
+            if (!FormatCellsNumberControlPlanner.Plan(numberCategoryList.SelectedItem as string).UsesDecimals)
+                return;
+            var code = FormatCellsNumberFormatPlanner.ResolveNumberFormat(label, numberFormatBox.SelectedIndex);
+            if (code is null)
+                return;
+            syncingNumberControls = true;
+            numberDecimalPlacesBox.Text = FormatCellsNumberFormatPlanner.DecimalPlacesForFormat(code)
+                .ToString(CultureInfo.InvariantCulture);
+            syncingNumberControls = false;
+        }
+
+        numberCategoryList.SelectionChanged += (_, _) =>
+        {
+            RefreshNumberTypeChoices();
+            ApplyNumberControlAvailability();
+            RefreshNumberPreview();
+        };
         numberFormatBox.SelectionChanged += (_, _) =>
         {
-            if (numberFormatBox.SelectedItem is FormatCellsNumberFormatChoice choice)
-                numberPreview.Text = choice.Preview;
+            SyncDecimalPlacesFromType();
+            RefreshNumberPreview();
         };
-        RefreshNumberChoices();
-        numberFormatBox.SelectedItem = currentNumberChoice;
+        numberDecimalPlacesBox.TextChanged += (_, _) =>
+        {
+            if (!syncingNumberControls)
+                RefreshNumberPreview();
+        };
+        numberSymbolBox.SelectionChanged += (_, _) => RefreshNumberPreview();
+        numberNegativeBox.SelectionChanged += (_, _) => RefreshNumberPreview();
+
+        RefreshNumberTypeChoices();
+        if (currentNumberOption is { } currentOption
+            && FormatCellsNumberFormatPlanner.LabelsForCategory(currentNumberCategory).Contains(currentOption.Label))
+        {
+            numberFormatBox.SelectedItem = currentOption.Label;
+        }
+        ApplyNumberControlAvailability();
+        RefreshNumberPreview();
 
         var horizontalAlignmentBox = CreateFormatCellsComboBox(
             "FormatCellsHorizontalAlignmentBox",
@@ -6942,9 +7779,9 @@ public sealed partial class MainWindow : Window
             "FormatCellsVerticalAlignmentBox",
             CreateFormatCellsVerticalAlignmentChoices(),
             currentVerticalAlignment);
-        var wrapTextBox = CreateFormatCellsCheckBox("Wrap text", "FormatCellsWrapTextBox", _session.IsSelectedRangeStartWrapText);
-        var shrinkToFitBox = CreateFormatCellsCheckBox("Shrink to fit", "FormatCellsShrinkToFitBox", currentShrinkToFit);
-        var mergeCellsBox = CreateFormatCellsCheckBox("Merge cells", "FormatCellsMergeCellsBox", currentMergeCells);
+        var wrapTextBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_WrapText"), "FormatCellsWrapTextBox", _session.IsSelectedRangeStartWrapText);
+        var shrinkToFitBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_ShrinkToFit"), "FormatCellsShrinkToFitBox", currentShrinkToFit);
+        var mergeCellsBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_MergeCells"), "FormatCellsMergeCellsBox", currentMergeCells);
         var indentLevelBox = new TextBox
         {
             Text = currentIndentLevel.ToString(CultureInfo.InvariantCulture),
@@ -6961,13 +7798,13 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetName(textRotationBox, "Text rotation");
         AutomationProperties.SetAutomationId(textRotationBox, "FormatCellsTextRotationBox");
 
-        var boldBox = CreateFormatCellsCheckBox("Bold", "FormatCellsBoldBox", _session.IsSelectedRangeStartBold);
-        var italicBox = CreateFormatCellsCheckBox("Italic", "FormatCellsItalicBox", _session.IsSelectedRangeStartItalic);
-        var underlineBox = CreateFormatCellsCheckBox("Underline", "FormatCellsUnderlineBox", currentUnderline);
-        var doubleUnderlineBox = CreateFormatCellsCheckBox("Double underline", "FormatCellsDoubleUnderlineBox", currentDoubleUnderline);
-        var strikethroughBox = CreateFormatCellsCheckBox("Strikethrough", "FormatCellsStrikethroughBox", _session.IsSelectedRangeStartStrikethrough);
-        var superscriptBox = CreateFormatCellsCheckBox("Superscript", "FormatCellsSuperscriptBox", currentSuperscript);
-        var subscriptBox = CreateFormatCellsCheckBox("Subscript", "FormatCellsSubscriptBox", currentSubscript);
+        var boldBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_Bold"), "FormatCellsBoldBox", _session.IsSelectedRangeStartBold);
+        var italicBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_Italic"), "FormatCellsItalicBox", _session.IsSelectedRangeStartItalic);
+        var underlineBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_Underline"), "FormatCellsUnderlineBox", currentUnderline);
+        var doubleUnderlineBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_DoubleUnderline"), "FormatCellsDoubleUnderlineBox", currentDoubleUnderline);
+        var strikethroughBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_Strikethrough"), "FormatCellsStrikethroughBox", _session.IsSelectedRangeStartStrikethrough);
+        var superscriptBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_Superscript"), "FormatCellsSuperscriptBox", currentSuperscript);
+        var subscriptBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_Subscript"), "FormatCellsSubscriptBox", currentSubscript);
         superscriptBox.PropertyChanged += (_, e) =>
         {
             if (e.Property == ToggleButton.IsCheckedProperty && superscriptBox.IsChecked == true)
@@ -6995,15 +7832,10 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetName(fontSizeBox, "Size");
         AutomationProperties.SetAutomationId(fontSizeBox, "FormatCellsFontSizeBox");
 
-        var fontColorBox = new ComboBox
-        {
-            ItemsSource = CreateFormatCellsColorChoices(includeClear: false),
-            SelectedIndex = 0,
-            MinWidth = 180,
-        };
+        var fontColorBox = CreateFormatCellsColorPicker(UiText.Get("FormatCells_NoChange"), includeClear: false, UiText.Get("FormatCells_MoreFontColors"));
         AutomationProperties.SetName(fontColorBox, "Font color");
         AutomationProperties.SetAutomationId(fontColorBox, "FormatCellsFontColorBox");
-        var normalFontBox = CreateFormatCellsCheckBox("Normal font", "FormatCellsNormalFontBox", false);
+        var normalFontBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_NormalFont"), "FormatCellsNormalFontBox", false);
         normalFontBox.PropertyChanged += (_, e) =>
         {
             if (e.Property != ToggleButton.IsCheckedProperty || normalFontBox.IsChecked != true)
@@ -7022,26 +7854,127 @@ public sealed partial class MainWindow : Window
             SelectFormatCellsColor(fontColorBox, normal.FontColor);
         };
 
-        var fillColorBox = new ComboBox
+        // Live font preview: a sample TextBlock reflecting bold/italic/underline/size/color as the
+        // user edits, mirroring the WPF preview.
+        var fontPreview = new TextBlock
         {
-            ItemsSource = CreateFormatCellsColorChoices(includeClear: true),
-            SelectedIndex = 0,
-            MinWidth = 180,
+            Text = "AaBbCcYyZz",
+            MinHeight = 36,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
         };
+        AutomationProperties.SetAutomationId(fontPreview, "FormatCellsFontPreview");
+
+        void RefreshFontPreview()
+        {
+            if (normalFontBox.IsChecked == true)
+            {
+                var normal = CellStyle.Default;
+                fontPreview.FontWeight = FontWeight.Normal;
+                fontPreview.FontStyle = FontStyle.Normal;
+                fontPreview.TextDecorations = null;
+                fontPreview.FontSize = normal.FontSize;
+                fontPreview.FontFamily = FontFamily.Default;
+                fontPreview.Foreground = Brush(normal.FontColor);
+                return;
+            }
+
+            fontPreview.FontWeight = boldBox.IsChecked == true ? FontWeight.Bold : FontWeight.Normal;
+            fontPreview.FontStyle = italicBox.IsChecked == true ? FontStyle.Italic : FontStyle.Normal;
+
+            var decorations = new TextDecorationCollection();
+            if (underlineBox.IsChecked == true || doubleUnderlineBox.IsChecked == true)
+                decorations.Add(new TextDecoration { Location = TextDecorationLocation.Underline });
+            if (strikethroughBox.IsChecked == true)
+                decorations.Add(new TextDecoration { Location = TextDecorationLocation.Strikethrough });
+            fontPreview.TextDecorations = decorations.Count > 0 ? decorations : null;
+
+            if (double.TryParse(fontSizeBox.Text?.Trim(), NumberStyles.Float, CultureInfo.CurrentCulture, out var size)
+                && double.IsFinite(size) && size > 0)
+            {
+                fontPreview.FontSize = Math.Clamp(size, 6, 72);
+            }
+
+            var fontName = fontNameBox.Text?.Trim();
+            fontPreview.FontFamily = string.IsNullOrWhiteSpace(fontName)
+                ? FontFamily.Default
+                : new FontFamily(fontName);
+
+            var color = (fontColorBox.SelectedItem as FormatCellsColorChoice)?.Color;
+            fontPreview.Foreground = color is { } chosen ? Brush(chosen) : PrimaryInk;
+        }
+
+        boldBox.IsCheckedChanged += (_, _) => RefreshFontPreview();
+        italicBox.IsCheckedChanged += (_, _) => RefreshFontPreview();
+        underlineBox.IsCheckedChanged += (_, _) => RefreshFontPreview();
+        doubleUnderlineBox.IsCheckedChanged += (_, _) => RefreshFontPreview();
+        strikethroughBox.IsCheckedChanged += (_, _) => RefreshFontPreview();
+        normalFontBox.IsCheckedChanged += (_, _) => RefreshFontPreview();
+        fontSizeBox.TextChanged += (_, _) => RefreshFontPreview();
+        fontNameBox.TextChanged += (_, _) => RefreshFontPreview();
+        fontColorBox.SelectionChanged += (_, _) => RefreshFontPreview();
+        RefreshFontPreview();
+
+        var fillColorBox = CreateFormatCellsColorPicker(UiText.Get("FormatCells_NoChange"), includeClear: true, UiText.Get("FormatCells_MoreFillColors"));
         AutomationProperties.SetName(fillColorBox, "Fill color");
         AutomationProperties.SetAutomationId(fillColorBox, "FormatCellsFillColorBox");
         var fillPatternStyleBox = CreateFormatCellsComboBox(
             "FormatCellsFillPatternStyleBox",
             CreateFormatCellsFillPatternStyleChoices(),
             currentFillPatternStyle);
-        var fillPatternColorBox = new ComboBox
-        {
-            ItemsSource = CreateFormatCellsColorChoices(includeClear: false),
-            SelectedIndex = 0,
-            MinWidth = 180,
-        };
+        var fillPatternColorBox = CreateFormatCellsColorPicker(UiText.Get("FormatCells_NoChange"), includeClear: false, UiText.Get("FormatCells_MorePatternColors"));
         AutomationProperties.SetName(fillPatternColorBox, "Pattern color");
         AutomationProperties.SetAutomationId(fillPatternColorBox, "FormatCellsFillPatternColorBox");
+
+        // Live fill preview: a swatch reflecting the chosen fill color + pattern color, or a
+        // "No fill" hatch when the clear sentinel is selected.
+        var fillPreview = new Border
+        {
+            Height = 36,
+            Width = 120,
+            Background = Brushes.White,
+            BorderBrush = Brushes.Gray,
+            BorderThickness = new Thickness(1),
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+        };
+        AutomationProperties.SetAutomationId(fillPreview, "FormatCellsFillPreview");
+        var fillPreviewLabel = new TextBlock
+        {
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+        };
+        fillPreview.Child = fillPreviewLabel;
+
+        void RefreshFillPreview()
+        {
+            var fillChoice = fillColorBox.SelectedItem as FormatCellsColorChoice;
+            if (fillChoice?.Clear == true)
+            {
+                fillPreview.Background = Brushes.White;
+                fillPreviewLabel.Text = "No fill";
+                return;
+            }
+
+            var patternStyle = (fillPatternStyleBox.SelectedItem as FormatCellsNullableChoice<CellFillPatternStyle>)?.Value
+                ?? CellFillPatternStyle.None;
+            var patternColor = (fillPatternColorBox.SelectedItem as FormatCellsColorChoice)?.Color;
+            if (fillChoice?.Color is { } fill)
+            {
+                fillPreview.Background = Brush(fill);
+                fillPreviewLabel.Text = patternStyle != CellFillPatternStyle.None && patternColor is { } pc
+                    ? $"{CellColorPalettePlanner.FormatHexColor(fill)} / {CellColorPalettePlanner.FormatHexColor(pc)}"
+                    : CellColorPalettePlanner.FormatHexColor(fill);
+            }
+            else
+            {
+                fillPreview.Background = Brushes.White;
+                fillPreviewLabel.Text = "No change";
+            }
+        }
+
+        fillColorBox.SelectionChanged += (_, _) => RefreshFillPreview();
+        fillPatternStyleBox.SelectionChanged += (_, _) => RefreshFillPreview();
+        fillPatternColorBox.SelectionChanged += (_, _) => RefreshFillPreview();
+        RefreshFillPreview();
 
         var borderPresetBox = new ComboBox
         {
@@ -7055,20 +7988,149 @@ public sealed partial class MainWindow : Window
             "FormatCellsBorderStyleBox",
             CreateFormatCellsBorderStyleChoices(),
             BorderStyle.Thin);
-        var borderColorBox = new ComboBox
-        {
-            ItemsSource = CreateFormatCellsColorChoices(includeClear: false),
-            SelectedIndex = 0,
-            MinWidth = 180,
-        };
+        var borderColorBox = CreateFormatCellsColorPicker(UiText.Get("FormatCells_NoChange"), includeClear: false, UiText.Get("FormatCells_MoreBorderColors"));
         AutomationProperties.SetName(borderColorBox, "Border color");
         AutomationProperties.SetAutomationId(borderColorBox, "FormatCellsBorderColorBox");
 
-        var lockedBox = CreateFormatCellsCheckBox("Locked", "FormatCellsLockedBox", currentLocked);
-        var hiddenBox = CreateFormatCellsCheckBox("Hidden", "FormatCellsHiddenBox", currentHidden);
+        // Per-side border controls mirror WPF: each edge is a toggle honoring the selected line
+        // style + color, composed alongside the whole-cell preset buttons (None/Outline/Inside).
+        // The toggle state and the chosen line style/color flow into the shared
+        // FormatCellsCompactRequest per-side fields so WPF/macOS map identically.
+        var borderTopToggle = CreateFormatCellsBorderSideToggle("Top", "FormatCellsBorderTopToggle");
+        var borderBottomToggle = CreateFormatCellsBorderSideToggle("Bottom", "FormatCellsBorderBottomToggle");
+        var borderLeftToggle = CreateFormatCellsBorderSideToggle("Left", "FormatCellsBorderLeftToggle");
+        var borderRightToggle = CreateFormatCellsBorderSideToggle("Right", "FormatCellsBorderRightToggle");
+        var borderInsideHorizontalToggle = CreateFormatCellsBorderSideToggle("Inside horizontal", "FormatCellsBorderInsideHorizontalToggle");
+        var borderInsideVerticalToggle = CreateFormatCellsBorderSideToggle("Inside vertical", "FormatCellsBorderInsideVerticalToggle");
+
+        var borderPreview = new Border
+        {
+            Width = 96,
+            Height = 64,
+            Background = Brushes.White,
+            BorderBrush = Brushes.Gray,
+            BorderThickness = new Thickness(1),
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+        };
+        AutomationProperties.SetAutomationId(borderPreview, "FormatCellsBorderPreview");
+        var borderPreviewGrid = new AvaloniaGrid
+        {
+            Width = 96,
+            Height = 64,
+            ColumnDefinitions = new ColumnDefinitions("*,*"),
+            RowDefinitions = new RowDefinitions("*,*"),
+        };
+        borderPreview.Child = borderPreviewGrid;
+
+        CellColor SelectedBorderLineColor() =>
+            (borderColorBox.SelectedItem as FormatCellsColorChoice)?.Color ?? CellColor.Black;
+        BorderStyle SelectedBorderLineStyle() =>
+            borderStyleBox.SelectedItem is FormatCellsNullableChoice<BorderStyle> { Value: { } style }
+                ? style
+                : BorderStyle.Thin;
+        CellBorder SelectedBorderLine() => new(SelectedBorderLineStyle(), SelectedBorderLineColor());
+
+        void RenderBorderPreview()
+        {
+            borderPreviewGrid.Children.Clear();
+            var line = SelectedBorderLine();
+            var brush = Brush(line.Color);
+            var thickness = FormatCellsBorderPreviewThickness(line.Style);
+
+            void AddEdge(double left, double top, double right, double bottom)
+            {
+                var edge = new Border
+                {
+                    BorderBrush = brush,
+                    BorderThickness = new Thickness(left, top, right, bottom),
+                    IsHitTestVisible = false,
+                    [AvaloniaGrid.RowProperty] = 0,
+                    [AvaloniaGrid.ColumnProperty] = 0,
+                    [AvaloniaGrid.RowSpanProperty] = 2,
+                    [AvaloniaGrid.ColumnSpanProperty] = 2,
+                };
+                borderPreviewGrid.Children.Add(edge);
+            }
+
+            if (borderTopToggle.IsChecked == true)
+                AddEdge(0, thickness, 0, 0);
+            if (borderBottomToggle.IsChecked == true)
+                AddEdge(0, 0, 0, thickness);
+            if (borderLeftToggle.IsChecked == true)
+                AddEdge(thickness, 0, 0, 0);
+            if (borderRightToggle.IsChecked == true)
+                AddEdge(0, 0, thickness, 0);
+            if (borderInsideVerticalToggle.IsChecked == true)
+            {
+                borderPreviewGrid.Children.Add(new Border
+                {
+                    BorderBrush = brush,
+                    BorderThickness = new Thickness(thickness, 0, 0, 0),
+                    HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
+                    IsHitTestVisible = false,
+                    [AvaloniaGrid.RowProperty] = 0,
+                    [AvaloniaGrid.ColumnProperty] = 1,
+                    [AvaloniaGrid.RowSpanProperty] = 2,
+                });
+            }
+            if (borderInsideHorizontalToggle.IsChecked == true)
+            {
+                borderPreviewGrid.Children.Add(new Border
+                {
+                    BorderBrush = brush,
+                    BorderThickness = new Thickness(0, thickness, 0, 0),
+                    VerticalAlignment = AvaloniaVerticalAlignment.Center,
+                    IsHitTestVisible = false,
+                    [AvaloniaGrid.RowProperty] = 1,
+                    [AvaloniaGrid.ColumnProperty] = 0,
+                    [AvaloniaGrid.ColumnSpanProperty] = 2,
+                });
+            }
+        }
+
+        void SetBorderSidesChecked(bool top, bool bottom, bool left, bool right, bool insideHorizontal, bool insideVertical)
+        {
+            borderTopToggle.IsChecked = top;
+            borderBottomToggle.IsChecked = bottom;
+            borderLeftToggle.IsChecked = left;
+            borderRightToggle.IsChecked = right;
+            borderInsideHorizontalToggle.IsChecked = insideHorizontal;
+            borderInsideVerticalToggle.IsChecked = insideVertical;
+            RenderBorderPreview();
+        }
+
+        var borderNoneButton = new Button { Content = UiText.Get("FormatCells_BorderPresetNone"), MinWidth = 70 };
+        AutomationProperties.SetAutomationId(borderNoneButton, "FormatCellsBorderPresetNoneButton");
+        borderNoneButton.Click += (_, _) => SetBorderSidesChecked(false, false, false, false, false, false);
+        var borderOutlineButton = new Button { Content = UiText.Get("FormatCells_BorderPresetOutline"), MinWidth = 70 };
+        AutomationProperties.SetAutomationId(borderOutlineButton, "FormatCellsBorderPresetOutlineButton");
+        borderOutlineButton.Click += (_, _) => SetBorderSidesChecked(true, true, true, true, false, false);
+        var borderInsideButton = new Button { Content = UiText.Get("FormatCells_BorderPresetInside"), MinWidth = 70 };
+        AutomationProperties.SetAutomationId(borderInsideButton, "FormatCellsBorderPresetInsideButton");
+        borderInsideButton.Click += (_, _) => SetBorderSidesChecked(false, false, false, false, true, true);
+
+        foreach (var toggle in new[]
+        {
+            borderTopToggle, borderBottomToggle, borderLeftToggle, borderRightToggle,
+            borderInsideHorizontalToggle, borderInsideVerticalToggle,
+        })
+        {
+            toggle.IsCheckedChanged += (_, _) => RenderBorderPreview();
+        }
+        borderStyleBox.SelectionChanged += (_, _) => RenderBorderPreview();
+        borderColorBox.SelectionChanged += (_, _) => RenderBorderPreview();
+        RenderBorderPreview();
+
+        CellBorder? ReadBorderSide(ToggleButton toggle) =>
+            toggle.IsChecked == true
+                ? SelectedBorderLine()
+                : null;
+
+        var lockedBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_Locked"), "FormatCellsLockedBox", currentLocked);
+        var hiddenBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_Hidden"), "FormatCellsHiddenBox", currentHidden);
         var protectionExplanationText = new TextBlock
         {
-            Text = "Locking cells or hiding formulas has no effect until you protect the worksheet.",
+            Text = UiText.Get("FormatCells_ProtectionExplanation"),
             Foreground = HeaderForeground,
             TextWrapping = TextWrapping.Wrap,
         };
@@ -7076,7 +8138,7 @@ public sealed partial class MainWindow : Window
 
         var okButton = new Button
         {
-            Content = "OK",
+            Content = UiText.Get("Common_Ok"),
             MinWidth = 84,
             Padding = new Thickness(10, 4),
         };
@@ -7084,7 +8146,7 @@ public sealed partial class MainWindow : Window
 
         var cancelButton = new Button
         {
-            Content = "Cancel",
+            Content = UiText.Get("Common_Cancel"),
             MinWidth = 84,
             Padding = new Thickness(10, 4),
         };
@@ -7122,9 +8184,19 @@ public sealed partial class MainWindow : Window
                 return;
             }
 
-            var numberFormat = numberFormatBox.SelectedItem is FormatCellsNumberFormatChoice numberChoice &&
-                !string.Equals(numberChoice.FormatCode, currentNumberFormat, StringComparison.Ordinal)
-                    ? numberChoice.FormatCode
+            var numberAvailability = FormatCellsNumberControlPlanner.Plan(numberCategoryList.SelectedItem as string);
+            if (numberAvailability.UsesDecimals
+                && (!int.TryParse(numberDecimalPlacesBox.Text?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var decimalPlaces)
+                    || decimalPlaces is < 0 or > 30))
+            {
+                errorText.Text = "Decimal places must be a whole number between 0 and 30.";
+                return;
+            }
+
+            var resolvedNumberFormat = ResolveSelectedNumberFormatCode();
+            var numberFormat = resolvedNumberFormat is { } resolvedFormat &&
+                !string.Equals(resolvedFormat, currentNumberFormat, StringComparison.Ordinal)
+                    ? resolvedFormat
                     : null;
             var fillChoice = fillColorBox.SelectedItem as FormatCellsColorChoice;
             var clearFill = fillChoice?.Clear == true;
@@ -7133,6 +8205,17 @@ public sealed partial class MainWindow : Window
                 ? selectedBorderStyle
                 : BorderStyle.Thin;
             var borderColor = (borderColorBox.SelectedItem as FormatCellsColorChoice)?.Color;
+            var borderTopSide = ReadBorderSide(borderTopToggle);
+            var borderBottomSide = ReadBorderSide(borderBottomToggle);
+            var borderLeftSide = ReadBorderSide(borderLeftToggle);
+            var borderRightSide = ReadBorderSide(borderRightToggle);
+            // Inner horizontal/vertical edges aren't single-cell StyleDiff edges; carry them via
+            // the shared Inside preset (applied per-cell by the session) when no explicit preset
+            // was chosen in the preset combo.
+            var hasInsideToggle = borderInsideHorizontalToggle.IsChecked == true
+                || borderInsideVerticalToggle.IsChecked == true;
+            var borderPreset = borderChoice?.Value
+                ?? (hasInsideToggle ? CellBorderPreset.Inside : (CellBorderPreset?)null);
             var request = new FormatCellsCompactRequest(
                 NumberFormat: numberFormat,
                 HorizontalAlignment: ReadChangedFormatCellsValue(currentHorizontalAlignment, horizontalAlignmentBox),
@@ -7157,8 +8240,12 @@ public sealed partial class MainWindow : Window
                 IndentLevel: indentLevel,
                 TextRotation: textRotation,
                 Locked: ReadChangedFormatCellsBool(currentLocked, lockedBox),
-                Hidden: ReadChangedFormatCellsBool(currentHidden, hiddenBox));
-            result = new FormatCellsDialogResult(request, borderChoice?.Value, borderStyle, borderColor);
+                Hidden: ReadChangedFormatCellsBool(currentHidden, hiddenBox),
+                BorderTop: borderTopSide,
+                BorderRight: borderRightSide,
+                BorderBottom: borderBottomSide,
+                BorderLeft: borderLeftSide);
+            result = new FormatCellsDialogResult(request, borderPreset, borderStyle, borderColor);
             dialog.Close();
         }
 
@@ -7179,7 +8266,7 @@ public sealed partial class MainWindow : Window
         };
 
         var numberTab = CreateFormatCellsTab(
-            "Number",
+            UiText.Get("FormatCells_TabNumber"),
             "FormatCellsNumberTab",
             new StackPanel
             {
@@ -7192,32 +8279,42 @@ public sealed partial class MainWindow : Window
                         Spacing = 12,
                         Children =
                         {
-                            CreateFormatCellsField("Category", numberCategoryList),
-                            CreateFormatCellsField("Type", numberFormatBox),
+                            CreateFormatCellsField(UiText.Get("FormatCells_Category"), numberCategoryList),
+                            new StackPanel
+                            {
+                                Spacing = 10,
+                                Children =
+                                {
+                                    CreateFormatCellsField(UiText.Get("FormatCells_Type"), numberFormatBox),
+                                    CreateFormatCellsField(UiText.Get("FormatCells_DecimalPlaces"), numberDecimalPlacesBox),
+                                    CreateFormatCellsField(UiText.Get("FormatCells_Symbol"), numberSymbolBox),
+                                    CreateFormatCellsField(UiText.Get("FormatCells_NegativeNumbers"), numberNegativeBox),
+                                },
+                            },
                         },
                     },
-                    CreateFormatCellsField("Sample", numberPreview),
+                    CreateFormatCellsField(UiText.Get("FormatCells_Sample"), numberPreview),
                 },
             });
         var alignmentTab = CreateFormatCellsTab(
-            "Alignment",
+            UiText.Get("FormatCells_TabAlignment"),
             "FormatCellsAlignmentTab",
             new StackPanel
             {
                 Spacing = 10,
                 Children =
                 {
-                    CreateFormatCellsField("Horizontal", horizontalAlignmentBox),
-                    CreateFormatCellsField("Vertical", verticalAlignmentBox),
+                    CreateFormatCellsField(UiText.Get("FormatCells_Horizontal"), horizontalAlignmentBox),
+                    CreateFormatCellsField(UiText.Get("FormatCells_Vertical"), verticalAlignmentBox),
                     wrapTextBox,
                     shrinkToFitBox,
                     mergeCellsBox,
-                    CreateFormatCellsField("Indent", indentLevelBox),
-                    CreateFormatCellsField("Text rotation", textRotationBox),
+                    CreateFormatCellsField(UiText.Get("FormatCells_Indent"), indentLevelBox),
+                    CreateFormatCellsField(UiText.Get("FormatCells_TextRotation"), textRotationBox),
                 },
             });
         var fontTab = CreateFormatCellsTab(
-            "Font",
+            UiText.Get("FormatCells_TabFont"),
             "FormatCellsFontTab",
             new StackPanel
             {
@@ -7247,40 +8344,70 @@ public sealed partial class MainWindow : Window
                             subscriptBox,
                         },
                     },
-                    CreateFormatCellsField("Font", fontNameBox),
-                    CreateFormatCellsField("Size", fontSizeBox),
-                    CreateFormatCellsField("Color", fontColorBox),
+                    CreateFormatCellsField(UiText.Get("FormatCells_Font"), fontNameBox),
+                    CreateFormatCellsField(UiText.Get("FormatCells_Size"), fontSizeBox),
+                    CreateFormatCellsField(UiText.Get("FormatCells_Color"), fontColorBox),
                     normalFontBox,
+                    CreateFormatCellsField(UiText.Get("FormatCells_Preview"), fontPreview),
                 },
             });
         var fillTab = CreateFormatCellsTab(
-            "Fill",
+            UiText.Get("FormatCells_TabFill"),
             "FormatCellsFillTab",
             new StackPanel
             {
                 Spacing = 10,
                 Children =
                 {
-                    CreateFormatCellsField("Fill color", fillColorBox),
-                    CreateFormatCellsField("Pattern style", fillPatternStyleBox),
-                    CreateFormatCellsField("Pattern color", fillPatternColorBox),
+                    CreateFormatCellsField(UiText.Get("FormatCells_FillColor"), fillColorBox),
+                    CreateFormatCellsField(UiText.Get("FormatCells_PatternStyle"), fillPatternStyleBox),
+                    CreateFormatCellsField(UiText.Get("FormatCells_PatternColor"), fillPatternColorBox),
+                    CreateFormatCellsField(UiText.Get("FormatCells_Preview"), fillPreview),
                 },
             });
         var borderTab = CreateFormatCellsTab(
-            "Border",
+            UiText.Get("FormatCells_TabBorder"),
             "FormatCellsBorderTab",
             new StackPanel
             {
                 Spacing = 10,
                 Children =
                 {
-                    CreateFormatCellsField("Preset", borderPresetBox),
-                    CreateFormatCellsField("Line style", borderStyleBox),
-                    CreateFormatCellsField("Line color", borderColorBox),
+                    CreateFormatCellsField(UiText.Get("FormatCells_Preset"), borderPresetBox),
+                    CreateFormatCellsField(UiText.Get("FormatCells_LineStyle"), borderStyleBox),
+                    CreateFormatCellsField(UiText.Get("FormatCells_LineColor"), borderColorBox),
+                    new StackPanel
+                    {
+                        Orientation = Orientation.Horizontal,
+                        Spacing = 6,
+                        Children = { borderNoneButton, borderOutlineButton, borderInsideButton },
+                    },
+                    CreateFormatCellsField(
+                        UiText.Get("FormatCells_Borders"),
+                        new StackPanel
+                        {
+                            Spacing = 6,
+                            Children =
+                            {
+                                new StackPanel
+                                {
+                                    Orientation = Orientation.Horizontal,
+                                    Spacing = 6,
+                                    Children = { borderTopToggle, borderBottomToggle, borderLeftToggle, borderRightToggle },
+                                },
+                                new StackPanel
+                                {
+                                    Orientation = Orientation.Horizontal,
+                                    Spacing = 6,
+                                    Children = { borderInsideHorizontalToggle, borderInsideVerticalToggle },
+                                },
+                            },
+                        }),
+                    CreateFormatCellsField(UiText.Get("FormatCells_Preview"), borderPreview),
                 },
             });
         var protectionTab = CreateFormatCellsTab(
-            "Protection",
+            UiText.Get("FormatCells_TabProtection"),
             "FormatCellsProtectionTab",
             new StackPanel
             {
@@ -7411,6 +8538,28 @@ public sealed partial class MainWindow : Window
         return comboBox;
     }
 
+    private static ToggleButton CreateFormatCellsBorderSideToggle(string label, string automationId)
+    {
+        var toggle = new ToggleButton
+        {
+            Content = label,
+            MinWidth = 70,
+        };
+        AutomationProperties.SetName(toggle, label);
+        AutomationProperties.SetAutomationId(toggle, automationId);
+        return toggle;
+    }
+
+    private static double FormatCellsBorderPreviewThickness(BorderStyle style) =>
+        style switch
+        {
+            BorderStyle.None => 0,
+            BorderStyle.Medium => 2,
+            BorderStyle.Thick => 3,
+            BorderStyle.Double => 3,
+            _ => 1,
+        };
+
     private static CheckBox CreateFormatCellsCheckBox(string label, string automationId, bool isChecked)
     {
         var checkBox = new CheckBox
@@ -7420,67 +8569,6 @@ public sealed partial class MainWindow : Window
         };
         AutomationProperties.SetAutomationId(checkBox, automationId);
         return checkBox;
-    }
-
-    private static IReadOnlyList<FormatCellsNumberFormatChoice> CreateFormatCellsNumberFormatChoices(string currentNumberFormat)
-    {
-        var choices = new List<FormatCellsNumberFormatChoice>
-        {
-            new("General", GeneralNumberFormat, "Sample"),
-            new("Number", "0", "1234"),
-            new("Number", "0.00", "1234.00"),
-            new("Number", "#,##0", "1,234"),
-            new("Number", CommaNumberFormat, "1,234.00"),
-            new("Currency", CurrencyNumberFormat, "$1,234.00"),
-            new("Percentage", PercentNumberFormat, "12%"),
-            new("Percentage", "0.00%", "12.34%"),
-            new("Date", "m/d/yyyy", "1/1/2026"),
-            new("Time", "h:mm AM/PM", "9:30 AM"),
-        };
-        if (FindFormatCellsNumberFormatChoice(choices, currentNumberFormat) is null)
-            choices.Add(new FormatCellsNumberFormatChoice("Custom", currentNumberFormat, "Custom"));
-
-        return choices;
-    }
-
-    private static FormatCellsNumberFormatChoice? FindFormatCellsNumberFormatChoice(
-        IEnumerable<FormatCellsNumberFormatChoice> choices,
-        string formatCode)
-    {
-        foreach (var choice in choices)
-        {
-            if (string.Equals(choice.FormatCode, formatCode, StringComparison.Ordinal))
-                return choice;
-        }
-
-        return null;
-    }
-
-    private static IReadOnlyList<FormatCellsNumberFormatChoice> FilterFormatCellsNumberFormatChoices(
-        IEnumerable<FormatCellsNumberFormatChoice> choices,
-        string category)
-    {
-        var matchingChoices = new List<FormatCellsNumberFormatChoice>();
-        foreach (var choice in choices)
-        {
-            if (string.Equals(choice.Category, category, StringComparison.Ordinal))
-                matchingChoices.Add(choice);
-        }
-
-        return matchingChoices;
-    }
-
-    private static bool ContainsFormatCellsNumberFormatChoice(
-        IEnumerable<FormatCellsNumberFormatChoice> choices,
-        FormatCellsNumberFormatChoice selected)
-    {
-        foreach (var choice in choices)
-        {
-            if (EqualityComparer<FormatCellsNumberFormatChoice>.Default.Equals(choice, selected))
-                return true;
-        }
-
-        return false;
     }
 
     private static IReadOnlyList<FormatCellsNullableChoice<CellHAlign>> CreateFormatCellsHorizontalAlignmentChoices() =>
@@ -7502,20 +8590,8 @@ public sealed partial class MainWindow : Window
         new("Distributed", CellVAlign.Distributed),
     ];
 
-    private static IReadOnlyList<FormatCellsColorChoice> CreateFormatCellsColorChoices(bool includeClear)
-    {
-        var choices = new List<FormatCellsColorChoice>
-        {
-            new("No change", null, Clear: false),
-        };
-        if (includeClear)
-            choices.Add(new FormatCellsColorChoice("No fill", null, Clear: true));
-
-        choices.AddRange(CellColorPalettePlanner.BuildDefaultSwatches()
-            .Take(16)
-            .Select(swatch => new FormatCellsColorChoice(swatch.Hex, swatch.Color, Clear: false)));
-        return choices;
-    }
+    private FormatCellsColorPicker CreateFormatCellsColorPicker(string noColorLabel, bool includeClear, string moreColorsTitle) =>
+        new(_recentColors, ShowMoreColorsDialogAsync, noColorLabel, includeClear, moreColorsTitle);
 
     private static IReadOnlyList<FormatCellsNullableChoice<CellFillPatternStyle>> CreateFormatCellsFillPatternStyleChoices() =>
     [
@@ -7563,20 +8639,8 @@ public sealed partial class MainWindow : Window
         return value == currentValue ? null : value;
     }
 
-    private static void SelectFormatCellsColor(ComboBox comboBox, CellColor color)
-    {
-        if (comboBox.ItemsSource is not IEnumerable<FormatCellsColorChoice> choices)
-            return;
-
-        foreach (var choice in choices)
-        {
-            if (choice.Color == color)
-            {
-                comboBox.SelectedItem = choice;
-                return;
-            }
-        }
-    }
+    private static void SelectFormatCellsColor(FormatCellsColorPicker picker, CellColor color) =>
+        picker.SelectColor(color);
 
     private static T? ReadChangedFormatCellsValue<T>(T currentValue, ComboBox comboBox)
         where T : struct
@@ -7972,7 +9036,15 @@ public sealed partial class MainWindow : Window
     {
         if (e.Key == Key.Enter)
         {
-            CommitFormulaBox();
+            if (_isOpening || _isSaving)
+            {
+                ShowSaveIssue("Finish saving before editing cells.");
+            }
+            else
+            {
+                CommitFormulaBox();
+            }
+
             e.Handled = true;
         }
         else if (e.Key == Key.Tab)
@@ -7997,6 +9069,12 @@ public sealed partial class MainWindow : Window
 
     private bool CommitFormulaBox()
     {
+        if (_isOpening || _isSaving)
+        {
+            ShowSaveIssue("Finish saving before editing cells.");
+            return false;
+        }
+
         var address = _session.FormulaEditAddress ?? _session.ActiveCell;
         var result = _session.CommitCellText(_formulaBox.Text ?? "");
 
@@ -8149,7 +9227,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        RefreshShell($"Flash filled {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_FlashFilledX", rangeReference));
     }
 
     private void SortSelectedRange(bool ascending)
@@ -8188,11 +9266,11 @@ public sealed partial class MainWindow : Window
         var result = _session.ToggleSelectedRangeAutoFilter();
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Toggle Filter failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_ToggleFilterFailed"));
             return;
         }
 
-        RefreshShell(wasEnabled ? "Removed filter" : "Added filter");
+        RefreshShell(wasEnabled ? UiText.Get("MainLoc_RemovedFilter") : UiText.Get("MainLoc_AddedFilter"));
     }
 
     private async Task ShowSortDialogAsync()
@@ -8217,7 +9295,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        RefreshShell($"Sorted {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_SortedX", rangeReference));
     }
 
     private async Task<SortDialogResult?> ShowSortInputDialogAsync()
@@ -8649,11 +9727,11 @@ public sealed partial class MainWindow : Window
                 var restoreResult = _session.UndoLastEdit();
                 if (!restoreResult.Success)
                 {
-                    ShowEditIssue(restoreResult.ErrorMessage ?? "Goal Seek restore failed.");
+                    ShowEditIssue(restoreResult.ErrorMessage ?? UiText.Get("MainLoc_GoalSeekRestoreFailed"));
                     return;
                 }
 
-                RefreshShell($"Restored original Goal Seek values for {FormatCellReference(result.Request.ChangingCell)}");
+                RefreshShell(UiText.Format("MainLoc_RestoredGoalSeekValues", FormatCellReference(result.Request.ChangingCell)));
                 return;
             }
 
@@ -9345,13 +10423,13 @@ public sealed partial class MainWindow : Window
             : _session.ExecuteSubtotalOptions(selection.Options!);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Subtotal failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_SubtotalFailed"));
             return;
         }
 
         RefreshShell(selection.Action == SubtotalDialogAction.RemoveAll
-            ? $"Removed subtotals from {rangeReference}"
-            : $"Added subtotals to {rangeReference}");
+            ? UiText.Format("MainLoc_RemovedSubtotalsFrom", rangeReference)
+            : UiText.Format("MainLoc_AddedSubtotalsTo", rangeReference));
     }
 
     private async Task<SubtotalDialogResult?> ShowSubtotalInputDialogAsync()
@@ -9946,7 +11024,7 @@ public sealed partial class MainWindow : Window
         var initialPlan = ScenarioManagerPlanner.CreateDialogPlan(_session.Workbook);
         if (!initialPlan.IsReady)
         {
-            ShowEditIssue(initialPlan.StatusText ?? "Scenario Manager failed.");
+            ShowEditIssue(initialPlan.StatusText ?? UiText.Get("MainLoc_ScenarioManagerFailed"));
             return;
         }
 
@@ -10781,13 +11859,13 @@ public sealed partial class MainWindow : Window
             var clearResult = _session.ClearSelectedRangeDataValidation();
             if (!clearResult.Success)
             {
-                ShowEditIssue(clearResult.ErrorMessage ?? "Clear Data Validation failed.");
+                ShowEditIssue(clearResult.ErrorMessage ?? UiText.Get("MainLoc_ClearDataValidationFailed"));
                 return;
             }
 
             RefreshShell(clearResult.Mutated
-                ? $"Cleared data validation from {rangeReference}"
-                : $"No data validation to clear from {rangeReference}");
+                ? UiText.Format("MainLoc_ClearedDataValidationFrom", rangeReference)
+                : UiText.Format("MainLoc_NoDataValidationToClear", rangeReference));
             return;
         }
 
@@ -10797,7 +11875,7 @@ public sealed partial class MainWindow : Window
         var result = _session.ApplyDataValidationToSelectedRange(rule);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Data Validation failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_DataValidationFailed"));
             return;
         }
 
@@ -11039,22 +12117,29 @@ public sealed partial class MainWindow : Window
             var op = SelectedOperator();
             var showSecondFormula = DataValidationPresetPlanner.RequiresSecondFormula(type, op);
             var isList = type == DvType.List;
+            var isCustom = type == DvType.Custom;
+            var isAny = type == DvType.Any;
 
             formula1Label.Text = isList
                 ? "Source"
-                : showSecondFormula
-                    ? "Minimum"
-                    : "Value";
+                : isCustom
+                    ? "Formula"
+                    : showSecondFormula
+                        ? "Minimum"
+                        : "Value";
             AutomationProperties.SetName(formula1Box, formula1Label.Text);
             AutomationProperties.SetHelpText(
                 formula1Box,
                 isList
                     ? "List source range or comma-separated values."
-                    : showSecondFormula
-                        ? "Minimum value for the validation rule."
-                        : "Value for the validation rule.");
+                    : isCustom
+                        ? "Formula that must evaluate to TRUE (e.g. =A1>0)."
+                        : showSecondFormula
+                            ? "Minimum value for the validation rule."
+                            : "Value for the validation rule.");
             formula2Label.Text = "Maximum";
-            operatorField.IsVisible = !isList;
+            operatorField.IsVisible = !isList && !isCustom && !isAny;
+            formula1Field.IsVisible = !isAny;
             formula2Field.IsVisible = showSecondFormula;
             showDropdownBox.IsVisible = isList;
         }
@@ -11248,7 +12333,7 @@ public sealed partial class MainWindow : Window
 
     private static IReadOnlyList<DataValidationTypeChoice> CreateDataValidationTypeChoices() =>
         DataValidationPresetPlanner.GetRuleTypeMetadata()
-            .Where(metadata => metadata.Type is DvType.WholeNumber or DvType.List or DvType.TextLength)
+            .Where(metadata => metadata.Type is DvType.WholeNumber or DvType.Decimal or DvType.List or DvType.Date or DvType.Time or DvType.TextLength or DvType.Custom or DvType.Any)
             .Select(metadata => new DataValidationTypeChoice(metadata.Type, metadata.DisplayName))
             .ToArray();
 
@@ -11318,9 +12403,21 @@ public sealed partial class MainWindow : Window
         {
             DvType.List => "Yes,No",
             DvType.TextLength => "50",
+            DvType.Decimal => "0",
+            DvType.Date => "2024-01-01",
+            DvType.Time => "09:00",
+            DvType.Custom => "=A1>0",
+            DvType.Any => "",
             _ => "1",
         };
-        rule.Formula2 = type == DvType.WholeNumber ? "100" : "";
+        rule.Formula2 = type switch
+        {
+            DvType.WholeNumber => "100",
+            DvType.Decimal => "100",
+            DvType.Date => "2024-12-31",
+            DvType.Time => "17:00",
+            _ => "",
+        };
         rule.ShowDropdown = type == DvType.List;
         return rule;
     }
@@ -11339,11 +12436,21 @@ public sealed partial class MainWindow : Window
     {
         var first = formula1?.Trim() ?? "";
         var second = formula2?.Trim() ?? "";
+
+        if (type == DvType.Any)
+        {
+            errorMessage = "";
+            return true;
+        }
+
         if (string.IsNullOrWhiteSpace(first))
         {
-            errorMessage = type == DvType.List
-                ? "List source is required."
-                : "Value is required.";
+            errorMessage = type switch
+            {
+                DvType.List => "List source is required.",
+                DvType.Custom => "Formula is required.",
+                _ => "Value is required.",
+            };
             return false;
         }
 
@@ -11380,6 +12487,13 @@ public sealed partial class MainWindow : Window
                     TryValidateIntegralDataValidationCriterion(second, allowNegative: false, out errorMessage));
         }
 
+        if (type == DvType.Decimal)
+        {
+            return TryValidateNumericDataValidationCriterion(first, out errorMessage) &&
+                (!DataValidationPresetPlanner.RequiresSecondFormula(type, op) ||
+                    TryValidateNumericDataValidationCriterion(second, out errorMessage));
+        }
+
         errorMessage = "";
         return true;
     }
@@ -11409,6 +12523,33 @@ public sealed partial class MainWindow : Window
         if (!allowNegative && value < 0)
         {
             errorMessage = "Text length must be zero or greater.";
+            return false;
+        }
+
+        errorMessage = "";
+        return true;
+    }
+
+    private static bool TryValidateNumericDataValidationCriterion(
+        string text,
+        out string errorMessage)
+    {
+        if (text.TrimStart().StartsWith('='))
+        {
+            errorMessage = "";
+            return true;
+        }
+
+        if (!double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out var value) &&
+            !double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value))
+        {
+            errorMessage = "Value must be a number or formula.";
+            return false;
+        }
+
+        if (!double.IsFinite(value))
+        {
+            errorMessage = "Value must be a finite number.";
             return false;
         }
 
@@ -11592,12 +12733,12 @@ public sealed partial class MainWindow : Window
         var cutResult = _session.TryCutSelectedRangeText();
         if (!cutResult.Success)
         {
-            ShowEditIssue(cutResult.ErrorMessage ?? "Cut failed.");
+            ShowEditIssue(cutResult.ErrorMessage ?? UiText.Get("MainLoc_CutFailed"));
             return;
         }
 
         await clipboard.SetTextAsync(cutResult.Text);
-        RefreshShell($"Cut {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_CutX", rangeReference));
     }
 
     private async Task CopySelectedRangeToClipboardAsync()
@@ -11619,12 +12760,12 @@ public sealed partial class MainWindow : Window
         var copyResult = _session.TryCopySelectedRangeText();
         if (!copyResult.Success)
         {
-            ShowEditIssue(copyResult.ErrorMessage ?? "Copy failed.");
+            ShowEditIssue(copyResult.ErrorMessage ?? UiText.Get("MainLoc_CopyFailed"));
             return;
         }
 
         await clipboard.SetTextAsync(copyResult.Text);
-        RefreshShell($"Copied {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_CopiedX", rangeReference));
     }
 
     private void SelectCurrentRegionOrAll()
@@ -11637,7 +12778,7 @@ public sealed partial class MainWindow : Window
 
         ClearSelectedDrawingObject();
         var range = _session.SelectCurrentRegionOrAll();
-        RefreshShell($"Selected {FormatRangeReference(range)}");
+        RefreshShell(UiText.Format("MainLoc_SelectedX", FormatRangeReference(range)));
     }
 
     private async Task PasteClipboardTextAsync()
@@ -11670,7 +12811,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        RefreshShell($"Pasted at {FormatCellReference(destination)}");
+        RefreshShell(UiText.Format("MainLoc_PastedAt", FormatCellReference(destination)));
     }
 
     private async Task<bool> TryPasteClipboardImageAsync(IClipboard clipboard, CellAddress destination)
@@ -11699,11 +12840,11 @@ public sealed partial class MainWindow : Window
         var result = _session.PasteClipboardImageAtActiveCell(pngBytes, pixelWidth, pixelHeight);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Paste Picture failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_PastePictureFailed"));
             return true;
         }
 
-        RefreshShell($"Pasted picture at {FormatCellReference(destination)}");
+        RefreshShell(UiText.Format("MainLoc_PastedPictureAt", FormatCellReference(destination)));
         return true;
     }
 
@@ -11756,7 +12897,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        RefreshShell($"Pasted {label} at {FormatCellReference(destination)}");
+        RefreshShell(UiText.Format("MainLoc_PastedLabelAt", label, FormatCellReference(destination)));
     }
 
     private async Task PasteColumnWidthsFromClipboardAsync(string label)
@@ -11779,11 +12920,11 @@ public sealed partial class MainWindow : Window
         var result = _session.PasteColumnWidthsFromClipboardAtActiveCell(text);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Paste Column Widths failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_PasteColumnWidthsFailed"));
             return;
         }
 
-        RefreshShell($"Pasted {label} at {FormatCellReference(destination)}");
+        RefreshShell(UiText.Format("MainLoc_PastedLabelAt", label, FormatCellReference(destination)));
     }
 
     private async Task PasteCommentsFromClipboardAsync(string label)
@@ -11806,11 +12947,11 @@ public sealed partial class MainWindow : Window
         var result = _session.PasteCommentsFromClipboardAtActiveCell(text);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Paste Comments failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_PasteCommentsFailed"));
             return;
         }
 
-        RefreshShell($"Pasted {label} at {FormatCellReference(destination)}");
+        RefreshShell(UiText.Format("MainLoc_PastedLabelAt", label, FormatCellReference(destination)));
     }
 
     private async Task PasteDataValidationFromClipboardAsync(string label)
@@ -11833,11 +12974,11 @@ public sealed partial class MainWindow : Window
         var result = _session.PasteDataValidationFromClipboardAtActiveCell(text);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Paste Validation failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_PasteValidationFailed"));
             return;
         }
 
-        RefreshShell($"Pasted {label} at {FormatCellReference(destination)}");
+        RefreshShell(UiText.Format("MainLoc_PastedLabelAt", label, FormatCellReference(destination)));
     }
 
     private async Task PasteLinkFromClipboardAsync(string label)
@@ -11860,11 +13001,11 @@ public sealed partial class MainWindow : Window
         var result = _session.PasteLinkFromClipboardAtActiveCell(text);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Paste Link failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_PasteLinkFailed"));
             return;
         }
 
-        RefreshShell($"Pasted {label} at {FormatCellReference(destination)}");
+        RefreshShell(UiText.Format("MainLoc_PastedLabelAt", label, FormatCellReference(destination)));
     }
 
     private async Task PasteSpecialExternalTextFromClipboardAsync(string label)
@@ -11887,11 +13028,11 @@ public sealed partial class MainWindow : Window
         var result = _session.PasteClipboardTextAtActiveCell(text, preserveText: true);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Paste Special Text failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_PasteSpecialTextFailed"));
             return;
         }
 
-        RefreshShell($"Pasted {label} at {FormatCellReference(destination)}");
+        RefreshShell(UiText.Format("MainLoc_PastedLabelAt", label, FormatCellReference(destination)));
     }
 
     private async Task PastePictureFromClipboardAsync(string label, bool linkedPicture)
@@ -11914,11 +13055,11 @@ public sealed partial class MainWindow : Window
         var result = _session.PastePictureFromClipboardAtActiveCell(text, linkedPicture);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Paste Picture failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_PastePictureFailed"));
             return;
         }
 
-        RefreshShell($"Pasted {label} at {FormatCellReference(destination)}");
+        RefreshShell(UiText.Format("MainLoc_PastedLabelAt", label, FormatCellReference(destination)));
     }
 
     private void ClearSelectedRangeContents()
@@ -11956,7 +13097,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        RefreshShell($"Cleared all from {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_ClearedAllFrom", rangeReference));
     }
 
     private void ClearSelectedRangeFormats()
@@ -11975,7 +13116,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        RefreshShell($"Cleared formats from {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_ClearedFormatsFrom", rangeReference));
     }
 
     private void ClearSelectedRangeComments()
@@ -11994,7 +13135,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        RefreshShell($"Cleared comments and notes from {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_ClearedCommentsAndNotesFrom", rangeReference));
     }
 
     private void ClearSelectedRangeHyperlinks()
@@ -12013,7 +13154,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        RefreshShell($"Cleared hyperlinks from {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_ClearedHyperlinksFrom", rangeReference));
     }
 
     private void CaptureFormatPainterSource(bool persistent)
@@ -12027,8 +13168,8 @@ public sealed partial class MainWindow : Window
         var rangeReference = FormatRangeReference(_session.SelectedRange);
         _session.CaptureFormatPainterSource(persistent);
         RefreshShell(persistent
-            ? $"Format Painter locked on {rangeReference}"
-            : $"Format Painter copied {rangeReference}");
+            ? UiText.Format("MainLoc_FormatPainterLockedOn", rangeReference)
+            : UiText.Format("MainLoc_FormatPainterCopied", rangeReference));
     }
 
     private void CancelFormatPainter()
@@ -12037,7 +13178,7 @@ public sealed partial class MainWindow : Window
             return;
 
         _session.CancelFormatPainter();
-        RefreshShell("Format Painter canceled");
+        RefreshShell(UiText.Get("MainLoc_FormatPainterCanceled"));
     }
 
     private void ApplyFormatPainterAfterTargetSelection()
@@ -12057,7 +13198,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        RefreshShell($"Applied Format Painter to {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_AppliedFormatPainterTo", rangeReference));
     }
 
     private void ToggleSelectedRangeBold()
@@ -12275,11 +13416,11 @@ public sealed partial class MainWindow : Window
         if (!result.Success)
         {
             RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "Set Font Size failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_SetFontSizeFailed"));
             return;
         }
 
-        RefreshShell($"Set font size {size:0.##} for {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_SetFontSizeFor", size, rangeReference));
     }
 
     /// <summary>
@@ -12302,11 +13443,11 @@ public sealed partial class MainWindow : Window
         if (!result.Success)
         {
             RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "Set Font failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_SetFontFailed"));
             return;
         }
 
-        RefreshShell($"Set font {fontName.Trim()} for {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_SetFontFor", fontName.Trim(), rangeReference));
     }
 
     private void IncreaseSelectedRangeFontSize()
@@ -12611,6 +13752,16 @@ public sealed partial class MainWindow : Window
         ApplySelectedRangeNumberFormat(CurrencyNumberFormat, "Applied currency format to", "Currency format failed.");
     }
 
+    /// <summary>
+    /// Applies an accounting number format for the given currency symbol (e.g. "€"/"£"/"¥") to the
+    /// selection, reusing the shared <see cref="FormatCellsNumberFormatPlanner.BuildAccountingFormatFor"/>.
+    /// </summary>
+    private void ApplySelectedRangeAccountingFormat(string symbol)
+    {
+        var format = FormatCellsNumberFormatPlanner.BuildAccountingFormatFor(2, symbol);
+        ApplySelectedRangeNumberFormat(format, "Applied accounting format to", "Accounting format failed.");
+    }
+
     private void ApplySelectedRangePercentFormat()
     {
         ApplySelectedRangeNumberFormat(PercentNumberFormat, "Applied percent format to", "Percent format failed.");
@@ -12903,13 +14054,10 @@ public sealed partial class MainWindow : Window
 
         var hasGoToDialog = false;
         var hasGoToDialogReferenceControls = false;
+        var hasGoToDialogHistoryControls = false;
+        var hasGoToDialogSpecialControl = false;
         var hasGoToDialogCompactLayout = false;
-        var goToDialogResult = await ShowSingleInputDialogAsync(
-            "Go To",
-            "Reference",
-            FormatRangeReference(_session.SelectedRange),
-            "Go",
-            "GoToReferenceBox",
+        var goToDialogResult = await ShowGoToInputDialogAsync(
             probe =>
             {
                 hasGoToDialog = HasLaunchSmokeDialog(probe.Dialog, "Go To");
@@ -12917,7 +14065,13 @@ public sealed partial class MainWindow : Window
                     HasLaunchSmokeAutomationId(probe.InputBox, "GoToReferenceBox") &&
                     HasLaunchSmokeButton(probe.AcceptButton, "GoToReferenceBoxAcceptButton", "Go") &&
                     HasLaunchSmokeButton(probe.CancelButton, "GoToReferenceBoxCancelButton", "Cancel");
-                hasGoToDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 380, height: 165, minWidth: 340, minHeight: 155);
+                hasGoToDialogHistoryControls =
+                    HasLaunchSmokeAutomationId(probe.HistoryList, "GoToHistoryList") &&
+                    string.Equals(AutomationProperties.GetName(probe.HistoryList), "Go to", StringComparison.Ordinal) &&
+                    probe.HistoryList.ItemCount > 0;
+                hasGoToDialogSpecialControl =
+                    HasLaunchSmokeButton(probe.SpecialButton, "GoToSpecialButton", "Special...");
+                hasGoToDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 380, height: 320, minWidth: 340, minHeight: 280);
             });
 
         var hasGoToSpecialDialog = false;
@@ -13052,6 +14206,69 @@ public sealed partial class MainWindow : Window
             hasDataValidationDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 540, height: 560, minWidth: 460, minHeight: 440);
         });
 
+        var hasConditionalFormatRuleDialog = false;
+        var hasConditionalFormatRuleTypeControls = false;
+        var hasConditionalFormatRulePresetControls = false;
+        var hasConditionalFormatRuleValueControls = false;
+        var hasConditionalFormatRuleActionButtons = false;
+        var hasConditionalFormatRuleCompactLayout = false;
+        var conditionalFormatRuleDialogResult = await ShowConditionalFormatRuleEditorAsync(
+            existingRule: null,
+            launchSmokeProbe: probe =>
+            {
+                hasConditionalFormatRuleDialog = HasLaunchSmokeDialog(probe.Dialog, "New Formatting Rule");
+                hasConditionalFormatRuleTypeControls =
+                    HasLaunchSmokeComboBox(probe.RuleTypeBox, "ConditionalFormatRuleTypeBox", "Rule type") &&
+                    probe.RuleTypeBox.SelectedIndex == 0 &&
+                    HasLaunchSmokeComboBox(probe.TopBottomBox, "ConditionalFormatTopBottomBox", "Top or bottom") &&
+                    HasLaunchSmokeAutomationId(probe.IconSetBox, "ConditionalFormatIconSetBox");
+                hasConditionalFormatRulePresetControls =
+                    HasLaunchSmokeComboBox(probe.PresetBox, "ConditionalFormatPresetBox", "Preset") &&
+                    probe.PresetBox.ItemCount > 0 &&
+                    HasLaunchSmokeAutomationId(probe.HighlightBox, "ConditionalFormatHighlightBox") &&
+                    probe.HighlightBox.SelectedIndex == 0;
+                hasConditionalFormatRuleValueControls =
+                    HasLaunchSmokeAutomationId(probe.OperatorBox, "ConditionalFormatOperatorBox") &&
+                    HasLaunchSmokeAutomationId(probe.Value1Box, "ConditionalFormatValue1Box") &&
+                    HasLaunchSmokeAutomationId(probe.FormulaBox, "ConditionalFormatFormulaBox") &&
+                    HasLaunchSmokeAutomationId(probe.TextBox, "ConditionalFormatTextBox") &&
+                    HasLaunchSmokeAutomationId(probe.RankBox, "ConditionalFormatRankBox") &&
+                    HasLaunchSmokeAutomationId(probe.MinColorBox, "ConditionalFormatMinColorBox") &&
+                    HasLaunchSmokeAutomationId(probe.MaxColorBox, "ConditionalFormatMaxColorBox");
+                hasConditionalFormatRuleActionButtons =
+                    HasLaunchSmokeButton(probe.OkButton, "ConditionalFormatOkButton", "OK") &&
+                    HasLaunchSmokeButton(probe.CancelButton, "ConditionalFormatCancelButton", "Cancel");
+                hasConditionalFormatRuleCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 460, height: 470, minWidth: 420, minHeight: 400);
+            });
+
+        var hasManageConditionalFormatsDialog = false;
+        var hasManageConditionalFormatsListControls = false;
+        var hasManageConditionalFormatsReorderControls = false;
+        var hasManageConditionalFormatsAppliesToControls = false;
+        var hasManageConditionalFormatsActionButtons = false;
+        var hasManageConditionalFormatsCompactLayout = false;
+        var manageConditionalFormatsClosedWithoutAccept = false;
+        await ShowManageConditionalFormatsDialogAsync(probe =>
+        {
+            hasManageConditionalFormatsDialog = HasLaunchSmokeDialog(probe.Dialog, "Manage Conditional Formatting Rules");
+            hasManageConditionalFormatsListControls =
+                HasLaunchSmokeAutomationId(probe.ListBox, "ManageConditionalFormatsListBox") &&
+                string.Equals(AutomationProperties.GetName(probe.ListBox), "Conditional formatting rules", StringComparison.Ordinal);
+            hasManageConditionalFormatsReorderControls =
+                HasLaunchSmokeButton(probe.MoveUpButton, "ManageConditionalFormatsMoveUpButton", "Move Up") &&
+                HasLaunchSmokeButton(probe.MoveDownButton, "ManageConditionalFormatsMoveDownButton", "Move Down");
+            hasManageConditionalFormatsAppliesToControls =
+                HasLaunchSmokeAutomationId(probe.AppliesToBox, "ManageConditionalFormatsAppliesToBox") &&
+                HasLaunchSmokeButton(probe.ApplyAppliesToButton, "ManageConditionalFormatsApplyAppliesToButton", "Apply Range");
+            hasManageConditionalFormatsActionButtons =
+                HasLaunchSmokeButton(probe.NewButton, "ManageConditionalFormatsNewButton", "New…") &&
+                HasLaunchSmokeButton(probe.EditButton, "ManageConditionalFormatsEditButton", "Edit…") &&
+                HasLaunchSmokeButton(probe.DeleteButton, "ManageConditionalFormatsDeleteButton", "Delete") &&
+                HasLaunchSmokeButton(probe.CloseButton, "ManageConditionalFormatsCloseButton", "Close");
+            hasManageConditionalFormatsCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 560, height: 460, minWidth: 480, minHeight: 360);
+            manageConditionalFormatsClosedWithoutAccept = true;
+        });
+
         _launchSmokeDialogEvidence = new MacOsLaunchSmokeDialogSnapshot(
             hasFindDialog,
             hasFindDialogTextBox,
@@ -13067,6 +14284,8 @@ public sealed partial class MainWindow : Window
             hasReplaceDialogCompactLayout,
             hasGoToDialog,
             hasGoToDialogReferenceControls,
+            hasGoToDialogHistoryControls,
+            hasGoToDialogSpecialControl,
             hasGoToDialogCompactLayout,
             hasGoToSpecialDialog,
             hasGoToSpecialKindControls,
@@ -13096,7 +14315,21 @@ public sealed partial class MainWindow : Window
             hasDataValidationDialogMessageControls,
             hasDataValidationDialogActionButtons,
             hasDataValidationDialogCompactLayout,
-            dataValidationDialogResult is null);
+            dataValidationDialogResult is null,
+            hasConditionalFormatRuleDialog,
+            hasConditionalFormatRuleTypeControls,
+            hasConditionalFormatRulePresetControls,
+            hasConditionalFormatRuleValueControls,
+            hasConditionalFormatRuleActionButtons,
+            hasConditionalFormatRuleCompactLayout,
+            conditionalFormatRuleDialogResult is null,
+            hasManageConditionalFormatsDialog,
+            hasManageConditionalFormatsListControls,
+            hasManageConditionalFormatsReorderControls,
+            hasManageConditionalFormatsAppliesToControls,
+            hasManageConditionalFormatsActionButtons,
+            hasManageConditionalFormatsCompactLayout,
+            manageConditionalFormatsClosedWithoutAccept);
         return _launchSmokeDialogEvidence;
     }
 
@@ -13348,17 +14581,17 @@ public sealed partial class MainWindow : Window
             HasNativeSheetMenu: hasNativeSheetMenu,
             HasNativeWindowMenu: hasNativeWindowMenu,
             HasNativeHelpMenu: hasNativeHelpMenu,
-            HasNativeNewWorkbookMenuItem: HasNativeMenuItem(_newWorkbookMenuItem, "New Workbook"),
-            HasNativeOpenMenuItem: HasNativeMenuItem(_openMenuItem, "Open..."),
-            HasNativeOpenRecentMenuItem: HasNativeMenuItem(_openRecentMenuItem, "Open Recent", requireGesture: false),
+            HasNativeNewWorkbookMenuItem: HasNativeMenuItem(_newWorkbookMenuItem, UiText.Get("AvaloniaNativeMenu_NewWorkbook")),
+            HasNativeOpenMenuItem: HasNativeMenuItem(_openMenuItem, UiText.Get("AvaloniaNativeMenu_Open")),
+            HasNativeOpenRecentMenuItem: HasNativeMenuItem(_openRecentMenuItem, UiText.Get("AvaloniaNativeMenu_OpenRecent"), requireGesture: false),
             NativeOpenRecentItemCount: nativeOpenRecentItemCount,
-            HasNativeSaveMenuItem: HasNativeMenuItem(_saveMenuItem, "Save"),
-            HasNativeSaveAsMenuItem: HasNativeMenuItem(_saveAsMenuItem, "Save As..."),
-            HasNativeExportPdfMenuItem: HasNativeMenuItem(_exportPdfMenuItem, "Export to PDF...", requireGesture: false),
-            HasNativeShareWorkbookMenuItem: HasEnabledNativeMenuItem(_shareWorkbookMenuItem, "Share Workbook...", requireGesture: false),
-            HasNativeWorkbookStatisticsMenuItem: HasNativeMenuItem(_workbookStatisticsMenuItem, "Workbook Statistics..."),
-            HasNativeCloseWorkbookMenuItem: HasNativeMenuItem(_closeWorkbookMenuItem, "Close Workbook"),
-            HasNativeNewSheetMenuItem: HasNativeMenuItem(_newSheetMenuItem, "New Sheet"),
+            HasNativeSaveMenuItem: HasNativeMenuItem(_saveMenuItem, UiText.Get("AvaloniaNativeMenu_Save")),
+            HasNativeSaveAsMenuItem: HasNativeMenuItem(_saveAsMenuItem, UiText.Get("AvaloniaNativeMenu_SaveAs")),
+            HasNativeExportPdfMenuItem: HasNativeMenuItem(_exportPdfMenuItem, UiText.Get("AvaloniaNativeMenu_ExportPdf"), requireGesture: false),
+            HasNativeShareWorkbookMenuItem: HasEnabledNativeMenuItem(_shareWorkbookMenuItem, UiText.Get("AvaloniaNativeMenu_ShareWorkbook"), requireGesture: false),
+            HasNativeWorkbookStatisticsMenuItem: HasNativeMenuItem(_workbookStatisticsMenuItem, UiText.Get("AvaloniaNativeMenu_WorkbookStatistics")),
+            HasNativeCloseWorkbookMenuItem: HasNativeMenuItem(_closeWorkbookMenuItem, UiText.Get("AvaloniaNativeMenu_CloseWorkbook")),
+            HasNativeNewSheetMenuItem: HasNativeMenuItem(_newSheetMenuItem, UiText.Get("AvaloniaNativeMenu_NewSheet")),
             HasNativeRenameSheetMenuItem: HasNativeMenuItem(_renameSheetMenuItem, "Rename Sheet...", requireGesture: false),
             HasNativeDuplicateSheetMenuItem: HasNativeMenuItem(_duplicateSheetMenuItem, "Duplicate Sheet", requireGesture: false),
             HasNativeMoveSheetLeftMenuItem: HasNativeMenuItem(_moveSheetLeftMenuItem, "Move Sheet Left", requireGesture: false),
@@ -13700,6 +14933,9 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        if (TryHandleRowColumnVisibilityShortcut(e))
+            return;
+
         if (!e.KeyModifiers.HasFlag(KeyModifiers.Control) &&
             !e.KeyModifiers.HasFlag(KeyModifiers.Meta))
         {
@@ -13901,6 +15137,16 @@ public sealed partial class MainWindow : Window
             e.Handled = true;
             await CloseWorkbookAsync();
         }
+        else if (e.Key == Key.P && HasOnlyCommandModifier(e.KeyModifiers))
+        {
+            e.Handled = true;
+            await ShowPrintDialogAsync();
+        }
+        else if (e.Key == Key.P && HasCommandAndShiftModifiers(e.KeyModifiers))
+        {
+            e.Handled = true;
+            await ShowPrintPreviewDialogAsync();
+        }
         else if (e.Key == Key.O)
         {
             e.Handled = true;
@@ -13948,7 +15194,7 @@ public sealed partial class MainWindow : Window
         {
             _session.CancelFormulaEdit();
             _formulaBoxEditOriginalText = null;
-            ShowEditIssue(result.ErrorMessage ?? "Data validation dropdown failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_DataValidationDropdownFailed"));
             return;
         }
 
@@ -14245,7 +15491,7 @@ public sealed partial class MainWindow : Window
             return;
 
         if (_session.UpdateViewportSize(viewportHeight, viewportWidth))
-            RefreshShell(string.IsNullOrWhiteSpace(_statusText.Text) ? "Ready" : _statusText.Text);
+            RefreshShell(string.IsNullOrWhiteSpace(_statusText.Text) ? UiText.Get("MainLoc_Ready") : _statusText.Text);
     }
 
     private void WorksheetScrollBar_ValueChanged(object? sender, RangeBaseValueChangedEventArgs e)
@@ -14668,152 +15914,180 @@ public sealed partial class MainWindow : Window
 
     private async Task SaveWorkbookAsAsync()
     {
-        if (_isSaving)
+        if (!TryBeginFileOperation())
             return;
 
-        if (!TryCommitPendingFormulaEdit())
-            return;
-
-        if (!StorageProvider.CanSave)
+        try
         {
-            ShowSaveIssue("Save As unavailable on this platform.");
-            return;
-        }
+            if (!TryCommitPendingFormulaEdit())
+                return;
 
-        var fileTypes = BuildSaveFileTypes();
-        if (fileTypes.Count == 0)
-        {
-            ShowSaveIssue("No save formats are available.");
-            return;
-        }
-
-        var storageFile = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
-        {
-            Title = "Save Workbook",
-            SuggestedFileName = _session.BuildSuggestedSaveAsFileName(NativeWorkbookExtension),
-            DefaultExtension = NativeWorkbookExtension[1..],
-            FileTypeChoices = fileTypes,
-            SuggestedFileType = fileTypes[0],
-            ShowOverwritePrompt = true,
-        });
-
-        if (storageFile is null)
-            return;
-
-        using (storageFile)
-        {
-            var path = storageFile.TryGetLocalPath();
-            if (string.IsNullOrWhiteSpace(path))
+            if (!StorageProvider.CanSave)
             {
-                ShowSaveIssue("Save As requires a local file path.");
+                ShowSaveIssue("Save As unavailable on this platform.");
                 return;
             }
 
-            path = WorkbookSession.EnsureSaveExtension(path, NativeWorkbookExtension);
-            if (!_session.TryResolveSaveTarget(path, out var target, out var message))
+            var fileTypes = BuildSaveFileTypes();
+            if (fileTypes.Count == 0)
             {
-                ShowSaveIssue(message);
+                ShowSaveIssue("No save formats are available.");
                 return;
             }
 
-            var fileAccessIdentity = await _workbookFileAccessService.CreateIdentityAsync(path, storageFile);
-            await SaveWorkbookToTargetAsync(target!, fileAccessIdentity);
+            var storageFile = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+            {
+                Title = "Save Workbook",
+                SuggestedFileName = _session.BuildSuggestedSaveAsFileName(NativeWorkbookExtension),
+                DefaultExtension = NativeWorkbookExtension[1..],
+                FileTypeChoices = fileTypes,
+                SuggestedFileType = fileTypes[0],
+                ShowOverwritePrompt = true,
+            });
+
+            if (storageFile is null)
+                return;
+
+            using (storageFile)
+            {
+                var path = storageFile.TryGetLocalPath();
+                if (string.IsNullOrWhiteSpace(path))
+                {
+                    ShowSaveIssue("Save As requires a local file path.");
+                    return;
+                }
+
+                var requestedPath = path;
+                path = WorkbookSession.EnsureSaveExtension(path, NativeWorkbookExtension);
+                if (ShouldPromptForNormalizedWorkbookOverwrite(requestedPath, path) &&
+                    !await ConfirmNormalizedWorkbookOverwriteAsync(path))
+                {
+                    ShowSaveIssue("Save canceled.");
+                    return;
+                }
+
+                if (!_session.TryResolveSaveTarget(path, out var target, out var message))
+                {
+                    ShowSaveIssue(message);
+                    return;
+                }
+
+                var fileAccessIdentity = await _workbookFileAccessService.CreateIdentityAsync(path, storageFile);
+                await SaveWorkbookToTargetAsync(target!, fileAccessIdentity);
+            }
+        }
+        finally
+        {
+            EndFileOperation();
         }
     }
 
     private async Task ExportActiveSheetPdfAsync()
     {
-        if (_isSaving)
+        if (!TryBeginFileOperation())
             return;
 
-        if (!TryCommitPendingFormulaEdit())
-            return;
-
-        if (!StorageProvider.CanSave)
+        try
         {
-            ShowExportIssue("PDF export unavailable on this platform.");
-            return;
-        }
+            if (!TryCommitPendingFormulaEdit())
+                return;
 
-        var pdfFileType = new FilePickerFileType("PDF Document")
-        {
-            Patterns = ["*.pdf"],
-        };
-        var storageFile = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
-        {
-            Title = "Export to PDF",
-            SuggestedFileName = BuildSuggestedPdfExportFileName(),
-            DefaultExtension = "pdf",
-            FileTypeChoices = [pdfFileType],
-            SuggestedFileType = pdfFileType,
-            ShowOverwritePrompt = true,
-        });
-
-        if (storageFile is null)
-            return;
-
-        using (storageFile)
-        {
-            var path = storageFile.TryGetLocalPath();
-            if (string.IsNullOrWhiteSpace(path))
+            if (!StorageProvider.CanSave)
             {
-                ShowExportIssue("PDF export requires a local file path.");
+                ShowExportIssue(UiText.Get("MainLoc_PdfExportUnavailable"));
                 return;
             }
 
-            var requestedPath = path;
-            var exportPathPlan = ExportPathPlanner.Plan(requestedPath, ExportFileFormat.Pdf);
-            if (ExportPathPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, exportPathPlan, File.Exists) &&
-                !await ConfirmNormalizedPdfOverwriteAsync(exportPathPlan.Path))
+            var pdfFileType = new FilePickerFileType("PDF Document")
             {
-                ShowExportIssue("PDF export canceled.");
+                Patterns = ["*.pdf"],
+            };
+            var storageFile = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+            {
+                Title = "Export to PDF",
+                SuggestedFileName = BuildSuggestedPdfExportFileName(),
+                DefaultExtension = "pdf",
+                FileTypeChoices = [pdfFileType],
+                SuggestedFileType = pdfFileType,
+                ShowOverwritePrompt = true,
+            });
+
+            if (storageFile is null)
                 return;
-            }
 
-            path = exportPathPlan.Path;
-            _isSaving = true;
-            UpdateSaveButton();
-            try
+            using (storageFile)
             {
-                _statusText.Text = "Exporting PDF...";
-                _statusText.Foreground = Brush(67, 113, 83);
-
-                var exportPrintPlan = CreateActiveSheetPortablePdfPrintPlan();
-                var exportPlan = PortablePdfExportPlanner.CreatePlan(exportPrintPlan);
-                if (!exportPlan.IsReady)
+                var path = storageFile.TryGetLocalPath();
+                if (string.IsNullOrWhiteSpace(path))
                 {
-                    ShowExportIssue(exportPlan.StatusText);
+                    ShowExportIssue(UiText.Get("MainLoc_PdfExportRequiresLocalPath"));
                     return;
                 }
 
-                PortablePdfDocumentExportResult result;
-                try
+                var requestedPath = path;
+                var exportPathPlan = ExportPathPlanner.Plan(requestedPath, ExportFileFormat.Pdf);
+                if (ExportPathPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, exportPathPlan, File.Exists) &&
+                    !await ConfirmNormalizedPdfOverwriteAsync(exportPathPlan.Path))
                 {
-                    // Skia shapes and automatically embeds/subsets fonts, so Unicode (non-WinAnsi)
-                    // text exports correctly. Fall back to the dependency-free WinAnsi writer if Skia
-                    // is unavailable so export still works for ASCII/WinAnsi content.
-                    using var pdfBuffer = new MemoryStream();
-                    result = Pdf.SkiaPdfDocumentExporter.Save(_session.Workbook, exportPlan, pdfBuffer);
-                    await File.WriteAllBytesAsync(path, pdfBuffer.ToArray());
-                }
-                catch (Exception)
-                {
-                    result = PortablePdfDocumentExporter.Save(_session.Workbook, exportPlan, path);
+                    ShowExportIssue(UiText.Get("MainLoc_PdfExportCanceled"));
+                    return;
                 }
 
-                RefreshShell($"{result.StatusText} {Path.GetFileName(path)}");
-            }
-            catch (Exception ex)
-            {
-                ShowExportIssue($"PDF export failed: {ex.Message}");
-            }
-            finally
-            {
-                _isSaving = false;
-                UpdateSaveButton();
+                path = exportPathPlan.Path;
+                try
+                {
+                    _statusText.Text = "Exporting PDF...";
+                    _statusText.Foreground = Brush(67, 113, 83);
+
+                    var exportPrintPlan = CreateActiveSheetPortablePdfPrintPlan();
+                    var exportPlan = PortablePdfExportPlanner.CreatePlan(exportPrintPlan);
+                    if (!exportPlan.IsReady)
+                    {
+                        ShowExportIssue(exportPlan.StatusText);
+                        return;
+                    }
+
+                    // Prefer the Unicode-capable Skia writer (shapes + auto-embeds/subsets fonts), and
+                    // fall back to the dependency-free WinAnsi writer when Skia is unavailable
+                    // (headless/no-Skia). The routing decision lives in AvaloniaPdfDocumentExporter so it
+                    // is exercised by tests.
+                    using var pdfBuffer = new MemoryStream();
+                    var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, exportPlan, pdfBuffer);
+                    await File.WriteAllBytesAsync(path, pdfBuffer.ToArray());
+
+                    RefreshShell(UiText.Format("MainLoc_StatusFileName", outcome.Result.StatusText, Path.GetFileName(path)));
+                }
+                catch (Exception ex)
+                {
+                    ShowExportIssue(UiText.Format("MainLoc_PdfExportFailed", ex.Message));
+                }
             }
         }
+        finally
+        {
+            EndFileOperation();
+        }
     }
+
+    private bool TryBeginFileOperation()
+    {
+        if (_isOpening || _isSaving)
+            return false;
+
+        _isSaving = true;
+        UpdateSaveButton();
+        return true;
+    }
+
+    private void EndFileOperation()
+    {
+        _isSaving = false;
+        UpdateSaveButton();
+    }
+
+    private static bool ShouldPromptForNormalizedWorkbookOverwrite(string requestedPath, string normalizedPath) =>
+        !string.Equals(Path.GetFullPath(requestedPath), Path.GetFullPath(normalizedPath), StringComparison.OrdinalIgnoreCase)
+        && File.Exists(normalizedPath);
 
     private async Task<bool> ConfirmNormalizedPdfOverwriteAsync(string normalizedPath)
     {
@@ -14913,6 +16187,104 @@ public sealed partial class MainWindow : Window
         return shouldReplace;
     }
 
+    private async Task<bool> ConfirmNormalizedWorkbookOverwriteAsync(string normalizedPath)
+    {
+        var fileName = Path.GetFileName(normalizedPath);
+        if (string.IsNullOrWhiteSpace(fileName))
+            fileName = normalizedPath;
+
+        var dialog = new Window
+        {
+            Title = "Replace workbook?",
+            Width = 460,
+            Height = 210,
+            MinWidth = 420,
+            MinHeight = 200,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+
+        var titleText = new TextBlock
+        {
+            Text = $"{fileName} already exists.",
+            FontSize = 16,
+            FontWeight = FontWeight.SemiBold,
+            TextWrapping = TextWrapping.Wrap,
+        };
+        var detailText = new TextBlock
+        {
+            Text = "FreeX changed the selected file name to use the workbook extension. Replace the existing workbook?",
+            Foreground = HeaderForeground,
+            TextWrapping = TextWrapping.Wrap,
+        };
+
+        var replaceButton = new Button
+        {
+            Content = "Replace",
+            MinWidth = 92,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(replaceButton, "WorkbookSaveOverwriteReplaceButton");
+        AutomationProperties.SetName(replaceButton, "Replace");
+        AutomationProperties.SetHelpText(replaceButton, "Replace the existing normalized workbook file.");
+
+        var cancelButton = new Button
+        {
+            Content = "Cancel",
+            MinWidth = 92,
+            Padding = new Thickness(10, 4),
+            IsCancel = true,
+        };
+        AutomationProperties.SetAutomationId(cancelButton, "WorkbookSaveOverwriteCancelButton");
+        AutomationProperties.SetName(cancelButton, "Cancel");
+        AutomationProperties.SetHelpText(cancelButton, "Return without saving the workbook.");
+
+        var shouldReplace = false;
+        void Finish(bool value)
+        {
+            shouldReplace = value;
+            dialog.Close();
+        }
+
+        replaceButton.Click += (_, _) => Finish(true);
+        cancelButton.Click += (_, _) => Finish(false);
+        dialog.Opened += (_, _) => cancelButton.Focus();
+        dialog.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Escape)
+            {
+                Finish(false);
+                e.Handled = true;
+            }
+        };
+
+        dialog.Content = new StackPanel
+        {
+            Margin = new Thickness(18),
+            Spacing = 12,
+            Children =
+            {
+                titleText,
+                detailText,
+                new Border { Height = 10 },
+                new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 8,
+                    HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+                    Children =
+                    {
+                        cancelButton,
+                        replaceButton,
+                    },
+                },
+            },
+        };
+
+        await dialog.ShowDialog(this);
+        return shouldReplace;
+    }
+
     private WorkbookExportPrintPlan CreateActiveSheetPortablePdfPrintPlan() =>
         WorkbookExportPrintPlanner.CreatePlan(
             _session.Workbook,
@@ -14922,6 +16294,114 @@ public sealed partial class MainWindow : Window
                 ActiveSheetIndex: ResolveActiveSheetIndex()),
             new WorkbookExportPrintPageCapacity(PortablePdfRowsPerPage, PortablePdfColumnsPerPage),
             WorkbookExportPrintSurface.MacOs);
+
+    /// <summary>
+    /// Scoped variant of <see cref="ExportActiveSheetPdfAsync"/> used by the backstage Export pane. Reuses
+    /// the same picker → <see cref="WorkbookExportPrintPlanner"/> → <see cref="PortablePdfExportPlanner"/>
+    /// → <see cref="Pdf.AvaloniaPdfDocumentExporter"/> path; the only addition is honoring the user's chosen
+    /// scope (selection / active sheet / whole visible workbook). Output kind is currently PDF on this
+    /// surface (XPS is offered only where the surface advertises it, which macOS does not).
+    /// </summary>
+    private async Task ExportWorkbookPdfAsync(
+        WorkbookExportPrintScope scope,
+        WorkbookExportPrintOutputKind outputKind)
+    {
+        if (!TryBeginFileOperation())
+            return;
+
+        try
+        {
+            if (!StorageProvider.CanSave)
+            {
+                ShowExportIssue(UiText.Get("MainLoc_PdfExportUnavailable"));
+                return;
+            }
+
+            var pdfFileType = new FilePickerFileType("PDF Document")
+            {
+                Patterns = ["*.pdf"],
+            };
+            var storageFile = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+            {
+                Title = "Export to PDF",
+                SuggestedFileName = BuildSuggestedPdfExportFileName(),
+                DefaultExtension = "pdf",
+                FileTypeChoices = [pdfFileType],
+                SuggestedFileType = pdfFileType,
+                ShowOverwritePrompt = true,
+            });
+
+            if (storageFile is null)
+                return;
+
+            using (storageFile)
+            {
+                var path = storageFile.TryGetLocalPath();
+                if (string.IsNullOrWhiteSpace(path))
+                {
+                    ShowExportIssue(UiText.Get("MainLoc_PdfExportRequiresLocalPath"));
+                    return;
+                }
+
+                var requestedPath = path;
+                var exportPathPlan = ExportPathPlanner.Plan(requestedPath, ExportFileFormat.Pdf);
+                if (ExportPathPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, exportPathPlan, File.Exists) &&
+                    !await ConfirmNormalizedPdfOverwriteAsync(exportPathPlan.Path))
+                {
+                    ShowExportIssue(UiText.Get("MainLoc_PdfExportCanceled"));
+                    return;
+                }
+
+                path = exportPathPlan.Path;
+                try
+                {
+                    _statusText.Text = "Exporting PDF...";
+                    _statusText.Foreground = Brush(67, 113, 83);
+
+                    var exportPrintPlan = CreateScopedPortablePdfPrintPlan(scope, outputKind);
+                    var exportPlan = PortablePdfExportPlanner.CreatePlan(exportPrintPlan);
+                    if (!exportPlan.IsReady)
+                    {
+                        ShowExportIssue(exportPlan.StatusText);
+                        return;
+                    }
+
+                    using var pdfBuffer = new MemoryStream();
+                    var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, exportPlan, pdfBuffer);
+                    await File.WriteAllBytesAsync(path, pdfBuffer.ToArray());
+
+                    RefreshShell(UiText.Format("MainLoc_StatusFileName", outcome.Result.StatusText, Path.GetFileName(path)));
+                }
+                catch (Exception ex)
+                {
+                    ShowExportIssue(UiText.Format("MainLoc_PdfExportFailed", ex.Message));
+                }
+            }
+        }
+        finally
+        {
+            EndFileOperation();
+        }
+    }
+
+    private WorkbookExportPrintPlan CreateScopedPortablePdfPrintPlan(
+        WorkbookExportPrintScope scope,
+        WorkbookExportPrintOutputKind outputKind)
+    {
+        var selectedRange = scope == WorkbookExportPrintScope.SelectedRange
+            ? _session.SelectedRange
+            : (GridRange?)null;
+
+        return WorkbookExportPrintPlanner.CreatePlan(
+            _session.Workbook,
+            new WorkbookExportPrintIntent(
+                scope,
+                outputKind,
+                ActiveSheetIndex: ResolveActiveSheetIndex(),
+                SelectedRange: selectedRange),
+            new WorkbookExportPrintPageCapacity(PortablePdfRowsPerPage, PortablePdfColumnsPerPage),
+            WorkbookExportPrintSurface.MacOs);
+    }
 
     private int ResolveActiveSheetIndex()
     {
@@ -14966,10 +16446,10 @@ public sealed partial class MainWindow : Window
                 target.Path,
                 existingIdentity: _session.CurrentFileAccessIdentity);
             using var fileAccess = await _workbookFileAccessService.BeginAccessAsync(StorageProvider, fileAccessIdentity);
-            await _saveService.SaveAsync(target.Path, target.Adapter, _session.Workbook, progress);
+            var saveWarnings = await _saveService.SaveAsync(target.Path, target.Adapter, _session.Workbook, progress);
             _session.TryMarkSavedIfNoEditsArrived(generationAtSaveStart, target.Path, fileAccessIdentity);
             RecordRecentWorkbook(target.Path, fileAccessIdentity);
-            RefreshShell($"Saved {Path.GetFileName(target.Path)}");
+            RefreshShell(FormatSaveCompletionStatus(target.Path, saveWarnings));
         }
         catch (Exception ex)
         {
@@ -15009,6 +16489,11 @@ public sealed partial class MainWindow : Window
         _statusText.Text = message;
         _statusText.Foreground = Brush(143, 74, 18);
     }
+
+    private static string FormatSaveCompletionStatus(string path, IReadOnlyList<string> warnings) =>
+        warnings.Count == 0
+            ? $"Saved {Path.GetFileName(path)}"
+            : $"Saved {Path.GetFileName(path)} with {warnings.Count} warning(s)";
 
     private void ShowExportIssue(string message)
     {

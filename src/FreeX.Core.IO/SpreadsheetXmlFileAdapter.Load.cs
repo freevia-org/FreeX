@@ -70,7 +70,7 @@ public sealed partial class SpreadsheetXmlFileAdapter
 
                 var address = new CellAddress(sheet.Id, rowIndex, columnIndex);
                 columnStyles.TryGetValue(columnIndex, out var columnStyleId);
-                var cell = ReadCell(cellElement, styles, rowStyleId, columnStyleId);
+                var cell = ReadCell(cellElement, styles, rowIndex, columnIndex, rowStyleId, columnStyleId);
                 var hyperlinkTarget = cellElement.Attribute(SpreadsheetHrefAttribute)?.Value;
                 if (cell.Value is not BlankValue || cell.FormulaText is not null || !string.IsNullOrWhiteSpace(hyperlinkTarget))
                 {
@@ -170,6 +170,8 @@ public sealed partial class SpreadsheetXmlFileAdapter
     private static Cell ReadCell(
         XElement cellElement,
         IReadOnlyDictionary<string, StyleId> styles,
+        uint row,
+        uint column,
         StyleId rowStyleId = default,
         StyleId columnStyleId = default)
     {
@@ -181,9 +183,15 @@ public sealed partial class SpreadsheetXmlFileAdapter
         if (string.IsNullOrWhiteSpace(formula))
             return new Cell { Value = value, StyleId = styleId };
 
+        var formulaText = formula.StartsWith("=", StringComparison.Ordinal) ? formula[1..] : formula;
+        // Excel saves SpreadsheetML formulas in R1C1; convert to the A1 the model expects. A1 formulas
+        // (e.g. from a FreeX-authored file) are left untouched.
+        if (LooksLikeR1C1(formulaText))
+            formulaText = ConvertR1C1FormulaToA1(formulaText, row, column);
+
         return new Cell
         {
-            FormulaText = formula.StartsWith("=", StringComparison.Ordinal) ? formula[1..] : formula,
+            FormulaText = formulaText,
             Value = value,
             StyleId = styleId
         };

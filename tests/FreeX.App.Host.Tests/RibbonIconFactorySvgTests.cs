@@ -157,14 +157,16 @@ public sealed class RibbonIconFactorySvgTests
     [Fact]
     public void CreateCommandIcon_PrefersNativeSvgVariantForRequestedRibbonSlot()
     {
-        var method = typeof(RibbonIconFactory).GetMethod(
+        // The size-specific SVG slug logic was extracted from RibbonIconFactory into the shared
+        // Free.Shared.Ribbon.Wpf.SvgCommandIconLoader (signature now (slug, size), no trailing flag).
+        var method = typeof(Free.Shared.Ribbon.Wpf.SvgCommandIconLoader).GetMethod(
             "GetSizeSpecificSlugCandidates",
             BindingFlags.NonPublic | BindingFlags.Static);
 
         method.Should().NotBeNull();
 
-        var smallCandidates = ((IEnumerable<string>)method!.Invoke(null, ["paste", 20d, false])!).ToList();
-        var largeCandidates = ((IEnumerable<string>)method.Invoke(null, ["paste", 32d, false])!).ToList();
+        var smallCandidates = ((IEnumerable<string>)method!.Invoke(null, ["paste", 20d])!).ToList();
+        var largeCandidates = ((IEnumerable<string>)method.Invoke(null, ["paste", 32d])!).ToList();
 
         smallCandidates.Should().StartWith("paste-small");
         smallCandidates.Should().ContainInOrder("paste-small", "paste");
@@ -175,12 +177,17 @@ public sealed class RibbonIconFactorySvgTests
     [Theory]
     [InlineData("Sort & Filter", "sort-and-filter", "sort")]
     [InlineData("Find & Select", "find-and-select", "find")]
+    [InlineData("Insert Link", "insert-link", "hyperlink")]
+    [InlineData("Header & Footer", "header-and-footer", "header-footer")]
+    [InlineData("Pictures", "pictures", "picture")]
     [InlineData("Export PDF/XPS", "export-pdf-xps", "export")]
     [InlineData("Collapse Group", "collapse-group", "hide-detail")]
     [InlineData("Expand Group", "expand-group", "show-detail")]
     [InlineData("Add Watch", "add-watch", "watch-add")]
     [InlineData("Delete Watch", "delete-watch", "watch-delete")]
     [InlineData("Reapply", "reapply", "reapply-filter")]
+    [InlineData("Sort A to Z", "sort-a-to-z", "sort-ascending")]
+    [InlineData("Sort Z to A", "sort-z-to-a", "sort-descending")]
     [InlineData("100%", "100", "zoom-to-100")]
     [InlineData("Pick From Drop-down List...", "pick-from-drop-down-list", "pick-from-dropdown")]
     public void CommandIconSlugAliases_NormalizePlainAmpersands(
@@ -205,20 +212,99 @@ public sealed class RibbonIconFactorySvgTests
         candidates.Should().ContainInOrder(expectedSlug, expectedAlias);
     }
 
+    [Theory]
+    [InlineData("Selection Pane#SelectionPaneBtn_Click", "selection-pane")]
+    [InlineData("Remove Duplicates#RemoveDuplicatesBtn_Click", "remove-duplicates")]
+    [InlineData("AutoSum#FormulasAutoSumPickerBtn_Click", "autosum")]
+    [InlineData("Protect Sheet#ProtectSheetBtn_Click", "protect-sheet")]
+    [InlineData("Clear#ClearFilterButton_Click", "clear-filter")]
+    public void CommandIconNames_StripHandlerSuffixesBeforeSlugLookup(
+        string commandName,
+        string expectedSlug)
+    {
+        var normalizeMethod = typeof(RibbonIconFactory).GetMethod(
+            "NormalizeCommandIconName",
+            BindingFlags.NonPublic | BindingFlags.Static);
+        var slugMethod = typeof(RibbonIconFactory).GetMethod(
+            "ToCommandIconSlug",
+            BindingFlags.NonPublic | BindingFlags.Static);
+
+        normalizeMethod.Should().NotBeNull();
+        slugMethod.Should().NotBeNull();
+
+        var normalized = (string)normalizeMethod!.Invoke(null, [commandName])!;
+        var slug = (string)slugMethod!.Invoke(null, [normalized])!;
+
+        normalized.Should().NotContain("#");
+        slug.Should().Be(expectedSlug);
+    }
+
+    [Theory]
+    [InlineData("Selection Pane#SelectionPaneBtn_Click")]
+    [InlineData("Remove Duplicates#RemoveDuplicatesBtn_Click")]
+    [InlineData("AutoSum#FormulasAutoSumPickerBtn_Click")]
+    [InlineData("Protect Sheet#ProtectSheetBtn_Click")]
+    [InlineData("Clear#ClearFilterButton_Click")]
+    public void CreateCommandIcon_LoadsDedicatedSvgArtworkForHandlerSuffixedCommandIds(string commandName)
+    {
+        StaTestRunner.Run(() =>
+        {
+            var icon = RibbonIconFactory.CreateCommandIcon(
+                commandName,
+                new RibbonCommandIcon(RibbonCommandIconKind.Generic),
+                size: 32,
+                Brushes.Black);
+
+            var image = icon.Should().BeOfType<Image>().Subject;
+            image.Source.Should().BeOfType<DrawingImage>();
+        });
+    }
+
+    [Theory]
+    [InlineData("Advanced", "advanced-filter")]
+    [InlineData("Page Setup dialog", "page-setup")]
+    [InlineData("View Gridlines", "gridlines")]
+    [InlineData("View Headings", "headings")]
+    public void CommandIconSlugAliases_MapDeclarativeRibbonLabelsToExistingSvgArtwork(
+        string commandName,
+        string expectedAlias)
+    {
+        var slugMethod = typeof(RibbonIconFactory).GetMethod(
+            "ToCommandIconSlug",
+            BindingFlags.NonPublic | BindingFlags.Static);
+        var aliasesMethod = typeof(RibbonIconFactory).GetMethod(
+            "GetCommandIconSlugCandidates",
+            BindingFlags.NonPublic | BindingFlags.Static);
+
+        slugMethod.Should().NotBeNull();
+        aliasesMethod.Should().NotBeNull();
+
+        var slug = (string)slugMethod!.Invoke(null, [commandName])!;
+        var candidates = ((IEnumerable<string>)aliasesMethod!.Invoke(null, [slug])!).ToList();
+
+        candidates.Should().Contain(expectedAlias);
+    }
+
     [Fact]
     public void AppHostProject_CopiesSvgCommandIconsInsteadOfPreRenderedPngs()
     {
-        var project = DialogSourceTestSupport.ReadHostSourceFile("FreeX.App.Host.csproj");
+        // After the declarative-ribbon cutover the per-command SVG glyphs live in
+        // FreeX.Ribbon.Definitions (shared with the Avalonia app) and are copied to the WPF host's
+        // output transitively at Resources\CommandIconsSvg\. Assert the shared project still ships the
+        // SVG glob, and that neither it nor the host project resurrect the old pre-rendered PNG assets.
+        var ribbonDefinitions = DialogSourceTestSupport.ReadRibbonDefinitionFile("FreeX.Ribbon.Definitions.csproj");
+        var host = DialogSourceTestSupport.ReadHostSourceFile("FreeX.App.Host.csproj");
 
-        project.Should().Contain(@"Resources\CommandIconsSvg\**\*.svg");
-        project.Should().NotContain(@"Resources\CommandIcons\**\*.png");
+        ribbonDefinitions.Should().Contain(@"Resources\CommandIconsSvg\**\*.svg");
+        ribbonDefinitions.Should().NotContain(@"Resources\CommandIcons\**\*.png");
+        host.Should().NotContain(@"Resources\CommandIcons\**\*.png");
     }
 
     [Fact]
     public void HomeRibbonLargeCommandArtwork_UsesDistinctSvgFiles()
     {
         var iconDirectory = Path.Combine(
-            DialogSourceTestSupport.FindHostSourceDirectory("FreeX.App.Host.csproj"),
+            DialogSourceTestSupport.FindRibbonDefinitionDirectory("FreeX.Ribbon.Definitions.csproj"),
             "Resources",
             "CommandIconsSvg");
 
@@ -243,7 +329,7 @@ public sealed class RibbonIconFactorySvgTests
             {
                 var path = Path.Combine(iconDirectory, fileName);
                 File.Exists(path).Should().BeTrue(path);
-                var text = DialogSourceTestSupport.ReadHostSourceFile("Resources", "CommandIconsSvg", fileName)
+                var text = DialogSourceTestSupport.ReadRibbonDefinitionFile("Resources", "CommandIconsSvg", fileName)
                     .ReplaceLineEndings(string.Empty);
                 return (fileName, text);
             })
@@ -259,7 +345,7 @@ public sealed class RibbonIconFactorySvgTests
     [Fact]
     public void HelpIcon_UsesCenteredPathQuestionMark()
     {
-        var svg = DialogSourceTestSupport.ReadHostSourceFile("Resources", "CommandIconsSvg", "help.svg");
+        var svg = DialogSourceTestSupport.ReadRibbonDefinitionFile("Resources", "CommandIconsSvg", "help.svg");
 
         svg.Should().Contain("width=\"32\"");
         svg.Should().Contain("viewBox=\"0 0 32 32\"");
@@ -272,7 +358,7 @@ public sealed class RibbonIconFactorySvgTests
     public void SizeSpecificSvgCommandIcons_DoNotUseDocumentPlaceholderArtwork()
     {
         var iconDirectory = Path.Combine(
-            DialogSourceTestSupport.FindHostSourceDirectory("FreeX.App.Host.csproj"),
+            DialogSourceTestSupport.FindRibbonDefinitionDirectory("FreeX.Ribbon.Definitions.csproj"),
             "Resources",
             "CommandIconsSvg");
 
@@ -302,7 +388,7 @@ public sealed class RibbonIconFactorySvgTests
     public void CommandIconAssets_OnlyUseSizeVariantsForPixelCrispAlignmentLines()
     {
         var iconDirectory = Path.Combine(
-            DialogSourceTestSupport.FindHostSourceDirectory("FreeX.App.Host.csproj"),
+            DialogSourceTestSupport.FindRibbonDefinitionDirectory("FreeX.Ribbon.Definitions.csproj"),
             "Resources",
             "CommandIconsSvg");
 
@@ -332,9 +418,9 @@ public sealed class RibbonIconFactorySvgTests
 
         foreach (var fileName in allowedSizeSpecificFiles)
         {
-            var smallText = DialogSourceTestSupport.ReadHostSourceFile("Resources", "CommandIconsSvg", fileName);
+            var smallText = DialogSourceTestSupport.ReadRibbonDefinitionFile("Resources", "CommandIconsSvg", fileName);
             var baseFileName = fileName.Replace("-small.svg", ".svg", StringComparison.OrdinalIgnoreCase);
-            var baseText = DialogSourceTestSupport.ReadHostSourceFile("Resources", "CommandIconsSvg", baseFileName);
+            var baseText = DialogSourceTestSupport.ReadRibbonDefinitionFile("Resources", "CommandIconsSvg", baseFileName);
 
             smallText.Should().Contain("height=\"1\"");
             smallText.Should().NotContain("height=\"2\"");
@@ -347,7 +433,7 @@ public sealed class RibbonIconFactorySvgTests
     public void CommandIconAssets_DoNotContainEmptyShellSvgs()
     {
         var iconDirectory = Path.Combine(
-            DialogSourceTestSupport.FindHostSourceDirectory("FreeX.App.Host.csproj"),
+            DialogSourceTestSupport.FindRibbonDefinitionDirectory("FreeX.Ribbon.Definitions.csproj"),
             "Resources",
             "CommandIconsSvg");
 
@@ -405,7 +491,7 @@ public sealed class RibbonIconFactorySvgTests
     [InlineData("shape-gradient.svg")]
     public void AcceptedIconReviewCommands_HaveDedicatedNonblankSvgArtwork(string fileName)
     {
-        var svg = DialogSourceTestSupport.ReadHostSourceFile("Resources", "CommandIconsSvg", fileName);
+        var svg = DialogSourceTestSupport.ReadRibbonDefinitionFile("Resources", "CommandIconsSvg", fileName);
 
         svg.Should().Contain("<svg");
         svg.Should().MatchRegex("<(path|rect|circle|ellipse|line)\\b");

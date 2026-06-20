@@ -25,6 +25,13 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
     public string FormatName => "XLSX Workbook";
     internal XlsxSaveDiagnostics LastSaveDiagnostics { get; private set; } = XlsxSaveDiagnostics.NotRun;
     internal XlsxLoadDiagnostics LastLoadDiagnostics { get; private set; } = XlsxLoadDiagnostics.NotRun;
+
+    public static void DetachSourcePackage(Workbook workbook)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+        SourcePackages.Remove(workbook);
+    }
+
     public IReadOnlyList<FileFormatDescriptor> Formats { get; } =
     [
         new(".xlsx", "XLSX Workbook", CanOpen: true, CanSave: true),
@@ -214,6 +221,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             xlWorkbook.Worksheets.Count);
         var workbook = new Workbook("Untitled", XlsxClosedXmlCellMapper.MapStyle(xlWorkbook.Style, workbookTheme));
         workbook.Theme = workbookTheme;
+        workbook.HasVbaProjectPackage = packageParts.HasVbaProjectPackage;
         workbook.Uses1904DateSystem = workbookMetadata.Uses1904DateSystem;
         workbook.Properties = workbookMetadata.WorkbookProperties;
         var workbookViewProperties = workbookMetadata.WorkbookViewProperties;
@@ -690,7 +698,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             catch (Exception ex) { warnings.Add($"[conditional-format] Sheet '{xlSheet.Name}': {ex.Message}"); }
 
             // Load data validation rules (best-effort)
-            try { XlsxDataValidationClosedXmlMapper.Load(xlSheet, sheet); }
+            try { XlsxDataValidationClosedXmlMapper.Load(xlSheet, sheet, warnings); }
             catch (Exception ex) { warnings.Add($"[data-validation] Sheet '{xlSheet.Name}': {ex.Message}"); }
             if (xmlLayout is not null)
                 XlsxDataValidationNativeMetadataMapper.Apply(sheet, xmlLayout.DataValidationNativeMetadata);
@@ -708,7 +716,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         ResolvePivotChartCacheBindings(workbook);
 
         // Load named ranges (best-effort; skip any we cannot map)
-        try { XlsxNamedRangeMapper.Load(xlWorkbook, workbook); }
+        try { XlsxNamedRangeMapper.Load(xlWorkbook, workbook, warnings); }
         catch (Exception ex) { warnings.Add($"[named-ranges]: {ex.Message}"); }
 
         foreach (var customView in xlsxCustomViews)
@@ -938,7 +946,8 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             packageParts.HasInspected ? packageParts.HasWorkbookNativeMetadataSchemaIssues : null,
             hasWorksheetRelationshipMarkerSchemaIssues,
             hasWorksheetNativeMetadataSchemaIssues,
-            mergeCellWorksheetPathsToStrip);
+            mergeCellWorksheetPathsToStrip,
+            packageParts.HasInspected ? packageParts.HasCalculationChainPackagePart : null);
     }
 
     private static IReadOnlySet<string>? GetWorksheetsWithPreservableSourceMetadata(
@@ -1171,6 +1180,8 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             bool hasSlicerTimelinePackageParts,
             bool hasExternalLinks,
             bool hasStructuredTables,
+            bool hasVbaProjectPackage,
+            bool hasCalculationChainPackagePart,
             bool? hasWorkbookWebPublishingSchemaIssues,
             bool? hasWorkbookSmartTagSchemaIssues,
             bool? hasWorkbookNativeMetadataSchemaIssues)
@@ -1185,6 +1196,8 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             HasSlicerTimelinePackageParts = hasSlicerTimelinePackageParts;
             HasExternalLinks = hasExternalLinks;
             HasStructuredTables = hasStructuredTables;
+            HasVbaProjectPackage = hasVbaProjectPackage;
+            HasCalculationChainPackagePart = hasCalculationChainPackagePart;
             HasWorkbookWebPublishingSchemaIssues = hasWorkbookWebPublishingSchemaIssues;
             HasWorkbookSmartTagSchemaIssues = hasWorkbookSmartTagSchemaIssues;
             HasWorkbookNativeMetadataSchemaIssues = hasWorkbookNativeMetadataSchemaIssues;
@@ -1201,6 +1214,8 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         public bool HasSlicerTimelinePackageParts { get; }
         public bool HasExternalLinks { get; }
         public bool HasStructuredTables { get; }
+        public bool HasVbaProjectPackage { get; }
+        public bool HasCalculationChainPackagePart { get; }
         public bool? HasWorkbookWebPublishingSchemaIssues { get; }
         public bool? HasWorkbookSmartTagSchemaIssues { get; }
         public bool? HasWorkbookNativeMetadataSchemaIssues { get; }
@@ -1215,6 +1230,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             var hasSlicerTimelinePackageParts = false;
             var hasExternalLinks = false;
             var hasStructuredTables = false;
+            var hasVbaProjectPackage = false;
 
             foreach (var entry in archive.Entries)
             {
@@ -1249,6 +1265,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                     break;
                 }
             }
+            hasVbaProjectPackage = archive.GetEntry("xl/vbaProject.bin") is not null;
 
             // Parse workbook.xml once and share the XDocument across all three schema-issue inspectors.
             XDocument? sharedWorkbookXml = null;
@@ -1282,6 +1299,8 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 hasSlicerTimelinePackageParts,
                 hasExternalLinks,
                 hasStructuredTables,
+                hasVbaProjectPackage,
+                archive.GetEntry("xl/calcChain.xml") is not null,
                 InspectWorkbookWebPublishingSchemaIssues(sharedWorkbookXml, sharedWorkbookXmlMissing, sharedWorkbookXmlCorrupt),
                 InspectWorkbookSmartTagSchemaIssues(sharedWorkbookXml, sharedWorkbookXmlMissing, sharedWorkbookXmlCorrupt),
                 InspectWorkbookNativeMetadataSchemaIssues(sharedWorkbookXml, sharedWorkbookXmlMissing, sharedWorkbookXmlCorrupt));
@@ -1503,6 +1522,9 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             if (IsClosedXmlConditionalFormattingLoadFailure(ex))
                 return OpenConditionalFormattingStripped();
 
+            if (IsClosedXmlRelationshipLookupFailure(ex))
+                return OpenPivotStripped();
+
             packageStream.Position = 0;
             var fallbackPackageStream = MeasurePackagePreparation(() => CreateClosedXmlParsePackage(
                 packageStream,
@@ -1520,6 +1542,29 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                     fallbackPackageStream.Dispose();
 
                 return OpenConditionalFormattingStripped();
+            }
+        }
+
+        ClosedXmlLoadResult OpenPivotStripped()
+        {
+            packageStream.Position = 0;
+            var pivotStrippedHints = sanitizationHints with { HasPivotPackageMetadata = true };
+            var pivotStrippedPackageStream = MeasurePackagePreparation(() => CreateClosedXmlParsePackage(
+                packageStream,
+                styleOnlyWorksheetPathsToStrip,
+                pivotStrippedHints,
+                removeUnsupportedConditionalFormatting: false));
+            try
+            {
+                return Complete(
+                    pivotStrippedPackageStream,
+                    MeasureWorkbookOpen(() => new XLWorkbook(pivotStrippedPackageStream)));
+            }
+            catch
+            {
+                if (!ReferenceEquals(pivotStrippedPackageStream, packageStream))
+                    pivotStrippedPackageStream.Dispose();
+                throw;
             }
         }
 
@@ -1604,6 +1649,22 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         for (var current = exception; current is not null; current = current.InnerException)
         {
             if (current.StackTrace?.Contains("LoadConditionalFormatting", StringComparison.Ordinal) == true)
+                return true;
+        }
+
+        return false;
+    }
+
+    // ClosedXML uses .First() when resolving part relationships; files authored by LibreOffice
+    // (and other non-Excel producers) sometimes emit table or pivot-cache relationships in a
+    // layout ClosedXML doesn't match, causing InvalidOperationException with the LINQ sentinel
+    // message.  Strip pivot metadata and retry so the rest of the workbook loads cleanly.
+    private static bool IsClosedXmlRelationshipLookupFailure(Exception exception)
+    {
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is InvalidOperationException &&
+                current.Message.Contains("Sequence contains no matching element", StringComparison.Ordinal))
                 return true;
         }
 

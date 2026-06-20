@@ -10,8 +10,15 @@
     <ProjectReference Include="..\..\shared\Free.Shared.Ribbon.Wpf\Free.Shared.Ribbon.Wpf.csproj" />
     <ProjectReference Include="..\FreeX.Ribbon.Definitions\FreeX.Ribbon.Definitions.csproj" />
     <ProjectReference Include="..\FreeX.App.Services\FreeX.App.Services.csproj" />
+    <!-- Single source of the pseudo-localization Expand() rules (also used by the portable catalog). -->
+    <ProjectReference Include="..\FreeX.App.Localization\FreeX.App.Localization.csproj" />
+    <ProjectReference Include="..\FreeX.App.Presentation\FreeX.App.Presentation.csproj" />
     <ProjectReference Include="..\FreeX.App.UI\FreeX.App.UI.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Shell\Free.Shared.Shell.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Shell.Wpf\Free.Shared.Shell.Wpf.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.AppServices.Windows\Free.Shared.AppServices.Windows.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Pdf\Free.Shared.Pdf.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Pdf.Wpf\Free.Shared.Pdf.Wpf.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -37,13 +44,8 @@
     <EmbeddedResource Remove="Resources\Strings.*.resx" />
   </ItemGroup>
 
-  <ItemGroup>
-    <EmbeddedResource Include="..\..\LICENSE" LogicalName="FreeX.Legal.ProjectLicense.txt" />
-    <EmbeddedResource Include="..\..\docs\legal\legal-notices.md" LogicalName="FreeX.Legal.LegalNotices.md" />
-    <EmbeddedResource Include="..\..\docs\legal\privacy.md" LogicalName="FreeX.Legal.PrivacyNotice.md" />
-    <EmbeddedResource Include="..\..\THIRD_PARTY_NOTICES.md" LogicalName="FreeX.Legal.ThirdPartyNotices.md" />
-    <EmbeddedResource Include="..\..\THIRD_PARTY_LICENSES.md" LogicalName="FreeX.Legal.ThirdPartyLicenses.md" />
-  </ItemGroup>
+  <!-- FreeX.Legal.* notice resources are embedded once in FreeX.App.Services (referenced above);
+       the dialog reads them from that assembly via FreeX.App.Services.LegalNoticeProvider. -->
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
@@ -87,5 +89,7 @@
     <Using Include="Free.Shared.Commands" />
     <Using Include="Free.Shared.AppServices" />
     <Using Include="Free.Shared.Shell" />
+    <Using Include="FreeX.App.Presentation" />
+    <Using Include="FreeX.App.Presentation.DrawingInteraction" />
   </ItemGroup>
 </Project>

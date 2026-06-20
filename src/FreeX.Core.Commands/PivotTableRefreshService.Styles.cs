@@ -78,35 +78,35 @@ public static partial class PivotTableRefreshService
             if (row < bodyStart.Row)
             {
                 if (pageFieldRows > 0 && row <= pageFieldEndRow)
-                    ApplyPivotVisualStyle(workbook, cell, headerStyle, pivotTable);
+                    ApplyPivotVisualStyle(workbook, cell, headerStyle);
                 continue;
             }
 
             if (row <= headerEndRow)
             {
                 if (ShouldApplyPivotHeaderStyle(pivotTable, col))
-                    ApplyPivotVisualStyle(workbook, cell, headerStyle, pivotTable);
+                    ApplyPivotVisualStyle(workbook, cell, headerStyle);
                 continue;
             }
 
             if (grandTotalRows.Contains(row) || grandTotalColumns.Contains(col))
             {
-                ApplyPivotVisualStyle(workbook, cell, grandTotalStyle, pivotTable);
+                ApplyPivotVisualStyle(workbook, cell, grandTotalStyle);
                 continue;
             }
 
             if (subtotalRows.Contains(row))
             {
-                ApplyPivotVisualStyle(workbook, cell, subtotalStyle, pivotTable);
+                ApplyPivotVisualStyle(workbook, cell, subtotalStyle);
                 continue;
             }
 
             var bodyRowIndex = row - headerEndRow - 1;
             var bodyColIndex = col - materialized.Start.Col;
             if (pivotTable.ShowRowStripes && bodyRowIndex % 2 == 0)
-                ApplyPivotVisualStyle(workbook, cell, stripeStyle, pivotTable);
+                ApplyPivotVisualStyle(workbook, cell, stripeStyle);
             if (pivotTable.ShowColumnStripes && bodyColIndex % 2 == 1)
-                ApplyPivotVisualStyle(workbook, cell, stripeStyle, pivotTable);
+                ApplyPivotVisualStyle(workbook, cell, stripeStyle);
         }
 
         ApplyCompactRowLabelIndent(workbook, sheet, pivotTable, materialized, headerEndRow, subtotalRows, grandTotalRows);
@@ -163,13 +163,16 @@ public static partial class PivotTableRefreshService
         SetPivotCell(sheet, new CellAddress(sheet.Id, row, col), BlankValue.Instance);
     }
 
-    private static void ApplyPivotVisualStyle(Workbook workbook, Cell cell, StyleId visualStyleId, PivotTableModel pivotTable)
+    private static void ApplyPivotVisualStyle(Workbook workbook, Cell cell, StyleId visualStyleId)
     {
+        // The modern pivot style (PivotStyleLight16 etc., carried by pivotTableStyleInfo) supplies the
+        // header/total fills, bold font and borders. Excel applies it independently of the legacy
+        // applyFontFormats / applyPatternFormats / applyBorderFormats autoformat flags, which real-world
+        // files routinely persist as "0"; gating on those flags dropped ALL visible pivot styling for
+        // pivots loaded from such files (Issue 123). Apply the full visual style, preserving only the
+        // cell's existing number format so data values keep their formatting.
         var numberFormat = workbook.GetStyle(cell.StyleId).NumberFormat;
-        if (pivotTable.ApplyFontFormats &&
-            pivotTable.ApplyPatternFormats &&
-            pivotTable.ApplyBorderFormats &&
-            numberFormat == CellStyle.Default.NumberFormat)
+        if (numberFormat == CellStyle.Default.NumberFormat)
         {
             cell.StyleId = visualStyleId;
             return;
@@ -179,12 +182,9 @@ public static partial class PivotTableRefreshService
         var style = CellStyle.Default.Clone();
         style.NumberFormat = numberFormat;
 
-        if (pivotTable.ApplyFontFormats)
-            ApplyPivotFontStyle(style, visualStyle);
-        if (pivotTable.ApplyPatternFormats)
-            ApplyPivotPatternStyle(style, visualStyle);
-        if (pivotTable.ApplyBorderFormats)
-            ApplyPivotBorderStyle(style, visualStyle);
+        ApplyPivotFontStyle(style, visualStyle);
+        ApplyPivotPatternStyle(style, visualStyle);
+        ApplyPivotBorderStyle(style, visualStyle);
 
         cell.StyleId = workbook.RegisterStyle(style);
     }

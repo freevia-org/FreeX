@@ -166,6 +166,7 @@ internal sealed class FidelityOptions
                                   vs Excel) instead of trusting the file's cached results (load-fidelity).
 
             Requires Microsoft Excel installed (COM automation). Not part of build/test/CI.
+            Corpus discovery includes .xlsx and legacy .xls workbooks under fidelity-corpus/files/.
             Download the corpus first: pwsh tools/Fetch-FidelityCorpus.ps1
             """);
     }
@@ -177,9 +178,17 @@ internal static class CorpusFiles
     {
         if (!Directory.Exists(options.FilesDirectory))
             return [];
-        return Directory.EnumerateFiles(options.FilesDirectory, "*.xlsx", SearchOption.TopDirectoryOnly)
+        return Directory.EnumerateFiles(options.FilesDirectory, "*.*", SearchOption.AllDirectories)
+            .Where(IsSupportedWorkbook)
             .Where(p => options.Filter is null || Path.GetFileName(p).Contains(options.Filter, StringComparison.OrdinalIgnoreCase))
             .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
             .ToList();
+    }
+
+    private static bool IsSupportedWorkbook(string path)
+    {
+        var extension = Path.GetExtension(path);
+        return extension.Equals(".xlsx", StringComparison.OrdinalIgnoreCase) ||
+               extension.Equals(".xls", StringComparison.OrdinalIgnoreCase);
     }
 }

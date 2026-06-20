@@ -15264,4 +15264,13 @@ and {0} more.</value>
   <data name="PrintPreview_UncollatedOption" xml:space="preserve">
     <value>Uncollated</value>
   </data>
+  <data name="MainWindow_AutomationName_UpdateReady" xml:space="preserve">
+    <value>Update ready</value>
+  </data>
+  <data name="MainWindow_Content_UpdateReady" xml:space="preserve">
+    <value>↻ Update ready</value>
+  </data>
+  <data name="MainWindow_ToolTip_UpdateReady" xml:space="preserve">
+    <value>A new version of FreeX has been downloaded. Click to restart and update.</value>
+  </data>
 </root>

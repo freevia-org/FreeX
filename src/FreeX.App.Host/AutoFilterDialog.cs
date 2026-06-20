@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using FreeX.App.Presentation.Filtering;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -319,6 +320,23 @@ public sealed partial class AutoFilterDialog : Window
         ShowInTaskbar = false;
         WindowStartupLocation = WindowStartupLocation.Manual;
         _cancelButton.IsCancel = false;
+        Deactivated += OnModelessFlyoutDeactivated;
+    }
+
+    private void OnModelessFlyoutDeactivated(object? sender, EventArgs e)
+    {
+        // Excel-style auto-dismiss: a click that lands anywhere outside the flyout — another cell,
+        // the ribbon, a sheet tab, a different worksheet/window, or another application — deactivates
+        // this borderless window, so close it. The check is deferred and re-tested so a transient
+        // deactivation from opening a child control's popup (which immediately returns activation to
+        // the flyout) does not dismiss it mid-interaction.
+        Dispatcher.BeginInvoke(
+            new Action(() =>
+            {
+                if (!IsActive)
+                    Close();
+            }),
+            System.Windows.Threading.DispatcherPriority.Input);
     }
 
     private void CommitResult(AutoFilterDialogResult result)

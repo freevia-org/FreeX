@@ -77,6 +77,8 @@ public partial class MainWindow : Window, IWorkbookWindow
     private bool _isExportingFile;
     // File name shown in the footer operation-progress message during an open/save (null when idle).
     private string? _operationProgressFileName;
+    private CancellationTokenSource? _fileOperationCancellation;
+    private Dictionary<UIElement, bool>? _fileOperationInputEnabledSnapshot;
     // ── Dirty / save-state cluster: canonical state lives in _documentState ──
     // These private properties delegate to the injected WorkbookDocumentState service.
     // They preserve the same names used across the 50-file partial-class surface so
@@ -213,6 +215,10 @@ public partial class MainWindow : Window, IWorkbookWindow
     private string? _textBoxInlineOriginalText;
     private bool _syncingFormulaEditorText;
     private System.Windows.Controls.ComboBox? _validationDropdown;
+    // The modeless AutoFilter dropdown flyout (a separate window) and the sheet it was opened on,
+    // so a sheet switch can dismiss it instead of leaving it floating over the new sheet.
+    private AutoFilterDialog? _autoFilterDropdown;
+    private SheetId _autoFilterDropdownSheetId;
     private CellAddress? _formulaEditCell;
     private CellAddress? _formulaRangeSelectionAnchor;
     private int? _formulaReferenceStart;
@@ -292,6 +298,7 @@ public partial class MainWindow : Window, IWorkbookWindow
         RebuildQuickAccessToolbar();
         InitializeQuickAccessToolbarCustomizationContextMenus();
         ConfigureBackstageInfoActionButtons();
+        InitializeBackstageFrame();
         RegisterKeyboardCommandShortcuts();
 
         _currentSheetId = _workbook.Sheets[0].Id;

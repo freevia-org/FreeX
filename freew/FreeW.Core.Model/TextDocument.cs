@@ -358,6 +358,73 @@ public sealed class Run(string text, RunFormatting? formatting = null)
     public RunFieldKind FieldKind { get; set; } = RunFieldKind.None;
 
     /// <summary>
+    /// When non-null, this run is a table-cell formula field (Word's Table &gt; Data &gt; Formula) — e.g.
+    /// <c>=SUM(ABOVE)</c> with an optional number format. It serialises as a <c>w:fldSimple</c> whose
+    /// <c>w:instr</c> is <c> =SUM(ABOVE) \# "#,##0.00" </c> wrapping a cached result run; the run's
+    /// <see cref="Text"/> doubles as that cached/last-computed result so field-unaware consumers still render
+    /// a value. Modelled as an optional run mark, mirroring <see cref="FieldKind"/>, so the field round-trips
+    /// through the existing run flow without a new block type.
+    /// </summary>
+    public TableFormulaField? TableFormula { get; set; }
+
+    /// <summary>Creates a table-formula field run carrying the cached result as its <see cref="Text"/>.</summary>
+    public static Run TableFormulaFieldRun(TableFormulaField formula, string cachedResult = "", RunFormatting? formatting = null) =>
+        new(cachedResult, formatting) { TableFormula = formula };
+
+    /// <summary>
+    /// When non-null, this run is a hidden Mark Citation field (Word's References &gt; Mark Citation) — the
+    /// invisible <c>TA</c> field that records a legal citation for a Table of Authorities. It serialises as a
+    /// <c>w:fldSimple</c> whose <c>w:instr</c> is the TA instruction (<c> TA \l "long" \s "short" \c N </c>)
+    /// wrapping a vanished run, so it round-trips like Word's and produces no visible glyph. The same data is
+    /// also mirrored into <see cref="TextDocument.Citations"/> for building the table. Modelled as an optional
+    /// run mark, mirroring <see cref="TableFormula"/>, so it round-trips without a new block type. The run
+    /// carries no literal text, so it produces no visible glyph — matching Word's hidden TA field.
+    /// </summary>
+    public Citation? Citation { get; set; }
+
+    /// <summary>Creates a hidden Mark Citation (TA) field run for <paramref name="citation"/>.</summary>
+    public static Run CitationMark(Citation citation) =>
+        new(string.Empty) { Citation = citation };
+
+    /// <summary>
+    /// When non-null, this run is a cross-reference field (Word's References &gt; Cross-reference) — a
+    /// <c>REF</c>/<c>PAGEREF</c>/<c>NOTEREF</c> field over a bookmark name or note id, optionally as a
+    /// clickable hyperlink. It serialises as a <c>w:fldSimple</c> whose <c>w:instr</c> is the field
+    /// instruction (e.g. <c> REF _Ref1 \h </c>) wrapping a cached result run; the run's
+    /// <see cref="Text"/> doubles as that cached/last-resolved display text so field-unaware consumers
+    /// still render a value. Modelled as an optional run mark, mirroring <see cref="TableFormula"/> and
+    /// <see cref="Citation"/>, so it round-trips without a new block type.
+    /// </summary>
+    public CrossReferenceField? CrossReference { get; set; }
+
+    /// <summary>
+    /// Creates a cross-reference field run carrying the cached resolved text as its <see cref="Text"/>.
+    /// </summary>
+    public static Run CrossReferenceFieldRun(CrossReferenceField field, string cached = "", RunFormatting? formatting = null) =>
+        new(cached, formatting) { CrossReference = field };
+
+    /// <summary>
+    /// When non-null, this run is a <em>complex</em> Word field (Word's <c>w:fldChar</c> begin / separate /
+    /// end run sequence with a <c>w:instrText</c> instruction) rather than the self-contained
+    /// <c>w:fldSimple</c> carried by <see cref="FieldKind"/>. It preserves the raw field-code instruction
+    /// (e.g. <c> PAGE </c>, <c> DATE \@ "M/d/yyyy" </c>, <c> FILENAME </c>, <c> AUTHOR </c>, <c> REF bm </c>)
+    /// verbatim so <em>any</em> field round-trips, and the run's <see cref="Text"/> doubles as the cached
+    /// result (the last-computed display value) shown when field codes are hidden. This is the generic
+    /// construct behind Insert &gt; Quick Parts &gt; Field, Alt+F9 (toggle codes), and F9 (update). Modelled
+    /// as an optional run mark, mirroring <see cref="CrossReference"/>, so it round-trips without a new block
+    /// type.
+    /// </summary>
+    public ComplexField? ComplexField { get; set; }
+
+    /// <summary>
+    /// Creates a complex field run with the given raw <paramref name="instruction"/> (e.g. <c> PAGE </c>)
+    /// and cached display <paramref name="result"/> (the last-computed value). The run serialises as the
+    /// <c>w:fldChar</c> begin / <c>w:instrText</c> / separate / result / end sequence.
+    /// </summary>
+    public static Run ComplexFieldRun(string instruction, string result = "", bool showCode = false, RunFormatting? formatting = null) =>
+        new(result, formatting) { ComplexField = new ComplexField(instruction, showCode) };
+
+    /// <summary>
     /// When set, this run is a footnote reference marker pointing at the footnote with this id in
     /// <see cref="TextDocument.Footnotes"/>. It carries no literal text of its own; the marker number
     /// is the id. Serialises as a superscript run wrapping a w:footnoteReference w:id="N".
@@ -428,6 +495,17 @@ public sealed class Run(string text, RunFormatting? formatting = null)
     /// <see cref="Comment.DateXml"/> is modelled.
     /// </summary>
     public string? RevisionDateXml { get; set; }
+
+    /// <summary>
+    /// A tracked <em>formatting</em> change on this run (Word's w:rPrChange), or null when the run's
+    /// formatting was not changed under Track Changes. When set, <see cref="Formatting"/> is the new
+    /// (current) formatting and <see cref="FormatRevision"/> carries the <em>previous</em> formatting plus
+    /// the author/date who made the change. This is independent of <see cref="Revision"/>: a run can be an
+    /// ordinary (un-inserted/un-deleted) run whose formatting was tracked-changed. Accepting keeps the new
+    /// formatting and clears the mark; rejecting restores the previous formatting. Modelled as an optional
+    /// run mark, mirroring <see cref="RevisionAuthor"/>/<see cref="RevisionDateXml"/>.
+    /// </summary>
+    public FormatRevision? FormatRevision { get; set; }
 
     /// <summary>Creates a run that carries an inline image instead of text.</summary>
     public static Run FromImage(InlineImage image) => new(string.Empty) { Image = image };
@@ -524,37 +602,115 @@ public sealed class Run(string text, RunFormatting? formatting = null)
         {
             Control = new ContentControl(ContentControlKind.CheckBox, tag, alias, @checked)
         };
+
+    /// <summary>
+    /// Creates a rich-text content control run carrying <paramref name="text"/> as its content, tagged
+    /// with the optional <paramref name="tag"/> / <paramref name="alias"/>. Serialises as a w:sdt
+    /// (w:richText) wrapping the run.
+    /// </summary>
+    public static Run RichTextControl(string text, string? tag = null, string? alias = null) =>
+        new(text) { Control = new ContentControl(ContentControlKind.RichText, tag, alias) };
+
+    /// <summary>
+    /// Creates a date-picker content control run. The run's <see cref="Text"/> is the displayed date text
+    /// and <paramref name="dateFormat"/> is the control's w:dateFormat (defaults to <see
+    /// cref="ContentControl.DefaultDateFormat"/>). Serialises as a w:sdt with a w:date w:sdtPr.
+    /// </summary>
+    public static Run DatePickerControl(
+        string text, string? tag = null, string? alias = null, string? dateFormat = null) =>
+        new(text)
+        {
+            Control = new ContentControl(
+                ContentControlKind.DatePicker, tag, alias,
+                DateFormat: dateFormat ?? ContentControl.DefaultDateFormat)
+        };
+
+    /// <summary>
+    /// Creates a drop-down-list content control run offering <paramref name="items"/>; the run's
+    /// <see cref="Text"/> is the currently displayed item (the first item's display text when none is
+    /// given). Serialises as a w:sdt with a w:dropDownList w:sdtPr carrying w:listItem entries.
+    /// </summary>
+    public static Run DropDownListControl(
+        IReadOnlyList<ContentControlListItem> items, string? selectedText = null,
+        string? tag = null, string? alias = null) =>
+        new(selectedText ?? (items.Count > 0 ? items[0].DisplayText : string.Empty))
+        {
+            Control = new ContentControl(ContentControlKind.DropDownList, tag, alias, ListItems: items)
+        };
+
+    /// <summary>
+    /// Creates a combo-box content control run offering <paramref name="items"/> (and allowing free text);
+    /// the run's <see cref="Text"/> is the currently displayed value. Serialises as a w:sdt with a
+    /// w:comboBox w:sdtPr carrying w:listItem entries.
+    /// </summary>
+    public static Run ComboBoxControl(
+        IReadOnlyList<ContentControlListItem> items, string? selectedText = null,
+        string? tag = null, string? alias = null) =>
+        new(selectedText ?? (items.Count > 0 ? items[0].DisplayText : string.Empty))
+        {
+            Control = new ContentControl(ContentControlKind.ComboBox, tag, alias, ListItems: items)
+        };
 }
 
 /// <summary>
 /// The kind of content control (structured document tag, w:sdt) a <see cref="Run"/> belongs to.
 /// <see cref="PlainText"/> is a plain-text control (w:sdtPr/w:text); <see cref="CheckBox"/> is a
-/// checkbox control (w:sdtPr/w14:checkbox or w:checkbox) whose run carries the checked/unchecked glyph.
+/// checkbox control (w:sdtPr/w14:checkbox or w:checkbox) whose run carries the checked/unchecked glyph;
+/// <see cref="RichText"/> is a rich-text control (w:sdtPr/w:richText) that may hold formatted content;
+/// <see cref="DatePicker"/> is a date picker (w:sdtPr/w:date) whose run carries the displayed date;
+/// <see cref="DropDownList"/> is a drop-down list (w:sdtPr/w:dropDownList + w:listItem entries) the user
+/// can only pick from; <see cref="ComboBox"/> is a combo box (w:sdtPr/w:comboBox + w:listItem entries)
+/// that additionally allows free text.
 /// </summary>
 public enum ContentControlKind
 {
     PlainText,
-    CheckBox
+    CheckBox,
+    RichText,
+    DatePicker,
+    DropDownList,
+    ComboBox
+}
+
+/// <summary>
+/// A single choice (w:listItem) of a drop-down list or combo box content control: the visible
+/// <see cref="DisplayText"/> (w:displayText) and the stored <see cref="Value"/> (w:value). Modelled as
+/// an immutable record so list items can be shared/compared like the other small marks.
+/// </summary>
+public sealed record ContentControlListItem(string DisplayText, string Value)
+{
+    /// <summary>Convenience for a list item whose stored value equals its display text.</summary>
+    public ContentControlListItem(string displayText) : this(displayText, displayText) { }
 }
 
 /// <summary>
 /// An immutable content-control (structured document tag / w:sdt) mark carried by a <see cref="Run"/>.
 /// Records the control <see cref="Kind"/>, an optional <see cref="Tag"/> (w:tag) and <see cref="Alias"/>
-/// (w:alias), and — for a checkbox — its <see cref="Checked"/> state. Modelled as an immutable record so
-/// it mirrors how other small marks (<see cref="PageBorder"/>, <see cref="TableFormatting"/>) are modelled
-/// and so consecutive runs can share one instance to coalesce into a single w:sdt on save.
+/// (w:alias), and the kind-specific extras: <see cref="Checked"/> (checkbox state), <see cref="DateFormat"/>
+/// (a date picker's w:dateFormat string), and <see cref="ListItems"/> (the w:listItem choices of a
+/// drop-down list or combo box). Modelled as an immutable record so it mirrors how other small marks
+/// (<see cref="PageBorder"/>, <see cref="TableFormatting"/>) are modelled and so consecutive runs can
+/// share one instance to coalesce into a single w:sdt on save.
 /// </summary>
 public sealed record ContentControl(
     ContentControlKind Kind,
     string? Tag = null,
     string? Alias = null,
-    bool Checked = false)
+    bool Checked = false,
+    string? DateFormat = null,
+    IReadOnlyList<ContentControlListItem>? ListItems = null)
 {
     /// <summary>The glyph used in a checkbox run's text when the box is checked (☒, U+2612).</summary>
     public const string CheckedGlyph = "☒";
 
     /// <summary>The glyph used in a checkbox run's text when the box is unchecked (☐, U+2610).</summary>
     public const string UncheckedGlyph = "☐";
+
+    /// <summary>The default date format (matching Word's date picker default) used when none is set.</summary>
+    public const string DefaultDateFormat = "M/d/yyyy";
+
+    /// <summary>The list items of a drop-down/combo control, never null (empty for other kinds).</summary>
+    public IReadOnlyList<ContentControlListItem> Items => ListItems ?? System.Array.Empty<ContentControlListItem>();
 }
 
 /// <summary>
@@ -587,10 +743,87 @@ public sealed class Endnote(int id)
 }
 
 /// <summary>
+/// Number format for footnote/endnote reference marks. Maps to w:numFmt/@w:val inside
+/// w:footnotePr / w:endnotePr in word/settings.xml. The default is <see cref="Decimal"/> (1, 2, 3, …).
+/// </summary>
+public enum NoteNumberFormat
+{
+    /// <summary>Arabic numerals: 1, 2, 3, … (w:numFmt val="decimal", the Word default).</summary>
+    Decimal,
+    /// <summary>Lower-case Roman numerals: i, ii, iii, … (w:numFmt val="lowerRoman").</summary>
+    LowerRoman,
+    /// <summary>Upper-case Roman numerals: I, II, III, … (w:numFmt val="upperRoman").</summary>
+    UpperRoman,
+    /// <summary>Lower-case letters: a, b, c, … (w:numFmt val="lowerLetter").</summary>
+    LowerLetter,
+    /// <summary>Upper-case letters: A, B, C, … (w:numFmt val="upperLetter").</summary>
+    UpperLetter,
+    /// <summary>Symbol sequence: *, †, ‡, §, **, †† … (w:numFmt val="chicago").</summary>
+    Chicago
+}
+
+/// <summary>
+/// Controls when footnote/endnote numbering restarts. Maps to w:numRestart/@w:val inside
+/// w:footnotePr / w:endnotePr in word/settings.xml. The default is <see cref="Continuous"/>
+/// (numbering runs across the whole document without restarting).
+/// </summary>
+public enum NoteNumberRestart
+{
+    /// <summary>Continuous numbering through the whole document (the Word default).</summary>
+    Continuous,
+    /// <summary>Restart numbering at 1 on each new section (w:numRestart val="eachSect").</summary>
+    EachSection,
+    /// <summary>Restart numbering at 1 on each new page (w:numRestart val="eachPage"; footnotes only).</summary>
+    EachPage
+}
+
+/// <summary>
+/// Document-level footnote (or endnote) numbering options stored in word/settings.xml as
+/// w:footnotePr (or w:endnotePr). All properties have Word-default values so a freshly created
+/// document round-trips without emitting these elements.
+/// </summary>
+public sealed class NoteNumberingOptions
+{
+    /// <summary>
+    /// Number format for the reference marks. Defaults to <see cref="NoteNumberFormat.Decimal"/>
+    /// (1, 2, 3, …), matching Word's default.
+    /// </summary>
+    public NoteNumberFormat NumberFormat { get; set; } = NoteNumberFormat.Decimal;
+
+    /// <summary>
+    /// The starting number for the first reference mark. Defaults to 1 (Word's default).
+    /// </summary>
+    public int StartAt { get; set; } = 1;
+
+    /// <summary>
+    /// When numbering restarts. Defaults to <see cref="NoteNumberRestart.Continuous"/>,
+    /// matching Word's default.
+    /// </summary>
+    public NoteNumberRestart NumberRestart { get; set; } = NoteNumberRestart.Continuous;
+
+    /// <summary>
+    /// Returns true when all properties match Word's defaults, meaning the w:footnotePr /
+    /// w:endnotePr element need not be emitted (keeps a freshly authored document minimal).
+    /// </summary>
+    public bool IsDefault =>
+        NumberFormat == NoteNumberFormat.Decimal &&
+        StartAt == 1 &&
+        NumberRestart == NoteNumberRestart.Continuous;
+}
+
+/// <summary>
 /// A single review comment: an id (matching the body runs' <see cref="Run.CommentId"/>), an author
 /// and initials, an optional explicit date, and the comment's block content as a list of paragraphs.
 /// Maps onto a w:comment element inside word/comments.xml. The date is an explicit model value (never
 /// auto-stamped) so the writer stays deterministic — it is only emitted when set.
+///
+/// Modern (threaded) Word comments are modelled by nesting <see cref="Replies"/> — an ordered list of
+/// child comments, each a full <see cref="Comment"/> with its own globally-unique id — under the
+/// top-level comment that anchors the body range, and by a <see cref="Resolved"/> flag on the top-level
+/// comment. Only the top-level comment is keyed in <see cref="TextDocument.Comments"/> / referenced by
+/// body runs; replies live only inside their parent's list. In docx the parent and every reply are flat
+/// <c>w:comment</c> entries in comments.xml, with the thread shape (parent/child) and resolved state
+/// captured in word/commentsExtended.xml (w15:commentEx, via w15:paraId / w15:paraIdParent / w15:done).
 /// </summary>
 public sealed class Comment(int id)
 {
@@ -610,6 +843,19 @@ public sealed class Comment(int id)
 
     public List<Paragraph> Content { get; } = [];
 
+    /// <summary>
+    /// The ordered thread of replies to this comment (each a full <see cref="Comment"/> with its own
+    /// unique id). Only meaningful on a top-level comment; a reply itself carries an empty list. Maps to
+    /// child w15:commentEx entries (w15:paraIdParent pointing at this comment's last paragraph).
+    /// </summary>
+    public List<Comment> Replies { get; } = [];
+
+    /// <summary>
+    /// True when the comment thread is marked resolved/done (Word's "Resolve"). Maps to w15:done="1" on
+    /// this comment's w15:commentEx entry. Only meaningful on a top-level comment.
+    /// </summary>
+    public bool Resolved { get; set; }
+
     public Comment(int id, string text, string author = "", string initials = "") : this(id)
     {
         Author = author;
@@ -618,19 +864,61 @@ public sealed class Comment(int id)
     }
 
     public string PlainText => string.Join("\n", Content.Select(p => p.PlainText));
+
+    /// <summary>
+    /// Adds a reply with the given text/author to this comment's thread and returns it. The reply's id
+    /// must be unique across the whole document (use <see cref="TextDocument.NextCommentId"/>).
+    /// </summary>
+    public Comment AddReply(int id, string text, string author = "", string initials = "")
+    {
+        var reply = new Comment(id, text, author, initials);
+        Replies.Add(reply);
+        return reply;
+    }
+
+    /// <summary>This comment together with its replies, in thread order (parent first).</summary>
+    public IEnumerable<Comment> ThreadInOrder()
+    {
+        yield return this;
+        foreach (var reply in Replies)
+            yield return reply;
+    }
+}
+
+/// <summary>
+/// The kind of work a <see cref="Source"/> describes, which selects how its bibliography entry is
+/// formatted (a journal article cites its journal/volume/pages, a web site its URL, etc.). The numeric
+/// values are stable so a chosen type can be persisted, and <see cref="SourceType.Book"/> is the default
+/// (value 0). The names match Word's bibliography source types (<c>b:SourceType</c>).
+/// </summary>
+public enum SourceType
+{
+    /// <summary>A book (author, title, publisher, year). The default.</summary>
+    Book = 0,
+
+    /// <summary>An article in a periodical (adds journal name, volume, issue and page range).</summary>
+    JournalArticle = 1,
+
+    /// <summary>A web page (adds its URL and an accessed date).</summary>
+    WebSite = 2,
 }
 
 /// <summary>
 /// A bibliographic source the document can cite: a short <see cref="Tag"/> (a stable identifier used
 /// to reference the source, e.g. <c>"Knuth1997"</c>) plus author/title/year and an optional publisher.
-/// Kept deliberately small and immutable-friendly (init-only properties) so it round-trips cleanly and
-/// the citation/bibliography formatting helpers (see <see cref="Citations"/>) can stay pure. Missing
-/// fields are represented as empty strings / null and handled gracefully by the formatters.
+/// A <see cref="SourceType"/> selects type-specific formatting and carries the extra fields that type
+/// needs (journal/volume/issue/pages for an article, url/accessed for a web site). Kept deliberately
+/// small and immutable-friendly (init-only properties) so it round-trips cleanly and the
+/// citation/bibliography formatting helpers (see <see cref="Citations"/>) can stay pure. Missing fields
+/// are represented as empty strings / null and handled gracefully by the formatters.
 /// </summary>
 public sealed class Source
 {
     /// <summary>A short, stable identifier for the source (used to reference it). May be empty.</summary>
     public string Tag { get; init; } = string.Empty;
+
+    /// <summary>The kind of work, selecting type-specific bibliography formatting. Defaults to <see cref="SourceType.Book"/>.</summary>
+    public SourceType Type { get; init; } = SourceType.Book;
 
     /// <summary>The author (or authors) of the work. Empty when unknown.</summary>
     public string Author { get; init; } = string.Empty;
@@ -643,6 +931,24 @@ public sealed class Source
 
     /// <summary>The publisher of the work, or null when unknown / not applicable.</summary>
     public string? Publisher { get; init; }
+
+    /// <summary>The periodical name for a <see cref="SourceType.JournalArticle"/>; null otherwise / when unknown.</summary>
+    public string? Journal { get; init; }
+
+    /// <summary>The volume number for a <see cref="SourceType.JournalArticle"/>; null when unknown.</summary>
+    public string? Volume { get; init; }
+
+    /// <summary>The issue number for a <see cref="SourceType.JournalArticle"/>; null when unknown.</summary>
+    public string? Issue { get; init; }
+
+    /// <summary>The page (range) for a <see cref="SourceType.JournalArticle"/>, e.g. <c>"12-20"</c>; null when unknown.</summary>
+    public string? Pages { get; init; }
+
+    /// <summary>The URL for a <see cref="SourceType.WebSite"/>; null otherwise / when unknown.</summary>
+    public string? Url { get; init; }
+
+    /// <summary>The accessed date for a <see cref="SourceType.WebSite"/>, free-text (e.g. <c>"3 May 2024"</c>); null when unknown.</summary>
+    public string? Accessed { get; init; }
 }
 
 /// <summary>
@@ -658,6 +964,53 @@ public sealed class IndexEntry
     public string Term { get; }
 
     public IndexEntry(string term) => Term = (term ?? string.Empty).Trim();
+}
+
+/// <summary>
+/// The standard categories Word groups a Table of Authorities by (References &gt; Table of Authorities).
+/// The numeric values match Word's built-in category numbers (1 = Cases, 2 = Statutes, …) which are
+/// what the TA field's <c>\c</c> switch carries, so they round-trip faithfully.
+/// </summary>
+public enum CitationCategory
+{
+    Cases = 1,
+    Statutes = 2,
+    OtherAuthorities = 3,
+    Rules = 4,
+    Treatises = 5,
+    Regulations = 6,
+    ConstitutionalProvisions = 7
+}
+
+/// <summary>
+/// A marked legal citation for a Table of Authorities (Word's References &gt; Mark Citation). It carries
+/// the citation's <see cref="Category"/> plus its <see cref="LongCitation"/> (the full form listed in the
+/// table) and an optional <see cref="ShortCitation"/> (the abbreviated form). Modelled as a model
+/// side-store on <see cref="TextDocument.Citations"/>, mirroring <see cref="IndexEntry"/>: the generated
+/// Table of Authorities is ordinary styled paragraphs that already round-trip, and the marks themselves
+/// serialise as hidden <c>TA</c> fields (see <c>DocxWriter</c>/<c>DocxReader</c>) so they survive a
+/// save/open exactly like Word's.
+/// </summary>
+public sealed class Citation
+{
+    /// <summary>The legal-authority category this citation belongs to (Cases, Statutes, …).</summary>
+    public CitationCategory Category { get; }
+
+    /// <summary>The full citation text listed in the Table of Authorities. Trimmed at construction.</summary>
+    public string LongCitation { get; }
+
+    /// <summary>
+    /// The abbreviated/short form Word matches subsequent occurrences against, or empty when none was
+    /// given. Trimmed at construction. Not listed in the table; carried for faithful round-trip.
+    /// </summary>
+    public string ShortCitation { get; }
+
+    public Citation(string longCitation, CitationCategory category = CitationCategory.Cases, string? shortCitation = null)
+    {
+        LongCitation = (longCitation ?? string.Empty).Trim();
+        Category = category;
+        ShortCitation = (shortCitation ?? string.Empty).Trim();
+    }
 }
 
 /// <summary>
@@ -678,6 +1031,34 @@ public enum RunFieldKind
 }
 
 /// <summary>
+/// A generic Word <em>complex</em> field — the <c>w:fldChar</c> begin / <c>w:instrText</c> / separate /
+/// result / end run sequence (Insert &gt; Quick Parts &gt; Field). Unlike <see cref="RunFieldKind"/>, which
+/// enumerates a fixed set of self-contained <c>w:fldSimple</c> fields, this preserves the raw field-code
+/// <see cref="Instruction"/> verbatim, so any field (PAGE, NUMPAGES, DATE with a \@ picture, FILENAME,
+/// AUTHOR, REF, or one FreeW does not specifically model) round-trips losslessly. The owning
+/// <see cref="Run.Text"/> holds the cached result. <see cref="ShowCode"/> drives the Alt+F9 toggle: when
+/// true the editor shows the field code (e.g. <c>{ PAGE }</c>) instead of the result; it is presentation
+/// state only and is not serialised.
+/// </summary>
+/// <param name="Instruction">The raw field instruction, e.g. <c> PAGE </c> or <c> DATE \@ "M/d/yyyy" </c>.</param>
+/// <param name="ShowCode">When true, the editor displays the field code rather than the result (Alt+F9).</param>
+public sealed record ComplexField(string Instruction, bool ShowCode = false)
+{
+    /// <summary>The leading keyword of <see cref="Instruction"/> upper-cased (e.g. "PAGE"), or "" if empty.</summary>
+    public string Keyword
+    {
+        get
+        {
+            var t = Instruction.Trim();
+            if (t.Length == 0)
+                return string.Empty;
+            var end = t.IndexOfAny([' ', '\t', '\\']);
+            return (end < 0 ? t : t[..end]).ToUpperInvariant();
+        }
+    }
+}
+
+/// <summary>
 /// The tracked-change state of a <see cref="Run"/>. <see cref="None"/> is an ordinary run;
 /// <see cref="Inserted"/> is a tracked insertion (w:ins); <see cref="Deleted"/> is a tracked deletion
 /// (w:del, whose text serialises as w:delText and is kept in the model until the change is accepted).
@@ -688,6 +1069,15 @@ public enum RevisionKind
     Inserted,
     Deleted
 }
+
+/// <summary>
+/// A tracked formatting change on a run (Word's <c>w:rPrChange</c>). <see cref="PreviousFormatting"/> is
+/// the run's formatting <em>before</em> the change (what reject restores); the run's current
+/// <see cref="Run.Formatting"/> is the new formatting. <see cref="Author"/>/<see cref="DateXml"/> record
+/// who made the change and when (the w:author/w:date on w:rPrChange). Immutable, mirroring how revision
+/// metadata is carried as plain optional data on the run.
+/// </summary>
+public sealed record FormatRevision(RunFormatting PreviousFormatting, string? Author, string? DateXml);
 
 /// <summary>
 /// A top-level document block. The document body is an ordered sequence of blocks; today that is
@@ -780,6 +1170,19 @@ public sealed class TableCell
     /// </summary>
     public VerticalMergeState VerticalMerge { get; set; } = VerticalMergeState.None;
 
+    /// <summary>
+    /// Vertical alignment of the cell's content (<c>tc/tcPr/w:vAlign</c>): top, center or bottom.
+    /// <see cref="TableCellVerticalAlignment.Top"/> is the docx default, so it is not emitted and existing
+    /// cells round-trip unchanged. Set by the Table Properties dialog's Cell tab.
+    /// </summary>
+    public TableCellVerticalAlignment VerticalAlignment { get; set; } = TableCellVerticalAlignment.Top;
+
+    /// <summary>
+    /// Per-cell margin override (<c>tc/tcPr/w:tcMar</c>), or null to inherit the table default
+    /// (<see cref="Table.DefaultCellMargins"/>). Null is the default so existing cells are unaffected.
+    /// </summary>
+    public TableCellMargins? Margins { get; set; }
+
     public TableCell() { }
 
     public TableCell(string text) => Paragraphs.Add(new Paragraph(text));
@@ -799,10 +1202,68 @@ public enum VerticalMergeState
     Continue
 }
 
+/// <summary>
+/// Vertical alignment of a table cell's content (<c>tc/tcPr/w:vAlign</c>). <see cref="Top"/> is the docx
+/// default (no element emitted); <see cref="Center"/> and <see cref="Bottom"/> map to the "center"/"bottom"
+/// tokens.
+/// </summary>
+public enum TableCellVerticalAlignment
+{
+    Top,
+    Center,
+    Bottom
+}
+
+/// <summary>
+/// How a table row's height is interpreted (<c>tr/trPr/w:trHeight/@w:hRule</c>). <see cref="Auto"/> is the
+/// docx default — the row grows to fit its content and no explicit height is emitted. <see cref="AtLeast"/>
+/// is a minimum height the row may exceed; <see cref="Exact"/> fixes the height (content may be clipped).
+/// </summary>
+public enum TableRowHeightRule
+{
+    Auto,
+    AtLeast,
+    Exact
+}
+
+/// <summary>
+/// The four inside margins (cell padding) of a table cell, in points, mapping onto a <c>w:tcMar</c>
+/// (per-cell override) or <c>w:tblCellMar</c> (table default) element. Immutable so it round-trips cleanly.
+/// Word's default cell margins are 0 top/bottom and ~5.4pt (108 dxa) left/right.
+/// </summary>
+public sealed record TableCellMargins(
+    double TopPt = 0,
+    double LeftPt = 5.4,
+    double BottomPt = 0,
+    double RightPt = 5.4)
+{
+    /// <summary>Word's default table cell margins (0 top/bottom, 5.4pt left/right).</summary>
+    public static readonly TableCellMargins Default = new();
+}
+
 /// <summary>A table row: an ordered sequence of cells (w:tr).</summary>
 public sealed class TableRow
 {
     public List<TableCell> Cells { get; } = [];
+
+    /// <summary>
+    /// Explicit row height in points (<c>tr/trPr/w:trHeight/@w:val</c>), interpreted per <see cref="HeightRule"/>.
+    /// Null (the default) means automatic height, so no <c>w:trHeight</c> is emitted and existing rows are
+    /// unaffected.
+    /// </summary>
+    public double? HeightPt { get; set; }
+
+    /// <summary>
+    /// How <see cref="HeightPt"/> is interpreted (<c>@w:hRule</c>). <see cref="TableRowHeightRule.Auto"/> is
+    /// the default; it is irrelevant unless <see cref="HeightPt"/> is set.
+    /// </summary>
+    public TableRowHeightRule HeightRule { get; set; } = TableRowHeightRule.Auto;
+
+    /// <summary>
+    /// Whether the row's contents may break across a page boundary (Word's "Allow row to break across pages").
+    /// True (the default) lets the row split; false emits <c>tr/trPr/w:cantSplit</c> to keep the row whole.
+    /// </summary>
+    public bool AllowBreakAcrossPages { get; set; } = true;
 }
 
 /// <summary>
@@ -836,6 +1297,18 @@ public sealed record TableFormatting
     public static readonly TableFormatting Default = new();
 }
 
+/// <summary>
+/// Horizontal alignment of a table within its column / page width (<c>tbl/tblPr/w:jc</c>). <see cref="Left"/>
+/// is the docx default (no element emitted); <see cref="Center"/> and <see cref="Right"/> map to the
+/// "center"/"right" tokens. Set by the Table Properties dialog's Table tab.
+/// </summary>
+public enum TableAlignment
+{
+    Left,
+    Center,
+    Right
+}
+
 /// <summary>A table block: rows of cells, each cell holding paragraphs (w:tbl / w:tr / w:tc).</summary>
 public sealed class Table : Block
 {
@@ -848,6 +1321,45 @@ public sealed class Table : Block
     /// existing tables are unaffected.
     /// </summary>
     public List<double> ColumnWidthsPt { get; } = [];
+
+    /// <summary>
+    /// Preferred total table width in points (<c>tbl/tblPr/w:tblW</c> with <c>type="dxa"</c>), or null for
+    /// automatic width (<c>type="auto"</c>, the historical default), so existing tables are unaffected. Set
+    /// by the Table Properties dialog's Table tab.
+    /// </summary>
+    public double? PreferredWidthPt { get; set; }
+
+    /// <summary>
+    /// Horizontal alignment of the table (<c>tbl/tblPr/w:jc</c>). <see cref="TableAlignment.Left"/> is the
+    /// default, so it is not emitted and existing tables are unaffected.
+    /// </summary>
+    public TableAlignment Alignment { get; set; } = TableAlignment.Left;
+
+    /// <summary>
+    /// Indent of the table from the left margin in points (<c>tbl/tblPr/w:tblInd</c>), or null for none
+    /// (the default). Word's "Indent from left" on the Table tab.
+    /// </summary>
+    public double? IndentFromLeftPt { get; set; }
+
+    /// <summary>
+    /// True when the table floats with text wrapping around it (Word's "Text wrapping: Around"). Emits a
+    /// minimal <c>tbl/tblPr/w:tblpPr</c> floating-position element so Word treats the table as floating.
+    /// False (the default) keeps the table inline, so existing tables are unaffected.
+    /// </summary>
+    public bool TextWrapping { get; set; }
+
+    /// <summary>
+    /// Default inside margins (cell padding) applied to every cell that has no <see cref="TableCell.Margins"/>
+    /// override (<c>tbl/tblPr/w:tblCellMar</c>), or null to use the implicit docx default, so existing tables
+    /// are unaffected. Set by the Table tab's "Options… &gt; Default cell margins".
+    /// </summary>
+    public TableCellMargins? DefaultCellMargins { get; set; }
+
+    /// <summary>
+    /// Spacing between cells in points (<c>tbl/tblPr/w:tblCellSpacing</c>), or null for none (the default).
+    /// Word's "Allow spacing between cells" on the Table Options dialog.
+    /// </summary>
+    public double? CellSpacingPt { get; set; }
 
     public Table() { }
 
@@ -907,14 +1419,16 @@ public sealed class DocumentProperties
 /// <see cref="None"/> is an unprotected document (the default — no settings part is emitted);
 /// <see cref="ReadOnly"/> locks the whole document against edits; <see cref="CommentsOnly"/> permits
 /// only the insertion of comments; <see cref="TrackChangesOnly"/> permits edits but forces them to be
-/// tracked revisions. Maps onto w:documentProtection/@w:edit ("readOnly"/"comments"/"trackedChanges").
+/// tracked revisions; <see cref="FillingForms"/> permits only filling in form fields. Maps onto
+/// w:documentProtection/@w:edit ("readOnly"/"comments"/"trackedChanges"/"forms").
 /// </summary>
 public enum ProtectionMode
 {
     None,
     ReadOnly,
     CommentsOnly,
-    TrackChangesOnly
+    TrackChangesOnly,
+    FillingForms
 }
 
 /// <summary>
@@ -957,7 +1471,14 @@ public sealed class HeaderFooter
 /// colour and width (points). Null on <see cref="PageSettings.PageBorder"/> means no page border, so
 /// existing documents are unaffected. Mirrors how <see cref="ParagraphBorder"/> is modelled.
 /// </summary>
-public sealed record PageBorder(string ColorHex = "#000000", double WidthPt = 1.0);
+public sealed record PageBorder(string ColorHex = "#000000", double WidthPt = 1.0)
+{
+    /// <summary>
+    /// The line style of every page-border edge (w:val). Defaults to <see cref="BorderLineStyle.Single"/>,
+    /// matching what the writer previously emitted, so existing documents round-trip byte-unchanged.
+    /// </summary>
+    public BorderLineStyle LineStyle { get; init; } = BorderLineStyle.Single;
+}
 
 /// <summary>
 /// How (and whether) lines are numbered in the page margin (w:sectPr/w:lnNumType).
@@ -998,6 +1519,40 @@ public sealed class PageSettings
     public bool Landscape { get; set; }
 
     /// <summary>
+    /// The binding gutter — extra margin added on the binding edge (w:sectPr/w:pgMar/@w:gutter), in points.
+    /// Defaults to 0 so existing documents round-trip unchanged — the @w:gutter attribute is emitted only when
+    /// greater than 0. Word's Page Setup &gt; Margins dialog exposes this as "Gutter". Always non-negative.
+    /// </summary>
+    public double GutterPt { get; set; }
+
+    /// <summary>
+    /// The distance from the top of the page to the header (w:sectPr/w:pgMar/@w:header), in points. Defaults to
+    /// 0, meaning "unspecified" — the @w:header attribute is then not emitted, so existing documents round-trip
+    /// unchanged (Word's own default is 0.5"). When greater than 0 the writer emits @w:header and the reader maps
+    /// it back here. Word's Page Setup &gt; Layout dialog exposes this as "Header from edge". Always non-negative.
+    /// </summary>
+    public double HeaderDistancePt { get; set; }
+
+    /// <summary>
+    /// The distance from the bottom of the page to the footer (w:sectPr/w:pgMar/@w:footer), in points. Defaults to
+    /// 0, meaning "unspecified" — the @w:footer attribute is then not emitted, so existing documents round-trip
+    /// unchanged (Word's own default is 0.5"). When greater than 0 the writer emits @w:footer and the reader maps
+    /// it back here. Word's Page Setup &gt; Layout dialog exposes this as "Footer from edge". Always non-negative.
+    /// </summary>
+    public double FooterDistancePt { get; set; }
+
+    /// <summary>
+    /// Whether the document uses mirror margins for double-sided printing (the document-level
+    /// w:settings/w:mirrorMargins toggle). When set, the left/right margins become inside/outside margins that
+    /// swap on facing pages and the gutter is added to the inside edge. Defaults to false so existing documents
+    /// are unaffected — no w:mirrorMargins is emitted and no settings part is forced. When true the writer emits
+    /// the toggle in word/settings.xml and the reader maps it back. Like <see cref="DifferentOddEvenPages"/> this
+    /// is a document-wide setting carried on the body-level page settings. Word's Page Setup &gt; Margins dialog
+    /// exposes this via the "Multiple pages: Mirror margins" option.
+    /// </summary>
+    public bool MirrorMargins { get; set; }
+
+    /// <summary>
     /// The number of equal-width text columns the page content flows into (w:sectPr/w:cols w:num).
     /// Defaults to 1 (single column) so existing documents are unaffected. Always at least 1.
     /// </summary>
@@ -1006,8 +1561,27 @@ public sealed class PageSettings
     /// <summary>
     /// The gap between adjacent columns in points (w:sectPr/w:cols w:space). Defaults to 36 points
     /// (half an inch), Word's default column spacing. Only meaningful when <see cref="ColumnCount"/> &gt; 1.
+    /// Ignored when <see cref="ColumnWidthsPt"/> carries explicit unequal columns (each column then
+    /// supplies its own trailing space).
     /// </summary>
     public double ColumnSpacingPt { get; set; } = 36;
+
+    /// <summary>
+    /// Whether a vertical line is drawn between adjacent columns (w:sectPr/w:cols w:sep). Defaults to
+    /// false so existing documents round-trip unchanged — no w:sep is emitted. Only meaningful when
+    /// <see cref="ColumnCount"/> &gt; 1; the print preview draws the divider lines when set.
+    /// </summary>
+    public bool ColumnsLineBetween { get; set; }
+
+    /// <summary>
+    /// Optional explicit per-column widths in points for an <em>unequal</em> column layout (Word's
+    /// "Left" / "Right" presets and custom widths). Null — the default — means equal-width columns
+    /// derived from <see cref="ColumnCount"/> and <see cref="ColumnSpacingPt"/>, so existing documents
+    /// are unaffected. When non-null it holds exactly <see cref="ColumnCount"/> widths and the writer
+    /// emits w:cols/@w:equalWidth="0" with one w:col (w:w + trailing w:space) per column. The trailing
+    /// space of all but the last column is <see cref="ColumnSpacingPt"/>.
+    /// </summary>
+    public IReadOnlyList<double>? ColumnWidthsPt { get; set; }
 
     /// <summary>
     /// Optional page border drawn around the whole page (w:sectPr/w:pgBorders), or null for none.
@@ -1045,6 +1619,31 @@ public sealed class PageSettings
     /// When true the writer emits w:autoHyphenation and the reader maps it back here.
     /// </summary>
     public bool AutoHyphenation { get; set; }
+
+    /// <summary>
+    /// The hyphenation zone in points (word/settings.xml's w:hyphenationZone, stored in twips). This is the
+    /// maximum amount of whitespace allowed at the end of a line before automatic hyphenation kicks in: a
+    /// word is only broken when the gap left at the line end would otherwise exceed this zone. A wider zone
+    /// means fewer hyphens (and a more ragged right edge); a narrower zone means more. Defaults to 0, which —
+    /// like Word — is treated as the default zone (0.25" / 360 twips) and is not emitted unless changed.
+    /// Only meaningful when <see cref="AutoHyphenation"/> is on.
+    /// </summary>
+    public double HyphenationZonePt { get; set; }
+
+    /// <summary>
+    /// The maximum number of consecutive lines that may end with a hyphen (word/settings.xml's
+    /// w:consecutiveHyphenLimit). 0 (the default) means no limit — Word's "Limit consecutive hyphens to: No
+    /// limit". Emitted only when greater than 0. Only meaningful when <see cref="AutoHyphenation"/> is on.
+    /// </summary>
+    public int ConsecutiveHyphenLimit { get; set; }
+
+    /// <summary>
+    /// When true, words in ALL CAPITALS are not automatically hyphenated (word/settings.xml's
+    /// w:doNotHyphenateCaps — Word's "Hyphenate words in CAPS" checkbox, inverted: checked = hyphenate caps =
+    /// this false). Defaults to false (caps are hyphenated) so existing documents are unaffected; emitted only
+    /// when true. Only meaningful when <see cref="AutoHyphenation"/> is on.
+    /// </summary>
+    public bool DoNotHyphenateCaps { get; set; }
 
     /// <summary>
     /// How page content is aligned vertically within the text area (w:sectPr/w:vAlign). Defaults to
@@ -1100,13 +1699,22 @@ public sealed class PageSettings
         MarginTopPt = MarginTopPt,
         MarginBottomPt = MarginBottomPt,
         Landscape = Landscape,
+        GutterPt = GutterPt,
+        HeaderDistancePt = HeaderDistancePt,
+        FooterDistancePt = FooterDistancePt,
+        MirrorMargins = MirrorMargins,
         ColumnCount = ColumnCount,
         ColumnSpacingPt = ColumnSpacingPt,
+        ColumnsLineBetween = ColumnsLineBetween,
+        ColumnWidthsPt = ColumnWidthsPt is null ? null : new List<double>(ColumnWidthsPt),
         PageBorder = PageBorder,
         Watermark = Watermark,
         LineNumberMode = LineNumberMode,
         LineNumberCountBy = LineNumberCountBy,
         AutoHyphenation = AutoHyphenation,
+        HyphenationZonePt = HyphenationZonePt,
+        ConsecutiveHyphenLimit = ConsecutiveHyphenLimit,
+        DoNotHyphenateCaps = DoNotHyphenateCaps,
         VerticalAlignment = VerticalAlignment,
         DifferentFirstPage = DifferentFirstPage,
         DifferentOddEvenPages = DifferentOddEvenPages,
@@ -1342,6 +1950,14 @@ public sealed class TextDocument
     public ProtectionSettings Protection { get; set; } = ProtectionSettings.Unprotected;
 
     /// <summary>
+    /// Word's "Mark as Final" flag. When true the document is advisory read-only: editors should open it
+    /// non-editable and show a "Marked as Final" banner ("Edit Anyway" clears it). Persisted following the
+    /// Word convention as the <c>_MarkAsFinal</c> boolean custom document property (docProps/custom.xml);
+    /// the reader maps it back here. Independent of <see cref="Protection"/> (enforced restrict-editing).
+    /// </summary>
+    public bool MarkedAsFinal { get; set; }
+
+    /// <summary>
     /// The document's persisted theme — the colour/font scheme that maps to <c>word/theme/theme1.xml</c>.
     /// Defaults to <see cref="DocumentTheme.Default"/> ("Office"), so existing documents are unchanged.
     /// The writer always emits a theme part (mirroring real Word documents, which always carry one); the
@@ -1372,14 +1988,34 @@ public sealed class TextDocument
     public int NextEndnoteId() => Endnotes.Count == 0 ? 1 : Math.Max(0, Endnotes.Keys.Max()) + 1;
 
     /// <summary>
+    /// Document-level footnote numbering options (number format, start-at, restart). Read from and
+    /// written to <c>w:footnotePr</c> in word/settings.xml. A fresh document uses Word's defaults so
+    /// no element is emitted until the user changes something.
+    /// </summary>
+    public NoteNumberingOptions FootnoteNumbering { get; } = new();
+
+    /// <summary>
+    /// Document-level endnote numbering options (number format, start-at, restart). Read from and
+    /// written to <c>w:endnotePr</c> in word/settings.xml. A fresh document uses Word's defaults so
+    /// no element is emitted until the user changes something.
+    /// </summary>
+    public NoteNumberingOptions EndnoteNumbering { get; } = new();
+
+    /// <summary>
     /// The document's review comments, keyed by comment id (matching the body runs' <see cref="Run.CommentId"/>).
     /// Maps to word/comments.xml (w:comments / w:comment w:id="N"). Empty when the document has no
     /// comments, in which case no comments part is emitted.
     /// </summary>
     public Dictionary<int, Comment> Comments { get; } = [];
 
-    /// <summary>The next unused comment id (0-based, as Word numbers comments from 0).</summary>
-    public int NextCommentId() => Comments.Count == 0 ? 0 : Comments.Keys.Max() + 1;
+    /// <summary>
+    /// The next unused comment id (0-based, as Word numbers comments from 0). Scans top-level comments
+    /// AND their replies, since every reply is also a flat w:comment with a globally-unique id.
+    /// </summary>
+    public int NextCommentId() =>
+        Comments.Count == 0
+            ? 0
+            : Comments.Values.SelectMany(c => c.ThreadInOrder()).Max(c => c.Id) + 1;
 
     /// <summary>
     /// The document's bibliographic sources, in insertion order. Citations reference a source's
@@ -1390,12 +2026,29 @@ public sealed class TextDocument
     public List<Source> Sources { get; } = [];
 
     /// <summary>
+    /// The selected bibliographic <see cref="CitationStyle"/> (APA / MLA / Chicago / IEEE) governing how
+    /// in-text citations and the bibliography are formatted. Chosen from the References &gt; Citation Style
+    /// combo; persisted to / restored from the docx bibliography part (<c>b:Sources/@SelectedStyle</c>) so it
+    /// survives a save/load. Defaults to <see cref="CitationStyle.Apa"/>.
+    /// </summary>
+    public CitationStyle BibliographyStyle { get; set; } = CitationStyle.Apa;
+
+    /// <summary>
     /// The terms marked for the document index, in mark order. <see cref="DocumentIndex.Build(TextDocument)"/>
     /// renders the distinct, alphabetically sorted terms as ordinary styled paragraphs. Like
     /// <see cref="Sources"/> these are pure model data (no docx part of their own) — the generated index is
     /// ordinary styled paragraphs that already round-trip. Empty when nothing has been marked.
     /// </summary>
     public List<IndexEntry> IndexEntries { get; } = [];
+
+    /// <summary>
+    /// The legal citations marked for a Table of Authorities, in mark order.
+    /// <see cref="TableOfAuthorities.Build(TextDocument)"/> renders them grouped by
+    /// <see cref="CitationCategory"/> as ordinary styled paragraphs. Unlike <see cref="IndexEntries"/>, the
+    /// marks themselves also serialise as hidden <c>TA</c> fields in the body (so they round-trip like
+    /// Word's), and the reader rebuilds this list from those fields. Empty when nothing has been marked.
+    /// </summary>
+    public List<Citation> Citations { get; } = [];
 
     /// <summary>
     /// The fonts embedded in the document, one <see cref="EmbeddedFont"/> per family. Empty (the default)
@@ -1498,5 +2151,7 @@ public sealed class TextDocument
         DocumentIndex.EnsureStyles(this);
         // The built-in table-of-figures heading/entry styles used by TableOfFigures (round-trip via styles.xml).
         TableOfFigures.EnsureStyles(this);
+        // The built-in Table of Authorities heading/category/entry styles (round-trip via styles.xml).
+        TableOfAuthorities.EnsureStyles(this);
     }
 }

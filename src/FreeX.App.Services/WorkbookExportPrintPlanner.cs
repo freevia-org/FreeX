@@ -43,35 +43,42 @@ public sealed record WorkbookExportPrintSurface(
     public static WorkbookExportPrintSurface WindowsDesktop { get; } = new("Windows desktop", SupportsXps: true);
     public static WorkbookExportPrintSurface MacOs { get; } = new("macOS");
 
-    public string Label { get; init; } = NormalizeLabel(Label);
+    // App-specific output-kind vocabulary maps onto the neutral shared capability core, so the
+    // label normalization and supported-kind selection live in one place reusable by FreeP/FreeW.
+    private ExportSurfaceCapability Capability { get; } =
+        new(Label, SupportsPdf, SupportsXps);
+
+    public string Label { get; init; } = ExportSurfaceCapability.Normalize(Label);
 
     public IReadOnlyList<WorkbookExportPrintOutputKind> SupportedOutputKinds
     {
         get
         {
-            var outputKinds = new List<WorkbookExportPrintOutputKind>(2);
-            if (SupportsPdf)
-                outputKinds.Add(WorkbookExportPrintOutputKind.Pdf);
-            if (SupportsXps)
-                outputKinds.Add(WorkbookExportPrintOutputKind.Xps);
+            var kinds = Capability.SupportedKinds;
+            var outputKinds = new List<WorkbookExportPrintOutputKind>(kinds.Count);
+            foreach (var kind in kinds)
+                outputKinds.Add(FromDocumentKind(kind));
 
             return outputKinds;
         }
     }
 
     public bool Supports(WorkbookExportPrintOutputKind outputKind) =>
+        Capability.Supports(ToDocumentKind(outputKind));
+
+    private static ExportDocumentKind ToDocumentKind(WorkbookExportPrintOutputKind outputKind) =>
         outputKind switch
         {
-            WorkbookExportPrintOutputKind.Pdf => SupportsPdf,
-            WorkbookExportPrintOutputKind.Xps => SupportsXps,
-            _ => false
+            WorkbookExportPrintOutputKind.Xps => ExportDocumentKind.Xps,
+            _ => ExportDocumentKind.Pdf
         };
 
-    private static string NormalizeLabel(string label)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(label);
-        return label.Trim();
-    }
+    private static WorkbookExportPrintOutputKind FromDocumentKind(ExportDocumentKind kind) =>
+        kind switch
+        {
+            ExportDocumentKind.Xps => WorkbookExportPrintOutputKind.Xps,
+            _ => WorkbookExportPrintOutputKind.Pdf
+        };
 }
 
 public sealed record WorkbookExportPrintIntent(

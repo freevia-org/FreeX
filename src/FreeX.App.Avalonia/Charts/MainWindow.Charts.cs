@@ -49,7 +49,7 @@ public sealed partial class MainWindow
             var inset = Math.Min(28 * zoomFactor, Math.Min(width, height) / 4);
             var plotArea = new PlotRect(inset, inset, Math.Max(1, width - (2 * inset)), Math.Max(1, height - (2 * inset)));
 
-            var request = AvaloniaChartRequestBuilder.TryBuild(chart, plotArea, accessor, ChartTextMeasurer);
+            var request = ChartLayoutRequestBuilder.TryBuild(chart, plotArea, accessor, ChartTextMeasurer);
             if (request is null)
                 continue;
 
@@ -89,13 +89,26 @@ public sealed partial class MainWindow
 
         AutomationProperties.SetAutomationId(container, $"Chart{chart.Id:N}");
         AutomationProperties.SetName(container, $"Chart {ChartDisplayName(chart)}");
-        AutomationProperties.SetHelpText(container, "Selects this chart in the workbook viewport.");
+        AutomationProperties.SetHelpText(container, UiText.Get("ChartLoc_SelectChartHelpText"));
         AutomationProperties.SetItemStatus(container, selected ? "Selected" : "Not selected");
 
         container.PointerPressed += (_, args) =>
         {
-            if (args.GetCurrentPoint(container).Properties.IsLeftButtonPressed)
+            var point = args.GetCurrentPoint(container);
+            if (point.Properties.IsRightButtonPressed)
             {
+                // Right-click selects the chart, then opens the per-target Chart context menu.
+                HandleChartPointerContext(chart, container, args);
+                return;
+            }
+
+            if (point.Properties.IsLeftButtonPressed)
+            {
+                // A click on the already-selected chart may begin a move/resize drag (on a resize
+                // handle or the body); otherwise it just selects the chart.
+                if (selected && TryBeginChartDrag(chart, container, args))
+                    return;
+
                 SelectChart(chart);
                 args.Handled = true;
             }
@@ -109,9 +122,12 @@ public sealed partial class MainWindow
             }
         };
 
+        if (selected)
+            WireChartDragMoveRelease(chart, container);
+
         container.Children.Add(visual);
         if (selected)
-            container.Children.Add(CreateSelectedDrawingObjectAdorner());
+            container.Children.Add(CreateChartSelectionAdorner(width, height));
 
         return container;
     }
@@ -123,7 +139,7 @@ public sealed partial class MainWindow
 
         _selectedDrawingObjectKind = SelectionPaneObjectKind.Chart;
         _selectedDrawingObjectId = chart.Id;
-        RefreshShell($"Selected Chart: {ChartDisplayName(chart)}");
+        RefreshShell(UiText.Format("ChartLoc_SelectedChart", ChartDisplayName(chart)));
     }
 
     private bool IsSelectedChart(ChartModel chart) =>
@@ -152,21 +168,19 @@ public sealed partial class MainWindow
         var result = _session.ExecuteReviewCommand(command);
         if (!result.Success)
         {
-            RefreshShell(result.ErrorMessage ?? "Insert Chart failed.");
+            RefreshShell(result.ErrorMessage ?? UiText.Get("ChartLoc_InsertChartFailed"));
             return;
         }
 
         ClearSelectedDrawingObject();
-        RefreshShell(string.Create(
-            CultureInfo.InvariantCulture,
-            $"Inserted {chartType} chart from {FormatCellReference(range.Start)}"));
+        RefreshShell(UiText.Format("ChartLoc_InsertedChartFrom", chartType, FormatCellReference(range.Start)));
     }
 
     /// <summary>
     /// Builds a cell accessor over the viewport's chart-data cells (and visible cells as a fallback),
     /// mirroring the desktop renderer's chart cell lookup + numeric coercion.
     /// </summary>
-    private static AvaloniaChartRequestBuilder.ChartCellAccessor BuildChartCellAccessor(
+    private static ChartLayoutRequestBuilder.ChartCellAccessor BuildChartCellAccessor(
         ViewportModel viewport,
         SheetId sheetId)
     {

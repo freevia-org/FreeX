@@ -131,8 +131,13 @@ public static class SlicerItemResolver
         if (sharedItems is null || sharedItems.Count == 0)
             return [];
 
+        // De-dup while preserving order: two cache items can resolve to the same caption, and the
+        // "all-selected => cleared" heuristic below compares selected vs available COUNTS, so a
+        // duplicated caption would inflate the denominator and misclassify the filter state.
         var available = new List<string>(slicer.CacheItems.Count);
+        var availableSeen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var selectedFromCache = new List<string>();
+        var selectedSeen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var item in slicer.CacheItems)
         {
             if (item.Index < 0 || item.Index >= sharedItems.Count)
@@ -140,8 +145,9 @@ public static class SlicerItemResolver
             var caption = sharedItems[item.Index];
             if (string.IsNullOrEmpty(caption))
                 continue;
-            available.Add(caption);
-            if (item.IsSelected)
+            if (availableSeen.Add(caption))
+                available.Add(caption);
+            if (item.IsSelected && selectedSeen.Add(caption))
                 selectedFromCache.Add(caption);
         }
 

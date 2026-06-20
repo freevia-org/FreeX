@@ -25,6 +25,34 @@ public class DocxRoundTripTests
         return XDocument.Load(entry);
     }
 
+    private static TextDocument ReadHandAuthoredDocx(string bodyXml, string? documentRelsXml = null, string? settingsXml = null)
+    {
+        using var stream = new MemoryStream();
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            void Add(string path, string xml)
+            {
+                var entry = zip.CreateEntry(path);
+                using var writer = new StreamWriter(entry.Open());
+                writer.Write(xml);
+            }
+
+            Add("word/document.xml",
+                $"""
+                <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+                            xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <w:body>{bodyXml}</w:body>
+                </w:document>
+                """);
+            if (documentRelsXml is not null)
+                Add("word/_rels/document.xml.rels", documentRelsXml);
+            if (settingsXml is not null)
+                Add("word/settings.xml", settingsXml);
+        }
+        stream.Position = 0;
+        return DocxReader.Read(stream);
+    }
+
     [Fact]
     public void RunProperties_EmittedInCanonicalSchemaOrder()
     {
@@ -411,6 +439,71 @@ public class DocxRoundTripTests
         page.PageBorder.Should().NotBeNull();
         page.PageBorder!.ColorHex.Should().Be("#0000FF");
         page.PageBorder.WidthPt.Should().BeApproximately(2.0, 0.001);
+    }
+
+    [Fact]
+    public void ParagraphBorder_PerEdgeStyleColourAndWidth_RoundTrip()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("custom border")
+        {
+            Formatting = ParagraphFormatting.Default with
+            {
+                Border = new ParagraphBorder("#00B050", 2.25)
+                {
+                    LineStyle = BorderLineStyle.Dashed,
+                    Top = true,
+                    Left = false,
+                    Bottom = true,
+                    Right = false,
+                }
+            }
+        });
+
+        var border = RoundTrip(doc).Paragraphs.First().Formatting.Border;
+
+        border.Should().NotBeNull();
+        border!.ColorHex.Should().Be("#00B050");
+        border.WidthPt.Should().BeApproximately(2.25, 0.001);
+        border.LineStyle.Should().Be(BorderLineStyle.Dashed);
+        border.Top.Should().BeTrue();
+        border.Left.Should().BeFalse();
+        border.Bottom.Should().BeTrue();
+        border.Right.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ParagraphShading_WithPattern_RoundTrips()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("shaded")
+        {
+            Formatting = ParagraphFormatting.Default with
+            {
+                ShadingColorHex = "#DDDDDD",
+                ShadingPattern = ShadingPattern.Pct25,
+            }
+        });
+
+        var formatting = RoundTrip(doc).Paragraphs.First().Formatting;
+
+        formatting.ShadingColorHex.Should().Be("#DDDDDD");
+        formatting.ShadingPattern.Should().Be(ShadingPattern.Pct25);
+    }
+
+    [Fact]
+    public void PageBorder_LineStyle_RoundTrips()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("page with dotted border"));
+        doc.Page.PageBorder = new PageBorder("#7030A0", 3.0) { LineStyle = BorderLineStyle.Dotted };
+
+        var page = RoundTrip(doc).Page;
+
+        page.PageBorder.Should().NotBeNull();
+        page.PageBorder!.ColorHex.Should().Be("#7030A0");
+        page.PageBorder.WidthPt.Should().BeApproximately(3.0, 0.001);
+        page.PageBorder.LineStyle.Should().Be(BorderLineStyle.Dotted);
     }
 
     [Fact]
@@ -861,6 +954,36 @@ public class DocxRoundTripTests
         firstRow.Element(ns + "trPr")!.Element(ns + "tblHeader").Should().NotBeNull();
         firstRow.Descendants(ns + "shd").First().Attribute(ns + "fill")!.Value.Should().Be("D9E2F3");
         firstRow.Descendants(ns + "b").Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public void Table_HeaderRowCell_InlineImage_RoundTrips()
+    {
+        // Regression: a header-row cell's runs are re-rendered bold via BoldHeaderParagraph, which clones
+        // each run. BuildRun resolves a run's image media part from a per-write map keyed by run reference,
+        // so a cloned image run missed the lookup and the w:drawing was silently dropped (image 1 -> 0).
+        var png = MinimalPng();
+        var doc = new TextDocument();
+        var table = Table.Create(2, 2);
+        table.Rows[0].Cells[0] = new TableCell("Head");
+        var imageCell = new TableCell();
+        var imagePara = new Paragraph();
+        imagePara.Runs.Add(Run.FromImage(new InlineImage(png, widthPt: 120, heightPt: 90)));
+        imageCell.Paragraphs.Add(imagePara);
+        table.Rows[0].Cells[1] = imageCell;
+        table.Rows[1].Cells[0] = new TableCell("a");
+        table.Rows[1].Cells[1] = new TableCell("b");
+        table.Formatting = TableFormatting.Default with { HeaderRow = true };
+        doc.Blocks.Add(table);
+
+        var readTable = RoundTrip(doc).Blocks.OfType<Table>().Single();
+        var imageRun = readTable.Rows[0].Cells[1].Paragraphs
+            .SelectMany(p => p.Runs)
+            .Single(r => r.Image is not null);
+
+        imageRun.Image!.PngBytes.Should().Equal(png);
+        imageRun.Image.WidthPt.Should().BeApproximately(120, 0.01);
+        imageRun.Image.HeightPt.Should().BeApproximately(90, 0.01);
     }
 
     [Fact]
@@ -1403,6 +1526,69 @@ public class DocxRoundTripTests
 
         using var docReader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
         docReader.ReadToEnd().Should().Contain("w:val=\"3\"");
+    }
+
+    [Fact]
+    public void NumberedList_StartOverride_RoundTripsAndEmitsLvlOverride()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("first")
+        {
+            Formatting = ParagraphFormatting.Default with { ListKind = ListKind.Number }
+        });
+        doc.Blocks.Add(new Paragraph("restart at five")
+        {
+            Formatting = ParagraphFormatting.Default with
+            {
+                ListKind = ListKind.Number,
+                ListStartOverride = 5
+            }
+        });
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
+        using (var reader = new StreamReader(zip.GetEntry("word/numbering.xml")!.Open()))
+        {
+            var numbering = reader.ReadToEnd();
+            numbering.Should().Contain("<w:lvlOverride w:ilvl=\"0\">");
+            numbering.Should().Contain("<w:startOverride w:val=\"5\" />");
+        }
+
+        stream.Position = 0;
+        var paragraphs = DocxReader.Read(stream).Paragraphs.ToList();
+
+        paragraphs[0].Formatting.ListStartOverride.Should().BeNull();
+        paragraphs[1].Formatting.ListKind.Should().Be(ListKind.Number);
+        paragraphs[1].Formatting.ListStartOverride.Should().Be(5);
+    }
+
+    [Fact]
+    public void TableCellList_StartOverride_RoundTrips()
+    {
+        var doc = new TextDocument();
+        var table = new Table();
+        table.Rows.Add(new TableRow());
+        table.Rows[0].Cells.Add(new TableCell());
+        table.Rows[0].Cells[0].Paragraphs.Add(new Paragraph("restart in table")
+        {
+            Formatting = ParagraphFormatting.Default with
+            {
+                ListKind = ListKind.MultiLevel,
+                ListLevel = 1,
+                ListStartOverride = 3
+            }
+        });
+        doc.Blocks.Add(table);
+
+        var paragraph = RoundTrip(doc).Blocks.OfType<Table>().Single()
+            .Rows.Single().Cells.Single().Paragraphs.Single();
+
+        paragraph.Formatting.ListKind.Should().Be(ListKind.MultiLevel);
+        paragraph.Formatting.ListLevel.Should().Be(1);
+        paragraph.Formatting.ListStartOverride.Should().Be(3);
     }
 
     [Fact]
@@ -2036,6 +2222,56 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void ColumnsLineBetween_RoundTripsAndEmitsSep()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Two columns with a divider line."));
+        doc.Page.ColumnCount = 2;
+        doc.Page.ColumnsLineBetween = true;
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Read))
+        using (var reader = new StreamReader(zip.GetEntry("word/document.xml")!.Open()))
+            reader.ReadToEnd().Should().Contain("w:sep=\"1\"");
+
+        var result = RoundTrip(doc);
+        result.Page.ColumnsLineBetween.Should().BeTrue();
+    }
+
+    [Fact]
+    public void UnequalColumns_RoundTripWidthsAndEqualWidthOff()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("A narrow column beside a wide one (Word's Left preset)."));
+        doc.Page.ColumnCount = 2;
+        doc.Page.ColumnSpacingPt = 36;
+        doc.Page.ColumnWidthsPt = [108.0, 360.0];
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Read))
+        using (var reader = new StreamReader(zip.GetEntry("word/document.xml")!.Open()))
+        {
+            var xml = reader.ReadToEnd();
+            xml.Should().Contain("w:equalWidth=\"0\"");
+            // 108 pt -> 2160 dxa, 360 pt -> 7200 dxa.
+            xml.Should().Contain("w:w=\"2160\"");
+            xml.Should().Contain("w:w=\"7200\"");
+        }
+
+        var result = RoundTrip(doc);
+        result.Page.ColumnCount.Should().Be(2);
+        result.Page.ColumnWidthsPt.Should().NotBeNull();
+        result.Page.ColumnWidthsPt![0].Should().BeApproximately(108, 0.001);
+        result.Page.ColumnWidthsPt![1].Should().BeApproximately(360, 0.001);
+    }
+
+    [Fact]
     public void InsertedRun_RoundTrips_KindAuthorAndDate()
     {
         var doc = new TextDocument();
@@ -2148,6 +2384,115 @@ public class DocxRoundTripTests
     }
 
     [Theory]
+    [InlineData(RevisionKind.Inserted)]
+    [InlineData(RevisionKind.Deleted)]
+    public void RevisedContentControl_RoundTrips_ControlAndRevision(RevisionKind revisionKind)
+    {
+        var doc = new TextDocument();
+        var body = new Paragraph();
+        var control = Run.PlainTextControl("tracked control", tag: "Tracked", alias: "Tracked control");
+        control.Revision = revisionKind;
+        control.RevisionAuthor = "Alex Editor";
+        control.RevisionDateXml = "2026-06-19T08:00:00Z";
+        body.Runs.Add(control);
+        doc.Blocks.Add(body);
+
+        var result = RoundTrip(doc);
+
+        var run = result.Paragraphs.First().Runs.Single();
+        run.Text.Should().Be("tracked control");
+        run.Control.Should().NotBeNull();
+        run.Control!.Kind.Should().Be(ContentControlKind.PlainText);
+        run.Control.Tag.Should().Be("Tracked");
+        run.Revision.Should().Be(revisionKind);
+        run.RevisionAuthor.Should().Be("Alex Editor");
+        run.RevisionDateXml.Should().Be("2026-06-19T08:00:00Z");
+    }
+
+    [Fact]
+    public void BlockLevelContentControl_ReadsContainedParagraph()
+    {
+        var result = ReadHandAuthoredDocx(
+            """
+            <w:sdt>
+              <w:sdtPr><w:tag w:val="BlockControl"/><w:richText/></w:sdtPr>
+              <w:sdtContent>
+                <w:p><w:r><w:t>block control text</w:t></w:r></w:p>
+              </w:sdtContent>
+            </w:sdt>
+            """);
+
+        var run = result.Paragraphs.Should().ContainSingle().Subject.Runs.Should().ContainSingle().Subject;
+        run.Text.Should().Be("block control text");
+        run.Control.Should().NotBeNull();
+        run.Control!.Kind.Should().Be(ContentControlKind.RichText);
+        run.Control.Tag.Should().Be("BlockControl");
+    }
+
+    [Fact]
+    public void TableCellContentControl_ReadsContainedParagraph()
+    {
+        var result = ReadHandAuthoredDocx(
+            """
+            <w:tbl>
+              <w:tr>
+                <w:tc>
+                  <w:sdt>
+                    <w:sdtPr><w:tag w:val="CellControl"/></w:sdtPr>
+                    <w:sdtContent>
+                      <w:p><w:r><w:t>cell control text</w:t></w:r></w:p>
+                    </w:sdtContent>
+                  </w:sdt>
+                </w:tc>
+              </w:tr>
+            </w:tbl>
+            """);
+
+        var table = result.Blocks.OfType<Table>().Should().ContainSingle().Subject;
+        var run = table.Rows[0].Cells[0].Paragraphs.Should().ContainSingle().Subject.Runs.Should().ContainSingle().Subject;
+        run.Text.Should().Be("cell control text");
+        run.Control.Should().NotBeNull();
+        run.Control!.Kind.Should().Be(ContentControlKind.PlainText);
+        run.Control.Tag.Should().Be("CellControl");
+    }
+
+    [Fact]
+    public void ContentControlWrappedHyperlinkRevision_ReadsTextControlLinkAndRevision()
+    {
+        var rels =
+            """
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rIdLink" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.com" TargetMode="External"/>
+            </Relationships>
+            """;
+        var result = ReadHandAuthoredDocx(
+            """
+            <w:p>
+              <w:sdt>
+                <w:sdtPr><w:tag w:val="TrackedLink"/></w:sdtPr>
+                <w:sdtContent>
+                  <w:hyperlink r:id="rIdLink">
+                    <w:ins w:author="Alex Editor" w:date="2026-06-19T08:00:00Z">
+                      <w:r><w:t>linked tracked control</w:t></w:r>
+                    </w:ins>
+                  </w:hyperlink>
+                </w:sdtContent>
+              </w:sdt>
+            </w:p>
+            """,
+            rels);
+
+        var run = result.Paragraphs.Should().ContainSingle().Subject.Runs.Should().ContainSingle().Subject;
+        run.Text.Should().Be("linked tracked control");
+        run.Control.Should().NotBeNull();
+        run.Control!.Tag.Should().Be("TrackedLink");
+        run.HyperlinkUrl.Should().Be("https://example.com");
+        run.Revision.Should().Be(RevisionKind.Inserted);
+        run.RevisionAuthor.Should().Be("Alex Editor");
+        run.RevisionDateXml.Should().Be("2026-06-19T08:00:00Z");
+    }
+
+    [Theory]
     [InlineData(true, "☒")]
     [InlineData(false, "☐")]
     public void CheckBoxContentControl_RoundTrips_CheckedState(bool isChecked, string glyph)
@@ -2165,6 +2510,76 @@ public class DocxRoundTripTests
         control.Text.Should().Be(glyph);
         control.Control.Tag.Should().Be("Agree");
         control.Control.Alias.Should().Be("I agree");
+    }
+
+    [Fact]
+    public void RichTextContentControl_RoundTrips_KindTagAndText()
+    {
+        var doc = new TextDocument();
+        var body = new Paragraph();
+        body.Runs.Add(new Run("Before "));
+        body.Runs.Add(Run.RichTextControl("rich content", tag: "Bio", alias: "Biography"));
+        body.Runs.Add(new Run(" after"));
+        doc.Blocks.Add(body);
+
+        var result = RoundTrip(doc);
+
+        var paragraph = result.Paragraphs.First();
+        paragraph.PlainText.Should().Be("Before rich content after");
+
+        var control = paragraph.Runs.Single(r => r.Control is not null);
+        control.Text.Should().Be("rich content");
+        control.Control!.Kind.Should().Be(ContentControlKind.RichText);
+        control.Control.Tag.Should().Be("Bio");
+        control.Control.Alias.Should().Be("Biography");
+    }
+
+    [Fact]
+    public void DatePickerContentControl_RoundTrips_DateFormatAndText()
+    {
+        var doc = new TextDocument();
+        var body = new Paragraph();
+        body.Runs.Add(Run.DatePickerControl("2026-06-19", tag: "Signed", alias: "Signed on", dateFormat: "yyyy-MM-dd"));
+        doc.Blocks.Add(body);
+
+        var result = RoundTrip(doc);
+
+        var control = result.Paragraphs.First().Runs.Single(r => r.Control is { Kind: ContentControlKind.DatePicker });
+        control.Text.Should().Be("2026-06-19");
+        control.Control!.Tag.Should().Be("Signed");
+        control.Control.Alias.Should().Be("Signed on");
+        control.Control.DateFormat.Should().Be("yyyy-MM-dd");
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ListContentControl_RoundTrips_ItemsAndSelection(bool combo)
+    {
+        var items = new[]
+        {
+            new ContentControlListItem("Red", "R"),
+            new ContentControlListItem("Green", "G"),
+            new ContentControlListItem("Blue", "B")
+        };
+
+        var doc = new TextDocument();
+        var body = new Paragraph();
+        body.Runs.Add(combo
+            ? Run.ComboBoxControl(items, selectedText: "Green", tag: "Color", alias: "Favourite colour")
+            : Run.DropDownListControl(items, selectedText: "Green", tag: "Color", alias: "Favourite colour"));
+        doc.Blocks.Add(body);
+
+        var result = RoundTrip(doc);
+
+        var control = result.Paragraphs.First().Runs.Single(r => r.Control is not null);
+        control.Control!.Kind.Should().Be(combo ? ContentControlKind.ComboBox : ContentControlKind.DropDownList);
+        control.Text.Should().Be("Green");
+        control.Control.Tag.Should().Be("Color");
+        control.Control.Alias.Should().Be("Favourite colour");
+        control.Control.Items.Should().HaveCount(3);
+        control.Control.Items.Select(i => i.DisplayText).Should().ContainInOrder("Red", "Green", "Blue");
+        control.Control.Items.Select(i => i.Value).Should().ContainInOrder("R", "G", "B");
     }
 
     [Fact]
@@ -2196,6 +2611,37 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void NewContentControls_EmitTheirSdtPrElements()
+    {
+        var doc = new TextDocument();
+        var body = new Paragraph();
+        body.Runs.Add(Run.RichTextControl("rich", tag: "R1"));
+        body.Runs.Add(Run.DatePickerControl("6/19/2026", tag: "D1", dateFormat: "M/d/yyyy"));
+        body.Runs.Add(Run.DropDownListControl(
+            new[] { new ContentControlListItem("One", "1"), new ContentControlListItem("Two", "2") }, tag: "DD1"));
+        body.Runs.Add(Run.ComboBoxControl(
+            new[] { new ContentControlListItem("A", "a") }, tag: "CB1"));
+        doc.Blocks.Add(body);
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        using var docReader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
+        var documentXml = docReader.ReadToEnd();
+
+        documentXml.Should().Contain("<w:richText");
+        documentXml.Should().Contain("<w:date");
+        documentXml.Should().Contain("<w:dateFormat");
+        documentXml.Should().Contain("<w:dropDownList");
+        documentXml.Should().Contain("<w:comboBox");
+        documentXml.Should().Contain("<w:listItem");
+        documentXml.Should().Contain("w:displayText=\"One\"");
+        documentXml.Should().Contain("w:value=\"2\"");
+    }
+
+    [Fact]
     public void NoContentControls_DoesNotEmitSdt()
     {
         var doc = new TextDocument();
@@ -2215,6 +2661,7 @@ public class DocxRoundTripTests
     [InlineData(ProtectionMode.ReadOnly, "readOnly")]
     [InlineData(ProtectionMode.CommentsOnly, "comments")]
     [InlineData(ProtectionMode.TrackChangesOnly, "trackedChanges")]
+    [InlineData(ProtectionMode.FillingForms, "forms")]
     public void DocumentProtection_RoundTrips_EachMode(ProtectionMode mode, string expectedEdit)
     {
         var doc = new TextDocument { Protection = new ProtectionSettings(mode) };
@@ -2293,6 +2740,67 @@ public class DocxRoundTripTests
         result.Protection.IsProtected.Should().BeFalse();
     }
 
+    [Fact]
+    public void MarkAsFinal_RoundTrips_AsCustomProperty()
+    {
+        var doc = new TextDocument { MarkedAsFinal = true };
+        doc.Blocks.Add(new Paragraph("Final body"));
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            // The flag rides in docProps/custom.xml as the Word-convention _MarkAsFinal boolean property,
+            // with the part declared and related in the package.
+            using var customReader = new StreamReader(zip.GetEntry("docProps/custom.xml")!.Open());
+            var custom = customReader.ReadToEnd();
+            custom.Should().Contain("_MarkAsFinal");
+            custom.Should().Contain("<vt:bool>true</vt:bool>");
+
+            using var ctReader = new StreamReader(zip.GetEntry("[Content_Types].xml")!.Open());
+            ctReader.ReadToEnd().Should().Contain("custom-properties+xml");
+
+            using var relsReader = new StreamReader(zip.GetEntry("_rels/.rels")!.Open());
+            relsReader.ReadToEnd().Should().Contain("docProps/custom.xml");
+        }
+
+        stream.Position = 0;
+        DocxReader.Read(stream).MarkedAsFinal.Should().BeTrue();
+    }
+
+    [Fact]
+    public void MarkAsFinal_AndWatermark_BothRoundTrip_InOneCustomPart()
+    {
+        var doc = new TextDocument { MarkedAsFinal = true };
+        doc.Page.Watermark = "DRAFT";
+        doc.Blocks.Add(new Paragraph("Body"));
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        var result = DocxReader.Read(stream);
+        result.MarkedAsFinal.Should().BeTrue();
+        result.Page.Watermark.Should().Be("DRAFT");
+    }
+
+    [Fact]
+    public void NotMarkedAsFinal_AndNoWatermark_EmitsNoCustomPart()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Body"));
+        doc.MarkedAsFinal.Should().BeFalse(); // default
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        zip.GetEntry("docProps/custom.xml").Should().BeNull();
+    }
+
     // --- Page setup polish: hyphenation (settings.xml), vertical alignment + titlePg (sectPr) ---
 
     [Fact]
@@ -2305,6 +2813,111 @@ public class DocxRoundTripTests
         var page = RoundTrip(doc).Page;
 
         page.AutoHyphenation.Should().BeTrue();
+    }
+
+    [Fact]
+    public void HyphenationOptions_RoundTrip_ZoneLimitAndCaps()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("hyphenate me"));
+        doc.Page.AutoHyphenation = true;
+        doc.Page.HyphenationZonePt = 18; // 360 twips
+        doc.Page.ConsecutiveHyphenLimit = 3;
+        doc.Page.DoNotHyphenateCaps = true;
+
+        var page = RoundTrip(doc).Page;
+
+        page.AutoHyphenation.Should().BeTrue();
+        page.HyphenationZonePt.Should().BeApproximately(18, 0.01);
+        page.ConsecutiveHyphenLimit.Should().Be(3);
+        page.DoNotHyphenateCaps.Should().BeTrue();
+    }
+
+    [Fact]
+    public void HyphenationOptions_EmitSettingsElements()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("hyphenate me"));
+        doc.Page.AutoHyphenation = true;
+        doc.Page.HyphenationZonePt = 18;
+        doc.Page.ConsecutiveHyphenLimit = 2;
+        doc.Page.DoNotHyphenateCaps = true;
+
+        using var optionsStream = new MemoryStream();
+        DocxWriter.Write(doc, optionsStream);
+        optionsStream.Position = 0;
+
+        using var optionsZip = new ZipArchive(optionsStream, ZipArchiveMode.Read);
+        using var optionsReader = new StreamReader(optionsZip.GetEntry("word/settings.xml")!.Open());
+        var settings = optionsReader.ReadToEnd();
+        settings.Should().Contain("autoHyphenation");
+        settings.Should().Contain("hyphenationZone");
+        settings.Should().Contain("consecutiveHyphenLimit");
+        settings.Should().Contain("doNotHyphenateCaps");
+    }
+
+    [Fact]
+    public void HyphenationSubOptions_NotEmitted_WhenAutoHyphenationOff()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("plain"));
+        // Sub-options set but automatic hyphenation off => they must not be emitted (and no settings part is
+        // forced into existence by them alone).
+        doc.Page.ConsecutiveHyphenLimit = 4;
+        doc.Page.DoNotHyphenateCaps = true;
+
+        using var offStream = new MemoryStream();
+        DocxWriter.Write(doc, offStream);
+        offStream.Position = 0;
+
+        using var offZip = new ZipArchive(offStream, ZipArchiveMode.Read);
+        offZip.GetEntry("word/settings.xml").Should().BeNull();
+    }
+
+    [Fact]
+    public void PreservedHyphenationSubOptions_RoundTrip_WhenAutoHyphenationOff()
+    {
+        var read = ReadHandAuthoredDocx(
+            """<w:p><w:r><w:t>plain</w:t></w:r></w:p>""",
+            settingsXml:
+            """
+            <w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+              <w:consecutiveHyphenLimit w:val="4"/>
+              <w:hyphenationZone w:val="360"/>
+              <w:doNotHyphenateCaps/>
+            </w:settings>
+            """);
+
+        read.Page.AutoHyphenation.Should().BeFalse();
+        read.Page.ConsecutiveHyphenLimit.Should().Be(4);
+        read.Page.HyphenationZonePt.Should().BeApproximately(18, 0.01);
+        read.Page.DoNotHyphenateCaps.Should().BeTrue();
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(read, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        using var reader = new StreamReader(zip.GetEntry("word/settings.xml")!.Open());
+        var settings = reader.ReadToEnd();
+        settings.Should().Contain("consecutiveHyphenLimit");
+        settings.Should().Contain("hyphenationZone");
+        settings.Should().Contain("doNotHyphenateCaps");
+        settings.Should().NotContain("autoHyphenation");
+    }
+
+    [Fact]
+    public void SuppressAutoHyphens_RoundTripsPerParagraph()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("normal"));
+        doc.Blocks.Add(new Paragraph("no hyphens") { Formatting = ParagraphFormatting.Default with { SuppressAutoHyphens = true } });
+
+        var result = RoundTrip(doc);
+
+        var paragraphs = result.Paragraphs.ToList();
+        paragraphs[0].Formatting.SuppressAutoHyphens.Should().BeFalse();
+        paragraphs[1].Formatting.SuppressAutoHyphens.Should().BeTrue();
     }
 
     [Fact]
@@ -2441,6 +3054,123 @@ public class DocxRoundTripTests
         DocxReader.Read(stream).Page.DifferentFirstPage.Should().BeFalse();
     }
 
+    // --- Page Setup dialog fields: gutter (pgMar), mirror margins (settings), header/footer distance
+    //     (pgMar), vertical alignment (sectPr) ---
+
+    [Fact]
+    public void PageSetup_GutterHeaderFooterDistance_RoundTrip_AndEmitInPgMar()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("page setup"));
+        doc.Page.GutterPt = 18;          // 0.25"
+        doc.Page.HeaderDistancePt = 30;  // ~0.42"
+        doc.Page.FooterDistancePt = 45;  // 0.625"
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            using var reader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
+            var documentXml = reader.ReadToEnd();
+            documentXml.Should().Contain("w:gutter=\"360\"");  // 18 pt * 20 = 360 twips
+            documentXml.Should().Contain("w:header=\"600\"");  // 30 pt * 20 = 600 twips
+            documentXml.Should().Contain("w:footer=\"900\"");  // 45 pt * 20 = 900 twips
+        }
+
+        stream.Position = 0;
+        var read = DocxReader.Read(stream).Page;
+        read.GutterPt.Should().BeApproximately(18, 0.01);
+        read.HeaderDistancePt.Should().BeApproximately(30, 0.01);
+        read.FooterDistancePt.Should().BeApproximately(45, 0.01);
+    }
+
+    [Fact]
+    public void DefaultPage_PgMar_HasNoGutterHeaderOrFooter()
+    {
+        // Regression guard: a document that never touched these keeps the legacy pgMar (no gutter/header/footer).
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("plain page"));
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        using var reader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
+        var documentXml = reader.ReadToEnd();
+        documentXml.Should().NotContain("w:gutter");
+        documentXml.Should().NotContain("w:header=");
+        documentXml.Should().NotContain("w:footer=");
+    }
+
+    [Fact]
+    public void MirrorMargins_RoundTrips_AndEmitsSettingsToggle()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("double sided"));
+        doc.Page.MirrorMargins = true;
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            using var reader = new StreamReader(zip.GetEntry("word/settings.xml")!.Open());
+            reader.ReadToEnd().Should().Contain("w:mirrorMargins");
+        }
+
+        stream.Position = 0;
+        DocxReader.Read(stream).Page.MirrorMargins.Should().BeTrue();
+    }
+
+    [Fact]
+    public void DefaultPage_NoMirrorMargins_EmitsNoSettingsPart()
+    {
+        // A document needing none of FreeW's settings-triggering features still emits no settings part.
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("plain page"));
+        doc.Page.MirrorMargins.Should().BeFalse(); // default
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        zip.GetEntry("word/settings.xml").Should().BeNull();
+    }
+
+    [Fact]
+    public void PageSetup_AllDialogFields_SurviveFullRoundTrip()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("everything"));
+        doc.Page.MarginTopPt = 54;
+        doc.Page.MarginBottomPt = 60;
+        doc.Page.MarginLeftPt = 66;
+        doc.Page.MarginRightPt = 70;
+        doc.Page.GutterPt = 12;
+        doc.Page.HeaderDistancePt = 24;
+        doc.Page.FooterDistancePt = 24;
+        doc.Page.MirrorMargins = true;
+        doc.Page.DifferentFirstPage = true;
+        doc.Page.VerticalAlignment = PageVerticalAlignment.Center;
+        doc.Page.WidthPt = 595.3; // A4 portrait width
+        doc.Page.HeightPt = 841.9;
+
+        var read = RoundTrip(doc).Page;
+        read.MarginTopPt.Should().BeApproximately(54, 0.05);
+        read.MarginBottomPt.Should().BeApproximately(60, 0.05);
+        read.MarginLeftPt.Should().BeApproximately(66, 0.05);
+        read.MarginRightPt.Should().BeApproximately(70, 0.05);
+        read.GutterPt.Should().BeApproximately(12, 0.05);
+        read.HeaderDistancePt.Should().BeApproximately(24, 0.05);
+        read.FooterDistancePt.Should().BeApproximately(24, 0.05);
+        read.MirrorMargins.Should().BeTrue();
+        read.DifferentFirstPage.Should().BeTrue();
+        read.VerticalAlignment.Should().Be(PageVerticalAlignment.Center);
+        read.WidthPt.Should().BeApproximately(595.3, 0.1);
+        read.HeightPt.Should().BeApproximately(841.9, 0.1);
+    }
+
     [Fact]
     public void SingleSection_RoundTripsIdentically_WithNoParagraphLevelSectPr()
     {
@@ -2523,5 +3253,215 @@ public class DocxRoundTripTests
         result.Sections.Should().HaveCount(2);
         result.Sections[0].BreakKind.Should().Be(SectionBreakKind.Continuous);
         result.Sections[0].Page.ColumnCount.Should().Be(2);
+    }
+
+    // ── Footnote/Endnote numbering options (w:footnotePr / w:endnotePr in settings.xml) ─────────
+
+    [Fact]
+    public void FootnoteNumbering_Default_Does_Not_Emit_Settings_Part()
+    {
+        // A freshly authored document with default footnote options must NOT emit a settings part
+        // (nor footnotePr) — keeps the file minimal and byte-equivalent to before.
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("text"));
+        // FootnoteNumbering is IsDefault — no settings part should appear.
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+
+        zip.GetEntry("word/settings.xml").Should().BeNull("default footnote options must not force a settings part");
+    }
+
+    [Fact]
+    public void FootnoteNumbering_RoundTrips_LowerRoman_PerSection()
+    {
+        // Set lower-roman format + start-at=1 + restart-per-section on footnotes;
+        // leave endnotes at default. The settings must survive a save → reload.
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("body"));
+        doc.FootnoteNumbering.NumberFormat = NoteNumberFormat.LowerRoman;
+        doc.FootnoteNumbering.NumberRestart = NoteNumberRestart.EachSection;
+
+        var result = RoundTrip(doc);
+
+        result.FootnoteNumbering.NumberFormat.Should().Be(NoteNumberFormat.LowerRoman);
+        result.FootnoteNumbering.NumberRestart.Should().Be(NoteNumberRestart.EachSection);
+        result.FootnoteNumbering.StartAt.Should().Be(1);  // default preserved
+        // Endnotes untouched.
+        result.EndnoteNumbering.IsDefault.Should().BeTrue();
+    }
+
+    [Fact]
+    public void FootnoteNumbering_RoundTrips_StartAt_3_And_LowerLetter()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("body"));
+        doc.FootnoteNumbering.NumberFormat = NoteNumberFormat.LowerLetter;
+        doc.FootnoteNumbering.StartAt = 3;
+        doc.FootnoteNumbering.NumberRestart = NoteNumberRestart.Continuous;
+
+        var result = RoundTrip(doc);
+
+        result.FootnoteNumbering.NumberFormat.Should().Be(NoteNumberFormat.LowerLetter);
+        result.FootnoteNumbering.StartAt.Should().Be(3);
+        result.FootnoteNumbering.NumberRestart.Should().Be(NoteNumberRestart.Continuous);
+    }
+
+    [Fact]
+    public void FootnoteNumbering_RoundTrips_EachPage_Restart()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("body"));
+        doc.FootnoteNumbering.NumberRestart = NoteNumberRestart.EachPage;
+
+        var result = RoundTrip(doc);
+
+        result.FootnoteNumbering.NumberRestart.Should().Be(NoteNumberRestart.EachPage);
+        result.FootnoteNumbering.NumberFormat.Should().Be(NoteNumberFormat.Decimal);  // default
+    }
+
+    [Fact]
+    public void EndnoteNumbering_RoundTrips_UpperRoman_PerSection()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("body"));
+        doc.EndnoteNumbering.NumberFormat = NoteNumberFormat.UpperRoman;
+        doc.EndnoteNumbering.NumberRestart = NoteNumberRestart.EachSection;
+        doc.EndnoteNumbering.StartAt = 2;
+
+        var result = RoundTrip(doc);
+
+        result.EndnoteNumbering.NumberFormat.Should().Be(NoteNumberFormat.UpperRoman);
+        result.EndnoteNumbering.NumberRestart.Should().Be(NoteNumberRestart.EachSection);
+        result.EndnoteNumbering.StartAt.Should().Be(2);
+        // Footnotes untouched.
+        result.FootnoteNumbering.IsDefault.Should().BeTrue();
+    }
+
+    [Fact]
+    public void FootnoteAndEndnoteNumbering_RoundTrip_Independently()
+    {
+        // Both changed simultaneously — must survive independently.
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("body"));
+        doc.FootnoteNumbering.NumberFormat = NoteNumberFormat.Chicago;
+        doc.FootnoteNumbering.StartAt = 1;
+        doc.FootnoteNumbering.NumberRestart = NoteNumberRestart.EachPage;
+        doc.EndnoteNumbering.NumberFormat = NoteNumberFormat.UpperLetter;
+        doc.EndnoteNumbering.StartAt = 5;
+        doc.EndnoteNumbering.NumberRestart = NoteNumberRestart.EachSection;
+
+        var result = RoundTrip(doc);
+
+        result.FootnoteNumbering.NumberFormat.Should().Be(NoteNumberFormat.Chicago);
+        result.FootnoteNumbering.NumberRestart.Should().Be(NoteNumberRestart.EachPage);
+        result.EndnoteNumbering.NumberFormat.Should().Be(NoteNumberFormat.UpperLetter);
+        result.EndnoteNumbering.StartAt.Should().Be(5);
+        result.EndnoteNumbering.NumberRestart.Should().Be(NoteNumberRestart.EachSection);
+    }
+
+    [Fact]
+    public void FootnoteNumbering_Emits_Correct_Ooxml_Attributes()
+    {
+        // Verify the raw XML written to word/settings.xml contains the correct w:footnotePr children.
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("body"));
+        doc.FootnoteNumbering.NumberFormat = NoteNumberFormat.LowerRoman;
+        doc.FootnoteNumbering.StartAt = 2;
+        doc.FootnoteNumbering.NumberRestart = NoteNumberRestart.EachSection;
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        var settingsEntry = zip.GetEntry("word/settings.xml");
+        settingsEntry.Should().NotBeNull();
+
+        using var reader = new System.IO.StreamReader(settingsEntry!.Open());
+        var xml = reader.ReadToEnd();
+
+        xml.Should().Contain("footnotePr");
+        xml.Should().Contain("lowerRoman");
+        xml.Should().Contain("numStart");
+        xml.Should().Contain("eachSect");
+        // Must NOT contain endnotePr (endnote still default).
+        xml.Should().NotContain("endnotePr");
+    }
+
+    [Fact]
+    public void FootnoteNumbering_PreservedSettings_Overlay_Works()
+    {
+        // When a preserved settings part exists (from a read document), overlaying new footnote options
+        // must replace any existing footnotePr and survive the round-trip.
+
+        // Build a minimal docx with a settings part containing footnotePr and read it back.
+        const string settingsXml =
+            "<?xml version=\"1.0\" encoding=\"utf-8\"?>" +
+            "<w:settings xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\">" +
+            "<w:footnotePr>" +
+            "<w:numFmt w:val=\"upperRoman\"/>" +
+            "<w:numStart w:val=\"3\"/>" +
+            "<w:numRestart w:val=\"eachPage\"/>" +
+            "</w:footnotePr>" +
+            "</w:settings>";
+
+        // Create a minimal docx containing this settings part and read it back.
+        using var srcStream = BuildMinimalDocxWithSettings(settingsXml);
+        var loaded = DocxReader.Read(srcStream);
+
+        // Reader must have populated the model from the settings XML.
+        loaded.FootnoteNumbering.NumberFormat.Should().Be(NoteNumberFormat.UpperRoman);
+        loaded.FootnoteNumbering.StartAt.Should().Be(3);
+        loaded.FootnoteNumbering.NumberRestart.Should().Be(NoteNumberRestart.EachPage);
+
+        // Now change one property and round-trip: the new value must survive.
+        loaded.FootnoteNumbering.NumberFormat = NoteNumberFormat.LowerLetter;
+        var result = RoundTrip(loaded);
+        result.FootnoteNumbering.NumberFormat.Should().Be(NoteNumberFormat.LowerLetter);
+        result.FootnoteNumbering.StartAt.Should().Be(3);
+        result.FootnoteNumbering.NumberRestart.Should().Be(NoteNumberRestart.EachPage);
+    }
+
+    // Builds a MemoryStream containing a minimal valid docx with the given settings XML content.
+    private static MemoryStream BuildMinimalDocxWithSettings(string settingsXml)
+    {
+        var stream = new MemoryStream();
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            WriteZipEntry(zip, "[Content_Types].xml",
+                "<?xml version=\"1.0\" encoding=\"utf-8\"?>" +
+                "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">" +
+                "<Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>" +
+                "<Default Extension=\"xml\" ContentType=\"application/xml\"/>" +
+                "<Override PartName=\"/word/document.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml\"/>" +
+                "</Types>");
+            WriteZipEntry(zip, "_rels/.rels",
+                "<?xml version=\"1.0\" encoding=\"utf-8\"?>" +
+                "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">" +
+                "<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"word/document.xml\"/>" +
+                "</Relationships>");
+            WriteZipEntry(zip, "word/document.xml",
+                "<?xml version=\"1.0\" encoding=\"utf-8\"?>" +
+                "<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\">" +
+                "<w:body><w:p><w:r><w:t>body</w:t></w:r></w:p></w:body></w:document>");
+            // Document rels: reference the settings part (must be written before settings.xml is added).
+            WriteZipEntry(zip, "word/_rels/document.xml.rels",
+                "<?xml version=\"1.0\" encoding=\"utf-8\"?>" +
+                "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">" +
+                "<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings\" Target=\"settings.xml\"/>" +
+                "</Relationships>");
+            WriteZipEntry(zip, "word/settings.xml", settingsXml);
+        }
+        stream.Position = 0;
+        return stream;
+    }
+
+    private static void WriteZipEntry(ZipArchive zip, string path, string content)
+    {
+        var entry = zip.CreateEntry(path);
+        using var writer = new System.IO.StreamWriter(entry.Open());
+        writer.Write(content);
     }
 }

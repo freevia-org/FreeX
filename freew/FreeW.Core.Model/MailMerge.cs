@@ -389,6 +389,9 @@ public static class MailMerge
             IsCommentReference = source.IsCommentReference,
             Revision = source.Revision,
             Control = source.Control,
+            Citation = source.Citation,
+            CrossReference = source.CrossReference,
+            ComplexField = source.ComplexField,
             RevisionAuthor = source.RevisionAuthor,
             RevisionDateXml = source.RevisionDateXml
         };
@@ -440,6 +443,8 @@ public static class MailMerge
         to.Landscape = from.Landscape;
         to.ColumnCount = from.ColumnCount;
         to.ColumnSpacingPt = from.ColumnSpacingPt;
+        to.ColumnsLineBetween = from.ColumnsLineBetween;
+        to.ColumnWidthsPt = from.ColumnWidthsPt is null ? null : new List<double>(from.ColumnWidthsPt);
         to.PageBorder = from.PageBorder;
         to.Watermark = from.Watermark;
         to.LineNumberMode = from.LineNumberMode;

@@ -447,7 +447,7 @@ public sealed class ExcelWorksheetNavigationPlannerTests(ITestOutputHelper outpu
     }
 
     [Fact]
-    public void GetCtrlEndCell_UsesMaterializedCellsOnly()
+    public void GetCtrlEndCell_IncludesSpillTargets()
     {
         var sheet = new Sheet(SheetId, "Sheet1");
         var anchor = new CellAddress(SheetId, 2, 2);
@@ -460,7 +460,7 @@ public sealed class ExcelWorksheetNavigationPlannerTests(ITestOutputHelper outpu
 
         ExcelWorksheetNavigationPlanner.GetCtrlEndCell(sheet, SheetId)
             .Should()
-            .Be(anchor);
+            .Be(new CellAddress(SheetId, 3, 3));
     }
 
     [Fact]

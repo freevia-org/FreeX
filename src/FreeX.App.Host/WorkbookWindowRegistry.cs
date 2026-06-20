@@ -228,7 +228,7 @@ public sealed class WorkbookWindowRegistry
             return false;
 
         var bounds = ArrangeAllLayoutPlanner.Arrange(
-            arrangement,
+            (ShellWindowArrangement)arrangement,
             workAreaWidth,
             workAreaHeight,
             visibleWindows.Count);
@@ -237,7 +237,10 @@ public sealed class WorkbookWindowRegistry
 
         DisableSideBySide();
         for (var index = 0; index < visibleWindows.Count; index++)
-            visibleWindows[index].TileToWorkArea(bounds[index]);
+        {
+            var b = bounds[index];
+            visibleWindows[index].TileToWorkArea(new Rect(b.X, b.Y, b.Width, b.Height));
+        }
 
         return true;
     }
@@ -260,8 +263,8 @@ public sealed class WorkbookWindowRegistry
             return false;
 
         var (primaryBounds, partnerBounds) = SideBySideLayoutPlanner.Tile(workAreaWidth, workAreaHeight);
-        primary.TileToWorkArea(primaryBounds);
-        partner.TileToWorkArea(partnerBounds);
+        primary.TileToWorkArea(new Rect(primaryBounds.X, primaryBounds.Y, primaryBounds.Width, primaryBounds.Height));
+        partner.TileToWorkArea(new Rect(partnerBounds.X, partnerBounds.Y, partnerBounds.Width, partnerBounds.Height));
 
         _sideBySidePrimary = primary;
         _sideBySidePartner = partner;

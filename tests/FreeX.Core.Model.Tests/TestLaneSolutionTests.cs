@@ -17,6 +17,7 @@ public sealed class TestLaneSolutionTests
         {
             "tests/FreeX.App.Avalonia.Tests/FreeX.App.Avalonia.Tests.csproj",
             "tests/FreeX.App.Host.Logic.Tests/FreeX.App.Host.Logic.Tests.csproj",
+            "tests/FreeX.App.Localization.Tests/FreeX.App.Localization.Tests.csproj",
             "tests/FreeX.App.Presentation.Tests/FreeX.App.Presentation.Tests.csproj",
             "tests/FreeX.App.Services.Tests/FreeX.App.Services.Tests.csproj",
             "tests/FreeX.Core.Calc.Tests/FreeX.Core.Calc.Tests.csproj",
@@ -25,6 +26,7 @@ public sealed class TestLaneSolutionTests
             "tests/FreeX.Core.Model.Tests/FreeX.Core.Model.Tests.csproj",
             "tests/FreeX.Fixtures/FreeX.Fixtures.csproj",
             "tests/FreeX.Integration.Tests/FreeX.Integration.Tests.csproj",
+            "tests/FreeX.ParityCompare.Tests/FreeX.ParityCompare.Tests.csproj",
             "tests/Free.Shared.Ribbon.Tests/Free.Shared.Ribbon.Tests.csproj"
         });
 

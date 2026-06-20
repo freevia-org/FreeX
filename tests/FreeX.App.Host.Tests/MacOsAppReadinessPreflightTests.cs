@@ -99,7 +99,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("toolbar_merge_and_center_button=true");
         script.Should().Contain("native_format_painter_menu_item=true");
         script.Should().Contain("native_borders_menu_item=true");
-        script.Should().Contain("native_borders_preset_count=8");
+        script.Should().Contain("native_borders_preset_count=14");
         script.Should().Contain("native_merge_and_center_menu_item=true");
         script.Should().Contain("native_unmerge_cells_menu_item=true");
         script.Should().Contain("native_cell_styles_menu_item=true");
@@ -473,7 +473,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("HasNativeMergeAndCenterMenuItem &&");
         script.Should().Contain("HasNativeUnmergeCellsMenuItem &&");
         script.Should().Contain("private readonly NativeMenuItem _workbookStatisticsMenuItem = new();");
-        script.Should().Contain("_workbookStatisticsMenuItem.Header = `\"Workbook Statistics...`\";");
+        script.Should().Contain("_workbookStatisticsMenuItem.Header = UiText.Get(`\"AvaloniaNativeMenu_WorkbookStatistics`\");");
         script.Should().Contain("_workbookStatisticsMenuItem.Gesture = new KeyGesture(Key.G, KeyModifiers.Control | KeyModifiers.Shift);");
         script.Should().Contain("_workbookStatisticsMenuItem.Click += async (_, _) => await ShowWorkbookStatisticsDialogAsync();");
         script.Should().Contain("fileMenu.Items.Add(_workbookStatisticsMenuItem);");
@@ -640,7 +640,9 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("`\"FormatCellsFillPatternColorBox`\"");
         script.Should().Contain("`\"FormatCellsNormalFontBox`\"");
         script.Should().Contain("`\"FormatCellsProtectionExplanationText`\"");
-        script.Should().Contain("Locking cells or hiding formulas has no effect until you protect the worksheet.");
+        // The protection explanation was localized; the preflight now declares the contract via the
+        // UiText resource key rather than the inline English string.
+        script.Should().Contain("FormatCells_ProtectionExplanation");
         script.Should().Contain("var normalStyle = CellStyle.Default;");
         script.Should().Contain("Bold: normalFont ? normalStyle.Bold : ReadChangedFormatCellsBool(_session.IsSelectedRangeStartBold, boldBox)");
         script.Should().Contain("FontName: normalFont ? normalStyle.FontName : ReadChangedFormatCellsText(currentFontName, fontNameBox)");
@@ -764,7 +766,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("private static bool HasVisibleCellBorder(CellStyle? style)");
         script.Should().Contain("private readonly RecentFilesStore _recentFiles = RecentFilesStore.Load();");
         script.Should().Contain("_newWorkbookMenuItem.Click += (_, _) => CreateNewWorkbook();");
-        script.Should().Contain("_openRecentMenuItem.Header = `\"Open Recent`\";");
+        script.Should().Contain("_openRecentMenuItem.Header = UiText.Get(`\"AvaloniaNativeMenu_OpenRecent`\");");
         script.Should().Contain("_selectAllMenuItem.Header = `\"Select All`\";");
         script.Should().Contain("_fillCellsButton.Content = `\"Fill Cells`\";");
         script.Should().Contain("_fillDownMenuItem.Gesture = new KeyGesture(Key.D, KeyModifiers.Control);");
@@ -1579,6 +1581,8 @@ public sealed class MacOsAppReadinessPreflightTests
                       grep -q "replace_dialog_result_closed_without_accept=true" "$artifact_root/launch.txt"
                       grep -q "go_to_dialog=true" "$artifact_root/launch.txt"
                       grep -q "go_to_dialog_reference_controls=true" "$artifact_root/launch.txt"
+                      grep -q "go_to_dialog_history_controls=true" "$artifact_root/launch.txt"
+                      grep -q "go_to_dialog_special_control=true" "$artifact_root/launch.txt"
                       grep -q "go_to_dialog_compact_layout=true" "$artifact_root/launch.txt"
                       grep -q "go_to_dialog_result_closed_without_accept=true" "$artifact_root/launch.txt"
                       grep -q "go_to_special_dialog=true" "$artifact_root/launch.txt"
@@ -1638,7 +1642,7 @@ public sealed class MacOsAppReadinessPreflightTests
                       grep -q "native_fill_color_swatch_count=69" "$artifact_root/launch.txt"
                       grep -q "native_font_color_swatch_count=69" "$artifact_root/launch.txt"
                       grep -q "native_borders_menu_item=true" "$artifact_root/launch.txt"
-                      grep -q "native_borders_preset_count=8" "$artifact_root/launch.txt"
+                      grep -q "native_borders_preset_count=14" "$artifact_root/launch.txt"
                       grep -q "native_merge_and_center_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_unmerge_cells_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_cell_styles_menu_item=true" "$artifact_root/launch.txt"
@@ -2143,7 +2147,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     AddStyledCellBorderOverlay(content, style);
                     private readonly RecentFilesStore _recentFiles = RecentFilesStore.Load();
                     _newWorkbookMenuItem.Click += (_, _) => CreateNewWorkbook();
-                    _openRecentMenuItem.Header = "Open Recent";
+                    _openRecentMenuItem.Header = UiText.Get("AvaloniaNativeMenu_OpenRecent");
                     _openRecentMenuItem.Menu = CreateNativeOpenRecentMenu(isIdle: true);
                     fileMenu.Items.Add(_openRecentMenuItem);
                     RefreshNativeOpenRecentMenu(isIdle);
@@ -2154,11 +2158,11 @@ public sealed class MacOsAppReadinessPreflightTests
                     path = target!.Path;
                     private readonly NativeMenuItem _workbookStatisticsMenuItem = new();
                     private readonly NativeMenuItem _exportPdfMenuItem = new();
-                    _exportPdfMenuItem.Header = "Export to PDF...";
+                    _exportPdfMenuItem.Header = UiText.Get("AvaloniaNativeMenu_ExportPdf");
                     _exportPdfMenuItem.Click += async (_, _) => await ExportActiveSheetPdfAsync();
                     fileMenu.Items.Add(_exportPdfMenuItem);
                     _exportPdfMenuItem.IsEnabled = isIdle && StorageProvider.CanSave;
-                    HasNativeExportPdfMenuItem: HasNativeMenuItem(_exportPdfMenuItem, "Export to PDF...", requireGesture: false)
+                    HasNativeExportPdfMenuItem: HasNativeMenuItem(_exportPdfMenuItem, UiText.Get("AvaloniaNativeMenu_ExportPdf"), requireGesture: false)
                     private async Task ExportActiveSheetPdfAsync()
                     var exportPathPlan = ExportPathPlanner.Plan(requestedPath, ExportFileFormat.Pdf);
                     ExportPathPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, exportPathPlan, File.Exists)
@@ -2169,13 +2173,43 @@ public sealed class MacOsAppReadinessPreflightTests
                     dialog.Opened += (_, _) => cancelButton.Focus();
                     AutomationProperties.SetAutomationId(replaceButton, "PdfExportOverwriteReplaceButton");
                     AutomationProperties.SetAutomationId(cancelButton, "PdfExportOverwriteCancelButton");
-                    PortablePdfDocumentExporter.Save(_session.Workbook, exportPlan, path)
-                    _workbookStatisticsMenuItem.Header = "Workbook Statistics...";
+                    var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, exportPlan, pdfBuffer);
+                    await File.WriteAllBytesAsync(path, pdfBuffer.ToArray());
+                    _workbookStatisticsMenuItem.Header = UiText.Get("AvaloniaNativeMenu_WorkbookStatistics");
                     _workbookStatisticsMenuItem.Gesture = new KeyGesture(Key.G, KeyModifiers.Control | KeyModifiers.Shift);
                     _workbookStatisticsMenuItem.Click += async (_, _) => await ShowWorkbookStatisticsDialogAsync();
                     fileMenu.Items.Add(_workbookStatisticsMenuItem);
                     _workbookStatisticsMenuItem.IsEnabled = isIdle;
-                    HasNativeWorkbookStatisticsMenuItem: HasNativeMenuItem(_workbookStatisticsMenuItem, "Workbook Statistics...")
+                    private readonly NativeMenuItem _optionsMenuItem = new();
+                    _optionsMenuItem.Header = UiText.Get("Options_Title");
+                    _optionsMenuItem.Gesture = new KeyGesture(Key.OemComma, KeyModifiers.Meta);
+                    _optionsMenuItem.Click += (_, _) => ShowOptions();
+                    fileMenu.Items.Add(_optionsMenuItem);
+                    Text = UiText.Get("FormatCells_ProtectionExplanation"),
+                    CreateFormatCellsField(UiText.Get("FormatCells_PatternStyle"), fillPatternStyleBox)
+                    CreateFormatCellsField(UiText.Get("FormatCells_PatternColor"), fillPatternColorBox)
+                    private readonly NativeMenuItem _backstageExportMenuItem = new();
+                    private readonly NativeMenuItem _backstageInfoMenuItem = new();
+                    private readonly NativeMenuItem _backstageAccountMenuItem = new();
+                    _backstageInfoMenuItem.Header = UiText.Get("Backstage_Info_MenuItem");
+                    _backstageInfoMenuItem.Click += (_, _) => ShowBackstageInfo();
+                    _backstageExportMenuItem.Header = UiText.Get("Backstage_Export_MenuItem");
+                    _backstageExportMenuItem.Click += (_, _) => ShowBackstageExport();
+                    _backstageAccountMenuItem.Header = UiText.Get("Backstage_Account_MenuItem");
+                    _backstageAccountMenuItem.Click += (_, _) => ShowBackstageAccount();
+                    fileMenu.Items.Add(_backstageExportMenuItem);
+                    fileMenu.Items.Add(_backstageInfoMenuItem);
+                    fileMenu.Items.Add(_backstageAccountMenuItem);
+                    private readonly NativeMenuItem _printMenuItem = new();
+                    _printMenuItem.Header = UiText.Get("Print_MenuItem");
+                    _printMenuItem.Gesture = new KeyGesture(Key.P, KeyModifiers.Meta);
+                    _printMenuItem.Click += async (_, _) => await ShowPrintDialogAsync();
+                    fileMenu.Items.Add(_printMenuItem);
+                    private readonly NativeMenuItem _printPreviewMenuItem = new();
+                    _printPreviewMenuItem.Header = UiText.Get("AvaloniaNativeMenu_PrintPreview");
+                    _printPreviewMenuItem.Gesture = new KeyGesture(Key.P, KeyModifiers.Meta | KeyModifiers.Shift);
+                    _printPreviewMenuItem.Click += async (_, _) => await ShowPrintPreviewDialogAsync();
+                    HasNativeWorkbookStatisticsMenuItem: HasNativeMenuItem(_workbookStatisticsMenuItem, UiText.Get("AvaloniaNativeMenu_WorkbookStatistics"))
                     e.Key == Key.G && e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift)
                     private async Task ShowWorkbookStatisticsDialogAsync()
                     WorkbookStatisticsService.GetStatistics(_session.Workbook)
@@ -3370,7 +3404,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 public int ExternalImageClipboardPicturePngByteCount { get; }
                 public int NativeBordersPresetCount { get; }
                 public int NativeCellStylesPresetCount { get; }
-                public string DialogReport => "macos_dialog_smoke= macos_dialog_smoke_attempted= macos_dialog_smoke_status= macos_dialog_activation_completed= find_dialog= find_dialog_text_box= find_dialog_action_buttons= find_dialog_options= find_dialog_format_controls= find_dialog_compact_layout= find_dialog_result_closed_without_accept= replace_dialog= replace_dialog_text_boxes= replace_dialog_action_buttons= replace_dialog_options= replace_dialog_format_controls= replace_dialog_compact_layout= replace_dialog_result_closed_without_accept= go_to_dialog= go_to_dialog_reference_controls= go_to_dialog_compact_layout= go_to_dialog_result_closed_without_accept= go_to_special_dialog= go_to_special_dialog_kind_controls= go_to_special_dialog_value_type_controls= go_to_special_dialog_compact_layout= go_to_special_dialog_result_closed_without_accept= format_cells_dialog= format_cells_dialog_tab_strip= format_cells_dialog_default_number_tab= format_cells_dialog_number_controls= format_cells_dialog_action_buttons= format_cells_dialog_compact_layout= format_cells_dialog_result_closed_without_accept= sort_dialog= sort_dialog_sort_on_controls= sort_dialog_color_controls= sort_dialog_action_buttons= sort_dialog_compact_layout= sort_dialog_result_closed_without_accept= data_validation_dropdown_control= data_validation_dropdown_items= data_validation_dialog= data_validation_dialog_criteria_controls= data_validation_dialog_message_controls= data_validation_dialog_action_buttons= data_validation_dialog_compact_layout= data_validation_dialog_result_closed_without_accept=";
+                public string DialogReport => "macos_dialog_smoke= macos_dialog_smoke_attempted= macos_dialog_smoke_status= macos_dialog_activation_completed= find_dialog= find_dialog_text_box= find_dialog_action_buttons= find_dialog_options= find_dialog_format_controls= find_dialog_compact_layout= find_dialog_result_closed_without_accept= replace_dialog= replace_dialog_text_boxes= replace_dialog_action_buttons= replace_dialog_options= replace_dialog_format_controls= replace_dialog_compact_layout= replace_dialog_result_closed_without_accept= go_to_dialog= go_to_dialog_reference_controls= go_to_dialog_history_controls= go_to_dialog_special_control= go_to_dialog_compact_layout= go_to_dialog_result_closed_without_accept= go_to_special_dialog= go_to_special_dialog_kind_controls= go_to_special_dialog_value_type_controls= go_to_special_dialog_compact_layout= go_to_special_dialog_result_closed_without_accept= format_cells_dialog= format_cells_dialog_tab_strip= format_cells_dialog_default_number_tab= format_cells_dialog_number_controls= format_cells_dialog_action_buttons= format_cells_dialog_compact_layout= format_cells_dialog_result_closed_without_accept= sort_dialog= sort_dialog_sort_on_controls= sort_dialog_color_controls= sort_dialog_action_buttons= sort_dialog_compact_layout= sort_dialog_result_closed_without_accept= data_validation_dropdown_control= data_validation_dropdown_items= data_validation_dialog= data_validation_dialog_criteria_controls= data_validation_dialog_message_controls= data_validation_dialog_action_buttons= data_validation_dialog_compact_layout= data_validation_dialog_result_closed_without_accept=";
                 public string NewRouteReport => "native_flash_fill_menu_item= native_review_menu= native_advanced_filter_menu_item= native_remove_duplicates_menu_item= native_subtotal_menu_item= native_data_validation_preview_menu_item= native_data_validation_menu_item= native_what_if_analysis_menu_item= native_goal_seek_menu_item= native_data_table_menu_item= native_scenario_manager_menu_item= native_forecast_sheet_menu_item= native_review_summary_menu_item= native_check_accessibility_menu_item= native_next_note_menu_item= native_previous_note_menu_item= native_next_comment_menu_item= native_previous_comment_menu_item=";
                 public string Report => "live_command_key_smoke_required= live_command_key_smoke= live_command_key_smoke_attempted= live_command_key_smoke_ready= cmd_find_direct_route_source_guard= cmd_page_up_direct_route_source_guard= cmd_page_down_direct_route_source_guard= live_cmd_select_all_received= live_cmd_select_all_state_changed= live_cmd_bold_received= live_cmd_bold_state_changed= live_cmd_italic_received= live_cmd_italic_state_changed= live_cmd_underline_received= live_cmd_underline_state_changed= external_image_clipboard_paste_required= external_image_clipboard_paste= external_image_clipboard_picture_count= external_image_clipboard_picture_png_bytes= macos_accessibility_smoke= a11y_formula_box_name= a11y_formula_box_help= a11y_formula_box_id= a11y_status_text_name= a11y_status_text_help= a11y_status_text_id= a11y_status_text_value= a11y_cell_address_name= a11y_cell_address_help= a11y_cell_address_id= a11y_selection_stats_name= a11y_selection_stats_help= a11y_selection_stats_id= native_new_workbook_menu_item= native_open_recent_menu_item= native_open_recent_item_count= native_export_pdf_menu_item= native_share_workbook_menu_item= native_workbook_statistics_menu_item= native_close_workbook_menu_item= new_sheet_button= toolbar_format_painter_button= toolbar_autosum_button= toolbar_autosum_sum_menu_item= toolbar_autosum_average_menu_item= toolbar_autosum_count_numbers_menu_item= toolbar_autosum_count_all_menu_item= toolbar_autosum_max_menu_item= toolbar_autosum_min_menu_item= toolbar_fill_cells_button= toolbar_fill_down_menu_item= toolbar_fill_right_menu_item= toolbar_fill_up_menu_item= toolbar_fill_left_menu_item= toolbar_clear_button= toolbar_clear_all_menu_item= toolbar_clear_formats_menu_item= toolbar_clear_contents_menu_item= toolbar_clear_comments_menu_item= toolbar_clear_hyperlinks_menu_item= toolbar_borders_button= toolbar_wrap_text_button= toolbar_merge_and_center_button= focusable_sheet_tab= focusable_active_sheet_tab= shell_focus_cycle_targets= sheet_tab_context_keyboard_help= sheet_tab_context_rename_menu_item= sheet_tab_context_tab_color_menu_item= sheet_tab_context_no_color_menu_item= sheet_tab_context_select_all_sheets_menu_item= sheet_tab_context_ungroup_sheets_menu_item= native_data_menu= native_flash_fill_menu_item= native_remove_duplicates_menu_item= native_subtotal_menu_item= native_data_validation_preview_menu_item= native_view_menu= native_sheet_menu= native_window_menu= native_new_sheet_menu_item= native_rename_sheet_menu_item= native_duplicate_sheet_menu_item= native_move_sheet_left_menu_item= native_move_sheet_right_menu_item= native_tab_color_menu_item= native_tab_color_clear_item= native_tab_color_swatch_count= native_select_all_sheets_menu_item= native_ungroup_sheets_menu_item= native_hide_sheet_menu_item= native_unhide_sheet_menu_item= native_delete_sheet_menu_item= native_cut_menu_item= native_copy_menu_item= native_paste_special_menu_item= native_format_painter_menu_item= native_paste_special_comments_menu_item= native_paste_special_validation_menu_item= native_paste_special_all_except_borders_menu_item= native_paste_special_all_merging_conditional_formats_menu_item= native_paste_special_column_widths_menu_item= native_paste_special_formulas_and_number_formats_menu_item= native_paste_special_values_and_number_formats_menu_item= native_paste_special_values_and_source_formatting_menu_item= native_paste_special_keep_source_column_widths_menu_item= native_paste_special_paste_link_menu_item= native_paste_special_text_menu_item= native_paste_special_unicode_text_menu_item= native_paste_special_picture_menu_item= native_paste_special_linked_picture_menu_item= native_select_all_menu_item= native_find_menu_item= native_find_next_menu_item= native_replace_menu_item= native_go_to_menu_item= native_go_to_special_menu_item= native_sort_ascending_menu_item= native_sort_descending_menu_item= native_format_cells_menu_item= native_autosum_menu_item= native_autosum_sum_menu_item= native_autosum_average_menu_item= native_autosum_count_numbers_menu_item= native_autosum_count_all_menu_item= native_autosum_max_menu_item= native_autosum_min_menu_item= native_fill_cells_menu_item= native_fill_down_menu_item= native_fill_right_menu_item= native_fill_up_menu_item= native_fill_left_menu_item= native_clear_menu_item= native_clear_all_menu_item= native_clear_formats_menu_item= native_clear_contents_menu_item= native_clear_comments_menu_item= native_clear_hyperlinks_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_borders_menu_item= native_borders_preset_count= native_merge_and_center_menu_item= native_unmerge_cells_menu_item= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item= native_show_gridlines_menu_item= native_show_headings_menu_item= native_zoom_in_menu_item= native_zoom_out_menu_item= native_zoom_100_menu_item= native_zoom_to_selection_menu_item= native_freeze_panes_menu_item= native_freeze_top_row_menu_item= native_freeze_first_column_menu_item= native_unfreeze_panes_menu_item= native_show_formulas_menu_item= native_minimize_window_menu_item= native_zoom_window_menu_item= native_bring_all_to_front_menu_item= native_help_menu= native_help_online_menu_item= native_send_feedback_menu_item= native_check_for_updates_menu_item= native_about_menu_item= native_legal_notices_menu_item=";
             }
@@ -4219,13 +4253,85 @@ public sealed class MacOsAppReadinessPreflightTests
             {
                 private static void Export()
                 {
+                    PortablePdfTextCapabilityPlanner.CreatePlan(workbook, exportPlan, options);
+                    var document = WorkbookPdfContentBuilder.Build(workbook, exportPlan, options);
+                    PortablePdfWriter.WriteToBytes(document, "FreeX portable PDF");
+                }
+            }
+            """);
+
+        WriteFile(
+            root,
+            "src/FreeX.App.Services/WorkbookPdfContentBuilder.cs",
+            """
+            namespace FreeX.App.Services;
+
+            public static class WorkbookPdfContentBuilder
+            {
+                public static object Build(object workbook, object exportPlan, object options)
+                {
                     PortablePdfPageContentPlanner.CreatePlan(workbook, request);
+                    PortablePdfWinAnsiTextCapability.Truncate(cell.DisplayText, options.MaximumCellTextLength);
+                    return new object();
+                }
+            }
+            """);
+
+        WriteFile(
+            root,
+            "shared/Free.Shared.Pdf/PortablePdfWriter.cs",
+            """
+            namespace Free.Shared.Pdf;
+
+            public static class PortablePdfWriter
+            {
+                public static byte[] WriteToBytes(object document, string title)
+                {
                     "/Encoding /WinAnsiEncoding".ToString();
                     EncodeWinAnsiHexText(normalized);
                     _ = "built-in Helvetica/WinAnsi set";
+                    return [];
                 }
 
                 private static byte EncodeWinAnsiByte(char ch) => 0;
+            }
+            """);
+
+        WriteFile(
+            root,
+            "shared/Free.Shared.Pdf.Skia/SkiaPdfDocumentExporter.cs",
+            """
+            namespace Free.Shared.Pdf.Skia;
+
+            public static class SkiaPdfDocumentExporter
+            {
+                public static void Save(object workbook, object exportPlan, object stream)
+                {
+                }
+            }
+            """);
+
+        WriteFile(
+            root,
+            "src/FreeX.App.Avalonia/Pdf/AvaloniaPdfDocumentExporter.cs",
+            """
+            namespace FreeX.App.Avalonia.Pdf;
+
+            public static class AvaloniaPdfDocumentExporter
+            {
+                public static PdfExportOutcome Save(object workbook, object exportPlan, Stream stream)
+                {
+                    try
+                    {
+                        var result = SkiaPdfDocumentExporter.Save(workbook, exportPlan, stream, options);
+                        return result;
+                    }
+                    catch (Exception ex) when (IsSkiaUnavailable(ex))
+                    {
+                        var result = PortablePdfDocumentExporter.Save(workbook, exportPlan, stream, options);
+                        return result;
+                    }
+                }
             }
             """);
 

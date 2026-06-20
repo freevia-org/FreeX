@@ -757,6 +757,8 @@ jobs:
             grep -q "replace_dialog_result_closed_without_accept=true" "$launch_smoke_report"
             grep -q "go_to_dialog=true" "$launch_smoke_report"
             grep -q "go_to_dialog_reference_controls=true" "$launch_smoke_report"
+            grep -q "go_to_dialog_history_controls=true" "$launch_smoke_report"
+            grep -q "go_to_dialog_special_control=true" "$launch_smoke_report"
             grep -q "go_to_dialog_compact_layout=true" "$launch_smoke_report"
             grep -q "go_to_dialog_result_closed_without_accept=true" "$launch_smoke_report"
             grep -q "go_to_special_dialog=true" "$launch_smoke_report"
@@ -816,7 +818,7 @@ jobs:
             grep -q "native_fill_color_swatch_count=69" "$launch_smoke_report"
             grep -q "native_font_color_swatch_count=69" "$launch_smoke_report"
             grep -q "native_borders_menu_item=true" "$launch_smoke_report"
-            grep -q "native_borders_preset_count=8" "$launch_smoke_report"
+            grep -q "native_borders_preset_count=14" "$launch_smoke_report"
             grep -q "native_cell_styles_menu_item=true" "$launch_smoke_report"
             grep -q "native_cell_styles_preset_count=33" "$launch_smoke_report"
             grep -q "native_horizontal_text_menu_item=true" "$launch_smoke_report"
@@ -1185,7 +1187,7 @@ jobs:
           {
             echo ""
             echo "[dotnet workload install macos]"
-            dotnet workload install macos --version "$FREEX_DOTNET_WORKLOAD_SET_VERSION" --skip-manifest-update
+            dotnet workload install macos --version "$FREEX_DOTNET_WORKLOAD_SET_VERSION"
             echo "[dotnet workload --info]"
             dotnet workload --info
             echo "[dotnet workload list after install]"
@@ -1204,13 +1206,17 @@ jobs:
             --configuration Release \
             --framework "$FREEX_MACOS_TFM" \
             --runtime "$FREEX_RUNTIME" \
-            -p:EnableMacOsTargetFramework=true
+            -p:EnableMacOsTargetFramework=true \
+            -p:ApplicationId=io.github.tony-xmelon.freex \
+            -p:ILLinkTreatWarningsAsErrors=false \
+            -p:NoWarn=IL2026
 
           dotnet msbuild src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj \
             -p:Configuration=Release \
             -p:EnableMacOsTargetFramework=true \
             -p:TargetFramework="$FREEX_MACOS_TFM" \
             -p:RuntimeIdentifier="$FREEX_RUNTIME" \
+            -p:ApplicationId=io.github.tony-xmelon.freex \
             -getItem:Compile \
             > "$compile_items_path"
 
@@ -1286,14 +1292,14 @@ jobs:
             throw "Unexpected downloaded macOS preview artifact wrapper(s): $($unexpectedWrapperNames -join ', ')"
           }
 
-          $arguments = @(
-            "-ArtifactRoot", $artifactRoot,
-            "-ExpectedRunId", $env:GITHUB_RUN_ID,
-            "-ExpectedRunAttempt", $env:GITHUB_RUN_ATTEMPT,
-            "-RequireSeparateDiagnosticsArtifact"
-          )
+          $arguments = @{
+            ArtifactRoot = $artifactRoot
+            ExpectedRunId = $env:GITHUB_RUN_ID
+            ExpectedRunAttempt = $env:GITHUB_RUN_ATTEMPT
+            RequireSeparateDiagnosticsArtifact = $true
+          }
           if ("${{ github.event_name == 'workflow_dispatch' && inputs.distribution_candidate == true }}" -eq "true") {
-            $arguments += "-DistributionCandidate"
+            $arguments.DistributionCandidate = $true
           }
 
           & (Join-Path $env:GITHUB_WORKSPACE "tools/Test-MacOsPublicPreviewReadiness.ps1") @arguments

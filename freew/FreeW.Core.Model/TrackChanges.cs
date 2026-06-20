@@ -9,9 +9,12 @@ namespace FreeW.Core.Model;
 /// </summary>
 public static class TrackChanges
 {
-    /// <summary>True when any run anywhere in the document body carries a tracked-change mark.</summary>
+    /// <summary>
+    /// True when any run anywhere in the document body carries a tracked-change mark — an insertion or
+    /// deletion (<see cref="Run.Revision"/>) or a tracked formatting change (<see cref="Run.FormatRevision"/>).
+    /// </summary>
     public static bool HasRevisions(TextDocument document) =>
-        EnumerateParagraphs(document).Any(p => p.Runs.Any(r => r.Revision != RevisionKind.None));
+        EnumerateParagraphs(document).Any(p => p.Runs.Any(r => r.Revision != RevisionKind.None || r.FormatRevision is not null));
 
     /// <summary>
     /// Accept every tracked change: inserted runs become ordinary text (their revision mark cleared) and
@@ -34,13 +37,25 @@ public static class TrackChanges
     }
 
     // Resolve all revision marks in one paragraph. On accept, deletions are dropped and insertions kept;
-    // on reject, insertions are dropped and deletions kept. Kept runs have their revision metadata cleared.
+    // on reject, insertions are dropped and deletions kept. A tracked formatting change (FormatRevision)
+    // is resolved independently of any insert/delete mark: accept keeps the current formatting and clears
+    // the mark; reject restores the previous formatting. Kept runs have their revision metadata cleared.
     private static void Resolve(Paragraph paragraph, bool accept)
     {
         var dropKind = accept ? RevisionKind.Deleted : RevisionKind.Inserted;
         for (var i = paragraph.Runs.Count - 1; i >= 0; i--)
         {
             var run = paragraph.Runs[i];
+
+            // Formatting change: on reject, restore the previous formatting; either way clear the mark.
+            // A run dropped below (insertion rejected / deletion accepted) needs no formatting fix-up.
+            if (run.FormatRevision is { } formatRevision)
+            {
+                if (!accept)
+                    run.Formatting = formatRevision.PreviousFormatting;
+                run.FormatRevision = null;
+            }
+
             if (run.Revision == RevisionKind.None)
                 continue;
             if (run.Revision == dropKind)

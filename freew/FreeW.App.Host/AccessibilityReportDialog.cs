@@ -54,18 +54,9 @@ internal sealed class AccessibilityReportDialog : Free.Shared.Ribbon.Wpf.DialogW
             });
         }
 
-        var close = new Button
-        {
-            Content = "Close",
-            MinWidth = 84,
-            IsDefault = true,
-            IsCancel = true,
-            Padding = new Thickness(6, 3, 6, 3),
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 12, 0, 4)
-        };
-        close.Click += (_, _) => Close();
-        outer.Children.Add(close);
+        // Reuse the shared OK-only button row (accelerator, automation name, shell strings; the single OK
+        // button is IsDefault + IsCancel so Enter/Esc both close). Matches FreeX's informational dialogs.
+        outer.Children.Add(DialogButtonRowFactory.CreateOkOnly(Close, buttonWidth: 84, rowMargin: new Thickness(0, 12, 0, 4)));
 
         Content = outer;
     }

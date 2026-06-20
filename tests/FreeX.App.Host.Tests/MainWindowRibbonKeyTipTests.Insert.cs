@@ -66,20 +66,26 @@ public sealed partial class MainWindowRibbonKeyTipTests
     }
 
     [Fact]
-    public void CollapsedInsertChartsKeyTip_DoesNotSurfaceDeferredMapChart()
+    public void InsertChartsKeyTip_DoesNotSurfaceDeferredMapChart()
     {
         RunSta(() =>
         {
             using var harness = MainWindowHarness.Create();
-            harness.SelectRibbonTab("Insert", 620);
+            // Charts is a primary Insert group and must remain reachable at normal narrow widths.
+            harness.SelectRibbonTab("Insert", 900);
 
-            harness.VisibleCommandKeyTipDump().Should().Contain(
-                "CH:Charts",
-                string.Join(", ", harness.VisibleCommandKeyTipDump()));
+            harness.RibbonGroupIsCollapsed("Charts").Should().BeTrue(
+                "the wide Charts group may compact at normal narrow widths, but it must remain visible");
+            harness.CollapsedRibbonGroupOverflowWidth("Charts").Should().BeGreaterThan(0,
+                "the Charts overflow button must paint so chart commands are reachable");
+            harness.CollapsedRibbonGroupOverflowKeyTip("Charts").Should().Be("CH");
 
-            harness.OpenRibbonMenu(Key.N, Key.C, Key.H);
-            harness.ActiveMenuItemGestureText("Column Chart").Should().Be("CC");
-            harness.ActiveMenuItemGestureText("Map Chart").Should().BeNull();
+            // The visible chart surface exposes implemented chart commands only.
+            var commands = harness.CollapsedRibbonGroupOverflowMenuKeyTips("Charts");
+            commands.Should().ContainKey("Recommended Charts").WhoseValue.Should().Be("RC");
+            commands.Should().ContainKey("Column Chart").WhoseValue.Should().Be("CC");
+            commands.Should().NotContainKey("Map Chart",
+                "the deferred Map Chart command must not be exposed by the Insert Charts surface");
         });
     }
 

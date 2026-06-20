@@ -26,6 +26,7 @@ Thumbs.db
 
 # XLSX corpus private samples
 test-corpus/local-private/
+test-corpus/public/COIN_Tool_v1_FULL_exampledata.xlsm
 
 # Contextures fidelity samples: kept locally for on-machine fidelity validation only;
 # redistribution rights are unconfirmed, so the workbooks are never committed.
@@ -43,7 +44,12 @@ freew-fidelity-corpus/runs/
 
 # Generated icon asset exports
 docs/assets/
+docs/icon-audit/*.html
+docs/icon-audit/*.json
 src/FreeX.App.Host/Resources/CommandIcons/
+
+# Temporary cross-session handoff notes
+HANDOVER-INBOX.md
 
 # Local isolated worktrees
 .worktrees/

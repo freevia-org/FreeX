@@ -82,7 +82,11 @@ public sealed partial class SpreadsheetXmlFileAdapter : IFileAdapter
             Indent = false,
             OmitXmlDeclaration = false,
             NewLineChars = "\r\n",
-            NewLineHandling = NewLineHandling.Replace
+            // Entitize (not Replace) so a literal CR inside cell text/comments is written as &#xD; and
+            // survives the round-trip. XML end-of-line normalization on read collapses a raw CR-LF in
+            // text to a single LF, silently rewriting multi-line cell values; entitizing the CR prevents
+            // that loss so text values are byte-faithful.
+            NewLineHandling = NewLineHandling.Entitize
         };
         using var writer = XmlWriter.Create(stream, settings);
         WriteWorkbook(writer, workbook, styleIds);

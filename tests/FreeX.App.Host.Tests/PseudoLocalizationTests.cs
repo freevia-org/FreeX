@@ -1,6 +1,7 @@
 using System.Globalization;
 using FluentAssertions;
 using FreeX.App.Host;
+using FreeX.App.Localization;
 using static FreeX.App.Host.Tests.LocalizationResourceTestSupport;
 
 namespace FreeX.App.Host.Tests;

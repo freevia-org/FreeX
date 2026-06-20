@@ -1,6 +1,8 @@
 using FluentAssertions;
 using System.Windows.Controls;
 
+using FreeX.App.Presentation.PageLayout;
+
 namespace FreeX.App.Host.Tests;
 
 public sealed partial class RemainingDialogTests

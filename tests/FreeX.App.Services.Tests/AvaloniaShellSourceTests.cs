@@ -142,14 +142,14 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private const string WorkbookShareSheetLabel = \"macOS Share Sheet\";");
         source.Should().Contain("private readonly IWorkbookShareSheetService _workbookShareSheetService;");
         source.Should().Contain("WorkbookShareSheetServiceFactory.Create(WorkbookShareSheetLabel),");
-        source.Should().Contain("WorkbookFileAccessServiceFactory.Create(App.Diagnostics))");
+        source.Should().Contain("WorkbookFileAccessServiceFactory.Create(App.Diagnostics),");
         source.Should().Contain("ArgumentNullException.ThrowIfNull(workbookShareSheetService);");
         source.Should().Contain("private readonly NativeMenuItem _shareWorkbookMenuItem = new();");
-        source.Should().Contain("_shareWorkbookMenuItem.Header = \"Share Workbook...\";");
+        source.Should().Contain("_shareWorkbookMenuItem.Header = UiText.Get(\"AvaloniaNativeMenu_ShareWorkbook\");");
         source.Should().Contain("_shareWorkbookMenuItem.Click += async (_, _) => await ShareWorkbookAsync();");
         source.Should().Contain("fileMenu.Items.Add(_shareWorkbookMenuItem);");
         source.Should().Contain("_shareWorkbookMenuItem.IsEnabled = isIdle;");
-        source.Should().Contain("HasNativeShareWorkbookMenuItem: HasEnabledNativeMenuItem(_shareWorkbookMenuItem, \"Share Workbook...\", requireGesture: false)");
+        source.Should().Contain("HasNativeShareWorkbookMenuItem: HasEnabledNativeMenuItem(_shareWorkbookMenuItem, UiText.Get(\"AvaloniaNativeMenu_ShareWorkbook\"), requireGesture: false)");
         source.Should().Contain("private static bool HasEnabledNativeMenuItem(NativeMenuItem item, string expectedHeader, bool requireGesture = true)");
         source.Should().Contain("private async Task ShareWorkbookAsync()");
         source.Should().Contain("WorkbookShareActionPlanner.CreatePlan(");
@@ -234,7 +234,7 @@ public sealed class AvaloniaShellSourceTests
         var exporterSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "PortablePdfDocumentExporter.cs"));
 
         source.Should().Contain("private readonly NativeMenuItem _exportPdfMenuItem = new();");
-        source.Should().Contain("_exportPdfMenuItem.Header = \"Export to PDF...\";");
+        source.Should().Contain("_exportPdfMenuItem.Header = UiText.Get(\"AvaloniaNativeMenu_ExportPdf\");");
         source.Should().Contain("_exportPdfMenuItem.Click += async (_, _) => await ExportActiveSheetPdfAsync();");
         source.Should().Contain("fileMenu.Items.Add(_exportPdfMenuItem);");
         source.Should().Contain("_exportPdfMenuItem.IsEnabled = isIdle && StorageProvider.CanSave;");
@@ -262,25 +262,219 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("WorkbookExportPrintPlanner.CreatePlan(");
         source.Should().Contain("WorkbookExportPrintSurface.MacOs");
         source.Should().Contain("PortablePdfExportPlanner.CreatePlan(exportPrintPlan)");
-        source.Should().Contain("PortablePdfDocumentExporter.Save(_session.Workbook, exportPlan, path)");
+        // The menu handler routes through a single PDF export seam; the Skia-vs-portable decision lives there.
+        source.Should().Contain("Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, exportPlan, pdfBuffer)");
+        var pdfRouterSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "Pdf", "AvaloniaPdfDocumentExporter.cs"));
         // Unicode-capable export goes through Skia (auto font embedding); portable WinAnsi is the fallback.
-        source.Should().Contain("Pdf.SkiaPdfDocumentExporter.Save(_session.Workbook, exportPlan, pdfBuffer)");
-        source.Should().Contain("HasNativeExportPdfMenuItem: HasNativeMenuItem(_exportPdfMenuItem, \"Export to PDF...\", requireGesture: false)");
+        pdfRouterSource.Should().Contain("SkiaPdfDocumentExporter.Save(workbook, exportPlan, stream");
+        pdfRouterSource.Should().Contain("PortablePdfDocumentExporter.Save(workbook, exportPlan, stream");
+        source.Should().Contain("HasNativeExportPdfMenuItem: HasNativeMenuItem(_exportPdfMenuItem, UiText.Get(\"AvaloniaNativeMenu_ExportPdf\"), requireGesture: false)");
 
         smokeSource.Should().Contain("bool HasNativeExportPdfMenuItem,");
         smokeSource.Should().Contain("HasNativeExportPdfMenuItem &&");
         smokeSource.Should().Contain("native_export_pdf_menu_item={FormatBool(snapshot.HasNativeExportPdfMenuItem)}");
 
         exporterSource.Should().Contain("public static class PortablePdfDocumentExporter");
-        exporterSource.Should().Contain("PortablePdfPageContentPlanner.CreatePlan(workbook, request)");
-        exporterSource.Should().Contain("/Encoding /WinAnsiEncoding");
-        exporterSource.Should().Contain("EncodeWinAnsiHexText(normalized)");
-        exporterSource.Should().Contain("private static byte EncodeWinAnsiByte(char ch)");
-        exporterSource.Should().Contain("built-in Helvetica/WinAnsi set");
+        // The WinAnsi byte format now lives in the shared Free.Shared.Pdf tier; the FreeX exporter
+        // builds the app-agnostic draw-op model (via WorkbookPdfContentBuilder) and delegates byte
+        // emission to the shared writer.
+        exporterSource.Should().Contain("WorkbookPdfContentBuilder.Build(workbook, exportPlan, options)");
+        exporterSource.Should().Contain("PortablePdfWriter.WriteToBytes(document, \"FreeX portable PDF\")");
+        var builderSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookPdfContentBuilder.cs"));
+        builderSource.Should().Contain("PortablePdfPageContentPlanner.CreatePlan(workbook, request)");
         exporterSource.Should().NotContain("/Encoding /Identity-H");
         exporterSource.Should().NotContain("/ArialMT");
         exporterSource.Should().NotContain("System.Windows");
         exporterSource.Should().NotContain("Microsoft.Win32");
+
+        // The dependency-free WinAnsi guarantees are now proven on the shared writer source.
+        var sharedWriterSource = File.ReadAllText(RepositoryFileLocator.Find("shared", "Free.Shared.Pdf", "PortablePdfWriter.cs"));
+        sharedWriterSource.Should().Contain("/Encoding /WinAnsiEncoding");
+        sharedWriterSource.Should().Contain("EncodeWinAnsiHexText(normalized)");
+        sharedWriterSource.Should().Contain("private static byte EncodeWinAnsiByte(char ch)");
+        sharedWriterSource.Should().Contain("built-in Helvetica/WinAnsi set");
+        sharedWriterSource.Should().NotContain("/Encoding /Identity-H");
+        sharedWriterSource.Should().NotContain("/ArialMT");
+        sharedWriterSource.Should().NotContain("System.Windows");
+        sharedWriterSource.Should().NotContain("Microsoft.Win32");
+    }
+
+    [Fact]
+    public void MainWindow_PrintFallbackGuardsNormalizedPdfOverwriteAndCupsTimeouts()
+    {
+        var printSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.Print.cs"));
+        var cupsSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "CupsPlatformPrinter.cs"));
+
+        printSource.Should().Contain("var requestedPath = path;");
+        printSource.Should().Contain("ExportPathPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, exportPathPlan, File.Exists)");
+        printSource.Should().Contain("!await ConfirmNormalizedPdfOverwriteAsync(exportPathPlan.Path)");
+        printSource.Should().Contain("UiText.Get(\"Print_SaveCanceled\")");
+
+        cupsSource.Should().Contain("private static readonly TimeSpan CommandTimeout");
+        cupsSource.Should().Contain("timeout.CancelAfter(CommandTimeout)");
+        cupsSource.Should().Contain("process.Kill(entireProcessTree: true)");
+        cupsSource.Should().Contain("catch (TimeoutException)");
+    }
+
+    [Fact]
+    public void MainWindow_FilePickersAreGuardedBeforeDialogsAndSaveAsConfirmsNormalizedOverwrite()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var printSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.Print.cs"));
+
+        source.Should().Contain("private bool TryBeginFileOperation()");
+        source.Should().Contain("if (_isOpening || _isSaving)");
+        source.Should().Contain("_isSaving = true;");
+        source.Should().Contain("private void EndFileOperation()");
+        source.Should().Contain("private static bool ShouldPromptForNormalizedWorkbookOverwrite(string requestedPath, string normalizedPath)");
+        source.Should().Contain("!string.Equals(Path.GetFullPath(requestedPath), Path.GetFullPath(normalizedPath), StringComparison.OrdinalIgnoreCase)");
+        source.Should().Contain("&& File.Exists(normalizedPath);");
+
+        var saveAsBlock = ExtractSourceBlock(
+            source,
+            "private async Task SaveWorkbookAsAsync()",
+            "await SaveWorkbookToTargetAsync(target!, fileAccessIdentity);");
+        saveAsBlock.Should().Contain("if (!TryBeginFileOperation())");
+        saveAsBlock.Should().Contain("var storageFile = await StorageProvider.SaveFilePickerAsync");
+        saveAsBlock.IndexOf("if (!TryBeginFileOperation())", StringComparison.Ordinal)
+            .Should().BeLessThan(saveAsBlock.IndexOf("StorageProvider.SaveFilePickerAsync", StringComparison.Ordinal));
+        saveAsBlock.Should().Contain("var requestedPath = path;");
+        saveAsBlock.Should().Contain("path = WorkbookSession.EnsureSaveExtension(path, NativeWorkbookExtension);");
+        saveAsBlock.Should().Contain("ShouldPromptForNormalizedWorkbookOverwrite(requestedPath, path)");
+        saveAsBlock.Should().Contain("!await ConfirmNormalizedWorkbookOverwriteAsync(path)");
+        source.Should().Contain("AutomationProperties.SetAutomationId(replaceButton, \"WorkbookSaveOverwriteReplaceButton\")");
+        source.Should().Contain("AutomationProperties.SetAutomationId(cancelButton, \"WorkbookSaveOverwriteCancelButton\")");
+
+        var activeSheetExportBlock = ExtractSourceBlock(
+            source,
+            "private async Task ExportActiveSheetPdfAsync()",
+            "EndFileOperation();");
+        activeSheetExportBlock.Should().Contain("if (!TryBeginFileOperation())");
+        activeSheetExportBlock.IndexOf("if (!TryBeginFileOperation())", StringComparison.Ordinal)
+            .Should().BeLessThan(activeSheetExportBlock.IndexOf("StorageProvider.SaveFilePickerAsync", StringComparison.Ordinal));
+
+        var workbookExportBlock = ExtractSourceBlock(
+            source,
+            "private async Task ExportWorkbookPdfAsync(",
+            "EndFileOperation();");
+        workbookExportBlock.Should().Contain("if (!TryBeginFileOperation())");
+        workbookExportBlock.IndexOf("if (!TryBeginFileOperation())", StringComparison.Ordinal)
+            .Should().BeLessThan(workbookExportBlock.IndexOf("StorageProvider.SaveFilePickerAsync", StringComparison.Ordinal));
+
+        var printSaveBlock = ExtractSourceBlock(
+            printSource,
+            "private async Task SavePrintReadyPdfAsync(byte[] documentBytes)",
+            "EndFileOperation();");
+        printSaveBlock.Should().Contain("if (!TryBeginFileOperation())");
+        printSaveBlock.IndexOf("if (!TryBeginFileOperation())", StringComparison.Ordinal)
+            .Should().BeLessThan(printSaveBlock.IndexOf("StorageProvider.SaveFilePickerAsync", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void MainWindow_RoutesAccountingMenuChoicesToDistinctCurrencySymbols()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var menuSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.Ribbon.Definitions", "HomeRibbonMenus.g.cs"));
+
+        menuSource.Should().Contain("m.Item(\"Accounting Number Format US Dollar\", \"US Dollar ($)\", \"D\")");
+        menuSource.Should().Contain(".Item(\"Accounting Number Format Euro\", \"Euro");
+        menuSource.Should().Contain(".Item(\"Accounting Number Format British Pound\", \"British Pound");
+        menuSource.Should().Contain(".Item(\"Accounting Number Format Japanese Yen\", \"Japanese Yen");
+        menuSource.Should().NotContain(".Item(\"Accounting Number Format\", \"Euro");
+        menuSource.Should().NotContain(".Item(\"Accounting Number Format\", \"British Pound");
+        menuSource.Should().NotContain(".Item(\"Accounting Number Format\", \"Japanese Yen");
+
+        source.Should().Contain("[\"Accounting Number Format US Dollar\"] = () => ApplySelectedRangeAccountingFormat(\"$\")");
+        source.Should().Contain("[\"Accounting Number Format Euro\"] = () => ApplySelectedRangeAccountingFormat(\"\\u20AC\")");
+        source.Should().Contain("[\"Accounting Number Format British Pound\"] = () => ApplySelectedRangeAccountingFormat(\"\\u00A3\")");
+        source.Should().Contain("[\"Accounting Number Format Japanese Yen\"] = () => ApplySelectedRangeAccountingFormat(\"\\u00A5\")");
+    }
+
+    [Fact]
+    public void MainWindow_NativeFileMenuLabelsUseLocalizedResources()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var neutralResources = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Localization", "Resources", "Strings.resx"));
+        var frenchResources = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Localization", "Resources", "Strings.fr-FR.resx"));
+
+        var keys = new[]
+        {
+            "AvaloniaNativeMenu_NewWorkbook",
+            "AvaloniaNativeMenu_Open",
+            "AvaloniaNativeMenu_OpenRecent",
+            "AvaloniaNativeMenu_Save",
+            "AvaloniaNativeMenu_SaveAs",
+            "AvaloniaNativeMenu_ExportPdf",
+            "AvaloniaNativeMenu_PageSetup",
+            "AvaloniaNativeMenu_PrintPreview",
+            "AvaloniaNativeMenu_ShareWorkbook",
+            "AvaloniaNativeMenu_WorkbookStatistics",
+            "AvaloniaNativeMenu_CloseWorkbook",
+            "AvaloniaNativeMenu_NewSheet",
+        };
+
+        foreach (var key in keys)
+        {
+            source.Should().Contain($"UiText.Get(\"{key}\")");
+            neutralResources.Should().Contain($"<data name=\"{key}\"");
+            frenchResources.Should().Contain($"<data name=\"{key}\"");
+        }
+
+        var nativeMenuBlock = ExtractSourceBlock(
+            source,
+            "private void ConfigureNativeMenu()",
+            "_renameSheetMenuItem.Header = \"Rename Sheet...\";");
+        nativeMenuBlock.Should().NotContain("_newWorkbookMenuItem.Header = \"New Workbook\"");
+        nativeMenuBlock.Should().NotContain("_openMenuItem.Header = \"Open...\"");
+        nativeMenuBlock.Should().NotContain("_openRecentMenuItem.Header = \"Open Recent\"");
+        nativeMenuBlock.Should().NotContain("_saveMenuItem.Header = \"Save\"");
+        nativeMenuBlock.Should().NotContain("_saveAsMenuItem.Header = \"Save As...\"");
+        nativeMenuBlock.Should().NotContain("_exportPdfMenuItem.Header = \"Export to PDF...\"");
+        nativeMenuBlock.Should().NotContain("_shareWorkbookMenuItem.Header = \"Share Workbook...\"");
+        nativeMenuBlock.Should().NotContain("_workbookStatisticsMenuItem.Header = \"Workbook Statistics...\"");
+        nativeMenuBlock.Should().NotContain("_closeWorkbookMenuItem.Header = \"Close Workbook\"");
+        nativeMenuBlock.Should().NotContain("_newSheetMenuItem.Header = \"New Sheet\"");
+    }
+
+    [Fact]
+    public void App_UsesSharedReleaseChannelForPrereleaseUpdatePolicy()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "App.cs"));
+
+        source.Should().Contain("UpdateFeed.AllowPrereleases(AppHelpInfo.ReleaseChannel)");
+        source.Should().Contain("releasesPageUrl: AppHelpInfo.LatestReleaseUrl");
+        source.Should().NotContain("UpdateFeed.AllowPrereleases(\"test\")");
+    }
+
+    [Fact]
+    public void MainWindow_WiresOptionsDialogToSharedAppOptionsStore()
+    {
+        var menuSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var optionsSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.Options.cs"));
+
+        // Wired into the native File menu with an Options entry that calls ShowOptions.
+        menuSource.Should().Contain("private readonly NativeMenuItem _optionsMenuItem = new();");
+        menuSource.Should().Contain("_optionsMenuItem.Header = UiText.Get(\"Options_Title\");");
+        menuSource.Should().Contain("_optionsMenuItem.Click += (_, _) => ShowOptions();");
+        menuSource.Should().Contain("fileMenu.Items.Add(_optionsMenuItem);");
+
+        // The dialog edits the shared AppOptions via the portable store and planner — no bespoke model.
+        optionsSource.Should().Contain("var current = AppOptionsStore.Load();");
+        optionsSource.Should().Contain("OptionsDialogPlanner.TryBuildInput(");
+        optionsSource.Should().Contain("var projected = OptionsDialogPlanner.Project(current, input);");
+        optionsSource.Should().Contain("AppOptionsStore.Save(projected)");
+        optionsSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"OptionsDialog\");");
+        optionsSource.Should().Contain("AutomationProperties.SetAutomationId(okButton, \"OptionsOkButton\");");
+        optionsSource.Should().Contain("AutomationProperties.SetAutomationId(applyButton, \"OptionsApplyButton\");");
+        optionsSource.Should().Contain("AutomationProperties.SetAutomationId(cancelButton, \"OptionsCancelButton\");");
+
+        // Live application of the cheap view/calc settings to the running session.
+        optionsSource.Should().Contain("private void ApplyLiveOptions(OptionsDialogPlanner.OptionsDialogInput input)");
+        optionsSource.Should().Contain("_session.SetShowGridlines(input.ShowGridlines);");
+        optionsSource.Should().Contain("_session.SetShowHeadings(input.ShowHeadings);");
+
+        // PresentationPortabilityGuard forbids these tokens in portable shell source — make sure we stayed clean.
+        optionsSource.Should().NotContain("System.Windows");
     }
 
     [Fact]
@@ -339,21 +533,21 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private readonly NativeMenuItem _checkForUpdatesMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _aboutMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _legalNoticesMenuItem = new();");
-        source.Should().Contain("_newWorkbookMenuItem.Header = \"New Workbook\";");
+        source.Should().Contain("_newWorkbookMenuItem.Header = UiText.Get(\"AvaloniaNativeMenu_NewWorkbook\");");
         source.Should().Contain("_newWorkbookMenuItem.Gesture = new KeyGesture(Key.N, KeyModifiers.Meta);");
         source.Should().Contain("_newWorkbookMenuItem.Click += (_, _) => CreateNewWorkbook();");
-        source.Should().Contain("_openMenuItem.Header = \"Open...\";");
+        source.Should().Contain("_openMenuItem.Header = UiText.Get(\"AvaloniaNativeMenu_Open\");");
         source.Should().Contain("_openMenuItem.Gesture = new KeyGesture(Key.O, KeyModifiers.Meta);");
         source.Should().Contain("_openMenuItem.Click += async (_, _) => await OpenWorkbookAsync();");
-        source.Should().Contain("_openRecentMenuItem.Header = \"Open Recent\";");
+        source.Should().Contain("_openRecentMenuItem.Header = UiText.Get(\"AvaloniaNativeMenu_OpenRecent\");");
         source.Should().Contain("_openRecentMenuItem.Menu = CreateNativeOpenRecentMenu(isIdle: true);");
-        source.Should().Contain("_saveMenuItem.Header = \"Save\";");
+        source.Should().Contain("_saveMenuItem.Header = UiText.Get(\"AvaloniaNativeMenu_Save\");");
         source.Should().Contain("_saveMenuItem.Gesture = new KeyGesture(Key.S, KeyModifiers.Meta);");
         source.Should().Contain("_saveMenuItem.Click += async (_, _) => await SaveCurrentWorkbookAsync();");
-        source.Should().Contain("_saveAsMenuItem.Header = \"Save As...\";");
+        source.Should().Contain("_saveAsMenuItem.Header = UiText.Get(\"AvaloniaNativeMenu_SaveAs\");");
         source.Should().Contain("_saveAsMenuItem.Gesture = new KeyGesture(Key.S, KeyModifiers.Meta | KeyModifiers.Shift);");
         source.Should().Contain("_saveAsMenuItem.Click += async (_, _) => await SaveWorkbookAsAsync();");
-        source.Should().Contain("_closeWorkbookMenuItem.Header = \"Close Workbook\";");
+        source.Should().Contain("_closeWorkbookMenuItem.Header = UiText.Get(\"AvaloniaNativeMenu_CloseWorkbook\");");
         source.Should().Contain("_closeWorkbookMenuItem.Gesture = new KeyGesture(Key.W, KeyModifiers.Meta);");
         source.Should().Contain("_closeWorkbookMenuItem.Click += async (_, _) => await CloseWorkbookAsync();");
         source.Should().Contain("_undoMenuItem.Header = \"Undo\";");
@@ -1070,10 +1264,10 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("_nativeMenu?.Items.OfType<NativeMenuItem>().Any");
         windowSource.Should().Contain("WindowShown: IsVisible");
         windowSource.Should().Contain("OpenedSourcePath: _session.CurrentFilePath");
-        windowSource.Should().Contain("HasNativeNewWorkbookMenuItem: HasNativeMenuItem(_newWorkbookMenuItem, \"New Workbook\")");
-        windowSource.Should().Contain("HasNativeOpenRecentMenuItem: HasNativeMenuItem(_openRecentMenuItem, \"Open Recent\", requireGesture: false)");
+        windowSource.Should().Contain("HasNativeNewWorkbookMenuItem: HasNativeMenuItem(_newWorkbookMenuItem, UiText.Get(\"AvaloniaNativeMenu_NewWorkbook\"))");
+        windowSource.Should().Contain("HasNativeOpenRecentMenuItem: HasNativeMenuItem(_openRecentMenuItem, UiText.Get(\"AvaloniaNativeMenu_OpenRecent\"), requireGesture: false)");
         windowSource.Should().Contain("NativeOpenRecentItemCount: nativeOpenRecentItemCount");
-        windowSource.Should().Contain("HasNativeWorkbookStatisticsMenuItem: HasNativeMenuItem(_workbookStatisticsMenuItem, \"Workbook Statistics...\")");
+        windowSource.Should().Contain("HasNativeWorkbookStatisticsMenuItem: HasNativeMenuItem(_workbookStatisticsMenuItem, UiText.Get(\"AvaloniaNativeMenu_WorkbookStatistics\"))");
         windowSource.Should().Contain("NativeTabColorSwatchCount: nativeTabColorSwatchCount");
         windowSource.Should().Contain("HasFocusableSheetTab: HasSheetTabButton(button => button.Focusable)");
         windowSource.Should().Contain("HasFocusableActiveSheetTab: FindSheetTabButton(_session.ActiveSheet.Id)?.Focusable == true");
@@ -1090,7 +1284,7 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("HasSheetTabContextUngroupSheetsMenuItem: HasSheetTabContextMenuItem(\"Ungroup Sheets\")");
         windowSource.Should().Contain("HasNativeSelectAllSheetsMenuItem: HasNativeMenuItem(_selectAllSheetsMenuItem, \"Select All Sheets\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeUngroupSheetsMenuItem: HasNativeMenuItem(_ungroupSheetsMenuItem, \"Ungroup Sheets\", requireGesture: false)");
-        windowSource.Should().Contain("HasNativeCloseWorkbookMenuItem: HasNativeMenuItem(_closeWorkbookMenuItem, \"Close Workbook\")");
+        windowSource.Should().Contain("HasNativeCloseWorkbookMenuItem: HasNativeMenuItem(_closeWorkbookMenuItem, UiText.Get(\"AvaloniaNativeMenu_CloseWorkbook\"))");
         windowSource.Should().Contain("HasNativeEditMenu: hasNativeEditMenu");
         windowSource.Should().Contain("HasNativeDataMenu: hasNativeDataMenu");
         windowSource.Should().Contain("HasNativeFormatMenu: hasNativeFormatMenu");
@@ -1314,6 +1508,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? -1 : 1");
         source.Should().Contain("_session.MoveActiveCell(0, colDelta);");
         source.Should().Contain("var result = _session.CommitCellText(_formulaBox.Text ?? \"\");");
+        source.Should().Contain("if (_isOpening || _isSaving)");
+        source.Should().Contain("Finish saving before editing cells.");
         source.Should().Contain("RefreshShell($\"Edited {FormatCellReference(address)}\");");
         source.Should().Contain("private bool TryCommitPendingFormulaEdit()");
         source.Should().Contain("private bool HasPendingFormulaEditText() =>");
@@ -1321,6 +1517,17 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("StringComparison.Ordinal");
         source.Should().Contain("if (!TryCommitPendingFormulaEdit())");
         source.Should().Contain("Finish the current cell edit before opening another workbook.");
+    }
+
+    [Fact]
+    public void MainWindow_SaveCapturesXlsxWarningsInAvaloniaStatus()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("var saveWarnings = await _saveService.SaveAsync");
+        source.Should().Contain("RefreshShell(FormatSaveCompletionStatus(target.Path, saveWarnings));");
+        source.Should().Contain("private static string FormatSaveCompletionStatus(string path, IReadOnlyList<string> warnings)");
+        source.Should().Contain("with {warnings.Count} warning(s)");
     }
 
     [Fact]
@@ -1751,7 +1958,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_session.SelectedRange");
         source.Should().Contain("CreateDataValidationTypeChoices()");
         source.Should().Contain("DataValidationPresetPlanner.GetRuleTypeMetadata()");
-        source.Should().Contain(".Where(metadata => metadata.Type is DvType.WholeNumber or DvType.List or DvType.TextLength)");
+        source.Should().Contain(".Where(metadata => metadata.Type is DvType.WholeNumber or DvType.Decimal or DvType.List or DvType.Date or DvType.Time or DvType.TextLength or DvType.Custom or DvType.Any)");
         source.Should().Contain("CreateDefaultDataValidationRule(initialType, _session.SelectedRange)");
         source.Should().Contain("DataValidationPresetPlanner.CreateDefaultRule(type, _session.SelectedRange)");
         source.Should().Contain("DataValidationPresetPlanner.RequiresSecondFormula(type, op)");
@@ -2825,7 +3032,7 @@ public sealed class AvaloniaShellSourceTests
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "HyperlinkNavigationPlanner.cs"));
-        var launcherSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "ExternalUriLauncher.cs"));
+        var launcherSource = File.ReadAllText(RepositoryFileLocator.Find("shared", "Free.Shared.AppServices", "ExternalUriLauncher.cs"));
 
         plannerSource.Should().Contain("public enum HyperlinkNavigationKind");
         plannerSource.Should().Contain("HyperlinkTargetKind.PlaceInThisDocument");
@@ -2834,7 +3041,7 @@ public sealed class AvaloniaShellSourceTests
         plannerSource.Should().Contain("\"http\", \"https\", \"mailto\", \"ftp\"");
         launcherSource.Should().Contain("public static class ExternalUriLauncher");
         launcherSource.Should().Contain("Func<Uri, Task<bool>>? launchAsync");
-        launcherSource.Should().Contain("HyperlinkNavigationPlanner.IsAllowedScheme(normalizedTarget)");
+        launcherSource.Should().Contain("\"http\", \"https\", \"mailto\", \"ftp\"");
 
         sessionSource.Should().Contain("public bool CanOpenSelectedHyperlink");
         sessionSource.Should().Contain("HyperlinkNavigationPlanner.TryCreatePlan(ActiveSheet, SelectedRange.Start, CurrentFilePath, out _)");
@@ -3522,6 +3729,22 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("\"FormatCellsBorderPresetBox\"");
         source.Should().Contain("\"FormatCellsBorderStyleBox\"");
         source.Should().Contain("\"FormatCellsBorderColorBox\"");
+        source.Should().Contain("\"FormatCellsBorderTopToggle\"");
+        source.Should().Contain("\"FormatCellsBorderBottomToggle\"");
+        source.Should().Contain("\"FormatCellsBorderLeftToggle\"");
+        source.Should().Contain("\"FormatCellsBorderRightToggle\"");
+        source.Should().Contain("\"FormatCellsBorderInsideHorizontalToggle\"");
+        source.Should().Contain("\"FormatCellsBorderInsideVerticalToggle\"");
+        source.Should().Contain("\"FormatCellsBorderPreview\"");
+        source.Should().Contain("\"FormatCellsFontPreview\"");
+        source.Should().Contain("\"FormatCellsFillPreview\"");
+        source.Should().Contain("\"FormatCellsBorderPresetNoneButton\"");
+        source.Should().Contain("\"FormatCellsBorderPresetOutlineButton\"");
+        source.Should().Contain("\"FormatCellsBorderPresetInsideButton\"");
+        source.Should().Contain("BorderTop: borderTopSide");
+        source.Should().Contain("BorderRight: borderRightSide");
+        source.Should().Contain("BorderBottom: borderBottomSide");
+        source.Should().Contain("BorderLeft: borderLeftSide");
         source.Should().Contain("\"FormatCellsDoubleUnderlineBox\"");
         source.Should().Contain("\"FormatCellsShrinkToFitBox\"");
         source.Should().Contain("\"FormatCellsIndentLevelBox\"");
@@ -3533,7 +3756,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("\"FormatCellsLockedBox\"");
         source.Should().Contain("\"FormatCellsHiddenBox\"");
         source.Should().Contain("\"FormatCellsProtectionExplanationText\"");
-        source.Should().Contain("Locking cells or hiding formulas has no effect until you protect the worksheet.");
+        // The protection-explanation text is now localized: it lives in the shared Strings.resx
+        // catalog and is routed through UiText, so the source references the key, not the literal.
+        source.Should().Contain("UiText.Get(\"FormatCells_ProtectionExplanation\")");
         source.Should().Contain("var currentMergeCells = _session.IsSelectedRangeMerged;");
         source.Should().Contain("var currentUnderline = currentStyle.Underline ?? CellStyle.Default.Underline;");
         source.Should().Contain("Underline: normalFont ? normalStyle.Underline : ReadChangedFormatCellsBool(currentUnderline, underlineBox)");
@@ -3586,6 +3811,14 @@ public sealed class AvaloniaShellSourceTests
         plannerSource.Should().Contain("Hidden: request.Hidden");
         plannerSource.Should().Contain("FillPatternStyle: request.ClearFill ? null : request.FillPatternStyle");
         plannerSource.Should().Contain("FillPatternColor: request.ClearFill ? null : request.FillPatternColor");
+        plannerSource.Should().Contain("CellBorder? BorderTop = null");
+        plannerSource.Should().Contain("CellBorder? BorderRight = null");
+        plannerSource.Should().Contain("CellBorder? BorderBottom = null");
+        plannerSource.Should().Contain("CellBorder? BorderLeft = null");
+        plannerSource.Should().Contain("var borderTop = request.BorderTop ?? borderDiff?.BorderTop");
+        plannerSource.Should().Contain("var borderRight = request.BorderRight ?? borderDiff?.BorderRight");
+        plannerSource.Should().Contain("var borderBottom = request.BorderBottom ?? borderDiff?.BorderBottom");
+        plannerSource.Should().Contain("var borderLeft = request.BorderLeft ?? borderDiff?.BorderLeft");
     }
 
     [Fact]
@@ -3631,7 +3864,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_newSheetButton.Content = \"+\";");
         source.Should().Contain("_newSheetButton.Click += (_, _) => AddNewSheet();");
         source.Should().Contain("AutomationProperties.SetName(_newSheetButton, \"New Sheet\");");
-        source.Should().Contain("_newSheetMenuItem.Header = \"New Sheet\";");
+        source.Should().Contain("_newSheetMenuItem.Header = UiText.Get(\"AvaloniaNativeMenu_NewSheet\");");
         source.Should().Contain("_newSheetMenuItem.Gesture = new KeyGesture(Key.F11, KeyModifiers.Shift);");
         source.Should().Contain("_newSheetMenuItem.Click += (_, _) => AddNewSheet();");
         source.Should().Contain("_renameSheetMenuItem.Header = \"Rename Sheet...\";");
@@ -3839,7 +4072,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("SelectAdjacentVisibleSheetFromKeyboard(direction: 1, selectRange: false)");
         source.Should().Contain("HasNewSheetButton: _newSheetButton.Content?.ToString() == \"+\"");
         source.Should().Contain("HasNativeSheetMenu: hasNativeSheetMenu");
-        source.Should().Contain("HasNativeNewSheetMenuItem: HasNativeMenuItem(_newSheetMenuItem, \"New Sheet\")");
+        source.Should().Contain("HasNativeNewSheetMenuItem: HasNativeMenuItem(_newSheetMenuItem, UiText.Get(\"AvaloniaNativeMenu_NewSheet\"))");
         source.Should().Contain("HasNativeRenameSheetMenuItem: HasNativeMenuItem(_renameSheetMenuItem, \"Rename Sheet...\", requireGesture: false)");
         source.Should().Contain("HasNativeDuplicateSheetMenuItem: HasNativeMenuItem(_duplicateSheetMenuItem, \"Duplicate Sheet\", requireGesture: false)");
         source.Should().Contain("HasNativeMoveSheetLeftMenuItem: HasNativeMenuItem(_moveSheetLeftMenuItem, \"Move Sheet Left\", requireGesture: false)");
@@ -4171,6 +4404,8 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("bool HasReplaceDialogCompactLayout,");
         smokeSource.Should().Contain("bool HasGoToDialog,");
         smokeSource.Should().Contain("bool HasGoToDialogReferenceControls,");
+        smokeSource.Should().Contain("bool HasGoToDialogHistoryControls,");
+        smokeSource.Should().Contain("bool HasGoToDialogSpecialControl,");
         smokeSource.Should().Contain("bool HasGoToDialogCompactLayout,");
         smokeSource.Should().Contain("bool HasGoToSpecialDialog,");
         smokeSource.Should().Contain("bool HasGoToSpecialKindControls,");
@@ -4196,11 +4431,14 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("Dispatcher.UIThread.Post(() => dialog.Close());");
         source.Should().Contain("HasLaunchSmokeCompactDialog(probe.Dialog, width: 420, height: 430, minWidth: 360, minHeight: 390)");
         source.Should().Contain("HasLaunchSmokeCompactDialog(probe.Dialog, width: 420, height: 520, minWidth: 360, minHeight: 480)");
-        source.Should().Contain("HasLaunchSmokeCompactDialog(probe.Dialog, width: 380, height: 165, minWidth: 340, minHeight: 155)");
+        source.Should().Contain("HasLaunchSmokeCompactDialog(probe.Dialog, width: 380, height: 320, minWidth: 340, minHeight: 280)");
         source.Should().Contain("HasLaunchSmokeCompactDialog(probe.Dialog, width: 420, height: 310, minWidth: 360, minHeight: 280)");
         source.Should().Contain("HasLaunchSmokeButton(probe.ChooseFormatButton, \"FindChooseFormatFromCellButton\", \"Choose From Cell\")");
         source.Should().Contain("HasLaunchSmokeButton(probe.ChooseFindFormatButton, \"ReplaceFindChooseFormatFromCellButton\", \"Choose From Cell\")");
+        source.Should().Contain("ShowGoToInputDialogAsync(");
         source.Should().Contain("HasLaunchSmokeAutomationId(probe.InputBox, \"GoToReferenceBox\")");
+        source.Should().Contain("HasLaunchSmokeAutomationId(probe.HistoryList, \"GoToHistoryList\")");
+        source.Should().Contain("HasLaunchSmokeButton(probe.SpecialButton, \"GoToSpecialButton\", \"Special...\")");
         source.Should().Contain("HasLaunchSmokeCheckBox(probe.NumbersBox, \"GoToSpecialNumbersBox\", \"Numbers\")");
         smokeSource.Should().Contain("native_find_menu_item={FormatBool(snapshot.HasNativeFindMenuItem)}");
         smokeSource.Should().Contain("native_find_next_menu_item={FormatBool(snapshot.HasNativeFindNextMenuItem)}");
@@ -4222,6 +4460,8 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("replace_dialog_compact_layout={FormatBool(snapshot.DialogEvidence.HasReplaceDialogCompactLayout)}");
         smokeSource.Should().Contain("go_to_dialog={FormatBool(snapshot.DialogEvidence.HasGoToDialog)}");
         smokeSource.Should().Contain("go_to_dialog_reference_controls={FormatBool(snapshot.DialogEvidence.HasGoToDialogReferenceControls)}");
+        smokeSource.Should().Contain("go_to_dialog_history_controls={FormatBool(snapshot.DialogEvidence.HasGoToDialogHistoryControls)}");
+        smokeSource.Should().Contain("go_to_dialog_special_control={FormatBool(snapshot.DialogEvidence.HasGoToDialogSpecialControl)}");
         smokeSource.Should().Contain("go_to_dialog_compact_layout={FormatBool(snapshot.DialogEvidence.HasGoToDialogCompactLayout)}");
         smokeSource.Should().Contain("go_to_special_dialog={FormatBool(snapshot.DialogEvidence.HasGoToSpecialDialog)}");
         smokeSource.Should().Contain("go_to_special_dialog_kind_controls={FormatBool(snapshot.DialogEvidence.HasGoToSpecialKindControls)}");
@@ -4240,12 +4480,12 @@ public sealed class AvaloniaShellSourceTests
         var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
 
         source.Should().Contain("private readonly NativeMenuItem _workbookStatisticsMenuItem = new();");
-        source.Should().Contain("_workbookStatisticsMenuItem.Header = \"Workbook Statistics...\";");
+        source.Should().Contain("_workbookStatisticsMenuItem.Header = UiText.Get(\"AvaloniaNativeMenu_WorkbookStatistics\");");
         source.Should().Contain("_workbookStatisticsMenuItem.Gesture = new KeyGesture(Key.G, KeyModifiers.Control | KeyModifiers.Shift);");
         source.Should().Contain("_workbookStatisticsMenuItem.Click += async (_, _) => await ShowWorkbookStatisticsDialogAsync();");
         source.Should().Contain("fileMenu.Items.Add(_workbookStatisticsMenuItem);");
         source.Should().Contain("_workbookStatisticsMenuItem.IsEnabled = isIdle;");
-        source.Should().Contain("HasNativeWorkbookStatisticsMenuItem: HasNativeMenuItem(_workbookStatisticsMenuItem, \"Workbook Statistics...\")");
+        source.Should().Contain("HasNativeWorkbookStatisticsMenuItem: HasNativeMenuItem(_workbookStatisticsMenuItem, UiText.Get(\"AvaloniaNativeMenu_WorkbookStatistics\"))");
         smokeSource.Should().Contain("bool HasNativeWorkbookStatisticsMenuItem,");
         smokeSource.Should().Contain("HasNativeWorkbookStatisticsMenuItem &&");
         smokeSource.Should().Contain("native_workbook_statistics_menu_item={FormatBool(snapshot.HasNativeWorkbookStatisticsMenuItem)}");
@@ -4358,6 +4598,110 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("native_minimize_window_menu_item={FormatBool(snapshot.HasNativeMinimizeWindowMenuItem)}");
         smokeSource.Should().Contain("native_zoom_window_menu_item={FormatBool(snapshot.HasNativeZoomWindowMenuItem)}");
         smokeSource.Should().Contain("native_bring_all_to_front_menu_item={FormatBool(snapshot.HasNativeBringAllToFrontMenuItem)}");
+    }
+
+    [Fact]
+    public void MainWindow_WiresConditionalFormatRuleAndManageDialogsToLaunchSmoke()
+    {
+        var cfSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.ConditionalFormat.cs"));
+        var windowSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+
+        // New Formatting Rule editor: rule-type picker, presets, per-type controls, automation ids.
+        cfSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"ConditionalFormatRuleDialog\");");
+        cfSource.Should().Contain("AutomationProperties.SetAutomationId(ruleTypeBox, \"ConditionalFormatRuleTypeBox\");");
+        cfSource.Should().Contain("AutomationProperties.SetAutomationId(presetBox, \"ConditionalFormatPresetBox\");");
+        cfSource.Should().Contain("AutomationProperties.SetAutomationId(topBottomBox, \"ConditionalFormatTopBottomBox\");");
+        cfSource.Should().Contain("AutomationProperties.SetAutomationId(minColorBox, \"ConditionalFormatMinColorBox\");");
+        cfSource.Should().Contain("AutomationProperties.SetAutomationId(maxColorBox, \"ConditionalFormatMaxColorBox\");");
+        cfSource.Should().Contain("ConditionalFormatPresetFactory.BuildInput(preset)");
+        cfSource.Should().Contain("ConditionalFormatRuleBuilder.TryBuildApplyCommand(");
+
+        // Manage Rules dialog: New / reorder / change applies-to, automation ids.
+        cfSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"ManageConditionalFormatsDialog\");");
+        cfSource.Should().Contain("AutomationProperties.SetAutomationId(moveUpButton, \"ManageConditionalFormatsMoveUpButton\");");
+        cfSource.Should().Contain("AutomationProperties.SetAutomationId(moveDownButton, \"ManageConditionalFormatsMoveDownButton\");");
+        cfSource.Should().Contain("AutomationProperties.SetAutomationId(appliesToBox, \"ManageConditionalFormatsAppliesToBox\");");
+        cfSource.Should().Contain("AutomationProperties.SetAutomationId(applyAppliesToButton, \"ManageConditionalFormatsApplyAppliesToButton\");");
+        cfSource.Should().Contain("ConditionalFormatManageModel.BuildMoveCommand(");
+        cfSource.Should().Contain("ConditionalFormatManageModel.BuildAppliesToCommand(");
+        cfSource.Should().Contain("_session.TryResolveReferenceRange(reference, out var range)");
+
+        // Launch-smoke probe wiring for both dialogs.
+        cfSource.Should().Contain("private sealed record ConditionalFormatRuleDialogSmokeProbe(");
+        cfSource.Should().Contain("private sealed record ManageConditionalFormatsDialogSmokeProbe(");
+        windowSource.Should().Contain("HasLaunchSmokeDialog(probe.Dialog, \"New Formatting Rule\")");
+        windowSource.Should().Contain("HasLaunchSmokeDialog(probe.Dialog, \"Manage Conditional Formatting Rules\")");
+
+        // Snapshot fields, IsPassed gating, and report lines for the two CF dialogs.
+        smokeSource.Should().Contain("bool HasConditionalFormatRuleDialog = false,");
+        smokeSource.Should().Contain("bool HasManageConditionalFormatsDialog = false,");
+        smokeSource.Should().Contain("HasConditionalFormatRuleDialog &&");
+        smokeSource.Should().Contain("HasManageConditionalFormatsReorderControls &&");
+        smokeSource.Should().Contain("HasManageConditionalFormatsAppliesToControls &&");
+        smokeSource.Should().Contain("conditional_format_rule_dialog={FormatBool(snapshot.DialogEvidence.HasConditionalFormatRuleDialog)}");
+        smokeSource.Should().Contain("manage_conditional_formats_dialog={FormatBool(snapshot.DialogEvidence.HasManageConditionalFormatsDialog)}");
+    }
+
+    [Fact]
+    public void MainWindow_WiresCustomViewsManagerAndAddDialogsThroughPortablePlanner()
+    {
+        var customViewsSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.CustomViews.cs"));
+        var windowSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        // The View ▸ Workbook Views ▸ Custom Views ribbon button is wired to the dialog entry point.
+        windowSource.Should().Contain("[\"Custom Views\"] = () => RunGuarded(OpenCustomViewsDialogAsync),");
+
+        // Manager dialog + Add dialog carry stable automation ids.
+        customViewsSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"CustomViewsDialog\");");
+        customViewsSource.Should().Contain("AutomationProperties.SetAutomationId(viewsList, \"CustomViewsList\");");
+        customViewsSource.Should().Contain("AutomationProperties.SetAutomationId(showButton, \"CustomViewsShowButton\");");
+        customViewsSource.Should().Contain("AutomationProperties.SetAutomationId(addButton, \"CustomViewsAddButton\");");
+        customViewsSource.Should().Contain("AutomationProperties.SetAutomationId(deleteButton, \"CustomViewsDeleteButton\");");
+        customViewsSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"CustomViewAddDialog\");");
+        customViewsSource.Should().Contain("AutomationProperties.SetAutomationId(nameBox, \"CustomViewNameBox\");");
+
+        // All Custom Views logic flows through the portable planner + the shared session command path.
+        customViewsSource.Should().Contain("CustomViewsPlanner.BuildRows(_session.Workbook)");
+        customViewsSource.Should().Contain("CustomViewsPlanner.BuildApplyCommand(name)");
+        customViewsSource.Should().Contain("CustomViewsPlanner.BuildSaveCommand(");
+        customViewsSource.Should().Contain("CustomViewsPlanner.BuildDeleteCommand(name)");
+        customViewsSource.Should().Contain("CustomViewsPlanner.ValidateName(_session.Workbook,");
+        customViewsSource.Should().Contain("_session.ExecuteReviewCommand(");
+        // Applying a view that changes the active sheet re-syncs the session's cached active sheet.
+        customViewsSource.Should().Contain("ResyncActiveSheetToWorkbook();");
+    }
+
+    [Fact]
+    public void GetData_FromTextCsv_RoutesThroughPortablePlannerAndImportCommand()
+    {
+        var windowSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var getDataSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.GetData.cs"));
+
+        // The Data-tab Get Data button + Refresh route to the new file-based import, not the old stubs.
+        windowSource.Should().Contain("[\"data.getData\"] = GetDataFromText,");
+        windowSource.Should().Contain("[\"data.refresh\"] = RefreshImportedData,");
+        windowSource.Should().NotContain("GetDataNotSupported");
+        windowSource.Should().NotContain("RefreshAllNotSupported");
+
+        // The dialog gathers options and previews via the portable ImportDataPlanner.
+        getDataSource.Should().Contain("private void GetDataFromText() => _ = ShowGetDataDialogAsync();");
+        getDataSource.Should().Contain("ImportDataPlanner.DecodeBytes(bytes, encodingKind)");
+        getDataSource.Should().Contain("ImportDataPlanner.PreviewText(decodedText, options");
+        getDataSource.Should().Contain("ImportDataPlanner.ResolveDelimiter(options, decodedText)");
+
+        // The parse reuses the existing delimited-text reader and applies via ImportSheetCommand on the
+        // shared session command path; the source is remembered so Refresh can re-run it.
+        getDataSource.Should().Contain("new DelimitedTextFileAdapter(\".csv\", \"Text\", delimiter).Load(stream)");
+        getDataSource.Should().Contain("new ImportSheetCommand(targetSheetId, destination, sourceSheet)");
+        getDataSource.Should().Contain("_session.ExecuteReviewCommand(command)");
+        getDataSource.Should().Contain("_session.AddSheet()");
+        getDataSource.Should().Contain("_lastImportSource = new ImportDataSource(filePath, options, resolvedDestination)");
+        getDataSource.Should().Contain("private void RefreshImportedData()");
+
+        // User-facing strings go through UiText with the unique GetData_ key prefix.
+        getDataSource.Should().Contain("UiText.Get(\"GetData_DialogTitle\")");
+        getDataSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"GetDataDialog\");");
     }
 
     private static string ExtractSourceBlock(string source, string startMarker, string endMarker)
