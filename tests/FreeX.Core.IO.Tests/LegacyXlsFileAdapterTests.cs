@@ -88,6 +88,10 @@ public sealed class LegacyXlsFileAdapterTests
         workbook.StructureProtectionPassword.Should().Be(ProtectionPasswordHelper.ToLegacyPasswordHash("structure"));
         GetWorkbookProtectionMetadataAttribute(workbook, "lockWindows").Should().Be("1");
         workbook.StyleCount.Should().BeGreaterThan(1);
+        workbook.FileSharing.Should().NotBeNull();
+        workbook.FileSharing!.ReadOnlyRecommended.Should().BeTrue();
+        workbook.FileSharing.UserName.Should().Be("Analyst");
+        workbook.FileSharing.ReservationPassword.Should().Be(ProtectionPasswordHelper.ToLegacyPasswordHash("reserve"));
 
         var sheet = workbook.GetSheetAt(0);
         sheet.Name.Should().Be("Visible");
@@ -179,6 +183,8 @@ public sealed class LegacyXlsFileAdapterTests
         sheet.ShowGridlines.Should().BeFalse();
         sheet.ShowHeadings.Should().BeFalse();
         sheet.ShowFormulas.Should().BeTrue();
+        sheet.ShowZeros.Should().BeFalse();
+        sheet.FullCalculationOnLoad.Should().BeTrue();
         sheet.ViewTopRow.Should().Be(3);
         sheet.ViewLeftCol.Should().Be(4);
         sheet.ActiveRow.Should().Be(2);
@@ -292,7 +298,9 @@ public sealed class LegacyXlsFileAdapterTests
                 SheetVisibilityFingerprints: ReadImportedSheetVisibilityFingerprints(workbook),
                 WorkbookViewFingerprints: ReadImportedWorkbookViewFingerprints(workbook),
                 WorkbookProtectionFingerprints: ReadImportedWorkbookProtectionFingerprints(workbook),
+                WorkbookFileSharingFingerprints: ReadImportedWorkbookFileSharingFingerprints(workbook),
                 WorkbookCalculationFingerprints: ReadImportedWorkbookCalculationFingerprints(workbook),
+                SheetCalculationFingerprints: ReadImportedSheetCalculationFingerprints(workbook),
                 CellFingerprints: ReadImportedCellFingerprints(workbook),
                 MergeFingerprints: ReadImportedMergeFingerprints(workbook),
                 DimensionFingerprints: ReadImportedDimensionFingerprints(workbook),
@@ -352,7 +360,9 @@ public sealed class LegacyXlsFileAdapterTests
                 imported.SheetVisibilityFingerprints.Should().BeEquivalentTo(source.SheetVisibilityFingerprints, imported.File);
                 imported.WorkbookViewFingerprints.Should().BeEquivalentTo(source.WorkbookViewFingerprints, imported.File);
                 imported.WorkbookProtectionFingerprints.Should().BeEquivalentTo(source.WorkbookProtectionFingerprints, imported.File);
+                imported.WorkbookFileSharingFingerprints.Should().BeEquivalentTo(source.WorkbookFileSharingFingerprints, imported.File);
                 imported.WorkbookCalculationFingerprints.Should().BeEquivalentTo(source.WorkbookCalculationFingerprints, imported.File);
+                imported.SheetCalculationFingerprints.Should().BeEquivalentTo(source.SheetCalculationFingerprints, imported.File);
                 imported.CellFingerprints.Should().BeEquivalentTo(source.CellFingerprints, imported.File);
                 imported.MergeFingerprints.Should().BeEquivalentTo(source.MergeFingerprints, imported.File);
                 imported.DimensionFingerprints.Should().BeEquivalentTo(source.DimensionFingerprints, imported.File);
@@ -418,6 +428,11 @@ public sealed class LegacyXlsFileAdapterTests
         summaries.Where(summary => summary.RichMetadata)
             .Sum(summary => summary.WorkbookCalculationFingerprints?.Count(fingerprint =>
                 !fingerprint.Contains("|Mode=Automatic|Full=False|Iterate=False|Count=null|Delta=null", StringComparison.Ordinal)) ?? 0)
+            .Should()
+            .BeGreaterThan(0);
+        summaries.Where(summary => summary.RichMetadata)
+            .Sum(summary => summary.ViewStateFingerprints?.Count(fingerprint =>
+                fingerprint.Contains(",False|TopLeft", StringComparison.Ordinal)) ?? 0)
             .Should()
             .BeGreaterThan(0);
         summaries.Sum(summary => summary.DefinedNames).Should().BeGreaterThan(0);
@@ -528,6 +543,7 @@ public sealed class LegacyXlsFileAdapterTests
         var password = hssf.Workbook.FindFirstRecordBySid(PasswordRecord.sid) as PasswordRecord ??
             throw new InvalidOperationException("Expected a BIFF workbook Password record in the HSSF fixture.");
         password.Password = unchecked((short)Convert.ToUInt16(ProtectionPasswordHelper.ToLegacyPasswordHash("structure"), 16));
+        hssf.WriteProtectWorkbook("reserve", "Analyst");
         sheet.AddMergedRegion(new CellRangeAddress(0, 0, 0, 1));
         sheet.SetColumnWidth(1, 18 * 256);
         sheet.SetColumnHidden(2, true);
@@ -535,7 +551,9 @@ public sealed class LegacyXlsFileAdapterTests
         sheet.DisplayGridlines = false;
         sheet.DisplayRowColHeadings = false;
         sheet.DisplayFormulas = true;
+        sheet.DisplayZeros = false;
         sheet.ShowInPane(2, 3);
+        sheet.ForceFormulaRecalculation = true;
         var windowTwo = TryGetWindowTwoRecord(sheet) ??
             throw new InvalidOperationException("Expected a BIFF sheet Window2 record in the HSSF fixture.");
         windowTwo.SavedInPageBreakPreview = true;
@@ -750,6 +768,7 @@ public sealed class LegacyXlsFileAdapterTests
         var printLayoutFingerprints = new List<string>();
         var pageSetupFingerprints = new List<string>();
         var viewStateFingerprints = new List<string>();
+        var sheetCalculationFingerprints = new List<string>();
         var autoFilterFingerprints = new List<string>();
         var sheetProtectionFingerprints = new List<string>();
         var dataValidationFingerprints = new List<string>();
@@ -794,6 +813,10 @@ public sealed class LegacyXlsFileAdapterTests
             pageBreaks += sheet.ColumnBreaks.Count(breakIndex => ToSourceModelIndex(breakIndex) >= 2);
             pageSetupFingerprints.Add(CreateSourcePageSetupFingerprint(sheetIndex, sheet.SheetName, sheet));
             viewStateFingerprints.Add(CreateSourceViewStateFingerprint(sheetIndex, sheet.SheetName, sheet, palette));
+            sheetCalculationFingerprints.Add(CreateSheetCalculationFingerprint(
+                sheetIndex,
+                sheet.SheetName,
+                sheet.ForceFormulaRecalculation));
             if (sheet.Protect || sheet.ScenarioProtect || sheet is HSSFSheet { ObjectProtect: true })
                 sheetProtectionFingerprints.Add(CreateSourceSheetProtectionFingerprint(sheetIndex, sheet.SheetName, sheet));
 
@@ -961,6 +984,7 @@ public sealed class LegacyXlsFileAdapterTests
             .ToArray();
         var workbookViewFingerprints = ReadSourceWorkbookViewFingerprints(hssf);
         var workbookProtectionFingerprints = ReadSourceWorkbookProtectionFingerprints(hssf);
+        var workbookFileSharingFingerprints = ReadSourceWorkbookFileSharingFingerprints(hssf);
         var workbookCalculationFingerprints = ReadSourceWorkbookCalculationFingerprints(hssf);
         var outlineSettingFingerprints = ReadSourceOutlineSettingFingerprints(hssf);
 
@@ -999,7 +1023,9 @@ public sealed class LegacyXlsFileAdapterTests
             SheetVisibilityFingerprints: sheetVisibilityFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             WorkbookViewFingerprints: workbookViewFingerprints,
             WorkbookProtectionFingerprints: workbookProtectionFingerprints,
+            WorkbookFileSharingFingerprints: workbookFileSharingFingerprints,
             WorkbookCalculationFingerprints: workbookCalculationFingerprints,
+            SheetCalculationFingerprints: sheetCalculationFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             CellFingerprints: cellFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             MergeFingerprints: mergeFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             DimensionFingerprints: dimensionFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
@@ -1154,7 +1180,9 @@ public sealed class LegacyXlsFileAdapterTests
             SheetVisibilityFingerprints: sheetVisibilityFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             WorkbookViewFingerprints: [],
             WorkbookProtectionFingerprints: [],
+            WorkbookFileSharingFingerprints: [],
             WorkbookCalculationFingerprints: [],
+            SheetCalculationFingerprints: [],
             CellFingerprints: cellFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             MergeFingerprints: mergeFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             DimensionFingerprints: dimensionFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
@@ -1268,6 +1296,47 @@ public sealed class LegacyXlsFileAdapterTests
         ];
     }
 
+    private static IReadOnlyList<string> ReadImportedWorkbookFileSharingFingerprints(Workbook workbook)
+    {
+        if (workbook.FileSharing is not { } fileSharing)
+            return [];
+
+        return
+        [
+            CreateWorkbookFileSharingFingerprint(
+                fileSharing.ReadOnlyRecommended,
+                fileSharing.UserName,
+                fileSharing.ReservationPassword)
+        ];
+    }
+
+    private static IReadOnlyList<string> ReadSourceWorkbookFileSharingFingerprints(HSSFWorkbook hssf)
+    {
+        if (hssf.Workbook.FindFirstRecordBySid(FileSharingRecord.sid) is not FileSharingRecord fileSharing)
+            return [];
+
+        var readOnlyRecommended = fileSharing.ReadOnly != 0;
+        var userName = string.IsNullOrWhiteSpace(fileSharing.Username) ? null : fileSharing.Username.Trim();
+        var reservationPassword = fileSharing.Password != 0
+            ? ((ushort)fileSharing.Password).ToString("X4", CultureInfo.InvariantCulture)
+            : null;
+
+        if (!readOnlyRecommended &&
+            userName is null &&
+            reservationPassword is null)
+        {
+            return [];
+        }
+
+        return
+        [
+            CreateWorkbookFileSharingFingerprint(
+                readOnlyRecommended,
+                userName,
+                reservationPassword)
+        ];
+    }
+
     private static IReadOnlyList<string> ReadImportedWorkbookCalculationFingerprints(Workbook workbook) =>
     [
         CreateWorkbookCalculationFingerprint(
@@ -1321,6 +1390,15 @@ public sealed class LegacyXlsFileAdapterTests
 
         return firstSheet.Sheet.FindFirstRecordBySid(sid) as TRecord;
     }
+
+    private static IReadOnlyList<string> ReadImportedSheetCalculationFingerprints(Workbook workbook) =>
+        workbook.Sheets
+            .Select((sheet, sheetIndex) => CreateSheetCalculationFingerprint(
+                sheetIndex,
+                sheet.Name,
+                sheet.FullCalculationOnLoad))
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
 
     private static IReadOnlyList<string> ReadImportedCellFingerprints(Workbook workbook) =>
         workbook.Sheets
@@ -1728,6 +1806,7 @@ public sealed class LegacyXlsFileAdapterTests
                 sheet.ShowGridlines,
                 sheet.ShowHeadings,
                 sheet.ShowFormulas,
+                sheet.ShowZeros,
                 sheet.ViewTopRow,
                 sheet.ViewLeftCol,
                 sheet.ActiveRow,
@@ -1877,6 +1956,7 @@ public sealed class LegacyXlsFileAdapterTests
             sheet.DisplayGridlines,
             sheet.DisplayRowColHeadings,
             sheet.DisplayFormulas,
+            sheet.DisplayZeros,
             sheet.TopRow > 0 ? ToSourceModelIndex(sheet.TopRow) : null,
             sheet.LeftCol > 0 ? ToSourceModelIndex(sheet.LeftCol) : null,
             hasActiveCell ? ToSourceModelIndex(activeCell.Row) : null,
@@ -2036,6 +2116,17 @@ public sealed class LegacyXlsFileAdapterTests
             $"LockWindows={lockWindows}"
         ]);
 
+    private static string CreateWorkbookFileSharingFingerprint(
+        bool? readOnlyRecommended,
+        string? userName,
+        string? reservationPassword) =>
+        string.Join("|", [
+            "WorkbookFileSharing",
+            $"ReadOnly={FormatNullableBool(readOnlyRecommended)}",
+            $"User={EscapeToken(userName ?? "")}",
+            $"Password={reservationPassword ?? ""}"
+        ]);
+
     private static string CreateWorkbookCalculationFingerprint(
         WorkbookCalculationMode mode,
         bool fullCalculationOnLoad,
@@ -2050,6 +2141,12 @@ public sealed class LegacyXlsFileAdapterTests
             $"Count={FormatNullableInt(maxCalculationIterations)}",
             $"Delta={(maxCalculationChange is { } value ? FormatDouble(value) : "null")}"
         ]);
+
+    private static string CreateSheetCalculationFingerprint(
+        int sheetIndex,
+        string sheetName,
+        bool fullCalculationOnLoad) =>
+        $"{sheetIndex}:{sheetName}|SheetCalculation|Full={fullCalculationOnLoad}";
 
     private static string NormalizeSourceSheetVisibility(SheetVisibility visibility) =>
         visibility switch
@@ -2511,6 +2608,7 @@ public sealed class LegacyXlsFileAdapterTests
         bool showGridlines,
         bool showHeadings,
         bool showFormulas,
+        bool showZeros,
         uint? viewTopRow,
         uint? viewLeftCol,
         uint? activeRow,
@@ -2521,7 +2619,7 @@ public sealed class LegacyXlsFileAdapterTests
         string.Join("|", [
             $"{sheetIndex}:{sheetName}",
             $"View={viewMode},{zoomPercent}",
-            $"Display={showGridlines},{showHeadings},{showFormulas}",
+            $"Display={showGridlines},{showHeadings},{showFormulas},{showZeros}",
             $"TopLeft={FormatNullableUInt(viewTopRow)},{FormatNullableUInt(viewLeftCol)}",
             $"Active={FormatNullableUInt(activeRow)},{FormatNullableUInt(activeColumn)}",
             $"Split={FormatNullableUInt(splitRow)},{FormatNullableUInt(splitColumn)}",
@@ -3319,7 +3417,9 @@ public sealed class LegacyXlsFileAdapterTests
         IReadOnlyList<string>? SheetVisibilityFingerprints = null,
         IReadOnlyList<string>? WorkbookViewFingerprints = null,
         IReadOnlyList<string>? WorkbookProtectionFingerprints = null,
+        IReadOnlyList<string>? WorkbookFileSharingFingerprints = null,
         IReadOnlyList<string>? WorkbookCalculationFingerprints = null,
+        IReadOnlyList<string>? SheetCalculationFingerprints = null,
         IReadOnlyList<string>? CellFingerprints = null,
         IReadOnlyList<string>? MergeFingerprints = null,
         IReadOnlyList<string>? DimensionFingerprints = null,

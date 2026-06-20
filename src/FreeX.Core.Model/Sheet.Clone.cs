@@ -29,6 +29,7 @@ public sealed partial class Sheet
             ShowRulers                    = ShowRulers,
             ZoomPercent                   = ZoomPercent,
             ShowFormulas                  = ShowFormulas,
+            ShowZeros                     = ShowZeros,
             FullCalculationOnLoad         = FullCalculationOnLoad,
             PhoneticProperties            = PhoneticProperties,
             PrintArea                     = PrintArea.HasValue ? RemapRange(PrintArea.Value, newId) : null,

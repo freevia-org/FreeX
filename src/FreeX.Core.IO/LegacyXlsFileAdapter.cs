@@ -85,6 +85,7 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         };
         LoadWorkbookView(hssf, workbook);
         LoadWorkbookProtection(hssf, workbook);
+        LoadFileSharing(hssf, workbook);
         LoadCalculationOptions(hssf, workbook);
         if (hssf.ActiveSheetIndex >= 0 && hssf.ActiveSheetIndex < hssf.NumberOfSheets)
             workbook.ActiveSheetIndex = hssf.ActiveSheetIndex;
@@ -198,6 +199,32 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
 
         workbook.ProtectionMetadata = new NativeXmlPreserveBag();
         workbook.ProtectionMetadata.Set("workbookProtection", serializedMetadata);
+    }
+
+    private static void LoadFileSharing(HSSFWorkbook sourceWorkbook, Workbook workbook)
+    {
+        if (sourceWorkbook.Workbook.FindFirstRecordBySid(FileSharingRecord.sid) is not FileSharingRecord fileSharing)
+            return;
+
+        var readOnlyRecommended = fileSharing.ReadOnly != 0;
+        var userName = string.IsNullOrWhiteSpace(fileSharing.Username) ? null : fileSharing.Username.Trim();
+        var reservationPassword = fileSharing.Password != 0
+            ? ((ushort)fileSharing.Password).ToString("X4", CultureInfo.InvariantCulture)
+            : null;
+
+        if (!readOnlyRecommended &&
+            userName is null &&
+            reservationPassword is null)
+        {
+            return;
+        }
+
+        workbook.FileSharing = new WorkbookFileSharingModel
+        {
+            ReadOnlyRecommended = readOnlyRecommended,
+            UserName = userName,
+            ReservationPassword = reservationPassword
+        };
     }
 
     private static void LoadCalculationOptions(HSSFWorkbook sourceWorkbook, Workbook workbook)
@@ -373,6 +400,7 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         LoadPageLayout(sourceSheet, sheet);
         LoadSheetView(sourceSheet, sheet, palette);
         LoadSheetProtection(sourceSheet, sheet);
+        sheet.FullCalculationOnLoad = sourceSheet.ForceFormulaRecalculation;
 
         if (sourceSheet.DefaultColumnWidth > 0)
             sheet.DefaultColumnWidth = sourceSheet.DefaultColumnWidth;
@@ -768,6 +796,7 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         sheet.ShowGridlines = sourceSheet.DisplayGridlines;
         sheet.ShowHeadings = sourceSheet.DisplayRowColHeadings;
         sheet.ShowFormulas = sourceSheet.DisplayFormulas;
+        sheet.ShowZeros = sourceSheet.DisplayZeros;
         if (sourceSheet.TopRow > 0)
             sheet.ViewTopRow = ToModelIndex(sourceSheet.TopRow);
         if (sourceSheet.LeftCol > 0)
