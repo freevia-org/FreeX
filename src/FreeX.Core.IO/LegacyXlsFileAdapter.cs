@@ -106,7 +106,7 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
             LoadSheetLayout(sourceSheet, sheet, palette);
             LoadMergedRegions(sourceSheet, sheet);
             LoadCells(hssf, sourceSheet, workbook, sheet, styleCache);
-            LoadPictures(sourceSheet, sheet);
+            LoadDrawingObjects(sourceSheet, sheet);
         }
 
         if (workbook.Sheets.Count == 0)
@@ -996,7 +996,7 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         }
     }
 
-    private static void LoadPictures(ISheet sourceSheet, Sheet sheet)
+    private static void LoadDrawingObjects(ISheet sourceSheet, Sheet sheet)
     {
         if (sourceSheet is not HSSFSheet { DrawingPatriarch: HSSFPatriarch patriarch })
             return;
@@ -1005,6 +1005,12 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         {
             if (TryCreatePicture(sourcePicture, sheet, out var picture))
                 sheet.Pictures.Add(picture);
+        }
+
+        foreach (var sourceTextBox in EnumerateTextBoxes(patriarch.Children))
+        {
+            if (TryCreateTextBox(sourceTextBox, sheet, out var textBox))
+                sheet.TextBoxes.Add(textBox);
         }
     }
 
@@ -1019,6 +1025,21 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
             {
                 foreach (var nestedPicture in EnumeratePictures(group.Children))
                     yield return nestedPicture;
+            }
+        }
+    }
+
+    private static IEnumerable<HSSFTextbox> EnumerateTextBoxes(IEnumerable<HSSFShape> shapes)
+    {
+        foreach (var shape in shapes)
+        {
+            if (shape is HSSFTextbox textBox && shape is not HSSFComment)
+                yield return textBox;
+
+            if (shape is HSSFShapeGroup group)
+            {
+                foreach (var nestedTextBox in EnumerateTextBoxes(group.Children))
+                    yield return nestedTextBox;
             }
         }
     }
@@ -1056,6 +1077,59 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         if (height > 0)
             picture.Height = height;
 
+        return true;
+    }
+
+    private static bool TryCreateTextBox(HSSFTextbox sourceTextBox, Sheet sheet, out TextBoxModel textBox)
+    {
+        textBox = new TextBoxModel();
+        if (sourceTextBox.Anchor is not HSSFClientAnchor anchor ||
+            anchor.Row1 < 0 ||
+            anchor.Col1 < 0)
+        {
+            return false;
+        }
+
+        var anchorRow = ToModelIndex(Math.Min(anchor.Row1, anchor.Row2));
+        var anchorCol = ToModelIndex(Math.Min(anchor.Col1, anchor.Col2));
+        textBox = new TextBoxModel
+        {
+            Anchor = new ModelCellAddress(sheet.Id, anchorRow, anchorCol),
+            Name = FirstNonBlank(sourceTextBox.Name, sourceTextBox.ShapeName),
+            Text = sourceTextBox.String?.String ?? "",
+            AnchorOffsetX = HssfColumnOffsetToPixels(sheet, anchorCol, Math.Min(anchor.Dx1, anchor.Dx2)),
+            AnchorOffsetY = HssfRowOffsetToPixels(sheet, anchorRow, Math.Min(anchor.Dy1, anchor.Dy2)),
+            RotationDegrees = sourceTextBox.RotationDegree,
+            FlipHorizontal = anchor.IsHorizontallyFlipped || sourceTextBox.FlipHorizontal || sourceTextBox.IsFlipHorizontal,
+            FlipVertical = anchor.IsVerticallyFlipped || sourceTextBox.FlipVertical || sourceTextBox.IsFlipVertical,
+            HasFill = !sourceTextBox.IsNoFill,
+            IsSourceLoaded = true
+        };
+
+        if (TryGetHssfRgbColor(sourceTextBox.FillColor, out var fillColor))
+            textBox.FillColor = fillColor;
+        if (TryGetHssfRgbColor(sourceTextBox.LineStyleColor, out var outlineColor))
+            textBox.OutlineColor = outlineColor;
+
+        var (width, height) = GetHssfAnchorSize(sheet, anchor);
+        if (width > 0)
+            textBox.Width = width;
+        if (height > 0)
+            textBox.Height = height;
+
+        return true;
+    }
+
+    private static bool TryGetHssfRgbColor(int value, out CellColor color)
+    {
+        color = default;
+        if (value < 0 || value > 0xFFFFFF)
+            return false;
+
+        color = new CellColor(
+            (byte)(value & 0xFF),
+            (byte)((value >> 8) & 0xFF),
+            (byte)((value >> 16) & 0xFF));
         return true;
     }
 
