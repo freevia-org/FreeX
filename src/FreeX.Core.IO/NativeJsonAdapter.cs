@@ -46,6 +46,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
         workbook.ActiveSheetIndex = NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(dto.ActiveSheetIndex, Math.Max(0, (dto.Sheets?.Count ?? 1) - 1));
         workbook.FileVersion = ToWorkbookFileVersion(dto.FileVersion);
         workbook.CountrySettings = ToWorkbookCountrySettings(dto.CountrySettings);
+        workbook.LegacyMenuSettings = ToWorkbookLegacyMenuSettings(dto.LegacyMenuSettings);
         workbook.FileSharing = ToWorkbookFileSharing(dto.FileSharing);
         foreach (var fileRecoveryProperties in (dto.FileRecoveryProperties ?? []).Select(ToWorkbookFileRecoveryProperties).OfType<WorkbookFileRecoveryPropertiesModel>())
             workbook.FileRecoveryProperties.Add(fileRecoveryProperties);

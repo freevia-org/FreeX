@@ -137,6 +137,29 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_RoundTrip_WorkbookLegacyMenuSettings()
+    {
+        var workbook = new Workbook("LegacyMenuSettingsNativeJson")
+        {
+            LegacyMenuSettings = new WorkbookLegacyMenuSettingsModel
+            {
+                AddMenuCount = 3,
+                DeleteMenuCount = 1
+            }
+        };
+        workbook.AddSheet("Sheet1");
+
+        using var stream = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var loaded = adapter.Load(stream);
+
+        loaded.LegacyMenuSettings.Should().BeEquivalentTo(workbook.LegacyMenuSettings);
+    }
+
+    [Fact]
     public void NativeJsonAdapter_RoundTrip_WorkbookProperties()
     {
         var workbook = new Workbook("WorkbookPropertiesNativeJson")

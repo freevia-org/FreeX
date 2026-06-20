@@ -99,6 +99,7 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         };
         LoadWorkbookView(hssf, workbook);
         LoadWorkbookCountrySettings(hssf, workbook);
+        LoadWorkbookLegacyMenuSettings(hssf, workbook);
         LoadWorkbookProperties(hssf, workbook);
         LoadWorkbookProtection(hssf, workbook);
         LoadFileSharing(hssf, workbook);
@@ -199,6 +200,23 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         {
             DefaultCountryId = PositiveOrNull(country.DefaultCountry),
             CurrentCountryId = PositiveOrNull(country.CurrentCountry)
+        };
+    }
+
+    private static void LoadWorkbookLegacyMenuSettings(HSSFWorkbook sourceWorkbook, Workbook workbook)
+    {
+        if (sourceWorkbook.Workbook.FindFirstRecordBySid(MMSRecord.sid) is not MMSRecord menuSettings)
+            return;
+
+        var addMenuCount = PositiveOrNull(menuSettings.AddMenuCount);
+        var deleteMenuCount = PositiveOrNull(menuSettings.DelMenuCount);
+        if (addMenuCount is null && deleteMenuCount is null)
+            return;
+
+        workbook.LegacyMenuSettings = new WorkbookLegacyMenuSettingsModel
+        {
+            AddMenuCount = addMenuCount,
+            DeleteMenuCount = deleteMenuCount
         };
     }
 

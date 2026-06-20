@@ -73,6 +73,38 @@ public sealed partial class NativeJsonAdapter
             };
     }
 
+    private static WorkbookLegacyMenuSettingsModel? ToWorkbookLegacyMenuSettings(WorkbookLegacyMenuSettingsDto? dto)
+    {
+        if (dto is null)
+            return null;
+
+        var addMenuCount = NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(dto.AddMenuCount, ushort.MaxValue);
+        var deleteMenuCount = NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(dto.DeleteMenuCount, ushort.MaxValue);
+        return addMenuCount is null && deleteMenuCount is null
+            ? null
+            : new WorkbookLegacyMenuSettingsModel
+            {
+                AddMenuCount = addMenuCount,
+                DeleteMenuCount = deleteMenuCount
+            };
+    }
+
+    private static WorkbookLegacyMenuSettingsDto? FromWorkbookLegacyMenuSettings(WorkbookLegacyMenuSettingsModel? menuSettings)
+    {
+        if (menuSettings is null)
+            return null;
+
+        var addMenuCount = NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(menuSettings.AddMenuCount, ushort.MaxValue);
+        var deleteMenuCount = NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(menuSettings.DeleteMenuCount, ushort.MaxValue);
+        return addMenuCount is null && deleteMenuCount is null
+            ? null
+            : new WorkbookLegacyMenuSettingsDto
+            {
+                AddMenuCount = addMenuCount,
+                DeleteMenuCount = deleteMenuCount
+            };
+    }
+
     private static bool IsSupportedFormulaErrorCode(string? errorCode) =>
         string.Equals(errorCode, ErrorValue.DivByZero.Code, StringComparison.OrdinalIgnoreCase) ||
         string.Equals(errorCode, ErrorValue.Value.Code, StringComparison.OrdinalIgnoreCase) ||
