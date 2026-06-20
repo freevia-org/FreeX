@@ -103,6 +103,7 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         if (workbook.Sheets.Count == 0)
             workbook.AddSheet("Sheet1");
 
+        LoadDataValidations(hssf, workbook);
         LoadDefinedNames(hssf, workbook);
 
         return workbook;
@@ -205,6 +206,118 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
             sheet.ProtectionMetadata = metadata;
         }
     }
+
+    private static void LoadDataValidations(HSSFWorkbook sourceWorkbook, Workbook workbook)
+    {
+        if (sourceWorkbook.NumberOfSheets == 0 || workbook.Sheets.Count == 0)
+            return;
+
+        for (var sheetIndex = 0; sheetIndex < sourceWorkbook.NumberOfSheets && sheetIndex < workbook.Sheets.Count; sheetIndex++)
+        {
+            if (sourceWorkbook.GetSheetAt(sheetIndex) is not HSSFSheet sourceSheet)
+                continue;
+
+            var sheet = workbook.GetSheetAt(sheetIndex);
+
+            IReadOnlyList<IDataValidation> validations;
+            try
+            {
+                validations = sourceSheet.GetDataValidations();
+            }
+            catch
+            {
+                continue;
+            }
+
+            foreach (var sourceValidation in validations)
+            {
+                if (TryCreateDataValidation(sourceValidation, sheet.Id, out var validation))
+                    sheet.DataValidations.Add(validation);
+            }
+        }
+    }
+
+    private static bool TryCreateDataValidation(
+        IDataValidation sourceValidation,
+        SheetId sheetId,
+        out DataValidation validation)
+    {
+        validation = new DataValidation();
+        var regions = sourceValidation.Regions?.CellRangeAddresses;
+        if (regions is null || regions.Length == 0)
+            return false;
+
+        validation.AppliesTo = ToGridRange(regions[0], sheetId);
+        foreach (var region in regions.Skip(1))
+            validation.AdditionalRanges.Add(ToGridRange(region, sheetId));
+
+        var constraint = sourceValidation.ValidationConstraint;
+        validation.Type = MapDataValidationType(constraint.GetValidationType());
+        validation.Operator = MapDataValidationOperator(constraint.Operator);
+        validation.AllowBlank = sourceValidation.EmptyCellAllowed;
+        validation.ShowDropdown = !sourceValidation.SuppressDropDownArrow;
+        validation.AlertStyle = MapDataValidationAlertStyle(sourceValidation.ErrorStyle);
+        validation.ShowInputMessage = sourceValidation.ShowPromptBox;
+        validation.ShowErrorMessage = sourceValidation.ShowErrorBox;
+        validation.ErrorTitle = NullIfEmpty(sourceValidation.ErrorBoxTitle);
+        validation.ErrorMessage = NullIfEmpty(sourceValidation.ErrorBoxText);
+        validation.PromptTitle = NullIfEmpty(sourceValidation.PromptBoxTitle);
+        validation.PromptMessage = NullIfEmpty(sourceValidation.PromptBoxText);
+
+        if (validation.Type == DvType.List && constraint.ExplicitListValues is { Length: > 0 } explicitValues)
+        {
+            validation.Formula1 = string.Join(",", explicitValues);
+        }
+        else
+        {
+            validation.Formula1 = NullIfEmpty(constraint.Formula1);
+            validation.Formula2 = NullIfEmpty(constraint.Formula2);
+        }
+
+        return true;
+    }
+
+    private static GridRange ToGridRange(CellRangeAddressBase range, SheetId sheetId) =>
+        new(
+            new ModelCellAddress(sheetId, ToModelIndex(range.FirstRow), ToModelIndex(range.FirstColumn)),
+            new ModelCellAddress(sheetId, ToModelIndex(range.LastRow), ToModelIndex(range.LastColumn)));
+
+    private static DvType MapDataValidationType(int validationType) =>
+        validationType switch
+        {
+            ValidationType.INTEGER => DvType.WholeNumber,
+            ValidationType.DECIMAL => DvType.Decimal,
+            ValidationType.LIST => DvType.List,
+            ValidationType.DATE => DvType.Date,
+            ValidationType.TIME => DvType.Time,
+            ValidationType.TEXT_LENGTH => DvType.TextLength,
+            ValidationType.FORMULA => DvType.Custom,
+            _ => DvType.Any
+        };
+
+    private static DvOperator MapDataValidationOperator(int operatorType) =>
+        operatorType switch
+        {
+            OperatorType.NOT_BETWEEN => DvOperator.NotBetween,
+            OperatorType.EQUAL => DvOperator.Equal,
+            OperatorType.NOT_EQUAL => DvOperator.NotEqual,
+            OperatorType.GREATER_THAN => DvOperator.GreaterThan,
+            OperatorType.LESS_THAN => DvOperator.LessThan,
+            OperatorType.GREATER_OR_EQUAL => DvOperator.GreaterThanOrEqual,
+            OperatorType.LESS_OR_EQUAL => DvOperator.LessThanOrEqual,
+            _ => DvOperator.Between
+        };
+
+    private static DvAlertStyle MapDataValidationAlertStyle(int errorStyle) =>
+        errorStyle switch
+        {
+            ERRORSTYLE.WARNING => DvAlertStyle.Warning,
+            ERRORSTYLE.INFO => DvAlertStyle.Information,
+            _ => DvAlertStyle.Stop
+        };
+
+    private static string? NullIfEmpty(string? value) =>
+        string.IsNullOrEmpty(value) ? null : value;
 
     private static void LoadColumnOutlineLevels(ISheet sourceSheet, Sheet sheet)
     {
