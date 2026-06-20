@@ -1223,8 +1223,8 @@ public sealed class DocumentView : Control
 
     /// <summary>
     /// Resolve a run's effective display formatting by cascading the paragraph's named style under it
-    /// (run override wins; then the style's Run; then the document default size). Display-only — the
-    /// model runs stay raw so the StyleId link round-trips on save. BasedOn chains are not followed (MVP).
+    /// (run override wins; then the style chain's Run values; then the document default size). Display-only —
+    /// the model runs stay raw so the StyleId link round-trips on save.
     /// </summary>
     private RunFormatting ResolveRunFmt(RunFormatting raw, Paragraph paragraph)
     {
