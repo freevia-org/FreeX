@@ -31,10 +31,14 @@ internal readonly record struct XlsxClosedXmlLoadSanitizationHints(
     bool? HasWorkbookNativeMetadataSchemaIssues,
     bool? HasWorksheetRelationshipMarkerSchemaIssues,
     bool? HasWorksheetNativeMetadataSchemaIssues,
-    IReadOnlySet<string>? MergeCellWorksheetPathsToStrip);
+    IReadOnlySet<string>? MergeCellWorksheetPathsToStrip,
+    bool? HasCalculationChainPackagePart = null);
 
 internal static class XlsxClosedXmlLoadPackageSanitizer
 {
+    private const string CalculationChainRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain";
+
     public static MemoryStream Create(MemoryStream sourcePackage) =>
         Create(sourcePackage, removeUnsupportedConditionalFormatting: false);
 
@@ -130,6 +134,8 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
                 NormalizeWorksheetRelationshipMarkers(archive);
             if (requirements.HasWorksheetNativeMetadataSchemaIssues)
                 NormalizeWorksheetNativeMetadata(archive);
+            if (requirements.HasCalculationChainPackagePart)
+                RemoveCalculationChainPackagePart(archive);
             if (requirements.MergeCellWorksheetPathsToStrip is { Count: > 0 } mergeCellWorksheetPaths)
                 RemoveWorksheetMergeCells(archive, mergeCellWorksheetPaths);
             if (requirements.HasDocumentPropertiesPackageGraphIssues)
@@ -259,11 +265,12 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
                 ResolveKnownOrScan(knownHints.HasWorkbookNativeMetadataSchemaIssues, archive, HasWorkbookNativeMetadataSchemaIssues),
                 ResolveKnownOrScan(knownHints.HasWorksheetRelationshipMarkerSchemaIssues, archive, HasWorksheetRelationshipMarkerSchemaIssues),
                 ResolveKnownOrScan(knownHints.HasWorksheetNativeMetadataSchemaIssues, archive, HasWorksheetNativeMetadataSchemaIssues),
-                knownHints.MergeCellWorksheetPathsToStrip);
+                knownHints.MergeCellWorksheetPathsToStrip,
+                ResolveKnownOrScan(knownHints.HasCalculationChainPackagePart, archive, HasCalculationChainPackagePart));
         }
         catch
         {
-            return new SanitizationRequirements(true, true, true, scanAllConditionalFormatting, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, null);
+            return new SanitizationRequirements(true, true, true, scanAllConditionalFormatting, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, null, true);
         }
         finally
         {
@@ -302,7 +309,8 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             hints.HasWorkbookSmartTagSchemaIssues is not { } hasWorkbookSmartTagSchemaIssues ||
             hints.HasWorkbookNativeMetadataSchemaIssues is not { } hasWorkbookNativeMetadataSchemaIssues ||
             hints.HasWorksheetRelationshipMarkerSchemaIssues is not { } hasWorksheetRelationshipMarkerSchemaIssues ||
-            hints.HasWorksheetNativeMetadataSchemaIssues is not { } hasWorksheetNativeMetadataSchemaIssues)
+            hints.HasWorksheetNativeMetadataSchemaIssues is not { } hasWorksheetNativeMetadataSchemaIssues ||
+            hints.HasCalculationChainPackagePart is not { } hasCalculationChainPackagePart)
         {
             return false;
         }
@@ -346,7 +354,8 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             hasWorkbookNativeMetadataSchemaIssues,
             hasWorksheetRelationshipMarkerSchemaIssues,
             hasWorksheetNativeMetadataSchemaIssues,
-            hints.MergeCellWorksheetPathsToStrip);
+            hints.MergeCellWorksheetPathsToStrip,
+            hasCalculationChainPackagePart);
         return true;
     }
 
@@ -583,10 +592,12 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         bool HasWorkbookNativeMetadataSchemaIssues,
         bool HasWorksheetRelationshipMarkerSchemaIssues,
         bool HasWorksheetNativeMetadataSchemaIssues,
-        IReadOnlySet<string>? MergeCellWorksheetPathsToStrip)
+        IReadOnlySet<string>? MergeCellWorksheetPathsToStrip,
+        bool HasCalculationChainPackagePart)
     {
         public bool RequiresAny =>
             HasPivotPackageMetadata ||
+            HasCalculationChainPackagePart ||
             HasChartExChartParts ||
             HasDrawingPackageParts ||
             HasAllConditionalFormattingBlocks ||
@@ -692,7 +703,9 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         {
             var normalizedPath = NormalizeEntryPath(entry.FullName);
             if (requirements.HasPivotPackageMetadata && IsPivotPackageEntry(normalizedPath) ||
-                requirements.HasDrawingPackageParts && IsClosedXmlDrawingPackageEntry(normalizedPath))
+                requirements.HasDrawingPackageParts && IsClosedXmlDrawingPackageEntry(normalizedPath) ||
+                requirements.HasCalculationChainPackagePart &&
+                string.Equals(normalizedPath, "xl/calcChain.xml", StringComparison.OrdinalIgnoreCase))
             {
                 removedParts.Add(normalizedPath);
             }
@@ -811,8 +824,15 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         if (requirements.HasPivotPackageMetadata)
             return true;
 
-        if (requirements.HasDrawingPackageParts && removedParts.Count > 0)
-            return GetSheetPathFromRelationshipPath(normalizedPath) is not null;
+        if (requirements.HasDrawingPackageParts &&
+            removedParts.Count > 0 &&
+            GetSheetPathFromRelationshipPath(normalizedPath) is not null)
+        {
+            return true;
+        }
+
+        if (requirements.HasCalculationChainPackagePart && removedParts.Count > 0)
+            return string.Equals(normalizedPath, "xl/_rels/workbook.xml.rels", StringComparison.OrdinalIgnoreCase);
 
         return requirements.HasChartExChartParts &&
             chartExParts.Count > 0 &&
@@ -1134,10 +1154,20 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         if (sourcePart is null ||
             relationship.Attribute("Target")?.Value is not { Length: > 0 } target)
         {
-            return false;
+            return requirements.HasCalculationChainPackagePart &&
+                IsCalculationChainRelationship(relationship);
+        }
+
+        if (requirements.HasCalculationChainPackagePart &&
+            IsCalculationChainRelationship(relationship))
+        {
+            return true;
         }
 
         var resolvedTarget = XlsxPackagePath.ResolveRelationshipTarget(sourcePart, target);
+        if (requirements.HasCalculationChainPackagePart && removedParts.Contains(resolvedTarget))
+            return true;
+
         if (requirements.HasDrawingPackageParts && removedParts.Contains(resolvedTarget))
             return true;
 
@@ -1237,6 +1267,9 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
     private static bool HasDrawingPackageParts(ZipArchive archive) =>
         archive.Entries.Any(entry => IsClosedXmlDrawingPackageEntry(entry.FullName));
 
+    private static bool HasCalculationChainPackagePart(ZipArchive archive) =>
+        archive.GetEntry("xl/calcChain.xml") is not null;
+
     private static HashSet<string> GetChartExPartNames(ZipArchive archive)
     {
         const string chartExContentType = "application/vnd.ms-office.chartex+xml";
@@ -1309,6 +1342,46 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         RemoveSheetDrawingReferences(archive);
         RemoveSheetDrawingRelationships(archive, removedParts);
         RemoveContentTypeOverrides(archive, removedParts);
+    }
+
+    private static void RemoveCalculationChainPackagePart(ZipArchive archive)
+    {
+        var calcChainEntry = archive.GetEntry("xl/calcChain.xml");
+        if (calcChainEntry is null)
+            return;
+
+        calcChainEntry.Delete();
+        var removedParts = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "xl/calcChain.xml"
+        };
+        RemoveWorkbookCalculationChainRelationship(archive, removedParts);
+        RemoveContentTypeOverrides(archive, removedParts);
+    }
+
+    private static void RemoveWorkbookCalculationChainRelationship(
+        ZipArchive archive,
+        IReadOnlySet<string> removedParts)
+    {
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var relsEntry = archive.GetEntry("xl/_rels/workbook.xml.rels");
+        if (relsEntry is null)
+            return;
+
+        var relsXml = XlsxPackageXmlEditor.LoadXml(relsEntry);
+        var relationships = relsXml.Root?
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                IsCalculationChainRelationship(relationship) ||
+                relationship.Attribute("Target")?.Value is { Length: > 0 } target &&
+                removedParts.Contains(XlsxPackagePath.ResolveRelationshipTarget("xl/workbook.xml", target)))
+            .ToList()
+            ?? [];
+        if (relationships.Count == 0)
+            return;
+
+        relationships.Remove();
+        XlsxPackageXmlEditor.ReplaceXml(archive, relsEntry.FullName, relsXml);
     }
 
     private static bool IsClosedXmlDrawingPackageEntry(string path)
@@ -1425,6 +1498,12 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
 
     private static string NormalizePartName(string partName) =>
         XlsxPackagePath.NormalizePackagePath(partName.Trim());
+
+    private static bool IsCalculationChainRelationship(XElement relationship) =>
+        string.Equals(
+            relationship.Attribute("Type")?.Value,
+            CalculationChainRelationshipType,
+            StringComparison.OrdinalIgnoreCase);
 
     private static string NormalizeEntryPath(string path) =>
         XlsxPackagePath.NormalizePackagePath(path);

@@ -56,9 +56,9 @@ internal static class CorpusManifestResolver
             }
 
             var fullPath = Path.GetFullPath(Path.Combine(manifestDirectory, row.RelativePath));
-            if (!string.Equals(Path.GetExtension(fullPath), ".xlsx", StringComparison.OrdinalIgnoreCase))
+            if (!IsSupportedOpenXmlSpreadsheetWorkbook(fullPath))
             {
-                skipped.Add(new CorpusManifestSkip(row, "not-xlsx", fullPath));
+                skipped.Add(new CorpusManifestSkip(row, "not-supported-openxml-spreadsheet", fullPath));
                 continue;
             }
 
@@ -149,6 +149,13 @@ internal static class CorpusManifestResolver
         }
 
         return new CorpusManifestSelection(manifestPath, inputs, skipped);
+    }
+
+    private static bool IsSupportedOpenXmlSpreadsheetWorkbook(string path)
+    {
+        var extension = Path.GetExtension(path);
+        return extension.Equals(".xlsx", StringComparison.OrdinalIgnoreCase) ||
+            extension.Equals(".xlsm", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool CanCreateGeneratedFixture(CorpusManifestRow row) =>

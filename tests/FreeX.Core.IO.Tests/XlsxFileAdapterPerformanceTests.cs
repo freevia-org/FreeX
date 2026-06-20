@@ -11,6 +11,9 @@ namespace FreeX.Core.IO.Tests;
 
 public sealed partial class XlsxFileAdapterPerformanceTests
 {
+    private static string CoinToolCorpusWorkbookPath =>
+        TestWorkspaceFiles.FindRepoFile("test-corpus", "public", "COIN_Tool_v1_FULL_exampledata.xlsm");
+
     private static void PrepareLoadedWorkbookForEdit(Workbook workbook)
     {
         XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
@@ -72,6 +75,40 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         }
 
         successfulLoads.Should().BeGreaterThan(0);
+    }
+
+    [BenchmarkFact]
+    [Trait("Category", "ExternalWorkbook")]
+    public void Benchmark_LoadCoinToolCorpusWorkbook_ReportsTimingWhenAvailable()
+    {
+        var path = CoinToolCorpusWorkbookPath;
+        if (!File.Exists(path))
+        {
+            Console.WriteLine(
+                "PERF XLSM_LOAD_COIN_TOOL_CORPUS skipped=true " +
+                $"reason=CORPUS_WORKBOOK_NOT_FOUND path=\"{path}\"");
+            return;
+        }
+
+        var adapter = new XlsxFileAdapter();
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+        using var stream = File.OpenRead(path);
+        var workbook = adapter.Load(stream);
+        stopwatch.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        workbook.SheetCount.Should().BeGreaterThan(0);
+        Console.WriteLine(
+            "PERF XLSM_LOAD_COIN_TOOL_CORPUS " +
+            $"file=\"{Path.GetFileName(path)}\" " +
+            $"bytes={new FileInfo(path).Length:N0} sheets={workbook.SheetCount} " +
+            $"cells={workbook.Sheets.Sum(sheet => sheet.CellCount):N0} " +
+            $"elapsed_ms={stopwatch.Elapsed.TotalMilliseconds:F2} allocated_bytes={allocatedBytes:N0}");
     }
 
     [BenchmarkFact]
