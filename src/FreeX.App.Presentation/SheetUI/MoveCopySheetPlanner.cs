@@ -89,14 +89,12 @@ public static class MoveCopySheetPlanner
     /// </summary>
     public static int ResolveCopyTargetIndex(int sourceIndex, int insertBeforeIndex, int originalSheetCount)
     {
+        _ = sourceIndex;
         var newSheetCount = Math.Max(1, originalSheetCount + 1);
         var lastIndex = newSheetCount - 1;
         if (insertBeforeIndex >= originalSheetCount)
             return lastIndex;
 
-        var adjustedInsertBeforeIndex = insertBeforeIndex > sourceIndex
-            ? insertBeforeIndex + 1
-            : insertBeforeIndex;
-        return Math.Clamp(adjustedInsertBeforeIndex, 0, lastIndex);
+        return Math.Clamp(insertBeforeIndex, 0, lastIndex);
     }
 }

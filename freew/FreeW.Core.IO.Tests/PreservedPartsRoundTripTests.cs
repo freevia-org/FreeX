@@ -18,10 +18,17 @@ public class PreservedPartsRoundTripTests
     private static readonly XNamespace R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
     private static readonly XNamespace Ct = "http://schemas.openxmlformats.org/package/2006/content-types";
     private static readonly XNamespace Rel = "http://schemas.openxmlformats.org/package/2006/relationships";
+    private static readonly XNamespace AppProps = "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties";
+    private static readonly XNamespace CustomProps = "http://schemas.openxmlformats.org/officeDocument/2006/custom-properties";
+    private static readonly XNamespace Vt = "http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes";
 
     private const string CustomXmlRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml";
     private const string CustomXmlPropsContentType = "application/vnd.openxmlformats-officedocument.customXmlProperties+xml";
     private const string WebSettingsContentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.webSettings+xml";
+    private const string CustomPropertiesContentType = "application/vnd.openxmlformats-officedocument.custom-properties+xml";
+    private const string ExtendedPropertiesContentType = "application/vnd.openxmlformats-officedocument.extended-properties+xml";
+    private const string CustomPropertiesRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties";
+    private const string ExtendedPropertiesRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties";
 
     private static byte[] WriteBytes(TextDocument document)
     {
@@ -155,6 +162,74 @@ public class PreservedPartsRoundTripTests
         return stream.ToArray();
     }
 
+    private static byte[] AuthorPackageWithDocumentMetadata()
+    {
+        using var stream = new MemoryStream();
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            void Add(string path, string content)
+            {
+                var entry = zip.CreateEntry(path, CompressionLevel.Optimal);
+                using var s = entry.Open();
+                var bytes = Encoding.UTF8.GetBytes(content);
+                s.Write(bytes, 0, bytes.Length);
+            }
+
+            Add("[Content_Types].xml",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+                  <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
+                  <Override PartName="/docProps/custom.xml" ContentType="application/vnd.openxmlformats-officedocument.custom-properties+xml"/>
+                </Types>
+                """);
+
+            Add("_rels/.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+                  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>
+                  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties" Target="docProps/custom.xml"/>
+                </Relationships>
+                """);
+
+            Add("word/document.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+                  <w:body>
+                    <w:p><w:r><w:t>Metadata body</w:t></w:r></w:p>
+                    <w:sectPr/>
+                  </w:body>
+                </w:document>
+                """);
+
+            Add("docProps/app.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
+                  <Application>Microsoft Word</Application>
+                  <Company>Contoso</Company>
+                  <Template>Normal.dotm</Template>
+                </Properties>
+                """);
+
+            Add("docProps/custom.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
+                  <property fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}" pid="2" name="Project"><vt:lpwstr>Apollo</vt:lpwstr></property>
+                  <property fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}" pid="3" name="Reviewed"><vt:bool>true</vt:bool></property>
+                </Properties>
+                """);
+        }
+        return stream.ToArray();
+    }
+
     // --- settings.xml: preserve + overlay -----------------------------------------------------------
 
     [Fact]
@@ -261,6 +336,71 @@ public class PreservedPartsRoundTripTests
         EntryBytes(twice, "customXml/item1.xml").Should().Equal(EntryBytes(once, "customXml/item1.xml"));
         EntryBytes(twice, "word/webSettings.xml").Should().Equal(EntryBytes(once, "word/webSettings.xml"));
         HasEntry(twice, "customXml/_rels/item1.xml.rels").Should().BeTrue();
+    }
+
+    [Fact]
+    public void DocumentMetadataParts_SurviveWithPackageRelationshipsAndContentTypes()
+    {
+        var source = AuthorPackageWithDocumentMetadata();
+        var read = ReadDoc(source);
+
+        read.Preserved.Parts.Select(p => p.PartName).Should().Contain("/docProps/app.xml");
+        read.Preserved.OriginalCustomProperties.Should().NotBeNull();
+
+        var rewritten = WriteBytes(read);
+        var app = EntryXml(rewritten, "docProps/app.xml").Root!;
+        app.Element(AppProps + "Application")!.Value.Should().Be("Microsoft Word");
+        app.Element(AppProps + "Company")!.Value.Should().Be("Contoso");
+        app.Element(AppProps + "Template")!.Value.Should().Be("Normal.dotm");
+
+        var custom = EntryXml(rewritten, "docProps/custom.xml").Root!;
+        custom.Elements(CustomProps + "property").Should().Contain(p =>
+            p.Attribute("name")!.Value == "Project"
+            && p.Element(Vt + "lpwstr")!.Value == "Apollo");
+        custom.Elements(CustomProps + "property").Should().Contain(p =>
+            p.Attribute("name")!.Value == "Reviewed"
+            && p.Element(Vt + "bool")!.Value == "true");
+
+        var overrides = EntryXml(rewritten, "[Content_Types].xml").Root!.Elements(Ct + "Override")
+            .ToDictionary(o => o.Attribute("PartName")!.Value, o => o.Attribute("ContentType")!.Value);
+        overrides["/docProps/app.xml"].Should().Be(ExtendedPropertiesContentType);
+        overrides["/docProps/custom.xml"].Should().Be(CustomPropertiesContentType);
+
+        var packageRels = EntryXml(rewritten, "_rels/.rels").Root!.Elements(Rel + "Relationship").ToList();
+        packageRels.Should().Contain(r =>
+            r.Attribute("Type")!.Value == ExtendedPropertiesRelType
+            && r.Attribute("Target")!.Value == "docProps/app.xml");
+        packageRels.Should().Contain(r =>
+            r.Attribute("Type")!.Value == CustomPropertiesRelType
+            && r.Attribute("Target")!.Value == "docProps/custom.xml");
+    }
+
+    [Fact]
+    public void CustomDocumentProperties_MergeFreeWPropertiesWithoutDroppingExistingProperties()
+    {
+        var read = ReadDoc(AuthorPackageWithDocumentMetadata());
+        read.Page.Watermark = "DRAFT";
+        read.MarkedAsFinal = true;
+
+        var rewritten = WriteBytes(read);
+        var custom = EntryXml(rewritten, "docProps/custom.xml").Root!;
+        var properties = custom.Elements(CustomProps + "property").ToList();
+
+        properties.Should().Contain(p =>
+            p.Attribute("name")!.Value == "Project"
+            && p.Element(Vt + "lpwstr")!.Value == "Apollo");
+        properties.Should().Contain(p =>
+            p.Attribute("name")!.Value == "FreeWWatermark"
+            && p.Element(Vt + "lpwstr")!.Value == "DRAFT");
+        properties.Should().Contain(p =>
+            p.Attribute("name")!.Value == "_MarkAsFinal"
+            && p.Element(Vt + "bool")!.Value == "true");
+        properties.Select(p => p.Attribute("pid")!.Value).Should().OnlyHaveUniqueItems();
+
+        var reread = ReadDoc(rewritten);
+        reread.Page.Watermark.Should().Be("DRAFT");
+        reread.MarkedAsFinal.Should().BeTrue();
+        reread.Preserved.OriginalCustomProperties.Should().NotBeNull();
     }
 
     // --- Regression: authored-from-scratch emits none of these --------------------------------------

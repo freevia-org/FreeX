@@ -243,9 +243,21 @@ foreach ($workflow in $workflows) {
         $errors.Add("$($workflow.Name): workflow YAML must use spaces for indentation, not tabs.")
     }
 
+    $inlineOnPullRequestTarget = $false
+    foreach ($line in $lines) {
+        if ($line -notmatch "^\s*on\s*:\s*(?<events>[^#]*)") {
+            continue
+        }
+
+        $events = $Matches["events"] -replace "['""]", ""
+        if ($events -match "(^|[\s,\[\{])pull_request_target($|[\s,\]\}:,])") {
+            $inlineOnPullRequestTarget = $true
+            break
+        }
+    }
+
     if ($content -match "(?m)^\s*pull_request_target\s*:" -or
-        $content -match "(?m)^\s*on\s*:\s*pull_request_target\s*(?:#.*)?$" -or
-        $content -match "(?m)^\s*on\s*:\s*\[[^\]]*\bpull_request_target\b[^\]]*\]\s*(?:#.*)?$") {
+        $inlineOnPullRequestTarget) {
         $errors.Add("$($workflow.Name): workflow must not use the privileged pull_request_target event.")
     }
 

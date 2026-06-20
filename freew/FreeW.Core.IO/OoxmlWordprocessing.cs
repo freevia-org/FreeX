@@ -135,6 +135,12 @@ internal static class Ooxml
     public const string CustomPropertiesRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties";
     public const string CustomPropertiesPartName = "/docProps/custom.xml";
 
+    // OPC extended properties (docProps/app.xml): application/company/template and other package metadata
+    // Word stores outside the core/custom property model.
+    public const string ExtendedPropertiesContentType = "application/vnd.openxmlformats-officedocument.extended-properties+xml";
+    public const string ExtendedPropertiesRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties";
+    public const string ExtendedPropertiesPartName = "/docProps/app.xml";
+
     /// <summary>The custom-property name under which the FreeW page watermark text is persisted.</summary>
     public const string WatermarkPropertyName = "FreeWWatermark";
 

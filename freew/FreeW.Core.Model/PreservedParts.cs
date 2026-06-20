@@ -107,6 +107,13 @@ public sealed class PreservedParts
     public XElement? OriginalNumbering { get; set; }
 
     /// <summary>
+    /// The original package-level <c>docProps/custom.xml</c> root element captured on read. The writer uses it
+    /// as the base for custom document properties so unmodelled properties survive while FreeW overlays its
+    /// modelled watermark and mark-as-final properties.
+    /// </summary>
+    public XElement? OriginalCustomProperties { get; set; }
+
+    /// <summary>
     /// The unmodelled parts preserved verbatim (customXml items / props / their rels, webSettings, and the
     /// chart/chartex parts + media referenced by a verbatim-preserved inline drawing), in the order they were
     /// captured. Empty for an authored-from-scratch document so nothing extra is emitted.
@@ -122,5 +129,5 @@ public sealed class PreservedParts
     public Dictionary<string, string> ContentTypeDefaults { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>True when nothing is preserved — the authored-from-scratch case.</summary>
-    public bool IsEmpty => OriginalSettings is null && OriginalNumbering is null && Parts.Count == 0;
+    public bool IsEmpty => OriginalSettings is null && OriginalNumbering is null && OriginalCustomProperties is null && Parts.Count == 0;
 }

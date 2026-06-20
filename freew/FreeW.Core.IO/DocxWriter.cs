@@ -117,9 +117,10 @@ public static class DocxWriter
         // emitted only when a watermark is set.
         var hasWatermark = !string.IsNullOrEmpty(document.Page.Watermark);
 
-        // A docProps/custom.xml part is emitted when the watermark OR Word's "Mark as Final" flag needs to
-        // round-trip; both ride in the same custom-properties part.
-        var hasCustomProps = hasWatermark || document.MarkedAsFinal;
+        // A docProps/custom.xml part is emitted when the watermark, Word's "Mark as Final" flag, or
+        // source-package custom properties need to round-trip; all ride in the same custom-properties part.
+        var hasPreservedCustomProps = document.Preserved.OriginalCustomProperties is not null;
+        var hasCustomProps = hasWatermark || document.MarkedAsFinal || hasPreservedCustomProps;
 
         // A word/settings.xml part is emitted only when something needs it — document protection
         // (w:documentProtection), automatic hyphenation (w:autoHyphenation), the different-odd/even-headers
@@ -173,13 +174,14 @@ public static class DocxWriter
         var preservedParts = options.IncludeMacroParts
             ? (IReadOnlyList<PreservedPart>)document.Preserved.Parts
             : document.Preserved.Parts.Where(p => !DocxWriteOptions.IsMacroPart(p.PartName)).ToList();
+        var hasExtendedProps = preservedParts.Any(p => p.PartName == ExtendedPropertiesPartName);
 
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true);
         WritePart(archive, "[Content_Types].xml", BuildContentTypes(imageExtensions, emitNumbering, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasCustomProps, hasSettings, hasBibliography, charts, embeddedObjects.Count > 0, smartArts, hasEmbeddedFonts, preservedParts, document.Preserved.ContentTypeDefaults, options.MainDocumentContentType));
-        WritePart(archive, "_rels/.rels", BuildPackageRels(hasCustomProps));
+        WritePart(archive, "_rels/.rels", BuildPackageRels(hasCustomProps, hasExtendedProps));
         WritePart(archive, "docProps/core.xml", BuildCoreProperties(document.Properties));
         if (hasCustomProps)
-            WritePart(archive, "docProps/custom.xml", BuildCustomProperties(document.Page.Watermark, document.MarkedAsFinal));
+            WritePart(archive, "docProps/custom.xml", BuildCustomProperties(document.Preserved.OriginalCustomProperties, document.Page.Watermark, document.MarkedAsFinal));
         WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, emitNumbering, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasSettings, hasBibliography, charts, embeddedObjects, smartArts, hasEmbeddedFonts, preservedParts));
         WritePart(archive, "word/document.xml", BuildDocument(document, images, charts, embeddedObjects, smartArts, hyperlinks, headerFooterParts, preservedNumbering, restartOverrides, preservedParts));
         WritePart(archive, "word/styles.xml", BuildStyles(document, preservedNumbering));
@@ -749,7 +751,7 @@ public static class DocxWriter
                     new XAttribute("PartName", p.PartName),
                     new XAttribute("ContentType", p.ContentTypeOverride!)))));
 
-    private static XDocument BuildPackageRels(bool hasCustomProps) => new(
+    private static XDocument BuildPackageRels(bool hasCustomProps, bool hasExtendedProps) => new(
         new XElement(Rel + "Relationships",
             new XElement(Rel + "Relationship",
                 new XAttribute("Id", "rId1"),
@@ -764,6 +766,12 @@ public static class DocxWriter
                     new XAttribute("Id", "rIdCustom"),
                     new XAttribute("Type", CustomPropertiesRelType),
                     new XAttribute("Target", "docProps/custom.xml"))
+                : null,
+            hasExtendedProps
+                ? new XElement(Rel + "Relationship",
+                    new XAttribute("Id", "rIdExtended"),
+                    new XAttribute("Type", ExtendedPropertiesRelType),
+                    new XAttribute("Target", "docProps/app.xml"))
                 : null));
 
     /// <summary>
@@ -772,11 +780,26 @@ public static class DocxWriter
     /// named custom properties. This is a standards-compliant OPC custom-properties part. Properties get
     /// sequential pids starting at 2 (pid 0/1 are reserved); only set properties are emitted.
     /// </summary>
-    private static XDocument BuildCustomProperties(string? watermark, bool markedAsFinal)
+    private static XDocument BuildCustomProperties(XElement? originalProperties, string? watermark, bool markedAsFinal)
     {
-        var properties = new XElement(CustomProps + "Properties",
-            new XAttribute(XNamespace.Xmlns + "vt", VtVariant.NamespaceName));
-        var pid = 2;
+        var properties = originalProperties is null
+            ? new XElement(CustomProps + "Properties",
+                new XAttribute(XNamespace.Xmlns + "vt", VtVariant.NamespaceName))
+            : new XElement(originalProperties);
+
+        properties.SetAttributeValue(XNamespace.Xmlns + "vt", VtVariant.NamespaceName);
+        properties.Elements(CustomProps + "property")
+            .Where(p =>
+            {
+                var name = p.Attribute("name")?.Value;
+                return name == WatermarkPropertyName || name == MarkAsFinalPropertyName;
+            })
+            .Remove();
+
+        var pid = Math.Max(2, properties.Elements(CustomProps + "property")
+            .Select(p => int.TryParse(p.Attribute("pid")?.Value, out var parsed) ? parsed + 1 : 2)
+            .DefaultIfEmpty(2)
+            .Max());
         if (!string.IsNullOrEmpty(watermark))
             properties.Add(new XElement(CustomProps + "property",
                 new XAttribute("fmtid", "{D5CDD505-2E9C-101B-9397-08002B2CF9AE}"),

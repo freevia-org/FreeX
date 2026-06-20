@@ -261,6 +261,11 @@ public static class DocxReader
             Capture("/word/webSettings.xml",
                 docRelTypesByTarget.GetValueOrDefault("webSettings.xml") ?? WebSettingsRelType);
 
+        // Package-level extended properties (docProps/app.xml) are not modelled by FreeW, but Word-authored
+        // documents commonly use them for application/company/template metadata.
+        if (archive.GetEntry("docProps/app.xml") is not null)
+            Capture(ExtendedPropertiesPartName, relationshipType: null);
+
         // VBA macro project (.docm/.dotm): word/vbaProject.bin, its optional word/vbaData.xml, and the
         // part-local word/_rels/vbaProject.bin.rels. Preserved verbatim and NEVER executed/deserialized. The
         // content type is forced to a per-part Override (valid OPC, and wins over any source Default-by-
@@ -3689,6 +3694,7 @@ public static class DocxReader
         var root = customXml?.Root;
         if (root is null)
             return;
+        document.Preserved.OriginalCustomProperties = new XElement(root);
 
         var properties = root.Elements(CustomProps + "property").ToList();
 

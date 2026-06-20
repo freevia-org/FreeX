@@ -78,8 +78,8 @@ public sealed class MoveCopySheetPlannerTests
     }
 
     [Theory]
-    // Copying Jan before Mar: after duplication the copy starts at index 1 and Mar shifts to index 3.
-    [InlineData(0, 2, 3, 3)]
+    // Copying Jan before Mar: MoveActiveSheetTo removes the copy before inserting at the final index.
+    [InlineData(0, 2, 3, 2)]
     // Copying Jan to the end of a 3-sheet workbook: the new last index is 3.
     [InlineData(0, 3, 3, 3)]
     // Copying Mar before Jan: destination is still the first slot.
