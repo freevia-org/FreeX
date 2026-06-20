@@ -420,7 +420,8 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         snapshotSource.Should().Contain("cryptoStream.FlushFinalBlock();");
         snapshotSource.Should().Contain("TryPrepareLoadedPackageSnapshotForEdit(Workbook workbook, out string? blockReason)");
         snapshotSource.Should().Contain("TryEnsureCellPatchBaseline(");
-        snapshotSource.Should().Contain("preparedPackage.TryEnsureCellPatchEligibility(workbook, out preparedPackage, out _);");
+        snapshotSource.Should().Contain("sourcePackage.TryEnsureCellPatchEligibility(workbook, out var preparedPackage, out blockReason)");
+        snapshotSource.Should().Contain("preparedPackage.TryEnsureCellPatchBaseline(workbook, out preparedPackage, out blockReason)");
         snapshotSource.Should().Contain("public bool TryEnsureCellPatchEligibility(");
         snapshotSource.Should().Contain("IsCellPatchEligibilityLazy = false");
         snapshotSource.Should().Contain("SourceHasCustomViews");

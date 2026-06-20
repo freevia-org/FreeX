@@ -327,7 +327,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     }
 
     [Fact]
-    public void Save_LoadedWorkbookWithUnpreparedDirectEdit_FallsBackInsteadOfCapturingEditAsBaseline()
+    public void Save_LoadedWorkbookWithUnpreparedDirectEdit_FallsBackOnPatchValidationDelta()
     {
         var sourceBytes = CreateSourcePackage();
         var adapter = new XlsxFileAdapter();
@@ -342,7 +342,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         adapter.Save(workbook, saved);
 
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave);
-        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_blocked_deferred_baseline_not_materialized");
+        adapter.LastSaveDiagnostics.Reason.Should().Be("change_unsupported_model_delta");
     }
 
     [Fact]
@@ -371,7 +371,10 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         Workbook workbook;
         using (var source = new MemoryStream(sourceBytes, writable: false))
             workbook = adapter.Load(source);
-        PrepareLoadedWorkbookForEdit(workbook);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeFalse();
+        blockReason.Should().Be("package_guard_digital_signatures");
 
         using var saved = new MemoryStream();
         adapter.Save(workbook, saved);
@@ -389,7 +392,10 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         Workbook workbook;
         using (var source = new MemoryStream(sourceBytes, writable: false))
             workbook = adapter.Load(source);
-        PrepareLoadedWorkbookForEdit(workbook);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeFalse();
+        blockReason.Should().Be("package_guard_digital_signatures");
 
         var sheet = workbook.GetSheetAt(0);
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("edited signed workbook"));
@@ -971,6 +977,72 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     }
 
     [Fact]
+    public void Save_LoadedWorkbookWithLegacyCommentAndPictureVmlDrawing_PatchesSourcePackage()
+    {
+        var sourceBytes = AddPictureShapeToLegacyCommentVml(CreateLegacyCommentSourcePackage());
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("cell patched"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        ReadCellText(savedBytes, "xl/worksheets/sheet1.xml", "A1")
+            .Should()
+            .Be("cell patched");
+        ReadPackageEntry(savedBytes, "xl/drawings/vmlDrawing1.vml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/drawings/vmlDrawing1.vml"));
+        ReadPackageEntry(savedBytes, "xl/drawings/_rels/vmlDrawing1.vml.rels")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/drawings/_rels/vmlDrawing1.vml.rels"));
+        ReadPackageEntry(savedBytes, "xl/media/image1.png")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/media/image1.png"));
+    }
+
+    [Fact]
+    public void Save_LoadedWorkbookWithPictureOnlyLegacyDrawing_PatchesSourcePackage()
+    {
+        var sourceBytes = CreatePictureOnlyLegacyDrawingSourcePackage();
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("cell patched"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        ReadPackageEntry(savedBytes, "xl/worksheets/_rels/sheet1.xml.rels")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/worksheets/_rels/sheet1.xml.rels"));
+        ReadPackageEntry(savedBytes, "xl/drawings/vmlDrawing1.vml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/drawings/vmlDrawing1.vml"));
+        ReadPackageEntry(savedBytes, "xl/drawings/_rels/vmlDrawing1.vml.rels")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/drawings/_rels/vmlDrawing1.vml.rels"));
+        ReadPackageEntry(savedBytes, "xl/media/image1.png")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/media/image1.png"));
+    }
+
+    [Fact]
     public void Save_LoadedWorkbookWithAddedLegacyComment_FallsBackToFullSave()
     {
         var sourceBytes = CreateLegacyCommentSourcePackage();
@@ -1000,7 +1072,10 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         Workbook workbook;
         using (var source = new MemoryStream(sourceBytes, writable: false))
             workbook = adapter.Load(source);
-        PrepareLoadedWorkbookForEdit(workbook);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeFalse();
+        blockReason.Should().Be("package_guard_legacy_drawing_vml");
 
         var sheet = workbook.GetSheetAt(0);
         sheet.Comments[new CellAddress(sheet.Id, 2, 3)] = "Patched note";
@@ -1286,6 +1361,41 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     }
 
     [Fact]
+    public void Save_LoadedWorkbookWithChartThemeOverrideAndOutsideCellEdit_PatchesSourcePackage()
+    {
+        var sourceBytes = AddChartThemeOverridePackageGraph(CreateChartSourcePackage());
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Charts.Should().ContainSingle();
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 4), new TextValue("theme override patched"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        adapter.LastSaveDiagnostics.CellChangeCount.Should().Be(1);
+        ReadPackageEntry(savedBytes, "xl/charts/chart1.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/charts/chart1.xml"));
+        ReadPackageEntry(savedBytes, "xl/charts/_rels/chart1.xml.rels")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/charts/_rels/chart1.xml.rels"));
+        ReadPackageEntry(savedBytes, "xl/theme/themeOverride1.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/theme/themeOverride1.xml"));
+        ReadCellText(savedBytes, "xl/worksheets/sheet1.xml", "D4")
+            .Should()
+            .Be("theme override patched");
+    }
+
+    [Fact]
     public void Save_LoadedWorkbookWithChartSourceCellEdit_FallsBackToFullSave()
     {
         var sourceBytes = CreateChartSourcePackage();
@@ -1477,6 +1587,45 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         reloadedSheet.GetCell(4, 4)!.Value.Should().Be(new TextValue("shape-adjacent patched"));
         reloadedSheet.TextBoxes.Should().ContainSingle().Which.Text.Should().Be("Review note");
         reloadedSheet.DrawingShapes.Should().ContainSingle().Which.Kind.Should().Be(DrawingShapeKind.Ellipse);
+    }
+
+    [Fact]
+    public void Save_LoadedWorkbookWithOpaqueDrawingShapeAndUnrelatedCellEdit_PatchesSourcePackage()
+    {
+        var sourceBytes = CreateOpaqueDrawingShapeSourcePackage();
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.TextBoxes.Should().ContainSingle();
+        sheet.DrawingShapes.Should().BeEmpty();
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 4), new TextValue("opaque shape patched"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        adapter.LastSaveDiagnostics.CellChangeCount.Should().Be(1);
+        ReadPackageEntry(savedBytes, "xl/drawings/drawing1.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/drawings/drawing1.xml"));
+        ReadPackageEntry(savedBytes, "xl/drawings/_rels/drawing1.xml.rels")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/drawings/_rels/drawing1.xml.rels"));
+        ReadCellText(savedBytes, "xl/worksheets/sheet1.xml", "D4")
+            .Should()
+            .Be("opaque shape patched");
+
+        using var reloadStream = new MemoryStream(savedBytes, writable: false);
+        var reloadedSheet = adapter.Load(reloadStream).GetSheetAt(0);
+        reloadedSheet.GetCell(4, 4)!.Value.Should().Be(new TextValue("opaque shape patched"));
+        reloadedSheet.TextBoxes.Should().ContainSingle().Which.Text.Should().Be("Review note");
+        reloadedSheet.DrawingShapes.Should().BeEmpty();
     }
 
     [Fact]
@@ -3225,6 +3374,107 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         return package.ToArray();
     }
 
+    private static byte[] AddPictureShapeToLegacyCommentVml(byte[] sourceBytes)
+    {
+        using var stream = new MemoryStream();
+        stream.Write(sourceBytes, 0, sourceBytes.Length);
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            AddLegacyDrawingPictureParts(archive, addPictureShape: true);
+        }
+
+        return stream.ToArray();
+    }
+
+    private static byte[] CreatePictureOnlyLegacyDrawingSourcePackage()
+    {
+        using var stream = new MemoryStream();
+        var sourceBytes = CreateLegacyCommentSourcePackage(vmlObjectType: "Pict");
+        stream.Write(sourceBytes, 0, sourceBytes.Length);
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+            XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+            var contentTypesXml = LoadPackageXml(archive, "[Content_Types].xml");
+            contentTypesXml.Root!
+                .Elements(contentTypeNs + "Override")
+                .Where(element => string.Equals((string?)element.Attribute("PartName"), "/xl/comments1.xml", StringComparison.OrdinalIgnoreCase))
+                .Remove();
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
+
+            archive.GetEntry("xl/comments1.xml")?.Delete();
+            var worksheetRelationshipsXml = LoadPackageXml(archive, "xl/worksheets/_rels/sheet1.xml.rels");
+            worksheetRelationshipsXml.Root!
+                .Elements(relationshipNs + "Relationship")
+                .Where(element => string.Equals(
+                    (string?)element.Attribute("Type"),
+                    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments",
+                    StringComparison.OrdinalIgnoreCase))
+                .Remove();
+            ReplacePackageXml(archive, "xl/worksheets/_rels/sheet1.xml.rels", worksheetRelationshipsXml);
+
+            AddLegacyDrawingPictureParts(archive, addPictureShape: false);
+        }
+
+        return stream.ToArray();
+    }
+
+    private static void AddLegacyDrawingPictureParts(ZipArchive archive, bool addPictureShape)
+    {
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        XNamespace packageRelationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        XNamespace vmlNs = "urn:schemas-microsoft-com:vml";
+        XNamespace officeNs = "urn:schemas-microsoft-com:office:office";
+        XNamespace excelNs = "urn:schemas-microsoft-com:office:excel";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+
+        var contentTypesXml = LoadPackageXml(archive, "[Content_Types].xml");
+        AddContentTypeDefault(contentTypesXml, contentTypeNs, "png", "image/png");
+        ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
+
+        var vmlXml = LoadPackageXml(archive, "xl/drawings/vmlDrawing1.vml");
+        var pictureShape = addPictureShape
+            ? new XElement(
+                vmlNs + "shape",
+                new XAttribute("id", "_x0000_s1026"),
+                new XAttribute("type", "#_x0000_t75"),
+                new XAttribute("style", "position:absolute;margin-left:12pt;margin-top:12pt;width:48pt;height:36pt;z-index:2"),
+                new XElement(vmlNs + "imagedata", new XAttribute(relNs + "id", "rIdImage1"), new XAttribute(officeNs + "title", "COIN-style preserved picture")),
+                new XElement(
+                    excelNs + "ClientData",
+                    new XAttribute("ObjectType", "Pict"),
+                    new XElement(excelNs + "MoveWithCells"),
+                    new XElement(excelNs + "SizeWithCells"),
+                    new XElement(excelNs + "Anchor", "1, 15, 1, 2, 2, 15, 3, 3")))
+            : vmlXml.Descendants(vmlNs + "shape").Single();
+
+        if (!addPictureShape)
+        {
+            pictureShape.AddFirst(new XElement(
+                vmlNs + "imagedata",
+                new XAttribute(relNs + "id", "rIdImage1"),
+                new XAttribute(officeNs + "title", "COIN-style preserved picture")));
+        }
+        else
+        {
+            vmlXml.Root!.Add(pictureShape);
+        }
+
+        ReplacePackageXml(archive, "xl/drawings/vmlDrawing1.vml", vmlXml);
+        ReplacePackageXml(
+            archive,
+            "xl/drawings/_rels/vmlDrawing1.vml.rels",
+            new XDocument(new XElement(
+                packageRelationshipNs + "Relationships",
+                new XElement(
+                    packageRelationshipNs + "Relationship",
+                    new XAttribute("Id", "rIdImage1"),
+                    new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"),
+                    new XAttribute("Target", "../media/image1.png")))));
+        WritePackageBytes(archive, "xl/media/image1.png", [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+    }
+
     private static byte[] CreateStructuredTableSourcePackage(bool includeFilter = false)
     {
         using var package = XlsxPackageTestFixtures.CreatePackage(
@@ -3480,6 +3730,44 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
                 """));
 
         return package.ToArray();
+    }
+
+    private static byte[] AddChartThemeOverridePackageGraph(byte[] sourceBytes)
+    {
+        using var stream = new MemoryStream();
+        stream.Write(sourceBytes, 0, sourceBytes.Length);
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+            XNamespace packageRelationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+
+            var contentTypesXml = LoadPackageXml(archive, "[Content_Types].xml");
+            AddContentTypeOverride(
+                contentTypesXml,
+                contentTypeNs,
+                "/xl/theme/themeOverride1.xml",
+                "application/vnd.openxmlformats-officedocument.themeOverride+xml");
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
+            ReplacePackageXml(
+                archive,
+                "xl/charts/_rels/chart1.xml.rels",
+                new XDocument(new XElement(
+                    packageRelationshipNs + "Relationships",
+                    new XElement(
+                        packageRelationshipNs + "Relationship",
+                        new XAttribute("Id", "rIdTheme1"),
+                        new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/themeOverride"),
+                        new XAttribute("Target", "../theme/themeOverride1.xml")))));
+            ReplacePackageXml(
+                archive,
+                "xl/theme/themeOverride1.xml",
+                new XDocument(new XElement(
+                    drawingNs + "themeOverride",
+                    new XElement(drawingNs + "clrScheme", new XAttribute("name", "Office")))));
+        }
+
+        return stream.ToArray();
     }
 
     private static byte[] CreateSmartArtDiagramSourcePackage()
@@ -3761,6 +4049,36 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
                 """));
 
         return package.ToArray();
+    }
+
+    private static byte[] CreateOpaqueDrawingShapeSourcePackage()
+    {
+        using var stream = new MemoryStream();
+        var sourceBytes = CreateDrawingShapeSourcePackage();
+        stream.Write(sourceBytes, 0, sourceBytes.Length);
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+            XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+
+            var drawingXml = LoadPackageXml(archive, "xl/drawings/drawing1.xml");
+            var opaqueShape = drawingXml
+                .Descendants(spreadsheetDrawingNs + "sp")
+                .Single(element => string.Equals(
+                    (string?)element
+                        .Element(spreadsheetDrawingNs + "nvSpPr")
+                        ?.Element(spreadsheetDrawingNs + "cNvPr")
+                        ?.Attribute("name"),
+                    "Approval Shape",
+                    StringComparison.Ordinal));
+            opaqueShape
+                .Element(spreadsheetDrawingNs + "spPr")!
+                .Element(drawingNs + "prstGeom")!
+                .SetAttributeValue("prst", "gear6");
+            ReplacePackageXml(archive, "xl/drawings/drawing1.xml", drawingXml);
+        }
+
+        return stream.ToArray();
     }
 
     private static byte[] CreatePivotSourcePackage()
