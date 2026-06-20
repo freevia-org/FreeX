@@ -446,6 +446,9 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
             if (TryLoadPrintDefinedName(workbook, definedName))
                 continue;
 
+            if (TryLoadAutoFilterDefinedName(workbook, definedName))
+                continue;
+
             if (IsExcelReservedDefinedName(definedName.NameName) ||
                 workbook.ValidateNamedRangeName(definedName.NameName) is not null)
             {
@@ -467,6 +470,22 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
 
             workbook.NamedFormulas[definedName.NameName] = refersTo.Trim();
         }
+    }
+
+    private static bool TryLoadAutoFilterDefinedName(Workbook workbook, IName definedName)
+    {
+        if (!IsAutoFilterDefinedName(definedName.NameName))
+            return false;
+
+        if (!TryParseNamedRangeRefersTo(workbook, definedName.RefersToFormula, out var range) ||
+            range.Start.Sheet != range.End.Sheet ||
+            workbook.GetSheet(range.Start.Sheet) is not { } sheet)
+        {
+            return true;
+        }
+
+        sheet.AutoFilter = new WorksheetAutoFilterModel(range.ToString(), null);
+        return true;
     }
 
     private static bool TryLoadPrintDefinedName(Workbook workbook, IName definedName)
@@ -807,6 +826,10 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
 
     private static bool IsPrintTitlesDefinedName(string? name) =>
         IsBuiltInDefinedName(name, "Print_Titles");
+
+    private static bool IsAutoFilterDefinedName(string? name) =>
+        IsBuiltInDefinedName(name, "_FilterDatabase") ||
+        IsBuiltInDefinedName(name, "FilterDatabase");
 
     private static bool IsBuiltInDefinedName(string? name, string builtInName)
     {
