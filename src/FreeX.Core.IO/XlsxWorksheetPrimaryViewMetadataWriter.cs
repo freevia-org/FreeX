@@ -135,7 +135,7 @@ internal static class XlsxWorksheetPrimaryViewMetadataWriter
 
         foreach (var attribute in nativeSelection.Attributes())
         {
-            if (attribute.IsNamespaceDeclaration || attribute.Name.LocalName is "activeCell" or "sqref")
+            if (attribute.IsNamespaceDeclaration || attribute.Name.LocalName is "activeCell")
                 continue;
 
             targetSelection.SetAttributeValue(attribute.Name, attribute.Value);
@@ -148,6 +148,12 @@ internal static class XlsxWorksheetPrimaryViewMetadataWriter
         {
             if (string.Equals(selection.Attribute("activeCell")?.Value, nativeActiveCell, StringComparison.Ordinal) &&
                 string.Equals(selection.Attribute("sqref")?.Value, nativeSelectionRef, StringComparison.Ordinal))
+                return selection;
+        }
+
+        foreach (var selection in sheetView.Elements(WorksheetNs + "selection"))
+        {
+            if (string.Equals(selection.Attribute("activeCell")?.Value, nativeActiveCell, StringComparison.Ordinal))
                 return selection;
         }
 

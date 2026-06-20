@@ -15262,6 +15262,8 @@ public partial class FileAdapterSmokeTests
         var workbook = new Workbook("PrimaryViewMetadataSaveTest");
         var sheet = workbook.AddSheet("Sheet1");
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("View metadata"));
+        sheet.ActiveRow = 1;
+        sheet.ActiveCol = 1;
         sheet.PrimaryViewMetadata = MakeBag("sheetView",
             new Dictionary<string, string>(StringComparer.Ordinal)
             {
@@ -15269,7 +15271,10 @@ public partial class FileAdapterSmokeTests
                 ["showZeros"] = "0",
                 ["zoomScale"] = "42"
             },
-            ["<pivotSelection xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" pane=\"topRight\" />"]);
+            [
+                "<selection xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" activeCell=\"A1\" sqref=\"A1:F2\" />",
+                "<pivotSelection xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" pane=\"topRight\" />"
+            ]);
 
         var saved = new MemoryStream();
         new XlsxFileAdapter().Save(workbook, saved);
@@ -15285,6 +15290,7 @@ public partial class FileAdapterSmokeTests
         sheetView.Attribute("rightToLeft")!.Value.Should().Be("1");
         sheetView.Attribute("showZeros")!.Value.Should().Be("0");
         sheetView.Attribute("zoomScale").Should().BeNull("zoomScale is modeled separately");
+        sheetView.Element(worksheetNs + "selection")!.Attribute("sqref")!.Value.Should().Be("A1:F2");
         sheetView.Element(worksheetNs + "pivotSelection")!.Attribute("pane")!.Value.Should().Be("topRight");
     }
 
