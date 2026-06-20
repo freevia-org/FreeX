@@ -38,11 +38,16 @@ public partial class MainWindow
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.NameManager, NamedRangesButton_Click);
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.CreateNamesFromSelection, CreateNamesFromSelectionBtn_Click);
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.InsertFunction, InsertFunctionBtn_Click);
+        _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.PasteName, (_, _) => OpenPasteNamesDialog());
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.SpellCheck, SpellCheckBtn_Click);
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.CloseWorkbook, (_, _) => Close());
+        _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.RestoreWorkbookWindow, (_, _) => RestoreWorkbookWindow());
+        _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.MoveWorkbookWindow, (_, _) => BeginSystemWindowMove());
+        _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.SizeWorkbookWindow, (_, _) => BeginSystemWindowSize());
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.CalculateNow, CalcNowBtn_Click);
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.CalculateSheet, CalcSheetBtn_Click);
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.RebuildDependenciesAndCalculate, (_, _) => RebuildDependenciesAndCalculate());
+        _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.OpenErrorChecking, ErrorCheckBtn_Click);
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.ToggleFormulaBarExpansion, FormulaBarExpandBtn_Click);
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.ToggleFilter, FilterButton_Click);
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.ReapplyFilter, (_, _) => ReapplyAutoFilter());
@@ -63,6 +68,10 @@ public partial class MainWindow
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.OpenHelp, HelpOnlineBtn_Click);
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.ShowKeyTips, (_, _) => EnterRibbonKeyTipMode(RibbonKeyTipScope.TopLevel));
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.CycleShellFocus, (_, _) => CycleShellFocus(reverse: Keyboard.Modifiers == System.Windows.Input.ModifierKeys.Shift));
+        _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.SwitchToNextWorkbookWindow, (_, _) => SwitchWorkbookWindow(forward: true));
+        _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.SwitchToPreviousWorkbookWindow, (_, _) => SwitchWorkbookWindow(forward: false));
+        _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.MinimizeWorkbookWindow, MinimizeBtn_Click);
+        _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.MaximizeOrRestoreWorkbookWindow, MaxRestoreBtn_Click);
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.OpenContextMenu, (_, _) => OpenKeyboardContextMenu());
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.EditInFormulaBar, (_, _) => EditActiveCellInFormulaBar());
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.InsertWorksheet, AddSheetButton_Click);

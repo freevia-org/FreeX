@@ -44,6 +44,21 @@ public static class WorkbookWindowOrdering
     }
 
     /// <summary>
+    /// Index of the previous window to activate when cycling backward. Wraps backward to
+    /// the last window. Returns <see cref="NoTarget"/> when there are no windows, and falls
+    /// back to the last window when the current index is out of range.
+    /// </summary>
+    public static int PreviousWindowIndex(int currentIndex, int count)
+    {
+        if (count <= 0)
+            return NoTarget;
+        if (currentIndex < 0 || currentIndex >= count)
+            return count - 1;
+
+        return (currentIndex + count - 1) % count;
+    }
+
+    /// <summary>
     /// Indices of the windows that must refresh after a workbook change, in registration order,
     /// excluding the originating window. When the origin index is out of range every window is
     /// notified (defensive: a change we cannot attribute should refresh everyone).

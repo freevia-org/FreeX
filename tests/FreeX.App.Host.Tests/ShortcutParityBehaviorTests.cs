@@ -217,6 +217,55 @@ public sealed class ShortcutParityBehaviorTests
         source.Should().ContainAll("Strikethrough", "Superscript", "Subscript");
     }
 
+    // --- F3 (Paste Name) ---
+
+    [Fact]
+    public void F3_IsRegisteredAsPasteNameCommand()
+    {
+        KeyboardShortcutMatcher.TryGetCommandShortcut(
+            Key.F3, Key.None, ModifierKeys.None, out var shortcut)
+            .Should().BeTrue();
+
+        shortcut.Should().Be(KeyboardCommandShortcut.PasteName);
+    }
+
+    [Fact]
+    public void PasteNameCommand_OpensPasteNamesDialogAndCanPasteList()
+    {
+        var keyboardSource = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyboardCommands.cs");
+        var formulaSource = DialogSourceTestSupport.ReadHostSources("MainWindow.FormulaCommands.cs");
+
+        keyboardSource.Should().Contain("KeyboardCommandShortcut.PasteName");
+        formulaSource.Should().Contain("OpenPasteNamesDialog");
+        formulaSource.Should().Contain("new PasteNamesDialog(items)");
+        formulaSource.Should().Contain("InsertDefinedNameIntoFormula(dialog.Result.Name)");
+        formulaSource.Should().Contain("PasteNamesPlanner.TryBuildPasteListEdits");
+        formulaSource.Should().Contain("TryExecuteEditCells(edits, title)");
+    }
+
+    // --- Alt+Shift+F10 (Error Checking) ---
+
+    [Fact]
+    public void AltShiftF10_IsRegisteredAsErrorCheckingCommand()
+    {
+        KeyboardShortcutMatcher.TryGetCommandShortcut(
+            Key.System, Key.F10, ModifierKeys.Alt | ModifierKeys.Shift, out var shortcut)
+            .Should().BeTrue();
+
+        shortcut.Should().Be(KeyboardCommandShortcut.OpenErrorChecking);
+    }
+
+    [Fact]
+    public void ErrorCheckingShortcut_RoutesToFormulaErrorChecking()
+    {
+        var keyboardSource = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyboardCommands.cs");
+        var formulaSource = DialogSourceTestSupport.ReadHostSources("MainWindow.FormulaCommands.cs");
+
+        keyboardSource.Should().Contain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.OpenErrorChecking, ErrorCheckBtn_Click);");
+        formulaSource.Should().Contain("private void ErrorCheckBtn_Click");
+        formulaSource.Should().Contain("FormulaAuditingService.FindFormulaErrorIssues");
+    }
+
     // --- Shift+F2 / Ctrl+Shift+F2 (Notes / Threaded Comments) ---
 
     [Fact]
@@ -386,6 +435,80 @@ public sealed class ShortcutParityBehaviorTests
 
         source.Should().Contain("CycleShellFocus");
         source.Should().ContainAny("PivotTable", "task pane", "taskPane", "TaskPane");
+    }
+
+    // --- Ctrl+F6 / Ctrl+Tab and reverse variants (Workbook window cycling) ---
+
+    [Theory]
+    [InlineData(Key.F6, ModifierKeys.Control)]
+    [InlineData(Key.Tab, ModifierKeys.Control)]
+    public void WorkbookWindowForwardCycleShortcuts_AreRegisteredAsNextWindow(Key key, ModifierKeys modifiers)
+    {
+        KeyboardShortcutMatcher.TryGetCommandShortcut(
+            key, Key.None, modifiers, out var shortcut)
+            .Should().BeTrue();
+
+        shortcut.Should().Be(KeyboardCommandShortcut.SwitchToNextWorkbookWindow);
+    }
+
+    [Theory]
+    [InlineData(Key.F6, ModifierKeys.Control | ModifierKeys.Shift)]
+    [InlineData(Key.Tab, ModifierKeys.Control | ModifierKeys.Shift)]
+    public void WorkbookWindowReverseCycleShortcuts_AreRegisteredAsPreviousWindow(Key key, ModifierKeys modifiers)
+    {
+        KeyboardShortcutMatcher.TryGetCommandShortcut(
+            key, Key.None, modifiers, out var shortcut)
+            .Should().BeTrue();
+
+        shortcut.Should().Be(KeyboardCommandShortcut.SwitchToPreviousWorkbookWindow);
+    }
+
+    [Fact]
+    public void WorkbookWindowCycleShortcuts_RouteThroughWindowRegistry()
+    {
+        var commandSource = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyboardCommands.cs");
+        var multiWindowSource = DialogSourceTestSupport.ReadHostSources("MainWindow.MultiWindow.cs");
+        var registrySource = DialogSourceTestSupport.ReadHostSources("WorkbookWindowRegistry.cs");
+
+        commandSource.Should().Contain("SwitchWorkbookWindow(forward: true)");
+        commandSource.Should().Contain("SwitchWorkbookWindow(forward: false)");
+        multiWindowSource.Should().Contain("_windowRegistry.SwitchToNextWindow(this)");
+        multiWindowSource.Should().Contain("_windowRegistry.SwitchToPreviousWindow(this)");
+        registrySource.Should().Contain("PreviousWindowTarget");
+    }
+
+    // --- Ctrl+F5 / Ctrl+F9 / Ctrl+F10 (Workbook window state) ---
+
+    [Theory]
+    [InlineData(Key.F5, KeyboardCommandShortcut.RestoreWorkbookWindow)]
+    [InlineData(Key.F7, KeyboardCommandShortcut.MoveWorkbookWindow)]
+    [InlineData(Key.F8, KeyboardCommandShortcut.SizeWorkbookWindow)]
+    [InlineData(Key.F9, KeyboardCommandShortcut.MinimizeWorkbookWindow)]
+    [InlineData(Key.F10, KeyboardCommandShortcut.MaximizeOrRestoreWorkbookWindow)]
+    public void WorkbookWindowStateShortcuts_AreRegistered(Key key, KeyboardCommandShortcut expected)
+    {
+        KeyboardShortcutMatcher.TryGetCommandShortcut(
+            key, Key.None, ModifierKeys.Control, out var shortcut)
+            .Should().BeTrue();
+
+        shortcut.Should().Be(expected);
+    }
+
+    [Fact]
+    public void WorkbookWindowStateShortcuts_RouteToWindowChromeCommands()
+    {
+        var commandSource = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyboardCommands.cs");
+        var viewSource = DialogSourceTestSupport.ReadHostSources("MainWindow.ViewCommands.cs");
+
+        commandSource.Should().Contain("KeyboardCommandShortcut.RestoreWorkbookWindow");
+        commandSource.Should().Contain("KeyboardCommandShortcut.MoveWorkbookWindow");
+        commandSource.Should().Contain("KeyboardCommandShortcut.SizeWorkbookWindow");
+        commandSource.Should().Contain("KeyboardCommandShortcut.MinimizeWorkbookWindow, MinimizeBtn_Click");
+        commandSource.Should().Contain("KeyboardCommandShortcut.MaximizeOrRestoreWorkbookWindow, MaxRestoreBtn_Click");
+        viewSource.Should().Contain("RestoreWorkbookWindow");
+        viewSource.Should().Contain("BeginSystemWindowCommand");
+        viewSource.Should().Contain("WM_SYSCOMMAND");
+        viewSource.Should().Contain("SystemCommands.RestoreWindow(this)");
     }
 
     // --- Tab / Shift+Tab in Ribbon ---

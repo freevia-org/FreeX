@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Interop;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -11,6 +12,10 @@ namespace FreeX.App.Host;
 
 public partial class MainWindow
 {
+    private const int WM_SYSCOMMAND = 0x0112;
+    private const int SC_SIZE = 0xF000;
+    private const int SC_MOVE = 0xF010;
+
     private void ViewGridlinesChk_Changed(object sender, RoutedEventArgs e)
     {
         if (_suppressViewOptionSync || SheetGrid is null) return;
@@ -370,6 +375,26 @@ public partial class MainWindow
 
     private void MinimizeBtn_Click(object sender, RoutedEventArgs e) =>
         SystemCommands.MinimizeWindow(this);
+
+    private void RestoreWorkbookWindow()
+    {
+        if (WindowState != WindowState.Normal)
+            SystemCommands.RestoreWindow(this);
+    }
+
+    private void BeginSystemWindowMove() => BeginSystemWindowCommand(SC_MOVE);
+
+    private void BeginSystemWindowSize() => BeginSystemWindowCommand(SC_SIZE);
+
+    private void BeginSystemWindowCommand(int command)
+    {
+        if (WindowState != WindowState.Normal)
+            return;
+
+        var handle = new WindowInteropHelper(this).Handle;
+        if (handle != IntPtr.Zero)
+            SendMessage(handle, WM_SYSCOMMAND, (IntPtr)command, IntPtr.Zero);
+    }
 
     private void MaxRestoreBtn_Click(object sender, RoutedEventArgs e)
     {

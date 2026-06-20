@@ -78,6 +78,37 @@ public sealed class WorkbookWindowOrderingTests
         WorkbookWindowOrdering.NextWindowIndex(currentIndex, count).Should().Be(0);
     }
 
+    [Theory]
+    [InlineData(0, 3, 2)]
+    [InlineData(1, 3, 0)]
+    [InlineData(2, 3, 1)]
+    [InlineData(0, 2, 1)]
+    [InlineData(1, 2, 0)]
+    public void PreviousWindowIndex_CyclesBackwardAndWraps(int currentIndex, int count, int expected)
+    {
+        WorkbookWindowOrdering.PreviousWindowIndex(currentIndex, count).Should().Be(expected);
+    }
+
+    [Fact]
+    public void PreviousWindowIndex_SingleWindow_StaysOnItself()
+    {
+        WorkbookWindowOrdering.PreviousWindowIndex(currentIndex: 0, count: 1).Should().Be(0);
+    }
+
+    [Fact]
+    public void PreviousWindowIndex_NoWindows_ReturnsNoTarget()
+    {
+        WorkbookWindowOrdering.PreviousWindowIndex(currentIndex: 0, count: 0).Should().Be(-1);
+    }
+
+    [Theory]
+    [InlineData(-1, 3)]
+    [InlineData(5, 3)]
+    public void PreviousWindowIndex_CurrentIndexOutOfRange_FallsBackToLast(int currentIndex, int count)
+    {
+        WorkbookWindowOrdering.PreviousWindowIndex(currentIndex, count).Should().Be(2);
+    }
+
     // ── Notify targets (cross-window refresh excludes the originating window) ──
 
     [Fact]

@@ -169,10 +169,40 @@ public sealed class WorkbookWindowRegistry
         return ReferenceEquals(target, currentWindow) ? null : target;
     }
 
+    /// <summary>
+    /// The previous window to activate when cycling backward from <paramref name="currentWindow"/>.
+    /// Returns null when there is no other window to switch to.
+    /// </summary>
+    public IWorkbookWindow? PreviousWindowTarget(IWorkbookWindow currentWindow)
+    {
+        ArgumentNullException.ThrowIfNull(currentWindow);
+        if (_windows.Count == 0)
+            return null;
+
+        var currentIndex = _windows.IndexOf(currentWindow);
+        var previousIndex = WorkbookWindowOrdering.PreviousWindowIndex(currentIndex, _windows.Count);
+        if (previousIndex == WorkbookWindowOrdering.NoTarget)
+            return null;
+
+        var target = _windows[previousIndex];
+        return ReferenceEquals(target, currentWindow) ? null : target;
+    }
+
     /// <summary>Activates the next window in the cycle, if there is one. Returns true if it switched.</summary>
     public bool SwitchToNextWindow(IWorkbookWindow currentWindow)
     {
         var target = NextWindowTarget(currentWindow);
+        if (target is null)
+            return false;
+
+        target.ActivateWindow();
+        return true;
+    }
+
+    /// <summary>Activates the previous window in the cycle, if there is one. Returns true if it switched.</summary>
+    public bool SwitchToPreviousWindow(IWorkbookWindow currentWindow)
+    {
+        var target = PreviousWindowTarget(currentWindow);
         if (target is null)
             return false;
 

@@ -158,6 +158,51 @@ public partial class MainWindow
         OpenRibbonContextMenu(btn, menu);
     }
 
+    private void OpenPasteNamesDialog()
+    {
+        if (SheetGrid.SelectedRange is not { } range)
+            return;
+
+        var title = UiText.Get("PasteNames_Title");
+        var items = PasteNamesPlanner.BuildItems(_workbook, FormatWorkbookRange);
+        if (items.Count == 0)
+        {
+            _messageService.ShowInfo(UiText.Get("PasteNames_NoNamesMessage"), title);
+            return;
+        }
+
+        var dialog = new PasteNamesDialog(items)
+        {
+            Owner = this
+        };
+
+        if (ShowOwnedDialog(dialog) != true)
+            return;
+
+        if (dialog.Result.Action == PasteNamesDialogAction.InsertName &&
+            !string.IsNullOrWhiteSpace(dialog.Result.Name))
+        {
+            InsertDefinedNameIntoFormula(dialog.Result.Name);
+            return;
+        }
+
+        if (dialog.Result.Action != PasteNamesDialogAction.PasteList)
+            return;
+
+        if (!PasteNamesPlanner.TryBuildPasteListEdits(range.Start, items, out var edits, out var error))
+        {
+            _messageService.ShowWarning(error ?? UiText.Get("PasteNames_NoNamesMessage"), title);
+            return;
+        }
+
+        if (!TryExecuteEditCells(edits, title))
+            return;
+
+        UpdateViewport();
+        RefreshToolbar();
+        RefreshStatusBar();
+    }
+
     private void InsertDefinedNameIntoFormula(string name)
     {
         var formulaText = FormulaBar.Text;

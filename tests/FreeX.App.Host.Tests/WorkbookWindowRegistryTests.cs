@@ -97,6 +97,32 @@ public sealed class WorkbookWindowRegistryTests
     }
 
     [Fact]
+    public void PreviousWindowTarget_CyclesBackwardAndWraps()
+    {
+        var registry = new WorkbookWindowRegistry();
+        var w1 = new TestWorkbookWindow();
+        var w2 = new TestWorkbookWindow();
+        var w3 = new TestWorkbookWindow();
+        registry.Register(w1);
+        registry.Register(w2);
+        registry.Register(w3);
+
+        registry.PreviousWindowTarget(w1).Should().BeSameAs(w3, "reverse cycling wraps back to the last window");
+        registry.PreviousWindowTarget(w2).Should().BeSameAs(w1);
+        registry.PreviousWindowTarget(w3).Should().BeSameAs(w2);
+    }
+
+    [Fact]
+    public void PreviousWindowTarget_SingleWindow_HasNoOtherWindow()
+    {
+        var registry = new WorkbookWindowRegistry();
+        var w1 = new TestWorkbookWindow();
+        registry.Register(w1);
+
+        registry.PreviousWindowTarget(w1).Should().BeNull();
+    }
+
+    [Fact]
     public void SwitchToNextWindow_ActivatesTheNextWindowOnly()
     {
         var registry = new WorkbookWindowRegistry();
@@ -112,6 +138,21 @@ public sealed class WorkbookWindowRegistryTests
     }
 
     [Fact]
+    public void SwitchToPreviousWindow_ActivatesThePreviousWindowOnly()
+    {
+        var registry = new WorkbookWindowRegistry();
+        var w1 = new TestWorkbookWindow();
+        var w2 = new TestWorkbookWindow();
+        registry.Register(w1);
+        registry.Register(w2);
+
+        registry.SwitchToPreviousWindow(w1).Should().BeTrue();
+
+        w2.ActivateCount.Should().Be(1);
+        w1.ActivateCount.Should().Be(0);
+    }
+
+    [Fact]
     public void SwitchToNextWindow_SingleWindow_DoesNothing()
     {
         var registry = new WorkbookWindowRegistry();
@@ -119,6 +160,17 @@ public sealed class WorkbookWindowRegistryTests
         registry.Register(w1);
 
         registry.SwitchToNextWindow(w1).Should().BeFalse();
+        w1.ActivateCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void SwitchToPreviousWindow_SingleWindow_DoesNothing()
+    {
+        var registry = new WorkbookWindowRegistry();
+        var w1 = new TestWorkbookWindow();
+        registry.Register(w1);
+
+        registry.SwitchToPreviousWindow(w1).Should().BeFalse();
         w1.ActivateCount.Should().Be(0);
     }
 

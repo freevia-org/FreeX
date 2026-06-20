@@ -219,6 +219,11 @@ public partial class MainWindow
 
     private void ViewSwitchWindowsBtn_Click(object sender, RoutedEventArgs e)
     {
+        SwitchWorkbookWindow(forward: true);
+    }
+
+    private void SwitchWorkbookWindow(bool forward)
+    {
         if (_windowRegistry is null)
         {
             RefreshViewWindowCommandState();
@@ -226,7 +231,11 @@ public partial class MainWindow
             return;
         }
 
-        _windowRegistry.SwitchToNextWindow(this);
+        if (forward)
+            _windowRegistry.SwitchToNextWindow(this);
+        else
+            _windowRegistry.SwitchToPreviousWindow(this);
+
         RefreshViewWindowCommandState();
     }
 
