@@ -292,6 +292,7 @@ public sealed class LegacyXlsFileAdapterTests
                 SheetVisibilityFingerprints: ReadImportedSheetVisibilityFingerprints(workbook),
                 WorkbookViewFingerprints: ReadImportedWorkbookViewFingerprints(workbook),
                 WorkbookProtectionFingerprints: ReadImportedWorkbookProtectionFingerprints(workbook),
+                WorkbookCalculationFingerprints: ReadImportedWorkbookCalculationFingerprints(workbook),
                 CellFingerprints: ReadImportedCellFingerprints(workbook),
                 MergeFingerprints: ReadImportedMergeFingerprints(workbook),
                 DimensionFingerprints: ReadImportedDimensionFingerprints(workbook),
@@ -351,6 +352,7 @@ public sealed class LegacyXlsFileAdapterTests
                 imported.SheetVisibilityFingerprints.Should().BeEquivalentTo(source.SheetVisibilityFingerprints, imported.File);
                 imported.WorkbookViewFingerprints.Should().BeEquivalentTo(source.WorkbookViewFingerprints, imported.File);
                 imported.WorkbookProtectionFingerprints.Should().BeEquivalentTo(source.WorkbookProtectionFingerprints, imported.File);
+                imported.WorkbookCalculationFingerprints.Should().BeEquivalentTo(source.WorkbookCalculationFingerprints, imported.File);
                 imported.CellFingerprints.Should().BeEquivalentTo(source.CellFingerprints, imported.File);
                 imported.MergeFingerprints.Should().BeEquivalentTo(source.MergeFingerprints, imported.File);
                 imported.DimensionFingerprints.Should().BeEquivalentTo(source.DimensionFingerprints, imported.File);
@@ -411,6 +413,11 @@ public sealed class LegacyXlsFileAdapterTests
             .Sum(summary => summary.ViewStateFingerprints?.Count(fingerprint =>
                 fingerprint.Contains("|Active=", StringComparison.Ordinal) &&
                 !fingerprint.Contains("|Active=null,null|", StringComparison.Ordinal)) ?? 0)
+            .Should()
+            .BeGreaterThan(0);
+        summaries.Where(summary => summary.RichMetadata)
+            .Sum(summary => summary.WorkbookCalculationFingerprints?.Count(fingerprint =>
+                !fingerprint.Contains("|Mode=Automatic|Full=False|Iterate=False|Count=null|Delta=null", StringComparison.Ordinal)) ?? 0)
             .Should()
             .BeGreaterThan(0);
         summaries.Sum(summary => summary.DefinedNames).Should().BeGreaterThan(0);
@@ -954,6 +961,7 @@ public sealed class LegacyXlsFileAdapterTests
             .ToArray();
         var workbookViewFingerprints = ReadSourceWorkbookViewFingerprints(hssf);
         var workbookProtectionFingerprints = ReadSourceWorkbookProtectionFingerprints(hssf);
+        var workbookCalculationFingerprints = ReadSourceWorkbookCalculationFingerprints(hssf);
         var outlineSettingFingerprints = ReadSourceOutlineSettingFingerprints(hssf);
 
         return new LegacyXlsCorpusSummary(
@@ -991,6 +999,7 @@ public sealed class LegacyXlsFileAdapterTests
             SheetVisibilityFingerprints: sheetVisibilityFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             WorkbookViewFingerprints: workbookViewFingerprints,
             WorkbookProtectionFingerprints: workbookProtectionFingerprints,
+            WorkbookCalculationFingerprints: workbookCalculationFingerprints,
             CellFingerprints: cellFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             MergeFingerprints: mergeFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             DimensionFingerprints: dimensionFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
@@ -1145,6 +1154,7 @@ public sealed class LegacyXlsFileAdapterTests
             SheetVisibilityFingerprints: sheetVisibilityFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             WorkbookViewFingerprints: [],
             WorkbookProtectionFingerprints: [],
+            WorkbookCalculationFingerprints: [],
             CellFingerprints: cellFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             MergeFingerprints: mergeFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             DimensionFingerprints: dimensionFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
@@ -1256,6 +1266,60 @@ public sealed class LegacyXlsFileAdapterTests
                 passwordHash,
                 windowProtected)
         ];
+    }
+
+    private static IReadOnlyList<string> ReadImportedWorkbookCalculationFingerprints(Workbook workbook) =>
+    [
+        CreateWorkbookCalculationFingerprint(
+            workbook.CalculationMode,
+            workbook.FullCalculationOnLoad,
+            workbook.IterativeCalculation,
+            workbook.MaxCalculationIterations,
+            workbook.MaxCalculationChange)
+    ];
+
+    private static IReadOnlyList<string> ReadSourceWorkbookCalculationFingerprints(HSSFWorkbook hssf)
+    {
+        var mode = FindSourceCalculationRecord<CalcModeRecord>(hssf, CalcModeRecord.sid) is { } calcMode &&
+                   calcMode.GetCalcMode() == CalcModeRecord.MANUAL
+            ? WorkbookCalculationMode.Manual
+            : WorkbookCalculationMode.Automatic;
+        var iterative = FindSourceCalculationRecord<IterationRecord>(hssf, IterationRecord.sid) is { } iteration &&
+                        iteration.Iteration;
+        var maxIterations = FindSourceCalculationRecord<CalcCountRecord>(hssf, CalcCountRecord.sid) is { } calcCount &&
+                            calcCount.Iterations is > 0 and not 100
+            ? calcCount.Iterations
+            : (int?)null;
+        var maxChange = FindSourceCalculationRecord<DeltaRecord>(hssf, DeltaRecord.sid) is { } delta &&
+                        delta.MaxChange > 0 &&
+                        Math.Abs(delta.MaxChange - 0.001) > 0.0000000001
+            ? delta.MaxChange
+            : (double?)null;
+
+        return
+        [
+            CreateWorkbookCalculationFingerprint(
+                mode,
+                hssf.ForceFormulaRecalculation,
+                iterative,
+                maxIterations,
+                maxChange)
+        ];
+    }
+
+    private static TRecord? FindSourceCalculationRecord<TRecord>(HSSFWorkbook hssf, short sid)
+        where TRecord : class
+    {
+        if (hssf.Workbook.FindFirstRecordBySid(sid) is TRecord workbookRecord)
+            return workbookRecord;
+
+        if (hssf.NumberOfSheets == 0 ||
+            hssf.GetSheetAt(0) is not HSSFSheet firstSheet)
+        {
+            return null;
+        }
+
+        return firstSheet.Sheet.FindFirstRecordBySid(sid) as TRecord;
     }
 
     private static IReadOnlyList<string> ReadImportedCellFingerprints(Workbook workbook) =>
@@ -1970,6 +2034,21 @@ public sealed class LegacyXlsFileAdapterTests
             $"Protected={protectedStructureOrWindows}",
             $"Password={passwordHash ?? ""}",
             $"LockWindows={lockWindows}"
+        ]);
+
+    private static string CreateWorkbookCalculationFingerprint(
+        WorkbookCalculationMode mode,
+        bool fullCalculationOnLoad,
+        bool iterativeCalculation,
+        int? maxCalculationIterations,
+        double? maxCalculationChange) =>
+        string.Join("|", [
+            "WorkbookCalculation",
+            $"Mode={mode}",
+            $"Full={fullCalculationOnLoad}",
+            $"Iterate={iterativeCalculation}",
+            $"Count={FormatNullableInt(maxCalculationIterations)}",
+            $"Delta={(maxCalculationChange is { } value ? FormatDouble(value) : "null")}"
         ]);
 
     private static string NormalizeSourceSheetVisibility(SheetVisibility visibility) =>
@@ -3240,6 +3319,7 @@ public sealed class LegacyXlsFileAdapterTests
         IReadOnlyList<string>? SheetVisibilityFingerprints = null,
         IReadOnlyList<string>? WorkbookViewFingerprints = null,
         IReadOnlyList<string>? WorkbookProtectionFingerprints = null,
+        IReadOnlyList<string>? WorkbookCalculationFingerprints = null,
         IReadOnlyList<string>? CellFingerprints = null,
         IReadOnlyList<string>? MergeFingerprints = null,
         IReadOnlyList<string>? DimensionFingerprints = null,

@@ -85,6 +85,7 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         };
         LoadWorkbookView(hssf, workbook);
         LoadWorkbookProtection(hssf, workbook);
+        LoadCalculationOptions(hssf, workbook);
         if (hssf.ActiveSheetIndex >= 0 && hssf.ActiveSheetIndex < hssf.NumberOfSheets)
             workbook.ActiveSheetIndex = hssf.ActiveSheetIndex;
 
@@ -197,6 +198,49 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
 
         workbook.ProtectionMetadata = new NativeXmlPreserveBag();
         workbook.ProtectionMetadata.Set("workbookProtection", serializedMetadata);
+    }
+
+    private static void LoadCalculationOptions(HSSFWorkbook sourceWorkbook, Workbook workbook)
+    {
+        workbook.FullCalculationOnLoad = sourceWorkbook.ForceFormulaRecalculation;
+
+        if (FindCalculationRecord<CalcModeRecord>(sourceWorkbook, CalcModeRecord.sid) is { } calcMode)
+        {
+            workbook.CalculationMode = calcMode.GetCalcMode() == CalcModeRecord.MANUAL
+                ? WorkbookCalculationMode.Manual
+                : WorkbookCalculationMode.Automatic;
+        }
+
+        if (FindCalculationRecord<IterationRecord>(sourceWorkbook, IterationRecord.sid) is { } iteration)
+            workbook.IterativeCalculation = iteration.Iteration;
+
+        if (FindCalculationRecord<CalcCountRecord>(sourceWorkbook, CalcCountRecord.sid) is { } calcCount &&
+            calcCount.Iterations is > 0 and not 100)
+        {
+            workbook.MaxCalculationIterations = calcCount.Iterations;
+        }
+
+        if (FindCalculationRecord<DeltaRecord>(sourceWorkbook, DeltaRecord.sid) is { } delta &&
+            delta.MaxChange > 0 &&
+            Math.Abs(delta.MaxChange - 0.001) > 0.0000000001)
+        {
+            workbook.MaxCalculationChange = delta.MaxChange;
+        }
+    }
+
+    private static TRecord? FindCalculationRecord<TRecord>(HSSFWorkbook sourceWorkbook, short sid)
+        where TRecord : class
+    {
+        if (sourceWorkbook.Workbook.FindFirstRecordBySid(sid) is TRecord workbookRecord)
+            return workbookRecord;
+
+        if (sourceWorkbook.NumberOfSheets == 0 ||
+            sourceWorkbook.GetSheetAt(0) is not HSSFSheet firstSheet)
+        {
+            return null;
+        }
+
+        return firstSheet.Sheet.FindFirstRecordBySid(sid) as TRecord;
     }
 
     private static Workbook LoadWithExcelDataReader(Stream stream)
