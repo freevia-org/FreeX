@@ -1,11 +1,14 @@
 using FluentAssertions;
+using ExcelDataReader;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
 using NPOI.HSSF.UserModel;
 using NPOI.SS.UserModel;
 using NPOI.SS.Util;
 using System.Reflection;
+using System.Text;
 using ModelBorderStyle = FreeX.Core.Model.BorderStyle;
+using ModelCellAddress = FreeX.Core.Model.CellAddress;
 using ModelHorizontalAlignment = FreeX.Core.Model.HorizontalAlignment;
 using ModelVerticalAlignment = FreeX.Core.Model.VerticalAlignment;
 using NPOIBorderStyle = NPOI.SS.UserModel.BorderStyle;
@@ -71,6 +74,12 @@ public sealed class LegacyXlsFileAdapterTests
 
         var sheet = workbook.GetSheetAt(0);
         sheet.Name.Should().Be("Visible");
+        workbook.NamedRanges.Should().ContainKey("InputCell");
+        workbook.NamedRanges["InputCell"].Start.Should().Be(new ModelCellAddress(sheet.Id, 2, 1));
+        workbook.NamedRanges["InputCell"].End.Should().Be(new ModelCellAddress(sheet.Id, 2, 1));
+        workbook.NamedRangeMetadataByName["InputCell"].Should().Be(new NamedRangeMetadata("Workbook", "Primary input cell"));
+        workbook.NamedFormulas.Should().ContainKey("DoubleInput").WhoseValue.Should().Be("Visible!$A$2*2");
+
         sheet.MergedRegions.Should().ContainSingle(region =>
             region.Start.Row == 1 && region.Start.Col == 1 &&
             region.End.Row == 1 && region.End.Col == 2);
@@ -96,6 +105,16 @@ public sealed class LegacyXlsFileAdapterTests
         formulaStyle.VerticalAlignment.Should().Be(ModelVerticalAlignment.Center);
         formulaStyle.BorderBottom.Style.Should().Be(ModelBorderStyle.Thin);
 
+        var hyperlinkAddress = new ModelCellAddress(sheet.Id, 2, 4);
+        sheet.Hyperlinks.Should().ContainKey(hyperlinkAddress)
+            .WhoseValue.Should().Be("https://exinfm.com/free_spreadsheets.html");
+        sheet.HyperlinkMetadata[hyperlinkAddress].Should().Be(new HyperlinkMetadata(HyperlinkTargetKind.ExistingFileOrWebPage));
+
+        var commentAddress = new ModelCellAddress(sheet.Id, 2, 5);
+        sheet.Comments.Should().ContainKey(commentAddress)
+            .WhoseValue.Should().Be("Review before publishing");
+        sheet.CommentAuthors[commentAddress].Should().Be("Analyst");
+
         var hiddenSheet = workbook.GetSheetAt(1);
         hiddenSheet.Name.Should().Be("Hidden");
         hiddenSheet.IsHidden.Should().BeTrue();
@@ -119,22 +138,45 @@ public sealed class LegacyXlsFileAdapterTests
             return;
 
         var adapter = new LegacyXlsFileAdapter();
-        var summaries = new List<(string File, int Sheets, int Cells, int Formulas, int Styles, int Merges, int Dimensions)>();
+        var summaries = new List<LegacyXlsCorpusSummary>();
 
         foreach (var path in paths)
         {
+            var source = ReadSourceSummary(path);
             using var stream = File.OpenRead(path);
             var workbook = adapter.Load(stream);
             workbook.Sheets.Should().NotBeEmpty(Path.GetFileName(path));
 
-            summaries.Add((
+            var imported = new LegacyXlsCorpusSummary(
                 Path.GetFileName(path),
                 workbook.SheetCount,
                 workbook.Sheets.Sum(sheet => sheet.CellCount),
                 workbook.Sheets.Sum(sheet => sheet.FormulaCellCount),
                 workbook.Sheets.Sum(sheet => sheet.EnumerateCells().Count(item => item.Cell.StyleId != StyleId.Default) + sheet.StyleOnlyCellCount),
                 workbook.Sheets.Sum(sheet => sheet.MergedRegions.Count),
-                workbook.Sheets.Sum(sheet => sheet.ColumnWidths.Count + sheet.RowHeights.Count + sheet.HiddenRows.Count + sheet.HiddenCols.Count)));
+                workbook.Sheets.Sum(sheet => sheet.ColumnWidths.Count + sheet.RowHeights.Count + sheet.HiddenRows.Count + sheet.HiddenCols.Count),
+                workbook.Sheets.Count(sheet => sheet.IsHidden),
+                workbook.Sheets.Count(sheet => sheet.IsVeryHidden),
+                workbook.NamedRanges.Count + workbook.NamedFormulas.Count,
+                workbook.Sheets.Sum(sheet => sheet.Hyperlinks.Count),
+                workbook.Sheets.Sum(sheet => sheet.Comments.Count));
+
+            imported.Sheets.Should().Be(source.Sheets, imported.File);
+            imported.Cells.Should().Be(source.Cells, imported.File);
+            if (source.RichMetadata)
+            {
+                imported.Formulas.Should().Be(source.Formulas, imported.File);
+                imported.Merges.Should().Be(source.Merges, imported.File);
+                imported.HiddenSheets.Should().Be(source.HiddenSheets, imported.File);
+                imported.VeryHiddenSheets.Should().Be(source.VeryHiddenSheets, imported.File);
+                imported.DefinedNames.Should().Be(source.DefinedNames, imported.File);
+                imported.Hyperlinks.Should().Be(source.Hyperlinks, imported.File);
+                imported.Comments.Should().Be(source.Comments, imported.File);
+                imported.Styles.Should().BeGreaterThanOrEqualTo(source.Styles, imported.File);
+                imported.Dimensions.Should().BeGreaterThanOrEqualTo(source.Dimensions, imported.File);
+            }
+
+            summaries.Add(imported);
         }
 
         summaries.Should().HaveCountGreaterThanOrEqualTo(20);
@@ -143,6 +185,8 @@ public sealed class LegacyXlsFileAdapterTests
         summaries.Sum(summary => summary.Styles).Should().BeGreaterThan(0);
         summaries.Sum(summary => summary.Merges).Should().BeGreaterThan(0);
         summaries.Sum(summary => summary.Dimensions).Should().BeGreaterThan(0);
+        summaries.Sum(summary => summary.DefinedNames).Should().BeGreaterThan(0);
+        summaries.Count(summary => summary.RichMetadata).Should().BeGreaterThan(0);
     }
 
     [Fact]
@@ -254,9 +298,35 @@ public sealed class LegacyXlsFileAdapterTests
         formula.CellStyle = style;
         row.CreateCell(2).SetCellValue("hidden column");
 
+        var helper = hssf.GetCreationHelper();
+        var hyperlink = helper.CreateHyperlink(HyperlinkType.Url);
+        hyperlink.Address = "https://exinfm.com/free_spreadsheets.html";
+        hyperlink.Label = "EXINFM";
+        var hyperlinkCell = row.CreateCell(3);
+        hyperlinkCell.SetCellValue("EXINFM");
+        hyperlinkCell.Hyperlink = hyperlink;
+
+        var drawing = sheet.CreateDrawingPatriarch();
+        var commentAnchor = new HSSFClientAnchor(0, 0, 0, 0, 4, 1, 6, 3);
+        var comment = drawing.CreateCellComment(commentAnchor);
+        comment.String = helper.CreateRichTextString("Review before publishing");
+        comment.Author = "Analyst";
+        var commentCell = row.CreateCell(4);
+        commentCell.SetCellValue("commented");
+        commentCell.CellComment = comment;
+
         var hiddenRow = sheet.CreateRow(3);
         hiddenRow.ZeroHeight = true;
         hiddenRow.CreateCell(0).SetCellValue("hidden");
+
+        var inputName = hssf.CreateName();
+        inputName.NameName = "InputCell";
+        inputName.RefersToFormula = "'Visible'!$A$2";
+        inputName.Comment = "Primary input cell";
+
+        var formulaName = hssf.CreateName();
+        formulaName.NameName = "DoubleInput";
+        formulaName.RefersToFormula = "Visible!$A$2*2";
 
         HSSFFormulaEvaluator.EvaluateAllFormulaCells(hssf);
 
@@ -265,6 +335,199 @@ public sealed class LegacyXlsFileAdapterTests
         stream.Position = 0;
         return stream;
     }
+
+    private static LegacyXlsCorpusSummary ReadSourceSummary(string path)
+    {
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+
+        var bytes = File.ReadAllBytes(path);
+        using var stream = new MemoryStream(bytes, writable: false);
+        try
+        {
+            using var hssf = new HSSFWorkbook(stream);
+            return ReadHssfSourceSummary(path, hssf);
+        }
+        catch
+        {
+            using var fallbackStream = new MemoryStream(bytes, writable: false);
+            return ReadExcelDataReaderSourceSummary(path, fallbackStream);
+        }
+    }
+
+    private static LegacyXlsCorpusSummary ReadHssfSourceSummary(string path, HSSFWorkbook hssf)
+    {
+        var cells = 0;
+        var formulas = 0;
+        var styles = 0;
+        var merges = 0;
+        var dimensions = 0;
+        var hyperlinks = 0;
+        var comments = 0;
+
+        for (var sheetIndex = 0; sheetIndex < hssf.NumberOfSheets; sheetIndex++)
+        {
+            var sheet = hssf.GetSheetAt(sheetIndex);
+            merges += sheet.NumMergedRegions;
+
+            for (var rowIndex = sheet.FirstRowNum; rowIndex <= sheet.LastRowNum; rowIndex++)
+            {
+                var row = sheet.GetRow(rowIndex);
+                if (row is null)
+                    continue;
+
+                if (row.ZeroHeight || row.HeightInPoints > 0)
+                    dimensions++;
+
+                foreach (var cell in row.Cells)
+                {
+                    if (IsSourceContentCell(cell))
+                        cells++;
+                    if (cell.CellType == CellType.Formula)
+                        formulas++;
+                    if (cell.CellStyle?.Index > 0)
+                        styles++;
+                }
+            }
+
+            var maxColumn = FindLastSourceColumn(sheet);
+            for (var columnIndex = 0; columnIndex <= maxColumn; columnIndex++)
+            {
+                if (sheet.IsColumnHidden(columnIndex) ||
+                    sheet.GetColumnWidth(columnIndex) != sheet.DefaultColumnWidth * 256)
+                {
+                    dimensions++;
+                }
+            }
+
+            if (sheet is HSSFSheet hssfSheet)
+            {
+                hyperlinks += hssfSheet.GetHyperlinkList().Count;
+                comments += hssfSheet.GetCellComments().Count;
+            }
+        }
+
+        var validationWorkbook = new Workbook("DefinedNameValidation");
+        var definedNames = Enumerable.Range(0, hssf.NumberOfNames)
+            .Select(hssf.GetNameAt)
+            .Where(name => IsImportableDefinedName(name, validationWorkbook))
+            .Select(name => name.NameName)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count();
+
+        return new LegacyXlsCorpusSummary(
+            Path.GetFileName(path),
+            hssf.NumberOfSheets,
+            cells,
+            formulas,
+            styles,
+            merges,
+            dimensions,
+            Enumerable.Range(0, hssf.NumberOfSheets).Count(index =>
+                hssf.GetSheetVisibility(index) is SheetVisibility.Hidden or SheetVisibility.VeryHidden),
+            Enumerable.Range(0, hssf.NumberOfSheets).Count(index =>
+                hssf.GetSheetVisibility(index) is SheetVisibility.VeryHidden),
+            definedNames,
+            hyperlinks,
+            comments);
+    }
+
+    private static LegacyXlsCorpusSummary ReadExcelDataReaderSourceSummary(string path, Stream stream)
+    {
+        using var reader = ExcelReaderFactory.CreateReader(stream);
+        var sheets = 0;
+        var cells = 0;
+
+        do
+        {
+            sheets++;
+            while (reader.Read())
+            {
+                for (var column = 0; column < reader.FieldCount; column++)
+                {
+                    var value = reader.GetValue(column);
+                    if (value is not null && (value is not string text || text.Length > 0))
+                        cells++;
+                }
+            }
+        }
+        while (reader.NextResult());
+
+        return new LegacyXlsCorpusSummary(
+            Path.GetFileName(path),
+            sheets,
+            cells,
+            Formulas: 0,
+            Styles: 0,
+            Merges: 0,
+            Dimensions: 0,
+            HiddenSheets: 0,
+            VeryHiddenSheets: 0,
+            DefinedNames: 0,
+            Hyperlinks: 0,
+            Comments: 0,
+            RichMetadata: false);
+    }
+
+    private static bool IsSourceContentCell(ICell cell)
+    {
+        if (cell.CellType == CellType.Blank)
+            return false;
+
+        return cell.CellType != CellType.String || !string.IsNullOrEmpty(cell.StringCellValue);
+    }
+
+    private static int FindLastSourceColumn(ISheet sheet)
+    {
+        var maxColumn = 0;
+        for (var rowIndex = sheet.FirstRowNum; rowIndex <= sheet.LastRowNum; rowIndex++)
+        {
+            var row = sheet.GetRow(rowIndex);
+            if (row is not null && row.LastCellNum > 0)
+                maxColumn = Math.Max(maxColumn, row.LastCellNum - 1);
+        }
+
+        return maxColumn;
+    }
+
+    private static bool IsImportableDefinedName(IName? name, Workbook validationWorkbook) =>
+        name is not null &&
+        !name.IsDeleted &&
+        !name.IsFunctionName &&
+        !string.IsNullOrWhiteSpace(name.RefersToFormula) &&
+        !IsExcelReservedDefinedName(name.NameName) &&
+        validationWorkbook.ValidateNamedRangeName(name.NameName) is null;
+
+    private static bool IsExcelReservedDefinedName(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return true;
+
+        var trimmedName = name.Trim();
+        return trimmedName.StartsWith("_xlchart.", StringComparison.OrdinalIgnoreCase) ||
+               trimmedName.StartsWith("_xlnm.", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(trimmedName, "Print_Area", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(trimmedName, "Print_Titles", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(trimmedName, "_FilterDatabase", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(trimmedName, "Criteria", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(trimmedName, "Database", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(trimmedName, "Extract", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(trimmedName, "Consolidate_Area", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private sealed record LegacyXlsCorpusSummary(
+        string File,
+        int Sheets,
+        int Cells,
+        int Formulas,
+        int Styles,
+        int Merges,
+        int Dimensions,
+        int HiddenSheets,
+        int VeryHiddenSheets,
+        int DefinedNames,
+        int Hyperlinks,
+        int Comments,
+        bool RichMetadata = true);
 
     public static TheoryData<object, double> AdditionalNumericValues() => new()
     {

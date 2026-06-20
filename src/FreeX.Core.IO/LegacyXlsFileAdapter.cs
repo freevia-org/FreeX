@@ -16,6 +16,17 @@ namespace FreeX.Core.IO;
 
 public sealed class LegacyXlsFileAdapter : IFileAdapter
 {
+    private static readonly HashSet<string> ExcelReservedDefinedNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Print_Area",
+        "Print_Titles",
+        "_FilterDatabase",
+        "Criteria",
+        "Database",
+        "Extract",
+        "Consolidate_Area"
+    };
+
     public string Extension => ".xls";
     public string FormatName => "XLS 97-2003 Workbook";
     public IReadOnlyList<FileFormatDescriptor> Formats { get; } =
@@ -81,6 +92,8 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
 
         if (workbook.Sheets.Count == 0)
             workbook.AddSheet("Sheet1");
+
+        LoadDefinedNames(hssf, workbook);
 
         return workbook;
     }
@@ -178,6 +191,7 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
                 var address = new ModelCellAddress(sheet.Id, ToModelIndex(sourceCell.RowIndex), ToModelIndex(sourceCell.ColumnIndex));
                 var cell = MapCell(sourceCell);
                 var styleId = GetStyleId(sourceWorkbook, workbook, sourceCell.CellStyle, styleCache);
+                LoadCellAnnotations(sourceCell, address, sheet);
 
                 if (cell.Value is BlankValue && !cell.HasFormula)
                 {
@@ -190,6 +204,183 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
                 sheet.SetCell(address, cell);
             }
         }
+    }
+
+    private static void LoadDefinedNames(NPOIWorkbook sourceWorkbook, Workbook workbook)
+    {
+        for (var index = 0; index < sourceWorkbook.NumberOfNames; index++)
+        {
+            var definedName = sourceWorkbook.GetNameAt(index);
+            if (definedName is null ||
+                definedName.IsDeleted ||
+                definedName.IsFunctionName ||
+                IsExcelReservedDefinedName(definedName.NameName) ||
+                workbook.ValidateNamedRangeName(definedName.NameName) is not null)
+            {
+                continue;
+            }
+
+            var refersTo = NormalizeFormula(definedName.RefersToFormula ?? "");
+            if (string.IsNullOrWhiteSpace(refersTo))
+                continue;
+
+            if (TryParseNamedRangeRefersTo(workbook, refersTo, out var range))
+            {
+                workbook.DefineNamedRange(
+                    definedName.NameName,
+                    range,
+                    new NamedRangeMetadata(GetDefinedNameScope(sourceWorkbook, definedName), definedName.Comment ?? ""));
+                continue;
+            }
+
+            workbook.NamedFormulas[definedName.NameName] = refersTo.Trim();
+        }
+    }
+
+    private static void LoadCellAnnotations(NPOICell sourceCell, ModelCellAddress address, Sheet sheet)
+    {
+        var hyperlink = sourceCell.Hyperlink;
+        if (hyperlink is not null)
+        {
+            var target = GetHyperlinkTarget(hyperlink);
+            if (!string.IsNullOrWhiteSpace(target))
+            {
+                sheet.Hyperlinks[address] = target;
+                sheet.HyperlinkMetadata[address] = new HyperlinkMetadata(
+                    MapHyperlinkTargetKind(hyperlink.Type),
+                    "",
+                    hyperlink.Type == HyperlinkType.Document ? target : "");
+            }
+        }
+
+        var comment = sourceCell.CellComment;
+        var commentText = comment?.String?.String;
+        if (!string.IsNullOrWhiteSpace(commentText))
+        {
+            sheet.Comments[address] = commentText;
+            if (!string.IsNullOrWhiteSpace(comment!.Author))
+                sheet.CommentAuthors[address] = comment.Author;
+        }
+    }
+
+    private static string GetDefinedNameScope(NPOIWorkbook sourceWorkbook, IName definedName)
+    {
+        var sheetIndex = definedName.SheetIndex;
+        return sheetIndex >= 0 && sheetIndex < sourceWorkbook.NumberOfSheets
+            ? sourceWorkbook.GetSheetName(sheetIndex)
+            : NamedRangeMetadata.WorkbookScope.Scope;
+    }
+
+    private static bool TryParseNamedRangeRefersTo(Workbook workbook, string? refersTo, out GridRange range)
+    {
+        range = default;
+        if (string.IsNullOrWhiteSpace(refersTo))
+            return false;
+
+        var text = NormalizeFormula(refersTo).Trim();
+        if (!TrySplitSheetQualifiedReference(text, out var sheetName, out var rangeText))
+            return false;
+
+        var sheet = workbook.GetSheet(sheetName);
+        if (sheet is null)
+            return false;
+
+        var parts = rangeText.Split(':');
+        if (parts.Length is < 1 or > 2)
+            return false;
+
+        if (!TryParseA1Part(parts[0], sheet.Id, out var start))
+            return false;
+
+        var endText = parts.Length == 2 ? parts[1] : parts[0];
+        if (!TryParseA1Part(endText, sheet.Id, out var end))
+            return false;
+
+        range = new GridRange(start, end);
+        return true;
+    }
+
+    private static bool TrySplitSheetQualifiedReference(string text, out string sheetName, out string rangeText)
+    {
+        sheetName = "";
+        rangeText = "";
+        if (text.Length == 0)
+            return false;
+
+        if (text[0] == '\'')
+        {
+            var builder = new StringBuilder();
+            for (var index = 1; index < text.Length; index++)
+            {
+                if (text[index] != '\'')
+                {
+                    builder.Append(text[index]);
+                    continue;
+                }
+
+                if (index + 1 < text.Length && text[index + 1] == '\'')
+                {
+                    builder.Append('\'');
+                    index++;
+                    continue;
+                }
+
+                if (index + 1 >= text.Length || text[index + 1] != '!')
+                    return false;
+
+                sheetName = builder.ToString();
+                rangeText = text[(index + 2)..].Trim();
+                return rangeText.Length > 0;
+            }
+
+            return false;
+        }
+
+        var separator = text.IndexOf('!', StringComparison.Ordinal);
+        if (separator <= 0 || separator == text.Length - 1)
+            return false;
+
+        sheetName = text[..separator].Trim();
+        rangeText = text[(separator + 1)..].Trim();
+        return sheetName.Length > 0 && rangeText.Length > 0;
+    }
+
+    private static bool TryParseA1Part(string text, SheetId sheetId, out ModelCellAddress address)
+    {
+        var normalized = text.Trim().Replace("$", "", StringComparison.Ordinal);
+        return ModelCellAddress.TryParse(normalized, sheetId, out address);
+    }
+
+    private static string GetHyperlinkTarget(IHyperlink hyperlink)
+    {
+        var address = hyperlink.Address ?? "";
+        if (hyperlink is HSSFHyperlink hssfHyperlink &&
+            hyperlink.Type == HyperlinkType.Document &&
+            !string.IsNullOrWhiteSpace(hssfHyperlink.TextMark))
+        {
+            return string.IsNullOrWhiteSpace(address) ? hssfHyperlink.TextMark : $"{address}#{hssfHyperlink.TextMark}";
+        }
+
+        return address;
+    }
+
+    private static HyperlinkTargetKind MapHyperlinkTargetKind(HyperlinkType type) =>
+        type switch
+        {
+            HyperlinkType.Document => HyperlinkTargetKind.PlaceInThisDocument,
+            HyperlinkType.Email => HyperlinkTargetKind.EmailAddress,
+            _ => HyperlinkTargetKind.ExistingFileOrWebPage
+        };
+
+    private static bool IsExcelReservedDefinedName(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return true;
+
+        var trimmedName = name.Trim();
+        return trimmedName.StartsWith("_xlchart.", StringComparison.OrdinalIgnoreCase) ||
+               trimmedName.StartsWith("_xlnm.", StringComparison.OrdinalIgnoreCase) ||
+               ExcelReservedDefinedNames.Contains(trimmedName);
     }
 
     private static Cell MapCell(NPOICell sourceCell)
