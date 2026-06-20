@@ -1,12 +1,12 @@
 # FreeX
 
-FreeX is a free Windows spreadsheet app for `.xlsx` files. It opens and saves standard XLSX workbooks while keeping the project, branding, icons, and release artifacts independent from Microsoft.
+FreeX is a free spreadsheet app for local workbook files. It opens and saves standard Excel-compatible and tabular formats while keeping the project, branding, icons, and release artifacts independent from Microsoft.
 
 ## Current Scope
 
-- Native Windows desktop app built with .NET 10 and WPF.
+- Native Windows desktop app built with .NET 10 and WPF, with Avalonia app-preview lanes for macOS/Linux work.
 - Spreadsheet editing, formulas, charts, PivotTables, conditional formatting, data tools, printing, and export.
-- `.xlsx`, `.csv`, and FreeX native `.fxl` workflows.
+- Workbook and interchange workflows for `.xlsx`, `.xltx`, `.xlsm` open, `.xltm` open, `.xls/.xlsb/.xlt` open, `.ods`, SpreadsheetML `.xml`, CSV variants, tabular text, SYLK, DIF, DBF open, HTML tables, and FreeX native `.fxl`.
 - Local files by default; Microsoft 365 cloud services, account integration, and proprietary Microsoft runtimes are outside the app scope.
 
 ## Downloads
@@ -16,11 +16,11 @@ Tester builds are published on the [FreeX releases page](https://github.com/tony
 - [FreeX-latest-win-x64.exe](https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-win-x64.exe)
 - [FreeX-latest-win-x64.msix](https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-win-x64.msix)
 
-Latest verified tester pre-release: [FreeX (Test Release) v0.8.105](https://github.com/tony-xmelon/FreeX/releases/tag/v0-8-105-2026-06-08-16-50-57-run105-attempt1%2B7adb8728). Use the direct release page for this build; GitHub's `releases/latest` redirect remains on the latest non-prerelease tester build.
+Latest verified tester release: [FreeX (Test Release) v0.8.127](https://github.com/tony-xmelon/FreeX/releases/tag/v0-8-127-2026-06-20-19-57-44-run127-attempt1%2B1790d2ab), published from Tester Release run 127 attempt 1 at commit `1790d2ab`. GitHub's `releases/latest` redirect remains on the latest non-prerelease tester build.
 
 ## Documentation
 
-Start with the [user guide](docs/user/guide.md) and the [documentation index](docs/README.md). Current build scope and known limitations are tracked in [outstanding build](docs/planning/outstanding-build.md) and [fidelity contract](docs/formats/fidelity-contract.md).
+Start with the [user guide](docs/user/guide.md), [documentation index](docs/README.md), and [current status snapshot](docs/history/status-2026-06-21.md). Current build scope and known limitations are tracked in [outstanding build](docs/planning/outstanding-build.md), [fidelity workstream summary](docs/fidelity/README.md), and [fidelity contract](docs/formats/fidelity-contract.md).
 
 This monorepo also hosts **FreeW**, a sibling `.docx` word processor built on the same shared tier. See [freew/README.md](freew/README.md).
 

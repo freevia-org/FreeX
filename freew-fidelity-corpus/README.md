@@ -4,6 +4,10 @@ This corpus backs the **on-demand** FreeW DOCX fidelity work. It is intentionall
 FreeX's `fidelity-corpus`: the catalogue and downloader are committed, while third-party DOCX
 binaries are downloaded into an ignored `files/` folder and are never redistributed from this repo.
 
+Current status as of 2026-06-21: `manifest.csv` has 134 redistributable rows, and the manifest is
+guarded by `freew/FreeW.Core.IO.Tests/FreeWFidelityCorpusManifestTests.cs`. The current expansion
+summary is [../docs/fidelity/2026-06-19-freew-corpus-feature-growth.md](../docs/fidelity/2026-06-19-freew-corpus-feature-growth.md).
+
 The seed corpus focuses on Microsoft Word / WordprocessingML features FreeW needs to learn to open,
 preserve, render, and eventually edit:
 
@@ -35,6 +39,9 @@ pwsh tools/Fetch-FreeWFidelityCorpus.ps1
 pwsh tools/Fetch-FreeWFidelityCorpus.ps1 -Force
 ```
 
+Run the commands from the repository root; `tools/Fetch-FreeWFidelityCorpus.ps1` writes files under
+`freew-fidelity-corpus/files/`.
+
 ## Manifest schema
 
 `id,file,source,license,retrieved_on,url,feature_tags,notes`
@@ -52,7 +59,8 @@ pwsh tools/Fetch-FreeWFidelityCorpus.ps1 -Force
 **Round-trip (no Word needed):** the corpus-gated test
 `freew/FreeW.Core.IO.Tests/FreeWFidelityCorpusRoundTripTests.cs` opens + round-trips every `files/` doc and
 asserts no modelled-content loss (it no-ops when `files/` is absent). Findings:
-`docs/fidelity/2026-06-17-freew-corpus-roundtrip.md`.
+`docs/fidelity/2026-06-17-freew-corpus-roundtrip.md` is the historical 26-file baseline; the current
+corpus growth note is `docs/fidelity/2026-06-19-freew-corpus-feature-growth.md`.
 
 **Visual vs MS Word / LibreOffice:** run on a machine that has MS Word (preferred) or LibreOffice installed:
 
