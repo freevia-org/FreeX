@@ -1,20 +1,18 @@
+using SharedFileDialogFilterBuilder = Free.Shared.IO.FileDialogFilterBuilder;
+using SharedFileDialogFormatDescriptor = Free.Shared.IO.FileDialogFormatDescriptor;
+using SharedFileDialogPickerTypeDescriptor = Free.Shared.IO.FileDialogPickerTypeDescriptor;
+
 namespace FreeX.Core.IO;
 
 public static class FileDialogFilterBuilder
 {
-    private const string AllFilesFilterEntry = "All files (*.*)|*.*";
+    public static string BuildOpenFilter(IEnumerable<IFileAdapter> adapters) =>
+        SharedFileDialogFilterBuilder.BuildOpenFilter(
+            GetFormats(adapters, static format => format.CanOpen).Select(ToSharedDescriptor));
 
-    public static string BuildOpenFilter(IEnumerable<IFileAdapter> adapters)
-    {
-        var formats = GetFormats(adapters, static format => format.CanOpen);
-        return BuildFilter(formats, includeAllSupported: true, includeAllFiles: true);
-    }
-
-    public static string BuildSaveFilter(IEnumerable<IFileAdapter> adapters)
-    {
-        var formats = GetFormats(adapters, static format => format.CanSave);
-        return BuildFilter(formats, includeAllSupported: false, includeAllFiles: false);
-    }
+    public static string BuildSaveFilter(IEnumerable<IFileAdapter> adapters) =>
+        SharedFileDialogFilterBuilder.BuildSaveFilter(
+            GetFormats(adapters, static format => format.CanSave).Select(ToSharedDescriptor));
 
     public static IReadOnlyList<FilePickerTypeDescriptor> BuildOpenPickerTypes(
         IEnumerable<IFileAdapter> adapters,
@@ -25,11 +23,11 @@ public static class FileDialogFilterBuilder
 
     public static IReadOnlyList<FilePickerTypeDescriptor> BuildOpenPickerTypes(
         IEnumerable<FileFormatDescriptor> formats,
-        string allSupportedName = "All supported files")
-    {
-        var openFormats = formats.Where(format => format.CanOpen).ToList();
-        return BuildPickerTypes(openFormats, includeAllSupported: true, allSupportedName);
-    }
+        string allSupportedName = "All supported files") =>
+        MapPickerTypes(
+            SharedFileDialogFilterBuilder.BuildOpenPickerTypes(
+                formats.Select(ToSharedDescriptor),
+                allSupportedName));
 
     public static IReadOnlyList<FilePickerTypeDescriptor> BuildSavePickerTypes(
         IEnumerable<IFileAdapter> adapters,
@@ -40,33 +38,16 @@ public static class FileDialogFilterBuilder
 
     public static IReadOnlyList<FilePickerTypeDescriptor> BuildSavePickerTypes(
         IEnumerable<FileFormatDescriptor> formats,
-        string? preferredFirstExtension = null)
-    {
-        var saveFormats = formats.Where(format => format.CanSave).ToList();
-        PromotePreferredExtension(saveFormats, preferredFirstExtension);
-        return BuildPickerTypes(saveFormats, includeAllSupported: false, allSupportedName: "");
-    }
+        string? preferredFirstExtension = null) =>
+        MapPickerTypes(
+            SharedFileDialogFilterBuilder.BuildSavePickerTypes(
+                formats.Select(ToSharedDescriptor),
+                preferredFirstExtension));
 
-    public static int FindSaveFilterIndex(IEnumerable<IFileAdapter> adapters, string extension)
-    {
-        var normalizedExtension = FileFormatResolver.NormalizeExtension(extension);
-        if (normalizedExtension.Length == 0)
-            return 1;
-
-        var formats = GetFormats(adapters, static format => format.CanSave);
-        for (var i = 0; i < formats.Count; i++)
-        {
-            if (string.Equals(
-                FileFormatResolver.NormalizeExtension(formats[i].Extension),
-                normalizedExtension,
-                StringComparison.OrdinalIgnoreCase))
-            {
-                return i + 1;
-            }
-        }
-
-        return 1;
-    }
+    public static int FindSaveFilterIndex(IEnumerable<IFileAdapter> adapters, string extension) =>
+        SharedFileDialogFilterBuilder.FindSaveFilterIndex(
+            GetFormats(adapters, static format => format.CanSave).Select(ToSharedDescriptor),
+            extension);
 
     public static IFileAdapter? FindOpenAdapter(
         IEnumerable<IFileAdapter> adapters,
@@ -92,100 +73,12 @@ public static class FileDialogFilterBuilder
         Func<FileFormatDescriptor, bool> predicate) =>
         adapters.SelectMany(adapter => adapter.Formats).Where(predicate).ToList();
 
-    private static string BuildFilter(
-        IReadOnlyCollection<FileFormatDescriptor> formats,
-        bool includeAllSupported,
-        bool includeAllFiles)
-    {
-        var parts = new List<string>(formats.Count + 2);
+    private static SharedFileDialogFormatDescriptor ToSharedDescriptor(FileFormatDescriptor format) =>
+        new(format.Extension, format.FormatName, format.CanOpen, format.CanSave);
 
-        if (includeAllSupported && formats.Count > 0)
-            parts.Add(BuildAllSupportedFilterEntry(formats));
-
-        parts.AddRange(formats.Select(BuildFormatFilterEntry));
-
-        if (includeAllFiles)
-            parts.Add(AllFilesFilterEntry);
-
-        return string.Join('|', parts);
-    }
-
-    private static IReadOnlyList<FilePickerTypeDescriptor> BuildPickerTypes(
-        IReadOnlyCollection<FileFormatDescriptor> formats,
-        bool includeAllSupported,
-        string allSupportedName)
-    {
-        var descriptors = new List<FilePickerTypeDescriptor>(formats.Count + 1);
-
-        if (includeAllSupported && formats.Count > 0)
-            descriptors.Add(BuildAllSupportedPickerType(formats, allSupportedName));
-
-        descriptors.AddRange(formats.Select(BuildFormatPickerType));
-        return descriptors;
-    }
-
-    private static string BuildAllSupportedFilterEntry(IEnumerable<FileFormatDescriptor> formats)
-    {
-        var allSupported = string.Join(';', formats
-            .Select(format => FileFormatResolver.NormalizeExtension(format.Extension))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Select(extension => $"*{extension}"));
-
-        return $"All supported files ({allSupported})|{allSupported}";
-    }
-
-    private static FilePickerTypeDescriptor BuildAllSupportedPickerType(
-        IEnumerable<FileFormatDescriptor> formats,
-        string allSupportedName) =>
-        new(allSupportedName, BuildDistinctPatterns(formats));
-
-    private static string BuildFormatFilterEntry(FileFormatDescriptor format)
-    {
-        var extension = FileFormatResolver.NormalizeExtension(format.Extension);
-        return $"{format.FormatName} (*{extension})|*{extension}";
-    }
-
-    private static FilePickerTypeDescriptor BuildFormatPickerType(FileFormatDescriptor format)
-    {
-        var extension = FileFormatResolver.NormalizeExtension(format.Extension);
-        return new FilePickerTypeDescriptor(format.FormatName, [$"*{extension}"]);
-    }
-
-    private static IReadOnlyList<string> BuildDistinctPatterns(IEnumerable<FileFormatDescriptor> formats) =>
-        formats
-            .Select(format => FileFormatResolver.NormalizeExtension(format.Extension))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Select(extension => $"*{extension}")
+    private static IReadOnlyList<FilePickerTypeDescriptor> MapPickerTypes(
+        IEnumerable<SharedFileDialogPickerTypeDescriptor> descriptors) =>
+        descriptors
+            .Select(descriptor => new FilePickerTypeDescriptor(descriptor.DisplayName, descriptor.Patterns))
             .ToList();
-
-    private static void PromotePreferredExtension(
-        List<FileFormatDescriptor> formats,
-        string? preferredFirstExtension)
-    {
-        var normalizedExtension = FileFormatResolver.NormalizeExtension(preferredFirstExtension ?? "");
-        if (normalizedExtension.Length == 0)
-            return;
-
-        var index = -1;
-        for (var i = 0; i < formats.Count; i++)
-        {
-            if (!string.Equals(
-                    FileFormatResolver.NormalizeExtension(formats[i].Extension),
-                    normalizedExtension,
-                    StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            index = i;
-            break;
-        }
-
-        if (index <= 0)
-            return;
-
-        var preferred = formats[index];
-        formats.RemoveAt(index);
-        formats.Insert(0, preferred);
-    }
 }

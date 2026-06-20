@@ -1,3 +1,5 @@
+using SharedFileDialogFilterBuilder = Free.Shared.IO.FileDialogFilterBuilder;
+
 namespace FreeX.Core.IO;
 
 public static class FileFormatResolver
@@ -65,19 +67,8 @@ public static class FileFormatResolver
             : "unknown";
     }
 
-    public static string NormalizeExtension(string extension)
-    {
-        extension = extension.Trim();
-        if (extension.Length == 0)
-            return "";
-
-        if (extension.StartsWith("*.", StringComparison.Ordinal))
-            extension = extension[1..];
-
-        return extension.StartsWith(".", StringComparison.Ordinal)
-            ? extension
-            : $".{extension}";
-    }
+    public static string NormalizeExtension(string extension) =>
+        SharedFileDialogFilterBuilder.NormalizeExtension(extension);
 
     private static IFileAdapter? FindAdapter(
         IEnumerable<IFileAdapter> adapters,

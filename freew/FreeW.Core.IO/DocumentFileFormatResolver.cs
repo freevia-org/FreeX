@@ -1,3 +1,5 @@
+using SharedFileDialogFilterBuilder = Free.Shared.IO.FileDialogFilterBuilder;
+
 namespace FreeW.Core.IO;
 
 /// <summary>
@@ -23,19 +25,8 @@ public static class DocumentFileFormatResolver
     /// Normalizes a user/path extension to a leading-dot form (<c>docx</c> / <c>*.docx</c> → <c>.docx</c>),
     /// returning "" for empty input. Comparison elsewhere is case-insensitive.
     /// </summary>
-    public static string NormalizeExtension(string extension)
-    {
-        extension = extension.Trim();
-        if (extension.Length == 0)
-            return "";
-
-        if (extension.StartsWith("*.", StringComparison.Ordinal))
-            extension = extension[1..];
-
-        return extension.StartsWith('.')
-            ? extension
-            : $".{extension}";
-    }
+    public static string NormalizeExtension(string extension) =>
+        SharedFileDialogFilterBuilder.NormalizeExtension(extension);
 
     private static IDocumentFileAdapter? FindAdapter(
         IEnumerable<IDocumentFileAdapter> adapters,

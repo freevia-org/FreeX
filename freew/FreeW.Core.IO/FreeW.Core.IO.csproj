@@ -15,6 +15,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\FreeW.Core.Model\FreeW.Core.Model.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.IO\Free.Shared.IO.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Opc\Free.Shared.Opc.csproj" />
   </ItemGroup>
   <ItemGroup>

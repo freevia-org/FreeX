@@ -2,6 +2,7 @@
   <Folder Name="/shared/">
     <Project Path="shared/Free.Shared.AppServices/Free.Shared.AppServices.csproj" />
     <Project Path="shared/Free.Shared.Commands/Free.Shared.Commands.csproj" />
+    <Project Path="shared/Free.Shared.IO/Free.Shared.IO.csproj" />
     <Project Path="shared/Free.Shared.Ribbon/Free.Shared.Ribbon.csproj" />
     <Project Path="shared/Free.Shared.Ribbon.Wpf/Free.Shared.Ribbon.Wpf.csproj" />
     <Project Path="shared/Free.Shared.Shell/Free.Shared.Shell.csproj" />

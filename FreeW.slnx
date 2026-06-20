@@ -2,6 +2,7 @@
   <Folder Name="/shared/">
     <Project Path="shared/Free.Shared.AppServices/Free.Shared.AppServices.csproj" />
     <Project Path="shared/Free.Shared.Commands/Free.Shared.Commands.csproj" />
+    <Project Path="shared/Free.Shared.IO/Free.Shared.IO.csproj" />
     <Project Path="shared/Free.Shared.Opc/Free.Shared.Opc.csproj" />
     <Project Path="shared/Free.Shared.Pdf/Free.Shared.Pdf.csproj" />
     <Project Path="shared/Free.Shared.Pdf.Skia/Free.Shared.Pdf.Skia.csproj" />
