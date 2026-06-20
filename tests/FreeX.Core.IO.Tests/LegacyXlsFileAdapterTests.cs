@@ -272,7 +272,9 @@ public sealed class LegacyXlsFileAdapterTests
                 RichMetadata: source.RichMetadata,
                 SheetNames: workbook.Sheets.Select(sheet => sheet.Name).ToArray(),
                 CellFingerprints: ReadImportedCellFingerprints(workbook),
-                StyleFingerprints: ReadImportedFallbackStyleFingerprints(workbook),
+                StyleFingerprints: source.RichMetadata
+                    ? ReadImportedRichStyleFingerprints(workbook)
+                    : ReadImportedFallbackStyleFingerprints(workbook),
                 HeaderFooterFingerprints: ReadImportedFallbackHeaderFooterFingerprints(workbook),
                 DefinedNameFingerprints: ReadImportedDefinedNameFingerprints(workbook),
                 HyperlinkFingerprints: ReadImportedHyperlinkFingerprints(workbook),
@@ -648,6 +650,7 @@ public sealed class LegacyXlsFileAdapterTests
         var conditionalFormats = 0;
         var sheetNames = new List<string>();
         var cellFingerprints = new List<string>();
+        var styleFingerprints = new List<string>();
         var hyperlinkFingerprints = new List<string>();
         var commentFingerprints = new List<string>();
         var pictureFingerprints = new List<string>();
@@ -729,7 +732,16 @@ public sealed class LegacyXlsFileAdapterTests
                     if (cell.CellType == CellType.Formula)
                         formulas++;
                     if (cell.CellStyle?.Index > 0)
+                    {
                         styles++;
+                        styleFingerprints.Add(CreateSourceRichStyleFingerprint(
+                            hssf,
+                            sheetIndex,
+                            sheet.SheetName,
+                            (uint)cell.RowIndex + 1,
+                            (uint)cell.ColumnIndex + 1,
+                            cell.CellStyle));
+                    }
                 }
             }
 
@@ -862,7 +874,7 @@ public sealed class LegacyXlsFileAdapterTests
             activeSheetIndex,
             SheetNames: sheetNames,
             CellFingerprints: cellFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
-            StyleFingerprints: [],
+            StyleFingerprints: styleFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             HeaderFooterFingerprints: [],
             DefinedNameFingerprints: definedNameFingerprints,
             HyperlinkFingerprints: hyperlinkFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
@@ -1034,6 +1046,26 @@ public sealed class LegacyXlsFileAdapterTests
                 }))
             .Where(value => value is not null)
             .Select(value => value!)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+
+    private static IReadOnlyList<string> ReadImportedRichStyleFingerprints(Workbook workbook) =>
+        workbook.Sheets
+            .SelectMany((sheet, sheetIndex) => sheet.EnumerateCells()
+                .Where(entry => entry.Cell.StyleId != StyleId.Default)
+                .Select(entry => CreateRichStyleFingerprint(
+                    sheetIndex,
+                    sheet.Name,
+                    entry.Address.Row,
+                    entry.Address.Col,
+                    workbook.GetStyle(entry.Cell.StyleId)))
+                .Concat(sheet.GetStyleOnlyEntries()
+                    .Select(entry => CreateRichStyleFingerprint(
+                        sheetIndex,
+                        sheet.Name,
+                        entry.Key.Row,
+                        entry.Key.Col,
+                        workbook.GetStyle(entry.StyleId)))))
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
 
@@ -1561,6 +1593,69 @@ public sealed class LegacyXlsFileAdapterTests
         bool hidden) =>
         $"{sheetIndex}:{sheetName}!{new ModelCellAddress(default, row, column).ToA1()}|Style|Fmt={EscapeToken(numberFormat)}|H={horizontalAlignment}|V={verticalAlignment}|Indent={indentLevel}|Locked={locked}|Hidden={hidden}";
 
+    private static string CreateSourceRichStyleFingerprint(
+        HSSFWorkbook hssf,
+        int sheetIndex,
+        string sheetName,
+        uint row,
+        uint column,
+        ICellStyle sourceStyle)
+    {
+        var style = new ModelCellStyle
+        {
+            NumberFormat = sourceStyle.GetDataFormatString(),
+            HorizontalAlignment = MapSourceHorizontalAlignment(sourceStyle.Alignment),
+            VerticalAlignment = MapSourceVerticalAlignment(sourceStyle.VerticalAlignment),
+            WrapText = sourceStyle.WrapText,
+            ShrinkToFit = sourceStyle.ShrinkToFit,
+            IndentLevel = sourceStyle.Indention,
+            TextRotation = MapSourceTextRotation(sourceStyle.Rotation),
+            Locked = sourceStyle.IsLocked,
+            Hidden = sourceStyle.IsHidden,
+            FillPatternStyle = MapSourceFillPattern(sourceStyle.FillPattern),
+            BorderTop = new CellBorder(MapSourceBorderStyle(sourceStyle.BorderTop), GetSourceIndexedColor(hssf, sourceStyle.TopBorderColor)),
+            BorderRight = new CellBorder(MapSourceBorderStyle(sourceStyle.BorderRight), GetSourceIndexedColor(hssf, sourceStyle.RightBorderColor)),
+            BorderBottom = new CellBorder(MapSourceBorderStyle(sourceStyle.BorderBottom), GetSourceIndexedColor(hssf, sourceStyle.BottomBorderColor)),
+            BorderLeft = new CellBorder(MapSourceBorderStyle(sourceStyle.BorderLeft), GetSourceIndexedColor(hssf, sourceStyle.LeftBorderColor))
+        };
+
+        if (sourceStyle.FillForegroundColor != 0)
+            style.FillColor = GetSourceIndexedColor(hssf, sourceStyle.FillForegroundColor);
+
+        var font = hssf.GetFontAt(sourceStyle.FontIndex);
+        if (font is not null)
+        {
+            style.FontName = string.IsNullOrWhiteSpace(font.FontName) ? style.FontName : font.FontName;
+            if (font.FontHeightInPoints > 0)
+                style.FontSize = font.FontHeightInPoints;
+            style.Bold = font.IsBold;
+            style.Italic = font.IsItalic;
+            style.Strikethrough = font.IsStrikeout;
+            style.Underline = font.Underline != FontUnderlineType.None;
+            style.FontColor = GetSourceIndexedColor(hssf, font.Color);
+        }
+
+        return CreateRichStyleFingerprint(sheetIndex, sheetName, row, column, style);
+    }
+
+    private static string CreateRichStyleFingerprint(
+        int sheetIndex,
+        string sheetName,
+        uint row,
+        uint column,
+        ModelCellStyle style) =>
+        string.Join("|", [
+            $"{sheetIndex}:{sheetName}!{new ModelCellAddress(default, row, column).ToA1()}",
+            $"Style=Rich",
+            $"Fmt={EscapeToken(style.NumberFormat)}",
+            $"Align={style.HorizontalAlignment},{style.VerticalAlignment}",
+            $"Text={style.WrapText},{style.ShrinkToFit},{style.IndentLevel},{style.TextRotation}",
+            $"Protection={style.Locked},{style.Hidden}",
+            $"Font={EscapeToken(style.FontName)},{FormatDouble(style.FontSize)},{style.Bold},{style.Italic},{style.Strikethrough},{style.Underline},{FormatColor(style.FontColor)}",
+            $"Fill={FormatColor(style.FillColor)},{style.FillPatternStyle},{FormatColor(style.FillPatternColor)}",
+            $"Borders=T:{FormatBorder(style.BorderTop)},R:{FormatBorder(style.BorderRight)},B:{FormatBorder(style.BorderBottom)},L:{FormatBorder(style.BorderLeft)}"
+        ]);
+
     private static bool TryCreateExcelDataReaderHeaderFooterFingerprint(
         IExcelDataReader reader,
         int sheetIndex,
@@ -2015,6 +2110,35 @@ public sealed class LegacyXlsFileAdapterTests
             NPOIBorderStyle.Dotted => ModelBorderStyle.Dotted,
             NPOIBorderStyle.Double => ModelBorderStyle.Double,
             _ => ModelBorderStyle.None
+        };
+
+    private static ModelHorizontalAlignment MapSourceHorizontalAlignment(NPOIHorizontalAlignment alignment) =>
+        alignment switch
+        {
+            NPOIHorizontalAlignment.Left => ModelHorizontalAlignment.Left,
+            NPOIHorizontalAlignment.Center => ModelHorizontalAlignment.Center,
+            NPOIHorizontalAlignment.Right => ModelHorizontalAlignment.Right,
+            NPOIHorizontalAlignment.Justify => ModelHorizontalAlignment.Justify,
+            NPOIHorizontalAlignment.Distributed => ModelHorizontalAlignment.Distributed,
+            _ => ModelHorizontalAlignment.General
+        };
+
+    private static ModelVerticalAlignment MapSourceVerticalAlignment(NPOIVerticalAlignment alignment) =>
+        alignment switch
+        {
+            NPOIVerticalAlignment.Top => ModelVerticalAlignment.Top,
+            NPOIVerticalAlignment.Center => ModelVerticalAlignment.Center,
+            NPOIVerticalAlignment.Justify => ModelVerticalAlignment.Justify,
+            NPOIVerticalAlignment.Distributed => ModelVerticalAlignment.Distributed,
+            _ => ModelVerticalAlignment.Bottom
+        };
+
+    private static int MapSourceTextRotation(short rotation) =>
+        rotation switch
+        {
+            255 => 255,
+            > 90 => 90 - rotation,
+            _ => rotation
         };
 
     private static ModelHorizontalAlignment MapExcelDataReaderHorizontalAlignment(ExcelDataReader.HorizontalAlignment alignment) =>
