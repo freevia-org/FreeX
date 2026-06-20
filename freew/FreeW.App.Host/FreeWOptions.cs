@@ -1,4 +1,3 @@
-using System;
 using Free.Shared.AppServices;
 using FreeW.Core.Model;
 
@@ -15,13 +14,13 @@ namespace FreeW.App.Host;
 /// constructor, so a missing or corrupt settings file degrades to <c>new FreeWOptions()</c>.
 /// </para>
 /// </summary>
-public sealed class FreeWOptions
+public sealed class FreeWOptions : INormalizableApplicationOptions
 {
-    public const int DefaultRecentFilesCap = 15;
-    public const int MinRecentFilesCap = 0;
-    public const int MaxRecentFilesCap = RecentFilesStore.MaxRecentEntries;
+    public const int DefaultRecentFilesCap = ApplicationOptionsNormalizer.DefaultRecentFilesCap;
+    public const int MinRecentFilesCap = ApplicationOptionsNormalizer.MinRecentFilesCap;
+    public const int MaxRecentFilesCap = ApplicationOptionsNormalizer.MaxRecentFilesCap;
     public const string DocxDefaultFormat = ".docx";
-    public const string SystemDefaultLanguage = "";
+    public const string SystemDefaultLanguage = ApplicationOptionsNormalizer.SystemDefaultLanguage;
 
     /// <summary>How many recent files FreeW retains. Clamped to [0, <see cref="MaxRecentFilesCap"/>].</summary>
     public int RecentFilesCap { get; set; } = DefaultRecentFilesCap;
@@ -54,10 +53,9 @@ public sealed class FreeWOptions
     /// <summary>Normalizes loaded values to their valid ranges (called after a load).</summary>
     public void Normalize()
     {
-        RecentFilesCap = Math.Clamp(RecentFilesCap, MinRecentFilesCap, MaxRecentFilesCap);
-        if (string.IsNullOrWhiteSpace(DefaultSaveFormat))
-            DefaultSaveFormat = DocxDefaultFormat;
-        UiLanguage = UiLanguage?.Trim() ?? SystemDefaultLanguage;
+        RecentFilesCap = ApplicationOptionsNormalizer.NormalizeRecentFilesCap(RecentFilesCap);
+        DefaultSaveFormat = ApplicationOptionsNormalizer.NormalizeDefaultSaveFormat(DefaultSaveFormat, DocxDefaultFormat);
+        UiLanguage = ApplicationOptionsNormalizer.NormalizeUiLanguage(UiLanguage);
         AutoFormat ??= AutoFormatOptions.Default;
         AutoCorrect ??= AutoCorrectOptions.Default;
         AutoCorrect.Normalize();

@@ -11,13 +11,13 @@ namespace FreeP.App.Host;
 /// <para>All properties carry sensible defaults and the type is JSON round-trippable with a parameterless
 /// constructor, so a missing or corrupt settings file degrades to <c>new FreePOptions()</c>.</para>
 /// </summary>
-public sealed class FreePOptions
+public sealed class FreePOptions : INormalizableApplicationOptions
 {
-    public const int DefaultRecentFilesCap = 15;
-    public const int MinRecentFilesCap = 0;
-    public const int MaxRecentFilesCap = RecentFilesStore.MaxRecentEntries;
+    public const int DefaultRecentFilesCap = ApplicationOptionsNormalizer.DefaultRecentFilesCap;
+    public const int MinRecentFilesCap = ApplicationOptionsNormalizer.MinRecentFilesCap;
+    public const int MaxRecentFilesCap = ApplicationOptionsNormalizer.MaxRecentFilesCap;
     public const string FxpDefaultFormat = FxpFormat.Extension;
-    public const string SystemDefaultLanguage = "";
+    public const string SystemDefaultLanguage = ApplicationOptionsNormalizer.SystemDefaultLanguage;
 
     /// <summary>How many recent files FreeP retains. Clamped to [0, <see cref="MaxRecentFilesCap"/>].</summary>
     public int RecentFilesCap { get; set; } = DefaultRecentFilesCap;
@@ -31,9 +31,8 @@ public sealed class FreePOptions
     /// <summary>Normalizes loaded values to their valid ranges (called after a load).</summary>
     public void Normalize()
     {
-        RecentFilesCap = Math.Clamp(RecentFilesCap, MinRecentFilesCap, MaxRecentFilesCap);
-        if (string.IsNullOrWhiteSpace(DefaultSaveFormat))
-            DefaultSaveFormat = FxpDefaultFormat;
-        UiLanguage = UiLanguage?.Trim() ?? SystemDefaultLanguage;
+        RecentFilesCap = ApplicationOptionsNormalizer.NormalizeRecentFilesCap(RecentFilesCap);
+        DefaultSaveFormat = ApplicationOptionsNormalizer.NormalizeDefaultSaveFormat(DefaultSaveFormat, FxpDefaultFormat);
+        UiLanguage = ApplicationOptionsNormalizer.NormalizeUiLanguage(UiLanguage);
     }
 }

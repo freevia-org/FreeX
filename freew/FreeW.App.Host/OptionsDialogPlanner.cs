@@ -1,4 +1,4 @@
-using System.Globalization;
+using Free.Shared.AppServices;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host;
@@ -16,18 +16,8 @@ internal static class OptionsDialogPlanner
     /// (so the dialog can warn) when the text is not a whole number within
     /// [<see cref="FreeWOptions.MinRecentFilesCap"/>, <see cref="FreeWOptions.MaxRecentFilesCap"/>].
     /// </summary>
-    public static bool TryParseRecentFilesCap(string? text, out int cap)
-    {
-        if (int.TryParse((text ?? string.Empty).Trim(), NumberStyles.Integer, CultureInfo.CurrentCulture, out cap)
-            && cap >= FreeWOptions.MinRecentFilesCap
-            && cap <= FreeWOptions.MaxRecentFilesCap)
-        {
-            return true;
-        }
-
-        cap = 0;
-        return false;
-    }
+    public static bool TryParseRecentFilesCap(string? text, out int cap) =>
+        ApplicationOptionsNormalizer.TryParseRecentFilesCap(text, out cap);
 
     /// <summary>
     /// Builds the normalized options the dialog hands back on OK. <paramref name="format"/> falls back to

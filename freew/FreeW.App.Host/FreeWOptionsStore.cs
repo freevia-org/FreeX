@@ -1,11 +1,10 @@
-using System;
 using Free.Shared.AppServices;
 
 namespace FreeW.App.Host;
 
 /// <summary>
 /// FreeW's settings store: a thin app-specific façade over the shared, neutral
-/// <see cref="JsonSettingsStore{T}"/>. Persists <see cref="FreeWOptions"/> as <c>settings.json</c> under
+/// <see cref="NormalizingJsonSettingsStore{T}"/>. Persists <see cref="FreeWOptions"/> as <c>settings.json</c> under
 /// FreeW's own data folder (because <c>Program.Main</c> installed <c>AppProduct = "FreeW"</c>, so the
 /// shared path planner resolves <c>%APPDATA%\FreeW\settings.json</c>).
 ///
@@ -20,9 +19,9 @@ public sealed class FreeWOptionsStore
     /// <summary>The settings file name under FreeW's product data folder.</summary>
     public const string FileName = "settings.json";
 
-    private readonly JsonSettingsStore<FreeWOptions> _store;
+    private readonly NormalizingJsonSettingsStore<FreeWOptions> _store;
 
-    private FreeWOptionsStore(JsonSettingsStore<FreeWOptions> store) => _store = store;
+    private FreeWOptionsStore(NormalizingJsonSettingsStore<FreeWOptions> store) => _store = store;
 
     /// <summary>The absolute path this store reads from / writes to.</summary>
     public string StorePath => _store.StorePath;
@@ -38,25 +37,15 @@ public sealed class FreeWOptionsStore
     public static FreeWOptionsStore Create(
         IApplicationDataPathProvider? pathProvider = null,
         string? overridePath = null) =>
-        new(JsonSettingsStore<FreeWOptions>.ForProductFile(FileName, pathProvider, overridePath));
+        new(NormalizingJsonSettingsStore<FreeWOptions>.ForProductFile(FileName, pathProvider, overridePath));
 
     /// <summary>A store rooted at an explicit absolute path (tests).</summary>
     public static FreeWOptionsStore ForPath(string storePath) =>
-        new(JsonSettingsStore<FreeWOptions>.ForPath(storePath));
+        new(NormalizingJsonSettingsStore<FreeWOptions>.ForPath(storePath));
 
     /// <summary>Loads and normalizes the settings; missing/corrupt files degrade to defaults.</summary>
-    public FreeWOptions Load()
-    {
-        var options = _store.Load();
-        options.Normalize();
-        return options;
-    }
+    public FreeWOptions Load() => _store.Load();
 
     /// <summary>Normalizes then atomically saves; returns false (with <see cref="LastError"/>) on failure.</summary>
-    public bool Save(FreeWOptions options)
-    {
-        ArgumentNullException.ThrowIfNull(options);
-        options.Normalize();
-        return _store.Save(options);
-    }
+    public bool Save(FreeWOptions options) => _store.Save(options);
 }
