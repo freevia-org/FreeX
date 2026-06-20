@@ -385,6 +385,31 @@ public sealed class AvaloniaRibbonHostCallbackTests
     }
 
     [Fact]
+    public void DrawCommands_DefaultToDisabledNoOpUntilContextualHandlersApply()
+    {
+        var registry = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { });
+
+        Assert.True(registry.TryGet(new RibbonCommandId("Bring Forward"), out var command));
+        var stateful = Assert.IsAssignableFrom<IRibbonStatefulCommand>(command);
+        Assert.False(stateful.GetState().IsEnabled);
+    }
+
+    [Fact]
+    public void DrawPicturesAndShapes_BindToInsertCallbacks_WhenProvided()
+    {
+        var registry = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { }, new AvaloniaRibbonHostCallbacks
+        {
+            InsertPicture = () => { },
+            InsertShape = () => { },
+        });
+
+        Assert.True(registry.TryGet(Canonical("insert.picture"), out var picture));
+        Assert.True(registry.TryGet(Canonical("insert.shapes"), out var shapes));
+        Assert.IsType<RelayRibbonCommand>(picture);
+        Assert.IsType<RelayRibbonCommand>(shapes);
+    }
+
+    [Fact]
     public void InsertTable_BindsBothRibbonAndHomeButtons_ToTheSameAction()
     {
         var count = 0;

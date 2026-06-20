@@ -43,6 +43,13 @@ public sealed partial class MainWindow
         ("tab.Help", "HelpTab"),
     ];
 
+    private static readonly string[] ParityBackstageSurfaces =
+    [
+        "backstage.Export",
+        "backstage.Info",
+        "backstage.Account",
+    ];
+
     /// <summary>
     /// Renders every app surface to <c>&lt;outputDirectory&gt;/&lt;surfaceId&gt;.png</c> and returns the per-surface
     /// outcome list that drives the manifest. Runs on the UI thread (the coordinator awaits it from the
@@ -67,9 +74,16 @@ public sealed partial class MainWindow
         foreach (var (surfaceId, opener) in ParityDialogOpeners())
             results.Add(await CaptureModalSurfaceAsync(outputDirectory, surfaceId, ParitySurfaceKind.Dialog, opener));
 
-        // ── Backstage panes: same modal capture path. ──
-        foreach (var (surfaceId, opener) in ParityBackstageOpeners())
-            results.Add(await CaptureModalSurfaceAsync(outputDirectory, surfaceId, ParitySurfaceKind.Backstage, opener));
+        // The Avalonia shell currently exposes File Info/Export/Account as modal dialogs, while the WPF
+        // shell captures the true full-window Backstage overlay. Record these honestly as missing instead
+        // of comparing mismatched popup windows as if they were the same surface.
+        foreach (var surfaceId in ParityBackstageSurfaces)
+            results.Add(new ParitySurfaceResult(
+                surfaceId,
+                ParitySurfaceKind.Backstage,
+                surfaceId + ".png",
+                Captured: false,
+                "Avalonia File surface is still dialog-based; true Backstage overlay capture is not ported yet."));
 
         return results;
     }
@@ -86,14 +100,6 @@ public sealed partial class MainWindow
         ("dialog.ConditionalFormatManage", () => ShowManageConditionalFormatsDialogAsync()),
         ("dialog.PageSetup", () => ShowPageSetupDialogAsync()),
         ("dialog.Options", () => ShowOptionsDialogAsync()),
-    ];
-
-    /// <summary>The backstage (File) panes and the shell method that opens each.</summary>
-    private IReadOnlyList<(string SurfaceId, Func<Task> Opener)> ParityBackstageOpeners() =>
-    [
-        ("backstage.Export", () => ShowBackstageExportDialogAsync()),
-        ("backstage.Info", () => ShowBackstageInfoDialogAsync()),
-        ("backstage.Account", () => ShowBackstageAccountDialogAsync()),
     ];
 
     private ParitySurfaceResult CaptureRibbonTab(

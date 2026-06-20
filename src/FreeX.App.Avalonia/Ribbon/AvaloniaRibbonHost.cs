@@ -212,6 +212,19 @@ internal sealed class NoOpRibbonCommand : IRibbonCommand
     }
 }
 
+/// <summary>A disabled placeholder for shared ribbon commands that are intentionally unavailable.</summary>
+internal sealed class DisabledNoOpRibbonCommand : IRibbonStatefulCommand
+{
+    public static readonly DisabledNoOpRibbonCommand Instance = new();
+
+    public void Execute(RibbonCommandContext context)
+    {
+        // Intentionally empty: unavailable commands render disabled and ignore activation.
+    }
+
+    public RibbonCommandState GetState() => new(IsEnabled: false);
+}
+
 /// <summary>
 /// Inserts a chart of a fixed <see cref="ChartType"/> over the live session's selection by running the
 /// shared Core <see cref="FreeX.Core.Commands.AddChartCommand"/> (built by
@@ -270,8 +283,11 @@ internal static class AvaloniaRibbonComposition
         // Seed every canonical id the shared definition emits with the honest NoOp stub, so the shared
         // definition's richer surface (Draw/Help tabs, deeper menus) renders enabled without a crash even
         // before any real handler is wired. Real handlers below override the relevant ids.
-        foreach (var id in EnumerateCommandIds(BuildDefinition()))
+        var definition = BuildDefinition();
+        foreach (var id in EnumerateCommandIds(definition))
             registry.Register(id, NoOpRibbonCommand.Instance);
+
+        RegisterDisabledDrawDefaults(registry, definition);
 
         // Override the representative formatting toggles with the shared, platform-neutral commands so the
         // Avalonia ribbon performs real edits (the same WorkbookSession logic the WPF host runs). Keys are
@@ -288,6 +304,16 @@ internal static class AvaloniaRibbonComposition
         // with host callbacks, so the declarative ribbon invokes the same handlers as the native menus.
         ApplyHostCallbacks(registry, callbacks);
         return registry;
+    }
+
+    private static void RegisterDisabledDrawDefaults(RibbonCommandRegistry registry, RibbonDefinition definition)
+    {
+        var drawTab = definition.Tabs.FirstOrDefault(tab => string.Equals(tab.Id, "DrawTab", StringComparison.Ordinal));
+        if (drawTab is null)
+            return;
+
+        foreach (var id in EnumerateCommandIds(drawTab))
+            registry.Register(id, DisabledNoOpRibbonCommand.Instance);
     }
 
     /// <summary>Registers <paramref name="command"/> under the canonical id for the Avalonia <paramref name="avaloniaId"/>.</summary>
@@ -376,6 +402,12 @@ internal static class AvaloniaRibbonComposition
     public static IEnumerable<RibbonCommandId> EnumerateCommandIds(RibbonDefinition definition)
     {
         foreach (var tab in definition.Tabs)
+        foreach (var id in EnumerateCommandIds(tab))
+            yield return id;
+    }
+
+    private static IEnumerable<RibbonCommandId> EnumerateCommandIds(RibbonTab tab)
+    {
         foreach (var group in tab.Groups)
         foreach (var control in group.Controls)
         {
