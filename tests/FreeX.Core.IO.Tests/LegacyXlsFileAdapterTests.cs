@@ -512,6 +512,12 @@ public sealed class LegacyXlsFileAdapterTests
                 fingerprint.Contains(",False|TopLeft", StringComparison.Ordinal)) ?? 0)
             .Should()
             .BeGreaterThan(0);
+        summaries.Where(summary => summary.RichMetadata)
+            .Sum(summary => summary.ViewStateFingerprints?.Count(fingerprint =>
+                fingerprint.Contains("|View=Normal,80|", StringComparison.Ordinal) ||
+                fingerprint.Contains("|View=Normal,85|", StringComparison.Ordinal)) ?? 0)
+            .Should()
+            .BeGreaterThan(0);
         summaries.Sum(summary => summary.DefinedNames).Should().BeGreaterThan(0);
         summaries.Sum(summary => summary.Hyperlinks).Should().BeGreaterThan(0);
         summaries.Sum(summary => summary.Comments).Should().BeGreaterThan(0);
@@ -3485,13 +3491,34 @@ public sealed class LegacyXlsFileAdapterTests
 
     private static int GetSourceZoomPercent(ISheet sheet)
     {
-        if (TryGetWindowTwoRecord(sheet) is not { } window)
-            return 100;
+        if (TryGetWindowTwoRecord(sheet) is { } window &&
+            GetValidWindowZoom(window) is { } windowZoom)
+        {
+            return windowZoom;
+        }
 
+        return GetValidScaleZoom(sheet) ?? 100;
+    }
+
+    private static int? GetValidWindowZoom(WindowTwoRecord window)
+    {
         var zoom = window.SavedInPageBreakPreview && window.PageBreakZoom > 0
             ? window.PageBreakZoom
             : window.NormalZoom;
-        return zoom is >= 10 and <= 400 ? zoom : 100;
+        return zoom is >= 10 and <= 400 ? zoom : null;
+    }
+
+    private static int? GetValidScaleZoom(ISheet sheet)
+    {
+        if (sheet is not HSSFSheet hssfSheet ||
+            hssfSheet.Sheet.FindFirstRecordBySid(SCLRecord.sid) is not SCLRecord scale ||
+            scale.Denominator <= 0)
+        {
+            return null;
+        }
+
+        var zoom = (int)Math.Round(scale.Numerator * 100d / scale.Denominator, MidpointRounding.AwayFromZero);
+        return zoom is >= 10 and <= 400 ? zoom : null;
     }
 
     private static WindowTwoRecord? TryGetWindowTwoRecord(ISheet sheet) =>

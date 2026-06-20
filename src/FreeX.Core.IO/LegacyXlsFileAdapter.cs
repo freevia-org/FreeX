@@ -905,15 +905,39 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
             if (window.SavedInPageBreakPreview)
                 sheet.ViewMode = WorksheetViewMode.PageBreakPreview;
 
-            var zoom = window.SavedInPageBreakPreview && window.PageBreakZoom > 0
-                ? window.PageBreakZoom
-                : window.NormalZoom;
-            if (zoom is >= 10 and <= 400)
+            if (GetValidWindowZoom(window) is { } zoom)
                 sheet.ZoomPercent = zoom;
+            else if (GetValidScaleZoom(sourceSheet) is { } scaleZoom)
+                sheet.ZoomPercent = scaleZoom;
+        }
+        else if (GetValidScaleZoom(sourceSheet) is { } scaleZoom)
+        {
+            sheet.ZoomPercent = scaleZoom;
         }
 
         if (TryGetTabColor(sourceSheet, palette, out var tabColor))
             sheet.TabColor = tabColor;
+    }
+
+    private static int? GetValidWindowZoom(WindowTwoRecord window)
+    {
+        var zoom = window.SavedInPageBreakPreview && window.PageBreakZoom > 0
+            ? window.PageBreakZoom
+            : window.NormalZoom;
+        return zoom is >= 10 and <= 400 ? zoom : null;
+    }
+
+    private static int? GetValidScaleZoom(ISheet sourceSheet)
+    {
+        if (sourceSheet is not HSSFSheet hssfSheet ||
+            hssfSheet.Sheet.FindFirstRecordBySid(SCLRecord.sid) is not SCLRecord scale ||
+            scale.Denominator <= 0)
+        {
+            return null;
+        }
+
+        var zoom = (int)Math.Round(scale.Numerator * 100d / scale.Denominator, MidpointRounding.AwayFromZero);
+        return zoom is >= 10 and <= 400 ? zoom : null;
     }
 
     private static void LoadPrimaryViewMetadata(ISheet sourceSheet, WindowTwoRecord window, Sheet sheet)
