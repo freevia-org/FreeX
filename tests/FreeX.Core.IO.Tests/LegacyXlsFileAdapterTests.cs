@@ -21,6 +21,9 @@ namespace FreeX.Core.IO.Tests;
 public sealed class LegacyXlsFileAdapterTests
 {
     private const int LegacyXlsMaxColumnIndex = 255;
+    private const short LegacyPaperSizeLetter = 1;
+    private const short LegacyPaperSizeLegal = 5;
+    private const short LegacyPaperSizeA4 = 9;
 
     [Fact]
     public void Formats_AreOpenOnly()
@@ -101,6 +104,30 @@ public sealed class LegacyXlsFileAdapterTests
         sheet.PrintArea.Value.End.Should().Be(new ModelCellAddress(sheet.Id, 7, 5));
         sheet.PrintTitleRows.Should().Be(new WorksheetRepeatRange(1, 2));
         sheet.PrintTitleColumns.Should().Be(new WorksheetRepeatRange(1, 2));
+        sheet.PageOrientation.Should().Be(WorksheetPageOrientation.Landscape);
+        sheet.PaperSize.Should().Be(WorksheetPaperSize.Letter);
+        sheet.PageMargins.Should().Be(new WorksheetPageMargins(0.7, 0.8, 0.9, 1.0));
+        sheet.HeaderMargin.Should().BeApproximately(0.25, 0.0001);
+        sheet.FooterMargin.Should().BeApproximately(0.35, 0.0001);
+        sheet.PrintGridlines.Should().BeTrue();
+        sheet.PrintHeadings.Should().BeTrue();
+        sheet.CenterHorizontallyOnPage.Should().BeTrue();
+        sheet.CenterVerticallyOnPage.Should().BeTrue();
+        sheet.FitToPage.Should().BeTrue();
+        sheet.AutoPageBreaks.Should().BeTrue();
+        sheet.ScaleToFit.Should().Be(new WorksheetScaleToFit(null, 1, 2));
+        sheet.PageOrder.Should().Be(WorksheetPageOrder.OverThenDown);
+        sheet.FirstPageNumber.Should().Be(3);
+        sheet.PrintCopies.Should().Be(2);
+        sheet.PrintBlackAndWhite.Should().BeTrue();
+        sheet.PrintDraftQuality.Should().BeTrue();
+        sheet.PrintQualityDpi.Should().Be(600);
+        sheet.PrintQualityVerticalDpi.Should().Be(300);
+        sheet.PrintComments.Should().Be(WorksheetPrintComments.AtEnd);
+        sheet.PageHeader.Should().Be(new WorksheetHeaderFooter("Legacy", "Page &P", "&D"));
+        sheet.PageFooter.Should().Be(new WorksheetHeaderFooter("Left footer", "Center footer", "Right footer"));
+        sheet.RowPageBreaks.Should().Contain(5);
+        sheet.ColumnPageBreaks.Should().Contain(4);
 
         var formulaCell = sheet.GetCell(2, 2);
         formulaCell.Should().NotBeNull();
@@ -180,6 +207,8 @@ public sealed class LegacyXlsFileAdapterTests
                 workbook.Sheets.Count(sheet => sheet.PrintArea is not null),
                 workbook.Sheets.Count(sheet => sheet.PrintTitleRows is not null),
                 workbook.Sheets.Count(sheet => sheet.PrintTitleColumns is not null),
+                workbook.Sheets.Count,
+                workbook.Sheets.Sum(sheet => sheet.RowPageBreaks.Count + sheet.ColumnPageBreaks.Count),
                 SheetNames: workbook.Sheets.Select(sheet => sheet.Name).ToArray(),
                 CellFingerprints: ReadImportedCellFingerprints(workbook),
                 DefinedNameFingerprints: ReadImportedDefinedNameFingerprints(workbook),
@@ -188,7 +217,8 @@ public sealed class LegacyXlsFileAdapterTests
                 PaneFingerprints: ReadImportedPaneFingerprints(workbook),
                 RowOutlineFingerprints: ReadImportedRowOutlineFingerprints(workbook),
                 ColOutlineFingerprints: ReadImportedColOutlineFingerprints(workbook),
-                PrintLayoutFingerprints: ReadImportedPrintLayoutFingerprints(workbook));
+                PrintLayoutFingerprints: ReadImportedPrintLayoutFingerprints(workbook),
+                PageSetupFingerprints: ReadImportedPageSetupFingerprints(workbook));
 
             imported.Sheets.Should().Be(source.Sheets, imported.File);
             imported.Cells.Should().Be(source.Cells, imported.File);
@@ -212,10 +242,13 @@ public sealed class LegacyXlsFileAdapterTests
                 imported.PrintAreas.Should().Be(source.PrintAreas, imported.File);
                 imported.PrintTitleRows.Should().Be(source.PrintTitleRows, imported.File);
                 imported.PrintTitleColumns.Should().Be(source.PrintTitleColumns, imported.File);
+                imported.PageSetupSheets.Should().Be(source.PageSetupSheets, imported.File);
+                imported.PageBreaks.Should().Be(source.PageBreaks, imported.File);
                 imported.PaneFingerprints.Should().BeEquivalentTo(source.PaneFingerprints, imported.File);
                 imported.RowOutlineFingerprints.Should().BeEquivalentTo(source.RowOutlineFingerprints, imported.File);
                 imported.ColOutlineFingerprints.Should().BeEquivalentTo(source.ColOutlineFingerprints, imported.File);
                 imported.PrintLayoutFingerprints.Should().BeEquivalentTo(source.PrintLayoutFingerprints, imported.File);
+                imported.PageSetupFingerprints.Should().BeEquivalentTo(source.PageSetupFingerprints, imported.File);
                 imported.Styles.Should().BeGreaterThanOrEqualTo(source.Styles, imported.File);
                 imported.Dimensions.Should().BeGreaterThanOrEqualTo(source.Dimensions, imported.File);
             }
@@ -384,6 +417,41 @@ public sealed class LegacyXlsFileAdapterTests
         hssf.SetPrintArea(0, 0, 4, 0, 6);
         sheet.RepeatingRows = new CellRangeAddress(0, 1, -1, -1);
         sheet.RepeatingColumns = new CellRangeAddress(-1, -1, 0, 1);
+        sheet.SetMargin(MarginType.LeftMargin, 0.7);
+        sheet.SetMargin(MarginType.RightMargin, 0.8);
+        sheet.SetMargin(MarginType.TopMargin, 0.9);
+        sheet.SetMargin(MarginType.BottomMargin, 1.0);
+        sheet.IsPrintGridlines = true;
+        sheet.IsPrintRowAndColumnHeadings = true;
+        sheet.HorizontallyCenter = true;
+        sheet.VerticallyCenter = true;
+        sheet.FitToPage = true;
+        sheet.Autobreaks = true;
+        sheet.Header.Left = "Legacy";
+        sheet.Header.Center = "Page &P";
+        sheet.Header.Right = "&D";
+        sheet.Footer.Left = "Left footer";
+        sheet.Footer.Center = "Center footer";
+        sheet.Footer.Right = "Right footer";
+        sheet.SetRowBreak(4);
+        sheet.SetColumnBreak(3);
+
+        var printSetup = sheet.PrintSetup;
+        printSetup.Landscape = true;
+        printSetup.PaperSize = LegacyPaperSizeLetter;
+        printSetup.FitWidth = 1;
+        printSetup.FitHeight = 2;
+        printSetup.LeftToRight = true;
+        printSetup.UsePage = true;
+        printSetup.PageStart = 3;
+        printSetup.Copies = 2;
+        printSetup.NoColor = true;
+        printSetup.Draft = true;
+        printSetup.HResolution = 600;
+        printSetup.VResolution = 300;
+        printSetup.HeaderMargin = 0.25;
+        printSetup.FooterMargin = 0.35;
+        printSetup.Notes = true;
 
         HSSFFormulaEvaluator.EvaluateAllFormulaCells(hssf);
 
@@ -423,6 +491,7 @@ public sealed class LegacyXlsFileAdapterTests
         var freezePanes = 0;
         var rowOutlineLevels = 0;
         var colOutlineLevels = 0;
+        var pageBreaks = 0;
         var sheetNames = new List<string>();
         var cellFingerprints = new List<string>();
         var hyperlinkFingerprints = new List<string>();
@@ -431,6 +500,7 @@ public sealed class LegacyXlsFileAdapterTests
         var rowOutlineFingerprints = new List<string>();
         var colOutlineFingerprints = new List<string>();
         var printLayoutFingerprints = new List<string>();
+        var pageSetupFingerprints = new List<string>();
 
         for (var sheetIndex = 0; sheetIndex < hssf.NumberOfSheets; sheetIndex++)
         {
@@ -452,6 +522,9 @@ public sealed class LegacyXlsFileAdapterTests
                 printLayoutFingerprints.Add(CreateRepeatRangeFingerprint(sheetIndex, sheet.SheetName, "Rows", repeatRows));
             if (TryCreateRepeatColumns(sheet.RepeatingColumns, out var repeatColumns))
                 printLayoutFingerprints.Add(CreateRepeatRangeFingerprint(sheetIndex, sheet.SheetName, "Cols", repeatColumns));
+            pageBreaks += sheet.RowBreaks.Count(breakIndex => ToSourceModelIndex(breakIndex) >= 2);
+            pageBreaks += sheet.ColumnBreaks.Count(breakIndex => ToSourceModelIndex(breakIndex) >= 2);
+            pageSetupFingerprints.Add(CreateSourcePageSetupFingerprint(sheetIndex, sheet.SheetName, sheet));
 
             for (var rowIndex = sheet.FirstRowNum; rowIndex <= sheet.LastRowNum; rowIndex++)
             {
@@ -577,6 +650,8 @@ public sealed class LegacyXlsFileAdapterTests
             orderedPrintLayoutFingerprints.Count(value => value.Contains("|Area|", StringComparison.Ordinal)),
             orderedPrintLayoutFingerprints.Count(value => value.Contains("|Rows|", StringComparison.Ordinal)),
             orderedPrintLayoutFingerprints.Count(value => value.Contains("|Cols|", StringComparison.Ordinal)),
+            pageSetupFingerprints.Count,
+            pageBreaks,
             SheetNames: sheetNames,
             CellFingerprints: cellFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             DefinedNameFingerprints: definedNameFingerprints,
@@ -585,7 +660,8 @@ public sealed class LegacyXlsFileAdapterTests
             PaneFingerprints: paneFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             RowOutlineFingerprints: rowOutlineFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             ColOutlineFingerprints: colOutlineFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
-            PrintLayoutFingerprints: orderedPrintLayoutFingerprints);
+            PrintLayoutFingerprints: orderedPrintLayoutFingerprints,
+            PageSetupFingerprints: pageSetupFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray());
     }
 
     private static LegacyXlsCorpusSummary ReadExcelDataReaderSourceSummary(string path, Stream stream)
@@ -628,6 +704,8 @@ public sealed class LegacyXlsFileAdapterTests
             PrintAreas: 0,
             PrintTitleRows: 0,
             PrintTitleColumns: 0,
+            PageSetupSheets: 0,
+            PageBreaks: 0,
             RichMetadata: false,
             SheetNames: [],
             CellFingerprints: [],
@@ -637,7 +715,8 @@ public sealed class LegacyXlsFileAdapterTests
             PaneFingerprints: [],
             RowOutlineFingerprints: [],
             ColOutlineFingerprints: [],
-            PrintLayoutFingerprints: []);
+            PrintLayoutFingerprints: [],
+            PageSetupFingerprints: []);
     }
 
     private static IReadOnlyList<string> ReadImportedCellFingerprints(Workbook workbook) =>
@@ -734,6 +813,38 @@ public sealed class LegacyXlsFileAdapterTests
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
 
+    private static IReadOnlyList<string> ReadImportedPageSetupFingerprints(Workbook workbook) =>
+        workbook.Sheets
+            .Select((sheet, sheetIndex) => CreatePageSetupFingerprint(
+                sheetIndex,
+                sheet.Name,
+                sheet.PageOrientation,
+                sheet.PaperSize,
+                sheet.PageMargins,
+                sheet.HeaderMargin,
+                sheet.FooterMargin,
+                sheet.PrintGridlines,
+                sheet.PrintHeadings,
+                sheet.CenterHorizontallyOnPage,
+                sheet.CenterVerticallyOnPage,
+                sheet.FitToPage,
+                sheet.AutoPageBreaks,
+                sheet.ScaleToFit,
+                sheet.PageOrder,
+                sheet.FirstPageNumber,
+                sheet.PrintCopies,
+                sheet.PrintBlackAndWhite,
+                sheet.PrintDraftQuality,
+                sheet.PrintQualityDpi,
+                sheet.PrintQualityVerticalDpi,
+                sheet.PrintComments,
+                sheet.PageHeader,
+                sheet.PageFooter,
+                sheet.RowPageBreaks,
+                sheet.ColumnPageBreaks))
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+
     private static IReadOnlyList<string> ReadSourcePrintLayoutFingerprints(HSSFWorkbook hssf)
     {
         var workbook = new Workbook("PrintLayoutSource");
@@ -750,6 +861,56 @@ public sealed class LegacyXlsFileAdapterTests
         }
 
         return ReadImportedPrintLayoutFingerprints(workbook);
+    }
+
+    private static string CreateSourcePageSetupFingerprint(int sheetIndex, string sheetName, ISheet sheet)
+    {
+        var printSetup = sheet.PrintSetup;
+        var scaleToFit = printSetup.FitWidth > 0 || printSetup.FitHeight > 0
+            ? new WorksheetScaleToFit(null, PositiveOrNull(printSetup.FitWidth), PositiveOrNull(printSetup.FitHeight))
+            : new WorksheetScaleToFit(PositiveOrDefault(printSetup.Scale, 100), null, null);
+        var rowBreaks = sheet.RowBreaks
+            .Select(ToSourceModelIndex)
+            .Where(index => index >= 2)
+            .Order()
+            .ToArray();
+        var columnBreaks = sheet.ColumnBreaks
+            .Select(ToSourceModelIndex)
+            .Where(index => index >= 2)
+            .Order()
+            .ToArray();
+
+        return CreatePageSetupFingerprint(
+            sheetIndex,
+            sheetName,
+            printSetup.Landscape ? WorksheetPageOrientation.Landscape : WorksheetPageOrientation.Portrait,
+            MapSourcePaperSize(printSetup.PaperSize),
+            new WorksheetPageMargins(
+                ValidMarginOrDefault(sheet.GetMargin(MarginType.LeftMargin), WorksheetPageMargins.Narrow.Left),
+                ValidMarginOrDefault(sheet.GetMargin(MarginType.RightMargin), WorksheetPageMargins.Narrow.Right),
+                ValidMarginOrDefault(sheet.GetMargin(MarginType.TopMargin), WorksheetPageMargins.Narrow.Top),
+                ValidMarginOrDefault(sheet.GetMargin(MarginType.BottomMargin), WorksheetPageMargins.Narrow.Bottom)),
+            ValidMarginOrDefault(printSetup.HeaderMargin, 0.3),
+            ValidMarginOrDefault(printSetup.FooterMargin, 0.3),
+            sheet.IsPrintGridlines,
+            sheet.IsPrintRowAndColumnHeadings,
+            sheet.HorizontallyCenter,
+            sheet.VerticallyCenter,
+            sheet.FitToPage,
+            sheet.Autobreaks,
+            scaleToFit,
+            printSetup.LeftToRight ? WorksheetPageOrder.OverThenDown : WorksheetPageOrder.DownThenOver,
+            printSetup.UsePage && printSetup.PageStart > 0 ? printSetup.PageStart : null,
+            printSetup.Copies > 0 ? printSetup.Copies : null,
+            printSetup.NoColor,
+            printSetup.Draft,
+            printSetup.HResolution > 0 ? printSetup.HResolution : null,
+            printSetup.VResolution > 0 && printSetup.VResolution != printSetup.HResolution ? printSetup.VResolution : null,
+            printSetup.Notes ? WorksheetPrintComments.AtEnd : WorksheetPrintComments.None,
+            ToWorksheetHeaderFooter(sheet.Header),
+            ToWorksheetHeaderFooter(sheet.Footer),
+            rowBreaks,
+            columnBreaks);
     }
 
     private static string CreateCellFingerprint(
@@ -796,6 +957,138 @@ public sealed class LegacyXlsFileAdapterTests
         string axis,
         WorksheetRepeatRange range) =>
         $"{sheetIndex}:{sheetName}|{axis}|{range.Start}:{range.End}";
+
+    private static string CreatePageSetupFingerprint(
+        int sheetIndex,
+        string sheetName,
+        WorksheetPageOrientation orientation,
+        WorksheetPaperSize paperSize,
+        WorksheetPageMargins margins,
+        double headerMargin,
+        double footerMargin,
+        bool printGridlines,
+        bool printHeadings,
+        bool centerHorizontally,
+        bool centerVertically,
+        bool? fitToPage,
+        bool? autoPageBreaks,
+        WorksheetScaleToFit scaleToFit,
+        WorksheetPageOrder pageOrder,
+        int? firstPageNumber,
+        int? printCopies,
+        bool blackAndWhite,
+        bool draftQuality,
+        int? printQualityDpi,
+        int? printQualityVerticalDpi,
+        WorksheetPrintComments printComments,
+        WorksheetHeaderFooter header,
+        WorksheetHeaderFooter footer,
+        IEnumerable<uint> rowBreaks,
+        IEnumerable<uint> columnBreaks) =>
+        string.Join("|", [
+            $"{sheetIndex}:{sheetName}",
+            $"Orient={orientation}",
+            $"Paper={paperSize}",
+            $"Margins={FormatDouble(margins.Left)},{FormatDouble(margins.Right)},{FormatDouble(margins.Top)},{FormatDouble(margins.Bottom)}",
+            $"HeaderFooterMargins={FormatDouble(headerMargin)},{FormatDouble(footerMargin)}",
+            $"Print={printGridlines},{printHeadings}",
+            $"Center={centerHorizontally},{centerVertically}",
+            $"Flags={FormatNullableBool(fitToPage)},{FormatNullableBool(autoPageBreaks)}",
+            $"Scale={FormatNullableInt(scaleToFit.ScalePercent)},{FormatNullableInt(scaleToFit.FitToPagesWide)},{FormatNullableInt(scaleToFit.FitToPagesTall)}",
+            $"Order={pageOrder}",
+            $"FirstPage={FormatNullableInt(firstPageNumber)}",
+            $"Copies={FormatNullableInt(printCopies)}",
+            $"Quality={blackAndWhite},{draftQuality},{FormatNullableInt(printQualityDpi)},{FormatNullableInt(printQualityVerticalDpi)}",
+            $"Comments={printComments}",
+            $"Header={FormatHeaderFooter(header)}",
+            $"Footer={FormatHeaderFooter(footer)}",
+            $"RowBreaks={FormatBreaks(rowBreaks)}",
+            $"ColBreaks={FormatBreaks(columnBreaks)}"
+        ]);
+
+    private static string FormatDouble(double value) =>
+        value.ToString("0.##########", CultureInfo.InvariantCulture);
+
+    private static string FormatNullableBool(bool? value) =>
+        value.HasValue ? value.Value.ToString(CultureInfo.InvariantCulture) : "null";
+
+    private static string FormatNullableInt(int? value) =>
+        value.HasValue ? value.Value.ToString(CultureInfo.InvariantCulture) : "null";
+
+    private static string FormatHeaderFooter(WorksheetHeaderFooter value) =>
+        $"{EscapeToken(value.Left)},{EscapeToken(value.Center)},{EscapeToken(value.Right)}";
+
+    private static string EscapeToken(string value) =>
+        value.Replace("\\", "\\\\", StringComparison.Ordinal)
+            .Replace("|", "\\p", StringComparison.Ordinal)
+            .Replace(",", "\\c", StringComparison.Ordinal);
+
+    private static string FormatBreaks(IEnumerable<uint> breaks) =>
+        string.Join(",", breaks.Order());
+
+    private static uint ToSourceModelIndex(int zeroBasedIndex) =>
+        (uint)zeroBasedIndex + 1;
+
+    private static WorksheetHeaderFooter ToWorksheetHeaderFooter(IHeaderFooter headerFooter)
+    {
+        if (headerFooter is NPOI.HSSF.UserModel.HeaderFooter legacyHeaderFooter)
+            return ParseHeaderFooterRawText(legacyHeaderFooter.RawText);
+
+        return new(headerFooter.Left ?? "", headerFooter.Center ?? "", headerFooter.Right ?? "");
+    }
+
+    private static WorksheetHeaderFooter ParseHeaderFooterRawText(string? rawText)
+    {
+        if (string.IsNullOrEmpty(rawText))
+            return new WorksheetHeaderFooter("", "", "");
+
+        var left = new StringBuilder();
+        var center = new StringBuilder();
+        var right = new StringBuilder();
+        var current = center;
+
+        for (var index = 0; index < rawText.Length; index++)
+        {
+            if (rawText[index] == '&' && index + 1 < rawText.Length)
+            {
+                current = rawText[index + 1] switch
+                {
+                    'L' => left,
+                    'C' => center,
+                    'R' => right,
+                    _ => current
+                };
+
+                if (rawText[index + 1] is 'L' or 'C' or 'R')
+                {
+                    index++;
+                    continue;
+                }
+            }
+
+            current.Append(rawText[index]);
+        }
+
+        return new WorksheetHeaderFooter(left.ToString(), center.ToString(), right.ToString());
+    }
+
+    private static WorksheetPaperSize MapSourcePaperSize(short paperSize) =>
+        paperSize switch
+        {
+            LegacyPaperSizeLetter => WorksheetPaperSize.Letter,
+            LegacyPaperSizeLegal => WorksheetPaperSize.Legal,
+            LegacyPaperSizeA4 => WorksheetPaperSize.A4,
+            _ => WorksheetPaperSize.A4
+        };
+
+    private static int? PositiveOrNull(short value) =>
+        value > 0 ? value : null;
+
+    private static int PositiveOrDefault(short value, int defaultValue) =>
+        value > 0 ? value : defaultValue;
+
+    private static double ValidMarginOrDefault(double value, double defaultValue) =>
+        double.IsFinite(value) && value >= 0 ? value : defaultValue;
 
     private static string SourceValueToken(ICell cell, CellType cellType) =>
         cellType switch
@@ -1185,6 +1478,8 @@ public sealed class LegacyXlsFileAdapterTests
         int PrintAreas,
         int PrintTitleRows,
         int PrintTitleColumns,
+        int PageSetupSheets,
+        int PageBreaks,
         bool RichMetadata = true,
         IReadOnlyList<string>? SheetNames = null,
         IReadOnlyList<string>? CellFingerprints = null,
@@ -1194,7 +1489,8 @@ public sealed class LegacyXlsFileAdapterTests
         IReadOnlyList<string>? PaneFingerprints = null,
         IReadOnlyList<string>? RowOutlineFingerprints = null,
         IReadOnlyList<string>? ColOutlineFingerprints = null,
-        IReadOnlyList<string>? PrintLayoutFingerprints = null);
+        IReadOnlyList<string>? PrintLayoutFingerprints = null,
+        IReadOnlyList<string>? PageSetupFingerprints = null);
 
     public static TheoryData<object, double> AdditionalNumericValues() => new()
     {

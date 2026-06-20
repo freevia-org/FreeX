@@ -18,6 +18,9 @@ namespace FreeX.Core.IO;
 public sealed class LegacyXlsFileAdapter : IFileAdapter
 {
     private const int LegacyXlsMaxColumnIndex = 255;
+    private const short LegacyPaperSizeLetter = 1;
+    private const short LegacyPaperSizeLegal = 5;
+    private const short LegacyPaperSizeA4 = 9;
 
     private static readonly HashSet<string> ExcelReservedDefinedNames = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -136,6 +139,7 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
     {
         LoadPaneState(sourceSheet, sheet);
         LoadPrintTitles(sourceSheet, sheet);
+        LoadPageLayout(sourceSheet, sheet);
 
         if (sourceSheet.DefaultColumnWidth > 0)
             sheet.DefaultColumnWidth = sourceSheet.DefaultColumnWidth;
@@ -200,6 +204,135 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
             sheet.PrintTitleRows = rows;
         if (TryCreateRepeatColumns(sourceSheet.RepeatingColumns, out var columns))
             sheet.PrintTitleColumns = columns;
+    }
+
+    private static void LoadPageLayout(ISheet sourceSheet, Sheet sheet)
+    {
+        sheet.PageMargins = new WorksheetPageMargins(
+            ValidMarginOrDefault(sourceSheet.GetMargin(MarginType.LeftMargin), sheet.PageMargins.Left),
+            ValidMarginOrDefault(sourceSheet.GetMargin(MarginType.RightMargin), sheet.PageMargins.Right),
+            ValidMarginOrDefault(sourceSheet.GetMargin(MarginType.TopMargin), sheet.PageMargins.Top),
+            ValidMarginOrDefault(sourceSheet.GetMargin(MarginType.BottomMargin), sheet.PageMargins.Bottom));
+
+        sheet.PrintGridlines = sourceSheet.IsPrintGridlines;
+        sheet.PrintHeadings = sourceSheet.IsPrintRowAndColumnHeadings;
+        sheet.CenterHorizontallyOnPage = sourceSheet.HorizontallyCenter;
+        sheet.CenterVerticallyOnPage = sourceSheet.VerticallyCenter;
+        sheet.FitToPage = sourceSheet.FitToPage;
+        sheet.AutoPageBreaks = sourceSheet.Autobreaks;
+        sheet.PageHeader = ToWorksheetHeaderFooter(sourceSheet.Header);
+        sheet.PageFooter = ToWorksheetHeaderFooter(sourceSheet.Footer);
+
+        LoadManualPageBreaks(sourceSheet, sheet);
+        LoadPrintSetup(sourceSheet.PrintSetup, sheet);
+    }
+
+    private static void LoadManualPageBreaks(ISheet sourceSheet, Sheet sheet)
+    {
+        foreach (var rowBreak in sourceSheet.RowBreaks)
+        {
+            var modelRow = ToModelIndex(rowBreak);
+            if (modelRow is >= 2 and <= ModelCellAddress.MaxRow)
+                sheet.RowPageBreaks.Add(modelRow);
+        }
+
+        foreach (var columnBreak in sourceSheet.ColumnBreaks)
+        {
+            var modelColumn = ToModelIndex(columnBreak);
+            if (modelColumn is >= 2 and <= ModelCellAddress.MaxCol)
+                sheet.ColumnPageBreaks.Add(modelColumn);
+        }
+    }
+
+    private static void LoadPrintSetup(IPrintSetup printSetup, Sheet sheet)
+    {
+        sheet.PageOrientation = printSetup.Landscape
+            ? WorksheetPageOrientation.Landscape
+            : WorksheetPageOrientation.Portrait;
+        sheet.PaperSize = MapPaperSize(printSetup.PaperSize);
+        sheet.HeaderMargin = ValidMarginOrDefault(printSetup.HeaderMargin, sheet.HeaderMargin);
+        sheet.FooterMargin = ValidMarginOrDefault(printSetup.FooterMargin, sheet.FooterMargin);
+        sheet.PageOrder = printSetup.LeftToRight
+            ? WorksheetPageOrder.OverThenDown
+            : WorksheetPageOrder.DownThenOver;
+        sheet.FirstPageNumber = printSetup.UsePage && printSetup.PageStart > 0
+            ? printSetup.PageStart
+            : null;
+        sheet.PrintCopies = printSetup.Copies > 0 ? printSetup.Copies : null;
+        sheet.PrintBlackAndWhite = printSetup.NoColor;
+        sheet.PrintDraftQuality = printSetup.Draft;
+        sheet.PrintQualityDpi = printSetup.HResolution > 0 ? printSetup.HResolution : null;
+        sheet.PrintQualityVerticalDpi = printSetup.VResolution > 0 && printSetup.VResolution != printSetup.HResolution
+            ? printSetup.VResolution
+            : null;
+        sheet.PrintComments = printSetup.Notes
+            ? WorksheetPrintComments.AtEnd
+            : WorksheetPrintComments.None;
+
+        sheet.ScaleToFit = printSetup.FitWidth > 0 || printSetup.FitHeight > 0
+            ? new WorksheetScaleToFit(null, PositiveOrNull(printSetup.FitWidth), PositiveOrNull(printSetup.FitHeight))
+            : new WorksheetScaleToFit(PositiveOrDefault(printSetup.Scale, 100), null, null);
+    }
+
+    private static WorksheetPaperSize MapPaperSize(short paperSize) =>
+        paperSize switch
+        {
+            LegacyPaperSizeLetter => WorksheetPaperSize.Letter,
+            LegacyPaperSizeLegal => WorksheetPaperSize.Legal,
+            LegacyPaperSizeA4 => WorksheetPaperSize.A4,
+            _ => WorksheetPaperSize.A4
+        };
+
+    private static int? PositiveOrNull(short value) =>
+        value > 0 ? value : null;
+
+    private static int PositiveOrDefault(short value, int defaultValue) =>
+        value > 0 ? value : defaultValue;
+
+    private static double ValidMarginOrDefault(double value, double defaultValue) =>
+        double.IsFinite(value) && value >= 0 ? value : defaultValue;
+
+    private static WorksheetHeaderFooter ToWorksheetHeaderFooter(IHeaderFooter headerFooter)
+    {
+        if (headerFooter is NPOI.HSSF.UserModel.HeaderFooter legacyHeaderFooter)
+            return ParseHeaderFooterRawText(legacyHeaderFooter.RawText);
+
+        return new(headerFooter.Left ?? "", headerFooter.Center ?? "", headerFooter.Right ?? "");
+    }
+
+    private static WorksheetHeaderFooter ParseHeaderFooterRawText(string? rawText)
+    {
+        if (string.IsNullOrEmpty(rawText))
+            return new WorksheetHeaderFooter("", "", "");
+
+        var left = new StringBuilder();
+        var center = new StringBuilder();
+        var right = new StringBuilder();
+        var current = center;
+
+        for (var index = 0; index < rawText.Length; index++)
+        {
+            if (rawText[index] == '&' && index + 1 < rawText.Length)
+            {
+                current = rawText[index + 1] switch
+                {
+                    'L' => left,
+                    'C' => center,
+                    'R' => right,
+                    _ => current
+                };
+
+                if (rawText[index + 1] is 'L' or 'C' or 'R')
+                {
+                    index++;
+                    continue;
+                }
+            }
+
+            current.Append(rawText[index]);
+        }
+
+        return new WorksheetHeaderFooter(left.ToString(), center.ToString(), right.ToString());
     }
 
     private static void LoadMergedRegions(ISheet sourceSheet, Sheet sheet)
