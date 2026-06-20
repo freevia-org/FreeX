@@ -4,8 +4,10 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Shapes;
 using Avalonia.Headless;
+using Avalonia.Layout;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
+using Avalonia.Styling;
 using Avalonia.Themes.Fluent;
 using Avalonia.VisualTree;
 using FreeX.App.Avalonia.Ribbon;
@@ -196,6 +198,48 @@ public sealed class AvaloniaRibbonRendererTests
     });
 
     [Fact]
+    public Task BuildRibbon_UsesCompactTabAndComboStyles() => RunOnUiThread(() =>
+    {
+        var definition = AvaloniaRibbonComposition.BuildDefinition();
+        var registry = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { });
+        var ribbon = AvaloniaRibbonRenderer.BuildRibbon(definition, registry);
+
+        var tabControl = Assert.IsType<TabControl>(ribbon);
+        Assert.Contains(tabControl.Styles, style => style is Style concrete && HasSetter(concrete, Layoutable.HeightProperty, 24d));
+        Assert.Contains(tabControl.Styles, style => style is Style concrete && HasSetter(concrete, TemplatedControl.PaddingProperty, new Thickness(10, 0, 10, 0)));
+        Assert.Contains(tabControl.Styles, style => style is Style concrete && HasSetter(concrete, TemplatedControl.BorderThicknessProperty, new Thickness(0, 0, 0, 2)));
+        Assert.Contains(tabControl.Styles, style => style is Style concrete && HasSetter(concrete, Layoutable.MaxHeightProperty, 21d));
+    });
+
+    [Fact]
+    public Task DropdownChevron_UsesWindowsChevronGlyph() => RunOnUiThread(() =>
+    {
+        var content = AvaloniaRibbonRenderer.BuildTabContent(BuildHomeTab(), new RibbonCommandRegistry());
+
+        var chevrons = content.GetLogicalDescendants()
+            .OfType<TextBlock>()
+            .Where(text => string.Equals(text.Text, "\u25BE", StringComparison.Ordinal))
+            .ToList();
+
+        Assert.NotEmpty(chevrons);
+        Assert.DoesNotContain(content.GetLogicalDescendants().OfType<TextBlock>(), text => text.Text == "v");
+    });
+
+    [Fact]
+    public Task ComboBox_UsesCompactHeightWithoutClippingPadding() => RunOnUiThread(() =>
+    {
+        var content = AvaloniaRibbonRenderer.BuildTabContent(BuildHomeTab(), registry: null);
+
+        var combo = content.GetLogicalDescendants().OfType<ComboBox>().Single();
+
+        Assert.Equal(21, combo.Height);
+        Assert.Equal(21, combo.MinHeight);
+        Assert.Equal(21, combo.MaxHeight);
+        Assert.Equal(new Thickness(6, 0, 18, 0), combo.Padding);
+        Assert.Equal(VerticalAlignment.Center, combo.VerticalContentAlignment);
+    });
+
+    [Fact]
     public Task BuildRibbon_ContextSource_ShowsAndHidesContextualTabs() => RunOnUiThread(() =>
     {
         var definition = new RibbonDefinitionBuilder()
@@ -235,6 +279,11 @@ public sealed class AvaloniaRibbonRendererTests
             ContextChanged?.Invoke(this, EventArgs.Empty);
         }
     }
+
+    private static bool HasSetter(Style style, AvaloniaProperty property, object expectedValue) =>
+        style.Setters
+            .OfType<Setter>()
+            .Any(setter => setter.Property == property && Equals(setter.Value, expectedValue));
 
     [Fact]
     public Task UnregisteredCommand_RendersDisabled() => RunOnUiThread(() =>

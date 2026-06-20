@@ -24,8 +24,9 @@ namespace FreeX.Ribbon.Avalonia;
 /// </summary>
 public static class AvaloniaRibbonRenderer
 {
-    private const double SmallRowHeight = 22;
-    private const double LargeIconSize = 32;
+    private const string MenuChevron = "\u25BE";
+    private const double SmallRowHeight = 21;
+    private const double LargeIconSize = 30;
     private const double MediumIconSize = 16;
     private const double SmallIconSize = 18;
     private const int MaxRowsPerColumn = 3;
@@ -97,7 +98,7 @@ public static class AvaloniaRibbonRenderer
 
         var panel = new AvaloniaRibbonAdaptivePanel
         {
-            MinHeight = 88,
+            MinHeight = 82,
         };
 
         var first = true;
@@ -113,7 +114,7 @@ public static class AvaloniaRibbonRenderer
         return new Border
         {
             Background = SurfaceBrush,
-            Padding = new Thickness(0, 4, 0, 0),
+            Padding = new Thickness(0, 2, 0, 0),
             Child = panel,
         };
     }
@@ -244,10 +245,10 @@ public static class AvaloniaRibbonRenderer
                 new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0, 0, 0, 3)),
                 new Setter(TemplatedControl.FontSizeProperty, 12d),
                 new Setter(TemplatedControl.ForegroundProperty, TabTextBrush),
-                // Avalonia Fluent default tab height is ~48px vs WPF ~28px; constrain to match.
+                // Avalonia Fluent default tab height is ~48px vs WPF's compact header row; constrain it.
                 new Setter(Layoutable.MinHeightProperty, 0d),
-                new Setter(Layoutable.HeightProperty, 28d),
-                new Setter(TemplatedControl.PaddingProperty, new Thickness(10, 2, 10, 2)),
+                new Setter(Layoutable.HeightProperty, 24d),
+                new Setter(TemplatedControl.PaddingProperty, new Thickness(10, 0, 10, 0)),
                 new Setter(Layoutable.MarginProperty, new Thickness(0, 0, 1, 0)),
                 new Setter(InputElement.CursorProperty, new Cursor(StandardCursorType.Hand)),
             },
@@ -270,7 +271,7 @@ public static class AvaloniaRibbonRenderer
                 new Setter(TemplatedControl.BackgroundProperty, SurfaceBrush),
                 new Setter(TemplatedControl.ForegroundProperty, TabTextBrush),
                 new Setter(TemplatedControl.BorderBrushProperty, AccentBrush),
-                new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0, 0, 0, 3)),
+                new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0, 0, 0, 2)),
             },
         };
 
@@ -342,9 +343,29 @@ public static class AvaloniaRibbonRenderer
         {
             Setters =
             {
-                new Setter(Layoutable.MaxHeightProperty, 26d),
-                new Setter(TemplatedControl.PaddingProperty, new Thickness(8, 2, 4, 2)),
+                new Setter(Layoutable.MinHeightProperty, SmallRowHeight),
+                new Setter(Layoutable.HeightProperty, SmallRowHeight),
+                new Setter(Layoutable.MaxHeightProperty, SmallRowHeight),
+                new Setter(TemplatedControl.FontSizeProperty, 12d),
+                new Setter(TemplatedControl.PaddingProperty, new Thickness(6, 0, 18, 0)),
             },
+        };
+
+        var disabledButtons = new Style(x => x.OfType<Button>().Class(":disabled"))
+        {
+            Setters = { new Setter(Visual.OpacityProperty, 0.45d) },
+        };
+        var disabledToggles = new Style(x => x.OfType<ToggleButton>().Class(":disabled"))
+        {
+            Setters = { new Setter(Visual.OpacityProperty, 0.45d) },
+        };
+        var disabledChecks = new Style(x => x.OfType<CheckBox>().Class(":disabled"))
+        {
+            Setters = { new Setter(Visual.OpacityProperty, 0.45d) },
+        };
+        var disabledCombos = new Style(x => x.OfType<ComboBox>().Class(":disabled"))
+        {
+            Setters = { new Setter(Visual.OpacityProperty, 0.55d) },
         };
 
         tabControl.Styles.Add(tabBase);
@@ -358,6 +379,10 @@ public static class AvaloniaRibbonRenderer
         tabControl.Styles.Add(toggleHover);
         tabControl.Styles.Add(toggleChecked);
         tabControl.Styles.Add(comboBase);
+        tabControl.Styles.Add(disabledButtons);
+        tabControl.Styles.Add(disabledToggles);
+        tabControl.Styles.Add(disabledChecks);
+        tabControl.Styles.Add(disabledCombos);
     }
 
     private static Control BuildGroup(RibbonGroup group, IRibbonCommandRegistry? registry)
@@ -368,7 +393,7 @@ public static class AvaloniaRibbonRenderer
             RowDefinitions =
             {
                 new RowDefinition(GridLength.Star),
-                new RowDefinition(new GridLength(18)),
+                new RowDefinition(new GridLength(17)),
             },
         };
 
@@ -381,7 +406,7 @@ public static class AvaloniaRibbonRenderer
         {
             BorderBrush = DividerBrush,
             BorderThickness = new Thickness(0, 1, 0, 0),
-            MinHeight = 18,
+            MinHeight = 17,
             Child = new TextBlock
             {
                 Text = group.Header,
@@ -569,7 +594,7 @@ public static class AvaloniaRibbonRenderer
         {
             stack.Children.Add(new TextBlock
             {
-                Text = "▾",
+                Text = MenuChevron,
                 FontSize = 10,
                 TextAlignment = TextAlignment.Center,
                 HorizontalAlignment = HorizontalAlignment.Center,
@@ -577,10 +602,10 @@ public static class AvaloniaRibbonRenderer
             });
         }
 
-        // WPF RibbonLargeButton: Width 70, Height 76, Padding 3,2.
+        // WPF RibbonLargeButton: compact hero column, Padding 3,2.
         var button = NewButtonLike(control);
-        button.Width = 70;
-        button.Height = 76;
+        button.Width = 68;
+        button.Height = 72;
         button.Padding = new Thickness(3, 2);
         ((ContentControl)button).Content = stack;
         WireControl(button, control, registry);
@@ -647,6 +672,11 @@ public static class AvaloniaRibbonRenderer
         {
             Width = combo.Width ?? 110,
             Height = SmallRowHeight,
+            MinHeight = SmallRowHeight,
+            MaxHeight = SmallRowHeight,
+            FontSize = 12,
+            Padding = new Thickness(6, 0, 18, 0),
+            VerticalContentAlignment = VerticalAlignment.Center,
             Margin = new Thickness(1, 0, 1, 0),
             Background = Brushes.White,
             Tag = combo.CommandId.Value,
@@ -685,7 +715,7 @@ public static class AvaloniaRibbonRenderer
 
     private static TextBlock Chevron() => new()
     {
-        Text = "▾",
+        Text = MenuChevron,
         FontSize = 9,
         VerticalAlignment = VerticalAlignment.Center,
         Margin = new Thickness(1, 0, 1, 0),

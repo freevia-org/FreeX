@@ -59,6 +59,12 @@ public sealed class ParityCaptureTests
                     File.Exists(Path.Combine(outputDirectory, dialog.PngFileName))
                         .Should().BeTrue($"{dialog.PngFileName} should be written for captured dialog {dialog.Id}");
 
+                results.Where(r => r.Id.StartsWith("backstage.", StringComparison.Ordinal))
+                    .Should()
+                    .OnlyContain(
+                        r => !r.Captured && r.Note.Contains("dialog-based", StringComparison.Ordinal),
+                        "Avalonia must not compare modal File dialogs as if they were the Windows Backstage overlay");
+
                 window.Close();
             }, CancellationToken.None);
         }

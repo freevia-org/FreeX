@@ -110,7 +110,7 @@ public static class CaptureRunner
         "cd /opt/freex",
         "chmod +x FreeX",
         "echo '=== parity-capture (Avalonia, Xvfb) ==='",
-        "xvfb-run -a --server-args=\"-screen 0 1600x1000x24\" ./FreeX --parity-capture /work/out || echo \"parity-capture exit=$?\"",
+        "xvfb-run -a --server-args=\"-screen 0 1120x720x24\" ./FreeX --parity-capture /work/out || echo \"parity-capture exit=$?\"",
         "echo '=== captured files ==='",
         "ls -la /work/out || echo '(no out dir)'",
     });
