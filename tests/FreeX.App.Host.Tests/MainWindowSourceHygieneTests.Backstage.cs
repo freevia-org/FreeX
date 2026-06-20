@@ -71,9 +71,12 @@ public sealed partial class MainWindowSourceHygieneTests
     public void BackstageOpenAndSave_UseFormatDescriptorRegistry()
     {
         var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
+        var pickerPlannerSource = DialogSourceTestSupport.ReadAppServicesSource("WorkbookFilePickerPlanner.cs");
 
-        backstageSource.Should().Contain("FileDialogFilterBuilder.BuildOpenFilter(_fileAdapters)");
-        backstageSource.Should().Contain("FileDialogFilterBuilder.BuildSaveFilter(_fileAdapters)");
+        backstageSource.Should().Contain("WorkbookFilePickerPlanner.BuildOpenDialogPlan(_fileAdapters)");
+        backstageSource.Should().Contain("WorkbookFilePickerPlanner.BuildSaveDialogPlan(");
+        pickerPlannerSource.Should().Contain("FileDialogFilterBuilder.BuildOpenFilter(adapters)");
+        pickerPlannerSource.Should().Contain("FileDialogFilterBuilder.BuildSaveFilter(adapters)");
         backstageSource.Should().Contain("FileDialogFilterBuilder.FindOpenAdapter(_fileAdapters, ext, out var format)");
         backstageSource.Should().Contain("_currentFilePath = result.OpenedAsTemplate ? null : path;");
     }
@@ -84,22 +87,20 @@ public sealed partial class MainWindowSourceHygieneTests
         var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
 
         backstageSource.Should().Contain("new Microsoft.Win32.OpenFileDialog");
-        backstageSource.Should().Contain("Filter = filter");
+        backstageSource.Should().Contain("Filter = plan.Filter");
         backstageSource.Should().Contain("CheckFileExists = true");
         backstageSource.Should().Contain("Multiselect = false");
         backstageSource.Should().Contain("if (dialog.ShowDialog() == true)");
         backstageSource.Should().Contain("await OpenFileAsync(dialog.FileName);");
 
         backstageSource.Should().Contain("new Microsoft.Win32.SaveFileDialog");
-        backstageSource.Should().Contain("FileName = _workbook.Name");
-        backstageSource.Should().Contain("var defaultExt = ResolveSaveDialogDefaultExtension();");
-        backstageSource.Should().Contain("DefaultExt = defaultExt");
-        backstageSource.Should().Contain("FilterIndex = FileDialogFilterBuilder.FindSaveFilterIndex(_fileAdapters, defaultExt)");
+        backstageSource.Should().Contain("FileName = plan.SuggestedFileName");
+        backstageSource.Should().Contain("DefaultExt = plan.DefaultExtensionWithDot");
+        backstageSource.Should().Contain("FilterIndex = plan.FilterIndex");
         backstageSource.Should().Contain("AddExtension = true");
         backstageSource.Should().Contain("OverwritePrompt = true");
-        backstageSource.Should().Contain("FileDialogFilterBuilder.FindSaveAdapter(_fileAdapters, ext, out _)");
-        backstageSource.Should().Contain("FreeXOptions.NormalizeDefaultFormat(_options.DefaultFormat)");
-        backstageSource.Should().Contain("return await SaveWorkbookToTargetAsync(new FileSaveTarget(dialog.FileName, adapter));");
+        backstageSource.Should().Contain("WorkbookFilePickerPlanner.TryResolveSaveDialogTarget(_fileAdapters, dialog.FileName, out var target)");
+        backstageSource.Should().Contain("return await SaveWorkbookToTargetAsync(target);");
     }
 
     [Fact]

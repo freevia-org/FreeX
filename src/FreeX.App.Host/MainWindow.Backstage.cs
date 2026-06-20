@@ -889,10 +889,10 @@ public partial class MainWindow
 
     private async void OpenButton_Click(object sender, RoutedEventArgs e)
     {
-        var filter = FileDialogFilterBuilder.BuildOpenFilter(_fileAdapters);
+        var plan = WorkbookFilePickerPlanner.BuildOpenDialogPlan(_fileAdapters);
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
-            Filter = filter,
+            Filter = plan.Filter,
             CheckFileExists = true,
             Multiselect = false
         };
@@ -920,37 +920,32 @@ public partial class MainWindow
 
     private async Task<bool> SaveWorkbookWithDialogAsync()
     {
-        var filter = FileDialogFilterBuilder.BuildSaveFilter(_fileAdapters);
-        var defaultExt = ResolveSaveDialogDefaultExtension();
+        var plan = WorkbookFilePickerPlanner.BuildSaveDialogPlan(
+            _fileAdapters,
+            _workbook.Name,
+            _options.DefaultFormat);
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
-            Filter = filter,
-            FileName = _workbook.Name,
-            DefaultExt = defaultExt,
-            FilterIndex = FileDialogFilterBuilder.FindSaveFilterIndex(_fileAdapters, defaultExt),
+            Filter = plan.Filter,
+            FileName = plan.SuggestedFileName,
+            DefaultExt = plan.DefaultExtensionWithDot,
+            FilterIndex = plan.FilterIndex,
             AddExtension = true,
             OverwritePrompt = true
         };
 
         if (dialog.ShowDialog() == true)
         {
-            var ext = System.IO.Path.GetExtension(dialog.FileName).ToLower();
-            var adapter = FileDialogFilterBuilder.FindSaveAdapter(_fileAdapters, ext, out _);
-            if (adapter == null)
+            if (!WorkbookFilePickerPlanner.TryResolveSaveDialogTarget(_fileAdapters, dialog.FileName, out var target) ||
+                target is null)
+            {
                 return false;
+            }
 
-            return await SaveWorkbookToTargetAsync(new FileSaveTarget(dialog.FileName, adapter));
+            return await SaveWorkbookToTargetAsync(target);
         }
 
         return false;
-    }
-
-    private string ResolveSaveDialogDefaultExtension()
-    {
-        var preferredExtension = FreeXOptions.NormalizeDefaultFormat(_options.DefaultFormat);
-        return FileDialogFilterBuilder.FindSaveAdapter(_fileAdapters, preferredExtension, out _) is null
-            ? FreeXOptions.XlsxDefaultFormat
-            : preferredExtension;
     }
 
     private async Task<bool> SaveWorkbookToTargetAsync(FileSaveTarget target)

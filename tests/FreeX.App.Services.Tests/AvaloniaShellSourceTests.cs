@@ -984,10 +984,12 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_BuildsAvaloniaFilePickerTypesFromCoreIoDescriptors()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var pickerPlanner = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookFilePickerPlanner.cs"));
 
-        source.Should().Contain("FileDialogFilterBuilder");
-        source.Should().Contain("BuildOpenPickerTypes(_session.OpenFormats, allSupportedName: \"All supported workbooks\")");
-        source.Should().Contain("BuildSavePickerTypes(_session.SaveFormats, preferredFirstExtension: NativeWorkbookExtension)");
+        source.Should().Contain("WorkbookFilePickerPlanner.BuildOpenPickerPlan(_session.OpenFormats)");
+        source.Should().Contain("WorkbookFilePickerPlanner.BuildSavePickerPlan(");
+        pickerPlanner.Should().Contain("FileDialogFilterBuilder.BuildOpenPickerTypes(openFormats, AllSupportedWorkbooksName)");
+        pickerPlanner.Should().Contain("FileDialogFilterBuilder.BuildSavePickerTypes(saveFormats, preferredFirstExtension: normalizedExtension)");
         source.Should().Contain("private static FilePickerFileType CreateFilePickerFileType(FilePickerTypeDescriptor descriptor)");
         source.Should().Contain("Patterns = descriptor.Patterns.ToList()");
     }

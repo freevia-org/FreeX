@@ -2749,15 +2749,10 @@ public sealed class WorkbookSession
 
     public string BuildSuggestedSaveAsFileName(string defaultExtension)
     {
-        var normalizedExtension = FileFormatResolver.NormalizeExtension(defaultExtension);
-        var sourceName = string.IsNullOrWhiteSpace(Workbook.Name)
-            ? DisplayName
-            : Workbook.Name;
-        var baseName = Path.GetFileNameWithoutExtension(sourceName);
-        if (string.IsNullOrWhiteSpace(baseName))
-            baseName = "Workbook";
-
-        return baseName + normalizedExtension;
+        return WorkbookFilePickerPlanner.BuildSuggestedSaveAsFileName(
+            Workbook.Name,
+            DisplayName,
+            defaultExtension);
     }
 
     public static string EnsureSaveExtension(string path, string defaultExtension)

@@ -15645,7 +15645,8 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        var fileTypes = BuildOpenFileTypes();
+        var openPlan = WorkbookFilePickerPlanner.BuildOpenPickerPlan(_session.OpenFormats);
+        var fileTypes = CreateFilePickerFileTypes(openPlan.FileTypes);
         if (fileTypes.Count == 0)
         {
             ShowOpenIssue("No open formats are available.");
@@ -16046,7 +16047,12 @@ public sealed partial class MainWindow : Window
                 return;
             }
 
-            var fileTypes = BuildSaveFileTypes();
+            var savePlan = WorkbookFilePickerPlanner.BuildSavePickerPlan(
+                _session.SaveFormats,
+                _session.Workbook.Name,
+                _session.DisplayName,
+                NativeWorkbookExtension);
+            var fileTypes = CreateFilePickerFileTypes(savePlan.FileTypes);
             if (fileTypes.Count == 0)
             {
                 ShowSaveIssue("No save formats are available.");
@@ -16056,8 +16062,8 @@ public sealed partial class MainWindow : Window
             var storageFile = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
             {
                 Title = "Save Workbook",
-                SuggestedFileName = _session.BuildSuggestedSaveAsFileName(NativeWorkbookExtension),
-                DefaultExtension = NativeWorkbookExtension[1..],
+                SuggestedFileName = savePlan.SuggestedFileName,
+                DefaultExtension = savePlan.DefaultExtensionWithoutDot,
                 FileTypeChoices = fileTypes,
                 SuggestedFileType = fileTypes[0],
                 ShowOverwritePrompt = true,
@@ -16580,21 +16586,9 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private IReadOnlyList<FilePickerFileType> BuildSaveFileTypes()
-    {
-        return FileDialogFilterBuilder
-            .BuildSavePickerTypes(_session.SaveFormats, preferredFirstExtension: NativeWorkbookExtension)
-            .Select(CreateFilePickerFileType)
-            .ToList();
-    }
-
-    private IReadOnlyList<FilePickerFileType> BuildOpenFileTypes()
-    {
-        return FileDialogFilterBuilder
-            .BuildOpenPickerTypes(_session.OpenFormats, allSupportedName: "All supported workbooks")
-            .Select(CreateFilePickerFileType)
-            .ToList();
-    }
+    private static IReadOnlyList<FilePickerFileType> CreateFilePickerFileTypes(
+        IEnumerable<FilePickerTypeDescriptor> descriptors) =>
+        descriptors.Select(CreateFilePickerFileType).ToList();
 
     private static FilePickerFileType CreateFilePickerFileType(FilePickerTypeDescriptor descriptor) =>
         new(descriptor.DisplayName)
