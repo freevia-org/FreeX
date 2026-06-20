@@ -464,6 +464,7 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
 
     private static void LoadSheetLayout(ISheet sourceSheet, Sheet sheet, HSSFPalette palette)
     {
+        LoadSheetKind(sourceSheet, sheet);
         LoadPaneState(sourceSheet, sheet);
         LoadPrintTitles(sourceSheet, sheet);
         LoadPageLayout(sourceSheet, sheet);
@@ -505,6 +506,15 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
 
         LoadColumnOutlineLevels(sourceSheet, sheet);
         LoadOutlineSettings(sourceSheet, sheet);
+    }
+
+    private static void LoadSheetKind(ISheet sourceSheet, Sheet sheet)
+    {
+        if (sourceSheet is HSSFSheet hssfSheet &&
+            hssfSheet.Sheet.FindFirstRecordBySid(WSBoolRecord.sid) is WSBoolRecord { Dialog: true })
+        {
+            sheet.Kind = SheetKind.DialogSheet;
+        }
     }
 
     private static void LoadSheetProtection(ISheet sourceSheet, Sheet sheet)

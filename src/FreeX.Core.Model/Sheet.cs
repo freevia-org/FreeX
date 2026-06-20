@@ -15,8 +15,8 @@ public sealed record ThreadedComment(string Text, string Author = "FreeX")
 }
 
 /// <summary>
-/// Distinguishes a normal worksheet (cell grid) from a chartsheet (a single full-page chart with
-/// no cell grid). Dialog and macro sheets are not modeled and remain unsupported.
+/// Distinguishes a normal worksheet (cell grid) from non-standard sheet tabs such as chartsheets
+/// and legacy dialog sheets. Macro sheets remain unsupported.
 /// </summary>
 public enum SheetKind
 {
@@ -24,7 +24,10 @@ public enum SheetKind
     Worksheet,
 
     /// <summary>A full-page chart-only sheet; its chart is stored in <see cref="Sheet.Charts"/>.</summary>
-    Chartsheet
+    Chartsheet,
+
+    /// <summary>A legacy Excel dialog sheet. FreeX preserves the kind but does not model dialog controls.</summary>
+    DialogSheet
 }
 
 public enum HyperlinkTargetKind
@@ -69,14 +72,16 @@ public sealed partial class Sheet
 
     /// <summary>
     /// The kind of sheet. <see cref="SheetKind.Worksheet"/> is a normal cell-grid sheet;
-    /// <see cref="SheetKind.Chartsheet"/> is a full-page chart-only sheet (no cell grid). A
-    /// chartsheet carries its single chart in <see cref="Charts"/>; <see cref="ChartsheetChart"/>
-    /// exposes it.
+    /// <see cref="SheetKind.Chartsheet"/> is a full-page chart-only sheet (no cell grid), and
+    /// <see cref="SheetKind.DialogSheet"/> preserves legacy Excel dialog-sheet identity.
     /// </summary>
     public SheetKind Kind { get; set; } = SheetKind.Worksheet;
 
     /// <summary>True when this sheet is a full-page chartsheet rather than a worksheet grid.</summary>
     public bool IsChartsheet => Kind == SheetKind.Chartsheet;
+
+    /// <summary>True when this sheet originated as a legacy Excel dialog sheet.</summary>
+    public bool IsDialogSheet => Kind == SheetKind.DialogSheet;
 
     /// <summary>
     /// The full-page chart for a chartsheet, or <see langword="null"/> when this is not a

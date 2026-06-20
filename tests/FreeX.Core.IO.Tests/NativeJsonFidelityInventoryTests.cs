@@ -84,6 +84,17 @@ public sealed class NativeJsonFidelityInventoryTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_RoundTrips_SheetKind()
+    {
+        var (wb, sheets) = BuildMaximalWorkbook();
+        var loaded = RoundTrip(wb);
+
+        loaded.GetSheetAt(sheets.mainIdx).Kind.Should().Be(SheetKind.Worksheet);
+        loaded.GetSheetAt(sheets.visibleIdx).Kind.Should().Be(SheetKind.DialogSheet);
+        loaded.GetSheetAt(sheets.visibleIdx).IsDialogSheet.Should().BeTrue();
+    }
+
+    [Fact]
     public void NativeJsonAdapter_RoundTrips_SheetProtection()
     {
         var (wb, sheets) = BuildMaximalWorkbook();
@@ -458,6 +469,7 @@ public sealed class NativeJsonFidelityInventoryTests
         hidden.IsHidden = true;
         veryHidden.IsVeryHidden = true;
         veryHidden.IsHidden = true;
+        visible.Kind = SheetKind.DialogSheet;
 
         // ── Main sheet: scalar fields ─────────────────────────────────────────
         main.TabColor = new CellColor(255, 0, 0);

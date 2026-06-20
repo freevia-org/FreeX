@@ -111,6 +111,7 @@ public sealed partial class NativeJsonAdapter
             Sheets = workbook.Sheets.Select(s => new SheetDto
             {
                 Name = s.Name,
+                Kind = NativeJsonValueSanitizer.ValidEnumOrDefault(s.Kind, SheetKind.Worksheet),
                 IsHidden = s.IsHidden,
                 IsVeryHidden = s.IsVeryHidden,
                 TabColor = s.TabColor is { } color ? FormatColor(color) : null,

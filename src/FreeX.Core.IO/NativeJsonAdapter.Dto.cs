@@ -445,6 +445,7 @@ public sealed partial class NativeJsonAdapter
     private class SheetDto
     {
         public string Name { get; set; } = "";
+        public SheetKind Kind { get; set; } = SheetKind.Worksheet;
         public bool IsHidden { get; set; }
         public bool IsVeryHidden { get; set; }
         public string? TabColor { get; set; }

@@ -16,6 +16,7 @@ public sealed partial class Sheet
         {
             DefaultColumnWidth            = DefaultColumnWidth,
             DefaultRowHeight              = DefaultRowHeight,
+            Kind                          = Kind,
             FrozenRows                    = FrozenRows,
             FrozenCols                    = FrozenCols,
             SplitRow                      = SplitRow,
