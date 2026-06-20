@@ -127,6 +127,7 @@ public sealed class NativeJsonFidelityInventoryTests
         dst.ShowHeadings.Should().Be(src.ShowHeadings);
         dst.ZoomPercent.Should().Be(src.ZoomPercent);
         dst.ShowFormulas.Should().Be(src.ShowFormulas);
+        dst.ShowZeros.Should().Be(src.ShowZeros);
     }
 
     // Helper: compare a GridRange's row/col structure without comparing SheetId GUIDs.
@@ -477,6 +478,7 @@ public sealed class NativeJsonFidelityInventoryTests
         main.ShowHeadings = false;
         main.ZoomPercent = 90;
         main.ShowFormulas = false;
+        main.ShowZeros = false;
 
         // ── Row/col dimensions ────────────────────────────────────────────────
         main.RowHeights[1] = 30.0;

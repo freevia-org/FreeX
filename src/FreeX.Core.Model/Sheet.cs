@@ -333,6 +333,9 @@ public sealed partial class Sheet
     /// <summary>Whether formulas are displayed in cells instead of their calculated values.</summary>
     public bool ShowFormulas { get; set; }
 
+    /// <summary>Whether zero values are displayed in cells.</summary>
+    public bool ShowZeros { get; set; } = true;
+
     /// <summary>Whether Excel should fully recalculate this worksheet when opened.</summary>
     public bool FullCalculationOnLoad { get; set; }
 

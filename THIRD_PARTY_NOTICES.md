@@ -14,7 +14,8 @@ license text and package-provided license text found in the restored packages.
   `project.assets.json` files.
 - Coverage: every restored package is listed below.
 - Runtime package posture: the publishable app dependency set is covered by
-  MIT, Apache-2.0, BSD-3-Clause, and BSD-style package licenses.
+  MIT, Apache-2.0, BSD-3-Clause, BSD-style package licenses, package license
+  files, and explicit LGPL-3.0-only package metadata where listed below.
 - Package-provided `NOTICE` files found in the local NuGet cache:
   Microsoft.NET.ILLink.Tasks `THIRD-PARTY-NOTICES.TXT`.
 - Package-provided license files found: Avalonia.Angle.Windows.Natives
@@ -49,12 +50,15 @@ replace this dependency or confirm the project has the required Xceed license.
 | Avalonia.Themes.Fluent | 12.0.4 | MIT | https://avaloniaui.net/ |
 | Avalonia.Win32 | 12.0.4 | MIT | https://avaloniaui.net/ |
 | Avalonia.X11 | 12.0.4 | MIT | https://avaloniaui.net/ |
+| BouncyCastle.Cryptography | 2.6.2 | MIT | https://www.bouncycastle.org/csharp/ |
 | ClosedXML | 0.105.0 | MIT | https://github.com/ClosedXML/ClosedXML |
 | ClosedXML.Parser | 2.0.0 | MIT | https://github.com/ClosedXML/ClosedXML.Parser |
 | DocSharp.Binary.Common | 0.20.0 | MIT | https://github.com/manfromarce/DocSharp |
 | DocSharp.Binary.Doc | 0.20.0 | MIT | https://github.com/manfromarce/DocSharp |
 | DocumentFormat.OpenXml | 3.1.1 | MIT | https://github.com/dotnet/Open-XML-SDK |
 | DocumentFormat.OpenXml.Framework | 3.1.1 | MIT | https://github.com/dotnet/Open-XML-SDK |
+| Enums.NET | 5.0.0 | MIT | https://github.com/TylerBrinkley/Enums.NET |
+| ExtendedNumerics.BigDecimal | 2025.1001.2.129 | MIT | https://www.nuget.org/packages/ExtendedNumerics.BigDecimal/ |
 | ExcelDataReader | 3.8.0 | MIT | https://github.com/ExcelDataReader/ExcelDataReader |
 | ExcelNumberFormat | 1.1.0 | MIT | https://github.com/andersnm/ExcelNumberFormat |
 | HarfBuzzSharp | 8.3.1.3 | MIT | https://go.microsoft.com/fwlink/?linkid=868515 |
@@ -62,14 +66,18 @@ replace this dependency or confirm the project has the required Xceed license.
 | HarfBuzzSharp.NativeAssets.macOS | 8.3.1.3 | MIT | https://go.microsoft.com/fwlink/?linkid=868515 |
 | HarfBuzzSharp.NativeAssets.WebAssembly | 8.3.1.3 | MIT | https://go.microsoft.com/fwlink/?linkid=868515 |
 | HarfBuzzSharp.NativeAssets.Win32 | 8.3.1.3 | MIT | https://go.microsoft.com/fwlink/?linkid=868515 |
+| MathNet.Numerics.Signed | 5.0.0 | MIT | https://numerics.mathdotnet.com/ |
 | Microsoft.Extensions.DependencyInjection | 10.0.7 | MIT | https://dot.net/ |
 | Microsoft.Extensions.DependencyInjection.Abstractions | 10.0.7 | MIT | https://dot.net/ |
 | Microsoft.Extensions.Logging | 10.0.7 | MIT | https://dot.net/ |
 | Microsoft.Extensions.Logging.Abstractions | 10.0.7 | MIT | https://dot.net/ |
 | Microsoft.Extensions.Options | 10.0.7 | MIT | https://dot.net/ |
 | Microsoft.Extensions.Primitives | 10.0.7 | MIT | https://dot.net/ |
+| Microsoft.IO.RecyclableMemoryStream | 3.0.1 | MIT | https://github.com/Microsoft/Microsoft.IO.RecyclableMemoryStream |
 | MicroCom.Runtime | 0.11.4 | MIT |  |
 | MimeKit | 4.17.0 | MIT | https://github.com/jstedfast/MimeKit |
+| NPOI | 2.7.6 | Apache-2.0 | https://github.com/nissl-lab/npoi |
+| NSax | 1.0.2 | LGPL-3.0-only | https://github.com/antony-liu/NSax |
 | OxyPlot.Core | 2.2.0 | MIT | https://oxyplot.github.io/ |
 | OxyPlot.Wpf | 2.2.0 | MIT | https://oxyplot.github.io/ |
 | OxyPlot.Wpf.Shared | 2.2.0 | MIT | https://oxyplot.github.io/ |
@@ -81,17 +89,23 @@ replace this dependency or confirm the project has the required Xceed license.
 | Serilog.Sinks.Console | 6.1.1 | Apache-2.0 | https://github.com/serilog/serilog-sinks-console |
 | Serilog.Sinks.File | 7.0.0 | Apache-2.0 | https://github.com/serilog/serilog-sinks-file |
 | SharpVectors.Wpf | 1.8.5 | BSD-3-Clause | https://github.com/ElinamLLC/SharpVectors |
+| SharpZipLib | 1.4.2 | MIT | https://github.com/icsharpcode/SharpZipLib |
 | SixLabors.Fonts | 1.0.0 | Apache-2.0 | https://github.com/SixLabors/Fonts |
+| SixLabors.Fonts | 1.0.1 | Apache-2.0 | https://github.com/SixLabors/Fonts |
+| SixLabors.ImageSharp | 2.1.11 | Apache-2.0 | https://github.com/SixLabors/ImageSharp |
 | SkiaSharp | 3.119.4 | MIT | https://go.microsoft.com/fwlink/?linkid=868515 |
 | SkiaSharp.NativeAssets.Linux | 3.119.4 | MIT | https://go.microsoft.com/fwlink/?linkid=868515 |
 | SkiaSharp.NativeAssets.macOS | 3.119.4 | MIT | https://go.microsoft.com/fwlink/?linkid=868515 |
 | SkiaSharp.NativeAssets.WebAssembly | 3.119.4 | MIT | https://go.microsoft.com/fwlink/?linkid=868515 |
 | SkiaSharp.NativeAssets.Win32 | 3.119.4 | MIT | https://go.microsoft.com/fwlink/?linkid=868515 |
 | System.IO.Packaging | 8.0.1 | MIT | https://dot.net/ |
+| System.Security.Cryptography.Pkcs | 10.0.9 | MIT | https://dot.net/ |
+| System.Security.Cryptography.Xml | 10.0.9 | MIT | https://dot.net/ |
 | Tmds.DBus.Protocol | 0.92.0 | MIT |  |
 | UglyToad.PdfPig | 1.7.0-custom-5 | Apache-2.0 | https://github.com/UglyToad/PdfPig |
 | UglyToad.PdfPig.DocumentLayoutAnalysis | 1.7.0-custom-5 | Apache-2.0 | https://github.com/UglyToad/PdfPig |
 | Velopack | 1.2.0 | MIT | https://github.com/velopack/velopack |
+| ZString | 2.6.0 | MIT | https://github.com/Cysharp/ZString |
 
 ## Test And Development Packages
 
@@ -119,6 +133,7 @@ replace this dependency or confirm the project has the required Xceed license.
 - MIT, Apache License 2.0, package-provided BSD/additional license text, and
   package-provided third-party notice text are bundled in
   [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
+- LGPL-3.0-only package metadata is listed explicitly above where restored.
 
 Some package licenses are provided as files or legacy license URLs inside the
 NuGet package metadata. Preserve those package-provided notices when

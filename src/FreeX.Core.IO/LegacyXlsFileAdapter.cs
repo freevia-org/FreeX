@@ -1,8 +1,12 @@
 using System.Globalization;
+using System.Reflection;
 using System.Text;
 using ExcelDataReader;
+using NPOI.HSSF.Model;
+using NPOI.HSSF.Record;
 using FreeX.Core.Model;
 using NPOI.HSSF.UserModel;
+using NPOI.POIFS.FileSystem;
 using NPOI.SS.UserModel;
 using NPOI.SS.Util;
 using NPOICell = NPOI.SS.UserModel.ICell;
@@ -22,6 +26,17 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
     private const short LegacyPaperSizeLetter = 1;
     private const short LegacyPaperSizeLegal = 5;
     private const short LegacyPaperSizeA4 = 9;
+
+    private static readonly FieldInfo? LbsSelectedIndexField =
+        typeof(LbsDataSubRecord).GetField("_iSel", BindingFlags.Instance | BindingFlags.NonPublic);
+
+    private static readonly FieldInfo? UnknownRecordRawDataField =
+        typeof(UnknownRecord).GetField("_rawData", BindingFlags.Instance | BindingFlags.NonPublic);
+
+    private static readonly MethodInfo? HssfGetObjRecordMethod =
+        typeof(HSSFSimpleShape).GetMethod(
+            "GetObjRecord",
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
 
     private static readonly HashSet<string> ExcelReservedDefinedNames = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -74,11 +89,18 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
 
     private static Workbook LoadHssf(Stream stream)
     {
+        var hasVbaProjectPackage = TryHasVbaProjectPackage(stream);
         using var hssf = new HSSFWorkbook(stream);
         var workbook = new Workbook("Untitled")
         {
-            Uses1904DateSystem = hssf.IsDate1904()
+            Uses1904DateSystem = hssf.IsDate1904(),
+            HasVbaProjectPackage = hasVbaProjectPackage
         };
+        LoadWorkbookView(hssf, workbook);
+        LoadWorkbookProperties(hssf, workbook);
+        LoadWorkbookProtection(hssf, workbook);
+        LoadFileSharing(hssf, workbook);
+        LoadCalculationOptions(hssf, workbook);
         if (hssf.ActiveSheetIndex >= 0 && hssf.ActiveSheetIndex < hssf.NumberOfSheets)
             workbook.ActiveSheetIndex = hssf.ActiveSheetIndex;
 
@@ -94,11 +116,12 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
             var visibility = hssf.GetSheetVisibility(sheetIndex);
             sheet.IsHidden = visibility is SheetVisibility.Hidden or SheetVisibility.VeryHidden;
             sheet.IsVeryHidden = visibility is SheetVisibility.VeryHidden;
+            sheet.CodeName = ReadHssfSheetCodeName(sourceSheet);
 
             LoadSheetLayout(sourceSheet, sheet, palette);
             LoadMergedRegions(sourceSheet, sheet);
             LoadCells(hssf, sourceSheet, workbook, sheet, styleCache);
-            LoadPictures(sourceSheet, sheet);
+            LoadDrawingObjects(hssf, workbook, sourceSheet, sheet);
         }
 
         if (workbook.Sheets.Count == 0)
@@ -109,6 +132,209 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         LoadDefinedNames(hssf, workbook);
 
         return workbook;
+    }
+
+    private static bool TryHasVbaProjectPackage(Stream stream)
+    {
+        if (!stream.CanSeek)
+            return false;
+
+        var start = stream.Position;
+        try
+        {
+            var poifs = new POIFSFileSystem(POIFSFileSystem.CreateNonClosingInputStream(stream));
+            return DirectoryContainsVbaProject(poifs.Root);
+        }
+        catch
+        {
+            return false;
+        }
+        finally
+        {
+            stream.Position = start;
+        }
+    }
+
+    private static bool DirectoryContainsVbaProject(DirectoryEntry directory)
+    {
+        var entries = directory.Entries;
+        while (entries.MoveNext())
+        {
+            var entry = entries.Current;
+            if (string.Equals(entry.Name, "_VBA_PROJECT_CUR", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(entry.Name, "VBA", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (entry is DirectoryEntry child && DirectoryContainsVbaProject(child))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static void LoadWorkbookView(HSSFWorkbook sourceWorkbook, Workbook workbook)
+    {
+        if (sourceWorkbook.FirstVisibleTab >= 0 && sourceWorkbook.FirstVisibleTab < sourceWorkbook.NumberOfSheets)
+            workbook.FirstVisibleSheetIndex = sourceWorkbook.FirstVisibleTab;
+
+        if (sourceWorkbook.Workbook.FindFirstRecordBySid(WindowOneRecord.sid) is not WindowOneRecord window)
+            return;
+
+        workbook.ShowSheetTabs = window.DisplayTabs;
+        workbook.SheetTabRatio = Math.Clamp((int)window.TabWidthRatio, 0, 1000);
+        if (window.FirstVisibleTab >= 0 && window.FirstVisibleTab < sourceWorkbook.NumberOfSheets)
+            workbook.FirstVisibleSheetIndex = window.FirstVisibleTab;
+    }
+
+    private static void LoadWorkbookProperties(HSSFWorkbook sourceWorkbook, Workbook workbook)
+    {
+        var nativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (ReadHssfWorkbookCodeName(sourceWorkbook) is { } codeName)
+            nativeAttributes["codeName"] = codeName;
+        if (sourceWorkbook.Workbook.FindFirstRecordBySid(BackupRecord.sid) is BackupRecord backup)
+            nativeAttributes["backupFile"] = backup.Backup != 0 ? "1" : "0";
+        if (sourceWorkbook.Workbook.FindFirstRecordBySid(HideObjRecord.sid) is HideObjRecord hideObjects)
+            nativeAttributes["showObjects"] = MapShowObjects(hideObjects.GetHideObj());
+        if (sourceWorkbook.Workbook.FindFirstRecordBySid(BookBoolRecord.sid) is BookBoolRecord bookBool)
+            nativeAttributes["saveExternalLinkValues"] = bookBool.SaveLinkValues != 0 ? "1" : "0";
+        if (sourceWorkbook.Workbook.FindFirstRecordBySid(RefreshAllRecord.sid) is RefreshAllRecord refreshAll)
+            nativeAttributes["refreshAllConnections"] = refreshAll.RefreshAll ? "1" : "0";
+        if (nativeAttributes.Count == 0)
+            return;
+
+        var serializedMetadata = XmlNativeBagSerializer.Serialize(nativeAttributes);
+        if (serializedMetadata is null)
+            return;
+
+        workbook.Properties ??= new NativeXmlPreserveBag();
+        workbook.Properties.Set("workbookPr", serializedMetadata);
+    }
+
+    private static string MapShowObjects(short hideObjects) =>
+        hideObjects switch
+        {
+            HideObjRecord.HIDE_ALL => "none",
+            HideObjRecord.SHOW_PLACEHOLDERS => "placeholders",
+            _ => "all"
+        };
+
+    private static void LoadWorkbookProtection(HSSFWorkbook sourceWorkbook, Workbook workbook)
+    {
+        var isStructureProtected =
+            sourceWorkbook.Workbook.FindFirstRecordBySid(ProtectRecord.sid) is ProtectRecord protect &&
+            protect.Protect;
+        var isWindowProtected =
+            sourceWorkbook.Workbook.FindFirstRecordBySid(WindowProtectRecord.sid) is WindowProtectRecord windowProtect &&
+            windowProtect.Protect;
+
+        workbook.IsStructureProtected = isStructureProtected || isWindowProtected;
+        if (sourceWorkbook.Workbook.FindFirstRecordBySid(PasswordRecord.sid) is PasswordRecord { Password: not 0 } password)
+            workbook.StructureProtectionPassword = ((ushort)password.Password).ToString("X4", CultureInfo.InvariantCulture);
+
+        if (!isWindowProtected)
+            return;
+
+        var serializedMetadata = XmlNativeBagSerializer.Serialize(
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["lockWindows"] = "1"
+            });
+        if (serializedMetadata is null)
+            return;
+
+        workbook.ProtectionMetadata = new NativeXmlPreserveBag();
+        workbook.ProtectionMetadata.Set("workbookProtection", serializedMetadata);
+    }
+
+    private static void LoadFileSharing(HSSFWorkbook sourceWorkbook, Workbook workbook)
+    {
+        var writeAccessUser = GetWriteAccessUser(sourceWorkbook);
+        if (sourceWorkbook.Workbook.FindFirstRecordBySid(FileSharingRecord.sid) is not FileSharingRecord fileSharing)
+        {
+            if (writeAccessUser is not null)
+            {
+                workbook.FileSharing = new WorkbookFileSharingModel
+                {
+                    UserName = writeAccessUser
+                };
+            }
+
+            return;
+        }
+
+        var readOnlyRecommended = fileSharing.ReadOnly != 0;
+        var userName = string.IsNullOrWhiteSpace(fileSharing.Username) ? writeAccessUser : fileSharing.Username.Trim();
+        var reservationPassword = fileSharing.Password != 0
+            ? ((ushort)fileSharing.Password).ToString("X4", CultureInfo.InvariantCulture)
+            : null;
+
+        if (!readOnlyRecommended &&
+            userName is null &&
+            reservationPassword is null)
+        {
+            return;
+        }
+
+        workbook.FileSharing = new WorkbookFileSharingModel
+        {
+            ReadOnlyRecommended = readOnlyRecommended,
+            UserName = userName,
+            ReservationPassword = reservationPassword
+        };
+    }
+
+    private static string? GetWriteAccessUser(HSSFWorkbook sourceWorkbook)
+    {
+        if (sourceWorkbook.Workbook.FindFirstRecordBySid(WriteAccessRecord.sid) is not WriteAccessRecord writeAccess)
+            return null;
+
+        var userName = writeAccess.Username?.Trim();
+        return string.IsNullOrWhiteSpace(userName) ? null : userName;
+    }
+
+    private static void LoadCalculationOptions(HSSFWorkbook sourceWorkbook, Workbook workbook)
+    {
+        workbook.FullCalculationOnLoad = sourceWorkbook.ForceFormulaRecalculation;
+
+        if (FindCalculationRecord<CalcModeRecord>(sourceWorkbook, CalcModeRecord.sid) is { } calcMode)
+        {
+            workbook.CalculationMode = calcMode.GetCalcMode() == CalcModeRecord.MANUAL
+                ? WorkbookCalculationMode.Manual
+                : WorkbookCalculationMode.Automatic;
+        }
+
+        if (FindCalculationRecord<IterationRecord>(sourceWorkbook, IterationRecord.sid) is { } iteration)
+            workbook.IterativeCalculation = iteration.Iteration;
+
+        if (FindCalculationRecord<CalcCountRecord>(sourceWorkbook, CalcCountRecord.sid) is { } calcCount &&
+            calcCount.Iterations is > 0 and not 100)
+        {
+            workbook.MaxCalculationIterations = calcCount.Iterations;
+        }
+
+        if (FindCalculationRecord<DeltaRecord>(sourceWorkbook, DeltaRecord.sid) is { } delta &&
+            delta.MaxChange > 0 &&
+            Math.Abs(delta.MaxChange - 0.001) > 0.0000000001)
+        {
+            workbook.MaxCalculationChange = delta.MaxChange;
+        }
+    }
+
+    private static TRecord? FindCalculationRecord<TRecord>(HSSFWorkbook sourceWorkbook, short sid)
+        where TRecord : class
+    {
+        if (sourceWorkbook.Workbook.FindFirstRecordBySid(sid) is TRecord workbookRecord)
+            return workbookRecord;
+
+        if (sourceWorkbook.NumberOfSheets == 0 ||
+            sourceWorkbook.GetSheetAt(0) is not HSSFSheet firstSheet)
+        {
+            return null;
+        }
+
+        return firstSheet.Sheet.FindFirstRecordBySid(sid) as TRecord;
     }
 
     private static Workbook LoadWithExcelDataReader(Stream stream)
@@ -133,7 +359,7 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
 
                 for (var col = 0; col < reader.FieldCount; col++)
                 {
-                    var value = MapValue(reader.GetValue(col));
+                    var value = MapExcelDataReaderCellValue(reader, col);
                     if (value is BlankValue)
                         continue;
 
@@ -179,6 +405,7 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         sheet.IsVeryHidden = string.Equals(reader.VisibleState, "veryHidden", StringComparison.OrdinalIgnoreCase);
         sheet.IsHidden = sheet.IsVeryHidden ||
             string.Equals(reader.VisibleState, "hidden", StringComparison.OrdinalIgnoreCase);
+        sheet.CodeName = NullIfWhiteSpace(reader.CodeName);
 
         if (reader.HeaderFooter is { } headerFooter)
         {
@@ -241,6 +468,7 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         LoadPageLayout(sourceSheet, sheet);
         LoadSheetView(sourceSheet, sheet, palette);
         LoadSheetProtection(sourceSheet, sheet);
+        sheet.FullCalculationOnLoad = sourceSheet.ForceFormulaRecalculation;
 
         if (sourceSheet.DefaultColumnWidth > 0)
             sheet.DefaultColumnWidth = sourceSheet.DefaultColumnWidth;
@@ -275,6 +503,7 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         }
 
         LoadColumnOutlineLevels(sourceSheet, sheet);
+        LoadOutlineSettings(sourceSheet, sheet);
     }
 
     private static void LoadSheetProtection(ISheet sourceSheet, Sheet sheet)
@@ -564,6 +793,22 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         }
     }
 
+    private static void LoadOutlineSettings(ISheet sourceSheet, Sheet sheet)
+    {
+        var hasOutlineLevels = sheet.RowOutlineLevels.Count > 0 || sheet.ColOutlineLevels.Count > 0;
+        if (!hasOutlineLevels &&
+            sourceSheet.RowSumsBelow &&
+            sourceSheet.RowSumsRight &&
+            sourceSheet.DisplayGuts)
+        {
+            return;
+        }
+
+        sheet.OutlineSummaryBelow = sourceSheet.RowSumsBelow;
+        sheet.OutlineSummaryRight = sourceSheet.RowSumsRight;
+        sheet.ShowOutlineSymbols = sourceSheet.DisplayGuts;
+    }
+
     private static void LoadPaneState(ISheet sourceSheet, Sheet sheet)
     {
         var pane = sourceSheet.PaneInformation;
@@ -612,6 +857,27 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
 
         LoadManualPageBreaks(sourceSheet, sheet);
         LoadPrintSetup(sourceSheet.PrintSetup, sheet);
+        LoadPrintOptionsMetadata(sourceSheet, sheet);
+    }
+
+    private static void LoadPrintOptionsMetadata(ISheet sourceSheet, Sheet sheet)
+    {
+        if (sourceSheet is not HSSFSheet hssfSheet ||
+            hssfSheet.Sheet.FindFirstRecordBySid(GridsetRecord.sid) is not GridsetRecord gridset)
+        {
+            return;
+        }
+
+        var serializedMetadata = XmlNativeBagSerializer.Serialize(
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["gridLinesSet"] = gridset.Gridset ? "1" : "0"
+            });
+        if (serializedMetadata is null)
+            return;
+
+        sheet.PrintOptionsMetadata ??= new NativeXmlPreserveBag();
+        sheet.PrintOptionsMetadata.Set("printOptions", serializedMetadata);
     }
 
     private static void LoadSheetView(ISheet sourceSheet, Sheet sheet, HSSFPalette palette)
@@ -619,11 +885,57 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         sheet.ShowGridlines = sourceSheet.DisplayGridlines;
         sheet.ShowHeadings = sourceSheet.DisplayRowColHeadings;
         sheet.ShowFormulas = sourceSheet.DisplayFormulas;
+        sheet.ShowZeros = sourceSheet.DisplayZeros;
         if (sourceSheet.TopRow > 0)
             sheet.ViewTopRow = ToModelIndex(sourceSheet.TopRow);
+        if (sourceSheet.LeftCol > 0)
+            sheet.ViewLeftCol = ToModelIndex(sourceSheet.LeftCol);
+        if (sourceSheet.ActiveCell is { } activeCell &&
+            (activeCell.Row > 0 || activeCell.Column > 0))
+        {
+            sheet.ActiveRow = ToModelIndex(activeCell.Row);
+            sheet.ActiveCol = ToModelIndex(activeCell.Column);
+        }
+
+        if (TryGetWindowTwoRecord(sourceSheet) is { } window)
+        {
+            LoadPrimaryViewMetadata(window, sheet);
+
+            if (window.SavedInPageBreakPreview)
+                sheet.ViewMode = WorksheetViewMode.PageBreakPreview;
+
+            var zoom = window.SavedInPageBreakPreview && window.PageBreakZoom > 0
+                ? window.PageBreakZoom
+                : window.NormalZoom;
+            if (zoom is >= 10 and <= 400)
+                sheet.ZoomPercent = zoom;
+        }
+
         if (TryGetTabColor(sourceSheet, palette, out var tabColor))
             sheet.TabColor = tabColor;
     }
+
+    private static void LoadPrimaryViewMetadata(WindowTwoRecord window, Sheet sheet)
+    {
+        if (!window.IsSelected)
+            return;
+
+        var serializedMetadata = XmlNativeBagSerializer.Serialize(
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["tabSelected"] = "1"
+            });
+        if (serializedMetadata is null)
+            return;
+
+        sheet.PrimaryViewMetadata ??= new NativeXmlPreserveBag();
+        sheet.PrimaryViewMetadata.Set("sheetView", serializedMetadata);
+    }
+
+    private static WindowTwoRecord? TryGetWindowTwoRecord(ISheet sourceSheet) =>
+        sourceSheet is HSSFSheet hssfSheet
+            ? hssfSheet.Sheet.FindFirstRecordBySid(WindowTwoRecord.sid) as WindowTwoRecord
+            : null;
 
     private static bool TryGetTabColor(ISheet sourceSheet, HSSFPalette palette, out CellColor tabColor)
     {
@@ -772,7 +1084,7 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         }
     }
 
-    private static void LoadPictures(ISheet sourceSheet, Sheet sheet)
+    private static void LoadDrawingObjects(HSSFWorkbook sourceWorkbook, Workbook workbook, ISheet sourceSheet, Sheet sheet)
     {
         if (sourceSheet is not HSSFSheet { DrawingPatriarch: HSSFPatriarch patriarch })
             return;
@@ -781,6 +1093,24 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         {
             if (TryCreatePicture(sourcePicture, sheet, out var picture))
                 sheet.Pictures.Add(picture);
+        }
+
+        foreach (var sourceTextBox in EnumerateTextBoxes(patriarch.Children))
+        {
+            if (TryCreateTextBox(sourceTextBox, sheet, out var textBox))
+                sheet.TextBoxes.Add(textBox);
+        }
+
+        foreach (var sourceControl in EnumerateFormControls(patriarch.Children))
+        {
+            if (TryCreateFormControl(sourceWorkbook, workbook, sourceControl, sheet, out var control))
+                sheet.FormControls.Add(control);
+        }
+
+        foreach (var sourceShape in EnumerateSimpleShapes(patriarch.Children))
+        {
+            if (TryCreateDrawingShape(sourceShape, sheet, out var shape))
+                sheet.DrawingShapes.Add(shape);
         }
     }
 
@@ -795,6 +1125,63 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
             {
                 foreach (var nestedPicture in EnumeratePictures(group.Children))
                     yield return nestedPicture;
+            }
+        }
+    }
+
+    private static IEnumerable<HSSFTextbox> EnumerateTextBoxes(IEnumerable<HSSFShape> shapes)
+    {
+        foreach (var shape in shapes)
+        {
+            if (shape is HSSFTextbox textBox && shape is not HSSFComment)
+                yield return textBox;
+
+            if (shape is HSSFShapeGroup group)
+            {
+                foreach (var nestedTextBox in EnumerateTextBoxes(group.Children))
+                    yield return nestedTextBox;
+            }
+        }
+    }
+
+    private static IEnumerable<HSSFSimpleShape> EnumerateSimpleShapes(IEnumerable<HSSFShape> shapes)
+    {
+        foreach (var shape in shapes)
+        {
+            if (shape is HSSFSimpleShape simpleShape &&
+                shape is not HSSFTextbox &&
+                shape is not HSSFComment &&
+                shape is not HSSFPicture &&
+                shape is not HSSFCombobox)
+            {
+                yield return simpleShape;
+            }
+
+            if (shape is HSSFShapeGroup group)
+            {
+                foreach (var nestedShape in EnumerateSimpleShapes(group.Children))
+                    yield return nestedShape;
+            }
+        }
+    }
+
+    private static IEnumerable<HSSFSimpleShape> EnumerateFormControls(IEnumerable<HSSFShape> shapes)
+    {
+        foreach (var shape in shapes)
+        {
+            if (shape is HSSFCombobox comboBox)
+            {
+                yield return comboBox;
+            }
+            else if (shape is HSSFSimpleShape { ShapeType: HSSFSimpleShape.OBJECT_TYPE_COMBO_BOX } comboShape)
+            {
+                yield return comboShape;
+            }
+
+            if (shape is HSSFShapeGroup group)
+            {
+                foreach (var nestedControl in EnumerateFormControls(group.Children))
+                    yield return nestedControl;
             }
         }
     }
@@ -834,6 +1221,262 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
 
         return true;
     }
+
+    private static bool TryCreateTextBox(HSSFTextbox sourceTextBox, Sheet sheet, out TextBoxModel textBox)
+    {
+        textBox = new TextBoxModel();
+        if (sourceTextBox.Anchor is not HSSFClientAnchor anchor ||
+            anchor.Row1 < 0 ||
+            anchor.Col1 < 0)
+        {
+            return false;
+        }
+
+        var anchorRow = ToModelIndex(Math.Min(anchor.Row1, anchor.Row2));
+        var anchorCol = ToModelIndex(Math.Min(anchor.Col1, anchor.Col2));
+        textBox = new TextBoxModel
+        {
+            Anchor = new ModelCellAddress(sheet.Id, anchorRow, anchorCol),
+            Name = FirstNonBlank(sourceTextBox.Name, sourceTextBox.ShapeName),
+            Text = sourceTextBox.String?.String ?? "",
+            AnchorOffsetX = HssfColumnOffsetToPixels(sheet, anchorCol, Math.Min(anchor.Dx1, anchor.Dx2)),
+            AnchorOffsetY = HssfRowOffsetToPixels(sheet, anchorRow, Math.Min(anchor.Dy1, anchor.Dy2)),
+            RotationDegrees = sourceTextBox.RotationDegree,
+            FlipHorizontal = anchor.IsHorizontallyFlipped || sourceTextBox.FlipHorizontal || sourceTextBox.IsFlipHorizontal,
+            FlipVertical = anchor.IsVerticallyFlipped || sourceTextBox.FlipVertical || sourceTextBox.IsFlipVertical,
+            HasFill = !sourceTextBox.IsNoFill,
+            IsSourceLoaded = true
+        };
+
+        if (TryGetHssfRgbColor(sourceTextBox.FillColor, out var fillColor))
+            textBox.FillColor = fillColor;
+        if (TryGetHssfRgbColor(sourceTextBox.LineStyleColor, out var outlineColor))
+            textBox.OutlineColor = outlineColor;
+
+        var (width, height) = GetHssfAnchorSize(sheet, anchor);
+        if (width > 0)
+            textBox.Width = width;
+        if (height > 0)
+            textBox.Height = height;
+
+        return true;
+    }
+
+    private static bool TryCreateFormControl(
+        HSSFWorkbook sourceWorkbook,
+        Workbook workbook,
+        HSSFSimpleShape sourceControl,
+        Sheet sheet,
+        out FormControlModel control)
+    {
+        control = new FormControlModel();
+        if (MapHssfFormControlKind(sourceControl.ShapeType) is not { } kind ||
+            sourceControl.Anchor is not HSSFClientAnchor anchor ||
+            anchor.Row1 < 0 ||
+            anchor.Col1 < 0 ||
+            IsAutoFilterDropDown(sourceWorkbook, workbook, anchor))
+        {
+            return false;
+        }
+
+        var fromRow = Math.Min(anchor.Row1, anchor.Row2);
+        var fromCol = Math.Min(anchor.Col1, anchor.Col2);
+        var toRow = Math.Max(anchor.Row1, anchor.Row2);
+        var toCol = Math.Max(anchor.Col1, anchor.Col2);
+        control = new FormControlModel
+        {
+            Kind = kind,
+            Name = FirstNonBlank(sourceControl.Name, sourceControl.ShapeName),
+            ShapeId = sourceControl.ShapeId > 0 ? (uint)sourceControl.ShapeId : null,
+            Anchor = new GridRange(
+                new ModelCellAddress(sheet.Id, ToModelIndex(fromRow), ToModelIndex(fromCol)),
+                new ModelCellAddress(sheet.Id, ToModelIndex(toRow), ToModelIndex(toCol))),
+            AnchorOffsets = new DrawingAnchorRange(
+                new DrawingAnchorPoint(
+                    (uint)fromCol,
+                    PixelsToEmus(HssfColumnOffsetToPixels(sheet, ToModelIndex(fromCol), Math.Min(anchor.Dx1, anchor.Dx2))),
+                    (uint)fromRow,
+                    PixelsToEmus(HssfRowOffsetToPixels(sheet, ToModelIndex(fromRow), Math.Min(anchor.Dy1, anchor.Dy2)))),
+                new DrawingAnchorPoint(
+                    (uint)toCol,
+                    PixelsToEmus(HssfColumnOffsetToPixels(sheet, ToModelIndex(toCol), Math.Max(anchor.Dx1, anchor.Dx2))),
+                    (uint)toRow,
+                    PixelsToEmus(HssfRowOffsetToPixels(sheet, ToModelIndex(toRow), Math.Max(anchor.Dy1, anchor.Dy2)))))
+        };
+
+        TryPopulateFormControlListMetadata(sourceWorkbook, sourceControl, control);
+        return true;
+    }
+
+    private static void TryPopulateFormControlListMetadata(
+        HSSFWorkbook sourceWorkbook,
+        HSSFSimpleShape sourceControl,
+        FormControlModel control)
+    {
+        if (control.Kind is not (FormControlKind.DropDown or FormControlKind.ListBox) ||
+            TryGetLbsDataSubRecord(sourceControl) is not { } lbsData)
+        {
+            return;
+        }
+
+        if (TryFormatLbsListFillRange(sourceWorkbook, lbsData, out var listFillRange))
+            control.ListFillRange = listFillRange;
+
+        if (TryGetLbsSelectedIndex(lbsData, out var selectedIndex))
+            control.SelectedIndex = selectedIndex;
+    }
+
+    private static LbsDataSubRecord? TryGetLbsDataSubRecord(HSSFSimpleShape sourceControl)
+    {
+        try
+        {
+            return TryGetObjRecord(sourceControl)?.SubRecords
+                    .OfType<LbsDataSubRecord>()
+                    .FirstOrDefault();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static ObjRecord? TryGetObjRecord(HSSFSimpleShape sourceControl) =>
+        HssfGetObjRecordMethod?.Invoke(sourceControl, null) as ObjRecord;
+
+    private static bool TryFormatLbsListFillRange(
+        HSSFWorkbook sourceWorkbook,
+        LbsDataSubRecord lbsData,
+        out string listFillRange)
+    {
+        listFillRange = "";
+        if (lbsData.Formula is not { } formula)
+            return false;
+
+        try
+        {
+            var text = NormalizeFormula(HSSFFormulaParser.ToFormulaString(sourceWorkbook, [formula])).Trim();
+            if (string.IsNullOrWhiteSpace(text))
+                return false;
+
+            listFillRange = text;
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool TryGetLbsSelectedIndex(LbsDataSubRecord lbsData, out int selectedIndex)
+    {
+        selectedIndex = 0;
+        if (LbsSelectedIndexField?.GetValue(lbsData) is not int raw || raw <= 0)
+            return false;
+
+        selectedIndex = raw;
+        return true;
+    }
+
+    private static bool IsAutoFilterDropDown(HSSFWorkbook sourceWorkbook, Workbook workbook, HSSFClientAnchor anchor)
+    {
+        var anchorRow = ToModelIndex(Math.Min(anchor.Row1, anchor.Row2));
+        var anchorCol = ToModelIndex(Math.Min(anchor.Col1, anchor.Col2));
+
+        for (var index = 0; index < sourceWorkbook.NumberOfNames; index++)
+        {
+            var definedName = sourceWorkbook.GetNameAt(index);
+            if (definedName is null ||
+                definedName.IsDeleted ||
+                !IsAutoFilterDefinedName(definedName.NameName) ||
+                !TryParseNamedRangeRefersTo(workbook, definedName.RefersToFormula, out var range))
+            {
+                continue;
+            }
+
+            if (range.Start.Sheet == range.End.Sheet &&
+                anchorRow == range.Start.Row &&
+                anchorCol >= range.Start.Col &&
+                anchorCol <= range.End.Col)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static FormControlKind? MapHssfFormControlKind(int shapeType) =>
+        shapeType switch
+        {
+            HSSFSimpleShape.OBJECT_TYPE_COMBO_BOX => FormControlKind.DropDown,
+            _ => null
+        };
+
+    private static bool TryCreateDrawingShape(HSSFSimpleShape sourceShape, Sheet sheet, out DrawingShapeModel shape)
+    {
+        shape = new DrawingShapeModel();
+        if (MapHssfShapeKind(sourceShape.ShapeType) is not { } kind ||
+            sourceShape.Anchor is not HSSFClientAnchor anchor ||
+            anchor.Row1 < 0 ||
+            anchor.Col1 < 0)
+        {
+            return false;
+        }
+
+        var anchorRow = ToModelIndex(Math.Min(anchor.Row1, anchor.Row2));
+        var anchorCol = ToModelIndex(Math.Min(anchor.Col1, anchor.Col2));
+        shape = new DrawingShapeModel
+        {
+            Anchor = new ModelCellAddress(sheet.Id, anchorRow, anchorCol),
+            Kind = kind,
+            Name = FirstNonBlank(sourceShape.Name, sourceShape.ShapeName),
+            AnchorOffsetX = HssfColumnOffsetToPixels(sheet, anchorCol, Math.Min(anchor.Dx1, anchor.Dx2)),
+            AnchorOffsetY = HssfRowOffsetToPixels(sheet, anchorRow, Math.Min(anchor.Dy1, anchor.Dy2)),
+            RotationDegrees = sourceShape.RotationDegree,
+            FlipHorizontal = anchor.IsHorizontallyFlipped || sourceShape.FlipHorizontal || sourceShape.IsFlipHorizontal,
+            FlipVertical = anchor.IsVerticallyFlipped || sourceShape.FlipVertical || sourceShape.IsFlipVertical,
+            HasFill = kind is not DrawingShapeKind.Line && !sourceShape.IsNoFill,
+            IsSourceLoaded = true
+        };
+
+        if (TryGetHssfRgbColor(sourceShape.FillColor, out var fillColor))
+            shape.FillColor = fillColor;
+        if (TryGetHssfRgbColor(sourceShape.LineStyleColor, out var outlineColor))
+            shape.OutlineColor = outlineColor;
+
+        var (width, height) = GetHssfAnchorSize(sheet, anchor);
+        if (width > 0)
+            shape.Width = width;
+        if (height > 0)
+            shape.Height = height;
+
+        return true;
+    }
+
+    private static DrawingShapeKind? MapHssfShapeKind(int shapeType) =>
+        shapeType switch
+        {
+            HSSFSimpleShape.OBJECT_TYPE_RECTANGLE => DrawingShapeKind.Rectangle,
+            HSSFSimpleShape.OBJECT_TYPE_OVAL => DrawingShapeKind.Ellipse,
+            HSSFSimpleShape.OBJECT_TYPE_LINE => DrawingShapeKind.Line,
+            _ => null
+        };
+
+    private static bool TryGetHssfRgbColor(int value, out CellColor color)
+    {
+        color = default;
+        if (value < 0 || value > 0xFFFFFF)
+            return false;
+
+        color = new CellColor(
+            (byte)(value & 0xFF),
+            (byte)((value >> 8) & 0xFF),
+            (byte)((value >> 16) & 0xFF));
+        return true;
+    }
+
+    private static long PixelsToEmus(double pixels) =>
+        (long)Math.Round(Math.Max(0, pixels) * 9525.0);
 
     private static string? FirstNonBlank(params string?[] values) =>
         values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
@@ -1474,6 +2117,69 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
 
     private static double PointsToPixels(double points) =>
         Math.Round(points * (96.0 / 72.0), MidpointRounding.AwayFromZero);
+
+    private static string? ReadHssfWorkbookCodeName(HSSFWorkbook sourceWorkbook)
+    {
+        if (sourceWorkbook.Workbook.FindFirstRecordBySid(UnknownRecord.CODENAME_1BA) is not UnknownRecord codeNameRecord ||
+            UnknownRecordRawDataField?.GetValue(codeNameRecord) is not byte[] rawData)
+        {
+            return null;
+        }
+
+        return DecodeBiffCodeName(rawData);
+    }
+
+    private static string? ReadHssfSheetCodeName(ISheet sourceSheet)
+    {
+        if (sourceSheet is not HSSFSheet hssfSheet ||
+            hssfSheet.Sheet.FindFirstRecordBySid(UnknownRecord.CODENAME_1BA) is not UnknownRecord codeNameRecord ||
+            UnknownRecordRawDataField?.GetValue(codeNameRecord) is not byte[] rawData)
+        {
+            return null;
+        }
+
+        return DecodeBiffCodeName(rawData);
+    }
+
+    private static string? DecodeBiffCodeName(byte[] rawData)
+    {
+        if (rawData.Length < 3)
+            return null;
+
+        var characterCount = rawData[0] | (rawData[1] << 8);
+        var optionFlags = rawData[2];
+        var isWide = (optionFlags & 0x01) != 0;
+        var byteCount = isWide ? characterCount * 2 : characterCount;
+        if (byteCount <= 0 || rawData.Length < 3 + byteCount)
+            return null;
+
+        var codeName = isWide
+            ? Encoding.Unicode.GetString(rawData, 3, byteCount)
+            : Encoding.Latin1.GetString(rawData, 3, byteCount);
+        return NullIfWhiteSpace(codeName);
+    }
+
+    private static string? NullIfWhiteSpace(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value;
+
+    private static ScalarValue MapExcelDataReaderCellValue(IExcelDataReader reader, int column) =>
+        reader.GetCellError(column) is { } error
+            ? MapExcelDataReaderErrorValue(error)
+            : MapValue(reader.GetValue(column));
+
+    private static ErrorValue MapExcelDataReaderErrorValue(ExcelDataReader.CellError error) =>
+        error switch
+        {
+            ExcelDataReader.CellError.NULL => ErrorValue.Null,
+            ExcelDataReader.CellError.DIV0 => ErrorValue.DivByZero,
+            ExcelDataReader.CellError.VALUE => ErrorValue.Value,
+            ExcelDataReader.CellError.REF => ErrorValue.Ref,
+            ExcelDataReader.CellError.NAME => ErrorValue.Name,
+            ExcelDataReader.CellError.NUM => ErrorValue.Num,
+            ExcelDataReader.CellError.NA => ErrorValue.NA,
+            ExcelDataReader.CellError.GETTING_DATA => new ErrorValue("#GETTING_DATA"),
+            _ => new ErrorValue(error.ToString())
+        };
 
     private static ModelHorizontalAlignment MapHorizontalAlignment(NPOI.SS.UserModel.HorizontalAlignment alignment) =>
         alignment switch
