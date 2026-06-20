@@ -36,6 +36,35 @@ public sealed class SharedBackstageFrameTests
     }
 
     [StaFact]
+    public void BackstageViewShell_WiresHostFrameVisibilityAndClosedCallback()
+    {
+        var closedCount = 0;
+        var host = new UserControl();
+        var shell = new BackstageViewShell(
+            host,
+            new BackstageAccent(
+                Color.FromRgb(0x10, 0x25, 0x3A),
+                Color.FromRgb(0x24, 0x44, 0x5E),
+                Color.FromRgb(0x18, 0x3A, 0x58),
+                Color.FromRgb(0x24, 0x44, 0x5E)),
+            new[] { BackstageEntry.Pane("Info", RibbonCommandIconKind.Info, () => new TextBlock()) },
+            () => closedCount++);
+
+        Assert.Same(shell.Frame, host.Content);
+        Assert.Equal(Visibility.Collapsed, host.Visibility);
+
+        shell.Show();
+
+        Assert.Equal(Visibility.Visible, host.Visibility);
+        Assert.Equal(Visibility.Visible, shell.Frame.Visibility);
+
+        shell.Hide();
+
+        Assert.Equal(Visibility.Collapsed, host.Visibility);
+        Assert.Equal(1, closedCount);
+    }
+
+    [StaFact]
     public void Entry_WithKeyTipAndAutomationId_ProducesButtonExposingThem()
     {
         var frame = new BackstageFrame();

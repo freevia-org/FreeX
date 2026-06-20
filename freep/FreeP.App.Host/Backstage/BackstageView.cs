@@ -32,7 +32,7 @@ internal sealed class BackstageView : UserControl
     private readonly Func<Presentation> _getModel;
     private readonly FileCommands _file;
     private readonly BackstageActions _actions;
-    private readonly BackstageFrame _frame;
+    private readonly BackstageViewShell _shell;
 
     public BackstageView(Func<Presentation> getModel, FileCommands file, BackstageActions actions)
     {
@@ -40,30 +40,21 @@ internal sealed class BackstageView : UserControl
         _file = file;
         _actions = actions;
 
-        _frame = new BackstageFrame();
-        _frame.SetAccent(AccentColor, AccentHoverColor, AccentSelectedColor, SeparatorColor);
-        _frame.SetEntries(BuildEntries());
-        _frame.Closed += () =>
-        {
-            Visibility = Visibility.Collapsed;
-            _actions.OnClosed();
-        };
-
-        Padding = new Thickness(0);
-        Background = Brushes.White;
-        Content = _frame;
-        Visibility = Visibility.Collapsed;
+        _shell = new BackstageViewShell(
+            this,
+            new BackstageAccent(AccentColor, AccentHoverColor, AccentSelectedColor, SeparatorColor),
+            BuildEntries(),
+            _actions.OnClosed);
     }
 
     /// <summary>Show the backstage, landing on the Info pane with live content.</summary>
     public void Show()
     {
-        Visibility = Visibility.Visible;
-        _frame.Show("Info");
+        _shell.Show();
     }
 
     /// <summary>Hide the backstage and return to the document (collapse happens via the frame's Closed event).</summary>
-    public void Hide() => _frame.Hide();
+    public void Hide() => _shell.Hide();
 
     private IEnumerable<BackstageEntry> BuildEntries()
     {
