@@ -470,6 +470,14 @@ public sealed partial class MainWindowXamlKeyTipTests
         LocalizedAttribute(progressText, "AutomationProperties.Name").Should().Be("Open progress detail");
         progressText.Attribute("AutomationProperties.LiveSetting")?.Value
             .Should().Be("Assertive");
+
+        var cancelButton = document
+            .Descendants(presentation + "Button")
+            .Single(element => element.Attribute(x + "Name")?.Value == "StatusSaveProgressCancelButton");
+
+        cancelButton.Attribute("Click")?.Value.Should().Be("CancelFileOperation_Click");
+        cancelButton.Attribute("AutomationProperties.AutomationId")?.Value.Should().Be("StatusSaveProgressCancelButton");
+        cancelButton.Attribute("Visibility")?.Value.Should().Be("Collapsed");
     }
 
     [Fact]

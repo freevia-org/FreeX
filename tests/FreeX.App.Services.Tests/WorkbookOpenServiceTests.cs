@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using FluentAssertions;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
@@ -52,6 +53,68 @@ public sealed class WorkbookOpenServiceTests
         progressUpdates.Should().Contain(update =>
             update.Phase == WorkbookOpenPhase.Calculating &&
             update.Percent == 98);
+    }
+
+    [Fact]
+    public async Task LoadAsync_SlowParseReportsIndeterminateProgressWhenRemainingWorkIsUnknown()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var tempPath = Path.Combine(temp.Path, "slow-load.fxjson");
+        await File.WriteAllTextAsync(tempPath, "payload");
+        using var indeterminateParsingObserved = new ManualResetEventSlim();
+        var progressUpdates = new ConcurrentQueue<WorkbookOpenProgressUpdate>();
+        var adapter = new TestFileAdapter(stream =>
+        {
+            indeterminateParsingObserved.Wait(TimeSpan.FromSeconds(3)).Should().BeTrue();
+            using var reader = new StreamReader(stream);
+            reader.ReadToEnd().Should().Be("payload");
+            var workbook = new Workbook("Loaded");
+            workbook.AddSheet("Sheet1");
+            return workbook;
+        });
+        var service = new WorkbookOpenService();
+
+        await service.LoadAsync(
+            tempPath,
+            adapter,
+            ".fxjson",
+            new FileFormatDescriptor(".fxjson", "Fake"),
+            new TestProgress<WorkbookOpenProgressUpdate>(update =>
+            {
+                progressUpdates.Enqueue(update);
+                if (update.Phase == WorkbookOpenPhase.Parsing && update.Percent is null)
+                    indeterminateParsingObserved.Set();
+            }));
+
+        progressUpdates.Should().Contain(update =>
+            update.Phase == WorkbookOpenPhase.Parsing &&
+            update.Percent == null);
+    }
+
+    [Fact]
+    public async Task LoadAsync_CanceledBeforeLoad_DoesNotInvokeAdapter()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var tempPath = Path.Combine(temp.Path, "canceled-load.fxjson");
+        await File.WriteAllTextAsync(tempPath, "payload");
+        var adapterInvoked = false;
+        var adapter = new TestFileAdapter(_ =>
+        {
+            adapterInvoked = true;
+            return new Workbook("Loaded");
+        });
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        var act = async () => await new WorkbookOpenService().LoadAsync(
+            tempPath,
+            adapter,
+            ".fxjson",
+            new FileFormatDescriptor(".fxjson", "Fake"),
+            cancellationToken: cancellation.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        adapterInvoked.Should().BeFalse();
     }
 
     [Fact]

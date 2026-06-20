@@ -34,6 +34,13 @@ public partial class MainWindow
 
     private void RefreshStatusBar()
     {
+        if (IsFileOperationProgressVisible())
+        {
+            SetVisibilityIfChanged(StatusReadyText, Visibility.Collapsed);
+            SetVisibilityIfChanged(StatusStatsPanel, Visibility.Collapsed);
+            return;
+        }
+
         if (SheetGrid.SelectedRange is not { } range)
         {
             ApplyStatusBarDisplayState(_statusBarDisplayStateCache.GetReady(UiText.Get("MainWindow_Text_Ready")));
@@ -54,6 +61,9 @@ public partial class MainWindow
 
         ApplyStatusBarDisplayState(_statusBarDisplayStateCache.GetStats(stats));
     }
+
+    private bool IsFileOperationProgressVisible() =>
+        StatusSaveProgressPanel.Visibility == Visibility.Visible;
 
     private void ApplyStatusBarDisplayState(Free.Shared.AppServices.StatusBarViewModel state)
     {
