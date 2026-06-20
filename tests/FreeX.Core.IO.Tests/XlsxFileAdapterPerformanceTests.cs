@@ -12,7 +12,7 @@ namespace FreeX.Core.IO.Tests;
 public sealed partial class XlsxFileAdapterPerformanceTests
 {
     private static string CoinToolCorpusWorkbookPath =>
-        TestWorkspaceFiles.FindRepoFile("test-corpus", "public", "COIN_Tool_v1_FULL_exampledata.xlsm");
+        TestWorkspaceFiles.FindRepoFile("test-corpus", "local-private", "COIN_Tool_v1_FULL_exampledata.xlsm");
 
     private static void PrepareLoadedWorkbookForEdit(Workbook workbook)
     {

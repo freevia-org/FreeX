@@ -218,20 +218,20 @@ public class XlsxCorpusScaffoldTests
     }
 
     [Fact]
-    public void CorpusManifest_IncludesCoinToolPublicOpenPerformanceFixture()
+    public void CorpusManifest_IncludesCoinToolLocalPrivateOpenPerformanceFixture()
     {
         var manifestRows = ReadManifestRows();
 
         manifestRows.Should().Contain(row =>
-            row.Path == "public/COIN_Tool_v1_FULL_exampledata.xlsm" &&
-            row.SourceType == "public" &&
-            row.SourceUrl == "user-provided-local" &&
-            row.License == "user-provided" &&
+            row.Path == "local-private/COIN_Tool_v1_FULL_exampledata.xlsm" &&
+            row.SourceType == "local-private" &&
+            row.SourceUrl == "user-approved-local" &&
+            row.License == "private-local" &&
             row.ExpectedWarnings == "excluded VBA macro disclosed" &&
-            row.ExpectedStatus == "public-pass" &&
+            row.ExpectedStatus == "supported-known-gap" &&
             row.FeatureTags.Contains("performance", StringComparison.Ordinal) &&
             row.FeatureTags.Contains("open-load", StringComparison.Ordinal) &&
-            row.Notes.Contains("open/load performance profiling", StringComparison.OrdinalIgnoreCase));
+            row.Notes.Contains("large private workbook open/load performance profiling", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -335,9 +335,12 @@ public class XlsxCorpusScaffoldTests
 
         publicRows.Should().HaveCountGreaterThan(0);
         publicRows.Should().OnlyContain(
-            row => HasPublicSourceMetadata(row),
+            row =>
+                row.SourceUrl.StartsWith("https://", StringComparison.Ordinal) &&
+                !string.IsNullOrWhiteSpace(row.RetrievedOn) &&
+                !string.IsNullOrWhiteSpace(row.License),
             "redistributed public corpus rows need auditable provenance metadata");
-        report.Should().Contain($"| Public source metadata coverage | {publicRows.Length}/{publicRows.Length} rows declare source URL or user-provided-local marker, retrieval date, and license |");
+        report.Should().Contain($"| Public source metadata coverage | {publicRows.Length}/{publicRows.Length} rows declare source URL, retrieval date, and license |");
     }
 
     [Fact]
@@ -705,16 +708,6 @@ public class XlsxCorpusScaffoldTests
         return isDriveLetter && path[1] == ':' && (path[2] == '\\' || path[2] == '/');
     }
 
-    private static bool HasPublicSourceMetadata(ManifestRow row)
-    {
-        if (string.IsNullOrWhiteSpace(row.RetrievedOn) || string.IsNullOrWhiteSpace(row.License))
-            return false;
-
-        if (row.SourceUrl == "user-provided-local")
-            return row.License == "user-provided";
-
-        return row.SourceUrl.StartsWith("https://", StringComparison.Ordinal);
-    }
     private static IReadOnlyList<string> ExpectedWarningsFor(ManifestRow row)
     {
         var tags = row.FeatureTags.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
