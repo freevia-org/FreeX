@@ -1,11 +1,16 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
+using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Free.Shared.Ribbon;
 using FreeX.App.Avalonia.Ribbon;
+
+using AvaloniaGrid = Avalonia.Controls.Grid;
+using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
+using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
 
 namespace FreeX.App.Avalonia;
 
@@ -28,6 +33,7 @@ public sealed partial class MainWindow
     // The capture canvas is sized to the shell's default window so ribbon/grid framing matches the WPF shell.
     private const int ParityCaptureWindowWidth = 1120;
     private const int ParityCaptureWindowHeight = 720;
+    private const int ParityCaptureTitleBarHeight = 34;
     private const int ParityCaptureDialogWaitMilliseconds = 8000;
     private const int ParityCaptureDialogPollMilliseconds = 50;
 
@@ -149,7 +155,7 @@ public sealed partial class MainWindow
         var pngName = surfaceId + ".png";
         try
         {
-            RenderVisualToPng(this, ParityCaptureWindowWidth, ParityCaptureWindowHeight, Path.Combine(outputDirectory, pngName));
+            RenderWindowWithCapturedTitleBarToPng(this, ParityCaptureWindowWidth, ParityCaptureWindowHeight, Path.Combine(outputDirectory, pngName));
             return new ParitySurfaceResult(surfaceId, kind, pngName, Captured: true, "");
         }
         catch (Exception ex)
@@ -279,12 +285,129 @@ public sealed partial class MainWindow
         Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
     }
 
+    private static void RenderWindowWithCapturedTitleBarToPng(MainWindow window, int width, int height, string path)
+    {
+        var pixelWidth = Math.Max(1, width);
+        var pixelHeight = Math.Max(1, height);
+        var contentHeight = Math.Max(1, pixelHeight - ParityCaptureTitleBarHeight);
+
+        using var contentBitmap = RenderVisualToBitmap(window, pixelWidth, contentHeight);
+        var composite = new AvaloniaGrid
+        {
+            Width = pixelWidth,
+            Height = pixelHeight,
+            Background = Brushes.White,
+            RowDefinitions =
+            {
+                new RowDefinition { Height = new GridLength(ParityCaptureTitleBarHeight) },
+                new RowDefinition { Height = new GridLength(1, GridUnitType.Star) },
+            },
+        };
+
+        AddGridChild(composite, CreateParityCapturedTitleBar(window.Title ?? "FreeX"), 0, 0);
+        AddGridChild(composite, new Image
+        {
+            Source = contentBitmap,
+            Stretch = Stretch.Fill,
+            Width = pixelWidth,
+            Height = contentHeight,
+        }, 1, 0);
+
+        RenderVisualToPng(composite, pixelWidth, pixelHeight, path);
+    }
+
+    private static Control CreateParityCapturedTitleBar(string title)
+    {
+        var root = new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(23, 50, 77)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(15, 36, 58)),
+            BorderThickness = new Thickness(0, 0, 0, 1),
+            Padding = new Thickness(6, 3),
+        };
+
+        var dock = new DockPanel { LastChildFill = true };
+        root.Child = dock;
+
+        var systemButtons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 0,
+        };
+        DockPanel.SetDock(systemButtons, Dock.Right);
+        systemButtons.Children.Add(CreateParityCapturedTitleBarButton("-"));
+        systemButtons.Children.Add(CreateParityCapturedTitleBarButton("[]"));
+        systemButtons.Children.Add(CreateParityCapturedTitleBarButton("X"));
+        dock.Children.Add(systemButtons);
+
+        var appIcon = new Border
+        {
+            Width = 22,
+            Height = 22,
+            Margin = new Thickness(0, 0, 8, 0),
+            Background = new SolidColorBrush(Color.FromRgb(15, 126, 155)),
+            BorderBrush = new SolidColorBrush(Color.FromArgb(102, 255, 255, 255)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(2),
+            Child = new TextBlock
+            {
+                Text = "X",
+                FontSize = 14,
+                FontWeight = FontWeight.Bold,
+                Foreground = Brushes.White,
+                HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
+                VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            },
+        };
+        DockPanel.SetDock(appIcon, Dock.Left);
+        dock.Children.Add(appIcon);
+
+        dock.Children.Add(new TextBlock
+        {
+            Text = title,
+            FontSize = 12,
+            FontWeight = FontWeight.SemiBold,
+            Foreground = Brushes.White,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+        });
+
+        return root;
+    }
+
+    private static Control CreateParityCapturedTitleBarButton(string text) =>
+        new Border
+        {
+            Width = 42,
+            Height = 27,
+            Child = new TextBlock
+            {
+                Text = text,
+                FontSize = 12,
+                Foreground = Brushes.White,
+                HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
+                VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            },
+        };
+
     /// <summary>
     /// Renders <paramref name="visual"/> into an off-screen <see cref="RenderTargetBitmap"/> at the given
     /// pixel size and writes it as a PNG. The visual is measured/arranged first so an off-screen or
     /// not-yet-shown window still produces a populated bitmap.
     /// </summary>
     private static void RenderVisualToPng(Visual visual, int width, int height, string path)
+    {
+        using var bitmap = RenderVisualToBitmap(visual, width, height);
+
+        var directory = Path.GetDirectoryName(path);
+        if (!string.IsNullOrWhiteSpace(directory))
+            Directory.CreateDirectory(directory);
+        using var stream = File.Create(path);
+        bitmap.Save(stream);
+    }
+
+    private static RenderTargetBitmap RenderVisualToBitmap(Visual visual, int width, int height)
     {
         var pixelWidth = Math.Max(1, width);
         var pixelHeight = Math.Max(1, height);
@@ -296,13 +419,8 @@ public sealed partial class MainWindow
         }
         Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
 
-        using var bitmap = new RenderTargetBitmap(new PixelSize(pixelWidth, pixelHeight), new Vector(96, 96));
+        var bitmap = new RenderTargetBitmap(new PixelSize(pixelWidth, pixelHeight), new Vector(96, 96));
         bitmap.Render(visual);
-
-        var directory = Path.GetDirectoryName(path);
-        if (!string.IsNullOrWhiteSpace(directory))
-            Directory.CreateDirectory(directory);
-        using var stream = File.Create(path);
-        bitmap.Save(stream);
+        return bitmap;
     }
 }

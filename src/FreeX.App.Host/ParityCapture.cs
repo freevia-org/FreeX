@@ -118,6 +118,7 @@ internal static class ParityCapture
             // compare identical CONTENT (the live shell otherwise opens an empty Book1). See
             // ParityDemoWorkbookFactory — both shells build from the committed docs/parity/parity-demo.csv.
             window.AdoptWorkbookForParityCapture(ParityDemoWorkbookFactory.Create());
+            EnsureFormulaBarVisibleForParityCapture(window);
             PumpDispatcher();
             window.UpdateLayout();
             PumpDispatcher();
@@ -210,6 +211,18 @@ internal static class ParityCapture
         }
 
         return RenderElement(overlay, overlay.ActualWidth, overlay.ActualHeight);
+    }
+
+    private static void EnsureFormulaBarVisibleForParityCapture(MainWindow window)
+    {
+        if (window.FindName("FormulaBarBorder") is FrameworkElement formulaBarBorder)
+            formulaBarBorder.Visibility = Visibility.Visible;
+
+        if (window.FindName("FormulaBar") is TextBox formulaBar)
+        {
+            formulaBar.Height = 30;
+            formulaBar.AcceptsReturn = false;
+        }
     }
 
     // ----- Standalone dialogs -----

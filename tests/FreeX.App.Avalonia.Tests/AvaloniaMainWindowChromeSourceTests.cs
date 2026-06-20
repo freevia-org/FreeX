@@ -39,10 +39,16 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     public void ParityCapture_UsesSameResolutionAndDoesNotMislabelBackstageDialogs()
     {
         var captureSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+        var hostCaptureSource = File.ReadAllText(RepoFile("src", "FreeX.App.Host", "ParityCapture.cs"));
         var runnerSource = File.ReadAllText(RepoFile("tools", "FreeX.ParityCompare", "CaptureRunner.cs"));
 
         runnerSource.Should().Contain("-screen 0 1120x720x24");
         runnerSource.Should().NotContain("-screen 0 1600x1000x24");
+        captureSource.Should().Contain("private const int ParityCaptureTitleBarHeight = 34;");
+        captureSource.Should().Contain("RenderWindowWithCapturedTitleBarToPng(this, ParityCaptureWindowWidth, ParityCaptureWindowHeight");
+        captureSource.Should().Contain("CreateParityCapturedTitleBar(window.Title ?? \"FreeX\")");
+        hostCaptureSource.Should().Contain("EnsureFormulaBarVisibleForParityCapture(window);");
+        hostCaptureSource.Should().Contain("window.FindName(\"FormulaBarBorder\")");
         captureSource.Should().Contain("Avalonia File surface is still dialog-based");
         captureSource.Should().NotContain("ShowBackstageInfoDialogAsync()");
         captureSource.Should().NotContain("ShowBackstageExportDialogAsync()");
