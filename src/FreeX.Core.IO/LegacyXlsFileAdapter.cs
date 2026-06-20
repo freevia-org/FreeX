@@ -100,6 +100,7 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         LoadWorkbookView(hssf, workbook);
         LoadWorkbookCountrySettings(hssf, workbook);
         LoadWorkbookLegacyMenuSettings(hssf, workbook);
+        LoadWorkbookFunctionGroups(hssf, workbook);
         LoadWorkbookProperties(hssf, workbook);
         LoadWorkbookProtection(hssf, workbook);
         LoadFileSharing(hssf, workbook);
@@ -218,6 +219,18 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
             AddMenuCount = addMenuCount,
             DeleteMenuCount = deleteMenuCount
         };
+    }
+
+    private static void LoadWorkbookFunctionGroups(HSSFWorkbook sourceWorkbook, Workbook workbook)
+    {
+        if (sourceWorkbook.Workbook.FindFirstRecordBySid(FnGroupCountRecord.sid) is not FnGroupCountRecord functionGroups ||
+            PositiveOrNull(functionGroups.Count) is not { } builtInGroupCount)
+        {
+            return;
+        }
+
+        workbook.FunctionGroups ??= new WorkbookFunctionGroupsModel();
+        workbook.FunctionGroups.BuiltInGroupCount = builtInGroupCount.ToString(CultureInfo.InvariantCulture);
     }
 
     private static void LoadWorkbookProperties(HSSFWorkbook sourceWorkbook, Workbook workbook)
