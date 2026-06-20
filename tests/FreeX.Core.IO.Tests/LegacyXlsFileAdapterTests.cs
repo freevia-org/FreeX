@@ -377,13 +377,21 @@ public sealed class LegacyXlsFileAdapterTests
             .BeGreaterThan(0);
         summaries.Sum(summary => summary.Merges).Should().BeGreaterThan(0);
         summaries.Sum(summary => summary.Dimensions).Should().BeGreaterThan(0);
+        summaries.Sum(summary => summary.HiddenSheets).Should().BeGreaterThan(0);
+        summaries.Count(summary => summary.Uses1904DateSystem).Should().BeGreaterThan(0);
         summaries.Where(summary => summary.RichMetadata).Sum(summary => summary.DefaultDimensionFingerprints?.Count ?? 0)
             .Should()
             .BeGreaterThan(0);
         summaries.Sum(summary => summary.DefinedNames).Should().BeGreaterThan(0);
+        summaries.Sum(summary => summary.Hyperlinks).Should().BeGreaterThan(0);
+        summaries.Sum(summary => summary.Comments).Should().BeGreaterThan(0);
+        summaries.Sum(summary => summary.Pictures).Should().BeGreaterThan(0);
         summaries.Sum(summary => summary.PrintAreas + summary.PrintTitleRows + summary.PrintTitleColumns)
             .Should()
             .BeGreaterThan(0);
+        summaries.Sum(summary => summary.ProtectedSheets).Should().BeGreaterThan(0);
+        summaries.Sum(summary => summary.ConditionalFormats).Should().BeGreaterThan(0);
+        summaries.Sum(summary => summary.PageBreaks).Should().BeGreaterThan(0);
         summaries.Count(summary => summary.RichMetadata).Should().BeGreaterThan(0);
     }
 
