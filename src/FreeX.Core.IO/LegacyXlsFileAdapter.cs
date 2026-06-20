@@ -842,6 +842,27 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
 
         LoadManualPageBreaks(sourceSheet, sheet);
         LoadPrintSetup(sourceSheet.PrintSetup, sheet);
+        LoadPrintOptionsMetadata(sourceSheet, sheet);
+    }
+
+    private static void LoadPrintOptionsMetadata(ISheet sourceSheet, Sheet sheet)
+    {
+        if (sourceSheet is not HSSFSheet hssfSheet ||
+            hssfSheet.Sheet.FindFirstRecordBySid(GridsetRecord.sid) is not GridsetRecord gridset)
+        {
+            return;
+        }
+
+        var serializedMetadata = XmlNativeBagSerializer.Serialize(
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["gridLinesSet"] = gridset.Gridset ? "1" : "0"
+            });
+        if (serializedMetadata is null)
+            return;
+
+        sheet.PrintOptionsMetadata ??= new NativeXmlPreserveBag();
+        sheet.PrintOptionsMetadata.Set("printOptions", serializedMetadata);
     }
 
     private static void LoadSheetView(ISheet sourceSheet, Sheet sheet, HSSFPalette palette)

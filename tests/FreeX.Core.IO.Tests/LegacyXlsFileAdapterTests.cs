@@ -366,6 +366,7 @@ public sealed class LegacyXlsFileAdapterTests
                 ColOutlineFingerprints: ReadImportedColOutlineFingerprints(workbook),
                 OutlineSettingFingerprints: ReadImportedOutlineSettingFingerprints(workbook),
                 PrintLayoutFingerprints: ReadImportedPrintLayoutFingerprints(workbook),
+                PrintOptionsFingerprints: ReadImportedPrintOptionsFingerprints(workbook),
                 PageSetupFingerprints: ReadImportedPageSetupFingerprints(workbook),
                 ViewStateFingerprints: ReadImportedViewStateFingerprints(workbook),
                 AutoFilterFingerprints: ReadImportedAutoFilterFingerprints(workbook),
@@ -448,6 +449,7 @@ public sealed class LegacyXlsFileAdapterTests
                 imported.ColOutlineFingerprints.Should().BeEquivalentTo(source.ColOutlineFingerprints, imported.File);
                 imported.OutlineSettingFingerprints.Should().BeEquivalentTo(source.OutlineSettingFingerprints, imported.File);
                 imported.PrintLayoutFingerprints.Should().BeEquivalentTo(source.PrintLayoutFingerprints, imported.File);
+                imported.PrintOptionsFingerprints.Should().BeEquivalentTo(source.PrintOptionsFingerprints, imported.File);
                 imported.PageSetupFingerprints.Should().BeEquivalentTo(source.PageSetupFingerprints, imported.File);
                 imported.ViewStateFingerprints.Should().BeEquivalentTo(source.ViewStateFingerprints, imported.File);
                 imported.AutoFilterFingerprints.Should().BeEquivalentTo(source.AutoFilterFingerprints, imported.File);
@@ -507,6 +509,11 @@ public sealed class LegacyXlsFileAdapterTests
         summaries.Sum(summary => summary.DrawingShapes).Should().BeGreaterThan(0);
         summaries.Sum(summary => summary.FormControls).Should().BeGreaterThan(0);
         summaries.Sum(summary => summary.PrintAreas + summary.PrintTitleRows + summary.PrintTitleColumns)
+            .Should()
+            .BeGreaterThan(0);
+        summaries.Where(summary => summary.RichMetadata)
+            .Sum(summary => summary.PrintOptionsFingerprints?.Count(fingerprint =>
+                fingerprint.Contains("|GridLinesSet=0", StringComparison.Ordinal)) ?? 0)
             .Should()
             .BeGreaterThan(0);
         summaries.Sum(summary => summary.ProtectedSheets).Should().BeGreaterThan(0);
@@ -911,6 +918,7 @@ public sealed class LegacyXlsFileAdapterTests
         var rowOutlineFingerprints = new List<string>();
         var colOutlineFingerprints = new List<string>();
         var printLayoutFingerprints = new List<string>();
+        var printOptionsFingerprints = new List<string>();
         var pageSetupFingerprints = new List<string>();
         var viewStateFingerprints = new List<string>();
         var sheetCalculationFingerprints = new List<string>();
@@ -956,6 +964,8 @@ public sealed class LegacyXlsFileAdapterTests
                 printLayoutFingerprints.Add(CreateRepeatRangeFingerprint(sheetIndex, sheet.SheetName, "Rows", repeatRows));
             if (TryCreateRepeatColumns(sheet.RepeatingColumns, out var repeatColumns))
                 printLayoutFingerprints.Add(CreateRepeatRangeFingerprint(sheetIndex, sheet.SheetName, "Cols", repeatColumns));
+            if (TryCreateSourcePrintOptionsFingerprint(sheetIndex, sheet.SheetName, sheet, out var printOptionsFingerprint))
+                printOptionsFingerprints.Add(printOptionsFingerprint);
             pageBreaks += sheet.RowBreaks.Count(breakIndex => ToSourceModelIndex(breakIndex) >= 2);
             pageBreaks += sheet.ColumnBreaks.Count(breakIndex => ToSourceModelIndex(breakIndex) >= 2);
             pageSetupFingerprints.Add(CreateSourcePageSetupFingerprint(sheetIndex, sheet.SheetName, sheet));
@@ -1208,6 +1218,7 @@ public sealed class LegacyXlsFileAdapterTests
             ColOutlineFingerprints: colOutlineFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             OutlineSettingFingerprints: outlineSettingFingerprints,
             PrintLayoutFingerprints: orderedPrintLayoutFingerprints,
+            PrintOptionsFingerprints: printOptionsFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             PageSetupFingerprints: pageSetupFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             ViewStateFingerprints: viewStateFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             AutoFilterFingerprints: orderedAutoFilterFingerprints,
@@ -1376,6 +1387,7 @@ public sealed class LegacyXlsFileAdapterTests
             ColOutlineFingerprints: [],
             OutlineSettingFingerprints: [],
             PrintLayoutFingerprints: [],
+            PrintOptionsFingerprints: [],
             PageSetupFingerprints: [],
             ViewStateFingerprints: [],
             AutoFilterFingerprints: [],
@@ -2293,6 +2305,17 @@ public sealed class LegacyXlsFileAdapterTests
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
 
+    private static IReadOnlyList<string> ReadImportedPrintOptionsFingerprints(Workbook workbook) =>
+        workbook.Sheets
+            .Select((sheet, sheetIndex) =>
+                GetPrintOptionsMetadataAttribute(sheet, "gridLinesSet") is { } gridLinesSet
+                    ? CreatePrintOptionsFingerprint(sheetIndex, sheet.Name, gridLinesSet)
+                    : null)
+            .Where(value => value is not null)
+            .Select(value => value!)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+
     private static IReadOnlyList<string> ReadImportedPageSetupFingerprints(Workbook workbook) =>
         workbook.Sheets
             .Select((sheet, sheetIndex) => CreatePageSetupFingerprint(
@@ -2406,6 +2429,23 @@ public sealed class LegacyXlsFileAdapterTests
         }
 
         return workbook;
+    }
+
+    private static bool TryCreateSourcePrintOptionsFingerprint(
+        int sheetIndex,
+        string sheetName,
+        ISheet sheet,
+        [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out string? fingerprint)
+    {
+        fingerprint = null;
+        if (sheet is not HSSFSheet hssfSheet ||
+            hssfSheet.Sheet.FindFirstRecordBySid(GridsetRecord.sid) is not GridsetRecord gridset)
+        {
+            return false;
+        }
+
+        fingerprint = CreatePrintOptionsFingerprint(sheetIndex, sheetName, gridset.Gridset ? "1" : "0");
+        return true;
     }
 
     private static string CreateSourcePageSetupFingerprint(int sheetIndex, string sheetName, ISheet sheet)
@@ -2679,6 +2719,9 @@ public sealed class LegacyXlsFileAdapterTests
 
     private static string CreateSheetCodeNameFingerprint(int sheetIndex, string sheetName, string codeName) =>
         $"{sheetIndex}:{sheetName}|CodeName={codeName}";
+
+    private static string CreatePrintOptionsFingerprint(int sheetIndex, string sheetName, string gridLinesSet) =>
+        $"{sheetIndex}:{sheetName}|PrintOptions|GridLinesSet={gridLinesSet}";
 
     private static string? ReadHssfWorkbookCodeName(HSSFWorkbook sourceWorkbook)
     {
@@ -3602,6 +3645,12 @@ public sealed class LegacyXlsFileAdapterTests
         return attributes.TryGetValue(name, out var value) ? value : null;
     }
 
+    private static string? GetPrintOptionsMetadataAttribute(Sheet sheet, string name)
+    {
+        var (attributes, _) = XmlNativeBagSerializer.Deserialize(sheet.PrintOptionsMetadata?.Get("printOptions"));
+        return attributes.TryGetValue(name, out var value) ? value : null;
+    }
+
     private static string? GetWorkbookProtectionMetadataAttribute(Workbook workbook, string name)
     {
         var (attributes, _) = XmlNativeBagSerializer.Deserialize(workbook.ProtectionMetadata?.Get("workbookProtection"));
@@ -4105,6 +4154,7 @@ public sealed class LegacyXlsFileAdapterTests
         IReadOnlyList<string>? ColOutlineFingerprints = null,
         IReadOnlyList<string>? OutlineSettingFingerprints = null,
         IReadOnlyList<string>? PrintLayoutFingerprints = null,
+        IReadOnlyList<string>? PrintOptionsFingerprints = null,
         IReadOnlyList<string>? PageSetupFingerprints = null,
         IReadOnlyList<string>? ViewStateFingerprints = null,
         IReadOnlyList<string>? AutoFilterFingerprints = null,
