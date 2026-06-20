@@ -114,6 +114,52 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_RoundTrip_WorkbookCountrySettings()
+    {
+        var workbook = new Workbook("CountrySettingsNativeJson")
+        {
+            CountrySettings = new WorkbookCountrySettingsModel
+            {
+                DefaultCountryId = 1,
+                CurrentCountryId = 44
+            }
+        };
+        workbook.AddSheet("Sheet1");
+
+        using var stream = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var loaded = adapter.Load(stream);
+
+        loaded.CountrySettings.Should().BeEquivalentTo(workbook.CountrySettings);
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_RoundTrip_WorkbookLegacyMenuSettings()
+    {
+        var workbook = new Workbook("LegacyMenuSettingsNativeJson")
+        {
+            LegacyMenuSettings = new WorkbookLegacyMenuSettingsModel
+            {
+                AddMenuCount = 3,
+                DeleteMenuCount = 1
+            }
+        };
+        workbook.AddSheet("Sheet1");
+
+        using var stream = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var loaded = adapter.Load(stream);
+
+        loaded.LegacyMenuSettings.Should().BeEquivalentTo(workbook.LegacyMenuSettings);
+    }
+
+    [Fact]
     public void NativeJsonAdapter_RoundTrip_WorkbookProperties()
     {
         var workbook = new Workbook("WorkbookPropertiesNativeJson")

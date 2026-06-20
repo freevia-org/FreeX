@@ -26,6 +26,18 @@ public sealed class WorkbookFileVersionModel
     public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
 }
 
+public sealed class WorkbookCountrySettingsModel
+{
+    public int? DefaultCountryId { get; set; }
+    public int? CurrentCountryId { get; set; }
+}
+
+public sealed class WorkbookLegacyMenuSettingsModel
+{
+    public int? AddMenuCount { get; set; }
+    public int? DeleteMenuCount { get; set; }
+}
+
 // WorkbookPropertiesModel and WorkbookProtectionMetadataModel were simple bags of
 // NativeAttributes + NativeChildXmls with no behaviour.
 // They have been consolidated into NativeXmlPreserveBag.
@@ -195,6 +207,12 @@ public sealed class Workbook
 
     /// <summary>Excel workbook file-version metadata.</summary>
     public WorkbookFileVersionModel? FileVersion { get; set; }
+
+    /// <summary>Legacy BIFF workbook country/localization identifiers.</summary>
+    public WorkbookCountrySettingsModel? CountrySettings { get; set; }
+
+    /// <summary>Legacy BIFF workbook add/delete menu metadata.</summary>
+    public WorkbookLegacyMenuSettingsModel? LegacyMenuSettings { get; set; }
 
     /// <summary>Excel workbook property metadata loaded from XLSX workbookPr (residual native XML).</summary>
     public NativeXmlPreserveBag? Properties { get; set; }

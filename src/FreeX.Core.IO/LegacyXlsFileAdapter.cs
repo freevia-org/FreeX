@@ -98,6 +98,8 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
             HasVbaProjectPackage = hasVbaProjectPackage
         };
         LoadWorkbookView(hssf, workbook);
+        LoadWorkbookCountrySettings(hssf, workbook);
+        LoadWorkbookLegacyMenuSettings(hssf, workbook);
         LoadWorkbookProperties(hssf, workbook);
         LoadWorkbookProtection(hssf, workbook);
         LoadFileSharing(hssf, workbook);
@@ -187,6 +189,35 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         workbook.SheetTabRatio = Math.Clamp((int)window.TabWidthRatio, 0, 1000);
         if (window.FirstVisibleTab >= 0 && window.FirstVisibleTab < sourceWorkbook.NumberOfSheets)
             workbook.FirstVisibleSheetIndex = window.FirstVisibleTab;
+    }
+
+    private static void LoadWorkbookCountrySettings(HSSFWorkbook sourceWorkbook, Workbook workbook)
+    {
+        if (sourceWorkbook.Workbook.FindFirstRecordBySid(CountryRecord.sid) is not CountryRecord country)
+            return;
+
+        workbook.CountrySettings = new WorkbookCountrySettingsModel
+        {
+            DefaultCountryId = PositiveOrNull(country.DefaultCountry),
+            CurrentCountryId = PositiveOrNull(country.CurrentCountry)
+        };
+    }
+
+    private static void LoadWorkbookLegacyMenuSettings(HSSFWorkbook sourceWorkbook, Workbook workbook)
+    {
+        if (sourceWorkbook.Workbook.FindFirstRecordBySid(MMSRecord.sid) is not MMSRecord menuSettings)
+            return;
+
+        var addMenuCount = PositiveOrNull(menuSettings.AddMenuCount);
+        var deleteMenuCount = PositiveOrNull(menuSettings.DelMenuCount);
+        if (addMenuCount is null && deleteMenuCount is null)
+            return;
+
+        workbook.LegacyMenuSettings = new WorkbookLegacyMenuSettingsModel
+        {
+            AddMenuCount = addMenuCount,
+            DeleteMenuCount = deleteMenuCount
+        };
     }
 
     private static void LoadWorkbookProperties(HSSFWorkbook sourceWorkbook, Workbook workbook)

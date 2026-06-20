@@ -41,6 +41,70 @@ public sealed partial class NativeJsonAdapter
         dto.MaxCalculationChange = workbook.MaxCalculationChange;
     }
 
+    private static WorkbookCountrySettingsModel? ToWorkbookCountrySettings(WorkbookCountrySettingsDto? dto)
+    {
+        if (dto is null)
+            return null;
+
+        var defaultCountryId = NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(dto.DefaultCountryId, ushort.MaxValue);
+        var currentCountryId = NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(dto.CurrentCountryId, ushort.MaxValue);
+        return defaultCountryId is null && currentCountryId is null
+            ? null
+            : new WorkbookCountrySettingsModel
+            {
+                DefaultCountryId = defaultCountryId,
+                CurrentCountryId = currentCountryId
+            };
+    }
+
+    private static WorkbookCountrySettingsDto? FromWorkbookCountrySettings(WorkbookCountrySettingsModel? countrySettings)
+    {
+        if (countrySettings is null)
+            return null;
+
+        var defaultCountryId = NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(countrySettings.DefaultCountryId, ushort.MaxValue);
+        var currentCountryId = NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(countrySettings.CurrentCountryId, ushort.MaxValue);
+        return defaultCountryId is null && currentCountryId is null
+            ? null
+            : new WorkbookCountrySettingsDto
+            {
+                DefaultCountryId = defaultCountryId,
+                CurrentCountryId = currentCountryId
+            };
+    }
+
+    private static WorkbookLegacyMenuSettingsModel? ToWorkbookLegacyMenuSettings(WorkbookLegacyMenuSettingsDto? dto)
+    {
+        if (dto is null)
+            return null;
+
+        var addMenuCount = NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(dto.AddMenuCount, ushort.MaxValue);
+        var deleteMenuCount = NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(dto.DeleteMenuCount, ushort.MaxValue);
+        return addMenuCount is null && deleteMenuCount is null
+            ? null
+            : new WorkbookLegacyMenuSettingsModel
+            {
+                AddMenuCount = addMenuCount,
+                DeleteMenuCount = deleteMenuCount
+            };
+    }
+
+    private static WorkbookLegacyMenuSettingsDto? FromWorkbookLegacyMenuSettings(WorkbookLegacyMenuSettingsModel? menuSettings)
+    {
+        if (menuSettings is null)
+            return null;
+
+        var addMenuCount = NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(menuSettings.AddMenuCount, ushort.MaxValue);
+        var deleteMenuCount = NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(menuSettings.DeleteMenuCount, ushort.MaxValue);
+        return addMenuCount is null && deleteMenuCount is null
+            ? null
+            : new WorkbookLegacyMenuSettingsDto
+            {
+                AddMenuCount = addMenuCount,
+                DeleteMenuCount = deleteMenuCount
+            };
+    }
+
     private static bool IsSupportedFormulaErrorCode(string? errorCode) =>
         string.Equals(errorCode, ErrorValue.DivByZero.Code, StringComparison.OrdinalIgnoreCase) ||
         string.Equals(errorCode, ErrorValue.Value.Code, StringComparison.OrdinalIgnoreCase) ||
