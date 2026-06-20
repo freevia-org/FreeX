@@ -119,6 +119,50 @@ public sealed class RibbonAdaptiveMeasurementCacheTests
         });
     }
 
+    [Fact]
+    public void AdaptiveCompaction_DataTabCutoffIsIndependentOfWarmupSequence()
+    {
+        StaTestRunner.Run(() =>
+        {
+            static (IReadOnlyList<string> Collapsed, IReadOnlyDictionary<string, double> FullWidths) CaptureDataAt1120(
+                Action<RibbonLiveAdaptivePanelHarness> warmup)
+            {
+                using var harness = RibbonLiveAdaptivePanelHarness.Create();
+                warmup(harness);
+                harness.RemeasurePanel();
+                return (harness.CollapsedGroupNames, RoundFullWidths(harness.FullWidths));
+            }
+
+            static IReadOnlyDictionary<string, double> RoundFullWidths(IReadOnlyDictionary<string, double> widths) =>
+                widths.ToDictionary(pair => pair.Key, pair => Math.Round(pair.Value, 1));
+
+            var direct = CaptureDataAt1120(harness => harness.SelectRibbonTab("Data", 1120));
+            var wideFirst = CaptureDataAt1120(harness =>
+            {
+                harness.SelectRibbonTab("Data", 1280);
+                harness.SetWidth(1120);
+            });
+            var compactFirst = CaptureDataAt1120(harness =>
+            {
+                harness.SelectRibbonTab("Data", 900);
+                harness.SetWidth(1120);
+            });
+
+            wideFirst.FullWidths.Should().Equal(
+                direct.FullWidths,
+                "the Data tab full-width budget at 1120px must not depend on a wider warm-up pass");
+            compactFirst.FullWidths.Should().Equal(
+                direct.FullWidths,
+                "the Data tab full-width budget at 1120px must not depend on a compact warm-up pass");
+            wideFirst.Collapsed.Should().Equal(
+                direct.Collapsed,
+                "Data at 1120px should collapse the same groups after a wider warm-up pass");
+            compactFirst.Collapsed.Should().Equal(
+                direct.Collapsed,
+                "Data at 1120px should collapse the same groups after a compact warm-up pass");
+        });
+    }
+
     [BenchmarkFact]
     public void Benchmark_DataTabRepeatedCompact_ReusesCachedOverrideLayout()
     {

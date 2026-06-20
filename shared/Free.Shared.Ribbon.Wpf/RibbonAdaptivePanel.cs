@@ -19,6 +19,12 @@ public sealed class RibbonGroupHost : ContentControl
     public int Priority { get; }
     public double FullWidth { get; set; }
 
+    public double MeasureFullWidth(Size availableSize)
+    {
+        _full.Measure(availableSize);
+        return _full.DesiredSize.Width;
+    }
+
     private readonly RibbonGroup _group;
     private readonly FrameworkElement _full;
     private readonly System.Func<FrameworkElement> _popupContentFactory;
@@ -151,31 +157,22 @@ public sealed class RibbonAdaptivePanel : Panel
         var hosts = children.OfType<RibbonGroupHost>().ToList();
         var infinite = new Size(double.PositiveInfinity, availableSize.Height);
 
-        // Cache each group's full (uncollapsed) width once. Group content is static after the ribbon is
-        // built, so this natural-width measure happens on the first pass and is reused on every later
-        // resize tick. The old code reset every host to full and measured the whole strip at infinite
-        // width TWICE on every measure pass, thrashing Content swaps — that was the slow-resize cause.
+        // Measure each group's full content directly so the collapse decision is independent of whatever
+        // state a previous pass left the host in.
         foreach (var host in hosts)
         {
-            if (host.FullWidth > 0)
-                continue;
-            var wasCollapsed = host.Collapsed;
-            host.Collapsed = false;
-            host.Measure(infinite);
-            host.FullWidth = host.DesiredSize.Width;
-            host.Collapsed = wasCollapsed;
+            host.FullWidth = host.MeasureFullWidth(infinite);
         }
 
         var available = ResolveAvailableWidth(this, availableSize.Width);
 
-        // Decide the collapse set from the cached widths (lowest priority collapses first — Office
-        // behaviour) WITHOUT touching Content yet, then apply only the hosts whose state actually flips.
-        // The Collapsed setter no-ops when unchanged, so resizing within one band swaps nothing.
+        // Decide the collapse set from the refreshed full widths, lowest priority first with child order
+        // as a deterministic tie-break, then apply only the groups whose state flips.
         if (!double.IsInfinity(available))
         {
             var collapsed = new HashSet<RibbonGroupHost>();
             var total = hosts.Sum(h => h.FullWidth) + GroupSpacing * Math.Max(0, children.Count - 1);
-            foreach (var host in hosts.OrderBy(h => h.Priority))
+            foreach (var host in EnumerateCollapseCandidates(hosts))
             {
                 if (total <= available)
                     break;
@@ -214,6 +211,13 @@ public sealed class RibbonAdaptivePanel : Panel
 
         return finalSize;
     }
+
+    private static IEnumerable<RibbonGroupHost> EnumerateCollapseCandidates(IReadOnlyList<RibbonGroupHost> hosts) =>
+        hosts
+            .Select((Host, Index) => new { Host, Index })
+            .OrderBy(entry => entry.Host.Priority)
+            .ThenBy(entry => entry.Index)
+            .Select(entry => entry.Host);
 
     private static double GetChildLayoutWidth(UIElement child)
     {

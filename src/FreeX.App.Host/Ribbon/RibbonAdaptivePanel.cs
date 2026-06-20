@@ -30,6 +30,12 @@ public sealed class RibbonGroupHost : ContentControl
     /// even while collapsed.</summary>
     public FrameworkElement GroupContent => _full;
 
+    public double MeasureFullWidth(Size availableSize)
+    {
+        _full.Measure(availableSize);
+        return _full.DesiredSize.Width;
+    }
+
     private readonly RibbonGroup _group;
     private readonly FrameworkElement _full;
     private readonly System.Func<FrameworkElement> _popupContentFactory;
@@ -182,28 +188,14 @@ public sealed class RibbonAdaptivePanel : Panel
         var infinite = new Size(double.PositiveInfinity, availableSize.Height);
         var spacing = GroupSpacing * Math.Max(0, children.Count - 1);
 
-        // Measure every child in its CURRENT state first, then record each expanded group's real width as
-        // its full (uncollapsed) width — grow-only.
-        //
-        // Why measure-then-record instead of a one-time seed: a group's rendered width grows after the
-        // first measure as its icons/fonts realize (e.g. Page Setup seeds at 641 but arranges at 786).
-        // The earlier code cached the small seed once and trusted it forever, so the collapse decision
-        // under-counted and the right-hand groups CLIPPED instead of folding into overflow buttons.
-        // Reading the live measured width of whatever is currently expanded keeps the decision honest; a
-        // collapsed group keeps the accurate width recorded the last time it was expanded.
-        //
-        // Why this does NOT reintroduce the "cross-dependent views" infinite loop the original had: we
-        // never reset groups to full or swap Content speculatively — we only flip the groups whose state
-        // actually changes, so a steady-state resize swaps nothing and the pass converges.
+        // Measure every child in its current state first so non-host chrome is current, then measure each
+        // group's full content directly. The full-width budget must not depend on whether a previous pass
+        // happened to leave that host collapsed or expanded; otherwise the same tab/width can produce
+        // different collapse sets after different resize sequences.
         foreach (var child in children)
             child.Measure(infinite);
         foreach (var host in hosts)
-        {
-            if (!host.Collapsed && host.DesiredSize.Width > host.FullWidth)
-                host.FullWidth = host.DesiredSize.Width;
-            else if (host.FullWidth <= 0)
-                host.FullWidth = host.DesiredSize.Width;
-        }
+            host.FullWidth = host.MeasureFullWidth(infinite);
 
         var nonHostWidth = children
             .Where(c => c is not RibbonGroupHost)
@@ -211,13 +203,13 @@ public sealed class RibbonAdaptivePanel : Panel
         var available = ResolveAvailableWidth(this, availableSize.Width);
         var fitAvailable = double.IsInfinity(available) ? available : Math.Max(0, available - 4);
 
-        // Decide the collapse set from the (now-refreshed) full widths — lowest priority collapses first
-        // (Office behaviour) — without touching Content yet, then apply only the groups whose state flips.
+        // Decide the collapse set from the refreshed full widths, lowest priority first with child order
+        // as a deterministic tie-break, then apply only the groups whose state flips.
         if (!double.IsInfinity(fitAvailable))
         {
             var collapsed = new HashSet<RibbonGroupHost>();
             var total = hosts.Sum(h => h.FullWidth) + nonHostWidth + spacing;
-            foreach (var host in hosts.OrderBy(h => h.Priority))
+            foreach (var host in EnumerateCollapseCandidates(hosts))
             {
                 if (total <= fitAvailable)
                     break;
@@ -241,7 +233,7 @@ public sealed class RibbonAdaptivePanel : Panel
         var width = children.Sum(GetChildLayoutWidth) + spacing;
         if (!double.IsInfinity(fitAvailable))
         {
-            foreach (var host in hosts.OrderBy(h => h.Priority).Where(h => !h.Collapsed))
+            foreach (var host in EnumerateCollapseCandidates(hosts).Where(h => !h.Collapsed))
             {
                 if (width <= fitAvailable)
                     break;
@@ -269,6 +261,13 @@ public sealed class RibbonAdaptivePanel : Panel
 
         return finalSize;
     }
+
+    private static IEnumerable<RibbonGroupHost> EnumerateCollapseCandidates(IReadOnlyList<RibbonGroupHost> hosts) =>
+        hosts
+            .Select((Host, Index) => new { Host, Index })
+            .OrderBy(entry => entry.Host.Priority)
+            .ThenBy(entry => entry.Index)
+            .Select(entry => entry.Host);
 
     private static double GetChildLayoutWidth(UIElement child)
     {
