@@ -76,6 +76,7 @@ public sealed class LegacyXlsFileAdapterTests
 
         workbook.Sheets.Should().HaveCount(2);
         workbook.Uses1904DateSystem.Should().BeFalse();
+        workbook.ActiveSheetIndex.Should().Be(0);
         workbook.StyleCount.Should().BeGreaterThan(1);
 
         var sheet = workbook.GetSheetAt(0);
@@ -128,6 +129,11 @@ public sealed class LegacyXlsFileAdapterTests
         sheet.PageFooter.Should().Be(new WorksheetHeaderFooter("Left footer", "Center footer", "Right footer"));
         sheet.RowPageBreaks.Should().Contain(5);
         sheet.ColumnPageBreaks.Should().Contain(4);
+        sheet.ShowGridlines.Should().BeFalse();
+        sheet.ShowHeadings.Should().BeFalse();
+        sheet.ShowFormulas.Should().BeTrue();
+        sheet.ViewTopRow.Should().Be(3);
+        sheet.TabColor.Should().Be(new CellColor(255, 192, 0));
 
         var formulaCell = sheet.GetCell(2, 2);
         formulaCell.Should().NotBeNull();
@@ -160,6 +166,8 @@ public sealed class LegacyXlsFileAdapterTests
         hiddenSheet.Name.Should().Be("Hidden");
         hiddenSheet.IsHidden.Should().BeTrue();
         hiddenSheet.IsVeryHidden.Should().BeFalse();
+        hiddenSheet.SplitRow.Should().Be(4);
+        hiddenSheet.SplitColumn.Should().Be(3);
     }
 
     [Fact]
@@ -209,6 +217,7 @@ public sealed class LegacyXlsFileAdapterTests
                 workbook.Sheets.Count(sheet => sheet.PrintTitleColumns is not null),
                 workbook.Sheets.Count,
                 workbook.Sheets.Sum(sheet => sheet.RowPageBreaks.Count + sheet.ColumnPageBreaks.Count),
+                workbook.ActiveSheetIndex,
                 SheetNames: workbook.Sheets.Select(sheet => sheet.Name).ToArray(),
                 CellFingerprints: ReadImportedCellFingerprints(workbook),
                 DefinedNameFingerprints: ReadImportedDefinedNameFingerprints(workbook),
@@ -218,7 +227,8 @@ public sealed class LegacyXlsFileAdapterTests
                 RowOutlineFingerprints: ReadImportedRowOutlineFingerprints(workbook),
                 ColOutlineFingerprints: ReadImportedColOutlineFingerprints(workbook),
                 PrintLayoutFingerprints: ReadImportedPrintLayoutFingerprints(workbook),
-                PageSetupFingerprints: ReadImportedPageSetupFingerprints(workbook));
+                PageSetupFingerprints: ReadImportedPageSetupFingerprints(workbook),
+                ViewStateFingerprints: ReadImportedViewStateFingerprints(workbook));
 
             imported.Sheets.Should().Be(source.Sheets, imported.File);
             imported.Cells.Should().Be(source.Cells, imported.File);
@@ -244,11 +254,13 @@ public sealed class LegacyXlsFileAdapterTests
                 imported.PrintTitleColumns.Should().Be(source.PrintTitleColumns, imported.File);
                 imported.PageSetupSheets.Should().Be(source.PageSetupSheets, imported.File);
                 imported.PageBreaks.Should().Be(source.PageBreaks, imported.File);
+                imported.ActiveSheetIndex.Should().Be(source.ActiveSheetIndex, imported.File);
                 imported.PaneFingerprints.Should().BeEquivalentTo(source.PaneFingerprints, imported.File);
                 imported.RowOutlineFingerprints.Should().BeEquivalentTo(source.RowOutlineFingerprints, imported.File);
                 imported.ColOutlineFingerprints.Should().BeEquivalentTo(source.ColOutlineFingerprints, imported.File);
                 imported.PrintLayoutFingerprints.Should().BeEquivalentTo(source.PrintLayoutFingerprints, imported.File);
                 imported.PageSetupFingerprints.Should().BeEquivalentTo(source.PageSetupFingerprints, imported.File);
+                imported.ViewStateFingerprints.Should().BeEquivalentTo(source.ViewStateFingerprints, imported.File);
                 imported.Styles.Should().BeGreaterThanOrEqualTo(source.Styles, imported.File);
                 imported.Dimensions.Should().BeGreaterThanOrEqualTo(source.Dimensions, imported.File);
             }
@@ -345,14 +357,23 @@ public sealed class LegacyXlsFileAdapterTests
     {
         var hssf = new HSSFWorkbook();
         var sheet = hssf.CreateSheet("Visible");
-        hssf.CreateSheet("Hidden");
+        var hidden = hssf.CreateSheet("Hidden");
+        hssf.SetActiveSheet(0);
+        hssf.SetSelectedTab(0);
         hssf.SetSheetVisibility(1, SheetVisibility.Hidden);
 
         sheet.AddMergedRegion(new CellRangeAddress(0, 0, 0, 1));
         sheet.SetColumnWidth(1, 18 * 256);
         sheet.SetColumnHidden(2, true);
         sheet.CreateFreezePane(1, 1);
+        sheet.DisplayGridlines = false;
+        sheet.DisplayRowColHeadings = false;
+        sheet.DisplayFormulas = true;
+        sheet.TopRow = 2;
+        hssf.GetCustomPalette().SetColorAtIndex(0x21, 255, 192, 0);
+        sheet.TabColorIndex = 0x21;
         sheet.GroupColumn(5, 6);
+        hidden.CreateSplitPane(2000, 3000, 2, 3, PanePosition.LowerRight);
 
         var header = sheet.CreateRow(0);
         header.CreateCell(0).SetCellValue("Merged header");
@@ -501,6 +522,11 @@ public sealed class LegacyXlsFileAdapterTests
         var colOutlineFingerprints = new List<string>();
         var printLayoutFingerprints = new List<string>();
         var pageSetupFingerprints = new List<string>();
+        var viewStateFingerprints = new List<string>();
+        var activeSheetIndex = hssf.ActiveSheetIndex >= 0 && hssf.ActiveSheetIndex < hssf.NumberOfSheets
+            ? hssf.ActiveSheetIndex
+            : (int?)null;
+        var palette = hssf.GetCustomPalette();
 
         for (var sheetIndex = 0; sheetIndex < hssf.NumberOfSheets; sheetIndex++)
         {
@@ -525,6 +551,7 @@ public sealed class LegacyXlsFileAdapterTests
             pageBreaks += sheet.RowBreaks.Count(breakIndex => ToSourceModelIndex(breakIndex) >= 2);
             pageBreaks += sheet.ColumnBreaks.Count(breakIndex => ToSourceModelIndex(breakIndex) >= 2);
             pageSetupFingerprints.Add(CreateSourcePageSetupFingerprint(sheetIndex, sheet.SheetName, sheet));
+            viewStateFingerprints.Add(CreateSourceViewStateFingerprint(sheetIndex, sheet.SheetName, sheet, palette));
 
             for (var rowIndex = sheet.FirstRowNum; rowIndex <= sheet.LastRowNum; rowIndex++)
             {
@@ -652,6 +679,7 @@ public sealed class LegacyXlsFileAdapterTests
             orderedPrintLayoutFingerprints.Count(value => value.Contains("|Cols|", StringComparison.Ordinal)),
             pageSetupFingerprints.Count,
             pageBreaks,
+            activeSheetIndex,
             SheetNames: sheetNames,
             CellFingerprints: cellFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             DefinedNameFingerprints: definedNameFingerprints,
@@ -661,7 +689,8 @@ public sealed class LegacyXlsFileAdapterTests
             RowOutlineFingerprints: rowOutlineFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             ColOutlineFingerprints: colOutlineFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             PrintLayoutFingerprints: orderedPrintLayoutFingerprints,
-            PageSetupFingerprints: pageSetupFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray());
+            PageSetupFingerprints: pageSetupFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            ViewStateFingerprints: viewStateFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray());
     }
 
     private static LegacyXlsCorpusSummary ReadExcelDataReaderSourceSummary(string path, Stream stream)
@@ -706,6 +735,7 @@ public sealed class LegacyXlsFileAdapterTests
             PrintTitleColumns: 0,
             PageSetupSheets: 0,
             PageBreaks: 0,
+            ActiveSheetIndex: null,
             RichMetadata: false,
             SheetNames: [],
             CellFingerprints: [],
@@ -716,7 +746,8 @@ public sealed class LegacyXlsFileAdapterTests
             RowOutlineFingerprints: [],
             ColOutlineFingerprints: [],
             PrintLayoutFingerprints: [],
-            PageSetupFingerprints: []);
+            PageSetupFingerprints: [],
+            ViewStateFingerprints: []);
     }
 
     private static IReadOnlyList<string> ReadImportedCellFingerprints(Workbook workbook) =>
@@ -845,6 +876,22 @@ public sealed class LegacyXlsFileAdapterTests
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
 
+    private static IReadOnlyList<string> ReadImportedViewStateFingerprints(Workbook workbook) =>
+        workbook.Sheets
+            .Select((sheet, sheetIndex) => CreateViewStateFingerprint(
+                sheetIndex,
+                sheet.Name,
+                sheet.ShowGridlines,
+                sheet.ShowHeadings,
+                sheet.ShowFormulas,
+                sheet.ViewTopRow,
+                sheet.ViewLeftCol,
+                sheet.SplitRow,
+                sheet.SplitColumn,
+                sheet.TabColor))
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+
     private static IReadOnlyList<string> ReadSourcePrintLayoutFingerprints(HSSFWorkbook hssf)
     {
         var workbook = new Workbook("PrintLayoutSource");
@@ -911,6 +958,36 @@ public sealed class LegacyXlsFileAdapterTests
             ToWorksheetHeaderFooter(sheet.Footer),
             rowBreaks,
             columnBreaks);
+    }
+
+    private static string CreateSourceViewStateFingerprint(
+        int sheetIndex,
+        string sheetName,
+        ISheet sheet,
+        HSSFPalette palette)
+    {
+        var pane = sheet.PaneInformation;
+        uint? splitRow = null;
+        uint? splitColumn = null;
+        if (pane is not null && !pane.IsFreezePane())
+        {
+            if (pane.HorizontalSplitPosition > 0 && pane.HorizontalSplitTopRow >= 0)
+                splitRow = ToSourceModelIndex(pane.HorizontalSplitTopRow);
+            if (pane.VerticalSplitPosition > 0 && pane.VerticalSplitLeftColumn >= 0)
+                splitColumn = ToSourceModelIndex(pane.VerticalSplitLeftColumn);
+        }
+
+        return CreateViewStateFingerprint(
+            sheetIndex,
+            sheetName,
+            sheet.DisplayGridlines,
+            sheet.DisplayRowColHeadings,
+            sheet.DisplayFormulas,
+            sheet.TopRow > 0 ? ToSourceModelIndex(sheet.TopRow) : null,
+            null,
+            splitRow,
+            splitColumn,
+            TryGetSourceTabColor(sheet, palette, out var tabColor) ? tabColor : null);
     }
 
     private static string CreateCellFingerprint(
@@ -1006,6 +1083,25 @@ public sealed class LegacyXlsFileAdapterTests
             $"ColBreaks={FormatBreaks(columnBreaks)}"
         ]);
 
+    private static string CreateViewStateFingerprint(
+        int sheetIndex,
+        string sheetName,
+        bool showGridlines,
+        bool showHeadings,
+        bool showFormulas,
+        uint? viewTopRow,
+        uint? viewLeftCol,
+        uint? splitRow,
+        uint? splitColumn,
+        CellColor? tabColor) =>
+        string.Join("|", [
+            $"{sheetIndex}:{sheetName}",
+            $"Display={showGridlines},{showHeadings},{showFormulas}",
+            $"TopLeft={FormatNullableUInt(viewTopRow)},{FormatNullableUInt(viewLeftCol)}",
+            $"Split={FormatNullableUInt(splitRow)},{FormatNullableUInt(splitColumn)}",
+            $"TabColor={FormatColor(tabColor)}"
+        ]);
+
     private static string FormatDouble(double value) =>
         value.ToString("0.##########", CultureInfo.InvariantCulture);
 
@@ -1015,8 +1111,16 @@ public sealed class LegacyXlsFileAdapterTests
     private static string FormatNullableInt(int? value) =>
         value.HasValue ? value.Value.ToString(CultureInfo.InvariantCulture) : "null";
 
+    private static string FormatNullableUInt(uint? value) =>
+        value.HasValue ? value.Value.ToString(CultureInfo.InvariantCulture) : "null";
+
     private static string FormatHeaderFooter(WorksheetHeaderFooter value) =>
         $"{EscapeToken(value.Left)},{EscapeToken(value.Center)},{EscapeToken(value.Right)}";
+
+    private static string FormatColor(CellColor? value) =>
+        value is { } color
+            ? $"{color.R},{color.G},{color.B}"
+            : "null";
 
     private static string EscapeToken(string value) =>
         value.Replace("\\", "\\\\", StringComparison.Ordinal)
@@ -1089,6 +1193,34 @@ public sealed class LegacyXlsFileAdapterTests
 
     private static double ValidMarginOrDefault(double value, double defaultValue) =>
         double.IsFinite(value) && value >= 0 ? value : defaultValue;
+
+    private static bool TryGetSourceTabColor(ISheet sheet, HSSFPalette palette, out CellColor tabColor)
+    {
+        tabColor = default;
+        if (sheet is not HSSFSheet hssfSheet)
+            return false;
+
+        try
+        {
+            if (hssfSheet.IsAutoTabColor)
+                return false;
+
+            var color = palette.GetColor(hssfSheet.TabColorIndex);
+            if (color is null)
+                return false;
+
+            var triplet = color.GetTriplet();
+            if (triplet.Length < 3)
+                return false;
+
+            tabColor = new CellColor(triplet[0], triplet[1], triplet[2]);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
 
     private static string SourceValueToken(ICell cell, CellType cellType) =>
         cellType switch
@@ -1480,6 +1612,7 @@ public sealed class LegacyXlsFileAdapterTests
         int PrintTitleColumns,
         int PageSetupSheets,
         int PageBreaks,
+        int? ActiveSheetIndex,
         bool RichMetadata = true,
         IReadOnlyList<string>? SheetNames = null,
         IReadOnlyList<string>? CellFingerprints = null,
@@ -1490,7 +1623,8 @@ public sealed class LegacyXlsFileAdapterTests
         IReadOnlyList<string>? RowOutlineFingerprints = null,
         IReadOnlyList<string>? ColOutlineFingerprints = null,
         IReadOnlyList<string>? PrintLayoutFingerprints = null,
-        IReadOnlyList<string>? PageSetupFingerprints = null);
+        IReadOnlyList<string>? PageSetupFingerprints = null,
+        IReadOnlyList<string>? ViewStateFingerprints = null);
 
     public static TheoryData<object, double> AdditionalNumericValues() => new()
     {

@@ -78,8 +78,11 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         {
             Uses1904DateSystem = hssf.IsDate1904()
         };
+        if (hssf.ActiveSheetIndex >= 0 && hssf.ActiveSheetIndex < hssf.NumberOfSheets)
+            workbook.ActiveSheetIndex = hssf.ActiveSheetIndex;
 
         var styleCache = new Dictionary<short, StyleId>();
+        var palette = hssf.GetCustomPalette();
         for (var sheetIndex = 0; sheetIndex < hssf.NumberOfSheets; sheetIndex++)
         {
             var sourceSheet = hssf.GetSheetAt(sheetIndex);
@@ -91,7 +94,7 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
             sheet.IsHidden = visibility is SheetVisibility.Hidden or SheetVisibility.VeryHidden;
             sheet.IsVeryHidden = visibility is SheetVisibility.VeryHidden;
 
-            LoadSheetLayout(sourceSheet, sheet);
+            LoadSheetLayout(sourceSheet, sheet, palette);
             LoadMergedRegions(sourceSheet, sheet);
             LoadCells(hssf, sourceSheet, workbook, sheet, styleCache);
         }
@@ -135,11 +138,12 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         return workbook;
     }
 
-    private static void LoadSheetLayout(ISheet sourceSheet, Sheet sheet)
+    private static void LoadSheetLayout(ISheet sourceSheet, Sheet sheet, HSSFPalette palette)
     {
         LoadPaneState(sourceSheet, sheet);
         LoadPrintTitles(sourceSheet, sheet);
         LoadPageLayout(sourceSheet, sheet);
+        LoadSheetView(sourceSheet, sheet, palette);
 
         if (sourceSheet.DefaultColumnWidth > 0)
             sheet.DefaultColumnWidth = sourceSheet.DefaultColumnWidth;
@@ -189,13 +193,22 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
     private static void LoadPaneState(ISheet sourceSheet, Sheet sheet)
     {
         var pane = sourceSheet.PaneInformation;
-        if (pane is null || !pane.IsFreezePane())
+        if (pane is null)
             return;
 
-        sheet.FrozenCols = (uint)Math.Max(0, (int)pane.VerticalSplitPosition);
-        sheet.FrozenRows = (uint)Math.Max(0, (int)pane.HorizontalSplitPosition);
-        sheet.SplitColumn = null;
-        sheet.SplitRow = null;
+        if (pane.IsFreezePane())
+        {
+            sheet.FrozenCols = (uint)Math.Max(0, (int)pane.VerticalSplitPosition);
+            sheet.FrozenRows = (uint)Math.Max(0, (int)pane.HorizontalSplitPosition);
+            sheet.SplitColumn = null;
+            sheet.SplitRow = null;
+            return;
+        }
+
+        if (pane.HorizontalSplitPosition > 0 && pane.HorizontalSplitTopRow >= 0)
+            sheet.SplitRow = ToModelIndex(pane.HorizontalSplitTopRow);
+        if (pane.VerticalSplitPosition > 0 && pane.VerticalSplitLeftColumn >= 0)
+            sheet.SplitColumn = ToModelIndex(pane.VerticalSplitLeftColumn);
     }
 
     private static void LoadPrintTitles(ISheet sourceSheet, Sheet sheet)
@@ -225,6 +238,45 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
 
         LoadManualPageBreaks(sourceSheet, sheet);
         LoadPrintSetup(sourceSheet.PrintSetup, sheet);
+    }
+
+    private static void LoadSheetView(ISheet sourceSheet, Sheet sheet, HSSFPalette palette)
+    {
+        sheet.ShowGridlines = sourceSheet.DisplayGridlines;
+        sheet.ShowHeadings = sourceSheet.DisplayRowColHeadings;
+        sheet.ShowFormulas = sourceSheet.DisplayFormulas;
+        if (sourceSheet.TopRow > 0)
+            sheet.ViewTopRow = ToModelIndex(sourceSheet.TopRow);
+        if (TryGetTabColor(sourceSheet, palette, out var tabColor))
+            sheet.TabColor = tabColor;
+    }
+
+    private static bool TryGetTabColor(ISheet sourceSheet, HSSFPalette palette, out CellColor tabColor)
+    {
+        tabColor = default;
+        if (sourceSheet is not HSSFSheet hssfSheet)
+            return false;
+
+        try
+        {
+            if (hssfSheet.IsAutoTabColor)
+                return false;
+
+            var color = palette.GetColor(hssfSheet.TabColorIndex);
+            if (color is null)
+                return false;
+
+            var triplet = color.GetTriplet();
+            if (triplet.Length < 3)
+                return false;
+
+            tabColor = new CellColor(triplet[0], triplet[1], triplet[2]);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static void LoadManualPageBreaks(ISheet sourceSheet, Sheet sheet)
