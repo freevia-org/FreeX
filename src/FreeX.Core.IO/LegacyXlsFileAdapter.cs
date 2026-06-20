@@ -98,6 +98,7 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
             LoadSheetLayout(sourceSheet, sheet, palette);
             LoadMergedRegions(sourceSheet, sheet);
             LoadCells(hssf, sourceSheet, workbook, sheet, styleCache);
+            LoadPictures(sourceSheet, sheet);
         }
 
         if (workbook.Sheets.Count == 0)
@@ -673,6 +674,129 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
                 new ModelCellAddress(sheet.Id, ToModelIndex(region.LastRow), ToModelIndex(region.LastColumn))));
         }
     }
+
+    private static void LoadPictures(ISheet sourceSheet, Sheet sheet)
+    {
+        if (sourceSheet is not HSSFSheet { DrawingPatriarch: HSSFPatriarch patriarch })
+            return;
+
+        foreach (var sourcePicture in EnumeratePictures(patriarch.Children))
+        {
+            if (TryCreatePicture(sourcePicture, sheet, out var picture))
+                sheet.Pictures.Add(picture);
+        }
+    }
+
+    private static IEnumerable<HSSFPicture> EnumeratePictures(IEnumerable<HSSFShape> shapes)
+    {
+        foreach (var shape in shapes)
+        {
+            if (shape is HSSFPicture picture)
+                yield return picture;
+
+            if (shape is HSSFShapeGroup group)
+            {
+                foreach (var nestedPicture in EnumeratePictures(group.Children))
+                    yield return nestedPicture;
+            }
+        }
+    }
+
+    private static bool TryCreatePicture(HSSFPicture sourcePicture, Sheet sheet, out PictureModel picture)
+    {
+        picture = new PictureModel();
+        var data = sourcePicture.PictureData;
+        if (data?.Data is not { Length: > 0 } bytes ||
+            sourcePicture.Anchor is not HSSFClientAnchor anchor ||
+            anchor.Row1 < 0 ||
+            anchor.Col1 < 0)
+        {
+            return false;
+        }
+
+        var anchorRow = ToModelIndex(Math.Min(anchor.Row1, anchor.Row2));
+        var anchorCol = ToModelIndex(Math.Min(anchor.Col1, anchor.Col2));
+        picture = new PictureModel
+        {
+            Anchor = new ModelCellAddress(sheet.Id, anchorRow, anchorCol),
+            Kind = PictureKind.Image,
+            Name = FirstNonBlank(sourcePicture.Name, sourcePicture.ShapeName, sourcePicture.FileName),
+            ImageBytes = bytes.ToArray(),
+            ContentType = NormalizePictureContentType(data.MimeType),
+            AnchorOffsetX = HssfColumnOffsetToPixels(sheet, anchorCol, Math.Min(anchor.Dx1, anchor.Dx2)),
+            AnchorOffsetY = HssfRowOffsetToPixels(sheet, anchorRow, Math.Min(anchor.Dy1, anchor.Dy2)),
+            FlipHorizontal = anchor.IsHorizontallyFlipped,
+            FlipVertical = anchor.IsVerticallyFlipped
+        };
+
+        var (width, height) = GetHssfAnchorSize(sheet, anchor);
+        if (width > 0)
+            picture.Width = width;
+        if (height > 0)
+            picture.Height = height;
+
+        return true;
+    }
+
+    private static string? FirstNonBlank(params string?[] values) =>
+        values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+
+    private static string NormalizePictureContentType(string? contentType) =>
+        string.IsNullOrWhiteSpace(contentType) ? "image/png" : contentType;
+
+    private static (double Width, double Height) GetHssfAnchorSize(Sheet sheet, HSSFClientAnchor anchor)
+    {
+        var fromColumn = ToModelIndex(Math.Min(anchor.Col1, anchor.Col2));
+        var toColumn = ToModelIndex(Math.Max(anchor.Col1, anchor.Col2));
+        var fromRow = ToModelIndex(Math.Min(anchor.Row1, anchor.Row2));
+        var toRow = ToModelIndex(Math.Max(anchor.Row1, anchor.Row2));
+        var fromColumnOffset = HssfColumnOffsetToPixels(sheet, fromColumn, Math.Min(anchor.Dx1, anchor.Dx2));
+        var toColumnOffset = HssfColumnOffsetToPixels(sheet, toColumn, Math.Max(anchor.Dx1, anchor.Dx2));
+        var fromRowOffset = HssfRowOffsetToPixels(sheet, fromRow, Math.Min(anchor.Dy1, anchor.Dy2));
+        var toRowOffset = HssfRowOffsetToPixels(sheet, toRow, Math.Max(anchor.Dy1, anchor.Dy2));
+
+        var width = SumColumnPixels(sheet, fromColumn, toColumn - fromColumn) + toColumnOffset - fromColumnOffset;
+        var height = SumRowPixels(sheet, fromRow, toRow - fromRow) + toRowOffset - fromRowOffset;
+        return (width, height);
+    }
+
+    private static double HssfColumnOffsetToPixels(Sheet sheet, uint column, int offset) =>
+        Math.Clamp(offset, 0, 1023) / 1024.0 * GetColumnPixelWidth(sheet, column);
+
+    private static double HssfRowOffsetToPixels(Sheet sheet, uint row, int offset) =>
+        Math.Clamp(offset, 0, 255) / 256.0 * GetRowPixelHeight(sheet, row);
+
+    private static double SumColumnPixels(Sheet sheet, uint firstColumn, uint count)
+    {
+        double width = 0;
+        for (var offset = 0u; offset < count; offset++)
+        {
+            var column = firstColumn + offset;
+            if (!sheet.IsColEffectivelyHidden(column))
+                width += GetColumnPixelWidth(sheet, column);
+        }
+
+        return width;
+    }
+
+    private static double SumRowPixels(Sheet sheet, uint firstRow, uint count)
+    {
+        double height = 0;
+        for (var offset = 0u; offset < count; offset++)
+        {
+            var row = firstRow + offset;
+            if (!sheet.IsRowEffectivelyHidden(row))
+                height += GetRowPixelHeight(sheet, row);
+        }
+
+        return height;
+    }
+
+    private static double GetColumnPixelWidth(Sheet sheet, uint column) =>
+        sheet.ColumnWidths.GetValueOrDefault(column, sheet.DefaultColumnWidth) * 8;
+
+    private static double GetRowPixelHeight(Sheet sheet, uint row) =>
+        sheet.RowHeights.GetValueOrDefault(row, sheet.DefaultRowHeight);
 
     private static void LoadCells(
         NPOIWorkbook sourceWorkbook,
