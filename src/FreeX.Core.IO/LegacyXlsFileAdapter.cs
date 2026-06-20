@@ -119,7 +119,11 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
 
         do
         {
+            var sheetIndex = workbook.Sheets.Count;
             var sheet = workbook.AddSheet(string.IsNullOrWhiteSpace(reader.Name) ? $"Sheet{workbook.Sheets.Count + 1}" : reader.Name);
+            if (reader.IsActiveSheet)
+                workbook.ActiveSheetIndex = sheetIndex;
+
             LoadExcelDataReaderSheetLayout(reader, sheet);
             var row = 1u;
             while (reader.Read())
@@ -147,6 +151,40 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
             workbook.AddSheet("Sheet1");
 
         return workbook;
+    }
+
+    private static void LoadExcelDataReaderSheetLayout(IExcelDataReader reader, Sheet sheet)
+    {
+        LoadExcelDataReaderSheetState(reader, sheet);
+
+        foreach (var range in reader.MergeCells ?? [])
+        {
+            if (range.FromRow <= range.ToRow &&
+                range.FromColumn <= range.ToColumn)
+            {
+                sheet.AddMergedRegion(ToGridRange(range, sheet.Id));
+            }
+        }
+
+        for (var col = 0; col < reader.FieldCount; col++)
+        {
+            var width = reader.GetColumnWidth(col);
+            if (width > 0)
+                sheet.ColumnWidths[ToModelIndex(col)] = width;
+        }
+    }
+
+    private static void LoadExcelDataReaderSheetState(IExcelDataReader reader, Sheet sheet)
+    {
+        sheet.IsVeryHidden = string.Equals(reader.VisibleState, "veryHidden", StringComparison.OrdinalIgnoreCase);
+        sheet.IsHidden = sheet.IsVeryHidden ||
+            string.Equals(reader.VisibleState, "hidden", StringComparison.OrdinalIgnoreCase);
+
+        if (reader.HeaderFooter is { } headerFooter)
+        {
+            sheet.PageHeader = ParseHeaderFooterRawText(headerFooter.OddHeader);
+            sheet.PageFooter = ParseHeaderFooterRawText(headerFooter.OddFooter);
+        }
     }
 
     private static StyleId GetExcelDataReaderStyleId(
@@ -195,25 +233,6 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         styleKey.IndentLevel == ModelCellStyle.Default.IndentLevel &&
         styleKey.Locked == ModelCellStyle.Default.Locked &&
         styleKey.Hidden == ModelCellStyle.Default.Hidden;
-
-    private static void LoadExcelDataReaderSheetLayout(IExcelDataReader reader, Sheet sheet)
-    {
-        foreach (var range in reader.MergeCells ?? [])
-        {
-            if (range.FromRow <= range.ToRow &&
-                range.FromColumn <= range.ToColumn)
-            {
-                sheet.AddMergedRegion(ToGridRange(range, sheet.Id));
-            }
-        }
-
-        for (var col = 0; col < reader.FieldCount; col++)
-        {
-            var width = reader.GetColumnWidth(col);
-            if (width > 0)
-                sheet.ColumnWidths[ToModelIndex(col)] = width;
-        }
-    }
 
     private static void LoadSheetLayout(ISheet sourceSheet, Sheet sheet, HSSFPalette palette)
     {

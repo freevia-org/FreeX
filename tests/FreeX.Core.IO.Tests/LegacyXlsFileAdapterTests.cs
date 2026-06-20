@@ -273,6 +273,7 @@ public sealed class LegacyXlsFileAdapterTests
                 SheetNames: workbook.Sheets.Select(sheet => sheet.Name).ToArray(),
                 CellFingerprints: ReadImportedCellFingerprints(workbook),
                 StyleFingerprints: ReadImportedFallbackStyleFingerprints(workbook),
+                HeaderFooterFingerprints: ReadImportedFallbackHeaderFooterFingerprints(workbook),
                 DefinedNameFingerprints: ReadImportedDefinedNameFingerprints(workbook),
                 HyperlinkFingerprints: ReadImportedHyperlinkFingerprints(workbook),
                 CommentFingerprints: ReadImportedCommentFingerprints(workbook),
@@ -294,9 +295,13 @@ public sealed class LegacyXlsFileAdapterTests
             {
                 imported.Styles.Should().Be(source.Styles, imported.File);
                 imported.Merges.Should().Be(source.Merges, imported.File);
+                imported.HiddenSheets.Should().Be(source.HiddenSheets, imported.File);
+                imported.VeryHiddenSheets.Should().Be(source.VeryHiddenSheets, imported.File);
                 imported.Dimensions.Should().BeGreaterThanOrEqualTo(source.Dimensions, imported.File);
+                imported.ActiveSheetIndex.Should().Be(source.ActiveSheetIndex, imported.File);
                 imported.SheetNames.Should().Equal(source.SheetNames, imported.File);
                 imported.StyleFingerprints.Should().BeEquivalentTo(source.StyleFingerprints, imported.File);
+                imported.HeaderFooterFingerprints.Should().BeEquivalentTo(source.HeaderFooterFingerprints, imported.File);
             }
 
             if (source.RichMetadata)
@@ -350,6 +355,9 @@ public sealed class LegacyXlsFileAdapterTests
         summaries.Sum(summary => summary.Formulas).Should().BeGreaterThan(0);
         summaries.Sum(summary => summary.Styles).Should().BeGreaterThan(0);
         summaries.Where(summary => !summary.RichMetadata).Sum(summary => summary.Styles).Should().BeGreaterThan(0);
+        summaries.Where(summary => !summary.RichMetadata).Sum(summary => summary.HeaderFooterFingerprints?.Count ?? 0)
+            .Should()
+            .BeGreaterThan(0);
         summaries.Sum(summary => summary.Merges).Should().BeGreaterThan(0);
         summaries.Sum(summary => summary.Dimensions).Should().BeGreaterThan(0);
         summaries.Sum(summary => summary.DefinedNames).Should().BeGreaterThan(0);
@@ -854,6 +862,7 @@ public sealed class LegacyXlsFileAdapterTests
             SheetNames: sheetNames,
             CellFingerprints: cellFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             StyleFingerprints: [],
+            HeaderFooterFingerprints: [],
             DefinedNameFingerprints: definedNameFingerprints,
             HyperlinkFingerprints: hyperlinkFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             CommentFingerprints: commentFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
@@ -878,14 +887,27 @@ public sealed class LegacyXlsFileAdapterTests
         var merges = 0;
         var dimensions = 0;
         var styles = 0;
+        var hiddenSheets = 0;
+        var veryHiddenSheets = 0;
+        int? activeSheetIndex = null;
         var sheetNames = new List<string>();
         var styleFingerprints = new List<string>();
+        var headerFooterFingerprints = new List<string>();
 
         do
         {
             sheets++;
             var sheetIndex = sheets - 1;
             sheetNames.Add(reader.Name);
+            if (reader.IsActiveSheet)
+                activeSheetIndex = sheetIndex;
+            if (!string.Equals(reader.VisibleState, "visible", StringComparison.OrdinalIgnoreCase))
+                hiddenSheets++;
+            if (string.Equals(reader.VisibleState, "veryHidden", StringComparison.OrdinalIgnoreCase))
+                veryHiddenSheets++;
+            if (TryCreateExcelDataReaderHeaderFooterFingerprint(reader, sheetIndex, reader.Name, out var headerFooterFingerprint))
+                headerFooterFingerprints.Add(headerFooterFingerprint);
+
             merges += reader.MergeCells?.Length ?? 0;
             for (var column = 0; column < reader.FieldCount; column++)
             {
@@ -923,8 +945,8 @@ public sealed class LegacyXlsFileAdapterTests
             Styles: styles,
             Merges: merges,
             Dimensions: dimensions,
-            HiddenSheets: 0,
-            VeryHiddenSheets: 0,
+            HiddenSheets: hiddenSheets,
+            VeryHiddenSheets: veryHiddenSheets,
             DefinedNames: 0,
             Hyperlinks: 0,
             Comments: 0,
@@ -941,11 +963,12 @@ public sealed class LegacyXlsFileAdapterTests
             ConditionalFormats: 0,
             PageSetupSheets: 0,
             PageBreaks: 0,
-            ActiveSheetIndex: null,
+            ActiveSheetIndex: activeSheetIndex,
             RichMetadata: false,
             SheetNames: sheetNames,
             CellFingerprints: [],
             StyleFingerprints: styleFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            HeaderFooterFingerprints: headerFooterFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             DefinedNameFingerprints: [],
             HyperlinkFingerprints: [],
             CommentFingerprints: [],
@@ -999,6 +1022,21 @@ public sealed class LegacyXlsFileAdapterTests
                             style.Locked,
                             style.Hidden);
                 }))
+            .Where(value => value is not null)
+            .Select(value => value!)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+
+    private static IReadOnlyList<string> ReadImportedFallbackHeaderFooterFingerprints(Workbook workbook) =>
+        workbook.Sheets
+            .Select((sheet, sheetIndex) => TryCreateHeaderFooterFingerprint(
+                sheetIndex,
+                sheet.Name,
+                sheet.PageHeader,
+                sheet.PageFooter,
+                out var fingerprint)
+                    ? fingerprint
+                    : null)
             .Where(value => value is not null)
             .Select(value => value!)
             .OrderBy(value => value, StringComparer.Ordinal)
@@ -1512,6 +1550,44 @@ public sealed class LegacyXlsFileAdapterTests
         bool locked,
         bool hidden) =>
         $"{sheetIndex}:{sheetName}!{new ModelCellAddress(default, row, column).ToA1()}|Style|Fmt={EscapeToken(numberFormat)}|H={horizontalAlignment}|V={verticalAlignment}|Indent={indentLevel}|Locked={locked}|Hidden={hidden}";
+
+    private static bool TryCreateExcelDataReaderHeaderFooterFingerprint(
+        IExcelDataReader reader,
+        int sheetIndex,
+        string sheetName,
+        out string fingerprint)
+    {
+        if (reader.HeaderFooter is not { } headerFooter)
+        {
+            fingerprint = "";
+            return false;
+        }
+
+        return TryCreateHeaderFooterFingerprint(
+            sheetIndex,
+            sheetName,
+            ParseHeaderFooterRawText(headerFooter.OddHeader),
+            ParseHeaderFooterRawText(headerFooter.OddFooter),
+            out fingerprint);
+    }
+
+    private static bool TryCreateHeaderFooterFingerprint(
+        int sheetIndex,
+        string sheetName,
+        WorksheetHeaderFooter header,
+        WorksheetHeaderFooter footer,
+        out string fingerprint)
+    {
+        if (header == new WorksheetHeaderFooter("", "", "") &&
+            footer == new WorksheetHeaderFooter("", "", ""))
+        {
+            fingerprint = "";
+            return false;
+        }
+
+        fingerprint = $"{sheetIndex}:{sheetName}|Header={FormatHeaderFooter(header)}|Footer={FormatHeaderFooter(footer)}";
+        return true;
+    }
 
     private static string CreateAddressedFingerprint(
         int sheetIndex,
@@ -2444,6 +2520,7 @@ public sealed class LegacyXlsFileAdapterTests
         IReadOnlyList<string>? SheetNames = null,
         IReadOnlyList<string>? CellFingerprints = null,
         IReadOnlyList<string>? StyleFingerprints = null,
+        IReadOnlyList<string>? HeaderFooterFingerprints = null,
         IReadOnlyList<string>? DefinedNameFingerprints = null,
         IReadOnlyList<string>? HyperlinkFingerprints = null,
         IReadOnlyList<string>? CommentFingerprints = null,
