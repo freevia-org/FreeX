@@ -1312,11 +1312,22 @@ public sealed class LegacyXlsFileAdapterTests
 
     private static IReadOnlyList<string> ReadSourceWorkbookFileSharingFingerprints(HSSFWorkbook hssf)
     {
+        var writeAccessUser = GetSourceWriteAccessUser(hssf);
         if (hssf.Workbook.FindFirstRecordBySid(FileSharingRecord.sid) is not FileSharingRecord fileSharing)
-            return [];
+        {
+            return writeAccessUser is null
+                ? []
+                :
+                [
+                    CreateWorkbookFileSharingFingerprint(
+                        null,
+                        writeAccessUser,
+                        null)
+                ];
+        }
 
         var readOnlyRecommended = fileSharing.ReadOnly != 0;
-        var userName = string.IsNullOrWhiteSpace(fileSharing.Username) ? null : fileSharing.Username.Trim();
+        var userName = string.IsNullOrWhiteSpace(fileSharing.Username) ? writeAccessUser : fileSharing.Username.Trim();
         var reservationPassword = fileSharing.Password != 0
             ? ((ushort)fileSharing.Password).ToString("X4", CultureInfo.InvariantCulture)
             : null;
@@ -1335,6 +1346,15 @@ public sealed class LegacyXlsFileAdapterTests
                 userName,
                 reservationPassword)
         ];
+    }
+
+    private static string? GetSourceWriteAccessUser(HSSFWorkbook hssf)
+    {
+        if (hssf.Workbook.FindFirstRecordBySid(WriteAccessRecord.sid) is not WriteAccessRecord writeAccess)
+            return null;
+
+        var userName = writeAccess.Username?.Trim();
+        return string.IsNullOrWhiteSpace(userName) ? null : userName;
     }
 
     private static IReadOnlyList<string> ReadImportedWorkbookCalculationFingerprints(Workbook workbook) =>

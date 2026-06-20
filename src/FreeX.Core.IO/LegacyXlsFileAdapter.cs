@@ -203,11 +203,22 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
 
     private static void LoadFileSharing(HSSFWorkbook sourceWorkbook, Workbook workbook)
     {
+        var writeAccessUser = GetWriteAccessUser(sourceWorkbook);
         if (sourceWorkbook.Workbook.FindFirstRecordBySid(FileSharingRecord.sid) is not FileSharingRecord fileSharing)
+        {
+            if (writeAccessUser is not null)
+            {
+                workbook.FileSharing = new WorkbookFileSharingModel
+                {
+                    UserName = writeAccessUser
+                };
+            }
+
             return;
+        }
 
         var readOnlyRecommended = fileSharing.ReadOnly != 0;
-        var userName = string.IsNullOrWhiteSpace(fileSharing.Username) ? null : fileSharing.Username.Trim();
+        var userName = string.IsNullOrWhiteSpace(fileSharing.Username) ? writeAccessUser : fileSharing.Username.Trim();
         var reservationPassword = fileSharing.Password != 0
             ? ((ushort)fileSharing.Password).ToString("X4", CultureInfo.InvariantCulture)
             : null;
@@ -225,6 +236,15 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
             UserName = userName,
             ReservationPassword = reservationPassword
         };
+    }
+
+    private static string? GetWriteAccessUser(HSSFWorkbook sourceWorkbook)
+    {
+        if (sourceWorkbook.Workbook.FindFirstRecordBySid(WriteAccessRecord.sid) is not WriteAccessRecord writeAccess)
+            return null;
+
+        var userName = writeAccess.Username?.Trim();
+        return string.IsNullOrWhiteSpace(userName) ? null : userName;
     }
 
     private static void LoadCalculationOptions(HSSFWorkbook sourceWorkbook, Workbook workbook)
