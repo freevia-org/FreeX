@@ -1,7 +1,7 @@
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Avalonia;
+namespace FreeX.App.Presentation.QuickAnalysis;
 
 /// <summary>
 /// Plans the sparkline inserts a Quick Analysis Sparklines suggestion performs over a selection: one

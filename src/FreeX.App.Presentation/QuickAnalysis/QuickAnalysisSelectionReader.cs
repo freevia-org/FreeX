@@ -1,7 +1,6 @@
-using FreeX.App.Presentation.QuickAnalysis;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Avalonia;
+namespace FreeX.App.Presentation.QuickAnalysis;
 
 /// <summary>
 /// Builds a portable <see cref="QuickAnalysisSelectionDescription"/> from a live sheet and selection by

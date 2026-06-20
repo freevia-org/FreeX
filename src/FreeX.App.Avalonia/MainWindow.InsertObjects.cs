@@ -10,6 +10,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Platform.Storage;
 
+using FreeX.App.Presentation.QuickAnalysis;
 using FreeX.App.Services;
 
 namespace FreeX.App.Avalonia;

@@ -12,9 +12,9 @@ namespace FreeX.App.Avalonia.Tests;
 
 /// <summary>
 /// Unit tests for the non-UI glue backing the Avalonia Quick Analysis entry point: mapping a chosen
-/// suggestion onto the existing shell command path (<see cref="QuickAnalysisCommandRouter"/>) and planning
-/// the sparkline inserts (<see cref="QuickAnalysisSparklinePlanner"/>). The selection reader, insert-chart
-/// and insert-table factories are covered by their own tests. No running UI is required.
+/// suggestion onto the existing shell command path (<see cref="QuickAnalysisCommandRouter"/>). Shared
+/// selection and sparkline planners are covered in the presentation tests; insert-chart and insert-table
+/// factories are covered by their own shell tests. No running UI is required.
 /// </summary>
 public sealed class QuickAnalysisShellGlueTests
 {
