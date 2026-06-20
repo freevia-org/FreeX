@@ -11,7 +11,7 @@ public sealed class GitHubWorkflowPreflightTests
     {
         var workflow = WorkspaceFileLocator.ReadAllText(".github", "workflows", "ci.yml");
 
-        workflow.Should().NotContain("push:");
+        workflow.Should().Contain("push:");
         workflow.Should().Contain("pull_request:");
         workflow.Should().Contain("branches:");
         workflow.Should().Contain("- main");
@@ -68,6 +68,10 @@ public sealed class GitHubWorkflowPreflightTests
         script.Should().Contain("persist-credentials: false");
         script.Should().Contain("if-no-files-found");
         script.Should().Contain("workflow must declare top-level permissions explicitly");
+        script.Should().Contain("primary CI must run on direct pushes to main");
+        script.Should().Contain("push path filters must include $requiredPushPath");
+        script.Should().Contain("Directory.Build.props");
+        script.Should().Contain("Directory.Packages.props");
         script.Should().Contain("workflow must not request write-all permissions");
         script.Should().Contain("must be pinned to an explicit major version");
         script.Should().Contain("\"actions/download-artifact\" = \"v7\"");
@@ -114,6 +118,21 @@ public sealed class GitHubWorkflowPreflightTests
         script.Should().Contain("macOS TFM validation artifact upload must be evidence-only");
         script.Should().Contain("macOS TFM validation job must not run dotnet publish");
         script.Should().Contain("Validated $($workflows.Count) GitHub workflow file(s).");
+    }
+
+    [Fact]
+    public void FreeWAndFreePWorkflows_RunOnCentralPropsPushes()
+    {
+        foreach (var workflowName in new[] { "freew-ci.yml", "freep-ci.yml" })
+        {
+            var workflow = WorkspaceFileLocator.ReadAllText(".github", "workflows", workflowName);
+            var pushBlock = ExtractRequiredYamlBlock(workflow, "push:");
+
+            pushBlock.Should().Contain("branches:");
+            pushBlock.Should().Contain("- main");
+            pushBlock.Should().Contain("Directory.Build.props");
+            pushBlock.Should().Contain("Directory.Packages.props");
+        }
     }
 
     [Fact]

@@ -247,6 +247,28 @@ foreach ($workflow in $workflows) {
         $errors.Add("$($workflow.Name): workflow must not use the privileged pull_request_target event.")
     }
 
+    if ($workflow.Name -eq "ci.yml") {
+        $pushBlock = Get-IndentedYamlBlock `
+            -Lines $lines `
+            -Pattern "^(?<indent>\s*)push\s*:\s*(?:#.*)?$"
+        if ([string]::IsNullOrWhiteSpace($pushBlock) -or
+            $pushBlock -notmatch "(?m)^\s*-\s+main\s*(?:#.*)?$") {
+            $errors.Add("ci.yml: primary CI must run on direct pushes to main.")
+        }
+    }
+
+    if ($workflow.Name -in @("freew-ci.yml", "freep-ci.yml")) {
+        $pushBlock = Get-IndentedYamlBlock `
+            -Lines $lines `
+            -Pattern "^(?<indent>\s*)push\s*:\s*(?:#.*)?$"
+        foreach ($requiredPushPath in @("Directory.Build.props", "Directory.Packages.props")) {
+            if ([string]::IsNullOrWhiteSpace($pushBlock) -or
+                -not $pushBlock.Contains($requiredPushPath)) {
+                $errors.Add("$($workflow.Name): push path filters must include $requiredPushPath.")
+            }
+        }
+    }
+
     foreach ($match in [regex]::Matches($content, "(?ms)^\s*runs-on\s*:\s*(?<runner>[^\r\n]*(?:\r?\n\s+-\s+[^\r\n]+)*)")) {
         $runnerBlock = (($match.Value -split "\r?\n") | ForEach-Object { $_ -replace "#.*$", "" }) -join "`n"
         if ($runnerBlock -match "(?i)(^|[\[\s,'`"-])self-hosted($|[\]\s,'`"])") {

@@ -280,6 +280,28 @@ public sealed class LegacyXlsFileAdapterTests
     }
 
     [Fact]
+    public void Load_PreservesLegacyWindowProtectionWithoutStructureProtection()
+    {
+        var hssf = new HSSFWorkbook();
+        hssf.CreateSheet("Visible");
+        var protect = hssf.Workbook.FindFirstRecordBySid(ProtectRecord.sid) as ProtectRecord ??
+            throw new InvalidOperationException("Expected a BIFF workbook Protect record in the HSSF fixture.");
+        protect.Protect = false;
+        var windowProtect = hssf.Workbook.FindFirstRecordBySid(WindowProtectRecord.sid) as WindowProtectRecord ??
+            throw new InvalidOperationException("Expected a BIFF workbook WindowProtect record in the HSSF fixture.");
+        windowProtect.Protect = true;
+        using var stream = new MemoryStream();
+        hssf.Write(stream);
+        stream.Position = 0;
+
+        var workbook = new LegacyXlsFileAdapter().Load(stream);
+
+        workbook.IsStructureProtected.Should().BeFalse();
+        workbook.StructureProtectionPassword.Should().BeNull();
+        GetWorkbookProtectionMetadataAttribute(workbook, "lockWindows").Should().Be("1");
+    }
+
+    [Fact]
     public void Load_ExinfmLegacyXlsCorpusFiles_WhenDownloaded()
     {
         var corpusRoot = Path.Combine(
@@ -344,6 +366,7 @@ public sealed class LegacyXlsFileAdapterTests
                 WorkbookCodeName: ReadImportedWorkbookCodeName(workbook),
                 SheetCodeNameFingerprints: ReadImportedSheetCodeNameFingerprints(workbook),
                 WorkbookCountryFingerprints: ReadImportedWorkbookCountryFingerprints(workbook),
+                WorkbookLegacyMenuFingerprints: ReadImportedWorkbookLegacyMenuFingerprints(workbook),
                 WorkbookPropertiesFingerprints: ReadImportedWorkbookPropertiesFingerprints(workbook),
                 WorkbookViewFingerprints: ReadImportedWorkbookViewFingerprints(workbook),
                 WorkbookProtectionFingerprints: ReadImportedWorkbookProtectionFingerprints(workbook),
@@ -421,6 +444,7 @@ public sealed class LegacyXlsFileAdapterTests
                 imported.WorkbookCodeName.Should().Be(source.WorkbookCodeName, imported.File);
                 imported.SheetCodeNameFingerprints.Should().BeEquivalentTo(source.SheetCodeNameFingerprints, imported.File);
                 imported.WorkbookCountryFingerprints.Should().BeEquivalentTo(source.WorkbookCountryFingerprints, imported.File);
+                imported.WorkbookLegacyMenuFingerprints.Should().BeEquivalentTo(source.WorkbookLegacyMenuFingerprints, imported.File);
                 imported.WorkbookPropertiesFingerprints.Should().BeEquivalentTo(source.WorkbookPropertiesFingerprints, imported.File);
                 imported.WorkbookViewFingerprints.Should().BeEquivalentTo(source.WorkbookViewFingerprints, imported.File);
                 imported.WorkbookProtectionFingerprints.Should().BeEquivalentTo(source.WorkbookProtectionFingerprints, imported.File);
@@ -506,6 +530,9 @@ public sealed class LegacyXlsFileAdapterTests
             .Should()
             .BeGreaterThan(0);
         summaries.Sum(summary => summary.WorkbookCountryFingerprints?.Count ?? 0)
+            .Should()
+            .BeGreaterThan(0);
+        summaries.Sum(summary => summary.WorkbookLegacyMenuFingerprints?.Count ?? 0)
             .Should()
             .BeGreaterThan(0);
         summaries.Where(summary => summary.RichMetadata)
@@ -1245,6 +1272,7 @@ public sealed class LegacyXlsFileAdapterTests
             WorkbookCodeName: ReadHssfWorkbookCodeName(hssf),
             SheetCodeNameFingerprints: sheetCodeNameFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             WorkbookCountryFingerprints: ReadSourceWorkbookCountryFingerprints(hssf),
+            WorkbookLegacyMenuFingerprints: ReadSourceWorkbookLegacyMenuFingerprints(hssf),
             WorkbookPropertiesFingerprints: workbookPropertiesFingerprints,
             WorkbookViewFingerprints: workbookViewFingerprints,
             WorkbookProtectionFingerprints: workbookProtectionFingerprints,
@@ -1417,6 +1445,7 @@ public sealed class LegacyXlsFileAdapterTests
             WorkbookCodeName: null,
             SheetCodeNameFingerprints: sheetCodeNameFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             WorkbookCountryFingerprints: [],
+            WorkbookLegacyMenuFingerprints: [],
             WorkbookPropertiesFingerprints: [],
             WorkbookViewFingerprints: [],
             WorkbookProtectionFingerprints: [],
@@ -1505,6 +1534,11 @@ public sealed class LegacyXlsFileAdapterTests
             ? [CreateWorkbookCountryFingerprint(countrySettings.DefaultCountryId, countrySettings.CurrentCountryId)]
             : [];
 
+    private static IReadOnlyList<string> ReadImportedWorkbookLegacyMenuFingerprints(Workbook workbook) =>
+        workbook.LegacyMenuSettings is { } menuSettings
+            ? [CreateWorkbookLegacyMenuFingerprint(menuSettings.AddMenuCount, menuSettings.DeleteMenuCount)]
+            : [];
+
     private static IReadOnlyList<string> ReadImportedWorkbookPropertiesFingerprints(Workbook workbook)
     {
         var (attributes, _) = XmlNativeBagSerializer.Deserialize(workbook.Properties?.Get("workbookPr"));
@@ -1580,6 +1614,18 @@ public sealed class LegacyXlsFileAdapterTests
             ? [CreateWorkbookCountryFingerprint(PositiveOrNull(country.DefaultCountry), PositiveOrNull(country.CurrentCountry))]
             : [];
 
+    private static IReadOnlyList<string> ReadSourceWorkbookLegacyMenuFingerprints(HSSFWorkbook hssf)
+    {
+        if (hssf.Workbook.FindFirstRecordBySid(MMSRecord.sid) is not MMSRecord menuSettings)
+            return [];
+
+        var addMenuCount = PositiveOrNull(menuSettings.AddMenuCount);
+        var deleteMenuCount = PositiveOrNull(menuSettings.DelMenuCount);
+        return addMenuCount is null && deleteMenuCount is null
+            ? []
+            : [CreateWorkbookLegacyMenuFingerprint(addMenuCount, deleteMenuCount)];
+    }
+
     private static IReadOnlyList<string> ReadImportedWorkbookProtectionFingerprints(Workbook workbook)
     {
         var lockWindows = GetWorkbookProtectionMetadataAttribute(workbook, "lockWindows") == "1";
@@ -1617,7 +1663,7 @@ public sealed class LegacyXlsFileAdapterTests
         return
         [
             CreateWorkbookProtectionFingerprint(
-                structureProtected || windowProtected,
+                structureProtected,
                 passwordHash,
                 windowProtected)
         ];
@@ -2875,6 +2921,13 @@ public sealed class LegacyXlsFileAdapterTests
             "WorkbookCountry",
             $"Default={FormatNullableInt(defaultCountryId)}",
             $"Current={FormatNullableInt(currentCountryId)}"
+        ]);
+
+    private static string CreateWorkbookLegacyMenuFingerprint(int? addMenuCount, int? deleteMenuCount) =>
+        string.Join("|", [
+            "WorkbookLegacyMenus",
+            $"Add={FormatNullableInt(addMenuCount)}",
+            $"Delete={FormatNullableInt(deleteMenuCount)}"
         ]);
 
     private static bool HasAnyWorkbookProperties(params string?[] values) =>
@@ -4446,6 +4499,7 @@ public sealed class LegacyXlsFileAdapterTests
         string? WorkbookCodeName = null,
         IReadOnlyList<string>? SheetCodeNameFingerprints = null,
         IReadOnlyList<string>? WorkbookCountryFingerprints = null,
+        IReadOnlyList<string>? WorkbookLegacyMenuFingerprints = null,
         IReadOnlyList<string>? WorkbookPropertiesFingerprints = null,
         IReadOnlyList<string>? WorkbookViewFingerprints = null,
         IReadOnlyList<string>? WorkbookProtectionFingerprints = null,

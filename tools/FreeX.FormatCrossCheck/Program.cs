@@ -16,7 +16,8 @@ namespace FreeX.FormatCrossCheck;
 ///     FreeX writes file  ->  soffice --headless --convert-to xlsx  ->  FreeX loads LibreOffice's xlsx
 ///     ->  compare VALUES + FORMULAS + sheet structure to the source (FidelityCompare semantics).
 ///
-/// Exit code: 0 when no FreeX-output-defect is found across every source x format; 1 otherwise.
+/// Exit code: 0 when every requested source x format validates cleanly; 1 for product/external
+/// validation failures; 2 when validation could not run (missing sources, no matching formats, no soffice).
 ///
 /// Usage:
 ///   FreeX.FormatCrossCheck                 # runs the default source set
@@ -78,8 +79,10 @@ internal static class Program
 
         var runner = new CrossCheckRunner(Path.Combine(outputDir, "scratch"), soffice);
         int totalDefects = 0;
+        int totalHardFailures = 0;
         int totalMissingSources = 0;
         int totalProcessedSources = 0;
+        int totalCheckedFormats = 0;
 
         foreach (var source in sources)
         {
@@ -99,10 +102,21 @@ internal static class Program
                 ? runner.RunAll(source)
                 : runner.RunAll(source).Where(r => r.Format.Key.Contains(formatFilter, StringComparison.OrdinalIgnoreCase)).ToList();
 
+            if (results.Count == 0)
+            {
+                Emit($"  SKIPPED: no interchange format matched --format={formatFilter}.");
+                Emit("");
+                continue;
+            }
+
+            totalCheckedFormats += results.Count;
             foreach (var r in results)
             {
                 ReportOne(Emit, r);
-                if (r.Kind == CrossKind.OutputDefect) totalDefects++;
+                if (r.Kind == CrossKind.OutputDefect)
+                    totalDefects++;
+                else if (IsHardValidationFailure(r.Kind))
+                    totalHardFailures++;
             }
             Emit("");
         }
@@ -115,18 +129,24 @@ internal static class Program
         // (the per-row grid is already printed above; this block prints just the final tally)
         Emit("");
         Emit($"  FreeX-output-defects (real bugs): {totalDefects}");
+        Emit($"  hard validation failures        : {totalHardFailures}");
         if (totalMissingSources > 0)
             Emit($"  sources missing on disk          : {totalMissingSources}");
         if (totalProcessedSources == 0)
             Emit("  processed sources                : 0");
+        if (totalCheckedFormats == 0)
+            Emit("  checked source x format rows     : 0");
         Emit("================================================================================");
 
         File.WriteAllText(reportPath, sb.ToString(), Encoding.UTF8);
         Console.WriteLine($"\n[Report written to {reportPath}]");
-        if (totalDefects > 0)
+        if (totalDefects > 0 || totalHardFailures > 0)
             return 1;
-        return totalMissingSources == 0 ? 0 : 2;
+        return totalMissingSources == 0 && totalCheckedFormats > 0 ? 0 : 2;
     }
+
+    private static bool IsHardValidationFailure(CrossKind kind) =>
+        kind is CrossKind.FreeXError or CrossKind.LibreOfficeOpenFailed;
 
     private static void ReportOne(Action<string> emit, CrossCheckResult r)
     {

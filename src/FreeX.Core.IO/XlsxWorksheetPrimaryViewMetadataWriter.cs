@@ -131,7 +131,11 @@ internal static class XlsxWorksheetPrimaryViewMetadataWriter
 
         var targetSelection = FindMatchingSelection(sheetView, nativeActiveCell, nativeSelectionRef);
         if (targetSelection is null)
+        {
+            if (!sheetView.Elements(WorksheetNs + "selection").Any())
+                sheetView.Add(new XElement(nativeSelection));
             return;
+        }
 
         foreach (var attribute in nativeSelection.Attributes())
         {

@@ -87,6 +87,68 @@ public class HtmlMhtmlRoundTripTests
     }
 
     [Fact]
+    public void Html_SaveSerializesFullVerticalMergeRowspan()
+    {
+        var document = new TextDocument();
+        var table = new Table();
+        table.Rows.Add(new TableRow
+        {
+            Cells =
+            {
+                new TableCell("Merged") { VerticalMerge = VerticalMergeState.Restart },
+                new TableCell("Top")
+            }
+        });
+        table.Rows.Add(new TableRow
+        {
+            Cells =
+            {
+                new TableCell(string.Empty) { VerticalMerge = VerticalMergeState.Continue },
+                new TableCell("Middle")
+            }
+        });
+        table.Rows.Add(new TableRow
+        {
+            Cells =
+            {
+                new TableCell(string.Empty) { VerticalMerge = VerticalMergeState.Continue },
+                new TableCell("Bottom")
+            }
+        });
+        document.Blocks.Add(table);
+
+        using var stream = new MemoryStream();
+        new HtmlFileAdapter().Save(document, stream);
+        var html = Encoding.UTF8.GetString(stream.ToArray());
+
+        html.Should().Contain("rowspan=\"3\"");
+        html.Should().NotContain("rowspan=\"2\"");
+    }
+
+    [Fact]
+    public void Html_LoadReservesEveryColumnCoveredByRowspanColspan()
+    {
+        const string html = """
+<!doctype html><html><body>
+<table>
+  <tr><td rowspan="2" colspan="2">Merged</td><td>Right</td></tr>
+  <tr><td>After</td></tr>
+</table>
+</body></html>
+""";
+
+        var loaded = HtmlFileAdapter.LoadHtml(html, static _ => null);
+
+        var table = loaded.Blocks.Should().ContainSingle().Which.Should().BeOfType<Table>().Which;
+        table.Rows.Should().HaveCount(2);
+        table.Rows[0].Cells[0].GridSpan.Should().Be(2);
+        table.Rows[0].Cells[0].VerticalMerge.Should().Be(VerticalMergeState.Restart);
+        table.Rows[1].Cells[0].GridSpan.Should().Be(2);
+        table.Rows[1].Cells[0].VerticalMerge.Should().Be(VerticalMergeState.Continue);
+        table.Rows[1].Cells[1].PlainText.Should().Be("After");
+    }
+
+    [Fact]
     public void Catalog_RegistersHtmlAndMhtmlFormats()
     {
         var formats = DocumentFileAdapterCatalog.CreateDefaultAdapters().SelectMany(adapter => adapter.Formats).ToList();
