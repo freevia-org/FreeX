@@ -105,6 +105,44 @@ public sealed partial class NativeJsonAdapter
             };
     }
 
+    private static WorkbookLegacyWorkbookSettingsModel? ToWorkbookLegacyWorkbookSettings(WorkbookLegacyWorkbookSettingsDto? dto)
+    {
+        if (dto is null)
+            return null;
+
+        var sheetTabIds = (dto.SheetTabIds ?? [])
+            .Select(value => NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(value, ushort.MaxValue))
+            .OfType<int>()
+            .ToList();
+        var useNaturalLanguageFormulas = dto.UseNaturalLanguageFormulas;
+        return sheetTabIds.Count == 0 && useNaturalLanguageFormulas is null
+            ? null
+            : new WorkbookLegacyWorkbookSettingsModel
+            {
+                SheetTabIds = sheetTabIds,
+                UseNaturalLanguageFormulas = useNaturalLanguageFormulas
+            };
+    }
+
+    private static WorkbookLegacyWorkbookSettingsDto? FromWorkbookLegacyWorkbookSettings(WorkbookLegacyWorkbookSettingsModel? settings)
+    {
+        if (settings is null)
+            return null;
+
+        var sheetTabIds = (settings.SheetTabIds ?? [])
+            .Select(value => NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(value, ushort.MaxValue))
+            .OfType<int>()
+            .ToList();
+        var useNaturalLanguageFormulas = settings.UseNaturalLanguageFormulas;
+        return sheetTabIds.Count == 0 && useNaturalLanguageFormulas is null
+            ? null
+            : new WorkbookLegacyWorkbookSettingsDto
+            {
+                SheetTabIds = sheetTabIds,
+                UseNaturalLanguageFormulas = useNaturalLanguageFormulas
+            };
+    }
+
     private static bool IsSupportedFormulaErrorCode(string? errorCode) =>
         string.Equals(errorCode, ErrorValue.DivByZero.Code, StringComparison.OrdinalIgnoreCase) ||
         string.Equals(errorCode, ErrorValue.Value.Code, StringComparison.OrdinalIgnoreCase) ||

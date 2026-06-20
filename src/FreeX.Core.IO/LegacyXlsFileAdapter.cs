@@ -34,6 +34,12 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
     private static readonly FieldInfo? UnknownRecordRawDataField =
         typeof(UnknownRecord).GetField("_rawData", BindingFlags.Instance | BindingFlags.NonPublic);
 
+    private static readonly FieldInfo? TabIdRecordTabIdsField =
+        typeof(TabIdRecord).GetField("_tabids", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
+    private static readonly FieldInfo? UseSelFsRecordOptionsField =
+        typeof(UseSelFSRecord).GetField("_options", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
     private static readonly MethodInfo? HssfGetObjRecordMethod =
         typeof(HSSFSimpleShape).GetMethod(
             "GetObjRecord",
@@ -100,6 +106,7 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         LoadWorkbookView(hssf, workbook);
         LoadWorkbookCountrySettings(hssf, workbook);
         LoadWorkbookLegacyMenuSettings(hssf, workbook);
+        LoadWorkbookLegacyWorkbookSettings(hssf, workbook);
         LoadWorkbookFunctionGroups(hssf, workbook);
         LoadWorkbookProperties(hssf, workbook);
         LoadWorkbookProtection(hssf, workbook);
@@ -219,6 +226,45 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
             AddMenuCount = addMenuCount,
             DeleteMenuCount = deleteMenuCount
         };
+    }
+
+    private static void LoadWorkbookLegacyWorkbookSettings(HSSFWorkbook sourceWorkbook, Workbook workbook)
+    {
+        var sheetTabIds = ReadHssfSheetTabIds(sourceWorkbook);
+        var useNaturalLanguageFormulas = ReadHssfUseNaturalLanguageFormulas(sourceWorkbook);
+        if (sheetTabIds.Count == 0 && useNaturalLanguageFormulas is null)
+            return;
+
+        workbook.LegacyWorkbookSettings = new WorkbookLegacyWorkbookSettingsModel
+        {
+            SheetTabIds = sheetTabIds,
+            UseNaturalLanguageFormulas = useNaturalLanguageFormulas
+        };
+    }
+
+    private static List<int> ReadHssfSheetTabIds(HSSFWorkbook sourceWorkbook)
+    {
+        if (sourceWorkbook.Workbook.FindFirstRecordBySid(TabIdRecord.sid) is not TabIdRecord tabIdRecord ||
+            TabIdRecordTabIdsField?.GetValue(tabIdRecord) is not short[] tabIds)
+        {
+            return [];
+        }
+
+        return tabIds
+            .Select(value => (int)value)
+            .Where(value => value >= 0)
+            .ToList();
+    }
+
+    private static bool? ReadHssfUseNaturalLanguageFormulas(HSSFWorkbook sourceWorkbook)
+    {
+        if (sourceWorkbook.Workbook.FindFirstRecordBySid(UseSelFSRecord.sid) is not UseSelFSRecord useSelFs ||
+            UseSelFsRecordOptionsField?.GetValue(useSelFs) is not { } options)
+        {
+            return null;
+        }
+
+        return Convert.ToInt32(options, CultureInfo.InvariantCulture) != 0;
     }
 
     private static void LoadWorkbookFunctionGroups(HSSFWorkbook sourceWorkbook, Workbook workbook)
