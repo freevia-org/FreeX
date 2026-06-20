@@ -4,6 +4,7 @@ using ExcelDataReader;
 using NPOI.HSSF.Record;
 using FreeX.Core.Model;
 using NPOI.HSSF.UserModel;
+using NPOI.POIFS.FileSystem;
 using NPOI.SS.UserModel;
 using NPOI.SS.Util;
 using NPOICell = NPOI.SS.UserModel.ICell;
@@ -75,10 +76,12 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
 
     private static Workbook LoadHssf(Stream stream)
     {
+        var hasVbaProjectPackage = TryHasVbaProjectPackage(stream);
         using var hssf = new HSSFWorkbook(stream);
         var workbook = new Workbook("Untitled")
         {
-            Uses1904DateSystem = hssf.IsDate1904()
+            Uses1904DateSystem = hssf.IsDate1904(),
+            HasVbaProjectPackage = hasVbaProjectPackage
         };
         LoadWorkbookView(hssf, workbook);
         LoadWorkbookProtection(hssf, workbook);
@@ -112,6 +115,46 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         LoadDefinedNames(hssf, workbook);
 
         return workbook;
+    }
+
+    private static bool TryHasVbaProjectPackage(Stream stream)
+    {
+        if (!stream.CanSeek)
+            return false;
+
+        var start = stream.Position;
+        try
+        {
+            var poifs = new POIFSFileSystem(POIFSFileSystem.CreateNonClosingInputStream(stream));
+            return DirectoryContainsVbaProject(poifs.Root);
+        }
+        catch
+        {
+            return false;
+        }
+        finally
+        {
+            stream.Position = start;
+        }
+    }
+
+    private static bool DirectoryContainsVbaProject(DirectoryEntry directory)
+    {
+        var entries = directory.Entries;
+        while (entries.MoveNext())
+        {
+            var entry = entries.Current;
+            if (string.Equals(entry.Name, "_VBA_PROJECT_CUR", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(entry.Name, "VBA", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (entry is DirectoryEntry child && DirectoryContainsVbaProject(child))
+                return true;
+        }
+
+        return false;
     }
 
     private static void LoadWorkbookView(HSSFWorkbook sourceWorkbook, Workbook workbook)
@@ -692,9 +735,26 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
             sheet.ActiveCol = ToModelIndex(activeCell.Column);
         }
 
+        if (TryGetWindowTwoRecord(sourceSheet) is { } window)
+        {
+            if (window.SavedInPageBreakPreview)
+                sheet.ViewMode = WorksheetViewMode.PageBreakPreview;
+
+            var zoom = window.SavedInPageBreakPreview && window.PageBreakZoom > 0
+                ? window.PageBreakZoom
+                : window.NormalZoom;
+            if (zoom is >= 10 and <= 400)
+                sheet.ZoomPercent = zoom;
+        }
+
         if (TryGetTabColor(sourceSheet, palette, out var tabColor))
             sheet.TabColor = tabColor;
     }
+
+    private static WindowTwoRecord? TryGetWindowTwoRecord(ISheet sourceSheet) =>
+        sourceSheet is HSSFSheet hssfSheet
+            ? hssfSheet.Sheet.FindFirstRecordBySid(WindowTwoRecord.sid) as WindowTwoRecord
+            : null;
 
     private static bool TryGetTabColor(ISheet sourceSheet, HSSFPalette palette, out CellColor tabColor)
     {

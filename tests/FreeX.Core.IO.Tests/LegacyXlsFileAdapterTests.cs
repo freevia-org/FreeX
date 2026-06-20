@@ -4,6 +4,7 @@ using FreeX.Core.IO;
 using FreeX.Core.Model;
 using NPOI.HSSF.Record;
 using NPOI.HSSF.UserModel;
+using NPOI.POIFS.FileSystem;
 using NPOI.SS.UserModel;
 using NPOI.SS.Util;
 using System.Globalization;
@@ -182,6 +183,8 @@ public sealed class LegacyXlsFileAdapterTests
         sheet.ViewLeftCol.Should().Be(4);
         sheet.ActiveRow.Should().Be(2);
         sheet.ActiveCol.Should().Be(4);
+        sheet.ViewMode.Should().Be(WorksheetViewMode.PageBreakPreview);
+        sheet.ZoomPercent.Should().Be(85);
         sheet.TabColor.Should().Be(new CellColor(255, 192, 0));
 
         var formulaCell = sheet.GetCell(2, 2);
@@ -284,6 +287,7 @@ public sealed class LegacyXlsFileAdapterTests
                 workbook.ActiveSheetIndex,
                 workbook.Uses1904DateSystem,
                 RichMetadata: source.RichMetadata,
+                HasVbaProjectPackage: workbook.HasVbaProjectPackage,
                 SheetNames: workbook.Sheets.Select(sheet => sheet.Name).ToArray(),
                 SheetVisibilityFingerprints: ReadImportedSheetVisibilityFingerprints(workbook),
                 WorkbookViewFingerprints: ReadImportedWorkbookViewFingerprints(workbook),
@@ -315,6 +319,7 @@ public sealed class LegacyXlsFileAdapterTests
             imported.Sheets.Should().Be(source.Sheets, imported.File);
             imported.Cells.Should().Be(source.Cells, imported.File);
             imported.Uses1904DateSystem.Should().Be(source.Uses1904DateSystem, imported.File);
+            imported.HasVbaProjectPackage.Should().Be(source.HasVbaProjectPackage, imported.File);
             if (!source.RichMetadata)
             {
                 imported.Styles.Should().Be(source.Styles, imported.File);
@@ -398,6 +403,7 @@ public sealed class LegacyXlsFileAdapterTests
         summaries.Sum(summary => summary.Dimensions).Should().BeGreaterThan(0);
         summaries.Sum(summary => summary.HiddenSheets).Should().BeGreaterThan(0);
         summaries.Count(summary => summary.Uses1904DateSystem).Should().BeGreaterThan(0);
+        summaries.Count(summary => summary.HasVbaProjectPackage).Should().BeGreaterThan(0);
         summaries.Where(summary => summary.RichMetadata).Sum(summary => summary.DefaultDimensionFingerprints?.Count ?? 0)
             .Should()
             .BeGreaterThan(0);
@@ -523,6 +529,11 @@ public sealed class LegacyXlsFileAdapterTests
         sheet.DisplayRowColHeadings = false;
         sheet.DisplayFormulas = true;
         sheet.ShowInPane(2, 3);
+        var windowTwo = TryGetWindowTwoRecord(sheet) ??
+            throw new InvalidOperationException("Expected a BIFF sheet Window2 record in the HSSF fixture.");
+        windowTwo.SavedInPageBreakPreview = true;
+        windowTwo.PageBreakZoom = 85;
+        windowTwo.NormalZoom = 125;
         hssf.GetCustomPalette().SetColorAtIndex(0x21, 255, 192, 0);
         sheet.TabColorIndex = 0x21;
         sheet.GroupColumn(5, 6);
@@ -975,6 +986,7 @@ public sealed class LegacyXlsFileAdapterTests
             pageBreaks,
             activeSheetIndex,
             hssf.IsDate1904(),
+            HasVbaProjectPackage: SourceHasVbaProjectPackage(path),
             SheetNames: sheetNames,
             SheetVisibilityFingerprints: sheetVisibilityFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             WorkbookViewFingerprints: workbookViewFingerprints,
@@ -1128,6 +1140,7 @@ public sealed class LegacyXlsFileAdapterTests
             ActiveSheetIndex: activeSheetIndex,
             Uses1904DateSystem: false,
             RichMetadata: false,
+            HasVbaProjectPackage: SourceHasVbaProjectPackage(path),
             SheetNames: sheetNames,
             SheetVisibilityFingerprints: sheetVisibilityFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             WorkbookViewFingerprints: [],
@@ -1646,6 +1659,8 @@ public sealed class LegacyXlsFileAdapterTests
             .Select((sheet, sheetIndex) => CreateViewStateFingerprint(
                 sheetIndex,
                 sheet.Name,
+                sheet.ViewMode,
+                sheet.ZoomPercent,
                 sheet.ShowGridlines,
                 sheet.ShowHeadings,
                 sheet.ShowFormulas,
@@ -1793,6 +1808,8 @@ public sealed class LegacyXlsFileAdapterTests
         return CreateViewStateFingerprint(
             sheetIndex,
             sheetName,
+            GetSourceViewMode(sheet),
+            GetSourceZoomPercent(sheet),
             sheet.DisplayGridlines,
             sheet.DisplayRowColHeadings,
             sheet.DisplayFormulas,
@@ -2410,6 +2427,8 @@ public sealed class LegacyXlsFileAdapterTests
     private static string CreateViewStateFingerprint(
         int sheetIndex,
         string sheetName,
+        WorksheetViewMode viewMode,
+        int zoomPercent,
         bool showGridlines,
         bool showHeadings,
         bool showFormulas,
@@ -2422,6 +2441,7 @@ public sealed class LegacyXlsFileAdapterTests
         CellColor? tabColor) =>
         string.Join("|", [
             $"{sheetIndex}:{sheetName}",
+            $"View={viewMode},{zoomPercent}",
             $"Display={showGridlines},{showHeadings},{showFormulas}",
             $"TopLeft={FormatNullableUInt(viewTopRow)},{FormatNullableUInt(viewLeftCol)}",
             $"Active={FormatNullableUInt(activeRow)},{FormatNullableUInt(activeColumn)}",
@@ -2451,6 +2471,60 @@ public sealed class LegacyXlsFileAdapterTests
         value is { } color
             ? $"{color.R},{color.G},{color.B}"
             : "null";
+
+    private static WorksheetViewMode GetSourceViewMode(ISheet sheet) =>
+        TryGetWindowTwoRecord(sheet) is { SavedInPageBreakPreview: true }
+            ? WorksheetViewMode.PageBreakPreview
+            : WorksheetViewMode.Normal;
+
+    private static int GetSourceZoomPercent(ISheet sheet)
+    {
+        if (TryGetWindowTwoRecord(sheet) is not { } window)
+            return 100;
+
+        var zoom = window.SavedInPageBreakPreview && window.PageBreakZoom > 0
+            ? window.PageBreakZoom
+            : window.NormalZoom;
+        return zoom is >= 10 and <= 400 ? zoom : 100;
+    }
+
+    private static WindowTwoRecord? TryGetWindowTwoRecord(ISheet sheet) =>
+        sheet is HSSFSheet hssfSheet
+            ? hssfSheet.Sheet.FindFirstRecordBySid(WindowTwoRecord.sid) as WindowTwoRecord
+            : null;
+
+    private static bool SourceHasVbaProjectPackage(string path)
+    {
+        try
+        {
+            using var stream = File.OpenRead(path);
+            var poifs = new POIFSFileSystem(POIFSFileSystem.CreateNonClosingInputStream(stream));
+            return DirectoryContainsVbaProject(poifs.Root);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool DirectoryContainsVbaProject(DirectoryEntry directory)
+    {
+        var entries = directory.Entries;
+        while (entries.MoveNext())
+        {
+            var entry = entries.Current;
+            if (string.Equals(entry.Name, "_VBA_PROJECT_CUR", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(entry.Name, "VBA", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (entry is DirectoryEntry child && DirectoryContainsVbaProject(child))
+                return true;
+        }
+
+        return false;
+    }
 
     private static string FormatBorder(CellBorder border) =>
         $"{border.Style},{FormatColor(border.Color)}";
@@ -3161,6 +3235,7 @@ public sealed class LegacyXlsFileAdapterTests
         int? ActiveSheetIndex,
         bool Uses1904DateSystem,
         bool RichMetadata = true,
+        bool HasVbaProjectPackage = false,
         IReadOnlyList<string>? SheetNames = null,
         IReadOnlyList<string>? SheetVisibilityFingerprints = null,
         IReadOnlyList<string>? WorkbookViewFingerprints = null,
