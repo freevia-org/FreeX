@@ -64,6 +64,11 @@ public static class ParityReport
                 windowsOnly = c.WindowsOnlyCount,
                 linuxOnly = c.LinuxOnlyCount,
                 hardSurfaces = c.HardSurfaceCount,
+                screens = c.ScreenSurfaceCount,
+                staticTabs = c.StaticTabSurfaceCount,
+                contextualTabs = c.ContextualTabSurfaceCount,
+                overlays = c.OverlaySurfaceCount,
+                dialogs = c.DialogSurfaceCount,
                 hardRegressions = c.HardRegressions.Count,
             },
             surfaces = c.Surfaces.Select(s => new
@@ -73,6 +78,7 @@ public static class ParityReport
                 presence = s.Presence.ToString(),
                 severity = s.Severity.ToString(),
                 diffPercent = s.DiffPercent,
+                evaluation = Evaluation(s, c.HardThreshold),
                 hardRegression = s.IsHardRegression(c.HardThreshold),
                 windowsNote = s.WindowsNote,
                 linuxNote = s.LinuxNote,
@@ -110,7 +116,11 @@ public static class ParityReport
         sb.AppendLine($"| Windows-only (missing on Linux) | {c.WindowsOnlyCount} |");
         sb.AppendLine($"| Linux-only (missing on Windows) | {c.LinuxOnlyCount} |");
         sb.AppendLine($"| Grid (hard) surfaces | {c.HardSurfaceCount} |");
-        sb.AppendLine($"| Chrome surfaces (expected diff) | {c.ChromeSurfaceCount} |");
+        sb.AppendLine($"| Demo screens | {c.ScreenSurfaceCount} |");
+        sb.AppendLine($"| Static tab screens | {c.StaticTabSurfaceCount} |");
+        sb.AppendLine($"| Contextual tab screens | {c.ContextualTabSurfaceCount} |");
+        sb.AppendLine($"| Overlay / backstage screens | {c.OverlaySurfaceCount} |");
+        sb.AppendLine($"| Dialog screens | {c.DialogSurfaceCount} |");
         sb.AppendLine($"| Hard regressions (> threshold) | {c.HardRegressions.Count} |");
         sb.AppendLine();
         sb.AppendLine("## Grid / content surfaces");
@@ -130,6 +140,32 @@ public static class ParityReport
             sb.AppendLine($"| `{s.Id}` | {diff} | {flag} |");
         }
         sb.AppendLine();
+        sb.AppendLine("## Demo Screens");
+        sb.AppendLine();
+        sb.AppendLine("These are same-size whole-window screenshots of the seeded demo workbook.");
+        sb.AppendLine();
+        AppendSurfaceTable(sb, c, s => s.Kind.Equals("screen", StringComparison.OrdinalIgnoreCase));
+
+        sb.AppendLine("## Static Ribbon Tabs");
+        sb.AppendLine();
+        sb.AppendLine("These are same-size whole-window screenshots with the static ribbon tab selected.");
+        sb.AppendLine();
+        AppendSurfaceTable(sb, c, s => s.Kind.Equals("static-tab", StringComparison.OrdinalIgnoreCase));
+
+        sb.AppendLine("## Contextual Ribbon Tabs");
+        sb.AppendLine();
+        sb.AppendLine("These are same-size whole-window screenshots after activating the tab's selection context.");
+        sb.AppendLine();
+        AppendSurfaceTable(sb, c, s => s.Kind.Equals("contextual-tab", StringComparison.OrdinalIgnoreCase));
+
+        sb.AppendLine("## Overlays / Backstage");
+        sb.AppendLine();
+        sb.AppendLine("These rows include File/Backstage overlay surfaces. Missing rows are still useful: they mark work the Linux shell has not ported yet.");
+        sb.AppendLine();
+        AppendSurfaceTable(sb, c, s =>
+            s.Kind.Equals("backstage", StringComparison.OrdinalIgnoreCase)
+            || s.Kind.Equals("overlay", StringComparison.OrdinalIgnoreCase));
+
         sb.AppendLine("## Chrome surfaces (ribbon tabs + backstage)");
         sb.AppendLine();
         sb.AppendLine("> **Expected differences.** The Avalonia shell adds a compact toolbar row (Open/Save/Undo/Redo/…)");
@@ -215,7 +251,11 @@ public static class ParityReport
         Card(sb, c.WindowsOnlyCount, "win only");
         Card(sb, c.LinuxOnlyCount, "linux only");
         Card(sb, c.HardSurfaceCount, "grid (hard)");
-        Card(sb, c.ChromeSurfaceCount, "chrome");
+        Card(sb, c.ScreenSurfaceCount, "screens");
+        Card(sb, c.StaticTabSurfaceCount, "static tabs");
+        Card(sb, c.ContextualTabSurfaceCount, "contextual tabs");
+        Card(sb, c.OverlaySurfaceCount, "overlays");
+        Card(sb, c.DialogSurfaceCount, "dialogs");
         Card(sb, c.HardRegressions.Count, "regressions");
         sb.AppendLine("</div>");
 
@@ -229,6 +269,30 @@ public static class ParityReport
         sb.AppendLine("<strong>Expected differences.</strong> The Avalonia shell adds a compact toolbar row (Open / Save / Undo / Redo / …) between the ribbon and the grid, and uses its own native title bar. Whole-window captures of ribbon tabs and the backstage therefore always show structural chrome differences. These diffs are <em>informational and never gate-failing</em>. Values above 20% are flagged for review.");
         sb.AppendLine("</div>");
         foreach (var s in c.Surfaces.Where(s => s.Severity == DiffSeverity.Chrome))
+            RenderSurfaceRow(sb, s, c.HardThreshold, reportDir);
+
+        sb.AppendLine("<h2>Demo screens</h2>");
+        sb.AppendLine("<p style=\"color:#555;font-size:14px\">Same-size whole-window screenshots of the seeded demo workbook.</p>");
+        foreach (var s in c.Surfaces.Where(s => s.Kind.Equals("screen", StringComparison.OrdinalIgnoreCase)))
+            RenderSurfaceRow(sb, s, c.HardThreshold, reportDir);
+
+        sb.AppendLine("<h2>Static ribbon tabs</h2>");
+        sb.AppendLine("<p style=\"color:#555;font-size:14px\">Same-size whole-window screenshots with one static ribbon tab selected.</p>");
+        foreach (var s in c.Surfaces.Where(s => s.Kind.Equals("static-tab", StringComparison.OrdinalIgnoreCase)))
+            RenderSurfaceRow(sb, s, c.HardThreshold, reportDir);
+
+        sb.AppendLine("<h2>Contextual ribbon tabs</h2>");
+        sb.AppendLine("<p style=\"color:#555;font-size:14px\">Same-size whole-window screenshots with each contextual tab's selection context active.</p>");
+        foreach (var s in c.Surfaces.Where(s => s.Kind.Equals("contextual-tab", StringComparison.OrdinalIgnoreCase)))
+            RenderSurfaceRow(sb, s, c.HardThreshold, reportDir);
+
+        sb.AppendLine("<h2>Overlays / Backstage</h2>");
+        sb.AppendLine("<div style=\"background:#fffbef;border:1px solid #e6c84a;border-radius:8px;padding:10px 14px;margin:8px 0 16px;font-size:13px;color:#5a4500\">");
+        sb.AppendLine("<strong>Evaluation note.</strong> Overlay rows are informational. Missing Linux rows usually mean the corresponding File/Backstage overlay has not been ported yet, not that the capture failed.");
+        sb.AppendLine("</div>");
+        foreach (var s in c.Surfaces.Where(s =>
+                     s.Kind.Equals("backstage", StringComparison.OrdinalIgnoreCase)
+                     || s.Kind.Equals("overlay", StringComparison.OrdinalIgnoreCase)))
             RenderSurfaceRow(sb, s, c.HardThreshold, reportDir);
 
         sb.AppendLine("<h2>Dialog / other surfaces</h2>");
@@ -259,6 +323,7 @@ public static class ParityReport
         sb.Append($"<span class=\"badge\">{Presence(s.Presence)}</span>");
         if (reg) sb.Append("<span class=\"badge\" style=\"background:#ffebe9;color:#cf222e\">REGRESSION</span>");
         if (largeChrome) sb.Append("<span class=\"badge\" style=\"background:#fffbef;color:#5a4500\">large chrome diff</span>");
+        sb.Append($"<span class=\"badge\">{Esc(Evaluation(s, threshold))}</span>");
         string diffTxt = s.DiffPercent is { } d ? $"diff {d:0.00}%" : (miss ? "n/a" : "—");
         sb.Append($"<span class=\"diff\">{diffTxt}</span>");
         sb.AppendLine("</div>");
@@ -268,6 +333,35 @@ public static class ParityReport
         sb.AppendLine("</div>");
         if (s.Error != null) sb.AppendLine($"<div class=\"note\">⚠ {Esc(s.Error)}</div>");
         sb.AppendLine("</div>");
+    }
+
+    private static void AppendSurfaceTable(StringBuilder sb, ParityComparison c, Func<SurfaceComparison, bool> predicate)
+    {
+        sb.AppendLine("| Surface | Kind | Diff% | Evaluation |");
+        sb.AppendLine("|---|---|---:|---|");
+        foreach (var s in c.Surfaces.Where(predicate))
+        {
+            string diff = s.DiffPercent is { } d ? d.ToString("0.00", CultureInfo.InvariantCulture) : "â€”";
+            sb.AppendLine($"| `{s.Id}` | {s.Kind} | {diff} | {Evaluation(s, c.HardThreshold)} |");
+        }
+        sb.AppendLine();
+    }
+
+    private static string Evaluation(SurfaceComparison s, double hardThreshold)
+    {
+        if (s.Error is not null)
+            return "capture/diff error";
+        if (s.Presence == SurfacePresence.WindowsOnly)
+            return "missing on Linux";
+        if (s.Presence == SurfacePresence.LinuxOnly)
+            return "missing on Windows";
+        if (s.IsHardRegression(hardThreshold))
+            return "hard regression";
+        if (s.IsLargeChromeDiff())
+            return "large visual difference";
+        if (s.DiffPercent is { } d && d > 0)
+            return "visual difference";
+        return "matched";
     }
 
     private static void Card(StringBuilder sb, int n, string label) =>

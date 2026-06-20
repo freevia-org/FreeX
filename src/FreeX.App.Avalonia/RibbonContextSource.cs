@@ -46,6 +46,20 @@ internal sealed class AvaloniaRibbonContextSource : IRibbonContextSource
     /// <summary>The selection was cleared: drop any drawing-object context.</summary>
     public void OnSelectionCleared() => SetDrawingObjectKey(null);
 
+    /// <summary>
+    /// Capture-only override used by the visual parity runner to render each contextual tab at a stable size.
+    /// Normal app interaction continues to flow through the selection/table/pivot callbacks above.
+    /// </summary>
+    internal void SetParityCaptureContext(string? activationKey)
+    {
+        _drawingObjectKey = activationKey is "chart.selected" or "picture.selected" or "shape.selected"
+            ? activationKey
+            : null;
+        _tableActive = string.Equals(activationKey, "table.active", StringComparison.Ordinal);
+        _pivotActive = string.Equals(activationKey, "pivot.active", StringComparison.Ordinal);
+        Recompute();
+    }
+
     private static string MapDrawingObjectKey(SelectionPaneObjectKind kind) => kind switch
     {
         SelectionPaneObjectKind.Chart => "chart.selected",

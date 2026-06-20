@@ -83,7 +83,9 @@ internal sealed record ParityCaptureOptions(string OutputDirectory)
 /// <summary>The classification a captured surface falls into, mirrored in the manifest.</summary>
 internal enum ParitySurfaceKind
 {
-    RibbonTab,
+    StaticRibbonTab,
+    ContextualRibbonTab,
+    Screen,
     Grid,
     Dialog,
     Backstage,
@@ -99,7 +101,9 @@ internal sealed record ParitySurfaceResult(
 {
     public static string KindToken(ParitySurfaceKind kind) => kind switch
     {
-        ParitySurfaceKind.RibbonTab => "ribbon-tab",
+        ParitySurfaceKind.StaticRibbonTab => "static-tab",
+        ParitySurfaceKind.ContextualRibbonTab => "contextual-tab",
+        ParitySurfaceKind.Screen => "screen",
         ParitySurfaceKind.Grid => "grid",
         ParitySurfaceKind.Dialog => "dialog",
         ParitySurfaceKind.Backstage => "backstage",

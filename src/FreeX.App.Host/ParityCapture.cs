@@ -8,6 +8,8 @@ using System.Windows.Media.Imaging;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
+using FreeX.Ribbon.Definitions;
+using SharedRibbon = Free.Shared.Ribbon;
 
 namespace FreeX.App.Host;
 
@@ -29,8 +31,8 @@ namespace FreeX.App.Host;
 /// </summary>
 internal static class ParityCapture
 {
-    private const double SurfaceWidth = 1280;
-    private const double SurfaceHeight = 820;
+    private const double SurfaceWidth = 1120;
+    private const double SurfaceHeight = 720;
 
     /// <summary>The CLI switch that selects this mode.</summary>
     public const string Switch = "--parity-capture";
@@ -120,10 +122,10 @@ internal static class ParityCapture
             window.UpdateLayout();
             PumpDispatcher();
 
-            // Ribbon tabs.
+            // Static ribbon tabs.
             foreach (var (surfaceId, catalogId) in RibbonTabSurfaces)
             {
-                CaptureSurface(results, surfaceId, "ribbon-tab", outDir, () =>
+                CaptureSurface(results, surfaceId, "static-tab", outDir, () =>
                 {
                     if (!TrySelectRibbonTab(window!, catalogId))
                         throw new InvalidOperationException($"Ribbon tab '{catalogId}' not found.");
@@ -133,16 +135,29 @@ internal static class ParityCapture
                 });
             }
 
-            // Grid: render just the spreadsheet grid region of the live window.
-            CaptureSurface(results, "grid.demo", "grid", outDir, () =>
+            // Contextual ribbon tabs: temporarily reveal each hidden contextual tab so the capture report
+            // shows how Windows and Linux render the same shared tab declaration.
+            foreach (var (surfaceId, catalogId) in ContextualRibbonTabSurfaces)
+            {
+                CaptureSurface(results, surfaceId, "contextual-tab", outDir, () =>
+                {
+                    if (!TrySelectRibbonTab(window!, catalogId, forceVisible: true))
+                        throw new InvalidOperationException($"Contextual ribbon tab '{catalogId}' not found.");
+                    window!.UpdateLayout();
+                    PumpDispatcher();
+                    return RenderElement(window!, SurfaceWidth, SurfaceHeight);
+                });
+            }
+
+            // Grid/demo screen: render the full app screen with the Home tab selected so it is comparable to
+            // the Avalonia capture at the same pixel size.
+            CaptureSurface(results, "grid.demo", "screen", outDir, () =>
             {
                 // Land on the Home tab so the ribbon/grid composition matches the demo baseline.
                 TrySelectRibbonTab(window!, "HomeTab");
                 window!.UpdateLayout();
                 PumpDispatcher();
-                if (window.FindName("SheetGrid") is not FrameworkElement grid)
-                    throw new InvalidOperationException("SheetGrid element not found.");
-                return RenderElement(grid, grid.ActualWidth, grid.ActualHeight);
+                return RenderElement(window!, SurfaceWidth, SurfaceHeight);
             });
 
             // Backstage panes. WPF exposes Info as a true backstage pane; Export and Account are rail
@@ -162,8 +177,10 @@ internal static class ParityCapture
             // The window itself failed to construct/show. Record every shell surface as not-captured.
             var note = Flatten(ex);
             foreach (var (surfaceId, _) in RibbonTabSurfaces)
-                AddMissing(results, surfaceId, "ribbon-tab", note);
-            AddMissing(results, "grid.demo", "grid", note);
+                AddMissing(results, surfaceId, "static-tab", note);
+            foreach (var (surfaceId, _) in ContextualRibbonTabSurfaces)
+                AddMissing(results, surfaceId, "contextual-tab", note);
+            AddMissing(results, "grid.demo", "screen", note);
             AddMissing(results, "backstage.Info", "backstage", note);
             AddMissing(results, "backstage.Export", "backstage", note);
             AddMissing(results, "backstage.Account", "backstage", note);
@@ -328,19 +345,33 @@ internal static class ParityCapture
     // ----- Helpers -----
 
     private static readonly (string SurfaceId, string CatalogId)[] RibbonTabSurfaces =
-    [
-        ("tab.Home", "HomeTab"),
-        ("tab.Insert", "InsertTab"),
-        ("tab.Draw", "DrawTab"),
-        ("tab.PageLayout", "PageLayoutTab"),
-        ("tab.Formulas", "FormulasTab"),
-        ("tab.Data", "DataTab"),
-        ("tab.Review", "ReviewTab"),
-        ("tab.View", "ViewTab"),
-        ("tab.Help", "HelpTab"),
-    ];
+        BuildStaticRibbonTabSurfaces();
 
-    private static bool TrySelectRibbonTab(MainWindow window, string catalogId)
+    private static readonly (string SurfaceId, string CatalogId)[] ContextualRibbonTabSurfaces =
+        BuildContextualRibbonTabSurfaces();
+
+    private static (string SurfaceId, string CatalogId)[] BuildStaticRibbonTabSurfaces()
+    {
+        var definition = FreeXRibbon.Build();
+        return definition.VisibleTabs
+            .Select(tab => ("tab." + SurfaceName(tab), tab.Id))
+            .ToArray();
+    }
+
+    private static (string SurfaceId, string CatalogId)[] BuildContextualRibbonTabSurfaces()
+    {
+        var definition = FreeXRibbon.Build();
+        return definition.ContextualTabs
+            .Select(tab => ("contextual." + SurfaceName(tab), tab.Id))
+            .ToArray();
+    }
+
+    private static string SurfaceName(SharedRibbon.RibbonTab tab) =>
+        tab.Id.EndsWith("Tab", StringComparison.Ordinal)
+            ? tab.Id[..^3]
+            : tab.Id;
+
+    private static bool TrySelectRibbonTab(MainWindow window, string catalogId, bool forceVisible = false)
     {
         if (window.FindName("RibbonTabs") is not TabControl tabs)
             return false;
@@ -350,6 +381,8 @@ internal static class ParityCapture
             if (item is TabItem tab &&
                 string.Equals(RibbonMetadata.GetCatalogId(tab), catalogId, StringComparison.Ordinal))
             {
+                if (forceVisible && tab.Visibility != Visibility.Visible)
+                    tab.Visibility = Visibility.Visible;
                 tabs.SelectedItem = tab;
                 return true;
             }
