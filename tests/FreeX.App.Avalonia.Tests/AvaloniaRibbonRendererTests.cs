@@ -68,6 +68,15 @@ public sealed class AvaloniaRibbonRendererTests
         return definition.FindTab("home")!;
     }
 
+    private sealed class StatefulCommand(RibbonCommandState state) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+        }
+
+        public RibbonCommandState GetState() => state;
+    }
+
     [Fact]
     public Task BuildTabContent_ProducesNonEmptyVisualTree() => RunOnUiThread(() =>
     {
@@ -197,6 +206,26 @@ public sealed class AvaloniaRibbonRendererTests
         var buttons = content.GetLogicalDescendants().OfType<Button>().ToList();
         Assert.NotEmpty(buttons);
         Assert.All(buttons, b => Assert.False(b.IsEnabled));
+    });
+
+    [Fact]
+    public Task StatefulCommand_DisabledState_RendersButtonAndToggleDisabled() => RunOnUiThread(() =>
+    {
+        var registry = new RibbonCommandRegistry();
+        registry.Register("cut", new StatefulCommand(new RibbonCommandState(IsEnabled: false)));
+        registry.Register("bold", new StatefulCommand(new RibbonCommandState(IsEnabled: false, IsChecked: true)));
+
+        var content = AvaloniaRibbonRenderer.BuildTabContent(BuildHomeTab(), registry);
+
+        var cut = content.GetLogicalDescendants()
+            .OfType<Button>()
+            .Single(b => Equals(b.Tag, "cut"));
+        var bold = content.GetLogicalDescendants()
+            .OfType<ToggleButton>()
+            .Single(b => Equals(b.Tag, "bold"));
+
+        Assert.False(cut.IsEnabled);
+        Assert.False(bold.IsEnabled);
     });
 
     [Fact]
