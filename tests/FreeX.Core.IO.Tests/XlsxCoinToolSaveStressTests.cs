@@ -12,7 +12,7 @@ public sealed class XlsxCoinToolSaveStressTests
     private const string CoinToolRelativePath = @"test-corpus\public\COIN_Tool_v1_FULL_exampledata.xlsm";
     private static readonly TimeSpan SourcePatchSaveBudget = TimeSpan.FromSeconds(30);
 
-    [Fact]
+    [BenchmarkFact]
     [Trait("Category", "ExternalWorkbook")]
     public void CoinToolWorkbook_ExistingLiteralCellEdit_CompletesViaSourcePatchSave()
     {
