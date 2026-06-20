@@ -1,6 +1,7 @@
 param(
     [string]$ProjectRoot = ".",
-    [string]$SolutionPath = "FreeX.slnx"
+    [string]$SolutionPath = "FreeX.slnx",
+    [string[]]$ProjectPathPrefixes = @("src/", "tests/", "tools/", "shared/")
 )
 
 $ErrorActionPreference = "Stop"
@@ -61,6 +62,18 @@ function Test-IsIgnoredDirectoryName {
     param([Parameter(Mandatory = $true)][string]$Name)
 
     return $Name -in @("bin", "obj", ".git", ".worktrees", ".claude")
+}
+
+function Test-IsIncludedProjectPath {
+    param([Parameter(Mandatory = $true)][string]$RelativePath)
+
+    foreach ($prefix in $ProjectPathPrefixes) {
+        if ($RelativePath.StartsWith((Normalize-RelativePath $prefix), [System.StringComparison]::OrdinalIgnoreCase)) {
+            return $true
+        }
+    }
+
+    return $false
 }
 
 function Get-ProjectFiles {
@@ -132,12 +145,7 @@ $discoveredProjectPaths = @(
             $relativePath = Normalize-RelativePath (Get-RelativePath -RootPath $resolvedProjectRoot -Path $_.FullName)
             $relativePath
         } |
-        Where-Object {
-            $_.StartsWith("src/") -or
-            $_.StartsWith("tests/") -or
-            $_.StartsWith("tools/") -or
-            $_.StartsWith("shared/")
-        } |
+        Where-Object { Test-IsIncludedProjectPath $_ } |
         Sort-Object -Unique
 )
 

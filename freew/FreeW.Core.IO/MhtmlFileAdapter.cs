@@ -33,14 +33,14 @@ public sealed class MhtmlFileAdapter : IDocumentFileAdapter
 
             if (entity is MimePart part &&
                 part.ContentType.MediaType.Equals("image", StringComparison.OrdinalIgnoreCase) &&
-                !string.IsNullOrWhiteSpace(part.ContentId) &&
                 part.Content is not null)
             {
                 using var buffer = new MemoryStream();
                 part.Content.DecodeTo(buffer);
                 var bytes = buffer.ToArray();
                 var format = InlineImage.FormatForExtension(part.FileName) ?? InlineImage.DetectFormat(bytes);
-                images[part.ContentId.Trim('<', '>')] = new InlineImage(bytes, 72, 72, format);
+                foreach (var key in GetImageLookupKeys(part))
+                    images[key] = new InlineImage(bytes, 72, 72, format);
             }
         }
 
@@ -54,6 +54,33 @@ public sealed class MhtmlFileAdapter : IDocumentFileAdapter
             cid = cid.Trim('<', '>');
             return images.TryGetValue(cid, out var image) ? image : null;
         });
+    }
+
+    private static IEnumerable<string> GetImageLookupKeys(MimePart part)
+    {
+        if (!string.IsNullOrWhiteSpace(part.ContentId))
+            yield return part.ContentId.Trim('<', '>');
+
+        foreach (var rawKey in new[]
+                 {
+                     part.ContentLocation?.ToString(),
+                     part.Headers["Content-Location"],
+                     part.FileName
+                 })
+        {
+            if (string.IsNullOrWhiteSpace(rawKey))
+                continue;
+
+            var key = rawKey.Trim('<', '>');
+            yield return key;
+
+            var fileName = Path.GetFileName(key.Replace('\\', '/'));
+            if (!string.IsNullOrWhiteSpace(fileName) &&
+                !string.Equals(fileName, key, StringComparison.OrdinalIgnoreCase))
+            {
+                yield return fileName;
+            }
+        }
     }
 
     public void Save(TextDocument document, Stream stream)

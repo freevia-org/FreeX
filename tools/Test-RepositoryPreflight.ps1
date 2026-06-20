@@ -28,7 +28,8 @@ function Resolve-RepoPath {
 function Invoke-RepositoryPreflight {
     param(
         [Parameter(Mandatory = $true)][string]$ScriptPath,
-        [Parameter(Mandatory = $true)][string]$Label
+        [Parameter(Mandatory = $true)][string]$Label,
+        [hashtable]$Parameters = @{}
     )
 
     $resolvedScriptPath = Resolve-RepoPath $ScriptPath
@@ -37,7 +38,7 @@ function Invoke-RepositoryPreflight {
     }
 
     Write-Host "Running $Label preflight..."
-    & $resolvedScriptPath
+    & $resolvedScriptPath @Parameters
 }
 
 Invoke-RepositoryPreflight -ScriptPath $JsonFilesScriptPath -Label "JSON files"
@@ -47,6 +48,14 @@ Invoke-RepositoryPreflight -ScriptPath $GitHubWorkflowsScriptPath -Label "GitHub
 Invoke-RepositoryPreflight -ScriptPath $DotNetSdkReadinessScriptPath -Label ".NET SDK readiness"
 Invoke-RepositoryPreflight -ScriptPath $DotNetProjectReferencesScriptPath -Label ".NET project references"
 Invoke-RepositoryPreflight -ScriptPath $SolutionProjectsScriptPath -Label "solution projects"
+Invoke-RepositoryPreflight -ScriptPath $SolutionProjectsScriptPath -Label "FreeW solution projects" -Parameters @{
+    SolutionPath = "FreeW.slnx"
+    ProjectPathPrefixes = @("freew/", "tools/FreeW.")
+}
+Invoke-RepositoryPreflight -ScriptPath $SolutionProjectsScriptPath -Label "FreeP solution projects" -Parameters @{
+    SolutionPath = "FreeP.slnx"
+    ProjectPathPrefixes = @("freep/")
+}
 Invoke-RepositoryPreflight -ScriptPath $MacOsAppReadinessScriptPath -Label "macOS app readiness"
 Invoke-RepositoryPreflight -ScriptPath $GeneratedDocsScriptPath -Label "generated docs"
 Invoke-RepositoryPreflight -ScriptPath $ConflictMarkersScriptPath -Label "Git conflict markers"

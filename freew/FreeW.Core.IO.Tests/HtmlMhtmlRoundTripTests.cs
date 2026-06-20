@@ -70,6 +70,37 @@ public class HtmlMhtmlRoundTripTests
     }
 
     [Fact]
+    public void Mhtml_LoadResolvesEmbeddedImageByContentLocation()
+    {
+        var imageBytes = new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x00 };
+        var mhtml = $$"""
+            MIME-Version: 1.0
+            Content-Type: multipart/related; boundary="freew-boundary"; type="text/html"
+
+            --freew-boundary
+            Content-Type: text/html; charset=utf-8
+
+            <!doctype html><html><body><p><img src="images/picture.png" alt="Located image"></p></body></html>
+            --freew-boundary
+            Content-Type: image/png
+            Content-Transfer-Encoding: base64
+            Content-Location: images/picture.png
+
+            {{Convert.ToBase64String(imageBytes)}}
+            --freew-boundary--
+            """;
+
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(mhtml.ReplaceLineEndings("\r\n")));
+        var loaded = new MhtmlFileAdapter().Load(stream);
+
+        var loadedImage = loaded.Blocks.Should().ContainSingle().Which
+            .Should().BeOfType<Paragraph>().Which.Runs.Should().ContainSingle().Which.Image;
+        loadedImage.Should().NotBeNull();
+        loadedImage!.Bytes.Should().Equal(imageBytes);
+        loadedImage.AltText.Should().Be("Located image");
+    }
+
+    [Fact]
     public void Html_SaveDropsUnsupportedFootnoteStoreByDesign()
     {
         var document = new TextDocument();
@@ -146,6 +177,36 @@ public class HtmlMhtmlRoundTripTests
         table.Rows[1].Cells[0].GridSpan.Should().Be(2);
         table.Rows[1].Cells[0].VerticalMerge.Should().Be(VerticalMergeState.Continue);
         table.Rows[1].Cells[1].PlainText.Should().Be("After");
+    }
+
+    [Fact]
+    public void Html_LoadDoesNotPromoteNestedTableRowsToOuterTableRows()
+    {
+        const string html = """
+<!doctype html><html><body>
+<table>
+  <tr>
+    <td>Outer
+      <table>
+        <tr><td>Inner</td></tr>
+      </table>
+    </td>
+    <td>Right</td>
+  </tr>
+  <tr><td>Bottom</td><td>Done</td></tr>
+</table>
+</body></html>
+""";
+
+        var loaded = HtmlFileAdapter.LoadHtml(html, static _ => null);
+
+        var table = loaded.Blocks.Should().ContainSingle().Which.Should().BeOfType<Table>().Which;
+        table.Rows.Should().HaveCount(2);
+        table.Rows[0].Cells.Should().HaveCount(2);
+        table.Rows[0].Cells[0].PlainText.Should().Contain("Outer");
+        table.Rows[0].Cells[0].PlainText.Should().Contain("Inner");
+        table.Rows[0].Cells[1].PlainText.Should().Be("Right");
+        table.Rows[1].Cells[0].PlainText.Should().Be("Bottom");
     }
 
     [Fact]

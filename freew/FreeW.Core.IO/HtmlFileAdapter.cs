@@ -174,7 +174,7 @@ td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
     private static Table ReadTable(IElement element, Func<string, InlineImage?> imageResolver)
     {
         var table = new Table();
-        var rowElements = element.QuerySelectorAll("tr").OfType<IElement>().ToList();
+        var rowElements = GetDirectTableRows(element);
         var pendingRowspans = new Dictionary<int, PendingRowspan>();
 
         foreach (var rowElement in rowElements)
@@ -205,7 +205,7 @@ td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
                     pendingRowspans[column] = new PendingRowspan(rowspan - 1, Math.Max(1, cell.GridSpan));
                 }
 
-                var paragraphs = ReadBlocks(cellElement.ChildNodes, imageResolver).OfType<Paragraph>().ToList();
+                var paragraphs = ReadCellParagraphs(cellElement.ChildNodes, imageResolver);
                 if (paragraphs.Count == 0)
                     paragraphs.Add(new Paragraph(NormalizeText(cellElement.TextContent)));
                 cell.Paragraphs.AddRange(paragraphs);
@@ -235,6 +235,56 @@ td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
         }
 
         return table;
+    }
+
+    private static List<Paragraph> ReadCellParagraphs(IEnumerable<INode> childNodes, Func<string, InlineImage?> imageResolver)
+    {
+        var paragraphs = new List<Paragraph>();
+        foreach (var block in ReadBlocks(childNodes, imageResolver))
+        {
+            switch (block)
+            {
+                case Paragraph paragraph:
+                    paragraphs.Add(paragraph);
+                    break;
+                case Table table when TablePlainText(table) is { Length: > 0 } text:
+                    paragraphs.Add(new Paragraph(text));
+                    break;
+            }
+        }
+
+        return paragraphs;
+    }
+
+    private static string TablePlainText(Table table)
+        => string.Join(
+            "\n",
+            table.Rows.Select(row =>
+                string.Join("\t", row.Cells.Select(cell => cell.PlainText))).Where(text => text.Length > 0));
+
+    private static List<IElement> GetDirectTableRows(IElement tableElement)
+    {
+        var rows = new List<IElement>();
+        foreach (var child in tableElement.Children.OfType<IElement>())
+        {
+            if (child.LocalName.Equals("tr", StringComparison.OrdinalIgnoreCase))
+            {
+                rows.Add(child);
+                continue;
+            }
+
+            if (!child.LocalName.Equals("thead", StringComparison.OrdinalIgnoreCase) &&
+                !child.LocalName.Equals("tbody", StringComparison.OrdinalIgnoreCase) &&
+                !child.LocalName.Equals("tfoot", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            rows.AddRange(child.Children.OfType<IElement>()
+                .Where(row => row.LocalName.Equals("tr", StringComparison.OrdinalIgnoreCase)));
+        }
+
+        return rows;
     }
 
     private static void AppendInline(

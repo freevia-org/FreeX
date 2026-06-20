@@ -4041,6 +4041,41 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWindowProtectionWithoutStructureProtection()
+    {
+        var workbook = new Workbook("WindowWorkbookProtectionRetentionTest");
+        var sheet = workbook.AddSheet("S1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("window locked"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWindowWorkbookProtectionMetadata(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.IsStructureProtected.Should().BeFalse();
+        loaded.StructureProtectionPassword.Should().BeNull();
+        loaded.ProtectionMetadata.Should().NotBeNull();
+        BagAttr(loaded.ProtectionMetadata, "workbookProtection", "lockWindows").Should().Be("1");
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var protection = workbookXml.Root!.Element(workbookNs + "workbookProtection");
+        protection.Should().NotBeNull();
+        protection!.Attribute("lockStructure").Should().BeNull();
+        protection.Attribute("workbookPassword").Should().BeNull();
+        protection.Attribute("lockWindows")!.Value.Should().Be("1");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesRevisionWorkbookProtectionPassword()
     {
         var workbook = new Workbook("RevisionWorkbookProtectionRetentionTest");
@@ -4056,6 +4091,7 @@ public partial class FileAdapterSmokeTests
         source.Position = 0;
         var loaded = adapter.Load(source);
         loaded.IsStructureProtected.Should().BeFalse();
+        loaded.StructureProtectionPassword.Should().BeNull();
         loaded.ProtectionMetadata.Should().NotBeNull();
         BagAttr(loaded.ProtectionMetadata, "workbookProtection", "lockRevision").Should().Be("1");
         BagAttr(loaded.ProtectionMetadata, "workbookProtection", "revisionsPassword").Should().Be("9AFB");
@@ -24554,6 +24590,23 @@ public partial class FileAdapterSmokeTests
                 new XAttribute("spinCount", "100000"),
                 new XElement(freexNs + "workbookProtectionNativeChild", new XAttribute("id", "first")),
                 new XElement(freexNs + "workbookProtectionNativeChild", new XAttribute("id", "second"))));
+            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWindowWorkbookProtectionMetadata(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+            workbookXml.Root!.Element(workbookNs + "workbookProtection")?.Remove();
+            workbookXml.Root.AddFirst(new XElement(
+                workbookNs + "workbookProtection",
+                new XAttribute("lockWindows", "1")));
             ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
         }
 

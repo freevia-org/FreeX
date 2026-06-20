@@ -81,4 +81,22 @@ public static class MoveCopySheetPlanner
         // Inserting after the source: the source's own removal shifts later positions left by one.
         return Math.Clamp(insertBeforeIndex - 1, 0, lastIndex);
     }
+
+    /// <summary>
+    /// Resolves the final 0-based landing index for a copied sheet after the host has inserted the
+    /// duplicate immediately after the source. <paramref name="insertBeforeIndex"/> is relative to the
+    /// original sheet order, before the duplicate exists.
+    /// </summary>
+    public static int ResolveCopyTargetIndex(int sourceIndex, int insertBeforeIndex, int originalSheetCount)
+    {
+        var newSheetCount = Math.Max(1, originalSheetCount + 1);
+        var lastIndex = newSheetCount - 1;
+        if (insertBeforeIndex >= originalSheetCount)
+            return lastIndex;
+
+        var adjustedInsertBeforeIndex = insertBeforeIndex > sourceIndex
+            ? insertBeforeIndex + 1
+            : insertBeforeIndex;
+        return Math.Clamp(adjustedInsertBeforeIndex, 0, lastIndex);
+    }
 }
