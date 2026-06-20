@@ -273,6 +273,7 @@ public sealed class LegacyXlsFileAdapterTests
                 SheetNames: workbook.Sheets.Select(sheet => sheet.Name).ToArray(),
                 CellFingerprints: ReadImportedCellFingerprints(workbook),
                 MergeFingerprints: ReadImportedMergeFingerprints(workbook),
+                DimensionFingerprints: ReadImportedDimensionFingerprints(workbook),
                 StyleFingerprints: source.RichMetadata
                     ? ReadImportedRichStyleFingerprints(workbook)
                     : ReadImportedFallbackStyleFingerprints(workbook),
@@ -305,6 +306,7 @@ public sealed class LegacyXlsFileAdapterTests
                 imported.SheetNames.Should().Equal(source.SheetNames, imported.File);
                 imported.CellFingerprints.Should().BeEquivalentTo(source.CellFingerprints, imported.File);
                 imported.MergeFingerprints.Should().BeEquivalentTo(source.MergeFingerprints, imported.File);
+                imported.DimensionFingerprints.Should().BeEquivalentTo(source.DimensionFingerprints, imported.File);
                 imported.StyleFingerprints.Should().BeEquivalentTo(source.StyleFingerprints, imported.File);
                 imported.HeaderFooterFingerprints.Should().BeEquivalentTo(source.HeaderFooterFingerprints, imported.File);
             }
@@ -322,6 +324,7 @@ public sealed class LegacyXlsFileAdapterTests
                 imported.SheetNames.Should().Equal(source.SheetNames, imported.File);
                 imported.CellFingerprints.Should().BeEquivalentTo(source.CellFingerprints, imported.File);
                 imported.MergeFingerprints.Should().BeEquivalentTo(source.MergeFingerprints, imported.File);
+                imported.DimensionFingerprints.Should().BeEquivalentTo(source.DimensionFingerprints, imported.File);
                 imported.DefinedNameFingerprints.Should().BeEquivalentTo(source.DefinedNameFingerprints, imported.File);
                 imported.HyperlinkFingerprints.Should().BeEquivalentTo(source.HyperlinkFingerprints, imported.File);
                 imported.CommentFingerprints.Should().BeEquivalentTo(source.CommentFingerprints, imported.File);
@@ -654,6 +657,7 @@ public sealed class LegacyXlsFileAdapterTests
         var sheetNames = new List<string>();
         var cellFingerprints = new List<string>();
         var mergeFingerprints = new List<string>();
+        var dimensionFingerprints = new List<string>();
         var styleFingerprints = new List<string>();
         var hyperlinkFingerprints = new List<string>();
         var commentFingerprints = new List<string>();
@@ -710,6 +714,16 @@ public sealed class LegacyXlsFileAdapterTests
 
                 if (row.ZeroHeight || row.HeightInPoints > 0)
                     dimensions++;
+                if (row.ZeroHeight)
+                    dimensionFingerprints.Add(CreateDimensionFingerprint(sheetIndex, sheet.SheetName, "HiddenRow", (uint)rowIndex + 1, "true"));
+                if (row.HeightInPoints > 0)
+                    dimensionFingerprints.Add(CreateDimensionFingerprint(
+                        sheetIndex,
+                        sheet.SheetName,
+                        "RowHeight",
+                        (uint)rowIndex + 1,
+                        FormatDouble(PointsToPixels(row.HeightInPoints))));
+
                 if (row.OutlineLevel > 0)
                 {
                     rowOutlineLevels++;
@@ -754,11 +768,23 @@ public sealed class LegacyXlsFileAdapterTests
             var maxColumn = FindLastSourceColumn(sheet);
             for (var columnIndex = 0; columnIndex <= maxColumn; columnIndex++)
             {
-                if (sheet.IsColumnHidden(columnIndex) ||
-                    sheet.GetColumnWidth(columnIndex) != sheet.DefaultColumnWidth * 256)
+                var hidden = sheet.IsColumnHidden(columnIndex);
+                var width = sheet.GetColumnWidth(columnIndex);
+                if (hidden ||
+                    width != sheet.DefaultColumnWidth * 256)
                 {
                     dimensions++;
                 }
+
+                if (hidden)
+                    dimensionFingerprints.Add(CreateDimensionFingerprint(sheetIndex, sheet.SheetName, "HiddenCol", (uint)columnIndex + 1, "true"));
+                if (width > 0)
+                    dimensionFingerprints.Add(CreateDimensionFingerprint(
+                        sheetIndex,
+                        sheet.SheetName,
+                        "ColWidth",
+                        (uint)columnIndex + 1,
+                        FormatDouble(width / 256.0)));
             }
 
             for (var columnIndex = 0; columnIndex <= LegacyXlsMaxColumnIndex; columnIndex++)
@@ -881,6 +907,7 @@ public sealed class LegacyXlsFileAdapterTests
             SheetNames: sheetNames,
             CellFingerprints: cellFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             MergeFingerprints: mergeFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            DimensionFingerprints: dimensionFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             StyleFingerprints: styleFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             HeaderFooterFingerprints: [],
             DefinedNameFingerprints: definedNameFingerprints,
@@ -913,6 +940,7 @@ public sealed class LegacyXlsFileAdapterTests
         var sheetNames = new List<string>();
         var cellFingerprints = new List<string>();
         var mergeFingerprints = new List<string>();
+        var dimensionFingerprints = new List<string>();
         var styleFingerprints = new List<string>();
         var headerFooterFingerprints = new List<string>();
 
@@ -939,14 +967,31 @@ public sealed class LegacyXlsFileAdapterTests
 
             for (var column = 0; column < reader.FieldCount; column++)
             {
-                if (reader.GetColumnWidth(column) > 0)
+                var width = reader.GetColumnWidth(column);
+                if (width > 0)
+                {
                     dimensions++;
+                    dimensionFingerprints.Add(CreateDimensionFingerprint(
+                        sheetIndex,
+                        reader.Name,
+                        "ColWidth",
+                        (uint)column + 1,
+                        FormatDouble(width)));
+                }
             }
 
             while (reader.Read())
             {
                 if (reader.RowHeight > 0)
+                {
                     dimensions++;
+                    dimensionFingerprints.Add(CreateDimensionFingerprint(
+                        sheetIndex,
+                        reader.Name,
+                        "RowHeight",
+                        (uint)reader.Depth + 1,
+                        FormatDouble(PointsToPixels(reader.RowHeight))));
+                }
 
                 for (var column = 0; column < reader.FieldCount; column++)
                 {
@@ -1004,6 +1049,7 @@ public sealed class LegacyXlsFileAdapterTests
             SheetNames: sheetNames,
             CellFingerprints: cellFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             MergeFingerprints: mergeFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            DimensionFingerprints: dimensionFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             StyleFingerprints: styleFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             HeaderFooterFingerprints: headerFooterFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             DefinedNameFingerprints: [],
@@ -1041,6 +1087,24 @@ public sealed class LegacyXlsFileAdapterTests
         workbook.Sheets
             .SelectMany((sheet, sheetIndex) => sheet.MergedRegions
                 .Select(range => CreateMergeFingerprint(sheetIndex, sheet.Name, range)))
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+
+    private static IReadOnlyList<string> ReadImportedDimensionFingerprints(Workbook workbook) =>
+        workbook.Sheets
+            .SelectMany((sheet, sheetIndex) =>
+            {
+                var fingerprints = new List<string>();
+                fingerprints.AddRange(sheet.HiddenRows
+                    .Select(row => CreateDimensionFingerprint(sheetIndex, sheet.Name, "HiddenRow", row, "true")));
+                fingerprints.AddRange(sheet.RowHeights
+                    .Select(entry => CreateDimensionFingerprint(sheetIndex, sheet.Name, "RowHeight", entry.Key, FormatDouble(entry.Value))));
+                fingerprints.AddRange(sheet.HiddenCols
+                    .Select(column => CreateDimensionFingerprint(sheetIndex, sheet.Name, "HiddenCol", column, "true")));
+                fingerprints.AddRange(sheet.ColumnWidths
+                    .Select(entry => CreateDimensionFingerprint(sheetIndex, sheet.Name, "ColWidth", entry.Key, FormatDouble(entry.Value))));
+                return fingerprints;
+            })
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
 
@@ -1572,6 +1636,9 @@ public sealed class LegacyXlsFileAdapterTests
         $"{sheetIndex}:{sheetName}|Merge|{new ModelCellAddress(default, ToSourceModelIndex(range.FromRow), ToSourceModelIndex(range.FromColumn)).ToA1()}:" +
         $"{new ModelCellAddress(default, ToSourceModelIndex(range.ToRow), ToSourceModelIndex(range.ToColumn)).ToA1()}";
 
+    private static string CreateDimensionFingerprint(int sheetIndex, string sheetName, string kind, uint index, string value) =>
+        $"{sheetIndex}:{sheetName}|Dimension|{kind}{index}={value}";
+
     private static bool TryCreateExcelDataReaderStyleFingerprint(
         IExcelDataReader reader,
         int sheetIndex,
@@ -1994,6 +2061,9 @@ public sealed class LegacyXlsFileAdapterTests
 
     private static string FormatDouble(double value) =>
         value.ToString("0.##########", CultureInfo.InvariantCulture);
+
+    private static double PointsToPixels(double points) =>
+        Math.Round(points * (96.0 / 72.0), MidpointRounding.AwayFromZero);
 
     private static string FormatNullableBool(bool? value) =>
         value.HasValue ? value.Value.ToString(CultureInfo.InvariantCulture) : "null";
@@ -2709,6 +2779,7 @@ public sealed class LegacyXlsFileAdapterTests
         IReadOnlyList<string>? SheetNames = null,
         IReadOnlyList<string>? CellFingerprints = null,
         IReadOnlyList<string>? MergeFingerprints = null,
+        IReadOnlyList<string>? DimensionFingerprints = null,
         IReadOnlyList<string>? StyleFingerprints = null,
         IReadOnlyList<string>? HeaderFooterFingerprints = null,
         IReadOnlyList<string>? DefinedNameFingerprints = null,
