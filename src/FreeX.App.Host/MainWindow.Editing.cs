@@ -107,8 +107,7 @@ public partial class MainWindow
             _inlineEditor.TextChanged += (_, _) =>
             {
                 SyncFormulaBarTextFromInlineEditor();
-                if (FormulaEditInteractionPlanner.ShouldStartPointModeFromTypedText(_inlineEditor.Text))
-                    _formulaRangeEntryMode = true;
+                UpdateFormulaRangeEntryStateAfterTextChanged(_inlineEditor);
                 RefreshInlineEditorTextSurface();
                 RefreshInlineEditorChromeBorder();
                 RefreshFormulaReferenceHighlights();

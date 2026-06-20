@@ -31,6 +31,40 @@ public partial class MainWindow
         _formulaReferenceLength = null;
     }
 
+    private void UpdateFormulaRangeEntryStateAfterTextChanged(System.Windows.Controls.TextBox editor)
+    {
+        if (FormulaEditInteractionPlanner.ShouldStartPointModeFromTypedText(editor.Text))
+            _formulaRangeEntryMode = true;
+
+        ClearFormulaReferenceEntrySpanIfCaretLeftReference(editor);
+    }
+
+    private void ClearFormulaReferenceEntrySpanIfCaretLeftReference(System.Windows.Controls.TextBox editor)
+    {
+        if (_formulaReferenceStart is not { } start || _formulaReferenceLength is not { } length)
+            return;
+
+        var end = start + length;
+        if (start < 0 || length < 0 || start > editor.Text.Length || end > editor.Text.Length)
+        {
+            ClearFormulaReferenceEntrySpan();
+            return;
+        }
+
+        var selectionStart = Math.Clamp(editor.SelectionStart, 0, editor.Text.Length);
+        if (editor.SelectionLength > 0)
+        {
+            var selectionEnd = Math.Clamp(selectionStart + editor.SelectionLength, selectionStart, editor.Text.Length);
+            if (selectionStart < start || selectionEnd > end)
+                ClearFormulaReferenceEntrySpan();
+            return;
+        }
+
+        var caret = Math.Clamp(editor.CaretIndex, 0, editor.Text.Length);
+        if (caret < start || caret > end)
+            ClearFormulaReferenceEntrySpan();
+    }
+
     private bool IsFormulaRangeEntryActive(System.Windows.Controls.TextBox? editor)
     {
         if (editor is null || _formulaEditCell is null)
@@ -65,14 +99,6 @@ public partial class MainWindow
 
     private bool TryApplyFormulaRangeSelection(CellAddress target, bool extendSelection)
     {
-        var editor = GetFormulaRangeEntryEditor();
-        if (editor is null)
-            return false;
-
-        var formulaCell = _formulaEditCell ?? SheetGrid.SelectedRange?.Start;
-        if (formulaCell is null)
-            return false;
-
         if (!extendSelection || _formulaRangeSelectionAnchor is null)
             _formulaRangeSelectionAnchor = target;
 
@@ -80,6 +106,22 @@ public partial class MainWindow
         var range = new GridRange(
             new CellAddress(_currentSheetId, Math.Min(anchor.Row, target.Row), Math.Min(anchor.Col, target.Col)),
             new CellAddress(_currentSheetId, Math.Max(anchor.Row, target.Row), Math.Max(anchor.Col, target.Col)));
+
+        return TryApplyFormulaRangeSelection(range, anchor, target);
+    }
+
+    private bool TryApplyFormulaRangeSelection(
+        GridRange range,
+        CellAddress selectionAnchor,
+        CellAddress selectionCursor)
+    {
+        var editor = GetFormulaRangeEntryEditor();
+        if (editor is null)
+            return false;
+
+        var formulaCell = _formulaEditCell ?? SheetGrid.SelectedRange?.Start;
+        if (formulaCell is null)
+            return false;
 
         var getPivotDataPlan = range.Start == range.End
             ? GetPivotDataFormulaPlanner.Create(
@@ -117,8 +159,8 @@ public partial class MainWindow
         HideValidationDropdown();
         ClearCommentPreview();
 
-        _selectionAnchor = anchor;
-        _selectionCursor = target;
+        _selectionAnchor = selectionAnchor;
+        _selectionCursor = selectionCursor;
         SheetGrid.SelectedRanges = null;
         SheetGrid.SelectedRange = range;
         CellAddressBox.Text = FormatRangeReference(range.Start, range.End);
