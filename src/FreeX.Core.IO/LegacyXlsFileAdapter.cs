@@ -1012,6 +1012,12 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
             if (TryCreateTextBox(sourceTextBox, sheet, out var textBox))
                 sheet.TextBoxes.Add(textBox);
         }
+
+        foreach (var sourceShape in EnumerateSimpleShapes(patriarch.Children))
+        {
+            if (TryCreateDrawingShape(sourceShape, sheet, out var shape))
+                sheet.DrawingShapes.Add(shape);
+        }
     }
 
     private static IEnumerable<HSSFPicture> EnumeratePictures(IEnumerable<HSSFShape> shapes)
@@ -1040,6 +1046,26 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
             {
                 foreach (var nestedTextBox in EnumerateTextBoxes(group.Children))
                     yield return nestedTextBox;
+            }
+        }
+    }
+
+    private static IEnumerable<HSSFSimpleShape> EnumerateSimpleShapes(IEnumerable<HSSFShape> shapes)
+    {
+        foreach (var shape in shapes)
+        {
+            if (shape is HSSFSimpleShape simpleShape &&
+                shape is not HSSFTextbox &&
+                shape is not HSSFComment &&
+                shape is not HSSFPicture)
+            {
+                yield return simpleShape;
+            }
+
+            if (shape is HSSFShapeGroup group)
+            {
+                foreach (var nestedShape in EnumerateSimpleShapes(group.Children))
+                    yield return nestedShape;
             }
         }
     }
@@ -1119,6 +1145,56 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
 
         return true;
     }
+
+    private static bool TryCreateDrawingShape(HSSFSimpleShape sourceShape, Sheet sheet, out DrawingShapeModel shape)
+    {
+        shape = new DrawingShapeModel();
+        if (MapHssfShapeKind(sourceShape.ShapeType) is not { } kind ||
+            sourceShape.Anchor is not HSSFClientAnchor anchor ||
+            anchor.Row1 < 0 ||
+            anchor.Col1 < 0)
+        {
+            return false;
+        }
+
+        var anchorRow = ToModelIndex(Math.Min(anchor.Row1, anchor.Row2));
+        var anchorCol = ToModelIndex(Math.Min(anchor.Col1, anchor.Col2));
+        shape = new DrawingShapeModel
+        {
+            Anchor = new ModelCellAddress(sheet.Id, anchorRow, anchorCol),
+            Kind = kind,
+            Name = FirstNonBlank(sourceShape.Name, sourceShape.ShapeName),
+            AnchorOffsetX = HssfColumnOffsetToPixels(sheet, anchorCol, Math.Min(anchor.Dx1, anchor.Dx2)),
+            AnchorOffsetY = HssfRowOffsetToPixels(sheet, anchorRow, Math.Min(anchor.Dy1, anchor.Dy2)),
+            RotationDegrees = sourceShape.RotationDegree,
+            FlipHorizontal = anchor.IsHorizontallyFlipped || sourceShape.FlipHorizontal || sourceShape.IsFlipHorizontal,
+            FlipVertical = anchor.IsVerticallyFlipped || sourceShape.FlipVertical || sourceShape.IsFlipVertical,
+            HasFill = kind is not DrawingShapeKind.Line && !sourceShape.IsNoFill,
+            IsSourceLoaded = true
+        };
+
+        if (TryGetHssfRgbColor(sourceShape.FillColor, out var fillColor))
+            shape.FillColor = fillColor;
+        if (TryGetHssfRgbColor(sourceShape.LineStyleColor, out var outlineColor))
+            shape.OutlineColor = outlineColor;
+
+        var (width, height) = GetHssfAnchorSize(sheet, anchor);
+        if (width > 0)
+            shape.Width = width;
+        if (height > 0)
+            shape.Height = height;
+
+        return true;
+    }
+
+    private static DrawingShapeKind? MapHssfShapeKind(int shapeType) =>
+        shapeType switch
+        {
+            HSSFSimpleShape.OBJECT_TYPE_RECTANGLE => DrawingShapeKind.Rectangle,
+            HSSFSimpleShape.OBJECT_TYPE_OVAL => DrawingShapeKind.Ellipse,
+            HSSFSimpleShape.OBJECT_TYPE_LINE => DrawingShapeKind.Line,
+            _ => null
+        };
 
     private static bool TryGetHssfRgbColor(int value, out CellColor color)
     {
