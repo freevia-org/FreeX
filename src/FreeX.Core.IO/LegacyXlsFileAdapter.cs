@@ -30,6 +30,9 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
     private static readonly FieldInfo? LbsSelectedIndexField =
         typeof(LbsDataSubRecord).GetField("_iSel", BindingFlags.Instance | BindingFlags.NonPublic);
 
+    private static readonly FieldInfo? UnknownRecordRawDataField =
+        typeof(UnknownRecord).GetField("_rawData", BindingFlags.Instance | BindingFlags.NonPublic);
+
     private static readonly MethodInfo? HssfGetObjRecordMethod =
         typeof(HSSFSimpleShape).GetMethod(
             "GetObjRecord",
@@ -112,6 +115,7 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
             var visibility = hssf.GetSheetVisibility(sheetIndex);
             sheet.IsHidden = visibility is SheetVisibility.Hidden or SheetVisibility.VeryHidden;
             sheet.IsVeryHidden = visibility is SheetVisibility.VeryHidden;
+            sheet.CodeName = ReadHssfSheetCodeName(sourceSheet);
 
             LoadSheetLayout(sourceSheet, sheet, palette);
             LoadMergedRegions(sourceSheet, sheet);
@@ -322,7 +326,7 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
 
                 for (var col = 0; col < reader.FieldCount; col++)
                 {
-                    var value = MapValue(reader.GetValue(col));
+                    var value = MapExcelDataReaderCellValue(reader, col);
                     if (value is BlankValue)
                         continue;
 
@@ -368,6 +372,7 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         sheet.IsVeryHidden = string.Equals(reader.VisibleState, "veryHidden", StringComparison.OrdinalIgnoreCase);
         sheet.IsHidden = sheet.IsVeryHidden ||
             string.Equals(reader.VisibleState, "hidden", StringComparison.OrdinalIgnoreCase);
+        sheet.CodeName = NullIfWhiteSpace(reader.CodeName);
 
         if (reader.HeaderFooter is { } headerFooter)
         {
@@ -2039,6 +2044,58 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
 
     private static double PointsToPixels(double points) =>
         Math.Round(points * (96.0 / 72.0), MidpointRounding.AwayFromZero);
+
+    private static string? ReadHssfSheetCodeName(ISheet sourceSheet)
+    {
+        if (sourceSheet is not HSSFSheet hssfSheet ||
+            hssfSheet.Sheet.FindFirstRecordBySid(UnknownRecord.CODENAME_1BA) is not UnknownRecord codeNameRecord ||
+            UnknownRecordRawDataField?.GetValue(codeNameRecord) is not byte[] rawData)
+        {
+            return null;
+        }
+
+        return DecodeBiffCodeName(rawData);
+    }
+
+    private static string? DecodeBiffCodeName(byte[] rawData)
+    {
+        if (rawData.Length < 3)
+            return null;
+
+        var characterCount = rawData[0] | (rawData[1] << 8);
+        var optionFlags = rawData[2];
+        var isWide = (optionFlags & 0x01) != 0;
+        var byteCount = isWide ? characterCount * 2 : characterCount;
+        if (byteCount <= 0 || rawData.Length < 3 + byteCount)
+            return null;
+
+        var codeName = isWide
+            ? Encoding.Unicode.GetString(rawData, 3, byteCount)
+            : Encoding.Latin1.GetString(rawData, 3, byteCount);
+        return NullIfWhiteSpace(codeName);
+    }
+
+    private static string? NullIfWhiteSpace(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value;
+
+    private static ScalarValue MapExcelDataReaderCellValue(IExcelDataReader reader, int column) =>
+        reader.GetCellError(column) is { } error
+            ? MapExcelDataReaderErrorValue(error)
+            : MapValue(reader.GetValue(column));
+
+    private static ErrorValue MapExcelDataReaderErrorValue(ExcelDataReader.CellError error) =>
+        error switch
+        {
+            ExcelDataReader.CellError.NULL => ErrorValue.Null,
+            ExcelDataReader.CellError.DIV0 => ErrorValue.DivByZero,
+            ExcelDataReader.CellError.VALUE => ErrorValue.Value,
+            ExcelDataReader.CellError.REF => ErrorValue.Ref,
+            ExcelDataReader.CellError.NAME => ErrorValue.Name,
+            ExcelDataReader.CellError.NUM => ErrorValue.Num,
+            ExcelDataReader.CellError.NA => ErrorValue.NA,
+            ExcelDataReader.CellError.GETTING_DATA => new ErrorValue("#GETTING_DATA"),
+            _ => new ErrorValue(error.ToString())
+        };
 
     private static ModelHorizontalAlignment MapHorizontalAlignment(NPOI.SS.UserModel.HorizontalAlignment alignment) =>
         alignment switch

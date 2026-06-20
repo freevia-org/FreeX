@@ -33,6 +33,9 @@ public sealed class LegacyXlsFileAdapterTests
     private static readonly FieldInfo? LbsSelectedIndexField =
         typeof(LbsDataSubRecord).GetField("_iSel", BindingFlags.Instance | BindingFlags.NonPublic);
 
+    private static readonly FieldInfo? UnknownRecordRawDataField =
+        typeof(UnknownRecord).GetField("_rawData", BindingFlags.Instance | BindingFlags.NonPublic);
+
     private static readonly MethodInfo? HssfGetObjRecordMethod =
         typeof(HSSFSimpleShape).GetMethod(
             "GetObjRecord",
@@ -336,6 +339,7 @@ public sealed class LegacyXlsFileAdapterTests
                 HasVbaProjectPackage: workbook.HasVbaProjectPackage,
                 SheetNames: workbook.Sheets.Select(sheet => sheet.Name).ToArray(),
                 SheetVisibilityFingerprints: ReadImportedSheetVisibilityFingerprints(workbook),
+                SheetCodeNameFingerprints: ReadImportedSheetCodeNameFingerprints(workbook),
                 WorkbookViewFingerprints: ReadImportedWorkbookViewFingerprints(workbook),
                 WorkbookProtectionFingerprints: ReadImportedWorkbookProtectionFingerprints(workbook),
                 WorkbookFileSharingFingerprints: ReadImportedWorkbookFileSharingFingerprints(workbook),
@@ -382,6 +386,7 @@ public sealed class LegacyXlsFileAdapterTests
                 imported.ActiveSheetIndex.Should().Be(source.ActiveSheetIndex, imported.File);
                 imported.SheetNames.Should().Equal(source.SheetNames, imported.File);
                 imported.SheetVisibilityFingerprints.Should().BeEquivalentTo(source.SheetVisibilityFingerprints, imported.File);
+                imported.SheetCodeNameFingerprints.Should().BeEquivalentTo(source.SheetCodeNameFingerprints, imported.File);
                 imported.CellFingerprints.Should().BeEquivalentTo(source.CellFingerprints, imported.File);
                 imported.MergeFingerprints.Should().BeEquivalentTo(source.MergeFingerprints, imported.File);
                 imported.DimensionFingerprints.Should().BeEquivalentTo(source.DimensionFingerprints, imported.File);
@@ -404,6 +409,7 @@ public sealed class LegacyXlsFileAdapterTests
                 imported.FormControls.Should().Be(source.FormControls, imported.File);
                 imported.SheetNames.Should().Equal(source.SheetNames, imported.File);
                 imported.SheetVisibilityFingerprints.Should().BeEquivalentTo(source.SheetVisibilityFingerprints, imported.File);
+                imported.SheetCodeNameFingerprints.Should().BeEquivalentTo(source.SheetCodeNameFingerprints, imported.File);
                 imported.WorkbookViewFingerprints.Should().BeEquivalentTo(source.WorkbookViewFingerprints, imported.File);
                 imported.WorkbookProtectionFingerprints.Should().BeEquivalentTo(source.WorkbookProtectionFingerprints, imported.File);
                 imported.WorkbookFileSharingFingerprints.Should().BeEquivalentTo(source.WorkbookFileSharingFingerprints, imported.File);
@@ -477,6 +483,9 @@ public sealed class LegacyXlsFileAdapterTests
         summaries.Where(summary => summary.RichMetadata)
             .Sum(summary => summary.WorkbookCalculationFingerprints?.Count(fingerprint =>
                 !fingerprint.Contains("|Mode=Automatic|Full=False|Iterate=False|Count=null|Delta=null", StringComparison.Ordinal)) ?? 0)
+            .Should()
+            .BeGreaterThan(0);
+        summaries.Sum(summary => summary.SheetCodeNameFingerprints?.Count ?? 0)
             .Should()
             .BeGreaterThan(0);
         summaries.Where(summary => summary.RichMetadata)
@@ -563,6 +572,28 @@ public sealed class LegacyXlsFileAdapterTests
         var act = () => adapter.Save(new Workbook("Book1"), new MemoryStream());
 
         act.Should().Throw<NotSupportedException>();
+    }
+
+    [Theory]
+    [InlineData(nameof(ExcelDataReader.CellError.NULL), "#NULL!")]
+    [InlineData(nameof(ExcelDataReader.CellError.DIV0), "#DIV/0!")]
+    [InlineData(nameof(ExcelDataReader.CellError.VALUE), "#VALUE!")]
+    [InlineData(nameof(ExcelDataReader.CellError.REF), "#REF!")]
+    [InlineData(nameof(ExcelDataReader.CellError.NAME), "#NAME?")]
+    [InlineData(nameof(ExcelDataReader.CellError.NUM), "#NUM!")]
+    [InlineData(nameof(ExcelDataReader.CellError.NA), "#N/A")]
+    [InlineData(nameof(ExcelDataReader.CellError.GETTING_DATA), "#GETTING_DATA")]
+    public void Load_MapsExcelDataReaderCellErrors(string errorName, string expectedCode)
+    {
+        var method = typeof(LegacyXlsFileAdapter).GetMethod(
+            "MapExcelDataReaderErrorValue",
+            BindingFlags.NonPublic | BindingFlags.Static);
+        method.Should().NotBeNull();
+
+        var error = Enum.Parse<ExcelDataReader.CellError>(errorName);
+        var value = method!.Invoke(null, [error]);
+
+        value.Should().Be(new ErrorValue(expectedCode));
     }
 
     [Fact]
@@ -858,6 +889,7 @@ public sealed class LegacyXlsFileAdapterTests
         var conditionalFormats = 0;
         var sheetNames = new List<string>();
         var sheetVisibilityFingerprints = new List<string>();
+        var sheetCodeNameFingerprints = new List<string>();
         var cellFingerprints = new List<string>();
         var mergeFingerprints = new List<string>();
         var dimensionFingerprints = new List<string>();
@@ -893,6 +925,8 @@ public sealed class LegacyXlsFileAdapterTests
                 sheetIndex,
                 sheet.SheetName,
                 NormalizeSourceSheetVisibility(hssf.GetSheetVisibility(sheetIndex))));
+            if (ReadHssfSheetCodeName(sheet) is { } codeName)
+                sheetCodeNameFingerprints.Add(CreateSheetCodeNameFingerprint(sheetIndex, sheet.SheetName, codeName));
             defaultDimensionFingerprints.Add(CreateDefaultDimensionFingerprint(
                 sheetIndex,
                 sheet.SheetName,
@@ -1143,6 +1177,7 @@ public sealed class LegacyXlsFileAdapterTests
             HasVbaProjectPackage: SourceHasVbaProjectPackage(path),
             SheetNames: sheetNames,
             SheetVisibilityFingerprints: sheetVisibilityFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            SheetCodeNameFingerprints: sheetCodeNameFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             WorkbookViewFingerprints: workbookViewFingerprints,
             WorkbookProtectionFingerprints: workbookProtectionFingerprints,
             WorkbookFileSharingFingerprints: workbookFileSharingFingerprints,
@@ -1187,6 +1222,7 @@ public sealed class LegacyXlsFileAdapterTests
         int? activeSheetIndex = null;
         var sheetNames = new List<string>();
         var sheetVisibilityFingerprints = new List<string>();
+        var sheetCodeNameFingerprints = new List<string>();
         var cellFingerprints = new List<string>();
         var mergeFingerprints = new List<string>();
         var dimensionFingerprints = new List<string>();
@@ -1202,6 +1238,8 @@ public sealed class LegacyXlsFileAdapterTests
                 sheetIndex,
                 reader.Name,
                 NormalizeExcelDataReaderVisibleState(reader.VisibleState)));
+            if (!string.IsNullOrWhiteSpace(reader.CodeName))
+                sheetCodeNameFingerprints.Add(CreateSheetCodeNameFingerprint(sheetIndex, reader.Name, reader.CodeName));
             if (reader.IsActiveSheet)
                 activeSheetIndex = sheetIndex;
             if (!string.Equals(reader.VisibleState, "visible", StringComparison.OrdinalIgnoreCase))
@@ -1248,8 +1286,8 @@ public sealed class LegacyXlsFileAdapterTests
 
                 for (var column = 0; column < reader.FieldCount; column++)
                 {
-                    var value = reader.GetValue(column);
-                    if (value is not null && (value is not string text || text.Length > 0))
+                    var value = MapExcelDataReaderCellValue(reader, column);
+                    if (value is not BlankValue)
                     {
                         cells++;
                         cellFingerprints.Add(CreateCellFingerprint(
@@ -1258,7 +1296,7 @@ public sealed class LegacyXlsFileAdapterTests
                             (uint)reader.Depth + 1,
                             (uint)column + 1,
                             "",
-                            ImportedValueToken(MapExcelDataReaderValue(value))));
+                            ImportedValueToken(value)));
 
                         if (TryCreateExcelDataReaderStyleFingerprint(reader, sheetIndex, reader.Name, column, out var fingerprint))
                         {
@@ -1306,6 +1344,7 @@ public sealed class LegacyXlsFileAdapterTests
             HasVbaProjectPackage: SourceHasVbaProjectPackage(path),
             SheetNames: sheetNames,
             SheetVisibilityFingerprints: sheetVisibilityFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            SheetCodeNameFingerprints: sheetCodeNameFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             WorkbookViewFingerprints: [],
             WorkbookProtectionFingerprints: [],
             WorkbookFileSharingFingerprints: [],
@@ -1343,6 +1382,16 @@ public sealed class LegacyXlsFileAdapterTests
                 sheetIndex,
                 sheet.Name,
                 sheet.IsVeryHidden ? "VeryHidden" : sheet.IsHidden ? "Hidden" : "Visible"))
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+
+    private static IReadOnlyList<string> ReadImportedSheetCodeNameFingerprints(Workbook workbook) =>
+        workbook.Sheets
+            .Select((sheet, sheetIndex) => string.IsNullOrWhiteSpace(sheet.CodeName)
+                ? null
+                : CreateSheetCodeNameFingerprint(sheetIndex, sheet.Name, sheet.CodeName))
+            .Where(value => value is not null)
+            .Select(value => value!)
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
 
@@ -2612,6 +2661,39 @@ public sealed class LegacyXlsFileAdapterTests
         bool fullCalculationOnLoad) =>
         $"{sheetIndex}:{sheetName}|SheetCalculation|Full={fullCalculationOnLoad}";
 
+    private static string CreateSheetCodeNameFingerprint(int sheetIndex, string sheetName, string codeName) =>
+        $"{sheetIndex}:{sheetName}|CodeName={codeName}";
+
+    private static string? ReadHssfSheetCodeName(ISheet sourceSheet)
+    {
+        if (sourceSheet is not HSSFSheet hssfSheet ||
+            hssfSheet.Sheet.FindFirstRecordBySid(UnknownRecord.CODENAME_1BA) is not UnknownRecord codeNameRecord ||
+            UnknownRecordRawDataField?.GetValue(codeNameRecord) is not byte[] rawData)
+        {
+            return null;
+        }
+
+        return DecodeBiffCodeName(rawData);
+    }
+
+    private static string? DecodeBiffCodeName(byte[] rawData)
+    {
+        if (rawData.Length < 3)
+            return null;
+
+        var characterCount = rawData[0] | (rawData[1] << 8);
+        var optionFlags = rawData[2];
+        var isWide = (optionFlags & 0x01) != 0;
+        var byteCount = isWide ? characterCount * 2 : characterCount;
+        if (byteCount <= 0 || rawData.Length < 3 + byteCount)
+            return null;
+
+        var codeName = isWide
+            ? Encoding.Unicode.GetString(rawData, 3, byteCount)
+            : Encoding.Latin1.GetString(rawData, 3, byteCount);
+        return string.IsNullOrWhiteSpace(codeName) ? null : codeName;
+    }
+
     private static string NormalizeSourceSheetVisibility(SheetVisibility visibility) =>
         visibility switch
         {
@@ -3534,6 +3616,25 @@ public sealed class LegacyXlsFileAdapterTests
             _ => new TextValue(Convert.ToString(value, CultureInfo.InvariantCulture) ?? "")
         };
 
+    private static ScalarValue MapExcelDataReaderCellValue(IExcelDataReader reader, int column) =>
+        reader.GetCellError(column) is { } error
+            ? MapExcelDataReaderErrorValue(error)
+            : MapExcelDataReaderValue(reader.GetValue(column));
+
+    private static ErrorValue MapExcelDataReaderErrorValue(ExcelDataReader.CellError error) =>
+        error switch
+        {
+            ExcelDataReader.CellError.NULL => ErrorValue.Null,
+            ExcelDataReader.CellError.DIV0 => ErrorValue.DivByZero,
+            ExcelDataReader.CellError.VALUE => ErrorValue.Value,
+            ExcelDataReader.CellError.REF => ErrorValue.Ref,
+            ExcelDataReader.CellError.NAME => ErrorValue.Name,
+            ExcelDataReader.CellError.NUM => ErrorValue.Num,
+            ExcelDataReader.CellError.NA => ErrorValue.NA,
+            ExcelDataReader.CellError.GETTING_DATA => new ErrorValue("#GETTING_DATA"),
+            _ => new ErrorValue(error.ToString())
+        };
+
     private static string ImportedValueToken(ScalarValue value) =>
         value switch
         {
@@ -3952,6 +4053,7 @@ public sealed class LegacyXlsFileAdapterTests
         bool HasVbaProjectPackage = false,
         IReadOnlyList<string>? SheetNames = null,
         IReadOnlyList<string>? SheetVisibilityFingerprints = null,
+        IReadOnlyList<string>? SheetCodeNameFingerprints = null,
         IReadOnlyList<string>? WorkbookViewFingerprints = null,
         IReadOnlyList<string>? WorkbookProtectionFingerprints = null,
         IReadOnlyList<string>? WorkbookFileSharingFingerprints = null,
