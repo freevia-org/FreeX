@@ -36,6 +36,9 @@ public partial class MainWindow
         });
         if (outcome.Success)
         {
+            if (outcome.IsNoOp)
+                return true;
+
             MarkWorkbookDirty();
             InvalidateNavigationCaches();
             NotifyOtherWindowsOfWorkbookChange();
@@ -106,6 +109,9 @@ public partial class MainWindow
         var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);
         if (outcome.Success)
         {
+            if (outcome.IsNoOp)
+                return true;
+
             MarkWorkbookDirty();
             _repeatPostAction = null;
             InvalidateNavigationCaches();

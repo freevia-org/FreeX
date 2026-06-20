@@ -40,6 +40,8 @@ public sealed class MoveSheetsCommand : IWorkbookCommand
         var targetIndex = Math.Clamp(_insertBeforeIndex - selectedBeforeTarget, 0, remaining.Count);
         var desiredOrder = remaining.ToList();
         desiredOrder.InsertRange(targetIndex, selectedIds);
+        if (currentOrder.SequenceEqual(desiredOrder))
+            return new CommandOutcome(true, IsNoOp: true);
 
         ReorderSheets(ctx.Workbook, desiredOrder);
         _applied = true;

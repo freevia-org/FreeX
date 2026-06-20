@@ -112,4 +112,5 @@ public interface ICommandContext
 public sealed record CommandOutcome(
     bool Success,
     string? ErrorMessage = null,
-    IReadOnlyList<CellAddress>? AffectedCells = null);
+    IReadOnlyList<CellAddress>? AffectedCells = null,
+    bool IsNoOp = false);

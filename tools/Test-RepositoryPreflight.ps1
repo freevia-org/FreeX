@@ -48,6 +48,11 @@ Invoke-RepositoryPreflight -ScriptPath $GitHubWorkflowsScriptPath -Label "GitHub
 Invoke-RepositoryPreflight -ScriptPath $DotNetSdkReadinessScriptPath -Label ".NET SDK readiness"
 Invoke-RepositoryPreflight -ScriptPath $DotNetProjectReferencesScriptPath -Label ".NET project references"
 Invoke-RepositoryPreflight -ScriptPath $SolutionProjectsScriptPath -Label "solution projects"
+Invoke-RepositoryPreflight -ScriptPath $SolutionProjectsScriptPath -Label "default test solution projects" -Parameters @{
+    SolutionPath = "FreeX.DefaultTests.slnx"
+    ProjectPathPrefixes = @("tests/")
+    ExcludedProjectPathPrefixes = @("tests/FreeX.App.Host.Tests/", "tests/FreeX.App.UI.Tests/")
+}
 Invoke-RepositoryPreflight -ScriptPath $SolutionProjectsScriptPath -Label "FreeW solution projects" -Parameters @{
     SolutionPath = "FreeW.slnx"
     ProjectPathPrefixes = @("freew/", "tools/FreeW.")

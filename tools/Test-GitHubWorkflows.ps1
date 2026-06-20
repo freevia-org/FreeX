@@ -245,7 +245,7 @@ foreach ($workflow in $workflows) {
 
     $inlineOnPullRequestTarget = $false
     foreach ($line in $lines) {
-        if ($line -notmatch "^\s*on\s*:\s*(?<events>[^#]*)") {
+        if ($line -notmatch "^\s*(?:['""]?on['""]?)\s*:\s*(?<events>[^#]*)") {
             continue
         }
 

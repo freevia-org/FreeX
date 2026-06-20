@@ -191,7 +191,7 @@ public sealed class MoveSheetCommand : IWorkbookCommand
             return new CommandOutcome(false, "Sheet index is out of range.");
 
         if (_fromIndex == _toIndex)
-            return new CommandOutcome(true);
+            return new CommandOutcome(true, IsNoOp: true);
 
         ctx.Workbook.MoveSheet(_fromIndex, _toIndex);
         _applied = true;

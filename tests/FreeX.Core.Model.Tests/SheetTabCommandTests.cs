@@ -317,6 +317,41 @@ public class SheetTabCommandTests
     }
 
     [Fact]
+    public void MoveSheetCommand_NoOpMove_DoesNotCreateUndoEntry()
+    {
+        var wb = new Workbook("test");
+        wb.AddSheet("Jan");
+        wb.AddSheet("Feb");
+        var bus = new CommandBus(_ => new TestCommandContext(wb));
+
+        var outcome = bus.Execute(wb.Id, new MoveSheetCommand(fromIndex: 0, toIndex: 0));
+
+        outcome.Success.Should().BeTrue();
+        outcome.IsNoOp.Should().BeTrue();
+        wb.Sheets.Select(sheet => sheet.Name).Should().Equal("Jan", "Feb");
+        bus.CanUndo(wb.Id).Should().BeFalse();
+        bus.GetUndoStackDepth(wb.Id).Should().Be(0);
+    }
+
+    [Fact]
+    public void MoveSheetsCommand_DefaultSingleSheetTarget_DoesNotCreateUndoEntry()
+    {
+        var wb = new Workbook("test");
+        var jan = wb.AddSheet("Jan");
+        wb.AddSheet("Feb");
+        wb.AddSheet("Mar");
+        var bus = new CommandBus(_ => new TestCommandContext(wb));
+
+        var outcome = bus.Execute(wb.Id, new MoveSheetsCommand([jan.Id], insertBeforeIndex: 0));
+
+        outcome.Success.Should().BeTrue();
+        outcome.IsNoOp.Should().BeTrue();
+        wb.Sheets.Select(sheet => sheet.Name).Should().Equal("Jan", "Feb", "Mar");
+        bus.CanUndo(wb.Id).Should().BeFalse();
+        bus.GetUndoStackDepth(wb.Id).Should().Be(0);
+    }
+
+    [Fact]
     public void SetSheetHiddenCommand_HidesSheetAndUndoRestores()
     {
         var wb = new Workbook("test");

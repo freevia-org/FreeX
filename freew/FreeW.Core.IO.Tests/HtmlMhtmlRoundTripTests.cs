@@ -101,6 +101,50 @@ public class HtmlMhtmlRoundTripTests
     }
 
     [Fact]
+    public void Mhtml_LoadClonesReusedImagePartBeforeApplyingPerUseMetadata()
+    {
+        var imageBytes = new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x00 };
+        var mhtml = $$"""
+            MIME-Version: 1.0
+            Content-Type: multipart/related; boundary="freew-boundary"; type="text/html"
+
+            --freew-boundary
+            Content-Type: text/html; charset=utf-8
+
+            <!doctype html><html><body>
+            <p><img src="cid:logo" alt="Small logo" width="24" height="18"><img src="cid:logo" alt="Large logo" width="48" height="36"></p>
+            </body></html>
+            --freew-boundary
+            Content-Type: image/png
+            Content-ID: <logo>
+            Content-Transfer-Encoding: base64
+
+            {{Convert.ToBase64String(imageBytes)}}
+            --freew-boundary--
+            """;
+
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(mhtml.ReplaceLineEndings("\r\n")));
+        var loaded = new MhtmlFileAdapter().Load(stream);
+
+        var images = loaded.Blocks.Should().ContainSingle().Which
+            .Should().BeOfType<Paragraph>().Which.Runs
+            .Select(run => run.Image)
+            .Where(image => image is not null)
+            .Select(image => image!)
+            .ToList();
+        images.Should().HaveCount(2);
+        images[0].Should().NotBeSameAs(images[1]);
+        images[0].Bytes.Should().Equal(imageBytes);
+        images[1].Bytes.Should().Equal(imageBytes);
+        images[0].AltText.Should().Be("Small logo");
+        images[0].WidthPt.Should().Be(18);
+        images[0].HeightPt.Should().Be(13.5);
+        images[1].AltText.Should().Be("Large logo");
+        images[1].WidthPt.Should().Be(36);
+        images[1].HeightPt.Should().Be(27);
+    }
+
+    [Fact]
     public void Html_SaveDropsUnsupportedFootnoteStoreByDesign()
     {
         var document = new TextDocument();

@@ -17,6 +17,8 @@ public sealed class RepositoryPreflightTests
         script.Should().Contain("Test-DotNetSdkReadiness.ps1");
         script.Should().Contain("Test-DotNetProjectReferences.ps1");
         script.Should().Contain("Test-SolutionProjects.ps1");
+        script.Should().Contain("FreeX.DefaultTests.slnx");
+        script.Should().Contain("ExcludedProjectPathPrefixes");
         script.Should().Contain("Test-MacOsAppReadiness.ps1");
         script.Should().Contain("Test-GeneratedDocs.ps1");
         script.Should().Contain("Test-ConflictMarkers.ps1");
@@ -60,6 +62,7 @@ public sealed class RepositoryPreflightTests
         result.Output.Should().Contain("Running .NET SDK readiness preflight...");
         result.Output.Should().Contain("Running .NET project references preflight...");
         result.Output.Should().Contain("Running solution projects preflight...");
+        result.Output.Should().Contain("Running default test solution projects preflight...");
         result.Output.Should().Contain("Running FreeW solution projects preflight...");
         result.Output.Should().Contain("Running FreeP solution projects preflight...");
         result.Output.Should().Contain("Running macOS app readiness preflight...");

@@ -550,6 +550,8 @@ public sealed class GitHubWorkflowPreflightTests
     [InlineData("on: [push, pull_request_target]")]
     [InlineData("on: [push, \"pull_request_target\"]")]
     [InlineData("on: { pull_request_target: {} }")]
+    [InlineData("\"on\": \"pull_request_target\"")]
+    [InlineData("'on': ['push', 'pull_request_target']")]
     public void GitHubWorkflowPreflight_FailsWhenWorkflowUsesInlinePullRequestTarget(string onLine)
     {
         using var temp = new TestTemporaryDirectory();

@@ -382,6 +382,7 @@ td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
         if (image is null)
             return null;
 
+        image = CloneImage(image);
         if (TryReadLengthPt(element.GetAttribute("width"), out var width))
             image.WidthPt = width;
         if (TryReadLengthPt(element.GetAttribute("height"), out var height))
@@ -389,6 +390,17 @@ td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
         image.AltText = element.GetAttribute("alt");
         return image;
     }
+
+    private static InlineImage CloneImage(InlineImage image) =>
+        new(image.Bytes, image.WidthPt, image.HeightPt, image.Format)
+        {
+            AltText = image.AltText,
+            Wrapping = image.Wrapping,
+            HorizontalOffsetPt = image.HorizontalOffsetPt,
+            VerticalOffsetPt = image.VerticalOffsetPt,
+            HorizontalAnchor = image.HorizontalAnchor,
+            VerticalAnchor = image.VerticalAnchor
+        };
 
     private static InlineImage? ReadDataUriImage(string src)
     {

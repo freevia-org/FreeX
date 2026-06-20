@@ -48,7 +48,7 @@ public sealed class CommandBus : ICommandBus, ICommandStackChangeNotifier, IComm
             return new CommandOutcome(false, $"Command failed: {ex.Message}");
         }
 
-        if (outcome.Success)
+        if (outcome.Success && !outcome.IsNoOp)
         {
             var stack = GetOrCreateStack(workbookId);
             stack.Push(command, EstimateBytes(command), GetAffectedCells(command, outcome), GetHistoryLabel(command));
@@ -62,7 +62,7 @@ public sealed class CommandBus : ICommandBus, ICommandStackChangeNotifier, IComm
     {
         var command = commandFactory();
         var outcome = Execute(workbookId, command);
-        if (outcome.Success)
+        if (outcome.Success && !outcome.IsNoOp)
             _repeatableCommandFactories[workbookId] = commandFactory;
 
         return outcome;
@@ -120,12 +120,12 @@ public sealed class CommandBus : ICommandBus, ICommandStackChangeNotifier, IComm
             ? GetAffectedCells(command, outcome) ?? entry.Payload
             : null;
 
-        if (outcome.Success)
+        if (outcome.Success && !outcome.IsNoOp)
             stack.PushWithoutClearingRedo(entry with { Payload = affectedCells });
         else
             stack.PushRedo(entry); // restore so the user can retry
 
-        if (outcome.Success)
+        if (outcome.Success && !outcome.IsNoOp)
             NotifyStackChanged(workbookId);
 
         return outcome with { AffectedCells = affectedCells };

@@ -15,6 +15,7 @@ public sealed class SolutionProjectsPreflightTests
         script.Should().Contain("Get-ProjectFiles -Directory");
         script.Should().Contain("Test-IsIgnoredDirectoryName");
         script.Should().Contain("ProjectPathPrefixes");
+        script.Should().Contain("ExcludedProjectPathPrefixes");
         script.Should().Contain("Test-IsIncludedProjectPath");
         script.Should().Contain("*_wpftmp.csproj");
         script.Should().Contain("$segments -contains \".worktrees\"");
@@ -31,6 +32,9 @@ public sealed class SolutionProjectsPreflightTests
         solution.Should().Contain("<Folder Name=\"/tools/\">");
         solution.Should().Contain("tools/FreeX.ChartInteropCompare/FreeX.ChartInteropCompare.csproj");
         solution.Should().Contain("tools/FreeX.ExcelOpenSmoke/FreeX.ExcelOpenSmoke.csproj");
+
+        var defaultTests = WorkspaceFileLocator.ReadAllText("FreeX.DefaultTests.slnx");
+        defaultTests.Should().Contain("tests/Free.Shared.Pdf.Tests/Free.Shared.Pdf.Tests.csproj");
     }
 
     [Fact]
@@ -147,6 +151,35 @@ public sealed class SolutionProjectsPreflightTests
         var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
             "Test-SolutionProjects.ps1",
             $"-ProjectRoot \"{tempDirectory}\" -SolutionPath \"{Path.Combine(tempDirectory, "FreeW.slnx")}\" -ProjectPathPrefixes freew/");
+
+        result.ExitCode.Should().Be(0, result.Error);
+        result.Output.Should().Contain("Validated 1 solution project entry(s).");
+    }
+
+    [Fact]
+    public void SolutionProjectsPreflight_ValidatesExcludedProjectPathPrefixes()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var tempDirectory = temp.Path;
+
+        Directory.CreateDirectory(Path.Combine(tempDirectory, "tests", "Included.Tests"));
+        Directory.CreateDirectory(Path.Combine(tempDirectory, "tests", "Excluded.UiTests"));
+
+        File.WriteAllText(
+            Path.Combine(tempDirectory, "FreeX.DefaultTests.slnx"),
+            """
+            <Solution>
+              <Folder Name="/tests/">
+                <Project Path="tests/Included.Tests/Included.Tests.csproj" />
+              </Folder>
+            </Solution>
+            """);
+        File.WriteAllText(Path.Combine(tempDirectory, "tests", "Included.Tests", "Included.Tests.csproj"), "<Project />");
+        File.WriteAllText(Path.Combine(tempDirectory, "tests", "Excluded.UiTests", "Excluded.UiTests.csproj"), "<Project />");
+
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Test-SolutionProjects.ps1",
+            $"-ProjectRoot \"{tempDirectory}\" -SolutionPath \"{Path.Combine(tempDirectory, "FreeX.DefaultTests.slnx")}\" -ProjectPathPrefixes tests/ -ExcludedProjectPathPrefixes tests/Excluded.UiTests/");
 
         result.ExitCode.Should().Be(0, result.Error);
         result.Output.Should().Contain("Validated 1 solution project entry(s).");

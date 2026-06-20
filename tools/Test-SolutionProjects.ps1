@@ -1,7 +1,8 @@
 param(
     [string]$ProjectRoot = ".",
     [string]$SolutionPath = "FreeX.slnx",
-    [string[]]$ProjectPathPrefixes = @("src/", "tests/", "tools/", "shared/")
+    [string[]]$ProjectPathPrefixes = @("src/", "tests/", "tools/", "shared/"),
+    [string[]]$ExcludedProjectPathPrefixes = @()
 )
 
 $ErrorActionPreference = "Stop"
@@ -66,6 +67,12 @@ function Test-IsIgnoredDirectoryName {
 
 function Test-IsIncludedProjectPath {
     param([Parameter(Mandatory = $true)][string]$RelativePath)
+
+    foreach ($prefix in $ExcludedProjectPathPrefixes) {
+        if ($RelativePath.StartsWith((Normalize-RelativePath $prefix), [System.StringComparison]::OrdinalIgnoreCase)) {
+            return $false
+        }
+    }
 
     foreach ($prefix in $ProjectPathPrefixes) {
         if ($RelativePath.StartsWith((Normalize-RelativePath $prefix), [System.StringComparison]::OrdinalIgnoreCase)) {
