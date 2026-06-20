@@ -288,6 +288,13 @@ public sealed class LegacyXlsFileAdapterTests
 
             imported.Sheets.Should().Be(source.Sheets, imported.File);
             imported.Cells.Should().Be(source.Cells, imported.File);
+            if (!source.RichMetadata)
+            {
+                imported.Merges.Should().Be(source.Merges, imported.File);
+                imported.Dimensions.Should().BeGreaterThanOrEqualTo(source.Dimensions, imported.File);
+                imported.SheetNames.Should().Equal(source.SheetNames, imported.File);
+            }
+
             if (source.RichMetadata)
             {
                 imported.Formulas.Should().Be(source.Formulas, imported.File);
@@ -862,12 +869,26 @@ public sealed class LegacyXlsFileAdapterTests
         using var reader = ExcelReaderFactory.CreateReader(stream);
         var sheets = 0;
         var cells = 0;
+        var merges = 0;
+        var dimensions = 0;
+        var sheetNames = new List<string>();
 
         do
         {
             sheets++;
+            sheetNames.Add(reader.Name);
+            merges += reader.MergeCells?.Length ?? 0;
+            for (var column = 0; column < reader.FieldCount; column++)
+            {
+                if (reader.GetColumnWidth(column) > 0)
+                    dimensions++;
+            }
+
             while (reader.Read())
             {
+                if (reader.RowHeight > 0)
+                    dimensions++;
+
                 for (var column = 0; column < reader.FieldCount; column++)
                 {
                     var value = reader.GetValue(column);
@@ -884,8 +905,8 @@ public sealed class LegacyXlsFileAdapterTests
             cells,
             Formulas: 0,
             Styles: 0,
-            Merges: 0,
-            Dimensions: 0,
+            Merges: merges,
+            Dimensions: dimensions,
             HiddenSheets: 0,
             VeryHiddenSheets: 0,
             DefinedNames: 0,
@@ -906,7 +927,7 @@ public sealed class LegacyXlsFileAdapterTests
             PageBreaks: 0,
             ActiveSheetIndex: null,
             RichMetadata: false,
-            SheetNames: [],
+            SheetNames: sheetNames,
             CellFingerprints: [],
             DefinedNameFingerprints: [],
             HyperlinkFingerprints: [],

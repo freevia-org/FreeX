@@ -119,9 +119,13 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         do
         {
             var sheet = workbook.AddSheet(string.IsNullOrWhiteSpace(reader.Name) ? $"Sheet{workbook.Sheets.Count + 1}" : reader.Name);
+            LoadExcelDataReaderSheetLayout(reader, sheet);
             var row = 1u;
             while (reader.Read())
             {
+                if (reader.RowHeight > 0)
+                    sheet.RowHeights[row] = PointsToPixels(reader.RowHeight);
+
                 for (var col = 0; col < reader.FieldCount; col++)
                 {
                     var value = MapValue(reader.GetValue(col));
@@ -140,6 +144,25 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
             workbook.AddSheet("Sheet1");
 
         return workbook;
+    }
+
+    private static void LoadExcelDataReaderSheetLayout(IExcelDataReader reader, Sheet sheet)
+    {
+        foreach (var range in reader.MergeCells ?? [])
+        {
+            if (range.FromRow <= range.ToRow &&
+                range.FromColumn <= range.ToColumn)
+            {
+                sheet.AddMergedRegion(ToGridRange(range, sheet.Id));
+            }
+        }
+
+        for (var col = 0; col < reader.FieldCount; col++)
+        {
+            var width = reader.GetColumnWidth(col);
+            if (width > 0)
+                sheet.ColumnWidths[ToModelIndex(col)] = width;
+        }
     }
 
     private static void LoadSheetLayout(ISheet sourceSheet, Sheet sheet, HSSFPalette palette)
@@ -283,6 +306,11 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         new(
             new ModelCellAddress(sheetId, ToModelIndex(range.FirstRow), ToModelIndex(range.FirstColumn)),
             new ModelCellAddress(sheetId, ToModelIndex(range.LastRow), ToModelIndex(range.LastColumn)));
+
+    private static GridRange ToGridRange(ExcelDataReader.CellRange range, SheetId sheetId) =>
+        new(
+            new ModelCellAddress(sheetId, ToModelIndex(range.FromRow), ToModelIndex(range.FromColumn)),
+            new ModelCellAddress(sheetId, ToModelIndex(range.ToRow), ToModelIndex(range.ToColumn)));
 
     private static DvType MapDataValidationType(int validationType) =>
         validationType switch
