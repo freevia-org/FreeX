@@ -543,6 +543,41 @@ public sealed class GitHubWorkflowPreflightTests
         result.CombinedOutput.Should().Contain("broken.yml");
     }
 
+    [Theory]
+    [InlineData("on: pull_request_target")]
+    [InlineData("on: [push, pull_request_target]")]
+    public void GitHubWorkflowPreflight_FailsWhenWorkflowUsesInlinePullRequestTarget(string onLine)
+    {
+        using var temp = new TestTemporaryDirectory();
+
+        File.WriteAllText(
+            Path.Combine(temp.Path, "broken.yml"),
+            $$"""
+            name: Broken
+
+            {{onLine}}
+
+            permissions:
+              contents: read
+
+            jobs:
+              build:
+                runs-on: windows-latest
+                steps:
+                  - name: Safe shell
+                    shell: pwsh
+                    run: dotnet restore FreeX.slnx
+            """);
+
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Test-GitHubWorkflows.ps1",
+            $"-WorkflowDirectory \"{temp.Path}\"");
+
+        result.ExitCode.Should().NotBe(0);
+        result.CombinedOutput.Should().Contain("workflow must not use the privileged pull_request_target event");
+        result.CombinedOutput.Should().Contain("broken.yml");
+    }
+
     [Fact]
     public void GitHubWorkflowPreflight_FailsWhenWorkflowRequestsWriteAllPermissions()
     {

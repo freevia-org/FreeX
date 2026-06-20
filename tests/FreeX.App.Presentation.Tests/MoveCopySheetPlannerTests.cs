@@ -76,4 +76,23 @@ public sealed class MoveCopySheetPlannerTests
         MoveCopySheetPlanner.ResolveMoveTargetIndex(sourceIndex, insertBeforeIndex, sheetCount)
             .Should().Be(expected);
     }
+
+    [Theory]
+    // Copying Jan before Mar: after duplication the copy starts at index 1 and Mar shifts to index 3.
+    [InlineData(0, 2, 3, 3)]
+    // Copying Jan to the end of a 3-sheet workbook: the new last index is 3.
+    [InlineData(0, 3, 3, 3)]
+    // Copying Mar before Jan: destination is still the first slot.
+    [InlineData(2, 0, 3, 0)]
+    // Copying Feb before itself mirrors Excel's default copy-before-source behavior.
+    [InlineData(1, 1, 3, 1)]
+    public void ResolveCopyTargetIndex_AccountsForInsertedDuplicate(
+        int sourceIndex,
+        int insertBeforeIndex,
+        int originalSheetCount,
+        int expected)
+    {
+        MoveCopySheetPlanner.ResolveCopyTargetIndex(sourceIndex, insertBeforeIndex, originalSheetCount)
+            .Should().Be(expected);
+    }
 }

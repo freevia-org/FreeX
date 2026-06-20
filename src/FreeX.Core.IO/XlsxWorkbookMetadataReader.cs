@@ -113,16 +113,12 @@ internal static class XlsxWorkbookMetadataReader
             if (protection is null)
                 return WorkbookProtectionState.None;
 
-            var isStructureProtected =
-                XlsxXmlAttributeReader.ReadBoolAttribute(protection, "lockStructure") ||
-                XlsxXmlAttributeReader.ReadBoolAttribute(protection, "lockWindows");
+            var isStructureProtected = XlsxXmlAttributeReader.ReadBoolAttribute(protection, "lockStructure");
 
             if (!isStructureProtected)
                 return WorkbookProtectionState.None;
 
-            var passwordHash =
-                protection.Attribute("workbookPassword")?.Value ??
-                protection.Attribute("revisionsPassword")?.Value;
+            var passwordHash = protection.Attribute("workbookPassword")?.Value;
 
             return new WorkbookProtectionState(true, passwordHash);
         }
@@ -403,16 +399,12 @@ internal static class XlsxWorkbookMetadataReader
         if (protection is null)
             return WorkbookProtectionState.None;
 
-        var isStructureProtected =
-            XlsxXmlAttributeReader.ReadBoolAttribute(protection, "lockStructure") ||
-            XlsxXmlAttributeReader.ReadBoolAttribute(protection, "lockWindows");
+        var isStructureProtected = XlsxXmlAttributeReader.ReadBoolAttribute(protection, "lockStructure");
 
         if (!isStructureProtected)
             return WorkbookProtectionState.None;
 
-        var passwordHash =
-            protection.Attribute("workbookPassword")?.Value ??
-            protection.Attribute("revisionsPassword")?.Value;
+        var passwordHash = protection.Attribute("workbookPassword")?.Value;
 
         return new WorkbookProtectionState(true, passwordHash);
     }

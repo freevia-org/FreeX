@@ -243,7 +243,9 @@ foreach ($workflow in $workflows) {
         $errors.Add("$($workflow.Name): workflow YAML must use spaces for indentation, not tabs.")
     }
 
-    if ($content -match "(?m)^\s*pull_request_target\s*:") {
+    if ($content -match "(?m)^\s*pull_request_target\s*:" -or
+        $content -match "(?m)^\s*on\s*:\s*pull_request_target\s*(?:#.*)?$" -or
+        $content -match "(?m)^\s*on\s*:\s*\[[^\]]*\bpull_request_target\b[^\]]*\]\s*(?:#.*)?$") {
         $errors.Add("$($workflow.Name): workflow must not use the privileged pull_request_target event.")
     }
 

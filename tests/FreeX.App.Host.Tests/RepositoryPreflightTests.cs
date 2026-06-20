@@ -60,6 +60,8 @@ public sealed class RepositoryPreflightTests
         result.Output.Should().Contain("Running .NET SDK readiness preflight...");
         result.Output.Should().Contain("Running .NET project references preflight...");
         result.Output.Should().Contain("Running solution projects preflight...");
+        result.Output.Should().Contain("Running FreeW solution projects preflight...");
+        result.Output.Should().Contain("Running FreeP solution projects preflight...");
         result.Output.Should().Contain("Running macOS app readiness preflight...");
         result.Output.Should().Contain("Running generated docs preflight...");
         result.Output.Should().Contain("Running Git conflict markers preflight...");

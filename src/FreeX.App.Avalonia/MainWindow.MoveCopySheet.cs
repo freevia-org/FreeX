@@ -137,10 +137,10 @@ public sealed partial class MainWindow
             // DuplicateActiveSheet drops the copy immediately after the source and makes it active;
             // move that copy to the requested position when it differs from the landing slot.
             var copyIndex = System.Math.Min(sourceIndex + 1, _session.SheetTabs.Count - 1);
-            var targetIndex = MoveCopySheetPlanner.ResolveMoveTargetIndex(
-                copyIndex,
+            var targetIndex = MoveCopySheetPlanner.ResolveCopyTargetIndex(
+                sourceIndex,
                 plan.InsertBeforeIndex,
-                _session.SheetTabs.Count);
+                _session.SheetTabs.Count - 1);
             if (copyIndex != targetIndex && !TryMoveActiveSheetTo(targetIndex))
                 return;
 
