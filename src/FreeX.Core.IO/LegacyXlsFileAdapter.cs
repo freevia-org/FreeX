@@ -190,20 +190,35 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
 
     private static void LoadWorkbookProperties(HSSFWorkbook sourceWorkbook, Workbook workbook)
     {
-        if (ReadHssfWorkbookCodeName(sourceWorkbook) is not { } codeName)
+        var nativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (ReadHssfWorkbookCodeName(sourceWorkbook) is { } codeName)
+            nativeAttributes["codeName"] = codeName;
+        if (sourceWorkbook.Workbook.FindFirstRecordBySid(BackupRecord.sid) is BackupRecord backup)
+            nativeAttributes["backupFile"] = backup.Backup != 0 ? "1" : "0";
+        if (sourceWorkbook.Workbook.FindFirstRecordBySid(HideObjRecord.sid) is HideObjRecord hideObjects)
+            nativeAttributes["showObjects"] = MapShowObjects(hideObjects.GetHideObj());
+        if (sourceWorkbook.Workbook.FindFirstRecordBySid(BookBoolRecord.sid) is BookBoolRecord bookBool)
+            nativeAttributes["saveExternalLinkValues"] = bookBool.SaveLinkValues != 0 ? "1" : "0";
+        if (sourceWorkbook.Workbook.FindFirstRecordBySid(RefreshAllRecord.sid) is RefreshAllRecord refreshAll)
+            nativeAttributes["refreshAllConnections"] = refreshAll.RefreshAll ? "1" : "0";
+        if (nativeAttributes.Count == 0)
             return;
 
-        var serializedMetadata = XmlNativeBagSerializer.Serialize(
-            new Dictionary<string, string>(StringComparer.Ordinal)
-            {
-                ["codeName"] = codeName
-            });
+        var serializedMetadata = XmlNativeBagSerializer.Serialize(nativeAttributes);
         if (serializedMetadata is null)
             return;
 
         workbook.Properties ??= new NativeXmlPreserveBag();
         workbook.Properties.Set("workbookPr", serializedMetadata);
     }
+
+    private static string MapShowObjects(short hideObjects) =>
+        hideObjects switch
+        {
+            HideObjRecord.HIDE_ALL => "none",
+            HideObjRecord.SHOW_PLACEHOLDERS => "placeholders",
+            _ => "all"
+        };
 
     private static void LoadWorkbookProtection(HSSFWorkbook sourceWorkbook, Workbook workbook)
     {

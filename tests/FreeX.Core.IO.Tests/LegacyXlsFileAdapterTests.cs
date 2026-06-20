@@ -341,6 +341,7 @@ public sealed class LegacyXlsFileAdapterTests
                 SheetVisibilityFingerprints: ReadImportedSheetVisibilityFingerprints(workbook),
                 WorkbookCodeName: ReadImportedWorkbookCodeName(workbook),
                 SheetCodeNameFingerprints: ReadImportedSheetCodeNameFingerprints(workbook),
+                WorkbookPropertiesFingerprints: ReadImportedWorkbookPropertiesFingerprints(workbook),
                 WorkbookViewFingerprints: ReadImportedWorkbookViewFingerprints(workbook),
                 WorkbookProtectionFingerprints: ReadImportedWorkbookProtectionFingerprints(workbook),
                 WorkbookFileSharingFingerprints: ReadImportedWorkbookFileSharingFingerprints(workbook),
@@ -414,6 +415,7 @@ public sealed class LegacyXlsFileAdapterTests
                 imported.SheetVisibilityFingerprints.Should().BeEquivalentTo(source.SheetVisibilityFingerprints, imported.File);
                 imported.WorkbookCodeName.Should().Be(source.WorkbookCodeName, imported.File);
                 imported.SheetCodeNameFingerprints.Should().BeEquivalentTo(source.SheetCodeNameFingerprints, imported.File);
+                imported.WorkbookPropertiesFingerprints.Should().BeEquivalentTo(source.WorkbookPropertiesFingerprints, imported.File);
                 imported.WorkbookViewFingerprints.Should().BeEquivalentTo(source.WorkbookViewFingerprints, imported.File);
                 imported.WorkbookProtectionFingerprints.Should().BeEquivalentTo(source.WorkbookProtectionFingerprints, imported.File);
                 imported.WorkbookFileSharingFingerprints.Should().BeEquivalentTo(source.WorkbookFileSharingFingerprints, imported.File);
@@ -494,6 +496,12 @@ public sealed class LegacyXlsFileAdapterTests
             .Should()
             .BeGreaterThan(0);
         summaries.Sum(summary => summary.SheetCodeNameFingerprints?.Count ?? 0)
+            .Should()
+            .BeGreaterThan(0);
+        summaries.Where(summary => summary.RichMetadata)
+            .Sum(summary => summary.WorkbookPropertiesFingerprints?.Count(fingerprint =>
+                fingerprint.Contains("ShowObjects=all", StringComparison.Ordinal) &&
+                fingerprint.Contains("Backup=0", StringComparison.Ordinal)) ?? 0)
             .Should()
             .BeGreaterThan(0);
         summaries.Where(summary => summary.RichMetadata)
@@ -1154,6 +1162,7 @@ public sealed class LegacyXlsFileAdapterTests
         var workbookViewFingerprints = ReadSourceWorkbookViewFingerprints(hssf);
         var workbookProtectionFingerprints = ReadSourceWorkbookProtectionFingerprints(hssf);
         var workbookFileSharingFingerprints = ReadSourceWorkbookFileSharingFingerprints(hssf);
+        var workbookPropertiesFingerprints = ReadSourceWorkbookPropertiesFingerprints(hssf);
         var workbookCalculationFingerprints = ReadSourceWorkbookCalculationFingerprints(hssf);
         var outlineSettingFingerprints = ReadSourceOutlineSettingFingerprints(hssf);
 
@@ -1195,6 +1204,7 @@ public sealed class LegacyXlsFileAdapterTests
             SheetVisibilityFingerprints: sheetVisibilityFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             WorkbookCodeName: ReadHssfWorkbookCodeName(hssf),
             SheetCodeNameFingerprints: sheetCodeNameFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            WorkbookPropertiesFingerprints: workbookPropertiesFingerprints,
             WorkbookViewFingerprints: workbookViewFingerprints,
             WorkbookProtectionFingerprints: workbookProtectionFingerprints,
             WorkbookFileSharingFingerprints: workbookFileSharingFingerprints,
@@ -1364,6 +1374,7 @@ public sealed class LegacyXlsFileAdapterTests
             SheetVisibilityFingerprints: sheetVisibilityFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             WorkbookCodeName: null,
             SheetCodeNameFingerprints: sheetCodeNameFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            WorkbookPropertiesFingerprints: [],
             WorkbookViewFingerprints: [],
             WorkbookProtectionFingerprints: [],
             WorkbookFileSharingFingerprints: [],
@@ -1423,6 +1434,18 @@ public sealed class LegacyXlsFileAdapterTests
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
 
+    private static IReadOnlyList<string> ReadImportedWorkbookPropertiesFingerprints(Workbook workbook)
+    {
+        var (attributes, _) = XmlNativeBagSerializer.Deserialize(workbook.Properties?.Get("workbookPr"));
+        var backupFile = attributes.GetValueOrDefault("backupFile");
+        var showObjects = attributes.GetValueOrDefault("showObjects");
+        var saveExternalLinkValues = attributes.GetValueOrDefault("saveExternalLinkValues");
+        var refreshAllConnections = attributes.GetValueOrDefault("refreshAllConnections");
+        return HasAnyWorkbookProperties(backupFile, showObjects, saveExternalLinkValues, refreshAllConnections)
+            ? [CreateWorkbookPropertiesFingerprint(backupFile, showObjects, saveExternalLinkValues, refreshAllConnections)]
+            : [];
+    }
+
     private static IReadOnlyList<string> ReadImportedWorkbookViewFingerprints(Workbook workbook) =>
     [
         CreateWorkbookViewFingerprint(
@@ -1459,6 +1482,26 @@ public sealed class LegacyXlsFileAdapterTests
                 firstVisibleSheetIndex,
                 activeSheetIndex)
         ];
+    }
+
+    private static IReadOnlyList<string> ReadSourceWorkbookPropertiesFingerprints(HSSFWorkbook hssf)
+    {
+        var backupFile = hssf.Workbook.FindFirstRecordBySid(BackupRecord.sid) is BackupRecord backup
+            ? FormatWorkbookPropertyBool(backup.Backup != 0)
+            : null;
+        var showObjects = hssf.Workbook.FindFirstRecordBySid(HideObjRecord.sid) is HideObjRecord hideObjects
+            ? MapSourceShowObjects(hideObjects.GetHideObj())
+            : null;
+        var saveExternalLinkValues = hssf.Workbook.FindFirstRecordBySid(BookBoolRecord.sid) is BookBoolRecord bookBool
+            ? FormatWorkbookPropertyBool(bookBool.SaveLinkValues != 0)
+            : null;
+        var refreshAllConnections = hssf.Workbook.FindFirstRecordBySid(RefreshAllRecord.sid) is RefreshAllRecord refreshAll
+            ? FormatWorkbookPropertyBool(refreshAll.RefreshAll)
+            : null;
+
+        return HasAnyWorkbookProperties(backupFile, showObjects, saveExternalLinkValues, refreshAllConnections)
+            ? [CreateWorkbookPropertiesFingerprint(backupFile, showObjects, saveExternalLinkValues, refreshAllConnections)]
+            : [];
     }
 
     private static IReadOnlyList<string> ReadImportedWorkbookProtectionFingerprints(Workbook workbook)
@@ -2673,6 +2716,33 @@ public sealed class LegacyXlsFileAdapterTests
             $"First={FormatNullableInt(firstVisibleSheetIndex)}",
             $"Active={FormatNullableInt(activeSheetIndex)}"
         ]);
+
+    private static string CreateWorkbookPropertiesFingerprint(
+        string? backupFile,
+        string? showObjects,
+        string? saveExternalLinkValues,
+        string? refreshAllConnections) =>
+        string.Join("|", [
+            "WorkbookProperties",
+            $"Backup={backupFile ?? "null"}",
+            $"ShowObjects={showObjects ?? "null"}",
+            $"SaveExternalLinkValues={saveExternalLinkValues ?? "null"}",
+            $"RefreshAllConnections={refreshAllConnections ?? "null"}"
+        ]);
+
+    private static bool HasAnyWorkbookProperties(params string?[] values) =>
+        values.Any(value => value is not null);
+
+    private static string FormatWorkbookPropertyBool(bool value) =>
+        value ? "1" : "0";
+
+    private static string MapSourceShowObjects(short hideObjects) =>
+        hideObjects switch
+        {
+            HideObjRecord.HIDE_ALL => "none",
+            HideObjRecord.SHOW_PLACEHOLDERS => "placeholders",
+            _ => "all"
+        };
 
     private static string CreateWorkbookProtectionFingerprint(
         bool protectedStructureOrWindows,
@@ -4131,6 +4201,7 @@ public sealed class LegacyXlsFileAdapterTests
         IReadOnlyList<string>? SheetVisibilityFingerprints = null,
         string? WorkbookCodeName = null,
         IReadOnlyList<string>? SheetCodeNameFingerprints = null,
+        IReadOnlyList<string>? WorkbookPropertiesFingerprints = null,
         IReadOnlyList<string>? WorkbookViewFingerprints = null,
         IReadOnlyList<string>? WorkbookProtectionFingerprints = null,
         IReadOnlyList<string>? WorkbookFileSharingFingerprints = null,
