@@ -19,7 +19,7 @@ public sealed class AppInfoTests
     {
         AppInfo.VersionText.Should().Be("Version 0.5 (Tester Release)");
         AppInfo.AboutText.Should().Contain(AppInfo.VersionText);
-        AppInfo.AboutText.Should().Contain("A free spreadsheet app for .xlsx files.");
+        AppInfo.AboutText.Should().Contain("A free spreadsheet app for XLSX editing with open-only legacy XLS/XLSB import.");
         AppInfo.AboutText.Should().Contain("Built with .NET 10, WPF, ClosedXML, OxyPlot.");
         AppInfo.AboutText.Should().Contain(AppInfo.TrademarkNotice);
         AppInfo.AboutText.Should().Contain(AppInfo.CompatibilityNotice);

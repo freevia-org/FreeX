@@ -23,7 +23,7 @@ public sealed class AppHelpInfoTests
 
         text.Should().Contain("FreeX");
         text.Should().Contain("Version 0.8.42 (Tester Release)");
-        text.Should().Contain("A free spreadsheet app for .xlsx files.");
+        text.Should().Contain("A free spreadsheet app for XLSX editing with open-only legacy XLS/XLSB import.");
         text.Should().Contain("Built with .NET 10, Avalonia, ClosedXML.");
         text.Should().Contain(AppHelpInfo.TrademarkNotice);
         text.Should().Contain(AppHelpInfo.CompatibilityNotice);

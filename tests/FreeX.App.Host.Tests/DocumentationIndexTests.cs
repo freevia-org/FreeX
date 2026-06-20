@@ -212,6 +212,16 @@ public sealed partial class DocumentationIndexTests
     }
 
     [Fact]
+    public void UserTroubleshooting_DocumentsLegacyBinaryOpenOnlySupport()
+    {
+        var troubleshooting = WorkspaceFileLocator.ReadAllText("docs", "user/troubleshooting.md");
+
+        troubleshooting.Should().Contain("legacy `.xls`, `.xlsb`, `.xlt`");
+        troubleshooting.Should().Contain("legacy binary workbooks, macro-enabled workbooks, and templates are open-only imports");
+        troubleshooting.Should().NotContain("It does not open `.xls`");
+    }
+
+    [Fact]
     public void UiTestCatalog_EvidenceScreenshotCountMatchesArtifacts()
     {
         var docsDirectory = WorkspaceFileLocator.FindDocsDirectory();

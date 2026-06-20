@@ -50,7 +50,7 @@ public static class AppHelpInfo
         {ProductName}
         {versionText}
 
-        A free spreadsheet app for .xlsx files.
+        A free spreadsheet app for XLSX editing with open-only legacy XLS/XLSB import.
 
         {platformSummary}
 

@@ -29,7 +29,7 @@ public static class AppInfo
     public const string SourceNotice = "Full project license, legal notice, privacy notice, third-party notices, and bundled third-party license texts are available in Help > Legal Notices and are maintained with the FreeX release materials at https://github.com/tony-xmelon/FreeX.";
 
     public static string AboutText { get; } =
-        $"FreeX\n{VersionText}\n\nA free spreadsheet app for .xlsx files.\n\nBuilt with .NET 10, WPF, ClosedXML, OxyPlot.\n\n{TrademarkNotice}\n\n{CompatibilityNotice}\n\n{ProjectLicenseNotice}\n\n{PrivacyNotice}\n\n{ThirdPartyRuntimeNotice}\n\n{SourceNotice}";
+        $"FreeX\n{VersionText}\n\nA free spreadsheet app for XLSX editing with open-only legacy XLS/XLSB import.\n\nBuilt with .NET 10, WPF, ClosedXML, OxyPlot.\n\n{TrademarkNotice}\n\n{CompatibilityNotice}\n\n{ProjectLicenseNotice}\n\n{PrivacyNotice}\n\n{ThirdPartyRuntimeNotice}\n\n{SourceNotice}";
 
     internal static string FormatVersionText(string? informationalVersion)
     {

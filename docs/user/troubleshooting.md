@@ -44,7 +44,7 @@ Common warning messages and what they mean:
 
 ### "This file format is not supported"
 
-FreeX opens `.xlsx`, `.csv`, and `.fxl` files. It does not open `.xls` (legacy XLS 97-2003 format), `.xlsm` (macro-enabled), or other formats directly. Convert `.xls` files to `.xlsx` with a compatible spreadsheet app first, then open them in FreeX.
+FreeX opens `.xlsx`, `.xlsm`, `.xltx`, `.xltm`, legacy `.xls`, `.xlsb`, `.xlt`, delimited text (`.csv`, `.tsv`, `.tab`), XML Spreadsheet 2003 (`.xml`), and FreeX workbook (`.fxl`) files. Save support is narrower: legacy binary workbooks, macro-enabled workbooks, and templates are open-only imports, so use Save As to write an editable `.xlsx` or `.fxl` copy after opening them.
 
 ### The file opens but data looks wrong or is missing
 
