@@ -1255,40 +1255,13 @@ public partial class MainWindow
         if (tabViewportBounds[activeIndex] is not { } activeBounds)
             return;
 
-        var activeContentLeft = currentOffset + activeBounds.Left;
-        var activeContentRight = currentOffset + activeBounds.Right;
-        var contentRightToKeepVisible = activeContentRight;
-        if (activeIndex == visibleTabs.Count - 1 &&
-            TryGetAddSheetButtonViewportBounds() is { } addButtonBounds)
-        {
-            contentRightToKeepVisible = Math.Max(
-                contentRightToKeepVisible,
-                currentOffset + addButtonBounds.Right);
-        }
-
-        var contextTabsBeforeActive = activeTab.Name.Length >= 7 ? 1 : 2;
-        var anchorIndex = Math.Max(0, activeIndex - contextTabsBeforeActive);
-        var targetOffset = activeContentLeft;
-
-        while (anchorIndex < activeIndex && tabViewportBounds[anchorIndex] is not { })
-            anchorIndex++;
-
-        while (anchorIndex < activeIndex &&
-               tabViewportBounds[anchorIndex] is { } anchorCandidateBounds &&
-               contentRightToKeepVisible - (currentOffset + anchorCandidateBounds.Left) > visibleViewportRight)
-        {
-            anchorIndex++;
-        }
-
-        if (tabViewportBounds[anchorIndex] is { } anchorBounds)
-            targetOffset = currentOffset + anchorBounds.Left;
-
-        if (contentRightToKeepVisible - targetOffset > visibleViewportRight)
-            targetOffset = contentRightToKeepVisible - visibleViewportRight;
-        if (activeContentLeft - targetOffset < 0)
-            targetOffset = activeContentLeft;
-
-        targetOffset = Math.Clamp(targetOffset, 0, SheetTabsScroller.ScrollableWidth);
+        var targetOffset = SheetTabViewportScrollPlanner.CalculateOffsetForSelectedTab(
+            currentOffset,
+            activeBounds.Left,
+            activeBounds.Right,
+            visibleViewportRight,
+            SheetTabsScroller.ScrollableWidth,
+            SheetTabScrollEpsilon);
         if (Math.Abs(targetOffset - currentOffset) > SheetTabScrollEpsilon)
             SheetTabsScroller.ScrollToHorizontalOffset(targetOffset);
     }

@@ -14,6 +14,7 @@ internal static class Program
     private const int PrewarmValueColumnsPerSheet = 12;
     private const int PrewarmStyleOnlyColumnsPerSheet = 80;
     private const int PrewarmStyleOnlyStartColumn = PrewarmValueColumnsPerSheet + 2;
+    private static readonly object PerfOutputGate = new();
 
     [STAThread]
     public static async Task<int> Main(string[] args)
@@ -38,7 +39,7 @@ internal static class Program
 
             if (string.IsNullOrWhiteSpace(options.Path))
             {
-                Console.Error.WriteLine("Missing required --path <xlsx>.");
+                Console.Error.WriteLine("Missing required --path <xlsx-or-xlsm>.");
                 WriteUsage();
                 return 2;
             }
@@ -88,6 +89,8 @@ internal static class Program
         var adapter = new XlsxFileAdapter();
         var loader = new OpenWorkbookLoader(CreateRecalculationAction(options));
         var fileInfo = new FileInfo(options.Path!);
+        var inputExtension = Path.GetExtension(options.Path!);
+        var inputFormat = ResolveOpenFormat(adapter, inputExtension);
         var openProgress = new ThrottledProgress<OpenProgressUpdate>(
             options,
             iteration,
@@ -104,8 +107,8 @@ internal static class Program
         var openResult = await loader.LoadAsync(
             options.Path!,
             adapter,
-            ".xlsx",
-            new FileFormatDescriptor(".xlsx", "XLSX Workbook", CanOpen: true, CanSave: true),
+            inputExtension,
+            inputFormat,
             openProgress);
         openStopwatch.Stop();
         var openAllocatedBytes = GC.GetTotalAllocatedBytes(precise: true) - openAllocatedBefore;
@@ -470,6 +473,15 @@ internal static class Program
     private static string FormatAddress((uint Row, uint Col) address) =>
         $"{CellAddress.NumberToColumnName(address.Col)}{address.Row}";
 
+    private static FileFormatDescriptor ResolveOpenFormat(XlsxFileAdapter adapter, string extension)
+    {
+        var format = adapter.Formats.FirstOrDefault(candidate =>
+            candidate.CanOpen &&
+            candidate.Extension.Equals(extension, StringComparison.OrdinalIgnoreCase));
+
+        return format ?? throw new ArgumentException($"Unsupported Open XML workbook extension for AppIoBench: {extension}");
+    }
+
     private static string FormatSaveDiagnostics(XlsxSaveDiagnostics diagnostics) =>
         $"save_path={diagnostics.PathLabel} save_reason={diagnostics.Reason} " +
         $"patch_changes={diagnostics.TotalPatchChangeCount} cell_changes={diagnostics.CellChangeCount} " +
@@ -496,10 +508,13 @@ internal static class Program
 
     private static void WritePerf(AppIoBenchOptions options, string line)
     {
-        Console.WriteLine(line);
-        Console.Out.Flush();
-        if (!string.IsNullOrWhiteSpace(options.LogPath))
-            File.AppendAllText(options.LogPath, line + Environment.NewLine);
+        lock (PerfOutputGate)
+        {
+            Console.WriteLine(line);
+            Console.Out.Flush();
+            if (!string.IsNullOrWhiteSpace(options.LogPath))
+                File.AppendAllText(options.LogPath, line + Environment.NewLine);
+        }
     }
 
     private static string EscapeField(string value) =>
@@ -520,7 +535,7 @@ internal static class Program
         Console.WriteLine(
             """
             Usage:
-              dotnet run --project tools/FreeX.AppIoBench -- --path <xlsx> [options]
+              dotnet run --project tools/FreeX.AppIoBench -- --path <xlsx-or-xlsm> [options]
 
             Options:
               --edit none|existing-literal|insert-literal|clear-cell|formula-text

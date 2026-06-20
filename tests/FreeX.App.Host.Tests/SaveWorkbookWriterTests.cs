@@ -59,4 +59,29 @@ public sealed class SaveWorkbookWriterTests
         await act.Should().ThrowAsync<InvalidOperationException>();
         (await File.ReadAllTextAsync(tempPath)).Should().Be("original");
     }
+
+    [Fact]
+    public async Task SaveAsync_CanceledBeforeSave_DoesNotInvokeAdapterOrCreateTarget()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var tempPath = Path.Combine(temp.Path, "canceled-save.fxjson");
+        var workbook = new Workbook("Canceled");
+        workbook.AddSheet("Sheet1");
+        var adapterInvoked = false;
+        var adapter = new TestFileAdapter(save: (_, _) => adapterInvoked = true);
+        var saver = new SaveWorkbookWriter();
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        var act = async () => await saver.SaveAsync(
+            tempPath,
+            adapter,
+            workbook,
+            new TestProgress<SaveProgressUpdate>(_ => { }),
+            cancellation.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        adapterInvoked.Should().BeFalse();
+        File.Exists(tempPath).Should().BeFalse();
+    }
 }

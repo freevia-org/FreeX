@@ -1146,7 +1146,7 @@
                                     HorizontalAlignment="Left"
                                     VerticalAlignment="Center"
                                     Visibility="Collapsed"
-                                    MaxWidth="420"
+                                    MaxWidth="460"
                                     ClipToBounds="True">
                             <ProgressBar x:Name="StatusSaveProgressBar"
                                          Width="120" Height="5"
@@ -1164,6 +1164,17 @@
                                        AutomationProperties.AutomationId="StatusSaveProgressText"
                                        AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_OpenProgressDetail}"
                                        AutomationProperties.LiveSetting="Assertive"/>
+                            <Button x:Name="StatusSaveProgressCancelButton"
+                                    Content="{local:Loc Key=Common_Cancel}"
+                                    Visibility="Collapsed"
+                                    Margin="8,0,0,0"
+                                    Padding="8,0"
+                                    MinWidth="56"
+                                    Height="20"
+                                    FontSize="11"
+                                    Click="CancelFileOperation_Click"
+                                    AutomationProperties.AutomationId="StatusSaveProgressCancelButton"
+                                    AutomationProperties.Name="{local:Loc Key=Common_Cancel}"/>
                         </StackPanel>
                         <StackPanel x:Name="StatusStatsPanel" Orientation="Horizontal"
                                     HorizontalAlignment="Right" VerticalAlignment="Center"

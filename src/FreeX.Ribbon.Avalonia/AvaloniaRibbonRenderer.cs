@@ -83,7 +83,9 @@ public static class AvaloniaRibbonRenderer
                 && registry.TryGet(new RibbonCommandId(id), out var cmd)
                 && cmd is IRibbonStatefulCommand stateful)
             {
-                toggle.IsChecked = stateful.GetState().IsChecked;
+                var state = stateful.GetState();
+                toggle.IsChecked = state.IsChecked;
+                toggle.IsEnabled = state.IsEnabled;
             }
         }
     }
@@ -734,7 +736,14 @@ public static class AvaloniaRibbonRenderer
             return;
         if (string.IsNullOrEmpty(control.CommandId.Value))
             return;
-        element.IsEnabled = registry.TryGet(control.CommandId, out _);
+        if (!registry.TryGet(control.CommandId, out var cmd))
+        {
+            element.IsEnabled = false;
+            return;
+        }
+        // Stateful commands expose IsEnabled in their state (e.g. Draw-tab commands disabled by
+        // default when no stylus/pen context is active). Respect that at build time.
+        element.IsEnabled = cmd is not IRibbonStatefulCommand stateful || stateful.GetState().IsEnabled;
     }
 
     private static RibbonMenu? BuildMenu(RibbonControl control) => control switch

@@ -454,6 +454,7 @@ public partial class MainWindow
         if (adapter == null) return;
         if (_isOpeningFile) return;
         _isOpeningFile = true;
+        using var operationCancellation = BeginFileOperationCancellation();
         try
         {
             if (await ConfirmSaveBeforeDestructiveActionAsync(UiText.Get("MainWindowMessage_SaveChangesBeforeOpeningWorkbook")) == SaveChangesConfirmation.Cancel)
@@ -468,7 +469,8 @@ public partial class MainWindow
             var progress = new Progress<OpenProgressUpdate>(
                 update => ShowOpenProgress(update.Title, update.Detail, update.Percent));
             var loader = new OpenWorkbookLoader(workbook => _recalcEngine.RecalculateAllFormulas(workbook));
-            var result = await loader.LoadAsync(path, adapter, ext, format!, progress);
+            var result = await loader.LoadAsync(path, adapter, ext, format!, progress, operationCancellation.Token);
+            operationCancellation.Token.ThrowIfCancellationRequested();
 
             CloseFindReplaceDialogIfOpen();
             _currentXlsxFeatureReport = result.FeatureReport;
@@ -503,7 +505,8 @@ public partial class MainWindow
             ShowOpenProgress(
                 OpenWorkbookProgressPlanner.ProgressTitle(),
                 OpenWorkbookProgressPlanner.FormatLoadingFileDetail("preparing view", TimeSpan.Zero),
-                98);
+                null);
+            operationCancellation.Token.ThrowIfCancellationRequested();
             ApplyOpenedWorksheetViewState();
             RefreshSheetTabs();
             HideStartScreen();
@@ -519,6 +522,15 @@ public partial class MainWindow
                 ["fileType"] = FileDialogFilterBuilder.SafeFileTypeFromExtension(ext),
                 ["format"] = format?.FormatName,
                 ["worksheetCount"] = _workbook.Sheets.Count.ToString()
+            });
+        }
+        catch (OperationCanceledException) when (operationCancellation.IsCancellationRequested)
+        {
+            RecordDiagnosticEvent("workbook_open_canceled", new Dictionary<string, string?>
+            {
+                ["extension"] = ext,
+                ["fileType"] = FileDialogFilterBuilder.SafeFileTypeFromExtension(ext),
+                ["format"] = format?.FormatName
             });
         }
         catch (Exception ex)
@@ -538,6 +550,7 @@ public partial class MainWindow
         finally
         {
             _isOpeningFile = false;
+            ClearFileOperationCancellation(operationCancellation);
             HideOpenProgress();
         }
     }
@@ -600,12 +613,69 @@ public partial class MainWindow
             message,
             percent);
         StatusSaveProgressPanel.SetValue(System.Windows.Automation.AutomationProperties.NameProperty, title);
+        StatusSaveProgressCancelButton.Visibility = Visibility.Visible;
+        StatusSaveProgressCancelButton.IsEnabled = true;
+        StatusReadyText.Visibility = Visibility.Collapsed;
+        StatusStatsPanel.Visibility = Visibility.Collapsed;
     }
 
     private void HideOperationFooterProgress()
     {
         BackstageProgressOverlayBinder.Hide(StatusSaveProgressPanel);
         _operationProgressFileName = null;
+        StatusSaveProgressCancelButton.Visibility = Visibility.Collapsed;
+        RefreshStatusBar();
+    }
+
+    private CancellationTokenSource BeginFileOperationCancellation()
+    {
+        _fileOperationCancellation?.Dispose();
+        var cancellation = new CancellationTokenSource();
+        _fileOperationCancellation = cancellation;
+        return cancellation;
+    }
+
+    private void ClearFileOperationCancellation(CancellationTokenSource operationCancellation)
+    {
+        if (ReferenceEquals(_fileOperationCancellation, operationCancellation))
+            _fileOperationCancellation = null;
+    }
+
+    private void CancelFileOperation_Click(object sender, RoutedEventArgs e)
+    {
+        _fileOperationCancellation?.Cancel();
+        StatusSaveProgressCancelButton.IsEnabled = false;
+    }
+
+    private void SetFileOperationInputEnabled(bool isEnabled)
+    {
+        if (!isEnabled)
+        {
+            if (_fileOperationInputEnabledSnapshot is not null)
+                return;
+
+            _fileOperationInputEnabledSnapshot = [];
+            foreach (UIElement child in RootGrid.Children)
+            {
+                if (ReferenceEquals(child, StatusBarRoot))
+                    continue;
+
+                _fileOperationInputEnabledSnapshot[child] = child.IsEnabled;
+                child.IsEnabled = false;
+            }
+
+            StatusInteractiveControls.IsEnabled = false;
+            return;
+        }
+
+        if (_fileOperationInputEnabledSnapshot is not null)
+        {
+            foreach (var (element, wasEnabled) in _fileOperationInputEnabledSnapshot)
+                element.IsEnabled = wasEnabled;
+            _fileOperationInputEnabledSnapshot = null;
+        }
+
+        StatusInteractiveControls.IsEnabled = true;
     }
 
     // Start screen button handlers. The former rail-button forwarders (SsBackBtn_Click, SsNewBtn_Click,
@@ -900,6 +970,7 @@ public partial class MainWindow
         var generationAtSaveStart = _workbookDirtyGeneration;
         var workbookAtSaveStart = _workbook;
 
+        using var operationCancellation = BeginFileOperationCancellation();
         try
         {
             _isSavingFile = true;
@@ -907,9 +978,9 @@ public partial class MainWindow
             // Block all user input for the duration of the save.  Unlike open (which builds a fresh
             // workbook), save serializes the LIVE model on a background thread, so a concurrent edit —
             // including a keyboard edit, which a mouse-only overlay would not stop — could tear the
-            // snapshot.  Disabling the root grid is the primary defence; the generation check below is
-            // belt-and-suspenders.  The footer progress still advances while disabled.
-            RootGrid.IsEnabled = false;
+            // snapshot.  Disable the app surface while leaving the status-bar cancel affordance live;
+            // the generation check below is belt-and-suspenders.
+            SetFileOperationInputEnabled(false);
             _operationProgressFileName = System.IO.Path.GetFileName(target.Path);
             ShowSaveProgress(
                 UiText.Get("Progress_SavingWorkbook"),
@@ -917,7 +988,13 @@ public partial class MainWindow
                 1);
             var progress = new Progress<SaveProgressUpdate>(
                 update => ShowSaveProgress(update.Title, update.Detail, update.Percent));
-            var saveWarnings = await new SaveWorkbookWriter().SaveAsync(target.Path, target.Adapter, _workbook, progress);
+            var saveWarnings = await new SaveWorkbookWriter().SaveAsync(
+                target.Path,
+                target.Adapter,
+                _workbook,
+                progress,
+                operationCancellation.Token);
+            operationCancellation.Token.ThrowIfCancellationRequested();
 
             var plan = SaveCompletionPlanner.Plan(
                 generationAtSaveStart,
@@ -953,6 +1030,16 @@ public partial class MainWindow
             });
             return true;
         }
+        catch (OperationCanceledException) when (operationCancellation.IsCancellationRequested)
+        {
+            RecordDiagnosticEvent("workbook_save_canceled", new Dictionary<string, string?>
+            {
+                ["extension"] = ext,
+                ["fileType"] = FileDialogFilterBuilder.SafeFileTypeFromExtension(ext),
+                ["format"] = target.Adapter.FormatName
+            });
+            return false;
+        }
         catch (Exception ex)
         {
             RecordDiagnosticEvent("workbook_save_failed", new Dictionary<string, string?>
@@ -970,8 +1057,9 @@ public partial class MainWindow
         }
         finally
         {
+            ClearFileOperationCancellation(operationCancellation);
             _isSavingFile = false;
-            RootGrid.IsEnabled = true;
+            SetFileOperationInputEnabled(true);
             HideSaveProgress();
         }
     }

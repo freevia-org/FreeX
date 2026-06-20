@@ -228,6 +228,196 @@ public sealed class XlsxLoadPackageStreamTests
     }
 
     [Fact]
+    public void ClosedXmlLoadSanitizer_RemovesCalcChainOnlyFromTransientPackage()
+    {
+        using var package = CreatePackageWithCalculationChain();
+        var hints = new XlsxClosedXmlLoadSanitizationHints(
+            HasPivotPackageMetadata: false,
+            HasChartExChartParts: false,
+            HasDrawingPackageParts: false,
+            HasConditionalFormattingBlocks: false,
+            HasUnsupportedConditionalFormattingBlocks: false,
+            HasWorksheetDynamicFilters: false,
+            HasWorksheetGridXmlSchemaIssues: false,
+            HasWorksheetPageLayoutSchemaIssues: false,
+            HasWorksheetPageBreakSchemaIssues: false,
+            HasWorksheetAutoFilterSchemaIssues: false,
+            HasStructuredTableAutoFilterSchemaIssues: false,
+            HasStructuredTableSortStateSchemaIssues: false,
+            HasStructuredTableMetadataSchemaIssues: false,
+            HasDocumentPropertiesPackageGraphIssues: false,
+            HasCustomRibbonPackageGraphIssues: false,
+            HasWorksheetSheetViewSchemaIssues: false,
+            HasWorkbookViewSchemaIssues: false,
+            HasWorkbookCalculationPropertySchemaIssues: false,
+            HasWorkbookFileSharingSchemaIssues: false,
+            HasWorkbookFileRecoveryPropertySchemaIssues: false,
+            HasWorkbookProtectionSchemaIssues: false,
+            HasWorkbookWebPublishingSchemaIssues: false,
+            HasWorkbookSmartTagSchemaIssues: false,
+            HasWorkbookNativeMetadataSchemaIssues: false,
+            HasWorksheetRelationshipMarkerSchemaIssues: false,
+            HasWorksheetNativeMetadataSchemaIssues: false,
+            MergeCellWorksheetPathsToStrip: null,
+            HasCalculationChainPackagePart: true);
+
+        var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(
+            package,
+            removeUnsupportedConditionalFormatting: false,
+            removeAllConditionalFormatting: false,
+            hints);
+
+        try
+        {
+            sanitized.Should().NotBeSameAs(package);
+            using var archive = new ZipArchive(sanitized, ZipArchiveMode.Read, leaveOpen: true);
+            archive.GetEntry("xl/calcChain.xml").Should().BeNull();
+
+            XNamespace contentTypesNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+            var contentTypesXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "[Content_Types].xml");
+            contentTypesXml.Root!.Elements(contentTypesNs + "Override")
+                .Select(element => element.Attribute("PartName")?.Value)
+                .Should()
+                .NotContain("/xl/calcChain.xml");
+
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            var relsXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/_rels/workbook.xml.rels");
+            relsXml.Root!.Elements(packageRelNs + "Relationship")
+                .Select(relationship => relationship.Attribute("Type")?.Value)
+                .Should()
+                .NotContain("http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain");
+        }
+        finally
+        {
+            if (!ReferenceEquals(sanitized, package))
+                sanitized.Dispose();
+        }
+
+        using var originalArchive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        originalArchive.GetEntry("xl/calcChain.xml").Should().NotBeNull();
+    }
+
+    [Fact]
+    public void ClosedXmlLoadSanitizer_RemovesCalcChainRelationshipByTypeWhenTargetDoesNotResolve()
+    {
+        using var package = CreatePackageWithCalculationChain("calcChain-via-type.xml");
+        var hints = new XlsxClosedXmlLoadSanitizationHints(
+            HasPivotPackageMetadata: false,
+            HasChartExChartParts: false,
+            HasDrawingPackageParts: false,
+            HasConditionalFormattingBlocks: false,
+            HasUnsupportedConditionalFormattingBlocks: false,
+            HasWorksheetDynamicFilters: false,
+            HasWorksheetGridXmlSchemaIssues: false,
+            HasWorksheetPageLayoutSchemaIssues: false,
+            HasWorksheetPageBreakSchemaIssues: false,
+            HasWorksheetAutoFilterSchemaIssues: false,
+            HasStructuredTableAutoFilterSchemaIssues: false,
+            HasStructuredTableSortStateSchemaIssues: false,
+            HasStructuredTableMetadataSchemaIssues: false,
+            HasDocumentPropertiesPackageGraphIssues: false,
+            HasCustomRibbonPackageGraphIssues: false,
+            HasWorksheetSheetViewSchemaIssues: false,
+            HasWorkbookViewSchemaIssues: false,
+            HasWorkbookCalculationPropertySchemaIssues: false,
+            HasWorkbookFileSharingSchemaIssues: false,
+            HasWorkbookFileRecoveryPropertySchemaIssues: false,
+            HasWorkbookProtectionSchemaIssues: false,
+            HasWorkbookWebPublishingSchemaIssues: false,
+            HasWorkbookSmartTagSchemaIssues: false,
+            HasWorkbookNativeMetadataSchemaIssues: false,
+            HasWorksheetRelationshipMarkerSchemaIssues: false,
+            HasWorksheetNativeMetadataSchemaIssues: false,
+            MergeCellWorksheetPathsToStrip: null,
+            HasCalculationChainPackagePart: true);
+
+        var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(
+            package,
+            removeUnsupportedConditionalFormatting: false,
+            removeAllConditionalFormatting: false,
+            hints);
+
+        try
+        {
+            using var archive = new ZipArchive(sanitized, ZipArchiveMode.Read, leaveOpen: true);
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            var relsXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/_rels/workbook.xml.rels");
+            relsXml.Root!.Elements(packageRelNs + "Relationship")
+                .Select(relationship => relationship.Attribute("Type")?.Value)
+                .Should()
+                .NotContain("http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain");
+        }
+        finally
+        {
+            if (!ReferenceEquals(sanitized, package))
+                sanitized.Dispose();
+        }
+    }
+
+    [Fact]
+    public void ClosedXmlLoadSanitizer_FusedTransientPackageRemovesCalcChainRelationshipWhenOtherPartsAreRemoved()
+    {
+        using var package = CreatePackageWithDrawingReferences();
+        AddCalculationChain(package);
+        var hints = new XlsxClosedXmlLoadSanitizationHints(
+            HasPivotPackageMetadata: false,
+            HasChartExChartParts: false,
+            HasDrawingPackageParts: true,
+            HasConditionalFormattingBlocks: false,
+            HasUnsupportedConditionalFormattingBlocks: false,
+            HasWorksheetDynamicFilters: false,
+            HasWorksheetGridXmlSchemaIssues: false,
+            HasWorksheetPageLayoutSchemaIssues: false,
+            HasWorksheetPageBreakSchemaIssues: false,
+            HasWorksheetAutoFilterSchemaIssues: false,
+            HasStructuredTableAutoFilterSchemaIssues: false,
+            HasStructuredTableSortStateSchemaIssues: false,
+            HasStructuredTableMetadataSchemaIssues: false,
+            HasDocumentPropertiesPackageGraphIssues: false,
+            HasCustomRibbonPackageGraphIssues: false,
+            HasWorksheetSheetViewSchemaIssues: false,
+            HasWorkbookViewSchemaIssues: false,
+            HasWorkbookCalculationPropertySchemaIssues: false,
+            HasWorkbookFileSharingSchemaIssues: false,
+            HasWorkbookFileRecoveryPropertySchemaIssues: false,
+            HasWorkbookProtectionSchemaIssues: false,
+            HasWorkbookWebPublishingSchemaIssues: false,
+            HasWorkbookSmartTagSchemaIssues: false,
+            HasWorkbookNativeMetadataSchemaIssues: false,
+            HasWorksheetRelationshipMarkerSchemaIssues: false,
+            HasWorksheetNativeMetadataSchemaIssues: false,
+            MergeCellWorksheetPathsToStrip: null,
+            HasCalculationChainPackagePart: true);
+
+        var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(
+            package,
+            styleOnlyWorksheetPathsToStrip: null,
+            removeUnsupportedConditionalFormatting: false,
+            removeAllConditionalFormatting: false,
+            hints);
+
+        try
+        {
+            sanitized.Should().NotBeSameAs(package);
+            using var archive = new ZipArchive(sanitized, ZipArchiveMode.Read, leaveOpen: true);
+            archive.GetEntry("xl/calcChain.xml").Should().BeNull();
+            archive.GetEntry("xl/drawings/drawing1.xml").Should().BeNull();
+
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            var relsXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/_rels/workbook.xml.rels");
+            relsXml.Root!.Elements(packageRelNs + "Relationship")
+                .Select(relationship => relationship.Attribute("Type")?.Value)
+                .Should()
+                .NotContain("http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain");
+        }
+        finally
+        {
+            if (!ReferenceEquals(sanitized, package))
+                sanitized.Dispose();
+        }
+    }
+
+    [Fact]
     public void ClosedXmlLoadSanitizer_RemovesDrawingPackagePartsFromChartsheetPackage()
     {
         using var package = CreatePackageWithChartsheetDrawingReferences();
@@ -1142,6 +1332,87 @@ public sealed class XlsxLoadPackageStreamTests
         return package;
     }
 
+    private static MemoryStream CreatePackageWithCalculationChain(string calculationChainTarget = "calcChain.xml")
+    {
+        var package = new MemoryStream();
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            WritePackageEntry(
+                archive,
+                "[Content_Types].xml",
+                """
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+                  <Override PartName="/xl/calcChain.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.calcChain+xml"/>
+                </Types>
+                """);
+            WritePackageEntry(
+                archive,
+                "xl/workbook.xml",
+                """
+                <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"/>
+                """);
+            WritePackageEntry(
+                archive,
+                "xl/_rels/workbook.xml.rels",
+                """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdCalcChain" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain" Target="{0}"/>
+                </Relationships>
+                """.Replace("{0}", calculationChainTarget, StringComparison.Ordinal));
+            WritePackageEntry(
+                archive,
+                "xl/calcChain.xml",
+                """
+                <calcChain xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+                  <c r="A1" i="1"/>
+                </calcChain>
+                """);
+        }
+
+        package.Position = 0;
+        return package;
+    }
+
+    private static void AddCalculationChain(MemoryStream package)
+    {
+        package.Position = 0;
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace contentTypesNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+            var contentTypesXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "[Content_Types].xml");
+            contentTypesXml.Root!.Add(new XElement(
+                contentTypesNs + "Override",
+                new XAttribute("PartName", "/xl/calcChain.xml"),
+                new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.calcChain+xml")));
+            ReplacePackageEntry(archive, "[Content_Types].xml", contentTypesXml.ToString(SaveOptions.DisableFormatting));
+
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            var workbookRelsXml = archive.GetEntry("xl/_rels/workbook.xml.rels") is null
+                ? new XDocument(new XElement(packageRelNs + "Relationships"))
+                : XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/_rels/workbook.xml.rels");
+            workbookRelsXml.Root!.Add(new XElement(
+                packageRelNs + "Relationship",
+                new XAttribute("Id", "rIdCalcChain"),
+                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain"),
+                new XAttribute("Target", "calcChain.xml")));
+            ReplacePackageEntry(archive, "xl/_rels/workbook.xml.rels", workbookRelsXml.ToString(SaveOptions.DisableFormatting));
+
+            WritePackageEntry(
+                archive,
+                "xl/calcChain.xml",
+                """
+                <calcChain xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+                  <c r="A1" i="1"/>
+                </calcChain>
+                """);
+        }
+
+        package.Position = 0;
+    }
+
     private static MemoryStream CreatePackageWithMalformedDocumentPropertyRootRelationship()
     {
         var package = new MemoryStream();
@@ -1442,6 +1713,12 @@ public sealed class XlsxLoadPackageStreamTests
         using var stream = entry.Open();
         using var writer = new StreamWriter(stream);
         writer.Write(content);
+    }
+
+    private static void ReplacePackageEntry(ZipArchive archive, string path, string content)
+    {
+        archive.GetEntry(path)?.Delete();
+        WritePackageEntry(archive, path, content);
     }
 
     private static string CreateUniqueStyleOnlyWorksheetXml(int rows, int columns)

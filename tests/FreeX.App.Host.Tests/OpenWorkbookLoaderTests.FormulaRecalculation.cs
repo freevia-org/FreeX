@@ -77,6 +77,34 @@ public sealed partial class OpenWorkbookLoaderTests
     }
 
     [Fact]
+    public async Task LoadAsync_CanceledBeforeLoad_DoesNotInvokeAdapter()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var tempPath = Path.Combine(temp.Path, "canceled-load.fxjson");
+        await File.WriteAllTextAsync(tempPath, "payload");
+        var adapterInvoked = false;
+        var adapter = new TestFileAdapter(_ =>
+        {
+            adapterInvoked = true;
+            return new Workbook("Loaded");
+        });
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        var loader = new OpenWorkbookLoader(_ => { });
+
+        var act = async () => await loader.LoadAsync(
+            tempPath,
+            adapter,
+            ".fxjson",
+            new FileFormatDescriptor(".fxjson", "Fake"),
+            new TestProgress<OpenProgressUpdate>(_ => { }),
+            cancellation.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        adapterInvoked.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task LoadAsync_XlsxWithCachedFormulasTrustsCachedValuesByDefault()
     {
         using var temp = new TestTemporaryDirectory();

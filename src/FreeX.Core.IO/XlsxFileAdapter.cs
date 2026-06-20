@@ -946,7 +946,8 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             packageParts.HasInspected ? packageParts.HasWorkbookNativeMetadataSchemaIssues : null,
             hasWorksheetRelationshipMarkerSchemaIssues,
             hasWorksheetNativeMetadataSchemaIssues,
-            mergeCellWorksheetPathsToStrip);
+            mergeCellWorksheetPathsToStrip,
+            packageParts.HasInspected ? packageParts.HasCalculationChainPackagePart : null);
     }
 
     private static IReadOnlySet<string>? GetWorksheetsWithPreservableSourceMetadata(
@@ -1180,6 +1181,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             bool hasExternalLinks,
             bool hasStructuredTables,
             bool hasVbaProjectPackage,
+            bool hasCalculationChainPackagePart,
             bool? hasWorkbookWebPublishingSchemaIssues,
             bool? hasWorkbookSmartTagSchemaIssues,
             bool? hasWorkbookNativeMetadataSchemaIssues)
@@ -1195,6 +1197,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             HasExternalLinks = hasExternalLinks;
             HasStructuredTables = hasStructuredTables;
             HasVbaProjectPackage = hasVbaProjectPackage;
+            HasCalculationChainPackagePart = hasCalculationChainPackagePart;
             HasWorkbookWebPublishingSchemaIssues = hasWorkbookWebPublishingSchemaIssues;
             HasWorkbookSmartTagSchemaIssues = hasWorkbookSmartTagSchemaIssues;
             HasWorkbookNativeMetadataSchemaIssues = hasWorkbookNativeMetadataSchemaIssues;
@@ -1212,6 +1215,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         public bool HasExternalLinks { get; }
         public bool HasStructuredTables { get; }
         public bool HasVbaProjectPackage { get; }
+        public bool HasCalculationChainPackagePart { get; }
         public bool? HasWorkbookWebPublishingSchemaIssues { get; }
         public bool? HasWorkbookSmartTagSchemaIssues { get; }
         public bool? HasWorkbookNativeMetadataSchemaIssues { get; }
@@ -1296,6 +1300,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 hasExternalLinks,
                 hasStructuredTables,
                 hasVbaProjectPackage,
+                archive.GetEntry("xl/calcChain.xml") is not null,
                 InspectWorkbookWebPublishingSchemaIssues(sharedWorkbookXml, sharedWorkbookXmlMissing, sharedWorkbookXmlCorrupt),
                 InspectWorkbookSmartTagSchemaIssues(sharedWorkbookXml, sharedWorkbookXmlMissing, sharedWorkbookXmlCorrupt),
                 InspectWorkbookNativeMetadataSchemaIssues(sharedWorkbookXml, sharedWorkbookXmlMissing, sharedWorkbookXmlCorrupt));
