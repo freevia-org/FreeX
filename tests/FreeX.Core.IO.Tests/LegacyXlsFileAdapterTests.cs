@@ -83,6 +83,9 @@ public sealed class LegacyXlsFileAdapterTests
         workbook.FirstVisibleSheetIndex.Should().Be(1);
         workbook.ShowSheetTabs.Should().BeFalse();
         workbook.SheetTabRatio.Should().Be(650);
+        workbook.IsStructureProtected.Should().BeTrue();
+        workbook.StructureProtectionPassword.Should().Be(ProtectionPasswordHelper.ToLegacyPasswordHash("structure"));
+        GetWorkbookProtectionMetadataAttribute(workbook, "lockWindows").Should().Be("1");
         workbook.StyleCount.Should().BeGreaterThan(1);
 
         var sheet = workbook.GetSheetAt(0);
@@ -278,6 +281,7 @@ public sealed class LegacyXlsFileAdapterTests
                 SheetNames: workbook.Sheets.Select(sheet => sheet.Name).ToArray(),
                 SheetVisibilityFingerprints: ReadImportedSheetVisibilityFingerprints(workbook),
                 WorkbookViewFingerprints: ReadImportedWorkbookViewFingerprints(workbook),
+                WorkbookProtectionFingerprints: ReadImportedWorkbookProtectionFingerprints(workbook),
                 CellFingerprints: ReadImportedCellFingerprints(workbook),
                 MergeFingerprints: ReadImportedMergeFingerprints(workbook),
                 DimensionFingerprints: ReadImportedDimensionFingerprints(workbook),
@@ -334,6 +338,7 @@ public sealed class LegacyXlsFileAdapterTests
                 imported.SheetNames.Should().Equal(source.SheetNames, imported.File);
                 imported.SheetVisibilityFingerprints.Should().BeEquivalentTo(source.SheetVisibilityFingerprints, imported.File);
                 imported.WorkbookViewFingerprints.Should().BeEquivalentTo(source.WorkbookViewFingerprints, imported.File);
+                imported.WorkbookProtectionFingerprints.Should().BeEquivalentTo(source.WorkbookProtectionFingerprints, imported.File);
                 imported.CellFingerprints.Should().BeEquivalentTo(source.CellFingerprints, imported.File);
                 imported.MergeFingerprints.Should().BeEquivalentTo(source.MergeFingerprints, imported.File);
                 imported.DimensionFingerprints.Should().BeEquivalentTo(source.DimensionFingerprints, imported.File);
@@ -487,7 +492,15 @@ public sealed class LegacyXlsFileAdapterTests
             window.DisplayTabs = false;
             window.TabWidthRatio = 650;
         }
-
+        var protect = hssf.Workbook.FindFirstRecordBySid(ProtectRecord.sid) as ProtectRecord ??
+            throw new InvalidOperationException("Expected a BIFF workbook Protect record in the HSSF fixture.");
+        protect.Protect = true;
+        var windowProtect = hssf.Workbook.FindFirstRecordBySid(WindowProtectRecord.sid) as WindowProtectRecord ??
+            throw new InvalidOperationException("Expected a BIFF workbook WindowProtect record in the HSSF fixture.");
+        windowProtect.Protect = true;
+        var password = hssf.Workbook.FindFirstRecordBySid(PasswordRecord.sid) as PasswordRecord ??
+            throw new InvalidOperationException("Expected a BIFF workbook Password record in the HSSF fixture.");
+        password.Password = unchecked((short)Convert.ToUInt16(ProtectionPasswordHelper.ToLegacyPasswordHash("structure"), 16));
         sheet.AddMergedRegion(new CellRangeAddress(0, 0, 0, 1));
         sheet.SetColumnWidth(1, 18 * 256);
         sheet.SetColumnHidden(2, true);
@@ -911,6 +924,7 @@ public sealed class LegacyXlsFileAdapterTests
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
         var workbookViewFingerprints = ReadSourceWorkbookViewFingerprints(hssf);
+        var workbookProtectionFingerprints = ReadSourceWorkbookProtectionFingerprints(hssf);
 
         return new LegacyXlsCorpusSummary(
             Path.GetFileName(path),
@@ -945,6 +959,7 @@ public sealed class LegacyXlsFileAdapterTests
             SheetNames: sheetNames,
             SheetVisibilityFingerprints: sheetVisibilityFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             WorkbookViewFingerprints: workbookViewFingerprints,
+            WorkbookProtectionFingerprints: workbookProtectionFingerprints,
             CellFingerprints: cellFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             MergeFingerprints: mergeFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             DimensionFingerprints: dimensionFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
@@ -1096,6 +1111,7 @@ public sealed class LegacyXlsFileAdapterTests
             SheetNames: sheetNames,
             SheetVisibilityFingerprints: sheetVisibilityFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             WorkbookViewFingerprints: [],
+            WorkbookProtectionFingerprints: [],
             CellFingerprints: cellFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             MergeFingerprints: mergeFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             DimensionFingerprints: dimensionFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
@@ -1162,6 +1178,49 @@ public sealed class LegacyXlsFileAdapterTests
                 sheetTabRatio,
                 firstVisibleSheetIndex,
                 activeSheetIndex)
+        ];
+    }
+
+    private static IReadOnlyList<string> ReadImportedWorkbookProtectionFingerprints(Workbook workbook)
+    {
+        var lockWindows = GetWorkbookProtectionMetadataAttribute(workbook, "lockWindows") == "1";
+        if (!workbook.IsStructureProtected &&
+            string.IsNullOrWhiteSpace(workbook.StructureProtectionPassword) &&
+            !lockWindows)
+        {
+            return [];
+        }
+
+        return
+        [
+            CreateWorkbookProtectionFingerprint(
+                workbook.IsStructureProtected,
+                workbook.StructureProtectionPassword,
+                lockWindows)
+        ];
+    }
+
+    private static IReadOnlyList<string> ReadSourceWorkbookProtectionFingerprints(HSSFWorkbook hssf)
+    {
+        var structureProtected =
+            hssf.Workbook.FindFirstRecordBySid(ProtectRecord.sid) is ProtectRecord protect &&
+            protect.Protect;
+        var windowProtected =
+            hssf.Workbook.FindFirstRecordBySid(WindowProtectRecord.sid) is WindowProtectRecord windowProtect &&
+            windowProtect.Protect;
+        var passwordHash = hssf.Workbook.FindFirstRecordBySid(PasswordRecord.sid) is PasswordRecord { Password: not 0 } password
+            ? ((ushort)password.Password).ToString("X4", CultureInfo.InvariantCulture)
+            : null;
+
+        if (!structureProtected && !windowProtected && string.IsNullOrWhiteSpace(passwordHash))
+            return [];
+
+        return
+        [
+            CreateWorkbookProtectionFingerprint(
+                structureProtected || windowProtected,
+                passwordHash,
+                windowProtected)
         ];
     }
 
@@ -1789,6 +1848,17 @@ public sealed class LegacyXlsFileAdapterTests
             $"Ratio={FormatNullableInt(sheetTabRatio)}",
             $"First={FormatNullableInt(firstVisibleSheetIndex)}",
             $"Active={FormatNullableInt(activeSheetIndex)}"
+        ]);
+
+    private static string CreateWorkbookProtectionFingerprint(
+        bool protectedStructureOrWindows,
+        string? passwordHash,
+        bool lockWindows) =>
+        string.Join("|", [
+            "WorkbookProtection",
+            $"Protected={protectedStructureOrWindows}",
+            $"Password={passwordHash ?? ""}",
+            $"LockWindows={lockWindows}"
         ]);
 
     private static string NormalizeSourceSheetVisibility(SheetVisibility visibility) =>
@@ -2533,6 +2603,12 @@ public sealed class LegacyXlsFileAdapterTests
         return attributes.TryGetValue(name, out var value) ? value : null;
     }
 
+    private static string? GetWorkbookProtectionMetadataAttribute(Workbook workbook, string name)
+    {
+        var (attributes, _) = XmlNativeBagSerializer.Deserialize(workbook.ProtectionMetadata?.Get("workbookProtection"));
+        return attributes.TryGetValue(name, out var value) ? value : null;
+    }
+
     private static string SourceValueToken(ICell cell, CellType cellType) =>
         cellType switch
         {
@@ -2983,6 +3059,7 @@ public sealed class LegacyXlsFileAdapterTests
         IReadOnlyList<string>? SheetNames = null,
         IReadOnlyList<string>? SheetVisibilityFingerprints = null,
         IReadOnlyList<string>? WorkbookViewFingerprints = null,
+        IReadOnlyList<string>? WorkbookProtectionFingerprints = null,
         IReadOnlyList<string>? CellFingerprints = null,
         IReadOnlyList<string>? MergeFingerprints = null,
         IReadOnlyList<string>? DimensionFingerprints = null,

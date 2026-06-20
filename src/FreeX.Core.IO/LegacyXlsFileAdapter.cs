@@ -81,6 +81,7 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
             Uses1904DateSystem = hssf.IsDate1904()
         };
         LoadWorkbookView(hssf, workbook);
+        LoadWorkbookProtection(hssf, workbook);
         if (hssf.ActiveSheetIndex >= 0 && hssf.ActiveSheetIndex < hssf.NumberOfSheets)
             workbook.ActiveSheetIndex = hssf.ActiveSheetIndex;
 
@@ -125,6 +126,34 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         workbook.SheetTabRatio = Math.Clamp((int)window.TabWidthRatio, 0, 1000);
         if (window.FirstVisibleTab >= 0 && window.FirstVisibleTab < sourceWorkbook.NumberOfSheets)
             workbook.FirstVisibleSheetIndex = window.FirstVisibleTab;
+    }
+
+    private static void LoadWorkbookProtection(HSSFWorkbook sourceWorkbook, Workbook workbook)
+    {
+        var isStructureProtected =
+            sourceWorkbook.Workbook.FindFirstRecordBySid(ProtectRecord.sid) is ProtectRecord protect &&
+            protect.Protect;
+        var isWindowProtected =
+            sourceWorkbook.Workbook.FindFirstRecordBySid(WindowProtectRecord.sid) is WindowProtectRecord windowProtect &&
+            windowProtect.Protect;
+
+        workbook.IsStructureProtected = isStructureProtected || isWindowProtected;
+        if (sourceWorkbook.Workbook.FindFirstRecordBySid(PasswordRecord.sid) is PasswordRecord { Password: not 0 } password)
+            workbook.StructureProtectionPassword = ((ushort)password.Password).ToString("X4", CultureInfo.InvariantCulture);
+
+        if (!isWindowProtected)
+            return;
+
+        var serializedMetadata = XmlNativeBagSerializer.Serialize(
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["lockWindows"] = "1"
+            });
+        if (serializedMetadata is null)
+            return;
+
+        workbook.ProtectionMetadata = new NativeXmlPreserveBag();
+        workbook.ProtectionMetadata.Set("workbookProtection", serializedMetadata);
     }
 
     private static Workbook LoadWithExcelDataReader(Stream stream)
