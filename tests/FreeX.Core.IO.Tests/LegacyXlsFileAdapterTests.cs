@@ -272,6 +272,7 @@ public sealed class LegacyXlsFileAdapterTests
                 RichMetadata: source.RichMetadata,
                 SheetNames: workbook.Sheets.Select(sheet => sheet.Name).ToArray(),
                 CellFingerprints: ReadImportedCellFingerprints(workbook),
+                MergeFingerprints: ReadImportedMergeFingerprints(workbook),
                 StyleFingerprints: source.RichMetadata
                     ? ReadImportedRichStyleFingerprints(workbook)
                     : ReadImportedFallbackStyleFingerprints(workbook),
@@ -303,6 +304,7 @@ public sealed class LegacyXlsFileAdapterTests
                 imported.ActiveSheetIndex.Should().Be(source.ActiveSheetIndex, imported.File);
                 imported.SheetNames.Should().Equal(source.SheetNames, imported.File);
                 imported.CellFingerprints.Should().BeEquivalentTo(source.CellFingerprints, imported.File);
+                imported.MergeFingerprints.Should().BeEquivalentTo(source.MergeFingerprints, imported.File);
                 imported.StyleFingerprints.Should().BeEquivalentTo(source.StyleFingerprints, imported.File);
                 imported.HeaderFooterFingerprints.Should().BeEquivalentTo(source.HeaderFooterFingerprints, imported.File);
             }
@@ -319,6 +321,7 @@ public sealed class LegacyXlsFileAdapterTests
                 imported.Pictures.Should().Be(source.Pictures, imported.File);
                 imported.SheetNames.Should().Equal(source.SheetNames, imported.File);
                 imported.CellFingerprints.Should().BeEquivalentTo(source.CellFingerprints, imported.File);
+                imported.MergeFingerprints.Should().BeEquivalentTo(source.MergeFingerprints, imported.File);
                 imported.DefinedNameFingerprints.Should().BeEquivalentTo(source.DefinedNameFingerprints, imported.File);
                 imported.HyperlinkFingerprints.Should().BeEquivalentTo(source.HyperlinkFingerprints, imported.File);
                 imported.CommentFingerprints.Should().BeEquivalentTo(source.CommentFingerprints, imported.File);
@@ -650,6 +653,7 @@ public sealed class LegacyXlsFileAdapterTests
         var conditionalFormats = 0;
         var sheetNames = new List<string>();
         var cellFingerprints = new List<string>();
+        var mergeFingerprints = new List<string>();
         var styleFingerprints = new List<string>();
         var hyperlinkFingerprints = new List<string>();
         var commentFingerprints = new List<string>();
@@ -674,6 +678,8 @@ public sealed class LegacyXlsFileAdapterTests
             var sheet = hssf.GetSheetAt(sheetIndex);
             sheetNames.Add(sheet.SheetName);
             merges += sheet.NumMergedRegions;
+            for (var mergeIndex = 0; mergeIndex < sheet.NumMergedRegions; mergeIndex++)
+                mergeFingerprints.Add(CreateMergeFingerprint(sheetIndex, sheet.SheetName, sheet.GetMergedRegion(mergeIndex)));
 
             if (sheet.PaneInformation is { } pane && pane.IsFreezePane())
             {
@@ -874,6 +880,7 @@ public sealed class LegacyXlsFileAdapterTests
             activeSheetIndex,
             SheetNames: sheetNames,
             CellFingerprints: cellFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            MergeFingerprints: mergeFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             StyleFingerprints: styleFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             HeaderFooterFingerprints: [],
             DefinedNameFingerprints: definedNameFingerprints,
@@ -905,6 +912,7 @@ public sealed class LegacyXlsFileAdapterTests
         int? activeSheetIndex = null;
         var sheetNames = new List<string>();
         var cellFingerprints = new List<string>();
+        var mergeFingerprints = new List<string>();
         var styleFingerprints = new List<string>();
         var headerFooterFingerprints = new List<string>();
 
@@ -923,6 +931,12 @@ public sealed class LegacyXlsFileAdapterTests
                 headerFooterFingerprints.Add(headerFooterFingerprint);
 
             merges += reader.MergeCells?.Length ?? 0;
+            foreach (var range in reader.MergeCells ?? [])
+            {
+                if (range.FromRow <= range.ToRow && range.FromColumn <= range.ToColumn)
+                    mergeFingerprints.Add(CreateMergeFingerprint(sheetIndex, reader.Name, range));
+            }
+
             for (var column = 0; column < reader.FieldCount; column++)
             {
                 if (reader.GetColumnWidth(column) > 0)
@@ -989,6 +1003,7 @@ public sealed class LegacyXlsFileAdapterTests
             RichMetadata: false,
             SheetNames: sheetNames,
             CellFingerprints: cellFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            MergeFingerprints: mergeFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             StyleFingerprints: styleFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             HeaderFooterFingerprints: headerFooterFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             DefinedNameFingerprints: [],
@@ -1019,6 +1034,13 @@ public sealed class LegacyXlsFileAdapterTests
                     entry.Address.Col,
                     NormalizeFormulaText(entry.Cell.FormulaText ?? ""),
                     ImportedValueToken(entry.Cell.Value))))
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+
+    private static IReadOnlyList<string> ReadImportedMergeFingerprints(Workbook workbook) =>
+        workbook.Sheets
+            .SelectMany((sheet, sheetIndex) => sheet.MergedRegions
+                .Select(range => CreateMergeFingerprint(sheetIndex, sheet.Name, range)))
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
 
@@ -1539,6 +1561,16 @@ public sealed class LegacyXlsFileAdapterTests
         string formula,
         string value) =>
         $"{sheetIndex}:{sheetName}!{new ModelCellAddress(default, row, column).ToA1()}|F={formula}|V={value}";
+
+    private static string CreateMergeFingerprint(int sheetIndex, string sheetName, GridRange range) =>
+        $"{sheetIndex}:{sheetName}|Merge|{range.Start.ToA1()}:{range.End.ToA1()}";
+
+    private static string CreateMergeFingerprint(int sheetIndex, string sheetName, CellRangeAddressBase range) =>
+        $"{sheetIndex}:{sheetName}|Merge|{CreateRangeToken(range)}";
+
+    private static string CreateMergeFingerprint(int sheetIndex, string sheetName, ExcelDataReader.CellRange range) =>
+        $"{sheetIndex}:{sheetName}|Merge|{new ModelCellAddress(default, ToSourceModelIndex(range.FromRow), ToSourceModelIndex(range.FromColumn)).ToA1()}:" +
+        $"{new ModelCellAddress(default, ToSourceModelIndex(range.ToRow), ToSourceModelIndex(range.ToColumn)).ToA1()}";
 
     private static bool TryCreateExcelDataReaderStyleFingerprint(
         IExcelDataReader reader,
@@ -2676,6 +2708,7 @@ public sealed class LegacyXlsFileAdapterTests
         bool RichMetadata = true,
         IReadOnlyList<string>? SheetNames = null,
         IReadOnlyList<string>? CellFingerprints = null,
+        IReadOnlyList<string>? MergeFingerprints = null,
         IReadOnlyList<string>? StyleFingerprints = null,
         IReadOnlyList<string>? HeaderFooterFingerprints = null,
         IReadOnlyList<string>? DefinedNameFingerprints = null,
