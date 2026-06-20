@@ -300,6 +300,7 @@ public sealed class LegacyXlsFileAdapterTests
                 imported.Dimensions.Should().BeGreaterThanOrEqualTo(source.Dimensions, imported.File);
                 imported.ActiveSheetIndex.Should().Be(source.ActiveSheetIndex, imported.File);
                 imported.SheetNames.Should().Equal(source.SheetNames, imported.File);
+                imported.CellFingerprints.Should().BeEquivalentTo(source.CellFingerprints, imported.File);
                 imported.StyleFingerprints.Should().BeEquivalentTo(source.StyleFingerprints, imported.File);
                 imported.HeaderFooterFingerprints.Should().BeEquivalentTo(source.HeaderFooterFingerprints, imported.File);
             }
@@ -891,6 +892,7 @@ public sealed class LegacyXlsFileAdapterTests
         var veryHiddenSheets = 0;
         int? activeSheetIndex = null;
         var sheetNames = new List<string>();
+        var cellFingerprints = new List<string>();
         var styleFingerprints = new List<string>();
         var headerFooterFingerprints = new List<string>();
 
@@ -926,6 +928,14 @@ public sealed class LegacyXlsFileAdapterTests
                     if (value is not null && (value is not string text || text.Length > 0))
                     {
                         cells++;
+                        cellFingerprints.Add(CreateCellFingerprint(
+                            sheetIndex,
+                            reader.Name,
+                            (uint)reader.Depth + 1,
+                            (uint)column + 1,
+                            "",
+                            ImportedValueToken(MapExcelDataReaderValue(value))));
+
                         if (TryCreateExcelDataReaderStyleFingerprint(reader, sheetIndex, reader.Name, column, out var fingerprint))
                         {
                             styles++;
@@ -966,7 +976,7 @@ public sealed class LegacyXlsFileAdapterTests
             ActiveSheetIndex: activeSheetIndex,
             RichMetadata: false,
             SheetNames: sheetNames,
-            CellFingerprints: [],
+            CellFingerprints: cellFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             StyleFingerprints: styleFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             HeaderFooterFingerprints: headerFooterFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             DefinedNameFingerprints: [],
@@ -2112,6 +2122,29 @@ public sealed class LegacyXlsFileAdapterTests
             CellType.String => $"Text:{cell.StringCellValue}",
             CellType.Error => $"Error:{FormulaError.ForInt(cell.ErrorCellValue).String}",
             _ => "Blank:"
+        };
+
+    private static ScalarValue MapExcelDataReaderValue(object? value) =>
+        value switch
+        {
+            null => BlankValue.Instance,
+            double number => new NumberValue(number),
+            float number => new NumberValue(number),
+            long number => new NumberValue(number),
+            int number => new NumberValue(number),
+            short number => new NumberValue(number),
+            byte number => new NumberValue(number),
+            sbyte number => new NumberValue(number),
+            uint number => new NumberValue(number),
+            ushort number => new NumberValue(number),
+            ulong number => new NumberValue(number),
+            decimal number => new NumberValue((double)number),
+            bool boolean => new BoolValue(boolean),
+            DateTime date => DateTimeValue.FromDateTime(date),
+            TimeSpan time => new DateTimeValue(time.TotalDays),
+            string text when text.Length == 0 => BlankValue.Instance,
+            string text => new TextValue(text),
+            _ => new TextValue(Convert.ToString(value, CultureInfo.InvariantCulture) ?? "")
         };
 
     private static string ImportedValueToken(ScalarValue value) =>
