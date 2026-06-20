@@ -4,7 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using FreeX.App.Services.Ribbon;
 using Free.Shared.Ribbon;
-using FreeX.Ribbon.Avalonia;
+using Free.Shared.Ribbon.Avalonia;
 
 namespace FreeX.App.Avalonia.Tests;
 

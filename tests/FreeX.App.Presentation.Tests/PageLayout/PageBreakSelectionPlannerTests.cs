@@ -1,7 +1,8 @@
 using FluentAssertions;
+using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host.Tests;
+namespace FreeX.App.Presentation.Tests.PageLayout;
 
 public sealed class PageBreakSelectionPlannerTests
 {

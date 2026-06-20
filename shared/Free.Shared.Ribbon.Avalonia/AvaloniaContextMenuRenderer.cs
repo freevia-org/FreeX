@@ -1,6 +1,6 @@
 using Avalonia.Controls;
 
-namespace FreeX.Ribbon.Avalonia;
+namespace Free.Shared.Ribbon.Avalonia;
 
 /// <summary>
 /// Renders a platform-neutral declarative <see cref="RibbonMenu"/> into an Avalonia

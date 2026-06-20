@@ -5,7 +5,7 @@ using System.Xml.Linq;
 using Avalonia;
 using Avalonia.Media;
 
-namespace FreeX.Ribbon.Avalonia;
+namespace Free.Shared.Ribbon.Avalonia;
 
 /// <summary>
 /// A minimal, software-safe SVG → Avalonia translator. It parses the per-command ribbon SVGs (the SAME

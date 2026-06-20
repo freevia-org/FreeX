@@ -7,6 +7,7 @@
     <Project Path="shared/Free.Shared.Pdf.Skia/Free.Shared.Pdf.Skia.csproj" />
     <Project Path="shared/Free.Shared.Pdf.Wpf/Free.Shared.Pdf.Wpf.csproj" />
     <Project Path="shared/Free.Shared.Ribbon/Free.Shared.Ribbon.csproj" />
+    <Project Path="shared/Free.Shared.Ribbon.Avalonia/Free.Shared.Ribbon.Avalonia.csproj" />
     <Project Path="shared/Free.Shared.Ribbon.Wpf/Free.Shared.Ribbon.Wpf.csproj" />
     <Project Path="shared/Free.Shared.Shell/Free.Shared.Shell.csproj" />
     <Project Path="shared/Free.Shared.Shell.Wpf/Free.Shared.Shell.Wpf.csproj" />

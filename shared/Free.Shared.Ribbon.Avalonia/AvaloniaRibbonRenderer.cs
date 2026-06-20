@@ -9,7 +9,7 @@ using Avalonia.Styling;
 using Avalonia.VisualTree;
 using Free.Shared.Ribbon;
 
-namespace FreeX.Ribbon.Avalonia;
+namespace Free.Shared.Ribbon.Avalonia;
 
 /// <summary>
 /// Avalonia (cross-platform) realization of a declarative <see cref="RibbonTab"/>.
@@ -93,7 +93,10 @@ public static class AvaloniaRibbonRenderer
     }
 
     /// <summary>Builds the content panel for one tab (the body shown under the tab header).</summary>
-    public static Control BuildTabContent(RibbonTab tab, IRibbonCommandRegistry? registry = null)
+    public static Control BuildTabContent(
+        RibbonTab tab,
+        IRibbonCommandRegistry? registry = null,
+        Action? afterExecute = null)
     {
         ArgumentNullException.ThrowIfNull(tab);
 
@@ -107,7 +110,7 @@ public static class AvaloniaRibbonRenderer
         {
             if (!first)
                 panel.Children.Add(BuildGroupDivider());
-            panel.Children.Add(new AvaloniaRibbonGroupHost(group, BuildGroup(group, registry), registry));
+            panel.Children.Add(new AvaloniaRibbonGroupHost(group, BuildGroup(group, registry, afterExecute), registry, afterExecute));
             first = false;
         }
 
@@ -129,10 +132,10 @@ public static class AvaloniaRibbonRenderer
     };
 
     /// <summary>Builds a single <see cref="TabItem"/> for a tab (header + content), tagged with the tab id.</summary>
-    private static TabItem BuildTabItem(RibbonTab tab, IRibbonCommandRegistry? registry) => new()
+    private static TabItem BuildTabItem(RibbonTab tab, IRibbonCommandRegistry? registry, Action? afterExecute) => new()
     {
         Header = BuildTabHeader(tab.Header),
-        Content = BuildTabContent(tab, registry),
+        Content = BuildTabContent(tab, registry, afterExecute),
         Tag = tab.Id,
     };
 
@@ -159,7 +162,8 @@ public static class AvaloniaRibbonRenderer
     public static Control BuildRibbon(
         RibbonDefinition definition,
         IRibbonCommandRegistry? registry = null,
-        IRibbonContextSource? contextSource = null)
+        IRibbonContextSource? contextSource = null,
+        Action? afterExecute = null)
     {
         ArgumentNullException.ThrowIfNull(definition);
 
@@ -181,13 +185,13 @@ public static class AvaloniaRibbonRenderer
             : ResolveTabStripTabs(definition, contextSource.Current);
 
         foreach (var tab in initialTabs)
-            tabControl.Items.Add(BuildTabItem(tab, registry));
+            tabControl.Items.Add(BuildTabItem(tab, registry, afterExecute));
 
         if (tabControl.Items.Count > 0)
             tabControl.SelectedIndex = tabControl.Items.Count > 1 ? 1 : 0;
 
         if (contextSource is not null)
-            contextSource.ContextChanged += (_, _) => SyncContextualTabs(tabControl, definition, registry, contextSource);
+            contextSource.ContextChanged += (_, _) => SyncContextualTabs(tabControl, definition, registry, contextSource, afterExecute);
 
         return tabControl;
     }
@@ -201,7 +205,8 @@ public static class AvaloniaRibbonRenderer
         TabControl tabControl,
         RibbonDefinition definition,
         IRibbonCommandRegistry? registry,
-        IRibbonContextSource contextSource)
+        IRibbonContextSource contextSource,
+        Action? afterExecute)
     {
         var desired = ResolveTabStripTabs(definition, contextSource.Current);
         var selectedId = (tabControl.SelectedItem as TabItem)?.Tag as string;
@@ -223,7 +228,7 @@ public static class AvaloniaRibbonRenderer
             var tab = desired[i];
             var existingIndex = IndexOfTab(tabControl, tab.Id);
             if (existingIndex < 0)
-                tabControl.Items.Insert(Math.Min(i + 1, tabControl.Items.Count), BuildTabItem(tab, registry));
+                tabControl.Items.Insert(Math.Min(i + 1, tabControl.Items.Count), BuildTabItem(tab, registry, afterExecute));
         }
 
         // Preserve selection if still visible; otherwise select the first tab.
@@ -449,7 +454,7 @@ public static class AvaloniaRibbonRenderer
         tabControl.Styles.Add(disabledCombos);
     }
 
-    private static Control BuildGroup(RibbonGroup group, IRibbonCommandRegistry? registry)
+    private static Control BuildGroup(RibbonGroup group, IRibbonCommandRegistry? registry, Action? afterExecute)
     {
         var grid = new Grid
         {
@@ -461,7 +466,7 @@ public static class AvaloniaRibbonRenderer
             },
         };
 
-        var content = BuildGroupContent(group, registry);
+        var content = BuildGroupContent(group, registry, afterExecute);
         Grid.SetRow(content, 0);
         grid.Children.Add(content);
 
@@ -487,7 +492,7 @@ public static class AvaloniaRibbonRenderer
         return grid;
     }
 
-    private static Control BuildGroupContent(RibbonGroup group, IRibbonCommandRegistry? registry)
+    private static Control BuildGroupContent(RibbonGroup group, IRibbonCommandRegistry? registry, Action? afterExecute)
     {
         var lane = new StackPanel
         {
@@ -502,7 +507,7 @@ public static class AvaloniaRibbonRenderer
         // Leading large "hero" buttons each occupy their own full-height column (mirrors WPF).
         while (index < controls.Count && controls[index].PreferredLayout == RibbonCommandLayoutKind.Large)
         {
-            lane.Children.Add(BuildLargeControl(controls[index], registry));
+            lane.Children.Add(BuildLargeControl(controls[index], registry, afterExecute));
             index++;
         }
 
@@ -511,15 +516,18 @@ public static class AvaloniaRibbonRenderer
             return lane;
 
         if (rest.Any(c => c is RibbonRowBreak))
-            lane.Children.Add(BuildExplicitRows(rest, registry));
+            lane.Children.Add(BuildExplicitRows(rest, registry, afterExecute));
         else
-            BuildAutoColumns(rest, lane, registry);
+            BuildAutoColumns(rest, lane, registry, afterExecute);
 
         return lane;
     }
 
     // Groups that declare RowBreaks lay out as stacked horizontal rows (e.g. Font: combos row, then B/I/U row).
-    private static Control BuildExplicitRows(IReadOnlyList<RibbonControl> controls, IRibbonCommandRegistry? registry)
+    private static Control BuildExplicitRows(
+        IReadOnlyList<RibbonControl> controls,
+        IRibbonCommandRegistry? registry,
+        Action? afterExecute)
     {
         var rows = new StackPanel { Orientation = Orientation.Vertical, VerticalAlignment = VerticalAlignment.Top };
         var current = NewRow(isFirst: true);
@@ -533,7 +541,7 @@ public static class AvaloniaRibbonRenderer
                 continue;
             }
 
-            current.Children.Add(BuildInlineControl(control, registry));
+            current.Children.Add(BuildInlineControl(control, registry, afterExecute));
         }
 
         rows.Children.Add(current);
@@ -547,7 +555,11 @@ public static class AvaloniaRibbonRenderer
     };
 
     // Groups without explicit rows pack medium/small/combo controls into columns of up to three.
-    private static void BuildAutoColumns(IReadOnlyList<RibbonControl> controls, StackPanel lane, IRibbonCommandRegistry? registry)
+    private static void BuildAutoColumns(
+        IReadOnlyList<RibbonControl> controls,
+        StackPanel lane,
+        IRibbonCommandRegistry? registry,
+        Action? afterExecute)
     {
         StackPanel? column = null;
         var columnIsCombo = false;
@@ -571,7 +583,7 @@ public static class AvaloniaRibbonRenderer
                     break;
                 case { PreferredLayout: RibbonCommandLayoutKind.Large }:
                     Flush();
-                    lane.Children.Add(BuildLargeControl(control, registry));
+                    lane.Children.Add(BuildLargeControl(control, registry, afterExecute));
                     break;
                 default:
                     // Keep comboboxes and buttons in separate columns so a group reads like WPF's.
@@ -580,7 +592,7 @@ public static class AvaloniaRibbonRenderer
                         Flush();
                     column ??= NewColumn();
                     columnIsCombo = isCombo;
-                    column.Children.Add(BuildInlineControl(control, registry));
+                    column.Children.Add(BuildInlineControl(control, registry, afterExecute));
                     if (column.Children.Count >= MaxRowsPerColumn)
                         Flush();
                     break;
@@ -599,18 +611,21 @@ public static class AvaloniaRibbonRenderer
 
     // Dispatches a single non-large control to its WPF-matching form: combo, checkbox, icon-only (Small),
     // or icon+label (Medium / default).
-    private static Control BuildInlineControl(RibbonControl control, IRibbonCommandRegistry? registry) => control switch
+    private static Control BuildInlineControl(
+        RibbonControl control,
+        IRibbonCommandRegistry? registry,
+        Action? afterExecute) => control switch
     {
         RibbonSeparator => BuildInlineDivider(),
-        RibbonComboBox combo => BuildComboControl(combo, registry),
-        RibbonCheckBox check => BuildCheckControl(check, registry),
-        { PreferredLayout: RibbonCommandLayoutKind.Large } => BuildLargeControl(control, registry),
-        { PreferredLayout: RibbonCommandLayoutKind.Small } => BuildIconControl(control, registry),
-        _ => BuildMediumControl(control, registry),
+        RibbonComboBox combo => BuildComboControl(combo, registry, afterExecute),
+        RibbonCheckBox check => BuildCheckControl(check, registry, afterExecute),
+        { PreferredLayout: RibbonCommandLayoutKind.Large } => BuildLargeControl(control, registry, afterExecute),
+        { PreferredLayout: RibbonCommandLayoutKind.Small } => BuildIconControl(control, registry, afterExecute),
+        _ => BuildMediumControl(control, registry, afterExecute),
     };
 
     // WPF BuildCheckControl: a real CheckBox carrying the label.
-    private static Control BuildCheckControl(RibbonCheckBox check, IRibbonCommandRegistry? registry)
+    private static Control BuildCheckControl(RibbonCheckBox check, IRibbonCommandRegistry? registry, Action? afterExecute)
     {
         var box = new CheckBox
         {
@@ -621,7 +636,7 @@ public static class AvaloniaRibbonRenderer
             Margin = new Thickness(2, 1, 2, 1),
             Tag = check.CommandId.Value,
         };
-        box.IsCheckedChanged += (_, _) => Execute(check.CommandId, registry);
+        box.IsCheckedChanged += (_, _) => Execute(check.CommandId, registry, afterExecute);
         ApplyEnablement(box, check, registry);
         return box;
     }
@@ -629,7 +644,7 @@ public static class AvaloniaRibbonRenderer
     // WPF BuildLargeControl: a hero button — big icon (~32px) above a centered (wrapping) caption. For a
     // split/dropdown control, WPF folds a centered chevron into a band BELOW the label (a distinct dropdown
     // affordance) rather than running "▾" into the caption text.
-    private static Control BuildLargeControl(RibbonControl control, IRibbonCommandRegistry? registry)
+    private static Control BuildLargeControl(RibbonControl control, IRibbonCommandRegistry? registry, Action? afterExecute)
     {
         var stack = new StackPanel { Orientation = Orientation.Vertical };
         stack.Children.Add(NewIcon(control, LargeIconSize, HorizontalAlignment.Center));
@@ -672,12 +687,12 @@ public static class AvaloniaRibbonRenderer
         button.Height = 72;
         button.Padding = new Thickness(3, 2);
         ((ContentControl)button).Content = stack;
-        WireControl(button, control, registry);
+        WireControl(button, control, registry, afterExecute);
         return button;
     }
 
     // WPF BuildMediumControl: small icon (16px) + label in a horizontal row.
-    private static Control BuildMediumControl(RibbonControl control, IRibbonCommandRegistry? registry)
+    private static Control BuildMediumControl(RibbonControl control, IRibbonCommandRegistry? registry, Action? afterExecute)
     {
         var content = new StackPanel { Orientation = Orientation.Horizontal };
         content.Children.Add(NewIcon(control, MediumIconSize, HorizontalAlignment.Center));
@@ -698,12 +713,12 @@ public static class AvaloniaRibbonRenderer
         button.Padding = new Thickness(4, 2);
         button.HorizontalContentAlignment = HorizontalAlignment.Left;
         ((ContentControl)button).Content = content;
-        WireControl(button, control, registry);
+        WireControl(button, control, registry, afterExecute);
         return button;
     }
 
     // WPF BuildIconControl: Small layout is ICON-ONLY (~18px) — no label. With a menu, append a chevron.
-    private static Control BuildIconControl(RibbonControl control, IRibbonCommandRegistry? registry)
+    private static Control BuildIconControl(RibbonControl control, IRibbonCommandRegistry? registry, Action? afterExecute)
     {
         var hasMenu = HasMenu(control);
         Control content;
@@ -726,11 +741,11 @@ public static class AvaloniaRibbonRenderer
         button.Padding = new Thickness(2);
         button.HorizontalContentAlignment = HorizontalAlignment.Center;
         ((ContentControl)button).Content = content;
-        WireControl(button, control, registry);
+        WireControl(button, control, registry, afterExecute);
         return button;
     }
 
-    private static Control BuildComboControl(RibbonComboBox combo, IRibbonCommandRegistry? registry)
+    private static Control BuildComboControl(RibbonComboBox combo, IRibbonCommandRegistry? registry, Action? afterExecute)
     {
         var box = new ComboBox
         {
@@ -756,7 +771,7 @@ public static class AvaloniaRibbonRenderer
         box.SelectionChanged += (_, _) =>
         {
             if (ready)
-                ExecuteWithValue(combo.CommandId, registry, box.SelectedItem as string);
+                ExecuteWithValue(combo.CommandId, registry, box.SelectedItem as string, afterExecute);
         };
         ready = true;
 
@@ -796,19 +811,23 @@ public static class AvaloniaRibbonRenderer
     /// <summary>
     /// Attaches the menu flyout (for dropdown/split buttons), click routing, and enablement.
     /// </summary>
-    private static void WireControl(ContentControl element, RibbonControl control, IRibbonCommandRegistry? registry)
+    private static void WireControl(
+        ContentControl element,
+        RibbonControl control,
+        IRibbonCommandRegistry? registry,
+        Action? afterExecute)
     {
         if (BuildMenu(control) is { } menu && element is Button menuButton)
         {
-            menuButton.Flyout = menu.BuildFlyout(registry);
+            menuButton.Flyout = menu.BuildFlyout(registry, afterExecute);
         }
         else if (element is Button button)
         {
-            button.Click += (_, _) => Execute(control.CommandId, registry);
+            button.Click += (_, _) => Execute(control.CommandId, registry, afterExecute);
         }
         else if (element is ToggleButton toggle)
         {
-            toggle.Click += (_, _) => Execute(control.CommandId, registry);
+            toggle.Click += (_, _) => Execute(control.CommandId, registry, afterExecute);
         }
 
         ApplyEnablement(element, control, registry);
@@ -839,15 +858,15 @@ public static class AvaloniaRibbonRenderer
         _ => null,
     };
 
-    private static MenuFlyout BuildFlyout(this RibbonMenu menu, IRibbonCommandRegistry? registry)
+    private static MenuFlyout BuildFlyout(this RibbonMenu menu, IRibbonCommandRegistry? registry, Action? afterExecute)
     {
         var flyout = new MenuFlyout();
         foreach (var item in menu.Items)
-            flyout.Items.Add(BuildMenuItem(item, registry));
+            flyout.Items.Add(BuildMenuItem(item, registry, afterExecute));
         return flyout;
     }
 
-    private static Control BuildMenuItem(RibbonMenuItem item, IRibbonCommandRegistry? registry)
+    private static Control BuildMenuItem(RibbonMenuItem item, IRibbonCommandRegistry? registry, Action? afterExecute)
     {
         if (item.Kind == RibbonMenuItemKind.Separator)
             return new Separator();
@@ -865,11 +884,11 @@ public static class AvaloniaRibbonRenderer
         if (item.Children.Count > 0)
         {
             foreach (var child in item.Children)
-                menuItem.Items.Add(BuildMenuItem(child, registry));
+                menuItem.Items.Add(BuildMenuItem(child, registry, afterExecute));
         }
         else if (item.CommandId is { } commandId)
         {
-            menuItem.Click += (_, _) => Execute(commandId, registry);
+            menuItem.Click += (_, _) => Execute(commandId, registry, afterExecute);
             ApplyEnablement(menuItem, commandId, registry);
         }
 
@@ -895,26 +914,39 @@ public static class AvaloniaRibbonRenderer
         item.IsEnabled = registry.TryGet(commandId, out _);
     }
 
-    private static void Execute(RibbonCommandId commandId, IRibbonCommandRegistry? registry)
+    private static void Execute(RibbonCommandId commandId, IRibbonCommandRegistry? registry, Action? afterExecute)
     {
         if (registry is null)
             return;
         if (registry.TryGet(commandId, out var command) && command is not null)
+        {
             command.Execute(RibbonCommandContext.Empty);
+            afterExecute?.Invoke();
+        }
     }
 
-    private static void ExecuteWithValue(RibbonCommandId commandId, IRibbonCommandRegistry? registry, string? value)
+    private static void ExecuteWithValue(
+        RibbonCommandId commandId,
+        IRibbonCommandRegistry? registry,
+        string? value,
+        Action? afterExecute)
     {
         if (registry is null)
             return;
         if (registry.TryGet(commandId, out var command) && command is not null)
+        {
             command.Execute(RibbonCommandContext.ForSelectedValue(value));
+            afterExecute?.Invoke();
+        }
     }
 
     private static bool HasMenu(RibbonControl control) =>
         control is RibbonSplitButton or RibbonDropdown;
 
-    private static MenuFlyout BuildCollapsedGroupFlyout(RibbonGroup group, IRibbonCommandRegistry? registry)
+    private static MenuFlyout BuildCollapsedGroupFlyout(
+        RibbonGroup group,
+        IRibbonCommandRegistry? registry,
+        Action? afterExecute)
     {
         var flyout = new MenuFlyout();
         foreach (var control in group.Controls)
@@ -930,7 +962,7 @@ public static class AvaloniaRibbonRenderer
                     flyout.Items.Add(new MenuItem { Header = combo.Label, IsEnabled = false, Tag = combo.CommandId.Value });
                     break;
                 default:
-                    flyout.Items.Add(BuildCollapsedGroupMenuItem(control, registry));
+                    flyout.Items.Add(BuildCollapsedGroupMenuItem(control, registry, afterExecute));
                     break;
             }
         }
@@ -938,7 +970,10 @@ public static class AvaloniaRibbonRenderer
         return flyout;
     }
 
-    private static Control BuildCollapsedGroupMenuItem(RibbonControl control, IRibbonCommandRegistry? registry)
+    private static Control BuildCollapsedGroupMenuItem(
+        RibbonControl control,
+        IRibbonCommandRegistry? registry,
+        Action? afterExecute)
     {
         var item = new MenuItem
         {
@@ -949,11 +984,11 @@ public static class AvaloniaRibbonRenderer
         if (BuildMenu(control) is { } menu)
         {
             foreach (var menuItem in menu.Items)
-                item.Items.Add(BuildMenuItem(menuItem, registry));
+                item.Items.Add(BuildMenuItem(menuItem, registry, afterExecute));
         }
         else
         {
-            item.Click += (_, _) => Execute(control.CommandId, registry);
+            item.Click += (_, _) => Execute(control.CommandId, registry, afterExecute);
         }
 
         ApplyEnablement(item, control.CommandId, registry);
@@ -985,14 +1020,20 @@ public static class AvaloniaRibbonRenderer
         private readonly RibbonGroup _group;
         private readonly Control _full;
         private readonly IRibbonCommandRegistry? _registry;
+        private readonly Action? _afterExecute;
         private Control? _collapsedButton;
         private bool _collapsed;
 
-        public AvaloniaRibbonGroupHost(RibbonGroup group, Control full, IRibbonCommandRegistry? registry)
+        public AvaloniaRibbonGroupHost(
+            RibbonGroup group,
+            Control full,
+            IRibbonCommandRegistry? registry,
+            Action? afterExecute)
         {
             _group = group;
             _full = full;
             _registry = registry;
+            _afterExecute = afterExecute;
             Priority = group.Priority;
             VerticalAlignment = VerticalAlignment.Stretch;
             Content = full;
@@ -1055,7 +1096,7 @@ public static class AvaloniaRibbonRenderer
                 Height = 76,
                 Padding = new Thickness(2),
                 Content = stack,
-                Flyout = BuildCollapsedGroupFlyout(_group, _registry),
+                Flyout = BuildCollapsedGroupFlyout(_group, _registry, _afterExecute),
                 Tag = $"collapsed:{_group.Id}",
             };
             button.Classes.Add("freex-ribbon-collapsed-group");

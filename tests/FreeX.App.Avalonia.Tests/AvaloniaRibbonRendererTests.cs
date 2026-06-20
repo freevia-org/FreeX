@@ -12,7 +12,7 @@ using Avalonia.Themes.Fluent;
 using Avalonia.VisualTree;
 using FreeX.App.Avalonia.Ribbon;
 using Free.Shared.Ribbon;
-using FreeX.Ribbon.Avalonia;
+using Free.Shared.Ribbon.Avalonia;
 using Free.Shared.Ribbon.Icons;
 using AvaloniaPath = Avalonia.Controls.Shapes.Path;
 

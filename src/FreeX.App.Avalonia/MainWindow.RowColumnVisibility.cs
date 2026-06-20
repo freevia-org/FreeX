@@ -10,7 +10,7 @@ using Free.Shared.Ribbon;
 using FreeX.App.Services.Ribbon;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
-using FreeX.Ribbon.Avalonia;
+using Free.Shared.Ribbon.Avalonia;
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
 
 namespace FreeX.App.Avalonia;

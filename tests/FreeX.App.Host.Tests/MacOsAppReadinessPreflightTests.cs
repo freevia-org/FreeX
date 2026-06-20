@@ -1111,7 +1111,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 <ProjectReference Include="..\FreeX.Core.IO\FreeX.Core.IO.csproj" />
                 <ProjectReference Include="..\FreeX.Core.Model\FreeX.Core.Model.csproj" />
                 <ProjectReference Include="..\..\shared\Free.Shared.Ribbon\Free.Shared.Ribbon.csproj" />
-                <ProjectReference Include="..\FreeX.Ribbon.Avalonia\FreeX.Ribbon.Avalonia.csproj" />
+                <ProjectReference Include="..\..\shared\Free.Shared.Ribbon.Avalonia\Free.Shared.Ribbon.Avalonia.csproj" />
               </ItemGroup>
               <ItemGroup>
                 <PackageReference Include="Avalonia" Version="12.0.4" />
@@ -4362,9 +4362,9 @@ public sealed class MacOsAppReadinessPreflightTests
 
         WriteFile(
             root,
-            "src/FreeX.Ribbon.Avalonia/RibbonHost.cs",
+            "shared/Free.Shared.Ribbon.Avalonia/RibbonHost.cs",
             """
-            namespace FreeX.Ribbon.Avalonia;
+            namespace Free.Shared.Ribbon.Avalonia;
 
             public sealed class RibbonHost
             {

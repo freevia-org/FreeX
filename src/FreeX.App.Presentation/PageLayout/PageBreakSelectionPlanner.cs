@@ -1,13 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Presentation.PageLayout;
 
-internal static class PageBreakSelectionPlanner
+public static class PageBreakSelectionPlanner
 {
     public static PageBreakSelectionPlan Insert(
         GridRange selection,
@@ -54,6 +53,6 @@ internal static class PageBreakSelectionPlanner
     }
 }
 
-internal sealed record PageBreakSelectionPlan(
+public sealed record PageBreakSelectionPlan(
     IReadOnlyList<uint> RowBreaks,
     IReadOnlyList<uint> ColumnBreaks);

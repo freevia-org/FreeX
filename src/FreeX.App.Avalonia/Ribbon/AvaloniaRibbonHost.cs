@@ -4,7 +4,7 @@ using FreeX.App.Avalonia.Charts;
 using FreeX.App.Services;
 using FreeX.App.Services.Ribbon;
 using FreeX.Core.Model;
-using FreeX.Ribbon.Avalonia;
+using Free.Shared.Ribbon.Avalonia;
 using FreeX.Ribbon.Definitions;
 
 namespace FreeX.App.Avalonia.Ribbon;

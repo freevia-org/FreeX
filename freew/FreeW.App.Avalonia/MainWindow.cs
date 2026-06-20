@@ -9,6 +9,7 @@ using Avalonia.Platform.Storage;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Pdf;
 using FreeW.App.Avalonia.Ribbon;
+using Free.Shared.Ribbon.Avalonia;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
 using TextAlignment = FreeW.Core.Model.TextAlignment;
@@ -122,7 +123,10 @@ public sealed class MainWindow : Window
             Paste: () => _ = PasteAsync());
 
         var registry = FreeWRibbon.BuildRegistry(_editor, callbacks);
-        var ribbon = AvaloniaRibbonRenderer.Build(FreeWRibbon.BuildDefinition(), registry, afterExecute: () => _editor.Focus());
+        var ribbon = AvaloniaRibbonRenderer.BuildRibbon(
+            FreeWRibbon.BuildDefinition(),
+            registry,
+            afterExecute: () => _editor.Focus());
         HasToolbar = true;
         return new Border
         {

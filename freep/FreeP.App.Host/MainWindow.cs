@@ -39,8 +39,7 @@ public sealed class MainWindow : Window
     private TextBlock _titleText = null!;
     private TabControl _ribbonTabs = null!;
     private TabItem _fileTab = null!;
-    private int _lastRibbonTabIndex = 1;
-    private bool _suppressFileTabRevert;
+    private RibbonFileTabRouter? _fileTabRouter;
     private Border _canvas = null!;
     private TextBlock _canvasLabel = null!;
     private TextBlock _slideCountText = null!;
@@ -309,32 +308,10 @@ public sealed class MainWindow : Window
         }
 
         if (tabs.Items.Count > 1)
-        {
             tabs.SelectedIndex = 1;
-            _lastRibbonTabIndex = 1;
-        }
-
-        tabs.SelectionChanged += (_, e) =>
-        {
-            if (!ReferenceEquals(e.OriginalSource, tabs))
-                return;
-            if (_suppressFileTabRevert)
-                return;
-
-            if (ReferenceEquals(tabs.SelectedItem, _fileTab))
-            {
-                _suppressFileTabRevert = true;
-                tabs.SelectedIndex = _lastRibbonTabIndex;
-                _suppressFileTabRevert = false;
-                ShowBackstage();
-            }
-            else
-            {
-                _lastRibbonTabIndex = tabs.SelectedIndex;
-            }
-        };
 
         _ribbonTabs = tabs;
+        _fileTabRouter = RibbonFileTabRouter.Attach(tabs, _fileTab, ShowBackstage, tabs.SelectedIndex);
 
         return new Border
         {

@@ -13,7 +13,7 @@ using AvaloniaRectangle = Avalonia.Controls.Shapes.Rectangle;
 using AvaloniaEllipse = Avalonia.Controls.Shapes.Ellipse;
 using AvaloniaImage = Avalonia.Controls.Image;
 
-namespace FreeX.Ribbon.Avalonia;
+namespace Free.Shared.Ribbon.Avalonia;
 
 /// <summary>
 /// Avalonia ribbon icon renderer. Draws the SAME glyph as the WPF <c>RibbonIconFactory</c> for every

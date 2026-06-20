@@ -30,7 +30,7 @@ public sealed class AvaloniaProjectPortabilityGuardTests
         "Free.Shared.Ribbon",
         "Free.Shared.Shell",
         "FreeX.Ribbon.Definitions",
-        "FreeX.Ribbon.Avalonia"
+        "Free.Shared.Ribbon.Avalonia"
     ];
 
     private static readonly (string Description, Regex Pattern)[] PortableForbiddenPatterns =

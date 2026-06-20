@@ -108,12 +108,10 @@ public sealed class MainWindow : Window
     // shows them only while their selection context is active (an image selected, the caret in a table).
     private RibbonContextualTabController _contextualTabs = null!;
 
-    // File ribbon tab (Word-style Backstage entry): the first tab, which opens the Backstage on selection
-    // and reverts to the previously-active content tab. _lastRibbonTabIndex tracks that tab; the suppress
-    // flag guards the programmatic revert from re-entering the SelectionChanged handler.
+    // File ribbon tab (Word-style Backstage entry): selecting it opens Backstage and the shared router
+    // restores the previously-active content tab.
     private TabItem _fileTab = null!;
-    private int _lastRibbonTabIndex = 1;
-    private bool _suppressFileTabRevert;
+    private RibbonFileTabRouter? _fileTabRouter;
     private Border _status = null!;
     private Border _markedAsFinalBanner = null!;
     private TextBlock _dataFolderText = null!;
@@ -1837,33 +1835,8 @@ public sealed class MainWindow : Window
         // Start on Home (index 1; index 0 is the File tab). Remember it as the last "real" tab so File
         // selection can revert to it.
         if (tabs.Items.Count > 1)
-        {
             tabs.SelectedIndex = 1;
-            _lastRibbonTabIndex = 1;
-        }
-
-        // File-tab routing: when the File pill is picked, open the Backstage and bounce the selection back
-        // to the previously-active content tab so the ribbon body never goes blank and File never "sticks".
-        tabs.SelectionChanged += (sender, e) =>
-        {
-            if (!ReferenceEquals(e.OriginalSource, tabs))
-                return; // ignore selection changes bubbling up from inner controls (combos, lists)
-
-            if (_suppressFileTabRevert)
-                return;
-
-            if (ReferenceEquals(tabs.SelectedItem, _fileTab))
-            {
-                _suppressFileTabRevert = true;
-                tabs.SelectedIndex = _lastRibbonTabIndex; // revert immediately so File never stays selected
-                _suppressFileTabRevert = false;
-                ShowBackstage();
-            }
-            else
-            {
-                _lastRibbonTabIndex = tabs.SelectedIndex;
-            }
-        };
+        _fileTabRouter = RibbonFileTabRouter.Attach(tabs, _fileTab, ShowBackstage, tabs.SelectedIndex);
 
         var border = new Border
         {

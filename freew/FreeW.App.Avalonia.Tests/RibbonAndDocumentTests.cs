@@ -43,6 +43,21 @@ public class RibbonAndDocumentTests
     }
 
     [Fact]
+    public void Avalonia_shell_uses_the_shared_ribbon_renderer()
+    {
+        var project = File.ReadAllText(FindRepoFile("freew", "FreeW.App.Avalonia", "FreeW.App.Avalonia.csproj"));
+        project.Should().Contain(@"..\..\shared\Free.Shared.Ribbon.Avalonia\Free.Shared.Ribbon.Avalonia.csproj");
+
+        var mainWindow = File.ReadAllText(FindRepoFile("freew", "FreeW.App.Avalonia", "MainWindow.cs"));
+        mainWindow.Should().Contain("using Free.Shared.Ribbon.Avalonia;");
+        mainWindow.Should().Contain("AvaloniaRibbonRenderer.BuildRibbon(");
+
+        File.Exists(FindRepoFile("freew", "FreeW.App.Avalonia", "Ribbon", "AvaloniaRibbonRenderer.cs"))
+            .Should()
+            .BeFalse("FreeW Avalonia should not carry a private renderer now that the suite has a shared Avalonia renderer");
+    }
+
+    [Fact]
     public void Sample_document_contains_title_lists_and_a_table()
     {
         var doc = SampleDocument.Create();
@@ -88,4 +103,20 @@ public class RibbonAndDocumentTests
         RibbonGallery g => g.CommandId,
         _ => (RibbonCommandId?)null,
     };
+
+    private static string FindRepoFile(params string[] parts) =>
+        Path.Combine(FindRepoRoot(), Path.Combine(parts));
+
+    private static string FindRepoRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "FreeW.slnx")))
+                return directory.FullName;
+            directory = directory.Parent;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate repository root from the test output directory.");
+    }
 }

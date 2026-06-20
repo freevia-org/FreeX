@@ -9,7 +9,7 @@ using Avalonia.Media;
 
 using Free.Shared.Ribbon;
 using FreeX.App.Avalonia.Ribbon;
-using FreeX.Ribbon.Avalonia;
+using Free.Shared.Ribbon.Avalonia;
 
 using Xunit;
 

@@ -8,6 +8,7 @@
     <Project Path="shared/Free.Shared.Pdf.Skia/Free.Shared.Pdf.Skia.csproj" />
     <Project Path="shared/Free.Shared.Pdf.Wpf/Free.Shared.Pdf.Wpf.csproj" />
     <Project Path="shared/Free.Shared.Ribbon/Free.Shared.Ribbon.csproj" />
+    <Project Path="shared/Free.Shared.Ribbon.Avalonia/Free.Shared.Ribbon.Avalonia.csproj" />
     <Project Path="shared/Free.Shared.Ribbon.Wpf/Free.Shared.Ribbon.Wpf.csproj" />
     <Project Path="shared/Free.Shared.Shell/Free.Shared.Shell.csproj" />
     <Project Path="shared/Free.Shared.Shell.Wpf/Free.Shared.Shell.Wpf.csproj" />
@@ -24,7 +25,6 @@
     <Project Path="src/FreeX.Core.Formula/FreeX.Core.Formula.csproj" />
     <Project Path="src/FreeX.Core.IO/FreeX.Core.IO.csproj" />
     <Project Path="src/FreeX.Core.Model/FreeX.Core.Model.csproj" />
-    <Project Path="src/FreeX.Ribbon.Avalonia/FreeX.Ribbon.Avalonia.csproj" />
     <Project Path="src/FreeX.Ribbon.Definitions/FreeX.Ribbon.Definitions.csproj" />
   </Folder>
   <Folder Name="/tests/">

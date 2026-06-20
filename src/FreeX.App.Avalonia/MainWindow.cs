@@ -16,7 +16,7 @@ using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Services;
 using FreeX.App.Services.Ribbon;
 using FreeX.App.Services.Updates;
-using FreeX.Ribbon.Avalonia;
+using Free.Shared.Ribbon.Avalonia;
 using Free.Shared.Ribbon;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
