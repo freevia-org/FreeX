@@ -25,12 +25,13 @@ public static class Program
 
         // Local diagnostics, backed by the shared file store under %LOCALAPPDATA%\FreeW\Diagnostics.
         // FreeX-style local-only wiring (no Sentry). Best-effort throughout.
-        var diagnostics = FreeWDiagnostics.CreateDefault(EntryAssemblyVersion.Resolve());
+        var diagnostics = LocalAppDiagnostics.CreateDefault(EntryAssemblyVersion.Resolve());
 
         var app = new Application { ShutdownMode = ShutdownMode.OnMainWindowClose };
 
         // Application now exists, so the dispatcher hook can attach; record startup before the window shows.
-        diagnostics.RegisterCrashHandlers();
+        diagnostics.RegisterCrashHandlers(
+            handler => app.DispatcherUnhandledException += (_, args) => handler(args.Exception));
         diagnostics.RecordEvent("app_start");
 
         app.Run(new MainWindow(options, optionsStore));

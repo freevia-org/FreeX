@@ -12,12 +12,12 @@ namespace FreeW.App.Host.Tests;
 /// <see cref="AppDiagnosticsFileStore"/>, and the shared path planner resolves FreeW's own diagnostics
 /// folder (because the test assembly installs AppProduct = "FreeW", mirroring Program.Main).
 /// </summary>
-public sealed class FreeWDiagnosticsTests : IDisposable
+public sealed class FreeWLocalDiagnosticsTests : IDisposable
 {
     private readonly string _tempDir =
         Path.Combine(Path.GetTempPath(), "FreeW.DiagnosticsTests", Guid.NewGuid().ToString("N"));
 
-    public FreeWDiagnosticsTests() => Directory.CreateDirectory(_tempDir);
+    public FreeWLocalDiagnosticsTests() => Directory.CreateDirectory(_tempDir);
 
     public void Dispose()
     {
@@ -36,7 +36,7 @@ public sealed class FreeWDiagnosticsTests : IDisposable
     }
 
     [Fact]
-    public void RecordEvent_WritesEventLineToFreeWDiagnosticsFolder()
+    public void RecordEvent_WritesEventLineToFreeWLocalDiagnosticsFolder()
     {
         var fileStore = new AppDiagnosticsFileStore(new AppDiagnosticsOptions(_tempDir, IsEnabled: true));
         var metadata = AppDiagnosticsMetadata.Create("9.9.9");

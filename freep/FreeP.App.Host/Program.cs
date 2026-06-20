@@ -35,11 +35,12 @@ public static class Program
 
         // Local diagnostics, backed by the shared file store under %LOCALAPPDATA%\FreeP\Diagnostics
         // (FreeX-style local-only wiring, no Sentry). Best-effort throughout.
-        var diagnostics = FreePDiagnostics.CreateDefault(EntryAssemblyVersion.Resolve());
+        var diagnostics = LocalAppDiagnostics.CreateDefault(EntryAssemblyVersion.Resolve());
 
         var app = new Application { ShutdownMode = ShutdownMode.OnMainWindowClose };
 
-        diagnostics.RegisterCrashHandlers();
+        diagnostics.RegisterCrashHandlers(
+            handler => app.DispatcherUnhandledException += (_, args) => handler(args.Exception));
         diagnostics.RecordEvent("app_start");
 
         app.Run(new MainWindow(options, optionsStore));
