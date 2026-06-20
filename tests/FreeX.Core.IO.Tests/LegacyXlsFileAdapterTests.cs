@@ -12,6 +12,7 @@ using System.Globalization;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
+using System.Xml.Linq;
 using ModelBorderStyle = FreeX.Core.Model.BorderStyle;
 using ModelCellAddress = FreeX.Core.Model.CellAddress;
 using ModelCellStyle = FreeX.Core.Model.CellStyle;
@@ -534,6 +535,11 @@ public sealed class LegacyXlsFileAdapterTests
         summaries.Where(summary => summary.RichMetadata)
             .Sum(summary => summary.PrimaryViewMetadataFingerprints?.Count(fingerprint =>
                 fingerprint.Contains("|DefaultGridColor=0|ColorId=8", StringComparison.Ordinal)) ?? 0)
+            .Should()
+            .BeGreaterThan(0);
+        summaries.Where(summary => summary.RichMetadata)
+            .Sum(summary => summary.PrimaryViewMetadataFingerprints?.Count(fingerprint =>
+                fingerprint.Contains("|Selection=A1,A1:F2,null", StringComparison.Ordinal)) ?? 0)
             .Should()
             .BeGreaterThan(0);
         summaries.Sum(summary => summary.ProtectedSheets).Should().BeGreaterThan(0);
@@ -2383,7 +2389,8 @@ public sealed class LegacyXlsFileAdapterTests
                 sheet.Name,
                 GetPrimaryViewMetadataAttribute(sheet, "tabSelected"),
                 GetPrimaryViewMetadataAttribute(sheet, "defaultGridColor"),
-                GetPrimaryViewMetadataAttribute(sheet, "colorId")))
+                GetPrimaryViewMetadataAttribute(sheet, "colorId"),
+                GetPrimaryViewSelectionToken(sheet)))
             .Where(value => value is not null)
             .Select(value => value!)
             .OrderBy(value => value, StringComparer.Ordinal)
@@ -2528,19 +2535,44 @@ public sealed class LegacyXlsFileAdapterTests
         [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out string? fingerprint)
     {
         fingerprint = null;
-        if (TryGetWindowTwoRecord(sheet) is not { } window ||
-            (!window.IsSelected && window.DefaultHeader && window.HeaderColor == 64))
+        if (TryGetWindowTwoRecord(sheet) is not { } window)
         {
             return false;
         }
+
+        var selection = GetSourceSelectionToken(sheet);
+        if (!window.IsSelected && window.DefaultHeader && window.HeaderColor == 64 && selection is null)
+            return false;
 
         fingerprint = CreatePrimaryViewMetadataFingerprint(
             sheetIndex,
             sheetName,
             window.IsSelected ? "1" : null,
             window.DefaultHeader ? null : "0",
-            window.HeaderColor == 64 ? null : window.HeaderColor.ToString(CultureInfo.InvariantCulture));
+            window.HeaderColor == 64 ? null : window.HeaderColor.ToString(CultureInfo.InvariantCulture),
+            selection);
         return fingerprint is not null;
+    }
+
+    private static string? GetSourceSelectionToken(ISheet sheet)
+    {
+        if (TryGetSelectionRecord(sheet) is not { } selection)
+            return null;
+
+        var activeCell = ToSourceA1(selection.ActiveCellRow, selection.ActiveCellCol);
+        var sqref = CreateSqrefToken(selection.CellReferences);
+        if (string.IsNullOrWhiteSpace(sqref))
+            sqref = activeCell;
+        var activeCellId = selection.ActiveCellRef > 0
+            ? selection.ActiveCellRef.ToString(CultureInfo.InvariantCulture)
+            : "null";
+        if (selection.ActiveCellRef == 0 &&
+            string.Equals(activeCell, sqref, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        return $"{activeCell},{sqref},{activeCellId}";
     }
 
     private static string CreateSourcePageSetupFingerprint(int sheetIndex, string sheetName, ISheet sheet)
@@ -2850,9 +2882,10 @@ public sealed class LegacyXlsFileAdapterTests
         string sheetName,
         string? tabSelected,
         string? defaultGridColor,
-        string? colorId)
+        string? colorId,
+        string? selection)
     {
-        if (tabSelected is null && defaultGridColor is null && colorId is null)
+        if (tabSelected is null && defaultGridColor is null && colorId is null && selection is null)
             return null;
 
         return string.Join("|", [
@@ -2860,7 +2893,8 @@ public sealed class LegacyXlsFileAdapterTests
             "PrimaryView",
             $"TabSelected={tabSelected ?? "null"}",
             $"DefaultGridColor={defaultGridColor ?? "null"}",
-            $"ColorId={colorId ?? "null"}"
+            $"ColorId={colorId ?? "null"}",
+            $"Selection={selection ?? "null"}"
         ]);
     }
 
@@ -3465,6 +3499,11 @@ public sealed class LegacyXlsFileAdapterTests
             ? hssfSheet.Sheet.FindFirstRecordBySid(WindowTwoRecord.sid) as WindowTwoRecord
             : null;
 
+    private static SelectionRecord? TryGetSelectionRecord(ISheet sheet) =>
+        sheet is HSSFSheet hssfSheet
+            ? hssfSheet.Sheet.FindFirstRecordBySid(SelectionRecord.sid) as SelectionRecord
+            : null;
+
     private static bool SourceHasVbaProjectPackage(string path)
     {
         try
@@ -3515,6 +3554,19 @@ public sealed class LegacyXlsFileAdapterTests
     private static string CreateRangeToken(CellRangeAddressBase range) =>
         $"{new ModelCellAddress(default, ToSourceModelIndex(range.FirstRow), ToSourceModelIndex(range.FirstColumn)).ToA1()}:" +
         $"{new ModelCellAddress(default, ToSourceModelIndex(range.LastRow), ToSourceModelIndex(range.LastColumn)).ToA1()}";
+
+    private static string CreateSqrefToken(IEnumerable<CellRangeAddressBase> ranges) =>
+        string.Join(" ", ranges.Select(CreateSqrefRangeToken));
+
+    private static string CreateSqrefRangeToken(CellRangeAddressBase range)
+    {
+        var first = ToSourceA1(range.FirstRow, range.FirstColumn);
+        var last = ToSourceA1(range.LastRow, range.LastColumn);
+        return string.Equals(first, last, StringComparison.Ordinal) ? first : $"{first}:{last}";
+    }
+
+    private static string ToSourceA1(int rowIndex, int columnIndex) =>
+        new ModelCellAddress(default, ToSourceModelIndex(rowIndex), ToSourceModelIndex(columnIndex)).ToA1();
 
     private static uint ToSourceModelIndex(int zeroBasedIndex) =>
         (uint)zeroBasedIndex + 1;
@@ -3796,6 +3848,36 @@ public sealed class LegacyXlsFileAdapterTests
     {
         var (attributes, _) = XmlNativeBagSerializer.Deserialize(sheet.PrimaryViewMetadata?.Get("sheetView"));
         return attributes.TryGetValue(name, out var value) ? value : null;
+    }
+
+    private static string? GetPrimaryViewSelectionToken(Sheet sheet)
+    {
+        var (_, children) = XmlNativeBagSerializer.Deserialize(sheet.PrimaryViewMetadata?.Get("sheetView"));
+        foreach (var child in children)
+        {
+            if (string.IsNullOrWhiteSpace(child))
+                continue;
+
+            try
+            {
+                var element = XElement.Parse(child);
+                if (!string.Equals(element.Name.LocalName, "selection", StringComparison.Ordinal))
+                    continue;
+
+                var activeCell = element.Attribute("activeCell")?.Value;
+                var sqref = element.Attribute("sqref")?.Value;
+                if (string.IsNullOrWhiteSpace(activeCell) || string.IsNullOrWhiteSpace(sqref))
+                    continue;
+
+                return $"{activeCell},{sqref},{element.Attribute("activeCellId")?.Value ?? "null"}";
+            }
+            catch
+            {
+                // Ignore malformed native child XML in test summaries.
+            }
+        }
+
+        return null;
     }
 
     private static string? GetWorkbookProtectionMetadataAttribute(Workbook workbook, string name)

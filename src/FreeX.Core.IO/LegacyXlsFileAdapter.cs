@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Reflection;
 using System.Text;
+using System.Xml.Linq;
 using ExcelDataReader;
 using NPOI.HSSF.Model;
 using NPOI.HSSF.Record;
@@ -899,7 +900,7 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
 
         if (TryGetWindowTwoRecord(sourceSheet) is { } window)
         {
-            LoadPrimaryViewMetadata(window, sheet);
+            LoadPrimaryViewMetadata(sourceSheet, window, sheet);
 
             if (window.SavedInPageBreakPreview)
                 sheet.ViewMode = WorksheetViewMode.PageBreakPreview;
@@ -915,19 +916,22 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
             sheet.TabColor = tabColor;
     }
 
-    private static void LoadPrimaryViewMetadata(WindowTwoRecord window, Sheet sheet)
+    private static void LoadPrimaryViewMetadata(ISheet sourceSheet, WindowTwoRecord window, Sheet sheet)
     {
         var nativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal);
+        var nativeChildren = new List<string>();
         if (window.IsSelected)
             nativeAttributes["tabSelected"] = "1";
         if (!window.DefaultHeader)
             nativeAttributes["defaultGridColor"] = "0";
         if (window.HeaderColor != 64)
             nativeAttributes["colorId"] = window.HeaderColor.ToString(CultureInfo.InvariantCulture);
-        if (nativeAttributes.Count == 0)
+        if (TryCreateSelectionMetadata(sourceSheet, sheet.Id, out var selectionMetadata))
+            nativeChildren.Add(selectionMetadata);
+        if (nativeAttributes.Count == 0 && nativeChildren.Count == 0)
             return;
 
-        var serializedMetadata = XmlNativeBagSerializer.Serialize(nativeAttributes);
+        var serializedMetadata = XmlNativeBagSerializer.Serialize(nativeAttributes, nativeChildren);
         if (serializedMetadata is null)
             return;
 
@@ -935,9 +939,55 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         sheet.PrimaryViewMetadata.Set("sheetView", serializedMetadata);
     }
 
+    private static bool TryCreateSelectionMetadata(
+        ISheet sourceSheet,
+        SheetId sheetId,
+        [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out string? metadata)
+    {
+        metadata = null;
+        if (TryGetSelectionRecord(sourceSheet) is not { } selection)
+            return false;
+
+        var activeCell = ToA1(sheetId, selection.ActiveCellRow, selection.ActiveCellCol);
+        var selectedRange = ToSqref(sheetId, selection.CellReferences);
+        var hasSelectedRange = !string.IsNullOrWhiteSpace(selectedRange) &&
+            !string.Equals(selectedRange, activeCell, StringComparison.Ordinal);
+        var hasActiveCellId = selection.ActiveCellRef > 0;
+        if (!hasSelectedRange && !hasActiveCellId)
+            return false;
+
+        var element = new XElement(
+            XName.Get("selection", "http://schemas.openxmlformats.org/spreadsheetml/2006/main"),
+            new XAttribute("activeCell", activeCell),
+            new XAttribute("sqref", hasSelectedRange ? selectedRange : activeCell));
+        if (hasActiveCellId)
+            element.SetAttributeValue("activeCellId", selection.ActiveCellRef.ToString(CultureInfo.InvariantCulture));
+
+        metadata = element.ToString(SaveOptions.DisableFormatting);
+        return true;
+    }
+
+    private static string ToSqref(SheetId sheetId, IEnumerable<CellRangeAddress8Bit> ranges) =>
+        string.Join(" ", ranges.Select(range => ToA1Range(sheetId, range)));
+
+    private static string ToA1Range(SheetId sheetId, CellRangeAddress8Bit range)
+    {
+        var first = ToA1(sheetId, range.FirstRow, range.FirstColumn);
+        var last = ToA1(sheetId, range.LastRow, range.LastColumn);
+        return string.Equals(first, last, StringComparison.Ordinal) ? first : $"{first}:{last}";
+    }
+
+    private static string ToA1(SheetId sheetId, int rowIndex, int columnIndex) =>
+        new ModelCellAddress(sheetId, ToModelIndex(rowIndex), ToModelIndex(columnIndex)).ToA1();
+
     private static WindowTwoRecord? TryGetWindowTwoRecord(ISheet sourceSheet) =>
         sourceSheet is HSSFSheet hssfSheet
             ? hssfSheet.Sheet.FindFirstRecordBySid(WindowTwoRecord.sid) as WindowTwoRecord
+            : null;
+
+    private static SelectionRecord? TryGetSelectionRecord(ISheet sourceSheet) =>
+        sourceSheet is HSSFSheet hssfSheet
+            ? hssfSheet.Sheet.FindFirstRecordBySid(SelectionRecord.sid) as SelectionRecord
             : null;
 
     private static bool TryGetTabColor(ISheet sourceSheet, HSSFPalette palette, out CellColor tabColor)
