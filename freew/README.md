@@ -1,18 +1,21 @@
 # FreeW
 
-FreeW is a Word-class `.docx` word processor for Windows. It opens and saves standard
-WordprocessingML documents with rich editing, a Word-style ribbon, file lifecycle, and print —
-keeping the project, branding, and release artifacts independent from Microsoft.
+FreeW is a Word-class word processor for Windows. It opens and saves WordprocessingML documents
+and uses a catalog-backed adapter layer for additional document formats, with rich editing,
+a Word-style ribbon, file lifecycle, and print - keeping the project, branding, and release
+artifacts independent from Microsoft.
 
-- **Platform:** native Windows desktop app, WPF, `net10.0-windows`.
-- **Document format:** Office Open XML WordprocessingML (`.docx`) over a plain `ZipArchive` OPC container.
+- **Platform:** native Windows desktop app, WPF, `net10.0-windows`, with an Avalonia shell for Linux/macOS-oriented work.
+- **Document formats:** DOCX/DOCM/DOTX/DOTM through Office Open XML, plus catalog-backed adapters for Word XML, RTF, HTML/HTM, MHTML/MHT, PDF import, legacy DOC/DOT import, and plain text variants.
 - **Foundation:** built on the shared `Free.Shared.*` tier (Ribbon, Opc, AppServices, Commands, Shell)
   with **zero coupling to FreeX**, the sibling spreadsheet app in the same monorepo. FreeW and FreeX
   share only the `Free.Shared.*` libraries; neither references the other.
 
-> Status: feature-complete through roadmap Milestones **A–U** (64 word-processor features beyond the
-> A–E base). See [`../docs/planning/freew-roadmap.md`](../docs/planning/freew-roadmap.md) for the
-> authoritative, per-feature implementation log.
+> Status: feature-complete through roadmap Milestones **A-U** plus follow-up file-format, corpus,
+> icon-audit, and platform slices on current mainline. See
+> [`../docs/planning/freew-roadmap.md`](../docs/planning/freew-roadmap.md) for the historical
+> per-feature implementation log and [`../docs/planning/freew-file-formats.md`](../docs/planning/freew-file-formats.md)
+> for the current format-adapter matrix.
 
 ---
 
@@ -25,8 +28,8 @@ in WPF.
 | Project | TFM | Responsibility |
 |---|---|---|
 | `FreeW.Core.Model` | `net10.0` | Pure document model (`TextDocument`, `Paragraph`, `Run`, `Table`, `InlineImage`), run/paragraph formatting records, the named-style catalog, page settings, side stores (footnotes, endnotes, comments, sources, index entries…), editing **commands**, and a large family of **pure helpers** (outline, TOC, citations, mail merge, compare, autocorrect, change case, sort/convert, statistics, …). |
-| `FreeW.Core.IO` | `net10.0` | WordprocessingML `.docx` **reader/writer** over `System.IO.Compression.ZipArchive` plus the shared `Free.Shared.Opc` hardened-XML settings. `DocxReader` / `DocxWriter` / `OoxmlWordprocessing` (element constants). |
-| `FreeW.App.Host` | `net10.0-windows` (WPF) | The application: a `RichTextBox`/`FlowDocument` editing surface (`DocumentView`), the ribbon, dialogs, file commands, autosave, print/preview. `WinExe`. |
+| `FreeW.Core.IO` | `net10.0` | Document reader/writer layer: WordprocessingML `.docx` over `System.IO.Compression.ZipArchive`, `IDocumentFileAdapter`, `DocumentFileAdapterCatalog`, catalog-derived format resolution, and adapters for DOCX family, Word XML, RTF, HTML/MHTML, PDF import, legacy DOC/DOT import, and plain text. |
+| `FreeW.App.Host` | `net10.0-windows` (WPF) | The application: a `RichTextBox`/`FlowDocument` editing surface (`DocumentView`), the ribbon, catalog-backed file commands, dialogs, autosave, print/preview. `WinExe`. |
 | `FreeW.Core.Model.Tests` | `net10.0` | xUnit tests for the model + commands + helpers. |
 | `FreeW.Core.IO.Tests` | `net10.0` | xUnit `.docx` round-trip tests. |
 
