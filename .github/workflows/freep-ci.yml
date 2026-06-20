@@ -21,6 +21,8 @@ on:
       - "freep/**"
       - "FreeP.slnx"
       - "shared/**"
+      - "Directory.Build.props"
+      - "Directory.Packages.props"
       - ".github/workflows/freep-ci.yml"
 
 concurrency:

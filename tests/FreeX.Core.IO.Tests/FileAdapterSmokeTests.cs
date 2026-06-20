@@ -15295,6 +15295,36 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_Save_WritesNativeSelectionWhenNoModeledActiveCellExists()
+    {
+        var workbook = new Workbook("PrimaryViewMetadataNativeSelectionOnly");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("View metadata"));
+        sheet.PrimaryViewMetadata = MakeBag("sheetView",
+            new Dictionary<string, string>(StringComparer.Ordinal),
+            [
+                "<selection xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" activeCell=\"A1\" sqref=\"A1 C3:D4\" />"
+            ]);
+
+        var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var selection = worksheetXml.Root!
+            .Element(worksheetNs + "sheetViews")!
+            .Elements(worksheetNs + "sheetView")
+            .Single(element => element.Attribute("workbookViewId")?.Value == "0")
+            .Element(worksheetNs + "selection");
+
+        selection.Should().NotBeNull();
+        selection!.Attribute("activeCell")!.Value.Should().Be("A1");
+        selection.Attribute("sqref")!.Value.Should().Be("A1 C3:D4");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetSheetViewsNativeAttributes()
     {
         var workbook = new Workbook("WorksheetSheetViewsNativeMetadata");

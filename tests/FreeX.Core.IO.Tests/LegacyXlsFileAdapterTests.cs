@@ -280,6 +280,28 @@ public sealed class LegacyXlsFileAdapterTests
     }
 
     [Fact]
+    public void Load_PreservesLegacyWindowProtectionWithoutStructureProtection()
+    {
+        var hssf = new HSSFWorkbook();
+        hssf.CreateSheet("Visible");
+        var protect = hssf.Workbook.FindFirstRecordBySid(ProtectRecord.sid) as ProtectRecord ??
+            throw new InvalidOperationException("Expected a BIFF workbook Protect record in the HSSF fixture.");
+        protect.Protect = false;
+        var windowProtect = hssf.Workbook.FindFirstRecordBySid(WindowProtectRecord.sid) as WindowProtectRecord ??
+            throw new InvalidOperationException("Expected a BIFF workbook WindowProtect record in the HSSF fixture.");
+        windowProtect.Protect = true;
+        using var stream = new MemoryStream();
+        hssf.Write(stream);
+        stream.Position = 0;
+
+        var workbook = new LegacyXlsFileAdapter().Load(stream);
+
+        workbook.IsStructureProtected.Should().BeFalse();
+        workbook.StructureProtectionPassword.Should().BeNull();
+        GetWorkbookProtectionMetadataAttribute(workbook, "lockWindows").Should().Be("1");
+    }
+
+    [Fact]
     public void Load_ExinfmLegacyXlsCorpusFiles_WhenDownloaded()
     {
         var corpusRoot = Path.Combine(
@@ -1600,7 +1622,7 @@ public sealed class LegacyXlsFileAdapterTests
         return
         [
             CreateWorkbookProtectionFingerprint(
-                structureProtected || windowProtected,
+                structureProtected,
                 passwordHash,
                 windowProtected)
         ];
