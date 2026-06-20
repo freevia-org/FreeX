@@ -15440,6 +15440,12 @@ og {0} mere.</value>
   <data name="StatusBar_EditMode" xml:space="preserve">
     <value>Rediger</value>
   </data>
+  <data name="StatusBar_EnterMode" xml:space="preserve">
+    <value>Enter</value>
+  </data>
+  <data name="StatusBar_PointMode" xml:space="preserve">
+    <value>Point</value>
+  </data>
   <data name="StatusBar_ExtendSelectionMode" xml:space="preserve">
     <value>Udvid udvalget</value>
   </data>

@@ -108,7 +108,10 @@ public partial class MainWindow
             {
                 SyncFormulaBarTextFromInlineEditor();
                 if (FormulaEditInteractionPlanner.ShouldStartPointModeFromTypedText(_inlineEditor.Text))
+                {
                     _formulaRangeEntryMode = true;
+                    SetFormulaEnterStatusBarMode();
+                }
                 RefreshInlineEditorTextSurface();
                 RefreshInlineEditorChromeBorder();
                 RefreshFormulaReferenceHighlights();
@@ -328,6 +331,7 @@ public partial class MainWindow
             _formulaRangeEntryMode = FormulaEditInteractionPlanner.TogglePointMode(_inlineEditor.Text, _formulaRangeEntryMode);
             if (!_formulaRangeEntryMode)
                 ClearFormulaReferenceEntrySpan();
+            SetFormulaEditStatusBarMode(_formulaRangeEntryMode);
             e.Handled = FormulaEditInteractionPlanner.IsFormulaText(_inlineEditor.Text);
             return;
         }
@@ -354,6 +358,7 @@ public partial class MainWindow
                 FormulaBar.Text = FormatFormulaBarText(cell, addr.Value);
             }
             ClearFormulaRangeEntryState();
+            RefreshStatusBar();
             CancelCopyAndTransientModes();
             FocusSheetGridIfNeeded();
             e.Handled = true;
@@ -366,9 +371,10 @@ public partial class MainWindow
         var inlineEditorCommitsOnArrow = FormulaEditInteractionPlanner.ShouldCommitInlineArrows(
             _inlineEditor?.Text,
             _formulaRangeEntryMode);
-        var current = formulaRangeEntryActive
+        var formulaReferenceCurrent = formulaRangeEntryActive
             ? FormulaRangeEntryPlanner.GetKeyboardCursor(selectedRange.Value, _selectionCursor)
             : selectedRange.Value.Start;
+        var editNavigationCurrent = _formulaEditCell ?? selectedRange.Value.Start;
         var modifiers = Keyboard.Modifiers;
         var pageSize = Math.Max(1, (SheetGrid.Viewport?.RowMetrics.Count ?? 25) - 1);
         var colPageSize = Math.Max(1, (SheetGrid.Viewport?.ColMetrics.Count ?? 12) - 1);
@@ -378,7 +384,7 @@ public partial class MainWindow
                 e.Key,
                 e.SystemKey,
                 modifiers,
-                current,
+                formulaReferenceCurrent,
                 _workbook.GetSheet(_currentSheetId),
                 pageSize,
                 colPageSize) is { } formulaReferenceShortcutTarget)
@@ -396,7 +402,7 @@ public partial class MainWindow
         var intent = ExcelEditKeyPlanner.GetIntent(
             e.Key,
             modifiers,
-            current,
+            editNavigationCurrent,
             pageSize: pageSize,
             allowFormulaBarNavigationKeys: false,
             formulaRangeEntryActive: formulaRangeEntryActive,
@@ -568,6 +574,18 @@ public partial class MainWindow
         ApplyStatusBarDisplayState(_statusBarDisplayStateCache.GetReady(text));
     }
 
+    private void SetFormulaEditStatusBarMode(bool pointMode)
+    {
+        SetStatusBarModeText(UiText.Get(pointMode
+            ? "StatusBar_PointMode"
+            : "StatusBar_EditMode"));
+    }
+
+    private void SetFormulaEnterStatusBarMode()
+    {
+        SetStatusBarModeText(UiText.Get("StatusBar_EnterMode"));
+    }
+
     private void FormulaBar_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
         if (e.Key == Key.F2 && e.KeyboardDevice.Modifiers == ModifierKeys.None)
@@ -575,6 +593,7 @@ public partial class MainWindow
             _formulaRangeEntryMode = FormulaEditInteractionPlanner.TogglePointMode(FormulaBar.Text, _formulaRangeEntryMode);
             if (!_formulaRangeEntryMode)
                 ClearFormulaReferenceEntrySpan();
+            SetFormulaEditStatusBarMode(_formulaRangeEntryMode);
             e.Handled = FormulaEditInteractionPlanner.IsFormulaText(FormulaBar.Text);
         }
         else if (ExcelEditKeyPlanner.ShouldCycleFormulaReference(
@@ -596,6 +615,7 @@ public partial class MainWindow
             }
             HideInlineEditor(commit: false);
             ClearFormulaRangeEntryState();
+            RefreshStatusBar();
             ClearClipboardVisualState();
             SheetGrid.Focus();
             e.Handled = true;
@@ -604,9 +624,10 @@ public partial class MainWindow
         {
             var formulaRangeEntryActive = IsFormulaRangeEntryActive(FormulaBar);
             var formulaTextActive = FormulaEditInteractionPlanner.IsFormulaText(FormulaBar.Text);
-            var current = formulaRangeEntryActive
+            var formulaReferenceCurrent = formulaRangeEntryActive
                 ? FormulaRangeEntryPlanner.GetKeyboardCursor(selectedRange, _selectionCursor)
                 : selectedRange.Start;
+            var editNavigationCurrent = _formulaEditCell ?? selectedRange.Start;
             int pageSize = Math.Max(1, (SheetGrid.Viewport?.RowMetrics.Count ?? 25) - 1);
             int colPageSize = Math.Max(1, (SheetGrid.Viewport?.ColMetrics.Count ?? 12) - 1);
             var modifiers = e.KeyboardDevice.Modifiers;
@@ -615,7 +636,7 @@ public partial class MainWindow
                     e.Key,
                     e.SystemKey,
                     modifiers,
-                    current,
+                    formulaReferenceCurrent,
                     _workbook.GetSheet(_currentSheetId),
                     pageSize,
                     colPageSize) is { } formulaReferenceShortcutTarget)
@@ -633,7 +654,7 @@ public partial class MainWindow
             var intent = ExcelEditKeyPlanner.GetIntent(
                 e.Key,
                 modifiers,
-                current,
+                editNavigationCurrent,
                 pageSize,
                 allowFormulaBarNavigationKeys: !formulaTextActive,
                 formulaRangeEntryActive: formulaRangeEntryActive,
@@ -689,6 +710,7 @@ public partial class MainWindow
 
         HideInlineEditor(commit: false);
         ClearFormulaRangeEntryState();
+        RefreshStatusBar();
         ClearClipboardVisualState();
         FocusSheetGridIfNeeded();
     }

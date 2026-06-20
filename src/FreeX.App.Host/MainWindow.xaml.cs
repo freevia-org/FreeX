@@ -365,7 +365,10 @@ public partial class MainWindow : Window, IWorkbookWindow
         {
             SyncInlineEditorTextFromFormulaBar();
             if (FormulaEditInteractionPlanner.ShouldStartPointModeFromTypedText(FormulaBar.Text))
+            {
                 _formulaRangeEntryMode = true;
+                SetFormulaEnterStatusBarMode();
+            }
 
             var formulaBarHasFocus = ReferenceEquals(System.Windows.Input.Keyboard.FocusedElement, FormulaBar);
             if (!formulaBarHasFocus && _inlineEditor?.IsVisible != true)

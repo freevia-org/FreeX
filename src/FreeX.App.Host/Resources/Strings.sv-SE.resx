@@ -15440,6 +15440,12 @@ och {0} till.</value>
   <data name="StatusBar_EditMode" xml:space="preserve">
     <value>Redigera</value>
   </data>
+  <data name="StatusBar_EnterMode" xml:space="preserve">
+    <value>Enter</value>
+  </data>
+  <data name="StatusBar_PointMode" xml:space="preserve">
+    <value>Point</value>
+  </data>
   <data name="StatusBar_ExtendSelectionMode" xml:space="preserve">
     <value>Utöka urvalet</value>
   </data>

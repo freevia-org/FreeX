@@ -36,6 +36,7 @@ public sealed partial class MainWindowFormulaBarSyncTests
         private readonly MethodInfo _showInlineEditor;
         private readonly MethodInfo _executeClearSelection;
         private readonly MethodInfo _formulaBarKeyDown;
+        private readonly MethodInfo _inlineEditorKeyDown;
         private readonly MethodInfo _cellAddressBoxKeyDown;
         private readonly MethodInfo _insertRawFormulaFunction;
         private readonly MethodInfo _insertDefinedNameIntoFormula;
@@ -92,6 +93,9 @@ public sealed partial class MainWindowFormulaBarSyncTests
             _formulaBarKeyDown = typeof(MainWindow)
                 .GetMethod("FormulaBar_KeyDown", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "FormulaBar_KeyDown");
+            _inlineEditorKeyDown = typeof(MainWindow)
+                .GetMethod("InlineEditor_KeyDown", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "InlineEditor_KeyDown");
             _cellAddressBoxKeyDown = typeof(MainWindow)
                 .GetMethod("CellAddressBox_KeyDown", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "CellAddressBox_KeyDown");
@@ -115,6 +119,8 @@ public sealed partial class MainWindowFormulaBarSyncTests
         public string FormulaBarText => ((TextBox)_window.FindName("FormulaBar")).Text;
 
         public string CellAddressBoxText => CellAddressBox.Text;
+
+        public string StatusReadyText => ((TextBlock)_window.FindName("StatusReadyText")).Text;
 
         private ComboBox CellAddressBox => (ComboBox)_window.FindName("CellAddressBox");
 
@@ -320,10 +326,23 @@ public sealed partial class MainWindowFormulaBarSyncTests
             PumpDispatcher();
         }
 
+        public void SetFormulaBarSelection(int selectionStart, int selectionLength)
+        {
+            ((TextBox)_window.FindName("FormulaBar")).Select(selectionStart, selectionLength);
+            PumpDispatcher();
+        }
+
         public void SetInlineEditorCaretIndex(int caretIndex)
         {
             var inlineEditor = InlineEditor ?? throw new InvalidOperationException("Inline editor is not visible.");
             inlineEditor.CaretIndex = caretIndex;
+            PumpDispatcher();
+        }
+
+        public void SetInlineEditorSelection(int selectionStart, int selectionLength)
+        {
+            var inlineEditor = InlineEditor ?? throw new InvalidOperationException("Inline editor is not visible.");
+            inlineEditor.Select(selectionStart, selectionLength);
             PumpDispatcher();
         }
 
@@ -355,6 +374,20 @@ public sealed partial class MainWindowFormulaBarSyncTests
                 RoutedEvent = Keyboard.KeyDownEvent
             };
             _formulaBarKeyDown.Invoke(_window, [((TextBox)_window.FindName("FormulaBar")), args]);
+            PumpDispatcher();
+            return args.Handled;
+        }
+
+        public bool PressInlineEditorKey(Key key)
+        {
+            var inlineEditor = InlineEditor ?? throw new InvalidOperationException("Inline editor is not visible.");
+            var source = PresentationSource.FromVisual(_window)
+                ?? throw new InvalidOperationException("MainWindow presentation source is not available.");
+            var args = new KeyEventArgs(Keyboard.PrimaryDevice, source, Environment.TickCount, key)
+            {
+                RoutedEvent = Keyboard.KeyDownEvent
+            };
+            _inlineEditorKeyDown.Invoke(_window, [inlineEditor, args]);
             PumpDispatcher();
             return args.Handled;
         }

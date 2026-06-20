@@ -14594,6 +14594,12 @@ Kayıtlı XPS dosyası:
   <data name="StatusBar_EditMode" xml:space="preserve">
     <value>Düzenle</value>
   </data>
+  <data name="StatusBar_EnterMode" xml:space="preserve">
+    <value>Enter</value>
+  </data>
+  <data name="StatusBar_PointMode" xml:space="preserve">
+    <value>Point</value>
+  </data>
   <data name="StatusBar_ExtendSelectionMode" xml:space="preserve">
     <value>Seçimi Genişlet</value>
   </data>
