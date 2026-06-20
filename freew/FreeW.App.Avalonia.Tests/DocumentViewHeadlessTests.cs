@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
@@ -6,6 +7,7 @@ using Avalonia.Headless;
 using Avalonia.Themes.Fluent;
 using FreeW.App.Avalonia;
 using FreeW.App.Avalonia.Editing;
+using FreeW.Core.Model;
 
 [assembly: AvaloniaTestApplication(typeof(FreeW.App.Avalonia.Tests.FreeWHeadlessApp))]
 
@@ -123,5 +125,71 @@ public sealed class DocumentViewHeadlessTests
         if (!ran)
             return;
         found.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Derived_style_inherits_based_on_run_and_paragraph_formatting()
+    {
+        RunFormatting? run = null;
+        ParagraphFormatting? paragraphFmt = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = new TextDocument();
+            doc.Styles["Base"] = new DocumentStyle
+            {
+                Id = "Base",
+                Name = "Base",
+                Run = new RunFormatting
+                {
+                    FontFamily = "Georgia",
+                    FontSizePt = 14,
+                    ColorHex = "#224466",
+                    Bold = true,
+                },
+                Paragraph = new ParagraphFormatting
+                {
+                    SpaceBeforePt = 12,
+                    SpaceBeforeIsSet = true,
+                    SpaceAfterPt = 3,
+                    SpaceAfterIsSet = true,
+                },
+            };
+            doc.Styles["Derived"] = new DocumentStyle
+            {
+                Id = "Derived",
+                Name = "Derived",
+                BasedOnStyleId = "Base",
+                Run = new RunFormatting { Italic = true },
+                Paragraph = new ParagraphFormatting { Alignment = TextAlignment.Center },
+            };
+            var paragraph = new Paragraph("styled") { StyleId = "Derived" };
+            doc.Blocks.Add(paragraph);
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            run = InvokePrivate<RunFormatting>(view, "ResolveRunFmt", RunFormatting.Default, paragraph);
+            paragraphFmt = InvokePrivate<ParagraphFormatting>(view, "ResolveParagraphFmt", paragraph);
+        });
+
+        if (!ran)
+            return;
+
+        run.Should().NotBeNull();
+        run!.FontFamily.Should().Be("Georgia");
+        run.FontSizePt.Should().Be(14);
+        run.ColorHex.Should().Be("#224466");
+        run.Bold.Should().BeTrue();
+        run.Italic.Should().BeTrue();
+        paragraphFmt.Should().NotBeNull();
+        paragraphFmt!.Alignment.Should().Be(TextAlignment.Center);
+        paragraphFmt.SpaceBeforePt.Should().Be(12);
+        paragraphFmt.SpaceAfterPt.Should().Be(3);
+    }
+
+    private static T InvokePrivate<T>(object instance, string name, params object[] args)
+    {
+        var method = instance.GetType().GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new MissingMethodException(instance.GetType().FullName, name);
+        return (T)method.Invoke(instance, args)!;
     }
 }

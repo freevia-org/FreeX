@@ -15,8 +15,8 @@ namespace FreeW.App.Avalonia.Editing;
 /// FlowDocument, so this is a custom <see cref="Control"/> that lays out the
 /// <see cref="TextDocument"/> per character, renders runs with their formatting, and routes every
 /// edit through the shared <see cref="DocumentCommandBus"/> (so undo/redo come for free). Caret
-/// addressing is (block index, character offset within the block's text). Tables and non-text runs
-/// render read-only for now; plain paragraphs are fully editable.
+/// addressing is (block index, character offset within the block's text). Tables render as grids with
+/// modal cell text editing; non-text runs render read-only for now; plain paragraphs are fully editable.
 /// </summary>
 public sealed class DocumentView : Control
 {
@@ -393,7 +393,7 @@ public sealed class DocumentView : Control
     private static string TablePlainText(Table table) =>
         string.Join("  |  ", table.Rows.SelectMany(r => r.Cells).Select(c => c.PlainText));
 
-    // ---- Table rendering (read-only grid) -------------------------------------------------------
+    // ---- Table rendering (grid + modal cell text editing) ----------------------------------------
 
     private double LayoutTable(int blockIndex, Table table, double textWidth, double y)
     {
@@ -680,7 +680,7 @@ public sealed class DocumentView : Control
     {
         base.OnPointerPressed(e);
 
-        // Double-click a table cell opens the cell editor (tables are otherwise read-only).
+        // Double-click a table cell opens the modal cell editor; in-cell caret editing is not modelled yet.
         if (e.ClickCount == 2)
         {
             var hit = e.GetPosition(this);
@@ -1228,41 +1228,91 @@ public sealed class DocumentView : Control
     /// </summary>
     private RunFormatting ResolveRunFmt(RunFormatting raw, Paragraph paragraph)
     {
-        var s = paragraph.StyleId is { } id && _doc.Styles.TryGetValue(id, out var style) ? style.Run : null;
-        if (s is null)
-            return raw;
-
-        return raw with
+        var styleRun = RunFormatting.Default;
+        var hasStyle = false;
+        foreach (var style in StyleChain(paragraph.StyleId))
         {
-            FontFamily = raw.FontFamily ?? s.FontFamily,
-            FontSizePt = raw.FontSizePt ?? s.FontSizePt ?? _doc.DefaultRun.FontSizePt,
-            ColorHex = raw.ColorHex ?? s.ColorHex,
-            HighlightColorHex = raw.HighlightColorHex ?? s.HighlightColorHex,
-            Bold = raw.Bold || s.Bold,
-            Italic = raw.Italic || s.Italic,
-            Underline = raw.Underline || s.Underline,
-            Strikethrough = raw.Strikethrough || s.Strikethrough,
-            SmallCaps = raw.SmallCaps || s.SmallCaps,
-            AllCaps = raw.AllCaps || s.AllCaps,
-        };
+            styleRun = OverlayRun(styleRun, style.Run);
+            hasStyle = true;
+        }
+
+        return hasStyle ? OverlayRun(styleRun, raw) with
+        {
+            FontSizePt = raw.FontSizePt ?? styleRun.FontSizePt ?? _doc.DefaultRun.FontSizePt,
+        } : raw;
     }
 
-    /// <summary>Cascade the paragraph's named-style paragraph formatting (alignment + space-before)
+    /// <summary>Cascade the paragraph's named-style paragraph formatting (alignment + spacing)
     /// under the paragraph's own values; the paragraph's explicit values win.</summary>
     private ParagraphFormatting ResolveParagraphFmt(Paragraph paragraph)
     {
-        if (paragraph.StyleId is { } id && _doc.Styles.TryGetValue(id, out var style))
+        var styleParagraph = ParagraphFormatting.Default;
+        var hasStyle = false;
+        foreach (var style in StyleChain(paragraph.StyleId))
         {
-            var sp = style.Paragraph;
-            return paragraph.Formatting with
-            {
-                Alignment = paragraph.Formatting.Alignment == TextAlignment.Left ? sp.Alignment : paragraph.Formatting.Alignment,
-                SpaceBeforePt = paragraph.Formatting.SpaceBeforePt <= 0 ? sp.SpaceBeforePt : paragraph.Formatting.SpaceBeforePt,
-            };
+            styleParagraph = OverlayParagraph(styleParagraph, style.Paragraph);
+            hasStyle = true;
         }
 
-        return paragraph.Formatting;
+        if (!hasStyle)
+            return paragraph.Formatting;
+
+        return paragraph.Formatting with
+        {
+            Alignment = paragraph.Formatting.Alignment == TextAlignment.Left
+                ? styleParagraph.Alignment
+                : paragraph.Formatting.Alignment,
+            SpaceBeforePt = paragraph.Formatting.SpaceBeforeIsSet
+                ? paragraph.Formatting.SpaceBeforePt
+                : styleParagraph.SpaceBeforePt,
+            SpaceBeforeIsSet = paragraph.Formatting.SpaceBeforeIsSet || styleParagraph.SpaceBeforeIsSet,
+            SpaceAfterPt = paragraph.Formatting.SpaceAfterIsSet
+                ? paragraph.Formatting.SpaceAfterPt
+                : styleParagraph.SpaceAfterPt,
+            SpaceAfterIsSet = paragraph.Formatting.SpaceAfterIsSet || styleParagraph.SpaceAfterIsSet,
+        };
     }
+
+    private IEnumerable<DocumentStyle> StyleChain(string? styleId)
+    {
+        if (string.IsNullOrEmpty(styleId))
+            yield break;
+
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var chain = new List<DocumentStyle>();
+        var id = styleId;
+        while (!string.IsNullOrEmpty(id) && seen.Add(id) && _doc.Styles.TryGetValue(id, out var style))
+        {
+            chain.Add(style);
+            id = style.BasedOnStyleId;
+        }
+
+        for (var i = chain.Count - 1; i >= 0; i--)
+            yield return chain[i];
+    }
+
+    private static RunFormatting OverlayRun(RunFormatting baseRun, RunFormatting over) => baseRun with
+    {
+        FontFamily = over.FontFamily ?? baseRun.FontFamily,
+        FontSizePt = over.FontSizePt ?? baseRun.FontSizePt,
+        ColorHex = over.ColorHex ?? baseRun.ColorHex,
+        HighlightColorHex = over.HighlightColorHex ?? baseRun.HighlightColorHex,
+        Bold = baseRun.Bold || over.Bold,
+        Italic = baseRun.Italic || over.Italic,
+        Underline = baseRun.Underline || over.Underline,
+        Strikethrough = baseRun.Strikethrough || over.Strikethrough,
+        SmallCaps = baseRun.SmallCaps || over.SmallCaps,
+        AllCaps = baseRun.AllCaps || over.AllCaps,
+    };
+
+    private static ParagraphFormatting OverlayParagraph(ParagraphFormatting baseParagraph, ParagraphFormatting over) => baseParagraph with
+    {
+        Alignment = over.Alignment == TextAlignment.Left ? baseParagraph.Alignment : over.Alignment,
+        SpaceBeforePt = over.SpaceBeforeIsSet ? over.SpaceBeforePt : baseParagraph.SpaceBeforePt,
+        SpaceBeforeIsSet = baseParagraph.SpaceBeforeIsSet || over.SpaceBeforeIsSet,
+        SpaceAfterPt = over.SpaceAfterIsSet ? over.SpaceAfterPt : baseParagraph.SpaceAfterPt,
+        SpaceAfterIsSet = baseParagraph.SpaceAfterIsSet || over.SpaceAfterIsSet,
+    };
 
     private static RunFormatting ActiveFormatting(Paragraph paragraph, int offset)
     {
