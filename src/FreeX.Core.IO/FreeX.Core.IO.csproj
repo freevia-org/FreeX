@@ -12,6 +12,8 @@
   <ItemGroup>
     <PackageReference Include="ClosedXML" />
     <PackageReference Include="ExcelDataReader" />
+    <PackageReference Include="NPOI" />
+    <PackageReference Include="System.Security.Cryptography.Xml" />
   </ItemGroup>
 
   <PropertyGroup>
