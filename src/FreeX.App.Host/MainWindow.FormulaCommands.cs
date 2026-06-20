@@ -73,9 +73,9 @@ public partial class MainWindow
     private void InsertFunctionBtn_Click(object sender, RoutedEventArgs e)
     {
         var dlg = new InsertFunctionDialog();
-        if (ShowOwnedDialog(dlg) != true || string.IsNullOrEmpty(dlg.SelectedFormula)) return;
+        if (ShowOwnedDialog(dlg) != true || dlg.SelectedFunction is not { } function) return;
         if (SheetGrid.SelectedRange is null) return;
-        BeginFormulaBarFormulaEdit("=" + dlg.SelectedFormula);
+        InsertFormulaFunction(function);
     }
 
     private void FormulaRecentlyUsedBtn_Click(object sender, RoutedEventArgs e) => InsertFunctionBtn_Click(sender, e);
@@ -540,11 +540,34 @@ public partial class MainWindow
             return;
         }
 
-        var argumentsDialog = new FunctionArgumentsDialog(function) { Owner = this };
+        InsertFormulaFunction(function);
+    }
+
+    private void InsertFormulaFunction(InsertFunctionCatalogEntry function)
+    {
+        if (SheetGrid.SelectedRange is null) return;
+
+        FunctionArgumentsDialog? argumentsDialog = null;
+        argumentsDialog = new FunctionArgumentsDialog(
+            function,
+            request => ApplyFunctionArgumentRangeSelection(argumentsDialog, request)) { Owner = this };
         if (ShowOwnedDialog(argumentsDialog) != true || string.IsNullOrWhiteSpace(argumentsDialog.ResultFormula))
             return;
 
         BeginFormulaBarFormulaEdit("=" + argumentsDialog.ResultFormula);
+    }
+
+    private void ApplyFunctionArgumentRangeSelection(
+        FunctionArgumentsDialog? dialog,
+        FunctionArgumentRangeSelectionRequest request)
+    {
+        if (dialog is null)
+            return;
+
+        BeginDialogRangeSelection(
+            dialog,
+            request.CollapseDialog,
+            selectedRange => dialog.ApplyRangeSelection(request.ArgumentIndex, FormatWorkbookRange(selectedRange)));
     }
 
     private void InsertRawFormulaFunction(string funcName)
@@ -610,49 +633,25 @@ public partial class MainWindow
         NamedRangeDialog? dialog,
         NamedRangeSelectionRequest request)
     {
-        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+        if (dialog is null)
             return;
 
-        var rangeText = FormatWorkbookRange(selectedRange);
-        if (request.CollapseDialog)
-            dialog.Hide();
-
-        try
-        {
-            dialog.ApplyRangeSelection(request.Target, rangeText);
-        }
-        finally
-        {
-            if (request.CollapseDialog)
-            {
-                dialog.Show();
-                dialog.Activate();
-            }
-        }
+        BeginDialogRangeSelection(
+            dialog,
+            request.CollapseDialog,
+            selectedRange => dialog.ApplyRangeSelection(request.Target, FormatWorkbookRange(selectedRange)));
     }
 
     private void ApplyNameDefinitionSelection(
         NameDefinitionDialog? dialog,
         NamedRangeSelectionRequest request)
     {
-        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+        if (dialog is null)
             return;
 
-        var rangeText = FormatWorkbookRange(selectedRange);
-        if (request.CollapseDialog)
-            dialog.Hide();
-
-        try
-        {
-            dialog.ApplyRangeSelection(rangeText);
-        }
-        finally
-        {
-            if (request.CollapseDialog)
-            {
-                dialog.Show();
-                dialog.Activate();
-            }
-        }
+        BeginDialogRangeSelection(
+            dialog,
+            request.CollapseDialog,
+            selectedRange => dialog.ApplyRangeSelection(FormatWorkbookRange(selectedRange)));
     }
 }

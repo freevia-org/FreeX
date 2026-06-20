@@ -368,11 +368,9 @@ public sealed partial class MainWindowSourceHygieneTests
         source.Should().Contain("requestAppliesToRangeSelection: request => ApplyConditionalFormatAppliesToRangeSelection(dlg, request)");
         source.Should().Contain("private void ApplyConditionalFormatAppliesToRangeSelection(");
         source.Should().Contain("ConditionalFormatAppliesToRangeSelectionRequest request");
-        source.Should().Contain("if (request.CollapseDialog)");
-        source.Should().Contain("dialog.Hide();");
-        source.Should().Contain("dialog.ApplyAppliesToRangeSelection(request.RuleId, selectedRange);");
-        source.Should().Contain("dialog.Show();");
-        source.Should().Contain("dialog.Activate();");
+        source.Should().Contain("BeginDialogRangeSelection(");
+        source.Should().Contain("request.CollapseDialog");
+        source.Should().Contain("selectedRange => dialog.ApplyAppliesToRangeSelection(request.RuleId, selectedRange)");
     }
 
     [Fact]

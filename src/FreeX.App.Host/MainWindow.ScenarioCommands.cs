@@ -10,7 +10,12 @@ public partial class MainWindow
 {
     private void ScenariosBtn_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new ScenarioManagerDialog(_workbook, _currentSheetId, ResolveSheetIdByName) { Owner = this };
+        ScenarioManagerDialog? dialog = null;
+        dialog = new ScenarioManagerDialog(
+            _workbook,
+            _currentSheetId,
+            ResolveSheetIdByName,
+            request => ApplyScenarioManagerRangeSelection(dialog, request)) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
 
@@ -40,6 +45,19 @@ public partial class MainWindow
                 CreateScenarioSummaryReport(dialog.ResultCellsText);
                 break;
         }
+    }
+
+    private void ApplyScenarioManagerRangeSelection(
+        ScenarioManagerDialog? dialog,
+        ScenarioManagerRangeSelectionRequest request)
+    {
+        if (dialog is null)
+            return;
+
+        BeginDialogRangeSelection(
+            dialog,
+            request.CollapseDialog,
+            selectedRange => dialog.ApplyRangeSelection(request.Target, FormatWorkbookRange(selectedRange)));
     }
 
     private void SaveScenarioFromDialog(

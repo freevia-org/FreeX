@@ -87,7 +87,8 @@ public sealed class FormulaCommandSourceTests
         var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
 
         source.Should().Contain("var dlg = new InsertFunctionDialog();");
-        source.Should().Contain("BeginFormulaBarFormulaEdit(\"=\" + dlg.SelectedFormula);");
+        source.Should().Contain("dlg.SelectedFunction is not { } function");
+        source.Should().Contain("InsertFormulaFunction(function);");
         nameManagerSource.Should().Contain("new NamedRangeDialog(");
         source.Should().Contain("new NameDefinitionDialog(");
         source.Should().Contain("request => ApplyNameDefinitionSelection(dialog, request)");
@@ -109,7 +110,10 @@ public sealed class FormulaCommandSourceTests
         source.Should().Contain("FormulaFinancialBtn_Click(object sender, RoutedEventArgs e) => OpenFormulaFunctionMenu(sender, [\"PMT\", \"NPV\", \"IRR\", \"RATE\", \"PV\", \"FV\"]);");
         source.Should().Contain("FormulaMoreBtn_Click(object sender, RoutedEventArgs e)    => InsertFunctionBtn_Click(sender, e);");
         source.Should().Contain("InsertFunctionCatalogPlanner.BuildCatalog()");
-        source.Should().Contain("new FunctionArgumentsDialog(function) { Owner = this }");
+        source.Should().Contain("new FunctionArgumentsDialog(");
+        source.Should().Contain("request => ApplyFunctionArgumentRangeSelection(argumentsDialog, request)");
+        source.Should().Contain("private void ApplyFunctionArgumentRangeSelection(");
+        source.Should().Contain("BeginDialogRangeSelection(");
         source.Should().Contain("ShowOwnedDialog(argumentsDialog)");
         source.Should().Contain("BeginFormulaBarFormulaEdit(\"=\" + argumentsDialog.ResultFormula);");
         source.Should().Contain("InsertRawFormulaFunction(normalizedName);");

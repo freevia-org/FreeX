@@ -333,30 +333,21 @@ public partial class MainWindow
         DataValidationDialog? dialog,
         DataValidationRangeSelectionRequest request)
     {
-        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+        if (dialog is null)
             return;
 
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        var formulaText = DataValidationService.FormatListSourceRange(
-            selectedRange,
-            sheet?.Name,
-            sheet?.Name);
-
-        if (request.CollapseDialog)
-            dialog.Hide();
-
-        try
-        {
-            dialog.ApplyRangeSelection(request.Target, formulaText);
-        }
-        finally
-        {
-            if (request.CollapseDialog)
+        BeginDialogRangeSelection(
+            dialog,
+            request.CollapseDialog,
+            selectedRange =>
             {
-                dialog.Show();
-                dialog.Activate();
-            }
-        }
+                var sheet = _workbook.GetSheet(_currentSheetId);
+                var formulaText = DataValidationService.FormatListSourceRange(
+                    selectedRange,
+                    sheet?.Name,
+                    sheet?.Name);
+                dialog.ApplyRangeSelection(request.Target, formulaText);
+            });
     }
 
     private IWorkbookCommand CreateDataValidationCommand(

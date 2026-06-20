@@ -169,24 +169,13 @@ public partial class MainWindow
         TextToColumnsDialog? dialog,
         TextToColumnsRangeSelectionRequest request)
     {
-        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+        if (dialog is null)
             return;
 
-        if (request.CollapseDialog)
-            dialog.Hide();
-
-        try
-        {
-            dialog.ApplyRangeSelection(selectedRange.Start);
-        }
-        finally
-        {
-            if (request.CollapseDialog)
-            {
-                dialog.Show();
-                dialog.Activate();
-            }
-        }
+        BeginDialogRangeSelection(
+            dialog,
+            request.CollapseDialog,
+            selectedRange => dialog.ApplyRangeSelection(selectedRange.Start));
     }
 
     private IWorkbookCommand CreateTextToColumnsCommand(
@@ -281,25 +270,13 @@ public partial class MainWindow
         AdvancedFilterDialog? dialog,
         AdvancedFilterRangeSelectionRequest request)
     {
-        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+        if (dialog is null)
             return;
 
-        var rangeText = FormatWorkbookRange(selectedRange);
-        if (request.CollapseDialog)
-            dialog.Hide();
-
-        try
-        {
-            dialog.ApplyRangeSelection(request.Target, rangeText);
-        }
-        finally
-        {
-            if (request.CollapseDialog)
-            {
-                dialog.Show();
-                dialog.Activate();
-            }
-        }
+        BeginDialogRangeSelection(
+            dialog,
+            request.CollapseDialog,
+            selectedRange => dialog.ApplyRangeSelection(request.Target, FormatWorkbookRange(selectedRange)));
     }
 
     private bool TryParseAdvancedFilterRange(string input, out GridRange range)
@@ -727,24 +704,13 @@ public partial class MainWindow
         GoalSeekDialog? dialog,
         GoalSeekRangeSelectionRequest request)
     {
-        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+        if (dialog is null)
             return;
 
-        if (request.CollapseDialog)
-            dialog.Hide();
-
-        try
-        {
-            dialog.ApplyRangeSelection(request.Target, selectedRange.Start);
-        }
-        finally
-        {
-            if (request.CollapseDialog)
-            {
-                dialog.Show();
-                dialog.Activate();
-            }
-        }
+        BeginDialogRangeSelection(
+            dialog,
+            request.CollapseDialog,
+            selectedRange => dialog.ApplyRangeSelection(request.Target, selectedRange.Start));
     }
 
     // ── Review tab ────────────────────────────────────────────────────────────
@@ -833,23 +799,12 @@ public partial class MainWindow
         DataTableDialog? dialog,
         DataTableRangeSelectionRequest request)
     {
-        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+        if (dialog is null)
             return;
 
-        if (request.CollapseDialog)
-            dialog.Hide();
-
-        try
-        {
-            dialog.ApplyRangeSelection(request.Target, selectedRange.Start);
-        }
-        finally
-        {
-            if (request.CollapseDialog)
-            {
-                dialog.Show();
-                dialog.Activate();
-            }
-        }
+        BeginDialogRangeSelection(
+            dialog,
+            request.CollapseDialog,
+            selectedRange => dialog.ApplyRangeSelection(request.Target, selectedRange.Start));
     }
 }

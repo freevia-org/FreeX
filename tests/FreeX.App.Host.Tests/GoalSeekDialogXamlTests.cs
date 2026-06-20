@@ -177,11 +177,9 @@ public sealed class GoalSeekDialogXamlTests
         source.Should().Contain("request => ApplyGoalSeekRangeSelection(dlg, request)");
         source.Should().Contain("private void ApplyGoalSeekRangeSelection(");
         source.Should().Contain("GoalSeekRangeSelectionRequest request");
-        source.Should().Contain("if (request.CollapseDialog)");
-        source.Should().Contain("dialog.Hide();");
-        source.Should().Contain("dialog.ApplyRangeSelection(request.Target, selectedRange.Start);");
-        source.Should().Contain("dialog.Show();");
-        source.Should().Contain("dialog.Activate();");
+        source.Should().Contain("BeginDialogRangeSelection(");
+        source.Should().Contain("request.CollapseDialog");
+        source.Should().Contain("selectedRange => dialog.ApplyRangeSelection(request.Target, selectedRange.Start)");
     }
 
     [Theory]

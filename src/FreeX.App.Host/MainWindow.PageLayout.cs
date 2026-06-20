@@ -579,28 +579,20 @@ public partial class MainWindow
 
     private void ApplyPageSetupRangeSelection(PageSetupDialog? dialog, PageSetupRangeSelectionRequest request)
     {
-        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+        if (dialog is null)
             return;
 
-        var rangeText = PageSetupRangeSelectionFormatter.Format(
-            request.Target,
-            selectedRange,
-            _options.UseR1C1ReferenceStyle);
-        if (request.CollapseDialog)
-            dialog.Hide();
-
-        try
-        {
-            dialog.ApplyRangeSelection(request.Target, rangeText);
-        }
-        finally
-        {
-            if (request.CollapseDialog)
+        BeginDialogRangeSelection(
+            dialog,
+            request.CollapseDialog,
+            selectedRange =>
             {
-                dialog.Show();
-                dialog.Activate();
-            }
-        }
+                var rangeText = PageSetupRangeSelectionFormatter.Format(
+                    request.Target,
+                    selectedRange,
+                    _options.UseR1C1ReferenceStyle);
+                dialog.ApplyRangeSelection(request.Target, rangeText);
+            });
     }
 
     private void ShowPageSetupPrinterOptions()

@@ -111,6 +111,8 @@ public sealed partial class RemainingDialogTests
         source.Should().Contain("request => ApplySparklineRangeSelection(dialog, request)");
         source.Should().Contain("private void ApplySparklineRangeSelection(");
         source.Should().Contain("SparklineRangeSelectionRequest request");
+        source.Should().Contain("BeginDialogRangeSelection(");
+        source.Should().Contain("request.CollapseDialog");
         source.Should().Contain("request.Target == SparklineRangeSelectionTarget.Location");
         source.Should().Contain("FormatCellReference(selectedRange.Start)");
         source.Should().Contain("FormatWorkbookRange(selectedRange)");

@@ -138,11 +138,9 @@ public sealed partial class DataToolDialogTests
         source.Should().Contain("request => ApplyCreateTableRangeSelection(dialog, request)");
         source.Should().Contain("private void ApplyCreateTableRangeSelection(");
         source.Should().Contain("CreateTableRangeSelectionRequest request");
-        source.Should().Contain("if (request.CollapseDialog)");
-        source.Should().Contain("dialog.Hide();");
-        source.Should().Contain("dialog.ApplyRangeSelection(FormatRangeReference(selectedRange.Start, selectedRange.End));");
-        source.Should().Contain("dialog.Show();");
-        source.Should().Contain("dialog.Activate();");
+        source.Should().Contain("BeginDialogRangeSelection(");
+        source.Should().Contain("request.CollapseDialog");
+        source.Should().Contain("selectedRange => dialog.ApplyRangeSelection(FormatRangeReference(selectedRange.Start, selectedRange.End))");
     }
 
     [Fact]

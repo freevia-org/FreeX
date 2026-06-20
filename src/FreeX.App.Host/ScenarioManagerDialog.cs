@@ -14,6 +14,17 @@ public sealed record ScenarioManagerItem(
     bool Hidden,
     bool Locked);
 
+public enum ScenarioManagerRangeSelectionTarget
+{
+    ChangingCells,
+    ResultCells
+}
+
+public sealed record ScenarioManagerRangeSelectionRequest(
+    ScenarioManagerRangeSelectionTarget Target,
+    string CurrentText,
+    bool CollapseDialog = true);
+
 public sealed partial class ScenarioManagerDialog : Window
 {
     private readonly ListBox _scenarioList = new();
@@ -26,6 +37,7 @@ public sealed partial class ScenarioManagerDialog : Window
     private readonly string _defaultScenarioName;
     private readonly SheetId? _currentSheetId;
     private readonly Func<string, SheetId?>? _resolveSheetIdByName;
+    private readonly Action<ScenarioManagerRangeSelectionRequest>? _requestRangeSelection;
     private Button? _addButton;
     private Button? _editButton;
     private Button? _deleteButton;
@@ -39,14 +51,17 @@ public sealed partial class ScenarioManagerDialog : Window
     public string? CommentText { get; private set; }
     public bool ScenarioHidden { get; private set; }
     public bool ScenarioLocked { get; private set; }
+    public ScenarioManagerRangeSelectionRequest? RangeSelectionRequest { get; private set; }
 
     public ScenarioManagerDialog(
         Workbook workbook,
         SheetId? currentSheetId = null,
-        Func<string, SheetId?>? resolveSheetIdByName = null)
+        Func<string, SheetId?>? resolveSheetIdByName = null,
+        Action<ScenarioManagerRangeSelectionRequest>? requestRangeSelection = null)
     {
         _currentSheetId = currentSheetId;
         _resolveSheetIdByName = resolveSheetIdByName;
+        _requestRangeSelection = requestRangeSelection;
         Title = UiText.Get("ScenarioManager_ScenarioManager");
         Width = 360;
         Height = 420;
@@ -102,8 +117,20 @@ public sealed partial class ScenarioManagerDialog : Window
 
         AddField(fields, row: 0, UiText.Get("ScenarioManager_ScenarioName"), _newNameBox);
         _newNameBox.Text = _defaultScenarioName;
-        AddField(fields, row: 1, UiText.Get("ScenarioManager_ChangingCells"), _changingCellsBox);
-        AddField(fields, row: 2, UiText.Get("ScenarioManager_ResultCells"), _resultCellsBox);
+        AddReferenceField(
+            fields,
+            row: 1,
+            UiText.Get("ScenarioManager_ChangingCells"),
+            _changingCellsBox,
+            "Select changing cells range",
+            ScenarioManagerRangeSelectionTarget.ChangingCells);
+        AddReferenceField(
+            fields,
+            row: 2,
+            UiText.Get("ScenarioManager_ResultCells"),
+            _resultCellsBox,
+            "Select result cells range",
+            ScenarioManagerRangeSelectionTarget.ResultCells);
         AddField(fields, row: 3, UiText.Get("ScenarioManager_Comment"), _commentBox);
         AddCheckBox(fields, row: 4, _lockedBox);
         AddCheckBox(fields, row: 5, _hiddenBox);
@@ -172,6 +199,36 @@ public sealed partial class ScenarioManagerDialog : Window
         Grid.SetRow(field, row);
         Grid.SetColumn(field, 1);
         grid.Children.Add(field);
+    }
+
+    private void AddReferenceField(
+        Grid grid,
+        int row,
+        string label,
+        TextBox field,
+        string automationName,
+        ScenarioManagerRangeSelectionTarget target)
+    {
+        var text = new Label
+        {
+            Content = label,
+            Target = field,
+            Padding = new Thickness(0),
+            VerticalAlignment = System.Windows.VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 8)
+        };
+        Grid.SetRow(text, row);
+        Grid.SetColumn(text, 0);
+        grid.Children.Add(text);
+
+        var editor = DialogReferencePicker.CreateEditor(
+            field,
+            automationName,
+            requestSelection: request => RequestRangeSelection(target, request));
+        editor.Margin = new Thickness(0, 0, 0, 8);
+        Grid.SetRow(editor, row);
+        Grid.SetColumn(editor, 1);
+        grid.Children.Add(editor);
     }
 
     private static void AddCheckBox(Grid grid, int row, CheckBox checkBox)
@@ -304,6 +361,34 @@ public sealed partial class ScenarioManagerDialog : Window
         CommentText = result.CommentText;
         ScenarioLocked = result.Locked;
         ScenarioHidden = result.Hidden;
+    }
+
+    public static ScenarioManagerRangeSelectionRequest CreateRangeSelectionRequest(
+        ScenarioManagerRangeSelectionTarget target,
+        string currentText) =>
+        new(target, currentText.Trim(), CollapseDialog: true);
+
+    private void RequestRangeSelection(
+        ScenarioManagerRangeSelectionTarget target,
+        DialogReferencePickerRequest request)
+    {
+        RangeSelectionRequest = CreateRangeSelectionRequest(target, request.CurrentText);
+        _requestRangeSelection?.Invoke(RangeSelectionRequest);
+        FocusRangeSelectionInput(request.Target);
+    }
+
+    public void ApplyRangeSelection(ScenarioManagerRangeSelectionTarget target, string rangeText)
+    {
+        var textBox = target == ScenarioManagerRangeSelectionTarget.ResultCells
+            ? _resultCellsBox
+            : _changingCellsBox;
+        textBox.Text = rangeText;
+        FocusRangeSelectionInput(textBox);
+    }
+
+    private static void FocusRangeSelectionInput(TextBox textBox)
+    {
+        DialogFocus.FocusAndSelect(textBox);
     }
 
     private TextBox GetValidationTarget(ScenarioManagerValidationField field) =>

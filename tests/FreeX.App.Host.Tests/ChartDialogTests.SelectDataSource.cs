@@ -168,11 +168,10 @@ public sealed partial class ChartDialogTests
         source.Should().Contain("request => ApplySelectDataSourceRangeSelection(dialog, request)");
         source.Should().Contain("private void ApplySelectDataSourceRangeSelection(");
         source.Should().Contain("SelectDataSourceRangeSelectionRequest request");
+        source.Should().Contain("BeginDialogRangeSelection(");
+        source.Should().Contain("request.CollapseDialog");
         source.Should().Contain("FormatWorkbookRange(selectedRange)");
-        source.Should().Contain("dialog.ApplyRangeSelection(rangeText);");
-        source.Should().Contain("dialog.Hide();");
-        source.Should().Contain("dialog.Show();");
-        source.Should().Contain("dialog.Activate();");
+        source.Should().Contain("selectedRange => dialog.ApplyRangeSelection(FormatWorkbookRange(selectedRange))");
     }
 
     [Fact]

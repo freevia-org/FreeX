@@ -1025,24 +1025,13 @@ public partial class MainWindow
         ManageConditionalFormatsDialog? dialog,
         ConditionalFormatAppliesToRangeSelectionRequest request)
     {
-        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+        if (dialog is null)
             return;
 
-        if (request.CollapseDialog)
-            dialog.Hide();
-
-        try
-        {
-            dialog.ApplyAppliesToRangeSelection(request.RuleId, selectedRange);
-        }
-        finally
-        {
-            if (request.CollapseDialog)
-            {
-                dialog.Show();
-                dialog.Activate();
-            }
-        }
+        BeginDialogRangeSelection(
+            dialog,
+            request.CollapseDialog,
+            selectedRange => dialog.ApplyAppliesToRangeSelection(request.RuleId, selectedRange));
     }
 
     private void ApplyManagedConditionalFormatRules(IReadOnlyList<ConditionalFormat> newRules)
@@ -1447,24 +1436,13 @@ public partial class MainWindow
         CreateTableDialog? dialog,
         CreateTableRangeSelectionRequest request)
     {
-        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+        if (dialog is null)
             return;
 
-        if (request.CollapseDialog)
-            dialog.Hide();
-
-        try
-        {
-            dialog.ApplyRangeSelection(FormatRangeReference(selectedRange.Start, selectedRange.End));
-        }
-        finally
-        {
-            if (request.CollapseDialog)
-            {
-                dialog.Show();
-                dialog.Activate();
-            }
-        }
+        BeginDialogRangeSelection(
+            dialog,
+            request.CollapseDialog,
+            selectedRange => dialog.ApplyRangeSelection(FormatRangeReference(selectedRange.Start, selectedRange.End)));
     }
 
     private void CellStylesBtn_Click(object sender, RoutedEventArgs e)

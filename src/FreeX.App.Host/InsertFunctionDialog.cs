@@ -10,6 +10,7 @@ namespace FreeX.App.Host;
 public sealed class InsertFunctionDialog : Window
 {
     public string? SelectedFormula { get; private set; }
+    public InsertFunctionCatalogEntry? SelectedFunction { get; private set; }
 
     private readonly ListBox _listBox;
     private readonly TextBox _searchBox;
@@ -164,11 +165,8 @@ public sealed class InsertFunctionDialog : Window
     {
         if (_listBox.SelectedItem is InsertFunctionCatalogEntry entry)
         {
-            var argumentsDialog = new FunctionArgumentsDialog(entry) { Owner = this };
-            if (argumentsDialog.ShowDialog() != true || string.IsNullOrWhiteSpace(argumentsDialog.ResultFormula))
-                return;
-
-            SelectedFormula = argumentsDialog.ResultFormula;
+            SelectedFunction = entry;
+            SelectedFormula = CreateFormula(entry.Name);
             DialogResult = true;
         }
     }

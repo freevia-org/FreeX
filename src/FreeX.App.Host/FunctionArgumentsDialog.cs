@@ -6,6 +6,7 @@ using System.Windows.Input;
 namespace FreeX.App.Host;
 
 public sealed record FunctionArgumentSpec(string Name, string Description, bool Optional = false);
+public sealed record FunctionArgumentRangeSelectionRequest(int ArgumentIndex, string CurrentText, bool CollapseDialog = true);
 
 public sealed partial class FunctionArgumentsDialog : Window
 {
@@ -13,13 +14,18 @@ public sealed partial class FunctionArgumentsDialog : Window
     private readonly IReadOnlyList<FunctionArgumentSpec> _arguments;
     private readonly List<TextBox> _argumentBoxes = [];
     private readonly TextBlock _formulaPreview = new();
+    private readonly Action<FunctionArgumentRangeSelectionRequest>? _requestRangeSelection;
 
     public string? ResultFormula { get; private set; }
+    public FunctionArgumentRangeSelectionRequest? RangeSelectionRequest { get; private set; }
 
-    public FunctionArgumentsDialog(FreeX.App.Presentation.Dialogs.InsertFunctionCatalogEntry function)
+    public FunctionArgumentsDialog(
+        FreeX.App.Presentation.Dialogs.InsertFunctionCatalogEntry function,
+        Action<FunctionArgumentRangeSelectionRequest>? requestRangeSelection = null)
     {
         _functionName = function.Name.Trim().ToUpperInvariant();
         _arguments = GetArgumentSpecs(_functionName);
+        _requestRangeSelection = requestRangeSelection;
 
         Title = UiText.Get("FunctionArguments_Title");
         Width = 520;
@@ -51,7 +57,7 @@ public sealed partial class FunctionArgumentsDialog : Window
 
         var argumentLabels = CreateArgumentLabels(_arguments);
         for (var index = 0; index < _arguments.Count; index++)
-            AddArgumentRow(body, _arguments[index], argumentLabels[index]);
+            AddArgumentRow(body, _arguments[index], argumentLabels[index], index);
 
         body.Children.Add(new TextBlock { Text = UiText.Get("FunctionArguments_FormulaResultLabel"), Margin = new Thickness(0, 12, 0, 2) });
         _formulaPreview.FontWeight = FontWeights.SemiBold;
@@ -84,6 +90,11 @@ public sealed partial class FunctionArgumentsDialog : Window
         return $"{normalized}({string.Join(", ", cleaned)})";
     }
 
+    public static FunctionArgumentRangeSelectionRequest CreateRangeSelectionRequest(
+        int argumentIndex,
+        string currentText) =>
+        new(argumentIndex, currentText.Trim(), CollapseDialog: true);
+
     public static IReadOnlyList<string> CreateArgumentLabels(IEnumerable<FunctionArgumentSpec> arguments)
     {
         var usedAccessKeys = new HashSet<char>();
@@ -112,7 +123,7 @@ public sealed partial class FunctionArgumentsDialog : Window
         return $"{label}:";
     }
 
-    private void AddArgumentRow(Panel body, FunctionArgumentSpec argument, string labelText)
+    private void AddArgumentRow(Panel body, FunctionArgumentSpec argument, string labelText, int argumentIndex)
     {
         var grid = new Grid { Margin = new Thickness(0, 0, 0, 8) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
@@ -123,6 +134,10 @@ public sealed partial class FunctionArgumentsDialog : Window
         var box = new TextBox { Margin = new Thickness(8, 0, 0, 2) };
         box.TextChanged += (_, _) => UpdatePreview();
         _argumentBoxes.Add(box);
+        var editor = DialogReferencePicker.CreateEditor(
+            box,
+            CreateArgumentRangePickerAutomationName(argument.Name),
+            requestSelection: request => RequestRangeSelection(argumentIndex, request));
 
         var label = new Label
         {
@@ -132,8 +147,8 @@ public sealed partial class FunctionArgumentsDialog : Window
             VerticalAlignment = VerticalAlignment.Center
         };
         grid.Children.Add(label);
-        Grid.SetColumn(box, 1);
-        grid.Children.Add(box);
+        Grid.SetColumn(editor, 1);
+        grid.Children.Add(editor);
 
         var help = new TextBlock
         {
@@ -148,6 +163,32 @@ public sealed partial class FunctionArgumentsDialog : Window
         grid.Children.Add(help);
 
         body.Children.Add(grid);
+    }
+
+    private static string CreateArgumentRangePickerAutomationName(string argumentName) =>
+        $"Select {argumentName.Replace('_', ' ')} reference";
+
+    private void RequestRangeSelection(int argumentIndex, DialogReferencePickerRequest request)
+    {
+        RangeSelectionRequest = CreateRangeSelectionRequest(argumentIndex, request.CurrentText);
+        _requestRangeSelection?.Invoke(RangeSelectionRequest);
+        FocusRangeSelectionInput(request.Target);
+    }
+
+    public void ApplyRangeSelection(int argumentIndex, string rangeText)
+    {
+        if ((uint)argumentIndex >= (uint)_argumentBoxes.Count)
+            return;
+
+        var textBox = _argumentBoxes[argumentIndex];
+        textBox.Text = rangeText;
+        UpdatePreview();
+        FocusRangeSelectionInput(textBox);
+    }
+
+    private static void FocusRangeSelectionInput(TextBox textBox)
+    {
+        DialogFocus.FocusAndSelect(textBox);
     }
 
     private void UpdatePreview()

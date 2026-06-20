@@ -177,25 +177,13 @@ public partial class MainWindow
         SelectDataSourceDialog? dialog,
         SelectDataSourceRangeSelectionRequest request)
     {
-        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+        if (dialog is null)
             return;
 
-        var rangeText = FormatWorkbookRange(selectedRange);
-        if (request.CollapseDialog)
-            dialog.Hide();
-
-        try
-        {
-            dialog.ApplyRangeSelection(rangeText);
-        }
-        finally
-        {
-            if (request.CollapseDialog)
-            {
-                dialog.Show();
-                dialog.Activate();
-            }
-        }
+        BeginDialogRangeSelection(
+            dialog,
+            request.CollapseDialog,
+            selectedRange => dialog.ApplyRangeSelection(FormatWorkbookRange(selectedRange)));
     }
 
     private void MoveChartBtn_Click(object sender, RoutedEventArgs e)

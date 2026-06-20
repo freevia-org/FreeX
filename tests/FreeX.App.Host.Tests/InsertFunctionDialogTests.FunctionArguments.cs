@@ -1,3 +1,4 @@
+using System.Windows.Controls;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -78,9 +79,39 @@ public sealed partial class InsertFunctionDialogTests
         xlookupLabels.Select(GetAccessKey).Should().OnlyHaveUniqueItems();
 
         var source = ReadFunctionArgumentsDialogSource();
-        source.Should().Contain("AddArgumentRow(body, _arguments[index], argumentLabels[index])");
+        source.Should().Contain("AddArgumentRow(body, _arguments[index], argumentLabels[index], index)");
         source.Should().Contain("Content = labelText");
         source.Should().Contain("Target = box");
+    }
+
+    [Fact]
+    public void FunctionArgumentsDialog_CreateRangeSelectionRequest_TrimsCurrentTextAndCollapses()
+    {
+        FunctionArgumentsDialog.CreateRangeSelectionRequest(1, " Sheet1!A1:B2 ")
+            .Should()
+            .Be(new FunctionArgumentRangeSelectionRequest(1, "Sheet1!A1:B2", CollapseDialog: true));
+    }
+
+    [Fact]
+    public void FunctionArgumentsDialog_RangePickerRaisesRequestAndApplyUpdatesArgument()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var function = InsertFunctionDialog.BuildCatalog().Single(entry => entry.Name == "SUM");
+            var requests = new List<FunctionArgumentRangeSelectionRequest>();
+            var dialog = new FunctionArgumentsDialog(function, requests.Add);
+            var picker = WpfTestTree.FindLogicalDescendants<Button>(dialog)
+                .First(button => string.Equals(button.Content?.ToString(), "...", StringComparison.Ordinal));
+
+            DialogSourceTestSupport.ClickButton(picker);
+            dialog.ApplyRangeSelection(0, "Sheet2!B2:D8");
+
+            requests.Should().Equal(new FunctionArgumentRangeSelectionRequest(0, "", CollapseDialog: true));
+            dialog.RangeSelectionRequest.Should().Be(requests[0]);
+            WpfTestTree.FindLogicalDescendants<TextBox>(dialog)
+                .First()
+                .Text.Should().Be("Sheet2!B2:D8");
+        });
     }
 
     [Fact]
@@ -120,5 +151,17 @@ public sealed partial class InsertFunctionDialogTests
         source.Should().Contain("AutomationProperties.SetName(_formulaPreview, UiText.Get(\"FunctionArguments_FormulaResultAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetHelpText(_formulaPreview");
         UiText.Get("FunctionArguments_FormulaResultLabel").Should().Be("Formula result =");
+    }
+
+    [Fact]
+    public void FunctionArgumentsDialog_WiresArgumentReferencePickers()
+    {
+        var source = ReadFunctionArgumentsDialogSource();
+
+        source.Should().Contain("DialogReferencePicker.CreateEditor(");
+        source.Should().Contain("requestSelection: request => RequestRangeSelection(argumentIndex, request)");
+        source.Should().Contain("_requestRangeSelection?.Invoke(RangeSelectionRequest);");
+        source.Should().Contain("public void ApplyRangeSelection(int argumentIndex, string rangeText)");
+        source.Should().Contain("FocusRangeSelectionInput(textBox);");
     }
 }

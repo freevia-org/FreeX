@@ -497,12 +497,11 @@ public sealed class NamedRangeDialogXamlTests
         source.Should().Contain("private void ApplyNamedRangeSelection(");
         source.Should().Contain("private void ApplyNameDefinitionSelection(");
         source.Should().Contain("NamedRangeSelectionRequest request");
+        source.Should().Contain("BeginDialogRangeSelection(");
+        source.Should().Contain("request.CollapseDialog");
         source.Should().Contain("FormatWorkbookRange(selectedRange)");
-        source.Should().Contain("dialog.ApplyRangeSelection(request.Target, rangeText);");
-        source.Should().Contain("dialog.ApplyRangeSelection(rangeText);");
-        source.Should().Contain("dialog.Hide();");
-        source.Should().Contain("dialog.Show();");
-        source.Should().Contain("dialog.Activate();");
+        source.Should().Contain("selectedRange => dialog.ApplyRangeSelection(request.Target, FormatWorkbookRange(selectedRange))");
+        source.Should().Contain("selectedRange => dialog.ApplyRangeSelection(FormatWorkbookRange(selectedRange))");
     }
 
     private static T GetControl<T>(NamedRangeDialog dialog, string name)

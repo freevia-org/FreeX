@@ -54,4 +54,42 @@ public sealed partial class ScenarioManagerDialogTests
             dialog.DialogResult.Should().BeNull();
         });
     }
+
+    [Fact]
+    public void RangePickersRaiseRequestsAndApplyRangeSelectionUpdatesTargetBoxes()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("test");
+            var sheet = workbook.AddSheet("Sheet1");
+            var requests = new List<ScenarioManagerRangeSelectionRequest>();
+            var dialog = new ScenarioManagerDialog(
+                workbook,
+                sheet.Id,
+                name => name == sheet.Name ? sheet.Id : null,
+                requests.Add);
+            try
+            {
+                var pickers = WpfTestTree.FindLogicalDescendants<Button>(dialog)
+                    .Where(button => string.Equals(button.Content?.ToString(), "...", StringComparison.Ordinal))
+                    .ToList();
+
+                DialogSourceTestSupport.ClickButton(pickers[0]);
+                DialogSourceTestSupport.ClickButton(pickers[1]);
+                dialog.ApplyRangeSelection(ScenarioManagerRangeSelectionTarget.ChangingCells, "Sheet1!B2:C4");
+                dialog.ApplyRangeSelection(ScenarioManagerRangeSelectionTarget.ResultCells, "Sheet1!D2:D4");
+
+                requests.Should().Equal(
+                    new ScenarioManagerRangeSelectionRequest(ScenarioManagerRangeSelectionTarget.ChangingCells, "", CollapseDialog: true),
+                    new ScenarioManagerRangeSelectionRequest(ScenarioManagerRangeSelectionTarget.ResultCells, "", CollapseDialog: true));
+                GetField<TextBox>(dialog, "_changingCellsBox").Text.Should().Be("Sheet1!B2:C4");
+                GetField<TextBox>(dialog, "_resultCellsBox").Text.Should().Be("Sheet1!D2:D4");
+                dialog.RangeSelectionRequest.Should().Be(requests[^1]);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
 }

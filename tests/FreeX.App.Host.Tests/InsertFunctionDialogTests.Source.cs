@@ -77,7 +77,9 @@ public sealed partial class InsertFunctionDialogTests
         source.Should().Contain("UiText.Get(\"InsertFunction_SelectAFunction\")");
         source.Should().Contain("UiText.Get(\"InsertFunction_FormulaSyntaxAndHelp\")");
         source.Should().Contain("UiText.Get(\"InsertFunction_HelpOnThisFunction\")");
-        source.Should().Contain("FunctionArgumentsDialog");
-        source.Should().Contain("argumentsDialog.ResultFormula");
+        source.Should().Contain("public InsertFunctionCatalogEntry? SelectedFunction");
+        source.Should().Contain("SelectedFunction = entry;");
+        source.Should().Contain("SelectedFormula = CreateFormula(entry.Name);");
+        source.Should().NotContain("new FunctionArgumentsDialog(");
     }
 }

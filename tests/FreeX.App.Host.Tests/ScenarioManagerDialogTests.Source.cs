@@ -103,7 +103,11 @@ public sealed partial class ScenarioManagerDialogTests
         source.Should().Contain("GetValidationTarget(failure.Field)");
         source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title);");
         source.Should().Contain("target.SelectAll();");
-        handlerSource.Should().Contain("new ScenarioManagerDialog(_workbook, _currentSheetId, ResolveSheetIdByName)");
+        handlerSource.Should().Contain("new ScenarioManagerDialog(");
+        handlerSource.Should().Contain("request => ApplyScenarioManagerRangeSelection(dialog, request)");
+        handlerSource.Should().Contain("private void ApplyScenarioManagerRangeSelection(");
+        handlerSource.Should().Contain("BeginDialogRangeSelection(");
+        handlerSource.Should().Contain("dialog.ApplyRangeSelection(request.Target, FormatWorkbookRange(selectedRange))");
         handlerSource.Should().Contain("dialog.ScenarioHidden");
         handlerSource.Should().Contain("dialog.ScenarioLocked");
         handlerSource.Should().Contain("dialog.ResultCellsText");
@@ -116,6 +120,20 @@ public sealed partial class ScenarioManagerDialogTests
         handlerSource.Should().Contain("dialog.SelectedAction == ScenarioManagerAction.Edit ? dialog.SelectedScenarioName : null");
         handlerSource.Should().Contain("new SaveScenarioCommand(name, changes, comment, hidden, locked, replaceScenarioName)");
         handlerSource.Should().Contain("TryParseScenarioChangingCells");
+    }
+
+    [Fact]
+    public void DialogSource_WiresRangePickersForChangingAndResultCells()
+    {
+        var source = ReadScenarioManagerDialogSource();
+
+        source.Should().Contain("public sealed record ScenarioManagerRangeSelectionRequest");
+        source.Should().Contain("AddReferenceField(");
+        source.Should().Contain("ScenarioManagerRangeSelectionTarget.ChangingCells");
+        source.Should().Contain("ScenarioManagerRangeSelectionTarget.ResultCells");
+        source.Should().Contain("DialogReferencePicker.CreateEditor(");
+        source.Should().Contain("_requestRangeSelection?.Invoke(RangeSelectionRequest);");
+        source.Should().Contain("public void ApplyRangeSelection(ScenarioManagerRangeSelectionTarget target, string rangeText)");
     }
 
     [Fact]

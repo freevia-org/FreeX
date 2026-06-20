@@ -120,25 +120,13 @@ public partial class MainWindow
         PivotTableDialog? dialog,
         PivotTableRangeSelectionRequest request)
     {
-        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+        if (dialog is null)
             return;
 
-        var rangeText = FormatWorkbookRange(selectedRange);
-        if (request.CollapseDialog)
-            dialog.Hide();
-
-        try
-        {
-            dialog.ApplyRangeSelection(request.Target, rangeText);
-        }
-        finally
-        {
-            if (request.CollapseDialog)
-            {
-                dialog.Show();
-                dialog.Activate();
-            }
-        }
+        BeginDialogRangeSelection(
+            dialog,
+            request.CollapseDialog,
+            selectedRange => dialog.ApplyRangeSelection(request.Target, FormatWorkbookRange(selectedRange)));
     }
 
     private void RefreshPivotTableBtn_Click(object sender, RoutedEventArgs e)
@@ -276,26 +264,17 @@ public partial class MainWindow
         MovePivotTableDialog? dialog,
         MovePivotTableRangeSelectionRequest request)
     {
-        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+        if (dialog is null)
             return;
 
-        var destination = new GridRange(selectedRange.Start, selectedRange.Start);
-        var rangeText = FormatWorkbookRange(destination);
-        if (request.CollapseDialog)
-            dialog.Hide();
-
-        try
-        {
-            dialog.ApplyRangeSelection(rangeText);
-        }
-        finally
-        {
-            if (request.CollapseDialog)
+        BeginDialogRangeSelection(
+            dialog,
+            request.CollapseDialog,
+            selectedRange =>
             {
-                dialog.Show();
-                dialog.Activate();
-            }
-        }
+                var destination = new GridRange(selectedRange.Start, selectedRange.Start);
+                dialog.ApplyRangeSelection(FormatWorkbookRange(destination));
+            });
     }
 
     private void PivotTableShowDetailsBtn_Click(object sender, RoutedEventArgs e)
@@ -456,25 +435,13 @@ public partial class MainWindow
         PivotTableDataSourceDialog? dialog,
         PivotTableDataSourceRangeSelectionRequest request)
     {
-        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+        if (dialog is null)
             return;
 
-        var rangeText = FormatWorkbookRange(selectedRange);
-        if (request.CollapseDialog)
-            dialog.Hide();
-
-        try
-        {
-            dialog.ApplyRangeSelection(rangeText);
-        }
-        finally
-        {
-            if (request.CollapseDialog)
-            {
-                dialog.Show();
-                dialog.Activate();
-            }
-        }
+        BeginDialogRangeSelection(
+            dialog,
+            request.CollapseDialog,
+            selectedRange => dialog.ApplyRangeSelection(FormatWorkbookRange(selectedRange)));
     }
 
     private void PivotInsertSlicerBtn_Click(object sender, RoutedEventArgs e)

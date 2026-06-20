@@ -241,11 +241,10 @@ public sealed partial class PivotWorkflowDialogTests
         source.Should().Contain("request => ApplyPivotTableRangeSelection(dialog, request)");
         source.Should().Contain("private void ApplyPivotTableRangeSelection(");
         source.Should().Contain("PivotTableRangeSelectionRequest request");
+        source.Should().Contain("BeginDialogRangeSelection(");
+        source.Should().Contain("request.CollapseDialog");
         source.Should().Contain("FormatWorkbookRange(selectedRange)");
-        source.Should().Contain("dialog.ApplyRangeSelection(request.Target, rangeText);");
-        source.Should().Contain("dialog.Hide();");
-        source.Should().Contain("dialog.Show();");
-        source.Should().Contain("dialog.Activate();");
+        source.Should().Contain("selectedRange => dialog.ApplyRangeSelection(request.Target, FormatWorkbookRange(selectedRange))");
     }
 
     [Theory]

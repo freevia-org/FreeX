@@ -465,12 +465,10 @@ public sealed partial class DataToolDialogTests
         source.Should().Contain("request => ApplyAdvancedFilterRangeSelection(dialog, request)");
         source.Should().Contain("private void ApplyAdvancedFilterRangeSelection(");
         source.Should().Contain("AdvancedFilterRangeSelectionRequest request");
-        source.Should().Contain("if (request.CollapseDialog)");
-        source.Should().Contain("dialog.Hide();");
+        source.Should().Contain("BeginDialogRangeSelection(");
+        source.Should().Contain("request.CollapseDialog");
         source.Should().Contain("FormatWorkbookRange(selectedRange)");
-        source.Should().Contain("dialog.ApplyRangeSelection(request.Target, rangeText);");
-        source.Should().Contain("dialog.Show();");
-        source.Should().Contain("dialog.Activate();");
+        source.Should().Contain("selectedRange => dialog.ApplyRangeSelection(request.Target, FormatWorkbookRange(selectedRange))");
         source.Should().Contain("ExecuteRepeatable(");
         source.Should().Contain("new AdvancedFilterCommand(");
         source.Should().Contain("RecalculateIfAutomatic(outcome.AffectedCells ?? []);");

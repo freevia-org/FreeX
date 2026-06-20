@@ -105,27 +105,19 @@ public partial class MainWindow
         SparklineDialog? dialog,
         SparklineRangeSelectionRequest request)
     {
-        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+        if (dialog is null)
             return;
 
-        var rangeText = request.Target == SparklineRangeSelectionTarget.Location
-            ? FormatCellReference(selectedRange.Start)
-            : FormatWorkbookRange(selectedRange);
-        if (request.CollapseDialog)
-            dialog.Hide();
-
-        try
-        {
-            dialog.ApplyRangeSelection(request.Target, rangeText);
-        }
-        finally
-        {
-            if (request.CollapseDialog)
+        BeginDialogRangeSelection(
+            dialog,
+            request.CollapseDialog,
+            selectedRange =>
             {
-                dialog.Show();
-                dialog.Activate();
-            }
-        }
+                var rangeText = request.Target == SparklineRangeSelectionTarget.Location
+                    ? FormatCellReference(selectedRange.Start)
+                    : FormatWorkbookRange(selectedRange);
+                dialog.ApplyRangeSelection(request.Target, rangeText);
+            });
     }
 
     private void InsertLinkBtn_Click(object sender, RoutedEventArgs e)

@@ -285,11 +285,9 @@ public sealed partial class DataValidationDialogTests
 
         source.Should().Contain("private void ApplyDataValidationRangeSelection(");
         source.Should().Contain("DataValidationRangeSelectionRequest request");
-        source.Should().Contain("if (request.CollapseDialog)");
-        source.Should().Contain("dialog.Hide();");
+        source.Should().Contain("BeginDialogRangeSelection(");
+        source.Should().Contain("request.CollapseDialog");
         source.Should().Contain("DataValidationService.FormatListSourceRange(");
         source.Should().Contain("dialog.ApplyRangeSelection(request.Target, formulaText);");
-        source.Should().Contain("dialog.Show();");
-        source.Should().Contain("dialog.Activate();");
     }
 }
