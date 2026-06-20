@@ -22,6 +22,7 @@ public sealed partial class NativeJsonAdapter
         public int? FirstVisibleSheetIndex { get; set; }
         public int? ActiveSheetIndex { get; set; }
         public WorkbookFileVersionDto? FileVersion { get; set; }
+        public WorkbookCountrySettingsDto? CountrySettings { get; set; }
         public WorkbookFileSharingDto? FileSharing { get; set; }
         public List<WorkbookFileRecoveryPropertiesDto> FileRecoveryProperties { get; set; } = [];
         public WorkbookPropertiesDto? Properties { get; set; }
@@ -134,6 +135,12 @@ public sealed partial class NativeJsonAdapter
         public string? RupBuild { get; set; }
         public string? CodeName { get; set; }
         public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    }
+
+    private class WorkbookCountrySettingsDto
+    {
+        public int? DefaultCountryId { get; set; }
+        public int? CurrentCountryId { get; set; }
     }
 
     private class WorkbookPropertiesDto

@@ -41,6 +41,38 @@ public sealed partial class NativeJsonAdapter
         dto.MaxCalculationChange = workbook.MaxCalculationChange;
     }
 
+    private static WorkbookCountrySettingsModel? ToWorkbookCountrySettings(WorkbookCountrySettingsDto? dto)
+    {
+        if (dto is null)
+            return null;
+
+        var defaultCountryId = NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(dto.DefaultCountryId, ushort.MaxValue);
+        var currentCountryId = NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(dto.CurrentCountryId, ushort.MaxValue);
+        return defaultCountryId is null && currentCountryId is null
+            ? null
+            : new WorkbookCountrySettingsModel
+            {
+                DefaultCountryId = defaultCountryId,
+                CurrentCountryId = currentCountryId
+            };
+    }
+
+    private static WorkbookCountrySettingsDto? FromWorkbookCountrySettings(WorkbookCountrySettingsModel? countrySettings)
+    {
+        if (countrySettings is null)
+            return null;
+
+        var defaultCountryId = NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(countrySettings.DefaultCountryId, ushort.MaxValue);
+        var currentCountryId = NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(countrySettings.CurrentCountryId, ushort.MaxValue);
+        return defaultCountryId is null && currentCountryId is null
+            ? null
+            : new WorkbookCountrySettingsDto
+            {
+                DefaultCountryId = defaultCountryId,
+                CurrentCountryId = currentCountryId
+            };
+    }
+
     private static bool IsSupportedFormulaErrorCode(string? errorCode) =>
         string.Equals(errorCode, ErrorValue.DivByZero.Code, StringComparison.OrdinalIgnoreCase) ||
         string.Equals(errorCode, ErrorValue.Value.Code, StringComparison.OrdinalIgnoreCase) ||
