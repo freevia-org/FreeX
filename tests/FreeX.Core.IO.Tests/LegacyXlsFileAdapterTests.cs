@@ -20,6 +20,8 @@ namespace FreeX.Core.IO.Tests;
 
 public sealed class LegacyXlsFileAdapterTests
 {
+    private const int LegacyXlsMaxColumnIndex = 255;
+
     [Fact]
     public void Formats_AreOpenOnly()
     {
@@ -88,6 +90,17 @@ public sealed class LegacyXlsFileAdapterTests
         sheet.HiddenCols.Should().Contain(3);
         sheet.RowHeights.Should().ContainKey(2).WhoseValue.Should().BeApproximately(32, 0.5);
         sheet.ColumnWidths.Should().ContainKey(2).WhoseValue.Should().BeApproximately(18, 0.01);
+        sheet.FrozenRows.Should().Be(1);
+        sheet.FrozenCols.Should().Be(1);
+        sheet.RowOutlineLevels.Should().ContainKey(6).WhoseValue.Should().Be(1);
+        sheet.RowOutlineLevels.Should().ContainKey(7).WhoseValue.Should().Be(1);
+        sheet.ColOutlineLevels.Should().ContainKey(6).WhoseValue.Should().Be(1);
+        sheet.ColOutlineLevels.Should().ContainKey(7).WhoseValue.Should().Be(1);
+        sheet.PrintArea.Should().NotBeNull();
+        sheet.PrintArea!.Value.Start.Should().Be(new ModelCellAddress(sheet.Id, 1, 1));
+        sheet.PrintArea.Value.End.Should().Be(new ModelCellAddress(sheet.Id, 7, 5));
+        sheet.PrintTitleRows.Should().Be(new WorksheetRepeatRange(1, 2));
+        sheet.PrintTitleColumns.Should().Be(new WorksheetRepeatRange(1, 2));
 
         var formulaCell = sheet.GetCell(2, 2);
         formulaCell.Should().NotBeNull();
@@ -161,11 +174,21 @@ public sealed class LegacyXlsFileAdapterTests
                 workbook.NamedRanges.Count + workbook.NamedFormulas.Count,
                 workbook.Sheets.Sum(sheet => sheet.Hyperlinks.Count),
                 workbook.Sheets.Sum(sheet => sheet.Comments.Count),
+                workbook.Sheets.Count(sheet => sheet.FrozenRows > 0 || sheet.FrozenCols > 0),
+                workbook.Sheets.Sum(sheet => sheet.RowOutlineLevels.Count),
+                workbook.Sheets.Sum(sheet => sheet.ColOutlineLevels.Count),
+                workbook.Sheets.Count(sheet => sheet.PrintArea is not null),
+                workbook.Sheets.Count(sheet => sheet.PrintTitleRows is not null),
+                workbook.Sheets.Count(sheet => sheet.PrintTitleColumns is not null),
                 SheetNames: workbook.Sheets.Select(sheet => sheet.Name).ToArray(),
                 CellFingerprints: ReadImportedCellFingerprints(workbook),
                 DefinedNameFingerprints: ReadImportedDefinedNameFingerprints(workbook),
                 HyperlinkFingerprints: ReadImportedHyperlinkFingerprints(workbook),
-                CommentFingerprints: ReadImportedCommentFingerprints(workbook));
+                CommentFingerprints: ReadImportedCommentFingerprints(workbook),
+                PaneFingerprints: ReadImportedPaneFingerprints(workbook),
+                RowOutlineFingerprints: ReadImportedRowOutlineFingerprints(workbook),
+                ColOutlineFingerprints: ReadImportedColOutlineFingerprints(workbook),
+                PrintLayoutFingerprints: ReadImportedPrintLayoutFingerprints(workbook));
 
             imported.Sheets.Should().Be(source.Sheets, imported.File);
             imported.Cells.Should().Be(source.Cells, imported.File);
@@ -183,6 +206,16 @@ public sealed class LegacyXlsFileAdapterTests
                 imported.DefinedNameFingerprints.Should().BeEquivalentTo(source.DefinedNameFingerprints, imported.File);
                 imported.HyperlinkFingerprints.Should().BeEquivalentTo(source.HyperlinkFingerprints, imported.File);
                 imported.CommentFingerprints.Should().BeEquivalentTo(source.CommentFingerprints, imported.File);
+                imported.FreezePanes.Should().Be(source.FreezePanes, imported.File);
+                imported.RowOutlineLevels.Should().Be(source.RowOutlineLevels, imported.File);
+                imported.ColOutlineLevels.Should().Be(source.ColOutlineLevels, imported.File);
+                imported.PrintAreas.Should().Be(source.PrintAreas, imported.File);
+                imported.PrintTitleRows.Should().Be(source.PrintTitleRows, imported.File);
+                imported.PrintTitleColumns.Should().Be(source.PrintTitleColumns, imported.File);
+                imported.PaneFingerprints.Should().BeEquivalentTo(source.PaneFingerprints, imported.File);
+                imported.RowOutlineFingerprints.Should().BeEquivalentTo(source.RowOutlineFingerprints, imported.File);
+                imported.ColOutlineFingerprints.Should().BeEquivalentTo(source.ColOutlineFingerprints, imported.File);
+                imported.PrintLayoutFingerprints.Should().BeEquivalentTo(source.PrintLayoutFingerprints, imported.File);
                 imported.Styles.Should().BeGreaterThanOrEqualTo(source.Styles, imported.File);
                 imported.Dimensions.Should().BeGreaterThanOrEqualTo(source.Dimensions, imported.File);
             }
@@ -197,6 +230,9 @@ public sealed class LegacyXlsFileAdapterTests
         summaries.Sum(summary => summary.Merges).Should().BeGreaterThan(0);
         summaries.Sum(summary => summary.Dimensions).Should().BeGreaterThan(0);
         summaries.Sum(summary => summary.DefinedNames).Should().BeGreaterThan(0);
+        summaries.Sum(summary => summary.PrintAreas + summary.PrintTitleRows + summary.PrintTitleColumns)
+            .Should()
+            .BeGreaterThan(0);
         summaries.Count(summary => summary.RichMetadata).Should().BeGreaterThan(0);
     }
 
@@ -282,6 +318,8 @@ public sealed class LegacyXlsFileAdapterTests
         sheet.AddMergedRegion(new CellRangeAddress(0, 0, 0, 1));
         sheet.SetColumnWidth(1, 18 * 256);
         sheet.SetColumnHidden(2, true);
+        sheet.CreateFreezePane(1, 1);
+        sheet.GroupColumn(5, 6);
 
         var header = sheet.CreateRow(0);
         header.CreateCell(0).SetCellValue("Merged header");
@@ -330,6 +368,10 @@ public sealed class LegacyXlsFileAdapterTests
         hiddenRow.ZeroHeight = true;
         hiddenRow.CreateCell(0).SetCellValue("hidden");
 
+        sheet.CreateRow(5).CreateCell(0).SetCellValue("outlined one");
+        sheet.CreateRow(6).CreateCell(0).SetCellValue("outlined two");
+        sheet.GroupRow(5, 6);
+
         var inputName = hssf.CreateName();
         inputName.NameName = "InputCell";
         inputName.RefersToFormula = "'Visible'!$A$2";
@@ -338,6 +380,10 @@ public sealed class LegacyXlsFileAdapterTests
         var formulaName = hssf.CreateName();
         formulaName.NameName = "DoubleInput";
         formulaName.RefersToFormula = "Visible!$A$2*2";
+
+        hssf.SetPrintArea(0, 0, 4, 0, 6);
+        sheet.RepeatingRows = new CellRangeAddress(0, 1, -1, -1);
+        sheet.RepeatingColumns = new CellRangeAddress(-1, -1, 0, 1);
 
         HSSFFormulaEvaluator.EvaluateAllFormulaCells(hssf);
 
@@ -374,16 +420,38 @@ public sealed class LegacyXlsFileAdapterTests
         var dimensions = 0;
         var hyperlinks = 0;
         var comments = 0;
+        var freezePanes = 0;
+        var rowOutlineLevels = 0;
+        var colOutlineLevels = 0;
         var sheetNames = new List<string>();
         var cellFingerprints = new List<string>();
         var hyperlinkFingerprints = new List<string>();
         var commentFingerprints = new List<string>();
+        var paneFingerprints = new List<string>();
+        var rowOutlineFingerprints = new List<string>();
+        var colOutlineFingerprints = new List<string>();
+        var printLayoutFingerprints = new List<string>();
 
         for (var sheetIndex = 0; sheetIndex < hssf.NumberOfSheets; sheetIndex++)
         {
             var sheet = hssf.GetSheetAt(sheetIndex);
             sheetNames.Add(sheet.SheetName);
             merges += sheet.NumMergedRegions;
+
+            if (sheet.PaneInformation is { } pane && pane.IsFreezePane())
+            {
+                freezePanes++;
+                paneFingerprints.Add(CreatePaneFingerprint(
+                    sheetIndex,
+                    sheet.SheetName,
+                    (uint)pane.HorizontalSplitPosition,
+                    (uint)pane.VerticalSplitPosition));
+            }
+
+            if (TryCreateRepeatRows(sheet.RepeatingRows, out var repeatRows))
+                printLayoutFingerprints.Add(CreateRepeatRangeFingerprint(sheetIndex, sheet.SheetName, "Rows", repeatRows));
+            if (TryCreateRepeatColumns(sheet.RepeatingColumns, out var repeatColumns))
+                printLayoutFingerprints.Add(CreateRepeatRangeFingerprint(sheetIndex, sheet.SheetName, "Cols", repeatColumns));
 
             for (var rowIndex = sheet.FirstRowNum; rowIndex <= sheet.LastRowNum; rowIndex++)
             {
@@ -393,6 +461,16 @@ public sealed class LegacyXlsFileAdapterTests
 
                 if (row.ZeroHeight || row.HeightInPoints > 0)
                     dimensions++;
+                if (row.OutlineLevel > 0)
+                {
+                    rowOutlineLevels++;
+                    rowOutlineFingerprints.Add(CreateOutlineFingerprint(
+                        sheetIndex,
+                        sheet.SheetName,
+                        "R",
+                        (uint)rowIndex + 1,
+                        row.OutlineLevel));
+                }
 
                 foreach (var cell in row.Cells)
                 {
@@ -422,6 +500,21 @@ public sealed class LegacyXlsFileAdapterTests
                     sheet.GetColumnWidth(columnIndex) != sheet.DefaultColumnWidth * 256)
                 {
                     dimensions++;
+                }
+            }
+
+            for (var columnIndex = 0; columnIndex <= LegacyXlsMaxColumnIndex; columnIndex++)
+            {
+                var outlineLevel = sheet.GetColumnOutlineLevel(columnIndex);
+                if (outlineLevel > 0)
+                {
+                    colOutlineLevels++;
+                    colOutlineFingerprints.Add(CreateOutlineFingerprint(
+                        sheetIndex,
+                        sheet.SheetName,
+                        "C",
+                        (uint)columnIndex + 1,
+                        outlineLevel));
                 }
             }
 
@@ -457,6 +550,11 @@ public sealed class LegacyXlsFileAdapterTests
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
             .ToArray();
+        printLayoutFingerprints.AddRange(ReadSourcePrintLayoutFingerprints(hssf));
+        var orderedPrintLayoutFingerprints = printLayoutFingerprints
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
 
         return new LegacyXlsCorpusSummary(
             Path.GetFileName(path),
@@ -473,11 +571,21 @@ public sealed class LegacyXlsFileAdapterTests
             definedNameFingerprints.Length,
             hyperlinks,
             comments,
+            freezePanes,
+            rowOutlineLevels,
+            colOutlineLevels,
+            orderedPrintLayoutFingerprints.Count(value => value.Contains("|Area|", StringComparison.Ordinal)),
+            orderedPrintLayoutFingerprints.Count(value => value.Contains("|Rows|", StringComparison.Ordinal)),
+            orderedPrintLayoutFingerprints.Count(value => value.Contains("|Cols|", StringComparison.Ordinal)),
             SheetNames: sheetNames,
             CellFingerprints: cellFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             DefinedNameFingerprints: definedNameFingerprints,
             HyperlinkFingerprints: hyperlinkFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
-            CommentFingerprints: commentFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray());
+            CommentFingerprints: commentFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            PaneFingerprints: paneFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            RowOutlineFingerprints: rowOutlineFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            ColOutlineFingerprints: colOutlineFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            PrintLayoutFingerprints: orderedPrintLayoutFingerprints);
     }
 
     private static LegacyXlsCorpusSummary ReadExcelDataReaderSourceSummary(string path, Stream stream)
@@ -514,12 +622,22 @@ public sealed class LegacyXlsFileAdapterTests
             DefinedNames: 0,
             Hyperlinks: 0,
             Comments: 0,
+            FreezePanes: 0,
+            RowOutlineLevels: 0,
+            ColOutlineLevels: 0,
+            PrintAreas: 0,
+            PrintTitleRows: 0,
+            PrintTitleColumns: 0,
             RichMetadata: false,
             SheetNames: [],
             CellFingerprints: [],
             DefinedNameFingerprints: [],
             HyperlinkFingerprints: [],
-            CommentFingerprints: []);
+            CommentFingerprints: [],
+            PaneFingerprints: [],
+            RowOutlineFingerprints: [],
+            ColOutlineFingerprints: [],
+            PrintLayoutFingerprints: []);
     }
 
     private static IReadOnlyList<string> ReadImportedCellFingerprints(Workbook workbook) =>
@@ -572,6 +690,68 @@ public sealed class LegacyXlsFileAdapterTests
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
 
+    private static IReadOnlyList<string> ReadImportedPaneFingerprints(Workbook workbook) =>
+        workbook.Sheets
+            .Select((sheet, sheetIndex) => new { Sheet = sheet, SheetIndex = sheetIndex })
+            .Where(entry => entry.Sheet.FrozenRows > 0 || entry.Sheet.FrozenCols > 0)
+            .Select(entry => CreatePaneFingerprint(
+                entry.SheetIndex,
+                entry.Sheet.Name,
+                entry.Sheet.FrozenRows,
+                entry.Sheet.FrozenCols))
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+
+    private static IReadOnlyList<string> ReadImportedRowOutlineFingerprints(Workbook workbook) =>
+        workbook.Sheets
+            .SelectMany((sheet, sheetIndex) => sheet.RowOutlineLevels
+                .OrderBy(pair => pair.Key)
+                .Select(pair => CreateOutlineFingerprint(sheetIndex, sheet.Name, "R", pair.Key, pair.Value)))
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+
+    private static IReadOnlyList<string> ReadImportedColOutlineFingerprints(Workbook workbook) =>
+        workbook.Sheets
+            .SelectMany((sheet, sheetIndex) => sheet.ColOutlineLevels
+                .OrderBy(pair => pair.Key)
+                .Select(pair => CreateOutlineFingerprint(sheetIndex, sheet.Name, "C", pair.Key, pair.Value)))
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+
+    private static IReadOnlyList<string> ReadImportedPrintLayoutFingerprints(Workbook workbook) =>
+        workbook.Sheets
+            .SelectMany((sheet, sheetIndex) =>
+            {
+                var fingerprints = new List<string>();
+                if (sheet.PrintArea is { } printArea)
+                    fingerprints.Add(CreatePrintAreaFingerprint(sheetIndex, sheet.Name, printArea));
+                if (sheet.PrintTitleRows is { } rows)
+                    fingerprints.Add(CreateRepeatRangeFingerprint(sheetIndex, sheet.Name, "Rows", rows));
+                if (sheet.PrintTitleColumns is { } columns)
+                    fingerprints.Add(CreateRepeatRangeFingerprint(sheetIndex, sheet.Name, "Cols", columns));
+                return fingerprints;
+            })
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+
+    private static IReadOnlyList<string> ReadSourcePrintLayoutFingerprints(HSSFWorkbook hssf)
+    {
+        var workbook = new Workbook("PrintLayoutSource");
+        for (var sheetIndex = 0; sheetIndex < hssf.NumberOfSheets; sheetIndex++)
+            workbook.AddSheet(hssf.GetSheetName(sheetIndex));
+
+        for (var nameIndex = 0; nameIndex < hssf.NumberOfNames; nameIndex++)
+        {
+            var name = hssf.GetNameAt(nameIndex);
+            if (name is null || name.IsDeleted || name.IsFunctionName)
+                continue;
+
+            TryLoadSourcePrintDefinedName(workbook, name);
+        }
+
+        return ReadImportedPrintLayoutFingerprints(workbook);
+    }
+
     private static string CreateCellFingerprint(
         int sheetIndex,
         string sheetName,
@@ -588,6 +768,34 @@ public sealed class LegacyXlsFileAdapterTests
         uint column,
         string value) =>
         $"{sheetIndex}:{sheetName}!{new ModelCellAddress(default, row, column).ToA1()}|{value}";
+
+    private static string CreatePaneFingerprint(
+        int sheetIndex,
+        string sheetName,
+        uint frozenRows,
+        uint frozenColumns) =>
+        $"{sheetIndex}:{sheetName}|Freeze|R={frozenRows}|C={frozenColumns}";
+
+    private static string CreateOutlineFingerprint(
+        int sheetIndex,
+        string sheetName,
+        string axis,
+        uint index,
+        int level) =>
+        $"{sheetIndex}:{sheetName}|{axis}{index}|L={level}";
+
+    private static string CreatePrintAreaFingerprint(
+        int sheetIndex,
+        string sheetName,
+        GridRange range) =>
+        $"{sheetIndex}:{sheetName}|Area|{range.Start.ToA1()}:{range.End.ToA1()}";
+
+    private static string CreateRepeatRangeFingerprint(
+        int sheetIndex,
+        string sheetName,
+        string axis,
+        WorksheetRepeatRange range) =>
+        $"{sheetIndex}:{sheetName}|{axis}|{range.Start}:{range.End}";
 
     private static string SourceValueToken(ICell cell, CellType cellType) =>
         cellType switch
@@ -658,6 +866,289 @@ public sealed class LegacyXlsFileAdapterTests
         !IsExcelReservedDefinedName(name.NameName) &&
         validationWorkbook.ValidateNamedRangeName(name.NameName) is null;
 
+    private static bool TryLoadSourcePrintDefinedName(Workbook workbook, IName definedName)
+    {
+        if (!IsPrintAreaDefinedName(definedName.NameName) &&
+            !IsPrintTitlesDefinedName(definedName.NameName))
+        {
+            return false;
+        }
+
+        var refersTo = NormalizeFormulaText(definedName.RefersToFormula ?? "");
+        if (string.IsNullOrWhiteSpace(refersTo))
+            return true;
+
+        if (IsPrintAreaDefinedName(definedName.NameName))
+        {
+            foreach (var reference in SplitFormulaReferences(refersTo))
+            {
+                if (TryParseNamedRangeRefersTo(workbook, reference, out var printArea) &&
+                    workbook.GetSheet(printArea.Start.Sheet) is { } sheet)
+                {
+                    sheet.PrintArea = printArea;
+                    break;
+                }
+            }
+
+            return true;
+        }
+
+        foreach (var reference in SplitFormulaReferences(refersTo))
+            TryLoadPrintTitleReference(workbook, reference);
+
+        return true;
+    }
+
+    private static bool TryLoadPrintTitleReference(Workbook workbook, string reference)
+    {
+        if (!TrySplitSheetQualifiedReference(reference.Trim(), out var sheetName, out var rangeText))
+            return false;
+
+        var sheet = workbook.GetSheet(sheetName);
+        if (sheet is null)
+            return false;
+
+        if (TryParseRepeatRows(rangeText, out var rows))
+        {
+            sheet.PrintTitleRows = rows;
+            return true;
+        }
+
+        if (TryParseRepeatColumns(rangeText, out var columns))
+        {
+            sheet.PrintTitleColumns = columns;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryParseNamedRangeRefersTo(Workbook workbook, string? refersTo, out GridRange range)
+    {
+        range = default;
+        if (string.IsNullOrWhiteSpace(refersTo))
+            return false;
+
+        var text = NormalizeFormulaText(refersTo).Trim();
+        if (!TrySplitSheetQualifiedReference(text, out var sheetName, out var rangeText))
+            return false;
+
+        var sheet = workbook.GetSheet(sheetName);
+        if (sheet is null)
+            return false;
+
+        var parts = rangeText.Split(':');
+        if (parts.Length is < 1 or > 2)
+            return false;
+
+        if (!TryParseA1Part(parts[0], sheet.Id, out var start))
+            return false;
+
+        var endText = parts.Length == 2 ? parts[1] : parts[0];
+        if (!TryParseA1Part(endText, sheet.Id, out var end))
+            return false;
+
+        range = new GridRange(start, end);
+        return true;
+    }
+
+    private static bool TrySplitSheetQualifiedReference(string text, out string sheetName, out string rangeText)
+    {
+        sheetName = "";
+        rangeText = "";
+        if (text.Length == 0)
+            return false;
+
+        if (text[0] == '\'')
+        {
+            var builder = new StringBuilder();
+            for (var index = 1; index < text.Length; index++)
+            {
+                if (text[index] != '\'')
+                {
+                    builder.Append(text[index]);
+                    continue;
+                }
+
+                if (index + 1 < text.Length && text[index + 1] == '\'')
+                {
+                    builder.Append('\'');
+                    index++;
+                    continue;
+                }
+
+                if (index + 1 >= text.Length || text[index + 1] != '!')
+                    return false;
+
+                sheetName = builder.ToString();
+                rangeText = text[(index + 2)..].Trim();
+                return rangeText.Length > 0;
+            }
+
+            return false;
+        }
+
+        var separator = text.IndexOf('!', StringComparison.Ordinal);
+        if (separator <= 0 || separator == text.Length - 1)
+            return false;
+
+        sheetName = text[..separator].Trim();
+        rangeText = text[(separator + 1)..].Trim();
+        return sheetName.Length > 0 && rangeText.Length > 0;
+    }
+
+    private static bool TryParseA1Part(string text, SheetId sheetId, out ModelCellAddress address)
+    {
+        var normalized = text.Trim().Replace("$", "", StringComparison.Ordinal);
+        return ModelCellAddress.TryParse(normalized, sheetId, out address);
+    }
+
+    private static IEnumerable<string> SplitFormulaReferences(string formula)
+    {
+        var start = 0;
+        var inQuote = false;
+        for (var index = 0; index < formula.Length; index++)
+        {
+            if (formula[index] == '\'')
+            {
+                if (inQuote && index + 1 < formula.Length && formula[index + 1] == '\'')
+                {
+                    index++;
+                    continue;
+                }
+
+                inQuote = !inQuote;
+                continue;
+            }
+
+            if (!inQuote && formula[index] == ',')
+            {
+                var token = formula[start..index].Trim();
+                if (token.Length > 0)
+                    yield return token;
+                start = index + 1;
+            }
+        }
+
+        var lastToken = formula[start..].Trim();
+        if (lastToken.Length > 0)
+            yield return lastToken;
+    }
+
+    private static bool TryParseRepeatRows(string rangeText, out WorksheetRepeatRange rows)
+    {
+        rows = default;
+        var parts = rangeText.Split(':', StringSplitOptions.TrimEntries);
+        if (parts.Length is < 1 or > 2)
+            return false;
+
+        if (!TryParseRowReference(parts[0], out var start))
+            return false;
+
+        var endText = parts.Length == 2 ? parts[1] : parts[0];
+        if (!TryParseRowReference(endText, out var end) ||
+            start < 1 ||
+            start > end ||
+            end > ModelCellAddress.MaxRow)
+        {
+            return false;
+        }
+
+        rows = new WorksheetRepeatRange(start, end);
+        return true;
+    }
+
+    private static bool TryCreateRepeatRows(CellRangeAddress? range, out WorksheetRepeatRange rows)
+    {
+        rows = default;
+        if (range is null ||
+            range.FirstRow < 0 ||
+            range.LastRow < range.FirstRow)
+        {
+            return false;
+        }
+
+        rows = new WorksheetRepeatRange((uint)range.FirstRow + 1, (uint)range.LastRow + 1);
+        return true;
+    }
+
+    private static bool TryParseRepeatColumns(string rangeText, out WorksheetRepeatRange columns)
+    {
+        columns = default;
+        var parts = rangeText.Split(':', StringSplitOptions.TrimEntries);
+        if (parts.Length is < 1 or > 2)
+            return false;
+
+        if (!TryParseColumnReference(parts[0], out var start))
+            return false;
+
+        var endText = parts.Length == 2 ? parts[1] : parts[0];
+        if (!TryParseColumnReference(endText, out var end) ||
+            start < 1 ||
+            start > end ||
+            end > ModelCellAddress.MaxCol)
+        {
+            return false;
+        }
+
+        columns = new WorksheetRepeatRange(start, end);
+        return true;
+    }
+
+    private static bool TryCreateRepeatColumns(CellRangeAddress? range, out WorksheetRepeatRange columns)
+    {
+        columns = default;
+        if (range is null ||
+            range.FirstColumn < 0 ||
+            range.LastColumn < range.FirstColumn)
+        {
+            return false;
+        }
+
+        columns = new WorksheetRepeatRange((uint)range.FirstColumn + 1, (uint)range.LastColumn + 1);
+        return true;
+    }
+
+    private static bool TryParseRowReference(string text, out uint row) =>
+        uint.TryParse(text.Trim().Replace("$", "", StringComparison.Ordinal), out row);
+
+    private static bool TryParseColumnReference(string text, out uint column)
+    {
+        column = default;
+        var normalized = text.Trim().Replace("$", "", StringComparison.Ordinal);
+        if (normalized.Length == 0 || normalized.Any(character => !IsAsciiLetter(character)))
+            return false;
+
+        try
+        {
+            column = ModelCellAddress.ColumnNameToNumber(normalized);
+            return true;
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+    }
+
+    private static bool IsAsciiLetter(char character) =>
+        character is >= 'A' and <= 'Z' or >= 'a' and <= 'z';
+
+    private static bool IsPrintAreaDefinedName(string? name) =>
+        IsBuiltInDefinedName(name, "Print_Area");
+
+    private static bool IsPrintTitlesDefinedName(string? name) =>
+        IsBuiltInDefinedName(name, "Print_Titles");
+
+    private static bool IsBuiltInDefinedName(string? name, string builtInName)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return false;
+
+        var trimmedName = name.Trim();
+        return string.Equals(trimmedName, builtInName, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(trimmedName, "_xlnm." + builtInName, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static bool IsExcelReservedDefinedName(string? name)
     {
         if (string.IsNullOrWhiteSpace(name))
@@ -688,12 +1179,22 @@ public sealed class LegacyXlsFileAdapterTests
         int DefinedNames,
         int Hyperlinks,
         int Comments,
+        int FreezePanes,
+        int RowOutlineLevels,
+        int ColOutlineLevels,
+        int PrintAreas,
+        int PrintTitleRows,
+        int PrintTitleColumns,
         bool RichMetadata = true,
         IReadOnlyList<string>? SheetNames = null,
         IReadOnlyList<string>? CellFingerprints = null,
         IReadOnlyList<string>? DefinedNameFingerprints = null,
         IReadOnlyList<string>? HyperlinkFingerprints = null,
-        IReadOnlyList<string>? CommentFingerprints = null);
+        IReadOnlyList<string>? CommentFingerprints = null,
+        IReadOnlyList<string>? PaneFingerprints = null,
+        IReadOnlyList<string>? RowOutlineFingerprints = null,
+        IReadOnlyList<string>? ColOutlineFingerprints = null,
+        IReadOnlyList<string>? PrintLayoutFingerprints = null);
 
     public static TheoryData<object, double> AdditionalNumericValues() => new()
     {

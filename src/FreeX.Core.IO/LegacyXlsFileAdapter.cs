@@ -3,6 +3,7 @@ using ExcelDataReader;
 using FreeX.Core.Model;
 using NPOI.HSSF.UserModel;
 using NPOI.SS.UserModel;
+using NPOI.SS.Util;
 using NPOICell = NPOI.SS.UserModel.ICell;
 using NPOICellStyle = NPOI.SS.UserModel.ICellStyle;
 using NPOIWorkbook = NPOI.SS.UserModel.IWorkbook;
@@ -16,6 +17,8 @@ namespace FreeX.Core.IO;
 
 public sealed class LegacyXlsFileAdapter : IFileAdapter
 {
+    private const int LegacyXlsMaxColumnIndex = 255;
+
     private static readonly HashSet<string> ExcelReservedDefinedNames = new(StringComparer.OrdinalIgnoreCase)
     {
         "Print_Area",
@@ -131,6 +134,9 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
 
     private static void LoadSheetLayout(ISheet sourceSheet, Sheet sheet)
     {
+        LoadPaneState(sourceSheet, sheet);
+        LoadPrintTitles(sourceSheet, sheet);
+
         if (sourceSheet.DefaultColumnWidth > 0)
             sheet.DefaultColumnWidth = sourceSheet.DefaultColumnWidth;
         if (sourceSheet.DefaultRowHeightInPoints > 0)
@@ -147,6 +153,8 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
                 sheet.HiddenRows.Add(rowNumber);
             if (sourceRow.HeightInPoints > 0)
                 sheet.RowHeights[rowNumber] = PointsToPixels(sourceRow.HeightInPoints);
+            if (sourceRow.OutlineLevel > 0)
+                sheet.RowOutlineLevels[rowNumber] = sourceRow.OutlineLevel;
         }
 
         var maxColumn = FindLastColumn(sourceSheet);
@@ -160,6 +168,38 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
             if (width > 0)
                 sheet.ColumnWidths[columnNumber] = width / 256.0;
         }
+
+        LoadColumnOutlineLevels(sourceSheet, sheet);
+    }
+
+    private static void LoadColumnOutlineLevels(ISheet sourceSheet, Sheet sheet)
+    {
+        for (var columnIndex = 0; columnIndex <= LegacyXlsMaxColumnIndex; columnIndex++)
+        {
+            var outlineLevel = sourceSheet.GetColumnOutlineLevel(columnIndex);
+            if (outlineLevel > 0)
+                sheet.ColOutlineLevels[ToModelIndex(columnIndex)] = outlineLevel;
+        }
+    }
+
+    private static void LoadPaneState(ISheet sourceSheet, Sheet sheet)
+    {
+        var pane = sourceSheet.PaneInformation;
+        if (pane is null || !pane.IsFreezePane())
+            return;
+
+        sheet.FrozenCols = (uint)Math.Max(0, (int)pane.VerticalSplitPosition);
+        sheet.FrozenRows = (uint)Math.Max(0, (int)pane.HorizontalSplitPosition);
+        sheet.SplitColumn = null;
+        sheet.SplitRow = null;
+    }
+
+    private static void LoadPrintTitles(ISheet sourceSheet, Sheet sheet)
+    {
+        if (TryCreateRepeatRows(sourceSheet.RepeatingRows, out var rows))
+            sheet.PrintTitleRows = rows;
+        if (TryCreateRepeatColumns(sourceSheet.RepeatingColumns, out var columns))
+            sheet.PrintTitleColumns = columns;
     }
 
     private static void LoadMergedRegions(ISheet sourceSheet, Sheet sheet)
@@ -213,8 +253,15 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
             var definedName = sourceWorkbook.GetNameAt(index);
             if (definedName is null ||
                 definedName.IsDeleted ||
-                definedName.IsFunctionName ||
-                IsExcelReservedDefinedName(definedName.NameName) ||
+                definedName.IsFunctionName)
+            {
+                continue;
+            }
+
+            if (TryLoadPrintDefinedName(workbook, definedName))
+                continue;
+
+            if (IsExcelReservedDefinedName(definedName.NameName) ||
                 workbook.ValidateNamedRangeName(definedName.NameName) is not null)
             {
                 continue;
@@ -236,6 +283,193 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
             workbook.NamedFormulas[definedName.NameName] = refersTo.Trim();
         }
     }
+
+    private static bool TryLoadPrintDefinedName(Workbook workbook, IName definedName)
+    {
+        if (!IsPrintAreaDefinedName(definedName.NameName) &&
+            !IsPrintTitlesDefinedName(definedName.NameName))
+        {
+            return false;
+        }
+
+        var refersTo = NormalizeFormula(definedName.RefersToFormula ?? "");
+        if (string.IsNullOrWhiteSpace(refersTo))
+            return true;
+
+        if (IsPrintAreaDefinedName(definedName.NameName))
+        {
+            foreach (var reference in SplitFormulaReferences(refersTo))
+            {
+                if (TryParseNamedRangeRefersTo(workbook, reference, out var printArea) &&
+                    workbook.GetSheet(printArea.Start.Sheet) is { } sheet)
+                {
+                    sheet.PrintArea = printArea;
+                    break;
+                }
+            }
+
+            return true;
+        }
+
+        foreach (var reference in SplitFormulaReferences(refersTo))
+            TryLoadPrintTitleReference(workbook, reference);
+
+        return true;
+    }
+
+    private static bool TryLoadPrintTitleReference(Workbook workbook, string reference)
+    {
+        if (!TrySplitSheetQualifiedReference(reference.Trim(), out var sheetName, out var rangeText))
+            return false;
+
+        var sheet = workbook.GetSheet(sheetName);
+        if (sheet is null)
+            return false;
+
+        if (TryParseRepeatRows(rangeText, out var rows))
+        {
+            sheet.PrintTitleRows = rows;
+            return true;
+        }
+
+        if (TryParseRepeatColumns(rangeText, out var columns))
+        {
+            sheet.PrintTitleColumns = columns;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static IEnumerable<string> SplitFormulaReferences(string formula)
+    {
+        var start = 0;
+        var inQuote = false;
+        for (var index = 0; index < formula.Length; index++)
+        {
+            if (formula[index] == '\'')
+            {
+                if (inQuote && index + 1 < formula.Length && formula[index + 1] == '\'')
+                {
+                    index++;
+                    continue;
+                }
+
+                inQuote = !inQuote;
+                continue;
+            }
+
+            if (!inQuote && formula[index] == ',')
+            {
+                var token = formula[start..index].Trim();
+                if (token.Length > 0)
+                    yield return token;
+                start = index + 1;
+            }
+        }
+
+        var lastToken = formula[start..].Trim();
+        if (lastToken.Length > 0)
+            yield return lastToken;
+    }
+
+    private static bool TryParseRepeatRows(string rangeText, out WorksheetRepeatRange rows)
+    {
+        rows = default;
+        var parts = rangeText.Split(':', StringSplitOptions.TrimEntries);
+        if (parts.Length is < 1 or > 2)
+            return false;
+
+        if (!TryParseRowReference(parts[0], out var start))
+            return false;
+
+        var endText = parts.Length == 2 ? parts[1] : parts[0];
+        if (!TryParseRowReference(endText, out var end) ||
+            start < 1 ||
+            start > end ||
+            end > ModelCellAddress.MaxRow)
+        {
+            return false;
+        }
+
+        rows = new WorksheetRepeatRange(start, end);
+        return true;
+    }
+
+    private static bool TryCreateRepeatRows(CellRangeAddress? range, out WorksheetRepeatRange rows)
+    {
+        rows = default;
+        if (range is null ||
+            range.FirstRow < 0 ||
+            range.LastRow < range.FirstRow)
+        {
+            return false;
+        }
+
+        rows = new WorksheetRepeatRange(ToModelIndex(range.FirstRow), ToModelIndex(range.LastRow));
+        return true;
+    }
+
+    private static bool TryParseRepeatColumns(string rangeText, out WorksheetRepeatRange columns)
+    {
+        columns = default;
+        var parts = rangeText.Split(':', StringSplitOptions.TrimEntries);
+        if (parts.Length is < 1 or > 2)
+            return false;
+
+        if (!TryParseColumnReference(parts[0], out var start))
+            return false;
+
+        var endText = parts.Length == 2 ? parts[1] : parts[0];
+        if (!TryParseColumnReference(endText, out var end) ||
+            start < 1 ||
+            start > end ||
+            end > ModelCellAddress.MaxCol)
+        {
+            return false;
+        }
+
+        columns = new WorksheetRepeatRange(start, end);
+        return true;
+    }
+
+    private static bool TryCreateRepeatColumns(CellRangeAddress? range, out WorksheetRepeatRange columns)
+    {
+        columns = default;
+        if (range is null ||
+            range.FirstColumn < 0 ||
+            range.LastColumn < range.FirstColumn)
+        {
+            return false;
+        }
+
+        columns = new WorksheetRepeatRange(ToModelIndex(range.FirstColumn), ToModelIndex(range.LastColumn));
+        return true;
+    }
+
+    private static bool TryParseRowReference(string text, out uint row) =>
+        uint.TryParse(text.Trim().Replace("$", "", StringComparison.Ordinal), out row);
+
+    private static bool TryParseColumnReference(string text, out uint column)
+    {
+        column = default;
+        var normalized = text.Trim().Replace("$", "", StringComparison.Ordinal);
+        if (normalized.Length == 0 || normalized.Any(character => !IsAsciiLetter(character)))
+            return false;
+
+        try
+        {
+            column = ModelCellAddress.ColumnNameToNumber(normalized);
+            return true;
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+    }
+
+    private static bool IsAsciiLetter(char character) =>
+        character is >= 'A' and <= 'Z' or >= 'a' and <= 'z';
 
     private static void LoadCellAnnotations(NPOICell sourceCell, ModelCellAddress address, Sheet sheet)
     {
@@ -381,6 +615,22 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         return trimmedName.StartsWith("_xlchart.", StringComparison.OrdinalIgnoreCase) ||
                trimmedName.StartsWith("_xlnm.", StringComparison.OrdinalIgnoreCase) ||
                ExcelReservedDefinedNames.Contains(trimmedName);
+    }
+
+    private static bool IsPrintAreaDefinedName(string? name) =>
+        IsBuiltInDefinedName(name, "Print_Area");
+
+    private static bool IsPrintTitlesDefinedName(string? name) =>
+        IsBuiltInDefinedName(name, "Print_Titles");
+
+    private static bool IsBuiltInDefinedName(string? name, string builtInName)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return false;
+
+        var trimmedName = name.Trim();
+        return string.Equals(trimmedName, builtInName, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(trimmedName, "_xlnm." + builtInName, StringComparison.OrdinalIgnoreCase);
     }
 
     private static Cell MapCell(NPOICell sourceCell)
