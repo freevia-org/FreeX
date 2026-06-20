@@ -899,6 +899,8 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
 
         if (TryGetWindowTwoRecord(sourceSheet) is { } window)
         {
+            LoadPrimaryViewMetadata(window, sheet);
+
             if (window.SavedInPageBreakPreview)
                 sheet.ViewMode = WorksheetViewMode.PageBreakPreview;
 
@@ -911,6 +913,23 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
 
         if (TryGetTabColor(sourceSheet, palette, out var tabColor))
             sheet.TabColor = tabColor;
+    }
+
+    private static void LoadPrimaryViewMetadata(WindowTwoRecord window, Sheet sheet)
+    {
+        if (!window.IsSelected)
+            return;
+
+        var serializedMetadata = XmlNativeBagSerializer.Serialize(
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["tabSelected"] = "1"
+            });
+        if (serializedMetadata is null)
+            return;
+
+        sheet.PrimaryViewMetadata ??= new NativeXmlPreserveBag();
+        sheet.PrimaryViewMetadata.Set("sheetView", serializedMetadata);
     }
 
     private static WindowTwoRecord? TryGetWindowTwoRecord(ISheet sourceSheet) =>

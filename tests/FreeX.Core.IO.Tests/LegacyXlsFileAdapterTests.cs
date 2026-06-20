@@ -368,6 +368,7 @@ public sealed class LegacyXlsFileAdapterTests
                 OutlineSettingFingerprints: ReadImportedOutlineSettingFingerprints(workbook),
                 PrintLayoutFingerprints: ReadImportedPrintLayoutFingerprints(workbook),
                 PrintOptionsFingerprints: ReadImportedPrintOptionsFingerprints(workbook),
+                PrimaryViewMetadataFingerprints: ReadImportedPrimaryViewMetadataFingerprints(workbook),
                 PageSetupFingerprints: ReadImportedPageSetupFingerprints(workbook),
                 ViewStateFingerprints: ReadImportedViewStateFingerprints(workbook),
                 AutoFilterFingerprints: ReadImportedAutoFilterFingerprints(workbook),
@@ -452,6 +453,7 @@ public sealed class LegacyXlsFileAdapterTests
                 imported.OutlineSettingFingerprints.Should().BeEquivalentTo(source.OutlineSettingFingerprints, imported.File);
                 imported.PrintLayoutFingerprints.Should().BeEquivalentTo(source.PrintLayoutFingerprints, imported.File);
                 imported.PrintOptionsFingerprints.Should().BeEquivalentTo(source.PrintOptionsFingerprints, imported.File);
+                imported.PrimaryViewMetadataFingerprints.Should().BeEquivalentTo(source.PrimaryViewMetadataFingerprints, imported.File);
                 imported.PageSetupFingerprints.Should().BeEquivalentTo(source.PageSetupFingerprints, imported.File);
                 imported.ViewStateFingerprints.Should().BeEquivalentTo(source.ViewStateFingerprints, imported.File);
                 imported.AutoFilterFingerprints.Should().BeEquivalentTo(source.AutoFilterFingerprints, imported.File);
@@ -522,6 +524,11 @@ public sealed class LegacyXlsFileAdapterTests
         summaries.Where(summary => summary.RichMetadata)
             .Sum(summary => summary.PrintOptionsFingerprints?.Count(fingerprint =>
                 fingerprint.Contains("|GridLinesSet=0", StringComparison.Ordinal)) ?? 0)
+            .Should()
+            .BeGreaterThan(0);
+        summaries.Where(summary => summary.RichMetadata)
+            .Sum(summary => summary.PrimaryViewMetadataFingerprints?.Count(fingerprint =>
+                fingerprint.Contains("|TabSelected=1", StringComparison.Ordinal)) ?? 0)
             .Should()
             .BeGreaterThan(0);
         summaries.Sum(summary => summary.ProtectedSheets).Should().BeGreaterThan(0);
@@ -927,6 +934,7 @@ public sealed class LegacyXlsFileAdapterTests
         var colOutlineFingerprints = new List<string>();
         var printLayoutFingerprints = new List<string>();
         var printOptionsFingerprints = new List<string>();
+        var primaryViewMetadataFingerprints = new List<string>();
         var pageSetupFingerprints = new List<string>();
         var viewStateFingerprints = new List<string>();
         var sheetCalculationFingerprints = new List<string>();
@@ -974,6 +982,8 @@ public sealed class LegacyXlsFileAdapterTests
                 printLayoutFingerprints.Add(CreateRepeatRangeFingerprint(sheetIndex, sheet.SheetName, "Cols", repeatColumns));
             if (TryCreateSourcePrintOptionsFingerprint(sheetIndex, sheet.SheetName, sheet, out var printOptionsFingerprint))
                 printOptionsFingerprints.Add(printOptionsFingerprint);
+            if (TryCreateSourcePrimaryViewMetadataFingerprint(sheetIndex, sheet.SheetName, sheet, out var primaryViewMetadataFingerprint))
+                primaryViewMetadataFingerprints.Add(primaryViewMetadataFingerprint);
             pageBreaks += sheet.RowBreaks.Count(breakIndex => ToSourceModelIndex(breakIndex) >= 2);
             pageBreaks += sheet.ColumnBreaks.Count(breakIndex => ToSourceModelIndex(breakIndex) >= 2);
             pageSetupFingerprints.Add(CreateSourcePageSetupFingerprint(sheetIndex, sheet.SheetName, sheet));
@@ -1229,6 +1239,7 @@ public sealed class LegacyXlsFileAdapterTests
             OutlineSettingFingerprints: outlineSettingFingerprints,
             PrintLayoutFingerprints: orderedPrintLayoutFingerprints,
             PrintOptionsFingerprints: printOptionsFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            PrimaryViewMetadataFingerprints: primaryViewMetadataFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             PageSetupFingerprints: pageSetupFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             ViewStateFingerprints: viewStateFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             AutoFilterFingerprints: orderedAutoFilterFingerprints,
@@ -1399,6 +1410,7 @@ public sealed class LegacyXlsFileAdapterTests
             OutlineSettingFingerprints: [],
             PrintLayoutFingerprints: [],
             PrintOptionsFingerprints: [],
+            PrimaryViewMetadataFingerprints: [],
             PageSetupFingerprints: [],
             ViewStateFingerprints: [],
             AutoFilterFingerprints: [],
@@ -2359,6 +2371,17 @@ public sealed class LegacyXlsFileAdapterTests
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
 
+    private static IReadOnlyList<string> ReadImportedPrimaryViewMetadataFingerprints(Workbook workbook) =>
+        workbook.Sheets
+            .Select((sheet, sheetIndex) =>
+                GetPrimaryViewMetadataAttribute(sheet, "tabSelected") is { } tabSelected
+                    ? CreatePrimaryViewMetadataFingerprint(sheetIndex, sheet.Name, tabSelected)
+                    : null)
+            .Where(value => value is not null)
+            .Select(value => value!)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+
     private static IReadOnlyList<string> ReadImportedPageSetupFingerprints(Workbook workbook) =>
         workbook.Sheets
             .Select((sheet, sheetIndex) => CreatePageSetupFingerprint(
@@ -2488,6 +2511,20 @@ public sealed class LegacyXlsFileAdapterTests
         }
 
         fingerprint = CreatePrintOptionsFingerprint(sheetIndex, sheetName, gridset.Gridset ? "1" : "0");
+        return true;
+    }
+
+    private static bool TryCreateSourcePrimaryViewMetadataFingerprint(
+        int sheetIndex,
+        string sheetName,
+        ISheet sheet,
+        [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out string? fingerprint)
+    {
+        fingerprint = null;
+        if (TryGetWindowTwoRecord(sheet) is not { IsSelected: true })
+            return false;
+
+        fingerprint = CreatePrimaryViewMetadataFingerprint(sheetIndex, sheetName, "1");
         return true;
     }
 
@@ -2792,6 +2829,9 @@ public sealed class LegacyXlsFileAdapterTests
 
     private static string CreatePrintOptionsFingerprint(int sheetIndex, string sheetName, string gridLinesSet) =>
         $"{sheetIndex}:{sheetName}|PrintOptions|GridLinesSet={gridLinesSet}";
+
+    private static string CreatePrimaryViewMetadataFingerprint(int sheetIndex, string sheetName, string tabSelected) =>
+        $"{sheetIndex}:{sheetName}|PrimaryView|TabSelected={tabSelected}";
 
     private static string? ReadHssfWorkbookCodeName(HSSFWorkbook sourceWorkbook)
     {
@@ -3721,6 +3761,12 @@ public sealed class LegacyXlsFileAdapterTests
         return attributes.TryGetValue(name, out var value) ? value : null;
     }
 
+    private static string? GetPrimaryViewMetadataAttribute(Sheet sheet, string name)
+    {
+        var (attributes, _) = XmlNativeBagSerializer.Deserialize(sheet.PrimaryViewMetadata?.Get("sheetView"));
+        return attributes.TryGetValue(name, out var value) ? value : null;
+    }
+
     private static string? GetWorkbookProtectionMetadataAttribute(Workbook workbook, string name)
     {
         var (attributes, _) = XmlNativeBagSerializer.Deserialize(workbook.ProtectionMetadata?.Get("workbookProtection"));
@@ -4226,6 +4272,7 @@ public sealed class LegacyXlsFileAdapterTests
         IReadOnlyList<string>? OutlineSettingFingerprints = null,
         IReadOnlyList<string>? PrintLayoutFingerprints = null,
         IReadOnlyList<string>? PrintOptionsFingerprints = null,
+        IReadOnlyList<string>? PrimaryViewMetadataFingerprints = null,
         IReadOnlyList<string>? PageSetupFingerprints = null,
         IReadOnlyList<string>? ViewStateFingerprints = null,
         IReadOnlyList<string>? AutoFilterFingerprints = null,
