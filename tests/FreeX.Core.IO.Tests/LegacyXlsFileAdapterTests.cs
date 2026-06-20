@@ -2,6 +2,7 @@ using FluentAssertions;
 using ExcelDataReader;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
+using NPOI.HSSF.Record;
 using NPOI.HSSF.UserModel;
 using NPOI.SS.UserModel;
 using NPOI.SS.Util;
@@ -79,6 +80,9 @@ public sealed class LegacyXlsFileAdapterTests
         workbook.Sheets.Should().HaveCount(2);
         workbook.Uses1904DateSystem.Should().BeFalse();
         workbook.ActiveSheetIndex.Should().Be(0);
+        workbook.FirstVisibleSheetIndex.Should().Be(1);
+        workbook.ShowSheetTabs.Should().BeFalse();
+        workbook.SheetTabRatio.Should().Be(650);
         workbook.StyleCount.Should().BeGreaterThan(1);
 
         var sheet = workbook.GetSheetAt(0);
@@ -273,6 +277,7 @@ public sealed class LegacyXlsFileAdapterTests
                 RichMetadata: source.RichMetadata,
                 SheetNames: workbook.Sheets.Select(sheet => sheet.Name).ToArray(),
                 SheetVisibilityFingerprints: ReadImportedSheetVisibilityFingerprints(workbook),
+                WorkbookViewFingerprints: ReadImportedWorkbookViewFingerprints(workbook),
                 CellFingerprints: ReadImportedCellFingerprints(workbook),
                 MergeFingerprints: ReadImportedMergeFingerprints(workbook),
                 DimensionFingerprints: ReadImportedDimensionFingerprints(workbook),
@@ -328,6 +333,7 @@ public sealed class LegacyXlsFileAdapterTests
                 imported.Pictures.Should().Be(source.Pictures, imported.File);
                 imported.SheetNames.Should().Equal(source.SheetNames, imported.File);
                 imported.SheetVisibilityFingerprints.Should().BeEquivalentTo(source.SheetVisibilityFingerprints, imported.File);
+                imported.WorkbookViewFingerprints.Should().BeEquivalentTo(source.WorkbookViewFingerprints, imported.File);
                 imported.CellFingerprints.Should().BeEquivalentTo(source.CellFingerprints, imported.File);
                 imported.MergeFingerprints.Should().BeEquivalentTo(source.MergeFingerprints, imported.File);
                 imported.DimensionFingerprints.Should().BeEquivalentTo(source.DimensionFingerprints, imported.File);
@@ -474,7 +480,13 @@ public sealed class LegacyXlsFileAdapterTests
         var hidden = hssf.CreateSheet("Hidden");
         hssf.SetActiveSheet(0);
         hssf.SetSelectedTab(0);
+        hssf.FirstVisibleTab = 1;
         hssf.SetSheetVisibility(1, SheetVisibility.Hidden);
+        if (hssf.Workbook.FindFirstRecordBySid(WindowOneRecord.sid) is WindowOneRecord window)
+        {
+            window.DisplayTabs = false;
+            window.TabWidthRatio = 650;
+        }
 
         sheet.AddMergedRegion(new CellRangeAddress(0, 0, 0, 1));
         sheet.SetColumnWidth(1, 18 * 256);
@@ -898,6 +910,7 @@ public sealed class LegacyXlsFileAdapterTests
             .Distinct(StringComparer.Ordinal)
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
+        var workbookViewFingerprints = ReadSourceWorkbookViewFingerprints(hssf);
 
         return new LegacyXlsCorpusSummary(
             Path.GetFileName(path),
@@ -931,6 +944,7 @@ public sealed class LegacyXlsFileAdapterTests
             hssf.IsDate1904(),
             SheetNames: sheetNames,
             SheetVisibilityFingerprints: sheetVisibilityFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            WorkbookViewFingerprints: workbookViewFingerprints,
             CellFingerprints: cellFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             MergeFingerprints: mergeFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             DimensionFingerprints: dimensionFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
@@ -1081,6 +1095,7 @@ public sealed class LegacyXlsFileAdapterTests
             RichMetadata: false,
             SheetNames: sheetNames,
             SheetVisibilityFingerprints: sheetVisibilityFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            WorkbookViewFingerprints: [],
             CellFingerprints: cellFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             MergeFingerprints: mergeFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             DimensionFingerprints: dimensionFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
@@ -1111,6 +1126,44 @@ public sealed class LegacyXlsFileAdapterTests
                 sheet.IsVeryHidden ? "VeryHidden" : sheet.IsHidden ? "Hidden" : "Visible"))
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
+
+    private static IReadOnlyList<string> ReadImportedWorkbookViewFingerprints(Workbook workbook) =>
+    [
+        CreateWorkbookViewFingerprint(
+            workbook.ShowSheetTabs,
+            workbook.SheetTabRatio,
+            workbook.FirstVisibleSheetIndex,
+            workbook.ActiveSheetIndex)
+    ];
+
+    private static IReadOnlyList<string> ReadSourceWorkbookViewFingerprints(HSSFWorkbook hssf)
+    {
+        bool? showSheetTabs = null;
+        int? sheetTabRatio = null;
+        int? firstVisibleSheetIndex = hssf.FirstVisibleTab >= 0 && hssf.FirstVisibleTab < hssf.NumberOfSheets
+            ? hssf.FirstVisibleTab
+            : null;
+        var activeSheetIndex = hssf.ActiveSheetIndex >= 0 && hssf.ActiveSheetIndex < hssf.NumberOfSheets
+            ? hssf.ActiveSheetIndex
+            : (int?)null;
+
+        if (hssf.Workbook.FindFirstRecordBySid(WindowOneRecord.sid) is WindowOneRecord window)
+        {
+            showSheetTabs = window.DisplayTabs;
+            sheetTabRatio = Math.Clamp((int)window.TabWidthRatio, 0, 1000);
+            if (window.FirstVisibleTab >= 0 && window.FirstVisibleTab < hssf.NumberOfSheets)
+                firstVisibleSheetIndex = window.FirstVisibleTab;
+        }
+
+        return
+        [
+            CreateWorkbookViewFingerprint(
+                showSheetTabs,
+                sheetTabRatio,
+                firstVisibleSheetIndex,
+                activeSheetIndex)
+        ];
+    }
 
     private static IReadOnlyList<string> ReadImportedCellFingerprints(Workbook workbook) =>
         workbook.Sheets
@@ -1724,6 +1777,19 @@ public sealed class LegacyXlsFileAdapterTests
 
     private static string CreateSheetVisibilityFingerprint(int sheetIndex, string sheetName, string visibility) =>
         $"{sheetIndex}:{sheetName}|Visibility={visibility}";
+
+    private static string CreateWorkbookViewFingerprint(
+        bool? showSheetTabs,
+        int? sheetTabRatio,
+        int? firstVisibleSheetIndex,
+        int? activeSheetIndex) =>
+        string.Join("|", [
+            "WorkbookView",
+            $"Tabs={FormatNullableBool(showSheetTabs)}",
+            $"Ratio={FormatNullableInt(sheetTabRatio)}",
+            $"First={FormatNullableInt(firstVisibleSheetIndex)}",
+            $"Active={FormatNullableInt(activeSheetIndex)}"
+        ]);
 
     private static string NormalizeSourceSheetVisibility(SheetVisibility visibility) =>
         visibility switch
@@ -2916,6 +2982,7 @@ public sealed class LegacyXlsFileAdapterTests
         bool RichMetadata = true,
         IReadOnlyList<string>? SheetNames = null,
         IReadOnlyList<string>? SheetVisibilityFingerprints = null,
+        IReadOnlyList<string>? WorkbookViewFingerprints = null,
         IReadOnlyList<string>? CellFingerprints = null,
         IReadOnlyList<string>? MergeFingerprints = null,
         IReadOnlyList<string>? DimensionFingerprints = null,
