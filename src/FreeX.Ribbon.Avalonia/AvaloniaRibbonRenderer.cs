@@ -71,9 +71,8 @@ public static class AvaloniaRibbonRenderer
     {
         ArgumentNullException.ThrowIfNull(tab);
 
-        var panel = new StackPanel
+        var panel = new AvaloniaRibbonAdaptivePanel
         {
-            Orientation = Orientation.Horizontal,
             MinHeight = 88,
         };
 
@@ -82,23 +81,16 @@ public static class AvaloniaRibbonRenderer
         {
             if (!first)
                 panel.Children.Add(BuildGroupDivider());
-            panel.Children.Add(BuildGroup(group, registry));
+            panel.Children.Add(new AvaloniaRibbonGroupHost(group, BuildGroup(group, registry), registry));
             first = false;
         }
-
-        var scroller = new ScrollViewer
-        {
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            Content = panel,
-        };
 
         // WPF: Border { Background=FreeXRibbonSurfaceBrush (white); Padding 0,4,0,0 } — no accent rule.
         return new Border
         {
             Background = SurfaceBrush,
             Padding = new Thickness(0, 4, 0, 0),
-            Child = scroller,
+            Child = panel,
         };
     }
 
@@ -775,6 +767,52 @@ public static class AvaloniaRibbonRenderer
     private static bool HasMenu(RibbonControl control) =>
         control is RibbonSplitButton or RibbonDropdown;
 
+    private static MenuFlyout BuildCollapsedGroupFlyout(RibbonGroup group, IRibbonCommandRegistry? registry)
+    {
+        var flyout = new MenuFlyout();
+        foreach (var control in group.Controls)
+        {
+            switch (control)
+            {
+                case RibbonRowBreak:
+                    break;
+                case RibbonSeparator:
+                    flyout.Items.Add(new Separator());
+                    break;
+                case RibbonComboBox combo:
+                    flyout.Items.Add(new MenuItem { Header = combo.Label, IsEnabled = false, Tag = combo.CommandId.Value });
+                    break;
+                default:
+                    flyout.Items.Add(BuildCollapsedGroupMenuItem(control, registry));
+                    break;
+            }
+        }
+
+        return flyout;
+    }
+
+    private static Control BuildCollapsedGroupMenuItem(RibbonControl control, IRibbonCommandRegistry? registry)
+    {
+        var item = new MenuItem
+        {
+            Header = control.Label,
+            Tag = control.CommandId.Value,
+        };
+
+        if (BuildMenu(control) is { } menu)
+        {
+            foreach (var menuItem in menu.Items)
+                item.Items.Add(BuildMenuItem(menuItem, registry));
+        }
+        else
+        {
+            item.Click += (_, _) => Execute(control.CommandId, registry);
+        }
+
+        ApplyEnablement(item, control.CommandId, registry);
+        return item;
+    }
+
     // WPF BuildInlineDivider: a 1px hardcoded #CCCCCC rule, stretched, margin 3.
     private static Control BuildInlineDivider() => new Rectangle
     {
@@ -792,4 +830,152 @@ public static class AvaloniaRibbonRenderer
         Fill = DividerBrush,
         VerticalAlignment = VerticalAlignment.Stretch,
     };
+
+    private sealed class AvaloniaRibbonGroupHost : ContentControl
+    {
+        public const double CollapsedWidth = 64;
+
+        private readonly RibbonGroup _group;
+        private readonly Control _full;
+        private readonly IRibbonCommandRegistry? _registry;
+        private Control? _collapsedButton;
+        private bool _collapsed;
+
+        public AvaloniaRibbonGroupHost(RibbonGroup group, Control full, IRibbonCommandRegistry? registry)
+        {
+            _group = group;
+            _full = full;
+            _registry = registry;
+            Priority = group.Priority;
+            VerticalAlignment = VerticalAlignment.Stretch;
+            Content = full;
+        }
+
+        public int Priority { get; }
+        public double FullWidth { get; set; }
+
+        public bool Collapsed
+        {
+            get => _collapsed;
+            set
+            {
+                if (_collapsed == value)
+                    return;
+
+                _collapsed = value;
+                Content = value ? (_collapsedButton ??= BuildCollapsedButton()) : _full;
+            }
+        }
+
+        private Control BuildCollapsedButton()
+        {
+            var iconSource = _group.Controls.FirstOrDefault(control =>
+                control is not RibbonRowBreak and not RibbonSeparator && control.Icon is not null);
+
+            var stack = new StackPanel
+            {
+                Orientation = Orientation.Vertical,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            stack.Children.Add(AvaloniaRibbonIcons.Build(
+                iconSource?.Icon?.Kind ?? RibbonCommandIconKind.Generic,
+                34,
+                iconSource?.CommandId.Value ?? _group.Header));
+            stack.Children.Add(new TextBlock
+            {
+                Text = _group.Header,
+                FontSize = 11,
+                Foreground = GroupLabelBrush,
+                TextAlignment = TextAlignment.Center,
+                TextWrapping = TextWrapping.WrapWithOverflow,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                MaxWidth = 56,
+                Margin = new Thickness(0, 2, 0, 0),
+            });
+            stack.Children.Add(new TextBlock
+            {
+                Text = "v",
+                FontSize = 9,
+                TextAlignment = TextAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Opacity = 0.85,
+            });
+
+            var button = new Button
+            {
+                Width = 58,
+                Height = 76,
+                Padding = new Thickness(2),
+                Content = stack,
+                Flyout = BuildCollapsedGroupFlyout(_group, _registry),
+                Tag = $"collapsed:{_group.Id}",
+            };
+            button.Classes.Add("freex-ribbon-collapsed-group");
+            return button;
+        }
+    }
+
+    private sealed class AvaloniaRibbonAdaptivePanel : Panel
+    {
+        private const double GroupSpacing = 6;
+
+        protected override Size MeasureOverride(Size availableSize)
+        {
+            var children = Children.ToList();
+            var hosts = children.OfType<AvaloniaRibbonGroupHost>().ToList();
+            var infinite = new Size(double.PositiveInfinity, availableSize.Height);
+            var spacing = GroupSpacing * Math.Max(0, children.Count - 1);
+
+            foreach (var child in children)
+                child.Measure(infinite);
+
+            foreach (var host in hosts)
+            {
+                if (!host.Collapsed && host.DesiredSize.Width > host.FullWidth)
+                    host.FullWidth = host.DesiredSize.Width;
+                else if (host.FullWidth <= 0)
+                    host.FullWidth = host.DesiredSize.Width;
+            }
+
+            var nonHostWidth = children
+                .Where(child => child is not AvaloniaRibbonGroupHost)
+                .Sum(child => child.DesiredSize.Width);
+            var available = double.IsInfinity(availableSize.Width) ? double.MaxValue : availableSize.Width;
+            var total = hosts.Sum(host => host.FullWidth) + nonHostWidth + spacing;
+            var collapsed = new HashSet<AvaloniaRibbonGroupHost>();
+
+            foreach (var host in hosts.OrderBy(host => host.Priority))
+            {
+                if (total <= available)
+                    break;
+
+                collapsed.Add(host);
+                total += AvaloniaRibbonGroupHost.CollapsedWidth - host.FullWidth;
+            }
+
+            foreach (var host in hosts)
+                host.Collapsed = collapsed.Contains(host);
+
+            foreach (var child in children)
+                child.Measure(infinite);
+
+            var width = children.Sum(child => child.DesiredSize.Width) + spacing;
+            var height = children.Count > 0 ? children.Max(child => child.DesiredSize.Height) : 0;
+            return new Size(double.IsInfinity(availableSize.Width) ? width : Math.Min(width, available), height);
+        }
+
+        protected override Size ArrangeOverride(Size finalSize)
+        {
+            double x = 0;
+            foreach (var child in Children)
+            {
+                var width = child.DesiredSize.Width;
+                child.Arrange(new Rect(x, 0, width, finalSize.Height));
+                x += width + GroupSpacing;
+            }
+
+            return finalSize;
+        }
+    }
 }

@@ -117,6 +117,46 @@ public sealed class AvaloniaRibbonRendererTests
     });
 
     [Fact]
+    public Task BuildTabContent_NarrowWidth_CollapsesRibbonGroups() => RunOnUiThread(() =>
+    {
+        var tab = BuildHomeTab();
+        var content = AvaloniaRibbonRenderer.BuildTabContent(tab, registry: null);
+
+        var window = new Window { Width = 180, Height = 200, Content = content };
+        window.Show();
+        window.Measure(new Size(180, 200));
+        window.Arrange(new Rect(0, 0, 180, 200));
+
+        var collapsedButtons = content.GetLogicalDescendants()
+            .OfType<Button>()
+            .Where(b => b.Classes.Contains("freex-ribbon-collapsed-group"))
+            .ToList();
+
+        Assert.NotEmpty(collapsedButtons);
+        Assert.All(collapsedButtons, b => Assert.IsType<MenuFlyout>(b.Flyout));
+        Assert.True(content.Bounds.Width <= 180);
+    });
+
+    [Fact]
+    public Task BuildTabContent_WideWidth_KeepsRibbonGroupsExpanded() => RunOnUiThread(() =>
+    {
+        var tab = BuildHomeTab();
+        var content = AvaloniaRibbonRenderer.BuildTabContent(tab, registry: null);
+
+        var window = new Window { Width = 1200, Height = 200, Content = content };
+        window.Show();
+        window.Measure(new Size(1200, 200));
+        window.Arrange(new Rect(0, 0, 1200, 200));
+
+        var collapsedButtons = content.GetLogicalDescendants()
+            .OfType<Button>()
+            .Where(b => b.Classes.Contains("freex-ribbon-collapsed-group"))
+            .ToList();
+
+        Assert.Empty(collapsedButtons);
+    });
+
+    [Fact]
     public Task Dropdown_ButtonHasFlyout_BuiltFromMenu() => RunOnUiThread(() =>
     {
         var tab = BuildHomeTab();
