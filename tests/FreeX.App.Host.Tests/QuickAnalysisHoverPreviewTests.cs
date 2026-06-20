@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.App.Presentation.QuickAnalysis;
 using FreeX.App.UI;
 using System.Reflection;
 

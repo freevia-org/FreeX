@@ -1036,7 +1036,7 @@ public sealed partial class MainWindowSourceHygieneTests
     public void QuickAnalysisMenu_UsesPlannerPreviewMetadataForHoverTooltips()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAnalysis.cs");
-        var planner = DialogSourceTestSupport.ReadHostSources("QuickAnalysisPlanner.cs");
+        var planner = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisPlanner.cs");
 
         source.Should().Contain("ToolTip = option.PreviewText");
         planner.Should().Contain("QuickAnalysisPreviewKind");
@@ -1062,7 +1062,7 @@ public sealed partial class MainWindowSourceHygieneTests
     public void QuickAnalysisMenu_RendersPlannerVisualPreviewIcons()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAnalysis.cs");
-        var planner = DialogSourceTestSupport.ReadHostSources("QuickAnalysisPlanner.cs");
+        var planner = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisPlanner.cs");
 
         planner.Should().Contain("QuickAnalysisPreviewVisual");
         source.Should().Contain("QuickAnalysisPreviewIconFactory.Create(option.PreviewVisual)");

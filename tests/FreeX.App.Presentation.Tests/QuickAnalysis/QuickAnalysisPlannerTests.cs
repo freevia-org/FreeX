@@ -1,7 +1,8 @@
 using FluentAssertions;
+using FreeX.App.Presentation.QuickAnalysis;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host.Tests;
+namespace FreeX.App.Presentation.Tests.QuickAnalysis;
 
 public sealed class QuickAnalysisPlannerTests
 {
