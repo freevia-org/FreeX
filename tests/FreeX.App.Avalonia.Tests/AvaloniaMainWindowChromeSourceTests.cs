@@ -11,16 +11,19 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
 
-        source.Should().Contain("private const double HeaderColumnWidth = 46;");
-        source.Should().Contain("private const double HeaderRowHeight = 22;");
+        source.Should().Contain("private const double HeaderColumnWidth = 34;");
+        source.Should().Contain("private const double HeaderRowHeight = 20;");
         source.Should().Contain("private const double MinimumDisplayedColumnWidth = 48;");
         source.Should().Contain("private const double MinimumDisplayedRowHeight = 20;");
 
-        source.Should().Contain("tabsAndAdd.Children.Add(_sheetTabsHost);");
-        source.Should().Contain("tabsAndAdd.Children.Add(_newSheetButton);");
+        source.Should().Contain("tabCluster.Children.Add(leftNav);");
+        source.Should().Contain("tabCluster.Children.Add(tabsScroller);");
+        source.Should().Contain("tabCluster.Children.Add(rightNav);");
+        source.Should().Contain("tabCluster.Children.Add(_newSheetButton);");
         source.Should().Contain("DockPanel.SetDock(_horizontalWorksheetScrollBar, Dock.Right);");
         source.Should().Contain("CreateSheetTabNavigationButton(\"<\", \"Scroll Tabs Left\", -1)");
         source.Should().Contain("CreateSheetTabNavigationButton(\">\", \"Scroll Tabs Right\", 1)");
+        source.Should().Contain("_horizontalWorksheetScrollBar.MinWidth = 300;");
         source.Should().NotContain("AddGridChild(chrome, _horizontalWorksheetScrollBar, 1, 0);");
     }
 
@@ -46,7 +49,12 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         runnerSource.Should().NotContain("-screen 0 1600x1000x24");
         captureSource.Should().Contain("private const int ParityCaptureTitleBarHeight = 34;");
         captureSource.Should().Contain("RenderWindowWithCapturedTitleBarToPng(this, ParityCaptureWindowWidth, ParityCaptureWindowHeight");
+        captureSource.Should().Contain("RenderWindowClientContentToBitmap(window, pixelWidth, contentHeight)");
+        captureSource.Should().Contain("window.Height = height;");
+        captureSource.Should().Contain("window.Content as Visual ?? window");
         captureSource.Should().Contain("CreateParityCapturedTitleBar(window.Title ?? \"FreeX\")");
+        captureSource.Should().Contain("CreateParityCapturedAppIcon()");
+        captureSource.Should().Contain("CreateParityCapturedSaveQatButton()");
         hostCaptureSource.Should().Contain("EnsureFormulaBarVisibleForParityCapture(window);");
         hostCaptureSource.Should().Contain("window.FindName(\"FormulaBarBorder\")");
         captureSource.Should().Contain("Avalonia File surface is still dialog-based");

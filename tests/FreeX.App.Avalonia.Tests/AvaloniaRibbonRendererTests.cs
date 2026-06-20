@@ -193,7 +193,9 @@ public sealed class AvaloniaRibbonRendererTests
         var ribbon = AvaloniaRibbonRenderer.BuildRibbon(definition, registry);
 
         var tabControl = Assert.IsType<TabControl>(ribbon);
-        Assert.Equal(definition.VisibleTabs.Count(), tabControl.Items.Count);
+        Assert.Equal(definition.VisibleTabs.Count() + 1, tabControl.Items.Count);
+        Assert.Equal("FileTab", ((TabItem)tabControl.Items[0]!).Tag);
+        Assert.Equal(1, tabControl.SelectedIndex);
         Assert.All(tabControl.Items, item => Assert.IsType<TabItem>(item));
     });
 
@@ -205,9 +207,9 @@ public sealed class AvaloniaRibbonRendererTests
         var ribbon = AvaloniaRibbonRenderer.BuildRibbon(definition, registry);
 
         var tabControl = Assert.IsType<TabControl>(ribbon);
-        Assert.Contains(tabControl.Styles, style => style is Style concrete && HasSetter(concrete, Layoutable.HeightProperty, 24d));
-        Assert.Contains(tabControl.Styles, style => style is Style concrete && HasSetter(concrete, TemplatedControl.PaddingProperty, new Thickness(10, 0, 10, 0)));
-        Assert.Contains(tabControl.Styles, style => style is Style concrete && HasSetter(concrete, TemplatedControl.BorderThicknessProperty, new Thickness(0, 0, 0, 2)));
+        Assert.Contains(tabControl.Styles, style => style is Style concrete && HasSetter(concrete, Layoutable.HeightProperty, 22d));
+        Assert.Contains(tabControl.Styles, style => style is Style concrete && HasSetter(concrete, TemplatedControl.PaddingProperty, new Thickness(9, 0, 9, 0)));
+        Assert.Contains(tabControl.Styles, style => style is Style concrete && HasSetter(concrete, TemplatedControl.BorderThicknessProperty, new Thickness(0)));
         Assert.Contains(tabControl.Styles, style => style is Style concrete && HasSetter(concrete, Layoutable.MaxHeightProperty, 21d));
     });
 
@@ -255,18 +257,40 @@ public sealed class AvaloniaRibbonRendererTests
         static IEnumerable<string> TabIds(TabControl tc) =>
             tc.Items.OfType<TabItem>().Select(i => (string)i.Tag!);
 
-        // Only the static tab initially.
-        Assert.Equal(new[] { "home" }, TabIds(tabControl).ToArray());
+        // File stays in front of the static tabs, but Home remains selected.
+        Assert.Equal(new[] { "FileTab", "home" }, TabIds(tabControl).ToArray());
+        Assert.Equal(1, tabControl.SelectedIndex);
 
         // Activating the chart context inserts the contextual tab.
         source.Raise(RibbonContextState.None.With("chart.selected"));
-        Assert.Equal(new[] { "home", "chart" }, TabIds(tabControl).ToArray());
+        Assert.Equal(new[] { "FileTab", "home", "chart" }, TabIds(tabControl).ToArray());
 
         // Selecting it, then clearing context, removes it and falls back to the first tab.
-        tabControl.SelectedIndex = 1;
+        tabControl.SelectedIndex = 2;
         source.Raise(RibbonContextState.None);
-        Assert.Equal(new[] { "home" }, TabIds(tabControl).ToArray());
-        Assert.Equal(0, tabControl.SelectedIndex);
+        Assert.Equal(new[] { "FileTab", "home" }, TabIds(tabControl).ToArray());
+        Assert.Equal(1, tabControl.SelectedIndex);
+    });
+
+    [Fact]
+    public Task BuildRibbon_ContextualTabsAppearBeforeHelpInWindowsOrder() => RunOnUiThread(() =>
+    {
+        var definition = new RibbonDefinitionBuilder()
+            .Tab("HomeTab", "Home", "H", t => t.Group("g", "G", "G", 1, g => g.Button("b", "B")))
+            .Tab("HelpTab", "Help", "Y", t => t.Group("hg", "HG", "Y", 1, g => g.Button("hb", "HB")))
+            .ContextualTab("ChartFormatTab", "Chart Format", new RibbonTabContext("chart.selected", "Chart Format", RibbonContextColor.Green),
+                t => t.Group("cfg", "CFG", "F", 1, g => g.Button("cfb", "CFB")))
+            .ContextualTab("ChartDesignTab", "Chart Design", new RibbonTabContext("chart.selected", "Chart Design", RibbonContextColor.Green),
+                t => t.Group("cdg", "CDG", "C", 1, g => g.Button("cdb", "CDB")))
+            .Build();
+
+        var source = new FakeContextSource();
+        source.Raise(RibbonContextState.None.With("chart.selected"));
+        var ribbon = AvaloniaRibbonRenderer.BuildRibbon(definition, registry: null, source);
+        var tabControl = Assert.IsType<TabControl>(ribbon);
+
+        var ids = tabControl.Items.OfType<TabItem>().Select(i => (string)i.Tag!).ToArray();
+        Assert.Equal(new[] { "FileTab", "HomeTab", "ChartDesignTab", "ChartFormatTab", "HelpTab" }, ids);
     });
 
     private sealed class FakeContextSource : IRibbonContextSource

@@ -24,6 +24,7 @@ namespace FreeX.Ribbon.Avalonia;
 /// </summary>
 public static class AvaloniaRibbonRenderer
 {
+    private const string FileRibbonTabId = "FileTab";
     private const string MenuChevron = "\u25BE";
     private const double SmallRowHeight = 21;
     private const double LargeIconSize = 30;
@@ -119,12 +120,31 @@ public static class AvaloniaRibbonRenderer
         };
     }
 
+    private static TextBlock BuildTabHeader(string header) => new()
+    {
+        Text = header,
+        FontSize = 12,
+        Foreground = TabTextBrush,
+        VerticalAlignment = VerticalAlignment.Center,
+    };
+
     /// <summary>Builds a single <see cref="TabItem"/> for a tab (header + content), tagged with the tab id.</summary>
     private static TabItem BuildTabItem(RibbonTab tab, IRibbonCommandRegistry? registry) => new()
     {
-        Header = tab.Header,
+        Header = BuildTabHeader(tab.Header),
         Content = BuildTabContent(tab, registry),
         Tag = tab.Id,
+    };
+
+    private static TabItem BuildFileTabItem() => new()
+    {
+        Header = BuildTabHeader("File"),
+        Content = new Border
+        {
+            Background = SurfaceBrush,
+            MinHeight = 82,
+        },
+        Tag = FileRibbonTabId,
     };
 
     /// <summary>
@@ -154,16 +174,17 @@ public static class AvaloniaRibbonRenderer
             BorderThickness = new Thickness(0),
         };
         ApplyRibbonTheme(tabControl);
+        tabControl.Items.Add(BuildFileTabItem());
 
         var initialTabs = contextSource is null
             ? (IReadOnlyList<RibbonTab>)definition.VisibleTabs.ToArray()
-            : RibbonContextResolver.Resolve(definition, contextSource.Current);
+            : ResolveTabStripTabs(definition, contextSource.Current);
 
         foreach (var tab in initialTabs)
             tabControl.Items.Add(BuildTabItem(tab, registry));
 
         if (tabControl.Items.Count > 0)
-            tabControl.SelectedIndex = 0;
+            tabControl.SelectedIndex = tabControl.Items.Count > 1 ? 1 : 0;
 
         if (contextSource is not null)
             contextSource.ContextChanged += (_, _) => SyncContextualTabs(tabControl, definition, registry, contextSource);
@@ -182,14 +203,17 @@ public static class AvaloniaRibbonRenderer
         IRibbonCommandRegistry? registry,
         IRibbonContextSource contextSource)
     {
-        var desired = RibbonContextResolver.Resolve(definition, contextSource.Current);
+        var desired = ResolveTabStripTabs(definition, contextSource.Current);
         var selectedId = (tabControl.SelectedItem as TabItem)?.Tag as string;
 
         // Remove tabs no longer desired.
         var desiredIds = new HashSet<string>(desired.Select(t => t.Id), StringComparer.Ordinal);
         for (var i = tabControl.Items.Count - 1; i >= 0; i--)
         {
-            if (tabControl.Items[i] is TabItem item && item.Tag is string id && !desiredIds.Contains(id))
+            if (tabControl.Items[i] is TabItem item &&
+                item.Tag is string id &&
+                !string.Equals(id, FileRibbonTabId, StringComparison.Ordinal) &&
+                !desiredIds.Contains(id))
                 tabControl.Items.RemoveAt(i);
         }
 
@@ -199,7 +223,7 @@ public static class AvaloniaRibbonRenderer
             var tab = desired[i];
             var existingIndex = IndexOfTab(tabControl, tab.Id);
             if (existingIndex < 0)
-                tabControl.Items.Insert(Math.Min(i, tabControl.Items.Count), BuildTabItem(tab, registry));
+                tabControl.Items.Insert(Math.Min(i + 1, tabControl.Items.Count), BuildTabItem(tab, registry));
         }
 
         // Preserve selection if still visible; otherwise select the first tab.
@@ -207,7 +231,7 @@ public static class AvaloniaRibbonRenderer
         if (restoreIndex >= 0)
             tabControl.SelectedIndex = restoreIndex;
         else if (tabControl.Items.Count > 0)
-            tabControl.SelectedIndex = 0;
+            tabControl.SelectedIndex = tabControl.Items.Count > 1 ? 1 : 0;
     }
 
     private static int IndexOfTab(TabControl tabControl, string tabId)
@@ -217,6 +241,46 @@ public static class AvaloniaRibbonRenderer
                 return i;
         return -1;
     }
+
+    private static IReadOnlyList<RibbonTab> ResolveTabStripTabs(RibbonDefinition definition, RibbonContextState state)
+    {
+        var resolved = RibbonContextResolver.Resolve(definition, state);
+        if (!resolved.Any(tab => tab.IsContextual))
+            return resolved;
+
+        var ordered = new List<RibbonTab>(resolved.Count);
+        var contextual = resolved.Where(tab => tab.IsContextual)
+            .OrderBy(tab => WpfContextualTabOrder(tab.Id))
+            .ToArray();
+
+        foreach (var tab in resolved)
+        {
+            if (tab.IsContextual)
+                continue;
+
+            if (string.Equals(tab.Id, "HelpTab", StringComparison.Ordinal))
+                ordered.AddRange(contextual);
+
+            ordered.Add(tab);
+        }
+
+        if (!ordered.Any(tab => tab.IsContextual))
+            ordered.AddRange(contextual);
+
+        return ordered;
+    }
+
+    private static int WpfContextualTabOrder(string tabId) => tabId switch
+    {
+        "ShapeFormatTab" => 0,
+        "PictureFormatTab" => 1,
+        "ChartDesignTab" => 2,
+        "ChartFormatTab" => 3,
+        "TableDesignTab" => 4,
+        "PivotTableAnalyzeTab" => 5,
+        "PivotTableDesignTab" => 6,
+        _ => 100,
+    };
 
     /// <summary>
     /// Applies the ribbon theme styles to the tab control, replicating the WPF look:
@@ -242,13 +306,13 @@ public static class AvaloniaRibbonRenderer
             {
                 new Setter(TemplatedControl.BackgroundProperty, TabStripBrush),
                 new Setter(TemplatedControl.BorderBrushProperty, Brushes.Transparent),
-                new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0, 0, 0, 3)),
+                new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0)),
                 new Setter(TemplatedControl.FontSizeProperty, 12d),
                 new Setter(TemplatedControl.ForegroundProperty, TabTextBrush),
                 // Avalonia Fluent default tab height is ~48px vs WPF's compact header row; constrain it.
                 new Setter(Layoutable.MinHeightProperty, 0d),
-                new Setter(Layoutable.HeightProperty, 24d),
-                new Setter(TemplatedControl.PaddingProperty, new Thickness(10, 0, 10, 0)),
+                new Setter(Layoutable.HeightProperty, 22d),
+                new Setter(TemplatedControl.PaddingProperty, new Thickness(9, 0, 9, 0)),
                 new Setter(Layoutable.MarginProperty, new Thickness(0, 0, 1, 0)),
                 new Setter(InputElement.CursorProperty, new Cursor(StandardCursorType.Hand)),
             },
@@ -271,7 +335,7 @@ public static class AvaloniaRibbonRenderer
                 new Setter(TemplatedControl.BackgroundProperty, SurfaceBrush),
                 new Setter(TemplatedControl.ForegroundProperty, TabTextBrush),
                 new Setter(TemplatedControl.BorderBrushProperty, AccentBrush),
-                new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0, 0, 0, 2)),
+                new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0)),
             },
         };
 

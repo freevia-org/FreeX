@@ -291,7 +291,7 @@ public sealed partial class MainWindow
         var pixelHeight = Math.Max(1, height);
         var contentHeight = Math.Max(1, pixelHeight - ParityCaptureTitleBarHeight);
 
-        using var contentBitmap = RenderVisualToBitmap(window, pixelWidth, contentHeight);
+        using var contentBitmap = RenderWindowClientContentToBitmap(window, pixelWidth, contentHeight);
         var composite = new AvaloniaGrid
         {
             Width = pixelWidth,
@@ -314,6 +314,34 @@ public sealed partial class MainWindow
         }, 1, 0);
 
         RenderVisualToPng(composite, pixelWidth, pixelHeight, path);
+    }
+
+    private static RenderTargetBitmap RenderWindowClientContentToBitmap(MainWindow window, int width, int height)
+    {
+        var originalWidth = window.Width;
+        var originalHeight = window.Height;
+
+        try
+        {
+            window.Width = width;
+            window.Height = height;
+            window.Measure(new Size(width, height));
+            window.Arrange(new Rect(0, 0, width, height));
+            window.UpdateLayout();
+            Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+
+            var contentVisual = window.Content as Visual ?? window;
+            return RenderVisualToBitmap(contentVisual, width, height);
+        }
+        finally
+        {
+            window.Width = originalWidth;
+            window.Height = originalHeight;
+            window.Measure(new Size(ParityCaptureWindowWidth, ParityCaptureWindowHeight));
+            window.Arrange(new Rect(0, 0, ParityCaptureWindowWidth, ParityCaptureWindowHeight));
+            window.UpdateLayout();
+            Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+        }
     }
 
     private static Control CreateParityCapturedTitleBar(string title)
@@ -340,27 +368,22 @@ public sealed partial class MainWindow
         systemButtons.Children.Add(CreateParityCapturedTitleBarButton("X"));
         dock.Children.Add(systemButtons);
 
-        var appIcon = new Border
-        {
-            Width = 22,
-            Height = 22,
-            Margin = new Thickness(0, 0, 8, 0),
-            Background = new SolidColorBrush(Color.FromRgb(15, 126, 155)),
-            BorderBrush = new SolidColorBrush(Color.FromArgb(102, 255, 255, 255)),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(2),
-            Child = new TextBlock
-            {
-                Text = "X",
-                FontSize = 14,
-                FontWeight = FontWeight.Bold,
-                Foreground = Brushes.White,
-                HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
-                VerticalAlignment = AvaloniaVerticalAlignment.Center,
-            },
-        };
+        var appIcon = CreateParityCapturedAppIcon();
         DockPanel.SetDock(appIcon, Dock.Left);
         dock.Children.Add(appIcon);
+
+        var qat = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 1,
+            Margin = new Thickness(0, 0, 8, 0),
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+        };
+        qat.Children.Add(CreateParityCapturedSaveQatButton());
+        qat.Children.Add(CreateParityCapturedQatButton("\u21B6"));
+        qat.Children.Add(CreateParityCapturedQatButton("\u21B7"));
+        DockPanel.SetDock(qat, Dock.Left);
+        dock.Children.Add(qat);
 
         dock.Children.Add(new TextBlock
         {
@@ -374,6 +397,133 @@ public sealed partial class MainWindow
         });
 
         return root;
+    }
+
+    private static Control CreateParityCapturedAppIcon()
+    {
+        var iconGrid = new AvaloniaGrid
+        {
+            RowDefinitions =
+            {
+                new RowDefinition { Height = new GridLength(8) },
+                new RowDefinition { Height = new GridLength(1) },
+                new RowDefinition { Height = new GridLength(1, GridUnitType.Star) },
+            },
+        };
+        AddGridChild(iconGrid, new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(15, 126, 155)),
+            CornerRadius = new CornerRadius(1, 1, 0, 0),
+        }, 0, 0);
+
+        var outlineBrush = new SolidColorBrush(Color.FromRgb(16, 37, 58));
+        iconGrid.Children.Add(CreateParityCapturedAppIconText("X", outlineBrush, new Thickness(0, -3, 0, 0), zIndex: 3));
+        iconGrid.Children.Add(CreateParityCapturedAppIconText("X", outlineBrush, new Thickness(0, -1, 0, 0), zIndex: 3));
+        iconGrid.Children.Add(CreateParityCapturedAppIconText("X", outlineBrush, new Thickness(-1, -2, 0, 0), zIndex: 3));
+        iconGrid.Children.Add(CreateParityCapturedAppIconText("X", outlineBrush, new Thickness(1, -2, 0, 0), zIndex: 3));
+        iconGrid.Children.Add(CreateParityCapturedAppIconText("X", Brushes.White, new Thickness(0, -2, 0, 0), zIndex: 4));
+
+        var freeText = new TextBlock
+        {
+            Text = "FREE",
+            FontSize = 6.6,
+            FontWeight = FontWeight.Bold,
+            Foreground = Brushes.White,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            TextAlignment = TextAlignment.Center,
+        };
+        AvaloniaGrid.SetRow(freeText, 0);
+        freeText.ZIndex = 2;
+        iconGrid.Children.Add(freeText);
+
+        return new Border
+        {
+            Width = 22,
+            Height = 22,
+            Margin = new Thickness(0, 0, 8, 0),
+            Background = new SolidColorBrush(Color.FromRgb(15, 109, 140)),
+            BorderBrush = new SolidColorBrush(Color.FromArgb(102, 255, 255, 255)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(2),
+            Child = iconGrid,
+        };
+    }
+
+    private static TextBlock CreateParityCapturedAppIconText(string text, IBrush foreground, Thickness margin, int zIndex)
+    {
+        var block = new TextBlock
+        {
+            Text = text,
+            FontSize = 14.5,
+            FontWeight = FontWeight.Bold,
+            Foreground = foreground,
+            Margin = margin,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            TextAlignment = TextAlignment.Center,
+        };
+        AvaloniaGrid.SetRow(block, 0);
+        AvaloniaGrid.SetRowSpan(block, 3);
+        block.ZIndex = zIndex;
+        return block;
+    }
+
+    private static Control CreateParityCapturedQatButton(string text) =>
+        new Border
+        {
+            Width = 26,
+            Height = 22,
+            Child = new TextBlock
+            {
+                Text = text,
+                FontSize = 13,
+                FontWeight = FontWeight.SemiBold,
+                Foreground = Brushes.White,
+                HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
+                VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            },
+        };
+
+    private static Control CreateParityCapturedSaveQatButton()
+    {
+        var glyph = new AvaloniaGrid
+        {
+            Width = 14,
+            Height = 14,
+            RowDefinitions =
+            {
+                new RowDefinition { Height = new GridLength(4) },
+                new RowDefinition { Height = new GridLength(1, GridUnitType.Star) },
+            },
+        };
+        AddGridChild(glyph, new Border
+        {
+            Background = Brushes.White,
+            CornerRadius = new CornerRadius(1, 1, 0, 0),
+        }, 0, 0);
+        AddGridChild(glyph, new Border
+        {
+            BorderBrush = Brushes.White,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(1),
+            Margin = new Thickness(0, 3, 0, 0),
+        }, 0, 0);
+        AvaloniaGrid.SetRowSpan(glyph.Children[^1], 2);
+        AddGridChild(glyph, new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(23, 50, 77)),
+            Height = 4,
+            Margin = new Thickness(3, 7, 3, 0),
+            VerticalAlignment = AvaloniaVerticalAlignment.Top,
+        }, 1, 0);
+
+        return new Border
+        {
+            Width = 26,
+            Height = 22,
+            Child = glyph,
+        };
     }
 
     private static Control CreateParityCapturedTitleBarButton(string text) =>
