@@ -269,8 +269,10 @@ public sealed class LegacyXlsFileAdapterTests
                 workbook.Sheets.Count,
                 workbook.Sheets.Sum(sheet => sheet.RowPageBreaks.Count + sheet.ColumnPageBreaks.Count),
                 workbook.ActiveSheetIndex,
+                RichMetadata: source.RichMetadata,
                 SheetNames: workbook.Sheets.Select(sheet => sheet.Name).ToArray(),
                 CellFingerprints: ReadImportedCellFingerprints(workbook),
+                StyleFingerprints: ReadImportedFallbackStyleFingerprints(workbook),
                 DefinedNameFingerprints: ReadImportedDefinedNameFingerprints(workbook),
                 HyperlinkFingerprints: ReadImportedHyperlinkFingerprints(workbook),
                 CommentFingerprints: ReadImportedCommentFingerprints(workbook),
@@ -290,9 +292,11 @@ public sealed class LegacyXlsFileAdapterTests
             imported.Cells.Should().Be(source.Cells, imported.File);
             if (!source.RichMetadata)
             {
+                imported.Styles.Should().Be(source.Styles, imported.File);
                 imported.Merges.Should().Be(source.Merges, imported.File);
                 imported.Dimensions.Should().BeGreaterThanOrEqualTo(source.Dimensions, imported.File);
                 imported.SheetNames.Should().Equal(source.SheetNames, imported.File);
+                imported.StyleFingerprints.Should().BeEquivalentTo(source.StyleFingerprints, imported.File);
             }
 
             if (source.RichMetadata)
@@ -345,6 +349,7 @@ public sealed class LegacyXlsFileAdapterTests
         summaries.Sum(summary => summary.Cells).Should().BeGreaterThan(0);
         summaries.Sum(summary => summary.Formulas).Should().BeGreaterThan(0);
         summaries.Sum(summary => summary.Styles).Should().BeGreaterThan(0);
+        summaries.Where(summary => !summary.RichMetadata).Sum(summary => summary.Styles).Should().BeGreaterThan(0);
         summaries.Sum(summary => summary.Merges).Should().BeGreaterThan(0);
         summaries.Sum(summary => summary.Dimensions).Should().BeGreaterThan(0);
         summaries.Sum(summary => summary.DefinedNames).Should().BeGreaterThan(0);
@@ -848,6 +853,7 @@ public sealed class LegacyXlsFileAdapterTests
             activeSheetIndex,
             SheetNames: sheetNames,
             CellFingerprints: cellFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            StyleFingerprints: [],
             DefinedNameFingerprints: definedNameFingerprints,
             HyperlinkFingerprints: hyperlinkFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             CommentFingerprints: commentFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
@@ -871,11 +877,14 @@ public sealed class LegacyXlsFileAdapterTests
         var cells = 0;
         var merges = 0;
         var dimensions = 0;
+        var styles = 0;
         var sheetNames = new List<string>();
+        var styleFingerprints = new List<string>();
 
         do
         {
             sheets++;
+            var sheetIndex = sheets - 1;
             sheetNames.Add(reader.Name);
             merges += reader.MergeCells?.Length ?? 0;
             for (var column = 0; column < reader.FieldCount; column++)
@@ -893,7 +902,14 @@ public sealed class LegacyXlsFileAdapterTests
                 {
                     var value = reader.GetValue(column);
                     if (value is not null && (value is not string text || text.Length > 0))
+                    {
                         cells++;
+                        if (TryCreateExcelDataReaderStyleFingerprint(reader, sheetIndex, reader.Name, column, out var fingerprint))
+                        {
+                            styles++;
+                            styleFingerprints.Add(fingerprint);
+                        }
+                    }
                 }
             }
         }
@@ -904,7 +920,7 @@ public sealed class LegacyXlsFileAdapterTests
             sheets,
             cells,
             Formulas: 0,
-            Styles: 0,
+            Styles: styles,
             Merges: merges,
             Dimensions: dimensions,
             HiddenSheets: 0,
@@ -929,6 +945,7 @@ public sealed class LegacyXlsFileAdapterTests
             RichMetadata: false,
             SheetNames: sheetNames,
             CellFingerprints: [],
+            StyleFingerprints: styleFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             DefinedNameFingerprints: [],
             HyperlinkFingerprints: [],
             CommentFingerprints: [],
@@ -957,6 +974,33 @@ public sealed class LegacyXlsFileAdapterTests
                     entry.Address.Col,
                     NormalizeFormulaText(entry.Cell.FormulaText ?? ""),
                     ImportedValueToken(entry.Cell.Value))))
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+
+    private static IReadOnlyList<string> ReadImportedFallbackStyleFingerprints(Workbook workbook) =>
+        workbook.Sheets
+            .SelectMany((sheet, sheetIndex) => sheet.EnumerateCells()
+                .OrderBy(entry => entry.Address.Row)
+                .ThenBy(entry => entry.Address.Col)
+                .Select(entry =>
+                {
+                    var style = workbook.GetStyle(entry.Cell.StyleId);
+                    return Equals(style, ModelCellStyle.Default)
+                        ? null
+                        : CreateFallbackStyleFingerprint(
+                            sheetIndex,
+                            sheet.Name,
+                            entry.Address.Row,
+                            entry.Address.Col,
+                            style.NumberFormat,
+                            style.HorizontalAlignment,
+                            style.VerticalAlignment,
+                            style.IndentLevel,
+                            style.Locked,
+                            style.Hidden);
+                }))
+            .Where(value => value is not null)
+            .Select(value => value!)
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
 
@@ -1416,6 +1460,59 @@ public sealed class LegacyXlsFileAdapterTests
         string value) =>
         $"{sheetIndex}:{sheetName}!{new ModelCellAddress(default, row, column).ToA1()}|F={formula}|V={value}";
 
+    private static bool TryCreateExcelDataReaderStyleFingerprint(
+        IExcelDataReader reader,
+        int sheetIndex,
+        string sheetName,
+        int column,
+        out string fingerprint)
+    {
+        var sourceStyle = reader.GetCellStyle(column);
+        var sourceNumberFormat = reader.GetNumberFormatString(column);
+        var numberFormat = string.IsNullOrWhiteSpace(sourceNumberFormat)
+            ? ModelCellStyle.Default.NumberFormat
+            : sourceNumberFormat;
+        var horizontalAlignment = MapExcelDataReaderHorizontalAlignment(sourceStyle.HorizontalAlignment);
+        var verticalAlignment = MapExcelDataReaderVerticalAlignment(sourceStyle.VerticalAlignment);
+
+        if (string.Equals(numberFormat, ModelCellStyle.Default.NumberFormat, StringComparison.Ordinal) &&
+            horizontalAlignment == ModelCellStyle.Default.HorizontalAlignment &&
+            verticalAlignment == ModelCellStyle.Default.VerticalAlignment &&
+            sourceStyle.IndentLevel == ModelCellStyle.Default.IndentLevel &&
+            sourceStyle.Locked == ModelCellStyle.Default.Locked &&
+            sourceStyle.Hidden == ModelCellStyle.Default.Hidden)
+        {
+            fingerprint = "";
+            return false;
+        }
+
+        fingerprint = CreateFallbackStyleFingerprint(
+            sheetIndex,
+            sheetName,
+            (uint)reader.Depth + 1,
+            (uint)column + 1,
+            numberFormat,
+            horizontalAlignment,
+            verticalAlignment,
+            sourceStyle.IndentLevel,
+            sourceStyle.Locked,
+            sourceStyle.Hidden);
+        return true;
+    }
+
+    private static string CreateFallbackStyleFingerprint(
+        int sheetIndex,
+        string sheetName,
+        uint row,
+        uint column,
+        string numberFormat,
+        ModelHorizontalAlignment horizontalAlignment,
+        ModelVerticalAlignment verticalAlignment,
+        int indentLevel,
+        bool locked,
+        bool hidden) =>
+        $"{sheetIndex}:{sheetName}!{new ModelCellAddress(default, row, column).ToA1()}|Style|Fmt={EscapeToken(numberFormat)}|H={horizontalAlignment}|V={verticalAlignment}|Indent={indentLevel}|Locked={locked}|Hidden={hidden}";
+
     private static string CreateAddressedFingerprint(
         int sheetIndex,
         string sheetName,
@@ -1832,6 +1929,27 @@ public sealed class LegacyXlsFileAdapterTests
             NPOIBorderStyle.Dotted => ModelBorderStyle.Dotted,
             NPOIBorderStyle.Double => ModelBorderStyle.Double,
             _ => ModelBorderStyle.None
+        };
+
+    private static ModelHorizontalAlignment MapExcelDataReaderHorizontalAlignment(ExcelDataReader.HorizontalAlignment alignment) =>
+        alignment switch
+        {
+            ExcelDataReader.HorizontalAlignment.Left => ModelHorizontalAlignment.Left,
+            ExcelDataReader.HorizontalAlignment.Center or ExcelDataReader.HorizontalAlignment.Centered or ExcelDataReader.HorizontalAlignment.CenteredAcrossSelection => ModelHorizontalAlignment.Center,
+            ExcelDataReader.HorizontalAlignment.Right => ModelHorizontalAlignment.Right,
+            ExcelDataReader.HorizontalAlignment.Justified => ModelHorizontalAlignment.Justify,
+            ExcelDataReader.HorizontalAlignment.Distributed => ModelHorizontalAlignment.Distributed,
+            _ => ModelHorizontalAlignment.General
+        };
+
+    private static ModelVerticalAlignment MapExcelDataReaderVerticalAlignment(ExcelDataReader.VerticalAlignment alignment) =>
+        alignment switch
+        {
+            ExcelDataReader.VerticalAlignment.Top => ModelVerticalAlignment.Top,
+            ExcelDataReader.VerticalAlignment.Center => ModelVerticalAlignment.Center,
+            ExcelDataReader.VerticalAlignment.Justify => ModelVerticalAlignment.Justify,
+            ExcelDataReader.VerticalAlignment.Distributed => ModelVerticalAlignment.Distributed,
+            _ => ModelVerticalAlignment.Bottom
         };
 
     private static CellFillPatternStyle MapSourceFillPattern(FillPattern fillPattern) =>
@@ -2325,6 +2443,7 @@ public sealed class LegacyXlsFileAdapterTests
         bool RichMetadata = true,
         IReadOnlyList<string>? SheetNames = null,
         IReadOnlyList<string>? CellFingerprints = null,
+        IReadOnlyList<string>? StyleFingerprints = null,
         IReadOnlyList<string>? DefinedNameFingerprints = null,
         IReadOnlyList<string>? HyperlinkFingerprints = null,
         IReadOnlyList<string>? CommentFingerprints = null,

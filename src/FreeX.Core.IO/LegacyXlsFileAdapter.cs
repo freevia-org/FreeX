@@ -115,6 +115,7 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
     {
         using var reader = ExcelReaderFactory.CreateReader(stream);
         var workbook = new Workbook("Untitled");
+        var styleCache = new Dictionary<ExcelDataReaderStyleKey, StyleId>();
 
         do
         {
@@ -132,7 +133,9 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
                     if (value is BlankValue)
                         continue;
 
-                    sheet.SetCell(new ModelCellAddress(sheet.Id, row, (uint)(col + 1)), value);
+                    var cell = Cell.FromValue(value);
+                    cell.StyleId = GetExcelDataReaderStyleId(reader, workbook, col, styleCache);
+                    sheet.SetCell(new ModelCellAddress(sheet.Id, row, (uint)(col + 1)), cell);
                 }
 
                 row++;
@@ -145,6 +148,53 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
 
         return workbook;
     }
+
+    private static StyleId GetExcelDataReaderStyleId(
+        IExcelDataReader reader,
+        Workbook workbook,
+        int column,
+        Dictionary<ExcelDataReaderStyleKey, StyleId> styleCache)
+    {
+        var sourceStyle = reader.GetCellStyle(column);
+        var numberFormat = reader.GetNumberFormatString(column);
+        var styleKey = new ExcelDataReaderStyleKey(
+            string.IsNullOrWhiteSpace(numberFormat)
+                ? ModelCellStyle.Default.NumberFormat
+                : numberFormat,
+            sourceStyle.HorizontalAlignment,
+            sourceStyle.VerticalAlignment,
+            sourceStyle.IndentLevel,
+            sourceStyle.Locked,
+            sourceStyle.Hidden);
+
+        if (IsDefaultExcelDataReaderStyle(styleKey))
+            return StyleId.Default;
+
+        if (styleCache.TryGetValue(styleKey, out var cached))
+            return cached;
+
+        var style = new ModelCellStyle
+        {
+            NumberFormat = styleKey.NumberFormat,
+            HorizontalAlignment = MapExcelDataReaderHorizontalAlignment(styleKey.HorizontalAlignment),
+            VerticalAlignment = MapExcelDataReaderVerticalAlignment(styleKey.VerticalAlignment),
+            IndentLevel = styleKey.IndentLevel,
+            Locked = styleKey.Locked,
+            Hidden = styleKey.Hidden
+        };
+
+        var styleId = workbook.RegisterStyle(style);
+        styleCache[styleKey] = styleId;
+        return styleId;
+    }
+
+    private static bool IsDefaultExcelDataReaderStyle(ExcelDataReaderStyleKey styleKey) =>
+        string.Equals(styleKey.NumberFormat, ModelCellStyle.Default.NumberFormat, StringComparison.Ordinal) &&
+        MapExcelDataReaderHorizontalAlignment(styleKey.HorizontalAlignment) == ModelCellStyle.Default.HorizontalAlignment &&
+        MapExcelDataReaderVerticalAlignment(styleKey.VerticalAlignment) == ModelCellStyle.Default.VerticalAlignment &&
+        styleKey.IndentLevel == ModelCellStyle.Default.IndentLevel &&
+        styleKey.Locked == ModelCellStyle.Default.Locked &&
+        styleKey.Hidden == ModelCellStyle.Default.Hidden;
 
     private static void LoadExcelDataReaderSheetLayout(IExcelDataReader reader, Sheet sheet)
     {
@@ -1417,6 +1467,17 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
             _ => ModelHorizontalAlignment.General
         };
 
+    private static ModelHorizontalAlignment MapExcelDataReaderHorizontalAlignment(ExcelDataReader.HorizontalAlignment alignment) =>
+        alignment switch
+        {
+            ExcelDataReader.HorizontalAlignment.Left => ModelHorizontalAlignment.Left,
+            ExcelDataReader.HorizontalAlignment.Center or ExcelDataReader.HorizontalAlignment.Centered or ExcelDataReader.HorizontalAlignment.CenteredAcrossSelection => ModelHorizontalAlignment.Center,
+            ExcelDataReader.HorizontalAlignment.Right => ModelHorizontalAlignment.Right,
+            ExcelDataReader.HorizontalAlignment.Justified => ModelHorizontalAlignment.Justify,
+            ExcelDataReader.HorizontalAlignment.Distributed => ModelHorizontalAlignment.Distributed,
+            _ => ModelHorizontalAlignment.General
+        };
+
     private static ModelVerticalAlignment MapVerticalAlignment(NPOI.SS.UserModel.VerticalAlignment alignment) =>
         alignment switch
         {
@@ -1426,6 +1487,24 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
             NPOI.SS.UserModel.VerticalAlignment.Distributed => ModelVerticalAlignment.Distributed,
             _ => ModelVerticalAlignment.Bottom
         };
+
+    private static ModelVerticalAlignment MapExcelDataReaderVerticalAlignment(ExcelDataReader.VerticalAlignment alignment) =>
+        alignment switch
+        {
+            ExcelDataReader.VerticalAlignment.Top => ModelVerticalAlignment.Top,
+            ExcelDataReader.VerticalAlignment.Center => ModelVerticalAlignment.Center,
+            ExcelDataReader.VerticalAlignment.Justify => ModelVerticalAlignment.Justify,
+            ExcelDataReader.VerticalAlignment.Distributed => ModelVerticalAlignment.Distributed,
+            _ => ModelVerticalAlignment.Bottom
+        };
+
+    private readonly record struct ExcelDataReaderStyleKey(
+        string NumberFormat,
+        ExcelDataReader.HorizontalAlignment HorizontalAlignment,
+        ExcelDataReader.VerticalAlignment VerticalAlignment,
+        int IndentLevel,
+        bool Locked,
+        bool Hidden);
 
     private static ModelBorderStyle MapBorderStyle(NPOI.SS.UserModel.BorderStyle borderStyle) =>
         borderStyle switch
