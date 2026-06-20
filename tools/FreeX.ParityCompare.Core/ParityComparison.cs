@@ -17,6 +17,13 @@ public sealed class ParityComparison
     public int LinuxOnlyCount => Surfaces.Count(s => s.Presence == SurfacePresence.LinuxOnly);
     public int HardSurfaceCount => Surfaces.Count(s => s.Severity == DiffSeverity.Hard);
     public int ChromeSurfaceCount => Surfaces.Count(s => s.Severity == DiffSeverity.Chrome);
+    public int ScreenSurfaceCount => Surfaces.Count(s => s.Kind.Equals("screen", StringComparison.OrdinalIgnoreCase));
+    public int StaticTabSurfaceCount => Surfaces.Count(s => s.Kind.Equals("static-tab", StringComparison.OrdinalIgnoreCase));
+    public int ContextualTabSurfaceCount => Surfaces.Count(s => s.Kind.Equals("contextual-tab", StringComparison.OrdinalIgnoreCase));
+    public int OverlaySurfaceCount => Surfaces.Count(s =>
+        s.Kind.Equals("backstage", StringComparison.OrdinalIgnoreCase)
+        || s.Kind.Equals("overlay", StringComparison.OrdinalIgnoreCase));
+    public int DialogSurfaceCount => Surfaces.Count(s => s.Kind.Equals("dialog", StringComparison.OrdinalIgnoreCase));
     public IReadOnlyList<SurfaceComparison> HardRegressions =>
         Surfaces.Where(s => s.IsHardRegression(HardThreshold)).ToList();
     public IReadOnlyList<SurfaceComparison> LargeChromeDiffs =>

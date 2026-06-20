@@ -97,6 +97,11 @@ public static class SurfaceComparer
         kind.Equals("grid", StringComparison.OrdinalIgnoreCase)
             ? DiffSeverity.Hard
             : kind.Equals("tab", StringComparison.OrdinalIgnoreCase)
+              || kind.Equals("ribbon-tab", StringComparison.OrdinalIgnoreCase)
+              || kind.Equals("static-tab", StringComparison.OrdinalIgnoreCase)
+              || kind.Equals("contextual-tab", StringComparison.OrdinalIgnoreCase)
+              || kind.Equals("screen", StringComparison.OrdinalIgnoreCase)
+              || kind.Equals("overlay", StringComparison.OrdinalIgnoreCase)
               || kind.Equals("backstage", StringComparison.OrdinalIgnoreCase)
                 ? DiffSeverity.Chrome
                 : DiffSeverity.Informational;

@@ -4,6 +4,8 @@ using Avalonia.Layout;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Free.Shared.Ribbon;
+using FreeX.App.Avalonia.Ribbon;
 
 namespace FreeX.App.Avalonia;
 
@@ -29,19 +31,13 @@ public sealed partial class MainWindow
     private const int ParityCaptureDialogWaitMilliseconds = 8000;
     private const int ParityCaptureDialogPollMilliseconds = 50;
 
-    /// <summary>The ordered ribbon-tab surface ids and the shared-definition tab id each maps to.</summary>
-    private static readonly (string SurfaceId, string TabId)[] ParityRibbonTabs =
-    [
-        ("tab.Home", "HomeTab"),
-        ("tab.Insert", "InsertTab"),
-        ("tab.Draw", "DrawTab"),
-        ("tab.PageLayout", "PageLayoutTab"),
-        ("tab.Formulas", "FormulasTab"),
-        ("tab.Data", "DataTab"),
-        ("tab.Review", "ReviewTab"),
-        ("tab.View", "ViewTab"),
-        ("tab.Help", "HelpTab"),
-    ];
+    /// <summary>The ordered static ribbon-tab surface ids and the shared-definition tab id each maps to.</summary>
+    private static readonly (string SurfaceId, string TabId)[] ParityStaticRibbonTabs =
+        BuildStaticRibbonTabSurfaces();
+
+    /// <summary>The contextual tab surfaces and the activation key that makes each tab visible.</summary>
+    private static readonly (string SurfaceId, string TabId, string ActivationKey)[] ParityContextualRibbonTabs =
+        BuildContextualRibbonTabSurfaces();
 
     private static readonly string[] ParityBackstageSurfaces =
     [
@@ -61,14 +57,21 @@ public sealed partial class MainWindow
 
         // ── Ribbon tabs + grid: render the live shell window with each tab selected. ──
         var ribbonTabControl = FindParityRibbonTabControl();
-        foreach (var (surfaceId, tabId) in ParityRibbonTabs)
+        foreach (var (surfaceId, tabId) in ParityStaticRibbonTabs)
         {
-            results.Add(CaptureRibbonTab(outputDirectory, ribbonTabControl, surfaceId, tabId, ParitySurfaceKind.RibbonTab));
+            results.Add(CaptureRibbonTab(outputDirectory, ribbonTabControl, surfaceId, tabId, ParitySurfaceKind.StaticRibbonTab));
         }
+
+        foreach (var (surfaceId, tabId, activationKey) in ParityContextualRibbonTabs)
+        {
+            _ribbonContextSource.SetParityCaptureContext(activationKey);
+            results.Add(CaptureRibbonTab(outputDirectory, ribbonTabControl, surfaceId, tabId, ParitySurfaceKind.ContextualRibbonTab));
+        }
+        _ribbonContextSource.SetParityCaptureContext(null);
 
         // grid.demo: the worksheet over the startup demo workbook, framed by the Home tab.
         SelectParityRibbonTab(ribbonTabControl, "HomeTab");
-        results.Add(CaptureWindowSurface(outputDirectory, "grid.demo", ParitySurfaceKind.Grid));
+        results.Add(CaptureWindowSurface(outputDirectory, "grid.demo", ParitySurfaceKind.Screen));
 
         // ── Dialogs: open each, render the dialog window, close it. ──
         foreach (var (surfaceId, opener) in ParityDialogOpeners())
@@ -101,6 +104,28 @@ public sealed partial class MainWindow
         ("dialog.PageSetup", () => ShowPageSetupDialogAsync()),
         ("dialog.Options", () => ShowOptionsDialogAsync()),
     ];
+
+    private static (string SurfaceId, string TabId)[] BuildStaticRibbonTabSurfaces()
+    {
+        var definition = AvaloniaRibbonComposition.BuildDefinition();
+        return definition.VisibleTabs
+            .Select(tab => ("tab." + SurfaceName(tab), tab.Id))
+            .ToArray();
+    }
+
+    private static (string SurfaceId, string TabId, string ActivationKey)[] BuildContextualRibbonTabSurfaces()
+    {
+        var definition = AvaloniaRibbonComposition.BuildDefinition();
+        return definition.ContextualTabs
+            .Where(tab => tab.Context is not null)
+            .Select(tab => ("contextual." + SurfaceName(tab), tab.Id, tab.Context!.ActivationKey))
+            .ToArray();
+    }
+
+    private static string SurfaceName(RibbonTab tab) =>
+        tab.Id.EndsWith("Tab", StringComparison.Ordinal)
+            ? tab.Id[..^3]
+            : tab.Id;
 
     private ParitySurfaceResult CaptureRibbonTab(
         string outputDirectory,
