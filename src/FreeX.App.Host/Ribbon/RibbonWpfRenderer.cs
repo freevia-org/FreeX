@@ -305,8 +305,9 @@ public static class RibbonWpfRenderer
             TextWrapping = TextWrapping.Wrap,
             HorizontalAlignment = HorizontalAlignment.Center,
             Margin = new Thickness(0, 2, 0, 0),
-            MaxWidth = 64
+            MaxWidth = 128
         };
+        EnsureNaturalLabelWidth(caption);
         RibbonMetadata.SetRole(caption, RibbonMetadataRole.CommandLabel);
         stack.Children.Add(caption);
 

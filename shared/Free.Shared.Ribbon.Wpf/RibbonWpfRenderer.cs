@@ -297,8 +297,9 @@ public static class RibbonWpfRenderer
             TextWrapping = TextWrapping.Wrap,
             HorizontalAlignment = HorizontalAlignment.Center,
             Margin = new Thickness(0, 2, 0, 0),
-            MaxWidth = 64
+            MaxWidth = 128
         };
+        EnsureNaturalLabelWidth(caption);
         if (HasMenu(control))
             caption.Inlines.Add(new System.Windows.Documents.Run("  ▾") { FontSize = 9 });
         stack.Children.Add(caption);

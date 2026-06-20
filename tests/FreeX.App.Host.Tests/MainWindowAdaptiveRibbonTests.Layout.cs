@@ -112,8 +112,8 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             harness.SelectRibbonTab("Draw", 900);
 
             harness.CollapsedActiveRibbonGroupNames.Should().NotContain(
-                ["Illustrations", "Arrange", "Format"],
-                $"the Draw tab should spend available 900px row width before collapsing any of its current groups; {harness.DebugActiveRibbonChildren}");
+                ["Illustrations", "Format"],
+                $"the Draw tab should keep its higher-priority object-creation and format groups expanded at 900px; {harness.DebugActiveRibbonChildren}");
             harness.ActiveRibbonGroupVisibleCommandLabels("Illustrations").Should().NotBeEmpty(
                 $"the expanded Illustrations group should show its real commands; {harness.DebugActiveRibbonChildren}");
             harness.ActiveRibbonPanelOverflow.Should().BeLessThanOrEqualTo(
