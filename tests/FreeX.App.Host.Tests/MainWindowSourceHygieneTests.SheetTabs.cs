@@ -209,8 +209,9 @@ public sealed partial class MainWindowSourceHygieneTests
         source.Should().Contain("SheetTabSeparatorBrush");
         source.Should().Contain("CreateSheetTabSeparatorGeometry");
         source.Should().Contain("new Rect(left, -3, Math.Max(0, right - left), SheetTabChromeHeight + 6)");
-        source.Should().Contain("var activeContentRight = currentOffset + activeBounds.Right;");
-        source.Should().Contain("targetOffset = currentOffset + anchorBounds.Left;");
+        source.Should().Contain("SheetTabViewportScrollPlanner.CalculateOffsetForSelectedTab(");
+        source.Should().NotContain("contextTabsBeforeActive");
+        source.Should().NotContain("anchorBounds.Left");
         source.Should().Contain("GetSheetTabsVisibleViewportRight");
         source.Should().Contain("UpdateAddSheetButtonInteractivity");
         source.Should().NotContain("UpdateSheetTabsViewportEdgeMasks");
