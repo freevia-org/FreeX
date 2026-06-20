@@ -917,14 +917,17 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
 
     private static void LoadPrimaryViewMetadata(WindowTwoRecord window, Sheet sheet)
     {
-        if (!window.IsSelected)
+        var nativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (window.IsSelected)
+            nativeAttributes["tabSelected"] = "1";
+        if (!window.DefaultHeader)
+            nativeAttributes["defaultGridColor"] = "0";
+        if (window.HeaderColor != 64)
+            nativeAttributes["colorId"] = window.HeaderColor.ToString(CultureInfo.InvariantCulture);
+        if (nativeAttributes.Count == 0)
             return;
 
-        var serializedMetadata = XmlNativeBagSerializer.Serialize(
-            new Dictionary<string, string>(StringComparer.Ordinal)
-            {
-                ["tabSelected"] = "1"
-            });
+        var serializedMetadata = XmlNativeBagSerializer.Serialize(nativeAttributes);
         if (serializedMetadata is null)
             return;
 

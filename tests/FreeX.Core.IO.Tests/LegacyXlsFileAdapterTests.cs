@@ -531,6 +531,11 @@ public sealed class LegacyXlsFileAdapterTests
                 fingerprint.Contains("|TabSelected=1", StringComparison.Ordinal)) ?? 0)
             .Should()
             .BeGreaterThan(0);
+        summaries.Where(summary => summary.RichMetadata)
+            .Sum(summary => summary.PrimaryViewMetadataFingerprints?.Count(fingerprint =>
+                fingerprint.Contains("|DefaultGridColor=0|ColorId=8", StringComparison.Ordinal)) ?? 0)
+            .Should()
+            .BeGreaterThan(0);
         summaries.Sum(summary => summary.ProtectedSheets).Should().BeGreaterThan(0);
         summaries.Sum(summary => summary.ConditionalFormats).Should().BeGreaterThan(0);
         summaries.Sum(summary => summary.PageBreaks).Should().BeGreaterThan(0);
@@ -2373,10 +2378,12 @@ public sealed class LegacyXlsFileAdapterTests
 
     private static IReadOnlyList<string> ReadImportedPrimaryViewMetadataFingerprints(Workbook workbook) =>
         workbook.Sheets
-            .Select((sheet, sheetIndex) =>
-                GetPrimaryViewMetadataAttribute(sheet, "tabSelected") is { } tabSelected
-                    ? CreatePrimaryViewMetadataFingerprint(sheetIndex, sheet.Name, tabSelected)
-                    : null)
+            .Select((sheet, sheetIndex) => CreatePrimaryViewMetadataFingerprint(
+                sheetIndex,
+                sheet.Name,
+                GetPrimaryViewMetadataAttribute(sheet, "tabSelected"),
+                GetPrimaryViewMetadataAttribute(sheet, "defaultGridColor"),
+                GetPrimaryViewMetadataAttribute(sheet, "colorId")))
             .Where(value => value is not null)
             .Select(value => value!)
             .OrderBy(value => value, StringComparer.Ordinal)
@@ -2521,11 +2528,19 @@ public sealed class LegacyXlsFileAdapterTests
         [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out string? fingerprint)
     {
         fingerprint = null;
-        if (TryGetWindowTwoRecord(sheet) is not { IsSelected: true })
+        if (TryGetWindowTwoRecord(sheet) is not { } window ||
+            (!window.IsSelected && window.DefaultHeader && window.HeaderColor == 64))
+        {
             return false;
+        }
 
-        fingerprint = CreatePrimaryViewMetadataFingerprint(sheetIndex, sheetName, "1");
-        return true;
+        fingerprint = CreatePrimaryViewMetadataFingerprint(
+            sheetIndex,
+            sheetName,
+            window.IsSelected ? "1" : null,
+            window.DefaultHeader ? null : "0",
+            window.HeaderColor == 64 ? null : window.HeaderColor.ToString(CultureInfo.InvariantCulture));
+        return fingerprint is not null;
     }
 
     private static string CreateSourcePageSetupFingerprint(int sheetIndex, string sheetName, ISheet sheet)
@@ -2830,8 +2845,24 @@ public sealed class LegacyXlsFileAdapterTests
     private static string CreatePrintOptionsFingerprint(int sheetIndex, string sheetName, string gridLinesSet) =>
         $"{sheetIndex}:{sheetName}|PrintOptions|GridLinesSet={gridLinesSet}";
 
-    private static string CreatePrimaryViewMetadataFingerprint(int sheetIndex, string sheetName, string tabSelected) =>
-        $"{sheetIndex}:{sheetName}|PrimaryView|TabSelected={tabSelected}";
+    private static string? CreatePrimaryViewMetadataFingerprint(
+        int sheetIndex,
+        string sheetName,
+        string? tabSelected,
+        string? defaultGridColor,
+        string? colorId)
+    {
+        if (tabSelected is null && defaultGridColor is null && colorId is null)
+            return null;
+
+        return string.Join("|", [
+            $"{sheetIndex}:{sheetName}",
+            "PrimaryView",
+            $"TabSelected={tabSelected ?? "null"}",
+            $"DefaultGridColor={defaultGridColor ?? "null"}",
+            $"ColorId={colorId ?? "null"}"
+        ]);
+    }
 
     private static string? ReadHssfWorkbookCodeName(HSSFWorkbook sourceWorkbook)
     {
