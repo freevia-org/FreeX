@@ -2,6 +2,7 @@
 
 ## Parallel Chat Sessions
 
+- No one works in `main`: always create a separate branch and linked worktree for each task, do the work there, then merge, push, and clean up the temporary worktree/branch after the task is done.
 - Expect multiple parallel agent sessions to be active at the same time.
 - Use one isolated Git worktree per active chat session.
 - Use one branch per session, preferably with the `codex/` prefix unless the user asks for another name.
