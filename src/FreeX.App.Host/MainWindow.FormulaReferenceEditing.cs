@@ -89,10 +89,13 @@ public partial class MainWindow
                 range.Start)
             : null;
 
+        var referenceInsertionIndex = editor.SelectionLength > 0
+            ? editor.SelectionStart
+            : editor.CaretIndex;
         var applied = getPivotDataPlan is not null
             ? FormulaRangeEntryPlanner.TryApplySelectionText(
                 editor.Text,
-                editor.CaretIndex,
+                referenceInsertionIndex,
                 editor.SelectionLength,
                 _formulaReferenceStart,
                 _formulaReferenceLength,
@@ -100,7 +103,7 @@ public partial class MainWindow
                 out var edit)
             : FormulaRangeEntryPlanner.TryApplyRangeSelection(
                 editor.Text,
-                editor.CaretIndex,
+                referenceInsertionIndex,
                 editor.SelectionLength,
                 _formulaReferenceStart,
                 _formulaReferenceLength,
@@ -133,6 +136,7 @@ public partial class MainWindow
         _formulaReferenceStart = edit.ReferenceStart;
         _formulaReferenceLength = edit.ReferenceLength;
         RefreshFormulaReferenceHighlights();
+        SetFormulaEditStatusBarMode(pointMode: true);
         editor.Focus();
         editor.Dispatcher.BeginInvoke(
             new Action(() =>

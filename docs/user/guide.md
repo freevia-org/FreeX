@@ -118,6 +118,8 @@ Type `=` to start a formula. FreeX supports the full Excel formula syntax includ
 - Text concatenation: `&`
 - Array literals: `{1,2,3}` or `{1;2;3}`
 
+While you are typing a new formula, the status bar shows **Enter** mode. Selecting a cell or range with the mouse or arrow keys inserts that reference into the formula and switches the status bar to **Point** mode. Press **F2** while editing a formula to toggle between **Edit** mode, where arrow keys move the text caret, and **Point** mode, where arrow keys select worksheet references. If a reference is selected in the formula text, selecting another cell or range replaces that reference; to add another argument, type the separator or operator first, such as `,` or `+`, and then select the next range.
+
 ### Cross-Sheet References
 
 Use `SheetName!A1` or `'Sheet Name'!A1` to reference another worksheet.

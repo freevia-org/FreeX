@@ -13,6 +13,17 @@ public sealed class FreeXUiE2eTests
 {
     [UiE2eFact]
     [Trait("Category", "UIE2E")]
+    public void FormulaEditing_CoversLiveEditAndPointScenarios()
+    {
+        UiE2ePreconditions.SkipUnlessEnabled();
+
+        using var run = FreeXUiRun.Start();
+
+        FormulaEditingUiE2eHarness.Run(run);
+    }
+
+    [UiE2eFact]
+    [Trait("Category", "UIE2E")]
     public void SharedAppInstance_CoversLiveUiScenarios()
     {
         UiE2ePreconditions.SkipUnlessEnabled();
@@ -37,7 +48,7 @@ internal static class FormulaEditingUiE2eHarness
 
         run.ClickCell(col: 3, row: 1);
         run.TypeText("=SUM(");
-        run.Capture("02-formula-point-mode-start");
+        run.Capture("02-formula-enter-mode-start");
         run.ClickCell(col: 1, row: 1);
         run.HoldShiftAndPress(VirtualKey.Down);
         run.TypeText(")");
@@ -53,7 +64,7 @@ internal static class FormulaEditingUiE2eHarness
         run.Press(VirtualKey.Enter);
         run.Capture("04-keyboard-reference-range");
 
-        run.ClickCell(col: 4, row: 1);
+        run.Press(VirtualKey.Up);
         run.Press(VirtualKey.F2);
         run.Press(VirtualKey.Left);
         run.Capture("05-f2-edit-mode-arrow-caret");
@@ -100,16 +111,18 @@ internal static class FormulaEditingUiE2eHarness
         ## Excel Reference Behavior
 
         - Microsoft Support documents `F2` as editing the active cell and, while editing a formula, toggling Point mode so arrow keys can create a reference.
-        - Microsoft Support's status-bar documentation identifies Point as formula cell selection mode and Edit as the mode entered by double-clicking or pressing `F2`.
+        - Microsoft Support's status-bar documentation identifies Enter as content entry mode, Edit as in-cell editing mode, and Point as formula cell selection mode.
+        - Microsoft Support documents formula references as selecting cells/ranges while creating a formula and changing existing references by selecting the formula reference and entering a new one.
 
         Sources:
-        - https://support.microsoft.com/en-gb/office/keyboard-shortcuts-in-excel-1798d9d5-842a-42b8-9c99-9b7213f0040f
-        - https://support.microsoft.com/en-us/office/excel-status-bar-options-6055ecd9-e20f-4a7a-a611-4481bd488c55
+        - https://support.microsoft.com/en-us/accessibility/excel/keyboard-shortcuts-in-excel
+        - https://support.microsoft.com/en-us/excel/excel-status-bar-options
+        - https://support.microsoft.com/en-us/excel/create-or-change-a-cell-reference
 
         ## Scenarios Driven
 
         - Entered numbers into `A1`, `A2`, and `B1`.
-        - Started a formula with `=SUM(` and selected a referenced range with mouse plus `Shift+Down`.
+        - Started a formula with `=SUM(`, captured Enter mode, then selected a referenced range with mouse plus `Shift+Down`.
         - Started a formula with `=SUM(` and selected/extended a referenced range with keyboard navigation.
         - Pressed `F2` in an existing formula and verified the visual state is captured for Edit mode arrow/caret movement.
         - Pressed `F2` again and captured Point mode arrow/reference behavior.
@@ -122,7 +135,8 @@ internal static class FormulaEditingUiE2eHarness
 
         ## Expected Comparison Against Excel
 
-        - Formula entry after typing `=` should be in a Point/Enter-style mode where mouse and arrow navigation insert references.
+        - Formula entry after typing should display Enter mode until a reference-selection gesture changes it to Point mode.
+        - Point mode should let mouse and arrow navigation insert references.
         - `Shift+Arrow` while in formula reference selection should extend the highlighted referenced range.
         - `F2` while editing a formula should toggle between text edit behavior and Point mode behavior.
         - Existing formula references should be visually color-highlighted in both the formula text and the grid.
@@ -134,7 +148,7 @@ internal static class FormulaEditingUiE2eHarness
         ## Current Known Gaps To Inspect In Artifacts
 
         - If the mouse-reference scenario leaves formula editing and selects another cell, that differs from Excel Point mode.
-        - If keyboard Point mode produces adjacent references without a separator, for example `C3E1`, that differs from Excel's reference/range entry behavior.
+        - If an existing reference is selected in formula text, Point-mode grid selection should replace that selected reference rather than append somewhere else.
         - Existing formula reference highlighting should show matching formula text color and grid range color; this is easiest to inspect in `07-reference-highlighting-existing-formula.png`.
         """;
     }
@@ -146,13 +160,14 @@ internal sealed class FreeXUiRun : IDisposable
 
     private const int WindowWidth = 1280;
     private const int WindowHeight = 720;
-    private const int GridLeft = 53;
-    private const int GridTop = 328;
-    private const int CellWidth = 101;
-    private const int CellHeight = 30;
+    private const int GridLeft = 29;
+    private const int GridTop = 219;
+    private const int CellWidth = 64;
+    private const int CellHeight = 20;
 
     private readonly Process _process;
     private readonly IntPtr _window;
+    private DateTime _lastCaptionFocusClickUtc = DateTime.MinValue;
 
     private FreeXUiRun(Process process, IntPtr window, DirectoryInfo artifacts)
     {
@@ -207,15 +222,18 @@ internal sealed class FreeXUiRun : IDisposable
 
     public void ClickCell(int col, int row)
     {
+        BringToForeground();
         var rect = GetWindowRect();
         var x = rect.Left + GridLeft + (col - 1) * CellWidth + CellWidth / 2;
         var y = rect.Top + GridTop + (row - 1) * CellHeight + CellHeight / 2;
-        BringToForeground();
         Native.SetCursorPos(x, y);
         Thread.Sleep(80);
         Native.mouse_event(Native.LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
         Native.mouse_event(Native.LEFTUP, 0, 0, 0, UIntPtr.Zero);
-        Thread.Sleep(160);
+        Thread.Sleep(220);
+        Native.ForegroundWindowBelongsToProcess(_process.Id)
+            .Should()
+            .BeTrue("clicking the intended FreeX cell should bring the app to the foreground");
     }
 
     public void TypeText(string text)
@@ -234,7 +252,7 @@ internal sealed class FreeXUiRun : IDisposable
     {
         BringToForeground();
         Native.SendKey(key);
-        Thread.Sleep(180);
+        Thread.Sleep(220);
     }
 
     public void HoldControlAndPress(ushort key)
@@ -264,10 +282,10 @@ internal sealed class FreeXUiRun : IDisposable
 
     public void WheelAtCell(int col, int row, int delta, bool shift = false, bool control = false)
     {
+        BringToForeground();
         var rect = GetWindowRect();
         var x = rect.Left + GridLeft + (col - 1) * CellWidth + CellWidth / 2;
         var y = rect.Top + GridTop + (row - 1) * CellHeight + CellHeight / 2;
-        BringToForeground();
         Native.SetCursorPos(x, y);
         Thread.Sleep(80);
         if (shift)
@@ -323,13 +341,13 @@ internal sealed class FreeXUiRun : IDisposable
     {
         for (var attempt = 0; attempt < 10; attempt++)
         {
-            Native.ShowWindow(_window, Native.SW_RESTORE);
+            RestoreWindowForInput();
             Native.SetForegroundWindow(_window);
-            var rect = GetWindowRect();
-            Native.SetCursorPos(rect.Left + 16, rect.Top + 16);
-            Native.mouse_event(Native.LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
-            Native.mouse_event(Native.LEFTUP, 0, 0, 0, UIntPtr.Zero);
             Thread.Sleep(80);
+            if (Native.ForegroundWindowBelongsToProcess(_process.Id))
+                return;
+
+            ClickCaptionForForeground();
             if (Native.ForegroundWindowBelongsToProcess(_process.Id))
                 return;
         }
@@ -337,6 +355,28 @@ internal sealed class FreeXUiRun : IDisposable
         Native.ForegroundWindowBelongsToProcess(_process.Id)
             .Should()
             .BeTrue("global keyboard and mouse input must not leak into another process");
+    }
+
+    private void RestoreWindowForInput()
+    {
+        Native.ShowWindow(_window, Native.SW_RESTORE);
+        Native.SetWindowPos(_window, IntPtr.Zero, 20, 20, WindowWidth, WindowHeight, Native.SWP_SHOWWINDOW);
+        Thread.Sleep(40);
+    }
+
+    private void ClickCaptionForForeground()
+    {
+        var elapsedSinceLastCaptionClick = DateTime.UtcNow - _lastCaptionFocusClickUtc;
+        if (elapsedSinceLastCaptionClick < TimeSpan.FromMilliseconds(750))
+            Thread.Sleep(TimeSpan.FromMilliseconds(750) - elapsedSinceLastCaptionClick);
+
+        var rect = GetWindowRect();
+        Native.SetCursorPos(rect.Left + WindowWidth / 2, rect.Top + 16);
+        Thread.Sleep(60);
+        Native.mouse_event(Native.LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
+        Native.mouse_event(Native.LEFTUP, 0, 0, 0, UIntPtr.Zero);
+        _lastCaptionFocusClickUtc = DateTime.UtcNow;
+        Thread.Sleep(160);
     }
 
     private static string ResolveAppExecutable()
