@@ -229,6 +229,23 @@ public sealed class LegacyXlsFileAdapterTests
         picture.AnchorOffsetY.Should().BeGreaterThan(0);
         picture.Width.Should().BeGreaterThan(0);
         picture.Height.Should().BeGreaterThan(0);
+        sheet.TextBoxes.Should().ContainSingle();
+        var textBox = sheet.TextBoxes.Single();
+        textBox.Anchor.Should().Be(new ModelCellAddress(sheet.Id, 8, 2));
+        textBox.Text.Should().Be("Legacy textbox");
+        textBox.FillColor.Should().Be(new CellColor(204, 255, 255));
+        textBox.IsSourceLoaded.Should().BeTrue();
+        textBox.Width.Should().BeGreaterThan(0);
+        textBox.Height.Should().BeGreaterThan(0);
+        sheet.DrawingShapes.Should().ContainSingle();
+        var shape = sheet.DrawingShapes.Single();
+        shape.Anchor.Should().Be(new ModelCellAddress(sheet.Id, 11, 2));
+        shape.Kind.Should().Be(DrawingShapeKind.Ellipse);
+        shape.FillColor.Should().Be(new CellColor(255, 230, 153));
+        shape.OutlineColor.Should().Be(new CellColor(156, 101, 0));
+        shape.IsSourceLoaded.Should().BeTrue();
+        shape.Width.Should().BeGreaterThan(0);
+        shape.Height.Should().BeGreaterThan(0);
 
         var hiddenSheet = workbook.GetSheetAt(1);
         hiddenSheet.Name.Should().Be("Hidden");
@@ -278,6 +295,8 @@ public sealed class LegacyXlsFileAdapterTests
                 workbook.Sheets.Sum(sheet => sheet.Hyperlinks.Count),
                 workbook.Sheets.Sum(sheet => sheet.Comments.Count),
                 workbook.Sheets.Sum(sheet => sheet.Pictures.Count),
+                workbook.Sheets.Sum(sheet => sheet.TextBoxes.Count),
+                workbook.Sheets.Sum(sheet => sheet.DrawingShapes.Count),
                 workbook.Sheets.Count(sheet => sheet.FrozenRows > 0 || sheet.FrozenCols > 0),
                 workbook.Sheets.Sum(sheet => sheet.RowOutlineLevels.Count),
                 workbook.Sheets.Sum(sheet => sheet.ColOutlineLevels.Count),
@@ -313,6 +332,8 @@ public sealed class LegacyXlsFileAdapterTests
                 HyperlinkFingerprints: ReadImportedHyperlinkFingerprints(workbook),
                 CommentFingerprints: ReadImportedCommentFingerprints(workbook),
                 PictureFingerprints: ReadImportedPictureFingerprints(workbook),
+                TextBoxFingerprints: ReadImportedTextBoxFingerprints(workbook),
+                DrawingShapeFingerprints: ReadImportedDrawingShapeFingerprints(workbook),
                 PaneFingerprints: ReadImportedPaneFingerprints(workbook),
                 RowOutlineFingerprints: ReadImportedRowOutlineFingerprints(workbook),
                 ColOutlineFingerprints: ReadImportedColOutlineFingerprints(workbook),
@@ -356,6 +377,8 @@ public sealed class LegacyXlsFileAdapterTests
                 imported.Hyperlinks.Should().Be(source.Hyperlinks, imported.File);
                 imported.Comments.Should().Be(source.Comments, imported.File);
                 imported.Pictures.Should().Be(source.Pictures, imported.File);
+                imported.TextBoxes.Should().Be(source.TextBoxes, imported.File);
+                imported.DrawingShapes.Should().Be(source.DrawingShapes, imported.File);
                 imported.SheetNames.Should().Equal(source.SheetNames, imported.File);
                 imported.SheetVisibilityFingerprints.Should().BeEquivalentTo(source.SheetVisibilityFingerprints, imported.File);
                 imported.WorkbookViewFingerprints.Should().BeEquivalentTo(source.WorkbookViewFingerprints, imported.File);
@@ -372,6 +395,8 @@ public sealed class LegacyXlsFileAdapterTests
                 imported.HyperlinkFingerprints.Should().BeEquivalentTo(source.HyperlinkFingerprints, imported.File);
                 imported.CommentFingerprints.Should().BeEquivalentTo(source.CommentFingerprints, imported.File);
                 imported.PictureFingerprints.Should().BeEquivalentTo(source.PictureFingerprints, imported.File);
+                imported.TextBoxFingerprints.Should().BeEquivalentTo(source.TextBoxFingerprints, imported.File);
+                imported.DrawingShapeFingerprints.Should().BeEquivalentTo(source.DrawingShapeFingerprints, imported.File);
                 imported.FreezePanes.Should().Be(source.FreezePanes, imported.File);
                 imported.RowOutlineLevels.Should().Be(source.RowOutlineLevels, imported.File);
                 imported.ColOutlineLevels.Should().Be(source.ColOutlineLevels, imported.File);
@@ -439,6 +464,8 @@ public sealed class LegacyXlsFileAdapterTests
         summaries.Sum(summary => summary.Hyperlinks).Should().BeGreaterThan(0);
         summaries.Sum(summary => summary.Comments).Should().BeGreaterThan(0);
         summaries.Sum(summary => summary.Pictures).Should().BeGreaterThan(0);
+        summaries.Sum(summary => summary.TextBoxes).Should().BeGreaterThan(0);
+        summaries.Sum(summary => summary.DrawingShapes).Should().BeGreaterThan(0);
         summaries.Sum(summary => summary.PrintAreas + summary.PrintTitleRows + summary.PrintTitleColumns)
             .Should()
             .BeGreaterThan(0);
@@ -599,7 +626,7 @@ public sealed class LegacyXlsFileAdapterTests
         hyperlinkCell.Hyperlink = hyperlink;
         hyperlinkCell.SetAsActiveCell();
 
-        var drawing = sheet.CreateDrawingPatriarch();
+        var drawing = (HSSFPatriarch)sheet.CreateDrawingPatriarch();
         var commentAnchor = new HSSFClientAnchor(0, 0, 0, 0, 4, 1, 6, 3);
         var comment = drawing.CreateCellComment(commentAnchor);
         comment.String = helper.CreateRichTextString("Review before publishing");
@@ -609,6 +636,13 @@ public sealed class LegacyXlsFileAdapterTests
         commentCell.CellComment = comment;
         var pictureIndex = hssf.AddPicture(MinimalPngBytes(), PictureType.PNG);
         drawing.CreatePicture(new HSSFClientAnchor(128, 64, 512, 192, 1, 4, 3, 7), pictureIndex);
+        var textBox = (HSSFTextbox)drawing.CreateTextbox(new HSSFClientAnchor(64, 32, 900, 220, 1, 7, 4, 10));
+        textBox.String = helper.CreateRichTextString("Legacy textbox");
+        textBox.SetFillColor(204, 255, 255);
+        var simpleShape = drawing.CreateSimpleShape(new HSSFClientAnchor(32, 64, 800, 220, 1, 10, 4, 13));
+        simpleShape.ShapeType = HSSFSimpleShape.OBJECT_TYPE_OVAL;
+        simpleShape.SetFillColor(255, 230, 153);
+        simpleShape.SetLineStyleColor(156, 101, 0);
 
         var hiddenRow = sheet.CreateRow(3);
         hiddenRow.ZeroHeight = true;
@@ -746,6 +780,8 @@ public sealed class LegacyXlsFileAdapterTests
         var hyperlinks = 0;
         var comments = 0;
         var pictures = 0;
+        var textBoxes = 0;
+        var drawingShapes = 0;
         var freezePanes = 0;
         var rowOutlineLevels = 0;
         var colOutlineLevels = 0;
@@ -762,6 +798,8 @@ public sealed class LegacyXlsFileAdapterTests
         var hyperlinkFingerprints = new List<string>();
         var commentFingerprints = new List<string>();
         var pictureFingerprints = new List<string>();
+        var textBoxFingerprints = new List<string>();
+        var drawingShapeFingerprints = new List<string>();
         var paneFingerprints = new List<string>();
         var rowOutlineFingerprints = new List<string>();
         var colOutlineFingerprints = new List<string>();
@@ -942,6 +980,14 @@ public sealed class LegacyXlsFileAdapterTests
                 pictures += sheetPictureFingerprints.Count;
                 pictureFingerprints.AddRange(sheetPictureFingerprints);
 
+                var sheetTextBoxFingerprints = ReadSourceTextBoxFingerprints(sheetIndex, hssfSheet);
+                textBoxes += sheetTextBoxFingerprints.Count;
+                textBoxFingerprints.AddRange(sheetTextBoxFingerprints);
+
+                var sheetDrawingShapeFingerprints = ReadSourceDrawingShapeFingerprints(sheetIndex, hssfSheet);
+                drawingShapes += sheetDrawingShapeFingerprints.Count;
+                drawingShapeFingerprints.AddRange(sheetDrawingShapeFingerprints);
+
                 try
                 {
                     var sheetDataValidationFingerprints = hssfSheet.GetDataValidations()
@@ -1004,6 +1050,8 @@ public sealed class LegacyXlsFileAdapterTests
             hyperlinks,
             comments,
             pictures,
+            textBoxes,
+            drawingShapes,
             freezePanes,
             rowOutlineLevels,
             colOutlineLevels,
@@ -1036,6 +1084,8 @@ public sealed class LegacyXlsFileAdapterTests
             HyperlinkFingerprints: hyperlinkFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             CommentFingerprints: commentFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             PictureFingerprints: pictureFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            TextBoxFingerprints: textBoxFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            DrawingShapeFingerprints: drawingShapeFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             PaneFingerprints: paneFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             RowOutlineFingerprints: rowOutlineFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             ColOutlineFingerprints: colOutlineFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
@@ -1160,6 +1210,8 @@ public sealed class LegacyXlsFileAdapterTests
             Hyperlinks: 0,
             Comments: 0,
             Pictures: 0,
+            TextBoxes: 0,
+            DrawingShapes: 0,
             FreezePanes: 0,
             RowOutlineLevels: 0,
             ColOutlineLevels: 0,
@@ -1193,6 +1245,8 @@ public sealed class LegacyXlsFileAdapterTests
             HyperlinkFingerprints: [],
             CommentFingerprints: [],
             PictureFingerprints: [],
+            TextBoxFingerprints: [],
+            DrawingShapeFingerprints: [],
             PaneFingerprints: [],
             RowOutlineFingerprints: [],
             ColOutlineFingerprints: [],
@@ -1594,6 +1648,34 @@ public sealed class LegacyXlsFileAdapterTests
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
 
+    private static IReadOnlyList<string> ReadImportedTextBoxFingerprints(Workbook workbook) =>
+        workbook.Sheets
+            .SelectMany((sheet, sheetIndex) => sheet.TextBoxes
+                .Select(textBox => CreateTextBoxFingerprint(
+                    sheetIndex,
+                    sheet.Name,
+                    textBox.Anchor.Row,
+                    textBox.Anchor.Col,
+                    textBox.Text,
+                    textBox.FillColor)))
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+
+    private static IReadOnlyList<string> ReadImportedDrawingShapeFingerprints(Workbook workbook) =>
+        workbook.Sheets
+            .SelectMany((sheet, sheetIndex) => sheet.DrawingShapes
+                .Select(shape => CreateDrawingShapeFingerprint(
+                    sheetIndex,
+                    sheet.Name,
+                    shape.Anchor.Row,
+                    shape.Anchor.Col,
+                    shape.Kind,
+                    shape.HasFill,
+                    shape.FillColor,
+                    shape.OutlineColor)))
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+
     private static IReadOnlyList<string> ReadSourcePictureFingerprints(int sheetIndex, HSSFSheet sheet)
     {
         if (sheet.DrawingPatriarch is not HSSFPatriarch patriarch)
@@ -1619,6 +1701,71 @@ public sealed class LegacyXlsFileAdapterTests
             .ToArray();
     }
 
+    private static IReadOnlyList<string> ReadSourceTextBoxFingerprints(int sheetIndex, HSSFSheet sheet)
+    {
+        if (sheet.DrawingPatriarch is not HSSFPatriarch patriarch)
+            return [];
+
+        return EnumerateSourceTextBoxes(patriarch.Children)
+            .Select(textBox =>
+            {
+                if (textBox.Anchor is not HSSFClientAnchor anchor)
+                    return null;
+
+                var fillColor = TryGetSourceHssfRgbColor(textBox.FillColor, out var color)
+                    ? color
+                    : (CellColor?)null;
+                return CreateTextBoxFingerprint(
+                    sheetIndex,
+                    sheet.SheetName,
+                    ToSourceModelIndex(Math.Min(anchor.Row1, anchor.Row2)),
+                    ToSourceModelIndex(Math.Min(anchor.Col1, anchor.Col2)),
+                    textBox.String?.String ?? "",
+                    fillColor);
+            })
+            .Where(value => value is not null)
+            .Select(value => value!)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static IReadOnlyList<string> ReadSourceDrawingShapeFingerprints(int sheetIndex, HSSFSheet sheet)
+    {
+        if (sheet.DrawingPatriarch is not HSSFPatriarch patriarch)
+            return [];
+
+        return EnumerateSourceSimpleShapes(patriarch.Children)
+            .Select(shape =>
+            {
+                if (MapSourceHssfShapeKind(shape.ShapeType) is not { } kind ||
+                    shape.Anchor is not HSSFClientAnchor anchor)
+                {
+                    return null;
+                }
+
+                var fillColor = TryGetSourceHssfRgbColor(shape.FillColor, out var fill)
+                    ? fill
+                    : (CellColor?)null;
+                var outlineColor = TryGetSourceHssfRgbColor(shape.LineStyleColor, out var outline)
+                    ? outline
+                    : (CellColor?)null;
+
+                return CreateDrawingShapeFingerprint(
+                    sheetIndex,
+                    sheet.SheetName,
+                    ToSourceModelIndex(Math.Min(anchor.Row1, anchor.Row2)),
+                    ToSourceModelIndex(Math.Min(anchor.Col1, anchor.Col2)),
+                    kind,
+                    kind is not DrawingShapeKind.Line && !shape.IsNoFill,
+                    fillColor,
+                    outlineColor);
+            })
+            .Where(value => value is not null)
+            .Select(value => value!)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+    }
+
     private static IEnumerable<HSSFPicture> EnumerateSourcePictures(IEnumerable<HSSFShape> shapes)
     {
         foreach (var shape in shapes)
@@ -1630,6 +1777,41 @@ public sealed class LegacyXlsFileAdapterTests
             {
                 foreach (var nestedPicture in EnumerateSourcePictures(group.Children))
                     yield return nestedPicture;
+            }
+        }
+    }
+
+    private static IEnumerable<HSSFTextbox> EnumerateSourceTextBoxes(IEnumerable<HSSFShape> shapes)
+    {
+        foreach (var shape in shapes)
+        {
+            if (shape is HSSFTextbox textBox && shape is not HSSFComment)
+                yield return textBox;
+
+            if (shape is HSSFShapeGroup group)
+            {
+                foreach (var nestedTextBox in EnumerateSourceTextBoxes(group.Children))
+                    yield return nestedTextBox;
+            }
+        }
+    }
+
+    private static IEnumerable<HSSFSimpleShape> EnumerateSourceSimpleShapes(IEnumerable<HSSFShape> shapes)
+    {
+        foreach (var shape in shapes)
+        {
+            if (shape is HSSFSimpleShape simpleShape &&
+                shape is not HSSFTextbox &&
+                shape is not HSSFComment &&
+                shape is not HSSFPicture)
+            {
+                yield return simpleShape;
+            }
+
+            if (shape is HSSFShapeGroup group)
+            {
+                foreach (var nestedShape in EnumerateSourceSimpleShapes(group.Children))
+                    yield return nestedShape;
             }
         }
     }
@@ -2374,12 +2556,40 @@ public sealed class LegacyXlsFileAdapterTests
         byte[]? imageBytes) =>
         $"{sheetIndex}:{sheetName}!{new ModelCellAddress(default, row, column).ToA1()}|Picture|Type={NormalizePictureContentType(contentType)}|Bytes={imageBytes?.Length ?? 0}|Hash={HashPictureBytes(imageBytes)}";
 
+    private static string CreateTextBoxFingerprint(
+        int sheetIndex,
+        string sheetName,
+        uint row,
+        uint column,
+        string? text,
+        CellColor? fillColor)
+    {
+        var normalizedText = text ?? "";
+        return $"{sheetIndex}:{sheetName}!{new ModelCellAddress(default, row, column).ToA1()}|TextBox|Len={normalizedText.Length}|Hash={HashText(normalizedText)}|Fill={FormatColor(fillColor)}";
+    }
+
+    private static string CreateDrawingShapeFingerprint(
+        int sheetIndex,
+        string sheetName,
+        uint row,
+        uint column,
+        DrawingShapeKind kind,
+        bool hasFill,
+        CellColor? fillColor,
+        CellColor? outlineColor) =>
+        $"{sheetIndex}:{sheetName}!{new ModelCellAddress(default, row, column).ToA1()}|Shape|Kind={kind}|Fill={hasFill},{FormatColor(fillColor)}|Outline={FormatColor(outlineColor)}";
+
     private static string NormalizePictureContentType(string? contentType) =>
         string.IsNullOrWhiteSpace(contentType) ? "image/png" : contentType;
 
     private static string HashPictureBytes(byte[]? imageBytes) =>
         imageBytes is { Length: > 0 }
             ? Convert.ToHexString(SHA256.HashData(imageBytes))[..16]
+            : "";
+
+    private static string HashText(string text) =>
+        text.Length > 0
+            ? Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)))[..16]
             : "";
 
     private static string CreatePaneFingerprint(
@@ -2964,6 +3174,28 @@ public sealed class LegacyXlsFileAdapterTests
         }
     }
 
+    private static bool TryGetSourceHssfRgbColor(int value, out CellColor color)
+    {
+        color = default;
+        if (value < 0 || value > 0xFFFFFF)
+            return false;
+
+        color = new CellColor(
+            (byte)(value & 0xFF),
+            (byte)((value >> 8) & 0xFF),
+            (byte)((value >> 16) & 0xFF));
+        return true;
+    }
+
+    private static DrawingShapeKind? MapSourceHssfShapeKind(int shapeType) =>
+        shapeType switch
+        {
+            HSSFSimpleShape.OBJECT_TYPE_RECTANGLE => DrawingShapeKind.Rectangle,
+            HSSFSimpleShape.OBJECT_TYPE_OVAL => DrawingShapeKind.Ellipse,
+            HSSFSimpleShape.OBJECT_TYPE_LINE => DrawingShapeKind.Line,
+            _ => null
+        };
+
     private static CellColor GetSourceIndexedColor(HSSFWorkbook hssf, short colorIndex)
     {
         var color = hssf.GetCustomPalette().GetColor(colorIndex);
@@ -3417,6 +3649,8 @@ public sealed class LegacyXlsFileAdapterTests
         int Hyperlinks,
         int Comments,
         int Pictures,
+        int TextBoxes,
+        int DrawingShapes,
         int FreezePanes,
         int RowOutlineLevels,
         int ColOutlineLevels,
@@ -3450,6 +3684,8 @@ public sealed class LegacyXlsFileAdapterTests
         IReadOnlyList<string>? HyperlinkFingerprints = null,
         IReadOnlyList<string>? CommentFingerprints = null,
         IReadOnlyList<string>? PictureFingerprints = null,
+        IReadOnlyList<string>? TextBoxFingerprints = null,
+        IReadOnlyList<string>? DrawingShapeFingerprints = null,
         IReadOnlyList<string>? PaneFingerprints = null,
         IReadOnlyList<string>? RowOutlineFingerprints = null,
         IReadOnlyList<string>? ColOutlineFingerprints = null,
