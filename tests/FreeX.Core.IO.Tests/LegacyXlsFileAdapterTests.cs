@@ -123,8 +123,8 @@ public sealed class LegacyXlsFileAdapterTests
         validation.PromptMessage.Should().Be("Choose a status");
         validation.ErrorTitle.Should().Be("Invalid status");
         validation.ErrorMessage.Should().Be("Pick Open or Closed");
-        sheet.ConditionalFormats.Should().ContainSingle();
-        var conditionalFormat = sheet.ConditionalFormats.Single();
+        sheet.ConditionalFormats.Should().HaveCount(2);
+        var conditionalFormat = sheet.ConditionalFormats.Single(format => format.AppliesTo.ToString() == "H2:H7");
         conditionalFormat.AppliesTo.ToString().Should().Be("H2:H7");
         conditionalFormat.RuleType.Should().Be(CfRuleType.CellValue);
         conditionalFormat.Operator.Should().Be(CfOperator.GreaterThan);
@@ -134,6 +134,8 @@ public sealed class LegacyXlsFileAdapterTests
         conditionalFormat.FormatIfTrue.FillColor.Should().Be(new CellColor(255, 255, 0));
         conditionalFormat.FormatIfTrue.FillPatternStyle.Should().Be(CellFillPatternStyle.Solid);
         conditionalFormat.FormatIfTrue.BorderBottom.Style.Should().Be(ModelBorderStyle.Thin);
+        sheet.ConditionalFormats.Single(format => format.AppliesTo.ToString() == "J2:J7")
+            .FormatIfTrue!.FontColor.Should().Be(new CellColor(255, 0, 0));
         sheet.IsProtected.Should().BeTrue();
         sheet.ProtectionPassword.Should().Be(ProtectionPasswordHelper.ToLegacyPasswordHash("secret"));
         GetProtectionMetadataAttribute(sheet, "objects").Should().Be("1");
@@ -511,7 +513,9 @@ public sealed class LegacyXlsFileAdapterTests
         var conditionalBorder = conditionalRule.CreateBorderFormatting();
         conditionalBorder.BorderBottom = NPOIBorderStyle.Thin;
         conditionalBorder.BottomBorderColor = IndexedColors.Blue.Index;
-        conditionalFormatting.AddConditionalFormatting([new CellRangeAddress(1, 6, 7, 7)], conditionalRule);
+        conditionalFormatting.AddConditionalFormatting(
+            [new CellRangeAddress(1, 6, 7, 7), new CellRangeAddress(1, 6, 9, 9)],
+            conditionalRule);
         sheet.ProtectSheet("secret");
         sheet.SetMargin(MarginType.LeftMargin, 0.7);
         sheet.SetMargin(MarginType.RightMargin, 0.8);
@@ -1236,8 +1240,11 @@ public sealed class LegacyXlsFileAdapterTests
             for (var ruleIndex = 0; ruleIndex < sourceFormat.NumberOfRules; ruleIndex++)
             {
                 var sourceRule = sourceFormat.GetRule(ruleIndex);
-                if (CreateSourceConditionalFormatFingerprint(hssf, sheetIndex, sheet.SheetName, sourceRule, ranges[0]) is { } fingerprint)
-                    fingerprints.Add(fingerprint);
+                foreach (var range in ranges)
+                {
+                    if (CreateSourceConditionalFormatFingerprint(hssf, sheetIndex, sheet.SheetName, sourceRule, range) is { } fingerprint)
+                        fingerprints.Add(fingerprint);
+                }
             }
         }
 

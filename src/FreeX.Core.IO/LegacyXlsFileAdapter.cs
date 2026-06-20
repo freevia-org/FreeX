@@ -360,8 +360,11 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
                 for (var ruleIndex = 0; ruleIndex < sourceFormat.NumberOfRules; ruleIndex++)
                 {
                     var sourceRule = sourceFormat.GetRule(ruleIndex);
-                    if (TryCreateConditionalFormat(sourceWorkbook, sourceRule, ranges[0], sheet.Id, out var conditionalFormat))
-                        sheet.ConditionalFormats.Add(conditionalFormat);
+                    foreach (var range in ranges)
+                    {
+                        if (TryCreateConditionalFormat(sourceWorkbook, sourceRule, range, sheet.Id, out var conditionalFormat))
+                            sheet.ConditionalFormats.Add(conditionalFormat);
+                    }
                 }
             }
         }
