@@ -45,6 +45,7 @@ public sealed partial class MainWindow
         _isFormulaBarHidden = !_isFormulaBarHidden;
         var visible = !_isFormulaBarHidden;
 
+        _formulaBarHost.IsVisible = visible;
         _formulaBox.IsVisible = visible;
         _cellAddressText.IsVisible = visible;
 
