@@ -99,7 +99,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("toolbar_merge_and_center_button=true");
         script.Should().Contain("native_format_painter_menu_item=true");
         script.Should().Contain("native_borders_menu_item=true");
-        script.Should().Contain("native_borders_preset_count=8");
+        script.Should().Contain("native_borders_preset_count=14");
         script.Should().Contain("native_merge_and_center_menu_item=true");
         script.Should().Contain("native_unmerge_cells_menu_item=true");
         script.Should().Contain("native_cell_styles_menu_item=true");
@@ -1642,7 +1642,7 @@ public sealed class MacOsAppReadinessPreflightTests
                       grep -q "native_fill_color_swatch_count=69" "$artifact_root/launch.txt"
                       grep -q "native_font_color_swatch_count=69" "$artifact_root/launch.txt"
                       grep -q "native_borders_menu_item=true" "$artifact_root/launch.txt"
-                      grep -q "native_borders_preset_count=8" "$artifact_root/launch.txt"
+                      grep -q "native_borders_preset_count=14" "$artifact_root/launch.txt"
                       grep -q "native_merge_and_center_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_unmerge_cells_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_cell_styles_menu_item=true" "$artifact_root/launch.txt"

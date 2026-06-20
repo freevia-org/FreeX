@@ -208,30 +208,53 @@ public sealed class RibbonAdaptivePanel : Panel
         var nonHostWidth = children
             .Where(c => c is not RibbonGroupHost)
             .Sum(c => c.DesiredSize.Width);
-        var available = double.IsInfinity(availableSize.Width) ? double.MaxValue : availableSize.Width;
+        var available = ResolveAvailableWidth(this, availableSize.Width);
+        var fitAvailable = double.IsInfinity(available) ? available : Math.Max(0, available - 4);
 
         // Decide the collapse set from the (now-refreshed) full widths — lowest priority collapses first
         // (Office behaviour) — without touching Content yet, then apply only the groups whose state flips.
-        var collapsed = new HashSet<RibbonGroupHost>();
-        var total = hosts.Sum(h => h.FullWidth) + nonHostWidth + spacing;
-        foreach (var host in hosts.OrderBy(h => h.Priority))
+        if (!double.IsInfinity(fitAvailable))
         {
-            if (total <= available)
-                break;
-            collapsed.Add(host);
-            total += RibbonGroupHost.CollapsedWidth - host.FullWidth;
-        }
+            var collapsed = new HashSet<RibbonGroupHost>();
+            var total = hosts.Sum(h => h.FullWidth) + nonHostWidth + spacing;
+            foreach (var host in hosts.OrderBy(h => h.Priority))
+            {
+                if (total <= fitAvailable)
+                    break;
+                collapsed.Add(host);
+                total += RibbonGroupHost.CollapsedWidth - host.FullWidth;
+            }
 
-        foreach (var host in hosts)
-            host.Collapsed = collapsed.Contains(host);
+            foreach (var host in hosts)
+                host.Collapsed = collapsed.Contains(host);
+        }
 
         // Re-measure the groups whose state just flipped (unchanged ones short-circuit).
         foreach (var child in children)
-            child.Measure(infinite);
+        {
+            if (child is RibbonGroupHost { Collapsed: true } collapsedHost)
+                collapsedHost.Measure(new Size(RibbonGroupHost.CollapsedWidth, availableSize.Height));
+            else
+                child.Measure(infinite);
+        }
 
-        var width = children.Sum(c => c.DesiredSize.Width) + spacing;
+        var width = children.Sum(GetChildLayoutWidth) + spacing;
+        if (!double.IsInfinity(fitAvailable))
+        {
+            foreach (var host in hosts.OrderBy(h => h.Priority).Where(h => !h.Collapsed))
+            {
+                if (width <= fitAvailable)
+                    break;
+
+                var previousWidth = GetChildLayoutWidth(host);
+                host.Collapsed = true;
+                host.Measure(new Size(RibbonGroupHost.CollapsedWidth, availableSize.Height));
+                width += RibbonGroupHost.CollapsedWidth - previousWidth;
+            }
+        }
+
         var height = children.Count > 0 ? children.Max(c => c.DesiredSize.Height) : 0;
-        return new Size(double.IsInfinity(availableSize.Width) ? width : Math.Min(width, available), height);
+        return new Size(double.IsInfinity(available) ? width : Math.Min(width, available), height);
     }
 
     protected override Size ArrangeOverride(Size finalSize)
@@ -239,11 +262,36 @@ public sealed class RibbonAdaptivePanel : Panel
         double x = 0;
         foreach (var child in Children.Cast<UIElement>())
         {
-            var w = child.DesiredSize.Width;
+            var w = GetChildLayoutWidth(child);
             child.Arrange(new Rect(x, 0, w, finalSize.Height));
             x += w + GroupSpacing;
         }
 
         return finalSize;
+    }
+
+    private static double GetChildLayoutWidth(UIElement child)
+    {
+        if (child is RibbonGroupHost host && host.FullWidth > 0)
+            return host.Collapsed ? RibbonGroupHost.CollapsedWidth : host.FullWidth;
+
+        return child.DesiredSize.Width;
+    }
+
+    private static double ResolveAvailableWidth(FrameworkElement element, double measuredWidth)
+    {
+        if (!double.IsInfinity(measuredWidth))
+            return measuredWidth;
+
+        var current = VisualTreeHelper.GetParent(element);
+        while (current is not null)
+        {
+            if (current is ScrollViewer { ViewportWidth: > 0 } scrollViewer)
+                return scrollViewer.ViewportWidth;
+
+            current = VisualTreeHelper.GetParent(current);
+        }
+
+        return double.PositiveInfinity;
     }
 }
