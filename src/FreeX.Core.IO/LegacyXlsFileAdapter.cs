@@ -1,6 +1,8 @@
 using System.Globalization;
+using System.Reflection;
 using System.Text;
 using ExcelDataReader;
+using NPOI.HSSF.Model;
 using NPOI.HSSF.Record;
 using FreeX.Core.Model;
 using NPOI.HSSF.UserModel;
@@ -24,6 +26,14 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
     private const short LegacyPaperSizeLetter = 1;
     private const short LegacyPaperSizeLegal = 5;
     private const short LegacyPaperSizeA4 = 9;
+
+    private static readonly FieldInfo? LbsSelectedIndexField =
+        typeof(LbsDataSubRecord).GetField("_iSel", BindingFlags.Instance | BindingFlags.NonPublic);
+
+    private static readonly MethodInfo? HssfGetObjRecordMethod =
+        typeof(HSSFSimpleShape).GetMethod(
+            "GetObjRecord",
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
 
     private static readonly HashSet<string> ExcelReservedDefinedNames = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -1216,6 +1226,76 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
                     PixelsToEmus(HssfRowOffsetToPixels(sheet, ToModelIndex(toRow), Math.Max(anchor.Dy1, anchor.Dy2)))))
         };
 
+        TryPopulateFormControlListMetadata(sourceWorkbook, sourceControl, control);
+        return true;
+    }
+
+    private static void TryPopulateFormControlListMetadata(
+        HSSFWorkbook sourceWorkbook,
+        HSSFSimpleShape sourceControl,
+        FormControlModel control)
+    {
+        if (control.Kind is not (FormControlKind.DropDown or FormControlKind.ListBox) ||
+            TryGetLbsDataSubRecord(sourceControl) is not { } lbsData)
+        {
+            return;
+        }
+
+        if (TryFormatLbsListFillRange(sourceWorkbook, lbsData, out var listFillRange))
+            control.ListFillRange = listFillRange;
+
+        if (TryGetLbsSelectedIndex(lbsData, out var selectedIndex))
+            control.SelectedIndex = selectedIndex;
+    }
+
+    private static LbsDataSubRecord? TryGetLbsDataSubRecord(HSSFSimpleShape sourceControl)
+    {
+        try
+        {
+            return TryGetObjRecord(sourceControl)?.SubRecords
+                    .OfType<LbsDataSubRecord>()
+                    .FirstOrDefault();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static ObjRecord? TryGetObjRecord(HSSFSimpleShape sourceControl) =>
+        HssfGetObjRecordMethod?.Invoke(sourceControl, null) as ObjRecord;
+
+    private static bool TryFormatLbsListFillRange(
+        HSSFWorkbook sourceWorkbook,
+        LbsDataSubRecord lbsData,
+        out string listFillRange)
+    {
+        listFillRange = "";
+        if (lbsData.Formula is not { } formula)
+            return false;
+
+        try
+        {
+            var text = NormalizeFormula(HSSFFormulaParser.ToFormulaString(sourceWorkbook, [formula])).Trim();
+            if (string.IsNullOrWhiteSpace(text))
+                return false;
+
+            listFillRange = text;
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool TryGetLbsSelectedIndex(LbsDataSubRecord lbsData, out int selectedIndex)
+    {
+        selectedIndex = 0;
+        if (LbsSelectedIndexField?.GetValue(lbsData) is not int raw || raw <= 0)
+            return false;
+
+        selectedIndex = raw;
         return true;
     }
 

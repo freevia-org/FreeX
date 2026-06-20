@@ -2,6 +2,7 @@ using FluentAssertions;
 using ExcelDataReader;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
+using NPOI.HSSF.Model;
 using NPOI.HSSF.Record;
 using NPOI.HSSF.UserModel;
 using NPOI.POIFS.FileSystem;
@@ -28,6 +29,14 @@ public sealed class LegacyXlsFileAdapterTests
     private const short LegacyPaperSizeLetter = 1;
     private const short LegacyPaperSizeLegal = 5;
     private const short LegacyPaperSizeA4 = 9;
+
+    private static readonly FieldInfo? LbsSelectedIndexField =
+        typeof(LbsDataSubRecord).GetField("_iSel", BindingFlags.Instance | BindingFlags.NonPublic);
+
+    private static readonly MethodInfo? HssfGetObjRecordMethod =
+        typeof(HSSFSimpleShape).GetMethod(
+            "GetObjRecord",
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
 
     [Fact]
     public void Formats_AreOpenOnly()
@@ -556,11 +565,52 @@ public sealed class LegacyXlsFileAdapterTests
         act.Should().Throw<NotSupportedException>();
     }
 
+    [Fact]
+    public void Load_ReadsLegacyXlsFormControlListMetadataFromLbsDataSubRecord()
+    {
+        var hssf = new HSSFWorkbook();
+        var sheet = (HSSFSheet)hssf.CreateSheet("Visible");
+        var drawing = (HSSFPatriarch)sheet.CreateDrawingPatriarch();
+        var comboBox = drawing.CreateComboBox(new HSSFClientAnchor(0, 0, 0, 0, 0, 0, 2, 2));
+        var objMethod = typeof(LegacyXlsFileAdapter).GetMethod(
+            "TryGetObjRecord",
+            BindingFlags.NonPublic | BindingFlags.Static);
+        objMethod.Should().NotBeNull();
+        objMethod!.Invoke(null, [comboBox]).Should().BeOfType<ObjRecord>();
+
+        var lbsData = LbsDataSubRecord.CreateAutoFilterInstance();
+        SetPrivateField(lbsData, "_linkPtg", HSSFFormulaParser.Parse("Visible!$A$20:$A$22", hssf).Single());
+        SetPrivateField(lbsData, "_iSel", 2);
+
+        var formatMethod = typeof(LegacyXlsFileAdapter).GetMethod(
+            "TryFormatLbsListFillRange",
+            BindingFlags.NonPublic | BindingFlags.Static);
+        formatMethod.Should().NotBeNull();
+        var formatArgs = new object?[] { hssf, lbsData, "" };
+        formatMethod!.Invoke(null, formatArgs).Should().Be(true);
+        formatArgs[2].Should().Be("Visible!$A$20:$A$22");
+
+        var selectedMethod = typeof(LegacyXlsFileAdapter).GetMethod(
+            "TryGetLbsSelectedIndex",
+            BindingFlags.NonPublic | BindingFlags.Static);
+        selectedMethod.Should().NotBeNull();
+        var selectedArgs = new object?[] { lbsData, 0 };
+        selectedMethod!.Invoke(null, selectedArgs).Should().Be(true);
+        selectedArgs[1].Should().Be(2);
+    }
+
     private static ScalarValue MapLegacyXlsValue(object? value)
     {
         var method = typeof(LegacyXlsFileAdapter).GetMethod("MapValue", BindingFlags.NonPublic | BindingFlags.Static);
         method.Should().NotBeNull();
         return (ScalarValue)method!.Invoke(null, [value])!;
+    }
+
+    private static void SetPrivateField(object target, string fieldName, object? value)
+    {
+        var field = target.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+        field.Should().NotBeNull($"NPOI {target.GetType().Name} should expose {fieldName} for fixture authoring");
+        field!.SetValue(target, value);
     }
 
     private static MemoryStream CreateRichLegacyXlsFixture()
@@ -1712,7 +1762,9 @@ public sealed class LegacyXlsFileAdapterTests
                     sheet.Name,
                     control.Anchor!.Value,
                     control.Kind,
-                    control.Name)))
+                    control.Name,
+                    control.ListFillRange,
+                    control.SelectedIndex)))
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
 
@@ -1836,12 +1888,71 @@ public sealed class LegacyXlsFileAdapterTests
                     sheet.SheetName,
                     range,
                     kind,
-                    FirstNonBlank(shape.Name, shape.ShapeName));
+                    FirstNonBlank(shape.Name, shape.ShapeName),
+                    TryGetSourceLbsDataSubRecord(shape) is { } lbsData &&
+                    TryFormatSourceLbsListFillRange(hssf, lbsData, out var listFillRange)
+                        ? listFillRange
+                        : null,
+                    TryGetSourceLbsDataSubRecord(shape) is { } selectedLbsData &&
+                    TryGetSourceLbsSelectedIndex(selectedLbsData, out var selectedIndex)
+                        ? selectedIndex
+                        : null);
             })
             .Where(value => value is not null)
             .Select(value => value!)
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
+    }
+
+    private static LbsDataSubRecord? TryGetSourceLbsDataSubRecord(HSSFSimpleShape sourceControl)
+    {
+        try
+        {
+            return TryGetSourceObjRecord(sourceControl)?.SubRecords
+                    .OfType<LbsDataSubRecord>()
+                    .FirstOrDefault();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static ObjRecord? TryGetSourceObjRecord(HSSFSimpleShape sourceControl) =>
+        HssfGetObjRecordMethod?.Invoke(sourceControl, null) as ObjRecord;
+
+    private static bool TryFormatSourceLbsListFillRange(
+        HSSFWorkbook hssf,
+        LbsDataSubRecord lbsData,
+        out string listFillRange)
+    {
+        listFillRange = "";
+        if (lbsData.Formula is not { } formula)
+            return false;
+
+        try
+        {
+            var text = NormalizeFormulaText(HSSFFormulaParser.ToFormulaString(hssf, [formula])).Trim();
+            if (string.IsNullOrWhiteSpace(text))
+                return false;
+
+            listFillRange = text;
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool TryGetSourceLbsSelectedIndex(LbsDataSubRecord lbsData, out int selectedIndex)
+    {
+        selectedIndex = 0;
+        if (LbsSelectedIndexField?.GetValue(lbsData) is not int raw || raw <= 0)
+            return false;
+
+        selectedIndex = raw;
+        return true;
     }
 
     private static bool IsSourceAutoFilterDropDown(HSSFWorkbook hssf, HSSFSheet sheet, HSSFClientAnchor anchor)
@@ -2735,8 +2846,10 @@ public sealed class LegacyXlsFileAdapterTests
         string sheetName,
         GridRange anchor,
         FormControlKind kind,
-        string? name) =>
-        $"{sheetIndex}:{sheetName}!{CreateRangeToken(anchor)}|FormControl|Kind={kind}|Name={EscapeToken(name ?? "")}";
+        string? name,
+        string? listFillRange,
+        int? selectedIndex) =>
+        $"{sheetIndex}:{sheetName}!{CreateRangeToken(anchor)}|FormControl|Kind={kind}|Name={EscapeToken(name ?? "")}|List={EscapeToken(listFillRange ?? "")}|Selected={selectedIndex?.ToString(CultureInfo.InvariantCulture) ?? ""}";
 
     private static string NormalizePictureContentType(string? contentType) =>
         string.IsNullOrWhiteSpace(contentType) ? "image/png" : contentType;
