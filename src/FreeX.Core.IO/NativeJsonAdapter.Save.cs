@@ -235,6 +235,7 @@ public sealed partial class NativeJsonAdapter
                 PrintQualityVerticalDpi = s.PrintQualityVerticalDpi is > 0 ? s.PrintQualityVerticalDpi : null,
                 PrintErrorValue = NativeJsonValueSanitizer.ValidEnumOrDefault(s.PrintErrorValue, WorksheetPrintErrorValue.Displayed),
                 PrintComments = NativeJsonValueSanitizer.ValidEnumOrDefault(s.PrintComments, WorksheetPrintComments.None),
+                LegacyPrintSize = s.LegacyPrintSize is > 0 and <= ushort.MaxValue ? s.LegacyPrintSize : null,
                 PageSetupMetadata = FromWorksheetPageSetupMetadata(s.PageSetupMetadata),
                 ScaleToFit = new ScaleToFitDto
                 {

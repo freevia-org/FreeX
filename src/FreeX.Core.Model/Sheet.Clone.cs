@@ -82,6 +82,7 @@ public sealed partial class Sheet
             PageMarginsMetadata           = PageMarginsMetadata?.Clone(),
             PrintErrorValue               = PrintErrorValue,
             PrintComments                 = PrintComments,
+            LegacyPrintSize               = LegacyPrintSize,
             PrintOptionsMetadata          = PrintOptionsMetadata?.Clone(),
             HeaderFooterMetadata          = HeaderFooterMetadata?.Clone(),
             PageSetupMetadata             = PageSetupMetadata?.Clone(),
