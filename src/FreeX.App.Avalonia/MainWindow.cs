@@ -583,6 +583,7 @@ public sealed partial class MainWindow : Window
     private SelectionPaneObjectKind? _selectedDrawingObjectKind;
     private Guid? _selectedDrawingObjectId;
     private readonly AvaloniaRibbonContextSource _ribbonContextSource = new();
+    private Action? _refreshRibbonToggleStates;
 
     public MainWindow(IReadOnlyList<string> startupArguments)
         : this(
@@ -1146,17 +1147,23 @@ public sealed partial class MainWindow : Window
         }
         ribbonCallbacks = ribbonCallbacks with { ExtraCommands = ribbonExtraCommands };
 
-        var ribbon = FreeX.App.Avalonia.Ribbon.AvaloniaRibbonHost.Build(
+        var (ribbon, refreshRibbonToggleStates) = FreeX.App.Avalonia.Ribbon.AvaloniaRibbonHost.Build(
             () => _session,
             RefreshShell,
             ribbonCallbacks,
             _ribbonContextSource);
+        _refreshRibbonToggleStates = refreshRibbonToggleStates;
         DockPanel.SetDock(ribbon, Dock.Top);
         root.Children.Add(ribbon);
 
         var toolbar = BuildToolbar();
         DockPanel.SetDock(toolbar, Dock.Top);
         root.Children.Add(toolbar);
+
+        // Status bar at absolute bottom (added first among Dock.Bottom children → lowest position).
+        var statusBar = BuildStatusBar();
+        DockPanel.SetDock(statusBar, Dock.Bottom);
+        root.Children.Add(statusBar);
 
         var sheetTabs = BuildSheetTabsChrome();
         DockPanel.SetDock(sheetTabs, Dock.Bottom);
@@ -2157,13 +2164,6 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetName(_zoomText, "Zoom");
         AutomationProperties.SetHelpText(_zoomText, "Shows the active worksheet zoom.");
 
-        // The status-bar readouts share one "Customize Status Bar" right-click menu, attached to each of
-        // the three status controls so right-clicking anywhere in the footer readout opens it.
-        var statusBarCustomizeMenu = BuildStatusBarCustomizeContextMenu();
-        _statusText.ContextMenu = statusBarCustomizeMenu;
-        _selectionStatsText.ContextMenu = statusBarCustomizeMenu;
-        _zoomText.ContextMenu = statusBarCustomizeMenu;
-
         _openButton.Content = "Open";
         _openButton.Padding = new Thickness(10, 4);
         _openButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
@@ -2494,67 +2494,67 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetName(_formulaBox, "Formula bar");
         AutomationProperties.SetHelpText(_formulaBox, "Edit the active cell value or formula.");
 
+        // Formula bar: [cell address (82px) | separator | formula box (fills remaining width)]
+        // Matches the WPF host layout — ribbon provides all Quick Access commands.
+        var cellAddressBorder = new Border
+        {
+            Width = 82,
+            BorderBrush = ToolbarBorder,
+            BorderThickness = new Thickness(0, 0, 1, 0),
+            Padding = new Thickness(4, 0),
+            Child = _cellAddressText,
+        };
+        DockPanel.SetDock(cellAddressBorder, Dock.Left);
+
+        var formulaFill = new Border
+        {
+            Padding = new Thickness(8, 0),
+            Child = _formulaBox,
+        };
+
+        var formulaDock = new DockPanel { LastChildFill = true };
+        formulaDock.Children.Add(cellAddressBorder);
+        formulaDock.Children.Add(formulaFill);
+
         return new Border
         {
             Background = Brushes.White,
             BorderBrush = ToolbarBorder,
             BorderThickness = new Thickness(0, 0, 0, 1),
-            Padding = new Thickness(16, 10),
-            Child = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Spacing = 12,
-                Children =
-                {
-                    _titleText,
-                    _detailText,
-                    _openButton,
-                    _saveButton,
-                    _saveAsButton,
-                    _undoButton,
-                    _redoButton,
-                    _cutButton,
-                    _copyButton,
-                    _pasteButton,
-                    _pasteSpecialButton,
-                    _formatPainterButton,
-                    _autoSumButton,
-                    _fillCellsButton,
-                    _clearButton,
-                    _boldButton,
-                    _italicButton,
-                    _underlineButton,
-                    _doubleUnderlineButton,
-                    _strikethroughButton,
-                    _increaseFontSizeButton,
-                    _decreaseFontSizeButton,
-                    _fillColorButton,
-                    _fontColorButton,
-                    _bordersButton,
-                    _cellStylesButton,
-                    _orientationButton,
-                    _currencyFormatButton,
-                    _percentFormatButton,
-                    _commaStyleButton,
-                    _increaseDecimalButton,
-                    _decreaseDecimalButton,
-                    _alignTopButton,
-                    _alignMiddleButton,
-                    _alignBottomButton,
-                    _wrapTextButton,
-                    _mergeAndCenterButton,
-                    _decreaseIndentButton,
-                    _increaseIndentButton,
-                    _alignLeftButton,
-                    _alignCenterButton,
-                    _alignRightButton,
-                    _cellAddressText,
-                    _formulaBox,
-                    _statusText,
-                    _selectionStatsText,
-                    _zoomText,
-                },
-            },
+            Height = 28,
+            Child = formulaDock,
+        };
+    }
+
+    private Control BuildStatusBar()
+    {
+        var statusBarCustomizeMenu = BuildStatusBarCustomizeContextMenu();
+        _statusText.ContextMenu = statusBarCustomizeMenu;
+        _selectionStatsText.ContextMenu = statusBarCustomizeMenu;
+        _zoomText.ContextMenu = statusBarCustomizeMenu;
+
+        var leftPanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 12,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+        };
+        leftPanel.Children.Add(_statusText);
+        leftPanel.Children.Add(_selectionStatsText);
+
+        DockPanel.SetDock(_zoomText, Dock.Right);
+        var dock = new DockPanel { LastChildFill = true };
+        dock.Children.Add(_zoomText);
+        dock.Children.Add(leftPanel);
+
+        return new Border
+        {
+            Background = ChromeSurface,
+            BorderBrush = ToolbarBorder,
+            BorderThickness = new Thickness(0, 1, 0, 0),
+            Height = 22,
+            Padding = new Thickness(8, 0),
+            Child = dock,
         };
     }
 
@@ -2573,8 +2573,7 @@ public sealed partial class MainWindow : Window
 
         _sheetGridHost.Content = BuildSheetGrid();
         _sheetTabsHost.Content = BuildSheetTabs();
-        _titleText.Text = FormatWindowWorkbookTitle();
-        _detailText.Text = $"{_session.ActiveSheet.Name}  |  {_session.Viewport.RowMetrics.Count} rows x {_session.Viewport.ColMetrics.Count} columns";
+        Title = $"FreeX - {FormatWindowWorkbookTitle()}";
         _cellAddressText.Text = FormatCellReference(_session.ActiveCell);
         _formulaBox.Text = preserveFormulaEdit
             ? formulaText
@@ -2614,6 +2613,7 @@ public sealed partial class MainWindow : Window
         _ribbonContextSource.OnPivotActive(
             FreeX.App.Avalonia.Pivot.PivotSourceContext.FindActivePivot(_session.ActiveSheet, _session.ActiveCell) is not null);
         UpdateSaveButton();
+        _refreshRibbonToggleStates?.Invoke();
     }
 
     private void UpdateViewportScrollBars()

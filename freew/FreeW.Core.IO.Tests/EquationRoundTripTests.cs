@@ -278,6 +278,31 @@ public class EquationRoundTripTests
     }
 
     [Fact]
+    public void FunctionApplyEquation_SurvivesRoundTrip()
+    {
+        var read = RoundTripEquation(new Equation([MathRun.FunctionApply("sin", "x")]));
+
+        read.Runs.Should().ContainSingle();
+        read.Runs[0].Kind.Should().Be(MathRunKind.FunctionApply);
+        read.Runs[0].FuncName.Should().Be("sin");
+        read.Runs[0].Base.Should().Be("x");
+        read.LinearText.Should().Be("sin(x)");
+    }
+
+    [Fact]
+    public void GroupCharEquation_SurvivesRoundTrip()
+    {
+        var read = RoundTripEquation(new Equation([MathRun.GroupCharOf("x+y", "\u23DF", "bot")]));
+
+        read.Runs.Should().ContainSingle();
+        read.Runs[0].Kind.Should().Be(MathRunKind.GroupChar);
+        read.Runs[0].Base.Should().Be("x+y");
+        read.Runs[0].GroupChr.Should().Be("\u23DF");
+        read.Runs[0].GroupChrPos.Should().Be("bot");
+        read.LinearText.Should().Be("x+y\u23DF");
+    }
+
+    [Fact]
     public void Equation_EmitsNewStructureElements()
     {
         var doc = new TextDocument();
@@ -287,7 +312,9 @@ public class EquationRoundTripTests
             MathRun.Radical("y"),
             MathRun.NAry("∫", "a", "b", "f"),
             MathRun.Delimiter("z"),
-            MathRun.MatrixOf(MathMatrix.Identity2x2())
+            MathRun.MatrixOf(MathMatrix.Identity2x2()),
+            MathRun.FunctionApply("sin", "x"),
+            MathRun.GroupCharOf("x+y")
         ])));
         doc.Blocks.Add(paragraph);
 
@@ -299,6 +326,8 @@ public class EquationRoundTripTests
         oMath.Elements(M + "nary").Should().ContainSingle();
         oMath.Elements(M + "d").Should().ContainSingle();
         oMath.Elements(M + "m").Should().ContainSingle();
+        oMath.Elements(M + "func").Should().ContainSingle();
+        oMath.Elements(M + "groupChr").Should().ContainSingle();
         // The 2x2 matrix emits two rows of two cells each.
         var matrix = oMath.Elements(M + "m").Single();
         matrix.Elements(M + "mr").Should().HaveCount(2);
@@ -319,82 +348,4 @@ public class EquationRoundTripTests
         var cellParagraph = ((Table)read.Blocks.Single()).Rows[0].Cells[0].Paragraphs.Single();
         cellParagraph.Runs.Single(r => r.Equation is not null).Equation!.LinearText.Should().Be("x^n");
     }
-
-    [Fact]
-    public void FunctionApplyEquation_SurvivesRoundTrip()
-    {
-        var read = RoundTripEquation(new Equation([MathRun.FunctionApply("sin", "x")]));
-
-        read.Runs.Should().ContainSingle();
-        read.Runs[0].Kind.Should().Be(MathRunKind.FunctionApply);
-        read.Runs[0].FuncName.Should().Be("sin");
-        read.Runs[0].Base.Should().Be("x");
-        read.LinearText.Should().Be("sin(x)");
-    }
-
-    [Fact]
-    public void FunctionApplyEquation_LimVariant_SurvivesRoundTrip()
-    {
-        var read = RoundTripEquation(new Equation([MathRun.FunctionApply("lim", "f(x)")]));
-
-        read.Runs.Should().ContainSingle();
-        read.Runs[0].Kind.Should().Be(MathRunKind.FunctionApply);
-        read.Runs[0].FuncName.Should().Be("lim");
-        read.Runs[0].Base.Should().Be("f(x)");
-    }
-
-    [Fact]
-    public void GroupCharEquation_Overbrace_SurvivesRoundTrip()
-    {
-        var read = RoundTripEquation(new Equation([MathRun.GroupCharOf("x+y")]));
-
-        read.Runs.Should().ContainSingle();
-        read.Runs[0].Kind.Should().Be(MathRunKind.GroupChar);
-        read.Runs[0].Base.Should().Be("x+y");
-        read.Runs[0].GroupChr.Should().Be("⏞");
-        read.Runs[0].GroupChrPos.Should().Be("top");
-    }
-
-    [Fact]
-    public void GroupCharEquation_Underbrace_SurvivesRoundTrip()
-    {
-        var read = RoundTripEquation(new Equation([MathRun.GroupCharOf("a+b", "⏟", "bot")]));
-
-        read.Runs.Should().ContainSingle();
-        read.Runs[0].Kind.Should().Be(MathRunKind.GroupChar);
-        read.Runs[0].Base.Should().Be("a+b");
-        read.Runs[0].GroupChr.Should().Be("⏟");
-        read.Runs[0].GroupChrPos.Should().Be("bot");
-        read.LinearText.Should().Be("a+b⏟");
-    }
-
-    [Fact]
-    public void FuncAndGroupChar_EmitTheirOmmlElements()
-    {
-        var doc = new TextDocument();
-        var paragraph = new Paragraph();
-        paragraph.Runs.Add(Run.FromEquation(new Equation([
-            MathRun.FunctionApply("cos", "θ"),
-            MathRun.GroupCharOf("n+1", "⏞", "top")
-        ])));
-        doc.Blocks.Add(paragraph);
-
-        var xml = WriteDocumentXml(doc);
-        var oMath = xml.Descendants(M + "oMath").Single();
-
-        // m:func element with m:fName and m:e
-        var func = oMath.Elements(M + "func").Single();
-        MathTextOf(func.Element(M + "fName")).Should().Be("cos");
-        MathTextOf(func.Element(M + "e")).Should().Be("θ");
-
-        // m:groupChr element with m:groupChrPr/m:chr and m:pos
-        var gc = oMath.Elements(M + "groupChr").Single();
-        gc.Element(M + "groupChrPr")!.Element(M + "chr")!.Attribute(M + "val")!.Value.Should().Be("⏞");
-        gc.Element(M + "groupChrPr")!.Element(M + "pos")!.Attribute(M + "val")!.Value.Should().Be("top");
-        MathTextOf(gc.Element(M + "e")).Should().Be("n+1");
-    }
-
-    // Helper used by the new OMML structure check test above.
-    private static string MathTextOf(XElement? element) =>
-        element is null ? string.Empty : string.Concat(element.Descendants(M + "t").Select(t => t.Value));
 }

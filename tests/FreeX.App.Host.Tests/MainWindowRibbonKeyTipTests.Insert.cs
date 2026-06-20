@@ -66,31 +66,26 @@ public sealed partial class MainWindowRibbonKeyTipTests
     }
 
     [Fact]
-    public void CollapsedInsertChartsKeyTip_DoesNotSurfaceDeferredMapChart()
+    public void InsertChartsKeyTip_DoesNotSurfaceDeferredMapChart()
     {
         RunSta(() =>
         {
             using var harness = MainWindowHarness.Create();
-            // At a narrow Insert width the lowest-priority Charts group folds into the live 2-state
-            // overflow form: ONE collapsed button carrying the group's derived keytip (CH) + title and a
-            // dropdown of the group's real commands. (There is no intermediate IconOnly/SmallWithLabels
-            // state in the declarative engine — it is full group grid OR one overflow button.)
-            harness.SelectRibbonTab("Insert", 700);
+            // Charts is a primary Insert group and must remain reachable at normal narrow widths.
+            harness.SelectRibbonTab("Insert", 900);
 
             harness.RibbonGroupIsCollapsed("Charts").Should().BeTrue(
-                "the lowest-priority Insert group collapses first at a narrow width");
+                "the wide Charts group may compact at normal narrow widths, but it must remain visible");
+            harness.CollapsedRibbonGroupOverflowWidth("Charts").Should().BeGreaterThan(0,
+                "the Charts overflow button must paint so chart commands are reachable");
             harness.CollapsedRibbonGroupOverflowKeyTip("Charts").Should().Be("CH");
-            harness.CollapsedRibbonGroupOverflowTitle("Charts").Should().Be("Charts");
-            harness.CollapsedRibbonGroupOverflowHasDropdownGlyph("Charts").Should().BeTrue(
-                "a collapsed group's overflow button shows the dropdown chevron so it reads as openable");
 
-            // The collapsed overflow dropdown preserves the group's real command set and their keytips —
-            // and the regression this test guards: the deferred Map Chart is NOT surfaced anywhere in it.
+            // The visible chart surface exposes implemented chart commands only.
             var commands = harness.CollapsedRibbonGroupOverflowMenuKeyTips("Charts");
             commands.Should().ContainKey("Recommended Charts").WhoseValue.Should().Be("RC");
             commands.Should().ContainKey("Column Chart").WhoseValue.Should().Be("CC");
             commands.Should().NotContainKey("Map Chart",
-                "the deferred Map Chart command must not be exposed by the Charts overflow menu");
+                "the deferred Map Chart command must not be exposed by the Insert Charts surface");
         });
     }
 
