@@ -109,6 +109,9 @@ public sealed class LegacyXlsFileAdapterTests
         sheet.RowOutlineLevels.Should().ContainKey(7).WhoseValue.Should().Be(1);
         sheet.ColOutlineLevels.Should().ContainKey(6).WhoseValue.Should().Be(1);
         sheet.ColOutlineLevels.Should().ContainKey(7).WhoseValue.Should().Be(1);
+        sheet.OutlineSummaryBelow.Should().BeFalse();
+        sheet.OutlineSummaryRight.Should().BeFalse();
+        sheet.ShowOutlineSymbols.Should().BeFalse();
         sheet.PrintArea.Should().NotBeNull();
         sheet.PrintArea!.Value.Start.Should().Be(new ModelCellAddress(sheet.Id, 1, 1));
         sheet.PrintArea.Value.End.Should().Be(new ModelCellAddress(sheet.Id, 7, 5));
@@ -176,6 +179,9 @@ public sealed class LegacyXlsFileAdapterTests
         sheet.ShowHeadings.Should().BeFalse();
         sheet.ShowFormulas.Should().BeTrue();
         sheet.ViewTopRow.Should().Be(3);
+        sheet.ViewLeftCol.Should().Be(4);
+        sheet.ActiveRow.Should().Be(2);
+        sheet.ActiveCol.Should().Be(4);
         sheet.TabColor.Should().Be(new CellColor(255, 192, 0));
 
         var formulaCell = sheet.GetCell(2, 2);
@@ -297,6 +303,7 @@ public sealed class LegacyXlsFileAdapterTests
                 PaneFingerprints: ReadImportedPaneFingerprints(workbook),
                 RowOutlineFingerprints: ReadImportedRowOutlineFingerprints(workbook),
                 ColOutlineFingerprints: ReadImportedColOutlineFingerprints(workbook),
+                OutlineSettingFingerprints: ReadImportedOutlineSettingFingerprints(workbook),
                 PrintLayoutFingerprints: ReadImportedPrintLayoutFingerprints(workbook),
                 PageSetupFingerprints: ReadImportedPageSetupFingerprints(workbook),
                 ViewStateFingerprints: ReadImportedViewStateFingerprints(workbook),
@@ -364,6 +371,7 @@ public sealed class LegacyXlsFileAdapterTests
                 imported.PaneFingerprints.Should().BeEquivalentTo(source.PaneFingerprints, imported.File);
                 imported.RowOutlineFingerprints.Should().BeEquivalentTo(source.RowOutlineFingerprints, imported.File);
                 imported.ColOutlineFingerprints.Should().BeEquivalentTo(source.ColOutlineFingerprints, imported.File);
+                imported.OutlineSettingFingerprints.Should().BeEquivalentTo(source.OutlineSettingFingerprints, imported.File);
                 imported.PrintLayoutFingerprints.Should().BeEquivalentTo(source.PrintLayoutFingerprints, imported.File);
                 imported.PageSetupFingerprints.Should().BeEquivalentTo(source.PageSetupFingerprints, imported.File);
                 imported.ViewStateFingerprints.Should().BeEquivalentTo(source.ViewStateFingerprints, imported.File);
@@ -391,6 +399,12 @@ public sealed class LegacyXlsFileAdapterTests
         summaries.Sum(summary => summary.HiddenSheets).Should().BeGreaterThan(0);
         summaries.Count(summary => summary.Uses1904DateSystem).Should().BeGreaterThan(0);
         summaries.Where(summary => summary.RichMetadata).Sum(summary => summary.DefaultDimensionFingerprints?.Count ?? 0)
+            .Should()
+            .BeGreaterThan(0);
+        summaries.Where(summary => summary.RichMetadata)
+            .Sum(summary => summary.ViewStateFingerprints?.Count(fingerprint =>
+                fingerprint.Contains("|Active=", StringComparison.Ordinal) &&
+                !fingerprint.Contains("|Active=null,null|", StringComparison.Ordinal)) ?? 0)
             .Should()
             .BeGreaterThan(0);
         summaries.Sum(summary => summary.DefinedNames).Should().BeGreaterThan(0);
@@ -508,7 +522,7 @@ public sealed class LegacyXlsFileAdapterTests
         sheet.DisplayGridlines = false;
         sheet.DisplayRowColHeadings = false;
         sheet.DisplayFormulas = true;
-        sheet.TopRow = 2;
+        sheet.ShowInPane(2, 3);
         hssf.GetCustomPalette().SetColorAtIndex(0x21, 255, 192, 0);
         sheet.TabColorIndex = 0x21;
         sheet.GroupColumn(5, 6);
@@ -547,6 +561,7 @@ public sealed class LegacyXlsFileAdapterTests
         var hyperlinkCell = row.CreateCell(3);
         hyperlinkCell.SetCellValue("EXINFM");
         hyperlinkCell.Hyperlink = hyperlink;
+        hyperlinkCell.SetAsActiveCell();
 
         var drawing = sheet.CreateDrawingPatriarch();
         var commentAnchor = new HSSFClientAnchor(0, 0, 0, 0, 4, 1, 6, 3);
@@ -566,6 +581,9 @@ public sealed class LegacyXlsFileAdapterTests
         sheet.CreateRow(5).CreateCell(0).SetCellValue("outlined one");
         sheet.CreateRow(6).CreateCell(0).SetCellValue("outlined two");
         sheet.GroupRow(5, 6);
+        sheet.RowSumsBelow = false;
+        sheet.RowSumsRight = false;
+        sheet.DisplayGuts = false;
 
         var inputName = hssf.CreateName();
         inputName.NameName = "InputCell";
@@ -925,6 +943,7 @@ public sealed class LegacyXlsFileAdapterTests
             .ToArray();
         var workbookViewFingerprints = ReadSourceWorkbookViewFingerprints(hssf);
         var workbookProtectionFingerprints = ReadSourceWorkbookProtectionFingerprints(hssf);
+        var outlineSettingFingerprints = ReadSourceOutlineSettingFingerprints(hssf);
 
         return new LegacyXlsCorpusSummary(
             Path.GetFileName(path),
@@ -973,6 +992,7 @@ public sealed class LegacyXlsFileAdapterTests
             PaneFingerprints: paneFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             RowOutlineFingerprints: rowOutlineFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             ColOutlineFingerprints: colOutlineFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            OutlineSettingFingerprints: outlineSettingFingerprints,
             PrintLayoutFingerprints: orderedPrintLayoutFingerprints,
             PageSetupFingerprints: pageSetupFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             ViewStateFingerprints: viewStateFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
@@ -1125,6 +1145,7 @@ public sealed class LegacyXlsFileAdapterTests
             PaneFingerprints: [],
             RowOutlineFingerprints: [],
             ColOutlineFingerprints: [],
+            OutlineSettingFingerprints: [],
             PrintLayoutFingerprints: [],
             PageSetupFingerprints: [],
             ViewStateFingerprints: [],
@@ -1466,6 +1487,73 @@ public sealed class LegacyXlsFileAdapterTests
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
 
+    private static IReadOnlyList<string> ReadImportedOutlineSettingFingerprints(Workbook workbook) =>
+        workbook.Sheets
+            .Select((sheet, sheetIndex) =>
+            {
+                var hasOutlineLevels = sheet.RowOutlineLevels.Count > 0 || sheet.ColOutlineLevels.Count > 0;
+                if (!hasOutlineLevels &&
+                    sheet.OutlineSummaryBelow is null &&
+                    sheet.OutlineSummaryRight is null &&
+                    sheet.ShowOutlineSymbols is null)
+                {
+                    return null;
+                }
+
+                return CreateOutlineSettingFingerprint(
+                    sheetIndex,
+                    sheet.Name,
+                    sheet.OutlineSummaryBelow,
+                    sheet.OutlineSummaryRight,
+                    sheet.ShowOutlineSymbols);
+            })
+            .Where(value => value is not null)
+            .Select(value => value!)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+
+    private static IReadOnlyList<string> ReadSourceOutlineSettingFingerprints(HSSFWorkbook hssf)
+    {
+        var fingerprints = new List<string>();
+        for (var sheetIndex = 0; sheetIndex < hssf.NumberOfSheets; sheetIndex++)
+        {
+            var sheet = hssf.GetSheetAt(sheetIndex);
+            if (!HasSourceOutlineLevels(sheet) &&
+                sheet.RowSumsBelow &&
+                sheet.RowSumsRight &&
+                sheet.DisplayGuts)
+            {
+                continue;
+            }
+
+            fingerprints.Add(CreateOutlineSettingFingerprint(
+                sheetIndex,
+                sheet.SheetName,
+                sheet.RowSumsBelow,
+                sheet.RowSumsRight,
+                sheet.DisplayGuts));
+        }
+
+        return fingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray();
+    }
+
+    private static bool HasSourceOutlineLevels(ISheet sheet)
+    {
+        for (var rowIndex = sheet.FirstRowNum; rowIndex <= sheet.LastRowNum; rowIndex++)
+        {
+            if (sheet.GetRow(rowIndex)?.OutlineLevel > 0)
+                return true;
+        }
+
+        for (var columnIndex = 0; columnIndex <= LegacyXlsMaxColumnIndex; columnIndex++)
+        {
+            if (sheet.GetColumnOutlineLevel(columnIndex) > 0)
+                return true;
+        }
+
+        return false;
+    }
+
     private static IReadOnlyList<string> ReadImportedPrintLayoutFingerprints(Workbook workbook) =>
         workbook.Sheets
             .SelectMany((sheet, sheetIndex) =>
@@ -1563,6 +1651,8 @@ public sealed class LegacyXlsFileAdapterTests
                 sheet.ShowFormulas,
                 sheet.ViewTopRow,
                 sheet.ViewLeftCol,
+                sheet.ActiveRow,
+                sheet.ActiveCol,
                 sheet.SplitRow,
                 sheet.SplitColumn,
                 sheet.TabColor))
@@ -1698,6 +1788,8 @@ public sealed class LegacyXlsFileAdapterTests
                 splitColumn = ToSourceModelIndex(pane.VerticalSplitLeftColumn);
         }
 
+        var activeCell = sheet.ActiveCell;
+        var hasActiveCell = activeCell.Row > 0 || activeCell.Column > 0;
         return CreateViewStateFingerprint(
             sheetIndex,
             sheetName,
@@ -1705,7 +1797,9 @@ public sealed class LegacyXlsFileAdapterTests
             sheet.DisplayRowColHeadings,
             sheet.DisplayFormulas,
             sheet.TopRow > 0 ? ToSourceModelIndex(sheet.TopRow) : null,
-            null,
+            sheet.LeftCol > 0 ? ToSourceModelIndex(sheet.LeftCol) : null,
+            hasActiveCell ? ToSourceModelIndex(activeCell.Row) : null,
+            hasActiveCell ? ToSourceModelIndex(activeCell.Column) : null,
             splitRow,
             splitColumn,
             TryGetSourceTabColor(sheet, palette, out var tabColor) ? tabColor : null);
@@ -2090,6 +2184,14 @@ public sealed class LegacyXlsFileAdapterTests
         int level) =>
         $"{sheetIndex}:{sheetName}|{axis}{index}|L={level}";
 
+    private static string CreateOutlineSettingFingerprint(
+        int sheetIndex,
+        string sheetName,
+        bool? summaryBelow,
+        bool? summaryRight,
+        bool? showOutlineSymbols) =>
+        $"{sheetIndex}:{sheetName}|OutlineSettings|Below={FormatNullableBool(summaryBelow)}|Right={FormatNullableBool(summaryRight)}|Symbols={FormatNullableBool(showOutlineSymbols)}";
+
     private static string CreatePrintAreaFingerprint(
         int sheetIndex,
         string sheetName,
@@ -2313,6 +2415,8 @@ public sealed class LegacyXlsFileAdapterTests
         bool showFormulas,
         uint? viewTopRow,
         uint? viewLeftCol,
+        uint? activeRow,
+        uint? activeColumn,
         uint? splitRow,
         uint? splitColumn,
         CellColor? tabColor) =>
@@ -2320,6 +2424,7 @@ public sealed class LegacyXlsFileAdapterTests
             $"{sheetIndex}:{sheetName}",
             $"Display={showGridlines},{showHeadings},{showFormulas}",
             $"TopLeft={FormatNullableUInt(viewTopRow)},{FormatNullableUInt(viewLeftCol)}",
+            $"Active={FormatNullableUInt(activeRow)},{FormatNullableUInt(activeColumn)}",
             $"Split={FormatNullableUInt(splitRow)},{FormatNullableUInt(splitColumn)}",
             $"TabColor={FormatColor(tabColor)}"
         ]);
@@ -3073,6 +3178,7 @@ public sealed class LegacyXlsFileAdapterTests
         IReadOnlyList<string>? PaneFingerprints = null,
         IReadOnlyList<string>? RowOutlineFingerprints = null,
         IReadOnlyList<string>? ColOutlineFingerprints = null,
+        IReadOnlyList<string>? OutlineSettingFingerprints = null,
         IReadOnlyList<string>? PrintLayoutFingerprints = null,
         IReadOnlyList<string>? PageSetupFingerprints = null,
         IReadOnlyList<string>? ViewStateFingerprints = null,

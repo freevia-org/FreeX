@@ -320,6 +320,7 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         }
 
         LoadColumnOutlineLevels(sourceSheet, sheet);
+        LoadOutlineSettings(sourceSheet, sheet);
     }
 
     private static void LoadSheetProtection(ISheet sourceSheet, Sheet sheet)
@@ -609,6 +610,22 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         }
     }
 
+    private static void LoadOutlineSettings(ISheet sourceSheet, Sheet sheet)
+    {
+        var hasOutlineLevels = sheet.RowOutlineLevels.Count > 0 || sheet.ColOutlineLevels.Count > 0;
+        if (!hasOutlineLevels &&
+            sourceSheet.RowSumsBelow &&
+            sourceSheet.RowSumsRight &&
+            sourceSheet.DisplayGuts)
+        {
+            return;
+        }
+
+        sheet.OutlineSummaryBelow = sourceSheet.RowSumsBelow;
+        sheet.OutlineSummaryRight = sourceSheet.RowSumsRight;
+        sheet.ShowOutlineSymbols = sourceSheet.DisplayGuts;
+    }
+
     private static void LoadPaneState(ISheet sourceSheet, Sheet sheet)
     {
         var pane = sourceSheet.PaneInformation;
@@ -666,6 +683,15 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         sheet.ShowFormulas = sourceSheet.DisplayFormulas;
         if (sourceSheet.TopRow > 0)
             sheet.ViewTopRow = ToModelIndex(sourceSheet.TopRow);
+        if (sourceSheet.LeftCol > 0)
+            sheet.ViewLeftCol = ToModelIndex(sourceSheet.LeftCol);
+        if (sourceSheet.ActiveCell is { } activeCell &&
+            (activeCell.Row > 0 || activeCell.Column > 0))
+        {
+            sheet.ActiveRow = ToModelIndex(activeCell.Row);
+            sheet.ActiveCol = ToModelIndex(activeCell.Column);
+        }
+
         if (TryGetTabColor(sourceSheet, palette, out var tabColor))
             sheet.TabColor = tabColor;
     }
