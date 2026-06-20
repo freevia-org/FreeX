@@ -1277,6 +1277,7 @@ public partial class FileAdapterSmokeTests
         sheet.PrintQualityDpi = 600;
         sheet.PrintErrorValue = WorksheetPrintErrorValue.Blank;
         sheet.PrintComments = WorksheetPrintComments.AtEnd;
+        sheet.LegacyPrintSize = 3;
         sheet.ScaleToFit = new WorksheetScaleToFit(null, 1, 2);
         sheet.PageSetupMetadata = MakeBag("pageSetup",
             new Dictionary<string, string>(StringComparer.Ordinal)
@@ -1362,6 +1363,7 @@ public partial class FileAdapterSmokeTests
         loadedSheet.PrintQualityDpi.Should().Be(600);
         loadedSheet.PrintErrorValue.Should().Be(WorksheetPrintErrorValue.Blank);
         loadedSheet.PrintComments.Should().Be(WorksheetPrintComments.AtEnd);
+        loadedSheet.LegacyPrintSize.Should().Be(3);
         loadedSheet.ScaleToFit.Should().Be(new WorksheetScaleToFit(null, 1, 2));
         loadedSheet.PageSetupMetadata.Should().BeEquivalentTo(sheet.PageSetupMetadata);
         loadedSheet.RowPageBreaks.Should().Contain(20u);

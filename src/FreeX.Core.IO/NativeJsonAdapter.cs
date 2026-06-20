@@ -218,6 +218,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
                 sheet.PrintErrorValue = printErrorValue;
             if (sDto.PrintComments is { } printComments && Enum.IsDefined(printComments))
                 sheet.PrintComments = printComments;
+            sheet.LegacyPrintSize = sDto.LegacyPrintSize is > 0 and <= ushort.MaxValue ? sDto.LegacyPrintSize : null;
             sheet.PageSetupMetadata = ToWorksheetPageSetupMetadata(sDto.PageSetupMetadata);
             if (sDto.ScaleToFit is { } scaleToFit)
                 sheet.ScaleToFit = NativeJsonValueSanitizer.ValidScaleToFitOrDefault(

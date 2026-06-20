@@ -302,6 +302,9 @@ public sealed partial class Sheet
     /// <summary>How cell comments are included in printed output.</summary>
     public WorksheetPrintComments PrintComments { get; set; } = WorksheetPrintComments.None;
 
+    /// <summary>Legacy BIFF sheet print-size metadata, when present in an imported XLS workbook.</summary>
+    public int? LegacyPrintSize { get; set; }
+
     /// <summary>Native Excel pageSetup metadata not yet modeled as editable fields.</summary>
     public NativeXmlPreserveBag? PageSetupMetadata { get; set; }
 
