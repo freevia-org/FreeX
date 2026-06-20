@@ -339,6 +339,7 @@ public sealed class LegacyXlsFileAdapterTests
                 HasVbaProjectPackage: workbook.HasVbaProjectPackage,
                 SheetNames: workbook.Sheets.Select(sheet => sheet.Name).ToArray(),
                 SheetVisibilityFingerprints: ReadImportedSheetVisibilityFingerprints(workbook),
+                WorkbookCodeName: ReadImportedWorkbookCodeName(workbook),
                 SheetCodeNameFingerprints: ReadImportedSheetCodeNameFingerprints(workbook),
                 WorkbookViewFingerprints: ReadImportedWorkbookViewFingerprints(workbook),
                 WorkbookProtectionFingerprints: ReadImportedWorkbookProtectionFingerprints(workbook),
@@ -386,6 +387,7 @@ public sealed class LegacyXlsFileAdapterTests
                 imported.ActiveSheetIndex.Should().Be(source.ActiveSheetIndex, imported.File);
                 imported.SheetNames.Should().Equal(source.SheetNames, imported.File);
                 imported.SheetVisibilityFingerprints.Should().BeEquivalentTo(source.SheetVisibilityFingerprints, imported.File);
+                imported.WorkbookCodeName.Should().Be(source.WorkbookCodeName, imported.File);
                 imported.SheetCodeNameFingerprints.Should().BeEquivalentTo(source.SheetCodeNameFingerprints, imported.File);
                 imported.CellFingerprints.Should().BeEquivalentTo(source.CellFingerprints, imported.File);
                 imported.MergeFingerprints.Should().BeEquivalentTo(source.MergeFingerprints, imported.File);
@@ -409,6 +411,7 @@ public sealed class LegacyXlsFileAdapterTests
                 imported.FormControls.Should().Be(source.FormControls, imported.File);
                 imported.SheetNames.Should().Equal(source.SheetNames, imported.File);
                 imported.SheetVisibilityFingerprints.Should().BeEquivalentTo(source.SheetVisibilityFingerprints, imported.File);
+                imported.WorkbookCodeName.Should().Be(source.WorkbookCodeName, imported.File);
                 imported.SheetCodeNameFingerprints.Should().BeEquivalentTo(source.SheetCodeNameFingerprints, imported.File);
                 imported.WorkbookViewFingerprints.Should().BeEquivalentTo(source.WorkbookViewFingerprints, imported.File);
                 imported.WorkbookProtectionFingerprints.Should().BeEquivalentTo(source.WorkbookProtectionFingerprints, imported.File);
@@ -483,6 +486,9 @@ public sealed class LegacyXlsFileAdapterTests
         summaries.Where(summary => summary.RichMetadata)
             .Sum(summary => summary.WorkbookCalculationFingerprints?.Count(fingerprint =>
                 !fingerprint.Contains("|Mode=Automatic|Full=False|Iterate=False|Count=null|Delta=null", StringComparison.Ordinal)) ?? 0)
+            .Should()
+            .BeGreaterThan(0);
+        summaries.Count(summary => !string.IsNullOrWhiteSpace(summary.WorkbookCodeName))
             .Should()
             .BeGreaterThan(0);
         summaries.Sum(summary => summary.SheetCodeNameFingerprints?.Count ?? 0)
@@ -1177,6 +1183,7 @@ public sealed class LegacyXlsFileAdapterTests
             HasVbaProjectPackage: SourceHasVbaProjectPackage(path),
             SheetNames: sheetNames,
             SheetVisibilityFingerprints: sheetVisibilityFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            WorkbookCodeName: ReadHssfWorkbookCodeName(hssf),
             SheetCodeNameFingerprints: sheetCodeNameFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             WorkbookViewFingerprints: workbookViewFingerprints,
             WorkbookProtectionFingerprints: workbookProtectionFingerprints,
@@ -1344,6 +1351,7 @@ public sealed class LegacyXlsFileAdapterTests
             HasVbaProjectPackage: SourceHasVbaProjectPackage(path),
             SheetNames: sheetNames,
             SheetVisibilityFingerprints: sheetVisibilityFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            WorkbookCodeName: null,
             SheetCodeNameFingerprints: sheetCodeNameFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             WorkbookViewFingerprints: [],
             WorkbookProtectionFingerprints: [],
@@ -1384,6 +1392,14 @@ public sealed class LegacyXlsFileAdapterTests
                 sheet.IsVeryHidden ? "VeryHidden" : sheet.IsHidden ? "Hidden" : "Visible"))
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
+
+    private static string? ReadImportedWorkbookCodeName(Workbook workbook)
+    {
+        var (attributes, _) = XmlNativeBagSerializer.Deserialize(workbook.Properties?.Get("workbookPr"));
+        return attributes.TryGetValue("codeName", out var codeName) && !string.IsNullOrWhiteSpace(codeName)
+            ? codeName
+            : null;
+    }
 
     private static IReadOnlyList<string> ReadImportedSheetCodeNameFingerprints(Workbook workbook) =>
         workbook.Sheets
@@ -2663,6 +2679,17 @@ public sealed class LegacyXlsFileAdapterTests
 
     private static string CreateSheetCodeNameFingerprint(int sheetIndex, string sheetName, string codeName) =>
         $"{sheetIndex}:{sheetName}|CodeName={codeName}";
+
+    private static string? ReadHssfWorkbookCodeName(HSSFWorkbook sourceWorkbook)
+    {
+        if (sourceWorkbook.Workbook.FindFirstRecordBySid(UnknownRecord.CODENAME_1BA) is not UnknownRecord codeNameRecord ||
+            UnknownRecordRawDataField?.GetValue(codeNameRecord) is not byte[] rawData)
+        {
+            return null;
+        }
+
+        return DecodeBiffCodeName(rawData);
+    }
 
     private static string? ReadHssfSheetCodeName(ISheet sourceSheet)
     {
@@ -4053,6 +4080,7 @@ public sealed class LegacyXlsFileAdapterTests
         bool HasVbaProjectPackage = false,
         IReadOnlyList<string>? SheetNames = null,
         IReadOnlyList<string>? SheetVisibilityFingerprints = null,
+        string? WorkbookCodeName = null,
         IReadOnlyList<string>? SheetCodeNameFingerprints = null,
         IReadOnlyList<string>? WorkbookViewFingerprints = null,
         IReadOnlyList<string>? WorkbookProtectionFingerprints = null,

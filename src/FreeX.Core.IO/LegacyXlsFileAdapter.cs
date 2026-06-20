@@ -97,6 +97,7 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
             HasVbaProjectPackage = hasVbaProjectPackage
         };
         LoadWorkbookView(hssf, workbook);
+        LoadWorkbookProperties(hssf, workbook);
         LoadWorkbookProtection(hssf, workbook);
         LoadFileSharing(hssf, workbook);
         LoadCalculationOptions(hssf, workbook);
@@ -185,6 +186,23 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         workbook.SheetTabRatio = Math.Clamp((int)window.TabWidthRatio, 0, 1000);
         if (window.FirstVisibleTab >= 0 && window.FirstVisibleTab < sourceWorkbook.NumberOfSheets)
             workbook.FirstVisibleSheetIndex = window.FirstVisibleTab;
+    }
+
+    private static void LoadWorkbookProperties(HSSFWorkbook sourceWorkbook, Workbook workbook)
+    {
+        if (ReadHssfWorkbookCodeName(sourceWorkbook) is not { } codeName)
+            return;
+
+        var serializedMetadata = XmlNativeBagSerializer.Serialize(
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["codeName"] = codeName
+            });
+        if (serializedMetadata is null)
+            return;
+
+        workbook.Properties ??= new NativeXmlPreserveBag();
+        workbook.Properties.Set("workbookPr", serializedMetadata);
     }
 
     private static void LoadWorkbookProtection(HSSFWorkbook sourceWorkbook, Workbook workbook)
@@ -2044,6 +2062,17 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
 
     private static double PointsToPixels(double points) =>
         Math.Round(points * (96.0 / 72.0), MidpointRounding.AwayFromZero);
+
+    private static string? ReadHssfWorkbookCodeName(HSSFWorkbook sourceWorkbook)
+    {
+        if (sourceWorkbook.Workbook.FindFirstRecordBySid(UnknownRecord.CODENAME_1BA) is not UnknownRecord codeNameRecord ||
+            UnknownRecordRawDataField?.GetValue(codeNameRecord) is not byte[] rawData)
+        {
+            return null;
+        }
+
+        return DecodeBiffCodeName(rawData);
+    }
 
     private static string? ReadHssfSheetCodeName(ISheet sourceSheet)
     {
