@@ -332,6 +332,7 @@ public sealed class LegacyXlsFileAdapterTests
                 imported.MergeFingerprints.Should().BeEquivalentTo(source.MergeFingerprints, imported.File);
                 imported.DimensionFingerprints.Should().BeEquivalentTo(source.DimensionFingerprints, imported.File);
                 imported.DefaultDimensionFingerprints.Should().BeEquivalentTo(source.DefaultDimensionFingerprints, imported.File);
+                imported.StyleFingerprints.Should().BeEquivalentTo(source.StyleFingerprints, imported.File);
                 imported.DefinedNameFingerprints.Should().BeEquivalentTo(source.DefinedNameFingerprints, imported.File);
                 imported.HyperlinkFingerprints.Should().BeEquivalentTo(source.HyperlinkFingerprints, imported.File);
                 imported.CommentFingerprints.Should().BeEquivalentTo(source.CommentFingerprints, imported.File);
