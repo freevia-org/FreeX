@@ -676,6 +676,13 @@ public sealed partial class MainWindowRibbonKeyTipTests
         public bool? RibbonComboBoxIsEnabled(string title) =>
             SelectedRibbonComboBox(title)?.IsEnabled;
 
+        public bool RibbonComboBoxDropDownIsOpen(string title) =>
+            SelectedRibbonComboBox(title)?.IsDropDownOpen == true;
+
+        public bool RibbonComboBoxHasKeyboardFocus(string title) =>
+            SelectedRibbonComboBox(title) is { } box &&
+            (box.IsKeyboardFocusWithin || ReferenceEquals(Keyboard.FocusedElement, box));
+
         public bool? CommandButtonIsEnabled(string name) =>
             (_window.FindName(name) as ButtonBase)?.IsEnabled;
 

@@ -427,12 +427,13 @@ public static class RibbonWpfRenderer
 
         var menu = GetMenu(control);
         var hasMenuItems = menu is not null && menu.Items.Count > 0;
-        var commandIsLive = hasMenuItems || registry.TryGet(control.CommandId, out _);
+        var commandIsLive = control is RibbonComboBox || hasMenuItems || registry.TryGet(control.CommandId, out _);
         element.IsEnabled = commandIsLive;
 
         // Bind the control to the neutral state store: its checked-ness, combo value, and enablement
         // now follow the store (the source of truth), replacing the old hidden-backplane mirroring.
-        // A control whose command has no handler stays disabled regardless of store state.
+        // A command-only control whose command has no handler stays disabled regardless of store state;
+        // editable combos are intrinsically live because their behavior is wired through input events.
         BindControlToStore(element, control.CommandId, stateStore, commandIsLive);
 
         if (element is not ButtonBase buttonBase)

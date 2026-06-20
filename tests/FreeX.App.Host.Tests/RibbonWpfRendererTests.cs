@@ -155,6 +155,35 @@ public class RibbonWpfRendererTests
         cut.Invocations.Should().Be(1);
     }
 
+    [Fact]
+    public void RenderedComboWithoutRegisteredCommand_RemainsEnabledForInputWiring()
+    {
+        var registry = new RibbonCommandRegistry();
+        var definition = new RibbonDefinitionBuilder()
+            .Tab("t", "T", "T", tab => tab
+                .Group("g", "G", "G", 1, group => group
+                    .ComboBox("Format", "Format", combo => combo with
+                    {
+                        KeyTip = "F",
+                        Items = new[] { "General", "Number" }
+                    })
+                    .Medium("Copy", "Copy", RibbonCommandIconKind.Copy, "C")))
+            .Build();
+
+        StaTestRunner.Run(() =>
+        {
+            var host = BuildHost();
+            host.Child = RibbonWpfRenderer.BuildTabContent(definition.FindTab("t")!, host, registry);
+            host.Measure(new Size(600, 130));
+            host.Arrange(new Rect(0, 0, 600, 130));
+            host.UpdateLayout();
+
+            FindByCommandName(host, "Format").Should().BeOfType<ComboBox>()
+                .Which.IsEnabled.Should().BeTrue();
+            FindByCommandName(host, "Copy")!.IsEnabled.Should().BeFalse();
+        });
+    }
+
     private static Border BuildHost()
     {
         if (Application.Current is null)

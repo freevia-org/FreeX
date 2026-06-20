@@ -7,6 +7,33 @@ namespace FreeX.App.Host.Tests;
 public sealed partial class MainWindowRibbonKeyTipTests
 {
     [Fact]
+    public void PageLayoutScaleToFitComboKeyTips_OpenEditableCombos()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.P);
+
+            harness.RibbonComboBoxIsEnabled("Scale Width").Should().BeTrue();
+            harness.RibbonComboBoxIsEnabled("Scale Height").Should().BeTrue();
+            harness.RibbonComboBoxIsEnabled("Scale Percent").Should().BeTrue();
+            harness.VisibleCommandKeyTips("SW").Should().ContainSingle("Scale Width");
+            harness.VisibleCommandKeyTips("SH").Should().ContainSingle("Scale Height");
+            harness.VisibleCommandKeyTips("SC").Should().ContainSingle("Scale Percent");
+
+            harness.HandleKeyTip(Key.S);
+            harness.KeyTipScope.Should().Be("Commands");
+            harness.HandleKeyTip(Key.W);
+
+            harness.RibbonComboBoxDropDownIsOpen("Scale Width").Should().BeTrue();
+            harness.RibbonComboBoxHasKeyboardFocus("Scale Width").Should().BeTrue();
+            harness.KeyTipScope.Should().Be("None");
+        });
+    }
+
+    [Fact]
     public void PageLayoutBreaksMenuKeyTips_UpdateSheetPageBreaks()
     {
         RunSta(() =>
