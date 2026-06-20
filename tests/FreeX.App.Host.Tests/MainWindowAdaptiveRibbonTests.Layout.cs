@@ -111,13 +111,9 @@ public sealed partial class MainWindowAdaptiveRibbonTests
 
             harness.SelectRibbonTab("Draw", 900);
 
-            // 2-state truth: Draw keeps its higher-priority Illustrations and Format groups expanded with
-            // their real commands at 900px and folds only the lower-priority Arrange group into overflow.
-            // (Flagged deviation: the live engine collapses Arrange while leaving a large amount of empty
-            // row space; Excel would keep all three expanded at this width.)
             harness.CollapsedActiveRibbonGroupNames.Should().NotContain(
-                ["Illustrations", "Format"],
-                $"the Draw tab should keep its higher-priority object-creation and format groups expanded at 900px; {harness.DebugActiveRibbonChildren}");
+                ["Illustrations", "Arrange", "Format"],
+                $"the Draw tab should spend available 900px row width before collapsing any of its current groups; {harness.DebugActiveRibbonChildren}");
             harness.ActiveRibbonGroupVisibleCommandLabels("Illustrations").Should().NotBeEmpty(
                 $"the expanded Illustrations group should show its real commands; {harness.DebugActiveRibbonChildren}");
             harness.ActiveRibbonPanelOverflow.Should().BeLessThanOrEqualTo(
@@ -170,14 +166,8 @@ public sealed partial class MainWindowAdaptiveRibbonTests
         });
     }
 
-    // NOTE (flagged deviation): at 900px the live Page Layout ribbon collapses *every* group -- including
-    // the primary Page Setup -- into overflow buttons even though the collapsed row leaves a large amount
-    // of empty horizontal space (arranged content ~520px inside a ~900px panel). Excel would keep Page Setup
-    // expanded there. This asserts the live 2-state truth (Page Setup is reachable through its overflow
-    // button without clipping) and the over-collapse is reported in flaggedDeviations rather than encoded as
-    // "correct".
     [Fact]
-    public void PageLayoutRibbon_CollapsesPageSetupToOverflowAt900()
+    public void PageLayoutRibbon_KeepsPageSetupExpandedAt900()
     {
         StaTestRunner.Run(() =>
         {
@@ -187,14 +177,12 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             if (!harness.CanUseRequestedRibbonWidth(900))
                 return;
 
-            // Page Setup folds to a single overflow button at this width, but it must still advertise and
-            // open its commands, and nothing may clip off the right edge.
-            harness.CollapsedActiveRibbonGroupNames.Should().Contain(
+            harness.CollapsedActiveRibbonGroupNames.Should().NotContain(
                 "Page Setup",
-                $"the live ribbon collapses Page Setup at 900px; {harness.DebugActiveRibbonChildren}");
-            harness.CollapsedActiveMenuHeaders("Page Setup").Should().Contain(
-                "Margins",
-                "the collapsed Page Setup overflow must still open its commands");
+                $"Page Layout should spend available 900px row width on the primary Page Setup group before collapsing it; {harness.DebugActiveRibbonChildren}");
+            harness.VisibleRibbonCommandLabels.Should().Contain(
+                ["Margins", "Page Orientation", "Paper Size", "Page Setup"],
+                $"Page Setup commands should remain directly reachable at 900px; {harness.DebugActiveRibbonChildren}");
             harness.ActiveRibbonPanelOverflow.Should().BeLessThanOrEqualTo(
                 0.5,
                 $"Page Layout at 900px must not clip its right edge; {harness.DebugActiveRibbonChildren}");
@@ -358,13 +346,13 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             if (!harness.CanUseRequestedRibbonWidth(750))
                 return;
 
-            // 2-state truth: at 750px the live Formulas ribbon folds its groups into overflow buttons. Each
-            // such button must still advertise and open its commands, and the row must never clip its right
-            // edge. (Flagged deviation: the live engine collapses all four Formulas groups while leaving a
-            // large amount of empty row width unused -- Excel would re-expand at least one group here.)
             var collapsedGroups = harness.CollapsedActiveRibbonGroupNames;
-            collapsedGroups.Should().NotBeEmpty(
-                $"Formulas at 750px collapses lower-priority groups to fit; {harness.DebugActiveRibbonChildren}");
+            collapsedGroups.Should().NotContain(
+                "Function Library",
+                $"Formulas should spend available 750px row width on its primary Function Library group before collapsing it; {harness.DebugActiveRibbonChildren}");
+            harness.VisibleRibbonCommandLabels.Should().Contain(
+                ["AutoSum", "Recently Used"],
+                $"Function Library commands should remain directly reachable at 750px; {harness.DebugActiveRibbonChildren}");
             harness.CollapsedActiveRibbonGroupsWithoutOverflowMenu.Should().BeEmpty(
                 $"every collapsed Formulas group must still open its commands from its overflow button; {harness.DebugActiveRibbonChildren}");
             harness.ActiveRibbonPanelOverflow.Should().BeLessThanOrEqualTo(

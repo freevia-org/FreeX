@@ -20,6 +20,7 @@ public sealed class RibbonGroupHost : ContentControl
 
     public int Priority { get; }
     public double FullWidth { get; set; }
+    internal double LayoutWidth { get; set; }
 
     /// <summary>The group's display name (header). Exposed so group-discovery queries and the test
     /// harness can identify the host without reaching into its private group model.</summary>
@@ -180,6 +181,8 @@ public sealed class RibbonGroupHost : ContentControl
 public sealed class RibbonAdaptivePanel : Panel
 {
     private const double GroupSpacing = 6;
+    private const double MinimumUnusedWidthForReclaim = 320;
+    private const double MinimumUnusedWidthRatioForReclaim = 0.35;
 
     // Contextual tabs are shown after the initial ribbon warm-up; refresh their full-width budget from
     // the preserved expanded group so a previously collapsed surface cannot under-plan and clip.
@@ -199,7 +202,10 @@ public sealed class RibbonAdaptivePanel : Panel
         foreach (var child in children)
             child.Measure(infinite);
         foreach (var host in hosts)
+        {
             host.FullWidth = host.MeasureFullWidth(infinite);
+            host.LayoutWidth = host.Collapsed ? RibbonGroupHost.CollapsedWidth : host.DesiredSize.Width;
+        }
 
         var nonHostWidth = children
             .Where(c => c is not RibbonGroupHost)
@@ -229,9 +235,16 @@ public sealed class RibbonAdaptivePanel : Panel
         foreach (var child in children)
         {
             if (child is RibbonGroupHost { Collapsed: true } collapsedHost)
+            {
                 collapsedHost.Measure(new Size(RibbonGroupHost.CollapsedWidth, availableSize.Height));
+                collapsedHost.LayoutWidth = RibbonGroupHost.CollapsedWidth;
+            }
             else
+            {
                 child.Measure(infinite);
+                if (child is RibbonGroupHost expandedHost)
+                    expandedHost.LayoutWidth = expandedHost.DesiredSize.Width;
+            }
         }
 
         var width = children.Sum(GetChildLayoutWidth) + spacing;
@@ -245,7 +258,33 @@ public sealed class RibbonAdaptivePanel : Panel
                 var previousWidth = GetChildLayoutWidth(host);
                 host.Collapsed = true;
                 host.Measure(new Size(RibbonGroupHost.CollapsedWidth, availableSize.Height));
+                host.LayoutWidth = RibbonGroupHost.CollapsedWidth;
                 width += RibbonGroupHost.CollapsedWidth - previousWidth;
+            }
+
+            foreach (var host in hosts
+                         .OrderByDescending(h => h.Priority)
+                         .Where(h => h.Collapsed))
+            {
+                if (!HasSevereUnusedWidth(width, fitAvailable))
+                    break;
+
+                var previousWidth = GetChildLayoutWidth(host);
+                var remainingWidth = Math.Max(0, fitAvailable - (width - previousWidth));
+                host.Collapsed = false;
+                host.Measure(new Size(remainingWidth, availableSize.Height));
+                host.LayoutWidth = host.DesiredSize.Width;
+
+                var expandedWidth = GetChildLayoutWidth(host);
+                if (width + expandedWidth - previousWidth <= fitAvailable)
+                {
+                    width += expandedWidth - previousWidth;
+                    continue;
+                }
+
+                host.Collapsed = true;
+                host.Measure(new Size(RibbonGroupHost.CollapsedWidth, availableSize.Height));
+                host.LayoutWidth = RibbonGroupHost.CollapsedWidth;
             }
         }
 
@@ -275,8 +314,17 @@ public sealed class RibbonAdaptivePanel : Panel
 
     private static double GetChildLayoutWidth(UIElement child)
     {
-        if (child is RibbonGroupHost host && host.FullWidth > 0)
-            return host.Collapsed ? RibbonGroupHost.CollapsedWidth : host.FullWidth;
+        if (child is RibbonGroupHost host)
+        {
+            if (host.Collapsed)
+                return RibbonGroupHost.CollapsedWidth;
+
+            if (host.LayoutWidth > 0)
+                return host.LayoutWidth;
+
+            if (host.FullWidth > 0)
+                return host.FullWidth;
+        }
 
         if (child is System.Windows.Shapes.Rectangle { Width: var width and > 0 } &&
             !double.IsNaN(width) &&
@@ -288,10 +336,20 @@ public sealed class RibbonAdaptivePanel : Panel
         return child.DesiredSize.Width;
     }
 
+    private static bool HasSevereUnusedWidth(double currentWidth, double fitAvailable)
+    {
+        var unusedWidth = fitAvailable - currentWidth;
+        var threshold = Math.Max(MinimumUnusedWidthForReclaim, fitAvailable * MinimumUnusedWidthRatioForReclaim);
+        return unusedWidth >= threshold;
+    }
+
     private static double ResolveAvailableWidth(FrameworkElement element, double measuredWidth)
     {
         if (!double.IsInfinity(measuredWidth))
             return measuredWidth;
+
+        if (element.ActualWidth > 0)
+            return element.ActualWidth;
 
         var current = VisualTreeHelper.GetParent(element);
         while (current is not null)
