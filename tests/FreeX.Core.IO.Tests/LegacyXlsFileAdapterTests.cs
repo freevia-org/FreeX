@@ -107,6 +107,10 @@ public sealed class LegacyXlsFileAdapterTests
         sheet.PrintTitleColumns.Should().Be(new WorksheetRepeatRange(1, 2));
         sheet.AutoFilter.Should().NotBeNull();
         sheet.AutoFilter!.Reference.Should().Be("A1:E7");
+        sheet.IsProtected.Should().BeTrue();
+        sheet.ProtectionPassword.Should().Be(ProtectionPasswordHelper.ToLegacyPasswordHash("secret"));
+        GetProtectionMetadataAttribute(sheet, "objects").Should().Be("1");
+        GetProtectionMetadataAttribute(sheet, "scenarios").Should().Be("1");
         sheet.PageOrientation.Should().Be(WorksheetPageOrientation.Landscape);
         sheet.PaperSize.Should().Be(WorksheetPaperSize.Letter);
         sheet.PageMargins.Should().Be(new WorksheetPageMargins(0.7, 0.8, 0.9, 1.0));
@@ -218,6 +222,7 @@ public sealed class LegacyXlsFileAdapterTests
                 workbook.Sheets.Count(sheet => sheet.PrintTitleRows is not null),
                 workbook.Sheets.Count(sheet => sheet.PrintTitleColumns is not null),
                 workbook.Sheets.Count(sheet => sheet.AutoFilter is not null),
+                workbook.Sheets.Count(sheet => sheet.IsProtected),
                 workbook.Sheets.Count,
                 workbook.Sheets.Sum(sheet => sheet.RowPageBreaks.Count + sheet.ColumnPageBreaks.Count),
                 workbook.ActiveSheetIndex,
@@ -232,7 +237,8 @@ public sealed class LegacyXlsFileAdapterTests
                 PrintLayoutFingerprints: ReadImportedPrintLayoutFingerprints(workbook),
                 PageSetupFingerprints: ReadImportedPageSetupFingerprints(workbook),
                 ViewStateFingerprints: ReadImportedViewStateFingerprints(workbook),
-                AutoFilterFingerprints: ReadImportedAutoFilterFingerprints(workbook));
+                AutoFilterFingerprints: ReadImportedAutoFilterFingerprints(workbook),
+                SheetProtectionFingerprints: ReadImportedSheetProtectionFingerprints(workbook));
 
             imported.Sheets.Should().Be(source.Sheets, imported.File);
             imported.Cells.Should().Be(source.Cells, imported.File);
@@ -257,6 +263,7 @@ public sealed class LegacyXlsFileAdapterTests
                 imported.PrintTitleRows.Should().Be(source.PrintTitleRows, imported.File);
                 imported.PrintTitleColumns.Should().Be(source.PrintTitleColumns, imported.File);
                 imported.AutoFilters.Should().Be(source.AutoFilters, imported.File);
+                imported.ProtectedSheets.Should().Be(source.ProtectedSheets, imported.File);
                 imported.PageSetupSheets.Should().Be(source.PageSetupSheets, imported.File);
                 imported.PageBreaks.Should().Be(source.PageBreaks, imported.File);
                 imported.ActiveSheetIndex.Should().Be(source.ActiveSheetIndex, imported.File);
@@ -267,6 +274,7 @@ public sealed class LegacyXlsFileAdapterTests
                 imported.PageSetupFingerprints.Should().BeEquivalentTo(source.PageSetupFingerprints, imported.File);
                 imported.ViewStateFingerprints.Should().BeEquivalentTo(source.ViewStateFingerprints, imported.File);
                 imported.AutoFilterFingerprints.Should().BeEquivalentTo(source.AutoFilterFingerprints, imported.File);
+                imported.SheetProtectionFingerprints.Should().BeEquivalentTo(source.SheetProtectionFingerprints, imported.File);
                 imported.Styles.Should().BeGreaterThanOrEqualTo(source.Styles, imported.File);
                 imported.Dimensions.Should().BeGreaterThanOrEqualTo(source.Dimensions, imported.File);
             }
@@ -445,6 +453,7 @@ public sealed class LegacyXlsFileAdapterTests
         sheet.RepeatingRows = new CellRangeAddress(0, 1, -1, -1);
         sheet.RepeatingColumns = new CellRangeAddress(-1, -1, 0, 1);
         sheet.SetAutoFilter(new CellRangeAddress(0, 6, 0, 4));
+        sheet.ProtectSheet("secret");
         sheet.SetMargin(MarginType.LeftMargin, 0.7);
         sheet.SetMargin(MarginType.RightMargin, 0.8);
         sheet.SetMargin(MarginType.TopMargin, 0.9);
@@ -531,6 +540,7 @@ public sealed class LegacyXlsFileAdapterTests
         var pageSetupFingerprints = new List<string>();
         var viewStateFingerprints = new List<string>();
         var autoFilterFingerprints = new List<string>();
+        var sheetProtectionFingerprints = new List<string>();
         var activeSheetIndex = hssf.ActiveSheetIndex >= 0 && hssf.ActiveSheetIndex < hssf.NumberOfSheets
             ? hssf.ActiveSheetIndex
             : (int?)null;
@@ -560,6 +570,8 @@ public sealed class LegacyXlsFileAdapterTests
             pageBreaks += sheet.ColumnBreaks.Count(breakIndex => ToSourceModelIndex(breakIndex) >= 2);
             pageSetupFingerprints.Add(CreateSourcePageSetupFingerprint(sheetIndex, sheet.SheetName, sheet));
             viewStateFingerprints.Add(CreateSourceViewStateFingerprint(sheetIndex, sheet.SheetName, sheet, palette));
+            if (sheet.Protect || sheet.ScenarioProtect || sheet is HSSFSheet { ObjectProtect: true })
+                sheetProtectionFingerprints.Add(CreateSourceSheetProtectionFingerprint(sheetIndex, sheet.SheetName, sheet));
 
             for (var rowIndex = sheet.FirstRowNum; rowIndex <= sheet.LastRowNum; rowIndex++)
             {
@@ -691,6 +703,7 @@ public sealed class LegacyXlsFileAdapterTests
             orderedPrintLayoutFingerprints.Count(value => value.Contains("|Rows|", StringComparison.Ordinal)),
             orderedPrintLayoutFingerprints.Count(value => value.Contains("|Cols|", StringComparison.Ordinal)),
             orderedAutoFilterFingerprints.Length,
+            sheetProtectionFingerprints.Count,
             pageSetupFingerprints.Count,
             pageBreaks,
             activeSheetIndex,
@@ -705,7 +718,8 @@ public sealed class LegacyXlsFileAdapterTests
             PrintLayoutFingerprints: orderedPrintLayoutFingerprints,
             PageSetupFingerprints: pageSetupFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             ViewStateFingerprints: viewStateFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
-            AutoFilterFingerprints: orderedAutoFilterFingerprints);
+            AutoFilterFingerprints: orderedAutoFilterFingerprints,
+            SheetProtectionFingerprints: sheetProtectionFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray());
     }
 
     private static LegacyXlsCorpusSummary ReadExcelDataReaderSourceSummary(string path, Stream stream)
@@ -749,6 +763,7 @@ public sealed class LegacyXlsFileAdapterTests
             PrintTitleRows: 0,
             PrintTitleColumns: 0,
             AutoFilters: 0,
+            ProtectedSheets: 0,
             PageSetupSheets: 0,
             PageBreaks: 0,
             ActiveSheetIndex: null,
@@ -764,7 +779,8 @@ public sealed class LegacyXlsFileAdapterTests
             PrintLayoutFingerprints: [],
             PageSetupFingerprints: [],
             ViewStateFingerprints: [],
-            AutoFilterFingerprints: []);
+            AutoFilterFingerprints: [],
+            SheetProtectionFingerprints: []);
     }
 
     private static IReadOnlyList<string> ReadImportedCellFingerprints(Workbook workbook) =>
@@ -865,6 +881,21 @@ public sealed class LegacyXlsFileAdapterTests
         workbook.Sheets
             .Select((sheet, sheetIndex) => sheet.AutoFilter?.Reference is { } reference
                 ? CreateAutoFilterFingerprint(sheetIndex, sheet.Name, reference)
+                : null)
+            .Where(value => value is not null)
+            .Select(value => value!)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+
+    private static IReadOnlyList<string> ReadImportedSheetProtectionFingerprints(Workbook workbook) =>
+        workbook.Sheets
+            .Select((sheet, sheetIndex) => sheet.IsProtected
+                ? CreateSheetProtectionFingerprint(
+                    sheetIndex,
+                    sheet.Name,
+                    sheet.ProtectionPassword,
+                    GetProtectionMetadataAttribute(sheet, "objects") == "1",
+                    GetProtectionMetadataAttribute(sheet, "scenarios") == "1")
                 : null)
             .Where(value => value is not null)
             .Select(value => value!)
@@ -1033,6 +1064,16 @@ public sealed class LegacyXlsFileAdapterTests
             TryGetSourceTabColor(sheet, palette, out var tabColor) ? tabColor : null);
     }
 
+    private static string CreateSourceSheetProtectionFingerprint(int sheetIndex, string sheetName, ISheet sheet) =>
+        CreateSheetProtectionFingerprint(
+            sheetIndex,
+            sheetName,
+            sheet is HSSFSheet { Password: not 0 } protectedSheet
+                ? ((ushort)protectedSheet.Password).ToString("X4", CultureInfo.InvariantCulture)
+                : null,
+            sheet is HSSFSheet { ObjectProtect: true },
+            sheet.ScenarioProtect);
+
     private static string CreateCellFingerprint(
         int sheetIndex,
         string sheetName,
@@ -1080,6 +1121,14 @@ public sealed class LegacyXlsFileAdapterTests
 
     private static string CreateAutoFilterFingerprint(int sheetIndex, string sheetName, string reference) =>
         $"{sheetIndex}:{sheetName}|AutoFilter|{reference}";
+
+    private static string CreateSheetProtectionFingerprint(
+        int sheetIndex,
+        string sheetName,
+        string? passwordHash,
+        bool objectProtected,
+        bool scenarioProtected) =>
+        $"{sheetIndex}:{sheetName}|Protection|Password={passwordHash ?? ""}|Objects={objectProtected}|Scenarios={scenarioProtected}";
 
     private static string CreatePageSetupFingerprint(
         int sheetIndex,
@@ -1266,6 +1315,12 @@ public sealed class LegacyXlsFileAdapterTests
         {
             return false;
         }
+    }
+
+    private static string? GetProtectionMetadataAttribute(Sheet sheet, string name)
+    {
+        var (attributes, _) = XmlNativeBagSerializer.Deserialize(sheet.ProtectionMetadata?.Get("sheetProtection"));
+        return attributes.TryGetValue(name, out var value) ? value : null;
     }
 
     private static string SourceValueToken(ICell cell, CellType cellType) =>
@@ -1675,6 +1730,7 @@ public sealed class LegacyXlsFileAdapterTests
         int PrintTitleRows,
         int PrintTitleColumns,
         int AutoFilters,
+        int ProtectedSheets,
         int PageSetupSheets,
         int PageBreaks,
         int? ActiveSheetIndex,
@@ -1690,7 +1746,8 @@ public sealed class LegacyXlsFileAdapterTests
         IReadOnlyList<string>? PrintLayoutFingerprints = null,
         IReadOnlyList<string>? PageSetupFingerprints = null,
         IReadOnlyList<string>? ViewStateFingerprints = null,
-        IReadOnlyList<string>? AutoFilterFingerprints = null);
+        IReadOnlyList<string>? AutoFilterFingerprints = null,
+        IReadOnlyList<string>? SheetProtectionFingerprints = null);
 
     public static TheoryData<object, double> AdditionalNumericValues() => new()
     {

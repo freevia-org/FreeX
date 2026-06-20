@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using ExcelDataReader;
 using FreeX.Core.Model;
@@ -144,6 +145,7 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         LoadPrintTitles(sourceSheet, sheet);
         LoadPageLayout(sourceSheet, sheet);
         LoadSheetView(sourceSheet, sheet, palette);
+        LoadSheetProtection(sourceSheet, sheet);
 
         if (sourceSheet.DefaultColumnWidth > 0)
             sheet.DefaultColumnWidth = sourceSheet.DefaultColumnWidth;
@@ -178,6 +180,30 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         }
 
         LoadColumnOutlineLevels(sourceSheet, sheet);
+    }
+
+    private static void LoadSheetProtection(ISheet sourceSheet, Sheet sheet)
+    {
+        var isObjectProtected = sourceSheet is HSSFSheet hssfSheet && hssfSheet.ObjectProtect;
+        var isScenarioProtected = sourceSheet.ScenarioProtect;
+        sheet.IsProtected = sourceSheet.Protect || isObjectProtected || isScenarioProtected;
+
+        if (sourceSheet is HSSFSheet { Password: not 0 } protectedSheet)
+            sheet.ProtectionPassword = ((ushort)protectedSheet.Password).ToString("X4", CultureInfo.InvariantCulture);
+
+        var nativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (isObjectProtected)
+            nativeAttributes["objects"] = "1";
+        if (isScenarioProtected)
+            nativeAttributes["scenarios"] = "1";
+
+        var serializedMetadata = XmlNativeBagSerializer.Serialize(nativeAttributes);
+        if (serializedMetadata is not null)
+        {
+            var metadata = new NativeXmlPreserveBag();
+            metadata.Set("sheetProtection", serializedMetadata);
+            sheet.ProtectionMetadata = metadata;
+        }
     }
 
     private static void LoadColumnOutlineLevels(ISheet sourceSheet, Sheet sheet)
