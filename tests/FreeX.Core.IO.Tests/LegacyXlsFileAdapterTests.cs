@@ -6,6 +6,7 @@ using NPOI.SS.UserModel;
 using NPOI.SS.Util;
 using System.Reflection;
 using ModelBorderStyle = FreeX.Core.Model.BorderStyle;
+using ModelCellAddress = FreeX.Core.Model.CellAddress;
 using ModelHorizontalAlignment = FreeX.Core.Model.HorizontalAlignment;
 using ModelVerticalAlignment = FreeX.Core.Model.VerticalAlignment;
 using NPOIBorderStyle = NPOI.SS.UserModel.BorderStyle;
@@ -71,6 +72,12 @@ public sealed class LegacyXlsFileAdapterTests
 
         var sheet = workbook.GetSheetAt(0);
         sheet.Name.Should().Be("Visible");
+        workbook.NamedRanges.Should().ContainKey("InputCell");
+        workbook.NamedRanges["InputCell"].Start.Should().Be(new ModelCellAddress(sheet.Id, 2, 1));
+        workbook.NamedRanges["InputCell"].End.Should().Be(new ModelCellAddress(sheet.Id, 2, 1));
+        workbook.NamedRangeMetadataByName["InputCell"].Should().Be(new NamedRangeMetadata("Workbook", "Primary input cell"));
+        workbook.NamedFormulas.Should().ContainKey("DoubleInput").WhoseValue.Should().Be("Visible!$A$2*2");
+
         sheet.MergedRegions.Should().ContainSingle(region =>
             region.Start.Row == 1 && region.Start.Col == 1 &&
             region.End.Row == 1 && region.End.Col == 2);
@@ -95,6 +102,16 @@ public sealed class LegacyXlsFileAdapterTests
         formulaStyle.HorizontalAlignment.Should().Be(ModelHorizontalAlignment.Center);
         formulaStyle.VerticalAlignment.Should().Be(ModelVerticalAlignment.Center);
         formulaStyle.BorderBottom.Style.Should().Be(ModelBorderStyle.Thin);
+
+        var hyperlinkAddress = new ModelCellAddress(sheet.Id, 2, 4);
+        sheet.Hyperlinks.Should().ContainKey(hyperlinkAddress)
+            .WhoseValue.Should().Be("https://exinfm.com/free_spreadsheets.html");
+        sheet.HyperlinkMetadata[hyperlinkAddress].Should().Be(new HyperlinkMetadata(HyperlinkTargetKind.ExistingFileOrWebPage));
+
+        var commentAddress = new ModelCellAddress(sheet.Id, 2, 5);
+        sheet.Comments.Should().ContainKey(commentAddress)
+            .WhoseValue.Should().Be("Review before publishing");
+        sheet.CommentAuthors[commentAddress].Should().Be("Analyst");
 
         var hiddenSheet = workbook.GetSheetAt(1);
         hiddenSheet.Name.Should().Be("Hidden");
@@ -254,9 +271,35 @@ public sealed class LegacyXlsFileAdapterTests
         formula.CellStyle = style;
         row.CreateCell(2).SetCellValue("hidden column");
 
+        var helper = hssf.GetCreationHelper();
+        var hyperlink = helper.CreateHyperlink(HyperlinkType.Url);
+        hyperlink.Address = "https://exinfm.com/free_spreadsheets.html";
+        hyperlink.Label = "EXINFM";
+        var hyperlinkCell = row.CreateCell(3);
+        hyperlinkCell.SetCellValue("EXINFM");
+        hyperlinkCell.Hyperlink = hyperlink;
+
+        var drawing = sheet.CreateDrawingPatriarch();
+        var commentAnchor = new HSSFClientAnchor(0, 0, 0, 0, 4, 1, 6, 3);
+        var comment = drawing.CreateCellComment(commentAnchor);
+        comment.String = helper.CreateRichTextString("Review before publishing");
+        comment.Author = "Analyst";
+        var commentCell = row.CreateCell(4);
+        commentCell.SetCellValue("commented");
+        commentCell.CellComment = comment;
+
         var hiddenRow = sheet.CreateRow(3);
         hiddenRow.ZeroHeight = true;
         hiddenRow.CreateCell(0).SetCellValue("hidden");
+
+        var inputName = hssf.CreateName();
+        inputName.NameName = "InputCell";
+        inputName.RefersToFormula = "'Visible'!$A$2";
+        inputName.Comment = "Primary input cell";
+
+        var formulaName = hssf.CreateName();
+        formulaName.NameName = "DoubleInput";
+        formulaName.RefersToFormula = "Visible!$A$2*2";
 
         HSSFFormulaEvaluator.EvaluateAllFormulaCells(hssf);
 
