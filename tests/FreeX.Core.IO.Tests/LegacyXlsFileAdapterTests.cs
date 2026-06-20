@@ -5,6 +5,7 @@ using FreeX.Core.Model;
 using NPOI.HSSF.UserModel;
 using NPOI.SS.UserModel;
 using NPOI.SS.Util;
+using System.Globalization;
 using System.Reflection;
 using System.Text;
 using ModelBorderStyle = FreeX.Core.Model.BorderStyle;
@@ -159,7 +160,12 @@ public sealed class LegacyXlsFileAdapterTests
                 workbook.Sheets.Count(sheet => sheet.IsVeryHidden),
                 workbook.NamedRanges.Count + workbook.NamedFormulas.Count,
                 workbook.Sheets.Sum(sheet => sheet.Hyperlinks.Count),
-                workbook.Sheets.Sum(sheet => sheet.Comments.Count));
+                workbook.Sheets.Sum(sheet => sheet.Comments.Count),
+                SheetNames: workbook.Sheets.Select(sheet => sheet.Name).ToArray(),
+                CellFingerprints: ReadImportedCellFingerprints(workbook),
+                DefinedNameFingerprints: ReadImportedDefinedNameFingerprints(workbook),
+                HyperlinkFingerprints: ReadImportedHyperlinkFingerprints(workbook),
+                CommentFingerprints: ReadImportedCommentFingerprints(workbook));
 
             imported.Sheets.Should().Be(source.Sheets, imported.File);
             imported.Cells.Should().Be(source.Cells, imported.File);
@@ -172,6 +178,11 @@ public sealed class LegacyXlsFileAdapterTests
                 imported.DefinedNames.Should().Be(source.DefinedNames, imported.File);
                 imported.Hyperlinks.Should().Be(source.Hyperlinks, imported.File);
                 imported.Comments.Should().Be(source.Comments, imported.File);
+                imported.SheetNames.Should().Equal(source.SheetNames, imported.File);
+                imported.CellFingerprints.Should().BeEquivalentTo(source.CellFingerprints, imported.File);
+                imported.DefinedNameFingerprints.Should().BeEquivalentTo(source.DefinedNameFingerprints, imported.File);
+                imported.HyperlinkFingerprints.Should().BeEquivalentTo(source.HyperlinkFingerprints, imported.File);
+                imported.CommentFingerprints.Should().BeEquivalentTo(source.CommentFingerprints, imported.File);
                 imported.Styles.Should().BeGreaterThanOrEqualTo(source.Styles, imported.File);
                 imported.Dimensions.Should().BeGreaterThanOrEqualTo(source.Dimensions, imported.File);
             }
@@ -363,10 +374,15 @@ public sealed class LegacyXlsFileAdapterTests
         var dimensions = 0;
         var hyperlinks = 0;
         var comments = 0;
+        var sheetNames = new List<string>();
+        var cellFingerprints = new List<string>();
+        var hyperlinkFingerprints = new List<string>();
+        var commentFingerprints = new List<string>();
 
         for (var sheetIndex = 0; sheetIndex < hssf.NumberOfSheets; sheetIndex++)
         {
             var sheet = hssf.GetSheetAt(sheetIndex);
+            sheetNames.Add(sheet.SheetName);
             merges += sheet.NumMergedRegions;
 
             for (var rowIndex = sheet.FirstRowNum; rowIndex <= sheet.LastRowNum; rowIndex++)
@@ -381,7 +397,17 @@ public sealed class LegacyXlsFileAdapterTests
                 foreach (var cell in row.Cells)
                 {
                     if (IsSourceContentCell(cell))
+                    {
                         cells++;
+                        cellFingerprints.Add(CreateCellFingerprint(
+                            sheetIndex,
+                            sheet.SheetName,
+                            (uint)cell.RowIndex + 1,
+                            (uint)cell.ColumnIndex + 1,
+                            cell.CellType == CellType.Formula ? NormalizeFormulaText(cell.CellFormula) : "",
+                            SourceValueToken(cell, cell.CellType == CellType.Formula ? cell.CachedFormulaResultType : cell.CellType)));
+                    }
+
                     if (cell.CellType == CellType.Formula)
                         formulas++;
                     if (cell.CellStyle?.Index > 0)
@@ -401,18 +427,36 @@ public sealed class LegacyXlsFileAdapterTests
 
             if (sheet is HSSFSheet hssfSheet)
             {
-                hyperlinks += hssfSheet.GetHyperlinkList().Count;
-                comments += hssfSheet.GetCellComments().Count;
+                var sheetHyperlinks = hssfSheet.GetHyperlinkList();
+                hyperlinks += sheetHyperlinks.Count;
+                hyperlinkFingerprints.AddRange(sheetHyperlinks
+                    .Select(link => CreateAddressedFingerprint(
+                        sheetIndex,
+                        sheet.SheetName,
+                        (uint)link.FirstRow + 1,
+                        (uint)link.FirstColumn + 1,
+                        GetSourceHyperlinkTarget(link))));
+
+                var sheetComments = hssfSheet.GetCellComments();
+                comments += sheetComments.Count;
+                commentFingerprints.AddRange(sheetComments
+                    .Select(pair => CreateAddressedFingerprint(
+                        sheetIndex,
+                        sheet.SheetName,
+                        (uint)pair.Key.Row + 1,
+                        (uint)pair.Key.Column + 1,
+                        pair.Value.String?.String ?? "")));
             }
         }
 
         var validationWorkbook = new Workbook("DefinedNameValidation");
-        var definedNames = Enumerable.Range(0, hssf.NumberOfNames)
+        var definedNameFingerprints = Enumerable.Range(0, hssf.NumberOfNames)
             .Select(hssf.GetNameAt)
             .Where(name => IsImportableDefinedName(name, validationWorkbook))
             .Select(name => name.NameName)
             .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Count();
+            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
 
         return new LegacyXlsCorpusSummary(
             Path.GetFileName(path),
@@ -426,9 +470,14 @@ public sealed class LegacyXlsFileAdapterTests
                 hssf.GetSheetVisibility(index) is SheetVisibility.Hidden or SheetVisibility.VeryHidden),
             Enumerable.Range(0, hssf.NumberOfSheets).Count(index =>
                 hssf.GetSheetVisibility(index) is SheetVisibility.VeryHidden),
-            definedNames,
+            definedNameFingerprints.Length,
             hyperlinks,
-            comments);
+            comments,
+            SheetNames: sheetNames,
+            CellFingerprints: cellFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            DefinedNameFingerprints: definedNameFingerprints,
+            HyperlinkFingerprints: hyperlinkFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            CommentFingerprints: commentFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray());
     }
 
     private static LegacyXlsCorpusSummary ReadExcelDataReaderSourceSummary(string path, Stream stream)
@@ -465,7 +514,119 @@ public sealed class LegacyXlsFileAdapterTests
             DefinedNames: 0,
             Hyperlinks: 0,
             Comments: 0,
-            RichMetadata: false);
+            RichMetadata: false,
+            SheetNames: [],
+            CellFingerprints: [],
+            DefinedNameFingerprints: [],
+            HyperlinkFingerprints: [],
+            CommentFingerprints: []);
+    }
+
+    private static IReadOnlyList<string> ReadImportedCellFingerprints(Workbook workbook) =>
+        workbook.Sheets
+            .SelectMany((sheet, sheetIndex) => sheet.EnumerateCells()
+                .OrderBy(entry => entry.Address.Row)
+                .ThenBy(entry => entry.Address.Col)
+                .Select(entry => CreateCellFingerprint(
+                    sheetIndex,
+                    sheet.Name,
+                    entry.Address.Row,
+                    entry.Address.Col,
+                    NormalizeFormulaText(entry.Cell.FormulaText ?? ""),
+                    ImportedValueToken(entry.Cell.Value))))
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+
+    private static IReadOnlyList<string> ReadImportedDefinedNameFingerprints(Workbook workbook) =>
+        workbook.NamedRanges.Keys
+            .Concat(workbook.NamedFormulas.Keys)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+    private static IReadOnlyList<string> ReadImportedHyperlinkFingerprints(Workbook workbook) =>
+        workbook.Sheets
+            .SelectMany((sheet, sheetIndex) => sheet.Hyperlinks
+                .OrderBy(entry => entry.Key.Row)
+                .ThenBy(entry => entry.Key.Col)
+                .Select(entry => CreateAddressedFingerprint(
+                    sheetIndex,
+                    sheet.Name,
+                    entry.Key.Row,
+                    entry.Key.Col,
+                    entry.Value)))
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+
+    private static IReadOnlyList<string> ReadImportedCommentFingerprints(Workbook workbook) =>
+        workbook.Sheets
+            .SelectMany((sheet, sheetIndex) => sheet.Comments
+                .OrderBy(entry => entry.Key.Row)
+                .ThenBy(entry => entry.Key.Col)
+                .Select(entry => CreateAddressedFingerprint(
+                    sheetIndex,
+                    sheet.Name,
+                    entry.Key.Row,
+                    entry.Key.Col,
+                    entry.Value)))
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+
+    private static string CreateCellFingerprint(
+        int sheetIndex,
+        string sheetName,
+        uint row,
+        uint column,
+        string formula,
+        string value) =>
+        $"{sheetIndex}:{sheetName}!{new ModelCellAddress(default, row, column).ToA1()}|F={formula}|V={value}";
+
+    private static string CreateAddressedFingerprint(
+        int sheetIndex,
+        string sheetName,
+        uint row,
+        uint column,
+        string value) =>
+        $"{sheetIndex}:{sheetName}!{new ModelCellAddress(default, row, column).ToA1()}|{value}";
+
+    private static string SourceValueToken(ICell cell, CellType cellType) =>
+        cellType switch
+        {
+            CellType.Numeric when DateUtil.IsCellDateFormatted(cell) && cell.DateCellValue is { } date =>
+                $"Date:{date.ToOADate().ToString("R", CultureInfo.InvariantCulture)}",
+            CellType.Numeric => $"Number:{cell.NumericCellValue.ToString("R", CultureInfo.InvariantCulture)}",
+            CellType.Boolean => $"Bool:{cell.BooleanCellValue}",
+            CellType.String => $"Text:{cell.StringCellValue}",
+            CellType.Error => $"Error:{FormulaError.ForInt(cell.ErrorCellValue).String}",
+            _ => "Blank:"
+        };
+
+    private static string ImportedValueToken(ScalarValue value) =>
+        value switch
+        {
+            NumberValue number => $"Number:{number.Value.ToString("R", CultureInfo.InvariantCulture)}",
+            DateTimeValue date => $"Date:{date.Value.ToString("R", CultureInfo.InvariantCulture)}",
+            BoolValue boolean => $"Bool:{boolean.Value}",
+            TextValue text => $"Text:{text.Value}",
+            ErrorValue error => $"Error:{error.Code}",
+            BlankValue => "Blank:",
+            _ => value.ToString() ?? ""
+        };
+
+    private static string NormalizeFormulaText(string formula) =>
+        formula.StartsWith('=') ? formula[1..] : formula;
+
+    private static string GetSourceHyperlinkTarget(IHyperlink hyperlink)
+    {
+        var address = hyperlink.Address ?? "";
+        if (hyperlink is HSSFHyperlink hssfHyperlink &&
+            hyperlink.Type == HyperlinkType.Document &&
+            !string.IsNullOrWhiteSpace(hssfHyperlink.TextMark))
+        {
+            return string.IsNullOrWhiteSpace(address) ? hssfHyperlink.TextMark : $"{address}#{hssfHyperlink.TextMark}";
+        }
+
+        return address;
     }
 
     private static bool IsSourceContentCell(ICell cell)
@@ -527,7 +688,12 @@ public sealed class LegacyXlsFileAdapterTests
         int DefinedNames,
         int Hyperlinks,
         int Comments,
-        bool RichMetadata = true);
+        bool RichMetadata = true,
+        IReadOnlyList<string>? SheetNames = null,
+        IReadOnlyList<string>? CellFingerprints = null,
+        IReadOnlyList<string>? DefinedNameFingerprints = null,
+        IReadOnlyList<string>? HyperlinkFingerprints = null,
+        IReadOnlyList<string>? CommentFingerprints = null);
 
     public static TheoryData<object, double> AdditionalNumericValues() => new()
     {
