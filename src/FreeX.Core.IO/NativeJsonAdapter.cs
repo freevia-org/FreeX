@@ -47,6 +47,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
         workbook.FileVersion = ToWorkbookFileVersion(dto.FileVersion);
         workbook.CountrySettings = ToWorkbookCountrySettings(dto.CountrySettings);
         workbook.LegacyMenuSettings = ToWorkbookLegacyMenuSettings(dto.LegacyMenuSettings);
+        workbook.LegacyWorkbookSettings = ToWorkbookLegacyWorkbookSettings(dto.LegacyWorkbookSettings);
         workbook.FileSharing = ToWorkbookFileSharing(dto.FileSharing);
         foreach (var fileRecoveryProperties in (dto.FileRecoveryProperties ?? []).Select(ToWorkbookFileRecoveryProperties).OfType<WorkbookFileRecoveryPropertiesModel>())
             workbook.FileRecoveryProperties.Add(fileRecoveryProperties);

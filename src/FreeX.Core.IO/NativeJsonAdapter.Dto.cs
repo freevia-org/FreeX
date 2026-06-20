@@ -24,6 +24,7 @@ public sealed partial class NativeJsonAdapter
         public WorkbookFileVersionDto? FileVersion { get; set; }
         public WorkbookCountrySettingsDto? CountrySettings { get; set; }
         public WorkbookLegacyMenuSettingsDto? LegacyMenuSettings { get; set; }
+        public WorkbookLegacyWorkbookSettingsDto? LegacyWorkbookSettings { get; set; }
         public WorkbookFileSharingDto? FileSharing { get; set; }
         public List<WorkbookFileRecoveryPropertiesDto> FileRecoveryProperties { get; set; } = [];
         public WorkbookPropertiesDto? Properties { get; set; }
@@ -148,6 +149,12 @@ public sealed partial class NativeJsonAdapter
     {
         public int? AddMenuCount { get; set; }
         public int? DeleteMenuCount { get; set; }
+    }
+
+    private class WorkbookLegacyWorkbookSettingsDto
+    {
+        public List<int> SheetTabIds { get; set; } = [];
+        public bool? UseNaturalLanguageFormulas { get; set; }
     }
 
     private class WorkbookPropertiesDto

@@ -37,6 +37,12 @@ public sealed class LegacyXlsFileAdapterTests
     private static readonly FieldInfo? UnknownRecordRawDataField =
         typeof(UnknownRecord).GetField("_rawData", BindingFlags.Instance | BindingFlags.NonPublic);
 
+    private static readonly FieldInfo? TabIdRecordTabIdsField =
+        typeof(TabIdRecord).GetField("_tabids", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
+    private static readonly FieldInfo? UseSelFsRecordOptionsField =
+        typeof(UseSelFSRecord).GetField("_options", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
     private static readonly MethodInfo? HssfGetObjRecordMethod =
         typeof(HSSFSimpleShape).GetMethod(
             "GetObjRecord",
@@ -367,6 +373,7 @@ public sealed class LegacyXlsFileAdapterTests
                 SheetCodeNameFingerprints: ReadImportedSheetCodeNameFingerprints(workbook),
                 WorkbookCountryFingerprints: ReadImportedWorkbookCountryFingerprints(workbook),
                 WorkbookLegacyMenuFingerprints: ReadImportedWorkbookLegacyMenuFingerprints(workbook),
+                WorkbookLegacyWorkbookFingerprints: ReadImportedWorkbookLegacyWorkbookFingerprints(workbook),
                 WorkbookFunctionGroupFingerprints: ReadImportedWorkbookFunctionGroupFingerprints(workbook),
                 WorkbookPropertiesFingerprints: ReadImportedWorkbookPropertiesFingerprints(workbook),
                 WorkbookViewFingerprints: ReadImportedWorkbookViewFingerprints(workbook),
@@ -447,6 +454,7 @@ public sealed class LegacyXlsFileAdapterTests
                 imported.SheetCodeNameFingerprints.Should().BeEquivalentTo(source.SheetCodeNameFingerprints, imported.File);
                 imported.WorkbookCountryFingerprints.Should().BeEquivalentTo(source.WorkbookCountryFingerprints, imported.File);
                 imported.WorkbookLegacyMenuFingerprints.Should().BeEquivalentTo(source.WorkbookLegacyMenuFingerprints, imported.File);
+                imported.WorkbookLegacyWorkbookFingerprints.Should().BeEquivalentTo(source.WorkbookLegacyWorkbookFingerprints, imported.File);
                 imported.WorkbookFunctionGroupFingerprints.Should().BeEquivalentTo(source.WorkbookFunctionGroupFingerprints, imported.File);
                 imported.WorkbookPropertiesFingerprints.Should().BeEquivalentTo(source.WorkbookPropertiesFingerprints, imported.File);
                 imported.WorkbookViewFingerprints.Should().BeEquivalentTo(source.WorkbookViewFingerprints, imported.File);
@@ -537,6 +545,15 @@ public sealed class LegacyXlsFileAdapterTests
             .Should()
             .BeGreaterThan(0);
         summaries.Sum(summary => summary.WorkbookLegacyMenuFingerprints?.Count ?? 0)
+            .Should()
+            .BeGreaterThan(0);
+        summaries.Sum(summary => summary.WorkbookLegacyWorkbookFingerprints?.Count ?? 0)
+            .Should()
+            .BeGreaterThan(0);
+        summaries.Where(summary => summary.RichMetadata)
+            .Sum(summary => summary.WorkbookLegacyWorkbookFingerprints?.Count(fingerprint =>
+                fingerprint.Contains("TabIds=3,2,12", StringComparison.Ordinal) ||
+                fingerprint.Contains("UseNaturalLanguageFormulas=False", StringComparison.Ordinal)) ?? 0)
             .Should()
             .BeGreaterThan(0);
         summaries.Sum(summary => summary.WorkbookFunctionGroupFingerprints?.Count ?? 0)
@@ -1284,6 +1301,7 @@ public sealed class LegacyXlsFileAdapterTests
             SheetCodeNameFingerprints: sheetCodeNameFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             WorkbookCountryFingerprints: ReadSourceWorkbookCountryFingerprints(hssf),
             WorkbookLegacyMenuFingerprints: ReadSourceWorkbookLegacyMenuFingerprints(hssf),
+            WorkbookLegacyWorkbookFingerprints: ReadSourceWorkbookLegacyWorkbookFingerprints(hssf),
             WorkbookFunctionGroupFingerprints: ReadSourceWorkbookFunctionGroupFingerprints(hssf),
             WorkbookPropertiesFingerprints: workbookPropertiesFingerprints,
             WorkbookViewFingerprints: workbookViewFingerprints,
@@ -1554,6 +1572,17 @@ public sealed class LegacyXlsFileAdapterTests
             ? [CreateWorkbookLegacyMenuFingerprint(menuSettings.AddMenuCount, menuSettings.DeleteMenuCount)]
             : [];
 
+    private static IReadOnlyList<string> ReadImportedWorkbookLegacyWorkbookFingerprints(Workbook workbook)
+    {
+        if (workbook.LegacyWorkbookSettings is not { } settings)
+            return [];
+
+        var sheetTabIds = settings.SheetTabIds ?? [];
+        return sheetTabIds.Count == 0 && settings.UseNaturalLanguageFormulas is null
+            ? []
+            : [CreateWorkbookLegacyWorkbookFingerprint(sheetTabIds, settings.UseNaturalLanguageFormulas)];
+    }
+
     private static IReadOnlyList<string> ReadImportedWorkbookFunctionGroupFingerprints(Workbook workbook) =>
         workbook.FunctionGroups?.BuiltInGroupCount is { Length: > 0 } builtInGroupCount
             ? [CreateWorkbookFunctionGroupFingerprint(builtInGroupCount)]
@@ -1644,6 +1673,40 @@ public sealed class LegacyXlsFileAdapterTests
         return addMenuCount is null && deleteMenuCount is null
             ? []
             : [CreateWorkbookLegacyMenuFingerprint(addMenuCount, deleteMenuCount)];
+    }
+
+    private static IReadOnlyList<string> ReadSourceWorkbookLegacyWorkbookFingerprints(HSSFWorkbook hssf)
+    {
+        var sheetTabIds = ReadHssfSheetTabIds(hssf);
+        var useNaturalLanguageFormulas = ReadHssfUseNaturalLanguageFormulas(hssf);
+        return sheetTabIds.Count == 0 && useNaturalLanguageFormulas is null
+            ? []
+            : [CreateWorkbookLegacyWorkbookFingerprint(sheetTabIds, useNaturalLanguageFormulas)];
+    }
+
+    private static List<int> ReadHssfSheetTabIds(HSSFWorkbook hssf)
+    {
+        if (hssf.Workbook.FindFirstRecordBySid(TabIdRecord.sid) is not TabIdRecord tabIdRecord ||
+            TabIdRecordTabIdsField?.GetValue(tabIdRecord) is not short[] tabIds)
+        {
+            return [];
+        }
+
+        return tabIds
+            .Select(value => (int)value)
+            .Where(value => value >= 0)
+            .ToList();
+    }
+
+    private static bool? ReadHssfUseNaturalLanguageFormulas(HSSFWorkbook hssf)
+    {
+        if (hssf.Workbook.FindFirstRecordBySid(UseSelFSRecord.sid) is not UseSelFSRecord useSelFs ||
+            UseSelFsRecordOptionsField?.GetValue(useSelFs) is not { } options)
+        {
+            return null;
+        }
+
+        return Convert.ToInt32(options, CultureInfo.InvariantCulture) != 0;
     }
 
     private static IReadOnlyList<string> ReadSourceWorkbookFunctionGroupFingerprints(HSSFWorkbook hssf) =>
@@ -2983,6 +3046,15 @@ public sealed class LegacyXlsFileAdapterTests
             "WorkbookLegacyMenus",
             $"Add={FormatNullableInt(addMenuCount)}",
             $"Delete={FormatNullableInt(deleteMenuCount)}"
+        ]);
+
+    private static string CreateWorkbookLegacyWorkbookFingerprint(
+        IReadOnlyList<int> sheetTabIds,
+        bool? useNaturalLanguageFormulas) =>
+        string.Join("|", [
+            "WorkbookLegacyWorkbook",
+            $"TabIds={string.Join(",", sheetTabIds)}",
+            $"UseNaturalLanguageFormulas={FormatNullableBool(useNaturalLanguageFormulas)}"
         ]);
 
     private static string CreateWorkbookFunctionGroupFingerprint(string builtInGroupCount) =>
@@ -4564,6 +4636,7 @@ public sealed class LegacyXlsFileAdapterTests
         IReadOnlyList<string>? SheetCodeNameFingerprints = null,
         IReadOnlyList<string>? WorkbookCountryFingerprints = null,
         IReadOnlyList<string>? WorkbookLegacyMenuFingerprints = null,
+        IReadOnlyList<string>? WorkbookLegacyWorkbookFingerprints = null,
         IReadOnlyList<string>? WorkbookFunctionGroupFingerprints = null,
         IReadOnlyList<string>? WorkbookPropertiesFingerprints = null,
         IReadOnlyList<string>? WorkbookViewFingerprints = null,

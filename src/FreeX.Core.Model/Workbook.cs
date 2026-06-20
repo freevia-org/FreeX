@@ -38,6 +38,12 @@ public sealed class WorkbookLegacyMenuSettingsModel
     public int? DeleteMenuCount { get; set; }
 }
 
+public sealed class WorkbookLegacyWorkbookSettingsModel
+{
+    public List<int> SheetTabIds { get; set; } = [];
+    public bool? UseNaturalLanguageFormulas { get; set; }
+}
+
 // WorkbookPropertiesModel and WorkbookProtectionMetadataModel were simple bags of
 // NativeAttributes + NativeChildXmls with no behaviour.
 // They have been consolidated into NativeXmlPreserveBag.
@@ -213,6 +219,9 @@ public sealed class Workbook
 
     /// <summary>Legacy BIFF workbook add/delete menu metadata.</summary>
     public WorkbookLegacyMenuSettingsModel? LegacyMenuSettings { get; set; }
+
+    /// <summary>Legacy BIFF workbook compatibility metadata.</summary>
+    public WorkbookLegacyWorkbookSettingsModel? LegacyWorkbookSettings { get; set; }
 
     /// <summary>Excel workbook property metadata loaded from XLSX workbookPr (residual native XML).</summary>
     public NativeXmlPreserveBag? Properties { get; set; }

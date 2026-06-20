@@ -46,6 +46,7 @@ public sealed partial class NativeJsonAdapter
             FileVersion = FromWorkbookFileVersion(workbook.FileVersion),
             CountrySettings = FromWorkbookCountrySettings(workbook.CountrySettings),
             LegacyMenuSettings = FromWorkbookLegacyMenuSettings(workbook.LegacyMenuSettings),
+            LegacyWorkbookSettings = FromWorkbookLegacyWorkbookSettings(workbook.LegacyWorkbookSettings),
             FileSharing = FromWorkbookFileSharing(workbook.FileSharing),
             FileRecoveryProperties = workbook.FileRecoveryProperties
                 .Select(FromWorkbookFileRecoveryProperties)
