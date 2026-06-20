@@ -1,0 +1,131 @@
+using System.Text;
+
+namespace FreeW.Core.IO.Tests;
+
+public class HtmlMhtmlRoundTripTests
+{
+    [Fact]
+    public void Html_RoundTripsModelledStructuralSubset()
+    {
+        var document = BuildStructuralDocument();
+        var loaded = RoundTrip(new HtmlFileAdapter(), document);
+
+        loaded.Blocks.Should().HaveCount(5);
+        loaded.Blocks[0].Should().BeOfType<Paragraph>().Which.StyleId.Should().Be("Heading1");
+        loaded.Blocks[1].Should().BeOfType<Paragraph>().Which.Runs.Should().Contain(r => r.Formatting.Bold && r.Text == "bold");
+        loaded.Blocks[1].Should().BeOfType<Paragraph>().Which.Runs.Should().Contain(r => r.Formatting.Italic && r.Text == "italic");
+        loaded.Blocks[1].Should().BeOfType<Paragraph>().Which.Runs.Should().Contain(r => r.HyperlinkUrl == "https://example.test/");
+        loaded.Blocks[2].Should().BeOfType<Paragraph>().Which.Formatting.ListKind.Should().Be(ListKind.Bullet);
+        loaded.Blocks[3].Should().BeOfType<Paragraph>().Which.Formatting.ListKind.Should().Be(ListKind.Bullet);
+        loaded.Blocks[4].Should().BeOfType<Table>().Which.Rows[0].Cells[0].PlainText.Should().Be("A1");
+    }
+
+    [Fact]
+    public void Html_ReadsInlineStyleFormatting()
+    {
+        const string html = """
+<!doctype html><html><body>
+<p style="text-align: center"><span style="font-weight: 700; font-style: italic; text-decoration: underline line-through; color: rgb(1, 2, 3); font-size: 16px">Styled</span></p>
+</body></html>
+""";
+
+        var loaded = HtmlFileAdapter.LoadHtml(html, static _ => null);
+        var paragraph = loaded.Blocks.Should().ContainSingle().Which.Should().BeOfType<Paragraph>().Which;
+        paragraph.Formatting.Alignment.Should().Be(TextAlignment.Center);
+        var run = paragraph.Runs.Should().ContainSingle().Which;
+        run.Formatting.Bold.Should().BeTrue();
+        run.Formatting.Italic.Should().BeTrue();
+        run.Formatting.Underline.Should().BeTrue();
+        run.Formatting.Strikethrough.Should().BeTrue();
+        run.Formatting.ColorHex.Should().Be("#010203");
+        run.Formatting.FontSizePt.Should().Be(12);
+    }
+
+    [Fact]
+    public void Mhtml_RoundTripsEmbeddedImageThroughCid()
+    {
+        var document = new TextDocument();
+        var paragraph = new Paragraph();
+        var image = new InlineImage([0x89, 0x50, 0x4E, 0x47, 0x00], 24, 18, ImageFormat.Png)
+        {
+            AltText = "Tiny image"
+        };
+        paragraph.Runs.Add(new Run(string.Empty) { Image = image });
+        document.Blocks.Add(paragraph);
+
+        using var stream = new MemoryStream();
+        var adapter = new MhtmlFileAdapter();
+        adapter.Save(document, stream);
+        var mhtml = Encoding.UTF8.GetString(stream.ToArray());
+        mhtml.Should().Contain("cid:image1@freew.local");
+
+        stream.Position = 0;
+        var loaded = adapter.Load(stream);
+
+        var loadedImage = loaded.Blocks.Should().ContainSingle().Which
+            .Should().BeOfType<Paragraph>().Which.Runs.Should().ContainSingle().Which.Image;
+        loadedImage.Should().NotBeNull();
+        loadedImage!.Bytes.Should().Equal(image.Bytes);
+        loadedImage.AltText.Should().Be("Tiny image");
+    }
+
+    [Fact]
+    public void Html_SaveDropsUnsupportedFootnoteStoreByDesign()
+    {
+        var document = new TextDocument();
+        var paragraph = new Paragraph("Body");
+        paragraph.Runs.Add(Run.FootnoteReference(1));
+        document.Blocks.Add(paragraph);
+        document.Footnotes[1] = new Footnote(1, "Footnote text");
+
+        using var stream = new MemoryStream();
+        new HtmlFileAdapter().Save(document, stream);
+        var html = Encoding.UTF8.GetString(stream.ToArray());
+
+        html.Should().Contain("Body");
+        html.Should().NotContain("Footnote text");
+    }
+
+    [Fact]
+    public void Catalog_RegistersHtmlAndMhtmlFormats()
+    {
+        var formats = DocumentFileAdapterCatalog.CreateDefaultAdapters().SelectMany(adapter => adapter.Formats).ToList();
+        formats.Should().ContainSingle(f => f.Extension == ".html" && f.CanOpen && f.CanSave);
+        formats.Should().ContainSingle(f => f.Extension == ".htm" && f.CanOpen && f.CanSave);
+        formats.Should().ContainSingle(f => f.Extension == ".mhtml" && f.CanOpen && f.CanSave);
+        formats.Should().ContainSingle(f => f.Extension == ".mht" && f.CanOpen && f.CanSave);
+    }
+
+    private static TextDocument BuildStructuralDocument()
+    {
+        var document = new TextDocument();
+        document.Blocks.Add(new Paragraph("Title") { StyleId = "Heading1" });
+
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("A "));
+        paragraph.Runs.Add(new Run("bold", new RunFormatting { Bold = true }));
+        paragraph.Runs.Add(new Run(" and "));
+        paragraph.Runs.Add(new Run("italic", new RunFormatting { Italic = true }));
+        paragraph.Runs.Add(new Run(" link") { HyperlinkUrl = "https://example.test/" });
+        document.Blocks.Add(paragraph);
+
+        document.Blocks.Add(new Paragraph("First item") { Formatting = ParagraphFormatting.Default with { ListKind = ListKind.Bullet } });
+        document.Blocks.Add(new Paragraph("Second item") { Formatting = ParagraphFormatting.Default with { ListKind = ListKind.Bullet } });
+
+        var table = new Table();
+        var row = new TableRow();
+        row.Cells.Add(new TableCell("A1"));
+        row.Cells.Add(new TableCell("B1"));
+        table.Rows.Add(row);
+        document.Blocks.Add(table);
+        return document;
+    }
+
+    private static TextDocument RoundTrip(IDocumentFileAdapter adapter, TextDocument document)
+    {
+        using var stream = new MemoryStream();
+        adapter.Save(document, stream);
+        stream.Position = 0;
+        return adapter.Load(stream);
+    }
+}

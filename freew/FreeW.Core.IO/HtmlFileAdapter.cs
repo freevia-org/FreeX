@@ -1,0 +1,553 @@
+using System.Globalization;
+using System.Net;
+using System.Text;
+using AngleSharp.Dom;
+using AngleSharp.Html.Parser;
+using FreeW.Core.Model;
+
+namespace FreeW.Core.IO;
+
+public sealed class HtmlFileAdapter : IDocumentFileAdapter
+{
+    public string Extension => ".html";
+    public string FormatName => "HTML document";
+
+    public IReadOnlyList<FileFormatDescriptor> Formats { get; } =
+    [
+        new(".html", "HTML document"),
+        new(".htm", "HTML document"),
+    ];
+
+    public TextDocument Load(Stream stream)
+    {
+        using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, bufferSize: 4096, leaveOpen: true);
+        return LoadHtml(reader.ReadToEnd(), static _ => null);
+    }
+
+    public void Save(TextDocument document, Stream stream)
+    {
+        var result = WriteHtml(document, HtmlImageMode.DataUri);
+        using var writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), bufferSize: 4096, leaveOpen: true);
+        writer.Write(result.Html);
+    }
+
+    internal static TextDocument LoadHtml(string html, Func<string, InlineImage?> imageResolver)
+    {
+        var parser = new HtmlParser();
+        var htmlDocument = parser.ParseDocument(html);
+        var document = new TextDocument();
+        document.Blocks.Clear();
+
+        var body = htmlDocument.Body;
+        if (body is null)
+            return document;
+
+        foreach (var block in ReadBlocks(body.ChildNodes, imageResolver))
+            document.Blocks.Add(block);
+
+        if (document.Blocks.Count == 0 && !string.IsNullOrWhiteSpace(body.TextContent))
+            document.Blocks.Add(new Paragraph(NormalizeText(body.TextContent)));
+
+        return document;
+    }
+
+    internal static HtmlWriteResult WriteHtml(TextDocument document, HtmlImageMode imageMode)
+    {
+        var images = new List<HtmlEmbeddedImage>();
+        var body = new StringBuilder();
+        WriteBlocks(body, document.Blocks, imageMode, images);
+
+        var html = """
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+body { font-family: Calibri, sans-serif; font-size: 11pt; }
+table { border-collapse: collapse; }
+td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
+</style>
+</head>
+<body>
+""" + body + """
+</body>
+</html>
+""";
+        return new HtmlWriteResult(html, images);
+    }
+
+    private static IEnumerable<Block> ReadBlocks(IEnumerable<INode> nodes, Func<string, InlineImage?> imageResolver)
+    {
+        foreach (var node in nodes)
+        {
+            if (node is not IElement element)
+            {
+                if (!string.IsNullOrWhiteSpace(node.TextContent))
+                    yield return new Paragraph(NormalizeText(node.TextContent));
+                continue;
+            }
+
+            switch (element.LocalName.ToLowerInvariant())
+            {
+                case "p":
+                    yield return ReadParagraph(element, ParagraphFormatting.Default, null, imageResolver);
+                    break;
+                case "h1":
+                case "h2":
+                case "h3":
+                case "h4":
+                case "h5":
+                case "h6":
+                    yield return ReadHeading(element, imageResolver);
+                    break;
+                case "ul":
+                case "ol":
+                    foreach (var item in ReadList(element, imageResolver))
+                        yield return item;
+                    break;
+                case "table":
+                    yield return ReadTable(element, imageResolver);
+                    break;
+                case "div":
+                case "section":
+                case "article":
+                case "main":
+                    foreach (var nested in ReadBlocks(element.ChildNodes, imageResolver))
+                        yield return nested;
+                    break;
+                case "br":
+                    yield return new Paragraph();
+                    break;
+                default:
+                    if (!string.IsNullOrWhiteSpace(element.TextContent))
+                        yield return ReadParagraph(element, ParagraphFormatting.Default, null, imageResolver);
+                    break;
+            }
+        }
+    }
+
+    private static Paragraph ReadHeading(IElement element, Func<string, InlineImage?> imageResolver)
+    {
+        var level = int.TryParse(element.LocalName[1..], NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            ? Math.Clamp(parsed, 1, 6)
+            : 1;
+        var paragraph = ReadParagraph(element, ParagraphFormatting.Default, $"Heading{Math.Min(level, 3)}", imageResolver);
+        paragraph.Runs.ReplaceAll(run => run.Formatting.Bold ? run : new Run(run.Text, run.Formatting with { Bold = true })
+        {
+            Image = run.Image,
+            HyperlinkUrl = run.HyperlinkUrl,
+            HyperlinkAnchor = run.HyperlinkAnchor,
+            HyperlinkTooltip = run.HyperlinkTooltip,
+        });
+        return paragraph;
+    }
+
+    private static IEnumerable<Paragraph> ReadList(IElement list, Func<string, InlineImage?> imageResolver)
+    {
+        var kind = list.LocalName.Equals("ol", StringComparison.OrdinalIgnoreCase) ? ListKind.Number : ListKind.Bullet;
+        foreach (var item in list.Children.Where(child => child.LocalName.Equals("li", StringComparison.OrdinalIgnoreCase)))
+        {
+            yield return ReadParagraph(
+                item,
+                ParagraphFormatting.Default with { ListKind = kind },
+                null,
+                imageResolver);
+        }
+    }
+
+    private static Paragraph ReadParagraph(
+        IElement element,
+        ParagraphFormatting baseFormatting,
+        string? styleId,
+        Func<string, InlineImage?> imageResolver)
+    {
+        var declarations = HtmlCssFormatting.ParseDeclarations(element.GetAttribute("style"));
+        var formatting = baseFormatting;
+        if (HtmlCssFormatting.ReadAlignment(declarations) is { } alignment)
+            formatting = formatting with { Alignment = alignment };
+
+        var paragraph = new Paragraph { Formatting = formatting, StyleId = styleId };
+        AppendInline(paragraph, element.ChildNodes, RunFormatting.Default, imageResolver);
+        return paragraph;
+    }
+
+    private static Table ReadTable(IElement element, Func<string, InlineImage?> imageResolver)
+    {
+        var table = new Table();
+        var rowElements = element.QuerySelectorAll("tr").OfType<IElement>().ToList();
+        var pendingRowspans = new Dictionary<int, int>();
+
+        foreach (var rowElement in rowElements)
+        {
+            var row = new TableRow();
+            var column = 0;
+            foreach (var cellElement in rowElement.Children.Where(c =>
+                         c.LocalName.Equals("td", StringComparison.OrdinalIgnoreCase) ||
+                         c.LocalName.Equals("th", StringComparison.OrdinalIgnoreCase)))
+            {
+                while (pendingRowspans.TryGetValue(column, out var remaining) && remaining > 0)
+                {
+                    row.Cells.Add(new TableCell { VerticalMerge = VerticalMergeState.Continue });
+                    pendingRowspans[column] = remaining - 1;
+                    column++;
+                }
+
+                var cell = new TableCell();
+                if (int.TryParse(cellElement.GetAttribute("colspan"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var colspan) && colspan > 1)
+                    cell.GridSpan = colspan;
+                if (int.TryParse(cellElement.GetAttribute("rowspan"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var rowspan) && rowspan > 1)
+                {
+                    cell.VerticalMerge = VerticalMergeState.Restart;
+                    pendingRowspans[column] = rowspan - 1;
+                }
+
+                var paragraphs = ReadBlocks(cellElement.ChildNodes, imageResolver).OfType<Paragraph>().ToList();
+                if (paragraphs.Count == 0)
+                    paragraphs.Add(new Paragraph(NormalizeText(cellElement.TextContent)));
+                cell.Paragraphs.AddRange(paragraphs);
+
+                if (cellElement.LocalName.Equals("th", StringComparison.OrdinalIgnoreCase))
+                {
+                    foreach (var run in cell.Paragraphs.SelectMany(p => p.Runs))
+                        run.Formatting = run.Formatting with { Bold = true };
+                }
+
+                row.Cells.Add(cell);
+                column += Math.Max(1, cell.GridSpan);
+            }
+
+            while (pendingRowspans.TryGetValue(column, out var remaining) && remaining > 0)
+            {
+                row.Cells.Add(new TableCell { VerticalMerge = VerticalMergeState.Continue });
+                pendingRowspans[column] = remaining - 1;
+                column++;
+            }
+
+            table.Rows.Add(row);
+        }
+
+        return table;
+    }
+
+    private static void AppendInline(
+        Paragraph paragraph,
+        IEnumerable<INode> nodes,
+        RunFormatting inherited,
+        Func<string, InlineImage?> imageResolver)
+    {
+        foreach (var node in nodes)
+        {
+            if (node is IText textNode)
+            {
+                var text = NormalizeText(textNode.Data);
+                if (text.Length > 0)
+                    paragraph.Runs.Add(new Run(text, inherited));
+                continue;
+            }
+
+            if (node is not IElement element)
+                continue;
+
+            var formatting = ApplyElementFormatting(element, inherited);
+            switch (element.LocalName.ToLowerInvariant())
+            {
+                case "br":
+                    paragraph.Runs.Add(new Run("\n", formatting));
+                    break;
+                case "img":
+                    if (TryReadImage(element, imageResolver) is { } image)
+                        paragraph.Runs.Add(new Run(string.Empty, formatting) { Image = image });
+                    break;
+                case "a":
+                    var before = paragraph.Runs.Count;
+                    AppendInline(paragraph, element.ChildNodes, formatting, imageResolver);
+                    var href = element.GetAttribute("href");
+                    if (!string.IsNullOrWhiteSpace(href))
+                    {
+                        foreach (var run in paragraph.Runs.Skip(before))
+                            run.HyperlinkUrl = href;
+                    }
+                    break;
+                default:
+                    AppendInline(paragraph, element.ChildNodes, formatting, imageResolver);
+                    break;
+            }
+        }
+    }
+
+    private static RunFormatting ApplyElementFormatting(IElement element, RunFormatting inherited)
+    {
+        var result = inherited;
+        switch (element.LocalName.ToLowerInvariant())
+        {
+            case "b":
+            case "strong":
+                result = result with { Bold = true };
+                break;
+            case "i":
+            case "em":
+                result = result with { Italic = true };
+                break;
+            case "u":
+                result = result with { Underline = true };
+                break;
+            case "s":
+            case "strike":
+            case "del":
+                result = result with { Strikethrough = true };
+                break;
+            case "sup":
+                result = result with { VerticalAlign = VerticalAlign.Superscript };
+                break;
+            case "sub":
+                result = result with { VerticalAlign = VerticalAlign.Subscript };
+                break;
+        }
+
+        return HtmlCssFormatting.ApplyToRun(result, HtmlCssFormatting.ParseDeclarations(element.GetAttribute("style")));
+    }
+
+    private static InlineImage? TryReadImage(IElement element, Func<string, InlineImage?> imageResolver)
+    {
+        var src = element.GetAttribute("src");
+        if (string.IsNullOrWhiteSpace(src))
+            return null;
+
+        InlineImage? image = null;
+        if (src.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+            image = ReadDataUriImage(src);
+        else if (src.StartsWith("cid:", StringComparison.OrdinalIgnoreCase))
+            image = imageResolver(src[4..]);
+        else
+            image = imageResolver(src);
+
+        if (image is null)
+            return null;
+
+        if (TryReadLengthPt(element.GetAttribute("width"), out var width))
+            image.WidthPt = width;
+        if (TryReadLengthPt(element.GetAttribute("height"), out var height))
+            image.HeightPt = height;
+        image.AltText = element.GetAttribute("alt");
+        return image;
+    }
+
+    private static InlineImage? ReadDataUriImage(string src)
+    {
+        var comma = src.IndexOf(',');
+        if (comma < 0)
+            return null;
+
+        var header = src[..comma];
+        if (!header.Contains(";base64", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        try
+        {
+            var bytes = Convert.FromBase64String(src[(comma + 1)..]);
+            var format = ImageFormatFromMime(header);
+            return new InlineImage(bytes, 72, 72, format);
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
+    }
+
+    private static ImageFormat ImageFormatFromMime(string header) =>
+        header.ToLowerInvariant() switch
+        {
+            var h when h.Contains("image/jpeg") || h.Contains("image/jpg") => ImageFormat.Jpeg,
+            var h when h.Contains("image/gif") => ImageFormat.Gif,
+            var h when h.Contains("image/bmp") => ImageFormat.Bmp,
+            var h when h.Contains("image/tiff") => ImageFormat.Tiff,
+            _ => ImageFormat.Png
+        };
+
+    private static bool TryReadLengthPt(string? value, out double pt) =>
+        HtmlCssFormatting.TryParseLengthPt(value, out pt);
+
+    private static void WriteBlocks(StringBuilder sb, IReadOnlyList<Block> blocks, HtmlImageMode imageMode, List<HtmlEmbeddedImage> images)
+    {
+        for (var i = 0; i < blocks.Count; i++)
+        {
+            if (blocks[i] is Paragraph paragraph && paragraph.Formatting.ListKind is ListKind.Bullet or ListKind.Number)
+            {
+                var kind = paragraph.Formatting.ListKind;
+                sb.Append(kind == ListKind.Number ? "<ol>" : "<ul>");
+                while (i < blocks.Count && blocks[i] is Paragraph item && item.Formatting.ListKind == kind)
+                {
+                    sb.Append("<li>");
+                    WriteRuns(sb, item.Runs, imageMode, images);
+                    sb.AppendLine("</li>");
+                    i++;
+                }
+                sb.AppendLine(kind == ListKind.Number ? "</ol>" : "</ul>");
+                i--;
+                continue;
+            }
+
+            switch (blocks[i])
+            {
+                case Paragraph p:
+                    WriteParagraph(sb, p, imageMode, images);
+                    break;
+                case Table table:
+                    WriteTable(sb, table, imageMode, images);
+                    break;
+            }
+        }
+    }
+
+    private static void WriteParagraph(StringBuilder sb, Paragraph paragraph, HtmlImageMode imageMode, List<HtmlEmbeddedImage> images)
+    {
+        var tag = HeadingTag(paragraph.StyleId) ?? "p";
+        var style = HtmlCssFormatting.ParagraphStyle(paragraph.Formatting);
+        sb.Append('<').Append(tag);
+        if (style.Length > 0)
+            sb.Append(" style=\"").Append(WebUtility.HtmlEncode(style)).Append('"');
+        sb.Append('>');
+        WriteRuns(sb, paragraph.Runs, imageMode, images);
+        sb.Append("</").Append(tag).AppendLine(">");
+    }
+
+    private static string? HeadingTag(string? styleId) =>
+        styleId?.ToLowerInvariant() switch
+        {
+            "heading1" => "h1",
+            "heading2" => "h2",
+            "heading3" => "h3",
+            _ => null
+        };
+
+    private static void WriteTable(StringBuilder sb, Table table, HtmlImageMode imageMode, List<HtmlEmbeddedImage> images)
+    {
+        sb.AppendLine("<table>");
+        foreach (var row in table.Rows)
+        {
+            sb.AppendLine("<tr>");
+            foreach (var cell in row.Cells)
+            {
+                if (cell.VerticalMerge == VerticalMergeState.Continue)
+                    continue;
+
+                sb.Append("<td");
+                if (cell.GridSpan > 1)
+                    sb.Append(" colspan=\"").Append(cell.GridSpan.ToString(CultureInfo.InvariantCulture)).Append('"');
+                if (cell.VerticalMerge == VerticalMergeState.Restart)
+                    sb.Append(" rowspan=\"2\"");
+                sb.Append('>');
+
+                if (cell.Paragraphs.Count == 1)
+                    WriteRuns(sb, cell.Paragraphs[0].Runs, imageMode, images);
+                else
+                    foreach (var paragraph in cell.Paragraphs)
+                        WriteParagraph(sb, paragraph, imageMode, images);
+
+                sb.AppendLine("</td>");
+            }
+            sb.AppendLine("</tr>");
+        }
+        sb.AppendLine("</table>");
+    }
+
+    private static void WriteRuns(StringBuilder sb, IEnumerable<Run> runs, HtmlImageMode imageMode, List<HtmlEmbeddedImage> images)
+    {
+        foreach (var run in runs)
+        {
+            if (run.FootnoteId.HasValue || run.EndnoteId.HasValue || run.CommentId.HasValue)
+                continue;
+
+            var textOrImage = new StringBuilder();
+            if (run.Image is { } image)
+                WriteImage(textOrImage, image, imageMode, images);
+            else
+                textOrImage.Append(WebUtility.HtmlEncode(run.Text).Replace("\n", "<br>"));
+
+            var content = textOrImage.ToString();
+            if (content.Length == 0)
+                continue;
+
+            var formatting = run.Formatting;
+            if (formatting.Bold)
+                content = "<strong>" + content + "</strong>";
+            if (formatting.Italic)
+                content = "<em>" + content + "</em>";
+            if (formatting.Underline)
+                content = "<u>" + content + "</u>";
+            if (formatting.Strikethrough)
+                content = "<s>" + content + "</s>";
+            if (formatting.VerticalAlign == VerticalAlign.Superscript)
+                content = "<sup>" + content + "</sup>";
+            if (formatting.VerticalAlign == VerticalAlign.Subscript)
+                content = "<sub>" + content + "</sub>";
+
+            var style = HtmlCssFormatting.RunStyle(formatting);
+            if (style.Length > 0)
+                content = "<span style=\"" + WebUtility.HtmlEncode(style) + "\">" + content + "</span>";
+
+            if (!string.IsNullOrWhiteSpace(run.HyperlinkUrl))
+                content = "<a href=\"" + WebUtility.HtmlEncode(run.HyperlinkUrl) + "\">" + content + "</a>";
+
+            sb.Append(content);
+        }
+    }
+
+    private static void WriteImage(StringBuilder sb, InlineImage image, HtmlImageMode imageMode, List<HtmlEmbeddedImage> images)
+    {
+        var ext = InlineImage.ExtensionFor(image.Format);
+        var mime = MimeTypeFor(image.Format);
+        string src;
+        if (imageMode == HtmlImageMode.Cid)
+        {
+            var cid = $"image{images.Count + 1}@freew.local";
+            images.Add(new HtmlEmbeddedImage(cid, mime, ext, image.Bytes));
+            src = "cid:" + cid;
+        }
+        else
+        {
+            src = $"data:{mime};base64,{Convert.ToBase64String(image.Bytes)}";
+        }
+
+        sb.Append("<img src=\"").Append(WebUtility.HtmlEncode(src)).Append('"')
+            .Append(" width=\"").Append(FormatPt(image.WidthPt)).Append("pt\"")
+            .Append(" height=\"").Append(FormatPt(image.HeightPt)).Append("pt\"");
+        if (!string.IsNullOrWhiteSpace(image.AltText))
+            sb.Append(" alt=\"").Append(WebUtility.HtmlEncode(image.AltText)).Append('"');
+        sb.Append('>');
+    }
+
+    internal static string MimeTypeFor(ImageFormat format) => format switch
+    {
+        ImageFormat.Jpeg => "image/jpeg",
+        ImageFormat.Gif => "image/gif",
+        ImageFormat.Bmp => "image/bmp",
+        ImageFormat.Tiff => "image/tiff",
+        _ => "image/png"
+    };
+
+    private static string NormalizeText(string text) =>
+        text.Replace("\r\n", "\n").Replace('\r', '\n');
+
+    private static string FormatPt(double pt) =>
+        pt.ToString("0.##", CultureInfo.InvariantCulture);
+}
+
+internal enum HtmlImageMode
+{
+    DataUri,
+    Cid,
+}
+
+internal sealed record HtmlEmbeddedImage(string ContentId, string MimeType, string Extension, byte[] Bytes);
+
+internal sealed record HtmlWriteResult(string Html, IReadOnlyList<HtmlEmbeddedImage> Images);
+
+internal static class ListExtensions
+{
+    public static void ReplaceAll<T>(this IList<T> list, Func<T, T> replace)
+    {
+        for (var i = 0; i < list.Count; i++)
+            list[i] = replace(list[i]);
+    }
+}
