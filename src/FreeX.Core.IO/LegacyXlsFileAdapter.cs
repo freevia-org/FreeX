@@ -261,8 +261,9 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
             sourceWorkbook.Workbook.FindFirstRecordBySid(WindowProtectRecord.sid) is WindowProtectRecord windowProtect &&
             windowProtect.Protect;
 
-        workbook.IsStructureProtected = isStructureProtected || isWindowProtected;
-        if (sourceWorkbook.Workbook.FindFirstRecordBySid(PasswordRecord.sid) is PasswordRecord { Password: not 0 } password)
+        workbook.IsStructureProtected = isStructureProtected;
+        if (isStructureProtected &&
+            sourceWorkbook.Workbook.FindFirstRecordBySid(PasswordRecord.sid) is PasswordRecord { Password: not 0 } password)
             workbook.StructureProtectionPassword = ((ushort)password.Password).ToString("X4", CultureInfo.InvariantCulture);
 
         if (!isWindowProtected)

@@ -175,7 +175,7 @@ td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
     {
         var table = new Table();
         var rowElements = element.QuerySelectorAll("tr").OfType<IElement>().ToList();
-        var pendingRowspans = new Dictionary<int, int>();
+        var pendingRowspans = new Dictionary<int, PendingRowspan>();
 
         foreach (var rowElement in rowElements)
         {
@@ -185,11 +185,15 @@ td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
                          c.LocalName.Equals("td", StringComparison.OrdinalIgnoreCase) ||
                          c.LocalName.Equals("th", StringComparison.OrdinalIgnoreCase)))
             {
-                while (pendingRowspans.TryGetValue(column, out var remaining) && remaining > 0)
+                while (pendingRowspans.TryGetValue(column, out var pending) && pending.RemainingRows > 0)
                 {
-                    row.Cells.Add(new TableCell { VerticalMerge = VerticalMergeState.Continue });
-                    pendingRowspans[column] = remaining - 1;
-                    column++;
+                    row.Cells.Add(new TableCell
+                    {
+                        GridSpan = pending.GridSpan,
+                        VerticalMerge = VerticalMergeState.Continue
+                    });
+                    pendingRowspans[column] = pending with { RemainingRows = pending.RemainingRows - 1 };
+                    column += pending.GridSpan;
                 }
 
                 var cell = new TableCell();
@@ -198,7 +202,7 @@ td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
                 if (int.TryParse(cellElement.GetAttribute("rowspan"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var rowspan) && rowspan > 1)
                 {
                     cell.VerticalMerge = VerticalMergeState.Restart;
-                    pendingRowspans[column] = rowspan - 1;
+                    pendingRowspans[column] = new PendingRowspan(rowspan - 1, Math.Max(1, cell.GridSpan));
                 }
 
                 var paragraphs = ReadBlocks(cellElement.ChildNodes, imageResolver).OfType<Paragraph>().ToList();
@@ -216,11 +220,15 @@ td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
                 column += Math.Max(1, cell.GridSpan);
             }
 
-            while (pendingRowspans.TryGetValue(column, out var remaining) && remaining > 0)
+            while (pendingRowspans.TryGetValue(column, out var pending) && pending.RemainingRows > 0)
             {
-                row.Cells.Add(new TableCell { VerticalMerge = VerticalMergeState.Continue });
-                pendingRowspans[column] = remaining - 1;
-                column++;
+                row.Cells.Add(new TableCell
+                {
+                    GridSpan = pending.GridSpan,
+                    VerticalMerge = VerticalMergeState.Continue
+                });
+                pendingRowspans[column] = pending with { RemainingRows = pending.RemainingRows - 1 };
+                column += pending.GridSpan;
             }
 
             table.Rows.Add(row);
@@ -423,19 +431,24 @@ td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
     private static void WriteTable(StringBuilder sb, Table table, HtmlImageMode imageMode, List<HtmlEmbeddedImage> images)
     {
         sb.AppendLine("<table>");
-        foreach (var row in table.Rows)
+        for (var rowIndex = 0; rowIndex < table.Rows.Count; rowIndex++)
         {
+            var row = table.Rows[rowIndex];
             sb.AppendLine("<tr>");
-            foreach (var cell in row.Cells)
+            for (var cellIndex = 0; cellIndex < row.Cells.Count; cellIndex++)
             {
+                var cell = row.Cells[cellIndex];
                 if (cell.VerticalMerge == VerticalMergeState.Continue)
                     continue;
 
                 sb.Append("<td");
                 if (cell.GridSpan > 1)
                     sb.Append(" colspan=\"").Append(cell.GridSpan.ToString(CultureInfo.InvariantCulture)).Append('"');
-                if (cell.VerticalMerge == VerticalMergeState.Restart)
-                    sb.Append(" rowspan=\"2\"");
+                var rowspan = cell.VerticalMerge == VerticalMergeState.Restart
+                    ? CalculateRowspan(table, rowIndex, cellIndex)
+                    : 1;
+                if (rowspan > 1)
+                    sb.Append(" rowspan=\"").Append(rowspan.ToString(CultureInfo.InvariantCulture)).Append('"');
                 sb.Append('>');
 
                 if (cell.Paragraphs.Count == 1)
@@ -449,6 +462,42 @@ td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
             sb.AppendLine("</tr>");
         }
         sb.AppendLine("</table>");
+    }
+
+    private static int CalculateRowspan(Table table, int rowIndex, int cellIndex)
+    {
+        var row = table.Rows[rowIndex];
+        var gridColumn = GridColumnOf(row, cellIndex);
+        var rowspan = 1;
+        for (var nextRowIndex = rowIndex + 1; nextRowIndex < table.Rows.Count; nextRowIndex++)
+        {
+            if (FindCellStartingAtGridColumn(table.Rows[nextRowIndex], gridColumn) is not { VerticalMerge: VerticalMergeState.Continue })
+                break;
+            rowspan++;
+        }
+
+        return rowspan;
+    }
+
+    private static int GridColumnOf(TableRow row, int cellIndex)
+    {
+        var column = 0;
+        for (var index = 0; index < cellIndex && index < row.Cells.Count; index++)
+            column += Math.Max(1, row.Cells[index].GridSpan);
+        return column;
+    }
+
+    private static TableCell? FindCellStartingAtGridColumn(TableRow row, int gridColumn)
+    {
+        var column = 0;
+        foreach (var cell in row.Cells)
+        {
+            if (column == gridColumn)
+                return cell;
+            column += Math.Max(1, cell.GridSpan);
+        }
+
+        return null;
     }
 
     private static void WriteRuns(StringBuilder sb, IEnumerable<Run> runs, HtmlImageMode imageMode, List<HtmlEmbeddedImage> images)
@@ -542,6 +591,8 @@ internal enum HtmlImageMode
 internal sealed record HtmlEmbeddedImage(string ContentId, string MimeType, string Extension, byte[] Bytes);
 
 internal sealed record HtmlWriteResult(string Html, IReadOnlyList<HtmlEmbeddedImage> Images);
+
+internal readonly record struct PendingRowspan(int RemainingRows, int GridSpan);
 
 internal static class ListExtensions
 {

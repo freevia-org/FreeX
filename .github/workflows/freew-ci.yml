@@ -22,6 +22,8 @@ on:
       - "freew/**"
       - "FreeW.slnx"
       - "shared/**"
+      - "Directory.Build.props"
+      - "Directory.Packages.props"
       - ".github/workflows/freew-ci.yml"
 
 concurrency:
