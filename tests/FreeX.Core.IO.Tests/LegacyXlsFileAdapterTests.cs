@@ -269,6 +269,7 @@ public sealed class LegacyXlsFileAdapterTests
                 workbook.Sheets.Count,
                 workbook.Sheets.Sum(sheet => sheet.RowPageBreaks.Count + sheet.ColumnPageBreaks.Count),
                 workbook.ActiveSheetIndex,
+                workbook.Uses1904DateSystem,
                 RichMetadata: source.RichMetadata,
                 SheetNames: workbook.Sheets.Select(sheet => sheet.Name).ToArray(),
                 CellFingerprints: ReadImportedCellFingerprints(workbook),
@@ -296,6 +297,7 @@ public sealed class LegacyXlsFileAdapterTests
 
             imported.Sheets.Should().Be(source.Sheets, imported.File);
             imported.Cells.Should().Be(source.Cells, imported.File);
+            imported.Uses1904DateSystem.Should().Be(source.Uses1904DateSystem, imported.File);
             if (!source.RichMetadata)
             {
                 imported.Styles.Should().Be(source.Styles, imported.File);
@@ -909,6 +911,7 @@ public sealed class LegacyXlsFileAdapterTests
             pageSetupFingerprints.Count,
             pageBreaks,
             activeSheetIndex,
+            hssf.IsDate1904(),
             SheetNames: sheetNames,
             CellFingerprints: cellFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             MergeFingerprints: mergeFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
@@ -1051,6 +1054,7 @@ public sealed class LegacyXlsFileAdapterTests
             PageSetupSheets: 0,
             PageBreaks: 0,
             ActiveSheetIndex: activeSheetIndex,
+            Uses1904DateSystem: false,
             RichMetadata: false,
             SheetNames: sheetNames,
             CellFingerprints: cellFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
@@ -2857,6 +2861,7 @@ public sealed class LegacyXlsFileAdapterTests
         int PageSetupSheets,
         int PageBreaks,
         int? ActiveSheetIndex,
+        bool Uses1904DateSystem,
         bool RichMetadata = true,
         IReadOnlyList<string>? SheetNames = null,
         IReadOnlyList<string>? CellFingerprints = null,
