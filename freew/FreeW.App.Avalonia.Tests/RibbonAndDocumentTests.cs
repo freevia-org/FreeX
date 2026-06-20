@@ -58,6 +58,20 @@ public class RibbonAndDocumentTests
     }
 
     [Fact]
+    public void Avalonia_shell_routes_file_lifecycle_through_shared_planner()
+    {
+        var project = File.ReadAllText(FindRepoFile("freew", "FreeW.App.Avalonia", "FreeW.App.Avalonia.csproj"));
+        project.Should().Contain(@"..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj");
+
+        var mainWindow = File.ReadAllText(FindRepoFile("freew", "FreeW.App.Avalonia", "MainWindow.cs"));
+        mainWindow.Should().Contain("private readonly WorkbookDocumentState _state = new();");
+        mainWindow.Should().Contain("FileLifecyclePlanner.PlanDirtyGate(_state.IsDirty)");
+        mainWindow.Should().Contain("FileLifecyclePlanner.ResolveDirtyGate(SaveChangesPrompt.DontSave)");
+        mainWindow.Should().Contain("FileLifecyclePlanner.PlanSave(_state.IsDirty, _state.CurrentFilePath)");
+        mainWindow.Should().NotContain("private string? _currentPath");
+    }
+
+    [Fact]
     public void Sample_document_contains_title_lists_and_a_table()
     {
         var doc = SampleDocument.Create();

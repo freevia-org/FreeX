@@ -6,10 +6,11 @@ using Avalonia.Input.Platform;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
+using Free.Shared.AppServices;
+using Free.Shared.Ribbon.Avalonia;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Pdf;
 using FreeW.App.Avalonia.Ribbon;
-using Free.Shared.Ribbon.Avalonia;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
 using TextAlignment = FreeW.Core.Model.TextAlignment;
@@ -31,10 +32,11 @@ public sealed class MainWindow : Window
     private readonly TextBox _replaceBox = new() { Width = 200, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock _zoomLabel = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0) };
     private readonly ScaleTransform _zoom = new(1, 1);
+    private readonly WorkbookDocumentState _state = new();
     private Border? _findBar;
     private ScrollViewer? _scroller;
     private double _zoomScale = 1.0;
-    private string? _currentPath;
+    private bool _suppressEditorDirty;
 
     public MainWindow()
         : this(Array.Empty<string>())
@@ -81,7 +83,7 @@ public sealed class MainWindow : Window
         var workspace = new Border { Background = new SolidColorBrush(Color.FromRgb(0xE6, 0xE6, 0xE6)), Child = _scroller };
         root.Children.Add(workspace);
 
-        _editor.DocumentChanged += UpdateStatus;
+        _editor.DocumentChanged += OnEditorDocumentChanged;
         _editor.ScrollToCaretRequested += ScrollCaretIntoView;
         _editor.CellEditRequested += async req =>
         {
@@ -89,7 +91,7 @@ public sealed class MainWindow : Window
             if (result is not null)
                 _editor.SetCellText(req.Block, req.Row, req.Col, result);
         };
-        _editor.LoadDocument(LoadStartupDocument(startupArguments));
+        LoadDocumentAsSaved(LoadStartupDocument(startupArguments), path: null);
         KeyDown += MainWindow_KeyDown;
         Content = root;
         UpdateStatus();
@@ -227,8 +229,10 @@ public sealed class MainWindow : Window
 
     private void NewDocument()
     {
-        _editor.LoadDocument(TextDocument.CreateEmpty());
-        _currentPath = null;
+        if (!ShouldReplaceCurrentDocument())
+            return;
+
+        LoadDocumentAsSaved(TextDocument.CreateEmpty(), path: null);
         Title = "FreeW";
     }
 
@@ -303,6 +307,9 @@ public sealed class MainWindow : Window
 
     private async Task OpenAsync()
     {
+        if (!ShouldReplaceCurrentDocument())
+            return;
+
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
             Title = "Open document",
@@ -327,17 +334,17 @@ public sealed class MainWindow : Window
         try
         {
             using var stream = File.OpenRead(path);
-            _editor.LoadDocument(adapter.Load(stream));
+            var document = adapter.Load(stream);
 
             if (format?.OpensAsTemplate == true)
             {
                 // Templates seed a new untitled document: clearing the path makes the next Save a Save-As.
-                _currentPath = null;
+                LoadDocumentAsSaved(document, path: null);
                 Title = "FreeW";
             }
             else
             {
-                _currentPath = path;
+                LoadDocumentAsSaved(document, path);
                 Title = $"FreeW - {Path.GetFileName(path)}";
             }
         }
@@ -349,8 +356,9 @@ public sealed class MainWindow : Window
 
     private async Task SaveAsync()
     {
-        var path = _currentPath;
-        if (path is null)
+        var saveIntent = FileLifecyclePlanner.PlanSave(_state.IsDirty, _state.CurrentFilePath);
+        var path = _state.CurrentFilePath;
+        if (saveIntent == FileSaveIntent.PromptSaveAs)
         {
             var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
             {
@@ -376,7 +384,7 @@ public sealed class MainWindow : Window
         {
             using (var stream = File.Create(path))
                 adapter.Save(_editor.Document, stream);
-            _currentPath = path;
+            _state.MarkSavedWithPath(path);
             Title = $"FreeW - {Path.GetFileName(path)}";
             _status.Text = $"Saved {Path.GetFileName(path)}";
         }
@@ -398,7 +406,7 @@ public sealed class MainWindow : Window
         {
             Title = "Export to PDF",
             DefaultExtension = "pdf",
-            SuggestedFileName = (_currentPath is null ? "Document" : Path.GetFileNameWithoutExtension(_currentPath)) + ".pdf",
+            SuggestedFileName = (_state.CurrentFilePath is null ? "Document" : Path.GetFileNameWithoutExtension(_state.CurrentFilePath)) + ".pdf",
             FileTypeChoices = [PdfFileType],
         });
         var path = file?.TryGetLocalPath();
@@ -414,6 +422,51 @@ public sealed class MainWindow : Window
         {
             _status.Text = $"PDF export failed: {ex.Message}";
         }
+    }
+
+    private void LoadDocumentAsSaved(TextDocument document, string? path)
+    {
+        _suppressEditorDirty = true;
+        try
+        {
+            _editor.LoadDocument(document);
+        }
+        finally
+        {
+            _suppressEditorDirty = false;
+        }
+
+        if (path is null)
+        {
+            _state.ClearCurrentFilePath();
+            _state.MarkSaved();
+        }
+        else
+        {
+            _state.MarkSavedWithPath(path);
+        }
+
+        UpdateStatus();
+    }
+
+    private bool ShouldReplaceCurrentDocument()
+    {
+        if (FileLifecyclePlanner.PlanDirtyGate(_state.IsDirty) == DirtyGateIntent.ProceedWithoutPrompt)
+            return true;
+
+        // FreeW Avalonia has historically discarded unsaved edits on New/Open without prompting.
+        // Keep that behavior for now, but express the decision through the shared lifecycle planner
+        // so a future prompt can be plugged in without duplicating the dirty-gate ceremony.
+        return FileLifecyclePlanner.ResolveDirtyGate(SaveChangesPrompt.DontSave)
+            == DirtyGateAction.ProceedDiscardingChanges;
+    }
+
+    private void OnEditorDocumentChanged()
+    {
+        if (!_suppressEditorDirty)
+            _state.MarkDirty();
+
+        UpdateStatus();
     }
 
     private void UpdateStatus()

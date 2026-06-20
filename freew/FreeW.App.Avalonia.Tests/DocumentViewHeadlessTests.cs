@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
 using Avalonia.Themes.Fluent;
+using Free.Shared.AppServices;
 using FreeW.App.Avalonia;
 using FreeW.App.Avalonia.Editing;
 using FreeW.Core.Model;
@@ -211,10 +212,49 @@ public sealed class DocumentViewHeadlessTests
         System.Text.Encoding.ASCII.GetString(bytes, 0, 5).Should().Be("%PDF-");
     }
 
+    [Fact]
+    public async Task MainWindow_tracks_dirty_and_new_document_state_with_shared_lifecycle_state()
+    {
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var state = GetPrivateField<WorkbookDocumentState>(window, "_state");
+
+            state.IsDirty.Should().BeFalse();
+            state.CurrentFilePath.Should().BeNull();
+
+            window.Editor.InsertText("draft ");
+            state.IsDirty.Should().BeTrue();
+
+            InvokePrivate(window, "NewDocument");
+
+            state.IsDirty.Should().BeFalse();
+            state.CurrentFilePath.Should().BeNull();
+            window.Title.Should().Be("FreeW");
+        });
+
+        if (!ran)
+            return;
+    }
+
     private static T InvokePrivate<T>(object instance, string name, params object[] args)
     {
         var method = instance.GetType().GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic)
             ?? throw new MissingMethodException(instance.GetType().FullName, name);
         return (T)method.Invoke(instance, args)!;
+    }
+
+    private static void InvokePrivate(object instance, string name, params object[] args)
+    {
+        var method = instance.GetType().GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new MissingMethodException(instance.GetType().FullName, name);
+        method.Invoke(instance, args);
+    }
+
+    private static T GetPrivateField<T>(object instance, string name)
+    {
+        var field = instance.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new MissingFieldException(instance.GetType().FullName, name);
+        return (T)field.GetValue(instance)!;
     }
 }
