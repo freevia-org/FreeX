@@ -220,7 +220,7 @@ public sealed partial class MainWindowRibbonKeyTipTests
             harness.HandleKeyTip(Key.H);
             harness.KeyTipScope.Should().Be("Menu");
             harness.ActiveMenuIsOpen.Should().BeTrue();
-            harness.ActiveMenuItemGestureText("Column Chart").Should().Be("CC");
+            harness.ActiveMenuItemGestureText("Column").Should().Be("CC");
         });
     }
 

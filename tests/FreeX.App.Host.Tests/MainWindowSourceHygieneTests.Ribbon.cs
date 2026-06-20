@@ -982,9 +982,9 @@ public sealed partial class MainWindowSourceHygieneTests
         var source = ReadChartCommandSource();
 
         ribbon.Should().Contain(".Large(\"Recommended Charts\", \"Recommended Charts\"");
-        ribbon.Should().Contain(".Medium(\"Column Chart\", \"Column Chart\"");
-        ribbon.Should().Contain(".Medium(\"Line Chart\", \"Line Chart\"");
-        ribbon.Should().Contain(".Medium(\"Pie Chart\", \"Pie Chart\"");
+        ribbon.Should().Contain(".Medium(\"Column Chart\", \"Column\"");
+        ribbon.Should().Contain(".Medium(\"Line Chart\", \"Line\"");
+        ribbon.Should().Contain(".Medium(\"Pie Chart\", \"Pie\"");
         source.Should().Contain("private void InsertChartOfType(ChartType type)");
         source.Should().Contain("ChartAuthoringPlanner.CanAuthor(type)");
         source.Should().Contain("ChartDataSourcePlanner.ResolveInsertionRange(sheet, currentRange)");

@@ -320,14 +320,17 @@ public static class RibbonWpfRenderer
     private static FrameworkElement BuildMediumControl(RibbonControl control, FrameworkElement resourceHost, IRibbonCommandRegistry? registry, IRibbonStateStore? stateStore)
     {
         var content = new StackPanel { Orientation = Orientation.Horizontal };
-        content.Children.Add(NewIcon(control, MediumIconSize, HorizontalAlignment.Center, VerticalAlignment.Center));
+        var icon = NewIcon(control, MediumIconSize, HorizontalAlignment.Center, VerticalAlignment.Center);
+        icon.Margin = new Thickness(0, 0, 4, 0);
+        content.Children.Add(icon);
         var label = new TextBlock
         {
             Text = control.Label,
             FontSize = 12,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(4, 0, 2, 0)
+            Margin = new Thickness(0)
         };
+        EnsureNaturalLabelWidth(label);
         RibbonMetadata.SetRole(label, RibbonMetadataRole.CommandLabel);
         content.Children.Add(label);
 
@@ -342,6 +345,17 @@ public static class RibbonWpfRenderer
         ((ContentControl)button).Content = content;
         WireMetadata(button, control, registry, stateStore);
         return button;
+    }
+
+    private static void EnsureNaturalLabelWidth(TextBlock label)
+    {
+        label.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        if (label.DesiredSize.Width > 0 &&
+            !double.IsInfinity(label.DesiredSize.Width) &&
+            !double.IsNaN(label.DesiredSize.Width))
+        {
+            label.MinWidth = Math.Max(label.MinWidth, Math.Ceiling(label.DesiredSize.Width));
+        }
     }
 
     private static FrameworkElement BuildIconControl(RibbonControl control, FrameworkElement resourceHost, IRibbonCommandRegistry? registry, IRibbonStateStore? stateStore)

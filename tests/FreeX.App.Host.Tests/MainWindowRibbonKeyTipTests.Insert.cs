@@ -53,7 +53,7 @@ public sealed partial class MainWindowRibbonKeyTipTests
 
             harness.HandleDirectTopLevelKeyTip(Key.N).Should().BeTrue();
             harness.SelectedRibbonTabHeader.Should().Be("Insert");
-            harness.VisibleCommandKeyTips("CC").Should().ContainSingle("Column Chart");
+            harness.VisibleCommandKeyTips("CC").Should().ContainSingle("Column");
 
             harness.HandleKeyTip(Key.C);
             harness.KeyTipScope.Should().Be("Commands", "C is a shared Insert command prefix before CC resolves");
@@ -83,7 +83,7 @@ public sealed partial class MainWindowRibbonKeyTipTests
             // The visible chart surface exposes implemented chart commands only.
             var commands = harness.CollapsedRibbonGroupOverflowMenuKeyTips("Charts");
             commands.Should().ContainKey("Recommended Charts").WhoseValue.Should().Be("RC");
-            commands.Should().ContainKey("Column Chart").WhoseValue.Should().Be("CC");
+            commands.Should().ContainKey("Column").WhoseValue.Should().Be("CC");
             commands.Should().NotContainKey("Map Chart",
                 "the deferred Map Chart command must not be exposed by the Insert Charts surface");
         });
