@@ -230,13 +230,9 @@ public sealed partial class MainWindowAdaptiveRibbonTests
         });
     }
 
-    // NOTE (flagged deviation): contextual ribbon tabs (Shape/Picture/Chart/Table/PivotTable) do NOT
-    // participate in the adaptive group-collapse engine -- their groups never fold into overflow buttons --
-    // so at the narrowest screenshot-tour widths some (e.g. Shape Format @750px) overflow the panel's right
-    // edge rather than collapsing to fit. The invariant that still holds at every width is that the ribbon
-    // never exposes a horizontal scroll surface or scrollbar; the no-clip guarantee only holds at the widest
-    // tour width (1100px), which this asserts. The narrow-width contextual clipping is reported in
-    // flaggedDeviations rather than encoded as correct.
+    // Contextual ribbon tabs participate in the same adaptive group-collapse engine as the main tabs:
+    // narrow screenshot-tour widths should fold groups into overflow buttons instead of clipping the
+    // right edge or surfacing a horizontal scrollbar.
     [Fact]
     public void ContextualRibbonTabs_FitWithoutVisibleScrollBarsAtScreenshotTourWidths()
     {
@@ -264,14 +260,9 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                     harness.ActiveRibbonVisibleHorizontalScrollBars.Should().BeEmpty(
                         $"{tab} should not expose a horizontal scrollbar at the screenshot-tour width {width:0}px");
 
-                    // Contextual tabs do not collapse, so the no-clip guarantee only holds at the widest tour
-                    // width; narrower widths are covered by the flagged deviation above.
-                    if (width >= 1100.0)
-                    {
-                        harness.ActiveRibbonPanelOverflow.Should().BeLessThanOrEqualTo(
-                            0.5,
-                            $"{tab} at {width:0}px should fit its contextual commands without clipping; {harness.DebugActiveRibbonChildren}");
-                    }
+                    harness.ActiveRibbonPanelOverflow.Should().BeLessThanOrEqualTo(
+                        0.5,
+                        $"{tab} at {width:0}px should fit its contextual commands without clipping; {harness.DebugActiveRibbonChildren}");
                 }
             }
         });

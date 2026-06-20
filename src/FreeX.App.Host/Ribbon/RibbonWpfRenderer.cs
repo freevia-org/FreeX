@@ -30,7 +30,11 @@ public static class RibbonWpfRenderer
         IRibbonCommandRegistry? registry = null,
         IRibbonStateStore? stateStore = null)
     {
-        var panel = new RibbonAdaptivePanel { MinHeight = 88 };
+        var panel = new RibbonAdaptivePanel
+        {
+            MinHeight = 88,
+            RefreshFullWidthsFromFullContent = tab.IsContextual
+        };
 
         // Group keytips for the collapsed (overflow) form are derived per tab, deduped against each
         // other (Excel: a collapsed group is reachable by a 2-letter keytip like Charts -> CH).

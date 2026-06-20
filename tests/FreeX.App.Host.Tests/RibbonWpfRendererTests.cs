@@ -117,6 +117,44 @@ public class RibbonWpfRendererTests
     }
 
     [Fact]
+    public void ContextualTabs_RefreshFullWidthsForAdaptiveCollapse()
+    {
+        var definition = new RibbonDefinitionBuilder()
+            .Tab("main", "Main", "M", tab => tab
+                .Group("mainGroup", "Main", "M", priority: 100, group => group
+                    .Large("MainCommand", "Main Command", RibbonCommandIconKind.Paste)))
+            .ContextualTab(
+                "contextual",
+                "Contextual",
+                new RibbonTabContext("context.active", "Contextual", RibbonContextColor.Green),
+                tab => tab
+                    .Group("contextGroup", "Context", "C", priority: 100, group => group
+                        .Large("ContextCommand", "Context Command", RibbonCommandIconKind.ChartColumn)))
+            .Build();
+
+        StaTestRunner.Run(() =>
+        {
+            var host = BuildHost();
+
+            host.Child = RibbonWpfRenderer.BuildTabContent(definition.FindTab("main")!, host);
+            Descendants(host)
+                .OfType<RibbonAdaptivePanel>()
+                .Single()
+                .RefreshFullWidthsFromFullContent
+                .Should()
+                .BeFalse("main tabs keep the existing cached-width adaptive behavior");
+
+            host.Child = RibbonWpfRenderer.BuildTabContent(definition.FindTab("contextual")!, host);
+            Descendants(host)
+                .OfType<RibbonAdaptivePanel>()
+                .Single()
+                .RefreshFullWidthsFromFullContent
+                .Should()
+                .BeTrue("contextual tabs need refreshed full-width budgets so narrow widths collapse instead of clipping");
+        });
+    }
+
+    [Fact]
     public void HomeDefinition_IsValid_AndHasAllSevenGroups()
     {
         var definition = HomeRibbonDefinition.Build();

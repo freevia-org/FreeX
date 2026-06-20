@@ -181,6 +181,10 @@ public sealed class RibbonAdaptivePanel : Panel
 {
     private const double GroupSpacing = 6;
 
+    // Contextual tabs are shown after the initial ribbon warm-up; refresh their full-width budget from
+    // the preserved expanded group so a previously collapsed surface cannot under-plan and clip.
+    public bool RefreshFullWidthsFromFullContent { get; set; }
+
     protected override Size MeasureOverride(Size availableSize)
     {
         var children = Children.Cast<UIElement>().ToList();
@@ -273,6 +277,13 @@ public sealed class RibbonAdaptivePanel : Panel
     {
         if (child is RibbonGroupHost host && host.FullWidth > 0)
             return host.Collapsed ? RibbonGroupHost.CollapsedWidth : host.FullWidth;
+
+        if (child is System.Windows.Shapes.Rectangle { Width: var width and > 0 } &&
+            !double.IsNaN(width) &&
+            !double.IsInfinity(width))
+        {
+            return width;
+        }
 
         return child.DesiredSize.Width;
     }

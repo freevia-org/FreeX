@@ -37,4 +37,35 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             checkedAtLeastOnce.Should().BeTrue($"the '{header}' tab should be checked at a reachable width");
         });
     }
+
+    [Fact]
+    [Trait("Category", "RibbonUiLane")]
+    public void RibbonLane_ContextualTabs_NeverClipContentAtAnyResolution()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            harness.ShowChartContextualTabs();
+            harness.ShowPivotContextualTabs();
+            harness.ShowTableDesignContextualTab();
+            harness.ShowDrawingObjectContextualTabs();
+
+            foreach (var header in new[] { "Shape Format", "Picture Format", "Chart Design", "Format", "Table Design", "PivotTable Analyze", "Design" })
+            {
+                var checkedAtLeastOnce = false;
+                foreach (var width in RibbonResolutionWidths)
+                {
+                    harness.SelectRibbonTab(header, width);
+                    if (!harness.CanUseRequestedWidth(width))
+                        continue;
+
+                    checkedAtLeastOnce = true;
+                    harness.SelectedTabRibbonRightOverflowPx.Should().BeLessThanOrEqualTo(2.0,
+                        $"the contextual '{header}' tab must collapse groups to fit width {width:0}, not clip its right edge");
+                }
+
+                checkedAtLeastOnce.Should().BeTrue($"the contextual '{header}' tab should be checked at a reachable width");
+            }
+        });
+    }
 }
