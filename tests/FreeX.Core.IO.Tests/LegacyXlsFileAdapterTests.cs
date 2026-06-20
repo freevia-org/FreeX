@@ -856,14 +856,8 @@ public sealed class LegacyXlsFileAdapterTests
             }
         }
 
-        var validationWorkbook = new Workbook("DefinedNameValidation");
-        var definedNameFingerprints = Enumerable.Range(0, hssf.NumberOfNames)
-            .Select(hssf.GetNameAt)
-            .Where(name => IsImportableDefinedName(name, validationWorkbook))
-            .Select(name => name.NameName)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
+        var definedNameWorkbook = CreateSourceDefinedNameWorkbook(hssf);
+        var definedNameFingerprints = ReadImportedDefinedNameFingerprints(definedNameWorkbook);
         autoFilterFingerprints.AddRange(ReadSourceAutoFilterFingerprints(hssf));
         printLayoutFingerprints.AddRange(ReadSourcePrintLayoutFingerprints(hssf));
         var orderedPrintLayoutFingerprints = printLayoutFingerprints
@@ -887,7 +881,7 @@ public sealed class LegacyXlsFileAdapterTests
                 hssf.GetSheetVisibility(index) is SheetVisibility.Hidden or SheetVisibility.VeryHidden),
             Enumerable.Range(0, hssf.NumberOfSheets).Count(index =>
                 hssf.GetSheetVisibility(index) is SheetVisibility.VeryHidden),
-            definedNameFingerprints.Length,
+            definedNameFingerprints.Count,
             hyperlinks,
             comments,
             pictures,
@@ -1171,10 +1165,24 @@ public sealed class LegacyXlsFileAdapterTests
             .ToArray();
 
     private static IReadOnlyList<string> ReadImportedDefinedNameFingerprints(Workbook workbook) =>
-        workbook.NamedRanges.Keys
-            .Concat(workbook.NamedFormulas.Keys)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+        workbook.NamedRanges
+            .Select(entry =>
+            {
+                workbook.TryGetNamedRangeMetadata(entry.Key, out var metadata);
+                return CreateDefinedNameFingerprint(
+                    entry.Key,
+                    "Range",
+                    CreateRangeToken(entry.Value),
+                    metadata.Scope,
+                    metadata.Comment);
+            })
+            .Concat(workbook.NamedFormulas.Select(entry => CreateDefinedNameFingerprint(
+                entry.Key,
+                "Formula",
+                NormalizeFormulaText(entry.Value),
+                "",
+                "")))
+            .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
     private static IReadOnlyList<string> ReadImportedHyperlinkFingerprints(Workbook workbook) =>
@@ -1421,6 +1429,34 @@ public sealed class LegacyXlsFileAdapterTests
         }
 
         return ReadImportedAutoFilterFingerprints(workbook);
+    }
+
+    private static Workbook CreateSourceDefinedNameWorkbook(HSSFWorkbook hssf)
+    {
+        var workbook = new Workbook("DefinedNameSource");
+        for (var sheetIndex = 0; sheetIndex < hssf.NumberOfSheets; sheetIndex++)
+            workbook.AddSheet(hssf.GetSheetName(sheetIndex));
+
+        for (var nameIndex = 0; nameIndex < hssf.NumberOfNames; nameIndex++)
+        {
+            var name = hssf.GetNameAt(nameIndex);
+            if (!IsImportableDefinedName(name, workbook))
+                continue;
+
+            var refersTo = NormalizeFormulaText(name.RefersToFormula ?? "").Trim();
+            if (TryParseNamedRangeRefersTo(workbook, refersTo, out var range))
+            {
+                workbook.DefineNamedRange(
+                    name.NameName,
+                    range,
+                    new NamedRangeMetadata(GetSourceDefinedNameScope(hssf, name), name.Comment ?? ""));
+                continue;
+            }
+
+            workbook.NamedFormulas[name.NameName] = refersTo;
+        }
+
+        return workbook;
     }
 
     private static string CreateSourcePageSetupFingerprint(int sheetIndex, string sheetName, ISheet sheet)
@@ -1848,6 +1884,14 @@ public sealed class LegacyXlsFileAdapterTests
 
     private static string CreateAutoFilterFingerprint(int sheetIndex, string sheetName, string reference) =>
         $"{sheetIndex}:{sheetName}|AutoFilter|{reference}";
+
+    private static string CreateDefinedNameFingerprint(
+        string name,
+        string kind,
+        string target,
+        string scope,
+        string comment) =>
+        $"DefinedName|Name={EscapeToken(name)}|Kind={kind}|Target={EscapeToken(target)}|Scope={EscapeToken(scope)}|Comment={EscapeToken(comment)}";
 
     private static string CreateSheetProtectionFingerprint(
         int sheetIndex,
@@ -2429,6 +2473,14 @@ public sealed class LegacyXlsFileAdapterTests
         !string.IsNullOrWhiteSpace(name.RefersToFormula) &&
         !IsExcelReservedDefinedName(name.NameName) &&
         validationWorkbook.ValidateNamedRangeName(name.NameName) is null;
+
+    private static string GetSourceDefinedNameScope(HSSFWorkbook hssf, IName definedName)
+    {
+        var sheetIndex = definedName.SheetIndex;
+        return sheetIndex >= 0 && sheetIndex < hssf.NumberOfSheets
+            ? hssf.GetSheetName(sheetIndex)
+            : NamedRangeMetadata.WorkbookScope.Scope;
+    }
 
     private static bool TryLoadSourcePrintDefinedName(Workbook workbook, IName definedName)
     {
