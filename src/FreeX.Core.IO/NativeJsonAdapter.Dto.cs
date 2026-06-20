@@ -551,6 +551,7 @@ public sealed partial class NativeJsonAdapter
         public int? PrintQualityVerticalDpi { get; set; }
         public WorksheetPrintErrorValue? PrintErrorValue { get; set; }
         public WorksheetPrintComments? PrintComments { get; set; }
+        public int? LegacyPrintSize { get; set; }
         public WorksheetPageSetupMetadataDto? PageSetupMetadata { get; set; }
         public ScaleToFitDto? ScaleToFit { get; set; }
         public bool? FitToPage { get; set; }

@@ -901,6 +901,7 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         LoadManualPageBreaks(sourceSheet, sheet);
         LoadPrintSetup(sourceSheet.PrintSetup, sheet);
         LoadPrintOptionsMetadata(sourceSheet, sheet);
+        LoadLegacyPrintSize(sourceSheet, sheet);
     }
 
     private static void LoadPrintOptionsMetadata(ISheet sourceSheet, Sheet sheet)
@@ -921,6 +922,17 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
 
         sheet.PrintOptionsMetadata ??= new NativeXmlPreserveBag();
         sheet.PrintOptionsMetadata.Set("printOptions", serializedMetadata);
+    }
+
+    private static void LoadLegacyPrintSize(ISheet sourceSheet, Sheet sheet)
+    {
+        if (sourceSheet is not HSSFSheet hssfSheet ||
+            hssfSheet.Sheet.FindFirstRecordBySid(PrintSizeRecord.sid) is not PrintSizeRecord printSize)
+        {
+            return;
+        }
+
+        sheet.LegacyPrintSize = PositiveOrNull(printSize.PrintSize);
     }
 
     private static void LoadSheetView(ISheet sourceSheet, Sheet sheet, HSSFPalette palette)
