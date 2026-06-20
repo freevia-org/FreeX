@@ -10,6 +10,7 @@ using System.Reflection;
 using System.Text;
 using ModelBorderStyle = FreeX.Core.Model.BorderStyle;
 using ModelCellAddress = FreeX.Core.Model.CellAddress;
+using ModelCellStyle = FreeX.Core.Model.CellStyle;
 using ModelHorizontalAlignment = FreeX.Core.Model.HorizontalAlignment;
 using ModelVerticalAlignment = FreeX.Core.Model.VerticalAlignment;
 using NPOIBorderStyle = NPOI.SS.UserModel.BorderStyle;
@@ -122,6 +123,17 @@ public sealed class LegacyXlsFileAdapterTests
         validation.PromptMessage.Should().Be("Choose a status");
         validation.ErrorTitle.Should().Be("Invalid status");
         validation.ErrorMessage.Should().Be("Pick Open or Closed");
+        sheet.ConditionalFormats.Should().ContainSingle();
+        var conditionalFormat = sheet.ConditionalFormats.Single();
+        conditionalFormat.AppliesTo.ToString().Should().Be("H2:H7");
+        conditionalFormat.RuleType.Should().Be(CfRuleType.CellValue);
+        conditionalFormat.Operator.Should().Be(CfOperator.GreaterThan);
+        conditionalFormat.Value1.Should().Be("10");
+        conditionalFormat.FormatIfTrue.Should().NotBeNull();
+        conditionalFormat.FormatIfTrue!.FontColor.Should().Be(new CellColor(255, 0, 0));
+        conditionalFormat.FormatIfTrue.FillColor.Should().Be(new CellColor(255, 255, 0));
+        conditionalFormat.FormatIfTrue.FillPatternStyle.Should().Be(CellFillPatternStyle.Solid);
+        conditionalFormat.FormatIfTrue.BorderBottom.Style.Should().Be(ModelBorderStyle.Thin);
         sheet.IsProtected.Should().BeTrue();
         sheet.ProtectionPassword.Should().Be(ProtectionPasswordHelper.ToLegacyPasswordHash("secret"));
         GetProtectionMetadataAttribute(sheet, "objects").Should().Be("1");
@@ -239,6 +251,7 @@ public sealed class LegacyXlsFileAdapterTests
                 workbook.Sheets.Count(sheet => sheet.AutoFilter is not null),
                 workbook.Sheets.Count(sheet => sheet.IsProtected),
                 workbook.Sheets.Sum(sheet => sheet.DataValidations.Count),
+                workbook.Sheets.Sum(sheet => sheet.ConditionalFormats.Count),
                 workbook.Sheets.Count,
                 workbook.Sheets.Sum(sheet => sheet.RowPageBreaks.Count + sheet.ColumnPageBreaks.Count),
                 workbook.ActiveSheetIndex,
@@ -255,7 +268,8 @@ public sealed class LegacyXlsFileAdapterTests
                 ViewStateFingerprints: ReadImportedViewStateFingerprints(workbook),
                 AutoFilterFingerprints: ReadImportedAutoFilterFingerprints(workbook),
                 SheetProtectionFingerprints: ReadImportedSheetProtectionFingerprints(workbook),
-                DataValidationFingerprints: ReadImportedDataValidationFingerprints(workbook));
+                DataValidationFingerprints: ReadImportedDataValidationFingerprints(workbook),
+                ConditionalFormatFingerprints: ReadImportedConditionalFormatFingerprints(workbook));
 
             imported.Sheets.Should().Be(source.Sheets, imported.File);
             imported.Cells.Should().Be(source.Cells, imported.File);
@@ -282,6 +296,7 @@ public sealed class LegacyXlsFileAdapterTests
                 imported.AutoFilters.Should().Be(source.AutoFilters, imported.File);
                 imported.ProtectedSheets.Should().Be(source.ProtectedSheets, imported.File);
                 imported.DataValidations.Should().Be(source.DataValidations, imported.File);
+                imported.ConditionalFormats.Should().Be(source.ConditionalFormats, imported.File);
                 imported.PageSetupSheets.Should().Be(source.PageSetupSheets, imported.File);
                 imported.PageBreaks.Should().Be(source.PageBreaks, imported.File);
                 imported.ActiveSheetIndex.Should().Be(source.ActiveSheetIndex, imported.File);
@@ -294,6 +309,7 @@ public sealed class LegacyXlsFileAdapterTests
                 imported.AutoFilterFingerprints.Should().BeEquivalentTo(source.AutoFilterFingerprints, imported.File);
                 imported.SheetProtectionFingerprints.Should().BeEquivalentTo(source.SheetProtectionFingerprints, imported.File);
                 imported.DataValidationFingerprints.Should().BeEquivalentTo(source.DataValidationFingerprints, imported.File);
+                imported.ConditionalFormatFingerprints.Should().BeEquivalentTo(source.ConditionalFormatFingerprints, imported.File);
                 imported.Styles.Should().BeGreaterThanOrEqualTo(source.Styles, imported.File);
                 imported.Dimensions.Should().BeGreaterThanOrEqualTo(source.Dimensions, imported.File);
             }
@@ -484,6 +500,18 @@ public sealed class LegacyXlsFileAdapterTests
         validation.ErrorStyle = ERRORSTYLE.WARNING;
         validation.CreateErrorBox("Invalid status", "Pick Open or Closed");
         sheet.AddValidationData(validation);
+        var conditionalFormatting = sheet.SheetConditionalFormatting;
+        var conditionalRule = conditionalFormatting.CreateConditionalFormattingRule(ComparisonOperator.GreaterThan, "10");
+        var conditionalFont = conditionalRule.CreateFontFormatting();
+        conditionalFont.SetFontStyle(true, false);
+        conditionalFont.FontColorIndex = IndexedColors.Red.Index;
+        var conditionalPattern = conditionalRule.CreatePatternFormatting();
+        conditionalPattern.FillPattern = FillPattern.SolidForeground;
+        conditionalPattern.FillForegroundColor = IndexedColors.Yellow.Index;
+        var conditionalBorder = conditionalRule.CreateBorderFormatting();
+        conditionalBorder.BorderBottom = NPOIBorderStyle.Thin;
+        conditionalBorder.BottomBorderColor = IndexedColors.Blue.Index;
+        conditionalFormatting.AddConditionalFormatting([new CellRangeAddress(1, 6, 7, 7)], conditionalRule);
         sheet.ProtectSheet("secret");
         sheet.SetMargin(MarginType.LeftMargin, 0.7);
         sheet.SetMargin(MarginType.RightMargin, 0.8);
@@ -561,6 +589,7 @@ public sealed class LegacyXlsFileAdapterTests
         var colOutlineLevels = 0;
         var pageBreaks = 0;
         var dataValidations = 0;
+        var conditionalFormats = 0;
         var sheetNames = new List<string>();
         var cellFingerprints = new List<string>();
         var hyperlinkFingerprints = new List<string>();
@@ -574,6 +603,7 @@ public sealed class LegacyXlsFileAdapterTests
         var autoFilterFingerprints = new List<string>();
         var sheetProtectionFingerprints = new List<string>();
         var dataValidationFingerprints = new List<string>();
+        var conditionalFormatFingerprints = new List<string>();
         var activeSheetIndex = hssf.ActiveSheetIndex >= 0 && hssf.ActiveSheetIndex < hssf.NumberOfSheets
             ? hssf.ActiveSheetIndex
             : (int?)null;
@@ -707,6 +737,17 @@ public sealed class LegacyXlsFileAdapterTests
                 {
                     // Match the production importer: malformed DV records should not discard the rest of the sheet.
                 }
+
+                try
+                {
+                    var sheetConditionalFormatFingerprints = ReadSourceConditionalFormatFingerprints(hssf, hssfSheet, sheetIndex);
+                    conditionalFormats += sheetConditionalFormatFingerprints.Count;
+                    conditionalFormatFingerprints.AddRange(sheetConditionalFormatFingerprints);
+                }
+                catch
+                {
+                    // Match the production importer: malformed CF records should not discard the rest of the sheet.
+                }
             }
         }
 
@@ -753,6 +794,7 @@ public sealed class LegacyXlsFileAdapterTests
             orderedAutoFilterFingerprints.Length,
             sheetProtectionFingerprints.Count,
             dataValidations,
+            conditionalFormats,
             pageSetupFingerprints.Count,
             pageBreaks,
             activeSheetIndex,
@@ -769,7 +811,8 @@ public sealed class LegacyXlsFileAdapterTests
             ViewStateFingerprints: viewStateFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             AutoFilterFingerprints: orderedAutoFilterFingerprints,
             SheetProtectionFingerprints: sheetProtectionFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
-            DataValidationFingerprints: dataValidationFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray());
+            DataValidationFingerprints: dataValidationFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            ConditionalFormatFingerprints: conditionalFormatFingerprints.OrderBy(value => value, StringComparer.Ordinal).ToArray());
     }
 
     private static LegacyXlsCorpusSummary ReadExcelDataReaderSourceSummary(string path, Stream stream)
@@ -815,6 +858,7 @@ public sealed class LegacyXlsFileAdapterTests
             AutoFilters: 0,
             ProtectedSheets: 0,
             DataValidations: 0,
+            ConditionalFormats: 0,
             PageSetupSheets: 0,
             PageBreaks: 0,
             ActiveSheetIndex: null,
@@ -832,7 +876,8 @@ public sealed class LegacyXlsFileAdapterTests
             ViewStateFingerprints: [],
             AutoFilterFingerprints: [],
             SheetProtectionFingerprints: [],
-            DataValidationFingerprints: []);
+            DataValidationFingerprints: [],
+            ConditionalFormatFingerprints: []);
     }
 
     private static IReadOnlyList<string> ReadImportedCellFingerprints(Workbook workbook) =>
@@ -958,6 +1003,13 @@ public sealed class LegacyXlsFileAdapterTests
         workbook.Sheets
             .SelectMany((sheet, sheetIndex) => sheet.DataValidations
                 .Select(validation => CreateDataValidationFingerprint(sheetIndex, sheet.Name, validation)))
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+
+    private static IReadOnlyList<string> ReadImportedConditionalFormatFingerprints(Workbook workbook) =>
+        workbook.Sheets
+            .SelectMany((sheet, sheetIndex) => sheet.ConditionalFormats
+                .Select(format => CreateConditionalFormatFingerprint(sheetIndex, sheet.Name, format)))
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
 
@@ -1167,6 +1219,73 @@ public sealed class LegacyXlsFileAdapterTests
             validation.ErrorBoxText);
     }
 
+    private static IReadOnlyList<string> ReadSourceConditionalFormatFingerprints(
+        HSSFWorkbook hssf,
+        HSSFSheet sheet,
+        int sheetIndex)
+    {
+        var sourceFormats = sheet.SheetConditionalFormatting;
+        var fingerprints = new List<string>();
+        for (var formatIndex = 0; formatIndex < sourceFormats.NumConditionalFormattings; formatIndex++)
+        {
+            var sourceFormat = sourceFormats.GetConditionalFormattingAt(formatIndex);
+            var ranges = sourceFormat.GetFormattingRanges();
+            if (ranges.Length == 0)
+                continue;
+
+            for (var ruleIndex = 0; ruleIndex < sourceFormat.NumberOfRules; ruleIndex++)
+            {
+                var sourceRule = sourceFormat.GetRule(ruleIndex);
+                if (CreateSourceConditionalFormatFingerprint(hssf, sheetIndex, sheet.SheetName, sourceRule, ranges[0]) is { } fingerprint)
+                    fingerprints.Add(fingerprint);
+            }
+        }
+
+        return fingerprints;
+    }
+
+    private static string? CreateSourceConditionalFormatFingerprint(
+        HSSFWorkbook hssf,
+        int sheetIndex,
+        string sheetName,
+        IConditionalFormattingRule rule,
+        CellRangeAddressBase range)
+    {
+        if (rule.ConditionType == ConditionType.CellValueIs)
+        {
+            return CreateConditionalFormatFingerprint(
+                sheetIndex,
+                sheetName,
+                CreateRangeToken(range),
+                CfRuleType.CellValue,
+                MapSourceConditionalFormatOperator(rule.ComparisonOperation),
+                NormalizeFormulaText(rule.Formula1 ?? ""),
+                NormalizeFormulaText(rule.Formula2 ?? ""),
+                null,
+                Math.Max(1, rule.Priority),
+                rule.StopIfTrue,
+                CreateSourceConditionalFormatStyleFingerprint(hssf, rule));
+        }
+
+        if (rule.ConditionType == ConditionType.Formula)
+        {
+            return CreateConditionalFormatFingerprint(
+                sheetIndex,
+                sheetName,
+                CreateRangeToken(range),
+                CfRuleType.Formula,
+                CfOperator.Equal,
+                null,
+                null,
+                NormalizeFormulaText(rule.Formula1 ?? ""),
+                Math.Max(1, rule.Priority),
+                rule.StopIfTrue,
+                CreateSourceConditionalFormatStyleFingerprint(hssf, rule));
+        }
+
+        return null;
+    }
+
     private static string CreateCellFingerprint(
         int sheetIndex,
         string sheetName,
@@ -1270,6 +1389,94 @@ public sealed class LegacyXlsFileAdapterTests
             $"Error={EscapeToken(errorTitle ?? "")},{EscapeToken(errorMessage ?? "")}"
         ]);
 
+    private static string CreateConditionalFormatFingerprint(int sheetIndex, string sheetName, ConditionalFormat format) =>
+        CreateConditionalFormatFingerprint(
+            sheetIndex,
+            sheetName,
+            CreateRangeToken(format.AppliesTo),
+            format.RuleType,
+            format.Operator,
+            format.Value1,
+            format.Value2,
+            format.FormulaText,
+            Math.Max(1, format.Priority),
+            format.StopIfTrue,
+            CreateStyleFingerprint(format.FormatIfTrue));
+
+    private static string CreateConditionalFormatFingerprint(
+        int sheetIndex,
+        string sheetName,
+        string range,
+        CfRuleType type,
+        CfOperator op,
+        string? value1,
+        string? value2,
+        string? formula,
+        int priority,
+        bool stopIfTrue,
+        string style) =>
+        string.Join("|", [
+            $"{sheetIndex}:{sheetName}",
+            $"ConditionalFormat={EscapeToken(range)}",
+            $"Type={type}",
+            $"Operator={op}",
+            $"Values={EscapeToken(value1 ?? "")},{EscapeToken(value2 ?? "")}",
+            $"Formula={EscapeToken(formula ?? "")}",
+            $"Priority={priority}",
+            $"Stop={stopIfTrue}",
+            style
+        ]);
+
+    private static string CreateStyleFingerprint(ModelCellStyle? style)
+    {
+        if (style is null)
+            return "Style=null";
+
+        return string.Join(";", [
+            $"Font={style.Bold},{style.Italic},{style.Underline},{FormatColor(style.FontColor)}",
+            $"Fill={FormatColor(style.FillColor)},{style.FillPatternStyle},{FormatColor(style.FillPatternColor)}",
+            $"Borders=T:{FormatBorder(style.BorderTop)},R:{FormatBorder(style.BorderRight)},B:{FormatBorder(style.BorderBottom)},L:{FormatBorder(style.BorderLeft)}"
+        ]);
+    }
+
+    private static string CreateSourceConditionalFormatStyleFingerprint(
+        HSSFWorkbook hssf,
+        IConditionalFormattingRule rule)
+    {
+        var hasStyle = false;
+        var style = new ModelCellStyle();
+        if (rule.FontFormatting is { } font)
+        {
+            hasStyle = true;
+            style.Bold = font.IsBold;
+            style.Italic = font.IsItalic;
+            style.Underline = font.UnderlineType != FontUnderlineType.None;
+            if (font.FontColorIndex != 0)
+                style.FontColor = GetSourceIndexedColor(hssf, font.FontColorIndex);
+        }
+
+        if (rule.PatternFormatting is { } pattern)
+        {
+            hasStyle = true;
+            style.FillPatternStyle = MapSourceFillPattern(pattern.FillPattern);
+            if (pattern.FillForegroundColor != 0)
+                style.FillColor = GetSourceIndexedColor(hssf, pattern.FillForegroundColor);
+            if (pattern.FillBackgroundColor != 0)
+                style.FillPatternColor = GetSourceIndexedColor(hssf, pattern.FillBackgroundColor);
+        }
+
+        if (rule.BorderFormatting is { } border)
+        {
+            hasStyle = true;
+            style.BorderTop = new CellBorder(MapSourceBorderStyle(border.BorderTop), GetSourceIndexedColor(hssf, border.TopBorderColor));
+            style.BorderRight = new CellBorder(MapSourceBorderStyle(border.BorderRight), GetSourceIndexedColor(hssf, border.RightBorderColor));
+            style.BorderBottom = new CellBorder(MapSourceBorderStyle(border.BorderBottom), GetSourceIndexedColor(hssf, border.BottomBorderColor));
+            style.BorderLeft = new CellBorder(MapSourceBorderStyle(border.BorderLeft), GetSourceIndexedColor(hssf, border.LeftBorderColor));
+        }
+
+        return hasStyle ? CreateStyleFingerprint(style) : "Style=null";
+    }
+
     private static string CreatePageSetupFingerprint(
         int sheetIndex,
         string sheetName,
@@ -1356,6 +1563,9 @@ public sealed class LegacyXlsFileAdapterTests
         value is { } color
             ? $"{color.R},{color.G},{color.B}"
             : "null";
+
+    private static string FormatBorder(CellBorder border) =>
+        $"{border.Style},{FormatColor(border.Color)}";
 
     private static string EscapeToken(string value) =>
         value.Replace("\\", "\\\\", StringComparison.Ordinal)
@@ -1461,6 +1671,53 @@ public sealed class LegacyXlsFileAdapterTests
             _ => DvAlertStyle.Stop
         };
 
+    private static CfOperator MapSourceConditionalFormatOperator(ComparisonOperator op) =>
+        op switch
+        {
+            ComparisonOperator.NotBetween => CfOperator.NotBetween,
+            ComparisonOperator.Equal => CfOperator.Equal,
+            ComparisonOperator.NotEqual => CfOperator.NotEqual,
+            ComparisonOperator.GreaterThan => CfOperator.GreaterThan,
+            ComparisonOperator.LessThan => CfOperator.LessThan,
+            ComparisonOperator.GreaterThanOrEqual => CfOperator.GreaterThanOrEqual,
+            ComparisonOperator.LessThanOrEqual => CfOperator.LessThanOrEqual,
+            _ => CfOperator.Between
+        };
+
+    private static ModelBorderStyle MapSourceBorderStyle(NPOIBorderStyle borderStyle) =>
+        borderStyle switch
+        {
+            NPOIBorderStyle.Thin => ModelBorderStyle.Thin,
+            NPOIBorderStyle.Medium => ModelBorderStyle.Medium,
+            NPOIBorderStyle.Thick => ModelBorderStyle.Thick,
+            NPOIBorderStyle.Dashed => ModelBorderStyle.Dashed,
+            NPOIBorderStyle.Dotted => ModelBorderStyle.Dotted,
+            NPOIBorderStyle.Double => ModelBorderStyle.Double,
+            _ => ModelBorderStyle.None
+        };
+
+    private static CellFillPatternStyle MapSourceFillPattern(FillPattern fillPattern) =>
+        fillPattern switch
+        {
+            FillPattern.SolidForeground => CellFillPatternStyle.Solid,
+            FillPattern.FineDots => CellFillPatternStyle.Gray125,
+            FillPattern.AltBars => CellFillPatternStyle.DarkHorizontal,
+            FillPattern.SparseDots => CellFillPatternStyle.Gray0625,
+            FillPattern.ThickHorizontalBands => CellFillPatternStyle.DarkHorizontal,
+            FillPattern.ThickVerticalBands => CellFillPatternStyle.DarkVertical,
+            FillPattern.ThickBackwardDiagonals => CellFillPatternStyle.DarkUp,
+            FillPattern.ThickForwardDiagonals => CellFillPatternStyle.DarkDown,
+            FillPattern.BigSpots => CellFillPatternStyle.LightGray,
+            FillPattern.Bricks => CellFillPatternStyle.LightTrellis,
+            FillPattern.ThinHorizontalBands => CellFillPatternStyle.LightHorizontal,
+            FillPattern.ThinVerticalBands => CellFillPatternStyle.LightVertical,
+            FillPattern.ThinBackwardDiagonals => CellFillPatternStyle.LightUp,
+            FillPattern.ThinForwardDiagonals => CellFillPatternStyle.LightDown,
+            FillPattern.Squares => CellFillPatternStyle.LightGrid,
+            FillPattern.Diamonds => CellFillPatternStyle.LightTrellis,
+            _ => CellFillPatternStyle.None
+        };
+
     private static int? PositiveOrNull(short value) =>
         value > 0 ? value : null;
 
@@ -1496,6 +1753,15 @@ public sealed class LegacyXlsFileAdapterTests
         {
             return false;
         }
+    }
+
+    private static CellColor GetSourceIndexedColor(HSSFWorkbook hssf, short colorIndex)
+    {
+        var color = hssf.GetCustomPalette().GetColor(colorIndex);
+        var triplet = color?.GetTriplet();
+        return triplet is { Length: >= 3 }
+            ? new CellColor(triplet[0], triplet[1], triplet[2])
+            : CellColor.Black;
     }
 
     private static string? GetProtectionMetadataAttribute(Sheet sheet, string name)
@@ -1913,6 +2179,7 @@ public sealed class LegacyXlsFileAdapterTests
         int AutoFilters,
         int ProtectedSheets,
         int DataValidations,
+        int ConditionalFormats,
         int PageSetupSheets,
         int PageBreaks,
         int? ActiveSheetIndex,
@@ -1930,7 +2197,8 @@ public sealed class LegacyXlsFileAdapterTests
         IReadOnlyList<string>? ViewStateFingerprints = null,
         IReadOnlyList<string>? AutoFilterFingerprints = null,
         IReadOnlyList<string>? SheetProtectionFingerprints = null,
-        IReadOnlyList<string>? DataValidationFingerprints = null);
+        IReadOnlyList<string>? DataValidationFingerprints = null,
+        IReadOnlyList<string>? ConditionalFormatFingerprints = null);
 
     public static TheoryData<object, double> AdditionalNumericValues() => new()
     {

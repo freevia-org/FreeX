@@ -103,6 +103,7 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         if (workbook.Sheets.Count == 0)
             workbook.AddSheet("Sheet1");
 
+        LoadConditionalFormats(hssf, workbook);
         LoadDataValidations(hssf, workbook);
         LoadDefinedNames(hssf, workbook);
 
@@ -318,6 +319,139 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
 
     private static string? NullIfEmpty(string? value) =>
         string.IsNullOrEmpty(value) ? null : value;
+
+    private static void LoadConditionalFormats(HSSFWorkbook sourceWorkbook, Workbook workbook)
+    {
+        if (sourceWorkbook.NumberOfSheets == 0 || workbook.Sheets.Count == 0)
+            return;
+
+        for (var sheetIndex = 0; sheetIndex < sourceWorkbook.NumberOfSheets && sheetIndex < workbook.Sheets.Count; sheetIndex++)
+        {
+            if (sourceWorkbook.GetSheetAt(sheetIndex) is not HSSFSheet sourceSheet)
+                continue;
+
+            var sheet = workbook.GetSheetAt(sheetIndex);
+            ISheetConditionalFormatting sourceFormats;
+            try
+            {
+                sourceFormats = sourceSheet.SheetConditionalFormatting;
+            }
+            catch
+            {
+                continue;
+            }
+
+            for (var formatIndex = 0; formatIndex < sourceFormats.NumConditionalFormattings; formatIndex++)
+            {
+                IConditionalFormatting sourceFormat;
+                try
+                {
+                    sourceFormat = sourceFormats.GetConditionalFormattingAt(formatIndex);
+                }
+                catch
+                {
+                    continue;
+                }
+
+                var ranges = sourceFormat.GetFormattingRanges();
+                if (ranges.Length == 0)
+                    continue;
+
+                for (var ruleIndex = 0; ruleIndex < sourceFormat.NumberOfRules; ruleIndex++)
+                {
+                    var sourceRule = sourceFormat.GetRule(ruleIndex);
+                    if (TryCreateConditionalFormat(sourceWorkbook, sourceRule, ranges[0], sheet.Id, out var conditionalFormat))
+                        sheet.ConditionalFormats.Add(conditionalFormat);
+                }
+            }
+        }
+    }
+
+    private static bool TryCreateConditionalFormat(
+        HSSFWorkbook sourceWorkbook,
+        IConditionalFormattingRule sourceRule,
+        CellRangeAddressBase range,
+        SheetId sheetId,
+        out ConditionalFormat conditionalFormat)
+    {
+        conditionalFormat = new ConditionalFormat();
+        if (sourceRule.ConditionType == ConditionType.CellValueIs)
+        {
+            conditionalFormat.RuleType = CfRuleType.CellValue;
+            conditionalFormat.Operator = MapConditionalFormatOperator(sourceRule.ComparisonOperation);
+            conditionalFormat.Value1 = NullIfEmpty(NormalizeFormula(sourceRule.Formula1 ?? ""));
+            conditionalFormat.Value2 = NullIfEmpty(NormalizeFormula(sourceRule.Formula2 ?? ""));
+        }
+        else if (sourceRule.ConditionType == ConditionType.Formula)
+        {
+            conditionalFormat.RuleType = CfRuleType.Formula;
+            conditionalFormat.FormulaText = NullIfEmpty(NormalizeFormula(sourceRule.Formula1 ?? ""));
+        }
+        else
+        {
+            return false;
+        }
+
+        conditionalFormat.AppliesTo = ToGridRange(range, sheetId);
+        conditionalFormat.Priority = Math.Max(1, sourceRule.Priority);
+        conditionalFormat.StopIfTrue = sourceRule.StopIfTrue;
+        conditionalFormat.FormatIfTrue = MapConditionalFormatStyle(sourceWorkbook, sourceRule);
+        return true;
+    }
+
+    private static CfOperator MapConditionalFormatOperator(ComparisonOperator op) =>
+        op switch
+        {
+            ComparisonOperator.NotBetween => CfOperator.NotBetween,
+            ComparisonOperator.Equal => CfOperator.Equal,
+            ComparisonOperator.NotEqual => CfOperator.NotEqual,
+            ComparisonOperator.GreaterThan => CfOperator.GreaterThan,
+            ComparisonOperator.LessThan => CfOperator.LessThan,
+            ComparisonOperator.GreaterThanOrEqual => CfOperator.GreaterThanOrEqual,
+            ComparisonOperator.LessThanOrEqual => CfOperator.LessThanOrEqual,
+            _ => CfOperator.Between
+        };
+
+    private static ModelCellStyle? MapConditionalFormatStyle(
+        HSSFWorkbook sourceWorkbook,
+        IConditionalFormattingRule sourceRule)
+    {
+        var hasStyle = false;
+        var style = new ModelCellStyle();
+
+        if (sourceRule.FontFormatting is { } font)
+        {
+            hasStyle = true;
+            style.Bold = font.IsBold;
+            style.Italic = font.IsItalic;
+            style.Underline = font.UnderlineType != FontUnderlineType.None;
+            if (font.FontHeight > 0)
+                style.FontSize = font.FontHeight / 20.0;
+            if (font.FontColorIndex != 0)
+                style.FontColor = GetIndexedColor(sourceWorkbook, font.FontColorIndex);
+        }
+
+        if (sourceRule.PatternFormatting is { } pattern)
+        {
+            hasStyle = true;
+            style.FillPatternStyle = MapFillPattern(pattern.FillPattern);
+            if (pattern.FillForegroundColor != 0)
+                style.FillColor = GetIndexedColor(sourceWorkbook, pattern.FillForegroundColor);
+            if (pattern.FillBackgroundColor != 0)
+                style.FillPatternColor = GetIndexedColor(sourceWorkbook, pattern.FillBackgroundColor);
+        }
+
+        if (sourceRule.BorderFormatting is { } border)
+        {
+            hasStyle = true;
+            style.BorderTop = new CellBorder(MapBorderStyle(border.BorderTop), GetIndexedColor(sourceWorkbook, border.TopBorderColor));
+            style.BorderRight = new CellBorder(MapBorderStyle(border.BorderRight), GetIndexedColor(sourceWorkbook, border.RightBorderColor));
+            style.BorderBottom = new CellBorder(MapBorderStyle(border.BorderBottom), GetIndexedColor(sourceWorkbook, border.BottomBorderColor));
+            style.BorderLeft = new CellBorder(MapBorderStyle(border.BorderLeft), GetIndexedColor(sourceWorkbook, border.LeftBorderColor));
+        }
+
+        return hasStyle ? style : null;
+    }
 
     private static void LoadColumnOutlineLevels(ISheet sourceSheet, Sheet sheet)
     {
