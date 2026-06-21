@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
+using FreeX.App.Presentation.DrawingUI;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -15,51 +16,40 @@ internal static class ShapeGradientDialogPlanner
     public static CellColor DefaultEndColor { get; } = new(180, 210, 240);
 
     public static IReadOnlyList<ShapeGradientDirectionOption> CreateDirectionOptions() =>
-    [
-        new(DrawingShapeGradientDirection.DiagonalDown, UiText.Get("FormatCells_FillPatternDarkUp")),
-        new(DrawingShapeGradientDirection.Horizontal, UiText.Get("MainWindow_Header_Horizontal")),
-        new(DrawingShapeGradientDirection.Vertical, UiText.Get("MainWindow_Header_Vertical")),
-        new(DrawingShapeGradientDirection.DiagonalUp, UiText.Get("FormatCells_FillPatternDarkDown"))
-    ];
+        ShapeGradientPlanner.CreateDirectionOptions()
+            .Select(option => new ShapeGradientDirectionOption(option.Direction, ResolveDirectionLabel(option.LabelKey)))
+            .ToArray();
 
     public static DrawingShapeGradientDirection NormalizeDirection(DrawingShapeGradientDirection direction) =>
-        Enum.IsDefined(direction)
-            ? direction
-            : DrawingShapeGradientDirection.DiagonalDown;
+        ShapeGradientPlanner.NormalizeDirection(direction);
+
+    public static ShapeGradientDialogResult CreateResult(
+        CellColor startColor,
+        CellColor endColor,
+        DrawingShapeGradientDirection direction)
+    {
+        var result = ShapeGradientPlanner.CreateResult(startColor, endColor, direction);
+        return new ShapeGradientDialogResult(result.StartColor, result.EndColor, result.Direction);
+    }
 
     public static (Point Start, Point End) CreatePreviewGradientPoints(
         DrawingShapeGradientDirection direction,
         double width,
         double height)
     {
-        direction = NormalizeDirection(direction);
-        if (direction == DrawingShapeGradientDirection.Horizontal)
-            return (new Point(0, 0.5), new Point(1, 0.5));
-        if (direction == DrawingShapeGradientDirection.Vertical)
-            return (new Point(0.5, 0), new Point(0.5, 1));
-
-        if (width <= 0 || height <= 0)
-        {
-            return direction == DrawingShapeGradientDirection.DiagonalUp
-                ? (new Point(0, 1), new Point(1, 0))
-                : (new Point(0, 0), new Point(1, 1));
-        }
-
-        var xSpan = 1.0;
-        var ySpan = 1.0;
-        if (width > height)
-            xSpan = height / width;
-        else if (height > width)
-            ySpan = width / height;
-
-        var startX = 0.5 - xSpan / 2;
-        var endX = 0.5 + xSpan / 2;
-        var startY = 0.5 - ySpan / 2;
-        var endY = 0.5 + ySpan / 2;
-        return direction == DrawingShapeGradientDirection.DiagonalUp
-            ? (new Point(startX, endY), new Point(endX, startY))
-            : (new Point(startX, startY), new Point(endX, endY));
+        var (startX, startY, endX, endY) = ShapeGradientPlanner.PreviewVector(direction, width, height);
+        return (new Point(startX, startY), new Point(endX, endY));
     }
+
+    private static string ResolveDirectionLabel(string labelKey) =>
+        labelKey switch
+        {
+            "ShapeGradient_DirectionDiagonalDown" => UiText.Get("FormatCells_FillPatternDarkUp"),
+            "ShapeGradient_DirectionHorizontal" => UiText.Get("MainWindow_Header_Horizontal"),
+            "ShapeGradient_DirectionVertical" => UiText.Get("MainWindow_Header_Vertical"),
+            "ShapeGradient_DirectionDiagonalUp" => UiText.Get("FormatCells_FillPatternDarkDown"),
+            _ => UiText.Get(labelKey),
+        };
 }
 
 public sealed record ShapeGradientDialogResult(
@@ -98,7 +88,7 @@ public sealed class ShapeGradientDialog : Window
         _endColor = endColor;
         _directionOptions = ShapeGradientDialogPlanner.CreateDirectionOptions();
         var normalizedDirection = ShapeGradientDialogPlanner.NormalizeDirection(direction);
-        Result = new ShapeGradientDialogResult(_startColor, _endColor, normalizedDirection);
+        Result = ShapeGradientDialogPlanner.CreateResult(_startColor, _endColor, normalizedDirection);
         Title = UiText.Get("ShapeGradient_Title");
         Width = 500;
         SizeToContent = SizeToContent.Height;
@@ -150,7 +140,7 @@ public sealed class ShapeGradientDialog : Window
             return false;
         }
 
-        result = new ShapeGradientDialogResult(startColor, endColor);
+        result = ShapeGradientDialogPlanner.CreateResult(startColor, endColor, DrawingShapeGradientDirection.DiagonalDown);
         return true;
     }
 
@@ -170,7 +160,7 @@ public sealed class ShapeGradientDialog : Window
             return;
         }
 
-        Result = new ShapeGradientDialogResult(startColor, endColor, SelectedDirection);
+        Result = ShapeGradientDialogPlanner.CreateResult(startColor, endColor, SelectedDirection);
         DialogResult = true;
     }
 

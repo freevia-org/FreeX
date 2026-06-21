@@ -10,6 +10,26 @@ namespace FreeX.App.Host.Tests;
 public sealed partial class ObjectDialogTests
 {
     [Fact]
+    public void ShapeAppearanceDialogPlanners_DelegatePortableRulesToSharedDrawingPlanners()
+    {
+        var gradientSource = DialogSourceTestSupport.ReadHostSources("ShapeGradientDialog.cs");
+        var effectsSource = DialogSourceTestSupport.ReadHostSources("ShapeEffectsDialog.cs");
+
+        gradientSource.Should().Contain("ShapeGradientPlanner.CreateDirectionOptions()");
+        gradientSource.Should().Contain("ShapeGradientPlanner.NormalizeDirection(direction)");
+        gradientSource.Should().Contain("ShapeGradientPlanner.CreateResult(startColor, endColor, direction)");
+        gradientSource.Should().Contain("ShapeGradientPlanner.PreviewVector(direction, width, height)");
+        gradientSource.Should().NotContain("if (width > height)");
+        gradientSource.Should().NotContain("Enum.IsDefined(direction)");
+
+        effectsSource.Should().Contain("ShapeEffectsPlanner.CreatePlan(currentPreset)");
+        effectsSource.Should().Contain("ShapeEffectsPlanner.NormalizePreset(preset)");
+        effectsSource.Should().Contain("ShapeEffectsPlanner.CreateOptions()");
+        effectsSource.Should().NotContain("Enum.IsDefined(preset)");
+        effectsSource.Should().NotContain("DrawingShapeEffectPreset.InnerShadow,");
+    }
+
+    [Fact]
     public void ShapeGradientDialog_LabelsStopRgbEditorsWithAccessKeyTargets()
     {
         var source = DialogSourceTestSupport.ReadHostSources("ShapeGradientDialog.cs");
