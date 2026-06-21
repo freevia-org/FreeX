@@ -35,37 +35,10 @@ public partial class MainWindow
 
     private async Task<SaveChangesConfirmation> ConfirmSaveBeforeDestructiveActionAsync(string message)
     {
-        // P2b: the dirty-gate DECISION is the shared FileLifecyclePlanner's
-        // PlanDirtyGate + ResolveDirtyGate; FreeX supplies only the WPF prompt and the
-        // richer (adapter-resolving, async/generation-aware) save MECHANICS.
-        if (FileLifecyclePlanner.PlanDirtyGate(_workbookDirty) == DirtyGateIntent.ProceedWithoutPrompt)
-            return SaveChangesConfirmation.Continue;
-
-        var result = ShowOwnedMessage(
-            message,
-            UiText.Get("MainWindowMessage_SaveChangesTitle"),
-            MessageBoxButton.YesNoCancel,
-            MessageBoxImage.Warning);
-
-        var prompt = result switch
-        {
-            MessageBoxResult.Cancel => SaveChangesPrompt.Cancel,
-            MessageBoxResult.No => SaveChangesPrompt.DontSave,
-            _ => SaveChangesPrompt.Save
-        };
-
-        return FileLifecyclePlanner.ResolveDirtyGate(prompt) switch
-        {
-            DirtyGateAction.Cancel => SaveChangesConfirmation.Cancel,
-            DirtyGateAction.ProceedDiscardingChanges => SaveChangesConfirmation.DiscardWithoutSaving,
-            // SaveThenProceed: run the FreeX-specific save (existing-path vs Save-As), proceeding only
-            // if it succeeds. The existing-path-vs-dialog branch IS the shared PlanSave decision; FreeX's
-            // FileSavePlanner.TryResolveExistingPath is the adapter-resolving mechanism that realizes it.
-            DirtyGateAction.SaveThenProceed => await SaveResolvedAsync()
-                ? SaveChangesConfirmation.Continue
-                : SaveChangesConfirmation.Cancel,
-            _ => SaveChangesConfirmation.Cancel
-        };
+        return await WorkbookFileLifecycleCoordinator.ConfirmBeforeDestructiveActionAsync(
+            _workbookDirty,
+            () => Task.FromResult(PromptSaveChangesBeforeDestructiveAction(message)),
+            SaveResolvedAsync);
     }
 
     /// <summary>
@@ -77,13 +50,28 @@ public partial class MainWindow
     /// </summary>
     private async Task<bool> SaveResolvedAsync()
     {
-        if (FileLifecyclePlanner.PlanSave(_workbookDirty, _currentFilePath) == FileSaveIntent.PromptSaveAs ||
-            !FileSavePlanner.TryResolveExistingPath(_currentFilePath, _fileAdapters, out var target))
-        {
-            return await SaveWorkbookWithDialogAsync();
-        }
+        return await WorkbookFileLifecycleCoordinator.SaveResolvedAsync(
+            _workbookDirty,
+            _currentFilePath,
+            _fileAdapters,
+            SaveWorkbookToTargetAsync,
+            SaveWorkbookWithDialogAsync);
+    }
 
-        return await SaveWorkbookToTargetAsync(target!);
+    private SaveChangesPrompt PromptSaveChangesBeforeDestructiveAction(string message)
+    {
+        var result = ShowOwnedMessage(
+            message,
+            UiText.Get("MainWindowMessage_SaveChangesTitle"),
+            MessageBoxButton.YesNoCancel,
+            MessageBoxImage.Warning);
+
+        return result switch
+        {
+            MessageBoxResult.Cancel => SaveChangesPrompt.Cancel,
+            MessageBoxResult.No => SaveChangesPrompt.DontSave,
+            _ => SaveChangesPrompt.Save
+        };
     }
 
     private async void MainWindow_Closing(object? sender, CancelEventArgs e)
