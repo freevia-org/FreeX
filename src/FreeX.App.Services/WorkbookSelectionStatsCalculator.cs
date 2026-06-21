@@ -12,7 +12,12 @@ public static class WorkbookSelectionStatsCalculator
         ArgumentNullException.ThrowIfNull(sheet);
 
         if (range.Start == range.End)
+        {
+            if (!IsVisibleCell(sheet, range.Start.Row, range.Start.Col))
+                return EmptyStats;
+
             return CalculateSingleCell(sheet.GetValue(range.Start.Row, range.Start.Col));
+        }
 
         if (sheet.GetUsedRange() is not { } usedRange || !usedRange.Overlaps(range))
             return EmptyStats;
@@ -30,16 +35,27 @@ public static class WorkbookSelectionStatsCalculator
             foreach (var entry in sheet.GetOccupiedCellMap())
             {
                 var (row, col) = entry.Key;
-                if (Contains(scanRange, row, col))
+                if (Contains(scanRange, row, col) &&
+                    IsVisibleCell(sheet, row, col))
+                {
                     Accumulate(entry.Value.Value, ref sum, ref count, ref numericalCount, ref min, ref max);
+                }
             }
         }
         else
         {
             for (var row = scanRange.Start.Row; row <= scanRange.End.Row; row++)
             {
+                if (sheet.IsRowEffectivelyHidden(row))
+                    continue;
+
                 for (var col = scanRange.Start.Col; col <= scanRange.End.Col; col++)
+                {
+                    if (sheet.IsColEffectivelyHidden(col))
+                        continue;
+
                     Accumulate(sheet.GetValue(row, col), ref sum, ref count, ref numericalCount, ref min, ref max);
+                }
             }
         }
 
@@ -84,8 +100,11 @@ public static class WorkbookSelectionStatsCalculator
             foreach (var entry in sheet.GetOccupiedCellMap())
             {
                 var (row, col) = entry.Key;
-                if (ContainsAny(scanRanges, row, col))
+                if (ContainsAny(scanRanges, row, col) &&
+                    IsVisibleCell(sheet, row, col))
+                {
                     Accumulate(entry.Value.Value, ref sum, ref count, ref numericalCount, ref min, ref max);
+                }
             }
         }
         else
@@ -96,8 +115,14 @@ public static class WorkbookSelectionStatsCalculator
                 var range = scanRanges[rangeIndex];
                 for (var row = range.Start.Row; row <= range.End.Row; row++)
                 {
+                    if (sheet.IsRowEffectivelyHidden(row))
+                        continue;
+
                     for (var col = range.Start.Col; col <= range.End.Col; col++)
                     {
+                        if (sheet.IsColEffectivelyHidden(col))
+                            continue;
+
                         if (visited.Add(CreateAddressKey(row, col)))
                             Accumulate(sheet.GetValue(row, col), ref sum, ref count, ref numericalCount, ref min, ref max);
                     }
@@ -167,6 +192,10 @@ public static class WorkbookSelectionStatsCalculator
 
         return false;
     }
+
+    private static bool IsVisibleCell(Sheet sheet, uint row, uint col) =>
+        !sheet.IsRowEffectivelyHidden(row) &&
+        !sheet.IsColEffectivelyHidden(col);
 
     private static long AddCellCount(long totalCells, long cellCount) =>
         totalCells > long.MaxValue - cellCount ? long.MaxValue : totalCells + cellCount;
