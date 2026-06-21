@@ -1,6 +1,7 @@
+using System;
+using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Media;
 using Free.Shared.Ribbon.Wpf;
 using Free.Shared.Shell.Wpf;
 using FreeP.Core.Model;
@@ -8,25 +9,14 @@ using FreeP.Core.Model;
 namespace FreeP.App.Host.Backstage;
 
 /// <summary>
-/// FreeP's Office-style Backstage (the full-window "File" screen), built on top of the shared, app-neutral
-/// <see cref="BackstageFrame"/>. FreeP supplies the entries (Info / New / Open / Save / Save As / Recent /
-/// Options / Close) and the content panes; the frame owns the coloured nav rail, selection/hover, the
-/// back-arrow + Esc close, and the Office-backstage look. No file IO is reimplemented here — every action
-/// routes back into the host's command implementations through <see cref="BackstageActions"/>. Mirrors
-/// FreeW.Backstage.BackstageView.
+/// FreeP's Office-style Backstage, built on the shared Backstage frame, theme, entry builder, and pane specs.
 /// </summary>
 internal sealed class BackstageView : UserControl
 {
-    // FreeP's rail accent (PowerPoint-style brick/orange) and the darker selection/hover bands.
-    private static readonly Color AccentColor = Color.FromRgb(0xB7, 0x47, 0x2A);
-    private static readonly Color AccentSelectedColor = Color.FromRgb(0x8F, 0x37, 0x21);
-    private static readonly Color AccentHoverColor = Color.FromRgb(0xC9, 0x5A, 0x3D);
-    private static readonly Color SeparatorColor = Color.FromRgb(0xCE, 0x6A, 0x4F);
-
-    // The code-built backstage-pane visual helpers (Heading/SubHeading/Field/TemplateTile/Scroll/Or) live in
-    // the shared Free.Shared.Shell.Wpf kit; FreeP supplies its link accent (brick) and the landscape slide tile.
-    private static readonly BackstageVisualKit Kit = new(Color.FromRgb(0xB7, 0x47, 0x2A), tileWidth: 190, tileHeight: 150);
+    private static readonly SisterBackstageTheme Theme = SisterBackstageTheme.FreeP;
+    private static readonly BackstageVisualKit Kit = new(Theme.LinkColor, Theme.TileWidth, Theme.TileHeight);
     private static readonly BackstagePaneComposer Panes = new(Kit);
+    private static readonly SisterBackstagePaneSpecPlanner PaneSpecs = new(SisterBackstagePaneTextSpec.FreeP);
 
     private readonly Func<Presentation> _getModel;
     private readonly FileCommands _file;
@@ -41,18 +31,16 @@ internal sealed class BackstageView : UserControl
 
         _shell = new BackstageViewShell(
             this,
-            new BackstageAccent(AccentColor, AccentHoverColor, AccentSelectedColor, SeparatorColor),
+            Theme.Accent,
             BuildEntries(),
             _actions.OnClosed);
     }
 
-    /// <summary>Show the backstage, landing on the Info pane with live content.</summary>
     public void Show()
     {
         _shell.Show();
     }
 
-    /// <summary>Hide the backstage and return to the document (collapse happens via the frame's Closed event).</summary>
     public void Hide() => _shell.Hide();
 
     private IEnumerable<BackstageEntry> BuildEntries()
@@ -68,7 +56,6 @@ internal sealed class BackstageView : UserControl
             BuildOptionsPane));
     }
 
-    // ── Info pane ──────────────────────────────────────────────────────────────
     private UIElement BuildInfoPane()
     {
         var model = _getModel();
@@ -90,41 +77,29 @@ internal sealed class BackstageView : UserControl
             ]));
     }
 
-    // ── Recent pane ────────────────────────────────────────────────────────────
     private UIElement BuildRecentPane()
     {
-        return Panes.BuildRecentPane(new BackstageRecentPaneSpec(
-            _file.RecentEntries.Select(entry => entry.Path).ToArray(),
-            "No recent presentations.",
+        return Panes.BuildRecentPane(PaneSpecs.BuildRecentPaneSpec(
+            _file.RecentEntries.Select(entry => entry.Path),
             path => { Hide(); _actions.OpenPath(path); }));
     }
 
-    // ── New pane ───────────────────────────────────────────────────────────────
     private UIElement BuildNewPane()
     {
-        return Panes.BuildTemplatePane(new BackstageTemplatePaneSpec(
-            "New",
-            "Blank presentation",
-            "More templates are not available in this build.",
+        return Panes.BuildTemplatePane(PaneSpecs.BuildNewPaneSpec(
             () => { Hide(); _actions.New(); }));
     }
 
-    // ── Options pane ───────────────────────────────────────────────────────────
     private UIElement BuildOptionsPane()
     {
         var options = _actions.CurrentOptions();
 
-        return Panes.BuildOptionsPane(BackstageApplicationOptionsPanePlanner.Build(
-            "FreeP application settings. These persist between sessions.",
+        return Panes.BuildOptionsPane(PaneSpecs.BuildOptionsPaneSpec(
             options,
             _actions.DataFolder()));
     }
 }
 
-/// <summary>
-/// The host callbacks the <see cref="BackstageView"/> drives. Every entry routes to an existing MainWindow
-/// command implementation (no file IO reimplemented here). Mirrors FreeW's BackstageActions.
-/// </summary>
 internal sealed record BackstageActions(
     Action New,
     Action Open,
