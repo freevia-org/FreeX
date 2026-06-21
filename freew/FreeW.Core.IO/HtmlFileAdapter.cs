@@ -240,21 +240,70 @@ td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
     private static List<Paragraph> ReadCellParagraphs(IEnumerable<INode> childNodes, Func<string, InlineImage?> imageResolver)
     {
         var paragraphs = new List<Paragraph>();
-        foreach (var block in ReadBlocks(childNodes, imageResolver))
+        var inlineNodes = new List<INode>();
+
+        void FlushInline()
         {
-            switch (block)
+            if (inlineNodes.Count == 0)
+                return;
+
+            var paragraph = new Paragraph();
+            AppendInline(paragraph, inlineNodes, RunFormatting.Default, imageResolver);
+            if (paragraph.Runs.Count > 0)
+                paragraphs.Add(paragraph);
+            inlineNodes.Clear();
+        }
+
+        foreach (var node in childNodes)
+        {
+            if (node is not IElement element || !IsTableCellBlockElement(element))
             {
-                case Paragraph paragraph:
-                    paragraphs.Add(paragraph);
+                inlineNodes.Add(node);
+                continue;
+            }
+
+            FlushInline();
+            switch (element.LocalName.ToLowerInvariant())
+            {
+                case "table":
+                    var nestedTable = ReadTable(element, imageResolver);
+                    if (TablePlainText(nestedTable) is { Length: > 0 } nestedText)
+                        paragraphs.Add(new Paragraph(nestedText));
                     break;
-                case Table table when TablePlainText(table) is { Length: > 0 } text:
-                    paragraphs.Add(new Paragraph(text));
+                case "div":
+                case "section":
+                case "article":
+                case "main":
+                    paragraphs.AddRange(ReadCellParagraphs(element.ChildNodes, imageResolver));
+                    break;
+                default:
+                    foreach (var block in ReadBlocks(new[] { element }, imageResolver))
+                    {
+                        switch (block)
+                        {
+                            case Paragraph paragraph:
+                                paragraphs.Add(paragraph);
+                                break;
+                            case Table table when TablePlainText(table) is { Length: > 0 } text:
+                                paragraphs.Add(new Paragraph(text));
+                                break;
+                        }
+                    }
                     break;
             }
         }
 
+        FlushInline();
         return paragraphs;
     }
+
+    private static bool IsTableCellBlockElement(IElement element) =>
+        element.LocalName.ToLowerInvariant() switch
+        {
+            "p" or "h1" or "h2" or "h3" or "h4" or "h5" or "h6" or
+            "ul" or "ol" or "table" or "div" or "section" or "article" or "main" => true,
+            _ => false
+        };
 
     private static string TablePlainText(Table table)
         => string.Join(

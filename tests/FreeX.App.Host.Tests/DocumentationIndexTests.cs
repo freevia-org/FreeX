@@ -40,6 +40,22 @@ public sealed partial class DocumentationIndexTests
     }
 
     [Fact]
+    public void DocsReadme_LinksEveryComprehensiveReviewReport()
+    {
+        var docsDirectory = WorkspaceFileLocator.FindDocsDirectory();
+        var readme = WorkspaceFileLocator.ReadAllText("docs", "README.md");
+        var reviewReports = Directory
+            .GetFiles(Path.Combine(docsDirectory, "reviews"), "comprehensive-code-review-*.md")
+            .Select(path => Path.GetRelativePath(docsDirectory, path).Replace(Path.DirectorySeparatorChar, '/'))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        reviewReports.Should().NotBeEmpty();
+        foreach (var report in reviewReports)
+            readme.Should().Contain($"[{report}]({report})");
+    }
+
+    [Fact]
     public void NewestStatusReport_NamesCurrentPlanningSources()
     {
         var docsDirectory = WorkspaceFileLocator.FindDocsDirectory();
@@ -265,6 +281,7 @@ public sealed partial class DocumentationIndexTests
             "planning/outstanding-build.md",
             "planning/next-phases.md",
             "testing/ui-test-catalog.md",
+            "reviews/code-review-log.md",
             "parity/shortcuts.md",
             "parity/functions.md",
             "parity/command-surface.md",

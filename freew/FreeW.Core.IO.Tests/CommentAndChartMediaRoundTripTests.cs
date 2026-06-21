@@ -30,6 +30,8 @@ public class CommentAndChartMediaRoundTripTests
 
     private const string ChartExRelType = "http://schemas.microsoft.com/office/2014/relationships/chartEx";
     private const string ChartExContentType = "application/vnd.ms-office.chartex+xml";
+    private const string ChartRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
+    private const string ChartContentType = "application/vnd.openxmlformats-officedocument.drawingml.chart+xml";
 
     // A 1x1 PNG, used as the comment / chart media so the bytes are something concrete to compare.
     private static readonly byte[] PngBytes =
@@ -453,5 +455,59 @@ public class CommentAndChartMediaRoundTripTests
         // No run in the document was misclassified as a preserved drawing.
         read.Blocks.OfType<Paragraph>().SelectMany(p => p.Runs)
             .Any(r => r.PreservedDrawing is not null).Should().BeFalse();
+    }
+
+    [Fact]
+    public void ModelledImageAndChart_AvoidPreservedPackagePartNameCollisions()
+    {
+        var doc = new TextDocument();
+        doc.Preserved.ContentTypeDefaults["png"] = "image/png";
+        doc.Preserved.Parts.Add(new PreservedPart("/word/media/image1.png", PngBytes));
+        doc.Preserved.Parts.Add(new PreservedPart(
+            "/word/charts/chart1.xml",
+            Encoding.UTF8.GetBytes("<c:chartSpace xmlns:c=\"http://schemas.openxmlformats.org/drawingml/2006/chart\"/>"),
+            ChartContentType,
+            ChartRelType));
+        doc.Preserved.Parts.Add(new PreservedPart(
+            "/word/charts/_rels/chart1.xml.rels",
+            Encoding.UTF8.GetBytes("""
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>
+                """)));
+
+        var imagePara = new Paragraph("Image ");
+        imagePara.Runs.Add(Run.FromImage(new InlineImage(PngBytes, 50, 50, ImageFormat.Png)));
+        doc.Blocks.Add(imagePara);
+        var chart = new Chart { Kind = ChartKind.Column, Title = "Modelled" };
+        chart.Categories.Add("A");
+        chart.Series.Add(new ChartSeries { Name = "S", Values = { 1 } });
+        var chartPara = new Paragraph();
+        chartPara.Runs.Add(Run.FromChart(chart));
+        doc.Blocks.Add(chartPara);
+
+        var bytes = WriteBytes(doc);
+
+        using var zip = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read);
+        var names = zip.Entries.Select(entry => entry.FullName).ToList();
+        names.Count(name => name == "word/media/image1.png").Should().Be(1);
+        names.Count(name => name == "word/media/image2.png").Should().Be(1);
+        names.Count(name => name == "word/charts/chart1.xml").Should().Be(1);
+        names.Count(name => name == "word/charts/chart2.xml").Should().Be(1);
+        names.Count(name => name == "word/charts/_rels/chart1.xml.rels").Should().Be(1);
+        names.Count(name => name == "word/charts/_rels/chart2.xml.rels").Should().Be(1);
+
+        var relTargets = EntryXml(bytes, "word/_rels/document.xml.rels")
+            .Root!.Elements(Rel + "Relationship")
+            .Select(rel => rel.Attribute("Target")!.Value)
+            .ToList();
+        relTargets.Should().Contain("media/image2.png");
+        relTargets.Should().Contain("charts/chart1.xml");
+        relTargets.Should().Contain("charts/chart2.xml");
+
+        var overrides = EntryXml(bytes, "[Content_Types].xml")
+            .Root!.Elements(Ct + "Override")
+            .Select(overrideElement => overrideElement.Attribute("PartName")!.Value)
+            .ToList();
+        overrides.Should().Contain("/word/charts/chart1.xml");
+        overrides.Should().Contain("/word/charts/chart2.xml");
     }
 }

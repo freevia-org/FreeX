@@ -254,6 +254,27 @@ public class HtmlMhtmlRoundTripTests
     }
 
     [Fact]
+    public void Html_LoadKeepsMixedInlineTableCellContentInOneParagraph()
+    {
+        const string html = """
+<!doctype html><html><body>
+<table>
+  <tr><td>A <strong>B</strong> <em>C</em></td></tr>
+</table>
+</body></html>
+""";
+
+        var loaded = HtmlFileAdapter.LoadHtml(html, static _ => null);
+
+        var cell = loaded.Blocks.Should().ContainSingle().Which
+            .Should().BeOfType<Table>().Which.Rows.Should().ContainSingle().Which.Cells.Should().ContainSingle().Which;
+        var paragraph = cell.Paragraphs.Should().ContainSingle().Which;
+        paragraph.PlainText.Should().Be("A B C");
+        paragraph.Runs.Should().Contain(run => run.Text == "B" && run.Formatting.Bold);
+        paragraph.Runs.Should().Contain(run => run.Text == "C" && run.Formatting.Italic);
+    }
+
+    [Fact]
     public void Catalog_RegistersHtmlAndMhtmlFormats()
     {
         var formats = DocumentFileAdapterCatalog.CreateDefaultAdapters().SelectMany(adapter => adapter.Formats).ToList();

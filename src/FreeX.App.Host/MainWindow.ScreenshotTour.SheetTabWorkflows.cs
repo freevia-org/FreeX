@@ -55,7 +55,7 @@ public partial class MainWindow
                 "insert-sheet-result",
                 "freex_sheet_tab_workflows_insert_sheet_result",
                 "Insert Sheet result shows the newly added sheet selected through the host InsertNewSheet/AddSheetCommand path.",
-                "InsertNewSheet() -> CommandBus.ExecuteRepeatable(AddSheetCommand)"));
+                "InsertNewSheet() -> TryExecuteRepeatableCommand(AddSheetCommand)"));
             workflows.Add(CreateCapturedSheetTabWorkflow(
                 "Insert sheet submitted result",
                 ["UI-CAT-SHEETTAB-001C", "UI-CAT-SHEETTAB-002A-J"],
@@ -81,12 +81,19 @@ public partial class MainWindow
 
             var moveCopySource = context.SummarySheet;
             var sourceIndex = FindWorkbookSheetIndex(moveCopySource.Id);
-            ExecuteSheetTabWorkflowsCommand(new DuplicateSheetCommand(moveCopySource.Id), "Duplicate Sheet");
-            var copyIndex = Math.Min(sourceIndex + 1, _workbook.Sheets.Count - 1);
-            var copySheet = _workbook.Sheets[copyIndex];
+            var postCopySheetCount = _workbook.Sheets.Count + 1;
+            var copyIndex = Math.Min(sourceIndex + 1, postCopySheetCount - 1);
+            var targetIndex = postCopySheetCount - 1;
+            ExecuteSheetTabWorkflowsCommand(
+                new CompositeWorkbookCommand(
+                    "Move or Copy Sheet",
+                    [
+                        new DuplicateSheetCommand(moveCopySource.Id),
+                        new MoveSheetCommand(copyIndex, targetIndex)
+                    ]),
+                "Move or Copy Sheet");
+            var copySheet = _workbook.Sheets[targetIndex];
             ExecuteSheetTabWorkflowsCommand(new RenameSheetCommand(copySheet.Id, "Summary Copy"), "Rename Sheet");
-            var renamedCopyIndex = FindWorkbookSheetIndex(copySheet.Id);
-            ExecuteSheetTabWorkflowsCommand(new MoveSheetCommand(renamedCopyIndex, _workbook.Sheets.Count - 1), "Move Sheet");
             _currentSheetId = copySheet.Id;
             _groupedSheetIds.Clear();
             _groupedSheetIds.Add(_currentSheetId);
@@ -96,12 +103,12 @@ public partial class MainWindow
                 outputDir,
                 "move-or-copy-result",
                 "freex_sheet_tab_workflows_move_or_copy_result",
-                "Move or Copy result shows a copied Summary sheet moved to the end of the workbook order through the same DuplicateSheetCommand and MoveSheetCommand path used after dialog submission.",
-                "DuplicateSheetCommand(sourceSheet.Id) -> RenameSheetCommand(copySheet.Id, \"Summary Copy\") -> MoveSheetCommand(copyIndex, lastIndex)"));
+                "Move or Copy result shows a copied Summary sheet moved to the end of the workbook order through the same composite DuplicateSheetCommand and MoveSheetCommand route used after dialog submission.",
+                "CompositeWorkbookCommand(DuplicateSheetCommand(sourceSheet.Id), MoveSheetCommand(copyIndex, lastIndex)) -> RenameSheetCommand(copySheet.Id, \"Summary Copy\")"));
             workflows.Add(CreateCapturedSheetTabWorkflow(
                 "Move or Copy create-copy result",
                 ["UI-CAT-SHEETTAB-001B", "UI-CAT-SHEETTAB-002A-J"],
-                "DuplicateSheetCommand plus MoveSheetCommand",
+                "CompositeWorkbookCommand for DuplicateSheetCommand plus MoveSheetCommand",
                 "move-or-copy-result"));
 
             ExecuteSheetTabWorkflowsCommand(
@@ -448,7 +455,7 @@ public partial class MainWindow
                 "Seeded workbook before submitted sheet-tab workflows",
                 "Insert Sheet selected the newly created sheet",
                 "Submitted rename result through RenameSheetCommand",
-                "Move or Copy create-copy result through DuplicateSheetCommand plus MoveSheetCommand",
+                "Move or Copy create-copy result through CompositeWorkbookCommand",
                 "Tab Color applied through SetSheetTabColorCommand",
                 "Hide Sheet and Unhide Sheet result states through SetSheetHiddenCommand",
                 "Select All Sheets and Ungroup Sheets grouping states through production context handlers",
@@ -459,7 +466,7 @@ public partial class MainWindow
             [
                 "This slice drives deterministic in-process command/session paths and captures the resulting WPF main window with RenderTargetBitmap.",
                 "It does not synthesize physical double-click rename, foreground right-click context-menu opening, tab drag reorder, Ctrl/Shift tab-click grouping, keytip/access-key traversal, native dialogs, UI Automation Invoke, or screen-wide capture input.",
-                "Move or Copy is represented by the submitted command result after DuplicateSheetCommand and MoveSheetCommand, matching the host path after the Move or Copy dialog returns rather than physically submitting the dialog.",
+                "Move or Copy is represented by the submitted composite command result, matching the host path after the Move or Copy dialog returns rather than physically submitting the dialog.",
                 "Rename, tab color, hide, and unhide are captured after their backing commands execute; dialog foreground entry and color-picker foreground submission remain separate evidence gaps.",
                 "The persistence proof saves and reopens an XLSX through FreeX host services; no Microsoft Excel counterpart screenshots are produced by this tool."
             ]);

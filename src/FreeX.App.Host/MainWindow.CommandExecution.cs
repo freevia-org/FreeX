@@ -52,6 +52,33 @@ public partial class MainWindow
     private bool TryExecuteCommand(IWorkbookCommand command, string title) =>
         TryExecuteCommand(command, title, out _);
 
+    private bool TryExecuteRepeatableCommand(
+        Func<IWorkbookCommand> commandFactory,
+        string title,
+        out CommandOutcome outcome)
+    {
+        outcome = _commandBus.ExecuteRepeatable(_workbook.Id, commandFactory);
+        RecordDiagnosticEvent("command_invoked", new Dictionary<string, string?>
+        {
+            ["command"] = title,
+            ["status"] = outcome.Success ? "succeeded" : "failed"
+        });
+        if (outcome.Success)
+        {
+            if (outcome.IsNoOp)
+                return true;
+
+            MarkWorkbookDirty();
+            _repeatPostAction = null;
+            InvalidateNavigationCaches();
+            NotifyOtherWindowsOfWorkbookChange();
+            return true;
+        }
+
+        ShowCommandError(outcome, title);
+        return false;
+    }
+
     private IReadOnlyList<SheetId> CurrentGroupedEditSheetIds()
     {
         var groupedVisibleSheets = _workbook.Sheets

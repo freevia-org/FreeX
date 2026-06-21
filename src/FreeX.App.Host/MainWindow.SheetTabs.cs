@@ -333,14 +333,11 @@ public partial class MainWindow
 
     private void InsertNewSheet()
     {
-        var outcome = _commandBus.ExecuteRepeatable(
-            _workbook.Id,
-            () => new AddSheetCommand(GenerateUniqueSheetName()));
-        if (!outcome.Success)
-        {
-            ShowCommandError(outcome, "Insert Sheet");
+        if (!TryExecuteRepeatableCommand(
+                () => new AddSheetCommand(GenerateUniqueSheetName()),
+                "Insert Sheet",
+                out _))
             return;
-        }
 
         ActivateNewWorksheetAtA1(_workbook.Sheets[^1].Id);
         UpdateViewport();
@@ -1534,12 +1531,8 @@ public partial class MainWindow
         var name = dialog.Result.SheetName;
         if (!string.IsNullOrWhiteSpace(name) && name != currentName)
         {
-            var outcome = _commandBus.Execute(_workbook.Id, new RenameSheetCommand(sheetId, name));
-            if (!outcome.Success)
-            {
-                ShowCommandError(outcome, "Rename Sheet");
+            if (!TryExecuteCommand(new RenameSheetCommand(sheetId, name), "Rename Sheet"))
                 return;
-            }
 
             RecalculateWorkbook();
             RefreshSheetTabs();
@@ -1565,12 +1558,8 @@ public partial class MainWindow
         if (!_messageService.AskYesNo(
                 UiText.Format("MainWindowMessage_DeleteSheetPrompt", tab.Name),
                 UiText.Get("MainWindowMessage_DeleteSheetTitle"))) return;
-        var outcome = _commandBus.Execute(_workbook.Id, new RemoveSheetCommand(tab.Id));
-        if (!outcome.Success)
-        {
-            ShowCommandError(outcome, "Delete Sheet");
+        if (!TryExecuteCommand(new RemoveSheetCommand(tab.Id), "Delete Sheet"))
             return;
-        }
 
         _worksheetSelections.Remove(tab.Id);
         _currentSheetId = _workbook.Sheets[0].Id;
@@ -1656,15 +1645,21 @@ public partial class MainWindow
                 break;
             }
 
-            if (!TryExecuteCommand(new DuplicateSheetCommand(tab.Id), "Duplicate Sheet"))
-                return;
-
-            var copyIndex = Math.Min(sourceIndex + 1, _workbook.Sheets.Count - 1);
+            var postCopySheetCount = _workbook.Sheets.Count + 1;
+            var copyIndex = Math.Min(sourceIndex + 1, postCopySheetCount - 1);
             var targetIndex = dialog.Result.InsertBeforeIndex <= sourceIndex
                 ? dialog.Result.InsertBeforeIndex
-                : Math.Min(dialog.Result.InsertBeforeIndex, _workbook.Sheets.Count - 1);
-            if (copyIndex != targetIndex &&
-                !TryExecuteCommand(new MoveSheetCommand(copyIndex, targetIndex), "Move Sheet"))
+                : Math.Min(dialog.Result.InsertBeforeIndex, postCopySheetCount - 1);
+
+            IWorkbookCommand command = copyIndex == targetIndex
+                ? new DuplicateSheetCommand(tab.Id)
+                : new CompositeWorkbookCommand(
+                    "Move or Copy Sheet",
+                    [
+                        new DuplicateSheetCommand(tab.Id),
+                        new MoveSheetCommand(copyIndex, targetIndex)
+                    ]);
+            if (!TryExecuteCommand(command, "Move or Copy Sheet"))
                 return;
 
             _currentSheetId = _workbook.Sheets[Math.Clamp(targetIndex, 0, _workbook.Sheets.Count - 1)].Id;
@@ -1818,12 +1813,8 @@ public partial class MainWindow
 
         var fromIndex = FindWorkbookSheetIndex(tab.Id);
         var toIndex = fromIndex + direction;
-        var outcome = _commandBus.Execute(_workbook.Id, new MoveSheetCommand(fromIndex, toIndex));
-        if (!outcome.Success)
-        {
-            ShowCommandError(outcome, "Move Sheet");
+        if (!TryExecuteCommand(new MoveSheetCommand(fromIndex, toIndex), "Move Sheet"))
             return;
-        }
 
         _currentSheetId = tab.Id;
         _groupedSheetIds.Clear();

@@ -352,6 +352,33 @@ public class SheetTabCommandTests
     }
 
     [Fact]
+    public void MoveOrCopyCompositeCommand_UndoRemovesCopiedSheetInOneStep()
+    {
+        var wb = new Workbook("test");
+        var jan = wb.AddSheet("Jan");
+        wb.AddSheet("Feb");
+        wb.AddSheet("Mar");
+        var bus = new CommandBus(_ => new TestCommandContext(wb));
+        var command = new CompositeWorkbookCommand(
+            "Move or Copy Sheet",
+            [
+                new DuplicateSheetCommand(jan.Id),
+                new MoveSheetCommand(fromIndex: 1, toIndex: 3)
+            ]);
+
+        var outcome = bus.Execute(wb.Id, command);
+
+        outcome.Success.Should().BeTrue();
+        wb.Sheets.Select(sheet => sheet.Name).Should().Equal("Jan", "Feb", "Mar", "Jan (2)");
+        bus.GetUndoStackDepth(wb.Id).Should().Be(1);
+
+        bus.Undo(wb.Id).Success.Should().BeTrue();
+
+        wb.Sheets.Select(sheet => sheet.Name).Should().Equal("Jan", "Feb", "Mar");
+        bus.GetUndoStackDepth(wb.Id).Should().Be(0);
+    }
+
+    [Fact]
     public void SetSheetHiddenCommand_HidesSheetAndUndoRestores()
     {
         var wb = new Workbook("test");

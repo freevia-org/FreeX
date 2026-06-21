@@ -256,7 +256,7 @@ foreach ($workflow in $workflows) {
         }
     }
 
-    if ($content -match "(?m)^\s*pull_request_target\s*:" -or
+    if ($content -match "(?m)^\s*(?:['""]?pull_request_target['""]?)\s*:" -or
         $inlineOnPullRequestTarget) {
         $errors.Add("$($workflow.Name): workflow must not use the privileged pull_request_target event.")
     }

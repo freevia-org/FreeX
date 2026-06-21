@@ -319,6 +319,41 @@ public sealed partial class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void SheetTabMutations_RouteThroughHostCommandExecutionHelpers()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.SheetTabs.cs");
+        var insert = ExtractMethodSource(source, "private void InsertNewSheet()");
+        var rename = ExtractMethodSource(source, "private void RenameSheet(");
+        var delete = ExtractMethodSource(source, "private void SheetCtxDelete_Click(");
+        var move = ExtractMethodSource(source, "private void MoveSheetTab(");
+
+        insert.Should().Contain("TryExecuteRepeatableCommand(");
+        rename.Should().Contain("TryExecuteCommand(new RenameSheetCommand");
+        delete.Should().Contain("TryExecuteCommand(new RemoveSheetCommand");
+        move.Should().Contain("TryExecuteCommand(new MoveSheetCommand");
+
+        insert.Should().NotContain("_commandBus.Execute");
+        rename.Should().NotContain("_commandBus.Execute");
+        delete.Should().NotContain("_commandBus.Execute");
+        move.Should().NotContain("_commandBus.Execute");
+    }
+
+    [Fact]
+    public void MoveOrCopyCreateCopy_UsesSingleCompositeCommandWhenCopyMustMove()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.SheetTabs.cs");
+        var method = ExtractMethodSource(source, "private void SheetCtxMoveOrCopy_Click(");
+
+        method.Should().Contain("new CompositeWorkbookCommand(");
+        method.Should().Contain("\"Move or Copy Sheet\"");
+        method.Should().Contain("new DuplicateSheetCommand(tab.Id)");
+        method.Should().Contain("new MoveSheetCommand(copyIndex, targetIndex)");
+        method.Should().Contain("TryExecuteCommand(command, \"Move or Copy Sheet\")");
+        method.Should().NotContain("TryExecuteCommand(new DuplicateSheetCommand(tab.Id), \"Duplicate Sheet\")");
+        method.Should().NotContain("TryExecuteCommand(new MoveSheetCommand(copyIndex, targetIndex), \"Move Sheet\")");
+    }
+
+    [Fact]
     public void WorksheetContextMenuPickFromDropDown_ReusesActiveDropdownPath()
     {
         var source =

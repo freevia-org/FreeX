@@ -20,10 +20,11 @@ public sealed class SheetTabWorkflowsScreenshotTourTests
 
         tourSource.Should().Contain("FREEX_SHEET_TAB_WORKFLOWS_TOUR");
         tourSource.Should().Contain("CaptureSheetTabWorkflowsWindowAsync");
-        tourSource.Should().Contain("InsertNewSheet() -> CommandBus.ExecuteRepeatable(AddSheetCommand)");
+        tourSource.Should().Contain("InsertNewSheet() -> TryExecuteRepeatableCommand(AddSheetCommand)");
         tourSource.Should().Contain("new RenameSheetCommand(insertedSheet.Id, \"Submitted Plan\")");
         tourSource.Should().Contain("new DuplicateSheetCommand(moveCopySource.Id)");
-        tourSource.Should().Contain("new MoveSheetCommand(renamedCopyIndex, _workbook.Sheets.Count - 1)");
+        tourSource.Should().Contain("new CompositeWorkbookCommand(");
+        tourSource.Should().Contain("new MoveSheetCommand(copyIndex, targetIndex)");
         tourSource.Should().Contain("new SetSheetTabColorCommand(insertedSheet.Id, new CellColor(255, 192, 0))");
         tourSource.Should().Contain("new SetSheetHiddenCommand(context.ArchiveSheet.Id, hidden: true)");
         tourSource.Should().Contain("new SetSheetHiddenCommand(context.ArchiveSheet.Id, hidden: false)");

@@ -55,16 +55,23 @@ public static class DocxWriter
 
     public static void Write(TextDocument document, Stream stream, DocxWriteOptions options)
     {
+        // Preserve-pass-through parts are emitted later, but their names must be reserved before assigning
+        // modelled media/chart names so a read-then-edited package cannot produce duplicate OPC entries.
+        var preservedParts = options.IncludeMacroParts
+            ? (IReadOnlyList<PreservedPart>)document.Preserved.Parts
+            : document.Preserved.Parts.Where(p => !DocxWriteOptions.IsMacroPart(p.PartName)).ToList();
+        var usedPartNames = CreateUsedPartNameSet(preservedParts);
+
         // Assign a relationship + media id to every inline image up front so document.xml, the
         // document relationships and the media parts all agree on rId/imageN.png.
-        var images = CollectImages(document);
+        var images = CollectImages(document, usedPartNames);
         // Assign a relationship + part name to every inline chart the same way (charts are a separate XML
         // part referenced from the run drawing by r:id, mirroring how images add a media part + r:embed).
-        var charts = CollectCharts(document);
+        var charts = CollectCharts(document, usedPartNames);
         // Assign a relationship + binary part name to every inline embedded OLE object the same way. Each
         // object's presentation icon is collected as an extra ImagePart appended to `images`, so the icon
         // media part + relationship + png content-type flow through the existing image plumbing untouched.
-        var embeddedObjects = CollectEmbeddedObjects(document, images);
+        var embeddedObjects = CollectEmbeddedObjects(document, images, usedPartNames);
         // Assign four relationship ids + four part names to every inline SmartArt diagram the same way
         // (a diagram is four separate XML parts referenced from the run drawing by dgm:relIds).
         var smartArts = CollectSmartArts(document);
@@ -97,7 +104,7 @@ public static class DocxWriter
         // section owns the legacy header1/footer1/header2/footer2 names so single-section documents stay
         // byte-equivalent (see CollectHeaderFooterParts). Even/first parts are only included when the owning
         // section's page settings turn on different-odd/even or different-first-page respectively.
-        var headerFooterParts = CollectHeaderFooterParts(document);
+        var headerFooterParts = CollectHeaderFooterParts(document, usedPartNames);
 
         // A footnotes part is emitted only when the document actually carries footnotes.
         var hasFootnotes = document.Footnotes.Count > 0;
@@ -111,7 +118,7 @@ public static class DocxWriter
         // Inline images carried by comment paragraphs (e.g. a pasted picture in a comment). Each becomes a
         // part-local media file + a relationship in word/_rels/comments.xml.rels, so comment-part images
         // round-trip referenced rather than orphaned. Empty for text-only comments.
-        var commentImages = hasComments ? CollectCommentImages(document) : new List<ImagePart>();
+        var commentImages = hasComments ? CollectCommentImages(document, usedPartNames) : new List<ImagePart>();
 
         // The watermark text is persisted best-effort as a custom document property (docProps/custom.xml),
         // emitted only when a watermark is set.
@@ -171,9 +178,6 @@ public static class DocxWriter
         // only re-emitted for macro-enabled targets (.docm/.dotm); a .docx/.dotx must not carry them. Filtered
         // once here and used for the content types, document rels, the inline-drawing rel ids and the byte parts
         // so the four stay in lock-step.
-        var preservedParts = options.IncludeMacroParts
-            ? (IReadOnlyList<PreservedPart>)document.Preserved.Parts
-            : document.Preserved.Parts.Where(p => !DocxWriteOptions.IsMacroPart(p.PartName)).ToList();
         var hasExtendedProps = preservedParts.Any(p => p.PartName == ExtendedPropertiesPartName);
 
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true);
@@ -278,7 +282,7 @@ public static class DocxWriter
     /// </summary>
     private sealed record ChartPart(Chart Chart, string RelationshipId, string FileName, uint DrawingId, string EmbeddingFileName, string ExternalDataRelId);
 
-    private static List<ChartPart> CollectCharts(TextDocument document)
+    private static List<ChartPart> CollectCharts(TextDocument document, HashSet<string> usedPartNames)
     {
         var charts = new List<ChartPart>();
         foreach (var paragraph in EnumerateParagraphs(document))
@@ -286,9 +290,15 @@ public static class DocxWriter
                 if (run.Chart is { } chart)
                 {
                     var index = charts.Count + 1;
+                    var chartFileName = NextAvailableChartFileName(usedPartNames);
+                    var embeddingFileName = NextAvailablePartFileName(
+                        usedPartNames,
+                        "word/embeddings",
+                        "Microsoft_Excel_Worksheet",
+                        "xlsx");
                     // The external-data rId is part-LOCAL (it lives in word/charts/_rels/chartN.xml.rels), so a
                     // fixed "rId1" per chart is fine and never collides with the document-level ids above.
-                    charts.Add(new ChartPart(chart, $"rIdChart{index}", $"chart{index}.xml", (uint)index, $"Microsoft_Excel_Worksheet{index}.xlsx", "rId1"));
+                    charts.Add(new ChartPart(chart, $"rIdChart{index}", chartFileName, (uint)index, embeddingFileName, "rId1"));
                 }
         return charts;
     }
@@ -314,7 +324,7 @@ public static class DocxWriter
     /// matches <see cref="EnumerateParagraphs"/> so document.xml and the rels agree on which ids belong to
     /// which run (replayed in <see cref="BuildDocument"/>).
     /// </summary>
-    private static List<EmbeddedObjectPart> CollectEmbeddedObjects(TextDocument document, List<ImagePart> images)
+    private static List<EmbeddedObjectPart> CollectEmbeddedObjects(TextDocument document, List<ImagePart> images, HashSet<string> usedPartNames)
     {
         var embedded = new List<EmbeddedObjectPart>();
         foreach (var paragraph in EnumerateParagraphs(document))
@@ -328,10 +338,19 @@ public static class DocxWriter
                         // Continue the image numbering so the icon media file name never clashes with a body
                         // image; the appended part is emitted by the ordinary media/rel/content-type loops.
                         var imageIndex = images.Count + 1;
-                        iconPart = new ImagePart(icon, $"rIdImg{imageIndex}", $"image{imageIndex}.{InlineImage.ExtensionFor(icon.Format)}", (uint)imageIndex);
+                        iconPart = new ImagePart(
+                            icon,
+                            $"rIdImg{imageIndex}",
+                            NextAvailablePartFileName(usedPartNames, "word/media", "image", InlineImage.ExtensionFor(icon.Format)),
+                            (uint)imageIndex);
                         images.Add(iconPart);
                     }
-                    embedded.Add(new EmbeddedObjectPart(obj, $"rIdOle{index}", $"oleObject{index}.bin", $"_oleObj{index}", iconPart));
+                    embedded.Add(new EmbeddedObjectPart(
+                        obj,
+                        $"rIdOle{index}",
+                        NextAvailablePartFileName(usedPartNames, "word/embeddings", "oleObject", "bin"),
+                        $"_oleObj{index}",
+                        iconPart));
                 }
         return embedded;
     }
@@ -429,7 +448,7 @@ public static class DocxWriter
         return families;
     }
 
-    private static List<ImagePart> CollectImages(TextDocument document)
+    private static List<ImagePart> CollectImages(TextDocument document, HashSet<string> usedPartNames)
     {
         var images = new List<ImagePart>();
         foreach (var paragraph in EnumerateParagraphs(document))
@@ -437,7 +456,11 @@ public static class DocxWriter
                 if (run.Image is { } image)
                 {
                     var index = images.Count + 1;
-                    images.Add(new ImagePart(image, $"rIdImg{index}", $"image{index}.{InlineImage.ExtensionFor(image.Format)}", (uint)index));
+                    images.Add(new ImagePart(
+                        image,
+                        $"rIdImg{index}",
+                        NextAvailablePartFileName(usedPartNames, "word/media", "image", InlineImage.ExtensionFor(image.Format)),
+                        (uint)index));
                 }
         return images;
     }
@@ -479,7 +502,7 @@ public static class DocxWriter
     /// settings turn on different-odd/even; first parts only when different-first-page is on. Each part also
     /// collects the inline images in its runs and assigns them part-local relationship ids.
     /// </summary>
-    private static List<HeaderFooterPart> CollectHeaderFooterParts(TextDocument document)
+    private static List<HeaderFooterPart> CollectHeaderFooterParts(TextDocument document, HashSet<string> usedPartNames)
     {
         var parts = new List<HeaderFooterPart>();
         // Header/footer part-name counters. They are seeded so the legacy final-section parts reuse the exact
@@ -511,7 +534,7 @@ public static class DocxWriter
 
                 var fileName = (isHeader ? "header" : "footer") + index + ".xml";
                 var relationshipId = (isHeader ? "rIdHeader" : "rIdFooter") + index;
-                var images = CollectHeaderFooterImages(content, fileName);
+                var images = CollectHeaderFooterImages(content, fileName, usedPartNames);
                 parts.Add(new HeaderFooterPart(
                     section,
                     type,
@@ -557,7 +580,7 @@ public static class DocxWriter
     /// The walk order matches <see cref="BuildHeaderFooterImagesByRun"/> so the part XML and its rels agree on
     /// which rId belongs to which run.
     /// </summary>
-    private static List<ImagePart> CollectHeaderFooterImages(HeaderFooter content, string partFileName)
+    private static List<ImagePart> CollectHeaderFooterImages(HeaderFooter content, string partFileName, HashSet<string> usedPartNames)
     {
         var stem = partFileName.EndsWith(".xml", StringComparison.Ordinal)
             ? partFileName[..^4]
@@ -572,7 +595,11 @@ public static class DocxWriter
                     // collides with the document-level image ids. The media file name embeds the part stem so
                     // each part's media files are unique within word/media/, and carries the image's real
                     // extension so non-PNG header/footer images round-trip too.
-                    images.Add(new ImagePart(image, $"rIdImg{index}", $"{stem}_image{index}.{InlineImage.ExtensionFor(image.Format)}", (uint)index));
+                    images.Add(new ImagePart(
+                        image,
+                        $"rIdImg{index}",
+                        NextAvailablePartFileName(usedPartNames, "word/media", $"{stem}_image", InlineImage.ExtensionFor(image.Format)),
+                        (uint)index));
                 }
         return images;
     }
@@ -628,6 +655,44 @@ public static class DocxWriter
         using var entryStream = entry.Open();
         entryStream.Write(content, 0, content.Length);
     }
+
+    private static HashSet<string> CreateUsedPartNameSet(IEnumerable<PreservedPart> preservedParts) =>
+        preservedParts
+            .Select(part => NormalizePartName(part.PartName))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    private static string NextAvailablePartFileName(
+        HashSet<string> usedPartNames,
+        string folder,
+        string prefix,
+        string extension)
+    {
+        for (var index = 1;; index++)
+        {
+            var fileName = $"{prefix}{index}.{extension}";
+            if (usedPartNames.Add(NormalizePartName($"{folder}/{fileName}")))
+                return fileName;
+        }
+    }
+
+    private static string NextAvailableChartFileName(HashSet<string> usedPartNames)
+    {
+        for (var index = 1;; index++)
+        {
+            var fileName = $"chart{index}.xml";
+            var chartPartName = NormalizePartName("word/charts/" + fileName);
+            var chartRelsPartName = NormalizePartName("word/charts/_rels/" + fileName + ".rels");
+            if (usedPartNames.Contains(chartPartName) || usedPartNames.Contains(chartRelsPartName))
+                continue;
+
+            usedPartNames.Add(chartPartName);
+            usedPartNames.Add(chartRelsPartName);
+            return fileName;
+        }
+    }
+
+    private static string NormalizePartName(string partName) =>
+        partName.TrimStart('/').Replace('\\', '/');
 
     private static XDocument BuildContentTypes(IReadOnlyList<string> imageExtensions, bool includeNumbering, IReadOnlyList<HeaderFooterPart> headerFooterParts, bool hasFootnotes, bool hasEndnotes, bool hasComments, bool hasCustomProps, bool hasSettings, bool hasBibliography, IReadOnlyList<ChartPart> charts, bool hasEmbeddedObjects, IReadOnlyList<SmartArtPart> smartArts, bool hasEmbeddedFonts, IReadOnlyList<PreservedPart> preservedParts, IReadOnlyDictionary<string, string> preservedContentTypeDefaults, string mainDocumentContentType) => new(
         new XElement(Ct + "Types",
@@ -1276,7 +1341,7 @@ public static class DocxWriter
     /// never clashes with body/header/footer media. Mirrors <see cref="CollectHeaderFooterImages"/>. Empty when
     /// no comment carries an image — so a text-only-comment document emits no comment media or rels.
     /// </summary>
-    private static List<ImagePart> CollectCommentImages(TextDocument document)
+    private static List<ImagePart> CollectCommentImages(TextDocument document, HashSet<string> usedPartNames)
     {
         var images = new List<ImagePart>();
         foreach (var comment in FlattenComments(document))
@@ -1285,7 +1350,11 @@ public static class DocxWriter
                     if (run.Image is { } image)
                     {
                         var index = images.Count + 1;
-                        images.Add(new ImagePart(image, $"rIdImg{index}", $"comment_image{index}.{InlineImage.ExtensionFor(image.Format)}", (uint)index));
+                        images.Add(new ImagePart(
+                            image,
+                            $"rIdImg{index}",
+                            NextAvailablePartFileName(usedPartNames, "word/media", "comment_image", InlineImage.ExtensionFor(image.Format)),
+                            (uint)index));
                     }
         return images;
     }
