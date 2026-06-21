@@ -58,16 +58,20 @@ public class RibbonAndDocumentTests
     }
 
     [Fact]
-    public void Avalonia_shell_routes_file_lifecycle_through_shared_planner()
+    public void Avalonia_shell_routes_file_lifecycle_through_shared_file_command_session()
     {
         var project = File.ReadAllText(FindRepoFile("freew", "FreeW.App.Avalonia", "FreeW.App.Avalonia.csproj"));
         project.Should().Contain(@"..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj");
 
         var mainWindow = File.ReadAllText(FindRepoFile("freew", "FreeW.App.Avalonia", "MainWindow.cs"));
-        mainWindow.Should().Contain("private readonly WorkbookDocumentState _state = new();");
-        mainWindow.Should().Contain("FileLifecyclePlanner.PlanDirtyGate(_state.IsDirty)");
-        mainWindow.Should().Contain("FileLifecyclePlanner.ResolveDirtyGate(SaveChangesPrompt.DontSave)");
-        mainWindow.Should().Contain("FileLifecyclePlanner.PlanSave(_state.IsDirty, _state.CurrentFilePath)");
+        mainWindow.Should().Contain("private readonly FileCommandSession _session = new();");
+        mainWindow.Should().Contain("_session.ConfirmDiscardOrSave(");
+        mainWindow.Should().Contain("FileLifecyclePlanner.PlanSave(_session.IsDirty, _session.CurrentPath)");
+        mainWindow.Should().Contain("_session.MarkDirty();");
+        mainWindow.Should().Contain("_session.MarkSavedWithPath(path, suppressRecentFiles: true");
+        mainWindow.Should().NotContain("WorkbookDocumentState");
+        mainWindow.Should().NotContain("_state.");
+        mainWindow.Should().NotContain("CurrentFilePath");
         mainWindow.Should().NotContain("private string? _currentPath");
     }
 

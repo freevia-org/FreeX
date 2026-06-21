@@ -32,7 +32,7 @@ public sealed class MainWindow : Window
     private readonly TextBox _replaceBox = new() { Width = 200, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock _zoomLabel = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0) };
     private readonly ScaleTransform _zoom = new(1, 1);
-    private readonly WorkbookDocumentState _state = new();
+    private readonly FileCommandSession _session = new();
     private Border? _findBar;
     private ScrollViewer? _scroller;
     private double _zoomScale = 1.0;
@@ -356,8 +356,8 @@ public sealed class MainWindow : Window
 
     private async Task SaveAsync()
     {
-        var saveIntent = FileLifecyclePlanner.PlanSave(_state.IsDirty, _state.CurrentFilePath);
-        var path = _state.CurrentFilePath;
+        var saveIntent = FileLifecyclePlanner.PlanSave(_session.IsDirty, _session.CurrentPath);
+        var path = _session.CurrentPath;
         if (saveIntent == FileSaveIntent.PromptSaveAs)
         {
             var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
@@ -384,7 +384,7 @@ public sealed class MainWindow : Window
         {
             using (var stream = File.Create(path))
                 adapter.Save(_editor.Document, stream);
-            _state.MarkSavedWithPath(path);
+            MarkDocumentSavedWithPath(path);
             Title = $"FreeW - {Path.GetFileName(path)}";
             _status.Text = $"Saved {Path.GetFileName(path)}";
         }
@@ -406,7 +406,7 @@ public sealed class MainWindow : Window
         {
             Title = "Export to PDF",
             DefaultExtension = "pdf",
-            SuggestedFileName = (_state.CurrentFilePath is null ? "Document" : Path.GetFileNameWithoutExtension(_state.CurrentFilePath)) + ".pdf",
+            SuggestedFileName = (_session.CurrentPath is null ? "Document" : Path.GetFileNameWithoutExtension(_session.CurrentPath)) + ".pdf",
             FileTypeChoices = [PdfFileType],
         });
         var path = file?.TryGetLocalPath();
@@ -438,12 +438,12 @@ public sealed class MainWindow : Window
 
         if (path is null)
         {
-            _state.ClearCurrentFilePath();
-            _state.MarkSaved();
+            _session.ClearCurrentPath();
+            _session.MarkSaved();
         }
         else
         {
-            _state.MarkSavedWithPath(path);
+            MarkDocumentSavedWithPath(path);
         }
 
         UpdateStatus();
@@ -451,22 +451,26 @@ public sealed class MainWindow : Window
 
     private bool ShouldReplaceCurrentDocument()
     {
-        if (FileLifecyclePlanner.PlanDirtyGate(_state.IsDirty) == DirtyGateIntent.ProceedWithoutPrompt)
-            return true;
-
         // FreeW Avalonia has historically discarded unsaved edits on New/Open without prompting.
         // Keep that behavior for now, but express the decision through the shared lifecycle planner
         // so a future prompt can be plugged in without duplicating the dirty-gate ceremony.
-        return FileLifecyclePlanner.ResolveDirtyGate(SaveChangesPrompt.DontSave)
-            == DirtyGateAction.ProceedDiscardingChanges;
+        return _session.ConfirmDiscardOrSave(
+            "replace the current document",
+            _ => SaveChangesPrompt.DontSave,
+            save: () => true);
     }
 
     private void OnEditorDocumentChanged()
     {
         if (!_suppressEditorDirty)
-            _state.MarkDirty();
+            _session.MarkDirty();
 
         UpdateStatus();
+    }
+
+    private void MarkDocumentSavedWithPath(string path)
+    {
+        _session.MarkSavedWithPath(path, suppressRecentFiles: true, maxRecentEntries: 0);
     }
 
     private void UpdateStatus()

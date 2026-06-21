@@ -40,6 +40,18 @@ public sealed class FileCommandSessionTests : IDisposable
     }
 
     [Fact]
+    public void MarkDirty_IncrementsDirtyGenerationOnEveryChange()
+    {
+        var session = new FileCommandSession();
+
+        session.MarkDirty();
+        session.MarkDirty();
+
+        session.IsDirty.Should().BeTrue();
+        session.DirtyGeneration.Should().Be(2);
+    }
+
+    [Fact]
     public void DisplayNameFromPath_UsesFileNameWithoutExtensionOrFallback()
     {
         FileCommandSession.DisplayNameFromPath(@"C:\Docs\Quarterly Review.fxp")

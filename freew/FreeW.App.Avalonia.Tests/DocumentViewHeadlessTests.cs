@@ -213,23 +213,25 @@ public sealed class DocumentViewHeadlessTests
     }
 
     [Fact]
-    public async Task MainWindow_tracks_dirty_and_new_document_state_with_shared_lifecycle_state()
+    public async Task MainWindow_tracks_dirty_and_new_document_state_with_shared_file_command_session()
     {
         var ran = await OnUiThread(() =>
         {
             var window = new MainWindow(Array.Empty<string>());
-            var state = GetPrivateField<WorkbookDocumentState>(window, "_state");
+            var session = GetPrivateField<FileCommandSession>(window, "_session");
 
-            state.IsDirty.Should().BeFalse();
-            state.CurrentFilePath.Should().BeNull();
+            session.IsDirty.Should().BeFalse();
+            session.CurrentPath.Should().BeNull();
+            session.DisplayName.Should().Be("Untitled");
 
             window.Editor.InsertText("draft ");
-            state.IsDirty.Should().BeTrue();
+            session.IsDirty.Should().BeTrue();
 
             InvokePrivate(window, "NewDocument");
 
-            state.IsDirty.Should().BeFalse();
-            state.CurrentFilePath.Should().BeNull();
+            session.IsDirty.Should().BeFalse();
+            session.CurrentPath.Should().BeNull();
+            session.DisplayName.Should().Be("Untitled");
             window.Title.Should().Be("FreeW");
         });
 
