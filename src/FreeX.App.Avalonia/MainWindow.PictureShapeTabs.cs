@@ -94,6 +94,11 @@ public sealed partial class MainWindow
     /// <summary>
     /// Resolves the selected picture on the active sheet, or reports an explanatory status and returns null.
     /// </summary>
+    private bool HasSelectedPictureForRibbonCommand() =>
+        _selectedDrawingObjectKind == SelectionPaneObjectKind.Picture &&
+        _selectedDrawingObjectId is { } id &&
+        _session.ActiveSheet.Pictures.Any(p => p.Id == id);
+
     private PictureModel? ResolveSelectedPicture()
     {
         if (_selectedDrawingObjectKind != SelectionPaneObjectKind.Picture || _selectedDrawingObjectId is not { } id)

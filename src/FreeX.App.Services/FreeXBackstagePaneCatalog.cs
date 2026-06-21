@@ -41,7 +41,8 @@ public enum FreeXBackstageInfoDetailId
     LastModified,
     Share,
     Export,
-    WorkbookProtection
+    WorkbookProtection,
+    ActiveSheetProtection
 }
 
 public sealed record FreeXBackstageInfoDetailDefinition(
@@ -232,6 +233,7 @@ public static class FreeXBackstagePaneCatalog
         new(FreeXBackstageInfoDetailId.Share, "MainWindow_Text_Share", "BackstageInfoShareStatus"),
         new(FreeXBackstageInfoDetailId.Export, "MainWindow_Text_Export", "BackstageInfoExportStatus"),
         new(FreeXBackstageInfoDetailId.WorkbookProtection, "MainWindow_Text_WorkbookProtection", "BackstageInfoWorkbookProtection"),
+        new(FreeXBackstageInfoDetailId.ActiveSheetProtection, "MainWindow_Text_ActiveSheetProtection", "BackstageInfoActiveSheetProtection"),
     ];
 
     private static readonly FreeXBackstageInfoDetailDefinition[] ParityInfoDetails = WpfInfoDetails;

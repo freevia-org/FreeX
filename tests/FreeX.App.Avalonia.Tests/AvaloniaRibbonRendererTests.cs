@@ -244,7 +244,7 @@ public sealed class AvaloniaRibbonRendererTests
     });
 
     [Fact]
-    public Task DropdownChevron_UsesWindowsChevronGlyph() => RunOnUiThread(() =>
+    public Task DropdownChevron_UsesWindowsChevronPath() => RunOnUiThread(() =>
     {
         var content = AvaloniaRibbonRenderer.BuildTabContent(BuildHomeTab(), new RibbonCommandRegistry());
         var window = new Window { Width = 1200, Height = 200, Content = content };
@@ -253,8 +253,13 @@ public sealed class AvaloniaRibbonRendererTests
         window.Arrange(new Rect(0, 0, 1200, 200));
 
         var chevrons = content.GetLogicalDescendants()
-            .OfType<TextBlock>()
-            .Where(text => text.Text == "\u25BE" && text.FontSize == 9)
+            .OfType<Viewbox>()
+            .Where(viewbox => viewbox.Width == 10 &&
+                              viewbox.Height == 8 &&
+                              viewbox.Child is AvaloniaPath path &&
+                              path.StrokeThickness == 1.45 &&
+                              path.StrokeLineCap == PenLineCap.Round &&
+                              path.StrokeJoin == PenLineJoin.Round)
             .ToList();
 
         Assert.True(chevrons.Count >= 2);
@@ -293,6 +298,9 @@ public sealed class AvaloniaRibbonRendererTests
         Assert.Equal(26, combo.MinHeight);
         Assert.Equal(26, combo.MaxHeight);
         Assert.Equal(new Thickness(6, 0, 18, 0), combo.Padding);
+        Assert.Equal(new Thickness(2, 0, 2, 0), combo.Margin);
+        Assert.Equal(new Thickness(1), combo.BorderThickness);
+        Assert.False(combo.ClipToBounds);
         Assert.Equal(VerticalAlignment.Center, combo.VerticalContentAlignment);
     });
 

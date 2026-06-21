@@ -1190,6 +1190,7 @@ public sealed partial class MainWindow : Window
                     ["view.headings"] = () => new RibbonCommandState(IsChecked: _session.IsShowingHeadings),
                     ["Ruler"] = () => new RibbonCommandState(IsChecked: _session.IsShowingRulers),
                     ["view.formulaBar"] = () => new RibbonCommandState(IsChecked: !_isFormulaBarHidden),
+                    ["pictureFormat.crop"] = () => new RibbonCommandState(IsEnabled: HasSelectedPictureForRibbonCommand()),
                 },
             };
 

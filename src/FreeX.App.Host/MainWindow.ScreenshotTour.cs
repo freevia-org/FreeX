@@ -3366,7 +3366,7 @@ public partial class MainWindow
                 FileName: fileName,
                 OutputFileName: $"{fileName}.png",
                 CaptureMethod: "PrintWindow-owned-native-dialog",
-                EvidenceSummary: "Account command opens the FreeX-owned local-account information message with explicit Microsoft 365 sign-in/cloud/coauthoring exclusion.",
+                EvidenceSummary: "Account command opens the FreeX-owned local-account information message with local OS account and app build details.",
                 CategoryName: null,
                 CategoryIndex: null,
                 FocusedElementAutomationId: null,
@@ -11325,9 +11325,6 @@ public partial class MainWindow
                     : "Abort before WPF window file writes unless the expected FreeX window owns foreground focus; owned native Account dialog is captured by HWND ownership and caption."),
             AccountTitle: accountPlan.Title,
             AccountDetailLabels: accountPlan.Details.Select(detail => detail.Label).ToArray(),
-            AccountMicrosoft365Exclusion: accountPlan.Details
-                .FirstOrDefault(detail => string.Equals(detail.Label, "Microsoft 365 services", StringComparison.OrdinalIgnoreCase))
-                ?.Value ?? string.Empty,
             CategoryListFocusedByDefault: categoryListFocusedByDefault,
             OptionsClosedViaCancelEquivalent: closedViaCancelEquivalent,
             FocusReturnedToBackstageOptionsCommand: focusReturned,
@@ -11340,7 +11337,7 @@ public partial class MainWindow
                 "The tour does not synthesize global mouse/keytip/UIA input; those interaction paths remain separate from this visual evidence.",
                 "The Options close proof verifies the OptionsCancelButton IsCancel metadata before closing the modeless tour dialog directly; modal Escape/Cancel event routing remains separate.",
                 "The tour does not persist option changes through OK.",
-                "The Account command is a local-account information message, not a Microsoft account sign-in surface; the manifest records the explicit Microsoft 365 services exclusion text."
+                "The Account command is a local-account information message, not a cloud account sign-in surface."
             ]);
 
         var path = Path.Combine(outputDir, OptionsAccountTourManifestFileName);
@@ -12061,7 +12058,6 @@ public partial class MainWindow
         RibbonScreenshotTourManifestFocusGuard FocusGuard,
         string AccountTitle,
         IReadOnlyList<string> AccountDetailLabels,
-        string AccountMicrosoft365Exclusion,
         bool CategoryListFocusedByDefault,
         bool OptionsClosedViaCancelEquivalent,
         bool FocusReturnedToBackstageOptionsCommand,

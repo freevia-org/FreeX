@@ -56,7 +56,8 @@ public sealed class FreeXBackstagePaneCatalogTests
                 "MainWindow_Text_LastModified",
                 "MainWindow_Text_Share",
                 "MainWindow_Text_Export",
-                "MainWindow_Text_WorkbookProtection");
+                "MainWindow_Text_WorkbookProtection",
+                "MainWindow_Text_ActiveSheetProtection");
     }
 
     [Fact]
