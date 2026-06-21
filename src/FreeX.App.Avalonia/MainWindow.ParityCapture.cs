@@ -9,6 +9,8 @@ using Avalonia.VisualTree;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
 using FreeX.App.Avalonia.Ribbon;
+using FreeX.App.Presentation.Backstage;
+using FreeX.App.Services;
 
 using AvaloniaGrid = Avalonia.Controls.Grid;
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
@@ -875,26 +877,40 @@ public sealed partial class MainWindow
 
         var top = new StackPanel { Spacing = 0 };
         top.Children.Add(CreateParityCapturedBackstageBackButton());
-        top.Children.Add(CreateParityCapturedBackstageRailButton(RibbonCommandIconKind.Grid, "Home", "Home", string.Equals(selectedPane, "Home", StringComparison.Ordinal)));
-        top.Children.Add(CreateParityCapturedBackstageRailButton(RibbonCommandIconKind.Insert, "New", "New", isSelected: false));
-        top.Children.Add(CreateParityCapturedBackstageRailButton(RibbonCommandIconKind.GetData, "Open", "Open", isSelected: false));
-        top.Children.Add(CreateParityCapturedBackstageRailButton(RibbonCommandIconKind.Share, "Share", "Share", isSelected: false));
-        top.Children.Add(CreateParityCapturedBackstageRailSeparator());
-        top.Children.Add(CreateParityCapturedBackstageRailButton(RibbonCommandIconKind.Info, "Info", "Info", string.Equals(selectedPane, "Info", StringComparison.Ordinal)));
-        top.Children.Add(CreateParityCapturedBackstageRailButton(RibbonCommandIconKind.Save, "Save", "Save", isSelected: false));
-        top.Children.Add(CreateParityCapturedBackstageRailButton(RibbonCommandIconKind.Save, "Save As", "Save As", isSelected: false));
-        top.Children.Add(CreateParityCapturedBackstageRailButton(RibbonCommandIconKind.Print, "Print", "Print", isSelected: false));
-        top.Children.Add(CreateParityCapturedBackstageRailButton(RibbonCommandIconKind.Share, "Export", "Export", string.Equals(selectedPane, "Export", StringComparison.Ordinal)));
-        top.Children.Add(CreateParityCapturedBackstageRailButton(RibbonCommandIconKind.WindowClose, "Close", "Close", isSelected: false));
         AddGridChild(rail, top, 0, 0);
 
         var bottom = new StackPanel { Spacing = 0 };
-        bottom.Children.Add(CreateParityCapturedBackstageRailSeparator());
-        bottom.Children.Add(CreateParityCapturedBackstageRailButton(RibbonCommandIconKind.Info, "Account", "Account", string.Equals(selectedPane, "Account", StringComparison.Ordinal)));
-        bottom.Children.Add(CreateParityCapturedBackstageRailButton(RibbonCommandIconKind.View, "Options", "Options", isSelected: false));
         AddGridChild(rail, bottom, 2, 0);
+        foreach (var entry in FreeXBackstageNavigationPlanner.Build())
+        {
+            var panel = entry.DockBottom ? bottom : top;
+            if (entry.Kind == FreeXBackstageNavigationEntryKind.Divider)
+            {
+                panel.Children.Add(CreateParityCapturedBackstageRailSeparator());
+                continue;
+            }
+
+            var text = UiText.Get(entry.LabelKey!);
+            panel.Children.Add(CreateParityCapturedBackstageRailButton(
+                entry.Icon ?? RibbonCommandIconKind.Info,
+                text,
+                entry.IconCommandName ?? text,
+                IsParityCapturedBackstageEntrySelected(entry, selectedPane)));
+        }
         return rail;
     }
+
+    private static bool IsParityCapturedBackstageEntrySelected(
+        FreeXBackstageNavigationEntry entry,
+        string selectedPane) =>
+        selectedPane switch
+        {
+            "Home" => entry.Pane == FreeXBackstagePaneId.Home,
+            "Info" => entry.Pane == FreeXBackstagePaneId.Info,
+            "Export" => entry.Command == FreeXBackstageCommandId.Export,
+            "Account" => entry.Command == FreeXBackstageCommandId.Account,
+            _ => false
+        };
 
     private static Control CreateParityCapturedBackstageBackButton()
     {
@@ -1076,14 +1092,14 @@ public sealed partial class MainWindow
         };
         root.Children.Add(new TextBlock
         {
-            Text = "Account",
+            Text = UiText.Get("Backstage_Account_Title"),
             FontSize = 30,
             FontWeight = FontWeight.SemiBold,
             Foreground = new SolidColorBrush(Color.FromRgb(31, 31, 31)),
         });
         root.Children.Add(new TextBlock
         {
-            Text = "Local account information",
+            Text = UiText.Get("Backstage_Account_ProductSectionHeader"),
             FontSize = 16,
             FontWeight = FontWeight.SemiBold,
             Foreground = new SolidColorBrush(Color.FromRgb(31, 31, 31)),
@@ -1097,24 +1113,13 @@ public sealed partial class MainWindow
                 new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
             },
         };
-        var rows = new (string Label, string Value)[]
-        {
-            ("FreeX user name", "quinn"),
-            ("Windows account", "Local Windows user"),
-            ("Device", "Local workstation"),
-            ("App version", "FreeX"),
-            ("Options file", "Local profile settings"),
-            ("Current workbook", "Parity Demo (not saved yet)"),
-            ("Sharing", "Save As is required before Windows Share can send the workbook."),
-            ("Export", "Ready for local PDF/XPS export to a chosen local path."),
-            ("Microsoft 365 services", "Not connected; account sign-in, cloud links, and coauthoring are not implemented."),
-        };
-        for (var i = 0; i < rows.Length; i++)
+        var rows = FreeXBackstagePaneCatalog.BuildAccountDetails();
+        for (var i = 0; i < rows.Count; i++)
         {
             details.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             AddGridChild(details, new TextBlock
             {
-                Text = rows[i].Label,
+                Text = UiText.Get(rows[i].LabelKey),
                 FontSize = 12,
                 Foreground = new SolidColorBrush(Color.FromRgb(95, 99, 104)),
                 Margin = new Thickness(0, 0, 18, 10),
@@ -1123,7 +1128,7 @@ public sealed partial class MainWindow
             }, i, 0);
             AddGridChild(details, new TextBlock
             {
-                Text = rows[i].Value,
+                Text = ResolveParityCapturedBackstageAccountDetailValue(rows[i].Id),
                 FontSize = 13,
                 Foreground = new SolidColorBrush(Color.FromRgb(31, 31, 31)),
                 Margin = new Thickness(0, 0, 0, 10),
@@ -1134,6 +1139,14 @@ public sealed partial class MainWindow
             }, i, 1);
         }
         root.Children.Add(details);
+        root.Children.Add(new TextBlock
+        {
+            Text = UiText.Get("Backstage_Account_LocalOnlyNote"),
+            FontSize = 12,
+            Foreground = new SolidColorBrush(Color.FromRgb(64, 64, 64)),
+            TextWrapping = TextWrapping.Wrap,
+            MaxWidth = 560,
+        });
 
         return new Border
         {
@@ -1141,6 +1154,17 @@ public sealed partial class MainWindow
             Child = root,
         };
     }
+
+    private static string ResolveParityCapturedBackstageAccountDetailValue(
+        FreeXBackstageAccountDetailId id) =>
+        id switch
+        {
+            FreeXBackstageAccountDetailId.Product => "FreeX",
+            FreeXBackstageAccountDetailId.Version => "FreeX",
+            FreeXBackstageAccountDetailId.Device => "Local workstation",
+            FreeXBackstageAccountDetailId.User => "quinn",
+            _ => throw new ArgumentOutOfRangeException(nameof(id), id, null)
+        };
 
     private static void PlaceBackstage(Canvas canvas, Control child, double left, double top)
     {
@@ -1348,22 +1372,25 @@ public sealed partial class MainWindow
         var actions = new StackPanel { Spacing = 14 };
         actions.Children.Add(new TextBlock
         {
-            Text = "Info",
+            Text = UiText.Get("MainWindow_Text_Info"),
             FontSize = 30,
             FontWeight = FontWeight.Normal,
             Foreground = new SolidColorBrush(Color.FromRgb(31, 31, 31)),
         });
         actions.Children.Add(new TextBlock
         {
-            Text = "Workbook actions",
+            Text = UiText.Get("MainWindow_Text_WorkbookActions"),
             FontSize = 14,
             FontWeight = FontWeight.SemiBold,
             Foreground = new SolidColorBrush(Color.FromRgb(31, 31, 31)),
         });
-        actions.Children.Add(CreateParityCapturedBackstageInfoAction(RibbonCommandIconKind.Protect, "Protect Workbook", "Control what types of changes people can make to this workbook."));
-        actions.Children.Add(CreateParityCapturedBackstageInfoAction(RibbonCommandIconKind.Accessibility, "Check Accessibility", "Inspect the workbook for content that people with disabilities might find difficult to read."));
-        actions.Children.Add(CreateParityCapturedBackstageInfoAction(RibbonCommandIconKind.Info, "Workbook Statistics", "View sheet, cell, chart, and object counts for the current workbook."));
-        actions.Children.Add(CreateParityCapturedBackstageInfoAction(RibbonCommandIconKind.Warning, "Error Checking", "Find common formula and workbook problems before sharing."));
+        foreach (var action in FreeXBackstagePaneCatalog.BuildInfoActions(FreeXBackstageInfoSurface.ParityCapture))
+        {
+            actions.Children.Add(CreateParityCapturedBackstageInfoAction(
+                action.Icon,
+                UiText.Get(action.LabelKey),
+                ResolveParityCapturedBackstageInfoActionDetail(action)));
+        }
         AddGridChild(root, actions, 0, 0);
         AddGridChild(root, new Border
         {
@@ -1379,20 +1406,17 @@ public sealed partial class MainWindow
         };
         properties.Children.Add(new TextBlock
         {
-            Text = "Properties",
+            Text = UiText.Get("MainWindow_Text_Properties"),
             FontSize = 14,
             FontWeight = FontWeight.SemiBold,
             Foreground = new SolidColorBrush(Color.FromRgb(31, 31, 31)),
         });
-        properties.Children.Add(CreateParityCapturedBackstageProperty("Workbook name", "Parity Demo"));
-        properties.Children.Add(CreateParityCapturedBackstageProperty("File path", "Not saved yet"));
-        properties.Children.Add(CreateParityCapturedBackstageProperty("Sheets", "1"));
-        properties.Children.Add(CreateParityCapturedBackstageProperty("Format", ".xlsx"));
-        properties.Children.Add(CreateParityCapturedBackstageProperty("File size", "Not saved yet"));
-        properties.Children.Add(CreateParityCapturedBackstageProperty("Last modified", "Not saved yet"));
-        properties.Children.Add(CreateParityCapturedBackstageProperty("Share", "Send a copy or invite people to collaborate."));
-        properties.Children.Add(CreateParityCapturedBackstageProperty("Export", "Create a PDF/XPS copy or change the file type."));
-        properties.Children.Add(CreateParityCapturedBackstageProperty("Workbook protection", "No protection has been applied."));
+        foreach (var detail in FreeXBackstagePaneCatalog.BuildInfoDetails(FreeXBackstageInfoSurface.ParityCapture))
+        {
+            properties.Children.Add(CreateParityCapturedBackstageProperty(
+                UiText.Get(detail.LabelKey),
+                ResolveParityCapturedBackstageInfoDetailValue(detail.Id)));
+        }
         AddGridChild(root, properties, 0, 2);
 
         return new Border
@@ -1440,6 +1464,29 @@ public sealed partial class MainWindow
             },
         };
     }
+
+    private static string ResolveParityCapturedBackstageInfoActionDetail(
+        FreeXBackstageInfoActionDefinition action)
+    {
+        var key = action.DetailKey ?? action.TooltipDescriptionKey ?? action.AutomationHelpTextKey;
+        return key is null ? string.Empty : UiText.Get(key);
+    }
+
+    private static string ResolveParityCapturedBackstageInfoDetailValue(
+        FreeXBackstageInfoDetailId id) =>
+        id switch
+        {
+            FreeXBackstageInfoDetailId.WorkbookName => "Parity Demo",
+            FreeXBackstageInfoDetailId.FilePath => UiText.Get("Backstage_Info_NotSavedYet"),
+            FreeXBackstageInfoDetailId.SheetCount => "1",
+            FreeXBackstageInfoDetailId.Format => ".xlsx",
+            FreeXBackstageInfoDetailId.FileSize => UiText.Get("Backstage_Info_NotSavedYet"),
+            FreeXBackstageInfoDetailId.LastModified => UiText.Get("Backstage_Info_NotSavedYet"),
+            FreeXBackstageInfoDetailId.Share => "Send a copy or invite people to collaborate.",
+            FreeXBackstageInfoDetailId.Export => "Create a PDF/XPS copy or change the file type.",
+            FreeXBackstageInfoDetailId.WorkbookProtection => "No protection has been applied.",
+            _ => throw new ArgumentOutOfRangeException(nameof(id), id, null)
+        };
 
     private static Control CreateParityCapturedBackstageProperty(string name, string value) =>
         new StackPanel

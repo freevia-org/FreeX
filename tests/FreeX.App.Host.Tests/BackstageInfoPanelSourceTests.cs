@@ -75,14 +75,17 @@ public sealed class BackstageInfoPanelSourceTests
     public void BackstageCodeBehind_WiresInfoPanelActionsWithAutomationMetadata()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
+        var catalogSource = DialogSourceTestSupport.ReadAppServicesSource("FreeXBackstagePaneCatalog.cs");
         var constructorSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
 
         constructorSource.Should().Contain("ConfigureBackstageInfoActionButtons();");
+        source.Should().Contain("FreeXBackstagePaneCatalog.BuildInfoActions(FreeXBackstageInfoSurface.WpfInfoPane)");
         source.Should().Contain("InfoProtectWorkbookButton.Click += InfoProtectWorkbookBtn_Click;");
         source.Should().Contain("ConfigureBackstageInfoActionButton(");
-        source.Should().Contain("\"BackstageInfoCheckAccessibilityButton\"");
-        source.Should().Contain("\"BackstageInfoWorkbookStatisticsButton\"");
-        source.Should().Contain("\"BackstageInfoErrorCheckingButton\"");
+        source.Should().Contain("action.AutomationId");
+        catalogSource.Should().Contain("\"BackstageInfoCheckAccessibilityButton\"");
+        catalogSource.Should().Contain("\"BackstageInfoWorkbookStatisticsButton\"");
+        catalogSource.Should().Contain("\"BackstageInfoErrorCheckingButton\"");
         source.Should().Contain("RibbonTooltip.SetKeyTip(button, keyTip);");
     }
 }

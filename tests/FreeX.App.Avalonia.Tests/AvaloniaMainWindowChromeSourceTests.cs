@@ -88,6 +88,10 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         hostCaptureSource.Should().Contain("window.FindName(\"FormulaBarBorder\")");
         captureSource.Should().Contain("CaptureBackstageSurface(outputDirectory, surfaceId)");
         captureSource.Should().Contain("CreateParityCapturedBackstageSurface(surfaceId)");
+        captureSource.Should().Contain("FreeXBackstageNavigationPlanner.Build()");
+        captureSource.Should().Contain("FreeXBackstagePaneCatalog.BuildInfoActions(FreeXBackstageInfoSurface.ParityCapture)");
+        captureSource.Should().Contain("FreeXBackstagePaneCatalog.BuildInfoDetails(FreeXBackstageInfoSurface.ParityCapture)");
+        captureSource.Should().Contain("FreeXBackstagePaneCatalog.BuildAccountDetails()");
         captureSource.Should().Contain("CreateParityCapturedStatusBarFooter()");
         captureSource.Should().Contain("_ribbonContextSource.SetParityCaptureContext(null);");
         captureSource.Should().Contain("_ribbonContextSource.SetParityCaptureContext(activationKey);");
@@ -104,10 +108,17 @@ public sealed class AvaloniaMainWindowChromeSourceTests
 
         source.Should().Contain("WorkbookInfoDisplayPlanner.Build(");
         source.Should().Contain("WorkbookInfoDisplaySurface.AvaloniaBackstageInfoDialog");
+        source.Should().Contain("FreeXBackstagePaneCatalog.BuildInfoDetails(FreeXBackstageInfoSurface.AvaloniaInfoDialog)");
+        source.Should().Contain("FreeXBackstagePaneCatalog.BuildInfoActions(FreeXBackstageInfoSurface.AvaloniaInfoDialog)");
+        source.Should().Contain("FreeXBackstagePaneCatalog.GetExportScopeLabelKey(");
+        source.Should().Contain("FreeXBackstagePaneCatalog.GetExportOutputKindLabelKey(");
+        source.Should().Contain("FreeXBackstagePaneCatalog.BuildAccountDetails()");
+        source.Should().Contain("FreeXBackstagePaneCatalog.BuildAccountActions(plan.OptionsAvailable)");
         source.Should().NotContain("FormatBackstageFileSize");
         source.Should().NotContain("FormatBackstageLastModified");
         source.Should().NotContain("FormatBackstageProtection");
         source.Should().NotContain("FormatBackstageStatistics");
+        source.Should().NotContain("FormatExportScopeLabel");
     }
 
     [Fact]
