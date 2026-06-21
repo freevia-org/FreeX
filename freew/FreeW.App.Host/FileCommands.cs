@@ -18,7 +18,8 @@ namespace FreeW.App.Host;
 /// <see cref="FileLifecyclePlanner"/> (P2). FreeW supplies only the thin host side: the native
 /// <see cref="OpenFileDialog"/>/<see cref="SaveFileDialog"/> for its single <c>.docx</c> format
 /// (via the shared <see cref="FileDialogFilter"/>), the actual docx read/write, and the message
-/// prompts. The dirty/path state lives in the shared <see cref="FileCommandSession"/>.
+/// prompts. The dirty/path state and lifecycle ceremony live in the shared
+/// <see cref="FileCommandWorkflow"/>.
 /// </para>
 ///
 /// <para>
@@ -31,7 +32,7 @@ internal sealed class FileCommands
     private readonly Window _window;
     private readonly DocumentView _editor;
     private readonly Action _onChanged;
-    private readonly FileCommandSession _session;
+    private readonly FileCommandWorkflow _workflow;
 
     // FreeW's persisted settings (shared JsonSettingsStore under %APPDATA%\FreeW). The recent-files cap
     // is read from here when registering a saved/opened file — a real read site that proves the options
@@ -56,19 +57,24 @@ internal sealed class FileCommands
         _window = window;
         _editor = editor;
         _onChanged = onChanged;
-        _session = new FileCommandSession(loadRecentFilesStore: loadRecentFilesStore);
         _options = options ?? new FreeWOptions();
         _adapters = adapters ?? DocumentFileAdapterCatalog.CreateDefaultAdapters();
+        _workflow = new FileCommandWorkflow(
+            () => _options.RecentFilesCap,
+            _onChanged,
+            PromptSaveChanges,
+            Save,
+            loadRecentFilesStore: loadRecentFilesStore);
     }
 
-    public bool IsDirty => _session.IsDirty;
+    public bool IsDirty => _workflow.IsDirty;
 
     /// <summary>Monotonic dirty-edit counter, used by autosave to suppress redundant snapshots.</summary>
-    public int DirtyGeneration => _session.DirtyGeneration;
+    public int DirtyGeneration => _workflow.DirtyGeneration;
 
-    public string? CurrentPath => _session.CurrentPath;
+    public string? CurrentPath => _workflow.CurrentPath;
 
-    public string DisplayName => _session.DisplayName;
+    public string DisplayName => _workflow.DisplayName;
 
     /// <summary>Load a recovered autosave snapshot, targeting the original path and marking dirty.</summary>
     public void OpenSnapshot(string snapshotPath, string? originalPath)
@@ -76,10 +82,9 @@ internal sealed class FileCommands
         try
         {
             _editor.LoadModel(DocxReader.Read(snapshotPath));
-            _session.SetCurrentPath(originalPath);
-            _session.MarkDirty();
-            _editor.CurrentFileName = originalPath is null ? null : Path.GetFileName(originalPath);
-            _onChanged();
+            _workflow.MarkDirtyWithPath(
+                originalPath,
+                () => _editor.CurrentFileName = originalPath is null ? null : Path.GetFileName(originalPath));
         }
         catch (Exception ex)
         {
@@ -89,42 +94,25 @@ internal sealed class FileCommands
 
     public void MarkDirty()
     {
-        _session.MarkDirtyIfClean(_onChanged);
+        _workflow.MarkDirty();
     }
 
     /// <summary>
     /// File &gt; New. Routes through the shared dirty-gate so unsaved work is not silently lost
     /// (previously FreeW dropped changes without prompting). Returns false if the user cancels.
     /// </summary>
-    public bool New()
-    {
-        if (!ConfirmDiscardOrSave("creating a new document"))
-            return false;
-
-        _editor.LoadModel(TextDocument.CreateEmpty());
-        _session.MarkSavedWithoutPath(() =>
-        {
-            _editor.CurrentFileName = null;
-            _onChanged();
-        });
-        return true;
-    }
+    public bool New() =>
+        _workflow.New(
+            "creating a new document",
+            () => _editor.LoadModel(TextDocument.CreateEmpty()),
+            () => _editor.CurrentFileName = null);
 
     /// <summary>
     /// File &gt; Open. Dirty-gates first, then shows the open dialog and loads the chosen file.
     /// Returns false if the user cancels at either step.
     /// </summary>
-    public bool Open()
-    {
-        if (!ConfirmDiscardOrSave("opening another document"))
-            return false;
-
-        var dialog = new OpenFileDialog { Filter = DocumentFileDialogFilterBuilder.BuildOpenFilter(_adapters) };
-        if (dialog.ShowDialog(_window) != true)
-            return false;
-
-        return OpenPath(dialog.FileName);
-    }
+    public bool Open() =>
+        _workflow.Open("opening another document", PromptOpenPath, OpenPath);
 
     /// <summary>
     /// Loads a specific path (recent-files click / drag-drop / startup). Does NOT dirty-gate: callers
@@ -152,11 +140,7 @@ internal sealed class FileCommands
             if (format!.OpensAsTemplate)
             {
                 // A template seeds a new untitled document: clear the path so the next Save becomes Save-As.
-                _session.MarkSavedWithoutPath(() =>
-                {
-                    _editor.CurrentFileName = null;
-                    _onChanged();
-                });
+                _workflow.MarkSavedWithoutPath(() => _editor.CurrentFileName = null);
             }
             else
             {
@@ -173,19 +157,14 @@ internal sealed class FileCommands
     }
 
     /// <summary>Recent files (most recent first) from the shared store; never throws.</summary>
-    public IReadOnlyList<RecentFileEntry> RecentEntries => _session.RecentEntries;
+    public IReadOnlyList<RecentFileEntry> RecentEntries => _workflow.RecentEntries;
 
     /// <summary>
     /// File &gt; Save. Resolves Save-vs-Save-As via the shared planner: writes to the existing path
     /// when there is one, otherwise falls through to Save-As. Returns true on a successful (or no-op)
     /// save, false on cancel/error.
     /// </summary>
-    public bool Save() => FileLifecyclePlanner.PlanSave(_session.IsDirty, _session.CurrentPath) switch
-    {
-        FileSaveIntent.UseExistingPath => SaveToCurrentPath(),
-        FileSaveIntent.NothingToDo => SaveToCurrentPath(),
-        _ => SaveAs(),
-    };
+    public bool Save() => _workflow.Save(SaveToCurrentPath, SaveAs);
 
     /// <summary>File &gt; Save As. Always prompts for a target. Returns true on a successful save.</summary>
     public bool SaveAs() =>
@@ -218,24 +197,14 @@ internal sealed class FileCommands
     /// may close (clean, saved, or the user chose Don't&#160;Save) and false to cancel the close.
     /// This is a behaviour <em>addition</em>: FreeW previously closed without prompting on unsaved work.
     /// </summary>
-    public bool ConfirmCloseAllowed() => ConfirmDiscardOrSave("closing");
-
-    /// <summary>
-    /// Shared dirty-gate. Returns true when the destructive action may proceed (clean, or the user
-    /// saved / chose to discard), false when the user cancels or a required save fails.
-    /// </summary>
-    private bool ConfirmDiscardOrSave(string action)
-    {
-        return _session.ConfirmDiscardOrSave(action, PromptSaveChanges, Save);
-    }
+    public bool ConfirmCloseAllowed() => _workflow.ConfirmCloseAllowed();
 
     /// <summary>
     /// Save to the current path, resolving its format adapter. Falls back to Save-As when the current file is
     /// a read-only format (e.g. a legacy format opened for viewing), so the user is steered to a writable one.
     /// </summary>
-    private bool SaveToCurrentPath()
+    private bool SaveToCurrentPath(string path)
     {
-        var path = _session.CurrentPath!;
         var adapter = DocumentFileFormatResolver.FindSaveAdapter(_adapters, Path.GetExtension(path), out _);
         return adapter is null ? SaveAs() : SaveTo(path, adapter);
     }
@@ -267,7 +236,7 @@ internal sealed class FileCommands
         path = "";
         adapter = null!;
 
-        var currentExtension = _session.CurrentPath is { } existing
+        var currentExtension = _workflow.CurrentPath is { } existing
             ? Path.GetExtension(existing)
             : DefaultSaveExtension;
         var dialog = new SaveFileDialog
@@ -277,9 +246,9 @@ internal sealed class FileCommands
             DefaultExt = DefaultSaveExtension,
             AddExtension = true,
             OverwritePrompt = true,
-            FileName = _session.CurrentPath is null
+            FileName = _workflow.CurrentPath is null
                 ? "Document" + DefaultSaveExtension
-                : Path.GetFileName(_session.CurrentPath),
+                : Path.GetFileName(_workflow.CurrentPath),
         };
         if (dialog.ShowDialog(_window) != true)
             return false;
@@ -299,13 +268,18 @@ internal sealed class FileCommands
         return true;
     }
 
+    private string? PromptOpenPath()
+    {
+        var dialog = new OpenFileDialog { Filter = DocumentFileDialogFilterBuilder.BuildOpenFilter(_adapters) };
+        return dialog.ShowDialog(_window) == true ? dialog.FileName : null;
+    }
+
     private void SetSaved(string path, bool suppressRecentFiles)
     {
-        _session.MarkSavedWithPath(path, suppressRecentFiles, _options.RecentFilesCap, () =>
+        _workflow.MarkSavedWithPath(path, suppressRecentFiles, () =>
         {
             // Surface the file name to the editor so FILENAME field runs resolve to it at render.
             _editor.CurrentFileName = Path.GetFileName(path);
-            _onChanged();
         });
     }
 
