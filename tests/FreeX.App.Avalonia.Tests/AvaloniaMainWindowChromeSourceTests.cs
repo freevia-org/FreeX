@@ -63,6 +63,19 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         captureSource.Should().NotContain("ShowBackstageAccountDialogAsync()");
     }
 
+    [Fact]
+    public void BackstageInfo_DelegatesDisplayTextToSharedPlanner()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.Backstage.cs"));
+
+        source.Should().Contain("WorkbookInfoDisplayPlanner.Build(");
+        source.Should().Contain("WorkbookInfoDisplaySurface.AvaloniaBackstageInfoDialog");
+        source.Should().NotContain("FormatBackstageFileSize");
+        source.Should().NotContain("FormatBackstageLastModified");
+        source.Should().NotContain("FormatBackstageProtection");
+        source.Should().NotContain("FormatBackstageStatistics");
+    }
+
     private static string RepoFile(params string[] parts)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

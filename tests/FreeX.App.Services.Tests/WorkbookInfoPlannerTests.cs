@@ -47,6 +47,22 @@ public sealed class WorkbookInfoPlannerTests
     }
 
     [Fact]
+    public void Build_DottedFoldersAndInvalidPaths_FallBackToDefaultFormat()
+    {
+        var workbook = new Workbook("Budget");
+        workbook.AddSheet("Sheet1");
+
+        WorkbookInfoPlanner.Build(workbook, @"C:\Work.v1\Budget", activeSheetIndex: 0)
+            .FormatExtension
+            .Should()
+            .Be(".xlsx");
+        WorkbookInfoPlanner.Build(workbook, "bad\0path.csv", activeSheetIndex: 0)
+            .FormatExtension
+            .Should()
+            .Be(".xlsx");
+    }
+
+    [Fact]
     public void Build_ProtectedSheetsAndStructure_ReportsCombinedPosture()
     {
         var workbook = new Workbook("Secured");

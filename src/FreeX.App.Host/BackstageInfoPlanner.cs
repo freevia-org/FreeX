@@ -31,30 +31,38 @@ public static class BackstageInfoPlanner
         bool hasSelection = false)
     {
         culture ??= CultureInfo.CurrentCulture;
-        var statistics = WorkbookStatisticsService.GetStatistics(workbook);
         var accessibilityIssues = AccessibilityCheckerService.FindIssues(workbook);
         var formulaIssues = FormulaAuditingService.FindFormulaErrorIssues(workbook);
         var summary = InfoPanelSummaryPlanner.Create(workbook, activeSheet, culture);
         var sharingStatus = ShareWorkbookPlanner.FormatStatus(
             ShareWorkbookPlanner.CreatePlan(currentFilePath, fileExists));
         var exportStatus = WorkbookExportReadinessPlanner.Create(workbook, hasSelection).StatusText;
-        var filePath = string.IsNullOrWhiteSpace(currentFilePath)
-            ? UiText.Get("Backstage_Info_NotSavedYet")
-            : currentFilePath;
-        var format = PlannerPathHelpers.TryGetExtension(currentFilePath, out var extension)
-            ? extension.ToLowerInvariant()
-            : ".xlsx";
+        var fileInfo = TryGetFileInfo(currentFilePath, out var currentFileInfo)
+            ? currentFileInfo
+            : null;
+        var workbookInfoPlan = WorkbookInfoPlanner.Build(
+            workbook,
+            currentFilePath,
+            ResolveActiveSheetIndex(workbook, activeSheet),
+            fileInfo?.Length,
+            fileInfo?.LastWriteTimeUtc,
+            fileInfo?.LastWriteTime);
+        var display = WorkbookInfoDisplayPlanner.Build(
+            workbookInfoPlan,
+            WorkbookInfoDisplaySurface.WindowsBackstagePane,
+            CreateDisplayStrings(),
+            culture);
 
         return new BackstageInfoPlan(
-            workbook.Name,
-            filePath,
-            workbook.Sheets.Count.ToString(CultureInfo.CurrentCulture),
-            string.IsNullOrWhiteSpace(format) ? ".xlsx" : format,
-            WorkbookStatisticsFormatter.Format(statistics),
+            display.WorkbookName,
+            display.FilePath,
+            display.SheetCount,
+            display.Format,
+            display.StatisticsSummary,
             FormatAccessibilitySummary(accessibilityIssues.Count),
             FormatFormulaErrorSummary(formulaIssues.Count),
-            FormatFileSize(currentFilePath, culture),
-            FormatLastModified(currentFilePath, culture),
+            display.FileSize,
+            display.LastModified,
             sharingStatus,
             exportStatus,
             summary);
@@ -72,22 +80,6 @@ public static class BackstageInfoPlanner
             : issueCount == 1
                 ? UiText.Get("Backstage_Info_OneIssueFound")
                 : UiText.Format("Backstage_Info_MultipleIssuesFound", issueCount);
-
-    private static string FormatFileSize(string? currentFilePath, CultureInfo culture)
-    {
-        if (!TryGetFileInfo(currentFilePath, out var fileInfo))
-            return FormatMissingFileMetadata(currentFilePath);
-
-        return FormatByteSize(fileInfo.Length, culture);
-    }
-
-    private static string FormatLastModified(string? currentFilePath, CultureInfo culture)
-    {
-        if (!TryGetFileInfo(currentFilePath, out var fileInfo))
-            return FormatMissingFileMetadata(currentFilePath);
-
-        return fileInfo.LastWriteTime.ToString("g", culture);
-    }
 
     private static bool TryGetFileInfo(string? currentFilePath, out FileInfo fileInfo)
     {
@@ -114,38 +106,20 @@ public static class BackstageInfoPlanner
         }
     }
 
-    private static string FormatMissingFileMetadata(string? currentFilePath) =>
-        string.IsNullOrWhiteSpace(currentFilePath)
-            ? UiText.Get("Backstage_Info_NotSavedYet")
-            : UiText.Get("Backstage_Info_FileMissing");
-
-    private static string FormatByteSize(long bytes, CultureInfo culture)
+    private static int ResolveActiveSheetIndex(Workbook workbook, Sheet? activeSheet)
     {
-        bytes = Math.Max(0, bytes);
-        if (bytes == 1)
-            return UiText.Format("Backstage_Info_ByteSingularFormat", bytes.ToString("N0", culture));
-
-        if (bytes < 1024)
-            return UiText.Format("Backstage_Info_BytePluralFormat", bytes.ToString("N0", culture));
-
-        var value = (double)bytes;
-        var unitIndex = -1;
-        string[] units = ["KB", "MB", "GB", "TB"];
-        do
+        if (activeSheet is not null)
         {
-            value /= 1024;
-            unitIndex++;
+            for (var i = 0; i < workbook.Sheets.Count; i++)
+            {
+                if (ReferenceEquals(workbook.Sheets[i], activeSheet))
+                    return i;
+            }
         }
-        while (value >= 1024 && unitIndex < units.Length - 1);
 
-        var valueText = value >= 10
-            ? value.ToString("N0", culture)
-            : value.ToString("N1", culture);
-
-        return UiText.Format(
-            "Backstage_Info_ByteSizeWithUnitFormat",
-            valueText,
-            units[unitIndex],
-            bytes.ToString("N0", culture));
+        return workbook.ActiveSheetIndex ?? 0;
     }
+
+    private static WorkbookInfoDisplayStrings CreateDisplayStrings() =>
+        new(UiText.Get, (key, args) => UiText.Format(key, args));
 }

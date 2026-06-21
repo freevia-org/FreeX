@@ -34,6 +34,11 @@ public sealed partial class MainWindow
             return;
 
         var plan = BuildWorkbookInfoPlan();
+        var display = WorkbookInfoDisplayPlanner.Build(
+            plan,
+            WorkbookInfoDisplaySurface.AvaloniaBackstageInfoDialog,
+            CreateWorkbookInfoDisplayStrings(),
+            CultureInfo.CurrentCulture);
 
         var dialog = new Window
         {
@@ -54,33 +59,29 @@ public sealed partial class MainWindow
         // File section
         content.Children.Add(CreateBackstageSectionHeader(UiText.Get("Backstage_Info_FileSectionHeader")));
         var fileGrid = CreateBackstageDetailGrid();
-        AddBackstageDetailRow(fileGrid, UiText.Get("Backstage_Info_NameLabel"), plan.WorkbookName, "BackstageInfoName");
+        AddBackstageDetailRow(fileGrid, UiText.Get("Backstage_Info_NameLabel"), display.WorkbookName, "BackstageInfoName");
         AddBackstageDetailRow(
             fileGrid,
             UiText.Get("Backstage_Info_PathLabel"),
-            plan.IsSaved ? plan.FilePath! : UiText.Get("Backstage_Info_NotSavedYet"),
+            display.FilePath,
             "BackstageInfoPath");
-        AddBackstageDetailRow(fileGrid, UiText.Get("Backstage_Info_FormatLabel"), plan.FormatExtension, "BackstageInfoFormat");
-        AddBackstageDetailRow(fileGrid, UiText.Get("Backstage_Info_SizeLabel"), FormatBackstageFileSize(plan), "BackstageInfoSize");
-        AddBackstageDetailRow(fileGrid, UiText.Get("Backstage_Info_ModifiedLabel"), FormatBackstageLastModified(plan), "BackstageInfoModified");
+        AddBackstageDetailRow(fileGrid, UiText.Get("Backstage_Info_FormatLabel"), display.Format, "BackstageInfoFormat");
+        AddBackstageDetailRow(fileGrid, UiText.Get("Backstage_Info_SizeLabel"), display.FileSize, "BackstageInfoSize");
+        AddBackstageDetailRow(fileGrid, UiText.Get("Backstage_Info_ModifiedLabel"), display.LastModified, "BackstageInfoModified");
         AddBackstageDetailRow(
             fileGrid,
             UiText.Get("Backstage_Info_SheetsLabel"),
-            plan.SheetCount.ToString(CultureInfo.CurrentCulture),
+            display.SheetCount,
             "BackstageInfoSheets");
         content.Children.Add(fileGrid);
 
-        if (plan.HasUnsavedChanges)
-            content.Children.Add(CreateBackstageNote(UiText.Get("Backstage_Info_UnsavedChanges"), "BackstageInfoUnsaved"));
+        if (display.UnsavedChangesNote is { } unsavedChangesNote)
+            content.Children.Add(CreateBackstageNote(unsavedChangesNote, "BackstageInfoUnsaved"));
 
         // Protection section
         content.Children.Add(CreateBackstageSectionHeader(UiText.Get("Backstage_Info_ProtectionSectionHeader")));
-        content.Children.Add(CreateBackstageNote(FormatBackstageProtection(plan), "BackstageInfoProtection"));
-        content.Children.Add(CreateBackstageNote(
-            plan.ActiveSheetIsProtected
-                ? UiText.Get("Backstage_Info_ActiveSheetProtected")
-                : UiText.Get("Backstage_Info_ActiveSheetUnprotected"),
-            "BackstageInfoActiveSheetProtection"));
+        content.Children.Add(CreateBackstageNote(display.WorkbookProtectionSummary, "BackstageInfoProtection"));
+        content.Children.Add(CreateBackstageNote(display.ActiveSheetProtectionSummary, "BackstageInfoActiveSheetProtection"));
 
         var protectActions = new StackPanel
         {
@@ -106,7 +107,7 @@ public sealed partial class MainWindow
 
         // Statistics section
         content.Children.Add(CreateBackstageSectionHeader(UiText.Get("Backstage_Info_StatisticsSectionHeader")));
-        content.Children.Add(CreateBackstageNote(FormatBackstageStatistics(plan.Statistics), "BackstageInfoStatistics"));
+        content.Children.Add(CreateBackstageNote(display.StatisticsSummary, "BackstageInfoStatistics"));
 
         var root = new DockPanel { Margin = new Thickness(18) };
         DockPanel.SetDock(closeButton, Dock.Bottom);
@@ -165,71 +166,8 @@ public sealed partial class MainWindow
             _session.IsDirty);
     }
 
-    private static string FormatBackstageFileSize(WorkbookInfoPlan plan)
-    {
-        if (!plan.IsSaved)
-            return UiText.Get("Backstage_Info_NotSavedYet");
-        if (!plan.FileExistsOnDisk || plan.FileSizeBytes is not { } bytes)
-            return UiText.Get("Backstage_Info_FileMissing");
-
-        return FormatByteSize(bytes);
-    }
-
-    private static string FormatBackstageLastModified(WorkbookInfoPlan plan)
-    {
-        if (!plan.IsSaved)
-            return UiText.Get("Backstage_Info_NotSavedYet");
-        if (!plan.FileExistsOnDisk || plan.LastModifiedLocal is not { } modified)
-            return UiText.Get("Backstage_Info_FileMissing");
-
-        return modified.ToString("g", CultureInfo.CurrentCulture);
-    }
-
-    private static string FormatBackstageProtection(WorkbookInfoPlan plan) =>
-        plan.ProtectionPosture switch
-        {
-            WorkbookProtectionPosture.StructureAndSheetsProtected => UiText.Format(
-                "Backstage_Info_ProtectionStructureAndSheets",
-                plan.ProtectedSheetCount.ToString(CultureInfo.CurrentCulture),
-                plan.SheetCount.ToString(CultureInfo.CurrentCulture)),
-            WorkbookProtectionPosture.StructureProtected => UiText.Get("Backstage_Info_ProtectionStructure"),
-            WorkbookProtectionPosture.SheetsProtected => UiText.Format(
-                "Backstage_Info_ProtectionSheets",
-                plan.ProtectedSheetCount.ToString(CultureInfo.CurrentCulture),
-                plan.SheetCount.ToString(CultureInfo.CurrentCulture)),
-            _ => UiText.Get("Backstage_Info_ProtectionNone")
-        };
-
-    private static string FormatBackstageStatistics(WorkbookStatistics statistics) =>
-        string.Join(Environment.NewLine,
-            $"Cells with data: {statistics.CellCount}",
-            $"Formulas: {statistics.FormulaCount}",
-            $"Charts: {statistics.ChartCount}",
-            $"Pictures: {statistics.PictureCount}",
-            $"Named ranges: {statistics.NamedRangeCount}");
-
-    private static string FormatByteSize(long bytes)
-    {
-        bytes = Math.Max(0, bytes);
-        var culture = CultureInfo.CurrentCulture;
-        if (bytes < 1024)
-            return $"{bytes.ToString("N0", culture)} B";
-
-        double value = bytes;
-        var unitIndex = -1;
-        string[] units = ["KB", "MB", "GB", "TB"];
-        do
-        {
-            value /= 1024;
-            unitIndex++;
-        }
-        while (value >= 1024 && unitIndex < units.Length - 1);
-
-        var valueText = value >= 10
-            ? value.ToString("N0", culture)
-            : value.ToString("N1", culture);
-        return $"{valueText} {units[unitIndex]}";
-    }
+    private static WorkbookInfoDisplayStrings CreateWorkbookInfoDisplayStrings() =>
+        new(UiText.Get, (key, args) => UiText.Format(key, args));
 
     // ── File ▸ Export ────────────────────────────────────────────────────────────
     private void ShowBackstageExport() => _ = ShowBackstageExportDialogAsync();

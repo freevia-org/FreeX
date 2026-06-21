@@ -1,3 +1,4 @@
+using System.IO;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -120,14 +121,25 @@ public static class WorkbookInfoPlanner
 
     private static string ResolveFormatExtension(string? currentFilePath)
     {
-        if (string.IsNullOrWhiteSpace(currentFilePath))
+        if (string.IsNullOrWhiteSpace(currentFilePath) || currentFilePath.IndexOf('\0') >= 0)
             return ".xlsx";
 
-        var lastDot = currentFilePath.LastIndexOf('.');
-        if (lastDot < 0 || lastDot == currentFilePath.Length - 1)
+        try
+        {
+            var extension = Path.GetExtension(currentFilePath);
+            return string.IsNullOrWhiteSpace(extension) ? ".xlsx" : extension.ToLowerInvariant();
+        }
+        catch (ArgumentException)
+        {
             return ".xlsx";
-
-        var extension = currentFilePath[lastDot..].ToLowerInvariant();
-        return extension.Length <= 1 ? ".xlsx" : extension;
+        }
+        catch (NotSupportedException)
+        {
+            return ".xlsx";
+        }
+        catch (PathTooLongException)
+        {
+            return ".xlsx";
+        }
     }
 }

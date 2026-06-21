@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using FreeX.App.Services;
 using FreeX.Core.Commands;
 
 namespace FreeX.App.Host;

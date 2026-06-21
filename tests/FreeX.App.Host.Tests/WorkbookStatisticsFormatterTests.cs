@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.App.Services;
 using FreeX.Core.Commands;
 
 namespace FreeX.App.Host.Tests;
