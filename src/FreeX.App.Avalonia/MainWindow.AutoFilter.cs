@@ -5,6 +5,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
 
+using FreeX.App.Presentation.Filtering;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -68,13 +69,17 @@ public sealed partial class MainWindow
             return;
 
         var columnOffset = headerCell.Col - range.Start.Col;
-        var headerText = AutoFilterColumnValueReader.ToFilterText(sheet.GetValue(headerCell.Row, headerCell.Col));
+        var headerText = AutoFilterChecklistPlanner.ToFilterText(sheet.GetValue(headerCell.Row, headerCell.Col));
         if (string.IsNullOrWhiteSpace(headerText))
             headerText = CellAddress.NumberToColumnName(headerCell.Col);
 
-        var distinctValues = AutoFilterColumnValueReader.DistinctColumnValues(sheet, range, columnOffset);
+        var checklistItems = AutoFilterChecklistPlanner.CreateItems(
+            sheet,
+            range,
+            columnOffset,
+            AutoFilterMenuPlanner.BlankDisplayText);
         var hasActiveFilter = RangeHasActiveFilter(sheet, range);
-        var model = AutoFilterMenuPlanner.Build(headerText, distinctValues, hasActiveFilter);
+        var model = AutoFilterMenuPlanner.Build(headerText, checklistItems, hasActiveFilter);
 
         var panel = new StackPanel { Spacing = 2, MinWidth = 200 };
         var checkBoxes = new List<CheckBox>();

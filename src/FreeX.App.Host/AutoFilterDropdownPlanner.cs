@@ -1,7 +1,6 @@
 using FreeX.App.Presentation;
-using FreeX.App.Presentation.Filtering;
-using FreeX.Core.Commands;
 using FreeX.App.Presentation.AutoFilter;
+using FreeX.App.Presentation.Filtering;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -29,72 +28,7 @@ public static class AutoFilterDropdownPlanner
     }
 
     public static IReadOnlyList<AutoFilterChecklistItem> CreateChecklistItems(Sheet sheet, AutoFilterDropdownPlan plan)
-    {
-        var filterColumn = plan.Range.Start.Col + plan.FilterColumnOffset;
-        var seenValues = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var items = new List<AutoFilterChecklistItem>();
-
-        for (var row = plan.Range.Start.Row + 1; row <= plan.Range.End.Row; row++)
-        {
-            // Use the canonical filter text (the single source of truth FilterCommand matches against)
-            // so the checklist Value the dropdown sends agrees exactly with what the filter applies.
-            var value = FilterValueFormatter.ToText(sheet.GetValue(row, filterColumn));
-            if (!seenValues.Add(value))
-                continue;
-
-            items.Add(new AutoFilterChecklistItem(
-                string.IsNullOrEmpty(value) ? BlankDisplayText : value,
-                value));
-        }
-
-        items.Sort(CompareChecklistItems);
-        return items;
-    }
-
-    private static int CompareChecklistItems(AutoFilterChecklistItem left, AutoFilterChecklistItem right)
-    {
-        var leftKey = CreateChecklistSortKey(left.Value);
-        var rightKey = CreateChecklistSortKey(right.Value);
-        var rankComparison = leftKey.Rank.CompareTo(rightKey.Rank);
-        if (rankComparison != 0)
-            return rankComparison;
-
-        var numericComparison = leftKey.Number.CompareTo(rightKey.Number);
-        if (numericComparison != 0)
-            return numericComparison;
-
-        return string.Compare(left.DisplayText, right.DisplayText, StringComparison.CurrentCultureIgnoreCase);
-    }
-
-    private static AutoFilterChecklistSortKey CreateChecklistSortKey(string value)
-    {
-        if (string.IsNullOrEmpty(value))
-            return new AutoFilterChecklistSortKey(5, 0);
-
-        if (double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.CurrentCulture, out var number) ||
-            double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out number))
-        {
-            return new AutoFilterChecklistSortKey(0, number);
-        }
-
-        if (DateTime.TryParse(value, System.Globalization.CultureInfo.CurrentCulture, out var date) ||
-            DateTime.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out date))
-        {
-            return new AutoFilterChecklistSortKey(1, date.Ticks);
-        }
-
-        if (string.Equals(value, "TRUE", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(value, "FALSE", StringComparison.OrdinalIgnoreCase))
-        {
-            return new AutoFilterChecklistSortKey(3, string.Equals(value, "TRUE", StringComparison.OrdinalIgnoreCase) ? 1 : 0);
-        }
-
-        return value.StartsWith('#')
-            ? new AutoFilterChecklistSortKey(4, 0)
-            : new AutoFilterChecklistSortKey(2, 0);
-    }
-
-    private readonly record struct AutoFilterChecklistSortKey(int Rank, double Number);
+        => AutoFilterChecklistPlanner.CreateItems(sheet, plan, BlankDisplayText);
 
     public static AutoFilterMenuPlan CreateMenuPlan(Sheet sheet, AutoFilterDropdownPlan plan)
     {
