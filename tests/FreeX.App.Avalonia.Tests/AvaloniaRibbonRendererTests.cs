@@ -214,21 +214,49 @@ public sealed class AvaloniaRibbonRendererTests
         Assert.Contains(tabControl.Styles, style => style is Style concrete && HasSetter(concrete, Border.BorderThicknessProperty, new Thickness(0)));
         Assert.DoesNotContain(tabControl.Styles, style => style is Style concrete && HasSetter(concrete, TemplatedControl.BorderThicknessProperty, new Thickness(0, 0, 0, 3)));
         Assert.Contains(tabControl.Styles, style => style is Style concrete && HasSetter(concrete, Layoutable.MaxHeightProperty, 26d));
-        Assert.Contains(tabControl.Styles, style => style is Style concrete && HasSetter(concrete, Layoutable.HeightProperty, 22d));
+        Assert.Contains(tabControl.Styles, style => style is Style concrete && HasSetter(concrete, Layoutable.HeightProperty, 18d));
+        Assert.Contains(tabControl.Styles, style => style is Style concrete && HasSetter(concrete, Layoutable.MaxHeightProperty, 18d));
+        Assert.Contains(tabControl.Styles, style => style is Style concrete && HasSetter(concrete, TemplatedControl.TemplateProperty));
     });
 
     [Fact]
-    public Task DropdownChevron_UsesWindowsChevronGlyph() => RunOnUiThread(() =>
+    public Task DropdownChevron_UsesWindowsChevronIcon() => RunOnUiThread(() =>
     {
         var content = AvaloniaRibbonRenderer.BuildTabContent(BuildHomeTab(), new RibbonCommandRegistry());
+        var window = new Window { Width = 1200, Height = 200, Content = content };
+        window.Show();
+        window.Measure(new Size(1200, 200));
+        window.Arrange(new Rect(0, 0, 1200, 200));
 
-        var chevrons = content.GetLogicalDescendants()
-            .OfType<TextBlock>()
-            .Where(text => string.Equals(text.Text, "\u25BE", StringComparison.Ordinal))
+        var chevrons = content.GetVisualDescendants()
+            .OfType<Viewbox>()
+            .Where(viewbox => viewbox.Width == 9 && viewbox.Height == 9)
             .ToList();
 
-        Assert.NotEmpty(chevrons);
-        Assert.DoesNotContain(content.GetLogicalDescendants().OfType<TextBlock>(), text => text.Text == "v");
+        Assert.True(chevrons.Count >= 2);
+        Assert.DoesNotContain(content.GetLogicalDescendants().OfType<TextBlock>(), text => text.Text == "\u25BE" || text.Text == "v");
+    });
+
+    [Fact]
+    public Task RibbonCheckBox_UsesCompactWindowsSizedTemplate() => RunOnUiThread(() =>
+    {
+        var definition = new RibbonDefinitionBuilder()
+            .Tab("view", "View", "V", view =>
+            {
+                view.Group("show", "Show", "S", 100, group =>
+                {
+                    group.CheckBox("gridlines", "Gridlines");
+                });
+            })
+            .Build();
+        var content = AvaloniaRibbonRenderer.BuildTabContent(definition.FindTab("view")!, new RibbonCommandRegistry());
+
+        var checkBox = content.GetLogicalDescendants().OfType<CheckBox>().Single();
+
+        Assert.Equal(18, checkBox.Height);
+        Assert.Equal(18, checkBox.MinHeight);
+        Assert.Equal(18, checkBox.MaxHeight);
+        Assert.NotNull(checkBox.Template);
     });
 
     [Fact]

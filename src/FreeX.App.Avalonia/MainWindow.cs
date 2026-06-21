@@ -1481,8 +1481,11 @@ public sealed partial class MainWindow : Window
 
         activeLeft -= _sheetTabsScroller.Offset.X;
         var activeRight = activeLeft + activeWidth;
-        var ruleLeft = 0d;
-        var ruleRight = Math.Max(ruleLeft, HeaderColumnWidth + _sheetTabsScroller.Width);
+        var ruleLeft = _sheetTabLeftNavButton.IsVisible ? HeaderColumnWidth : 0d;
+        var scrollBarLeft = _horizontalWorksheetScrollBar.Bounds.Left > 0
+            ? _horizontalWorksheetScrollBar.Bounds.Left
+            : Math.Max(0, totalWidth - _horizontalWorksheetScrollBar.Width);
+        var ruleRight = Math.Max(ruleLeft, scrollBarLeft);
 
         activeLeft = Math.Clamp(activeLeft, ruleLeft, Math.Max(ruleLeft, ruleRight - 16));
         activeRight = Math.Clamp(activeRight, activeLeft + 16, ruleRight);
@@ -1493,10 +1496,8 @@ public sealed partial class MainWindow : Window
         var tabBottomY = 27d;
         var leftJoin = Math.Max(ruleLeft, activeLeft - corner);
         var rightJoin = Math.Min(ruleRight, activeRight + corner);
-        AddSheetTabContourPath(
-            $"M {Geom(ruleLeft)} {Geom(topY)} L {Geom(leftJoin)} {Geom(topY)} " +
-            $"M {Geom(rightJoin)} {Geom(topY)} L {Geom(ruleRight)} {Geom(topY)}",
-            strokeThickness: 1.0);
+        AddSheetTabTopRuleSegment(ruleLeft, leftJoin, topY);
+        AddSheetTabTopRuleSegment(rightJoin, ruleRight, topY);
 
         var path =
             $"M {Geom(leftJoin)} {Geom(topY)} " +
@@ -1508,6 +1509,25 @@ public sealed partial class MainWindow : Window
             $"L {Geom(activeRight)} {Geom(sideY)} " +
             $"C {Geom(activeRight)} {Geom(sideY - 4)} {Geom(activeRight)} {Geom(topY)} {Geom(rightJoin)} {Geom(topY)}";
         AddSheetTabContourPath(path, strokeThickness: 1.0);
+    }
+
+    private void AddSheetTabTopRuleSegment(double left, double right, double y)
+    {
+        if (right <= left)
+            return;
+
+        if (!_sheetTabRightNavButton.IsVisible)
+        {
+            AddSheetTabContourPath($"M {Geom(left)} {Geom(y)} L {Geom(right)} {Geom(y)}", strokeThickness: 1.0);
+            return;
+        }
+
+        var navLeft = HeaderColumnWidth + _sheetTabsScroller.Width;
+        var navRight = navLeft + _sheetTabRightNavButton.Width;
+        if (left < navLeft)
+            AddSheetTabContourPath($"M {Geom(left)} {Geom(y)} L {Geom(Math.Min(right, navLeft))} {Geom(y)}", strokeThickness: 1.0);
+        if (right > navRight)
+            AddSheetTabContourPath($"M {Geom(Math.Max(left, navRight))} {Geom(y)} L {Geom(right)} {Geom(y)}", strokeThickness: 1.0);
     }
 
     private double EstimateSheetTabWidth(int tabIndex)
@@ -2734,7 +2754,8 @@ public sealed partial class MainWindow : Window
         _cellAddressText.FontSize = 13;
         _cellAddressText.FontWeight = FontWeight.SemiBold;
         _cellAddressText.Foreground = Brush(28, 38, 48);
-        _cellAddressText.TextAlignment = TextAlignment.Center;
+        _cellAddressText.TextAlignment = TextAlignment.Left;
+        _cellAddressText.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;
         _cellAddressText.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         AutomationProperties.SetAutomationId(_cellAddressText, "CellAddressText");
         AutomationProperties.SetName(_cellAddressText, "Cell address");
@@ -3102,19 +3123,19 @@ public sealed partial class MainWindow : Window
         _statusZoomSlider.ZIndex = 20;
         _statusZoomSliderHost.Children.Add(_statusZoomSlider);
         _statusZoomSliderHost.Children.Add(BuildStatusZoomTick(left: 8));
-        _statusZoomSliderHost.Children.Add(BuildStatusZoomTick(left: 60, isMiddle: true));
+        _statusZoomSliderHost.Children.Add(BuildStatusZoomTick(left: 60));
         _statusZoomSliderHost.Children.Add(BuildStatusZoomTick(left: 111));
         UpdateStatusZoomSliderThumb(_statusZoomSlider.Value);
         return _statusZoomSliderHost;
     }
 
-    private static Control BuildStatusZoomTick(double left, bool isMiddle = false) =>
+    private static Control BuildStatusZoomTick(double left) =>
         new Border
         {
-            Width = isMiddle ? 2 : 1,
-            Height = isMiddle ? 8 : 4,
-            Margin = new Thickness(left, 0, 0, isMiddle ? 0 : 2),
-            Background = isMiddle ? Brush(92, 102, 112) : Brush(232, 236, 240),
+            Width = 1,
+            Height = 4,
+            Margin = new Thickness(left, 0, 0, 2),
+            Background = Brush(232, 236, 240),
             HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
             VerticalAlignment = AvaloniaVerticalAlignment.Bottom,
             IsHitTestVisible = false,
