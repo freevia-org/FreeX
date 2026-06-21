@@ -762,7 +762,7 @@ public partial class MainWindow
         ShowOwnedDialog(dialog);
     }
 
-    private void SendFeedbackBtn_Click(object sender, RoutedEventArgs e)
+    private void FeedbackBtn_Click(object sender, RoutedEventArgs e)
     {
         var context = CreateIssueReportContext();
         _diagnostics?.RecordEvent("report_issue_opened", new Dictionary<string, string?>

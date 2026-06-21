@@ -32,4 +32,15 @@ public sealed class HelpCommandSourceTests
         source.Should().Contain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.OpenHelp, HelpOnlineBtn_Click);");
     }
 
+    [Fact]
+    public void HelpRibbonFeedbackCommand_HasMatchingLiveHandler()
+    {
+        var ribbonDefinition = DialogSourceTestSupport.ReadRibbonDefinitionSource("FreeXRibbonDefinition.cs");
+        var reviewCommands = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
+
+        ribbonDefinition.Should().Contain(".Large(\"Feedback#FeedbackBtn_Click\"");
+        reviewCommands.Should().Contain("private void FeedbackBtn_Click(");
+        reviewCommands.Should().NotContain("private void SendFeedbackBtn_Click(");
+    }
+
 }
