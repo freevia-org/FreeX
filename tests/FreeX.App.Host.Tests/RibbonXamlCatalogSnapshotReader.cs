@@ -1,5 +1,4 @@
 using System.Xml.Linq;
-using FreeX.App.Host;
 using FreeX.Ribbon.Definitions;
 using SharedRibbon = Free.Shared.Ribbon;
 
@@ -155,3 +154,112 @@ internal sealed record RibbonXamlCatalogSnapshot(
     int ClickHandlerCount,
     int AutomationIdCount,
     int RibbonKeyTipCount);
+
+internal sealed record RibbonCatalog(IReadOnlyList<RibbonTabDefinition> Tabs)
+{
+    public IEnumerable<RibbonTabDefinition> VisibleTabs =>
+        Tabs.Where(tab => !tab.IsContextual);
+
+    public IEnumerable<RibbonTabDefinition> ContextualTabs =>
+        Tabs.Where(tab => tab.IsContextual);
+
+    public RibbonTabDefinition? FindTab(string header)
+    {
+        foreach (var tab in Tabs)
+            if (string.Equals(tab.Header, header, StringComparison.Ordinal))
+                return tab;
+
+        return null;
+    }
+}
+
+internal sealed record RibbonTabDefinition(
+    string Header,
+    string? Id,
+    string? Name,
+    string? KeyTip,
+    bool IsContextual,
+    IReadOnlyList<RibbonGroupDefinition> Groups)
+{
+    public RibbonGroupDefinition? FindGroup(string name)
+    {
+        foreach (var group in Groups)
+            if (string.Equals(group.Name, name, StringComparison.Ordinal))
+                return group;
+
+        return null;
+    }
+}
+
+internal sealed record RibbonGroupDefinition(
+    string Name,
+    string? Id,
+    IReadOnlyList<RibbonCommandDefinition> Commands)
+{
+    public RibbonCommandDefinition? FindCommand(string title)
+    {
+        foreach (var command in Commands)
+            if (string.Equals(command.Title, title, StringComparison.Ordinal))
+                return command;
+
+        return null;
+    }
+}
+
+internal sealed record RibbonCommandDefinition(
+    string Title,
+    RibbonCommandKind Kind,
+    string? Name,
+    string? KeyTip,
+    string? Description,
+    string? ClickHandler,
+    string? AutomationName,
+    string? IsEnabled,
+    bool IsExplicitlyDisabled,
+    string? Content,
+    string? Style,
+    RibbonCommandWidthHint WidthHint,
+    IReadOnlyList<RibbonMenuItemDefinition> MenuItems)
+{
+    public IEnumerable<RibbonMenuItemDefinition> DescendantMenuItems =>
+        MenuItems.SelectMany(EnumerateMenuItem);
+
+    private static IEnumerable<RibbonMenuItemDefinition> EnumerateMenuItem(RibbonMenuItemDefinition item)
+    {
+        yield return item;
+
+        foreach (var child in item.Children.SelectMany(EnumerateMenuItem))
+            yield return child;
+    }
+}
+
+internal sealed record RibbonMenuItemDefinition(
+    string Header,
+    RibbonMenuItemKind Kind,
+    string? KeyTip,
+    string? InputGestureText,
+    string? ClickHandler,
+    string? IsEnabled,
+    bool IsExplicitlyDisabled,
+    IReadOnlyList<RibbonMenuItemDefinition> Children);
+
+internal readonly record struct RibbonCommandWidthHint(
+    double? Width,
+    double? Height,
+    double? CompactFullWidth,
+    double? CompactWidth);
+
+internal enum RibbonCommandKind
+{
+    Button,
+    ToggleButton,
+    ComboBox,
+    CheckBox,
+    Other
+}
+
+internal enum RibbonMenuItemKind
+{
+    Command,
+    Separator
+}
