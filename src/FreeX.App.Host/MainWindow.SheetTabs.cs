@@ -1252,16 +1252,18 @@ public partial class MainWindow
         if (tabViewportBounds[activeIndex] is not { } activeBounds)
             return;
 
+        var targetLeft = activeBounds.Left;
         var targetRight = activeBounds.Right;
         if (activeIndex == visibleTabs.Count - 1 &&
             TryGetAddSheetButtonViewportBounds() is { } addSheetBounds)
         {
+            targetLeft = Math.Min(targetLeft, addSheetBounds.Left);
             targetRight = Math.Max(targetRight, addSheetBounds.Right);
         }
 
         var targetOffset = SheetTabViewportScrollPlanner.CalculateOffsetForSelectedTab(
             currentOffset,
-            activeBounds.Left,
+            targetLeft,
             targetRight,
             visibleViewportRight,
             SheetTabsScroller.ScrollableWidth,

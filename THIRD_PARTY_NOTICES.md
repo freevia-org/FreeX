@@ -10,17 +10,20 @@ license text and package-provided license text found in the restored packages.
 ## Audit Status
 
 - Audit command: `dotnet restore FreeX.slnx --disable-parallel -v:minimal`.
-- Restored package inventory: 68 unique NuGet packages across 18
+- Restored package inventory: 80 unique NuGet packages across 18
   `project.assets.json` files.
 - Coverage: every restored package is listed below.
 - Runtime package posture: the publishable app dependency set is covered by
   MIT, Apache-2.0, BSD-3-Clause, BSD-style package licenses, package license
   files, and explicit LGPL-3.0-only package metadata where listed below.
 - Package-provided `NOTICE` files found in the local NuGet cache:
-  Microsoft.NET.ILLink.Tasks `THIRD-PARTY-NOTICES.TXT`.
+  Microsoft.NET.ILLink.Tasks `THIRD-PARTY-NOTICES.TXT`,
+  System.Security.Cryptography.Pkcs `THIRD-PARTY-NOTICES.TXT`, and
+  System.Security.Cryptography.Xml `THIRD-PARTY-NOTICES.TXT`.
 - Package-provided license files found: Avalonia.Angle.Windows.Natives
-  `LICENSE`, FluentAssertions `LICENSE`, Newtonsoft.Json `LICENSE.md`,
-  SharpVectors.Wpf `lib/License.txt`, and System.IO.Packaging `LICENSE.TXT`.
+  `LICENSE`, BouncyCastle.Cryptography `LICENSE.md`, FluentAssertions
+  `LICENSE`, Newtonsoft.Json `LICENSE.md`, NPOI `LICENSE`, SharpVectors.Wpf
+  `lib/License.txt`, and System.IO.Packaging `LICENSE.TXT`.
 
 ## Commercial-Use Note
 
@@ -50,7 +53,7 @@ replace this dependency or confirm the project has the required Xceed license.
 | Avalonia.Themes.Fluent | 12.0.4 | MIT | https://avaloniaui.net/ |
 | Avalonia.Win32 | 12.0.4 | MIT | https://avaloniaui.net/ |
 | Avalonia.X11 | 12.0.4 | MIT | https://avaloniaui.net/ |
-| BouncyCastle.Cryptography | 2.6.2 | MIT | https://www.bouncycastle.org/csharp/ |
+| BouncyCastle.Cryptography | 2.6.2 | MIT | https://www.bouncycastle.org/stable/nuget/csharp/website |
 | ClosedXML | 0.105.0 | MIT | https://github.com/ClosedXML/ClosedXML |
 | ClosedXML.Parser | 2.0.0 | MIT | https://github.com/ClosedXML/ClosedXML.Parser |
 | DocSharp.Binary.Common | 0.20.0 | MIT | https://github.com/manfromarce/DocSharp |
@@ -58,9 +61,9 @@ replace this dependency or confirm the project has the required Xceed license.
 | DocumentFormat.OpenXml | 3.1.1 | MIT | https://github.com/dotnet/Open-XML-SDK |
 | DocumentFormat.OpenXml.Framework | 3.1.1 | MIT | https://github.com/dotnet/Open-XML-SDK |
 | Enums.NET | 5.0.0 | MIT | https://github.com/TylerBrinkley/Enums.NET |
-| ExtendedNumerics.BigDecimal | 2025.1001.2.129 | MIT | https://www.nuget.org/packages/ExtendedNumerics.BigDecimal/ |
 | ExcelDataReader | 3.8.0 | MIT | https://github.com/ExcelDataReader/ExcelDataReader |
 | ExcelNumberFormat | 1.1.0 | MIT | https://github.com/andersnm/ExcelNumberFormat |
+| ExtendedNumerics.BigDecimal | 2025.1001.2.129 | MIT | https://www.nuget.org/packages/ExtendedNumerics.BigDecimal/ |
 | HarfBuzzSharp | 8.3.1.3 | MIT | https://go.microsoft.com/fwlink/?linkid=868515 |
 | HarfBuzzSharp.NativeAssets.Linux | 8.3.1.3 | MIT | https://go.microsoft.com/fwlink/?linkid=868515 |
 | HarfBuzzSharp.NativeAssets.macOS | 8.3.1.3 | MIT | https://go.microsoft.com/fwlink/?linkid=868515 |

@@ -14,12 +14,15 @@ public partial class MainWindow
 {
     private void SelectRow(uint row)
     {
+        var range = CreateWholeRowRange(_currentSheetId, row);
+        if (TryApplyFormulaRangeSelection(range, range.Start, range.End))
+            return;
+
         ClearSelectionTransientOverlays();
-        const uint maxCol = 16_384;
-        _selectionAnchor = new CellAddress(_currentSheetId, row, 1);
-        _selectionCursor = new CellAddress(_currentSheetId, row, maxCol);
+        _selectionAnchor = range.Start;
+        _selectionCursor = range.End;
         SetSelectedRangesIfChanged(null);
-        SheetGrid.SelectedRange = new GridRange(_selectionAnchor.Value, _selectionCursor.Value);
+        SheetGrid.SelectedRange = range;
         CellAddressBox.Text = $"{row}:{row}";
         var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(_selectionAnchor.Value);
         SetFormulaBarSelectionText(FormatFormulaBarText(cell, _selectionAnchor.Value));
@@ -30,12 +33,15 @@ public partial class MainWindow
 
     private void SelectColumn(uint col)
     {
+        var range = CreateWholeColumnRange(_currentSheetId, col);
+        if (TryApplyFormulaRangeSelection(range, range.Start, range.End))
+            return;
+
         ClearSelectionTransientOverlays();
-        const uint maxRow = 1_048_576;
-        _selectionAnchor = new CellAddress(_currentSheetId, 1, col);
-        _selectionCursor = new CellAddress(_currentSheetId, maxRow, col);
+        _selectionAnchor = range.Start;
+        _selectionCursor = range.End;
         SetSelectedRangesIfChanged(null);
-        SheetGrid.SelectedRange = new GridRange(_selectionAnchor.Value, _selectionCursor.Value);
+        SheetGrid.SelectedRange = range;
         var colName = FormatColumnReference(col);
         CellAddressBox.Text = $"{colName}:{colName}";
         var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(_selectionAnchor.Value);
@@ -47,13 +53,15 @@ public partial class MainWindow
 
     private void SelectAll()
     {
+        var range = CreateWholeGridRange(_currentSheetId);
+        if (TryApplyFormulaRangeSelection(range, range.Start, range.End))
+            return;
+
         ClearSelectionTransientOverlays();
-        const uint maxRow = 1_048_576;
-        const uint maxCol = 16_384;
-        _selectionAnchor = new CellAddress(_currentSheetId, 1, 1);
-        _selectionCursor = new CellAddress(_currentSheetId, maxRow, maxCol);
+        _selectionAnchor = range.Start;
+        _selectionCursor = range.End;
         SetSelectedRangesIfChanged(null);
-        SheetGrid.SelectedRange = new GridRange(_selectionAnchor.Value, _selectionCursor.Value);
+        SheetGrid.SelectedRange = range;
         CellAddressBox.Text = FormatCellReference(_selectionAnchor.Value);
         var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(_selectionAnchor.Value);
         SetFormulaBarSelectionText(FormatFormulaBarText(cell, _selectionAnchor.Value));
@@ -61,6 +69,21 @@ public partial class MainWindow
         RefreshToolbarAfterSelectionChange();
         RefreshStatusBar();
     }
+
+    private static GridRange CreateWholeRowRange(SheetId sheetId, uint row) =>
+        new(
+            new CellAddress(sheetId, row, 1),
+            new CellAddress(sheetId, row, CellAddress.MaxCol));
+
+    private static GridRange CreateWholeColumnRange(SheetId sheetId, uint col) =>
+        new(
+            new CellAddress(sheetId, 1, col),
+            new CellAddress(sheetId, CellAddress.MaxRow, col));
+
+    private static GridRange CreateWholeGridRange(SheetId sheetId) =>
+        new(
+            new CellAddress(sheetId, 1, 1),
+            new CellAddress(sheetId, CellAddress.MaxRow, CellAddress.MaxCol));
 
     private void SheetGrid_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
@@ -95,14 +118,24 @@ public partial class MainWindow
                     {
                         if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0 && _selectionAnchor.HasValue)
                         {
+                            uint anchorCol = _selectionAnchor.Value.Col;
+                            var anchor = new CellAddress(_currentSheetId, 1, anchorCol);
+                            var cursor = new CellAddress(_currentSheetId, CellAddress.MaxRow, cm.Col);
+                            var range = new GridRange(
+                                new CellAddress(_currentSheetId, 1, Math.Min(anchorCol, cm.Col)),
+                                new CellAddress(_currentSheetId, CellAddress.MaxRow, Math.Max(anchorCol, cm.Col)));
+                            if (TryApplyFormulaRangeSelection(range, anchor, cursor))
+                            {
+                                BeginHeaderSelectionDrag(GridHeaderContextMenuTarget.Column, anchorCol);
+                                e.Handled = true;
+                                return;
+                            }
+
                             HideValidationDropdown();
                             ClearCommentPreview();
-                            uint anchorCol = _selectionAnchor.Value.Col;
-                            _selectionCursor = new CellAddress(_currentSheetId, 1_048_576, cm.Col);
+                            _selectionCursor = cursor;
                             SetSelectedRangesIfChanged(null);
-                            SheetGrid.SelectedRange = new GridRange(
-                                new CellAddress(_currentSheetId, 1, Math.Min(anchorCol, cm.Col)),
-                                new CellAddress(_currentSheetId, 1_048_576, Math.Max(anchorCol, cm.Col)));
+                            SheetGrid.SelectedRange = range;
                             var c1 = FormatColumnReference(Math.Min(anchorCol, cm.Col));
                             var c2 = FormatColumnReference(Math.Max(anchorCol, cm.Col));
                             CellAddressBox.Text = c1 == c2 ? $"{c1}:{c1}" : $"{c1}:{c2}";
@@ -132,14 +165,24 @@ public partial class MainWindow
                 {
                     if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0 && _selectionAnchor.HasValue)
                     {
+                        uint anchorRow = _selectionAnchor.Value.Row;
+                        var anchor = new CellAddress(_currentSheetId, anchorRow, 1);
+                        var cursor = new CellAddress(_currentSheetId, rm.Row, CellAddress.MaxCol);
+                        var range = new GridRange(
+                            new CellAddress(_currentSheetId, Math.Min(anchorRow, rm.Row), 1),
+                            new CellAddress(_currentSheetId, Math.Max(anchorRow, rm.Row), CellAddress.MaxCol));
+                        if (TryApplyFormulaRangeSelection(range, anchor, cursor))
+                        {
+                            BeginHeaderSelectionDrag(GridHeaderContextMenuTarget.Row, anchorRow);
+                            e.Handled = true;
+                            return;
+                        }
+
                         HideValidationDropdown();
                         ClearCommentPreview();
-                        uint anchorRow = _selectionAnchor.Value.Row;
-                        _selectionCursor = new CellAddress(_currentSheetId, rm.Row, 16_384);
+                        _selectionCursor = cursor;
                         SetSelectedRangesIfChanged(null);
-                        SheetGrid.SelectedRange = new GridRange(
-                            new CellAddress(_currentSheetId, Math.Min(anchorRow, rm.Row), 1),
-                            new CellAddress(_currentSheetId, Math.Max(anchorRow, rm.Row), 16_384));
+                        SheetGrid.SelectedRange = range;
                         var r1 = Math.Min(anchorRow, rm.Row);
                         var r2 = Math.Max(anchorRow, rm.Row);
                         CellAddressBox.Text = r1 == r2 ? $"{r1}:{r1}" : $"{r1}:{r2}";
@@ -1031,11 +1074,17 @@ public partial class MainWindow
         {
             var firstCol = Math.Min(anchorIndex, targetIndex);
             var lastCol = Math.Max(anchorIndex, targetIndex);
-            _selectionAnchor = new CellAddress(_currentSheetId, 1, anchorIndex);
-            _selectionCursor = new CellAddress(_currentSheetId, 1_048_576, targetIndex);
-            SheetGrid.SelectedRange = new GridRange(
+            var anchor = new CellAddress(_currentSheetId, 1, anchorIndex);
+            var cursor = new CellAddress(_currentSheetId, CellAddress.MaxRow, targetIndex);
+            var range = new GridRange(
                 new CellAddress(_currentSheetId, 1, firstCol),
-                new CellAddress(_currentSheetId, 1_048_576, lastCol));
+                new CellAddress(_currentSheetId, CellAddress.MaxRow, lastCol));
+            if (TryApplyFormulaRangeSelection(range, anchor, cursor))
+                return;
+
+            _selectionAnchor = anchor;
+            _selectionCursor = cursor;
+            SheetGrid.SelectedRange = range;
             var c1 = FormatColumnReference(firstCol);
             var c2 = FormatColumnReference(lastCol);
             CellAddressBox.Text = c1 == c2 ? $"{c1}:{c1}" : $"{c1}:{c2}";
@@ -1044,11 +1093,17 @@ public partial class MainWindow
         {
             var firstRow = Math.Min(anchorIndex, targetIndex);
             var lastRow = Math.Max(anchorIndex, targetIndex);
-            _selectionAnchor = new CellAddress(_currentSheetId, anchorIndex, 1);
-            _selectionCursor = new CellAddress(_currentSheetId, targetIndex, 16_384);
-            SheetGrid.SelectedRange = new GridRange(
+            var anchor = new CellAddress(_currentSheetId, anchorIndex, 1);
+            var cursor = new CellAddress(_currentSheetId, targetIndex, CellAddress.MaxCol);
+            var range = new GridRange(
                 new CellAddress(_currentSheetId, firstRow, 1),
-                new CellAddress(_currentSheetId, lastRow, 16_384));
+                new CellAddress(_currentSheetId, lastRow, CellAddress.MaxCol));
+            if (TryApplyFormulaRangeSelection(range, anchor, cursor))
+                return;
+
+            _selectionAnchor = anchor;
+            _selectionCursor = cursor;
+            SheetGrid.SelectedRange = range;
             CellAddressBox.Text = firstRow == lastRow ? $"{firstRow}:{firstRow}" : $"{firstRow}:{lastRow}";
         }
 
@@ -1075,17 +1130,17 @@ public partial class MainWindow
             var firstCol = Math.Min(anchorIndex, targetIndex);
             var lastCol = Math.Max(anchorIndex, targetIndex);
             return _selectionAnchor == new CellAddress(_currentSheetId, 1, anchorIndex) &&
-                _selectionCursor == new CellAddress(_currentSheetId, 1_048_576, targetIndex) &&
+                _selectionCursor == new CellAddress(_currentSheetId, CellAddress.MaxRow, targetIndex) &&
                 range.Start == new CellAddress(_currentSheetId, 1, firstCol) &&
-                range.End == new CellAddress(_currentSheetId, 1_048_576, lastCol);
+                range.End == new CellAddress(_currentSheetId, CellAddress.MaxRow, lastCol);
         }
 
         var firstRow = Math.Min(anchorIndex, targetIndex);
         var lastRow = Math.Max(anchorIndex, targetIndex);
         return _selectionAnchor == new CellAddress(_currentSheetId, anchorIndex, 1) &&
-            _selectionCursor == new CellAddress(_currentSheetId, targetIndex, 16_384) &&
+            _selectionCursor == new CellAddress(_currentSheetId, targetIndex, CellAddress.MaxCol) &&
             range.Start == new CellAddress(_currentSheetId, firstRow, 1) &&
-            range.End == new CellAddress(_currentSheetId, lastRow, 16_384);
+            range.End == new CellAddress(_currentSheetId, lastRow, CellAddress.MaxCol);
     }
 
     private void SetSelectedRangesIfChanged(IReadOnlyList<GridRange>? ranges)

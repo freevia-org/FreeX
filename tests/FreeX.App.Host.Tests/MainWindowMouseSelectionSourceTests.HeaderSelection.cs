@@ -13,8 +13,8 @@ public sealed partial class MainWindowMouseSelectionSourceTests
             selectionSource.IndexOf("private void SheetGrid_MouseDown", StringComparison.Ordinal)..
             selectionSource.IndexOf("private void MainWindow_TextInput", StringComparison.Ordinal)];
 
-        var columnAnchorIndex = mouseDown.IndexOf("uint anchorCol = _selectionAnchor.Value.Col;", StringComparison.Ordinal);
-        var rowAnchorIndex = mouseDown.IndexOf("uint anchorRow = _selectionAnchor.Value.Row;", StringComparison.Ordinal);
+        var columnAnchorIndex = mouseDown.IndexOf("_selectionCursor = cursor;", StringComparison.Ordinal);
+        var rowAnchorIndex = mouseDown.IndexOf("_selectionCursor = cursor;", columnAnchorIndex + 1, StringComparison.Ordinal);
         var columnShiftSelection = mouseDown[
             mouseDown.LastIndexOf("HideValidationDropdown();", columnAnchorIndex, StringComparison.Ordinal)..
             mouseDown.IndexOf("else", columnAnchorIndex, StringComparison.Ordinal)];
@@ -23,7 +23,7 @@ public sealed partial class MainWindowMouseSelectionSourceTests
             mouseDown.IndexOf("else", rowAnchorIndex, StringComparison.Ordinal)];
 
         columnShiftSelection.Should().Contain("SetSelectedRangesIfChanged(null);");
-        columnShiftSelection.Should().Contain("SheetGrid.SelectedRange = new GridRange(");
+        columnShiftSelection.Should().Contain("SheetGrid.SelectedRange = range;");
         columnShiftSelection.Should().Contain("CellAddressBox.Text");
         columnShiftSelection.Should().Contain("HideValidationDropdown();");
         columnShiftSelection.Should().Contain("SetFormulaBarSelectionText(FormatFormulaBarText(cell, _selectionAnchor.Value));");
@@ -32,7 +32,7 @@ public sealed partial class MainWindowMouseSelectionSourceTests
         columnShiftSelection.Should().Contain("RefreshStatusBar();");
 
         rowShiftSelection.Should().Contain("SetSelectedRangesIfChanged(null);");
-        rowShiftSelection.Should().Contain("SheetGrid.SelectedRange = new GridRange(");
+        rowShiftSelection.Should().Contain("SheetGrid.SelectedRange = range;");
         rowShiftSelection.Should().Contain("CellAddressBox.Text");
         rowShiftSelection.Should().Contain("HideValidationDropdown();");
         rowShiftSelection.Should().Contain("SetFormulaBarSelectionText(FormatFormulaBarText(cell, _selectionAnchor.Value));");
@@ -67,8 +67,8 @@ public sealed partial class MainWindowMouseSelectionSourceTests
         selectAll.Should().Contain("ClearSelectionTransientOverlays();");
         clearTransientOverlays.Should().Contain("ClearCommentPreview();");
 
-        var columnAnchorIndex = mouseDown.IndexOf("uint anchorCol = _selectionAnchor.Value.Col;", StringComparison.Ordinal);
-        var rowAnchorIndex = mouseDown.IndexOf("uint anchorRow = _selectionAnchor.Value.Row;", StringComparison.Ordinal);
+        var columnAnchorIndex = mouseDown.IndexOf("_selectionCursor = cursor;", StringComparison.Ordinal);
+        var rowAnchorIndex = mouseDown.IndexOf("_selectionCursor = cursor;", columnAnchorIndex + 1, StringComparison.Ordinal);
         var columnShiftSelection = mouseDown[
             mouseDown.LastIndexOf("HideValidationDropdown();", columnAnchorIndex, StringComparison.Ordinal)..
             mouseDown.IndexOf("else", columnAnchorIndex, StringComparison.Ordinal)];

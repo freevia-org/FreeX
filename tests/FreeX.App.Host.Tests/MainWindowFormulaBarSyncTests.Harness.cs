@@ -43,6 +43,9 @@ public sealed partial class MainWindowFormulaBarSyncTests
         private readonly MethodInfo _formulaBarExpandButtonClick;
         private readonly MethodInfo _editActiveCellInFormulaBar;
         private readonly MethodInfo _tryApplyFormulaRangeSelection;
+        private readonly MethodInfo _selectRow;
+        private readonly MethodInfo _selectColumn;
+        private readonly MethodInfo _selectAll;
 
         private MainWindowHarness(MainWindow window, ICommandBus commandBus)
         {
@@ -112,8 +115,22 @@ public sealed partial class MainWindowFormulaBarSyncTests
                 .GetMethod("EditActiveCellInFormulaBar", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "EditActiveCellInFormulaBar");
             _tryApplyFormulaRangeSelection = typeof(MainWindow)
-                .GetMethod("TryApplyFormulaRangeSelection", BindingFlags.Instance | BindingFlags.NonPublic)
+                .GetMethod(
+                    "TryApplyFormulaRangeSelection",
+                    BindingFlags.Instance | BindingFlags.NonPublic,
+                    binder: null,
+                    types: [typeof(CellAddress), typeof(bool)],
+                    modifiers: null)
                 ?? throw new MissingMethodException(nameof(MainWindow), "TryApplyFormulaRangeSelection");
+            _selectRow = typeof(MainWindow)
+                .GetMethod("SelectRow", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "SelectRow");
+            _selectColumn = typeof(MainWindow)
+                .GetMethod("SelectColumn", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "SelectColumn");
+            _selectAll = typeof(MainWindow)
+                .GetMethod("SelectAll", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "SelectAll");
         }
 
         public string FormulaBarText => ((TextBox)_window.FindName("FormulaBar")).Text;
@@ -143,6 +160,8 @@ public sealed partial class MainWindowFormulaBarSyncTests
         public double HorizontalScrollValue => ((ScrollBar)_window.FindName("HorizontalScroll")).Value;
 
         public string? InlineEditorText => InlineEditor?.Text;
+
+        public int? InlineEditorCaretIndex => InlineEditor?.CaretIndex;
 
         public bool InlineEditorVisible => InlineEditor?.IsVisible == true;
 
@@ -286,6 +305,24 @@ public sealed partial class MainWindowFormulaBarSyncTests
                 [new CellAddress(sheet.Id, row, col), extend])!;
             PumpDispatcher();
             return applied;
+        }
+
+        public void SelectWholeRow(uint row)
+        {
+            _selectRow.Invoke(_window, [row]);
+            PumpDispatcher();
+        }
+
+        public void SelectWholeColumn(uint col)
+        {
+            _selectColumn.Invoke(_window, [col]);
+            PumpDispatcher();
+        }
+
+        public void SelectWholeGrid()
+        {
+            _selectAll.Invoke(_window, null);
+            PumpDispatcher();
         }
 
         public void InsertFormulaFunction(string functionName)
