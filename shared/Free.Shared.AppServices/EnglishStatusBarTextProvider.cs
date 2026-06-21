@@ -1,18 +1,14 @@
-using Free.Shared.AppServices;
-
-namespace FreeX.App.Avalonia;
+namespace Free.Shared.AppServices;
 
 /// <summary>
-/// Backs the neutral <see cref="IStatusBarTextProvider"/> for the Avalonia port. The Avalonia shell has
-/// no <c>UiText</c> resource system yet, so it supplies the same English label/format strings the WPF
-/// host resolves from its <c>StatusBar_*</c> resources, keeping the shared
-/// <see cref="StatusBarDisplayModelBuilder"/> output identical across shells.
+/// English status-bar label/format strings for shells that do not have a localized resource adapter.
+/// WPF keeps using its UiText-backed provider; Avalonia uses this shared fallback.
 /// </summary>
-internal sealed class AvaloniaStatusBarTextProvider : IStatusBarTextProvider
+public sealed class EnglishStatusBarTextProvider : IStatusBarTextProvider
 {
-    public static readonly AvaloniaStatusBarTextProvider Instance = new();
+    public static readonly EnglishStatusBarTextProvider Instance = new();
 
-    private AvaloniaStatusBarTextProvider()
+    private EnglishStatusBarTextProvider()
     {
     }
 

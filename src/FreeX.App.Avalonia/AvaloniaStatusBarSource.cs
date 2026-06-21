@@ -21,8 +21,8 @@ internal static class AvaloniaStatusBarSource
 
     /// <summary>
     /// Builds the neutral <see cref="StatusBarViewModel"/> for the given selection stats and zoom using
-    /// the shared <see cref="StatusBarDisplayModelBuilder"/>. The Avalonia session has no page-layout /
-    /// page-break view yet, so the view mode is <see cref="StatusBarViewMode.Normal"/>.
+    /// the shared <see cref="StatusBarDisplayModelBuilder"/> and English text provider. The Avalonia
+    /// session has no page-layout / page-break view yet, so the view mode is <see cref="StatusBarViewMode.Normal"/>.
     /// </summary>
     public static StatusBarViewModel BuildModel(WorkbookSelectionStats stats, int zoomPercent, string readyText) =>
         stats.IsEmpty
@@ -31,7 +31,7 @@ internal static class AvaloniaStatusBarSource
                 StatusBarViewMode.Normal,
                 zoomPercent,
                 stats,
-                AvaloniaStatusBarTextProvider.Instance);
+                EnglishStatusBarTextProvider.Instance);
 
     /// <summary>
     /// Joins the model's visible aggregate readouts (filtered by <paramref name="optionVisibility"/>)
