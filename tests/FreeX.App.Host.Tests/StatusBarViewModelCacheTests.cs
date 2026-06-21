@@ -13,11 +13,11 @@ public sealed class StatusBarViewModelCacheTests
     public void GetStats_ReusesNeutralModelWhenStatsAreUnchanged()
     {
         var cache = CreateCache();
-        var stats = new StatusBarCalculator.Stats(12, 4, 3, 4, 2, 6);
+        var stats = new WorkbookSelectionStats(12, 4, 3, 4, 2, 6);
 
-        var first = cache.GetStats(stats);
-        var second = cache.GetStats(stats);
-        var changed = cache.GetStats(stats with { Sum = 18 });
+        var first = cache.GetStats(StatusBarViewMode.Normal, zoomPercent: 0, stats);
+        var second = cache.GetStats(StatusBarViewMode.Normal, zoomPercent: 0, stats);
+        var changed = cache.GetStats(StatusBarViewMode.Normal, zoomPercent: 0, stats with { Sum = 18 });
 
         second.Should().BeSameAs(first);
         changed.Should().NotBeSameAs(first);
@@ -30,9 +30,9 @@ public sealed class StatusBarViewModelCacheTests
     {
         var cache = CreateCache();
 
-        var first = cache.GetReady("Ready");
-        var second = cache.GetReady("Ready");
-        var changed = cache.GetReady("Edit");
+        var first = cache.GetReady(StatusBarViewMode.Normal, zoomPercent: 0, "Ready");
+        var second = cache.GetReady(StatusBarViewMode.Normal, zoomPercent: 0, "Ready");
+        var changed = cache.GetReady(StatusBarViewMode.Normal, zoomPercent: 0, "Edit");
 
         second.Should().BeSameAs(first);
         changed.Should().NotBeSameAs(first);
@@ -44,20 +44,30 @@ public sealed class StatusBarViewModelCacheTests
     public void Clear_DropsCachedModels()
     {
         var cache = CreateCache();
-        var stats = new StatusBarCalculator.Stats(12, 4, 3, 4, 2, 6);
+        var stats = new WorkbookSelectionStats(12, 4, 3, 4, 2, 6);
 
-        var first = cache.GetStats(stats);
+        var first = cache.GetStats(StatusBarViewMode.Normal, zoomPercent: 0, stats);
         cache.Clear();
-        var afterClear = cache.GetStats(stats);
+        var afterClear = cache.GetStats(StatusBarViewMode.Normal, zoomPercent: 0, stats);
 
         afterClear.Should().NotBeSameAs(first);
+    }
+
+    [Fact]
+    public void Cache_LivesInSharedAppServicesAndUsesNeutralStats()
+    {
+        var source = WorkspaceFileLocator.ReadAllText(
+            "shared", "Free.Shared.AppServices", "StatusBarViewModelCache.cs");
+
+        source.Should().Contain("WorkbookSelectionStats");
+        source.Should().NotContain("StatusBarCalculator.Stats");
     }
 
     [BenchmarkFact]
     public void Benchmark_RepeatedStatsModel_ReportsCachedTimingAndAllocation()
     {
         const int iterations = 50_000;
-        var stats = new StatusBarCalculator.Stats(
+        var stats = new WorkbookSelectionStats(
             Count: 4,
             NumericalCount: 3,
             Sum: 123456,
@@ -67,7 +77,7 @@ public sealed class StatusBarViewModelCacheTests
         var cache = CreateCache();
 
         for (var i = 0; i < 100; i++)
-            _ = cache.GetStats(stats);
+            _ = cache.GetStats(StatusBarViewMode.Normal, zoomPercent: 0, stats);
 
         GC.Collect();
         GC.WaitForPendingFinalizers();
@@ -77,7 +87,7 @@ public sealed class StatusBarViewModelCacheTests
         var stopwatch = Stopwatch.StartNew();
         StatusBarViewModel? lastState = null;
         for (var i = 0; i < iterations; i++)
-            lastState = cache.GetStats(stats);
+            lastState = cache.GetStats(StatusBarViewMode.Normal, zoomPercent: 0, stats);
         stopwatch.Stop();
         var cachedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
 
@@ -87,7 +97,7 @@ public sealed class StatusBarViewModelCacheTests
             $"cached_ms={stopwatch.Elapsed.TotalMilliseconds:F2} " +
             $"cached_allocated_bytes={cachedBytes:N0}");
 
-        lastState.Should().BeSameAs(cache.GetStats(stats));
+        lastState.Should().BeSameAs(cache.GetStats(StatusBarViewMode.Normal, zoomPercent: 0, stats));
         cachedBytes.Should().BeLessThan(
             iterations * 8,
             "cached status refreshes should reuse the formatted neutral model instead of rebuilding it");

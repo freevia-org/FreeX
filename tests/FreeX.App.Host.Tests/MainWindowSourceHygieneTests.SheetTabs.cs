@@ -553,14 +553,14 @@ public sealed partial class MainWindowSourceHygieneTests
         xaml.IndexOf("x:Name=\"StatusNumericalCountText\"", StringComparison.Ordinal)
             .Should().BeLessThan(xaml.IndexOf("x:Name=\"StatusSumText\"", StringComparison.Ordinal));
 
-        gridStatusSource.Should().Contain("ApplyStatusBarDisplayState(_statusBarDisplayStateCache.GetStats(stats))");
+        gridStatusSource.Should().Contain("StatusBarCalculator.ToShared(stats)");
         gridStatusSource.Should().Contain("if (IsFileOperationProgressVisible())");
         gridStatusSource.Should().Contain("SetVisibilityIfChanged(StatusReadyText, Visibility.Collapsed)");
         gridStatusSource.Should().Contain("SetVisibilityIfChanged(StatusStatsPanel, Visibility.Collapsed)");
         gridStatusSource.Should().Contain("SetStatusStatisticTextIfChanged(StatusCountText, ReadoutValue(state, StatusBarReadoutKind.Count)");
         gridStatusSource.Should().Contain("SetStatusStatisticTextIfChanged(StatusNumericalCountText, ReadoutValue(state, StatusBarReadoutKind.NumericalCount)");
         gridStatusSource.Should().Contain("SetStatusStatisticTextIfChanged(StatusSumText, ReadoutValue(state, StatusBarReadoutKind.Sum)");
-        gridStatusSource.Should().Contain("_statusBarDisplayStateCache.GetReady(UiText.Get(\"MainWindow_Text_Ready\"))");
+        gridStatusSource.Should().Contain("UiText.Get(\"MainWindow_Text_Ready\")");
         // Readout formatting now lives in the platform-neutral shared builder, keyed by readout kind
         // (the WPF host's UiTextStatusBarTextProvider maps each kind to its StatusBar_*Format resource).
         WorkspaceFileLocator.ReadAllText("shared", "Free.Shared.AppServices", "StatusBarDisplayModelBuilder.cs")

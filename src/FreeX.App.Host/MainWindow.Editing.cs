@@ -571,7 +571,10 @@ public partial class MainWindow
         if (StatusStatsPanel is null || StatusReadyText is null)
             return;
 
-        ApplyStatusBarDisplayState(_statusBarDisplayStateCache.GetReady(text));
+        ApplyStatusBarDisplayState(_statusBarDisplayStateCache.GetReady(
+            StatusBarViewMode.Normal,
+            zoomPercent: 0,
+            text));
     }
 
     private void SetFormulaEditStatusBarMode(bool pointMode)

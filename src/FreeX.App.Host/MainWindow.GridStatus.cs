@@ -43,7 +43,10 @@ public partial class MainWindow
 
         if (SheetGrid.SelectedRange is not { } range)
         {
-            ApplyStatusBarDisplayState(_statusBarDisplayStateCache.GetReady(UiText.Get("MainWindow_Text_Ready")));
+            ApplyStatusBarDisplayState(_statusBarDisplayStateCache.GetReady(
+                StatusBarViewMode.Normal,
+                zoomPercent: 0,
+                UiText.Get("MainWindow_Text_Ready")));
             return;
         }
 
@@ -55,11 +58,16 @@ public partial class MainWindow
         if (stats.Count == 0)
         {
             ApplyStatusBarDisplayState(_statusBarDisplayStateCache.GetReady(
+                StatusBarViewMode.Normal,
+                zoomPercent: 0,
                 StatusBarCalculator.GetReadyStatusText(sheet, range.Start)));
             return;
         }
 
-        ApplyStatusBarDisplayState(_statusBarDisplayStateCache.GetStats(stats));
+        ApplyStatusBarDisplayState(_statusBarDisplayStateCache.GetStats(
+            StatusBarViewMode.Normal,
+            zoomPercent: 0,
+            StatusBarCalculator.ToShared(stats)));
     }
 
     private bool IsFileOperationProgressVisible() =>
