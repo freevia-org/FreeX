@@ -385,13 +385,24 @@ public sealed class AvaloniaRibbonHostCallbackTests
     }
 
     [Fact]
-    public void DrawCommands_DefaultToDisabledNoOpUntilContextualHandlersApply()
+    public void DrawCommands_DefaultToWindowsStaticDrawEnablement()
     {
         var registry = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { });
 
-        Assert.True(registry.TryGet(new RibbonCommandId("Bring Forward"), out var command));
-        var stateful = Assert.IsAssignableFrom<IRibbonStatefulCommand>(command);
-        Assert.False(stateful.GetState().IsEnabled);
+        Assert.True(registry.TryGet(new RibbonCommandId("Bring Forward"), out var bringForward));
+        Assert.IsType<NoOpRibbonCommand>(bringForward);
+        Assert.True(registry.TryGet(new RibbonCommandId("Shape Fill"), out var shapeFill));
+        Assert.IsType<NoOpRibbonCommand>(shapeFill);
+
+        Assert.True(registry.TryGet(new RibbonCommandId("Crop Picture"), out var crop));
+        var cropState = Assert.IsAssignableFrom<IRibbonStatefulCommand>(crop);
+        Assert.False(cropState.GetState().IsEnabled);
+        Assert.True(registry.TryGet(new RibbonCommandId("Shape Gradient"), out var gradient));
+        var gradientState = Assert.IsAssignableFrom<IRibbonStatefulCommand>(gradient);
+        Assert.False(gradientState.GetState().IsEnabled);
+        Assert.True(registry.TryGet(new RibbonCommandId("Shape Effects"), out var effects));
+        var effectsState = Assert.IsAssignableFrom<IRibbonStatefulCommand>(effects);
+        Assert.False(effectsState.GetState().IsEnabled);
     }
 
     [Fact]

@@ -290,6 +290,13 @@ internal sealed class InsertChartRibbonCommand : IRibbonCommand
 /// </summary>
 internal static class AvaloniaRibbonComposition
 {
+    private static readonly IReadOnlySet<string> StaticDrawUnavailableCommandIds = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "Crop Picture",
+        "Shape Gradient",
+        "Shape Effects",
+    };
+
     /// <summary>The canonical, single-source ribbon definition shared with the WPF app.</summary>
     public static RibbonDefinition BuildDefinition() => FreeXRibbon.Build();
 
@@ -336,7 +343,8 @@ internal static class AvaloniaRibbonComposition
             return;
 
         foreach (var id in EnumerateCommandIds(drawTab))
-            registry.Register(id, DisabledNoOpRibbonCommand.Instance);
+            if (StaticDrawUnavailableCommandIds.Contains(id.Value))
+                registry.Register(id, DisabledNoOpRibbonCommand.Instance);
     }
 
     /// <summary>Registers <paramref name="command"/> under the canonical id for the Avalonia <paramref name="avaloniaId"/>.</summary>
