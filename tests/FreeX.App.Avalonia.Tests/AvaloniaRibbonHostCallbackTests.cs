@@ -395,6 +395,26 @@ public sealed class AvaloniaRibbonHostCallbackTests
     }
 
     [Fact]
+    public void ExtraCommandStates_RegisterStatefulRelayCommand()
+    {
+        var registry = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { }, new AvaloniaRibbonHostCallbacks
+        {
+            ExtraCommands = new Dictionary<string, Action>
+            {
+                ["view.gridlines"] = () => { },
+            },
+            ExtraCommandStates = new Dictionary<string, Func<RibbonCommandState>>
+            {
+                ["view.gridlines"] = () => new RibbonCommandState(IsChecked: true),
+            },
+        });
+
+        Assert.True(registry.TryGet(Canonical("view.gridlines"), out var command));
+        var stateful = Assert.IsAssignableFrom<IRibbonStatefulCommand>(command);
+        Assert.True(stateful.GetState().IsChecked);
+    }
+
+    [Fact]
     public void DrawPicturesAndShapes_BindToInsertCallbacks_WhenProvided()
     {
         var registry = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { }, new AvaloniaRibbonHostCallbacks

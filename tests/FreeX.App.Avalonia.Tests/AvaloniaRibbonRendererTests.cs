@@ -79,6 +79,13 @@ public sealed class AvaloniaRibbonRendererTests
         public RibbonCommandState GetState() => state;
     }
 
+    private sealed class NoOpCommand : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+        }
+    }
+
     [Fact]
     public Task BuildTabContent_ProducesNonEmptyVisualTree() => RunOnUiThread(() =>
     {
@@ -220,7 +227,7 @@ public sealed class AvaloniaRibbonRendererTests
     });
 
     [Fact]
-    public Task DropdownChevron_UsesWindowsChevronIcon() => RunOnUiThread(() =>
+    public Task DropdownChevron_UsesWindowsChevronGlyph() => RunOnUiThread(() =>
     {
         var content = AvaloniaRibbonRenderer.BuildTabContent(BuildHomeTab(), new RibbonCommandRegistry());
         var window = new Window { Width = 1200, Height = 200, Content = content };
@@ -228,13 +235,12 @@ public sealed class AvaloniaRibbonRendererTests
         window.Measure(new Size(1200, 200));
         window.Arrange(new Rect(0, 0, 1200, 200));
 
-        var chevrons = content.GetVisualDescendants()
-            .OfType<Viewbox>()
-            .Where(viewbox => viewbox.Width == 9 && viewbox.Height == 9)
+        var chevrons = content.GetLogicalDescendants()
+            .OfType<TextBlock>()
+            .Where(text => text.Text == "\u25BE" && text.FontSize == 9)
             .ToList();
 
         Assert.True(chevrons.Count >= 2);
-        Assert.DoesNotContain(content.GetLogicalDescendants().OfType<TextBlock>(), text => text.Text == "\u25BE" || text.Text == "v");
     });
 
     [Fact]
@@ -391,6 +397,45 @@ public sealed class AvaloniaRibbonRendererTests
 
         Assert.False(cut.IsEnabled);
         Assert.False(bold.IsEnabled);
+        Assert.True(bold.IsChecked);
+    });
+
+    [Fact]
+    public Task StatefulCheckBox_InitialCheckedState_RendersBeforeRefresh() => RunOnUiThread(() =>
+    {
+        var definition = new RibbonDefinitionBuilder()
+            .Tab("view", "View", "V", view =>
+            {
+                view.Group("show", "Show", "S", 100, group =>
+                {
+                    group.CheckBox("gridlines", "Gridlines");
+                });
+            })
+            .Build();
+        var registry = new RibbonCommandRegistry();
+        registry.Register("gridlines", new StatefulCommand(new RibbonCommandState(IsChecked: true)));
+
+        var content = AvaloniaRibbonRenderer.BuildTabContent(definition.FindTab("view")!, registry);
+
+        var checkBox = content.GetLogicalDescendants().OfType<CheckBox>().Single();
+        Assert.True(checkBox.IsChecked);
+        Assert.True(checkBox.IsEnabled);
+    });
+
+    [Fact]
+    public Task StaticDrawTab_ObjectCommandsStayDisabledWithRegisteredHandlers() => RunOnUiThread(() =>
+    {
+        var definition = AvaloniaRibbonComposition.BuildDefinition();
+        var registry = new RibbonCommandRegistry();
+        registry.Register("Crop Picture", new NoOpCommand());
+        registry.Register("Shape Gradient", new NoOpCommand());
+
+        var content = AvaloniaRibbonRenderer.BuildTabContent(definition.FindTab("DrawTab")!, registry);
+
+        var crop = content.GetLogicalDescendants().OfType<Button>().Single(button => Equals(button.Tag, "Crop Picture"));
+        var gradient = content.GetLogicalDescendants().OfType<Button>().Single(button => Equals(button.Tag, "Shape Gradient"));
+        Assert.False(crop.IsEnabled);
+        Assert.False(gradient.IsEnabled);
     });
 
     [Fact]
@@ -486,6 +531,7 @@ public sealed class AvaloniaRibbonRendererTests
         [InlineData("Page Setup dialog")]
         [InlineData("View Gridlines")]
         [InlineData("View Headings")]
+        [InlineData("Shape Gradient")]
         [InlineData("Clear#ClearFilterButton_Click")]
         [InlineData("Sort A to Z#SortAscButton_Click")]
         [InlineData("Sort Z to A#SortDescButton_Click")]

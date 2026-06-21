@@ -35,8 +35,8 @@ namespace Free.Shared.Ribbon.Avalonia;
 /// </list>
 /// <para>Paint: <c>fill="none"</c> → no fill; a stroke becomes a <see cref="Pen"/> (thickness +
 /// <see cref="PenLineCap"/>/<see cref="PenLineJoin"/> from stroke-linecap/linejoin). Colors parse
-/// <c>#rrggbb</c>, <c>#rgb</c>, <c>none</c>, and named black/white. The single
-/// <c>&lt;linearGradient&gt;</c> icon is approximated with the gradient's solid first stop. Other
+/// <c>#rrggbb</c>, <c>#rgb</c>, <c>none</c>, and named black/white. Simple
+/// <c>&lt;linearGradient&gt;</c> definitions resolve to native Avalonia gradient brushes. Other
 /// <c>&lt;defs&gt;</c> content is skipped.</para>
 /// </remarks>
 internal static class SvgIconParser
@@ -599,7 +599,6 @@ internal static class SvgIconParser
             return ParseColor(value) is { } c ? new SolidColorBrush(c) : null;
         }
 
-        // The one gradient icon: approximate with the gradient's solid first stop (no full gradient).
         private static IBrush? ResolveGradientBrush(string urlRef, XElement element)
         {
             var id = urlRef.Trim();
@@ -617,6 +616,12 @@ internal static class SvgIconParser
                 if (grad.Attribute("id")?.Value != id)
                     continue;
 
+                if (grad.Name.LocalName == "linearGradient" &&
+                    TryBuildLinearGradientBrush(grad, root) is { } brush)
+                {
+                    return brush;
+                }
+
                 foreach (var stop in grad.Elements())
                 {
                     if (stop.Name.LocalName != "stop")
@@ -627,6 +632,69 @@ internal static class SvgIconParser
             }
 
             return Brushes.Gray;
+        }
+
+        private static LinearGradientBrush? TryBuildLinearGradientBrush(XElement gradient, XElement root)
+        {
+            var stops = new List<GradientStop>();
+            foreach (var stop in gradient.Elements())
+            {
+                if (stop.Name.LocalName != "stop")
+                    continue;
+                if (stop.Attribute("stop-color")?.Value is not { } rawColor || ParseColor(rawColor) is not { } color)
+                    continue;
+
+                stops.Add(new GradientStop(color, ParseGradientOffset(stop.Attribute("offset")?.Value)));
+            }
+
+            if (stops.Count == 0)
+                return null;
+
+            var usesUserSpace = string.Equals(
+                gradient.Attribute("gradientUnits")?.Value,
+                "userSpaceOnUse",
+                StringComparison.OrdinalIgnoreCase);
+            var viewBox = ReadViewBox(root) ?? new Rect(0, 0, 1, 1);
+            var x1 = ParseDouble(gradient.Attribute("x1")?.Value) ?? 0;
+            var y1 = ParseDouble(gradient.Attribute("y1")?.Value) ?? 0;
+            var x2 = ParseDouble(gradient.Attribute("x2")?.Value) ?? 1;
+            var y2 = ParseDouble(gradient.Attribute("y2")?.Value) ?? 0;
+
+            var brush = new LinearGradientBrush
+            {
+                StartPoint = ToGradientPoint(x1, y1, viewBox, usesUserSpace),
+                EndPoint = ToGradientPoint(x2, y2, viewBox, usesUserSpace),
+            };
+            foreach (var stop in stops.OrderBy(stop => stop.Offset))
+                brush.GradientStops.Add(stop);
+            return brush;
+        }
+
+        private static RelativePoint ToGradientPoint(double x, double y, Rect viewBox, bool usesUserSpace)
+        {
+            if (!usesUserSpace)
+                return new RelativePoint(x, y, RelativeUnit.Relative);
+
+            var relativeX = viewBox.Width > 0 ? (x - viewBox.X) / viewBox.Width : 0;
+            var relativeY = viewBox.Height > 0 ? (y - viewBox.Y) / viewBox.Height : 0;
+            return new RelativePoint(relativeX, relativeY, RelativeUnit.Relative);
+        }
+
+        private static double ParseGradientOffset(string? raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+                return 0;
+
+            var value = raw.Trim();
+            if (value.EndsWith("%", StringComparison.Ordinal) &&
+                double.TryParse(value[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out var percent))
+            {
+                return Math.Clamp(percent / 100d, 0d, 1d);
+            }
+
+            return double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var offset)
+                ? Math.Clamp(offset, 0d, 1d)
+                : 0d;
         }
     }
 
