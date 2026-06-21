@@ -15,6 +15,8 @@ public sealed record SisterBackstageEntrySpec(
 {
     public Action? Print { get; init; }
 
+    public Action? SaveCopy { get; init; }
+
     public Func<UIElement>? BuildExportPane { get; init; }
 }
 
@@ -45,6 +47,9 @@ public static class SisterBackstageEntryBuilder
             BackstageEntry.Command("Save", RibbonCommandIconKind.Save, spec.Save, iconName: "save"),
             BackstageEntry.Command("Save As", RibbonCommandIconKind.Save, spec.SaveAs, iconName: "save-as"),
         };
+
+        if (spec.SaveCopy is not null)
+            entries.Add(BackstageEntry.Command("Save a Copy", RibbonCommandIconKind.Save, spec.SaveCopy, iconName: "save-copy"));
 
         if (spec.Print is not null)
             entries.Add(BackstageEntry.Command("Print", RibbonCommandIconKind.Print, spec.Print, iconName: "print"));

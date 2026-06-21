@@ -29,6 +29,7 @@ public sealed class SisterBackstageEntryBuilderTests
     {
         var entries = SisterBackstageEntryBuilder.Build(CreateSpec() with
         {
+            SaveCopy = () => { },
             Print = () => { },
             BuildExportPane = Pane
         });
@@ -40,6 +41,7 @@ public sealed class SisterBackstageEntryBuilderTests
             "|",
             "Save",
             "Save As",
+            "Save a Copy",
             "Print",
             "Export",
             "Recent",
@@ -50,6 +52,7 @@ public sealed class SisterBackstageEntryBuilderTests
         entries.Single(entry => entry.Label == "Close").DockBottom.Should().BeTrue();
         entries.Single(entry => entry.Label == "Export").ContentFactory.Should().NotBeNull();
         entries.Single(entry => entry.Label == "Print").Action.Should().NotBeNull();
+        entries.Single(entry => entry.Label == "Save a Copy").Action.Should().NotBeNull();
     }
 
     [Fact]
@@ -70,6 +73,7 @@ public sealed class SisterBackstageEntryBuilderTests
             "Close");
         entries.Should().NotContain(entry => entry.Label == "Print");
         entries.Should().NotContain(entry => entry.Label == "Export");
+        entries.Should().NotContain(entry => entry.Label == "Save a Copy");
     }
 
     [Fact]
