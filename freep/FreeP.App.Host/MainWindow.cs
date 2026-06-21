@@ -126,18 +126,8 @@ public sealed class MainWindow : Window
 
         // Compose: title bar in its own top row, the body+backstage stacked below (File screen covers the body
         // but leaves the title bar visible — Office behaviour).
-        var belowTitle = new Grid();
-        belowTitle.Children.Add(root);
-        belowTitle.Children.Add(_backstage);
-
-        var outer = new Grid();
-        outer.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        outer.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        Grid.SetRow(_titleBar, 0);
-        outer.Children.Add(_titleBar);
-        Grid.SetRow(belowTitle, 1);
-        outer.Children.Add(belowTitle);
-        Content = outer;
+        var frame = SisterAppWindowFrameBuilder.Build(new SisterAppWindowFrameSpec(_titleBar, root, _backstage));
+        Content = frame.Root;
 
         UpdateTitle();
         RefreshCanvas();

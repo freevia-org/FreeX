@@ -41,12 +41,15 @@ public sealed class SisterAppFrameHelperTests
             "MainWindow.cs"));
 
         source.Should().Contain("RibbonShellBuilder.Build(");
+        source.Should().Contain("SisterAppWindowFrameBuilder.Build(");
         source.Should().Contain("AppStoragePathPlanner.GetOptionsFilePathLabelOrFallback(");
         source.Should().NotContain("RibbonTabControlFactory.Create(");
         source.Should().NotContain("RibbonFileTabRouter.Attach(");
         source.Should().NotContain("RibbonWpfRenderer.BuildTabContent(");
         source.Should().NotContain("new FrameworkElementFactory(typeof(Border), \"FileTabBorder\")");
         source.Should().NotContain("$\"%LOCALAPPDATA%\\\\{AppProduct.Current.ProductDirectoryName}\"");
+        source.Should().NotContain("belowTitle.Children.Add(root)");
+        source.Should().NotContain("Content = outer;");
     }
 
     private static string FindRepositoryRoot()

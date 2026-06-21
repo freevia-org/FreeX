@@ -401,23 +401,13 @@ public sealed class MainWindow : Window
         // Compose the window. The title bar occupies its own top row of the OUTER grid, always above the
         // Backstage; `belowTitle` stacks the Backstage overlay over the 3-row body (ribbon + document +
         // status), so the File screen covers those but leaves the title bar visible (Word behaviour).
-        var belowTitle = new Grid();
-        belowTitle.Children.Add(root);
-        belowTitle.Children.Add(_backstage);
-
-        var outer = new Grid();
-        outer.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                  // title bar
-        outer.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // body + backstage
-        Grid.SetRow(_titleBar, 0);
-        outer.Children.Add(_titleBar);
-        Grid.SetRow(belowTitle, 1);
-        outer.Children.Add(belowTitle);
-        Content = outer;
+        var frame = SisterAppWindowFrameBuilder.Build(new SisterAppWindowFrameSpec(_titleBar, root, _backstage));
+        Content = frame.Root;
 
         // V5 KeyTips: pressing Alt overlays Word-style letter badges over the ribbon tabs, then over the
         // active tab's controls, so the ribbon is fully keyboard-navigable. The overlay walks the rendered
         // ribbon and draws its badges on the outer grid (which spans the whole client area).
-        KeyTipsOverlay.Install(this, _ribbonTabs, outer);
+        KeyTipsOverlay.Install(this, _ribbonTabs, frame.Root);
     }
 
     // Show the Word-style Backstage (File screen) over the document.
