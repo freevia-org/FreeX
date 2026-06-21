@@ -44,7 +44,7 @@ public sealed class PageLayoutCommandSourceTests
         source.Should().Contain("PageBreakSelectionPlanner.Insert(selectedRange, sheet.RowPageBreaks, sheet.ColumnPageBreaks)");
         source.Should().Contain("PageBreakSelectionPlanner.Remove(selectedRange, sheet.RowPageBreaks, sheet.ColumnPageBreaks)");
         source.Should().Contain("new SetPageBreaksCommand(sheetId, rowBreaks, columnBreaks)");
-        source.Should().Contain("PageSetupCommandBuilder.Build(sheetId, dialog)");
+        source.Should().Contain("PageSetupDialogModel.TryBuildCommandPlan(sheet, fields, sheetId).Plan!.ToComposite()");
         source.Should().Contain("NativePrintDialogService.ShowPrinterOptionsDialog(this)");
         source.Should().Contain("new SetPrintOptionsCommand(_currentSheetId, isChecked, sheet?.PrintHeadings ?? false)");
         source.Should().Contain("new SetPrintOptionsCommand(_currentSheetId, sheet?.PrintGridlines ?? false, isChecked)");
