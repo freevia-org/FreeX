@@ -40,8 +40,11 @@ public sealed class SisterAppFrameHelperTests
             projectFolder,
             "MainWindow.cs"));
 
-        source.Should().Contain("RibbonFileTabStyle.Build(");
+        source.Should().Contain("RibbonShellBuilder.Build(");
         source.Should().Contain("AppStoragePathPlanner.GetOptionsFilePathLabelOrFallback(");
+        source.Should().NotContain("RibbonTabControlFactory.Create(");
+        source.Should().NotContain("RibbonFileTabRouter.Attach(");
+        source.Should().NotContain("RibbonWpfRenderer.BuildTabContent(");
         source.Should().NotContain("new FrameworkElementFactory(typeof(Border), \"FileTabBorder\")");
         source.Should().NotContain("$\"%LOCALAPPDATA%\\\\{AppProduct.Current.ProductDirectoryName}\"");
     }

@@ -1770,37 +1770,36 @@ public sealed class MainWindow : Window
         // Flat Word/FreeX ribbon tabs come from the shared library so any app on the shared ribbon gets
         // the look automatically (no border, transparent headers, hover wash, selected tab filled white
         // with a colored accent underline). See RibbonTabControlFactory.
-        var tabs = RibbonTabControlFactory.Create();
+        var result = RibbonShellBuilder.Build(new RibbonShellBuildSpec(
+            definition,
+            registry,
+            stateStore,
+            FileTabHeader: "File",
+            FileTabAccent: Color.FromRgb(0x0F, 0x6D, 0x8C),
+            FileTabHover: Color.FromRgb(0x0B, 0x55, 0x6E),
+            ShowBackstage)
+        {
+            EnableContextualTabs = true,
+            ResourceDictionaries =
+            [
+                new ResourceDictionary
+                {
+                    Source = new Uri("/FreeW.App.Host;component/Ribbon/FreeWRibbonResources.xaml", UriKind.Relative)
+                }
+            ],
+            CustomizeTabContent = (tab, content) =>
+            {
 
         // The renderer resolves its button/group styles and surface brushes via TryFindResource on the
         // supplied resource host. Merge FreeW's ribbon styles into the TabControl so those lookups
         // resolve (the renderer falls back gracefully for any key it can't find).
-        tabs.Resources.MergedDictionaries.Add(new ResourceDictionary
-        {
-            Source = new Uri("/FreeW.App.Host;component/Ribbon/FreeWRibbonResources.xaml", UriKind.Relative)
-        });
-
         // ── File tab (Word-style): the FIRST ribbon tab, rendered as an accent-coloured pill. Selecting it
         //    opens the Backstage overlay rather than swapping the ribbon body to an empty tab. Like FreeX,
         //    the File tab never *stays* selected: the SelectionChanged handler shows the Backstage and
         //    immediately reverts the selection to the previously-active content tab (index 1 = Home).
-        _fileTab = new TabItem
-        {
-            Header = "File",
-            Style = BuildFileTabStyle(),
-            Content = null // never shown — selecting it routes to the Backstage instead
-        };
-        tabs.Items.Add(_fileTab);
-
         // Contextual "Tools" tabs (Picture Format / Table Design) are declared in the ribbon model and
         // managed by the shared controller — hidden until their selection context is active. Default revert
         // tab is Home (index 1; index 0 is the File pill).
-        _contextualTabs = new RibbonContextualTabController(tabs, defaultTabIndex: 1);
-
-        foreach (var tab in definition.Tabs)
-        {
-            var content = RibbonWpfRenderer.BuildTabContent(tab, tabs, registry, stateStore);
-
             // V5 galleries: inject the live-preview Word-style galleries into the rendered group content.
             // The shared renderer stamps each group's grid with its catalog id (RibbonMetadata.CatalogId),
             // so we find the target group and prepend a custom gallery control into its content lane. This
@@ -1815,45 +1814,20 @@ public sealed class MainWindow : Window
                 InjectGallery(content, "themes", ThemeGallery.BuildThemes(_editor), removeKind: RemoveKind.All,
                     extra: ThemeGallery.BuildColours(_editor));
 
-            var item = new TabItem { Header = tab.Header, Content = content };
-            tabs.Items.Add(item);
-
-            // Contextual tabs render like any other tab but the controller owns their visibility.
-            if (tab.Context is { } context)
-                _contextualTabs.Register(item, context.ActivationKey, context.Color);
-        }
+            }
+        });
 
         // Start on Home (index 1; index 0 is the File tab). Remember it as the last "real" tab so File
         // selection can revert to it.
-        if (tabs.Items.Count > 1)
-            tabs.SelectedIndex = 1;
-        _fileTabRouter = RibbonFileTabRouter.Attach(tabs, _fileTab, ShowBackstage, tabs.SelectedIndex);
-
-        var border = new Border
-        {
-            Background = Brushes.White,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xD0, 0xD0, 0xD0)),
-            BorderThickness = new Thickness(0, 0, 0, 1),
-            Child = tabs
-        };
-        return (border, tabs);
+        _fileTab = result.FileTab;
+        _fileTabRouter = result.FileTabRouter;
+        _contextualTabs = result.ContextualTabs!;
+        return (result.Root, result.Tabs);
     }
 
     // The accent-coloured File tab style (Word's blue File button look): a solid accent fill with white
     // text, a darker hover/press, comfortable padding. Distinct from the flat content-tab headers so it
     // reads as the Backstage entry point. Authored in code to keep parity with the code-only shell.
-    private static Style BuildFileTabStyle()
-        // FreeX accent (#0F6D8C teal) with a darker hover, so the File pill reads as the accent-coloured
-        // Backstage entry against the deep-navy title bar.
-        => RibbonFileTabStyle.Build(Color.FromRgb(0x0F, 0x6D, 0x8C), Color.FromRgb(0x0B, 0x55, 0x6E));
-
-    private static Brush Freeze(Color color)
-    {
-        var brush = new SolidColorBrush(color);
-        brush.Freeze();
-        return brush;
-    }
-
     // What of a group's original rendered controls to drop before injecting a gallery.
     private enum RemoveKind { None, Combos, All }
 

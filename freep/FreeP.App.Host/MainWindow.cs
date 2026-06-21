@@ -281,38 +281,19 @@ public sealed class MainWindow : Window
     {
         FreePRibbonIcons.Install();
 
-        var tabs = RibbonTabControlFactory.Create();
+        var result = RibbonShellBuilder.Build(new RibbonShellBuildSpec(
+            definition,
+            registry,
+            stateStore,
+            FileTabHeader: "File",
+            FileTabAccent: Color.FromRgb(0xB7, 0x47, 0x2A),
+            FileTabHover: Color.FromRgb(0x8F, 0x37, 0x21),
+            ShowBackstage));
 
-        // File tab (the FIRST tab): an accent pill that opens the Backstage rather than swapping the body.
-        _fileTab = new TabItem
-        {
-            Header = "File",
-            Style = BuildFileTabStyle(),
-            Content = null
-        };
-        tabs.Items.Add(_fileTab);
-
-        foreach (var tab in definition.Tabs)
-        {
-            var content = RibbonWpfRenderer.BuildTabContent(tab, tabs, registry, stateStore);
-            tabs.Items.Add(new TabItem { Header = tab.Header, Content = content });
-        }
-
-        if (tabs.Items.Count > 1)
-            tabs.SelectedIndex = 1;
-
-        _ribbonTabs = tabs;
-        _fileTabRouter = RibbonFileTabRouter.Attach(tabs, _fileTab, ShowBackstage, tabs.SelectedIndex);
-
-        return new Border
-        {
-            Background = Brushes.White,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xD0, 0xD0, 0xD0)),
-            BorderThickness = new Thickness(0, 0, 0, 1),
-            Child = tabs
-        };
+        _ribbonTabs = result.Tabs;
+        _fileTab = result.FileTab;
+        _fileTabRouter = result.FileTabRouter;
+        return result.Root;
     }
 
-    private static Style BuildFileTabStyle()
-        => RibbonFileTabStyle.Build(Color.FromRgb(0xB7, 0x47, 0x2A), Color.FromRgb(0x8F, 0x37, 0x21));
 }
