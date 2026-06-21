@@ -412,12 +412,14 @@ internal static class FreeWRibbon
                 {
                     g.MediumToggle("freew.read-aloud", "Read Aloud", RibbonCommandIconKind.ReadAloud);
                 });
-                // Single-command group → Large.
                 tab.Group("comments", "Comments", "C", 95, g =>
                 {
-                    // New Comment is the hero; Reply / Resolve act on the comment thread covering the caret
-                    // (modern threaded comments) and read as labelled Medium rows beside it.
-                    g.Large("freew.new-comment", "New Comment", RibbonCommandIconKind.Comment);
+                    // Thread actions mirror Word's Review > Comments group and stay labelled at narrow widths.
+                    g.Medium("freew.new-comment", "New Comment", RibbonCommandIconKind.Comment);
+                    g.Medium("freew.delete-comment", "Delete", RibbonCommandIconKind.Delete);
+                    g.Medium("freew.previous-comment", "Previous", RibbonCommandIconKind.Previous);
+                    g.Medium("freew.next-comment", "Next", RibbonCommandIconKind.Next);
+                    g.RowBreak();
                     g.Medium("freew.reply-comment", "Reply", RibbonCommandIconKind.Comment);
                     g.Medium("freew.resolve-comment", "Resolve", RibbonCommandIconKind.AcceptChange);
                 });

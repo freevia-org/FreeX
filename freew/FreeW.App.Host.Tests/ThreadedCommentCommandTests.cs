@@ -29,6 +29,32 @@ public sealed class ThreadedCommentCommandTests
         return view;
     }
 
+    private static DocumentView ViewWithTwoComments()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+
+        var first = new Paragraph();
+        first.Runs.Add(new Run("First reviewed text") { CommentId = 0 });
+        first.Runs.Add(Run.CommentReference(0));
+        doc.Blocks.Add(first);
+
+        doc.Blocks.Add(new Paragraph("Plain text"));
+
+        var second = new Paragraph();
+        second.Runs.Add(new Run("Second reviewed text") { CommentId = 2 });
+        second.Runs.Add(Run.CommentReference(2));
+        doc.Blocks.Add(second);
+
+        doc.Comments[0] = new Comment(0, "First note", "Alice", "A");
+        doc.Comments[2] = new Comment(2, "Second note", "Casey", "C");
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+        view.CaretPosition = view.Document.Blocks.FirstBlock!.ContentStart;
+        return view;
+    }
+
     [StaFact]
     public void ReplyToCommentAtCaret_AppendsAReply()
     {
@@ -73,5 +99,53 @@ public sealed class ThreadedCommentCommandTests
 
         view.ReplyToCommentAtCaret("nope", "Bob", "B").Should().BeFalse();
         view.ToggleResolveCommentAtCaret().Should().BeNull();
+    }
+
+    [StaFact]
+    public void DeleteCommentAtCaret_RemovesThreadRangeAndReference()
+    {
+        var view = ViewWithOneComment();
+        view.Model.Comments[0].AddReply(1, "Follow-up", "Bob", "B");
+
+        view.DeleteCommentAtCaret().Should().BeTrue();
+
+        view.Model.Comments.Should().NotContainKey(0);
+        var paragraph = (Paragraph)view.Model.Blocks[0];
+        paragraph.Runs.Should().ContainSingle();
+        paragraph.Runs[0].Text.Should().Be("Reviewed text");
+        paragraph.Runs[0].CommentId.Should().BeNull();
+        paragraph.Runs[0].IsCommentReference.Should().BeFalse();
+    }
+
+    [StaFact]
+    public void CommentNavigation_MovesBetweenThreadsInDocumentOrder()
+    {
+        var view = ViewWithTwoComments();
+
+        view.MoveToNextComment().Should().BeTrue();
+        view.ToggleResolveCommentAtCaret().Should().BeTrue();
+        view.Model.Comments[2].Resolved.Should().BeTrue();
+        view.Model.Comments[0].Resolved.Should().BeFalse();
+
+        view.BringBlockIntoView(2);
+        view.MoveToPreviousComment().Should().BeTrue();
+        view.ToggleResolveCommentAtCaret().Should().BeTrue();
+        view.Model.Comments[0].Resolved.Should().BeTrue();
+    }
+
+    [StaFact]
+    public void CommentNavigation_WrapsAndNoOpsWithoutComments()
+    {
+        var view = ViewWithTwoComments();
+
+        view.MoveToPreviousComment().Should().BeTrue();
+        view.DeleteCommentAtCaret().Should().BeTrue();
+        view.Model.Comments.Should().NotContainKey(2);
+
+        var plain = new DocumentView();
+        plain.LoadModel(TextDocument.CreateEmpty());
+        plain.MoveToNextComment().Should().BeFalse();
+        plain.MoveToPreviousComment().Should().BeFalse();
+        plain.DeleteCommentAtCaret().Should().BeFalse();
     }
 }

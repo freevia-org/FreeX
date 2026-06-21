@@ -107,6 +107,28 @@ public sealed class FreeWRibbonParityTests
         registry.TryGet("freew.select", out _).Should().BeTrue();
     }
 
+    [StaFact]
+    public void ReviewComments_ExposesAndRegistersWordStyleThreadActions()
+    {
+        var definition = FreeWRibbon.Build();
+        var comments = definition.FindTab("review")!.FindGroup("comments");
+        var editor = new DocumentView();
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        CommandIds(comments!)
+            .Should()
+            .Equal(
+                "freew.new-comment",
+                "freew.delete-comment",
+                "freew.previous-comment",
+                "freew.next-comment",
+                "freew.reply-comment",
+                "freew.resolve-comment");
+
+        foreach (var commandId in CommandIds(comments!))
+            registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must execute from the Review comments group");
+    }
+
     private static IEnumerable<string> CommandIds(RibbonTab tab)
     {
         foreach (var control in tab.Groups.SelectMany(group => group.Controls))

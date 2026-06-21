@@ -385,6 +385,9 @@ internal static class FreeWRibbonCommands
         // comments). Reply prompts for text and appends a child comment; Resolve toggles the thread's done flag.
         registry.Register("freew.reply-comment", new ReplyCommentCommand(editor));
         registry.Register("freew.resolve-comment", new ResolveCommentCommand(editor));
+        registry.Register("freew.delete-comment", new DeleteCommentCommand(editor));
+        registry.Register("freew.previous-comment", new NavigateCommentCommand(editor, previous: true));
+        registry.Register("freew.next-comment", new NavigateCommentCommand(editor, previous: false));
 
         // Review tab — Proofing: open the read-only Word Count / Statistics dialog. Commits pending
         // edits first so the counts reflect the current text, then computes from the model.
@@ -2111,6 +2114,31 @@ internal static class FreeWRibbonCommands
             if (editor.ToggleResolveCommentAtCaret() is null)
                 DialogMessageHelper.ShowWarning(Window.GetWindow(editor)!,
                     "Place the cursor inside a comment, then choose Resolve.", "Resolve");
+        }
+    }
+
+    // Review > Comments > Delete: remove the comment thread covering the caret and clear its body marks.
+    private sealed class DeleteCommentCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            if (!editor.DeleteCommentAtCaret())
+                DialogMessageHelper.ShowWarning(Window.GetWindow(editor)!,
+                    "Place the cursor inside a comment, then choose Delete.", "Delete Comment");
+        }
+    }
+
+    // Review > Comments > Previous / Next: step through comment threads in document order, wrapping like Word.
+    private sealed class NavigateCommentCommand(DocumentView editor, bool previous) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var moved = previous ? editor.MoveToPreviousComment() : editor.MoveToNextComment();
+            if (!moved)
+                DialogMessageHelper.ShowWarning(Window.GetWindow(editor)!,
+                    "This document does not contain any comments.", previous ? "Previous Comment" : "Next Comment");
         }
     }
 

@@ -5722,6 +5722,47 @@ public sealed class DocumentView : RichTextBox
         return commentId;
     }
 
+    private sealed record CommentNavigationTarget(int CommentId, int BlockIndex);
+
+    private IEnumerable<CommentNavigationTarget> CommentNavigationTargets()
+    {
+        CommitToModel();
+
+        var seen = new HashSet<int>();
+        for (var blockIndex = 0; blockIndex < _model.Blocks.Count; blockIndex++)
+        {
+            foreach (var paragraph in ParagraphsInBlock(_model.Blocks[blockIndex]))
+            {
+                foreach (var run in paragraph.Runs)
+                {
+                    if (run.CommentId is not { } commentId)
+                        continue;
+
+                    var topLevelId = TopLevelCommentId(commentId);
+                    if (_model.Comments.ContainsKey(topLevelId) && seen.Add(topLevelId))
+                        yield return new CommentNavigationTarget(topLevelId, blockIndex);
+                }
+            }
+        }
+    }
+
+    private static IEnumerable<ModelParagraph> ParagraphsInBlock(ModelBlock block)
+    {
+        if (block is ModelParagraph topLevelParagraph)
+        {
+            yield return topLevelParagraph;
+            yield break;
+        }
+
+        if (block is not ModelTable table)
+            yield break;
+
+        foreach (var row in table.Rows)
+            foreach (var cell in row.Cells)
+                foreach (var cellParagraph in cell.Paragraphs)
+                    yield return cellParagraph;
+    }
+
     /// <summary>
     /// Adds <paramref name="text"/> as a reply (by <paramref name="author"/>/<paramref name="initials"/>) to
     /// the comment thread covering the caret/selection, then re-renders so the thread tooltip updates. No-op
@@ -5754,6 +5795,63 @@ public sealed class DocumentView : RichTextBox
         comment.Resolved = !comment.Resolved;
         Render();
         return comment.Resolved;
+    }
+
+    /// <summary>
+    /// Deletes the comment thread covering the caret/selection, removing both the stored thread and body
+    /// range/reference marks. No-op when the caret is not inside a comment.
+    /// </summary>
+    public bool DeleteCommentAtCaret()
+    {
+        Focus();
+        if (CommentIdAtCaret() is not { } id || !_model.Comments.Remove(id))
+            return false;
+
+        foreach (var block in _model.Blocks)
+        {
+            foreach (var paragraph in ParagraphsInBlock(block))
+            {
+                for (var i = paragraph.Runs.Count - 1; i >= 0; i--)
+                {
+                    var run = paragraph.Runs[i];
+                    if (run.CommentId is not { } commentId || TopLevelCommentId(commentId) != id)
+                        continue;
+
+                    if (run.IsCommentReference)
+                        paragraph.Runs.RemoveAt(i);
+                    else
+                        run.CommentId = null;
+                }
+            }
+        }
+
+        Render();
+        return true;
+    }
+
+    /// <summary>Moves the caret to the next comment thread in document order, wrapping at the end.</summary>
+    public bool MoveToNextComment() => MoveToAdjacentComment(direction: 1);
+
+    /// <summary>Moves the caret to the previous comment thread in document order, wrapping at the start.</summary>
+    public bool MoveToPreviousComment() => MoveToAdjacentComment(direction: -1);
+
+    private bool MoveToAdjacentComment(int direction)
+    {
+        Focus();
+        var currentId = CommentIdAtCaret();
+        var targets = CommentNavigationTargets().ToArray();
+        if (targets.Length == 0)
+            return false;
+
+        var currentIndex = currentId is { } id
+            ? Array.FindIndex(targets, target => target.CommentId == id)
+            : -1;
+        var targetIndex = currentIndex < 0
+            ? (direction > 0 ? 0 : targets.Length - 1)
+            : (currentIndex + direction + targets.Length) % targets.Length;
+
+        BringBlockIntoView(targets[targetIndex].BlockIndex);
+        return true;
     }
 
     /// <summary>
