@@ -28,10 +28,12 @@ namespace Free.Shared.Ribbon.Avalonia;
 public static class AvaloniaRibbonRenderer
 {
     private const string FileRibbonTabId = "FileTab";
-    private const string MenuChevron = "\u25BE";
     private const string SelectedTabUnderlineTag = "FreeX.SelectedTabUnderline";
     private const double SmallRowHeight = 26;
     private const double TabHeaderHeight = 28;
+    private const double RibbonCheckBoxHeight = 18;
+    private const double RibbonCheckGlyphSize = 11;
+    private const double MenuChevronSize = 9;
     private const double LargeIconSize = 32;
     private const double MediumIconSize = 22;
     private const double SmallIconSize = 22;
@@ -94,6 +96,60 @@ public static class AvaloniaRibbonRenderer
         border.Bind(Border.BorderThicknessProperty, new Binding(nameof(TemplatedControl.BorderThickness)) { Source = button });
         border.Bind(Border.PaddingProperty, new Binding(nameof(TemplatedControl.Padding)) { Source = button });
         return border;
+    });
+    private static readonly FuncControlTemplate<CheckBox> RibbonCheckBoxTemplate = new((checkBox, _) =>
+    {
+        var checkMark = new global::Avalonia.Controls.Shapes.Path
+        {
+            Data = Geometry.Parse("M2,5.5 L4.4,8 L9,2.7"),
+            Stroke = AccentBrush,
+            StrokeThickness = 1.5,
+            StrokeLineCap = PenLineCap.Round,
+            StrokeJoin = PenLineJoin.Round,
+            Fill = Brushes.Transparent,
+            IsVisible = checkBox.IsChecked == true,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        checkBox.PropertyChanged += (_, args) =>
+        {
+            if (args.Property == ToggleButton.IsCheckedProperty)
+                checkMark.IsVisible = checkBox.IsChecked == true;
+        };
+
+        var indicator = new Border
+        {
+            Width = RibbonCheckGlyphSize,
+            Height = RibbonCheckGlyphSize,
+            Background = Brushes.White,
+            BorderBrush = HoverBorderBrush,
+            BorderThickness = new Thickness(1),
+            Margin = new Thickness(0, 0, 4, 0),
+            Child = checkMark,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        var presenter = new ContentPresenter
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        presenter.Bind(ContentPresenter.ContentProperty, new Binding(nameof(ContentControl.Content)) { Source = checkBox });
+        presenter.Bind(ContentPresenter.ContentTemplateProperty, new Binding(nameof(ContentControl.ContentTemplate)) { Source = checkBox });
+
+        return new Border
+        {
+            Padding = new Thickness(0),
+            Child = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                VerticalAlignment = VerticalAlignment.Center,
+                Children =
+                {
+                    indicator,
+                    presenter,
+                },
+            },
+        };
     });
     private static readonly FuncControlTemplate<TabItem> RibbonTabItemTemplate = new((tabItem, _) =>
     {
@@ -574,11 +630,13 @@ public static class AvaloniaRibbonRenderer
         {
             Setters =
             {
-                new Setter(Layoutable.MinHeightProperty, 22d),
-                new Setter(Layoutable.HeightProperty, 22d),
+                new Setter(Layoutable.MinHeightProperty, RibbonCheckBoxHeight),
+                new Setter(Layoutable.HeightProperty, RibbonCheckBoxHeight),
+                new Setter(Layoutable.MaxHeightProperty, RibbonCheckBoxHeight),
                 new Setter(TemplatedControl.FontSizeProperty, 12d),
                 new Setter(TemplatedControl.FontFamilyProperty, RibbonFontFamily),
                 new Setter(TemplatedControl.PaddingProperty, new Thickness(0)),
+                new Setter(TemplatedControl.TemplateProperty, RibbonCheckBoxTemplate),
             },
         };
 
@@ -799,7 +857,10 @@ public static class AvaloniaRibbonRenderer
             Content = check.Label,
             FontSize = 12,
             FontFamily = RibbonFontFamily,
-            Height = 22,
+            Height = RibbonCheckBoxHeight,
+            MinHeight = RibbonCheckBoxHeight,
+            MaxHeight = RibbonCheckBoxHeight,
+            Template = RibbonCheckBoxTemplate,
             VerticalContentAlignment = VerticalAlignment.Center,
             Margin = new Thickness(2, 1, 2, 1),
             Tag = check.CommandId.Value,
@@ -840,15 +901,7 @@ public static class AvaloniaRibbonRenderer
         // WireControl, so the primary click opens the menu as before; only the visual changes.
         if (HasMenu(control))
         {
-            stack.Children.Add(new TextBlock
-            {
-                Text = MenuChevron,
-                FontSize = 12,
-                FontFamily = RibbonFontFamily,
-                TextAlignment = TextAlignment.Center,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(0, 1, 0, 0),
-            });
+            stack.Children.Add(Chevron(new Thickness(0, 1, 0, 0)));
         }
 
         // WPF RibbonLargeButton: compact hero column, Padding 3,2.
@@ -966,14 +1019,15 @@ public static class AvaloniaRibbonRenderer
         return icon;
     }
 
-    private static TextBlock Chevron() => new()
+    private static Control Chevron() => Chevron(new Thickness(1, 0, 1, 0));
+
+    private static Control Chevron(Thickness margin)
     {
-        Text = MenuChevron,
-        FontSize = 11,
-        FontFamily = RibbonFontFamily,
-        VerticalAlignment = VerticalAlignment.Center,
-        Margin = new Thickness(1, 0, 1, 0),
-    };
+        var chevron = AvaloniaRibbonIcons.Build(RibbonCommandIconKind.ChevronDown, MenuChevronSize);
+        chevron.VerticalAlignment = VerticalAlignment.Center;
+        chevron.Margin = margin;
+        return chevron;
+    }
 
     private static ContentControl NewButtonLike(RibbonControl control)
     {

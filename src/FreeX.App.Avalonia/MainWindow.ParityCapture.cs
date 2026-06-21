@@ -835,16 +835,16 @@ public sealed partial class MainWindow
         });
         Canvas.SetLeft(canvas.Children[^1], 8);
         Canvas.SetTop(canvas.Children[^1], 9);
-        foreach (var (left, isMiddle) in new[] { (8d, false), (60d, true), (111d, false) })
+        foreach (var left in new[] { 8d, 60d, 111d })
         {
             canvas.Children.Add(new Border
             {
-                Width = isMiddle ? 2 : 1,
-                Height = isMiddle ? 8 : 4,
-                Background = isMiddle ? Brush(92, 102, 112) : Brush(232, 236, 240),
+                Width = 1,
+                Height = 4,
+                Background = Brush(232, 236, 240),
             });
             Canvas.SetLeft(canvas.Children[^1], left);
-            Canvas.SetTop(canvas.Children[^1], isMiddle ? 14 : 16);
+            Canvas.SetTop(canvas.Children[^1], 16);
         }
         canvas.Children.Add(new Border
         {
