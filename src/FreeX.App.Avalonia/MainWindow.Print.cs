@@ -425,19 +425,7 @@ public sealed partial class MainWindow
                 return;
             }
 
-            var pdfFileType = new FilePickerFileType("PDF Document")
-            {
-                Patterns = ["*.pdf"],
-            };
-            var storageFile = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
-            {
-                Title = UiText.Get("Print_SaveAsPdfButton"),
-                SuggestedFileName = BuildSuggestedPdfExportFileName(),
-                DefaultExtension = "pdf",
-                FileTypeChoices = [pdfFileType],
-                SuggestedFileType = pdfFileType,
-                ShowOverwritePrompt = true,
-            });
+            var storageFile = await ShowPortablePdfSavePickerAsync(UiText.Get("Print_SaveAsPdfButton"));
 
             if (storageFile is null)
                 return;

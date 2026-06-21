@@ -4,6 +4,7 @@ using System.IO;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Documents;
+using FreeX.App.Services;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -87,18 +88,21 @@ public partial class MainWindow
 
     private async void ExportPdfButton_Click(object sender, RoutedEventArgs e)
     {
+        var savePlan = ExportFilePickerPlanner.BuildPdfXpsDialogPlan(_workbook.Name, "FreeX");
         var saveDlg = new Microsoft.Win32.SaveFileDialog
         {
             Title      = UiText.Get("MainWindowDialog_ExportPdfXpsTitle"),
             Filter     = UiText.Get("MainWindowDialog_ExportPdfXpsFilter"),
-            DefaultExt = ".pdf",
-            FileName   = _workbook.Name,
+            DefaultExt = savePlan.DefaultExtensionWithDot,
+            FileName   = savePlan.SuggestedFileName,
+            FilterIndex = savePlan.DefaultFilterIndex,
             AddExtension = true,
             OverwritePrompt = true
         };
         if (saveDlg.ShowDialog() != true) return;
 
-        var selectedFormat = saveDlg.FilterIndex == 2
+        var selectedExportFileFormat = ExportFilePickerPlanner.FormatFromPdfXpsFilterIndex(saveDlg.FilterIndex);
+        var selectedFormat = selectedExportFileFormat == ExportFileFormat.Xps
             ? ExportFormat.Xps
             : ExportFormat.Pdf;
         var optionsDialog = new ExportOptionsDialog(SheetGrid.SelectedRange is not null, _options.PdfExportLanguage, selectedFormat) { Owner = this };

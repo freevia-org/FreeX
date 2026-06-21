@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
+using System.Windows.Shapes;
 using FluentAssertions;
 using Free.Shared.Ribbon;
 
@@ -162,6 +163,31 @@ public class RibbonWpfRendererTests
         RibbonDefinitionValidator.Validate(definition).HasErrors.Should().BeFalse();
         definition.FindTab("HomeTab")!.Groups.Select(g => g.Header).Should().Equal(
             "Clipboard", "Font", "Alignment", "Number", "Styles", "Cells", "Editing");
+    }
+
+    [Fact]
+    public void RenderedHomeTab_IncludesVisibleSectionDividers()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var host = BuildHost();
+            var tab = HomeRibbonDefinition.Build().FindTab("HomeTab")!;
+            host.Child = RibbonWpfRenderer.BuildTabContent(tab, host);
+            host.Measure(new Size(1880, 130));
+            host.Arrange(new Rect(0, 0, 1880, 130));
+            host.UpdateLayout();
+
+            var dividers = Descendants(host)
+                .OfType<Rectangle>()
+                .Where(rect => rect.Width == 1 && rect.Margin == new Thickness(2, 5, 3, 18))
+                .ToList();
+
+            dividers.Should().HaveCountGreaterThan(0);
+            dividers.Should().OnlyContain(rect =>
+                rect.Fill != null &&
+                rect.VerticalAlignment == VerticalAlignment.Stretch &&
+                rect.Visibility == Visibility.Visible);
+        });
     }
 
     [Fact]

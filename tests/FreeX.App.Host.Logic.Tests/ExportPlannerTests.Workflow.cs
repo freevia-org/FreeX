@@ -11,7 +11,8 @@ public partial class ExportPlannerTests
         var optionsSource = DialogSourceTestSupport.ReadHostSources("FreeXOptions.cs");
 
         optionsSource.Should().Contain("public string PdfExportLanguage { get; set; } = ExportPlanner.DefaultPdfLanguage;");
-        printExport.Should().Contain("saveDlg.FilterIndex == 2");
+        printExport.Should().Contain("ExportFilePickerPlanner.FormatFromPdfXpsFilterIndex(saveDlg.FilterIndex)");
+        printExport.Should().Contain("selectedExportFileFormat == ExportFileFormat.Xps");
         printExport.Should().Contain("new ExportOptionsDialog(SheetGrid.SelectedRange is not null, _options.PdfExportLanguage, selectedFormat)");
         printExport.Should().Contain("if (selectedFormat == ExportFormat.Pdf)");
         printExport.Should().Contain("_options.PdfExportLanguage = optionsDialog.Result.PdfLanguage;");

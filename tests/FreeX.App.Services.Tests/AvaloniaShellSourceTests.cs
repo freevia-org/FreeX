@@ -246,10 +246,15 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("fileMenu.Items.Add(_exportPdfMenuItem);");
         source.Should().Contain("_exportPdfMenuItem.IsEnabled = isIdle && StorageProvider.CanSave;");
         source.Should().Contain("private async Task ExportActiveSheetPdfAsync()");
-        source.Should().Contain("new FilePickerFileType(\"PDF Document\")");
-        source.Should().Contain("Patterns = [\"*.pdf\"]");
-        source.Should().Contain("Title = \"Export to PDF\"");
-        source.Should().Contain("DefaultExtension = \"pdf\"");
+        source.Should().Contain("var storageFile = await ShowPortablePdfSavePickerAsync(\"Export to PDF\");");
+        source.Should().Contain("private async Task<IStorageFile?> ShowPortablePdfSavePickerAsync(string title)");
+        source.Should().Contain("ExportFilePickerPlanner.BuildPortablePdfPickerPlan(_session.DisplayName, ApplicationTitle)");
+        source.Should().Contain("var fileTypes = CreateFilePickerFileTypes(pickerPlan.FileTypes);");
+        source.Should().Contain("Title = title");
+        source.Should().Contain("SuggestedFileName = pickerPlan.SuggestedFileName");
+        source.Should().Contain("DefaultExtension = pickerPlan.DefaultExtensionWithoutDot");
+        source.Should().Contain("FileTypeChoices = fileTypes");
+        source.Should().Contain("SuggestedFileType = fileTypes[0]");
         source.Should().Contain("ShowOverwritePrompt = true");
         source.Should().Contain("storageFile.TryGetLocalPath()");
         source.Should().Contain("var exportPathPlan = ExportPathPlanner.Plan(requestedPath, ExportFileFormat.Pdf);");
@@ -316,6 +321,7 @@ public sealed class AvaloniaShellSourceTests
         printSource.Should().Contain("ExportPathPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, exportPathPlan, File.Exists)");
         printSource.Should().Contain("!await ConfirmNormalizedPdfOverwriteAsync(exportPathPlan.Path)");
         printSource.Should().Contain("UiText.Get(\"Print_SaveCanceled\")");
+        printSource.Should().Contain("ShowPortablePdfSavePickerAsync(UiText.Get(\"Print_SaveAsPdfButton\"))");
 
         cupsSource.Should().Contain("private static readonly TimeSpan CommandTimeout");
         cupsSource.Should().Contain("timeout.CancelAfter(CommandTimeout)");
@@ -358,7 +364,7 @@ public sealed class AvaloniaShellSourceTests
             "EndFileOperation();");
         activeSheetExportBlock.Should().Contain("if (!TryBeginFileOperation())");
         activeSheetExportBlock.IndexOf("if (!TryBeginFileOperation())", StringComparison.Ordinal)
-            .Should().BeLessThan(activeSheetExportBlock.IndexOf("StorageProvider.SaveFilePickerAsync", StringComparison.Ordinal));
+            .Should().BeLessThan(activeSheetExportBlock.IndexOf("ShowPortablePdfSavePickerAsync", StringComparison.Ordinal));
 
         var workbookExportBlock = ExtractSourceBlock(
             source,
@@ -366,7 +372,7 @@ public sealed class AvaloniaShellSourceTests
             "EndFileOperation();");
         workbookExportBlock.Should().Contain("if (!TryBeginFileOperation())");
         workbookExportBlock.IndexOf("if (!TryBeginFileOperation())", StringComparison.Ordinal)
-            .Should().BeLessThan(workbookExportBlock.IndexOf("StorageProvider.SaveFilePickerAsync", StringComparison.Ordinal));
+            .Should().BeLessThan(workbookExportBlock.IndexOf("ShowPortablePdfSavePickerAsync", StringComparison.Ordinal));
 
         var printSaveBlock = ExtractSourceBlock(
             printSource,
@@ -374,7 +380,7 @@ public sealed class AvaloniaShellSourceTests
             "EndFileOperation();");
         printSaveBlock.Should().Contain("if (!TryBeginFileOperation())");
         printSaveBlock.IndexOf("if (!TryBeginFileOperation())", StringComparison.Ordinal)
-            .Should().BeLessThan(printSaveBlock.IndexOf("StorageProvider.SaveFilePickerAsync", StringComparison.Ordinal));
+            .Should().BeLessThan(printSaveBlock.IndexOf("ShowPortablePdfSavePickerAsync", StringComparison.Ordinal));
     }
 
     [Fact]

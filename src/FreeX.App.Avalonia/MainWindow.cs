@@ -1190,6 +1190,7 @@ public sealed partial class MainWindow : Window
                     ["view.headings"] = () => new RibbonCommandState(IsChecked: _session.IsShowingHeadings),
                     ["Ruler"] = () => new RibbonCommandState(IsChecked: _session.IsShowingRulers),
                     ["view.formulaBar"] = () => new RibbonCommandState(IsChecked: !_isFormulaBarHidden),
+                    ["pictureFormat.crop"] = () => new RibbonCommandState(IsEnabled: HasSelectedPictureForRibbonCommand()),
                 },
             };
 
@@ -16748,19 +16749,7 @@ public sealed partial class MainWindow : Window
                 return;
             }
 
-            var pdfFileType = new FilePickerFileType("PDF Document")
-            {
-                Patterns = ["*.pdf"],
-            };
-            var storageFile = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
-            {
-                Title = "Export to PDF",
-                SuggestedFileName = BuildSuggestedPdfExportFileName(),
-                DefaultExtension = "pdf",
-                FileTypeChoices = [pdfFileType],
-                SuggestedFileType = pdfFileType,
-                ShowOverwritePrompt = true,
-            });
+            var storageFile = await ShowPortablePdfSavePickerAsync("Export to PDF");
 
             if (storageFile is null)
                 return;
@@ -17067,19 +17056,7 @@ public sealed partial class MainWindow : Window
                 return;
             }
 
-            var pdfFileType = new FilePickerFileType("PDF Document")
-            {
-                Patterns = ["*.pdf"],
-            };
-            var storageFile = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
-            {
-                Title = "Export to PDF",
-                SuggestedFileName = BuildSuggestedPdfExportFileName(),
-                DefaultExtension = "pdf",
-                FileTypeChoices = [pdfFileType],
-                SuggestedFileType = pdfFileType,
-                ShowOverwritePrompt = true,
-            });
+            var storageFile = await ShowPortablePdfSavePickerAsync("Export to PDF");
 
             if (storageFile is null)
                 return;
@@ -17164,13 +17141,19 @@ public sealed partial class MainWindow : Window
         return _session.Workbook.ActiveSheetIndex ?? 0;
     }
 
-    private string BuildSuggestedPdfExportFileName()
+    private async Task<IStorageFile?> ShowPortablePdfSavePickerAsync(string title)
     {
-        var workbookName = Path.GetFileNameWithoutExtension(_session.DisplayName);
-        if (string.IsNullOrWhiteSpace(workbookName))
-            workbookName = "FreeX";
-
-        return workbookName + ".pdf";
+        var pickerPlan = ExportFilePickerPlanner.BuildPortablePdfPickerPlan(_session.DisplayName, ApplicationTitle);
+        var fileTypes = CreateFilePickerFileTypes(pickerPlan.FileTypes);
+        return await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = title,
+            SuggestedFileName = pickerPlan.SuggestedFileName,
+            DefaultExtension = pickerPlan.DefaultExtensionWithoutDot,
+            FileTypeChoices = fileTypes,
+            SuggestedFileType = fileTypes[0],
+            ShowOverwritePrompt = true,
+        });
     }
 
     private async Task SaveWorkbookToTargetAsync(

@@ -1,3 +1,4 @@
+using System.Globalization;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
@@ -6,6 +7,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Free.Shared.AppServices;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
 using FreeX.App.Avalonia.Ribbon;
@@ -1159,10 +1161,10 @@ public sealed partial class MainWindow
         FreeXBackstageAccountDetailId id) =>
         id switch
         {
-            FreeXBackstageAccountDetailId.Product => "FreeX",
-            FreeXBackstageAccountDetailId.Version => "FreeX",
-            FreeXBackstageAccountDetailId.Device => "Local workstation",
-            FreeXBackstageAccountDetailId.User => "quinn",
+            FreeXBackstageAccountDetailId.Product => AppHelpInfo.ProductName,
+            FreeXBackstageAccountDetailId.Version => AppHelpInfo.GetBuildVersionText(typeof(MainWindow).Assembly),
+            FreeXBackstageAccountDetailId.Device => Environment.MachineName,
+            FreeXBackstageAccountDetailId.User => Environment.UserName,
             _ => throw new ArgumentOutOfRangeException(nameof(id), id, null)
         };
 
@@ -1473,20 +1475,31 @@ public sealed partial class MainWindow
     }
 
     private static string ResolveParityCapturedBackstageInfoDetailValue(
-        FreeXBackstageInfoDetailId id) =>
-        id switch
+        FreeXBackstageInfoDetailId id)
+    {
+        var workbook = ParityDemoWorkbookFactory.Create();
+        var activeSheet = workbook.Sheets[workbook.ActiveSheetIndex ?? 0];
+
+        return id switch
         {
-            FreeXBackstageInfoDetailId.WorkbookName => "Parity Demo",
+            FreeXBackstageInfoDetailId.WorkbookName => workbook.Name,
             FreeXBackstageInfoDetailId.FilePath => UiText.Get("Backstage_Info_NotSavedYet"),
-            FreeXBackstageInfoDetailId.SheetCount => "1",
+            FreeXBackstageInfoDetailId.SheetCount => workbook.Sheets.Count.ToString(CultureInfo.CurrentCulture),
             FreeXBackstageInfoDetailId.Format => ".xlsx",
             FreeXBackstageInfoDetailId.FileSize => UiText.Get("Backstage_Info_NotSavedYet"),
             FreeXBackstageInfoDetailId.LastModified => UiText.Get("Backstage_Info_NotSavedYet"),
-            FreeXBackstageInfoDetailId.Share => "Send a copy or invite people to collaborate.",
-            FreeXBackstageInfoDetailId.Export => "Create a PDF/XPS copy or change the file type.",
-            FreeXBackstageInfoDetailId.WorkbookProtection => "No protection has been applied.",
+            FreeXBackstageInfoDetailId.Share => WorkbookShareReadinessPlanner.FormatStatus(
+                WorkbookShareReadinessPlanner.CreatePlan(null, WorkbookShareSurface.WindowsShare, _ => false)),
+            FreeXBackstageInfoDetailId.Export => WorkbookExportReadinessPlanner.Create(workbook).StatusText,
+            FreeXBackstageInfoDetailId.WorkbookProtection => workbook.IsStructureProtected
+                ? "Workbook structure protected."
+                : "Workbook structure unprotected.",
+            FreeXBackstageInfoDetailId.ActiveSheetProtection => activeSheet.IsProtected
+                ? "Active sheet protected."
+                : "Active sheet unprotected.",
             _ => throw new ArgumentOutOfRangeException(nameof(id), id, null)
         };
+    }
 
     private static Control CreateParityCapturedBackstageProperty(string name, string value) =>
         new StackPanel

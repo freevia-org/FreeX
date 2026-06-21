@@ -268,7 +268,24 @@ internal static class ParityCapture
         var frame = GetBackstageFrame(window);
         var method = frame?.GetType().GetMethod("FocusEntry", [typeof(string)]);
         _ = method?.Invoke(frame, [entryId]);
+        SelectBackstageEntryChrome(frame, entryId);
         PumpDispatcher();
+    }
+
+    private static void SelectBackstageEntryChrome(object? frame, string entryId)
+    {
+        if (frame is null)
+            return;
+
+        var frameType = frame.GetType();
+        var findButton = frameType.GetMethod(
+            "FindNavButton",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        var setSelected = frameType.GetMethod(
+            "SetSelected",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        if (findButton?.Invoke(frame, [entryId]) is Button button)
+            _ = setSelected?.Invoke(frame, [button]);
     }
 
     private static object? GetBackstageFrame(MainWindow window)
@@ -308,14 +325,13 @@ internal static class ParityCapture
         var rows = new (string Label, string Value)[]
         {
             ("FreeX user name", "quinn"),
-            ("Windows account", "Local Windows user"),
-            ("Device", "Local workstation"),
-            ("App version", "FreeX"),
+            ("Local OS account", Environment.UserName),
+            ("Device", Environment.MachineName),
+            ("App version", AppInfo.ExactVersionText),
             ("Options file", "Local profile settings"),
             ("Current workbook", "Parity Demo (not saved yet)"),
             ("Sharing", "Save As is required before Windows Share can send the workbook."),
             ("Export", "Ready for local PDF/XPS export to a chosen local path."),
-            ("Microsoft 365 services", "Not connected; account sign-in, cloud links, and coauthoring are not implemented."),
         };
         for (var i = 0; i < rows.Length; i++)
         {

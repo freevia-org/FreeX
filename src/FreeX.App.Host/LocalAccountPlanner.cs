@@ -50,14 +50,13 @@ public static class LocalAccountPlanner
         var details = new List<LocalAccountDetail>
         {
             new("FreeX user name", userName),
-            new("Windows account", windowsAccount),
+            new("Local OS account", windowsAccount),
             new("Device", machineName),
-            new("App version", AppInfo.VersionText),
+            new("App version", AppInfo.ExactVersionText),
             new("Options file", optionsPath),
             new("Current workbook", workbookStatus),
             new("Sharing", sharingStatus),
             new("Export", exportStatus),
-            new("Microsoft 365 services", "Not connected; account sign-in, cloud links, and coauthoring are not implemented.")
         };
 
         return new LocalAccountPlan(

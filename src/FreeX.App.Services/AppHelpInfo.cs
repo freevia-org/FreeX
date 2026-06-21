@@ -24,14 +24,19 @@ public static class AppHelpInfo
                 ?.InformationalVersion);
     }
 
+    public static string GetBuildVersionText(Assembly assembly)
+    {
+        ArgumentNullException.ThrowIfNull(assembly);
+
+        return FormatBuildVersionText(
+            assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+                ?.InformationalVersion,
+            assembly.GetName().Version?.ToString());
+    }
+
     public static string FormatVersionText(string? informationalVersion)
     {
-        var displayVersion = string.IsNullOrWhiteSpace(informationalVersion)
-            ? "0.5.0"
-            : informationalVersion.Trim();
-        var metadataIndex = displayVersion.IndexOf('+', StringComparison.Ordinal);
-        if (metadataIndex >= 0)
-            displayVersion = displayVersion[..metadataIndex];
+        var displayVersion = NormalizeVersionForDisplay(informationalVersion);
 
         var versionParts = displayVersion.Split('.');
         if (versionParts.Length == 3 &&
@@ -43,6 +48,28 @@ public static class AppHelpInfo
         }
 
         return $"Version {displayVersion} (Tester Release)";
+    }
+
+    public static string FormatBuildVersionText(string? informationalVersion, string? assemblyVersion = null)
+    {
+        var displayVersion = NormalizeVersionForDisplay(informationalVersion);
+        var buildVersion = NormalizeVersionForDisplay(assemblyVersion);
+
+        return string.Equals(displayVersion, buildVersion, StringComparison.OrdinalIgnoreCase)
+            ? $"Version {displayVersion} (Tester Release)"
+            : $"Version {displayVersion} (build {buildVersion}, Tester Release)";
+    }
+
+    private static string NormalizeVersionForDisplay(string? version)
+    {
+        var displayVersion = string.IsNullOrWhiteSpace(version)
+            ? "0.5.0"
+            : version.Trim();
+        var metadataIndex = displayVersion.IndexOf('+', StringComparison.Ordinal);
+        if (metadataIndex >= 0)
+            displayVersion = displayVersion[..metadataIndex];
+
+        return string.IsNullOrWhiteSpace(displayVersion) ? "0.5.0" : displayVersion;
     }
 
     public static string BuildAboutText(string versionText, string platformSummary) =>

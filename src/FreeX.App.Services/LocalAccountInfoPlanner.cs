@@ -36,7 +36,7 @@ public static class LocalAccountInfoPlanner
 
         return new LocalAccountInfoPlan(
             ProductName: AppHelpInfo.ProductName,
-            VersionText: AppHelpInfo.GetVersionText(appAssembly),
+            VersionText: AppHelpInfo.GetBuildVersionText(appAssembly),
             DeviceName: NormalizeOrUnknown(deviceName),
             UserName: NormalizeOrUnknown(userName),
             OptionsAvailable: optionsAvailable,

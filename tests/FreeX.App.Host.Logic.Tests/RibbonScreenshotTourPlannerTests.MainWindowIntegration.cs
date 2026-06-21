@@ -463,7 +463,9 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("CategoryListFocusedByDefault");
         source.Should().Contain("OptionsClosedViaCancelEquivalent");
         source.Should().Contain("FocusReturnedToBackstageOptionsCommand");
-        source.Should().Contain("AccountMicrosoft365Exclusion");
+        source.Should().Contain("AccountDetailLabels");
+        source.Should().Contain("local OS account and app build details");
+        source.Should().Contain("not a cloud account sign-in surface");
         source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.OptionsAccountTourManifest");
     }
 
