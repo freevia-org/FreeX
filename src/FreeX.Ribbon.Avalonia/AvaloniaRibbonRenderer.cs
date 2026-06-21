@@ -33,11 +33,23 @@ public static class AvaloniaRibbonRenderer
     private const double TabHeaderHeight = 28;
     private const double RibbonCheckBoxHeight = 18;
     private const double RibbonCheckGlyphSize = 11;
-    private const double MenuChevronSize = 9;
     private const double LargeIconSize = 32;
     private const double MediumIconSize = 22;
     private const double SmallIconSize = 22;
     private const int MaxRowsPerColumn = 3;
+    private static readonly IReadOnlySet<string> StaticDrawContextCommandIds = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "Bring Forward",
+        "Send Backward",
+        "Selection Pane#SelectionPaneBtn_Click",
+        "Rotate Object",
+        "Object Size",
+        "Shape Fill",
+        "Object Outline",
+        "Crop Picture",
+        "Shape Gradient",
+        "Shape Effects",
+    };
 
     // Ribbon palette — matched 1:1 to the WPF resources so the Avalonia ribbon visually replicates
     // Windows. Exposed internally so the theme is unit-testable.
@@ -186,10 +198,7 @@ public static class AvaloniaRibbonRenderer
                 && registry.TryGet(new RibbonCommandId(id), out var cmd)
                 && cmd is IRibbonStatefulCommand stateful)
             {
-                var state = stateful.GetState();
-                toggle.IsChecked = state.IsChecked;
-                toggle.IsEnabled = state.IsEnabled;
-                ApplyToggleCheckedChrome(toggle);
+                ApplyRibbonCommandState(toggle, stateful.GetState());
             }
         }
     }
@@ -214,12 +223,42 @@ public static class AvaloniaRibbonRenderer
         }
 
         // WPF: Border { Background=FreeXRibbonSurfaceBrush (white); Padding 0,4,0,0 } — no accent rule.
+        if (string.Equals(tab.Id, "DrawTab", StringComparison.Ordinal))
+            DisableStaticDrawContextCommands(panel);
+
         return new Border
         {
             Background = SurfaceBrush,
             Padding = new Thickness(0, 2, 0, 0),
             Child = panel,
         };
+    }
+
+    private static void DisableStaticDrawContextCommands(Control root)
+    {
+        ForEachRibbonDescendant(root, control =>
+        {
+            if (control.Tag is string id && StaticDrawContextCommandIds.Contains(id))
+                control.IsEnabled = false;
+        });
+    }
+
+    private static void ForEachRibbonDescendant(Control control, Action<Control> visit)
+    {
+        visit(control);
+        switch (control)
+        {
+            case Panel panel:
+                foreach (var child in panel.Children.OfType<Control>())
+                    ForEachRibbonDescendant(child, visit);
+                break;
+            case ContentControl { Content: Control content }:
+                ForEachRibbonDescendant(content, visit);
+                break;
+            case Decorator { Child: { } child }:
+                ForEachRibbonDescendant(child, visit);
+                break;
+        }
     }
 
     private static Control BuildTabHeader(string header)
@@ -850,8 +889,8 @@ public static class AvaloniaRibbonRenderer
             Margin = new Thickness(2, 1, 2, 1),
             Tag = check.CommandId.Value,
         };
+        ApplyStateAndEnablement(box, check.CommandId, registry);
         box.IsCheckedChanged += (_, _) => Execute(check.CommandId, registry);
-        ApplyEnablement(box, check, registry);
         return box;
     }
 
@@ -1006,12 +1045,17 @@ public static class AvaloniaRibbonRenderer
 
     private static Control Chevron() => Chevron(new Thickness(1, 0, 1, 0));
 
-    private static Control Chevron(Thickness margin)
+    private static TextBlock Chevron(Thickness margin)
     {
-        var chevron = AvaloniaRibbonIcons.Build(RibbonCommandIconKind.ChevronDown, MenuChevronSize);
-        chevron.VerticalAlignment = VerticalAlignment.Center;
-        chevron.Margin = margin;
-        return chevron;
+        return new TextBlock
+        {
+            Text = "\u25BE",
+            FontSize = 9,
+            FontFamily = RibbonFontFamily,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = margin,
+        };
     }
 
     private static ContentControl NewButtonLike(RibbonControl control)
@@ -1068,25 +1112,52 @@ public static class AvaloniaRibbonRenderer
             toggle.Click += (_, _) => Execute(control.CommandId, registry);
         }
 
-        ApplyEnablement(element, control, registry);
+        ApplyStateAndEnablement(element, control.CommandId, registry);
     }
 
     private static void ApplyEnablement(Control element, RibbonControl control, IRibbonCommandRegistry? registry)
+        => ApplyStateAndEnablement(element, control.CommandId, registry);
+
+    private static void ApplyStateAndEnablement(Control element, RibbonCommandId commandId, IRibbonCommandRegistry? registry)
     {
         // No registry => preview/design mode: leave controls enabled so the layout renders fully.
         // With a registry, an unregistered command id renders disabled (never throws).
         if (registry is null)
             return;
-        if (string.IsNullOrEmpty(control.CommandId.Value))
+        if (string.IsNullOrEmpty(commandId.Value))
             return;
-        if (!registry.TryGet(control.CommandId, out var cmd))
+        if (!registry.TryGet(commandId, out var cmd))
         {
             element.IsEnabled = false;
             return;
         }
         // Stateful commands expose IsEnabled in their state (e.g. Draw-tab commands disabled by
         // default when no stylus/pen context is active). Respect that at build time.
-        element.IsEnabled = cmd is not IRibbonStatefulCommand stateful || stateful.GetState().IsEnabled;
+        if (cmd is IRibbonStatefulCommand stateful)
+        {
+            ApplyRibbonCommandState(element, stateful.GetState());
+            return;
+        }
+
+        element.IsEnabled = true;
+    }
+
+    private static void ApplyRibbonCommandState(Control element, RibbonCommandState state)
+    {
+        element.IsEnabled = state.IsEnabled;
+        switch (element)
+        {
+            case CheckBox checkBox:
+                checkBox.IsChecked = state.IsChecked;
+                break;
+            case ToggleButton toggle:
+                toggle.IsChecked = state.IsChecked;
+                ApplyToggleCheckedChrome(toggle);
+                break;
+            case ComboBox combo when state.Value is { } value:
+                combo.Text = value;
+                break;
+        }
     }
 
     private static RibbonMenu? BuildMenu(RibbonControl control) => control switch
@@ -1149,7 +1220,8 @@ public static class AvaloniaRibbonRenderer
     {
         if (registry is null || string.IsNullOrEmpty(commandId.Value))
             return;
-        item.IsEnabled = registry.TryGet(commandId, out _);
+        item.IsEnabled = registry.TryGet(commandId, out var cmd)
+            && (cmd is not IRibbonStatefulCommand stateful || stateful.GetState().IsEnabled);
     }
 
     private static void Execute(RibbonCommandId commandId, IRibbonCommandRegistry? registry)
@@ -1299,8 +1371,9 @@ public static class AvaloniaRibbonRenderer
             });
             stack.Children.Add(new TextBlock
             {
-                Text = "v",
+                Text = "\u25BE",
                 FontSize = 9,
+                FontFamily = RibbonFontFamily,
                 TextAlignment = TextAlignment.Center,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 Opacity = 0.85,

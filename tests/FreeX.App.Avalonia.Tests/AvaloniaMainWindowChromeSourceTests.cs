@@ -27,9 +27,12 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         source.Should().Contain("var contentWidth = _session.SheetTabs.Sum(tab => EstimateSheetTabWidth(tab.Name)) + _newSheetButton.Width;");
         source.Should().Contain("button.FontSize = 15;");
         source.Should().Contain("Margin = new Thickness(0, -2, 0, 0),");
-        source.Should().Contain("var scrollBarLeft = _horizontalWorksheetScrollBar.Bounds.Left > 0");
-        source.Should().Contain("AddSheetTabTopRuleSegment(ruleLeft, leftJoin, topY);");
-        source.Should().Contain("AddSheetTabTopRuleSegment(rightJoin, ruleRight, topY);");
+        source.Should().Contain("var horizontalRuleLeft = 0d;");
+        source.Should().Contain("var horizontalRuleRight = totalWidth;");
+        source.Should().Contain("var contourRight = Math.Clamp(scrollerRight, contourLeft, Math.Max(contourLeft, scrollBarLeft));");
+        source.Should().Contain("AddSheetTabContourPath($\"M {Geom(horizontalRuleLeft)} {Geom(topY)} L {Geom(leftJoin)} {Geom(topY)}\"");
+        source.Should().Contain("AddSheetTabContourPath($\"M {Geom(rightJoin)} {Geom(topY)} L {Geom(horizontalRuleRight)} {Geom(topY)}\"");
+        source.Should().NotContain("AddSheetTabTopRuleSegment");
         source.Should().Contain("UpdateSheetTabsContourLayer();");
         source.Should().Contain("private void UpdateSheetTabNavigationVisibility()");
         source.Should().Contain("private void UpdateSheetTabsContourLayer()");

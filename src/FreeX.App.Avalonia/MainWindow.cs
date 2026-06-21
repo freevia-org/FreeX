@@ -1178,6 +1178,13 @@ public sealed partial class MainWindow : Window
                     ["50%"] = () => ApplyZoomPercentPreset(50),
                     ["25%"] = () => ApplyZoomPercentPreset(25),
                 },
+                ExtraCommandStates = new Dictionary<string, Func<RibbonCommandState>>(StringComparer.Ordinal)
+                {
+                    ["view.gridlines"] = () => new RibbonCommandState(IsChecked: _session.IsShowingGridlines),
+                    ["view.headings"] = () => new RibbonCommandState(IsChecked: _session.IsShowingHeadings),
+                    ["Ruler"] = () => new RibbonCommandState(IsChecked: _session.IsShowingRulers),
+                    ["view.formulaBar"] = () => new RibbonCommandState(IsChecked: !_isFormulaBarHidden),
+                },
             };
 
         // Merge in the Help-tab + contextual-tab (Chart/Picture/Shape/Table/Pivot) command handlers.
@@ -1481,23 +1488,29 @@ public sealed partial class MainWindow : Window
 
         activeLeft -= _sheetTabsScroller.Offset.X;
         var activeRight = activeLeft + activeWidth;
-        var ruleLeft = _sheetTabLeftNavButton.IsVisible ? HeaderColumnWidth : 0d;
+        var horizontalRuleLeft = 0d;
+        var horizontalRuleRight = totalWidth;
+        var contourLeft = HeaderColumnWidth;
         var scrollBarLeft = _horizontalWorksheetScrollBar.Bounds.Left > 0
             ? _horizontalWorksheetScrollBar.Bounds.Left
             : Math.Max(0, totalWidth - _horizontalWorksheetScrollBar.Width);
-        var ruleRight = Math.Max(ruleLeft, scrollBarLeft);
+        var scrollerRight = HeaderColumnWidth + (_sheetTabsScroller.Width > 0
+            ? _sheetTabsScroller.Width
+            : Math.Max(0, scrollBarLeft - HeaderColumnWidth));
+        var contourRight = Math.Clamp(scrollerRight, contourLeft, Math.Max(contourLeft, scrollBarLeft));
 
-        activeLeft = Math.Clamp(activeLeft, ruleLeft, Math.Max(ruleLeft, ruleRight - 16));
-        activeRight = Math.Clamp(activeRight, activeLeft + 16, ruleRight);
+        activeLeft = Math.Clamp(activeLeft, contourLeft, Math.Max(contourLeft, contourRight - 16));
+        activeRight = Math.Clamp(activeRight, activeLeft + 16, contourRight);
 
         var corner = Math.Min(9, Math.Max(6, activeWidth * 0.10));
         var topY = 1d;
         var sideY = 10d;
         var tabBottomY = 27d;
-        var leftJoin = Math.Max(ruleLeft, activeLeft - corner);
-        var rightJoin = Math.Min(ruleRight, activeRight + corner);
-        AddSheetTabTopRuleSegment(ruleLeft, leftJoin, topY);
-        AddSheetTabTopRuleSegment(rightJoin, ruleRight, topY);
+        var leftJoin = Math.Max(contourLeft, activeLeft - corner);
+        var rightJoin = Math.Min(contourRight, activeRight + corner);
+
+        AddSheetTabContourPath($"M {Geom(horizontalRuleLeft)} {Geom(topY)} L {Geom(leftJoin)} {Geom(topY)}", strokeThickness: 1.0);
+        AddSheetTabContourPath($"M {Geom(rightJoin)} {Geom(topY)} L {Geom(horizontalRuleRight)} {Geom(topY)}", strokeThickness: 1.0);
 
         var path =
             $"M {Geom(leftJoin)} {Geom(topY)} " +
@@ -1509,25 +1522,6 @@ public sealed partial class MainWindow : Window
             $"L {Geom(activeRight)} {Geom(sideY)} " +
             $"C {Geom(activeRight)} {Geom(sideY - 4)} {Geom(activeRight)} {Geom(topY)} {Geom(rightJoin)} {Geom(topY)}";
         AddSheetTabContourPath(path, strokeThickness: 1.0);
-    }
-
-    private void AddSheetTabTopRuleSegment(double left, double right, double y)
-    {
-        if (right <= left)
-            return;
-
-        if (!_sheetTabRightNavButton.IsVisible)
-        {
-            AddSheetTabContourPath($"M {Geom(left)} {Geom(y)} L {Geom(right)} {Geom(y)}", strokeThickness: 1.0);
-            return;
-        }
-
-        var navLeft = HeaderColumnWidth + _sheetTabsScroller.Width;
-        var navRight = navLeft + _sheetTabRightNavButton.Width;
-        if (left < navLeft)
-            AddSheetTabContourPath($"M {Geom(left)} {Geom(y)} L {Geom(Math.Min(right, navLeft))} {Geom(y)}", strokeThickness: 1.0);
-        if (right > navRight)
-            AddSheetTabContourPath($"M {Geom(Math.Max(left, navRight))} {Geom(y)} L {Geom(right)} {Geom(y)}", strokeThickness: 1.0);
     }
 
     private double EstimateSheetTabWidth(int tabIndex)
