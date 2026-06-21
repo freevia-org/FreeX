@@ -11,7 +11,7 @@ public sealed class FreeWRibbonParityTests
     {
         FreeWRibbon.Build().VisibleTabs.Select(tab => tab.Id)
             .Should()
-            .Equal("home", "insert", "design", "layout", "references", "mailings", "review", "view");
+            .Equal("home", "insert", "design", "layout", "references", "mailings", "review", "view", "developer");
     }
 
     [Fact]
@@ -127,6 +127,58 @@ public sealed class FreeWRibbonParityTests
 
         foreach (var commandId in CommandIds(comments!))
             registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must execute from the Review comments group");
+    }
+
+    [StaFact]
+    public void DeveloperControls_ExposesAndRegistersImplementedContentControlCommands()
+    {
+        var definition = FreeWRibbon.Build();
+        var developer = definition.FindTab("developer");
+        var editor = new DocumentView();
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        definition.VisibleTabs.Select(tab => tab.Id)
+            .Should()
+            .ContainInOrder("view", "developer");
+
+        developer.Should().NotBeNull();
+        developer!.Groups.Select(group => group.Id)
+            .Should()
+            .Equal("controls");
+
+        CommandIds(developer)
+            .Should()
+            .Equal(
+                "freew.cc-text",
+                "freew.cc-richtext",
+                "freew.cc-checkbox",
+                "freew.cc-date",
+                "freew.cc-dropdown",
+                "freew.cc-combo");
+
+        foreach (var commandId in CommandIds(developer))
+            registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must execute from the Developer controls group");
+    }
+
+    [Fact]
+    public void InsertTab_DoesNotExposeContentControlsOutsideDeveloper()
+    {
+        var insert = FreeWRibbon.Build().FindTab("insert");
+
+        insert.Should().NotBeNull();
+        insert!.Groups.Select(group => group.Id)
+            .Should()
+            .NotContain("controls", "Word exposes content controls from the Developer tab");
+
+        CommandIds(insert).Should().NotContain(new[]
+        {
+            "freew.cc-text",
+            "freew.cc-richtext",
+            "freew.cc-checkbox",
+            "freew.cc-date",
+            "freew.cc-dropdown",
+            "freew.cc-combo"
+        });
     }
 
     [Fact]
