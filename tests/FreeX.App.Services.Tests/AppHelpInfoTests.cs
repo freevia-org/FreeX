@@ -42,4 +42,13 @@ public sealed class AppHelpInfoTests
         AppHelpInfo.FormatVersionText("0.5.0").Should().Be("Version 0.5 (Tester Release)");
         AppHelpInfo.FormatVersionText(null).Should().Be("Version 0.5 (Tester Release)");
     }
+
+    [Fact]
+    public void FormatBuildVersionText_PreservesExactVersionAndAssemblyBuild()
+    {
+        AppHelpInfo.FormatBuildVersionText("0.8.42+abcdef12", "0.8.42.0")
+            .Should().Be("Version 0.8.42 (build 0.8.42.0, Tester Release)");
+        AppHelpInfo.FormatBuildVersionText("0.5.0", "0.5.0")
+            .Should().Be("Version 0.5.0 (Tester Release)");
+    }
 }

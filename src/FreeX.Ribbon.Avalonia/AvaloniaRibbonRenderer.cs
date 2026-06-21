@@ -667,6 +667,8 @@ public static class AvaloniaRibbonRenderer
                 new Setter(Layoutable.MinHeightProperty, SmallRowHeight),
                 new Setter(Layoutable.HeightProperty, SmallRowHeight),
                 new Setter(Layoutable.MaxHeightProperty, SmallRowHeight),
+                new Setter(TemplatedControl.BorderBrushProperty, DividerBrush),
+                new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(1)),
                 new Setter(TemplatedControl.FontSizeProperty, 12d),
                 new Setter(TemplatedControl.FontFamilyProperty, RibbonFontFamily),
                 new Setter(TemplatedControl.PaddingProperty, new Thickness(6, 0, 18, 0)),
@@ -1048,8 +1050,11 @@ public static class AvaloniaRibbonRenderer
             FontFamily = RibbonFontFamily,
             Padding = new Thickness(6, 0, 18, 0),
             VerticalContentAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(1, 0, 1, 0),
+            Margin = new Thickness(2, 0, 2, 0),
             Background = Brushes.White,
+            BorderBrush = DividerBrush,
+            BorderThickness = new Thickness(1),
+            ClipToBounds = false,
             Tag = combo.CommandId.Value,
         };
         foreach (var item in combo.Items)
@@ -1086,16 +1091,30 @@ public static class AvaloniaRibbonRenderer
 
     private static Control Chevron() => Chevron(new Thickness(1, 0, 1, 0));
 
-    private static TextBlock Chevron(Thickness margin)
+    private static Control Chevron(Thickness margin)
     {
-        return new TextBlock
+        var path = new global::Avalonia.Controls.Shapes.Path
         {
-            Text = "\u25BE",
-            FontSize = 9,
-            FontFamily = RibbonFontFamily,
+            Data = Geometry.Parse("M2,2 L6,6 L10,2"),
+            Stroke = TabTextBrush,
+            StrokeThickness = 1.45,
+            StrokeLineCap = PenLineCap.Round,
+            StrokeJoin = PenLineJoin.Round,
+            Fill = Brushes.Transparent,
+            Stretch = Stretch.None,
+            IsHitTestVisible = false,
+        };
+
+        return new Viewbox
+        {
+            Width = 10,
+            Height = 8,
+            Stretch = Stretch.Uniform,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = margin,
+            Child = path,
+            IsHitTestVisible = false,
         };
     }
 
@@ -1410,15 +1429,7 @@ public static class AvaloniaRibbonRenderer
                 MaxWidth = 56,
                 Margin = new Thickness(0, 2, 0, 0),
             });
-            stack.Children.Add(new TextBlock
-            {
-                Text = "\u25BE",
-                FontSize = 9,
-                FontFamily = RibbonFontFamily,
-                TextAlignment = TextAlignment.Center,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                Opacity = 0.85,
-            });
+            stack.Children.Add(Chevron(new Thickness(0, 2, 0, 0)));
 
             var button = new Button
             {

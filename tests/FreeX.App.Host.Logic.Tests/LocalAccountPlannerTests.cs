@@ -29,17 +29,18 @@ public sealed class LocalAccountPlannerTests
         plan.SharingStatus.Should().Be(@"Ready for Windows Share from C:\Work\Budget.xlsx.");
         plan.ExportStatus.Should().Contain("selected range");
         plan.Details.Should().ContainEquivalentOf(new LocalAccountDetail("FreeX user name", "Analyst"));
-        plan.Details.Should().ContainEquivalentOf(new LocalAccountDetail("Windows account", @"DESKTOP\quinn"));
+        plan.Details.Should().ContainEquivalentOf(new LocalAccountDetail("Local OS account", @"DESKTOP\quinn"));
         plan.Details.Should().ContainEquivalentOf(new LocalAccountDetail("Device", "FREEX-PC"));
+        plan.Details.Should().Contain(detail =>
+            detail.Label == "App version" &&
+            detail.Value.StartsWith("Version ", StringComparison.Ordinal));
         plan.Details.Should().Contain(detail =>
             detail.Label == "Options file" &&
             detail.Value == @"C:\Users\quinn\AppData\Roaming\FreeX\options.json");
         plan.Details.Should().Contain(detail =>
             detail.Label == "Export" &&
             detail.Value.Contains("Ready for local PDF/XPS export"));
-        plan.Details.Should().Contain(detail =>
-            detail.Label == "Microsoft 365 services" &&
-            detail.Value.Contains("coauthoring"));
+        plan.Details.Should().NotContain(detail => detail.Label == "Microsoft 365 services");
     }
 
     [Fact]
@@ -110,9 +111,9 @@ public sealed class LocalAccountPlannerTests
 
         message.Body.Should().Contain("Microsoft account integration is not implemented");
         message.Body.Should().Contain("FreeX user name: Analyst");
-        message.Body.Should().Contain(@"Windows account: DESKTOP\quinn");
+        message.Body.Should().Contain(@"Local OS account: DESKTOP\quinn");
         message.Body.Should().Contain("Sharing: Ready for Windows Share");
         message.Body.Should().Contain("Export: Ready for local PDF/XPS export");
-        message.Body.Should().Contain("Microsoft 365 services: Not connected");
+        message.Body.Should().NotContain("Microsoft 365 services");
     }
 }

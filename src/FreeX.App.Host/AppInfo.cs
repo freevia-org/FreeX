@@ -10,6 +10,8 @@ public static class AppInfo
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
             ?.InformationalVersion);
 
+    public static string ExactVersionText { get; } = AppHelpInfo.GetBuildVersionText(typeof(AppInfo).Assembly);
+
     /// <summary>
     /// Release channel for self-update. The tester channel pulls GitHub pre-releases
     /// (see <c>UpdateFeed.AllowPrereleases</c>); mirrors <c>release/progress.json</c>'s "channel".

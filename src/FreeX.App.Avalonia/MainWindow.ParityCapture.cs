@@ -1,3 +1,4 @@
+using System.Globalization;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
@@ -6,8 +7,10 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Free.Shared.AppServices;
 using Free.Shared.Ribbon;
 using FreeX.App.Avalonia.Ribbon;
+using FreeX.App.Services;
 using FreeX.Ribbon.Avalonia;
 
 using AvaloniaGrid = Avalonia.Controls.Grid;
@@ -1100,14 +1103,13 @@ public sealed partial class MainWindow
         var rows = new (string Label, string Value)[]
         {
             ("FreeX user name", "quinn"),
-            ("Windows account", "Local Windows user"),
-            ("Device", "Local workstation"),
-            ("App version", "FreeX"),
+            ("Local OS account", Environment.UserName),
+            ("Device", Environment.MachineName),
+            ("App version", AppHelpInfo.GetBuildVersionText(typeof(MainWindow).Assembly)),
             ("Options file", "Local profile settings"),
             ("Current workbook", "Parity Demo (not saved yet)"),
             ("Sharing", "Save As is required before Windows Share can send the workbook."),
             ("Export", "Ready for local PDF/XPS export to a chosen local path."),
-            ("Microsoft 365 services", "Not connected; account sign-in, cloud links, and coauthoring are not implemented."),
         };
         for (var i = 0; i < rows.Length; i++)
         {
@@ -1384,15 +1386,27 @@ public sealed partial class MainWindow
             FontWeight = FontWeight.SemiBold,
             Foreground = new SolidColorBrush(Color.FromRgb(31, 31, 31)),
         });
-        properties.Children.Add(CreateParityCapturedBackstageProperty("Workbook name", "Parity Demo"));
+        var workbook = ParityDemoWorkbookFactory.Create();
+        var shareStatus = WorkbookShareReadinessPlanner.FormatStatus(
+            WorkbookShareReadinessPlanner.CreatePlan(null, WorkbookShareSurface.WindowsShare, _ => false));
+        var exportStatus = WorkbookExportReadinessPlanner.Create(workbook).StatusText;
+        var workbookProtection = workbook.IsStructureProtected
+            ? "Workbook structure protected."
+            : "Workbook structure unprotected.";
+        var activeSheetProtection = workbook.Sheets[workbook.ActiveSheetIndex ?? 0].IsProtected
+            ? "Active sheet protected."
+            : "Active sheet unprotected.";
+
+        properties.Children.Add(CreateParityCapturedBackstageProperty("Workbook name", workbook.Name));
         properties.Children.Add(CreateParityCapturedBackstageProperty("File path", "Not saved yet"));
-        properties.Children.Add(CreateParityCapturedBackstageProperty("Sheets", "1"));
+        properties.Children.Add(CreateParityCapturedBackstageProperty("Sheets", workbook.Sheets.Count.ToString(CultureInfo.CurrentCulture)));
         properties.Children.Add(CreateParityCapturedBackstageProperty("Format", ".xlsx"));
         properties.Children.Add(CreateParityCapturedBackstageProperty("File size", "Not saved yet"));
         properties.Children.Add(CreateParityCapturedBackstageProperty("Last modified", "Not saved yet"));
-        properties.Children.Add(CreateParityCapturedBackstageProperty("Share", "Send a copy or invite people to collaborate."));
-        properties.Children.Add(CreateParityCapturedBackstageProperty("Export", "Create a PDF/XPS copy or change the file type."));
-        properties.Children.Add(CreateParityCapturedBackstageProperty("Workbook protection", "No protection has been applied."));
+        properties.Children.Add(CreateParityCapturedBackstageProperty("Share", shareStatus));
+        properties.Children.Add(CreateParityCapturedBackstageProperty("Export", exportStatus));
+        properties.Children.Add(CreateParityCapturedBackstageProperty("Workbook protection", workbookProtection));
+        properties.Children.Add(CreateParityCapturedBackstageProperty("Active sheet protection", activeSheetProtection));
         AddGridChild(root, properties, 0, 2);
 
         return new Border

@@ -596,7 +596,14 @@ public static class RibbonWpfRenderer
 
     private static FrameworkElement BuildGroupDivider(FrameworkElement resourceHost)
     {
-        var divider = new Rectangle();
+        var divider = new Rectangle
+        {
+            Width = 1,
+            Fill = Brush(resourceHost, "FreeXBorderBrush", new SolidColorBrush(Color.FromRgb(0xDA, 0xDC, 0xE0))),
+            Margin = new Thickness(2, 5, 3, 18),
+            VerticalAlignment = VerticalAlignment.Stretch,
+            SnapsToDevicePixels = true
+        };
         ApplyStyle(divider, resourceHost, "RibbonGroupDivider");
         return divider;
     }
