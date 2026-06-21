@@ -20,6 +20,89 @@ public sealed class PageSetupDialogModelTests
     }
 
     [Fact]
+    public void ChoiceLists_DefineRendererNeutralPageSetupComboOrder()
+    {
+        PageSetupDialogModel.OrientationChoices.Select(choice => choice.Value)
+            .Should()
+            .Equal(WorksheetPageOrientation.Portrait, WorksheetPageOrientation.Landscape);
+        PageSetupDialogModel.PaperSizeChoices.Select(choice => choice.Value)
+            .Should()
+            .Equal(WorksheetPaperSize.Letter, WorksheetPaperSize.A4, WorksheetPaperSize.Legal);
+        PageSetupDialogModel.PaperSizes.Should().Equal(
+            PageSetupDialogModel.PaperSizeChoices.Select(choice => choice.Value));
+        PageSetupDialogModel.PageOrderChoices.Select(choice => choice.Value)
+            .Should()
+            .Equal(WorksheetPageOrder.DownThenOver, WorksheetPageOrder.OverThenDown);
+        PageSetupDialogModel.PrintErrorValueChoices.Select(choice => choice.Value)
+            .Should()
+            .Equal(
+                WorksheetPrintErrorValue.Displayed,
+                WorksheetPrintErrorValue.Blank,
+                WorksheetPrintErrorValue.Dash,
+                WorksheetPrintErrorValue.NotAvailable);
+        PageSetupDialogModel.PrintCommentChoices.Select(choice => choice.Value)
+            .Should()
+            .Equal(WorksheetPrintComments.None, WorksheetPrintComments.AtEnd, WorksheetPrintComments.AsDisplayed);
+        PageSetupDialogModel.PrintErrorValueChoices
+            .Should()
+            .OnlyContain(choice => !string.IsNullOrWhiteSpace(choice.LabelResourceKey));
+    }
+
+    [Fact]
+    public void ChoiceHelpers_FallbackUnknownValuesAndIndexes()
+    {
+        PageSetupDialogModel.ChoiceIndex(
+                PageSetupDialogModel.PrintErrorValueChoices,
+                WorksheetPrintErrorValue.Dash,
+                WorksheetPrintErrorValue.Displayed)
+            .Should()
+            .Be(2);
+        PageSetupDialogModel.ChoiceIndex(
+                PageSetupDialogModel.PrintErrorValueChoices,
+                (WorksheetPrintErrorValue)999,
+                WorksheetPrintErrorValue.Displayed)
+            .Should()
+            .Be(0);
+        PageSetupDialogModel.ChoiceValue(
+                PageSetupDialogModel.PrintCommentChoices,
+                selectedIndex: 1,
+                WorksheetPrintComments.None)
+            .Should()
+            .Be(WorksheetPrintComments.AtEnd);
+        PageSetupDialogModel.ChoiceValue(
+                PageSetupDialogModel.PrintCommentChoices,
+                selectedIndex: 99,
+                WorksheetPrintComments.None)
+            .Should()
+            .Be(WorksheetPrintComments.None);
+        PageSetupDialogModel.ChoiceValue(
+                Array.Empty<PageSetupChoice<WorksheetPageOrder>>(),
+                selectedIndex: 0,
+                WorksheetPageOrder.DownThenOver)
+            .Should()
+            .Be(WorksheetPageOrder.DownThenOver);
+    }
+
+    [Theory]
+    [InlineData(null, PageSetupDialogTab.Page, PageSetupDialogField.Orientation)]
+    [InlineData(PageSetupValidationTarget.Orientation, PageSetupDialogTab.Page, PageSetupDialogField.Orientation)]
+    [InlineData(PageSetupValidationTarget.PaperSize, PageSetupDialogTab.Page, PageSetupDialogField.PaperSize)]
+    [InlineData(PageSetupValidationTarget.Scaling, PageSetupDialogTab.Page, PageSetupDialogField.Scaling)]
+    [InlineData(PageSetupValidationTarget.HeaderMargin, PageSetupDialogTab.Margins, PageSetupDialogField.HeaderMargin)]
+    [InlineData(PageSetupValidationTarget.FooterMargin, PageSetupDialogTab.Margins, PageSetupDialogField.FooterMargin)]
+    [InlineData(PageSetupValidationTarget.RepeatColumns, PageSetupDialogTab.Sheet, PageSetupDialogField.RepeatColumns)]
+    [InlineData(PageSetupValidationTarget.PrintErrorValue, PageSetupDialogTab.Sheet, PageSetupDialogField.PrintErrorValue)]
+    public void GetValidationRoute_MapsValidationTargetsToNeutralDialogFields(
+        PageSetupValidationTarget? target,
+        PageSetupDialogTab expectedTab,
+        PageSetupDialogField expectedField)
+    {
+        PageSetupDialogModel.GetValidationRoute(target)
+            .Should()
+            .Be(new PageSetupValidationRoute(expectedTab, expectedField));
+    }
+
+    [Fact]
     public void FromSheet_MapsOrientationPaperSizeAndMargins()
     {
         var sheet = CreateSheet();

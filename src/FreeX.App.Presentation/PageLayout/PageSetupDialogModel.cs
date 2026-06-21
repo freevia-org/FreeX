@@ -23,6 +23,9 @@ public enum PageSetupScalingMode
     FitToPages
 }
 
+/// <summary>A renderer-neutral Page Setup combo-box row. Shells resolve <see cref="LabelResourceKey"/> locally.</summary>
+public sealed record PageSetupChoice<T>(T Value, string LabelResourceKey);
+
 /// <summary>The editable dialog field that caused shared Page Setup validation to fail.</summary>
 public enum PageSetupValidationTarget
 {
@@ -41,6 +44,35 @@ public enum PageSetupValidationTarget
     PrintErrorValue,
     PrintComments
 }
+
+/// <summary>Renderer-neutral Page Setup dialog tabs used when routing shared validation failures.</summary>
+public enum PageSetupDialogTab
+{
+    Page,
+    Margins,
+    Sheet
+}
+
+/// <summary>Renderer-neutral Page Setup dialog fields used when routing shared validation failures.</summary>
+public enum PageSetupDialogField
+{
+    Orientation,
+    PaperSize,
+    Margins,
+    HeaderMargin,
+    FooterMargin,
+    Scaling,
+    FirstPageNumber,
+    PrintQuality,
+    PrintArea,
+    RepeatRows,
+    RepeatColumns,
+    PageOrder,
+    PrintErrorValue,
+    PrintComments
+}
+
+public sealed record PageSetupValidationRoute(PageSetupDialogTab Tab, PageSetupDialogField Field);
 
 /// <summary>
 /// A snapshot of every editable page-setup field, decoupled from the Core.Model so the dialog can edit
@@ -151,9 +183,43 @@ public sealed record PageSetupCommandPlanBuildResult(
 
 public static class PageSetupDialogModel
 {
+    public static IReadOnlyList<PageSetupChoice<WorksheetPageOrientation>> OrientationChoices { get; } =
+    [
+        new(WorksheetPageOrientation.Portrait, "PageSetup_Portrait"),
+        new(WorksheetPageOrientation.Landscape, "PageSetup_Landscape"),
+    ];
+
+    public static IReadOnlyList<PageSetupChoice<WorksheetPaperSize>> PaperSizeChoices { get; } =
+    [
+        new(WorksheetPaperSize.Letter, "PageSetup_Letter85X11"),
+        new(WorksheetPaperSize.A4, "PageSetup_A4210X297Mm"),
+        new(WorksheetPaperSize.Legal, "PageSetup_Legal85X14"),
+    ];
+
     /// <summary>The paper sizes the dialog offers, in display order.</summary>
     public static IReadOnlyList<WorksheetPaperSize> PaperSizes { get; } =
-        [WorksheetPaperSize.Letter, WorksheetPaperSize.A4, WorksheetPaperSize.Legal];
+        PaperSizeChoices.Select(choice => choice.Value).ToArray();
+
+    public static IReadOnlyList<PageSetupChoice<WorksheetPageOrder>> PageOrderChoices { get; } =
+    [
+        new(WorksheetPageOrder.DownThenOver, "PageSetup_DownThenOver"),
+        new(WorksheetPageOrder.OverThenDown, "PageSetup_OverThenDown"),
+    ];
+
+    public static IReadOnlyList<PageSetupChoice<WorksheetPrintErrorValue>> PrintErrorValueChoices { get; } =
+    [
+        new(WorksheetPrintErrorValue.Displayed, "PageSetup_ErrorsDisplayed"),
+        new(WorksheetPrintErrorValue.Blank, "PageSetup_ErrorsBlank"),
+        new(WorksheetPrintErrorValue.Dash, "PageSetup_ErrorsDash"),
+        new(WorksheetPrintErrorValue.NotAvailable, "PageSetup_ErrorsNotAvailable"),
+    ];
+
+    public static IReadOnlyList<PageSetupChoice<WorksheetPrintComments>> PrintCommentChoices { get; } =
+    [
+        new(WorksheetPrintComments.None, "PageSetup_CommentsNone"),
+        new(WorksheetPrintComments.AtEnd, "PageSetup_CommentsAtEnd"),
+        new(WorksheetPrintComments.AsDisplayed, "PageSetup_CommentsAsDisplayed"),
+    ];
 
     /// <summary>The header/footer center presets the dialog offers, as (token) values; "" means none.</summary>
     public static IReadOnlyList<string> HeaderFooterPresets { get; } =
@@ -178,6 +244,56 @@ public static class PageSetupDialogModel
             WorksheetPaperSize.Letter => "Letter (8.5\" x 11\")",
             WorksheetPaperSize.Legal => "Legal (8.5\" x 14\")",
             _ => "A4 (210mm x 297mm)"
+        };
+
+    public static int ChoiceIndex<T>(IReadOnlyList<PageSetupChoice<T>> choices, T value, T fallback)
+    {
+        ArgumentNullException.ThrowIfNull(choices);
+        var comparer = EqualityComparer<T>.Default;
+        var fallbackIndex = -1;
+
+        for (var index = 0; index < choices.Count; index++)
+        {
+            var choice = choices[index];
+            if (comparer.Equals(choice.Value, value))
+                return index;
+
+            if (fallbackIndex < 0 && comparer.Equals(choice.Value, fallback))
+                fallbackIndex = index;
+        }
+
+        return fallbackIndex >= 0
+            ? fallbackIndex
+            : choices.Count > 0 ? 0 : -1;
+    }
+
+    public static T ChoiceValue<T>(IReadOnlyList<PageSetupChoice<T>> choices, int selectedIndex, T fallback)
+    {
+        ArgumentNullException.ThrowIfNull(choices);
+        if (selectedIndex >= 0 && selectedIndex < choices.Count)
+            return choices[selectedIndex].Value;
+
+        var fallbackIndex = ChoiceIndex(choices, fallback, fallback);
+        return fallbackIndex >= 0 ? choices[fallbackIndex].Value : fallback;
+    }
+
+    public static PageSetupValidationRoute GetValidationRoute(PageSetupValidationTarget? target) =>
+        target switch
+        {
+            PageSetupValidationTarget.PaperSize => new(PageSetupDialogTab.Page, PageSetupDialogField.PaperSize),
+            PageSetupValidationTarget.Margins => new(PageSetupDialogTab.Margins, PageSetupDialogField.Margins),
+            PageSetupValidationTarget.HeaderMargin => new(PageSetupDialogTab.Margins, PageSetupDialogField.HeaderMargin),
+            PageSetupValidationTarget.FooterMargin => new(PageSetupDialogTab.Margins, PageSetupDialogField.FooterMargin),
+            PageSetupValidationTarget.Scaling => new(PageSetupDialogTab.Page, PageSetupDialogField.Scaling),
+            PageSetupValidationTarget.FirstPageNumber => new(PageSetupDialogTab.Page, PageSetupDialogField.FirstPageNumber),
+            PageSetupValidationTarget.PrintQuality => new(PageSetupDialogTab.Page, PageSetupDialogField.PrintQuality),
+            PageSetupValidationTarget.PrintArea => new(PageSetupDialogTab.Sheet, PageSetupDialogField.PrintArea),
+            PageSetupValidationTarget.RepeatRows => new(PageSetupDialogTab.Sheet, PageSetupDialogField.RepeatRows),
+            PageSetupValidationTarget.RepeatColumns => new(PageSetupDialogTab.Sheet, PageSetupDialogField.RepeatColumns),
+            PageSetupValidationTarget.PageOrder => new(PageSetupDialogTab.Sheet, PageSetupDialogField.PageOrder),
+            PageSetupValidationTarget.PrintErrorValue => new(PageSetupDialogTab.Sheet, PageSetupDialogField.PrintErrorValue),
+            PageSetupValidationTarget.PrintComments => new(PageSetupDialogTab.Sheet, PageSetupDialogField.PrintComments),
+            _ => new(PageSetupDialogTab.Page, PageSetupDialogField.Orientation),
         };
 
     /// <summary>Reads the editable page-setup state of <paramref name="sheet"/> into dialog fields.</summary>

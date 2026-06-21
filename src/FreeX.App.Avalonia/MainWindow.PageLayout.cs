@@ -282,20 +282,30 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(dialog, "PageSetupDialog");
 
+        static IReadOnlyList<string> ChoiceLabels<T>(IReadOnlyList<PageSetupChoice<T>> choices) =>
+            choices.Select(choice => UiText.Get(choice.LabelResourceKey)).ToList();
+
         // --- Page tab ---
+        var orientationChoices = PageSetupDialogModel.OrientationChoices;
         var orientationBox = new ComboBox
         {
-            ItemsSource = new[] { UiText.Get("PageSetup_Portrait"), UiText.Get("PageSetup_Landscape") },
-            SelectedIndex = initial.Orientation == WorksheetPageOrientation.Landscape ? 1 : 0,
+            ItemsSource = ChoiceLabels(orientationChoices),
+            SelectedIndex = PageSetupDialogModel.ChoiceIndex(
+                orientationChoices,
+                initial.Orientation,
+                WorksheetPageOrientation.Portrait),
             MinWidth = 220,
         };
         AutomationProperties.SetAutomationId(orientationBox, "PageSetupOrientationBox");
 
-        var paperSizes = PageSetupDialogModel.PaperSizes;
+        var paperSizeChoices = PageSetupDialogModel.PaperSizeChoices;
         var paperBox = new ComboBox
         {
-            ItemsSource = paperSizes.Select(PageSetupDialogModel.DescribePaperSize).ToList(),
-            SelectedIndex = Math.Max(0, paperSizes.ToList().IndexOf(initial.PaperSize)),
+            ItemsSource = ChoiceLabels(paperSizeChoices),
+            SelectedIndex = PageSetupDialogModel.ChoiceIndex(
+                paperSizeChoices,
+                initial.PaperSize,
+                WorksheetPaperSize.A4),
             MinWidth = 220,
         };
         AutomationProperties.SetAutomationId(paperBox, "PageSetupPaperSizeBox");
@@ -464,48 +474,38 @@ public sealed partial class MainWindow
         var draftQualityCheck = new CheckBox { Content = UiText.Get("PageSetup_DraftQuality"), IsChecked = initial.PrintDraftQuality };
         AutomationProperties.SetAutomationId(draftQualityCheck, "PageSetupDraftQualityCheck");
 
+        var pageOrderChoices = PageSetupDialogModel.PageOrderChoices;
         var pageOrderBox = new ComboBox
         {
-            ItemsSource = new[] { UiText.Get("PageSetup_DownThenOver"), UiText.Get("PageSetup_OverThenDown") },
-            SelectedIndex = initial.PageOrder == WorksheetPageOrder.OverThenDown ? 1 : 0,
+            ItemsSource = ChoiceLabels(pageOrderChoices),
+            SelectedIndex = PageSetupDialogModel.ChoiceIndex(
+                pageOrderChoices,
+                initial.PageOrder,
+                WorksheetPageOrder.DownThenOver),
             MinWidth = 220,
         };
         AutomationProperties.SetAutomationId(pageOrderBox, "PageSetupPageOrderBox");
 
+        var printErrorValueChoices = PageSetupDialogModel.PrintErrorValueChoices;
         var cellErrorsBox = new ComboBox
         {
-            ItemsSource = new[]
-            {
-                UiText.Get("PageSetup_ErrorsDisplayed"),
-                UiText.Get("PageSetup_ErrorsBlank"),
-                UiText.Get("PageSetup_ErrorsDash"),
-                UiText.Get("PageSetup_ErrorsNotAvailable"),
-            },
-            SelectedIndex = initial.PrintErrorValue switch
-            {
-                WorksheetPrintErrorValue.Blank => 1,
-                WorksheetPrintErrorValue.Dash => 2,
-                WorksheetPrintErrorValue.NotAvailable => 3,
-                _ => 0,
-            },
+            ItemsSource = ChoiceLabels(printErrorValueChoices),
+            SelectedIndex = PageSetupDialogModel.ChoiceIndex(
+                printErrorValueChoices,
+                initial.PrintErrorValue,
+                WorksheetPrintErrorValue.Displayed),
             MinWidth = 220,
         };
         AutomationProperties.SetAutomationId(cellErrorsBox, "PageSetupCellErrorsBox");
 
+        var printCommentChoices = PageSetupDialogModel.PrintCommentChoices;
         var commentsBox = new ComboBox
         {
-            ItemsSource = new[]
-            {
-                UiText.Get("PageSetup_CommentsNone"),
-                UiText.Get("PageSetup_CommentsAtEnd"),
-                UiText.Get("PageSetup_CommentsAsDisplayed"),
-            },
-            SelectedIndex = initial.PrintComments switch
-            {
-                WorksheetPrintComments.AtEnd => 1,
-                WorksheetPrintComments.AsDisplayed => 2,
-                _ => 0,
-            },
+            ItemsSource = ChoiceLabels(printCommentChoices),
+            SelectedIndex = PageSetupDialogModel.ChoiceIndex(
+                printCommentChoices,
+                initial.PrintComments,
+                WorksheetPrintComments.None),
             MinWidth = 220,
         };
         AutomationProperties.SetAutomationId(commentsBox, "PageSetupCommentsBox");
@@ -523,27 +523,16 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(okButton, "PageSetupOkButton");
         AutomationProperties.SetAutomationId(cancelButton, "PageSetupCancelButton");
 
-        WorksheetPrintErrorValue ReadErrorValue() => cellErrorsBox.SelectedIndex switch
-        {
-            1 => WorksheetPrintErrorValue.Blank,
-            2 => WorksheetPrintErrorValue.Dash,
-            3 => WorksheetPrintErrorValue.NotAvailable,
-            _ => WorksheetPrintErrorValue.Displayed,
-        };
-
-        WorksheetPrintComments ReadComments() => commentsBox.SelectedIndex switch
-        {
-            1 => WorksheetPrintComments.AtEnd,
-            2 => WorksheetPrintComments.AsDisplayed,
-            _ => WorksheetPrintComments.None,
-        };
-
         PageSetupDialogFields ReadFields() => initial with
         {
-            Orientation = orientationBox.SelectedIndex == 1
-                ? WorksheetPageOrientation.Landscape
-                : WorksheetPageOrientation.Portrait,
-            PaperSize = paperSizes[Math.Clamp(paperBox.SelectedIndex, 0, paperSizes.Count - 1)],
+            Orientation = PageSetupDialogModel.ChoiceValue(
+                orientationChoices,
+                orientationBox.SelectedIndex,
+                WorksheetPageOrientation.Portrait),
+            PaperSize = PageSetupDialogModel.ChoiceValue(
+                paperSizeChoices,
+                paperBox.SelectedIndex,
+                WorksheetPaperSize.A4),
             MarginsText = marginsBox.Text ?? "",
             HeaderMarginText = headerMarginBox.Text ?? "",
             FooterMarginText = footerMarginBox.Text ?? "",
@@ -564,50 +553,24 @@ public sealed partial class MainWindow
             PrintHeadings = headingsCheck.IsChecked == true,
             PrintBlackAndWhite = blackAndWhiteCheck.IsChecked == true,
             PrintDraftQuality = draftQualityCheck.IsChecked == true,
-            PrintErrorValue = ReadErrorValue(),
-            PrintComments = ReadComments(),
-            PageOrder = pageOrderBox.SelectedIndex == 1
-                ? WorksheetPageOrder.OverThenDown
-                : WorksheetPageOrder.DownThenOver,
+            PrintErrorValue = PageSetupDialogModel.ChoiceValue(
+                printErrorValueChoices,
+                cellErrorsBox.SelectedIndex,
+                WorksheetPrintErrorValue.Displayed),
+            PrintComments = PageSetupDialogModel.ChoiceValue(
+                printCommentChoices,
+                commentsBox.SelectedIndex,
+                WorksheetPrintComments.None),
+            PageOrder = PageSetupDialogModel.ChoiceValue(
+                pageOrderChoices,
+                pageOrderBox.SelectedIndex,
+                WorksheetPageOrder.DownThenOver),
             Header = new WorksheetHeaderFooter(headerLeftBox.Text ?? "", headerCenterBox.Text ?? "", headerRightBox.Text ?? ""),
             Footer = new WorksheetHeaderFooter(footerLeftBox.Text ?? "", footerCenterBox.Text ?? "", footerRightBox.Text ?? ""),
             DifferentFirstPage = differentFirstPageCheck.IsChecked == true,
             DifferentOddEvenPages = differentOddEvenCheck.IsChecked == true,
             ScaleHeaderFooterWithDocument = scaleWithDocumentCheck.IsChecked == true,
             AlignHeaderFooterWithMargins = alignWithMarginsCheck.IsChecked == true,
-        };
-
-        void Accept()
-        {
-            var fields = ReadFields();
-            var build = PageSetupDialogModel.TryBuildCommand(_session.ActiveSheet, fields);
-            if (!build.Success)
-            {
-                validationText.Text = build.Error;
-                validationText.IsVisible = true;
-                return;
-            }
-
-            if (!PageSetupDialogModel.TryParsePrintArea(fields.PrintAreaText, _session.ActiveSheet.Id, out _))
-            {
-                validationText.Text = UiText.Get("ShellLoc_PrintAreaMustBeRange");
-                validationText.IsVisible = true;
-                return;
-            }
-
-            result = fields;
-            dialog.Close();
-        }
-
-        okButton.Click += (_, _) => Accept();
-        cancelButton.Click += (_, _) => dialog.Close();
-        dialog.KeyDown += (_, e) =>
-        {
-            if (e.Key == Key.Escape)
-            {
-                dialog.Close();
-                e.Handled = true;
-            }
         };
 
         var buttonRow = new StackPanel
@@ -772,6 +735,43 @@ public sealed partial class MainWindow
             Items = { pageTab, marginsTab, headerFooterTab, sheetTab },
         };
         AutomationProperties.SetAutomationId(tabs, "PageSetupTabs");
+
+        void SelectValidationRoute(PageSetupValidationRoute route)
+        {
+            tabs.SelectedItem = route.Tab switch
+            {
+                PageSetupDialogTab.Margins => marginsTab,
+                PageSetupDialogTab.Sheet => sheetTab,
+                _ => pageTab,
+            };
+        }
+
+        void Accept()
+        {
+            var fields = ReadFields();
+            var build = PageSetupDialogModel.TryBuildCommand(_session.ActiveSheet, fields);
+            if (!build.Success)
+            {
+                SelectValidationRoute(PageSetupDialogModel.GetValidationRoute(build.Target));
+                validationText.Text = build.Error;
+                validationText.IsVisible = true;
+                return;
+            }
+
+            result = fields;
+            dialog.Close();
+        }
+
+        okButton.Click += (_, _) => Accept();
+        cancelButton.Click += (_, _) => dialog.Close();
+        dialog.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Escape)
+            {
+                dialog.Close();
+                e.Handled = true;
+            }
+        };
 
         DockPanel.SetDock(buttonRow, AvaloniaDock.Bottom);
         DockPanel.SetDock(validationText, AvaloniaDock.Bottom);
