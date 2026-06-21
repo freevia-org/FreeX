@@ -213,25 +213,25 @@ public sealed class DocumentViewHeadlessTests
     }
 
     [Fact]
-    public async Task MainWindow_tracks_dirty_and_new_document_state_with_shared_file_command_session()
+    public async Task MainWindow_tracks_dirty_and_new_document_state_with_shared_file_command_workflow()
     {
         var ran = await OnUiThread(() =>
         {
             var window = new MainWindow(Array.Empty<string>());
-            var session = GetPrivateField<FileCommandSession>(window, "_session");
+            var workflow = GetPrivateField<FileCommandWorkflow>(window, "_fileWorkflow");
 
-            session.IsDirty.Should().BeFalse();
-            session.CurrentPath.Should().BeNull();
-            session.DisplayName.Should().Be("Untitled");
+            workflow.IsDirty.Should().BeFalse();
+            workflow.CurrentPath.Should().BeNull();
+            workflow.DisplayName.Should().Be("Untitled");
 
             window.Editor.InsertText("draft ");
-            session.IsDirty.Should().BeTrue();
+            workflow.IsDirty.Should().BeTrue();
 
             InvokePrivate(window, "NewDocument");
 
-            session.IsDirty.Should().BeFalse();
-            session.CurrentPath.Should().BeNull();
-            session.DisplayName.Should().Be("Untitled");
+            workflow.IsDirty.Should().BeFalse();
+            workflow.CurrentPath.Should().BeNull();
+            workflow.DisplayName.Should().Be("Untitled");
             window.Title.Should().Be("FreeW");
         });
 

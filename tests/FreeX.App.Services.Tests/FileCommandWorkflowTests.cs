@@ -104,6 +104,69 @@ public sealed class FileCommandWorkflowTests : IDisposable
     }
 
     [Fact]
+    public async Task SaveAsync_UsesCurrentPathOrSaveAsFromPlanner()
+    {
+        var workflow = CreateWorkflow();
+        var path = Path.Combine(_tempDir, "saved.fxp");
+        var savedPaths = new List<string>();
+        var saveAsCount = 0;
+
+        (await workflow.SaveAsync(
+            p =>
+            {
+                savedPaths.Add(p);
+                return Task.FromResult(true);
+            },
+            () =>
+            {
+                saveAsCount++;
+                return Task.FromResult(true);
+            }))
+            .Should()
+            .BeTrue();
+        saveAsCount.Should().Be(1);
+
+        workflow.MarkSavedWithPath(path, suppressRecentFiles: true);
+        (await workflow.SaveAsync(
+            p =>
+            {
+                savedPaths.Add(p);
+                return Task.FromResult(true);
+            },
+            () => Task.FromResult(false)))
+            .Should()
+            .BeTrue();
+
+        savedPaths.Should().Equal(path);
+    }
+
+    [Fact]
+    public async Task OpenAsync_DirtyDocument_UsesSharedDirtyGateBeforePromptingForPath()
+    {
+        var promptedForPath = false;
+        var opened = false;
+        var workflow = CreateWorkflow(prompt: _ => SaveChangesPrompt.Cancel);
+        workflow.MarkDirty();
+
+        var proceeded = await workflow.OpenAsync(
+            "opening another document",
+            () =>
+            {
+                promptedForPath = true;
+                return Task.FromResult<string?>("ignored.fxp");
+            },
+            _ =>
+            {
+                opened = true;
+                return Task.FromResult(true);
+            });
+
+        proceeded.Should().BeFalse();
+        promptedForPath.Should().BeFalse();
+        opened.Should().BeFalse();
+    }
+
+    [Fact]
     public void MarkSavedWithPath_UsesCurrentRecentFilesCapAndNotifies()
     {
         var cap = 2;

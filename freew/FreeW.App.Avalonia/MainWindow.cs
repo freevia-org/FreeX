@@ -32,7 +32,7 @@ public sealed class MainWindow : Window
     private readonly TextBox _replaceBox = new() { Width = 200, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock _zoomLabel = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0) };
     private readonly ScaleTransform _zoom = new(1, 1);
-    private readonly FileCommandSession _session = new();
+    private readonly FileCommandWorkflow _fileWorkflow;
     private Border? _findBar;
     private ScrollViewer? _scroller;
     private double _zoomScale = 1.0;
@@ -51,6 +51,11 @@ public sealed class MainWindow : Window
         MinWidth = 720;
         MinHeight = 480;
         Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
+        _fileWorkflow = new FileCommandWorkflow(
+            maxRecentEntries: () => 0,
+            onChanged: UpdateStatus,
+            promptSaveChanges: _ => SaveChangesPrompt.DontSave,
+            save: () => true);
 
         var root = new DockPanel();
 
@@ -229,11 +234,10 @@ public sealed class MainWindow : Window
 
     private void NewDocument()
     {
-        if (!ShouldReplaceCurrentDocument())
-            return;
-
-        LoadDocumentAsSaved(TextDocument.CreateEmpty(), path: null);
-        Title = "FreeW";
+        _fileWorkflow.New(
+            "replace the current document",
+            () => LoadDocumentContent(TextDocument.CreateEmpty()),
+            () => Title = "FreeW");
     }
 
     private void ToggleFindBar(bool show)
@@ -307,9 +311,14 @@ public sealed class MainWindow : Window
 
     private async Task OpenAsync()
     {
-        if (!ShouldReplaceCurrentDocument())
-            return;
+        await _fileWorkflow.OpenAsync(
+            "opening another document",
+            PromptOpenPathAsync,
+            OpenPathAsync);
+    }
 
+    private async Task<string?> PromptOpenPathAsync()
+    {
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
             Title = "Open document",
@@ -318,17 +327,18 @@ public sealed class MainWindow : Window
         });
 
         if (files.Count == 0)
-            return;
+            return null;
 
-        var path = files[0].TryGetLocalPath();
-        if (path is null)
-            return;
+        return files[0].TryGetLocalPath();
+    }
 
+    private Task<bool> OpenPathAsync(string path)
+    {
         var adapter = DocumentFileFormatResolver.FindOpenAdapter(_adapters, Path.GetExtension(path), out var format);
         if (adapter is null)
         {
             _status.Text = $"Open failed: unsupported file type \"{Path.GetExtension(path)}\".";
-            return;
+            return Task.FromResult(false);
         }
 
         try
@@ -347,37 +357,44 @@ public sealed class MainWindow : Window
                 LoadDocumentAsSaved(document, path);
                 Title = $"FreeW - {Path.GetFileName(path)}";
             }
+
+            return Task.FromResult(true);
         }
         catch (Exception ex)
         {
             _status.Text = $"Open failed: {ex.Message}";
+            return Task.FromResult(false);
         }
     }
 
-    private async Task SaveAsync()
+    private Task<bool> SaveAsync() =>
+        _fileWorkflow.SaveAsync(SaveToCurrentPathAsync, SaveAsAsync);
+
+    private Task<bool> SaveToCurrentPathAsync(string path) => SaveToPathAsync(path);
+
+    private async Task<bool> SaveAsAsync()
     {
-        var saveIntent = FileLifecyclePlanner.PlanSave(_session.IsDirty, _session.CurrentPath);
-        var path = _session.CurrentPath;
-        if (saveIntent == FileSaveIntent.PromptSaveAs)
+        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
-            var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
-            {
-                Title = "Save document",
-                DefaultExtension = "docx",
-                SuggestedFileName = "Document.docx",
-                FileTypeChoices = [.. DocumentFilePickerTypes.BuildSaveTypes(_adapters)],
-            });
-            path = file?.TryGetLocalPath();
-        }
+            Title = "Save document",
+            DefaultExtension = "docx",
+            SuggestedFileName = _fileWorkflow.CurrentPath is null
+                ? "Document.docx"
+                : Path.GetFileName(_fileWorkflow.CurrentPath),
+            FileTypeChoices = [.. DocumentFilePickerTypes.BuildSaveTypes(_adapters)],
+        });
 
-        if (path is null)
-            return;
+        var path = file?.TryGetLocalPath();
+        return path is not null && await SaveToPathAsync(path);
+    }
 
+    private Task<bool> SaveToPathAsync(string path)
+    {
         var adapter = DocumentFileFormatResolver.FindSaveAdapter(_adapters, Path.GetExtension(path), out _);
         if (adapter is null)
         {
             _status.Text = $"Save failed: unsupported file type \"{Path.GetExtension(path)}\".";
-            return;
+            return Task.FromResult(false);
         }
 
         try
@@ -387,10 +404,12 @@ public sealed class MainWindow : Window
             MarkDocumentSavedWithPath(path);
             Title = $"FreeW - {Path.GetFileName(path)}";
             _status.Text = $"Saved {Path.GetFileName(path)}";
+            return Task.FromResult(true);
         }
         catch (Exception ex)
         {
             _status.Text = $"Save failed: {ex.Message}";
+            return Task.FromResult(false);
         }
     }
 
@@ -406,7 +425,7 @@ public sealed class MainWindow : Window
         {
             Title = "Export to PDF",
             DefaultExtension = "pdf",
-            SuggestedFileName = (_session.CurrentPath is null ? "Document" : Path.GetFileNameWithoutExtension(_session.CurrentPath)) + ".pdf",
+            SuggestedFileName = (_fileWorkflow.CurrentPath is null ? "Document" : Path.GetFileNameWithoutExtension(_fileWorkflow.CurrentPath)) + ".pdf",
             FileTypeChoices = [PdfFileType],
         });
         var path = file?.TryGetLocalPath();
@@ -426,6 +445,20 @@ public sealed class MainWindow : Window
 
     private void LoadDocumentAsSaved(TextDocument document, string? path)
     {
+        LoadDocumentContent(document);
+
+        if (path is null)
+        {
+            _fileWorkflow.MarkSavedWithoutPath();
+        }
+        else
+        {
+            MarkDocumentSavedWithPath(path);
+        }
+    }
+
+    private void LoadDocumentContent(TextDocument document)
+    {
         _suppressEditorDirty = true;
         try
         {
@@ -435,41 +468,19 @@ public sealed class MainWindow : Window
         {
             _suppressEditorDirty = false;
         }
-
-        if (path is null)
-        {
-            _session.MarkSavedWithoutPath();
-        }
-        else
-        {
-            MarkDocumentSavedWithPath(path);
-        }
-
-        UpdateStatus();
-    }
-
-    private bool ShouldReplaceCurrentDocument()
-    {
-        // FreeW Avalonia has historically discarded unsaved edits on New/Open without prompting.
-        // Keep that behavior for now, but express the decision through the shared lifecycle planner
-        // so a future prompt can be plugged in without duplicating the dirty-gate ceremony.
-        return _session.ConfirmDiscardOrSave(
-            "replace the current document",
-            _ => SaveChangesPrompt.DontSave,
-            save: () => true);
     }
 
     private void OnEditorDocumentChanged()
     {
         if (!_suppressEditorDirty)
-            _session.MarkDirty();
+            _fileWorkflow.MarkDirty();
 
         UpdateStatus();
     }
 
     private void MarkDocumentSavedWithPath(string path)
     {
-        _session.MarkSavedWithPath(path, suppressRecentFiles: true, maxRecentEntries: 0);
+        _fileWorkflow.MarkSavedWithPath(path, suppressRecentFiles: true);
     }
 
     private void UpdateStatus()

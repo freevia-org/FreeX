@@ -64,6 +64,21 @@ public sealed class FileCommandWorkflow
         return true;
     }
 
+    public async Task<bool> NewAsync(
+        string action,
+        Func<Task> loadNewDocumentAsync,
+        Action? beforeChanged = null)
+    {
+        ArgumentNullException.ThrowIfNull(loadNewDocumentAsync);
+
+        if (!ConfirmDiscardOrSave(action))
+            return false;
+
+        await loadNewDocumentAsync();
+        MarkSavedWithoutPath(beforeChanged);
+        return true;
+    }
+
     public bool Open(string action, Func<string?> promptPath, Func<string, bool> openPath)
     {
         ArgumentNullException.ThrowIfNull(promptPath);
@@ -76,6 +91,21 @@ public sealed class FileCommandWorkflow
         return !string.IsNullOrWhiteSpace(path) && openPath(path);
     }
 
+    public async Task<bool> OpenAsync(
+        string action,
+        Func<Task<string?>> promptPathAsync,
+        Func<string, Task<bool>> openPathAsync)
+    {
+        ArgumentNullException.ThrowIfNull(promptPathAsync);
+        ArgumentNullException.ThrowIfNull(openPathAsync);
+
+        if (!ConfirmDiscardOrSave(action))
+            return false;
+
+        var path = await promptPathAsync();
+        return !string.IsNullOrWhiteSpace(path) && await openPathAsync(path);
+    }
+
     public bool Save(Func<string, bool> saveToCurrentPath, Func<bool> saveAs)
     {
         ArgumentNullException.ThrowIfNull(saveToCurrentPath);
@@ -86,6 +116,21 @@ public sealed class FileCommandWorkflow
             FileSaveIntent.UseExistingPath => saveToCurrentPath(_session.CurrentPath!),
             FileSaveIntent.NothingToDo => saveToCurrentPath(_session.CurrentPath!),
             _ => saveAs(),
+        };
+    }
+
+    public Task<bool> SaveAsync(
+        Func<string, Task<bool>> saveToCurrentPathAsync,
+        Func<Task<bool>> saveAsAsync)
+    {
+        ArgumentNullException.ThrowIfNull(saveToCurrentPathAsync);
+        ArgumentNullException.ThrowIfNull(saveAsAsync);
+
+        return FileLifecyclePlanner.PlanSave(_session.IsDirty, _session.CurrentPath) switch
+        {
+            FileSaveIntent.UseExistingPath => saveToCurrentPathAsync(_session.CurrentPath!),
+            FileSaveIntent.NothingToDo => saveToCurrentPathAsync(_session.CurrentPath!),
+            _ => saveAsAsync(),
         };
     }
 
