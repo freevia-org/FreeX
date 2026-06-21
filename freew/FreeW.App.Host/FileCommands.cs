@@ -18,8 +18,7 @@ namespace FreeW.App.Host;
 /// <see cref="FileLifecyclePlanner"/> (P2). FreeW supplies only the thin host side: the native
 /// <see cref="OpenFileDialog"/>/<see cref="SaveFileDialog"/> for its single <c>.docx</c> format
 /// (via the shared <see cref="FileDialogFilter"/>), the actual docx read/write, and the message
-/// prompts. The dirty/path state lives in the shared <see cref="WorkbookDocumentState"/>, replacing
-/// the hand-rolled <c>IsDirty</c> bool and <c>_currentPath</c> field this class used to carry.
+/// prompts. The dirty/path state lives in the shared <see cref="FileCommandSession"/>.
 /// </para>
 ///
 /// <para>
@@ -32,7 +31,7 @@ internal sealed class FileCommands
     private readonly Window _window;
     private readonly DocumentView _editor;
     private readonly Action _onChanged;
-    private readonly WorkbookDocumentState _state = new();
+    private readonly FileCommandSession _session;
 
     // FreeW's persisted settings (shared JsonSettingsStore under %APPDATA%\FreeW). The recent-files cap
     // is read from here when registering a saved/opened file — a real read site that proves the options
@@ -51,24 +50,25 @@ internal sealed class FileCommands
         DocumentView editor,
         Action onChanged,
         FreeWOptions? options = null,
-        IReadOnlyList<IDocumentFileAdapter>? adapters = null)
+        IReadOnlyList<IDocumentFileAdapter>? adapters = null,
+        Func<RecentFilesStore>? loadRecentFilesStore = null)
     {
         _window = window;
         _editor = editor;
         _onChanged = onChanged;
+        _session = new FileCommandSession(loadRecentFilesStore: loadRecentFilesStore);
         _options = options ?? new FreeWOptions();
         _adapters = adapters ?? DocumentFileAdapterCatalog.CreateDefaultAdapters();
     }
 
-    public bool IsDirty => _state.IsDirty;
+    public bool IsDirty => _session.IsDirty;
 
     /// <summary>Monotonic dirty-edit counter, used by autosave to suppress redundant snapshots.</summary>
-    public int DirtyGeneration => _state.DirtyGeneration;
+    public int DirtyGeneration => _session.DirtyGeneration;
 
-    public string? CurrentPath => _state.CurrentFilePath;
+    public string? CurrentPath => _session.CurrentPath;
 
-    public string DisplayName =>
-        _state.CurrentFilePath is null ? "Untitled" : Path.GetFileNameWithoutExtension(_state.CurrentFilePath);
+    public string DisplayName => _session.DisplayName;
 
     /// <summary>Load a recovered autosave snapshot, targeting the original path and marking dirty.</summary>
     public void OpenSnapshot(string snapshotPath, string? originalPath)
@@ -76,8 +76,8 @@ internal sealed class FileCommands
         try
         {
             _editor.LoadModel(DocxReader.Read(snapshotPath));
-            _state.SetCurrentFilePath(originalPath);
-            _state.MarkDirty();
+            _session.SetCurrentPath(originalPath);
+            _session.MarkDirty();
             _editor.CurrentFileName = originalPath is null ? null : Path.GetFileName(originalPath);
             _onChanged();
         }
@@ -89,10 +89,7 @@ internal sealed class FileCommands
 
     public void MarkDirty()
     {
-        if (_state.IsDirty)
-            return;
-        _state.MarkDirty();
-        _onChanged();
+        _session.MarkDirtyIfClean(_onChanged);
     }
 
     /// <summary>
@@ -105,8 +102,8 @@ internal sealed class FileCommands
             return false;
 
         _editor.LoadModel(TextDocument.CreateEmpty());
-        _state.ClearCurrentFilePath();
-        _state.MarkSaved();
+        _session.ClearCurrentPath();
+        _session.MarkSaved();
         _editor.CurrentFileName = null;
         _onChanged();
         return true;
@@ -154,8 +151,8 @@ internal sealed class FileCommands
             if (format!.OpensAsTemplate)
             {
                 // A template seeds a new untitled document: clear the path so the next Save becomes Save-As.
-                _state.ClearCurrentFilePath();
-                _state.MarkSaved();
+                _session.ClearCurrentPath();
+                _session.MarkSaved();
                 _editor.CurrentFileName = null;
                 _onChanged();
             }
@@ -174,27 +171,14 @@ internal sealed class FileCommands
     }
 
     /// <summary>Recent files (most recent first) from the shared store; never throws.</summary>
-    public IReadOnlyList<RecentFileEntry> RecentEntries
-    {
-        get
-        {
-            try
-            {
-                return RecentFilesStore.Load().Entries;
-            }
-            catch
-            {
-                return Array.Empty<RecentFileEntry>();
-            }
-        }
-    }
+    public IReadOnlyList<RecentFileEntry> RecentEntries => _session.RecentEntries;
 
     /// <summary>
     /// File &gt; Save. Resolves Save-vs-Save-As via the shared planner: writes to the existing path
     /// when there is one, otherwise falls through to Save-As. Returns true on a successful (or no-op)
     /// save, false on cancel/error.
     /// </summary>
-    public bool Save() => FileLifecyclePlanner.PlanSave(_state.IsDirty, _state.CurrentFilePath) switch
+    public bool Save() => FileLifecyclePlanner.PlanSave(_session.IsDirty, _session.CurrentPath) switch
     {
         FileSaveIntent.UseExistingPath => SaveToCurrentPath(),
         FileSaveIntent.NothingToDo => SaveToCurrentPath(),
@@ -240,17 +224,7 @@ internal sealed class FileCommands
     /// </summary>
     private bool ConfirmDiscardOrSave(string action)
     {
-        if (FileLifecyclePlanner.PlanDirtyGate(_state.IsDirty) == DirtyGateIntent.ProceedWithoutPrompt)
-            return true;
-
-        var answer = PromptSaveChanges(action);
-        return FileLifecyclePlanner.ResolveDirtyGate(answer) switch
-        {
-            DirtyGateAction.Cancel => false,
-            DirtyGateAction.ProceedDiscardingChanges => true,
-            DirtyGateAction.SaveThenProceed => Save(),
-            _ => false,
-        };
+        return _session.ConfirmDiscardOrSave(action, PromptSaveChanges, Save);
     }
 
     /// <summary>
@@ -259,7 +233,7 @@ internal sealed class FileCommands
     /// </summary>
     private bool SaveToCurrentPath()
     {
-        var path = _state.CurrentFilePath!;
+        var path = _session.CurrentPath!;
         var adapter = DocumentFileFormatResolver.FindSaveAdapter(_adapters, Path.GetExtension(path), out _);
         return adapter is null ? SaveAs() : SaveTo(path, adapter);
     }
@@ -291,7 +265,7 @@ internal sealed class FileCommands
         path = "";
         adapter = null!;
 
-        var currentExtension = _state.CurrentFilePath is { } existing
+        var currentExtension = _session.CurrentPath is { } existing
             ? Path.GetExtension(existing)
             : DefaultSaveExtension;
         var dialog = new SaveFileDialog
@@ -301,9 +275,9 @@ internal sealed class FileCommands
             DefaultExt = DefaultSaveExtension,
             AddExtension = true,
             OverwritePrompt = true,
-            FileName = _state.CurrentFilePath is null
+            FileName = _session.CurrentPath is null
                 ? "Document" + DefaultSaveExtension
-                : Path.GetFileName(_state.CurrentFilePath),
+                : Path.GetFileName(_session.CurrentPath),
         };
         if (dialog.ShowDialog(_window) != true)
             return false;
@@ -325,23 +299,9 @@ internal sealed class FileCommands
 
     private void SetSaved(string path, bool suppressRecentFiles)
     {
-        _state.MarkSavedWithPath(path);
+        _session.MarkSavedWithPath(path, suppressRecentFiles, _options.RecentFilesCap);
         // Surface the file name to the editor so FILENAME field runs resolve to it at render.
         _editor.CurrentFileName = Path.GetFileName(path);
-
-        if (FileLifecyclePlanner.PlanRecentRegistration(path, suppressRecentFiles) == RecentFileRegistration.Register)
-        {
-            try
-            {
-                // Honour the user-configured recent-files cap (FreeWOptions.RecentFilesCap) — a real read
-                // site for the shared options mechanism. The shared store still always retains pinned items.
-                RecentFilesStore.Load().AddOrUpdate(path, _options.RecentFilesCap);
-            }
-            catch
-            {
-                // Recent-files tracking is best-effort; never block a save/open on it.
-            }
-        }
 
         _onChanged();
     }

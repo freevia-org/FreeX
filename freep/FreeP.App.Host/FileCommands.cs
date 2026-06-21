@@ -16,7 +16,7 @@ namespace FreeP.App.Host;
 /// <see cref="FileLifecyclePlanner"/>. FreeP supplies only the thin host side: the native
 /// <see cref="OpenFileDialog"/>/<see cref="SaveFileDialog"/> for its single <c>.fxp</c> format (via the shared
 /// <see cref="FileDialogFilter"/>), the actual <c>.fxp</c> read/write, and the message prompts. Dirty/path
-/// state lives in the shared <see cref="WorkbookDocumentState"/>; recent files in the shared
+/// state lives in the shared <see cref="FileCommandSession"/>; recent files in the shared
 /// <see cref="RecentFilesStore"/>. Mirrors FreeW.FileCommands exactly (FreeW already adopted these seams).
 /// </para>
 ///
@@ -32,7 +32,7 @@ internal sealed class FileCommands
     private readonly Func<Presentation> _getModel;
     private readonly Action<Presentation> _loadModel;
     private readonly Action _onChanged;
-    private readonly WorkbookDocumentState _state = new();
+    private readonly FileCommandSession _session;
     private readonly FreePOptions _options;
 
     // FreeP ships a single .fxp format; the filter/default-extension are composed by the shared
@@ -48,28 +48,26 @@ internal sealed class FileCommands
         Func<Presentation> getModel,
         Action<Presentation> loadModel,
         Action onChanged,
-        FreePOptions? options = null)
+        FreePOptions? options = null,
+        Func<RecentFilesStore>? loadRecentFilesStore = null)
     {
         _window = window;
         _getModel = getModel;
         _loadModel = loadModel;
         _onChanged = onChanged;
+        _session = new FileCommandSession(loadRecentFilesStore: loadRecentFilesStore);
         _options = options ?? new FreePOptions();
     }
 
-    public bool IsDirty => _state.IsDirty;
+    public bool IsDirty => _session.IsDirty;
 
-    public string? CurrentPath => _state.CurrentFilePath;
+    public string? CurrentPath => _session.CurrentPath;
 
-    public string DisplayName =>
-        _state.CurrentFilePath is null ? "Untitled" : Path.GetFileNameWithoutExtension(_state.CurrentFilePath);
+    public string DisplayName => _session.DisplayName;
 
     public void MarkDirty()
     {
-        if (_state.IsDirty)
-            return;
-        _state.MarkDirty();
-        _onChanged();
+        _session.MarkDirtyIfClean(_onChanged);
     }
 
     /// <summary>File &gt; New. Dirty-gates so unsaved work is not silently lost. Returns false on cancel.</summary>
@@ -79,8 +77,8 @@ internal sealed class FileCommands
             return false;
 
         _loadModel(Presentation.CreateEmpty());
-        _state.ClearCurrentFilePath();
-        _state.MarkSaved();
+        _session.ClearCurrentPath();
+        _session.MarkSaved();
         _onChanged();
         return true;
     }
@@ -117,26 +115,13 @@ internal sealed class FileCommands
     }
 
     /// <summary>Recent files (most recent first) from the shared store; never throws.</summary>
-    public IReadOnlyList<RecentFileEntry> RecentEntries
-    {
-        get
-        {
-            try
-            {
-                return RecentFilesStore.Load().Entries;
-            }
-            catch
-            {
-                return Array.Empty<RecentFileEntry>();
-            }
-        }
-    }
+    public IReadOnlyList<RecentFileEntry> RecentEntries => _session.RecentEntries;
 
     /// <summary>File &gt; Save. Resolves Save-vs-Save-As via the shared planner.</summary>
-    public bool Save() => FileLifecyclePlanner.PlanSave(_state.IsDirty, _state.CurrentFilePath) switch
+    public bool Save() => FileLifecyclePlanner.PlanSave(_session.IsDirty, _session.CurrentPath) switch
     {
-        FileSaveIntent.UseExistingPath => SaveTo(_state.CurrentFilePath!),
-        FileSaveIntent.NothingToDo => SaveTo(_state.CurrentFilePath!),
+        FileSaveIntent.UseExistingPath => SaveTo(_session.CurrentPath!),
+        FileSaveIntent.NothingToDo => SaveTo(_session.CurrentPath!),
         _ => SaveAs(),
     };
 
@@ -149,9 +134,9 @@ internal sealed class FileCommands
             DefaultExt = DefaultExtension,
             AddExtension = true,
             OverwritePrompt = true,
-            FileName = _state.CurrentFilePath is null
+            FileName = _session.CurrentPath is null
                 ? "Presentation" + DefaultExtension
-                : Path.GetFileName(_state.CurrentFilePath)
+                : Path.GetFileName(_session.CurrentPath)
         };
         return dialog.ShowDialog(_window) == true && SaveTo(dialog.FileName);
     }
@@ -161,17 +146,7 @@ internal sealed class FileCommands
 
     private bool ConfirmDiscardOrSave(string action)
     {
-        if (FileLifecyclePlanner.PlanDirtyGate(_state.IsDirty) == DirtyGateIntent.ProceedWithoutPrompt)
-            return true;
-
-        var answer = PromptSaveChanges(action);
-        return FileLifecyclePlanner.ResolveDirtyGate(answer) switch
-        {
-            DirtyGateAction.Cancel => false,
-            DirtyGateAction.ProceedDiscardingChanges => true,
-            DirtyGateAction.SaveThenProceed => Save(),
-            _ => false,
-        };
+        return _session.ConfirmDiscardOrSave(action, PromptSaveChanges, Save);
     }
 
     private bool SaveTo(string path)
@@ -191,21 +166,7 @@ internal sealed class FileCommands
 
     private void SetSaved(string path, bool suppressRecentFiles)
     {
-        _state.MarkSavedWithPath(path);
-
-        if (FileLifecyclePlanner.PlanRecentRegistration(path, suppressRecentFiles) == RecentFileRegistration.Register)
-        {
-            try
-            {
-                // Honour the user-configured recent-files cap (FreePOptions.RecentFilesCap) — a real read site
-                // for the shared options mechanism. The shared store still always retains pinned items.
-                RecentFilesStore.Load().AddOrUpdate(path, _options.RecentFilesCap);
-            }
-            catch
-            {
-                // Recent-files tracking is best-effort; never block a save/open on it.
-            }
-        }
+        _session.MarkSavedWithPath(path, suppressRecentFiles, _options.RecentFilesCap);
 
         _onChanged();
     }

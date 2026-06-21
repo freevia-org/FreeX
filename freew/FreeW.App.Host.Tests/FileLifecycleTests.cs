@@ -12,7 +12,7 @@ namespace FreeW.App.Host.Tests;
 /// <summary>
 /// Coverage for FreeW's P2 file-lifecycle adoption: <see cref="FileCommands"/> now routes its
 /// ceremony through the shared <see cref="FileLifecyclePlanner"/> and tracks dirty/path state via the
-/// shared <see cref="WorkbookDocumentState"/> (replacing the old hand-rolled <c>IsDirty</c> bool).
+/// shared <see cref="FileCommandSession"/>.
 ///
 /// <para>
 /// These exercise only the dialog-free paths (New on a clean doc, MarkDirty, OpenPath/Save to an
@@ -40,7 +40,12 @@ public sealed class FileLifecycleTests : IDisposable
         var editor = new DocumentView();
         editor.LoadModel(TextDocument.CreateEmpty());
         var changes = 0;
-        var file = new FileCommands(window, editor, () => changes++);
+        var recentStorePath = Path.Combine(_tempDir, "recent.json");
+        var file = new FileCommands(
+            window,
+            editor,
+            () => changes++,
+            loadRecentFilesStore: () => RecentFilesStore.Load(recentStorePath));
         return (window, editor, file, () => changes);
     }
 
