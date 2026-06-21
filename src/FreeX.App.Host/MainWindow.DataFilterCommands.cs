@@ -88,7 +88,7 @@ public partial class MainWindow
         }
 
         ClearRememberedAutoFilterCommand();
-        UpdateViewport();
+        UpdateFilterViewportAndStatusBar();
     }
 
     private bool TryExecuteRememberedAutoFilterCommand(
@@ -122,7 +122,7 @@ public partial class MainWindow
             return;
 
         RestoreAutoFilterRangeSelection(range);
-        UpdateViewport();
+        UpdateFilterViewportAndStatusBar();
     }
 
     private void ClearRememberedAutoFilterCommand()
@@ -130,6 +130,12 @@ public partial class MainWindow
         _lastAutoFilterRange = null;
         _lastAutoFilterCommandFactory = null;
         _lastAutoFilterCommandTitle = "Reapply Filter";
+    }
+
+    private void UpdateFilterViewportAndStatusBar()
+    {
+        UpdateViewport();
+        RefreshStatusBar();
     }
 
     private bool ApplyAutoFilterDialogResult(GridRange range, uint filterColOffset, AutoFilterDialogResult result, string title)
@@ -436,7 +442,7 @@ public partial class MainWindow
             return;
         ClearRememberedAutoFilterCommand();
         RestoreAutoFilterRangeSelection(range);
-        UpdateViewport();
+        UpdateFilterViewportAndStatusBar();
     }
 
     private void RestoreAutoFilterRangeSelection(GridRange range)

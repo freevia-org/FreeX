@@ -812,6 +812,42 @@ public sealed partial class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void AutoFilterAndAdvancedFilter_RefreshStatusBarAfterRowsAreHiddenOrShown()
+    {
+        var dataFilterSource = DialogSourceTestSupport.ReadHostSources("MainWindow.DataFilterCommands.cs");
+        var editingSource = ReadEditingSource();
+        var dataCommandsSource = DialogSourceTestSupport.ReadHostSources("MainWindow.DataCommands.cs");
+
+        dataFilterSource.Should().Contain("private void UpdateFilterViewportAndStatusBar()");
+        dataFilterSource.Should().Contain("UpdateViewport();");
+        dataFilterSource.Should().Contain("RefreshStatusBar();");
+
+        ExtractMethodSource(dataFilterSource, "private void FilterButton_Click(")
+            .Should()
+            .Contain("UpdateFilterViewportAndStatusBar();");
+        ExtractMethodSource(dataFilterSource, "private void ReapplyAutoFilter()")
+            .Should()
+            .Contain("UpdateFilterViewportAndStatusBar();");
+        ExtractMethodSource(dataFilterSource, "private void ClearFilterButton_Click(")
+            .Should()
+            .Contain("UpdateFilterViewportAndStatusBar();");
+
+        var committedHandlerStart = editingSource.IndexOf("dialog.ResultCommitted += (_, result) =>", StringComparison.Ordinal);
+        committedHandlerStart.Should().BeGreaterThanOrEqualTo(0);
+        var committedHandlerEnd = editingSource.IndexOf("};", committedHandlerStart, StringComparison.Ordinal);
+        committedHandlerEnd.Should().BeGreaterThan(committedHandlerStart);
+        var committedHandler = editingSource[committedHandlerStart..committedHandlerEnd];
+        committedHandler.Should().Contain("ApplyAutoFilterDialogResult(plan.Range, plan.FilterColumnOffset, result, \"AutoFilter\")");
+        committedHandler.Should().Contain("UpdateViewport();");
+        committedHandler.Should().Contain("RefreshStatusBar();");
+
+        ExtractMethodSource(dataCommandsSource, "private void AdvancedFilterBtn_Click(")
+            .Should()
+            .Contain("UpdateViewport();")
+            .And.Contain("RefreshStatusBar();");
+    }
+
+    [Fact]
     public void GridRenderedAutoFilterButtons_AreWiredToHostFlyoutRoute()
     {
         var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
