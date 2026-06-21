@@ -162,26 +162,26 @@ public sealed partial class MainWindowSourceHygieneTests
         saveTargetMethod.Should().NotContain("MessageBox.Show(");
 
         var confirmMethod = ExtractMethodSource(lifecycleSource, "private async Task<SaveChangesConfirmation> ConfirmSaveBeforeDestructiveActionAsync(");
-        confirmMethod.Should().Contain("ShowOwnedMessage(");
-        confirmMethod.Should().Contain("SaveChangesConfirmation.DiscardWithoutSaving");
-        // P2b: the dirty-gate DECISION now routes through the shared FileLifecyclePlanner. The dirty
-        // check and the Save/Don't-Save/Cancel answer mapping are the planner's PlanDirtyGate /
-        // ResolveDirtyGate; the WPF prompt + the FreeX-specific save mechanics stay host-side.
-        confirmMethod.Should().Contain("FileLifecyclePlanner.PlanDirtyGate(_workbookDirty)");
-        confirmMethod.Should().Contain("FileLifecyclePlanner.ResolveDirtyGate(prompt)");
-        confirmMethod.Should().Contain("DirtyGateAction.ProceedDiscardingChanges => SaveChangesConfirmation.DiscardWithoutSaving");
-        // The "Save then proceed" branch defers Save-vs-Save-As to the shared SaveResolvedAsync helper.
-        confirmMethod.Should().Contain("DirtyGateAction.SaveThenProceed => await SaveResolvedAsync()");
+        confirmMethod.Should().Contain("WorkbookFileLifecycleCoordinator.ConfirmBeforeDestructiveActionAsync(");
+        confirmMethod.Should().Contain("_workbookDirty");
+        confirmMethod.Should().Contain("PromptSaveChangesBeforeDestructiveAction(message)");
+        confirmMethod.Should().Contain("SaveResolvedAsync");
 
-        // Save-vs-Save-As resolution: the high-level branch is the shared planner's PlanSave decision;
-        // FreeX's adapter-resolving FileSavePlanner.TryResolveExistingPath realizes the concrete target,
-        // and the no-usable-path case falls through to the Save-As dialog. (Moved verbatim out of the
-        // dirty-gate into SaveResolvedAsync so both the gate and SaveButton share one resolution path.)
+        var promptMethod = ExtractMethodSource(lifecycleSource, "private SaveChangesPrompt PromptSaveChangesBeforeDestructiveAction(");
+        promptMethod.Should().Contain("ShowOwnedMessage(");
+        promptMethod.Should().Contain("MessageBoxButton.YesNoCancel");
+        promptMethod.Should().Contain("MessageBoxResult.Cancel => SaveChangesPrompt.Cancel");
+        promptMethod.Should().Contain("MessageBoxResult.No => SaveChangesPrompt.DontSave");
+
+        // Save-vs-Save-As resolution: the shared coordinator owns the PlanSave branch and adapter
+        // resolution; WPF supplies only the concrete save target and save-as effects.
         var saveResolvedMethod = ExtractMethodSource(lifecycleSource, "private async Task<bool> SaveResolvedAsync()");
-        saveResolvedMethod.Should().Contain("FileLifecyclePlanner.PlanSave(_workbookDirty, _currentFilePath) == FileSaveIntent.PromptSaveAs");
-        saveResolvedMethod.Should().Contain("FileSavePlanner.TryResolveExistingPath(_currentFilePath, _fileAdapters, out var target)");
-        saveResolvedMethod.Should().Contain("return await SaveWorkbookWithDialogAsync();");
-        saveResolvedMethod.Should().Contain("return await SaveWorkbookToTargetAsync(target!);");
+        saveResolvedMethod.Should().Contain("WorkbookFileLifecycleCoordinator.SaveResolvedAsync(");
+        saveResolvedMethod.Should().Contain("_workbookDirty");
+        saveResolvedMethod.Should().Contain("_currentFilePath");
+        saveResolvedMethod.Should().Contain("_fileAdapters");
+        saveResolvedMethod.Should().Contain("SaveWorkbookToTargetAsync");
+        saveResolvedMethod.Should().Contain("SaveWorkbookWithDialogAsync");
 
         var closingMethod = ExtractMethodSource(lifecycleSource, "private async void MainWindow_Closing(");
         closingMethod.Should().Contain("ConfirmSaveBeforeDestructiveActionAsync(UiText.Get(\"MainWindowMessage_SaveChangesBeforeClosingWorkbook\"))");

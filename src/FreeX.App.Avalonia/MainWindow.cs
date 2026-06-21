@@ -16461,24 +16461,20 @@ public sealed partial class MainWindow : Window
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        switch (FileLifecyclePlanner.PlanSave(_session.IsDirty, _session.CurrentFilePath))
-        {
-            case FileSaveIntent.UseExistingPath:
-            case FileSaveIntent.NothingToDo:
-                if (_session.CanSaveCurrentSource(out var target))
-                {
-                    await SaveWorkbookToTargetAsync(target!);
-                    return;
-                }
-
+        await WorkbookFileLifecycleCoordinator.SaveResolvedAsync(
+            _session.IsDirty,
+            _session.CurrentFilePath,
+            () => _session.CanSaveCurrentSource(out var target) ? target : null,
+            async target =>
+            {
+                await SaveWorkbookToTargetAsync(target);
+                return true;
+            },
+            async () =>
+            {
                 await SaveWorkbookAsAsync();
-                return;
-
-            case FileSaveIntent.PromptSaveAs:
-            default:
-                await SaveWorkbookAsAsync();
-                return;
-        }
+                return true;
+            });
     }
 
     private async Task ShareWorkbookAsync()
@@ -17274,17 +17270,11 @@ public sealed partial class MainWindow : Window
 
     private async Task<bool> ConfirmDirtyWorkbookCloseAsync(string title, string discardButtonText)
     {
-        if (FileLifecyclePlanner.PlanDirtyGate(_session.IsDirty) == DirtyGateIntent.ProceedWithoutPrompt)
-            return true;
-
-        var choice = await ShowDirtyWorkbookCloseDialogAsync(title, discardButtonText);
-        return FileLifecyclePlanner.ResolveDirtyGate(ToSaveChangesPrompt(choice)) switch
-        {
-            DirtyGateAction.Cancel => false,
-            DirtyGateAction.ProceedDiscardingChanges => true,
-            DirtyGateAction.SaveThenProceed => await SaveCurrentWorkbookThenConfirmCleanAsync(),
-            _ => false,
-        };
+        var confirmation = await WorkbookFileLifecycleCoordinator.ConfirmBeforeDestructiveActionAsync(
+            _session.IsDirty,
+            async () => ToSaveChangesPrompt(await ShowDirtyWorkbookCloseDialogAsync(title, discardButtonText)),
+            SaveCurrentWorkbookThenConfirmCleanAsync);
+        return confirmation != SaveChangesConfirmation.Cancel;
     }
 
     private async Task<bool> SaveCurrentWorkbookThenConfirmCleanAsync()
