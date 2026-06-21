@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -9,7 +11,7 @@ namespace Free.Shared.Ribbon.Wpf;
 /// <summary>
 /// Hosts one ribbon group and can swap between its full content and a collapsed single-button form
 /// (icon + group label + chevron) that opens the full group in a popup. Collapsing is driven by
-/// <see cref="RibbonAdaptivePanel"/> based on available width. Ported from FreeX (app-neutral).
+/// <see cref="RibbonAdaptivePanel"/> based on available width.
 /// </summary>
 public sealed class RibbonGroupHost : ContentControl
 {
@@ -18,6 +20,16 @@ public sealed class RibbonGroupHost : ContentControl
 
     public int Priority { get; }
     public double FullWidth { get; set; }
+    internal double LayoutWidth { get; set; }
+
+    /// <summary>The group's display name (header). Exposed so group-discovery queries and test harnesses
+    /// can identify the host without reaching into its private group model.</summary>
+    public string GroupName => _group.Header;
+
+    /// <summary>The full (expanded) group grid this host renders. Always the same instance regardless
+    /// of whether the host is currently showing the collapsed button, so discovery can find the group
+    /// even while collapsed.</summary>
+    public FrameworkElement GroupContent => _full;
 
     public double MeasureFullWidth(Size availableSize)
     {
@@ -77,9 +89,17 @@ public sealed class RibbonGroupHost : ContentControl
 
     private FrameworkElement BuildCollapsedButton()
     {
-        var firstIcon = _group.Controls.FirstOrDefault(c => c.Icon is not null)?.Icon?.Kind ?? RibbonCommandIconKind.Generic;
+        // Use the group's first real command icon (kind + command name so the actual SVG resolves, not a
+        // generic glyph) at a prominent size. A collapsed group reads as one representative command button.
+        var iconControl = _group.Controls.FirstOrDefault(c => c.Icon is not null);
         var stack = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
-        stack.Children.Add(new RibbonIcon { Kind = firstIcon, IconSize = 22, HorizontalAlignment = HorizontalAlignment.Center });
+        stack.Children.Add(new RibbonIcon
+        {
+            Kind = iconControl?.Icon?.Kind ?? RibbonCommandIconKind.Generic,
+            CommandName = iconControl?.CommandId.Value ?? string.Empty,
+            IconSize = 36,
+            HorizontalAlignment = HorizontalAlignment.Center
+        });
         var caption = new TextBlock
         {
             Text = _group.Header,
@@ -87,18 +107,27 @@ public sealed class RibbonGroupHost : ContentControl
             TextAlignment = TextAlignment.Center,
             TextWrapping = TextWrapping.Wrap,
             HorizontalAlignment = HorizontalAlignment.Center,
-            MaxWidth = 56,
+            MaxWidth = 58,
             Margin = new Thickness(0, 2, 0, 0)
         };
-        caption.Inlines.Add(new System.Windows.Documents.Run(" ▾") { FontSize = 8 });
         stack.Children.Add(caption);
+        stack.Children.Add(new TextBlock
+        {
+            Text = "▾",
+            FontSize = 9,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            TextAlignment = TextAlignment.Center,
+            Opacity = 0.85
+        });
 
-        var button = new Button { Width = 60, Content = stack };
+        // Keep the rendered width just under RibbonGroupHost.CollapsedWidth (the value the fit decision
+        // budgets per collapsed group) so the strip never edges over the viewport.
+        var button = new Button { Width = 58, Content = stack };
         if (_resourceHost.TryFindResource("RibbonBtn") is Style style)
             button.Style = style;
 
-        // Mark the collapsed button so callers can treat it as a group overflow: it carries the group's
-        // derived keytip + title and a menu of the group's commands.
+        // Mark the collapsed button so keytip systems can treat it as a group overflow: it carries the
+        // group's derived keytip + title and a menu of the group's commands.
         RibbonMetadata.SetRole(button, RibbonMetadataRole.CollapsedGroupButton);
         if (!string.IsNullOrEmpty(_collapsedKeyTip))
             RibbonTooltip.SetKeyTip(button, _collapsedKeyTip);
@@ -145,36 +174,51 @@ public sealed class RibbonGroupHost : ContentControl
 /// <summary>
 /// Lays ribbon group hosts left-to-right and, when the available width is insufficient, collapses the
 /// lowest-priority groups to popup buttons first (Office behavior). Realtime: WPF re-measures on resize.
-/// Ported from FreeX (app-neutral).
 /// </summary>
 public sealed class RibbonAdaptivePanel : Panel
 {
     private const double GroupSpacing = 6;
+    private const double MinimumUnusedWidthForReclaim = 320;
+    private const double MinimumUnusedWidthRatioForReclaim = 0.35;
+
+    // Contextual tabs are shown after the initial ribbon warm-up; refresh their full-width budget from
+    // the preserved expanded group so a previously collapsed surface cannot under-plan and clip.
+    public bool RefreshFullWidthsFromFullContent { get; set; }
 
     protected override Size MeasureOverride(Size availableSize)
     {
         var children = Children.Cast<UIElement>().ToList();
         var hosts = children.OfType<RibbonGroupHost>().ToList();
         var infinite = new Size(double.PositiveInfinity, availableSize.Height);
+        var spacing = GroupSpacing * Math.Max(0, children.Count - 1);
 
-        // Measure each group's full content directly so the collapse decision is independent of whatever
-        // state a previous pass left the host in.
+        // Measure every child in its current state first so non-host chrome is current, then measure each
+        // group's full content directly. The full-width budget must not depend on whether a previous pass
+        // happened to leave that host collapsed or expanded; otherwise the same tab/width can produce
+        // different collapse sets after different resize sequences.
+        foreach (var child in children)
+            child.Measure(infinite);
         foreach (var host in hosts)
         {
             host.FullWidth = host.MeasureFullWidth(infinite);
+            host.LayoutWidth = host.Collapsed ? RibbonGroupHost.CollapsedWidth : host.DesiredSize.Width;
         }
 
+        var nonHostWidth = children
+            .Where(c => c is not RibbonGroupHost)
+            .Sum(c => c.DesiredSize.Width);
         var available = ResolveAvailableWidth(this, availableSize.Width);
+        var fitAvailable = double.IsInfinity(available) ? available : Math.Max(0, available - 4);
 
         // Decide the collapse set from the refreshed full widths, lowest priority first with child order
         // as a deterministic tie-break, then apply only the groups whose state flips.
-        if (!double.IsInfinity(available))
+        if (!double.IsInfinity(fitAvailable))
         {
             var collapsed = new HashSet<RibbonGroupHost>();
-            var total = hosts.Sum(h => h.FullWidth) + GroupSpacing * Math.Max(0, children.Count - 1);
+            var total = hosts.Sum(h => h.FullWidth) + nonHostWidth + spacing;
             foreach (var host in EnumerateCollapseCandidates(hosts))
             {
-                if (total <= available)
+                if (total <= fitAvailable)
                     break;
                 collapsed.Add(host);
                 total += RibbonGroupHost.CollapsedWidth - host.FullWidth;
@@ -184,17 +228,63 @@ public sealed class RibbonAdaptivePanel : Panel
                 host.Collapsed = collapsed.Contains(host);
         }
 
-        // Measure children in their final (post-flip) state. Hosts whose state did not change are already
-        // measure-valid, so WPF short-circuits these — only the flipped ones do real work.
+        // Re-measure the groups whose state just flipped (unchanged ones short-circuit).
         foreach (var child in children)
         {
             if (child is RibbonGroupHost { Collapsed: true } collapsedHost)
+            {
                 collapsedHost.Measure(new Size(RibbonGroupHost.CollapsedWidth, availableSize.Height));
+                collapsedHost.LayoutWidth = RibbonGroupHost.CollapsedWidth;
+            }
             else
+            {
                 child.Measure(infinite);
+                if (child is RibbonGroupHost expandedHost)
+                    expandedHost.LayoutWidth = expandedHost.DesiredSize.Width;
+            }
         }
 
-        var width = children.Sum(GetChildLayoutWidth) + GroupSpacing * Math.Max(0, children.Count - 1);
+        var width = children.Sum(GetChildLayoutWidth) + spacing;
+        if (!double.IsInfinity(fitAvailable))
+        {
+            foreach (var host in EnumerateCollapseCandidates(hosts).Where(h => !h.Collapsed))
+            {
+                if (width <= fitAvailable)
+                    break;
+
+                var previousWidth = GetChildLayoutWidth(host);
+                host.Collapsed = true;
+                host.Measure(new Size(RibbonGroupHost.CollapsedWidth, availableSize.Height));
+                host.LayoutWidth = RibbonGroupHost.CollapsedWidth;
+                width += RibbonGroupHost.CollapsedWidth - previousWidth;
+            }
+
+            foreach (var host in hosts
+                         .OrderByDescending(h => h.Priority)
+                         .Where(h => h.Collapsed))
+            {
+                if (!HasSevereUnusedWidth(width, fitAvailable))
+                    break;
+
+                var previousWidth = GetChildLayoutWidth(host);
+                var remainingWidth = Math.Max(0, fitAvailable - (width - previousWidth));
+                host.Collapsed = false;
+                host.Measure(new Size(remainingWidth, availableSize.Height));
+                host.LayoutWidth = host.DesiredSize.Width;
+
+                var expandedWidth = GetChildLayoutWidth(host);
+                if (width + expandedWidth - previousWidth <= fitAvailable)
+                {
+                    width += expandedWidth - previousWidth;
+                    continue;
+                }
+
+                host.Collapsed = true;
+                host.Measure(new Size(RibbonGroupHost.CollapsedWidth, availableSize.Height));
+                host.LayoutWidth = RibbonGroupHost.CollapsedWidth;
+            }
+        }
+
         var height = children.Count > 0 ? children.Max(c => c.DesiredSize.Height) : 0;
         return new Size(double.IsInfinity(available) ? width : Math.Min(width, available), height);
     }
@@ -221,10 +311,33 @@ public sealed class RibbonAdaptivePanel : Panel
 
     private static double GetChildLayoutWidth(UIElement child)
     {
-        if (child is RibbonGroupHost host && host.FullWidth > 0)
-            return host.Collapsed ? RibbonGroupHost.CollapsedWidth : host.FullWidth;
+        if (child is RibbonGroupHost host)
+        {
+            if (host.Collapsed)
+                return RibbonGroupHost.CollapsedWidth;
+
+            if (host.LayoutWidth > 0)
+                return host.LayoutWidth;
+
+            if (host.FullWidth > 0)
+                return host.FullWidth;
+        }
+
+        if (child is System.Windows.Shapes.Rectangle { Width: var width and > 0 } &&
+            !double.IsNaN(width) &&
+            !double.IsInfinity(width))
+        {
+            return width;
+        }
 
         return child.DesiredSize.Width;
+    }
+
+    private static bool HasSevereUnusedWidth(double currentWidth, double fitAvailable)
+    {
+        var unusedWidth = fitAvailable - currentWidth;
+        var threshold = Math.Max(MinimumUnusedWidthForReclaim, fitAvailable * MinimumUnusedWidthRatioForReclaim);
+        return unusedWidth >= threshold;
     }
 
     private static double ResolveAvailableWidth(FrameworkElement element, double measuredWidth)
@@ -232,26 +345,14 @@ public sealed class RibbonAdaptivePanel : Panel
         if (!double.IsInfinity(measuredWidth))
             return measuredWidth;
 
+        if (element.ActualWidth > 0)
+            return element.ActualWidth;
+
         var current = VisualTreeHelper.GetParent(element);
         while (current is not null)
         {
             if (current is ScrollViewer { ViewportWidth: > 0 } scrollViewer)
                 return scrollViewer.ViewportWidth;
-
-            current = VisualTreeHelper.GetParent(current);
-        }
-
-        if (element.ActualWidth > 0)
-            return element.ActualWidth;
-
-        if (element.Parent is FrameworkElement parent && parent.ActualWidth > 0)
-            return parent.ActualWidth;
-
-        current = VisualTreeHelper.GetParent(element);
-        while (current is not null)
-        {
-            if (current is FrameworkElement { ActualWidth: > 0 } ancestor)
-                return ancestor.ActualWidth;
 
             current = VisualTreeHelper.GetParent(current);
         }

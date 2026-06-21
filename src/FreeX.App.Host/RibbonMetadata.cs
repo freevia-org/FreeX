@@ -1,4 +1,7 @@
 using System.Windows;
+using SharedRibbonCommandContentLayout = Free.Shared.Ribbon.Wpf.RibbonCommandContentLayout;
+using SharedRibbonMetadata = Free.Shared.Ribbon.Wpf.RibbonMetadata;
+using SharedRibbonMetadataRole = Free.Shared.Ribbon.Wpf.RibbonMetadataRole;
 
 namespace FreeX.App.Host;
 
@@ -81,50 +84,74 @@ public static class RibbonMetadata
             typeof(RibbonMetadata),
             new FrameworkPropertyMetadata(false));
 
-    public static RibbonMetadataRole GetRole(DependencyObject element) =>
-        (RibbonMetadataRole)element.GetValue(RoleProperty);
+    public static RibbonMetadataRole GetRole(DependencyObject element)
+    {
+        var role = (RibbonMetadataRole)element.GetValue(RoleProperty);
+        return role == RibbonMetadataRole.None ? MapRole(SharedRibbonMetadata.GetRole(element)) : role;
+    }
 
     public static void SetRole(DependencyObject element, RibbonMetadataRole value) =>
         element.SetValue(RoleProperty, value);
 
-    public static double GetCompactFullWidth(DependencyObject element) =>
-        (double)element.GetValue(CompactFullWidthProperty);
+    public static double GetCompactFullWidth(DependencyObject element)
+    {
+        var width = (double)element.GetValue(CompactFullWidthProperty);
+        return double.IsNaN(width) ? SharedRibbonMetadata.GetCompactFullWidth(element) : width;
+    }
 
     public static void SetCompactFullWidth(DependencyObject element, double value) =>
         element.SetValue(CompactFullWidthProperty, value);
 
-    public static double GetCompactWidth(DependencyObject element) =>
-        (double)element.GetValue(CompactWidthProperty);
+    public static double GetCompactWidth(DependencyObject element)
+    {
+        var width = (double)element.GetValue(CompactWidthProperty);
+        return double.IsNaN(width) ? SharedRibbonMetadata.GetCompactWidth(element) : width;
+    }
 
     public static void SetCompactWidth(DependencyObject element, double value) =>
         element.SetValue(CompactWidthProperty, value);
 
-    public static RibbonCommandContentLayout GetCommandContentLayout(DependencyObject element) =>
-        (RibbonCommandContentLayout)element.GetValue(CommandContentLayoutProperty);
+    public static RibbonCommandContentLayout GetCommandContentLayout(DependencyObject element)
+    {
+        var layout = (RibbonCommandContentLayout)element.GetValue(CommandContentLayoutProperty);
+        return layout == RibbonCommandContentLayout.None
+            ? MapCommandContentLayout(SharedRibbonMetadata.GetCommandContentLayout(element))
+            : layout;
+    }
 
     public static void SetCommandContentLayout(DependencyObject element, RibbonCommandContentLayout value) =>
         element.SetValue(CommandContentLayoutProperty, value);
 
-    public static string GetGroupName(DependencyObject element) =>
-        (string)element.GetValue(GroupNameProperty);
+    public static string GetGroupName(DependencyObject element)
+    {
+        var value = (string)element.GetValue(GroupNameProperty);
+        return string.IsNullOrWhiteSpace(value) ? SharedRibbonMetadata.GetGroupName(element) : value;
+    }
 
     public static void SetGroupName(DependencyObject element, string value) =>
         element.SetValue(GroupNameProperty, value);
 
-    public static string GetCommandName(DependencyObject element) =>
-        (string)element.GetValue(CommandNameProperty);
+    public static string GetCommandName(DependencyObject element)
+    {
+        var value = (string)element.GetValue(CommandNameProperty);
+        return string.IsNullOrWhiteSpace(value) ? SharedRibbonMetadata.GetCommandName(element) : value;
+    }
 
     public static void SetCommandName(DependencyObject element, string value) =>
         element.SetValue(CommandNameProperty, value);
 
-    public static string GetCatalogId(DependencyObject element) =>
-        (string)element.GetValue(CatalogIdProperty);
+    public static string GetCatalogId(DependencyObject element)
+    {
+        var value = (string)element.GetValue(CatalogIdProperty);
+        return string.IsNullOrWhiteSpace(value) ? SharedRibbonMetadata.GetCatalogId(element) : value;
+    }
 
     public static void SetCatalogId(DependencyObject element, string value) =>
         element.SetValue(CatalogIdProperty, value);
 
     public static bool GetDropdownMenuButton(DependencyObject element) =>
-        (bool)element.GetValue(DropdownMenuButtonProperty);
+        (bool)element.GetValue(DropdownMenuButtonProperty) ||
+        SharedRibbonMetadata.GetDropdownMenuButton(element);
 
     public static void SetDropdownMenuButton(DependencyObject element, bool value) =>
         element.SetValue(DropdownMenuButtonProperty, value);
@@ -142,13 +169,15 @@ public static class RibbonMetadata
     }
 
     public static bool GetDropdownZoneHandlerAttached(DependencyObject element) =>
-        (bool)element.GetValue(DropdownZoneHandlerAttachedProperty);
+        (bool)element.GetValue(DropdownZoneHandlerAttachedProperty) ||
+        SharedRibbonMetadata.GetDropdownZoneHandlerAttached(element);
 
     public static void SetDropdownZoneHandlerAttached(DependencyObject element, bool value) =>
         element.SetValue(DropdownZoneHandlerAttachedProperty, value);
 
     public static bool GetDropdownZoneHighlightAttached(DependencyObject element) =>
-        (bool)element.GetValue(DropdownZoneHighlightAttachedProperty);
+        (bool)element.GetValue(DropdownZoneHighlightAttachedProperty) ||
+        SharedRibbonMetadata.GetDropdownZoneHighlightAttached(element);
 
     public static void SetDropdownZoneHighlightAttached(DependencyObject element, bool value) =>
         element.SetValue(DropdownZoneHighlightAttachedProperty, value);
@@ -252,6 +281,29 @@ public static class RibbonMetadata
 
         return false;
     }
+
+    private static RibbonMetadataRole MapRole(SharedRibbonMetadataRole role) =>
+        role switch
+        {
+            SharedRibbonMetadataRole.CommandLabel => RibbonMetadataRole.CommandLabel,
+            SharedRibbonMetadataRole.CommandIcon => RibbonMetadataRole.CommandIcon,
+            SharedRibbonMetadataRole.CollapsedGroupButton => RibbonMetadataRole.CollapsedGroupButton,
+            SharedRibbonMetadataRole.CollapsedChevron => RibbonMetadataRole.CollapsedChevron,
+            SharedRibbonMetadataRole.CommandSpacer => RibbonMetadataRole.CommandSpacer,
+            SharedRibbonMetadataRole.RibbonGroup => RibbonMetadataRole.RibbonGroup,
+            SharedRibbonMetadataRole.DropdownChevron => RibbonMetadataRole.DropdownChevron,
+            _ => RibbonMetadataRole.None
+        };
+
+    private static RibbonCommandContentLayout MapCommandContentLayout(SharedRibbonCommandContentLayout layout) =>
+        layout switch
+        {
+            SharedRibbonCommandContentLayout.Small => RibbonCommandContentLayout.Small,
+            SharedRibbonCommandContentLayout.Medium => RibbonCommandContentLayout.Medium,
+            SharedRibbonCommandContentLayout.Large => RibbonCommandContentLayout.Large,
+            SharedRibbonCommandContentLayout.IconOnly => RibbonCommandContentLayout.IconOnly,
+            _ => RibbonCommandContentLayout.None
+        };
 }
 
 public enum RibbonMetadataRole

@@ -18,21 +18,36 @@ namespace Free.Shared.Ribbon.Wpf;
 ///
 /// Ported from FreeX's <c>RibbonWpfRenderer</c> (app-neutral: depends only on WPF + Free.Shared.Ribbon).
 /// </summary>
+public sealed record RibbonWpfRendererOptions(
+    bool UseExternalDropdownZones = false,
+    double MediumIconSize = 16,
+    double SmallIconSize = 18)
+{
+    public static RibbonWpfRendererOptions Default { get; } = new();
+
+    public static RibbonWpfRendererOptions FreeXHost { get; } =
+        new(UseExternalDropdownZones: true, MediumIconSize: 20, SmallIconSize: 20);
+}
+
 public static class RibbonWpfRenderer
 {
     private const double SmallRowHeight = 22;
     private const double LargeIconSize = 32;
-    private const double MediumIconSize = 16;
-    private const double SmallIconSize = 18;
     private const int MaxRowsPerColumn = 3;
 
     public static FrameworkElement BuildTabContent(
         RibbonTab tab,
         FrameworkElement resourceHost,
         IRibbonCommandRegistry? registry = null,
-        IRibbonStateStore? stateStore = null)
+        IRibbonStateStore? stateStore = null,
+        RibbonWpfRendererOptions? options = null)
     {
-        var panel = new RibbonAdaptivePanel { MinHeight = 88 };
+        options ??= RibbonWpfRendererOptions.Default;
+        var panel = new RibbonAdaptivePanel
+        {
+            MinHeight = 88,
+            RefreshFullWidthsFromFullContent = tab.IsContextual
+        };
 
         // Group keytips for the collapsed (overflow) form are derived per tab, deduped against each
         // other (a collapsed group is reachable by a 2-letter keytip like Charts -> CH).
@@ -44,13 +59,13 @@ public static class RibbonWpfRenderer
             if (!first)
                 panel.Children.Add(BuildGroupDivider(resourceHost));
 
-            var full = (FrameworkElement)BuildGroup(group, resourceHost, registry, stateStore);
+            var full = (FrameworkElement)BuildGroup(group, resourceHost, registry, stateStore, options);
             var captured = group;
             var collapsedKeyTip = DeriveGroupKeyTip(group.Header, usedGroupKeyTips);
             panel.Children.Add(new RibbonGroupHost(
                 group,
                 full,
-                () => (FrameworkElement)BuildGroup(captured, resourceHost, registry, stateStore),
+                () => (FrameworkElement)BuildGroup(captured, resourceHost, registry, stateStore, options),
                 resourceHost,
                 collapsedKeyTip,
                 () => BuildCollapsedGroupMenu(captured, registry)));
@@ -134,15 +149,23 @@ public static class RibbonWpfRenderer
         return menu;
     }
 
-    private static FrameworkElement BuildGroup(RibbonGroup group, FrameworkElement resourceHost, IRibbonCommandRegistry? registry, IRibbonStateStore? stateStore)
+    private static FrameworkElement BuildGroup(
+        RibbonGroup group,
+        FrameworkElement resourceHost,
+        IRibbonCommandRegistry? registry,
+        IRibbonStateStore? stateStore,
+        RibbonWpfRendererOptions options)
     {
         var grid = new Grid();
         ApplyStyle(grid, resourceHost, "RibbonGroupPanel");
         RibbonMetadata.SetCatalogId(grid, group.Id);
+        RibbonMetadata.SetRole(grid, RibbonMetadataRole.RibbonGroup);
+        if (!string.IsNullOrEmpty(group.Header))
+            RibbonMetadata.SetGroupName(grid, group.Header);
         grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(18) });
 
-        var content = BuildGroupContent(group, resourceHost, registry, stateStore);
+        var content = BuildGroupContent(group, resourceHost, registry, stateStore, options);
         Grid.SetRow(content, 0);
         grid.Children.Add(content);
 
@@ -157,7 +180,12 @@ public static class RibbonWpfRenderer
         return grid;
     }
 
-    private static FrameworkElement BuildGroupContent(RibbonGroup group, FrameworkElement resourceHost, IRibbonCommandRegistry? registry, IRibbonStateStore? stateStore)
+    private static FrameworkElement BuildGroupContent(
+        RibbonGroup group,
+        FrameworkElement resourceHost,
+        IRibbonCommandRegistry? registry,
+        IRibbonStateStore? stateStore,
+        RibbonWpfRendererOptions options)
     {
         var lane = new StackPanel
         {
@@ -172,7 +200,7 @@ public static class RibbonWpfRenderer
         // Leading large "hero" buttons each occupy their own full-height column.
         while (index < controls.Count && controls[index].PreferredLayout == RibbonCommandLayoutKind.Large)
         {
-            lane.Children.Add(BuildLargeControl(controls[index], resourceHost, registry, stateStore));
+            lane.Children.Add(BuildLargeControl(controls[index], resourceHost, registry, stateStore, options));
             index++;
         }
 
@@ -181,15 +209,20 @@ public static class RibbonWpfRenderer
             return lane;
 
         if (rest.Any(c => c is RibbonRowBreak))
-            lane.Children.Add(BuildExplicitRows(rest, resourceHost, registry, stateStore));
+            lane.Children.Add(BuildExplicitRows(rest, resourceHost, registry, stateStore, options));
         else
-            BuildAutoColumns(rest, lane, resourceHost, registry, stateStore);
+            BuildAutoColumns(rest, lane, resourceHost, registry, stateStore, options);
 
         return lane;
     }
 
     // Groups that declare RowBreaks lay out as stacked horizontal rows (e.g. Font: combos row, then B/I/U row).
-    private static FrameworkElement BuildExplicitRows(IReadOnlyList<RibbonControl> controls, FrameworkElement resourceHost, IRibbonCommandRegistry? registry, IRibbonStateStore? stateStore)
+    private static FrameworkElement BuildExplicitRows(
+        IReadOnlyList<RibbonControl> controls,
+        FrameworkElement resourceHost,
+        IRibbonCommandRegistry? registry,
+        IRibbonStateStore? stateStore,
+        RibbonWpfRendererOptions options)
     {
         var rows = new StackPanel { Orientation = Orientation.Vertical, VerticalAlignment = VerticalAlignment.Top };
         var current = NewRow(isFirst: true);
@@ -203,7 +236,7 @@ public static class RibbonWpfRenderer
                 continue;
             }
 
-            current.Children.Add(BuildInlineControl(control, resourceHost, registry, stateStore));
+            current.Children.Add(BuildInlineControl(control, resourceHost, registry, stateStore, options));
         }
 
         rows.Children.Add(current);
@@ -217,7 +250,13 @@ public static class RibbonWpfRenderer
     };
 
     // Groups without explicit rows pack medium/small/combo controls into columns of up to three.
-    private static void BuildAutoColumns(IReadOnlyList<RibbonControl> controls, StackPanel lane, FrameworkElement resourceHost, IRibbonCommandRegistry? registry, IRibbonStateStore? stateStore)
+    private static void BuildAutoColumns(
+        IReadOnlyList<RibbonControl> controls,
+        StackPanel lane,
+        FrameworkElement resourceHost,
+        IRibbonCommandRegistry? registry,
+        IRibbonStateStore? stateStore,
+        RibbonWpfRendererOptions options)
     {
         StackPanel? column = null;
         var columnIsCombo = false;
@@ -241,7 +280,7 @@ public static class RibbonWpfRenderer
                     break;
                 case { PreferredLayout: RibbonCommandLayoutKind.Large }:
                     Flush();
-                    lane.Children.Add(BuildLargeControl(control, resourceHost, registry, stateStore));
+                    lane.Children.Add(BuildLargeControl(control, resourceHost, registry, stateStore, options));
                     break;
                 default:
                     var isCombo = control is RibbonComboBox;
@@ -249,7 +288,7 @@ public static class RibbonWpfRenderer
                         Flush();
                     column ??= new StackPanel { Orientation = Orientation.Vertical, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(1, 1, 1, 0) };
                     columnIsCombo = isCombo;
-                    column.Children.Add(BuildInlineControl(control, resourceHost, registry, stateStore));
+                    column.Children.Add(BuildInlineControl(control, resourceHost, registry, stateStore, options));
                     if (column.Children.Count >= MaxRowsPerColumn)
                         Flush();
                     break;
@@ -259,15 +298,20 @@ public static class RibbonWpfRenderer
         Flush();
     }
 
-    private static FrameworkElement BuildInlineControl(RibbonControl control, FrameworkElement resourceHost, IRibbonCommandRegistry? registry, IRibbonStateStore? stateStore) =>
+    private static FrameworkElement BuildInlineControl(
+        RibbonControl control,
+        FrameworkElement resourceHost,
+        IRibbonCommandRegistry? registry,
+        IRibbonStateStore? stateStore,
+        RibbonWpfRendererOptions options) =>
         control switch
         {
             RibbonSeparator => BuildInlineDivider(),
             RibbonComboBox combo => BuildComboControl(combo, resourceHost, registry, stateStore),
             RibbonCheckBox check => BuildCheckControl(check, registry, stateStore),
-            { PreferredLayout: RibbonCommandLayoutKind.Large } => BuildLargeControl(control, resourceHost, registry, stateStore),
-            { PreferredLayout: RibbonCommandLayoutKind.Small } => BuildIconControl(control, resourceHost, registry, stateStore),
-            _ => BuildMediumControl(control, resourceHost, registry, stateStore)
+            { PreferredLayout: RibbonCommandLayoutKind.Large } => BuildLargeControl(control, resourceHost, registry, stateStore, options),
+            { PreferredLayout: RibbonCommandLayoutKind.Small } => BuildIconControl(control, resourceHost, registry, stateStore, options),
+            _ => BuildMediumControl(control, resourceHost, registry, stateStore, options)
         };
 
     private static FrameworkElement BuildCheckControl(RibbonCheckBox check, IRibbonCommandRegistry? registry, IRibbonStateStore? stateStore)
@@ -280,13 +324,18 @@ public static class RibbonWpfRenderer
             VerticalContentAlignment = VerticalAlignment.Center,
             Margin = new Thickness(2, 1, 2, 1)
         };
-        WireMetadata(box, check, registry, stateStore);
+        WireMetadata(box, check, registry, stateStore, RibbonWpfRendererOptions.Default);
         return box;
     }
 
-    private static FrameworkElement BuildLargeControl(RibbonControl control, FrameworkElement resourceHost, IRibbonCommandRegistry? registry, IRibbonStateStore? stateStore)
+    private static FrameworkElement BuildLargeControl(
+        RibbonControl control,
+        FrameworkElement resourceHost,
+        IRibbonCommandRegistry? registry,
+        IRibbonStateStore? stateStore,
+        RibbonWpfRendererOptions options)
     {
-        var stack = new StackPanel();
+        var stack = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
         stack.Children.Add(NewIcon(control, LargeIconSize, HorizontalAlignment.Center));
 
         var caption = new TextBlock
@@ -300,20 +349,28 @@ public static class RibbonWpfRenderer
             MaxWidth = 128
         };
         EnsureNaturalLabelWidth(caption);
-        if (HasMenu(control))
+        RibbonMetadata.SetRole(caption, RibbonMetadataRole.CommandLabel);
+        if (HasMenu(control) && !options.UseExternalDropdownZones)
             caption.Inlines.Add(new System.Windows.Documents.Run("  ▾") { FontSize = 9 });
         stack.Children.Add(caption);
+        if (options.UseExternalDropdownZones)
+            RibbonMetadata.SetCommandContentLayout(stack, RibbonCommandContentLayout.Large);
 
         var button = NewButton(control, resourceHost, "RibbonLargeButton");
         ((ContentControl)button).Content = stack;
-        WireMetadata(button, control, registry, stateStore);
+        WireMetadata(button, control, registry, stateStore, options);
         return button;
     }
 
-    private static FrameworkElement BuildMediumControl(RibbonControl control, FrameworkElement resourceHost, IRibbonCommandRegistry? registry, IRibbonStateStore? stateStore)
+    private static FrameworkElement BuildMediumControl(
+        RibbonControl control,
+        FrameworkElement resourceHost,
+        IRibbonCommandRegistry? registry,
+        IRibbonStateStore? stateStore,
+        RibbonWpfRendererOptions options)
     {
         var content = new StackPanel { Orientation = Orientation.Horizontal };
-        var icon = NewIcon(control, MediumIconSize, HorizontalAlignment.Center, VerticalAlignment.Center);
+        var icon = NewIcon(control, options.MediumIconSize, HorizontalAlignment.Center, VerticalAlignment.Center);
         icon.Margin = new Thickness(0, 0, 4, 0);
         content.Children.Add(icon);
         var label = new TextBlock
@@ -324,16 +381,19 @@ public static class RibbonWpfRenderer
             Margin = new Thickness(0)
         };
         EnsureNaturalLabelWidth(label);
+        RibbonMetadata.SetRole(label, RibbonMetadataRole.CommandLabel);
         content.Children.Add(label);
-        if (HasMenu(control))
+        if (HasMenu(control) && !options.UseExternalDropdownZones)
             content.Children.Add(Chevron());
+        if (options.UseExternalDropdownZones)
+            RibbonMetadata.SetCommandContentLayout(content, RibbonCommandContentLayout.Medium);
 
         var button = NewButton(control, resourceHost, "RibbonBtn");
         button.Height = SmallRowHeight;
         button.MinWidth = 84;
         button.HorizontalContentAlignment = HorizontalAlignment.Left;
         ((ContentControl)button).Content = content;
-        WireMetadata(button, control, registry, stateStore);
+        WireMetadata(button, control, registry, stateStore, options);
         return button;
     }
 
@@ -348,28 +408,37 @@ public static class RibbonWpfRenderer
         }
     }
 
-    private static FrameworkElement BuildIconControl(RibbonControl control, FrameworkElement resourceHost, IRibbonCommandRegistry? registry, IRibbonStateStore? stateStore)
+    private static FrameworkElement BuildIconControl(
+        RibbonControl control,
+        FrameworkElement resourceHost,
+        IRibbonCommandRegistry? registry,
+        IRibbonStateStore? stateStore,
+        RibbonWpfRendererOptions options)
     {
         var hasMenu = HasMenu(control);
         FrameworkElement content;
-        if (hasMenu)
+        if (hasMenu && !options.UseExternalDropdownZones)
         {
             var stack = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
-            stack.Children.Add(NewIcon(control, SmallIconSize, HorizontalAlignment.Center, VerticalAlignment.Center));
+            stack.Children.Add(NewIcon(control, options.SmallIconSize, HorizontalAlignment.Center, VerticalAlignment.Center));
             stack.Children.Add(Chevron());
             content = stack;
         }
         else
         {
-            content = NewIcon(control, SmallIconSize, HorizontalAlignment.Center, VerticalAlignment.Center);
+            var grid = new Grid { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            grid.Children.Add(NewIcon(control, options.SmallIconSize, HorizontalAlignment.Center, VerticalAlignment.Center));
+            if (options.UseExternalDropdownZones)
+                RibbonMetadata.SetCommandContentLayout(grid, RibbonCommandContentLayout.IconOnly);
+            content = grid;
         }
 
         var isToggle = control is RibbonToggleButton or RibbonCheckBox;
         var button = NewButton(control, resourceHost, isToggle ? "RibbonIconToggleButton" : "RibbonIconButton");
-        if (hasMenu)
+        if (hasMenu && !options.UseExternalDropdownZones)
             button.Width = 34;
         ((ContentControl)button).Content = content;
-        WireMetadata(button, control, registry, stateStore);
+        WireMetadata(button, control, registry, stateStore, options);
         return button;
     }
 
@@ -387,18 +456,23 @@ public static class RibbonWpfRenderer
             box.Items.Add(item);
         if (combo.Items.Count > 0)
             box.SelectedIndex = 0;
-        WireMetadata(box, combo, registry, stateStore);
+        WireMetadata(box, combo, registry, stateStore, RibbonWpfRendererOptions.Default);
         return box;
     }
 
-    private static RibbonIcon NewIcon(RibbonControl control, double size, HorizontalAlignment h, VerticalAlignment v = VerticalAlignment.Center) => new()
+    private static RibbonIcon NewIcon(RibbonControl control, double size, HorizontalAlignment h, VerticalAlignment v = VerticalAlignment.Center)
     {
-        Kind = control.Icon?.Kind ?? RibbonCommandIconKind.Generic,
-        CommandName = control.CommandId.Value,
-        IconSize = size,
-        HorizontalAlignment = h,
-        VerticalAlignment = v
-    };
+        var icon = new RibbonIcon
+        {
+            Kind = control.Icon?.Kind ?? RibbonCommandIconKind.Generic,
+            CommandName = control.CommandId.Value,
+            IconSize = size,
+            HorizontalAlignment = h,
+            VerticalAlignment = v
+        };
+        RibbonMetadata.SetRole(icon, RibbonMetadataRole.CommandIcon);
+        return icon;
+    }
 
     private static TextBlock Chevron() => new()
     {
@@ -422,7 +496,12 @@ public static class RibbonWpfRenderer
         return button;
     }
 
-    private static void WireMetadata(Control element, RibbonControl control, IRibbonCommandRegistry? registry, IRibbonStateStore? stateStore)
+    private static void WireMetadata(
+        Control element,
+        RibbonControl control,
+        IRibbonCommandRegistry? registry,
+        IRibbonStateStore? stateStore,
+        RibbonWpfRendererOptions options)
     {
         if (!string.IsNullOrEmpty(control.CommandId.Value))
             RibbonMetadata.SetCommandName(element, control.CommandId.Value);
@@ -453,6 +532,9 @@ public static class RibbonWpfRenderer
 
         if (element is not ButtonBase buttonBase)
             return;
+
+        if (HasMenu(control) && options.UseExternalDropdownZones)
+            RibbonMetadata.SetDropdownMenuButton(buttonBase, true);
 
         if (hasMenuItems)
         {
