@@ -91,5 +91,6 @@
     <Using Include="Free.Shared.Shell" />
     <Using Include="FreeX.App.Presentation" />
     <Using Include="FreeX.App.Presentation.DrawingInteraction" />
+    <Using Include="FreeX.App.Presentation.TextToColumns" />
   </ItemGroup>
 </Project>

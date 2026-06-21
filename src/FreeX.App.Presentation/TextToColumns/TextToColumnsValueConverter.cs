@@ -1,27 +1,53 @@
 using System.Globalization;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Presentation.TextToColumns;
 
-internal static class TextToColumnsValueConverter
+public static class TextToColumnsValueConverter
 {
     private static readonly DatePartOrder DateOrderMDY = new(MonthIndex: 0, DayIndex: 1, YearIndex: 2);
     private static readonly DatePartOrder DateOrderDMY = new(MonthIndex: 1, DayIndex: 0, YearIndex: 2);
     private static readonly DatePartOrder DateOrderYMD = new(MonthIndex: 1, DayIndex: 2, YearIndex: 0);
+    private static readonly DatePartOrder DateOrderMYD = new(MonthIndex: 0, DayIndex: 2, YearIndex: 1);
+    private static readonly DatePartOrder DateOrderDYM = new(MonthIndex: 2, DayIndex: 0, YearIndex: 1);
+    private static readonly DatePartOrder DateOrderYDM = new(MonthIndex: 2, DayIndex: 1, YearIndex: 0);
 
     public static ScalarValue ConvertValue(
         string text,
         TextToColumnsColumnFormat columnFormat,
-        TextToColumnsAdvancedOptions? advancedOptions) =>
+        TextToColumnsAdvancedOptions? advancedOptions = null) =>
         columnFormat switch
         {
             TextToColumnsColumnFormat.Text => new TextValue(text),
             TextToColumnsColumnFormat.DateMDY when TryParseDate(text, DateOrderMDY, out var date) => new DateTimeValue(date.ToOADate()),
             TextToColumnsColumnFormat.DateDMY when TryParseDate(text, DateOrderDMY, out var date) => new DateTimeValue(date.ToOADate()),
             TextToColumnsColumnFormat.DateYMD when TryParseDate(text, DateOrderYMD, out var date) => new DateTimeValue(date.ToOADate()),
+            TextToColumnsColumnFormat.DateMYD when TryParseDate(text, DateOrderMYD, out var date) => new DateTimeValue(date.ToOADate()),
+            TextToColumnsColumnFormat.DateDYM when TryParseDate(text, DateOrderDYM, out var date) => new DateTimeValue(date.ToOADate()),
+            TextToColumnsColumnFormat.DateYDM when TryParseDate(text, DateOrderYDM, out var date) => new DateTimeValue(date.ToOADate()),
             _ when TryParseNumber(text, advancedOptions, out var number) => new NumberValue(number),
+            _ when IsBooleanText(text, out var value) => new BoolValue(value),
             _ => new TextValue(text)
         };
+
+    private static bool IsBooleanText(string text, out bool value)
+    {
+        var trimmed = text.Trim();
+        if (trimmed.Equals("TRUE", StringComparison.OrdinalIgnoreCase))
+        {
+            value = true;
+            return true;
+        }
+
+        if (trimmed.Equals("FALSE", StringComparison.OrdinalIgnoreCase))
+        {
+            value = false;
+            return true;
+        }
+
+        value = false;
+        return false;
+    }
 
     private static bool TryParseNumber(string text, TextToColumnsAdvancedOptions? advancedOptions, out double number)
     {

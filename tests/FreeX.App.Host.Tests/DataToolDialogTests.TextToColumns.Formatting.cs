@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -13,13 +14,37 @@ public sealed partial class DataToolDialogTests
     public void TextToColumnsDialog_ExposesAllExcelDateColumnFormats()
     {
         var dialogSource = ReadTextToColumnsDialogSources();
-        var modelSource = DialogSourceTestSupport.ReadHostSources("TextToColumnsDialogModel.cs");
+        var modelSource = DialogSourceTestSupport.ReadPresentationSources("TextToColumns", "TextToColumnsOptions.cs");
 
         foreach (var dateOrder in new[] { "MDY", "DMY", "YMD", "MYD", "DYM", "YDM" })
         {
             dialogSource.Should().Contain($"\"{dateOrder}\"");
             modelSource.Should().Contain($"Date{dateOrder}");
         }
+    }
+
+    [Fact]
+    public void TextToColumnsDialog_UsesPresentationModelAndPlanner()
+    {
+        var hostDirectory = Path.GetDirectoryName(DialogSourceTestSupport.FindHostSourceFile("TextToColumnsDialog.Helpers.cs"))
+            ?? throw new DirectoryNotFoundException("Could not locate FreeX.App.Host source directory.");
+
+        foreach (var fileName in new[]
+        {
+            "TextToColumnsDialogModel.cs",
+            "TextToColumnsDialogPlanner.cs",
+            "TextToColumnsDelimiterPlanner.cs",
+            "TextToColumnsValueConverter.cs"
+        })
+        {
+            File.Exists(Path.Combine(hostDirectory, fileName))
+                .Should()
+                .BeFalse($"{fileName} should live in FreeX.App.Presentation.TextToColumns, not the WPF host");
+        }
+
+        var helperSource = DialogSourceTestSupport.ReadHostSources("TextToColumnsDialog.Helpers.cs");
+        helperSource.Should().Contain("TextToColumnsDelimiters.CreatePlan(");
+        helperSource.Should().Contain("TextToColumnsDialogPlanner.NormalizeColumnFormats(");
     }
 
     [Fact]

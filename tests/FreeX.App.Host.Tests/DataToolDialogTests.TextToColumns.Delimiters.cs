@@ -38,9 +38,9 @@ public sealed partial class DataToolDialogTests
     }
 
     [Fact]
-    public void TextToColumnsDelimiterPlanner_BuildsDistinctDelimiterPlan()
+    public void TextToColumnsDelimiters_BuildsDistinctDelimiterPlan()
     {
-        var plan = TextToColumnsDelimiterPlanner.CreatePlan(
+        var plan = TextToColumnsDelimiters.CreatePlan(
             [
                 TextToColumnsDelimiterKind.Space,
                 TextToColumnsDelimiterKind.Comma,
@@ -50,8 +50,8 @@ public sealed partial class DataToolDialogTests
             "|");
 
         plan.Should().Be(new TextToColumnsDelimiterPlan(TextToColumnsDelimiterKind.Custom, " ,|"));
-        TextToColumnsDelimiterPlanner.DelimiterFor(TextToColumnsDelimiterKind.Tab).Should().Be("\t");
-        var act = () => TextToColumnsDelimiterPlanner.DelimiterFor(TextToColumnsDelimiterKind.Custom);
+        TextToColumnsDelimiters.DelimiterFor(TextToColumnsDelimiterKind.Tab).Should().Be("\t");
+        var act = () => TextToColumnsDelimiters.DelimiterFor(TextToColumnsDelimiterKind.Custom);
         act.Should().Throw<ArgumentException>()
             .WithMessage("Custom delimiter is required.*");
     }

@@ -1,5 +1,9 @@
 namespace FreeX.App.Presentation.TextToColumns;
 
+public sealed record TextToColumnsDelimiterPlan(
+    TextToColumnsDelimiterKind PrimaryKind,
+    string Delimiters);
+
 /// <summary>Maps well-known delimiter kinds to the characters the splitter recognises.</summary>
 public static class TextToColumnsDelimiters
 {
@@ -15,6 +19,20 @@ public static class TextToColumnsDelimiters
         TextToColumnsDelimiterKind.Custom => customDelimiter is { } ch
             ? ch.ToString()
             : throw new ArgumentException("A custom delimiter character is required.", nameof(customDelimiter)),
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unsupported delimiter kind.")
+    };
+
+    public static string DelimiterFor(
+        TextToColumnsDelimiterKind kind,
+        string? customDelimiter = null) => kind switch
+    {
+        TextToColumnsDelimiterKind.Comma => ",",
+        TextToColumnsDelimiterKind.Semicolon => ";",
+        TextToColumnsDelimiterKind.Tab => "\t",
+        TextToColumnsDelimiterKind.Space => " ",
+        TextToColumnsDelimiterKind.Custom => string.IsNullOrEmpty(customDelimiter)
+            ? throw new ArgumentException("Custom delimiter is required.", nameof(customDelimiter))
+            : customDelimiter,
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unsupported delimiter kind.")
     };
 
@@ -39,5 +57,29 @@ public static class TextToColumnsDelimiters
             throw new ArgumentException("Select at least one delimiter.", nameof(kinds));
 
         return string.Concat(distinct.Select(kind => CharacterFor(kind, customDelimiter)));
+    }
+
+    public static TextToColumnsDelimiterPlan CreatePlan(
+        IEnumerable<TextToColumnsDelimiterKind> kinds,
+        string? customDelimiter = null)
+    {
+        ArgumentNullException.ThrowIfNull(kinds);
+
+        var distinct = new List<TextToColumnsDelimiterKind>();
+        foreach (var kind in kinds)
+        {
+            if (!distinct.Contains(kind))
+                distinct.Add(kind);
+        }
+
+        if (distinct.Count == 0)
+            throw new ArgumentException("Select at least one delimiter.", nameof(kinds));
+
+        var delimiters = string.Concat(distinct.Select(kind => DelimiterFor(kind, customDelimiter)));
+        var primaryKind = distinct.Contains(TextToColumnsDelimiterKind.Custom)
+            ? TextToColumnsDelimiterKind.Custom
+            : distinct[0];
+
+        return new TextToColumnsDelimiterPlan(primaryKind, delimiters);
     }
 }

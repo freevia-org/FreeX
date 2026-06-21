@@ -1,41 +1,6 @@
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host;
-
-public enum TextToColumnsDelimiterKind
-{
-    Comma,
-    Semicolon,
-    Tab,
-    Space,
-    Custom
-}
-
-public enum TextToColumnsSplitMode
-{
-    Delimited,
-    FixedWidth
-}
-
-public enum TextToColumnsTextQualifier
-{
-    DoubleQuote,
-    SingleQuote,
-    None
-}
-
-public enum TextToColumnsColumnFormat
-{
-    General = 0,
-    Text = 1,
-    DateMDY = 2,
-    DateDMY = 3,
-    DateYMD = 4,
-    Skip = 5,
-    DateMYD = 6,
-    DateDYM = 7,
-    DateYDM = 8
-}
+namespace FreeX.App.Presentation.TextToColumns;
 
 public sealed record TextToColumnsAdvancedOptions(
     string DecimalSeparator = ".",
@@ -54,10 +19,6 @@ public sealed record TextToColumnsDialogResult(
     TextToColumnsAdvancedOptions? AdvancedOptions = null)
 {
     public string Delimiters => Delimiter;
-    public char? TextQualifierChar => TextQualifier switch
-    {
-        TextToColumnsTextQualifier.DoubleQuote => '"',
-        TextToColumnsTextQualifier.SingleQuote => '\'',
-        _ => null
-    };
+
+    public char? TextQualifierChar => TextToColumnsOptions.QualifierChar(TextQualifier);
 }

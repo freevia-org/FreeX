@@ -11,7 +11,7 @@ public sealed partial class TextToColumnsDialog
         IReadOnlyList<TextToColumnsColumnFormat>? columnFormats = null,
         TextToColumnsAdvancedOptions? advancedOptions = null)
     {
-        var delimiter = TextToColumnsDelimiterPlanner.DelimiterFor(delimiterKind, customDelimiter);
+        var delimiter = TextToColumnsDelimiters.DelimiterFor(delimiterKind, customDelimiter);
 
         return new TextToColumnsDialogResult(
             delimiterKind,
@@ -30,7 +30,7 @@ public sealed partial class TextToColumnsDialog
         IReadOnlyList<TextToColumnsColumnFormat>? columnFormats = null,
         TextToColumnsAdvancedOptions? advancedOptions = null)
     {
-        var delimiterPlan = TextToColumnsDelimiterPlanner.CreatePlan(delimiterKinds, customDelimiter);
+        var delimiterPlan = TextToColumnsDelimiters.CreatePlan(delimiterKinds, customDelimiter);
         return new TextToColumnsDialogResult(
             delimiterPlan.PrimaryKind,
             delimiterPlan.Delimiters,

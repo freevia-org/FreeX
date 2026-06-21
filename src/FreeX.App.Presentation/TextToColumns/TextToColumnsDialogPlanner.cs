@@ -1,5 +1,3 @@
-using System.Globalization;
-
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.TextToColumns;
@@ -14,6 +12,108 @@ namespace FreeX.App.Presentation.TextToColumns;
 /// </summary>
 public static class TextToColumnsDialogPlanner
 {
+    public static IReadOnlyList<string> BuildPreviewRows(Sheet? sheet, GridRange range, int maxRows = 3)
+    {
+        if (sheet is null)
+            return [];
+
+        var rows = new List<string>();
+        for (var row = range.Start.Row; row <= range.End.Row && rows.Count < maxRows; row++)
+        {
+            if (sheet.GetValue(row, range.Start.Col) is TextValue text && !string.IsNullOrWhiteSpace(text.Value))
+                rows.Add(text.Value);
+        }
+
+        return rows;
+    }
+
+    public static bool CanConvertRange(GridRange range) =>
+        range.Start.Col == range.End.Col;
+
+    public static bool TryParseDestination(string? input, CellAddress defaultDestination, out CellAddress destination)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            destination = default;
+            return false;
+        }
+
+        return CellReferenceInputParser.TryParseCell(input, defaultDestination.Sheet, out destination);
+    }
+
+    public static IReadOnlyList<TextToColumnsColumnFormat> NormalizeColumnFormats(
+        IReadOnlyList<TextToColumnsColumnFormat>? columnFormats)
+    {
+        if (columnFormats is null || columnFormats.Count == 0)
+            return [];
+
+        var normalized = columnFormats.ToList();
+        while (normalized.Count > 0 && normalized[^1] == TextToColumnsColumnFormat.General)
+            normalized.RemoveAt(normalized.Count - 1);
+        return normalized;
+    }
+
+    public static bool TryParseAdvancedSeparator(string? value, out string separator)
+    {
+        separator = string.Empty;
+        var trimmed = value?.Trim() ?? string.Empty;
+        if (trimmed.Length != 1)
+            return false;
+
+        separator = trimmed;
+        return true;
+    }
+
+    public static TextToColumnsTextQualifier TextQualifierFromSelectedIndex(int selectedIndex) =>
+        selectedIndex switch
+        {
+            1 => TextToColumnsTextQualifier.SingleQuote,
+            2 => TextToColumnsTextQualifier.None,
+            _ => TextToColumnsTextQualifier.DoubleQuote
+        };
+
+    public static TextToColumnsColumnFormat DateColumnFormatFromLabel(string? label) =>
+        label switch
+        {
+            "DMY" => TextToColumnsColumnFormat.DateDMY,
+            "YMD" => TextToColumnsColumnFormat.DateYMD,
+            "MYD" => TextToColumnsColumnFormat.DateMYD,
+            "DYM" => TextToColumnsColumnFormat.DateDYM,
+            "YDM" => TextToColumnsColumnFormat.DateYDM,
+            _ => TextToColumnsColumnFormat.DateMDY
+        };
+
+    public static bool IsDateColumnFormat(TextToColumnsColumnFormat format) =>
+        format is TextToColumnsColumnFormat.DateMDY
+            or TextToColumnsColumnFormat.DateDMY
+            or TextToColumnsColumnFormat.DateYMD
+            or TextToColumnsColumnFormat.DateMYD
+            or TextToColumnsColumnFormat.DateDYM
+            or TextToColumnsColumnFormat.DateYDM;
+
+    public static string DateColumnFormatLabel(TextToColumnsColumnFormat format) =>
+        format switch
+        {
+            TextToColumnsColumnFormat.DateDMY => "DMY",
+            TextToColumnsColumnFormat.DateYMD => "YMD",
+            TextToColumnsColumnFormat.DateMYD => "MYD",
+            TextToColumnsColumnFormat.DateDYM => "DYM",
+            TextToColumnsColumnFormat.DateYDM => "YDM",
+            _ => "MDY"
+        };
+
+    public static IReadOnlyList<TextToColumnsColumnFormat> BuildColumnFormats(
+        int columnCount,
+        IReadOnlyDictionary<int, TextToColumnsColumnFormat> storedFormats)
+    {
+        var formats = Enumerable.Range(0, columnCount)
+            .Select(index => storedFormats.TryGetValue(index, out var format)
+                ? format
+                : TextToColumnsColumnFormat.General)
+            .ToList();
+        return NormalizeColumnFormats(formats);
+    }
+
     /// <summary>True when the dialog state names at least one delimiter the splitter can act on.</summary>
     public static bool HasAnyDelimiter(TextToColumnsDialogState state)
     {
@@ -109,7 +209,7 @@ public static class TextToColumnsDialogPlanner
 
                 var text = fieldIndex < row.Fields.Count ? row.Fields[fieldIndex] : string.Empty;
                 var address = new CellAddress(sheetId, startRow + (uint)rowIndex, startCol + targetOffset);
-                edits.Add((address, Cell.FromValue(ConvertValue(text, format))));
+                edits.Add((address, Cell.FromValue(TextToColumnsValueConverter.ConvertValue(text, format))));
                 targetOffset++;
             }
         }
@@ -142,68 +242,5 @@ public static class TextToColumnsDialogPlanner
         }
 
         return targets;
-    }
-
-    /// <summary>
-    /// Converts a raw field string to a scalar according to its format hint: <c>Text</c> keeps the raw
-    /// string, the date hints parse with the matching part order, and <c>General</c> infers number/bool
-    /// /text. <c>Skip</c> never reaches here (those fields are dropped before mapping).
-    /// </summary>
-    private static ScalarValue ConvertValue(string text, TextToColumnsColumnFormat format) => format switch
-    {
-        TextToColumnsColumnFormat.Text => new TextValue(text),
-        TextToColumnsColumnFormat.DateMDY when TryParseDate(text, 0, 1, 2, out var d) => new DateTimeValue(d.ToOADate()),
-        TextToColumnsColumnFormat.DateDMY when TryParseDate(text, 1, 0, 2, out var d) => new DateTimeValue(d.ToOADate()),
-        TextToColumnsColumnFormat.DateYMD when TryParseDate(text, 1, 2, 0, out var d) => new DateTimeValue(d.ToOADate()),
-        TextToColumnsColumnFormat.DateMYD when TryParseDate(text, 0, 2, 1, out var d) => new DateTimeValue(d.ToOADate()),
-        TextToColumnsColumnFormat.DateDYM when TryParseDate(text, 2, 0, 1, out var d) => new DateTimeValue(d.ToOADate()),
-        TextToColumnsColumnFormat.DateYDM when TryParseDate(text, 2, 1, 0, out var d) => new DateTimeValue(d.ToOADate()),
-        _ => InferGeneral(text)
-    };
-
-    private static ScalarValue InferGeneral(string text)
-    {
-        var trimmed = text.Trim();
-        if (TryParseNumber(trimmed, out var number))
-            return new NumberValue(number);
-
-        if (trimmed.Equals("TRUE", StringComparison.OrdinalIgnoreCase) ||
-            trimmed.Equals("FALSE", StringComparison.OrdinalIgnoreCase))
-        {
-            return new BoolValue(trimmed.Equals("TRUE", StringComparison.OrdinalIgnoreCase));
-        }
-
-        return new TextValue(text);
-    }
-
-    private static bool TryParseNumber(string text, out double number) =>
-        (double.TryParse(text, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.CurrentCulture, out number) ||
-         double.TryParse(text, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out number)) &&
-        double.IsFinite(number);
-
-    private static bool TryParseDate(string text, int monthIndex, int dayIndex, int yearIndex, out DateTime date)
-    {
-        date = default;
-        var parts = text.Split(['/', '-', '.'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length != 3 ||
-            !int.TryParse(parts[monthIndex], out var month) ||
-            !int.TryParse(parts[dayIndex], out var day) ||
-            !int.TryParse(parts[yearIndex], out var year))
-        {
-            return false;
-        }
-
-        if (year is >= 0 and < 100)
-            year += year < 30 ? 2000 : 1900;
-
-        try
-        {
-            date = new DateTime(year, month, day);
-            return true;
-        }
-        catch (ArgumentOutOfRangeException)
-        {
-            return false;
-        }
     }
 }
