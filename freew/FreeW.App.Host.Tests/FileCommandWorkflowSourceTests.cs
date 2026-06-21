@@ -20,9 +20,12 @@ public sealed class FileCommandWorkflowSourceTests
         source.Should().Contain("_workflow.Open(");
         source.Should().Contain("_workflow.Save(");
         source.Should().Contain("_workflow.ConfirmCloseAllowed(");
+        source.Should().Contain("FileCommandMessageBox.PromptSaveChanges(");
+        source.Should().Contain("FileCommandMessageBox.ShowError(");
         source.Should().NotContain("new FileCommandSession");
         source.Should().NotContain("FileLifecyclePlanner.PlanSave(");
         source.Should().NotContain(".ConfirmDiscardOrSave(action");
+        source.Should().NotContain("MessageBox.Show(");
     }
 
     private static string FindRepositoryRoot()

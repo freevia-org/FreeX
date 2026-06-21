@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows;
 using Microsoft.Win32;
 using Free.Shared.AppServices;
+using Free.Shared.Shell;
 using FreeP.Core.IO;
 using FreeP.Core.Model;
 
@@ -154,22 +155,8 @@ internal sealed class FileCommands
 
     // ── Host seams (WPF) ─────────────────────────────────────────────────────
     private SaveChangesPrompt PromptSaveChanges(string action)
-    {
-        var result = MessageBox.Show(
-            _window,
-            $"Do you want to save changes to {DisplayName} before {action}?",
-            "FreeP",
-            MessageBoxButton.YesNoCancel,
-            MessageBoxImage.Warning);
-
-        return result switch
-        {
-            MessageBoxResult.Yes => SaveChangesPrompt.Save,
-            MessageBoxResult.No => SaveChangesPrompt.DontSave,
-            _ => SaveChangesPrompt.Cancel,
-        };
-    }
+        => FileCommandMessageBox.PromptSaveChanges(_window, DisplayName, action, "FreeP");
 
     private void ShowError(string summary, Exception ex) =>
-        MessageBox.Show(_window, $"{summary}:\n{ex.Message}", "FreeP", MessageBoxButton.OK, MessageBoxImage.Error);
+        FileCommandMessageBox.ShowError(_window, summary, ex, "FreeP");
 }

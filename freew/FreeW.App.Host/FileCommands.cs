@@ -3,6 +3,7 @@ using System.IO;
 using System.Windows;
 using Microsoft.Win32;
 using Free.Shared.AppServices;
+using Free.Shared.Shell;
 using FreeW.App.Host.Editing;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
@@ -288,22 +289,8 @@ internal sealed class FileCommands
     // supply its own implementations (e.g. Avalonia pickers / message dialogs).
 
     private SaveChangesPrompt PromptSaveChanges(string action)
-    {
-        var result = MessageBox.Show(
-            _window,
-            $"Do you want to save changes to {DisplayName} before {action}?",
-            "FreeW",
-            MessageBoxButton.YesNoCancel,
-            MessageBoxImage.Warning);
-
-        return result switch
-        {
-            MessageBoxResult.Yes => SaveChangesPrompt.Save,
-            MessageBoxResult.No => SaveChangesPrompt.DontSave,
-            _ => SaveChangesPrompt.Cancel,
-        };
-    }
+        => FileCommandMessageBox.PromptSaveChanges(_window, DisplayName, action, "FreeW");
 
     private void ShowError(string summary, Exception ex) =>
-        MessageBox.Show(_window, $"{summary}:\n{ex.Message}", "FreeW", MessageBoxButton.OK, MessageBoxImage.Error);
+        FileCommandMessageBox.ShowError(_window, summary, ex, "FreeW");
 }
