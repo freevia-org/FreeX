@@ -96,4 +96,17 @@ public sealed class StatusBarStatsCacheTests
             return new StatusBarCalculator.Stats(calls, calls, calls, calls, calls, calls);
         }
     }
+
+    [Fact]
+    public void HostCache_DelegatesExpansionCachingToSharedWorkbookSelectionStatsCache()
+    {
+        var source = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Host", "StatusBarStatsCache.cs");
+        var calculatorSource = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Host", "StatusBarCalculator.cs");
+
+        source.Should().Contain("WorkbookSelectionStatsCache");
+        source.Should().NotContain("TryCalculateContainingExpansion");
+        source.Should().NotContain("private static bool Contains");
+        source.Should().NotContain("StatusBarCalculator.Combine");
+        calculatorSource.Should().NotContain("public static Stats Combine");
+    }
 }

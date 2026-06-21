@@ -18,9 +18,6 @@ public static class StatusBarCalculator
     public static Stats Calculate(Sheet sheet, GridRange range) =>
         ToStats(WorkbookSelectionStatsCalculator.Calculate(sheet, range));
 
-    public static Stats Combine(Stats left, Stats right) =>
-        ToStats(WorkbookSelectionStatsCalculator.Combine(ToShared(left), ToShared(right)));
-
     internal static Stats ToStats(WorkbookSelectionStats stats) =>
         new(stats.Sum, stats.Count, stats.NumericalCount, stats.Average, stats.Min, stats.Max);
 
