@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 
+using FreeX.App.Avalonia.Dialogs;
 using FreeX.App.Presentation.QuickAnalysis;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -153,11 +154,16 @@ public sealed partial class MainWindow
         var route = QuickAnalysisCommandRouter.Route(suggestion);
         switch (route.Kind)
         {
-            case QuickAnalysisCommandKind.ConditionalFormatPreset when route.Preset is { } preset:
+            case QuickAnalysisCommandKind.ConditionalFormat
+                when route.ConditionalFormat is { } conditionalFormat &&
+                     TryMapQuickAnalysisConditionalFormatPreset(conditionalFormat, out var preset):
                 ApplyConditionalFormatPreset(preset);
                 break;
 
-            case QuickAnalysisCommandKind.AutoSum when route.AutoSumFunction is { } function:
+            case QuickAnalysisCommandKind.InsertTotalFormula
+                when route.TotalFormulaKind == QuickAnalysisTotalFormulaKind.Aggregate &&
+                     route.TotalFunction is { } function &&
+                     IsQuickAnalysisAutoSumFunction(function):
                 InsertAutoSumFormula(function);
                 break;
 
@@ -173,11 +179,54 @@ public sealed partial class MainWindow
                 InsertTableFromSelection();
                 break;
 
+            case QuickAnalysisCommandKind.PivotTable:
+                RefreshShell("Converting to a PivotTable is not yet available on macOS.");
+                break;
+
+            case QuickAnalysisCommandKind.InsertTotalFormula:
+                RefreshShell("This total is not yet available on macOS.");
+                break;
+
             default:
                 RefreshShell(route.DeferredNote ?? UiText.Get("TableLoc_QaSuggestionNotAvailable"));
                 break;
         }
     }
+
+    private static bool TryMapQuickAnalysisConditionalFormatPreset(
+        QuickAnalysisConditionalFormatCommand command,
+        out ConditionalFormatPreset preset)
+    {
+        preset = command switch
+        {
+            QuickAnalysisConditionalFormatCommand.DataBar => ConditionalFormatPreset.DataBar,
+            QuickAnalysisConditionalFormatCommand.ColorScale => ConditionalFormatPreset.ColorScale,
+            QuickAnalysisConditionalFormatCommand.IconSet => ConditionalFormatPreset.IconSet,
+            QuickAnalysisConditionalFormatCommand.GreaterThan => ConditionalFormatPreset.HighlightGreaterThan,
+            QuickAnalysisConditionalFormatCommand.LessThan => ConditionalFormatPreset.HighlightLessThan,
+            QuickAnalysisConditionalFormatCommand.Between => ConditionalFormatPreset.HighlightBetween,
+            QuickAnalysisConditionalFormatCommand.EqualTo => ConditionalFormatPreset.HighlightEqualTo,
+            QuickAnalysisConditionalFormatCommand.TextContains => ConditionalFormatPreset.HighlightTextContains,
+            QuickAnalysisConditionalFormatCommand.DateOccurring => ConditionalFormatPreset.HighlightDateOccurring,
+            QuickAnalysisConditionalFormatCommand.DuplicateValues => ConditionalFormatPreset.HighlightDuplicateValues,
+            QuickAnalysisConditionalFormatCommand.Top10Items => ConditionalFormatPreset.Top10,
+            QuickAnalysisConditionalFormatCommand.Top10Percent => ConditionalFormatPreset.Top10Percent,
+            QuickAnalysisConditionalFormatCommand.Bottom10Items => ConditionalFormatPreset.Bottom10Items,
+            QuickAnalysisConditionalFormatCommand.Bottom10Percent => ConditionalFormatPreset.Bottom10Percent,
+            QuickAnalysisConditionalFormatCommand.AboveAverage => ConditionalFormatPreset.AboveAverage,
+            QuickAnalysisConditionalFormatCommand.BelowAverage => ConditionalFormatPreset.BelowAverage,
+            _ => default
+        };
+
+        return Enum.IsDefined(command);
+    }
+
+    private static bool IsQuickAnalysisAutoSumFunction(string function) =>
+        string.Equals(function, "SUM", StringComparison.Ordinal) ||
+        string.Equals(function, "AVERAGE", StringComparison.Ordinal) ||
+        string.Equals(function, "COUNT", StringComparison.Ordinal) ||
+        string.Equals(function, "MAX", StringComparison.Ordinal) ||
+        string.Equals(function, "MIN", StringComparison.Ordinal);
 
     /// <summary>
     /// Inserts one sparkline per data row beside the selection through the shared session command path,

@@ -23,6 +23,25 @@ public enum PageSetupScalingMode
     FitToPages
 }
 
+/// <summary>The editable dialog field that caused shared Page Setup validation to fail.</summary>
+public enum PageSetupValidationTarget
+{
+    Orientation,
+    PaperSize,
+    Margins,
+    HeaderMargin,
+    FooterMargin,
+    Scaling,
+    FirstPageNumber,
+    PrintQuality,
+    PrintArea,
+    RepeatRows,
+    RepeatColumns,
+    PageOrder,
+    PrintErrorValue,
+    PrintComments
+}
+
 /// <summary>
 /// A snapshot of every editable page-setup field, decoupled from the Core.Model so the dialog can edit
 /// strings/enums without mutating the sheet until the user commits. Built from a <see cref="Sheet"/>
@@ -103,23 +122,31 @@ public sealed record PageSetupDialogFields
 /// The outcome of validating + building a command from the dialog fields: either a ready-to-run
 /// command, or a human-readable error describing the first invalid field.
 /// </summary>
-public sealed record PageSetupCommandBuildResult(SetPageSetupCommand? Command, string? Error)
+public sealed record PageSetupCommandBuildResult(
+    SetPageSetupCommand? Command,
+    string? Error,
+    PageSetupValidationTarget? Target = null)
 {
     public bool Success => Command is not null;
 
     public static PageSetupCommandBuildResult Ok(SetPageSetupCommand command) => new(command, null);
-    public static PageSetupCommandBuildResult Fail(string error) => new(null, error);
+    public static PageSetupCommandBuildResult Fail(string error, PageSetupValidationTarget? target = null) =>
+        new(null, error, target);
 }
 
 /// <summary>
 /// The complete shared Page Setup command plan, or the first validation error that prevented building it.
 /// </summary>
-public sealed record PageSetupCommandPlanBuildResult(PageSetupCommandPlan? Plan, string? Error)
+public sealed record PageSetupCommandPlanBuildResult(
+    PageSetupCommandPlan? Plan,
+    string? Error,
+    PageSetupValidationTarget? Target = null)
 {
     public bool Success => Plan is not null;
 
     public static PageSetupCommandPlanBuildResult Ok(PageSetupCommandPlan plan) => new(plan, null);
-    public static PageSetupCommandPlanBuildResult Fail(string error) => new(null, error);
+    public static PageSetupCommandPlanBuildResult Fail(string error, PageSetupValidationTarget? target = null) =>
+        new(null, error, target);
 }
 
 public static class PageSetupDialogModel
@@ -218,7 +245,7 @@ public static class PageSetupDialogModel
         var plan = TryBuildCommandPlan(sheet, fields);
         return plan.Success
             ? PageSetupCommandBuildResult.Ok(plan.Plan!.PageSetupCommand)
-            : PageSetupCommandBuildResult.Fail(plan.Error ?? "Page setup is invalid.");
+            : PageSetupCommandBuildResult.Fail(plan.Error ?? "Page setup is invalid.", plan.Target);
     }
 
     /// <summary>
@@ -241,7 +268,7 @@ public static class PageSetupDialogModel
         var request = TryBuildRequest(sheet, fields);
         return request.Success
             ? PageSetupCommandPlanBuildResult.Ok(PageSetupCommandFactory.Build(targetSheetId, request.Request!))
-            : PageSetupCommandPlanBuildResult.Fail(request.Error ?? "Page setup is invalid.");
+            : PageSetupCommandPlanBuildResult.Fail(request.Error ?? "Page setup is invalid.", request.Target);
     }
 
     /// <summary>
@@ -341,42 +368,42 @@ public static class PageSetupDialogModel
         ArgumentNullException.ThrowIfNull(fields);
 
         if (!Enum.IsDefined(fields.Orientation))
-            return PageSetupRequestBuildResult.Fail("Choose a page orientation.");
+            return PageSetupRequestBuildResult.Fail("Choose a page orientation.", PageSetupValidationTarget.Orientation);
         if (!Enum.IsDefined(fields.PaperSize))
-            return PageSetupRequestBuildResult.Fail("Choose a paper size.");
+            return PageSetupRequestBuildResult.Fail("Choose a paper size.", PageSetupValidationTarget.PaperSize);
         if (!Enum.IsDefined(fields.PageOrder))
-            return PageSetupRequestBuildResult.Fail("Choose a page order.");
+            return PageSetupRequestBuildResult.Fail("Choose a page order.", PageSetupValidationTarget.PageOrder);
         if (!Enum.IsDefined(fields.PrintErrorValue))
-            return PageSetupRequestBuildResult.Fail("Choose how cell errors print.");
+            return PageSetupRequestBuildResult.Fail("Choose how cell errors print.", PageSetupValidationTarget.PrintErrorValue);
         if (!Enum.IsDefined(fields.PrintComments))
-            return PageSetupRequestBuildResult.Fail("Choose how comments print.");
+            return PageSetupRequestBuildResult.Fail("Choose how comments print.", PageSetupValidationTarget.PrintComments);
 
         if (!PageMarginInputParser.TryParse(fields.MarginsText, out var margins, out var marginError))
-            return PageSetupRequestBuildResult.Fail(marginError ?? "Margins are invalid.");
+            return PageSetupRequestBuildResult.Fail(marginError ?? "Margins are invalid.", PageSetupValidationTarget.Margins);
 
         if (!TryParseMargin(fields.HeaderMarginText, sheet.HeaderMargin, out var headerMargin))
-            return PageSetupRequestBuildResult.Fail("Header margin must be a non-negative number of inches.");
+            return PageSetupRequestBuildResult.Fail("Header margin must be a non-negative number of inches.", PageSetupValidationTarget.HeaderMargin);
 
         if (!TryParseMargin(fields.FooterMarginText, sheet.FooterMargin, out var footerMargin))
-            return PageSetupRequestBuildResult.Fail("Footer margin must be a non-negative number of inches.");
+            return PageSetupRequestBuildResult.Fail("Footer margin must be a non-negative number of inches.", PageSetupValidationTarget.FooterMargin);
 
         if (!TryResolveScaleToFit(fields, out var scaleToFit, out var scaleError))
-            return PageSetupRequestBuildResult.Fail(scaleError!);
+            return PageSetupRequestBuildResult.Fail(scaleError!, PageSetupValidationTarget.Scaling);
 
         if (!TryParseFirstPageNumber(fields.FirstPageNumberText, out var firstPageNumber))
-            return PageSetupRequestBuildResult.Fail("First page number must be a positive whole number or blank for automatic.");
+            return PageSetupRequestBuildResult.Fail("First page number must be a positive whole number or blank for automatic.", PageSetupValidationTarget.FirstPageNumber);
 
         if (!TryParsePrintQualityDpi(fields.PrintQualityDpiText, out var printQualityDpi))
-            return PageSetupRequestBuildResult.Fail("Print quality must be a positive DPI value or blank.");
+            return PageSetupRequestBuildResult.Fail("Print quality must be a positive DPI value or blank.", PageSetupValidationTarget.PrintQuality);
 
         if (!TryParsePrintArea(fields.PrintAreaText, sheet.Id, out var printArea))
-            return PageSetupRequestBuildResult.Fail("Print area must be a cell range like A1:D20.");
+            return PageSetupRequestBuildResult.Fail("Print area must be a cell range like A1:D20.", PageSetupValidationTarget.PrintArea);
 
         if (!PageLayoutInputParser.TryParseRepeatRows(fields.RepeatRowsText, out var repeatRows))
-            return PageSetupRequestBuildResult.Fail("Rows to repeat at top must be a row range like 1:2.");
+            return PageSetupRequestBuildResult.Fail("Rows to repeat at top must be a row range like 1:2.", PageSetupValidationTarget.RepeatRows);
 
         if (!PageLayoutInputParser.TryParseRepeatColumns(fields.RepeatColumnsText, out var repeatColumns))
-            return PageSetupRequestBuildResult.Fail("Columns to repeat at left must be a column range like A:B.");
+            return PageSetupRequestBuildResult.Fail("Columns to repeat at left must be a column range like A:B.", PageSetupValidationTarget.RepeatColumns);
 
         return PageSetupRequestBuildResult.Ok(new PageSetupCommandRequest
         {
@@ -422,12 +449,16 @@ public static class PageSetupDialogModel
         });
     }
 
-    private sealed record PageSetupRequestBuildResult(PageSetupCommandRequest? Request, string? Error)
+    private sealed record PageSetupRequestBuildResult(
+        PageSetupCommandRequest? Request,
+        string? Error,
+        PageSetupValidationTarget? Target = null)
     {
         public bool Success => Request is not null;
 
         public static PageSetupRequestBuildResult Ok(PageSetupCommandRequest request) => new(request, null);
-        public static PageSetupRequestBuildResult Fail(string error) => new(null, error);
+        public static PageSetupRequestBuildResult Fail(string error, PageSetupValidationTarget? target = null) =>
+            new(null, error, target);
     }
 
     private static bool TryParseFitToPages(string input, out int? pages)

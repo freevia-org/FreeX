@@ -173,6 +173,7 @@ public sealed class PageSetupDialogModelTests
         result.Success.Should().BeFalse();
         result.Command.Should().BeNull();
         result.Error.Should().NotBeNullOrEmpty();
+        result.Target.Should().Be(PageSetupValidationTarget.Margins);
     }
 
     [Fact]
@@ -185,6 +186,7 @@ public sealed class PageSetupDialogModelTests
 
         result.Success.Should().BeFalse();
         result.Error.Should().NotBeNullOrEmpty();
+        result.Target.Should().Be(PageSetupValidationTarget.RepeatRows);
     }
 
     [Fact]
@@ -314,6 +316,7 @@ public sealed class PageSetupDialogModelTests
 
         result.Success.Should().BeFalse();
         result.Error.Should().NotBeNullOrEmpty();
+        result.Target.Should().Be(PageSetupValidationTarget.FirstPageNumber);
     }
 
     [Theory]
@@ -329,6 +332,7 @@ public sealed class PageSetupDialogModelTests
 
         result.Success.Should().BeFalse();
         result.Error.Should().NotBeNullOrEmpty();
+        result.Target.Should().Be(PageSetupValidationTarget.PrintQuality);
     }
 
     [Fact]
@@ -341,6 +345,36 @@ public sealed class PageSetupDialogModelTests
 
         result.Success.Should().BeFalse();
         result.Error.Should().NotBeNullOrEmpty();
+        result.Target.Should().Be(PageSetupValidationTarget.HeaderMargin);
+    }
+
+    [Fact]
+    public void TryBuildCommand_InvalidPrintAreaReportsTarget()
+    {
+        var sheet = CreateSheet();
+        var fields = PageSetupDialogModel.FromSheet(sheet) with { PrintAreaText = "not a range" };
+
+        var result = PageSetupDialogModel.TryBuildCommand(sheet, fields);
+
+        result.Success.Should().BeFalse();
+        result.Error.Should().NotBeNullOrEmpty();
+        result.Target.Should().Be(PageSetupValidationTarget.PrintArea);
+    }
+
+    [Fact]
+    public void TryBuildCommandPlan_InvalidEnumReportsTarget()
+    {
+        var sheet = CreateSheet();
+        var fields = PageSetupDialogModel.FromSheet(sheet) with
+        {
+            PageOrder = (WorksheetPageOrder)999,
+        };
+
+        var result = PageSetupDialogModel.TryBuildCommandPlan(sheet, fields);
+
+        result.Success.Should().BeFalse();
+        result.Error.Should().NotBeNullOrEmpty();
+        result.Target.Should().Be(PageSetupValidationTarget.PageOrder);
     }
 
     [Fact]
