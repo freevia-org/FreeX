@@ -57,7 +57,10 @@ internal static class SvgIconParser
     /// is authored in the SVG's own viewBox coordinate space; the caller scales it to the wanted pixel
     /// size via an <see cref="Avalonia.Controls.Image"/> with <see cref="Stretch.Uniform"/>.
     /// </summary>
-    public static DrawingImage? TryParseFile(string filePath)
+    public static DrawingImage? TryParseFile(string filePath) =>
+        TryParseFile(filePath, monochromeBrush: null);
+
+    public static DrawingImage? TryParseFile(string filePath, IBrush? monochromeBrush)
     {
         try
         {
@@ -69,7 +72,7 @@ internal static class SvgIconParser
             var viewBox = ReadViewBox(root);
 
             var group = new DrawingGroup();
-            var inherited = SvgPaint.Root;
+            var inherited = SvgPaint.CreateRoot(monochromeBrush);
             foreach (var child in root.Elements())
                 ParseElement(child, group, inherited);
 
@@ -223,21 +226,20 @@ internal static class SvgIconParser
             fontSize,
             fillBrush);
 
-        // SVG (x,y) is the anchor point on the text baseline. FormattedText origin is the top-left of the
-        // layout box, so shift left by the anchor offset and up by the ascent (baseline ≈ origin + ascent).
+        // SVG (x,y) is the anchor point on the text baseline unless dominant-baseline asks for a visual
+        // center. Match the WPF SVG loader here so shared text-heavy icons (Bold/Underline/etc.) do not
+        // sit low in their button slots on Linux.
         var originX = x;
         if (string.Equals(anchor, "middle", StringComparison.OrdinalIgnoreCase))
             originX -= formatted.Width / 2;
         else if (string.Equals(anchor, "end", StringComparison.OrdinalIgnoreCase))
             originX -= formatted.Width;
 
-        // Approximate the baseline: ascent ≈ Baseline. dominant-baseline=central means (x,y) is the
-        // visual center, so additionally lift by half the height.
         var originY = y - formatted.Baseline;
         if (string.Equals(baseline, "central", StringComparison.OrdinalIgnoreCase)
             || string.Equals(baseline, "middle", StringComparison.OrdinalIgnoreCase))
         {
-            originY += formatted.Height / 2;
+            originY = y - formatted.Height / 2;
         }
 
         var geometry = formatted.BuildGeometry(new Point(originX, originY));
@@ -512,40 +514,44 @@ internal static class SvgIconParser
         public Pen? Stroke { get; private init; }
         public FillRule? FillRule { get; private init; }
 
-        // Stroke is built lazily from these because stroke color, width and caps can be set at different
+        // Stroke is built lazily from these because stroke paint, width and caps can be set at different
         // levels of the tree (e.g. <g stroke-width> with per-path stroke).
-        private readonly Color? _strokeColor;
+        private readonly IBrush? _strokeBrush;
         private readonly double _strokeWidth;
         private readonly PenLineCap _lineCap;
         private readonly PenLineJoin _lineJoin;
+        private readonly IBrush? _monochromeBrush;
 
         private SvgPaint(
             IBrush? fill,
-            Color? strokeColor,
+            IBrush? strokeBrush,
             double strokeWidth,
             PenLineCap lineCap,
             PenLineJoin lineJoin,
-            FillRule? fillRule)
+            FillRule? fillRule,
+            IBrush? monochromeBrush)
         {
             Fill = fill;
-            _strokeColor = strokeColor;
+            _strokeBrush = strokeBrush;
             _strokeWidth = strokeWidth;
             _lineCap = lineCap;
             _lineJoin = lineJoin;
             FillRule = fillRule;
-            Stroke = strokeColor is { } c && strokeWidth > 0
-                ? new Pen(new SolidColorBrush(c), strokeWidth) { LineCap = lineCap, LineJoin = lineJoin }
+            _monochromeBrush = monochromeBrush;
+            Stroke = strokeBrush is { } brush && strokeWidth > 0
+                ? new Pen(brush, strokeWidth) { LineCap = lineCap, LineJoin = lineJoin }
                 : null;
         }
 
         // The SVG default: black fill, no stroke, 1px stroke width, butt caps / miter joins.
-        public static SvgPaint Root => new(
-            fill: Brushes.Black,
-            strokeColor: null,
+        public static SvgPaint CreateRoot(IBrush? monochromeBrush) => new(
+            fill: monochromeBrush ?? Brushes.Black,
+            strokeBrush: null,
             strokeWidth: 1.0,
             lineCap: PenLineCap.Flat,
             lineJoin: PenLineJoin.Miter,
-            fillRule: null);
+            fillRule: null,
+            monochromeBrush: monochromeBrush);
 
         /// <summary>Returns a new paint state with this element's presentation attributes applied over self.</summary>
         public SvgPaint Inherit(XElement element)
@@ -554,9 +560,9 @@ internal static class SvgIconParser
             if (element.Attribute("fill")?.Value is { } fillRaw)
                 fill = ParseBrush(fillRaw, element);
 
-            var strokeColor = _strokeColor;
+            var strokeBrush = _strokeBrush;
             if (element.Attribute("stroke")?.Value is { } strokeRaw)
-                strokeColor = ParseColor(strokeRaw);
+                strokeBrush = ParseBrush(strokeRaw, element);
 
             var strokeWidth = _strokeWidth;
             if (ParseDouble(element.Attribute("stroke-width")?.Value) is { } sw)
@@ -576,12 +582,18 @@ internal static class SvgIconParser
                     ? global::Avalonia.Media.FillRule.EvenOdd
                     : global::Avalonia.Media.FillRule.NonZero;
 
-            return new SvgPaint(fill, strokeColor, strokeWidth, lineCap, lineJoin, fillRule);
+            return new SvgPaint(fill, strokeBrush, strokeWidth, lineCap, lineJoin, fillRule, _monochromeBrush);
         }
 
-        private static IBrush? ParseBrush(string raw, XElement element)
+        private IBrush? ParseBrush(string raw, XElement element)
         {
             var value = raw.Trim();
+            if (value.Length == 0 || value.Equals("none", StringComparison.OrdinalIgnoreCase))
+                return null;
+            if (value.Equals("transparent", StringComparison.OrdinalIgnoreCase))
+                return Brushes.Transparent;
+            if (_monochromeBrush is { } monochrome)
+                return monochrome;
             if (value.StartsWith("url(", StringComparison.OrdinalIgnoreCase))
                 return ResolveGradientBrush(value, element);
             return ParseColor(value) is { } c ? new SolidColorBrush(c) : null;

@@ -16,6 +16,7 @@ internal sealed class AvaloniaRibbonContextSource : IRibbonContextSource
     private string? _drawingObjectKey;
     private bool _tableActive;
     private bool _pivotActive;
+    private string? _parityCaptureActivationKey;
 
     public RibbonContextState Current { get; private set; } = RibbonContextState.None;
 
@@ -23,11 +24,17 @@ internal sealed class AvaloniaRibbonContextSource : IRibbonContextSource
 
     /// <summary>A drawing object was selected: map its kind to the contextual tab's activation key.</summary>
     public void OnDrawingObjectSelected(SelectionPaneObjectKind kind)
-        => SetDrawingObjectKey(MapDrawingObjectKey(kind));
+    {
+        if (_parityCaptureActivationKey is not null)
+            return;
+        SetDrawingObjectKey(MapDrawingObjectKey(kind));
+    }
 
     /// <summary>The active cell entered/left a structured table.</summary>
     public void OnTableActive(bool active)
     {
+        if (_parityCaptureActivationKey is not null)
+            return;
         if (_tableActive == active)
             return;
         _tableActive = active;
@@ -37,6 +44,8 @@ internal sealed class AvaloniaRibbonContextSource : IRibbonContextSource
     /// <summary>The active cell entered/left a PivotTable.</summary>
     public void OnPivotActive(bool active)
     {
+        if (_parityCaptureActivationKey is not null)
+            return;
         if (_pivotActive == active)
             return;
         _pivotActive = active;
@@ -44,7 +53,12 @@ internal sealed class AvaloniaRibbonContextSource : IRibbonContextSource
     }
 
     /// <summary>The selection was cleared: drop any drawing-object context.</summary>
-    public void OnSelectionCleared() => SetDrawingObjectKey(null);
+    public void OnSelectionCleared()
+    {
+        if (_parityCaptureActivationKey is not null)
+            return;
+        SetDrawingObjectKey(null);
+    }
 
     /// <summary>
     /// Capture-only override used by the visual parity runner to render each contextual tab at a stable size.
@@ -52,11 +66,7 @@ internal sealed class AvaloniaRibbonContextSource : IRibbonContextSource
     /// </summary>
     internal void SetParityCaptureContext(string? activationKey)
     {
-        _drawingObjectKey = activationKey is "chart.selected" or "picture.selected" or "shape.selected"
-            ? activationKey
-            : null;
-        _tableActive = string.Equals(activationKey, "table.active", StringComparison.Ordinal);
-        _pivotActive = string.Equals(activationKey, "pivot.active", StringComparison.Ordinal);
+        _parityCaptureActivationKey = activationKey;
         Recompute();
     }
 
@@ -80,6 +90,13 @@ internal sealed class AvaloniaRibbonContextSource : IRibbonContextSource
 
     private void Recompute()
     {
+        if (_parityCaptureActivationKey is { } captureKey)
+        {
+            Current = RibbonContextState.None.With(captureKey);
+            ContextChanged?.Invoke(this, EventArgs.Empty);
+            return;
+        }
+
         var state = RibbonContextState.None;
         if (_drawingObjectKey is not null)
             state = state.With(_drawingObjectKey);

@@ -26,17 +26,20 @@ public static class WorkbookViewportScrollPlanner
 
         var visibleRows = CountScrollableRows(viewport.RowMetrics, sheet.FrozenRows);
         var visibleColumns = CountScrollableColumns(viewport.ColMetrics, sheet.FrozenCols);
+        var (usedMaxRow, usedMaxCol) = CalculateUsedRangeExtents(sheet);
         return new WorkbookViewportScrollState(
             CreateAxis(
                 sheet.ViewTopRow ?? GetScrollableRowStart(sheet),
                 sheet.FrozenRows,
                 CellAddress.MaxRow,
-                visibleRows),
+                visibleRows,
+                usedMaxRow),
             CreateAxis(
                 sheet.ViewLeftCol ?? GetScrollableColumnStart(sheet),
                 sheet.FrozenCols,
                 CellAddress.MaxCol,
-                visibleColumns));
+                visibleColumns,
+                usedMaxCol));
     }
 
     public static (uint TopRow, uint LeftCol) CalculateViewportOrigin(
@@ -89,15 +92,38 @@ public static class WorkbookViewportScrollPlanner
         return visibleSpan >= absoluteLimit ? 1 : absoluteLimit - visibleSpan + 1;
     }
 
+    public static uint CalculateScrollbarMaximumForUsedRange(
+        uint usedMax,
+        uint visibleSpan,
+        uint currentScrollValue,
+        uint absoluteLimit)
+    {
+        var maxOrigin = CalculateMaximumViewportOrigin(absoluteLimit, visibleSpan);
+        return Math.Min(maxOrigin, Math.Max(Math.Max(usedMax, visibleSpan), currentScrollValue));
+    }
+
+    public static (uint UsedMaxRow, uint UsedMaxCol) CalculateUsedRangeExtents(Sheet sheet)
+    {
+        ArgumentNullException.ThrowIfNull(sheet);
+
+        var usedRange = sheet.GetUsedRange();
+        return usedRange is null
+            ? (1u, 1u)
+            : (usedRange.Value.End.Row, usedRange.Value.End.Col);
+    }
+
     private static WorkbookViewportScrollAxis CreateAxis(
         uint worksheetOrigin,
         uint frozenCount,
         uint absoluteLimit,
-        uint visibleSpan)
+        uint visibleSpan,
+        uint usedMax)
     {
         var scrollableLimit = CalculateScrollableLimit(absoluteLimit, frozenCount);
-        var maximum = CalculateMaximumViewportOrigin(scrollableLimit, visibleSpan);
-        var value = Math.Clamp(WorksheetIndexToScrollbarValue(worksheetOrigin, frozenCount), 1, maximum);
+        var value = WorksheetIndexToScrollbarValue(worksheetOrigin, frozenCount);
+        var usedMaxScrollValue = WorksheetIndexToScrollbarValue(usedMax, frozenCount);
+        var maximum = CalculateScrollbarMaximumForUsedRange(usedMaxScrollValue, visibleSpan, value, scrollableLimit);
+        value = Math.Clamp(value, 1, maximum);
         var largeChange = Math.Max(1, visibleSpan - 1);
         return new WorkbookViewportScrollAxis(
             MinimumScrollValue,

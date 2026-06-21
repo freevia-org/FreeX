@@ -160,18 +160,27 @@ internal static class ParityCapture
                 PumpDispatcher();
                 return RenderElement(window!, SurfaceWidth, SurfaceHeight);
             });
+            CaptureSurface(results, "grid.sheetTabsOverflow", "screen", outDir, () =>
+            {
+                PrepareSheetTabsOverflowParityCapture(window!);
+                TrySelectRibbonTab(window!, "HomeTab");
+                window!.UpdateLayout();
+                PumpDispatcher();
+                return RenderElement(window!, SurfaceWidth, SurfaceHeight);
+            });
 
             // Backstage panes. WPF exposes Info as a true backstage pane; Export and Account are rail
             // *actions* (they open the Export-options dialog / show account info) rather than dedicated
-            // panes, so we render the backstage Home host with those rail entries present and note it.
+            // panes, so capture the full backstage host with those action entries focused instead of
+            // silently comparing them as Home.
             CaptureSurface(results, "backstage.Info", "backstage", outDir, () =>
                 RenderBackstage(window!, "ShowInfoView"));
             CaptureSurface(results, "backstage.Export", "backstage", outDir,
-                () => RenderBackstage(window!, "ShowHomeView"),
-                note: "WPF Export is a backstage rail action (opens Export dialog); rendered the backstage rail host.");
+                () => RenderBackstage(window!, "ShowHomeView", "BackstageExportButton"),
+                note: "WPF Export is a backstage rail action (opens Export dialog); rendered the backstage rail host with Export focused.");
             CaptureSurface(results, "backstage.Account", "backstage", outDir,
-                () => RenderBackstage(window!, "ShowHomeView"),
-                note: "WPF Account is a backstage rail action; rendered the backstage rail host.");
+                () => RenderBackstage(window!, "ShowHomeView", "BackstageAccountButton", CreateBackstageAccountPane()),
+                note: "WPF Account is a backstage rail action; rendered a capture-only Account content pane with the Account entry focused.");
         }
         catch (Exception ex)
         {
@@ -182,6 +191,7 @@ internal static class ParityCapture
             foreach (var (surfaceId, _) in ContextualRibbonTabSurfaces)
                 AddMissing(results, surfaceId, "contextual-tab", note);
             AddMissing(results, "grid.demo", "screen", note);
+            AddMissing(results, "grid.sheetTabsOverflow", "screen", note);
             AddMissing(results, "backstage.Info", "backstage", note);
             AddMissing(results, "backstage.Export", "backstage", note);
             AddMissing(results, "backstage.Account", "backstage", note);
@@ -194,12 +204,41 @@ internal static class ParityCapture
         }
     }
 
-    private static BitmapSource RenderBackstage(MainWindow window, string showViewMethod)
+    private static void PrepareSheetTabsOverflowParityCapture(MainWindow window)
+    {
+        while (GetWorkbookSheetCount(window) < 20)
+            InvokePrivate(window, "InsertNewSheet");
+
+        InvokePrivate(window, "RefreshSheetTabs");
+        if (window.FindName("SheetTabsRowGrid") is FrameworkElement sheetTabsRow)
+            sheetTabsRow.UpdateLayout();
+        window.UpdateLayout();
+        PumpDispatcher();
+    }
+
+    private static int GetWorkbookSheetCount(MainWindow window)
+    {
+        var field = typeof(MainWindow).GetField(
+            "_workbook",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("MainWindow._workbook field not found.");
+        return field.GetValue(window) is Workbook workbook ? workbook.Sheets.Count : 0;
+    }
+
+    private static BitmapSource RenderBackstage(
+        MainWindow window,
+        string showViewMethod,
+        string? focusEntryId = null,
+        UIElement? replacementContent = null)
     {
         InvokePrivate(window, "ShowStartScreen");
         window.UpdateLayout();
         PumpDispatcher();
         InvokePrivate(window, showViewMethod);
+        if (replacementContent is not null)
+            SetBackstageContent(window, replacementContent);
+        if (!string.IsNullOrWhiteSpace(focusEntryId))
+            FocusBackstageEntry(window, focusEntryId);
         window.UpdateLayout();
         PumpDispatcher();
 
@@ -210,7 +249,109 @@ internal static class ParityCapture
             return RenderElement(window, SurfaceWidth, SurfaceHeight);
         }
 
-        return RenderElement(overlay, overlay.ActualWidth, overlay.ActualHeight);
+        return RenderElement(window, SurfaceWidth, SurfaceHeight);
+    }
+
+    private static void SetBackstageContent(MainWindow window, UIElement content)
+    {
+        var frame = GetBackstageFrame(window);
+        var field = frame?.GetType().GetField(
+            "_content",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        if (field?.GetValue(frame) is ContentControl contentHost)
+            contentHost.Content = content;
+    }
+
+    private static void FocusBackstageEntry(MainWindow window, string entryId)
+    {
+        var frame = GetBackstageFrame(window);
+        var method = frame?.GetType().GetMethod("FocusEntry", [typeof(string)]);
+        _ = method?.Invoke(frame, [entryId]);
+        PumpDispatcher();
+    }
+
+    private static object? GetBackstageFrame(MainWindow window)
+    {
+        var field = typeof(MainWindow).GetField(
+            "_backstageFrame",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        return field?.GetValue(window);
+    }
+
+    private static UIElement CreateBackstageAccountPane()
+    {
+        var root = new StackPanel
+        {
+            Margin = new Thickness(40, 34, 46, 0),
+        };
+        root.Children.Add(new TextBlock
+        {
+            Text = "Account",
+            FontSize = 30,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = Brushes.Black,
+            Margin = new Thickness(0, 0, 0, 18),
+        });
+        root.Children.Add(new TextBlock
+        {
+            Text = "Local account information",
+            FontSize = 16,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = Brushes.Black,
+            Margin = new Thickness(0, 0, 0, 18),
+        });
+
+        var details = new Grid();
+        details.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(180) });
+        details.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var rows = new (string Label, string Value)[]
+        {
+            ("FreeX user name", "quinn"),
+            ("Windows account", "Local Windows user"),
+            ("Device", "Local workstation"),
+            ("App version", "FreeX"),
+            ("Options file", "Local profile settings"),
+            ("Current workbook", "Parity Demo (not saved yet)"),
+            ("Sharing", "Save As is required before Windows Share can send the workbook."),
+            ("Export", "Ready for local PDF/XPS export to a chosen local path."),
+            ("Microsoft 365 services", "Not connected; account sign-in, cloud links, and coauthoring are not implemented."),
+        };
+        for (var i = 0; i < rows.Length; i++)
+        {
+            details.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            AddAccountDetail(details, i, rows[i].Label, rows[i].Value);
+        }
+        root.Children.Add(details);
+        return root;
+    }
+
+    private static void AddAccountDetail(Grid grid, int row, string label, string value)
+    {
+        var labelBlock = new TextBlock
+        {
+            Text = label,
+            FontSize = 12,
+            Foreground = new SolidColorBrush(Color.FromRgb(95, 99, 104)),
+            Margin = new Thickness(0, 0, 18, 10),
+            TextAlignment = TextAlignment.Left,
+        };
+        Grid.SetRow(labelBlock, row);
+        Grid.SetColumn(labelBlock, 0);
+        grid.Children.Add(labelBlock);
+
+        var valueBlock = new TextBlock
+        {
+            Text = value,
+            FontSize = 13,
+            Foreground = Brushes.Black,
+            Margin = new Thickness(0, 0, 0, 10),
+            MaxWidth = 560,
+            TextWrapping = TextWrapping.Wrap,
+            TextAlignment = TextAlignment.Left,
+        };
+        Grid.SetRow(valueBlock, row);
+        Grid.SetColumn(valueBlock, 1);
+        grid.Children.Add(valueBlock);
     }
 
     private static void EnsureFormulaBarVisibleForParityCapture(MainWindow window)

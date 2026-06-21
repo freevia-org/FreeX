@@ -13,11 +13,11 @@ internal static class AvaloniaStatusBarSource
 {
     /// <summary>
     /// Default per-option visibility, keyed by the <c>StatusBarCustomizeContextMenuPlanner</c> OptionTag
-    /// values. The Avalonia footer starts with the full compact readout profile it used before this helper
-    /// was shared, while WPF keeps its persisted Excel-default options.
+    /// values. Avalonia uses the same Excel-default profile as the WPF host, so the shared planner stays
+    /// the source of truth for both renderers.
     /// </summary>
     public static Dictionary<string, bool> CreateDefaultOptionVisibility() =>
-        StatusBarVisibilityPlanner.CreateDefaultOptionVisibility(StatusBarOptionVisibility.FullReadoutDefaults);
+        StatusBarVisibilityPlanner.CreateDefaultOptionVisibility(StatusBarOptionVisibility.ExcelDefaults);
 
     /// <summary>
     /// Builds the neutral <see cref="StatusBarViewModel"/> for the given selection stats and zoom using

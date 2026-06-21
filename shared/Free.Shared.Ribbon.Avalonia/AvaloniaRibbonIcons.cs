@@ -48,7 +48,7 @@ namespace Free.Shared.Ribbon.Avalonia;
 /// where Segoe UI is absent), keeping the letter shapes as faithful to Windows as the host fonts allow.
 /// </para>
 /// </remarks>
-internal static class AvaloniaRibbonIcons
+public static class AvaloniaRibbonIcons
 {
     private const double Artboard = RibbonIconGeometry.Artboard;
 
@@ -70,6 +70,7 @@ internal static class AvaloniaRibbonIcons
 
     private static readonly object CommandIconCacheGate = new();
     private static readonly Dictionary<string, DrawingImage?> CommandIconCache = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, DrawingImage?> CommandIconMonochromeCache = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Builds an icon control for the given kind at the requested pixel size.</summary>
     public static Control Build(RibbonCommandIconKind kind, double size) =>
@@ -85,10 +86,23 @@ internal static class AvaloniaRibbonIcons
     /// </summary>
     public static Control Build(RibbonCommandIconKind kind, double size, string? commandName)
     {
-        if (TryBuildCommandSvg(commandName, size) is { } svg)
+        if (TryBuildCommandSvg(commandName, size, monochromeForeground: null) is { } svg)
             return svg;
 
         return Build(new RibbonCommandIcon(kind), size, foreground: null);
+    }
+
+    /// <summary>
+    /// Builds a command icon from the shared SVG asset and recolours its visible paint to
+    /// <paramref name="foreground"/>. This is used by dark chrome such as the Office backstage rail,
+    /// matching the WPF SVG loader's white glyph path while still reusing the exact same artwork.
+    /// </summary>
+    public static Control BuildMonochrome(RibbonCommandIconKind kind, double size, string? commandName, IBrush foreground)
+    {
+        if (TryBuildCommandSvg(commandName, size, foreground) is { } svg)
+            return svg;
+
+        return Build(new RibbonCommandIcon(kind), size, foreground);
     }
 
     /// <summary>
@@ -98,7 +112,7 @@ internal static class AvaloniaRibbonIcons
     /// <c>-small</c>/<c>-large</c> variants, then the bare slug, then known aliases) mirror the WPF host
     /// in <c>RibbonIconFactory.Svg.cs</c> byte-for-byte so the filenames resolve identically.
     /// </summary>
-    private static Control? TryBuildCommandSvg(string? commandName, double size)
+    private static Control? TryBuildCommandSvg(string? commandName, double size, IBrush? monochromeForeground)
     {
         if (string.IsNullOrWhiteSpace(commandName))
             return null;
@@ -111,7 +125,7 @@ internal static class AvaloniaRibbonIcons
         {
             foreach (var fileSlug in GetSizeSpecificSlugCandidates(candidateSlug, size))
             {
-                if (LoadCommandSvg(fileSlug) is { } image)
+                if (LoadCommandSvg(fileSlug, monochromeForeground) is { } image)
                 {
                     return new AvaloniaImage
                     {
@@ -130,8 +144,11 @@ internal static class AvaloniaRibbonIcons
     // Parses (and caches by file slug) the per-command SVG into a native Avalonia DrawingImage via the
     // in-house SvgIconParser — no external SVG library, so it renders through Avalonia's own software-safe
     // pipeline. A missing file or a parse failure caches null so the caller falls back to the kind glyph.
-    private static DrawingImage? LoadCommandSvg(string fileSlug)
+    private static DrawingImage? LoadCommandSvg(string fileSlug, IBrush? monochromeForeground)
     {
+        if (monochromeForeground is { } foreground)
+            return LoadMonochromeCommandSvg(fileSlug, foreground);
+
         lock (CommandIconCacheGate)
         {
             if (CommandIconCache.TryGetValue(fileSlug, out var cached))
@@ -147,6 +164,30 @@ internal static class AvaloniaRibbonIcons
             CommandIconCache[fileSlug] = image;
         return image;
     }
+
+    private static DrawingImage? LoadMonochromeCommandSvg(string fileSlug, IBrush foreground)
+    {
+        var cacheKey = fileSlug + "|" + GetBrushCacheKey(foreground);
+        lock (CommandIconCacheGate)
+        {
+            if (CommandIconMonochromeCache.TryGetValue(cacheKey, out var cached))
+                return cached;
+        }
+
+        var filePath = Path.Combine(CommandIconsDirectory, fileSlug + ".svg");
+        DrawingImage? image = null;
+        if (File.Exists(filePath))
+            image = SvgIconParser.TryParseFile(filePath, foreground);
+
+        lock (CommandIconCacheGate)
+            CommandIconMonochromeCache[cacheKey] = image;
+        return image;
+    }
+
+    private static string GetBrushCacheKey(IBrush brush) =>
+        brush is ISolidColorBrush solid
+            ? $"#{solid.Color.A:X2}{solid.Color.R:X2}{solid.Color.G:X2}{solid.Color.B:X2}"
+            : brush.GetType().FullName ?? "brush";
 
     // Mirrors RibbonIconFactory.Svg.cs GetSizeSpecificSlugCandidates: prefer a size-specific variant
     // (small ≤ 22px, otherwise large), then fall back to the bare slug.
