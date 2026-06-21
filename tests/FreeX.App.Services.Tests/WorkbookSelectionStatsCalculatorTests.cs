@@ -53,6 +53,53 @@ public sealed class WorkbookSelectionStatsCalculatorTests
     }
 
     [Fact]
+    public void Calculate_FilteredRowsAreExcludedFromSelectionStats()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new TextValue("Header")));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), Cell.FromValue(new NumberValue(10)));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), Cell.FromValue(new NumberValue(30)));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), Cell.FromValue(new TextValue("visible")));
+        sheet.FilterHiddenRows.Add(2);
+
+        var stats = WorkbookSelectionStatsCalculator.Calculate(
+            sheet,
+            new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 4, 1)));
+
+        stats.Count.Should().Be(3);
+        stats.NumericalCount.Should().Be(1);
+        stats.Sum.Should().Be(30);
+        stats.Average.Should().Be(30);
+        stats.Min.Should().Be(30);
+        stats.Max.Should().Be(30);
+    }
+
+    [Fact]
+    public void Calculate_HiddenColumnsAreExcludedFromSelectionStats()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(10)));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), Cell.FromValue(new NumberValue(20)));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), Cell.FromValue(new NumberValue(30)));
+        sheet.HiddenCols.Add(2);
+
+        var stats = WorkbookSelectionStatsCalculator.Calculate(
+            sheet,
+            new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 1, 3)));
+
+        stats.Count.Should().Be(2);
+        stats.NumericalCount.Should().Be(2);
+        stats.Sum.Should().Be(40);
+        stats.Average.Should().Be(20);
+        stats.Min.Should().Be(10);
+        stats.Max.Should().Be(30);
+    }
+
+    [Fact]
     public void Calculate_FormulaCellsUseTheirEffectiveCachedValues()
     {
         var sheet = new Sheet(SheetId.New(), "Sheet1");

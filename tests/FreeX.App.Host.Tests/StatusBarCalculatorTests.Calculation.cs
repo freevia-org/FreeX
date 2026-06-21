@@ -50,6 +50,30 @@ public sealed partial class StatusBarCalculatorTests
     }
 
     [Fact]
+    public void Calculate_FilteredRowsAreExcludedFromStatusTipStats()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new TextValue("Header")));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), Cell.FromValue(new NumberValue(10)));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), Cell.FromValue(new NumberValue(30)));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), Cell.FromValue(new TextValue("visible")));
+        sheet.FilterHiddenRows.Add(2);
+
+        var stats = StatusBarCalculator.Calculate(
+            sheet,
+            new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 4, 1)));
+
+        stats.Count.Should().Be(3);
+        stats.NumericalCount.Should().Be(1);
+        stats.Sum.Should().Be(30);
+        stats.Average.Should().Be(30);
+        stats.Min.Should().Be(30);
+        stats.Max.Should().Be(30);
+    }
+
+    [Fact]
     public void Calculate_SingleCellSelectionUsesDirectValueStats()
     {
         var sheet = new Sheet(SheetId.New(), "Sheet1");
