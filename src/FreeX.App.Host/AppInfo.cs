@@ -1,56 +1,32 @@
-using System.Reflection;
 using FreeX.App.Services;
 
 namespace FreeX.App.Host;
 
 public static class AppInfo
 {
-    public static string VersionText { get; } = FormatVersionText(
-        typeof(AppInfo).Assembly
-            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
-            ?.InformationalVersion);
+    public static string VersionText { get; } = AppHelpInfo.GetVersionText(typeof(AppInfo).Assembly);
 
     /// <summary>
     /// Release channel for self-update. The tester channel pulls GitHub pre-releases
     /// (see <c>UpdateFeed.AllowPrereleases</c>); mirrors <c>release/progress.json</c>'s "channel".
     /// </summary>
-    public const string ReleaseChannel = "test";
+    public const string ReleaseChannel = AppHelpInfo.ReleaseChannel;
 
-    public const string HelpUrl = "https://github.com/tony-xmelon/FreeX";
-    public const string FeedbackUrl = "https://github.com/tony-xmelon/FreeX/issues/new";
-    public const string LatestReleaseUrl = "https://github.com/tony-xmelon/FreeX/releases/latest";
+    public const string HelpUrl = AppHelpInfo.HelpUrl;
+    public const string FeedbackUrl = AppHelpInfo.FeedbackUrl;
+    public const string LatestReleaseUrl = AppHelpInfo.LatestReleaseUrl;
     public const string LatestTesterDownloadUrl = "https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-win-x64.exe";
-    public const string TrademarkNotice = "FreeX is not affiliated with, endorsed by, or sponsored by Microsoft. Microsoft Excel is a trademark of Microsoft Corporation.";
-    public const string ProjectLicenseNotice = "FreeX Source License: Copyright (c) 2026 FreeX contributors. All rights reserved. Tester binaries may be downloaded and run for personal evaluation and testing. Redistribution or commercial distribution requires separate written permission from the copyright holder.";
+    public const string TrademarkNotice = AppHelpInfo.TrademarkNotice;
+    public const string ProjectLicenseNotice = AppHelpInfo.ProjectLicenseNotice;
     public const string PrivacyNotice = AppHelpInfo.PrivacyNotice;
-    public const string CompatibilityNotice = "Compatibility references: FreeX uses Microsoft product names only in plain text when describing file compatibility, interoperability, excluded Microsoft services, or test/reference behavior. FreeX does not use Microsoft logos, product icons, trade dress, or Microsoft-style app branding. File-format labels use neutral names such as XLSX Workbook.";
+    public const string CompatibilityNotice = AppHelpInfo.CompatibilityNotice;
     public const string ThirdPartyRuntimeNotice =
         "Third-party runtime notices: Runtime dependencies remain governed by their own licenses. The publishable app dependency set is covered by MIT, Apache-2.0, and BSD-3-Clause style licenses. Runtime packages: ClosedXML, ClosedXML.Parser, DocumentFormat.OpenXml, DocumentFormat.OpenXml.Framework, ExcelDataReader, ExcelNumberFormat, Microsoft.Extensions.DependencyInjection, Microsoft.Extensions.DependencyInjection.Abstractions, Microsoft.Extensions.Logging, Microsoft.Extensions.Logging.Abstractions, Microsoft.Extensions.Options, Microsoft.Extensions.Primitives, OxyPlot.Core, OxyPlot.Wpf, OxyPlot.Wpf.Shared, PDFsharp-WPF, RBush.Signed, Sentry, Serilog, Serilog.Extensions.Logging, Serilog.Sinks.Console, Serilog.Sinks.File, SharpVectors.Wpf, SixLabors.Fonts, and System.IO.Packaging. No package-provided NOTICE files were found in the restored runtime packages.";
-    public const string SourceNotice = "Full project license, legal notice, privacy notice, third-party notices, and bundled third-party license texts are available in Help > Legal Notices and are maintained with the FreeX release materials at https://github.com/tony-xmelon/FreeX.";
+    public const string SourceNotice = AppHelpInfo.SourceNotice;
 
     public static string AboutText { get; } =
         $"FreeX\n{VersionText}\n\nA free spreadsheet app for XLSX editing with open-only legacy XLS/XLSB import.\n\nBuilt with .NET 10, WPF, ClosedXML, OxyPlot.\n\n{TrademarkNotice}\n\n{CompatibilityNotice}\n\n{ProjectLicenseNotice}\n\n{PrivacyNotice}\n\n{ThirdPartyRuntimeNotice}\n\n{SourceNotice}";
 
-    internal static string FormatVersionText(string? informationalVersion)
-    {
-        var displayVersion = string.IsNullOrWhiteSpace(informationalVersion)
-            ? "0.5.0"
-            : informationalVersion.Trim();
-        var metadataIndex = displayVersion.IndexOf('+', StringComparison.Ordinal);
-        if (metadataIndex >= 0)
-        {
-            displayVersion = displayVersion[..metadataIndex];
-        }
-
-        var versionParts = displayVersion.Split('.');
-        if (versionParts.Length == 3 &&
-            versionParts[2] == "0" &&
-            versionParts[0].All(char.IsDigit) &&
-            versionParts[1].All(char.IsDigit))
-        {
-            displayVersion = $"{versionParts[0]}.{versionParts[1]}";
-        }
-
-        return $"Version {displayVersion} (Tester Release)";
-    }
+    internal static string FormatVersionText(string? informationalVersion) =>
+        AppHelpInfo.FormatVersionText(informationalVersion);
 }

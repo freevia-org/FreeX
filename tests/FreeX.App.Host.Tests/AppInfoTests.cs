@@ -1,5 +1,6 @@
 using FluentAssertions;
 using FreeX.App.Host;
+using FreeX.App.Services;
 
 namespace FreeX.App.Host.Tests;
 
@@ -12,6 +13,20 @@ public sealed class AppInfoTests
         AppInfo.FeedbackUrl.Should().Be("https://github.com/tony-xmelon/FreeX/issues/new");
         AppInfo.LatestReleaseUrl.Should().Be("https://github.com/tony-xmelon/FreeX/releases/latest");
         AppInfo.LatestTesterDownloadUrl.Should().Be("https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-win-x64.exe");
+    }
+
+    [Fact]
+    public void SharedNotices_DelegateToAppHelpInfo()
+    {
+        AppInfo.ReleaseChannel.Should().Be(AppHelpInfo.ReleaseChannel);
+        AppInfo.HelpUrl.Should().Be(AppHelpInfo.HelpUrl);
+        AppInfo.FeedbackUrl.Should().Be(AppHelpInfo.FeedbackUrl);
+        AppInfo.LatestReleaseUrl.Should().Be(AppHelpInfo.LatestReleaseUrl);
+        AppInfo.TrademarkNotice.Should().Be(AppHelpInfo.TrademarkNotice);
+        AppInfo.ProjectLicenseNotice.Should().Be(AppHelpInfo.ProjectLicenseNotice);
+        AppInfo.PrivacyNotice.Should().Be(AppHelpInfo.PrivacyNotice);
+        AppInfo.CompatibilityNotice.Should().Be(AppHelpInfo.CompatibilityNotice);
+        AppInfo.SourceNotice.Should().Be(AppHelpInfo.SourceNotice);
     }
 
     [Fact]
