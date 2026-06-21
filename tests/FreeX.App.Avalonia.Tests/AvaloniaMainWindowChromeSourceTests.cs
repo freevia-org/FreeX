@@ -111,6 +111,20 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     }
 
     [Fact]
+    public void InsertObjects_DelegatesDrawingInsertionToSharedPlanner()
+    {
+        var insertObjectsSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.InsertObjects.cs"));
+        var mainSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        insertObjectsSource.Should().Contain("foreach (var group in DrawingInsertionPlanner.ShapeGroups)");
+        insertObjectsSource.Should().Contain("DrawingInsertionPlanner.BuildShapeCommand(");
+        insertObjectsSource.Should().Contain("DrawingInsertionPlanner.BuildTextBoxCommand(");
+        mainSource.Should().Contain("DrawingInsertionPlanner.DefaultShape");
+        File.Exists(RepoFile("src", "FreeX.App.Avalonia", "InsertShapeCommandFactory.cs")).Should().BeFalse();
+        File.Exists(RepoFile("src", "FreeX.App.Avalonia", "InsertTextBoxCommandFactory.cs")).Should().BeFalse();
+    }
+
+    [Fact]
     public void StatusBarZoomSlider_UsesIdenticalMinMiddleMaxMarks()
     {
         var mainSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));

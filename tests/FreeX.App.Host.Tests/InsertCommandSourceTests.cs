@@ -85,8 +85,7 @@ public sealed class InsertCommandSourceTests
         drawingSource.Should().NotContain("new TextEntryDialog(");
         drawingSource.Should().NotContain("UiText.Get(\"MainWindowDialog_InsertTextBoxTitle\")");
         drawingSource.Should().NotContain("UiText.Get(\"MainWindowDialog_TextEntryLabel\")");
-        drawingSource.Should().Contain("new AddTextBoxCommand(");
-        drawingSource.Should().Contain("string.Empty");
+        drawingSource.Should().Contain("DrawingInsertionPlanner.BuildInlineEditTextBoxCommand(");
         drawingSource.Should().Contain("BeginTextBoxInlineEdit(currentSheetCommand.TextBoxId)");
     }
 
