@@ -7,13 +7,21 @@ namespace FreeW.App.Host.Tests;
 public sealed class FreeWRibbonParityTests
 {
     [Fact]
+    public void Build_OrdersImplementedTopLevelTabsLikeWord()
+    {
+        FreeWRibbon.Build().VisibleTabs.Select(tab => tab.Id)
+            .Should()
+            .Equal("home", "insert", "design", "layout", "references", "mailings", "review", "view");
+    }
+
+    [Fact]
     public void Build_ExposesReferencesAsAWordStyleTopLevelTab()
     {
         var definition = FreeWRibbon.Build();
 
         definition.VisibleTabs.Select(tab => tab.Id)
             .Should()
-            .ContainInOrder("home", "insert", "references");
+            .ContainInOrder("layout", "references", "mailings");
 
         definition.FindTab("insert")!.Groups.Select(group => group.Id)
             .Should()

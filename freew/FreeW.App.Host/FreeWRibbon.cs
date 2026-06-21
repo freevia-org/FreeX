@@ -14,7 +14,7 @@ internal static class FreeWRibbon
         static RibbonButton Icon(RibbonButton button, RibbonCommandIconKind kind, RibbonCommandIconAccent accent = RibbonCommandIconAccent.None) =>
             button with { Icon = new RibbonCommandIcon(kind, accent) };
 
-        return new RibbonDefinitionBuilder()
+        var definition = new RibbonDefinitionBuilder()
             .Tab("home", "Home", "H", tab =>
             {
                 tab.Group("clipboard", "Clipboard", "C", 100, g =>
@@ -509,5 +509,35 @@ internal static class FreeWRibbon
                     g.Large("freew.table-properties", "Properties", RibbonCommandIconKind.Table, accent: RibbonCommandIconAccent.Green));
             })
             .Build();
+
+        return definition with { Tabs = OrderVisibleTabs(definition.Tabs) };
+    }
+
+    private static IReadOnlyList<RibbonTab> OrderVisibleTabs(IReadOnlyList<RibbonTab> tabs)
+    {
+        string[] wordOrder =
+        [
+            "home",
+            "insert",
+            "design",
+            "layout",
+            "references",
+            "mailings",
+            "review",
+            "view"
+        ];
+
+        var visibleOrder = wordOrder
+            .Select((id, index) => new { id, index })
+            .ToDictionary(item => item.id, item => item.index, StringComparer.Ordinal);
+
+        var visible = tabs
+            .Where(tab => !tab.IsContextual)
+            .OrderBy(tab => visibleOrder.TryGetValue(tab.Id, out var index) ? index : int.MaxValue)
+            .ThenBy(tab => visibleOrder.ContainsKey(tab.Id) ? 0 : 1)
+            .ToArray();
+        var contextual = tabs.Where(tab => tab.IsContextual).ToArray();
+
+        return visible.Concat(contextual).ToArray();
     }
 }
