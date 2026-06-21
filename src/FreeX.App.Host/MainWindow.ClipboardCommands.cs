@@ -163,15 +163,20 @@ public partial class MainWindow
             }
             else
             {
+                var expandPasteToSelectedRange = ClipboardPastePlanner.ShouldFillSelectedDestinationRange(clip.IsCut, options);
                 IWorkbookCommand CreatePasteCommand()
                 {
                     var currentRange = SheetGrid.SelectedRange ?? range;
+                    var destinationRange = expandPasteToSelectedRange
+                        ? currentRange
+                        : new GridRange(currentRange.Start, currentRange.Start);
+
                     var pasteCommand = PasteCommandFactory.CreateInternalPasteCommand(
                         _workbook,
                         _currentSheetId,
                         clip.SourceRange,
                         clip.Cells,
-                        currentRange.Start,
+                        destinationRange,
                         ClipboardPastePlanner.ToCorePasteMode(mode),
                         options);
                     var command = keepColumnWidths
@@ -216,14 +221,22 @@ public partial class MainWindow
                 var preserveClipboardVisual = ClipboardPastePlanner.ShouldPreserveClipboardVisualAfterPaste(clip.IsCut);
                 _repeatPostAction = _ =>
                 {
-                    CompletePasteSelection(clip.SourceRange, options, preserveClipboardVisual);
+                    CompletePasteSelection(
+                        clip.SourceRange,
+                        options,
+                        preserveClipboardVisual,
+                        expandToSelectedRange: expandPasteToSelectedRange);
                     if (clip.IsCut)
                         _internalClipboard = null;
                 };
                 if (mode != PasteMode.Formats)
                     RecalculateIfAutomatic(pasteOutcome.AffectedCells ?? []);
 
-                CompletePasteSelection(clip.SourceRange, options, preserveClipboardVisual);
+                CompletePasteSelection(
+                    clip.SourceRange,
+                    options,
+                    preserveClipboardVisual,
+                    expandToSelectedRange: expandPasteToSelectedRange);
                 if (clip.IsCut)
                     _internalClipboard = null;
                 UpdateViewport();
@@ -255,7 +268,7 @@ public partial class MainWindow
             var currentRange = SheetGrid.SelectedRange ?? range;
             return PasteCommandFactory.CreateExternalTextPasteCommand(
                 _currentSheetId,
-                currentRange.Start,
+                currentRange,
                 capturedRows,
                 preserveText: externalTextAsText);
         }
@@ -267,10 +280,10 @@ public partial class MainWindow
             return;
         }
 
-        _repeatPostAction = _ => CompleteExternalPasteSelection(capturedRows);
+        _repeatPostAction = _ => CompleteExternalPasteSelection(capturedRows, expandToSelectedRange: true);
         RecalculateIfAutomatic(fallbackOutcome.AffectedCells ?? []);
 
-        CompleteExternalPasteSelection(capturedRows);
+        CompleteExternalPasteSelection(capturedRows, expandToSelectedRange: true);
         UpdateViewport();
         RefreshToolbar();
     }
@@ -324,13 +337,23 @@ public partial class MainWindow
         RefreshToolbar();
     }
 
-    private void CompletePasteSelection(GridRange sourceRange, PasteSpecialOptions options, bool preserveClipboardVisual = false)
+    private void CompletePasteSelection(
+        GridRange sourceRange,
+        PasteSpecialOptions options,
+        bool preserveClipboardVisual = false,
+        bool expandToSelectedRange = false)
     {
         if (SheetGrid.SelectedRange is not { } range)
             return;
 
         var pastedRows = options.Transpose ? sourceRange.ColCount : sourceRange.RowCount;
         var pastedCols = options.Transpose ? sourceRange.RowCount : sourceRange.ColCount;
+        if (expandToSelectedRange)
+        {
+            pastedRows = Math.Max(pastedRows, range.RowCount);
+            pastedCols = Math.Max(pastedCols, range.ColCount);
+        }
+
         var pastedEnd = new CellAddress(
             _currentSheetId,
             range.Start.Row + (uint)pastedRows - 1,
@@ -355,7 +378,9 @@ public partial class MainWindow
         ClearClipboardVisualState();
     }
 
-    private void CompleteExternalPasteSelection(IReadOnlyList<IReadOnlyList<string>> rows)
+    private void CompleteExternalPasteSelection(
+        IReadOnlyList<IReadOnlyList<string>> rows,
+        bool expandToSelectedRange = false)
     {
         if (SheetGrid.SelectedRange is not { } range || rows.Count == 0)
             return;
@@ -363,10 +388,16 @@ public partial class MainWindow
         var pastedColCount = rows.Count == 0 ? 0 : rows.Max(row => row.Count);
         if (pastedColCount == 0)
             return;
+        if (expandToSelectedRange)
+            pastedColCount = Math.Max(pastedColCount, (int)range.ColCount);
+
+        var pastedRowCount = expandToSelectedRange
+            ? Math.Max(rows.Count, (int)range.RowCount)
+            : rows.Count;
 
         var pastedEnd = new CellAddress(
             _currentSheetId,
-            range.Start.Row + (uint)rows.Count - 1,
+            range.Start.Row + (uint)pastedRowCount - 1,
             range.Start.Col + (uint)pastedColCount - 1);
 
         _selectionAnchor = range.Start;

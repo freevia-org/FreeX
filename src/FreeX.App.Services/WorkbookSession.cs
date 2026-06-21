@@ -2054,15 +2054,19 @@ public sealed class WorkbookSession
         ArgumentNullException.ThrowIfNull(text);
 
         var destination = ActiveCell;
+        var destinationRange = GetSinglePasteDestinationRange(destination);
         var rows = ClipboardSerializer.Deserialize(text);
         var columnCount = rows.Length == 0 ? 0 : rows.Max(static row => row.Length);
-        var command = CreateExternalTextPasteCommand(destination, rows, preserveText);
+        var command = CreateExternalTextPasteCommand(destinationRange, rows, preserveText);
         var result = _cellEditService.ExecuteEditCommand(Workbook, command);
         if (!result.Success)
             return result;
 
         ApplySuccessfulEditResult(result, destination);
-        SelectPastedRange(destination, (ulong)rows.Length, (ulong)columnCount);
+        SelectPastedRange(
+            destination,
+            Math.Max((ulong)rows.Length, destinationRange.RowCount),
+            Math.Max((ulong)columnCount, destinationRange.ColCount));
         return result;
     }
 
@@ -3145,7 +3149,7 @@ public sealed class WorkbookSession
     }
 
     private IWorkbookCommand CreateExternalTextPasteCommand(
-        CellAddress destination,
+        GridRange destinationRange,
         IReadOnlyList<IReadOnlyList<string>> rows,
         bool preserveText)
     {
@@ -3153,7 +3157,7 @@ public sealed class WorkbookSession
         var commands = targetSheetIds
             .Select(sheetId => PasteCommandFactory.CreateExternalTextPasteCommand(
                 sheetId,
-                RemapAddressToSheet(destination, sheetId),
+                RemapRangeToSheet(destinationRange, sheetId),
                 rows,
                 preserveText))
             .ToList();
@@ -3165,13 +3169,26 @@ public sealed class WorkbookSession
         CellAddress destination,
         PasteCellsMode mode,
         PasteSpecialOptions options,
+        bool keepSourceColumnWidths) =>
+        CreateInternalPasteCommand(
+            clipboard,
+            new GridRange(destination, destination),
+            mode,
+            options,
+            keepSourceColumnWidths);
+
+    private IWorkbookCommand CreateInternalPasteCommand(
+        InternalClipboard clipboard,
+        GridRange destinationRange,
+        PasteCellsMode mode,
+        PasteSpecialOptions options,
         bool keepSourceColumnWidths)
     {
         var targetSheetIds = CurrentGroupedEditSheetIds();
         var commands = new List<IWorkbookCommand>(targetSheetIds.Count);
         foreach (var sheetId in targetSheetIds)
         {
-            var sheetDestination = RemapAddressToSheet(destination, sheetId);
+            var sheetDestination = RemapRangeToSheet(destinationRange, sheetId);
             var command = PasteCommandFactory.CreateInternalPasteCommand(
                 Workbook,
                 sheetId,
@@ -3186,7 +3203,7 @@ public sealed class WorkbookSession
                     "Paste Special",
                     [
                         command,
-                        new PasteColumnWidthsCommand(sheetId, clipboard.SourceRange, sheetDestination.Col)
+                        new PasteColumnWidthsCommand(sheetId, clipboard.SourceRange, sheetDestination.Start.Col)
                     ]);
             }
 
@@ -4132,9 +4149,13 @@ public sealed class WorkbookSession
         bool keepSourceColumnWidths = false)
     {
         var destination = ActiveCell;
+        var expandPasteToSelectedRange = ShouldFillSelectedDestinationRange(clipboard.IsCut, options);
+        var destinationRange = expandPasteToSelectedRange
+            ? GetSinglePasteDestinationRange(destination)
+            : new GridRange(destination, destination);
         var command = CreateInternalPasteCommand(
             clipboard,
-            destination,
+            destinationRange,
             mode,
             options,
             keepSourceColumnWidths);
@@ -4155,6 +4176,13 @@ public sealed class WorkbookSession
 
         ApplySuccessfulEditResult(result, destination);
         var pasteSize = GetPasteDimensions(clipboard.SourceRange, options.Transpose);
+        if (expandPasteToSelectedRange)
+        {
+            pasteSize = (
+                Math.Max(pasteSize.RowCount, destinationRange.RowCount),
+                Math.Max(pasteSize.ColCount, destinationRange.ColCount));
+        }
+
         SelectPastedRange(destination, pasteSize.RowCount, pasteSize.ColCount);
         if (clipboard.IsCut)
             _internalClipboard = null;
@@ -4382,6 +4410,16 @@ public sealed class WorkbookSession
 
         return !clipboard.SourceRange.Overlaps(new GridRange(destination, pastedEnd));
     }
+
+    private static bool ShouldFillSelectedDestinationRange(bool isCut, PasteSpecialOptions options) =>
+        !isCut &&
+        options.Operation == PasteSpecialOperation.None &&
+        options.ContentKind != PasteSpecialContentKind.AllMergingConditionalFormats;
+
+    private GridRange GetSinglePasteDestinationRange(CellAddress destination) =>
+        SelectedRanges.Count <= 1
+            ? SelectedRange
+            : new GridRange(destination, destination);
 
     private static (ulong RowCount, ulong ColCount) GetPasteDimensions(GridRange sourceRange, bool transpose) =>
         transpose

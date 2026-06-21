@@ -27,6 +27,33 @@ public sealed partial class PasteCellsCommandTests
     }
 
     [Fact]
+    public void PasteCommandFactory_ExternalTextTilesClipboardRowsAcrossLargerDestinationRange()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var destination = new GridRange(
+            new CellAddress(sheet.Id, 3, 2),
+            new CellAddress(sheet.Id, 5, 5));
+
+        var command = PasteCommandFactory.CreateExternalTextPasteCommand(
+            sheet.Id,
+            destination,
+            [["1", "Name"], ["2.5", "West"]]);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.GetValue(3, 2).Should().Be(new NumberValue(1));
+        sheet.GetValue(3, 3).Should().Be(new TextValue("Name"));
+        sheet.GetValue(3, 4).Should().Be(new NumberValue(1));
+        sheet.GetValue(3, 5).Should().Be(new TextValue("Name"));
+        sheet.GetValue(4, 2).Should().Be(new NumberValue(2.5));
+        sheet.GetValue(4, 3).Should().Be(new TextValue("West"));
+        sheet.GetValue(5, 2).Should().Be(new NumberValue(1));
+        sheet.GetValue(5, 5).Should().Be(new TextValue("Name"));
+    }
+
+    [Fact]
     public void PasteCommandFactory_ExternalTextRejectsRectanglePastWorksheetEdge()
     {
         var wb = new Workbook("test");

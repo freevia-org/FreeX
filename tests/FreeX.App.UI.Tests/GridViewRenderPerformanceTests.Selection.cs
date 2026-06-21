@@ -53,7 +53,13 @@ public sealed partial class GridViewRenderPerformanceTests
         gridViewSource.Should().Contain("private static Pen MakeAutofillPreviewPen()");
         gridViewSource.Should().Contain("DashStyle = new DashStyle([4.0, 4.0], 0)");
         gridViewSource.Should().Contain("pen.Freeze();");
-        renderAutofill.Should().Contain("dc.DrawRectangle(null, AutofillPreviewPen, rect);");
+        renderAutofill.Should().Contain("CalculateVisibleSelectionLayout(");
+        renderAutofill.Should().Contain("previewLayout.HasTopEdge");
+        renderAutofill.Should().Contain("previewLayout.HasBottomEdge");
+        renderAutofill.Should().Contain("previewLayout.HasLeftEdge");
+        renderAutofill.Should().Contain("previewLayout.HasRightEdge");
+        renderAutofill.Should().Contain("dc.DrawLine(AutofillPreviewPen");
+        renderAutofill.Should().NotContain("GetRangePixels(vp");
         renderAutofill.Should().NotContain("new Pen");
         renderAutofill.Should().NotContain("new SolidColorBrush");
         renderAutofill.Should().NotContain("new DashStyle");

@@ -28,6 +28,11 @@ public static class ClipboardPastePlanner
 
     public static bool ShouldPreserveClipboardVisualAfterPaste(bool isCut) => !isCut;
 
+    public static bool ShouldFillSelectedDestinationRange(bool isCut, PasteSpecialOptions options) =>
+        !isCut &&
+        options.Operation == PasteSpecialOperation.None &&
+        options.ContentKind != PasteSpecialContentKind.AllMergingConditionalFormats;
+
     public static bool ShouldClearCutSourceAfterPaste(
         bool isCut,
         GridRange sourceRange,

@@ -2094,6 +2094,42 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void PasteClipboardTextAtActiveCell_TilesInternalClipboardAcrossLargerSelectedRange()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var a2 = new CellAddress(sheet.Id, 2, 1);
+        var b2 = new CellAddress(sheet.Id, 2, 2);
+        var d3 = new CellAddress(sheet.Id, 3, 4);
+        var f5 = new CellAddress(sheet.Id, 5, 6);
+        sheet.SetCell(a1, new TextValue("A"));
+        sheet.SetCell(b1, new TextValue("B"));
+        sheet.SetCell(a2, new TextValue("C"));
+        sheet.SetCell(b2, new TextValue("D"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(new GridRange(a1, b2));
+        var clipboardText = session.CopySelectedRangeText();
+        session.SelectRange(new GridRange(d3, f5));
+
+        var result = session.PasteClipboardTextAtActiveCell(clipboardText);
+
+        result.Success.Should().BeTrue();
+        session.SelectedRange.Should().Be(new GridRange(d3, f5));
+        sheet.GetValue(d3).Should().Be(new TextValue("A"));
+        sheet.GetValue(new CellAddress(sheet.Id, 3, 5)).Should().Be(new TextValue("B"));
+        sheet.GetValue(new CellAddress(sheet.Id, 3, 6)).Should().Be(new TextValue("A"));
+        sheet.GetValue(new CellAddress(sheet.Id, 4, 4)).Should().Be(new TextValue("C"));
+        sheet.GetValue(new CellAddress(sheet.Id, 4, 5)).Should().Be(new TextValue("D"));
+        sheet.GetValue(f5).Should().Be(new TextValue("A"));
+    }
+
+    [Fact]
     public void PasteClipboardTextAtActiveCell_UsesInternalClipboardWhenPlatformTextCannotBeRead()
     {
         var workbook = CreateWorkbook();
@@ -6777,6 +6813,32 @@ public sealed class WorkbookSessionTests
         sheet.GetValue(new CellAddress(sheet.Id, 3, 3)).Should().Be(new TextValue("West"));
         sheet.GetValue(new CellAddress(sheet.Id, 4, 2)).Should().Be(new TextValue("Name"));
         sheet.GetCell(new CellAddress(sheet.Id, 4, 3)).Should().BeNull();
+    }
+
+    [Fact]
+    public void PasteExternalTextAtActiveCell_TilesClipboardRowsAcrossLargerSelectedRange()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var b3 = new CellAddress(sheet.Id, 3, 2);
+        var e5 = new CellAddress(sheet.Id, 5, 5);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(new GridRange(b3, e5));
+
+        var result = session.PasteExternalTextAtActiveCell("10\tWest\r\nName\tEast");
+
+        result.Success.Should().BeTrue();
+        session.SelectedRange.Should().Be(new GridRange(b3, e5));
+        sheet.GetValue(b3).Should().Be(new NumberValue(10));
+        sheet.GetValue(new CellAddress(sheet.Id, 3, 3)).Should().Be(new TextValue("West"));
+        sheet.GetValue(new CellAddress(sheet.Id, 3, 4)).Should().Be(new NumberValue(10));
+        sheet.GetValue(new CellAddress(sheet.Id, 4, 2)).Should().Be(new TextValue("Name"));
+        sheet.GetValue(new CellAddress(sheet.Id, 4, 3)).Should().Be(new TextValue("East"));
+        sheet.GetValue(e5).Should().Be(new TextValue("West"));
     }
 
     [Fact]

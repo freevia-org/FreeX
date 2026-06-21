@@ -125,6 +125,27 @@ public sealed class ClipboardPastePlannerTests
             .Be(expected);
     }
 
+    [Fact]
+    public void ShouldFillSelectedDestinationRange_AllowsCopiedCellsButKeepsCutAndOperationsAtSourceFootprint()
+    {
+        ClipboardPastePlanner.ShouldFillSelectedDestinationRange(isCut: false, default)
+            .Should()
+            .BeTrue();
+        ClipboardPastePlanner.ShouldFillSelectedDestinationRange(isCut: true, default)
+            .Should()
+            .BeFalse();
+        ClipboardPastePlanner.ShouldFillSelectedDestinationRange(
+                isCut: false,
+                new PasteSpecialOptions(Operation: PasteSpecialOperation.Add))
+            .Should()
+            .BeFalse();
+        ClipboardPastePlanner.ShouldFillSelectedDestinationRange(
+                isCut: false,
+                new PasteSpecialOptions(ContentKind: PasteSpecialContentKind.AllMergingConditionalFormats))
+            .Should()
+            .BeFalse();
+    }
+
     [WindowsClipboardFact]
     public void ExternalPaste_UsesRealWindowsClipboardTextAndRejectsStaleInternalCopy()
     {

@@ -27,7 +27,10 @@ public sealed class HomeClipboardCommandSourceTests
         source.Should().Contain("ClipboardPastePlanner.ToCorePasteMode(mode)");
         source.Should().Contain("ClipboardPastePlanner.ShouldPreserveClipboardVisualAfterPaste(clip.IsCut)");
         source.Should().Contain("ApplyClipboardVisualStateAfterInternalPaste(sourceRange, preserveClipboardVisual)");
-        source.Should().Contain("CompletePasteSelection(clip.SourceRange, options, preserveClipboardVisual)");
+        source.Should().Contain("ShouldFillSelectedDestinationRange(clip.IsCut, options)");
+        source.Should().Contain("CompletePasteSelection(");
+        source.Should().Contain("expandToSelectedRange: expandPasteToSelectedRange");
+        source.Should().Contain("CompleteExternalPasteSelection(capturedRows, expandToSelectedRange: true)");
         source.Should().Contain("PasteSpecialPlanner.CreatePlan(new PasteSpecialDialogSelection(");
         source.Should().Contain("ExecutePaste(plan.PasteMode, plan.Options, plan.KeepColumnWidths");
     }

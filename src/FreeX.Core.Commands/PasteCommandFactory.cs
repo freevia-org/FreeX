@@ -17,33 +17,57 @@ public static class PasteCommandFactory
         SheetId targetSheetId,
         CellAddress destination,
         IReadOnlyList<IReadOnlyList<string>> rows,
+        bool preserveText = false) =>
+        CreateExternalTextPasteCommand(
+            targetSheetId,
+            new GridRange(destination, destination),
+            rows,
+            preserveText);
+
+    public static IWorkbookCommand CreateExternalTextPasteCommand(
+        SheetId targetSheetId,
+        GridRange destinationRange,
+        IReadOnlyList<IReadOnlyList<string>> rows,
         bool preserveText = false)
     {
+        var destination = destinationRange.Start;
         if (destination.Sheet != targetSheetId)
             return new RejectedWorkbookCommand("Paste", "Paste destination must be on the target sheet.");
+        if (destinationRange.End.Sheet != targetSheetId)
+            return new RejectedWorkbookCommand("Paste", "Paste destination range must be on the target sheet.");
 
         var rowCount = (ulong)rows.Count;
         var colCount = 0UL;
         foreach (var row in rows)
             colCount = Math.Max(colCount, (ulong)row.Count);
+        var targetRowCount = rowCount == 0 ? 0 : Math.Max(rowCount, destinationRange.RowCount);
+        var targetColCount = colCount == 0 ? 0 : Math.Max(colCount, destinationRange.ColCount);
 
-        if (rowCount > 0 &&
-            colCount > 0 &&
-            !WorksheetBounds.TryGetRectangleEnd(destination, rowCount, colCount, out _))
+        if (targetRowCount > 0 &&
+            targetColCount > 0 &&
+            !WorksheetBounds.TryGetRectangleEnd(destination, targetRowCount, targetColCount, out _))
         {
             return new RejectedWorkbookCommand("Paste", "Paste destination range is outside the worksheet bounds.");
         }
 
         var edits = new List<(CellAddress Address, Cell Cell)>();
-        for (var rowIndex = 0; rowIndex < rows.Count; rowIndex++)
+        for (var rowOffset = 0UL; rowOffset < targetRowCount; rowOffset++)
         {
-            for (var colIndex = 0; colIndex < rows[rowIndex].Count; colIndex++)
+            var sourceRow = rows[(int)(rowOffset % rowCount)];
+            if (sourceRow.Count == 0)
+                continue;
+
+            for (var colOffset = 0UL; colOffset < targetColCount; colOffset++)
             {
+                var sourceColIndex = (int)(colOffset % colCount);
+                if (sourceColIndex >= sourceRow.Count)
+                    continue;
+
                 var address = new CellAddress(
                     targetSheetId,
-                    destination.Row + (uint)rowIndex,
-                    destination.Col + (uint)colIndex);
-                var text = rows[rowIndex][colIndex];
+                    destination.Row + (uint)rowOffset,
+                    destination.Col + (uint)colOffset);
+                var text = sourceRow[sourceColIndex];
                 edits.Add((address, Cell.FromValue(preserveText ? new TextValue(text) : ParseClipboardValue(text))));
             }
         }
@@ -58,8 +82,26 @@ public static class PasteCommandFactory
         IReadOnlyList<(CellAddress Source, Cell Cell)> sourceCells,
         CellAddress destination,
         PasteCellsMode mode,
+        PasteSpecialOptions options) =>
+        CreateInternalPasteCommand(
+            workbook,
+            targetSheetId,
+            sourceRange,
+            sourceCells,
+            new GridRange(destination, destination),
+            mode,
+            options);
+
+    public static IWorkbookCommand CreateInternalPasteCommand(
+        Workbook workbook,
+        SheetId targetSheetId,
+        GridRange sourceRange,
+        IReadOnlyList<(CellAddress Source, Cell Cell)> sourceCells,
+        GridRange destinationRange,
+        PasteCellsMode mode,
         PasteSpecialOptions options)
     {
+        var destination = destinationRange.Start;
         var validationError = PasteCommandValidator.ValidateInternalPaste(
             targetSheetId,
             sourceRange,
@@ -69,8 +111,39 @@ public static class PasteCommandFactory
         if (validationError is not null)
             return new RejectedWorkbookCommand("Paste", validationError);
 
+        var pasteRows = options.Transpose ? sourceRange.ColCount : sourceRange.RowCount;
+        var pasteCols = options.Transpose ? sourceRange.RowCount : sourceRange.ColCount;
+        var targetRows = Math.Max(pasteRows, destinationRange.RowCount);
+        var targetCols = Math.Max(pasteCols, destinationRange.ColCount);
+        if (destinationRange.End.Sheet != targetSheetId ||
+            !WorksheetBounds.IsValidAddress(destinationRange.End) ||
+            !WorksheetBounds.TryGetRectangleEnd(destination, targetRows, targetCols, out _))
+        {
+            return new RejectedWorkbookCommand("Paste", "Paste destination range is outside the worksheet bounds.");
+        }
+
         var targetSheet = workbook.GetSheet(targetSheetId);
         var activeSheetName = targetSheet?.Name ?? "";
+
+        var shouldTileDestinationRange =
+            (targetRows > pasteRows || targetCols > pasteCols) &&
+            options.Operation == PasteSpecialOperation.None &&
+            options.ContentKind != PasteSpecialContentKind.AllMergingConditionalFormats;
+        if (shouldTileDestinationRange)
+        {
+            return CreateTiledInternalPasteCommand(
+                workbook,
+                targetSheetId,
+                targetSheet,
+                activeSheetName,
+                sourceRange,
+                sourceCells,
+                destination,
+                targetRows,
+                targetCols,
+                mode,
+                options);
+        }
 
         if (options.ContentKind == PasteSpecialContentKind.AllMergingConditionalFormats)
         {
@@ -205,6 +278,113 @@ public static class PasteCommandFactory
 
     private static bool IsBlank(Cell cell) =>
         cell.FormulaText is null && cell.Value is BlankValue;
+
+    private static IWorkbookCommand CreateTiledInternalPasteCommand(
+        Workbook workbook,
+        SheetId targetSheetId,
+        Sheet? targetSheet,
+        string activeSheetName,
+        GridRange sourceRange,
+        IReadOnlyList<(CellAddress Source, Cell Cell)> sourceCells,
+        CellAddress destination,
+        uint targetRows,
+        uint targetCols,
+        PasteCellsMode mode,
+        PasteSpecialOptions options)
+    {
+        var sourceLookup = sourceCells.ToDictionary(c => c.Source, c => c.Cell);
+
+        if (mode == PasteCellsMode.Formats && options.Operation == PasteSpecialOperation.None)
+        {
+            var formats = new List<(CellAddress Address, StyleId StyleId)>((int)Math.Min(int.MaxValue, (long)targetRows * targetCols));
+            foreach (var (sourceAddress, destinationAddress) in EnumerateTiledAddresses(
+                sourceRange,
+                targetSheetId,
+                destination,
+                targetRows,
+                targetCols,
+                options.Transpose))
+            {
+                if (!sourceLookup.TryGetValue(sourceAddress, out var sourceCell) ||
+                    options.SkipBlanks && IsBlank(sourceCell))
+                {
+                    continue;
+                }
+
+                formats.Add((destinationAddress, sourceCell.StyleId));
+            }
+
+            return new PasteFormatsCommand(targetSheetId, formats);
+        }
+
+        var edits = new List<(CellAddress Address, Cell Cell)>((int)Math.Min(int.MaxValue, (long)targetRows * targetCols));
+        foreach (var (sourceAddress, destinationAddress) in EnumerateTiledAddresses(
+            sourceRange,
+            targetSheetId,
+            destination,
+            targetRows,
+            targetCols,
+            options.Transpose))
+        {
+            if (!sourceLookup.TryGetValue(sourceAddress, out var sourceCell) ||
+                options.SkipBlanks && IsBlank(sourceCell))
+            {
+                continue;
+            }
+
+            var destinationStyle = PasteCommandCellFactory.GetDestinationStyle(targetSheet, destinationAddress);
+            var pastedRowDelta = (int)destinationAddress.Row - (int)sourceAddress.Row;
+            var pastedColDelta = (int)destinationAddress.Col - (int)sourceAddress.Col;
+            var pastedPasteOp = new PasteOffsetOp(pastedRowDelta, pastedColDelta);
+            var pastedCell = PasteCommandCellFactory.BuildPastedCell(
+                workbook,
+                sourceCell,
+                mode,
+                options.ContentKind,
+                pastedPasteOp,
+                activeSheetName,
+                pastedRowDelta,
+                pastedColDelta,
+                destinationStyle);
+            edits.Add((destinationAddress, pastedCell));
+        }
+
+        return mode == PasteCellsMode.All
+            ? new PasteCellsCommand(targetSheetId, edits)
+            : new EditCellsCommand(targetSheetId, edits);
+    }
+
+    private static IEnumerable<(CellAddress Source, CellAddress Destination)> EnumerateTiledAddresses(
+        GridRange sourceRange,
+        SheetId targetSheetId,
+        CellAddress destination,
+        uint targetRows,
+        uint targetCols,
+        bool transpose)
+    {
+        for (var rowOffset = 0U; rowOffset < targetRows; rowOffset++)
+        {
+            for (var colOffset = 0U; colOffset < targetCols; colOffset++)
+            {
+                var sourceRowOffset = transpose
+                    ? colOffset % sourceRange.RowCount
+                    : rowOffset % sourceRange.RowCount;
+                var sourceColOffset = transpose
+                    ? rowOffset % sourceRange.ColCount
+                    : colOffset % sourceRange.ColCount;
+                var sourceAddress = new CellAddress(
+                    sourceRange.Start.Sheet,
+                    sourceRange.Start.Row + sourceRowOffset,
+                    sourceRange.Start.Col + sourceColOffset);
+                var destinationAddress = new CellAddress(
+                    targetSheetId,
+                    destination.Row + rowOffset,
+                    destination.Col + colOffset);
+
+                yield return (sourceAddress, destinationAddress);
+            }
+        }
+    }
 
     private static ScalarValue ParseClipboardValue(string text)
     {

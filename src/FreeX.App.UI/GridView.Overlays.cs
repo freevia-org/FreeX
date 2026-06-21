@@ -47,12 +47,19 @@ public partial class GridView
             Math.Max(src.End.Row, tgt.Row),
             Math.Max(src.End.Col, tgt.Col));
 
-        var (top, left, bottom, right) = GetRangePixels(vp,
-            new GridRange(previewStart, previewEnd));
-        if (!top.HasValue || !left.HasValue || !bottom.HasValue || !right.HasValue) return;
+        var layout = CalculateVisibleSelectionLayout(
+            vp,
+            new GridRange(previewStart, previewEnd),
+            ActualRowHeaderWidth,
+            EffectiveColHeaderHeight);
+        if (layout is null) return;
 
-        var rect = new Rect(left.Value, top.Value, right.Value - left.Value, bottom.Value - top.Value);
-        dc.DrawRectangle(null, AutofillPreviewPen, rect);
+        var previewLayout = layout.Value;
+        var rect = previewLayout.Rect;
+        if (previewLayout.HasTopEdge) dc.DrawLine(AutofillPreviewPen, new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Top));
+        if (previewLayout.HasBottomEdge) dc.DrawLine(AutofillPreviewPen, new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Bottom));
+        if (previewLayout.HasLeftEdge) dc.DrawLine(AutofillPreviewPen, new Point(rect.Left, rect.Top), new Point(rect.Left, rect.Bottom));
+        if (previewLayout.HasRightEdge) dc.DrawLine(AutofillPreviewPen, new Point(rect.Right, rect.Top), new Point(rect.Right, rect.Bottom));
     }
 
     private void RenderMarchingAnts(DrawingContext dc)
