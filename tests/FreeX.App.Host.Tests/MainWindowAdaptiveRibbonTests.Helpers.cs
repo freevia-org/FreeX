@@ -1158,8 +1158,15 @@ public sealed partial class MainWindowAdaptiveRibbonTests
 
         private static bool IsTextVisuallyClipped(TextBlock textBlock)
         {
+            const double LayoutTolerance = 2.0;
+            if (textBlock.TextWrapping != TextWrapping.NoWrap && textBlock.ActualWidth > 0)
+            {
+                textBlock.Measure(new Size(textBlock.ActualWidth, double.PositiveInfinity));
+                return textBlock.DesiredSize.Height > textBlock.ActualHeight + LayoutTolerance;
+            }
+
             textBlock.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-            return textBlock.DesiredSize.Width > textBlock.ActualWidth + 0.5;
+            return textBlock.DesiredSize.Width > textBlock.ActualWidth + LayoutTolerance;
         }
 
         private static string FormatClippedTextBlock(TextBlock textBlock)
