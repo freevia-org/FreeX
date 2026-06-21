@@ -1,5 +1,6 @@
 using FluentAssertions;
 using System.Text.RegularExpressions;
+using FreeX.App.Presentation.DrawingUI;
 
 namespace FreeX.App.Host.Tests;
 
@@ -169,9 +170,9 @@ public sealed class RibbonCommandPresentationPlannerTests
     }
 
     [Fact]
-    public void InsertShapeGalleryCatalogItems_MapToNonGenericIcons()
+    public void DrawingInsertionPlannerShapeItems_MapToNonGenericIcons()
     {
-        var genericShapeItems = InsertShapeGalleryCatalog.Items
+        var genericShapeItems = DrawingInsertionPlanner.ShapeItems
             .Where(item => RibbonCommandPresentationPlanner.GetIcon(item.Label).Kind == RibbonCommandIconKind.Generic)
             .Select(item => item.Label)
             .Order(StringComparer.Ordinal)

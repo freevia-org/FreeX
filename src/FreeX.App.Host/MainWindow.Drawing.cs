@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -262,12 +263,9 @@ public partial class MainWindow
                 sheetId =>
                 {
                     var currentAnchor = SheetGrid.SelectedRange?.Start ?? anchor;
-                    var command = new AddTextBoxCommand(
+                    var command = DrawingInsertionPlanner.BuildInlineEditTextBoxCommand(
                         sheetId,
-                        new CellAddress(sheetId, currentAnchor.Row, currentAnchor.Col),
-                        string.Empty,
-                        FreeX.App.UI.GridTextBoxPlacementPlanner.DefaultTextBoxWidth,
-                        FreeX.App.UI.GridTextBoxPlacementPlanner.DefaultTextBoxHeight);
+                        new CellAddress(sheetId, currentAnchor.Row, currentAnchor.Col));
                     if (sheetId == _currentSheetId)
                         currentSheetCommand = command;
                     return command;
@@ -296,7 +294,7 @@ public partial class MainWindow
                 sheetId =>
                 {
                     var currentAnchor = SheetGrid.SelectedRange?.Start ?? anchor;
-                    var command = new AddDrawingShapeCommand(
+                    var command = DrawingInsertionPlanner.BuildShapeCommand(
                         sheetId,
                         new CellAddress(sheetId, currentAnchor.Row, currentAnchor.Col),
                         kind,

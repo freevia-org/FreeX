@@ -602,8 +602,8 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("new SymbolPickerDialog");
         source.Should().Contain("freex_insert_symbol_picker_opened");
         source.Should().Contain("ApplyInsertObjectsLinksTourModelEvidenceAsync");
-        source.Should().Contain("new AddDrawingShapeCommand(sheetId, new CellAddress(sheetId, 4, 2), DrawingShapeKind.Rectangle)");
-        source.Should().Contain("new AddTextBoxCommand(sheetId, new CellAddress(sheetId, 4, 5), \"Text Box evidence\")");
+        source.Should().Contain("DrawingInsertionPlanner.BuildShapeCommand(sheetId, new CellAddress(sheetId, 4, 2), DrawingShapeKind.Rectangle)");
+        source.Should().Contain("DrawingInsertionPlanner.BuildTextBoxCommand(sheetId, new CellAddress(sheetId, 4, 5), \"Text Box evidence\")");
         source.Should().Contain("InsertObjectPlacementPlanner.CreateInsertPictureCommand(");
         source.Should().Contain("new SetThreadedCommentCommand(sheetId, new CellAddress(sheetId, 6, 4), \"Threaded comment evidence\")");
         source.Should().Contain("new SetCommentCommand(sheetId, new CellAddress(sheetId, 6, 5), \"Note evidence\")");

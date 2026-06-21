@@ -20,6 +20,7 @@ using System.Windows.Threading;
 using Free.Shared.Ribbon.Wpf;
 using FreeX.Core.Calc;
 using FreeX.App.Presentation.Filtering;
+using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.IO;
@@ -8666,10 +8667,10 @@ public partial class MainWindow
             "FreeX hyperlink",
             new HyperlinkMetadata(HyperlinkTargetKind.ExistingFileOrWebPage, "FreeX visual evidence", "")), "Insert Hyperlink");
         ExecuteInsertObjectsLinksTourCommand(
-            new AddDrawingShapeCommand(sheetId, new CellAddress(sheetId, 4, 2), DrawingShapeKind.Rectangle),
+            DrawingInsertionPlanner.BuildShapeCommand(sheetId, new CellAddress(sheetId, 4, 2), DrawingShapeKind.Rectangle),
             "Insert Shape");
         ExecuteInsertObjectsLinksTourCommand(
-            new AddTextBoxCommand(sheetId, new CellAddress(sheetId, 4, 5), "Text Box evidence"),
+            DrawingInsertionPlanner.BuildTextBoxCommand(sheetId, new CellAddress(sheetId, 4, 5), "Text Box evidence"),
             "Insert Text Box");
         ExecuteInsertObjectsLinksTourCommand(
             InsertObjectPlacementPlanner.CreateInsertPictureCommand(

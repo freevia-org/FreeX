@@ -1,12 +1,13 @@
 using System.Windows;
+using FreeX.App.Presentation.DrawingUI;
 using FreeX.Core.Model;
 
 namespace FreeX.App.UI;
 
 public static class GridTextBoxPlacementPlanner
 {
-    public const double DefaultTextBoxWidth = 180;
-    public const double DefaultTextBoxHeight = 80;
+    public const double DefaultTextBoxWidth = DrawingInsertionPlanner.DefaultTextBoxWidth;
+    public const double DefaultTextBoxHeight = DrawingInsertionPlanner.DefaultTextBoxHeight;
     public const double MinimumTextBoxSize = GridObjectDragPlanner.MinimumObjectSize;
 
     public static TextBoxPlacementRequest CreateRequest(

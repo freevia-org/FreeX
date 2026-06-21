@@ -705,7 +705,7 @@ public sealed partial class MainWindow : Window
                 QuickAnalysis = () => _ = ShowQuickAnalysisDialogAsync(),
                 InsertPivotTable = () => _ = ShowInsertPivotTableDialogAsync(),
                 InsertPicture = () => _ = InsertPictureFromFileAsync(),
-                InsertShape = () => InsertShapeAtActiveCell(InsertShapeCommandFactory.DefaultShape),
+                InsertShape = () => InsertShapeAtActiveCell(FreeX.App.Presentation.DrawingUI.DrawingInsertionPlanner.DefaultShape),
                 InsertTextBox = InsertTextBoxAtActiveCell,
                 FormatPainter = () => CaptureFormatPainterSource(persistent: false),
                 SetFontSize = ApplyRibbonFontSize,

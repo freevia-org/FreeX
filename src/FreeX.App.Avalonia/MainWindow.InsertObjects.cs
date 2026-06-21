@@ -10,6 +10,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Platform.Storage;
 
+using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Presentation.QuickAnalysis;
 using FreeX.App.Services;
 
@@ -21,12 +22,23 @@ public sealed partial class MainWindow
     private NativeMenu CreateNativeShapeMenu()
     {
         var menu = new NativeMenu();
-        foreach (var item in InsertShapeCommandFactory.Catalog)
+        foreach (var group in DrawingInsertionPlanner.ShapeGroups)
         {
-            var kind = item.Kind;
-            var menuItem = new NativeMenuItem { Header = item.Label };
-            menuItem.Click += (_, _) => InsertShapeAtActiveCell(kind);
-            menu.Items.Add(menuItem);
+            var groupMenu = new NativeMenuItem
+            {
+                Header = group.Label,
+                Menu = new NativeMenu(),
+            };
+
+            foreach (var item in group.Items)
+            {
+                var kind = item.Kind;
+                var menuItem = new NativeMenuItem { Header = item.Label };
+                menuItem.Click += (_, _) => InsertShapeAtActiveCell(kind);
+                groupMenu.Menu.Items.Add(menuItem);
+            }
+
+            menu.Items.Add(groupMenu);
         }
 
         return menu;
@@ -127,7 +139,7 @@ public sealed partial class MainWindow
             return;
 
         var anchor = _session.ActiveCell;
-        var command = InsertShapeCommandFactory.Build(_session.ActiveSheet.Id, anchor, kind);
+        var command = DrawingInsertionPlanner.BuildShapeCommand(_session.ActiveSheet.Id, anchor, kind);
         var result = _session.ExecuteReviewCommand(command);
         if (!result.Success)
         {
@@ -151,7 +163,7 @@ public sealed partial class MainWindow
             return;
 
         var anchor = _session.ActiveCell;
-        var command = InsertTextBoxCommandFactory.Build(_session.ActiveSheet.Id, anchor);
+        var command = DrawingInsertionPlanner.BuildTextBoxCommand(_session.ActiveSheet.Id, anchor);
         var result = _session.ExecuteReviewCommand(command);
         if (!result.Success)
         {

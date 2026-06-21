@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using FreeX.App.Presentation.DrawingUI;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -15,7 +16,7 @@ public partial class MainWindow
     private void InitializeInsertShapeGalleryContextMenu()
     {
         var menu = new ContextMenu();
-        foreach (var group in InsertShapeGalleryCatalog.Groups)
+        foreach (var group in DrawingInsertionPlanner.ShapeGroups)
         {
             var groupItem = new MenuItem { Header = group.Label };
             RibbonTooltip.SetKeyTip(groupItem, group.KeyTip);

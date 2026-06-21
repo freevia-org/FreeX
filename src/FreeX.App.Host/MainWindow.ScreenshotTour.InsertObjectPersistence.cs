@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text.Json;
 using System.Windows;
+using FreeX.App.Presentation.DrawingUI;
 using FreeX.Core.Commands;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
@@ -162,10 +163,10 @@ public partial class MainWindow
             new SetCommentCommand(sheet.Id, noteCell, "Persisted note evidence"),
             "Insert Note");
         ExecuteInsertObjectPersistenceCommand(
-            new AddDrawingShapeCommand(sheet.Id, shapeAnchor, DrawingShapeKind.Rectangle, width: 172, height: 92),
+            DrawingInsertionPlanner.BuildShapeCommand(sheet.Id, shapeAnchor, DrawingShapeKind.Rectangle, width: 172, height: 92),
             "Insert Shape");
         ExecuteInsertObjectPersistenceCommand(
-            new AddTextBoxCommand(sheet.Id, textBoxAnchor, "Persisted text box", width: 214, height: 82),
+            DrawingInsertionPlanner.BuildTextBoxCommand(sheet.Id, textBoxAnchor, "Persisted text box", width: 214, height: 82),
             "Insert Text Box");
         ExecuteInsertObjectPersistenceCommand(
             InsertObjectPlacementPlanner.CreateInsertPictureCommand(

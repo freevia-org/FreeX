@@ -1,14 +1,27 @@
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Presentation.DrawingUI;
 
-internal sealed record InsertShapeGalleryItem(DrawingShapeKind Kind, string Label, string KeyTip);
+public sealed record DrawingShapeGalleryItem(DrawingShapeKind Kind, string Label, string KeyTip);
 
-internal sealed record InsertShapeGalleryGroup(string Label, string KeyTip, IReadOnlyList<InsertShapeGalleryItem> Items);
+public sealed record DrawingShapeGalleryGroup(string Label, string KeyTip, IReadOnlyList<DrawingShapeGalleryItem> Items);
 
-internal static class InsertShapeGalleryCatalog
+/// <summary>
+/// Portable insertion catalog and command factory for drawing shapes and text boxes. Renderers own menus,
+/// selection, focus and post-insert editing; this planner owns the shared gallery order and default commands.
+/// </summary>
+public static class DrawingInsertionPlanner
 {
-    public static IReadOnlyList<InsertShapeGalleryGroup> Groups { get; } =
+    public const double DefaultShapeWidth = 120d;
+    public const double DefaultShapeHeight = 70d;
+    public const double DefaultTextBoxWidth = 180d;
+    public const double DefaultTextBoxHeight = 80d;
+    public const string TextBoxPlaceholder = "Text Box";
+
+    public const DrawingShapeKind DefaultShape = DrawingShapeKind.Rectangle;
+
+    public static IReadOnlyList<DrawingShapeGalleryGroup> ShapeGroups { get; } =
     [
         new(
             "Lines",
@@ -94,6 +107,40 @@ internal static class InsertShapeGalleryCatalog
             ])
     ];
 
-    public static IEnumerable<InsertShapeGalleryItem> Items =>
-        Groups.SelectMany(group => group.Items);
+    public static IEnumerable<DrawingShapeGalleryItem> ShapeItems =>
+        ShapeGroups.SelectMany(group => group.Items);
+
+    public static AddDrawingShapeCommand BuildShapeCommand(
+        SheetId sheetId,
+        CellAddress anchor,
+        DrawingShapeKind kind,
+        double width = DefaultShapeWidth,
+        double height = DefaultShapeHeight,
+        CellColor? fillColor = null,
+        CellColor? outlineColor = null,
+        bool hasFill = true) =>
+        new(sheetId, anchor, kind, width, height, fillColor, outlineColor, hasFill);
+
+    public static AddTextBoxCommand BuildTextBoxCommand(
+        SheetId sheetId,
+        CellAddress anchor,
+        string? text = null,
+        double width = DefaultTextBoxWidth,
+        double height = DefaultTextBoxHeight) =>
+        new(sheetId, anchor, NormalizeTextBoxText(text), width, height);
+
+    public static AddTextBoxCommand BuildInlineEditTextBoxCommand(
+        SheetId sheetId,
+        CellAddress anchor,
+        double width = DefaultTextBoxWidth,
+        double height = DefaultTextBoxHeight) =>
+        new(sheetId, anchor, string.Empty, width, height);
+
+    private static string NormalizeTextBoxText(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return TextBoxPlaceholder;
+
+        return text.Trim();
+    }
 }

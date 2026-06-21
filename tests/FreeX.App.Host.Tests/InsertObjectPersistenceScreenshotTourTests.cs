@@ -20,8 +20,8 @@ public sealed class InsertObjectPersistenceScreenshotTourTests
         tourSource.Should().Contain("new SetHyperlinkCommand(");
         tourSource.Should().Contain("new SetThreadedCommentCommand(");
         tourSource.Should().Contain("new SetCommentCommand(");
-        tourSource.Should().Contain("new AddDrawingShapeCommand(");
-        tourSource.Should().Contain("new AddTextBoxCommand(");
+        tourSource.Should().Contain("DrawingInsertionPlanner.BuildShapeCommand(");
+        tourSource.Should().Contain("DrawingInsertionPlanner.BuildTextBoxCommand(");
         tourSource.Should().Contain("InsertObjectPlacementPlanner.CreateInsertPictureCommand(");
         tourSource.Should().Contain("SheetGrid.SelectedObjectId = objectId;");
         tourSource.Should().Contain("SheetGrid.SelectedObjectKind = kind;");
