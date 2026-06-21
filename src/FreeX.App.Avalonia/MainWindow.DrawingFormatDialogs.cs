@@ -195,23 +195,17 @@ public sealed partial class MainWindow
         var sheetId = _session.ActiveSheet.Id;
         var kind = isPicture ? SelectionPaneObjectKind.Picture : SelectionPaneObjectKind.Shape;
 
-        IWorkbookCommand resize = isPicture
-            ? new ResizePictureCommand(sheetId, id, result.Width, result.Height)
-            : new ResizeDrawingShapeCommand(sheetId, id, result.Width, result.Height);
-        if (!RunFormatStep(resize))
+        if (!RunFormatStep(DrawingObjectCommandPlanner.BuildResizeCommand(sheetId, kind, id, result.Width, result.Height)))
             return;
 
-        if (!RunFormatStep(new SetDrawingObjectRotationCommand(sheetId, kind, id, result.RotationDegrees)))
+        if (!RunFormatStep(DrawingObjectCommandPlanner.BuildRotateCommand(sheetId, kind, id, result.RotationDegrees)))
             return;
 
         if (isPicture &&
             !RunFormatStep(new SetPictureLockAspectRatioCommand(sheetId, id, result.LockAspectRatio)))
             return;
 
-        IWorkbookCommand altText = isPicture
-            ? new SetPictureAltTextCommand(sheetId, id, result.AltText)
-            : new SetDrawingShapeAltTextCommand(sheetId, id, result.AltText);
-        if (!RunFormatStep(altText))
+        if (!RunFormatStep(DrawingObjectCommandPlanner.BuildAltTextCommand(sheetId, kind, id, result.AltText)))
             return;
 
         RefreshShell(UiText.Get("FormatPicture_Applied"));

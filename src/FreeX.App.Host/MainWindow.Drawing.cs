@@ -345,7 +345,7 @@ public partial class MainWindow
                 sheetId =>
                 {
                     var target = GetTargetDrawingZOrderObject(sheetId, currentTarget.Kind);
-                    return new MoveSelectionPaneObjectCommand(
+                    return DrawingObjectCommandPlanner.BuildZOrderCommand(
                         sheetId,
                         target?.Kind ?? currentTarget.Kind,
                         target?.Id ?? Guid.Empty,
@@ -379,12 +379,12 @@ public partial class MainWindow
                 sheetId =>
                 {
                     var groupedTarget = GetTargetTransformDrawingObject(sheetId, target.Kind);
-                    return target.Kind switch
-                    {
-                        DrawingObjectTargetKind.Picture => new ResizePictureCommand(sheetId, groupedTarget?.Id ?? Guid.Empty, dialog.Result.Width, dialog.Result.Height),
-                        DrawingObjectTargetKind.Shape => new ResizeDrawingShapeCommand(sheetId, groupedTarget?.Id ?? Guid.Empty, dialog.Result.Width, dialog.Result.Height),
-                        _ => new ResizeTextBoxCommand(sheetId, groupedTarget?.Id ?? Guid.Empty, dialog.Result.Width, dialog.Result.Height)
-                    };
+                    return DrawingObjectCommandPlanner.BuildResizeCommand(
+                        sheetId,
+                        target.Kind,
+                        groupedTarget?.Id ?? Guid.Empty,
+                        dialog.Result.Width,
+                        dialog.Result.Height);
                 }))
             return;
 
@@ -414,12 +414,11 @@ public partial class MainWindow
                 sheetId =>
                 {
                     var groupedTarget = GetTargetTransformDrawingObject(sheetId, target.Kind);
-                    return target.Kind switch
-                    {
-                        DrawingObjectTargetKind.Picture => new RotatePictureCommand(sheetId, groupedTarget?.Id ?? Guid.Empty, dialog.Result.Degrees),
-                        DrawingObjectTargetKind.Shape => new RotateDrawingShapeCommand(sheetId, groupedTarget?.Id ?? Guid.Empty, dialog.Result.Degrees),
-                        _ => new RotateTextBoxCommand(sheetId, groupedTarget?.Id ?? Guid.Empty, dialog.Result.Degrees)
-                    };
+                    return DrawingObjectCommandPlanner.BuildRotateCommand(
+                        sheetId,
+                        target.Kind,
+                        groupedTarget?.Id ?? Guid.Empty,
+                        dialog.Result.Degrees);
                 }))
             return;
 
@@ -773,14 +772,9 @@ public partial class MainWindow
     private void OnObjectMoved(Guid id, FreeX.App.UI.ObjectKind kind, Core.Model.CellAddress newAnchor)
     {
         var anchor = new Core.Model.CellAddress(_currentSheetId, newAnchor.Row, newAnchor.Col);
-        IWorkbookCommand cmd = kind switch
-        {
-            FreeX.App.UI.ObjectKind.Picture  => new RepositionPictureCommand(_currentSheetId, id, anchor),
-            FreeX.App.UI.ObjectKind.Shape    => new RepositionShapeCommand(_currentSheetId, id, anchor),
-            FreeX.App.UI.ObjectKind.TextBox  => new RepositionTextBoxCommand(_currentSheetId, id, anchor),
-            _ => null!
-        };
-        if (cmd is null) return;
+        var targetKind = ToDrawingObjectTargetKind(kind);
+        if (targetKind is null) return;
+        var cmd = DrawingObjectCommandPlanner.BuildMoveCommand(_currentSheetId, targetKind.Value, id, anchor);
         TryExecuteCommand(cmd, "Move Object");
         UpdateViewport();
     }
@@ -803,14 +797,16 @@ public partial class MainWindow
         bool flipHorizontal,
         bool flipVertical)
     {
-        IWorkbookCommand cmd = kind switch
-        {
-            FreeX.App.UI.ObjectKind.Picture  => new ResizePictureCommand(_currentSheetId, id, width, height, flipHorizontal, flipVertical),
-            FreeX.App.UI.ObjectKind.Shape    => new ResizeDrawingShapeCommand(_currentSheetId, id, width, height, flipHorizontal, flipVertical),
-            FreeX.App.UI.ObjectKind.TextBox  => new ResizeTextBoxCommand(_currentSheetId, id, width, height, flipHorizontal, flipVertical),
-            _ => null!
-        };
-        if (cmd is null) return;
+        var targetKind = ToDrawingObjectTargetKind(kind);
+        if (targetKind is null) return;
+        var cmd = DrawingObjectCommandPlanner.BuildResizeCommand(
+            _currentSheetId,
+            targetKind.Value,
+            id,
+            width,
+            height,
+            flipHorizontal,
+            flipVertical);
         TryExecuteCommand(cmd, "Resize Object");
         UpdateViewport();
     }
@@ -827,47 +823,40 @@ public partial class MainWindow
         bool flipVertical)
     {
         var anchor = new Core.Model.CellAddress(_currentSheetId, newAnchor.Row, newAnchor.Col);
-        IReadOnlyList<IWorkbookCommand>? commands = kind switch
-        {
-            FreeX.App.UI.ObjectKind.Picture =>
-            [
-                new RepositionPictureCommand(_currentSheetId, id, anchor),
-                new ResizePictureCommand(_currentSheetId, id, width, height, flipHorizontal, flipVertical)
-            ],
-            FreeX.App.UI.ObjectKind.Shape =>
-            [
-                new RepositionShapeCommand(_currentSheetId, id, anchor),
-                new ResizeDrawingShapeCommand(_currentSheetId, id, width, height, flipHorizontal, flipVertical)
-            ],
-            FreeX.App.UI.ObjectKind.TextBox =>
-            [
-                new RepositionTextBoxCommand(_currentSheetId, id, anchor),
-                new ResizeTextBoxCommand(_currentSheetId, id, width, height, flipHorizontal, flipVertical)
-            ],
-            _ => null
-        };
-        if (commands is null) return;
+        var targetKind = ToDrawingObjectTargetKind(kind);
+        if (targetKind is null) return;
         TryExecuteCommand(
-            new CompositeWorkbookCommand("Resize Object", commands),
+            DrawingObjectCommandPlanner.BuildResizeWithAnchorCommand(
+                _currentSheetId,
+                targetKind.Value,
+                id,
+                anchor,
+                width,
+                height,
+                flipHorizontal,
+                flipVertical),
             "Resize Object");
         UpdateViewport();
     }
 
     private void OnObjectRotated(Guid id, FreeX.App.UI.ObjectKind kind, double degrees)
     {
-        var rotationKind = kind switch
-        {
-            FreeX.App.UI.ObjectKind.Picture => SelectionPaneObjectKind.Picture,
-            FreeX.App.UI.ObjectKind.Shape   => SelectionPaneObjectKind.Shape,
-            FreeX.App.UI.ObjectKind.TextBox => SelectionPaneObjectKind.TextBox,
-            _ => (SelectionPaneObjectKind?)null
-        };
-        if (rotationKind is not { } resolvedKind) return;
+        var targetKind = ToDrawingObjectTargetKind(kind);
+        if (targetKind is null) return;
         TryExecuteCommand(
-            new SetDrawingObjectRotationCommand(_currentSheetId, resolvedKind, id, degrees),
+            DrawingObjectCommandPlanner.BuildRotateCommand(_currentSheetId, targetKind.Value, id, degrees),
             "Rotate Object");
         UpdateViewport();
     }
+
+    private static DrawingObjectTargetKind? ToDrawingObjectTargetKind(FreeX.App.UI.ObjectKind kind) =>
+        kind switch
+        {
+            FreeX.App.UI.ObjectKind.Picture => DrawingObjectTargetKind.Picture,
+            FreeX.App.UI.ObjectKind.Shape => DrawingObjectTargetKind.Shape,
+            FreeX.App.UI.ObjectKind.TextBox => DrawingObjectTargetKind.TextBox,
+            _ => null
+        };
 
     private void OnPictureCropped(Guid id, FreeX.App.UI.PictureCropRatios crop)
     {

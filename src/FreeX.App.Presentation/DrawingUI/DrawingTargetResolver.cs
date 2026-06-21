@@ -1,6 +1,6 @@
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Presentation.DrawingUI;
 
 public static class DrawingTargetResolver
 {

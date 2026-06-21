@@ -144,7 +144,7 @@ public sealed partial class MainWindow
     }
 
     // -------------------------------------------------------------------------------------------------------
-    // Shape z-order (real: BringDrawingShapeForwardCommand / SendDrawingShapeBackwardCommand)
+    // Shape z-order (shared drawing-object command planner)
     // -------------------------------------------------------------------------------------------------------
 
     private void BringSelectedShapeForward()
@@ -153,7 +153,11 @@ public sealed partial class MainWindow
             return;
 
         RunDrawingObjectCommand(
-            new BringDrawingShapeForwardCommand(_session.ActiveSheet.Id, shape.Id),
+            DrawingObjectCommandPlanner.BuildZOrderCommand(
+                _session.ActiveSheet.Id,
+                SelectionPaneObjectKind.Shape,
+                shape.Id,
+                forward: true),
             UiText.Get("InsertLoc_BroughtShapeForward"),
             UiText.Get("InsertLoc_BringForwardLabel"));
     }
@@ -164,7 +168,11 @@ public sealed partial class MainWindow
             return;
 
         RunDrawingObjectCommand(
-            new SendDrawingShapeBackwardCommand(_session.ActiveSheet.Id, shape.Id),
+            DrawingObjectCommandPlanner.BuildZOrderCommand(
+                _session.ActiveSheet.Id,
+                SelectionPaneObjectKind.Shape,
+                shape.Id,
+                forward: false),
             UiText.Get("InsertLoc_SentShapeBackward"),
             UiText.Get("InsertLoc_SendBackwardLabel"));
     }
@@ -180,7 +188,11 @@ public sealed partial class MainWindow
             return;
 
         RunDrawingObjectCommand(
-            new MoveSelectionPaneObjectCommand(_session.ActiveSheet.Id, SelectionPaneObjectKind.Picture, picture.Id, forward: true),
+            DrawingObjectCommandPlanner.BuildZOrderCommand(
+                _session.ActiveSheet.Id,
+                SelectionPaneObjectKind.Picture,
+                picture.Id,
+                forward: true),
             UiText.Get("Drawing_PictureBroughtForward"),
             UiText.Get("Drawing_BringForwardLabel"));
     }
@@ -191,7 +203,11 @@ public sealed partial class MainWindow
             return;
 
         RunDrawingObjectCommand(
-            new MoveSelectionPaneObjectCommand(_session.ActiveSheet.Id, SelectionPaneObjectKind.Picture, picture.Id, forward: false),
+            DrawingObjectCommandPlanner.BuildZOrderCommand(
+                _session.ActiveSheet.Id,
+                SelectionPaneObjectKind.Picture,
+                picture.Id,
+                forward: false),
             UiText.Get("Drawing_PictureSentBackward"),
             UiText.Get("Drawing_SendBackwardLabel"));
     }
@@ -334,7 +350,7 @@ public sealed partial class MainWindow
         }
 
         RunDrawingObjectCommand(
-            new SetDrawingObjectRotationCommand(_session.ActiveSheet.Id, kind, id, degrees),
+            DrawingObjectCommandPlanner.BuildRotateCommand(_session.ActiveSheet.Id, kind, id, degrees),
             UiText.Format("InsertLoc_RotatedObject", degrees),
             UiText.Get("InsertLoc_RotateObjectTitle"));
     }
@@ -350,22 +366,22 @@ public sealed partial class MainWindow
 
         double width;
         double height;
-        IWorkbookCommand BuildResize(double w, double h)
-        {
-            return _selectedDrawingObjectKind == SelectionPaneObjectKind.Picture
-                ? new ResizePictureCommand(_session.ActiveSheet.Id, _selectedDrawingObjectId!.Value, w, h)
-                : new ResizeDrawingShapeCommand(_session.ActiveSheet.Id, _selectedDrawingObjectId!.Value, w, h);
-        }
+        SelectionPaneObjectKind kind;
+        Guid id;
 
         switch (_selectedDrawingObjectKind)
         {
             case SelectionPaneObjectKind.Picture when ResolveSelectedPicture() is { } picture:
                 width = picture.Width;
                 height = picture.Height;
+                kind = SelectionPaneObjectKind.Picture;
+                id = picture.Id;
                 break;
             case SelectionPaneObjectKind.Shape when ResolveSelectedShape() is { } shape:
                 width = shape.Width;
                 height = shape.Height;
+                kind = SelectionPaneObjectKind.Shape;
+                id = shape.Id;
                 break;
             default:
                 RefreshShell(UiText.Get("InsertLoc_SelectPictureOrShapeFirst"));
@@ -382,7 +398,12 @@ public sealed partial class MainWindow
         }
 
         RunDrawingObjectCommand(
-            BuildResize(chosen.Width, chosen.Height),
+            DrawingObjectCommandPlanner.BuildResizeCommand(
+                _session.ActiveSheet.Id,
+                kind,
+                id,
+                chosen.Width,
+                chosen.Height),
             UiText.Format("InsertLoc_ResizedObject", chosen.Width, chosen.Height),
             UiText.Get("InsertLoc_ObjectSizeTitle"));
     }
@@ -397,20 +418,20 @@ public sealed partial class MainWindow
             return;
 
         string? current;
-        IWorkbookCommand BuildAltText(string? text)
-        {
-            return _selectedDrawingObjectKind == SelectionPaneObjectKind.Picture
-                ? new SetPictureAltTextCommand(_session.ActiveSheet.Id, _selectedDrawingObjectId!.Value, text)
-                : new SetDrawingShapeAltTextCommand(_session.ActiveSheet.Id, _selectedDrawingObjectId!.Value, text);
-        }
+        SelectionPaneObjectKind kind;
+        Guid id;
 
         switch (_selectedDrawingObjectKind)
         {
             case SelectionPaneObjectKind.Picture when ResolveSelectedPicture() is { } picture:
                 current = picture.AltText;
+                kind = SelectionPaneObjectKind.Picture;
+                id = picture.Id;
                 break;
             case SelectionPaneObjectKind.Shape when ResolveSelectedShape() is { } shape:
                 current = shape.AltText;
+                kind = SelectionPaneObjectKind.Shape;
+                id = shape.Id;
                 break;
             default:
                 RefreshShell(UiText.Get("InsertLoc_SelectPictureOrShapeFirst"));
@@ -431,7 +452,7 @@ public sealed partial class MainWindow
         }
 
         RunDrawingObjectCommand(
-            BuildAltText(input),
+            DrawingObjectCommandPlanner.BuildAltTextCommand(_session.ActiveSheet.Id, kind, id, input),
             string.IsNullOrWhiteSpace(input) ? UiText.Get("InsertLoc_AltTextCleared") : UiText.Get("InsertLoc_AltTextUpdated"),
             UiText.Get("InsertLoc_AltTextTitle"));
     }

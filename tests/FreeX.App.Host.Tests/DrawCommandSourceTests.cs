@@ -39,13 +39,15 @@ public sealed class DrawCommandSourceTests
         source.Should().Contain("menuItem.IsChecked = preset == currentPreset;");
         source.Should().Contain("private void ShapeEffectPresetMenuItem_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("SetSelectedDrawingShapeEffect(preset);");
-        source.Should().Contain("new MoveSelectionPaneObjectCommand(");
+        source.Should().Contain("DrawingObjectCommandPlanner.BuildZOrderCommand(");
         source.Should().Contain("var target = GetTargetDrawingZOrderObject(sheetId, currentTarget.Kind);");
         source.Should().Contain("private DrawingObjectTarget? GetTargetTransformDrawingObject(");
         source.Should().Contain("includePictures: true");
         source.Should().Contain("FreeX.App.UI.ObjectKind.Picture => DrawingObjectTargetKind.Picture");
-        source.Should().Contain("DrawingObjectTargetKind.Picture => new ResizePictureCommand(");
-        source.Should().Contain("DrawingObjectTargetKind.Picture => new RotatePictureCommand(");
+        source.Should().Contain("DrawingObjectCommandPlanner.BuildResizeCommand(");
+        source.Should().Contain("DrawingObjectCommandPlanner.BuildRotateCommand(");
+        source.Should().Contain("DrawingObjectCommandPlanner.BuildMoveCommand(");
+        source.Should().Contain("DrawingObjectCommandPlanner.BuildResizeWithAnchorCommand(");
         source.Should().Contain("new ObjectSizeDialog(target.Width, target.Height, UiText.Get(\"MainWindowMessage_ObjectSizeTitle\"))");
         source.Should().Contain("new RotationDialog(target.RotationDegrees, UiText.Get(\"MainWindowMessage_RotateObjectTitle\"))");
         source.Should().Contain("new SetDrawingShapeColorsCommand(");

@@ -1,8 +1,9 @@
 using System.Diagnostics;
 using FluentAssertions;
+using FreeX.App.Presentation.DrawingUI;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host.Tests;
+namespace FreeX.App.Presentation.Tests.DrawingUI;
 
 public sealed class DrawingTargetResolverTests
 {
@@ -247,7 +248,7 @@ public sealed class DrawingTargetResolverTests
     [Fact]
     public void ResolverScansVisibleItemsWithoutAllocatingFilteredLists()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("DrawingTargetResolver.cs");
+        var source = File.ReadAllText(FindRepositoryFile("src", "FreeX.App.Presentation", "DrawingUI", "DrawingTargetResolver.cs"));
 
         source.Should().NotContain(".Where(");
         source.Should().NotContain(".ToList()");
@@ -274,5 +275,19 @@ public sealed class DrawingTargetResolverTests
         stopwatch.Stop();
         Console.WriteLine($"Drawing target reverse lookup: {stopwatch.ElapsedMilliseconds}ms for 10000 lookups");
         stopwatch.ElapsedMilliseconds.Should().BeLessThan(250);
+    }
+
+    private static string FindRepositoryFile(params string[] relativeParts)
+    {
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
+             directory is not null;
+             directory = directory.Parent)
+        {
+            var candidate = Path.Combine(new[] { directory.FullName }.Concat(relativeParts).ToArray());
+            if (File.Exists(candidate))
+                return candidate;
+        }
+
+        throw new FileNotFoundException("Could not locate repository file.", Path.Combine(relativeParts));
     }
 }

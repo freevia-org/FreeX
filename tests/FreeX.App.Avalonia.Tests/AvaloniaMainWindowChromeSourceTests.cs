@@ -136,6 +136,35 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     }
 
     [Fact]
+    public void DrawingObjectCommands_DelegateToSharedPlanner()
+    {
+        var contextualTabsSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PictureShapeTabs.cs"));
+        var formatDialogSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.DrawingFormatDialogs.cs"));
+
+        contextualTabsSource.Should().Contain("DrawingObjectCommandPlanner.BuildZOrderCommand(");
+        contextualTabsSource.Should().Contain("DrawingObjectCommandPlanner.BuildRotateCommand(");
+        contextualTabsSource.Should().Contain("DrawingObjectCommandPlanner.BuildResizeCommand(");
+        contextualTabsSource.Should().Contain("DrawingObjectCommandPlanner.BuildAltTextCommand(");
+        formatDialogSource.Should().Contain("DrawingObjectCommandPlanner.BuildResizeCommand(");
+        formatDialogSource.Should().Contain("DrawingObjectCommandPlanner.BuildRotateCommand(");
+        formatDialogSource.Should().Contain("DrawingObjectCommandPlanner.BuildAltTextCommand(");
+
+        contextualTabsSource.Should().NotContain("new MoveSelectionPaneObjectCommand(");
+        contextualTabsSource.Should().NotContain("new BringDrawingShapeForwardCommand(");
+        contextualTabsSource.Should().NotContain("new SendDrawingShapeBackwardCommand(");
+        contextualTabsSource.Should().NotContain("new SetDrawingObjectRotationCommand(");
+        contextualTabsSource.Should().NotContain("new ResizePictureCommand(");
+        contextualTabsSource.Should().NotContain("new ResizeDrawingShapeCommand(");
+        contextualTabsSource.Should().NotContain("new SetPictureAltTextCommand(");
+        contextualTabsSource.Should().NotContain("new SetDrawingShapeAltTextCommand(");
+        formatDialogSource.Should().NotContain("new SetDrawingObjectRotationCommand(");
+        formatDialogSource.Should().NotContain("new ResizePictureCommand(");
+        formatDialogSource.Should().NotContain("new ResizeDrawingShapeCommand(");
+        formatDialogSource.Should().NotContain("new SetPictureAltTextCommand(");
+        formatDialogSource.Should().NotContain("new SetDrawingShapeAltTextCommand(");
+    }
+
+    [Fact]
     public void TableDesign_DelegatesCommandCompositionToSharedPlanner()
     {
         var tableTabSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.TableDesignTab.cs"));
