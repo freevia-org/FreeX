@@ -2151,11 +2151,10 @@ public sealed class MacOsAppReadinessPreflightTests
                     _openRecentMenuItem.Menu = CreateNativeOpenRecentMenu(isIdle: true);
                     fileMenu.Items.Add(_openRecentMenuItem);
                     RefreshNativeOpenRecentMenu(isIdle);
-                    LocalFilePath.TryNormalize(candidate, out var normalizedCandidate)
-                    Directory.Exists(normalizedCandidate)
-                    File.Exists(normalizedCandidate)
-                    _session.TryResolveOpenTarget(normalizedCandidate, out var target, out unsupportedMessage)
-                    path = target!.Path;
+                    WorkbookOpenIngressPlanner.SelectOpenableExistingLocalFile(
+                    _session.TryResolveOpenTarget(candidatePath, out var target, out var unsupportedMessage)
+                    WorkbookOpenIngressResolution.Resolved(target!.Path)
+                    path = plan.Path;
                     private readonly NativeMenuItem _workbookStatisticsMenuItem = new();
                     private readonly NativeMenuItem _exportPdfMenuItem = new();
                     _exportPdfMenuItem.Header = UiText.Get("AvaloniaNativeMenu_ExportPdf");

@@ -10,6 +10,7 @@ public sealed class AvaloniaShellSourceTests
         var appSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "App.cs"));
         var programSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "Program.cs"));
         var windowSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var ingressPlannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookOpenIngressPlanner.cs"));
 
         programSource.Should().NotContain("DisableAvaloniaAppDelegate");
         appSource.Should().Contain("new MainWindow(StartupArguments)");
@@ -28,6 +29,9 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("private bool TrySelectOpenableLocalWorkbookPath(IEnumerable<IStorageItem> files, out string? path, out string message)");
         windowSource.Should().Contain("TrySelectOpenableLocalWorkbookPath(files, out var path, out var storageItem, out var message)");
         windowSource.Should().Contain("file.TryGetLocalPath()");
+        windowSource.Should().Contain("WorkbookOpenIngressPlanner.SelectOpenableExistingLocalFile(");
+        ingressPlannerSource.Should().Contain("LocalFilePath.TryNormalize(candidatePath, out var normalizedPath)");
+        ingressPlannerSource.Should().Contain("File.Exists(normalizedPath)");
         windowSource.Should().Contain("ShowOpenIssue(message);");
         windowSource.Should().Contain("await OpenWorkbookPathAsync(path!, fileAccessIdentity)");
     }
@@ -36,6 +40,7 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresDroppedWorkbookFilesToSharedOpenPipeline()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var ingressPlannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookOpenIngressPlanner.cs"));
 
         source.Should().Contain("ConfigureWorkbookDropTarget();");
         source.Should().Contain("DragDrop.SetAllowDrop(this, true);");
@@ -46,12 +51,14 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("file.TryGetLocalPath()");
         source.Should().Contain("_isOpening || _isSaving");
         source.Should().Contain("_session.IsDirty");
-        source.Should().Contain("LocalFilePath.TryNormalize(candidate, out var normalizedCandidate)");
-        source.Should().Contain("Directory.Exists(normalizedCandidate)");
-        source.Should().Contain("File.Exists(normalizedCandidate)");
-        source.Should().Contain("_session.TryResolveOpenTarget(normalizedCandidate, out var target, out unsupportedMessage)");
-        source.Should().Contain("path = target!.Path;");
-        source.Should().Contain("storageItem = file;");
+        source.Should().Contain("WorkbookOpenIngressPlanner.SelectOpenableExistingLocalFile(");
+        source.Should().Contain("_session.TryResolveOpenTarget(candidatePath, out var target, out var unsupportedMessage)");
+        source.Should().Contain("path = plan.Path;");
+        source.Should().Contain("storageItem = candidates[plan.CandidateIndex].StorageItem;");
+        ingressPlannerSource.Should().Contain("LocalFilePath.TryNormalize(candidatePath, out var normalizedPath)");
+        ingressPlannerSource.Should().Contain("Directory.Exists(normalizedPath)");
+        ingressPlannerSource.Should().Contain("File.Exists(normalizedPath)");
+        ingressPlannerSource.Should().Contain("FileFormatResolver.FindOpenAdapter(adapters, extension, out _)");
         source.Should().Contain("ShowOpenIssue(message)");
         source.Should().Contain("await OpenWorkbookPathAsync(path!, fileAccessIdentity)");
         source.Should().Contain("await OpenWorkbookFromTargetAsync(target!)");
@@ -72,7 +79,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_workbookFileAccessService.CreateIdentityAsync(path, storageFile)");
         source.Should().Contain("TrySelectOpenableLocalWorkbookPath(files, out var path, out var storageItem, out var message)");
         source.Should().Contain("TrySelectDroppedWorkbookPath(e, out var path, out var storageItem, out var message)");
-        source.Should().Contain("storageItem = file;");
+        source.Should().Contain("storageItem = candidates[plan.CandidateIndex].StorageItem;");
         source.Should().Contain("await _workbookFileAccessService.BeginAccessAsync(");
         source.Should().Contain("StorageProvider,");
         source.Should().Contain("target.FileAccessIdentity");

@@ -197,7 +197,7 @@ public partial class MainWindow
         // The shared planner already resolved the (absolute) local path; only open it when it
         // maps to a supported workbook adapter, mirroring the cross-platform port's guard.
         if (string.IsNullOrWhiteSpace(plan.LocalPath) ||
-            WorkbookDropPlanner.SelectOpenableFile(new[] { plan.LocalPath }, _fileAdapters) is not { } openablePath)
+            WorkbookOpenIngressPlanner.SelectOpenableFile(new[] { plan.LocalPath }, _fileAdapters) is not { } openablePath)
         {
             ShowOwnedMessage(
                 UiText.Get("MainWindowMessage_OpenHyperlinkOpenFailed"),

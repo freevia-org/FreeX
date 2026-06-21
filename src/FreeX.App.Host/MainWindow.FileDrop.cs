@@ -1,4 +1,5 @@
 using System.Windows;
+using FreeX.App.Services;
 
 namespace FreeX.App.Host;
 
@@ -28,7 +29,7 @@ public partial class MainWindow
             return null;
 
         return e.Data.GetData(DataFormats.FileDrop) is string[] paths
-            ? WorkbookDropPlanner.SelectOpenableFile(paths, _fileAdapters)
+            ? WorkbookOpenIngressPlanner.SelectOpenableFile(paths, _fileAdapters)
             : null;
     }
 }

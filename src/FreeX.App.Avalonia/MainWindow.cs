@@ -15759,37 +15759,29 @@ public sealed partial class MainWindow : Window
             return false;
         }
 
-        var sawLocalPath = false;
-        var sawFileCandidate = false;
-        var unsupportedMessage = "Drop a supported workbook file.";
-        foreach (var file in files)
-        {
-            var candidate = file.TryGetLocalPath();
-            if (!LocalFilePath.TryNormalize(candidate, out var normalizedCandidate))
-                continue;
-
-            sawLocalPath = true;
-            if (Directory.Exists(normalizedCandidate))
-                continue;
-            if (!File.Exists(normalizedCandidate))
-                continue;
-
-            sawFileCandidate = true;
-            if (_session.TryResolveOpenTarget(normalizedCandidate, out var target, out unsupportedMessage))
+        var candidates = files
+            .Select(file => new
             {
-                path = target!.Path;
-                storageItem = file;
-                message = "";
-                return true;
-            }
+                StorageItem = file,
+                LocalPath = file.TryGetLocalPath()
+            })
+            .ToList();
+        var plan = WorkbookOpenIngressPlanner.SelectOpenableExistingLocalFile(
+            candidates.Select(candidate => candidate.LocalPath),
+            candidatePath =>
+                _session.TryResolveOpenTarget(candidatePath, out var target, out var unsupportedMessage)
+                    ? WorkbookOpenIngressResolution.Resolved(target!.Path)
+                    : WorkbookOpenIngressResolution.Failed(unsupportedMessage));
+        if (!plan.Success)
+        {
+            message = plan.Message;
+            return false;
         }
 
-        message = sawFileCandidate
-            ? unsupportedMessage
-            : sawLocalPath
-                ? "Drop a supported workbook file."
-                : "Open requires a local file path.";
-        return false;
+        path = plan.Path;
+        storageItem = candidates[plan.CandidateIndex].StorageItem;
+        message = "";
+        return true;
     }
 
     private async Task OpenWorkbookFromTargetAsync(WorkbookOpenTarget target)

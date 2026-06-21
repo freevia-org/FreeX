@@ -10,14 +10,14 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.FileDrop.cs");
-        var planner = DialogSourceTestSupport.ReadHostSources("WorkbookDropPlanner.cs");
+        var planner = DialogSourceTestSupport.ReadAppServicesSource("WorkbookOpenIngressPlanner.cs");
 
         xaml.Should().Contain("AllowDrop=\"True\"");
         xaml.Should().Contain("DragOver=\"MainWindow_DragOver\"");
         xaml.Should().Contain("Drop=\"MainWindow_Drop\"");
-        source.Should().Contain("WorkbookDropPlanner.SelectOpenableFile(paths, _fileAdapters)");
+        source.Should().Contain("WorkbookOpenIngressPlanner.SelectOpenableFile(paths, _fileAdapters)");
         source.Should().Contain("await OpenFileAsync(path)");
-        planner.Should().Contain("FileDialogFilterBuilder.FindOpenAdapter(adapters, extension, out _)");
+        planner.Should().Contain("FileFormatResolver.FindOpenAdapter(adapters, extension, out _)");
     }
 
     [Fact]
