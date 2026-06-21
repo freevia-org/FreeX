@@ -293,6 +293,7 @@ public sealed partial class MainWindow : Window
     private const double SheetHorizontalScrollbarMinimumWidth = 260;
     private const double SheetHorizontalScrollbarMaximumWidth = 420;
     private const double SheetHorizontalScrollbarWindowRatio = 0.34;
+    private const double SheetTabContourClipTolerance = 0.5;
     private const uint PortablePdfColumnsPerPage = 8;
     private const uint PortablePdfRowsPerPage = 28;
     private const double ZoomToSelectionDefaultColumnWidth = 80;
@@ -1499,18 +1500,23 @@ public sealed partial class MainWindow : Window
             : Math.Max(0, scrollBarLeft - HeaderColumnWidth));
         var contourRight = Math.Clamp(scrollerRight, contourLeft, Math.Max(contourLeft, scrollBarLeft));
 
-        activeLeft = Math.Clamp(activeLeft, contourLeft, Math.Max(contourLeft, contourRight - 16));
-        activeRight = Math.Clamp(activeRight, activeLeft + 16, contourRight);
+        var topY = 1d;
+        var activeTabFullyVisible = activeLeft >= contourLeft - SheetTabContourClipTolerance
+            && activeRight <= contourRight + SheetTabContourClipTolerance;
+        if (!activeTabFullyVisible)
+        {
+            AddSheetTabContourLine(horizontalRuleLeft, horizontalRuleRight, topY);
+            return;
+        }
 
         var corner = Math.Min(9, Math.Max(6, activeWidth * 0.10));
-        var topY = 1d;
         var sideY = 10d;
         var tabBottomY = 27d;
         var leftJoin = Math.Max(contourLeft, activeLeft - corner);
         var rightJoin = Math.Min(contourRight, activeRight + corner);
 
-        AddSheetTabContourPath($"M {Geom(horizontalRuleLeft)} {Geom(topY)} L {Geom(leftJoin)} {Geom(topY)}", strokeThickness: 1.0);
-        AddSheetTabContourPath($"M {Geom(rightJoin)} {Geom(topY)} L {Geom(horizontalRuleRight)} {Geom(topY)}", strokeThickness: 1.0);
+        AddSheetTabContourLine(horizontalRuleLeft, leftJoin, topY);
+        AddSheetTabContourLine(rightJoin, horizontalRuleRight, topY);
 
         var path =
             $"M {Geom(leftJoin)} {Geom(topY)} " +
@@ -1522,6 +1528,13 @@ public sealed partial class MainWindow : Window
             $"L {Geom(activeRight)} {Geom(sideY)} " +
             $"C {Geom(activeRight)} {Geom(sideY - 4)} {Geom(activeRight)} {Geom(topY)} {Geom(rightJoin)} {Geom(topY)}";
         AddSheetTabContourPath(path, strokeThickness: 1.0);
+    }
+
+    private void AddSheetTabContourLine(double left, double right, double y)
+    {
+        if (right <= left + SheetTabContourClipTolerance)
+            return;
+        AddSheetTabContourPath($"M {Geom(left)} {Geom(y)} L {Geom(right)} {Geom(y)}", strokeThickness: 1.0);
     }
 
     private double EstimateSheetTabWidth(int tabIndex)

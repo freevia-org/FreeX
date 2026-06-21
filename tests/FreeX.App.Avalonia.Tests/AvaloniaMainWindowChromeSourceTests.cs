@@ -30,8 +30,13 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         source.Should().Contain("var horizontalRuleLeft = 0d;");
         source.Should().Contain("var horizontalRuleRight = totalWidth;");
         source.Should().Contain("var contourRight = Math.Clamp(scrollerRight, contourLeft, Math.Max(contourLeft, scrollBarLeft));");
-        source.Should().Contain("AddSheetTabContourPath($\"M {Geom(horizontalRuleLeft)} {Geom(topY)} L {Geom(leftJoin)} {Geom(topY)}\"");
-        source.Should().Contain("AddSheetTabContourPath($\"M {Geom(rightJoin)} {Geom(topY)} L {Geom(horizontalRuleRight)} {Geom(topY)}\"");
+        source.Should().Contain("var activeTabFullyVisible = activeLeft >= contourLeft - SheetTabContourClipTolerance");
+        source.Should().Contain("if (!activeTabFullyVisible)");
+        source.Should().Contain("AddSheetTabContourLine(horizontalRuleLeft, horizontalRuleRight, topY);");
+        source.Should().Contain("AddSheetTabContourLine(horizontalRuleLeft, leftJoin, topY);");
+        source.Should().Contain("AddSheetTabContourLine(rightJoin, horizontalRuleRight, topY);");
+        source.Should().NotContain("Math.Clamp(activeLeft, contourLeft");
+        source.Should().NotContain("Math.Clamp(activeRight, activeLeft + 16");
         source.Should().NotContain("AddSheetTabTopRuleSegment");
         source.Should().Contain("UpdateSheetTabsContourLayer();");
         source.Should().Contain("private void UpdateSheetTabNavigationVisibility()");
