@@ -16,6 +16,34 @@ public sealed class ApplicationOptionsSupportTests
     }
 
     [Fact]
+    public void SummaryPlanner_BuildsCommonSisterAppOptionRows()
+    {
+        var options = new DummyOptions
+        {
+            RecentFilesCap = 7,
+            DefaultSaveFormat = ".fxp",
+            UiLanguage = ApplicationOptionsNormalizer.SystemDefaultLanguage
+        };
+
+        var plan = ApplicationOptionsSummaryPlanner.Build(options, @"C:\Users\Ada\AppData\Local\FreeP");
+
+        plan.Rows.Should().Equal(
+            new ApplicationOptionsSummaryRow(ApplicationOptionsSummaryPlanner.RecentFilesKeptLabel, "7"),
+            new ApplicationOptionsSummaryRow(ApplicationOptionsSummaryPlanner.DefaultSaveFormatLabel, ".fxp"),
+            new ApplicationOptionsSummaryRow(ApplicationOptionsSummaryPlanner.UiLanguageLabel, ApplicationOptionsSummaryPlanner.SystemDefaultLanguageLabel),
+            new ApplicationOptionsSummaryRow(ApplicationOptionsSummaryPlanner.DataFolderLabel, @"C:\Users\Ada\AppData\Local\FreeP"));
+    }
+
+    [Fact]
+    public void SummaryPlanner_FormatUiLanguage_PreservesExplicitLanguage()
+    {
+        ApplicationOptionsSummaryPlanner.FormatUiLanguage("uk-UA").Should().Be("uk-UA");
+        ApplicationOptionsSummaryPlanner.FormatUiLanguage(null)
+            .Should()
+            .Be(ApplicationOptionsSummaryPlanner.SystemDefaultLanguageLabel);
+    }
+
+    [Fact]
     public void Load_WhenFileMissing_ReturnsNormalizedDefaults()
     {
         using var temp = new TestTemporaryDirectory();
@@ -76,7 +104,7 @@ public sealed class ApplicationOptionsSupportTests
         store.StorePath.Should().Be(Path.Combine(temp.Path, "FreeX", "settings.json"));
     }
 
-    private sealed class DummyOptions : INormalizableApplicationOptions
+    private sealed class DummyOptions : INormalizableApplicationOptions, IApplicationOptionsSummarySource
     {
         public const string DefaultFormat = ".dummy";
 

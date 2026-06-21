@@ -11,7 +11,7 @@ namespace FreeP.App.Host;
 /// <para>All properties carry sensible defaults and the type is JSON round-trippable with a parameterless
 /// constructor, so a missing or corrupt settings file degrades to <c>new FreePOptions()</c>.</para>
 /// </summary>
-public sealed class FreePOptions : INormalizableApplicationOptions
+public sealed class FreePOptions : INormalizableApplicationOptions, IApplicationOptionsSummarySource
 {
     public const int DefaultRecentFilesCap = ApplicationOptionsNormalizer.DefaultRecentFilesCap;
     public const int MinRecentFilesCap = ApplicationOptionsNormalizer.MinRecentFilesCap;

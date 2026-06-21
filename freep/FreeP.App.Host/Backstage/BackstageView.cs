@@ -116,14 +116,10 @@ internal sealed class BackstageView : UserControl
     {
         var options = _actions.CurrentOptions();
 
-        return Panes.BuildOptionsPane(new BackstageOptionsPaneSpec(
+        return Panes.BuildOptionsPane(BackstageApplicationOptionsPanePlanner.Build(
             "FreeP application settings. These persist between sessions.",
-            [
-                new("Recent files kept", options.RecentFilesCap.ToString()),
-                new("Default save format", options.DefaultSaveFormat),
-                new("UI language", string.IsNullOrEmpty(options.UiLanguage) ? "System default" : options.UiLanguage),
-                new("Data folder", _actions.DataFolder()),
-            ]));
+            options,
+            _actions.DataFolder()));
     }
 }
 

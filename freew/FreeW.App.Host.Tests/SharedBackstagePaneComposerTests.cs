@@ -6,6 +6,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using Free.Shared.AppServices;
 using Free.Shared.Shell.Wpf;
 using Xunit;
 
@@ -106,6 +107,31 @@ public sealed class SharedBackstagePaneComposerTests
         edited.Should().BeTrue();
     }
 
+    [Fact]
+    public void BackstageApplicationOptionsPanePlanner_AdaptsSharedSummaryRows()
+    {
+        var edited = false;
+
+        var spec = BackstageApplicationOptionsPanePlanner.Build(
+            "FreeW application settings.",
+            new SummaryOptions(RecentFilesCap: 6, DefaultSaveFormat: ".docx", UiLanguage: ""),
+            @"C:\Users\Ada\AppData\Local\FreeW",
+            editText: "Edit options...",
+            edit: () => edited = true);
+
+        spec.Description.Should().Be("FreeW application settings.");
+        spec.Fields.Should().Equal(
+            new BackstageFieldRow(ApplicationOptionsSummaryPlanner.RecentFilesKeptLabel, "6"),
+            new BackstageFieldRow(ApplicationOptionsSummaryPlanner.DefaultSaveFormatLabel, ".docx"),
+            new BackstageFieldRow(ApplicationOptionsSummaryPlanner.UiLanguageLabel, ApplicationOptionsSummaryPlanner.SystemDefaultLanguageLabel),
+            new BackstageFieldRow(ApplicationOptionsSummaryPlanner.DataFolderLabel, @"C:\Users\Ada\AppData\Local\FreeW"));
+        spec.EditText.Should().Be("Edit options...");
+
+        spec.Edit.Should().NotBeNull();
+        spec.Edit!.Invoke();
+        edited.Should().BeTrue();
+    }
+
     [StaFact]
     public void BuildInfoPane_RendersDirtyLocationPropertiesStatsAndOptionalEditButton()
     {
@@ -179,4 +205,9 @@ public sealed class SharedBackstagePaneComposerTests
             }
         }
     }
+
+    private sealed record SummaryOptions(
+        int RecentFilesCap,
+        string DefaultSaveFormat,
+        string UiLanguage) : IApplicationOptionsSummarySource;
 }

@@ -2,7 +2,6 @@ using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
-using Free.Shared.AppServices;
 using Free.Shared.Ribbon.Wpf;
 using Free.Shared.Shell.Wpf;
 using FreeW.App.Host.Editing;
@@ -178,16 +177,12 @@ internal sealed class BackstageView : UserControl
     {
         var options = _actions.CurrentOptions();
 
-        return Panes.BuildOptionsPane(new BackstageOptionsPaneSpec(
+        return Panes.BuildOptionsPane(BackstageApplicationOptionsPanePlanner.Build(
             "FreeW application settings. These persist between sessions and apply immediately.",
-            [
-                new("Recent files kept", options.RecentFilesCap.ToString()),
-                new("Default save format", options.DefaultSaveFormat),
-                new("UI language", string.IsNullOrEmpty(options.UiLanguage) ? "System default" : options.UiLanguage),
-                new("Data folder", _actions.DataFolder()),
-            ],
-            EditText: "Edit options…",
-            Edit: () => { Hide(); _actions.EditOptions(); }));
+            options,
+            _actions.DataFolder(),
+            editText: "Edit options…",
+            edit: () => { Hide(); _actions.EditOptions(); }));
     }
 }
 
