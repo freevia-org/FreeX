@@ -53,25 +53,8 @@ internal static class AvaloniaStatusBarSource
 
     /// <summary>
     /// Resolves the customize-menu header text for a planner resource key. The Avalonia shell has no
-    /// <c>UiText</c> resource system, so it mirrors the WPF host's <c>StatusBar_*</c> resource values.
+    /// <c>UiText</c> resource system, so it uses the shared English fallback labels for the same keys.
     /// </summary>
     public static string CustomizeHeader(string resourceKey) =>
-        resourceKey switch
-        {
-            "StatusBar_CustomizeStatusBar" => "Customize Status Bar",
-            "StatusBar_CellMode" => "Cell Mode",
-            "StatusBar_EndMode" => "End Mode",
-            "StatusBar_SelectionMode" => "Selection Mode",
-            "StatusBar_PageNumber" => "Page Number",
-            "StatusBar_Average" => "Average",
-            "StatusBar_Count" => "Count",
-            "StatusBar_NumericalCount" => "Numerical Count",
-            "StatusBar_Minimum" => "Minimum",
-            "StatusBar_Maximum" => "Maximum",
-            "StatusBar_Sum" => "Sum",
-            "StatusBar_ViewShortcuts" => "View Shortcuts",
-            "StatusBar_Zoom" => "Zoom",
-            "StatusBar_ZoomSlider" => "Zoom Slider",
-            _ => resourceKey
-        };
+        StatusBarCustomizeLabelPlanner.EnglishHeader(resourceKey);
 }

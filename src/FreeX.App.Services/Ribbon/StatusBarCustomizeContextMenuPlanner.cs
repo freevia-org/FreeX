@@ -19,23 +19,23 @@ public static class StatusBarCustomizeContextMenuPlanner
     private static IReadOnlyList<StatusBarCustomizeMenuCommand> BuildCommands() =>
         Array.AsReadOnly(new[]
         {
-            StatusBarCustomizeMenuCommand.Title("StatusBar_CustomizeStatusBar", keyTip: "T", automationId: "StatusBarCustomizeTitleMenuItem"),
+            StatusBarCustomizeMenuCommand.Title(StatusBarCustomizeResourceKeys.CustomizeStatusBar, keyTip: "T", automationId: "StatusBarCustomizeTitleMenuItem"),
             StatusBarCustomizeMenuCommand.Separator,
-            Toggle("StatusBar_CellMode", keyTip: "M", optionTag: StatusBarOptionTags.CellMode, automationId: "StatusBarCellModeMenuItem"),
-            Toggle("StatusBar_EndMode", keyTip: "E", optionTag: StatusBarOptionTags.EndMode, automationId: "StatusBarEndModeMenuItem"),
-            Toggle("StatusBar_SelectionMode", keyTip: "O", optionTag: StatusBarOptionTags.SelectionMode, automationId: "StatusBarSelectionModeMenuItem"),
-            Toggle("StatusBar_PageNumber", keyTip: "P", optionTag: StatusBarOptionTags.PageNumber, automationId: "StatusBarPageNumberMenuItem"),
+            Toggle(StatusBarCustomizeResourceKeys.CellMode, keyTip: "M", optionTag: StatusBarOptionTags.CellMode, automationId: "StatusBarCellModeMenuItem"),
+            Toggle(StatusBarCustomizeResourceKeys.EndMode, keyTip: "E", optionTag: StatusBarOptionTags.EndMode, automationId: "StatusBarEndModeMenuItem"),
+            Toggle(StatusBarCustomizeResourceKeys.SelectionMode, keyTip: "O", optionTag: StatusBarOptionTags.SelectionMode, automationId: "StatusBarSelectionModeMenuItem"),
+            Toggle(StatusBarCustomizeResourceKeys.PageNumber, keyTip: "P", optionTag: StatusBarOptionTags.PageNumber, automationId: "StatusBarPageNumberMenuItem"),
             StatusBarCustomizeMenuCommand.Separator,
-            Toggle("StatusBar_Average", keyTip: "A", optionTag: StatusBarOptionTags.Average, automationId: "StatusBarAverageMenuItem"),
-            Toggle("StatusBar_Count", keyTip: "C", optionTag: StatusBarOptionTags.Count, automationId: "StatusBarCountMenuItem"),
-            Toggle("StatusBar_NumericalCount", keyTip: "N", optionTag: StatusBarOptionTags.NumericalCount, automationId: "StatusBarNumericalCountMenuItem"),
-            Toggle("StatusBar_Minimum", keyTip: "I", optionTag: StatusBarOptionTags.Minimum, automationId: "StatusBarMinimumMenuItem"),
-            Toggle("StatusBar_Maximum", keyTip: "X", optionTag: StatusBarOptionTags.Maximum, automationId: "StatusBarMaximumMenuItem"),
-            Toggle("StatusBar_Sum", keyTip: "S", optionTag: StatusBarOptionTags.Sum, automationId: "StatusBarSumMenuItem"),
+            Toggle(StatusBarCustomizeResourceKeys.Average, keyTip: "A", optionTag: StatusBarOptionTags.Average, automationId: "StatusBarAverageMenuItem"),
+            Toggle(StatusBarCustomizeResourceKeys.Count, keyTip: "C", optionTag: StatusBarOptionTags.Count, automationId: "StatusBarCountMenuItem"),
+            Toggle(StatusBarCustomizeResourceKeys.NumericalCount, keyTip: "N", optionTag: StatusBarOptionTags.NumericalCount, automationId: "StatusBarNumericalCountMenuItem"),
+            Toggle(StatusBarCustomizeResourceKeys.Minimum, keyTip: "I", optionTag: StatusBarOptionTags.Minimum, automationId: "StatusBarMinimumMenuItem"),
+            Toggle(StatusBarCustomizeResourceKeys.Maximum, keyTip: "X", optionTag: StatusBarOptionTags.Maximum, automationId: "StatusBarMaximumMenuItem"),
+            Toggle(StatusBarCustomizeResourceKeys.Sum, keyTip: "S", optionTag: StatusBarOptionTags.Sum, automationId: "StatusBarSumMenuItem"),
             StatusBarCustomizeMenuCommand.Separator,
-            Toggle("StatusBar_ViewShortcuts", keyTip: "V", optionTag: StatusBarOptionTags.ViewShortcuts, automationId: "StatusBarViewShortcutsMenuItem"),
-            Toggle("StatusBar_Zoom", keyTip: "Z", optionTag: StatusBarOptionTags.Zoom, automationId: "StatusBarZoomMenuItem"),
-            Toggle("StatusBar_ZoomSlider", keyTip: "L", optionTag: StatusBarOptionTags.ZoomSlider, automationId: "StatusBarZoomSliderMenuItem"),
+            Toggle(StatusBarCustomizeResourceKeys.ViewShortcuts, keyTip: "V", optionTag: StatusBarOptionTags.ViewShortcuts, automationId: "StatusBarViewShortcutsMenuItem"),
+            Toggle(StatusBarCustomizeResourceKeys.Zoom, keyTip: "Z", optionTag: StatusBarOptionTags.Zoom, automationId: "StatusBarZoomMenuItem"),
+            Toggle(StatusBarCustomizeResourceKeys.ZoomSlider, keyTip: "L", optionTag: StatusBarOptionTags.ZoomSlider, automationId: "StatusBarZoomSliderMenuItem"),
         });
 
     private static StatusBarCustomizeMenuCommand Toggle(string resourceKey, string keyTip, string optionTag, string automationId) =>

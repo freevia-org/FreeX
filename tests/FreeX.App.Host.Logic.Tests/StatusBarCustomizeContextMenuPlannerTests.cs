@@ -37,7 +37,7 @@ public sealed class StatusBarCustomizeContextMenuPlannerTests
     {
         var title = StatusBarCustomizeContextMenuPlanner.BuildStatusBarCustomizeCommands()[0];
 
-        title.ResourceKey.Should().Be("StatusBar_CustomizeStatusBar");
+        title.ResourceKey.Should().Be(StatusBarCustomizeResourceKeys.CustomizeStatusBar);
         title.IsEnabled.Should().BeFalse();
         title.IsCheckable.Should().BeFalse();
         title.KeyTip.Should().Be("T");
