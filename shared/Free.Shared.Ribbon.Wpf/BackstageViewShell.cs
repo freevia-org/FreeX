@@ -34,10 +34,10 @@ public sealed class BackstageViewShell
 
         _host = host;
         _onClosed = onClosed;
-        Frame = new BackstageFrame();
-        Frame.SetAccent(accent.Sidebar, accent.Hover, accent.Selected, accent.Separator);
-        Frame.SetEntries(entries);
-        Frame.Closed += OnFrameClosed;
+        Frame = BackstageFrameComposer.Build(new BackstageFrameComposerSpec(accent, entries)
+        {
+            Closed = OnFrameClosed
+        });
 
         _host.Padding = new Thickness(0);
         _host.Background = Brushes.White;

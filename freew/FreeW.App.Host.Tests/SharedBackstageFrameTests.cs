@@ -35,6 +35,22 @@ public sealed class SharedBackstageFrameTests
         return buttons;
     }
 
+    private static Button BackButton(BackstageFrame frame)
+    {
+        var field = typeof(BackstageFrame).GetField(
+            "_back",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        return (Button)field.GetValue(frame)!;
+    }
+
+    private static Thickness ContentPadding(BackstageFrame frame)
+    {
+        var field = typeof(BackstageFrame).GetField(
+            "_content",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        return ((System.Windows.Controls.ContentControl)field.GetValue(frame)!).Margin;
+    }
+
     [StaFact]
     public void BackstageViewShell_WiresHostFrameVisibilityAndClosedCallback()
     {
@@ -62,6 +78,49 @@ public sealed class SharedBackstageFrameTests
 
         Assert.Equal(Visibility.Collapsed, host.Visibility);
         Assert.Equal(1, closedCount);
+    }
+
+    [StaFact]
+    public void BackstageFrameComposer_AppliesFrameSetupAndHostHooks()
+    {
+        var closedCount = 0;
+        var decorated = new System.Collections.Generic.List<string>();
+
+        var frame = BackstageFrameComposer.Build(new BackstageFrameComposerSpec(
+            new BackstageAccent(
+                Color.FromRgb(0x10, 0x25, 0x3A),
+                Color.FromRgb(0x24, 0x44, 0x5E),
+                Color.FromRgb(0x18, 0x3A, 0x58),
+                Color.FromRgb(0x24, 0x44, 0x5E)),
+            new[] { BackstageEntry.Pane("Info", RibbonCommandIconKind.Info, () => new TextBlock()) })
+        {
+            ContentPadding = new Thickness(0),
+            BackButton = new BackstageBackButtonSpec(
+                AutomationId: "BackstageBackButton",
+                AutomationName: "Back",
+                AutomationHelpText: "Return to document.",
+                ToolTip: "Back",
+                TooltipTitle: "Back",
+                KeyTip: "B"),
+            DecorateNavButtons = (entry, _) => decorated.Add(entry?.Label ?? "back"),
+            Closed = () => closedCount++
+        });
+
+        ContentPadding(frame).Should().Be(new Thickness(0));
+
+        var back = BackButton(frame);
+        AutomationProperties.GetAutomationId(back).Should().Be("BackstageBackButton");
+        AutomationProperties.GetName(back).Should().Be("Back");
+        AutomationProperties.GetHelpText(back).Should().Be("Return to document.");
+        RibbonTooltip.GetKeyTip(back).Should().Be("B");
+        RibbonTooltip.GetTitle(back).Should().Be("Back");
+        back.ToolTip.Should().NotBeNull();
+
+        decorated.Should().Equal("back", "Info");
+
+        frame.Hide();
+
+        closedCount.Should().Be(1);
     }
 
     [StaFact]
