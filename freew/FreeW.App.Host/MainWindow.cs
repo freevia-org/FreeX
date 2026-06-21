@@ -390,6 +390,7 @@ public sealed class MainWindow : Window
             OpenPath: path => _file.OpenPath(path),
             Save: () => _file.Save(),
             SaveAs: () => _file.SaveAs(),
+            SaveCopy: () => _file.SaveCopy(),
             Print: Print,
             ExportPdf: ExportToPdf,
             ExportXps: ExportToXps,
