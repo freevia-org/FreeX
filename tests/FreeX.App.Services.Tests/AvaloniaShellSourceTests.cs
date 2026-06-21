@@ -3255,7 +3255,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("var result = _session.DecreaseSelectedRangeFontSize();");
         source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Decrease Font Size failed.\");");
         source.Should().Contain("RefreshShell($\"Decreased font size for {rangeReference}\");");
-        source.Should().Contain("var fontSize = style?.FontSize ?? CellStyle.Default.FontSize;");
+        source.Should().Contain("var fontSize = (style?.FontSize ?? CellStyle.Default.FontSize) + WorksheetFontSizeDisplayOffset;");
         source.Should().Contain("FontSize = scaledFontSize,");
     }
 
