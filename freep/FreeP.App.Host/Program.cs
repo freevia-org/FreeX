@@ -28,9 +28,9 @@ public static class Program
         // Must follow the AppProduct install and precede any shared dialog/backstage use.
         AppComposition.InstallSharedSeams();
 
-        // Load FreeP's persisted options via the shared JsonSettingsStore (best-effort; missing/corrupt
+        // Load FreeP's persisted options via the shared ApplicationOptionsStore (best-effort; missing/corrupt
         // degrades to defaults). Must follow the AppProduct install so the path resolves under FreeP.
-        var optionsStore = FreePOptionsStore.Create();
+        var optionsStore = ApplicationOptionsStore<FreePOptions>.Create();
         var options = optionsStore.Load();
 
         // Local diagnostics, backed by the shared file store under %LOCALAPPDATA%\FreeP\Diagnostics

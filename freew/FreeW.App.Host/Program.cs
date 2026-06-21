@@ -17,10 +17,10 @@ public static class Program
         AppProduct.Current = new AppProductIdentity("FreeW", "FREEW_DIAGNOSTICS", "FreeW");
         ShellStrings.Current = new DefaultShellStrings();
 
-        // Load FreeW's persisted options via the shared JsonSettingsStore (best-effort; a missing or
+        // Load FreeW's persisted options via the shared ApplicationOptionsStore (best-effort; a missing or
         // corrupt settings file degrades to defaults). Read once at startup; the recent-files cap flows
         // into the file commands. Must follow the AppProduct install so the path resolves under FreeW.
-        var optionsStore = FreeWOptionsStore.Create();
+        var optionsStore = ApplicationOptionsStore<FreeWOptions>.Create();
         var options = optionsStore.Load();
 
         // Local diagnostics, backed by the shared file store under %LOCALAPPDATA%\FreeW\Diagnostics.

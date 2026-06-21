@@ -27,7 +27,7 @@ public sealed class MainWindow : Window
     };
 
     private readonly FreePOptions _options;
-    private readonly FreePOptionsStore _optionsStore;
+    private readonly ApplicationOptionsStore<FreePOptions> _optionsStore;
 
     // The presentation model + its undo bus (shared command tier). The placeholder canvas re-renders from this.
     private Presentation _presentation = Presentation.CreateEmpty();
@@ -48,12 +48,12 @@ public sealed class MainWindow : Window
     {
     }
 
-    public MainWindow(FreePOptions options, FreePOptionsStore? optionsStore = null)
+    public MainWindow(FreePOptions options, ApplicationOptionsStore<FreePOptions>? optionsStore = null)
     {
         _options = options ?? new FreePOptions();
         // No store supplied (tests / isolation) → a transient in-memory store so editing still works without
         // touching the real profile. Mirrors FreeW.
-        _optionsStore = optionsStore ?? FreePOptionsStore.ForPath(
+        _optionsStore = optionsStore ?? ApplicationOptionsStore<FreePOptions>.ForPath(
             System.IO.Path.Combine(System.IO.Path.GetTempPath(), "FreeP", "settings.transient.json"));
 
         Title = "FreeP";

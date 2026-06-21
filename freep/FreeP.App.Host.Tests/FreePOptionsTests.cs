@@ -5,8 +5,8 @@ using FreeP.App.Host;
 namespace FreeP.App.Host.Tests;
 
 /// <summary>
-/// Coverage for FreeP's options adoption: <see cref="FreePOptionsStore"/> persists <see cref="FreePOptions"/>
-/// through the shared, neutral <see cref="JsonSettingsStore{T}"/> under FreeP's own product folder. Headless
+/// Coverage for FreeP's options adoption: <see cref="ApplicationOptionsStore{T}"/> persists <see cref="FreePOptions"/>
+/// through the shared, neutral options store under FreeP's own product folder. Headless
 /// (no WPF) — pure model + store round-trips. Mirrors FreeWOptionsTests.
 /// </summary>
 public sealed class FreePOptionsTests : IDisposable
@@ -34,7 +34,7 @@ public sealed class FreePOptionsTests : IDisposable
     [Fact]
     public void Load_WhenFileMissing_ReturnsNormalizedDefaults()
     {
-        var store = FreePOptionsStore.ForPath(Path.Combine(_tempDir, "missing.json"));
+        var store = ApplicationOptionsStore<FreePOptions>.ForPath(Path.Combine(_tempDir, "missing.json"));
 
         var options = store.Load();
 
@@ -47,7 +47,7 @@ public sealed class FreePOptionsTests : IDisposable
     public void SaveThenLoad_RoundTrips()
     {
         var path = Path.Combine(_tempDir, "nested", "settings.json");
-        var store = FreePOptionsStore.ForPath(path);
+        var store = ApplicationOptionsStore<FreePOptions>.ForPath(path);
 
         store.Save(new FreePOptions
         {
@@ -71,7 +71,7 @@ public sealed class FreePOptionsTests : IDisposable
             """
             { "RecentFilesCap": 9999, "DefaultSaveFormat": "  ", "UiLanguage": "  en-GB  " }
             """);
-        var store = FreePOptionsStore.ForPath(path);
+        var store = ApplicationOptionsStore<FreePOptions>.ForPath(path);
 
         var options = store.Load();
 
@@ -85,10 +85,10 @@ public sealed class FreePOptionsTests : IDisposable
     {
         var provider = new TestApplicationDataPathProvider(_tempDir);
 
-        var store = FreePOptionsStore.Create(provider);
+        var store = ApplicationOptionsStore<FreePOptions>.Create(provider);
 
         // The test assembly installs AppProduct = "FreeP" (AppProductTestDefaults).
-        store.StorePath.Should().Be(Path.Combine(_tempDir, "FreeP", FreePOptionsStore.FileName));
+        store.StorePath.Should().Be(Path.Combine(_tempDir, "FreeP", ApplicationOptionsStore<FreePOptions>.DefaultFileName));
     }
 
     private sealed class TestApplicationDataPathProvider(string path) : IApplicationDataPathProvider

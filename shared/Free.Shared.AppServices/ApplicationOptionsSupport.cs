@@ -81,3 +81,40 @@ public sealed class NormalizingJsonSettingsStore<T>
         return _store.Save(options);
     }
 }
+
+/// <summary>
+/// Shared facade for app-specific options models. The model stays app-owned; the file name, product-folder
+/// resolution, safe load, normalization, and atomic save ceremony are common to the sister apps.
+/// </summary>
+public sealed class ApplicationOptionsStore<T>
+    where T : class, INormalizableApplicationOptions, new()
+{
+    public const string DefaultFileName = "settings.json";
+
+    private readonly NormalizingJsonSettingsStore<T> _store;
+
+    private ApplicationOptionsStore(NormalizingJsonSettingsStore<T> store) => _store = store;
+
+    /// <summary>The absolute path this store reads from / writes to.</summary>
+    public string StorePath => _store.StorePath;
+
+    /// <summary>Last load/save error surfaced by the shared store (null when the last op succeeded).</summary>
+    public string? LastError => _store.LastError;
+
+    /// <summary>A store rooted at the ambient app product data folder.</summary>
+    public static ApplicationOptionsStore<T> Create(
+        IApplicationDataPathProvider? pathProvider = null,
+        string? overridePath = null,
+        string fileName = DefaultFileName) =>
+        new(NormalizingJsonSettingsStore<T>.ForProductFile(fileName, pathProvider, overridePath));
+
+    /// <summary>A store rooted at an explicit absolute path (tests / transient isolated windows).</summary>
+    public static ApplicationOptionsStore<T> ForPath(string storePath) =>
+        new(NormalizingJsonSettingsStore<T>.ForPath(storePath));
+
+    /// <summary>Loads and normalizes options; missing/corrupt files degrade to defaults.</summary>
+    public T Load() => _store.Load();
+
+    /// <summary>Normalizes then atomically saves; returns false (with <see cref="LastError"/>) on failure.</summary>
+    public bool Save(T options) => _store.Save(options);
+}

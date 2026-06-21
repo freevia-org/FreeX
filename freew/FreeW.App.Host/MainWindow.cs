@@ -149,18 +149,18 @@ public sealed class MainWindow : Window
     // that persists edits made from the backstage Options dialog. The options instance is mutated in place
     // so settings read live by FileCommands (e.g. the recent-files cap) take effect without a restart.
     private readonly FreeWOptions _options;
-    private readonly FreeWOptionsStore _optionsStore;
+    private readonly ApplicationOptionsStore<FreeWOptions> _optionsStore;
 
     public MainWindow() : this(new FreeWOptions())
     {
     }
 
-    public MainWindow(FreeWOptions options, FreeWOptionsStore? optionsStore = null)
+    public MainWindow(FreeWOptions options, ApplicationOptionsStore<FreeWOptions>? optionsStore = null)
     {
         _options = options ?? new FreeWOptions();
         // No store supplied (e.g. constructed in isolation / tests) → a no-op in-memory store so editing
         // still round-trips through the dialog and applies live, just without touching the real profile.
-        _optionsStore = optionsStore ?? FreeWOptionsStore.ForPath(
+        _optionsStore = optionsStore ?? ApplicationOptionsStore<FreeWOptions>.ForPath(
             System.IO.Path.Combine(System.IO.Path.GetTempPath(), "FreeW", "settings.transient.json"));
         Title = "FreeW";
         Width = 1280;

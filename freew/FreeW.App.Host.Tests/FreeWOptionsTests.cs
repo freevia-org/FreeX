@@ -9,8 +9,8 @@ using Xunit;
 namespace FreeW.App.Host.Tests;
 
 /// <summary>
-/// Coverage for FreeW's P4 options adoption: <see cref="FreeWOptionsStore"/> persists
-/// <see cref="FreeWOptions"/> through the shared, neutral <see cref="JsonSettingsStore{T}"/> under
+/// Coverage for FreeW's P4 options adoption: <see cref="ApplicationOptionsStore{T}"/> persists
+/// <see cref="FreeWOptions"/> through the shared, neutral options store under
 /// FreeW's own product folder. These run headless (no WPF) — pure model + store round-trips.
 /// </summary>
 public sealed class FreeWOptionsTests : IDisposable
@@ -38,7 +38,7 @@ public sealed class FreeWOptionsTests : IDisposable
     [Fact]
     public void Load_WhenFileMissing_ReturnsNormalizedDefaults()
     {
-        var store = FreeWOptionsStore.ForPath(Path.Combine(_tempDir, "missing.json"));
+        var store = ApplicationOptionsStore<FreeWOptions>.ForPath(Path.Combine(_tempDir, "missing.json"));
 
         var options = store.Load();
 
@@ -51,7 +51,7 @@ public sealed class FreeWOptionsTests : IDisposable
     public void SaveThenLoad_RoundTrips()
     {
         var path = Path.Combine(_tempDir, "nested", "settings.json");
-        var store = FreeWOptionsStore.ForPath(path);
+        var store = ApplicationOptionsStore<FreeWOptions>.ForPath(path);
 
         store.Save(new FreeWOptions
         {
@@ -71,7 +71,7 @@ public sealed class FreeWOptionsTests : IDisposable
     {
         var path = Path.Combine(_tempDir, "settings.json");
         File.WriteAllText(path, "{ not json");
-        var store = FreeWOptionsStore.ForPath(path);
+        var store = ApplicationOptionsStore<FreeWOptions>.ForPath(path);
 
         var options = store.Load();
 
@@ -89,7 +89,7 @@ public sealed class FreeWOptionsTests : IDisposable
             """
             { "RecentFilesCap": 9999, "DefaultSaveFormat": "  ", "UiLanguage": "  en-GB  " }
             """);
-        var store = FreeWOptionsStore.ForPath(path);
+        var store = ApplicationOptionsStore<FreeWOptions>.ForPath(path);
 
         var options = store.Load();
 
@@ -145,9 +145,9 @@ public sealed class FreeWOptionsTests : IDisposable
             AutoCorrectEnabled = false,
             AutoFormat = AutoFormatOptions.Default with { Hyperlinks = false, Fractions = false },
         };
-        FreeWOptionsStore.ForPath(path).Save(options).Should().BeTrue();
+        ApplicationOptionsStore<FreeWOptions>.ForPath(path).Save(options).Should().BeTrue();
 
-        var reloaded = FreeWOptionsStore.ForPath(path).Load();
+        var reloaded = ApplicationOptionsStore<FreeWOptions>.ForPath(path).Load();
         reloaded.AutoCorrectEnabled.Should().BeFalse();
         reloaded.AutoFormat.Hyperlinks.Should().BeFalse();
         reloaded.AutoFormat.Fractions.Should().BeFalse();
@@ -160,7 +160,7 @@ public sealed class FreeWOptionsTests : IDisposable
         // Mirrors MainWindow.OpenOptions: the dialog produces a normalized result, the host copies it onto
         // the live options instance (so FileCommands sees the new cap immediately) and saves via the store.
         var path = Path.Combine(_tempDir, "settings.json");
-        var store = FreeWOptionsStore.ForPath(path);
+        var store = ApplicationOptionsStore<FreeWOptions>.ForPath(path);
         var live = new FreeWOptions { RecentFilesCap = FreeWOptions.DefaultRecentFilesCap };
 
         var edited = OptionsDialogPlanner.BuildResult(
@@ -176,7 +176,7 @@ public sealed class FreeWOptionsTests : IDisposable
         // Applied live on the shared instance...
         live.RecentFilesCap.Should().Be(3);
         // ...and survives a restart (fresh store load).
-        var reloaded = FreeWOptionsStore.ForPath(path).Load();
+        var reloaded = ApplicationOptionsStore<FreeWOptions>.ForPath(path).Load();
         reloaded.RecentFilesCap.Should().Be(3);
         reloaded.UiLanguage.Should().Be("uk-UA");
         reloaded.DefaultSaveFormat.Should().Be(FreeWOptions.DocxDefaultFormat);
@@ -187,10 +187,10 @@ public sealed class FreeWOptionsTests : IDisposable
     {
         var provider = new TestApplicationDataPathProvider(_tempDir);
 
-        var store = FreeWOptionsStore.Create(provider);
+        var store = ApplicationOptionsStore<FreeWOptions>.Create(provider);
 
         // The test assembly installs AppProduct = "FreeW" (AppProductTestDefaults).
-        store.StorePath.Should().Be(Path.Combine(_tempDir, "FreeW", FreeWOptionsStore.FileName));
+        store.StorePath.Should().Be(Path.Combine(_tempDir, "FreeW", ApplicationOptionsStore<FreeWOptions>.DefaultFileName));
     }
 
     private sealed class TestApplicationDataPathProvider(string path) : IApplicationDataPathProvider
