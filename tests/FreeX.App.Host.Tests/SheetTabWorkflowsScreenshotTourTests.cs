@@ -25,6 +25,9 @@ public sealed class SheetTabWorkflowsScreenshotTourTests
         tourSource.Should().Contain("new DuplicateSheetCommand(moveCopySource.Id)");
         tourSource.Should().Contain("new CompositeWorkbookCommand(");
         tourSource.Should().Contain("new MoveSheetCommand(copyIndex, targetIndex)");
+        tourSource.Should().Contain("Single CompositeWorkbookCommand for Move or Copy create-copy");
+        tourSource.Should().NotContain("composite DuplicateSheetCommand and MoveSheetCommand route");
+        tourSource.Should().NotContain("CompositeWorkbookCommand for DuplicateSheetCommand plus MoveSheetCommand");
         tourSource.Should().Contain("new SetSheetTabColorCommand(insertedSheet.Id, new CellColor(255, 192, 0))");
         tourSource.Should().Contain("new SetSheetHiddenCommand(context.ArchiveSheet.Id, hidden: true)");
         tourSource.Should().Contain("new SetSheetHiddenCommand(context.ArchiveSheet.Id, hidden: false)");

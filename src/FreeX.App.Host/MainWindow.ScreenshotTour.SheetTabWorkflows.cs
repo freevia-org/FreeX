@@ -103,12 +103,12 @@ public partial class MainWindow
                 outputDir,
                 "move-or-copy-result",
                 "freex_sheet_tab_workflows_move_or_copy_result",
-                "Move or Copy result shows a copied Summary sheet moved to the end of the workbook order through the same composite DuplicateSheetCommand and MoveSheetCommand route used after dialog submission.",
+                "Move or Copy result shows a copied Summary sheet moved to the end of the workbook order through the same single CompositeWorkbookCommand route used after dialog submission.",
                 "CompositeWorkbookCommand(DuplicateSheetCommand(sourceSheet.Id), MoveSheetCommand(copyIndex, lastIndex)) -> RenameSheetCommand(copySheet.Id, \"Summary Copy\")"));
             workflows.Add(CreateCapturedSheetTabWorkflow(
                 "Move or Copy create-copy result",
                 ["UI-CAT-SHEETTAB-001B", "UI-CAT-SHEETTAB-002A-J"],
-                "CompositeWorkbookCommand for DuplicateSheetCommand plus MoveSheetCommand",
+                "Single CompositeWorkbookCommand for Move or Copy create-copy",
                 "move-or-copy-result"));
 
             ExecuteSheetTabWorkflowsCommand(
