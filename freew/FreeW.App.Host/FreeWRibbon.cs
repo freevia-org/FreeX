@@ -292,12 +292,6 @@ internal static class FreeWRibbon
                     g.Icon("freew.page-valign", "Vertical Align", RibbonCommandIconKind.AlignJustify);
                     g.Icon("freew.different-first-page", "Different First Page", RibbonCommandIconKind.CoverPage);
                 });
-                tab.Group("page-background", "Page Background", "B", 95, g =>
-                {
-                    // Two commands → labelled Medium buttons.
-                    g.Medium("freew.page-border", "Page Border", RibbonCommandIconKind.Border, accent: RibbonCommandIconAccent.Border);
-                    g.Medium("freew.watermark", "Watermark", RibbonCommandIconKind.Watermark);
-                });
                 // Single-command group → Large.
                 tab.Group("preview", "Preview", "V", 90, g =>
                 {
@@ -326,6 +320,7 @@ internal static class FreeWRibbon
                 // BackgroundColorHex, which already round-trips as w:background in docx.
                 tab.Group("page-background", "Page Background", "B", 90, g =>
                 {
+                    g.Medium("freew.watermark", "Watermark", RibbonCommandIconKind.Watermark);
                     g.Medium("freew.page-color", "Page Color", RibbonCommandIconKind.Fill, accent: RibbonCommandIconAccent.Fill, dropdown: true);
                     // Word's Design > Page Background > Page Borders: opens the full Borders and Shading dialog.
                     g.Medium("freew.page-border", "Page Borders", RibbonCommandIconKind.Border, accent: RibbonCommandIconAccent.Border);
@@ -353,22 +348,22 @@ internal static class FreeWRibbon
             })
             .Tab("mailings", "Mailings", "M", tab =>
             {
-                tab.Group("merge-data", "Start Mail Merge", "D", 100, g =>
+                tab.Group("merge-data", "Start Mail Merge", "D", 135, g =>
                 {
-                    g.Large("freew.merge-data", "Set Data", RibbonCommandIconKind.Recipients);
+                    g.Medium("freew.merge-data", "Select Recipients", RibbonCommandIconKind.Recipients);
                 });
-                // Each Mailings group is a single command → Large hero button, like Word.
-                tab.Group("merge-write", "Write & Insert Fields", "W", 90, g =>
+                // Each Mailings group is a single labelled command so Word's command names stay readable.
+                tab.Group("merge-write", "Write & Insert Fields", "W", 145, g =>
                 {
-                    g.Large("freew.merge-field", "Insert Merge Field", RibbonCommandIconKind.MergeField);
+                    g.Medium("freew.merge-field", "Insert Merge Field", RibbonCommandIconKind.MergeField);
                 });
-                tab.Group("merge-preview", "Preview Results", "P", 80, g =>
+                tab.Group("merge-preview", "Preview Results", "P", 120, g =>
                 {
-                    g.Large("freew.merge-preview", "Preview Results", RibbonCommandIconKind.PreviewResults);
+                    g.Medium("freew.merge-preview", "Preview Results", RibbonCommandIconKind.PreviewResults);
                 });
-                tab.Group("merge-finish", "Finish", "F", 70, g =>
+                tab.Group("merge-finish", "Finish", "F", 110, g =>
                 {
-                    g.Large("freew.merge-finish", "Finish & Merge", RibbonCommandIconKind.FinishMerge);
+                    g.Medium("freew.merge-finish", "Finish & Merge", RibbonCommandIconKind.FinishMerge);
                 });
             })
             .Tab("review", "Review", "R", tab =>

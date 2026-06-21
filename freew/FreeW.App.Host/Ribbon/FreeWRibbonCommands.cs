@@ -601,9 +601,9 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.page-valign", new PageVerticalAlignmentCommand(editor));
         registry.Register("freew.different-first-page", new DifferentFirstPageCommand(editor));
 
-        // Layout tab — Page Background: "Page Border" opens the full Borders and Shading dialog (Word's
-        // Page Borders button), and Watermark sets/clears the page watermark. Both ultimately mutate
-        // PageSettings via ApplyPageSettings (commit + re-render) and round-trip through docx save.
+        // Design tab — Page Background: "Page Borders" opens the full Borders and Shading dialog,
+        // and Watermark sets/clears the page watermark. Both ultimately mutate PageSettings via
+        // ApplyPageSettings (commit + re-render) and round-trip through docx save.
         registry.Register("freew.page-border", new BordersAndShadingCommand(editor));
         registry.Register("freew.watermark", new WatermarkCommand(editor));
 
@@ -669,8 +669,8 @@ internal static class FreeWRibbonCommands
 
         // Mailings tab — a simple mail merge. Field placeholders are the literal text «FieldName»
         // (ordinary run text, so they round-trip through docx as plain text). The four commands share a
-        // MailMergeSession: "Set Data" captures the CSV/typed records; "Insert Merge Field" drops a
-        // «Name» placeholder at the caret; "Preview Record" loads MergeRecord(template, row) into the
+        // MailMergeSession: "Select Recipients" captures the CSV/typed records; "Insert Merge Field" drops a
+        // «Name» placeholder at the caret; "Preview Results" loads MergeRecord(template, row) into the
         // editor with next/prev (restoring the template when exited); "Finish & Merge" concatenates every
         // merged record into one document.
         var mergeSession = new MailMergeSession();
@@ -2977,7 +2977,7 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // Mailings > Set Data: open a dialog to paste/type CSV (first line = headers). The parsed MergeData
+    // Mailings > Select Recipients: open a dialog to paste/type CSV (first line = headers). The parsed MergeData
     // is stored on the session. If the document already has merge fields, they are shown as a hint so the
     // user knows which columns to provide.
     private sealed class SetMergeDataCommand(DocumentView editor, MailMergeSession session) : IRibbonCommand
@@ -3022,10 +3022,10 @@ internal static class FreeWRibbonCommands
                 : value;
     }
 
-    // Mailings > Preview Record: load MergeRecord(template, currentRow) into the editor so the user sees
+    // Mailings > Preview Results: load MergeRecord(template, currentRow) into the editor so the user sees
     // a real record. The original (template) document is stashed on first preview so stepping to the next
     // record re-renders from the template, and leaving the preview restores it. With no data, prompts the
-    // user to Set Data first.
+    // user to Select Recipients first.
     private sealed class PreviewMergeRecordCommand(DocumentView editor, MailMergeSession session) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
@@ -3033,7 +3033,7 @@ internal static class FreeWRibbonCommands
             if (session.Data is not { Count: > 0 } data)
             {
                 MessageBox.Show(Window.GetWindow(editor),
-                    "Set the merge data first (Mailings ▸ Set Data), then preview a record.",
+                    "Select recipients first (Mailings > Select Recipients), then preview a record.",
                     "Mail Merge", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
@@ -3084,7 +3084,7 @@ internal static class FreeWRibbonCommands
             if (session.Data is not { Count: > 0 } data)
             {
                 MessageBox.Show(Window.GetWindow(editor),
-                    "Set the merge data first (Mailings ▸ Set Data), then Finish & Merge.",
+                    "Select recipients first (Mailings > Select Recipients), then Finish & Merge.",
                     "Mail Merge", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }

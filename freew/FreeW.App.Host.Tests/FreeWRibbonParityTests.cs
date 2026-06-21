@@ -130,6 +130,76 @@ public sealed class FreeWRibbonParityTests
     }
 
     [StaFact]
+    public void DesignPageBackground_ExposesWordStyleWatermarkPageColorAndPageBorders()
+    {
+        var definition = FreeWRibbon.Build();
+        var pageBackground = definition.FindTab("design")!.FindGroup("page-background");
+        var editor = new DocumentView();
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        pageBackground.Should().NotBeNull();
+        CommandIds(pageBackground!)
+            .Should()
+            .Equal("freew.watermark", "freew.page-color", "freew.page-border");
+        Labels(pageBackground!)
+            .Should()
+            .Equal("Watermark", "Page Color", "Page Borders");
+
+        foreach (var commandId in CommandIds(pageBackground!))
+            registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must execute from Design > Page Background");
+    }
+
+    [Fact]
+    public void LayoutTab_DoesNotExposeDesignPageBackgroundCommands()
+    {
+        var layout = FreeWRibbon.Build().FindTab("layout");
+
+        layout.Should().NotBeNull();
+        layout!.Groups.Select(group => group.Id)
+            .Should()
+            .NotContain("page-background", "Word exposes Watermark, Page Color, and Page Borders from Design");
+
+        CommandIds(layout).Should().NotContain(new[]
+        {
+            "freew.watermark",
+            "freew.page-color",
+            "freew.page-border"
+        });
+    }
+
+    [StaFact]
+    public void MailingsTab_UsesWordStyleMergeCommandLabels()
+    {
+        var definition = FreeWRibbon.Build();
+        var mailings = definition.FindTab("mailings");
+        var editor = new DocumentView();
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        mailings.Should().NotBeNull();
+        mailings!.Groups.Select(group => group.Id)
+            .Should()
+            .Equal("merge-data", "merge-write", "merge-preview", "merge-finish");
+
+        CommandIds(mailings)
+            .Should()
+            .Equal(
+                "freew.merge-data",
+                "freew.merge-field",
+                "freew.merge-preview",
+                "freew.merge-finish");
+        Labels(mailings)
+            .Should()
+            .Equal(
+                "Select Recipients",
+                "Insert Merge Field",
+                "Preview Results",
+                "Finish & Merge");
+
+        foreach (var commandId in CommandIds(mailings))
+            registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must execute from the Mailings tab");
+    }
+
+    [StaFact]
     public void DeveloperControls_ExposesAndRegistersImplementedContentControlCommands()
     {
         var definition = FreeWRibbon.Build();
@@ -299,6 +369,24 @@ public sealed class FreeWRibbonParityTests
         {
             if (!string.IsNullOrWhiteSpace(control.CommandId.Value))
                 yield return control.CommandId.Value;
+        }
+    }
+
+    private static IEnumerable<string> Labels(RibbonTab tab)
+    {
+        foreach (var control in tab.Groups.SelectMany(group => group.Controls))
+        {
+            if (!string.IsNullOrWhiteSpace(control.Label))
+                yield return control.Label;
+        }
+    }
+
+    private static IEnumerable<string> Labels(RibbonGroup group)
+    {
+        foreach (var control in group.Controls)
+        {
+            if (!string.IsNullOrWhiteSpace(control.Label))
+                yield return control.Label;
         }
     }
 }
