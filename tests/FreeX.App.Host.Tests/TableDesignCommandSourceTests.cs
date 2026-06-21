@@ -19,26 +19,24 @@ public sealed class TableDesignCommandSourceTests
     }
 
     [Fact]
-    public void TableDesignTotalRow_UsesPhysicalTotalsRowCommandAndReappliesKnownGalleryStyle()
+    public void TableDesignTotalRow_DelegatesStyleOptionCommandCompositionToSharedPlanner()
     {
         var source = ReadHostSourceFile("MainWindow.TableDesignCommands.cs");
 
-        source.Should().Contain("new SetStructuredTableTotalsRowCommand(");
-        source.Should().Contain("var totalsRowChanged = false;");
-        source.Should().Contain("if (totalsRowShown is { } showTotals && showTotals != table.TotalsRowShown)");
-        source.Should().Contain("if (styleOptionChanged || totalsRowChanged)");
-        source.Should().Contain("new CompositeWorkbookCommand(\"Table Style Options\", commands)");
-        source.Should().NotContain("totalsRowShown: totalsRowShown");
+        source.Should().Contain("TableDesignCommandPlanner.BuildStyleOptionsCommand(");
+        source.Should().NotContain("new SetStructuredTableTotalsRowCommand(");
+        source.Should().NotContain("new ReapplyStructuredTableStyleCommand(");
+        source.Should().NotContain("new CompositeWorkbookCommand(\"Table Style Options\"");
     }
 
     [Fact]
-    public void TableDesignOptions_ReapplyNonGalleryStylesInsteadOfMetadataOnlyConfigure()
+    public void TableDesignOptions_StayThinAndDoNotBuildModelCommandsInWpf()
     {
         var source = ReadHostSourceFile("MainWindow.TableDesignCommands.cs");
 
-        source.Should().Contain("else if (styleOptionChanged)");
-        source.Should().Contain("new ReapplyStructuredTableStyleCommand(");
-        source.Should().Contain("else if (totalsRowChanged)");
+        source.Should().Contain("TableDesignCommandPlanner.BuildStyleOptionsCommand(");
+        source.Should().NotContain("new ApplyStructuredTableStyleCommand(");
+        source.Should().NotContain("new ReapplyStructuredTableStyleCommand(");
     }
 
     [Fact]
@@ -47,12 +45,16 @@ public sealed class TableDesignCommandSourceTests
         var source = ReadHostSourceFile("MainWindow.TableDesignCommands.cs");
 
         source.Should().Contain("new TextEntryDialog(");
-        source.Should().Contain("new RenameStructuredTableCommand(_currentSheetId, table.Id, dialog.Result.Text)");
-        source.Should().Contain("new ResizeStructuredTableCommand(_currentSheetId, table.Id, newRange)");
+        source.Should().Contain("TableNamePlanner.Capture(table)");
+        source.Should().Contain("TableNamePlanner.TryCreateRename(");
+        source.Should().Contain("TableDesignCommandPlanner.BuildRenameCommand(");
+        source.Should().Contain("TableResizePlanner.Capture(table)");
+        source.Should().Contain("TableResizePlanner.TryCreateResize(");
+        source.Should().Contain("TableDesignCommandPlanner.BuildResizeCommand(");
         source.Should().Contain("new AddPivotTableToNewWorksheetCommand(");
         source.Should().Contain("ActivateNewWorksheetAtA1(createdSheetId)");
         source.Should().Contain("new AddPivotTableCommand(");
-        source.Should().Contain("new ConvertStructuredTableToRangeCommand(_currentSheetId, table.Id)");
+        source.Should().Contain("TableDesignCommandPlanner.BuildConvertToRangeCommand(");
         source.Should().Contain("_messageService.AskYesNo(");
     }
 

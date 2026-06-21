@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using FreeX.App.Presentation.TableUI;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -46,21 +47,7 @@ public partial class MainWindow
             SheetGrid.SelectedRange?.Start is not { } activeCell)
             return false;
 
-        var smallestArea = uint.MaxValue;
-        foreach (var candidate in sheet.StructuredTables)
-        {
-            if (!candidate.Range.Contains(activeCell))
-                continue;
-
-            var area = candidate.Range.RowCount * candidate.Range.ColCount;
-            if (area >= smallestArea)
-                continue;
-
-            table = candidate;
-            smallestArea = area;
-        }
-
-        return table is not null;
+        return TableDesignCommandPlanner.TryGetActiveStructuredTable(sheet, activeCell, out table);
     }
 
     private void TableDesignTableNameBtn_Click(object sender, RoutedEventArgs e)
@@ -68,17 +55,30 @@ public partial class MainWindow
         if (!TryGetActiveStructuredTable(out _, out var table))
             return;
 
-        var initialName = string.IsNullOrWhiteSpace(table.DisplayName) ? table.Name : table.DisplayName;
         var dialog = new TextEntryDialog(
             UiText.Get("MainWindow_TooltipTitle_TableName"),
             UiText.Get("TableDesign_TableNameLabel"),
-            initialName)
+            TableNamePlanner.Capture(table))
         { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
 
+        if (!TableNamePlanner.TryCreateRename(
+                _workbook,
+                _currentSheetId,
+                table.Id,
+                dialog.Result.Text,
+                out var values,
+                out var error))
+        {
+            _messageService.ShowWarning(
+                error ?? UiText.Get("MainWindow_TooltipTitle_TableName"),
+                UiText.Get("MainWindow_TooltipTitle_TableName"));
+            return;
+        }
+
         if (!TryExecuteCommand(
-                new RenameStructuredTableCommand(_currentSheetId, table.Id, dialog.Result.Text),
+                TableDesignCommandPlanner.BuildRenameCommand(_currentSheetId, table, values!),
                 "Table Name"))
             return;
 
@@ -94,40 +94,34 @@ public partial class MainWindow
         var dialog = new TextEntryDialog(
             UiText.Get("MainWindow_TooltipTitle_ResizeTable"),
             UiText.Get("TableDesign_TableRangeLabel"),
-            FormatWorkbookRange(table.Range))
+            TableResizePlanner.Capture(table))
         { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
 
-        if (!TryParseWorkbookRange(_currentSheetId, dialog.Result.Text, out var newRange))
+        if (!TableResizePlanner.TryCreateResize(
+                table,
+                dialog.Result.Text,
+                ResolveResizeReference,
+                out var change,
+                out var error))
         {
             _messageService.ShowWarning(
-                UiText.Get("TableDesign_InvalidResizeRange"),
+                error ?? UiText.Get("TableDesign_InvalidResizeRange"),
                 UiText.Get("MainWindow_TooltipTitle_ResizeTable"));
             return;
         }
 
-        var commands = new List<IWorkbookCommand>
-        {
-            new ResizeStructuredTableCommand(_currentSheetId, table.Id, newRange)
-        };
-        if (TableStyleGalleryPlanner.TryGetOption(table.StyleName, _workbook.Theme, out var option))
-        {
-            commands.Add(new ApplyStructuredTableStyleCommand(
-                _currentSheetId,
-                table.Id,
-                option.Banding));
-        }
-
-        var command = commands.Count == 1
-            ? commands[0]
-            : new CompositeWorkbookCommand("Resize Table", commands);
-
-        if (!TryExecuteCommand(command, "Resize Table"))
+        if (!TryExecuteCommand(
+                TableDesignCommandPlanner.BuildResizeCommand(_currentSheetId, table, change!.NewRange, _workbook.Theme),
+                "Resize Table"))
             return;
 
         RefreshTableContextualTab();
         UpdateViewport();
+
+        bool ResolveResizeReference(string reference, out GridRange range) =>
+            TryParseWorkbookRange(_currentSheetId, reference, out range);
     }
 
     private void TableDesignSummarizeWithPivotTableBtn_Click(object sender, RoutedEventArgs e)
@@ -230,7 +224,7 @@ public partial class MainWindow
             return;
 
         if (!TryExecuteCommand(
-                new ConvertStructuredTableToRangeCommand(_currentSheetId, table.Id),
+                TableDesignCommandPlanner.BuildConvertToRangeCommand(_currentSheetId, table),
                 "Convert to Range"))
             return;
 
@@ -357,58 +351,18 @@ public partial class MainWindow
         bool? hasAutoFilter = null,
         bool? totalsRowShown = null)
     {
-        var commands = new List<IWorkbookCommand>();
-        var totalsRowChanged = false;
-        if (totalsRowShown is { } showTotals && showTotals != table.TotalsRowShown)
-        {
-            totalsRowChanged = true;
-            commands.Add(new SetStructuredTableTotalsRowCommand(_currentSheetId, table.Id, showTotals));
-        }
-
-        var styleOptionChanged =
-            showFirstColumn.HasValue ||
-            showLastColumn.HasValue ||
-            showRowStripes.HasValue ||
-            showColumnStripes.HasValue ||
-            hasAutoFilter.HasValue;
-
-        if (TableStyleGalleryPlanner.TryGetOption(table.StyleName, _workbook.Theme, out var option))
-        {
-            if (styleOptionChanged || totalsRowChanged)
-            {
-                commands.Add(new ApplyStructuredTableStyleCommand(
-                    _currentSheetId,
-                    table.Id,
-                    option.Banding,
-                    showFirstColumn: showFirstColumn,
-                    showLastColumn: showLastColumn,
-                    showRowStripes: showRowStripes,
-                    showColumnStripes: showColumnStripes,
-                    hasAutoFilter: hasAutoFilter));
-            }
-        }
-        else if (styleOptionChanged)
-        {
-            commands.Add(new ReapplyStructuredTableStyleCommand(
-                _currentSheetId,
-                table.Id,
-                showFirstColumn: showFirstColumn,
-                showLastColumn: showLastColumn,
-                showRowStripes: showRowStripes,
-                showColumnStripes: showColumnStripes,
-                hasAutoFilter: hasAutoFilter));
-        }
-        else if (totalsRowChanged)
-        {
-            commands.Add(new ReapplyStructuredTableStyleCommand(_currentSheetId, table.Id));
-        }
-
-        if (commands.Count == 0)
+        var command = TableDesignCommandPlanner.BuildStyleOptionsCommand(
+            _currentSheetId,
+            table,
+            _workbook.Theme,
+            showFirstColumn,
+            showLastColumn,
+            showRowStripes,
+            showColumnStripes,
+            hasAutoFilter,
+            totalsRowShown);
+        if (command is null)
             return;
-
-        var command = commands.Count == 1
-            ? commands[0]
-            : new CompositeWorkbookCommand("Table Style Options", commands);
 
         if (!TryExecuteCommand(command, "Table Style Options"))
             return;
@@ -421,14 +375,9 @@ public partial class MainWindow
         if (!TryGetActiveStructuredTable(out _, out var table))
             return;
 
-        var option = TableStyleGalleryPlanner.GetOption(variant, _workbook.Theme);
+        var option = FreeX.App.Presentation.TableUI.TableStyleGalleryPlanner.GetOption(variant, _workbook.Theme);
         if (!TryExecuteCommand(
-                new ApplyStructuredTableStyleCommand(
-                    _currentSheetId,
-                    table.Id,
-                    option.Banding,
-                    option.StyleName,
-                    updateStyleName: true),
+                TableDesignCommandPlanner.BuildApplyStyleCommand(_currentSheetId, table, option),
                 "Table Style"))
             return;
 

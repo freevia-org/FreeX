@@ -12,22 +12,14 @@ using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
 namespace FreeX.App.Avalonia;
 
 /// <summary>
-/// Windows-parity "Resize Table" dialog for the Avalonia/macOS shell: a single reference box pre-filled with the
-/// active table's current range, validated and resolved into the new data <see cref="GridRange"/>. The current-
-/// range capture and the validation (same sheet, top-left header cell fixed, a header row plus at least one data
-/// row, at least one column) come from the portable <see cref="TableResizePlanner"/> so the behavior is single-
-/// sourced with the WPF host and reusable on macOS; reference resolution reuses the shared
-/// <see cref="WorkbookSession.TryResolveReferenceRange"/> seam (the same parser Go To / data-source editing use).
-/// The result round-trips through <see cref="ResizeStructuredTableCommand"/>, followed by a style reapply (via
-/// <see cref="ApplyStructuredTableStyleCommand"/> when the table carries a built-in style) so any newly enclosed
-/// cells pick up the table's banding — mirroring the WPF host. Reached from the Table Design ▸ Resize Table
-/// ribbon command (<c>tableDesign.resize</c>).
+/// Windows-parity "Resize Table" dialog for the Avalonia/macOS shell: the dialog stays renderer-local while
+/// range capture, validation, and resize command composition come from portable TableUI planners.
 /// </summary>
 public sealed partial class MainWindow
 {
     /// <summary>
-    /// Table Design ▸ Resize Table — opens the resize dialog for the active table and applies the resolved range
-    /// through the Core resize command. Reports an honest status when no table is active.
+    /// Opens the resize dialog for the active table and applies the resolved range through the shared command
+    /// planner. Reports an honest status when no table is active.
     /// </summary>
     private void OpenTableResize()
     {
@@ -111,7 +103,11 @@ public sealed partial class MainWindow
             return;
         }
 
-        var command = BuildResizeCommand(sheetId, table, change!.NewRange);
+        var command = TableDesignCommandPlanner.BuildResizeCommand(
+            sheetId,
+            table,
+            change!.NewRange,
+            _session.Workbook.Theme);
         var result = _session.ExecuteReviewCommand(command);
 
         if (result.Success)
@@ -123,24 +119,5 @@ public sealed partial class MainWindow
         {
             ShowEditIssue(result.ErrorMessage ?? UiText.Get("TableResize_Failed"));
         }
-    }
-
-    /// <summary>
-    /// Builds the resize command: the bare <see cref="ResizeStructuredTableCommand"/>, paired (in a composite)
-    /// with an <see cref="ApplyStructuredTableStyleCommand"/> that repaints the resized table's banding when the
-    /// table carries a built-in style, so any newly enclosed cells inherit the table's style — matching the WPF
-    /// host. A table with no (or a non-built-in) style only runs the resize.
-    /// </summary>
-    private IWorkbookCommand BuildResizeCommand(SheetId sheetId, StructuredTableModel table, GridRange newRange)
-    {
-        var resize = new ResizeStructuredTableCommand(sheetId, table.Id, newRange);
-        if (!TableStyleGalleryPlanner.TryGetOption(table.StyleName, _session.Workbook.Theme, out var option))
-            return resize;
-
-        return new CompositeWorkbookCommand("Resize Table", new IWorkbookCommand[]
-        {
-            resize,
-            new ApplyStructuredTableStyleCommand(sheetId, table.Id, option.Banding),
-        });
     }
 }

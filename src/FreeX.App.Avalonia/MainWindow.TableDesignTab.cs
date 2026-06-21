@@ -1,3 +1,4 @@
+using FreeX.App.Presentation.TableUI;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -33,21 +34,7 @@ public sealed partial class MainWindow
         var sheet = _session.ActiveSheet;
         var activeCell = _session.ActiveCell;
 
-        var smallestArea = ulong.MaxValue;
-        foreach (var candidate in sheet.StructuredTables)
-        {
-            if (!candidate.Range.Contains(activeCell))
-                continue;
-
-            var area = (ulong)candidate.Range.RowCount * candidate.Range.ColCount;
-            if (area >= smallestArea)
-                continue;
-
-            table = candidate;
-            smallestArea = area;
-        }
-
-        return table is not null;
+        return TableDesignCommandPlanner.TryGetActiveStructuredTable(sheet, activeCell, out table);
     }
 
     /// <summary>Whether the active cell currently sits inside a structured table (drives "table.active").</summary>
@@ -74,7 +61,7 @@ public sealed partial class MainWindow
         }
 
         var result = _session.ExecuteReviewCommand(
-            new ConvertStructuredTableToRangeCommand(_session.ActiveSheet.Id, table.Id));
+            TableDesignCommandPlanner.BuildConvertToRangeCommand(_session.ActiveSheet.Id, table));
 
         if (result.Success)
         {
@@ -124,11 +111,13 @@ public sealed partial class MainWindow
 
         var show = nextValue(table);
         var sheetId = _session.ActiveSheet.Id;
-        var command = new CompositeWorkbookCommand("Table Total Row", new IWorkbookCommand[]
-        {
-            new SetStructuredTableTotalsRowCommand(sheetId, table.Id, show),
-            new ReapplyStructuredTableStyleCommand(sheetId, table.Id),
-        });
+        var command = TableDesignCommandPlanner.BuildStyleOptionsCommand(
+            sheetId,
+            table,
+            _session.Workbook.Theme,
+            totalsRowShown: show);
+        if (command is null)
+            return;
 
         var result = _session.ExecuteReviewCommand(command);
         if (result.Success)
@@ -167,14 +156,17 @@ public sealed partial class MainWindow
 
         var value = nextValue(table);
         var sheetId = _session.ActiveSheet.Id;
-        var command = new ReapplyStructuredTableStyleCommand(
+        var command = TableDesignCommandPlanner.BuildStyleOptionsCommand(
             sheetId,
-            table.Id,
+            table,
+            _session.Workbook.Theme,
             showFirstColumn: showFirstColumn ? value : null,
             showLastColumn: showLastColumn ? value : null,
             showRowStripes: showRowStripes ? value : null,
             showColumnStripes: showColumnStripes ? value : null,
             hasAutoFilter: hasAutoFilter ? value : null);
+        if (command is null)
+            return;
 
         var result = _session.ExecuteReviewCommand(command);
         if (result.Success)
@@ -187,5 +179,5 @@ public sealed partial class MainWindow
     }
 
     private static string TableDisplayName(StructuredTableModel table)
-        => string.IsNullOrWhiteSpace(table.DisplayName) ? table.Name : table.DisplayName;
+        => TableDesignCommandPlanner.GetDisplayName(table);
 }

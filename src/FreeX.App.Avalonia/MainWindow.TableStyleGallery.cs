@@ -106,12 +106,7 @@ public sealed partial class MainWindow
         var option = TableStyleGalleryPlanner.GetOption(selectedIndex, _session.Workbook.Theme);
 
         var result = _session.ExecuteReviewCommand(
-            new ApplyStructuredTableStyleCommand(
-                sheetId,
-                table.Id,
-                option.Banding,
-                option.StyleName,
-                updateStyleName: true));
+            TableDesignCommandPlanner.BuildApplyStyleCommand(sheetId, table, option));
 
         if (result.Success)
             RefreshShell(UiText.Format("TableStyleGallery_Applied", option.Label));
