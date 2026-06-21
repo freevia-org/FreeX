@@ -227,6 +227,23 @@ public sealed class AvaloniaRibbonRendererTests
     });
 
     [Fact]
+    public Task BuildRibbon_DisabledButtonsKeepFlatTransparentChrome() => RunOnUiThread(() =>
+    {
+        var definition = AvaloniaRibbonComposition.BuildDefinition();
+        var registry = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { });
+        var ribbon = AvaloniaRibbonRenderer.BuildRibbon(definition, registry);
+
+        var tabControl = Assert.IsType<TabControl>(ribbon);
+        Assert.Contains(tabControl.Styles, style => style is Style concrete
+            && HasSetter(concrete, Visual.OpacityProperty, 0.45d)
+            && HasSetter(concrete, TemplatedControl.BackgroundProperty, Brushes.Transparent)
+            && HasSetter(concrete, TemplatedControl.BorderBrushProperty, Brushes.Transparent));
+        Assert.Contains(tabControl.Styles, style => style is Style concrete
+            && HasSetter(concrete, Border.BackgroundProperty, Brushes.Transparent)
+            && HasSetter(concrete, Border.BorderBrushProperty, Brushes.Transparent));
+    });
+
+    [Fact]
     public Task DropdownChevron_UsesWindowsChevronGlyph() => RunOnUiThread(() =>
     {
         var content = AvaloniaRibbonRenderer.BuildTabContent(BuildHomeTab(), new RibbonCommandRegistry());
@@ -423,19 +440,34 @@ public sealed class AvaloniaRibbonRendererTests
     });
 
     [Fact]
-    public Task StaticDrawTab_ObjectCommandsStayDisabledWithRegisteredHandlers() => RunOnUiThread(() =>
+    public Task StaticDrawTab_OnlyWindowsUnavailableFormatCommandsRenderDisabled() => RunOnUiThread(() =>
     {
         var definition = AvaloniaRibbonComposition.BuildDefinition();
-        var registry = new RibbonCommandRegistry();
-        registry.Register("Crop Picture", new NoOpCommand());
-        registry.Register("Shape Gradient", new NoOpCommand());
+        var registry = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { });
 
         var content = AvaloniaRibbonRenderer.BuildTabContent(definition.FindTab("DrawTab")!, registry);
 
+        var bringForward = content.GetLogicalDescendants().OfType<Button>().Single(button => Equals(button.Tag, "Bring Forward"));
+        var sendBackward = content.GetLogicalDescendants().OfType<Button>().Single(button => Equals(button.Tag, "Send Backward"));
+        var selectionPane = content.GetLogicalDescendants().OfType<Button>().Single(button => Equals(button.Tag, "Selection Pane#SelectionPaneBtn_Click"));
+        var rotate = content.GetLogicalDescendants().OfType<Button>().Single(button => Equals(button.Tag, "Rotate Object"));
+        var objectSize = content.GetLogicalDescendants().OfType<Button>().Single(button => Equals(button.Tag, "Object Size"));
+        var fill = content.GetLogicalDescendants().OfType<Button>().Single(button => Equals(button.Tag, "Shape Fill"));
+        var outline = content.GetLogicalDescendants().OfType<Button>().Single(button => Equals(button.Tag, "Object Outline"));
         var crop = content.GetLogicalDescendants().OfType<Button>().Single(button => Equals(button.Tag, "Crop Picture"));
         var gradient = content.GetLogicalDescendants().OfType<Button>().Single(button => Equals(button.Tag, "Shape Gradient"));
+        var effects = content.GetLogicalDescendants().OfType<Button>().Single(button => Equals(button.Tag, "Shape Effects"));
+
+        Assert.True(bringForward.IsEnabled);
+        Assert.True(sendBackward.IsEnabled);
+        Assert.True(selectionPane.IsEnabled);
+        Assert.True(rotate.IsEnabled);
+        Assert.True(objectSize.IsEnabled);
+        Assert.True(fill.IsEnabled);
+        Assert.True(outline.IsEnabled);
         Assert.False(crop.IsEnabled);
         Assert.False(gradient.IsEnabled);
+        Assert.False(effects.IsEnabled);
     });
 
     [Fact]

@@ -37,15 +37,8 @@ public static class AvaloniaRibbonRenderer
     private const double MediumIconSize = 22;
     private const double SmallIconSize = 22;
     private const int MaxRowsPerColumn = 3;
-    private static readonly IReadOnlySet<string> StaticDrawContextCommandIds = new HashSet<string>(StringComparer.Ordinal)
+    private static readonly IReadOnlySet<string> StaticDrawUnavailableCommandIds = new HashSet<string>(StringComparer.Ordinal)
     {
-        "Bring Forward",
-        "Send Backward",
-        "Selection Pane#SelectionPaneBtn_Click",
-        "Rotate Object",
-        "Object Size",
-        "Shape Fill",
-        "Object Outline",
         "Crop Picture",
         "Shape Gradient",
         "Shape Effects",
@@ -90,6 +83,25 @@ public static class AvaloniaRibbonRenderer
     private static readonly IBrush TabTextBrush = new SolidColorBrush(TabTextColor);
     private static readonly FontFamily RibbonFontFamily =
         new("Arial Narrow, Aptos Narrow, Liberation Sans Narrow, Nimbus Sans Narrow, DejaVu Sans Condensed, Arial, Liberation Sans, Noto Sans, DejaVu Sans, Helvetica, sans-serif");
+    private static readonly FuncControlTemplate<Button> RibbonButtonTemplate = new((button, _) =>
+    {
+        var presenter = new ContentPresenter();
+        presenter.Bind(ContentPresenter.ContentProperty, new Binding(nameof(ContentControl.Content)) { Source = button });
+        presenter.Bind(ContentPresenter.ContentTemplateProperty, new Binding(nameof(ContentControl.ContentTemplate)) { Source = button });
+        presenter.Bind(Layoutable.HorizontalAlignmentProperty, new Binding(nameof(ContentControl.HorizontalContentAlignment)) { Source = button });
+        presenter.Bind(Layoutable.VerticalAlignmentProperty, new Binding(nameof(ContentControl.VerticalContentAlignment)) { Source = button });
+
+        var border = new Border
+        {
+            CornerRadius = new CornerRadius(1),
+            Child = presenter,
+        };
+        border.Bind(Border.BackgroundProperty, new Binding(nameof(TemplatedControl.Background)) { Source = button });
+        border.Bind(Border.BorderBrushProperty, new Binding(nameof(TemplatedControl.BorderBrush)) { Source = button });
+        border.Bind(Border.BorderThicknessProperty, new Binding(nameof(TemplatedControl.BorderThickness)) { Source = button });
+        border.Bind(Border.PaddingProperty, new Binding(nameof(TemplatedControl.Padding)) { Source = button });
+        return border;
+    });
     private static readonly FuncControlTemplate<ToggleButton> RibbonToggleButtonTemplate = new((button, _) =>
     {
         var presenter = new ContentPresenter();
@@ -224,7 +236,7 @@ public static class AvaloniaRibbonRenderer
 
         // WPF: Border { Background=FreeXRibbonSurfaceBrush (white); Padding 0,4,0,0 } — no accent rule.
         if (string.Equals(tab.Id, "DrawTab", StringComparison.Ordinal))
-            DisableStaticDrawContextCommands(panel);
+            DisableStaticDrawUnavailableCommands(panel);
 
         return new Border
         {
@@ -234,11 +246,11 @@ public static class AvaloniaRibbonRenderer
         };
     }
 
-    private static void DisableStaticDrawContextCommands(Control root)
+    private static void DisableStaticDrawUnavailableCommands(Control root)
     {
         ForEachRibbonDescendant(root, control =>
         {
-            if (control.Tag is string id && StaticDrawContextCommandIds.Contains(id))
+            if (control.Tag is string id && StaticDrawUnavailableCommandIds.Contains(id))
                 control.IsEnabled = false;
         });
     }
@@ -588,6 +600,7 @@ public static class AvaloniaRibbonRenderer
                 new Setter(TemplatedControl.BorderBrushProperty, Brushes.Transparent),
                 new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(1)),
                 new Setter(TemplatedControl.FontFamilyProperty, RibbonFontFamily),
+                new Setter(TemplatedControl.TemplateProperty, RibbonButtonTemplate),
             },
         };
         var buttonHover = new Style(x => x.OfType<Button>().Class(":pointerover"))
@@ -676,11 +689,37 @@ public static class AvaloniaRibbonRenderer
 
         var disabledButtons = new Style(x => x.OfType<Button>().Class(":disabled"))
         {
-            Setters = { new Setter(Visual.OpacityProperty, 0.45d) },
+            Setters =
+            {
+                new Setter(Visual.OpacityProperty, 0.45d),
+                new Setter(TemplatedControl.BackgroundProperty, Brushes.Transparent),
+                new Setter(TemplatedControl.BorderBrushProperty, Brushes.Transparent),
+            },
         };
         var disabledToggles = new Style(x => x.OfType<ToggleButton>().Class(":disabled"))
         {
-            Setters = { new Setter(Visual.OpacityProperty, 0.45d) },
+            Setters =
+            {
+                new Setter(Visual.OpacityProperty, 0.45d),
+                new Setter(TemplatedControl.BackgroundProperty, Brushes.Transparent),
+                new Setter(TemplatedControl.BorderBrushProperty, Brushes.Transparent),
+            },
+        };
+        var disabledButtonTemplateBorder = new Style(x => x.OfType<Button>().Class(":disabled").Template().OfType<Border>())
+        {
+            Setters =
+            {
+                new Setter(Border.BackgroundProperty, Brushes.Transparent),
+                new Setter(Border.BorderBrushProperty, Brushes.Transparent),
+            },
+        };
+        var disabledToggleTemplateBorder = new Style(x => x.OfType<ToggleButton>().Class(":disabled").Template().OfType<Border>())
+        {
+            Setters =
+            {
+                new Setter(Border.BackgroundProperty, Brushes.Transparent),
+                new Setter(Border.BorderBrushProperty, Brushes.Transparent),
+            },
         };
         var disabledChecks = new Style(x => x.OfType<CheckBox>().Class(":disabled"))
         {
@@ -708,6 +747,8 @@ public static class AvaloniaRibbonRenderer
         tabControl.Styles.Add(checkBase);
         tabControl.Styles.Add(disabledButtons);
         tabControl.Styles.Add(disabledToggles);
+        tabControl.Styles.Add(disabledButtonTemplateBorder);
+        tabControl.Styles.Add(disabledToggleTemplateBorder);
         tabControl.Styles.Add(disabledChecks);
         tabControl.Styles.Add(disabledCombos);
     }
