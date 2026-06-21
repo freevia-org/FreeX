@@ -15,21 +15,21 @@ public sealed class StatusBarCustomizeContextMenuPlannerTests
             .Equal(
                 "title",
                 "—",
-                "CellMode",
-                "EndMode",
-                "SelectionMode",
-                "PageNumber",
+                StatusBarOptionTags.CellMode,
+                StatusBarOptionTags.EndMode,
+                StatusBarOptionTags.SelectionMode,
+                StatusBarOptionTags.PageNumber,
                 "—",
-                "Average",
-                "Count",
-                "NumericalCount",
-                "Minimum",
-                "Maximum",
-                "Sum",
+                StatusBarOptionTags.Average,
+                StatusBarOptionTags.Count,
+                StatusBarOptionTags.NumericalCount,
+                StatusBarOptionTags.Minimum,
+                StatusBarOptionTags.Maximum,
+                StatusBarOptionTags.Sum,
                 "—",
-                "ViewShortcuts",
-                "Zoom",
-                "ZoomSlider");
+                StatusBarOptionTags.ViewShortcuts,
+                StatusBarOptionTags.Zoom,
+                StatusBarOptionTags.ZoomSlider);
     }
 
     [Fact]

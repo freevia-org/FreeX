@@ -1,4 +1,3 @@
-using System.Linq;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -78,17 +77,16 @@ public partial class MainWindow
         if (_lastStatusBarDisplayState == state && IsStatusBarDisplayStateApplied(state))
             return;
 
-        SetVisibilityIfChanged(StatusReadyText, _options.StatusBarShowCellMode ? ToVisibility(state.IsReadyVisible) : Visibility.Collapsed);
-        SetVisibilityIfChanged(StatusPageNumberText, _options.StatusBarShowPageNumber && !string.IsNullOrEmpty(StatusPageNumberText.Text)
-            ? Visibility.Visible
-            : Visibility.Collapsed);
-        SetVisibilityIfChanged(StatusStatsPanel, HasVisibleStatusBarStatistic() ? ToVisibility(state.AreStatsVisible) : Visibility.Collapsed);
-        SetVisibilityIfChanged(StatusAvgText, _options.StatusBarShowAverage ? Visibility.Visible : Visibility.Collapsed);
-        SetVisibilityIfChanged(StatusCountText, _options.StatusBarShowCount ? Visibility.Visible : Visibility.Collapsed);
-        SetVisibilityIfChanged(StatusNumericalCountText, _options.StatusBarShowNumericalCount ? Visibility.Visible : Visibility.Collapsed);
-        SetVisibilityIfChanged(StatusSumText, _options.StatusBarShowSum ? Visibility.Visible : Visibility.Collapsed);
-        SetVisibilityIfChanged(StatusMinText, _options.StatusBarShowMinimum ? Visibility.Visible : Visibility.Collapsed);
-        SetVisibilityIfChanged(StatusMaxText, _options.StatusBarShowMaximum ? Visibility.Visible : Visibility.Collapsed);
+        var plan = BuildStatusBarVisibilityPlan(state);
+        SetVisibilityIfChanged(StatusReadyText, ToVisibility(plan.ReadyTextVisible));
+        SetVisibilityIfChanged(StatusPageNumberText, ToVisibility(plan.PageNumberVisible));
+        SetVisibilityIfChanged(StatusStatsPanel, ToVisibility(plan.StatsPanelVisible));
+        SetVisibilityIfChanged(StatusAvgText, ToVisibility(plan.AverageVisible));
+        SetVisibilityIfChanged(StatusCountText, ToVisibility(plan.CountVisible));
+        SetVisibilityIfChanged(StatusNumericalCountText, ToVisibility(plan.NumericalCountVisible));
+        SetVisibilityIfChanged(StatusSumText, ToVisibility(plan.SumVisible));
+        SetVisibilityIfChanged(StatusMinText, ToVisibility(plan.MinimumVisible));
+        SetVisibilityIfChanged(StatusMaxText, ToVisibility(plan.MaximumVisible));
         SetTextIfChanged(StatusReadyText, state.ReadyText);
         SetStatusStatisticTextIfChanged(StatusAvgText, ReadoutValue(state, StatusBarReadoutKind.Average), UiText.Get("StatusBar_Average"));
         SetStatusStatisticTextIfChanged(StatusCountText, ReadoutValue(state, StatusBarReadoutKind.Count), UiText.Get("StatusBar_Count"));
@@ -106,51 +104,63 @@ public partial class MainWindow
     private static string ReadoutValue(Free.Shared.AppServices.StatusBarViewModel state, StatusBarReadoutKind kind) =>
         state.FindReadout(kind)?.Value ?? string.Empty;
 
-    private bool IsStatusBarDisplayStateApplied(Free.Shared.AppServices.StatusBarViewModel state) =>
-        StatusReadyText.Visibility == (_options.StatusBarShowCellMode ? ToVisibility(state.IsReadyVisible) : Visibility.Collapsed) &&
-        StatusPageNumberText.Visibility == (_options.StatusBarShowPageNumber && !string.IsNullOrEmpty(StatusPageNumberText.Text)
-            ? Visibility.Visible
-            : Visibility.Collapsed) &&
-        StatusStatsPanel.Visibility == (HasVisibleStatusBarStatistic() ? ToVisibility(state.AreStatsVisible) : Visibility.Collapsed) &&
-        StatusAvgText.Visibility == (_options.StatusBarShowAverage ? Visibility.Visible : Visibility.Collapsed) &&
-        StatusCountText.Visibility == (_options.StatusBarShowCount ? Visibility.Visible : Visibility.Collapsed) &&
-        StatusNumericalCountText.Visibility == (_options.StatusBarShowNumericalCount ? Visibility.Visible : Visibility.Collapsed) &&
-        StatusSumText.Visibility == (_options.StatusBarShowSum ? Visibility.Visible : Visibility.Collapsed) &&
-        StatusMinText.Visibility == (_options.StatusBarShowMinimum ? Visibility.Visible : Visibility.Collapsed) &&
-        StatusMaxText.Visibility == (_options.StatusBarShowMaximum ? Visibility.Visible : Visibility.Collapsed) &&
-        StatusViewShortcutControls.Visibility == (_options.StatusBarShowViewShortcuts ? Visibility.Visible : Visibility.Collapsed) &&
-        StatusZoomText.Visibility == (_options.StatusBarShowZoom ? Visibility.Visible : Visibility.Collapsed) &&
-        StatusZoomSliderControls.Visibility == (_options.StatusBarShowZoomSlider ? Visibility.Visible : Visibility.Collapsed) &&
-        StatusReadyText.Text == state.ReadyText &&
-        StatusAvgText.Text == ReadoutValue(state, StatusBarReadoutKind.Average) &&
-        StatusCountText.Text == ReadoutValue(state, StatusBarReadoutKind.Count) &&
-        StatusNumericalCountText.Text == ReadoutValue(state, StatusBarReadoutKind.NumericalCount) &&
-        StatusSumText.Text == ReadoutValue(state, StatusBarReadoutKind.Sum) &&
-        StatusMinText.Text == ReadoutValue(state, StatusBarReadoutKind.Minimum) &&
-        StatusMaxText.Text == ReadoutValue(state, StatusBarReadoutKind.Maximum);
+    private bool IsStatusBarDisplayStateApplied(Free.Shared.AppServices.StatusBarViewModel state)
+    {
+        var plan = BuildStatusBarVisibilityPlan(state);
+        return
+            StatusReadyText.Visibility == ToVisibility(plan.ReadyTextVisible) &&
+            StatusPageNumberText.Visibility == ToVisibility(plan.PageNumberVisible) &&
+            StatusStatsPanel.Visibility == ToVisibility(plan.StatsPanelVisible) &&
+            StatusAvgText.Visibility == ToVisibility(plan.AverageVisible) &&
+            StatusCountText.Visibility == ToVisibility(plan.CountVisible) &&
+            StatusNumericalCountText.Visibility == ToVisibility(plan.NumericalCountVisible) &&
+            StatusSumText.Visibility == ToVisibility(plan.SumVisible) &&
+            StatusMinText.Visibility == ToVisibility(plan.MinimumVisible) &&
+            StatusMaxText.Visibility == ToVisibility(plan.MaximumVisible) &&
+            StatusViewShortcutControls.Visibility == ToVisibility(plan.ViewShortcutsVisible) &&
+            StatusZoomText.Visibility == ToVisibility(plan.ZoomVisible) &&
+            StatusZoomSliderControls.Visibility == ToVisibility(plan.ZoomSliderVisible) &&
+            StatusReadyText.Text == state.ReadyText &&
+            StatusAvgText.Text == ReadoutValue(state, StatusBarReadoutKind.Average) &&
+            StatusCountText.Text == ReadoutValue(state, StatusBarReadoutKind.Count) &&
+            StatusNumericalCountText.Text == ReadoutValue(state, StatusBarReadoutKind.NumericalCount) &&
+            StatusSumText.Text == ReadoutValue(state, StatusBarReadoutKind.Sum) &&
+            StatusMinText.Text == ReadoutValue(state, StatusBarReadoutKind.Minimum) &&
+            StatusMaxText.Text == ReadoutValue(state, StatusBarReadoutKind.Maximum);
+    }
 
-    private bool HasVisibleStatusBarStatistic() =>
-        _options.StatusBarShowAverage ||
-        _options.StatusBarShowCount ||
-        _options.StatusBarShowNumericalCount ||
-        _options.StatusBarShowSum ||
-        _options.StatusBarShowMinimum ||
-        _options.StatusBarShowMaximum;
+    private StatusBarVisibilityPlan BuildStatusBarVisibilityPlan(Free.Shared.AppServices.StatusBarViewModel state) =>
+        StatusBarVisibilityPlanner.Build(
+            state,
+            GetStatusBarOptionVisibility(),
+            hasPageNumberText: !string.IsNullOrEmpty(StatusPageNumberText.Text),
+            fallbackAutomationText: UiText.Get("StatusBar_CustomizeStatusBar"));
 
     private void ApplyStatusBarInteractiveDisplayState()
     {
-        SetVisibilityIfChanged(StatusViewShortcutControls, _options.StatusBarShowViewShortcuts ? Visibility.Visible : Visibility.Collapsed);
-        SetVisibilityIfChanged(StatusZoomText, _options.StatusBarShowZoom ? Visibility.Visible : Visibility.Collapsed);
-        SetVisibilityIfChanged(StatusZoomSliderControls, _options.StatusBarShowZoomSlider ? Visibility.Visible : Visibility.Collapsed);
-        SetVisibilityIfChanged(StatusZoomControls, _options.StatusBarShowZoom || _options.StatusBarShowZoomSlider
-            ? Visibility.Visible
-            : Visibility.Collapsed);
-        SetVisibilityIfChanged(StatusInteractiveControls, _options.StatusBarShowViewShortcuts ||
-            _options.StatusBarShowZoom ||
-            _options.StatusBarShowZoomSlider
-                ? Visibility.Visible
-                : Visibility.Collapsed);
+        var options = GetStatusBarOptionVisibility();
+        SetVisibilityIfChanged(StatusViewShortcutControls, ToVisibility(options.ViewShortcuts));
+        SetVisibilityIfChanged(StatusZoomText, ToVisibility(options.Zoom));
+        SetVisibilityIfChanged(StatusZoomSliderControls, ToVisibility(options.ZoomSlider));
+        SetVisibilityIfChanged(StatusZoomControls, ToVisibility(options.Zoom || options.ZoomSlider));
+        SetVisibilityIfChanged(StatusInteractiveControls, ToVisibility(options.ViewShortcuts || options.Zoom || options.ZoomSlider));
     }
+
+    private StatusBarOptionVisibility GetStatusBarOptionVisibility() =>
+        new(
+            CellMode: _options.StatusBarShowCellMode,
+            EndMode: _options.StatusBarShowEndMode,
+            SelectionMode: _options.StatusBarShowSelectionMode,
+            PageNumber: _options.StatusBarShowPageNumber,
+            Average: _options.StatusBarShowAverage,
+            Count: _options.StatusBarShowCount,
+            NumericalCount: _options.StatusBarShowNumericalCount,
+            Minimum: _options.StatusBarShowMinimum,
+            Maximum: _options.StatusBarShowMaximum,
+            Sum: _options.StatusBarShowSum,
+            ViewShortcuts: _options.StatusBarShowViewShortcuts,
+            Zoom: _options.StatusBarShowZoom,
+            ZoomSlider: _options.StatusBarShowZoomSlider);
 
     // Tracks the runtime-built status-bar customize toggle items by their persisted-option Tag so the menu's
     // live checked state can be refreshed on open without relying on hand-authored x:Name fields.
@@ -168,23 +178,7 @@ public partial class MainWindow
     }
 
     private bool GetStatusBarCustomizeOption(string optionTag) =>
-        optionTag switch
-        {
-            "CellMode" => _options.StatusBarShowCellMode,
-            "EndMode" => _options.StatusBarShowEndMode,
-            "SelectionMode" => _options.StatusBarShowSelectionMode,
-            "PageNumber" => _options.StatusBarShowPageNumber,
-            "Average" => _options.StatusBarShowAverage,
-            "Count" => _options.StatusBarShowCount,
-            "NumericalCount" => _options.StatusBarShowNumericalCount,
-            "Minimum" => _options.StatusBarShowMinimum,
-            "Maximum" => _options.StatusBarShowMaximum,
-            "Sum" => _options.StatusBarShowSum,
-            "ViewShortcuts" => _options.StatusBarShowViewShortcuts,
-            "Zoom" => _options.StatusBarShowZoom,
-            "ZoomSlider" => _options.StatusBarShowZoomSlider,
-            _ => false
-        };
+        GetStatusBarOptionVisibility().IsVisible(optionTag);
 
     private void StatusBarCustomizeMenuItem_Click(object sender, RoutedEventArgs e)
     {
@@ -194,43 +188,43 @@ public partial class MainWindow
         var isChecked = menuItem.IsChecked;
         switch (option)
         {
-            case "CellMode":
+            case StatusBarOptionTags.CellMode:
                 _options.StatusBarShowCellMode = isChecked;
                 break;
-            case "EndMode":
+            case StatusBarOptionTags.EndMode:
                 _options.StatusBarShowEndMode = isChecked;
                 break;
-            case "SelectionMode":
+            case StatusBarOptionTags.SelectionMode:
                 _options.StatusBarShowSelectionMode = isChecked;
                 break;
-            case "PageNumber":
+            case StatusBarOptionTags.PageNumber:
                 _options.StatusBarShowPageNumber = isChecked;
                 break;
-            case "Average":
+            case StatusBarOptionTags.Average:
                 _options.StatusBarShowAverage = isChecked;
                 break;
-            case "Count":
+            case StatusBarOptionTags.Count:
                 _options.StatusBarShowCount = isChecked;
                 break;
-            case "NumericalCount":
+            case StatusBarOptionTags.NumericalCount:
                 _options.StatusBarShowNumericalCount = isChecked;
                 break;
-            case "Minimum":
+            case StatusBarOptionTags.Minimum:
                 _options.StatusBarShowMinimum = isChecked;
                 break;
-            case "Maximum":
+            case StatusBarOptionTags.Maximum:
                 _options.StatusBarShowMaximum = isChecked;
                 break;
-            case "Sum":
+            case StatusBarOptionTags.Sum:
                 _options.StatusBarShowSum = isChecked;
                 break;
-            case "ViewShortcuts":
+            case StatusBarOptionTags.ViewShortcuts:
                 _options.StatusBarShowViewShortcuts = isChecked;
                 break;
-            case "Zoom":
+            case StatusBarOptionTags.Zoom:
                 _options.StatusBarShowZoom = isChecked;
                 break;
-            case "ZoomSlider":
+            case StatusBarOptionTags.ZoomSlider:
                 _options.StatusBarShowZoomSlider = isChecked;
                 break;
             default:
@@ -300,21 +294,10 @@ public partial class MainWindow
             return;
         }
 
-        var visibleStatTexts = new[]
-            {
-                _options.StatusBarShowAverage ? ReadoutValue(state, StatusBarReadoutKind.Average) : string.Empty,
-                _options.StatusBarShowCount ? ReadoutValue(state, StatusBarReadoutKind.Count) : string.Empty,
-                _options.StatusBarShowNumericalCount ? ReadoutValue(state, StatusBarReadoutKind.NumericalCount) : string.Empty,
-                _options.StatusBarShowSum ? ReadoutValue(state, StatusBarReadoutKind.Sum) : string.Empty,
-                _options.StatusBarShowMinimum ? ReadoutValue(state, StatusBarReadoutKind.Minimum) : string.Empty,
-                _options.StatusBarShowMaximum ? ReadoutValue(state, StatusBarReadoutKind.Maximum) : string.Empty
-            }
-            .Where(text => !string.IsNullOrWhiteSpace(text))
-            .ToArray();
-
-        var automationName = visibleStatTexts.Length == 0
-            ? UiText.Get("StatusBar_CustomizeStatusBar")
-            : string.Join("; ", visibleStatTexts);
+        var automationName = StatusBarVisibilityPlanner.FormatAutomationText(
+            state,
+            GetStatusBarOptionVisibility(),
+            UiText.Get("StatusBar_CustomizeStatusBar"));
         var previousAutomationName = AutomationProperties.GetName(StatusStatsPanel);
         if (!string.Equals(previousAutomationName, automationName, StringComparison.Ordinal))
         {

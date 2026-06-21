@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Text;
 using Free.Shared.AppServices;
 
 namespace FreeX.App.Avalonia;
@@ -14,26 +13,11 @@ internal static class AvaloniaStatusBarSource
 {
     /// <summary>
     /// Default per-option visibility, keyed by the <c>StatusBarCustomizeContextMenuPlanner</c> OptionTag
-    /// values. Defaults mirror Excel / the WPF host (the standard set of toggles on), so the first render
-    /// shows the full readout.
+    /// values. The Avalonia footer starts with the full compact readout profile it used before this helper
+    /// was shared, while WPF keeps its persisted Excel-default options.
     /// </summary>
     public static Dictionary<string, bool> CreateDefaultOptionVisibility() =>
-        new(StringComparer.Ordinal)
-        {
-            ["CellMode"] = true,
-            ["EndMode"] = false,
-            ["SelectionMode"] = true,
-            ["PageNumber"] = false,
-            ["Average"] = true,
-            ["Count"] = true,
-            ["NumericalCount"] = true,
-            ["Minimum"] = false,
-            ["Maximum"] = false,
-            ["Sum"] = true,
-            ["ViewShortcuts"] = true,
-            ["Zoom"] = true,
-            ["ZoomSlider"] = true,
-        };
+        StatusBarVisibilityPlanner.CreateDefaultOptionVisibility(StatusBarOptionVisibility.FullReadoutDefaults);
 
     /// <summary>
     /// Builds the neutral <see cref="StatusBarViewModel"/> for the given selection stats and zoom using
@@ -56,41 +40,16 @@ internal static class AvaloniaStatusBarSource
     /// </summary>
     public static string FormatVisibleReadouts(
         StatusBarViewModel model,
-        IReadOnlyDictionary<string, bool> optionVisibility)
-    {
-        if (!model.AreStatsVisible)
-            return "";
-
-        var builder = new StringBuilder();
-        foreach (var readout in model.Readouts)
-        {
-            if (!readout.IsVisible || readout.Value.Length == 0)
-                continue;
-            if (!IsOptionVisible(optionVisibility, ReadoutOptionTag(readout.Kind)))
-                continue;
-
-            if (builder.Length > 0)
-                builder.Append("   ");
-            builder.Append(readout.Value);
-        }
-
-        return builder.ToString();
-    }
+        IReadOnlyDictionary<string, bool> optionVisibility) =>
+        StatusBarVisibilityPlanner.FormatVisibleReadouts(
+            model,
+            StatusBarVisibilityPlanner.FromOptionVisibility(optionVisibility));
 
     public static bool IsOptionVisible(IReadOnlyDictionary<string, bool> optionVisibility, string optionTag) =>
-        optionVisibility.TryGetValue(optionTag, out var visible) && visible;
+        StatusBarVisibilityPlanner.IsOptionVisible(optionVisibility, optionTag);
 
     public static string ReadoutOptionTag(StatusBarReadoutKind kind) =>
-        kind switch
-        {
-            StatusBarReadoutKind.Average => "Average",
-            StatusBarReadoutKind.Count => "Count",
-            StatusBarReadoutKind.NumericalCount => "NumericalCount",
-            StatusBarReadoutKind.Sum => "Sum",
-            StatusBarReadoutKind.Minimum => "Minimum",
-            StatusBarReadoutKind.Maximum => "Maximum",
-            _ => "Count"
-        };
+        StatusBarVisibilityPlanner.ReadoutOptionTag(kind);
 
     /// <summary>
     /// Resolves the customize-menu header text for a planner resource key. The Avalonia shell has no
