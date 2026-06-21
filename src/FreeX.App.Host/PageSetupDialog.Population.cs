@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Input;
 using FreeX.App.Presentation.PageLayout;
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -10,25 +11,28 @@ public partial class PageSetupDialog
 {
     private void PopulateFields()
     {
-        OrientationBox.SelectedIndex = Orientation == WorksheetPageOrientation.Landscape ? 1 : 0;
-        PaperSizeBox.SelectedIndex = PaperSize switch
+        var fields = Fields;
+        var margins = ParseMarginsForDisplay(fields.MarginsText);
+
+        OrientationBox.SelectedIndex = fields.Orientation == WorksheetPageOrientation.Landscape ? 1 : 0;
+        PaperSizeBox.SelectedIndex = fields.PaperSize switch
         {
             WorksheetPaperSize.Letter => 0,
             WorksheetPaperSize.Legal => 2,
             _ => 1
         };
-        LeftMarginBox.Text = Margins.Left.ToString(CultureInfo.InvariantCulture);
-        RightMarginBox.Text = Margins.Right.ToString(CultureInfo.InvariantCulture);
-        TopMarginBox.Text = Margins.Top.ToString(CultureInfo.InvariantCulture);
-        BottomMarginBox.Text = Margins.Bottom.ToString(CultureInfo.InvariantCulture);
-        HeaderMarginBox.Text = HeaderMargin.ToString(CultureInfo.InvariantCulture);
-        FooterMarginBox.Text = FooterMargin.ToString(CultureInfo.InvariantCulture);
-        CenterHorizontallyBox.IsChecked = CenterHorizontally;
-        CenterVerticallyBox.IsChecked = CenterVertically;
-        if (ScaleToFit.ScalePercent.HasValue)
+        LeftMarginBox.Text = margins.Left.ToString(CultureInfo.InvariantCulture);
+        RightMarginBox.Text = margins.Right.ToString(CultureInfo.InvariantCulture);
+        TopMarginBox.Text = margins.Top.ToString(CultureInfo.InvariantCulture);
+        BottomMarginBox.Text = margins.Bottom.ToString(CultureInfo.InvariantCulture);
+        HeaderMarginBox.Text = fields.HeaderMarginText;
+        FooterMarginBox.Text = fields.FooterMarginText;
+        CenterHorizontallyBox.IsChecked = fields.CenterHorizontally;
+        CenterVerticallyBox.IsChecked = fields.CenterVertically;
+        if (fields.ScalingMode == PageSetupScalingMode.AdjustToPercent)
         {
             AdjustToRadioButton.IsChecked = true;
-            ScalePercentBox.Text = ScaleToFit.ScalePercent.Value.ToString(CultureInfo.InvariantCulture);
+            ScalePercentBox.Text = fields.ScalePercentText;
             FitPagesWideBox.Text = "1";
             FitPagesTallBox.Text = "1";
         }
@@ -36,32 +40,32 @@ public partial class PageSetupDialog
         {
             FitToRadioButton.IsChecked = true;
             ScalePercentBox.Text = "100";
-            FitPagesWideBox.Text = (ScaleToFit.FitToPagesWide ?? 1).ToString(CultureInfo.InvariantCulture);
-            FitPagesTallBox.Text = (ScaleToFit.FitToPagesTall ?? 1).ToString(CultureInfo.InvariantCulture);
+            FitPagesWideBox.Text = FitToDisplayText(fields.FitToWideText);
+            FitPagesTallBox.Text = FitToDisplayText(fields.FitToTallText);
         }
 
-        FirstPageNumberBox.Text = FirstPageNumber?.ToString(CultureInfo.InvariantCulture) ?? "";
-        PrintQualityBox.Text = PrintQualityDpi?.ToString(CultureInfo.InvariantCulture) ?? "";
-        PrintAreaBox.Text = PrintArea is { } printArea
+        FirstPageNumberBox.Text = fields.FirstPageNumberText;
+        PrintQualityBox.Text = fields.PrintQualityDpiText;
+        PrintAreaBox.Text = _sourceSheet.PrintArea is { } printArea
             ? PageSetupRangeSelectionFormatter.Format(PageSetupRangeSelectionTarget.PrintArea, printArea, useR1C1ReferenceStyle: false)
-            : "";
-        RowsRepeatBox.Text = PrintTitleRows is { } rows ? $"${rows.Start}:${rows.End}" : "";
-        ColumnsRepeatBox.Text = PrintTitleColumns is { } cols
+            : fields.PrintAreaText;
+        RowsRepeatBox.Text = _sourceSheet.PrintTitleRows is { } rows ? $"${rows.Start}:${rows.End}" : fields.RepeatRowsText;
+        ColumnsRepeatBox.Text = _sourceSheet.PrintTitleColumns is { } cols
             ? $"${CellAddress.NumberToColumnName(cols.Start)}:${CellAddress.NumberToColumnName(cols.End)}"
-            : "";
-        PrintGridlinesBox.IsChecked = PrintGridlines;
-        PrintHeadingsBox.IsChecked = PrintHeadings;
-        PageOrderBox.SelectedIndex = PageOrder == WorksheetPageOrder.OverThenDown ? 1 : 0;
-        PrintBlackAndWhiteBox.IsChecked = PrintBlackAndWhite;
-        PrintDraftQualityBox.IsChecked = PrintDraftQuality;
-        PrintErrorValueBox.SelectedIndex = PrintErrorValue switch
+            : fields.RepeatColumnsText;
+        PrintGridlinesBox.IsChecked = fields.PrintGridlines;
+        PrintHeadingsBox.IsChecked = fields.PrintHeadings;
+        PageOrderBox.SelectedIndex = fields.PageOrder == WorksheetPageOrder.OverThenDown ? 1 : 0;
+        PrintBlackAndWhiteBox.IsChecked = fields.PrintBlackAndWhite;
+        PrintDraftQualityBox.IsChecked = fields.PrintDraftQuality;
+        PrintErrorValueBox.SelectedIndex = fields.PrintErrorValue switch
         {
             WorksheetPrintErrorValue.Blank => 1,
             WorksheetPrintErrorValue.Dash => 2,
             WorksheetPrintErrorValue.NotAvailable => 3,
             _ => 0
         };
-        PrintCommentsBox.SelectedIndex = PrintComments switch
+        PrintCommentsBox.SelectedIndex = fields.PrintComments switch
         {
             WorksheetPrintComments.AtEnd => 1,
             WorksheetPrintComments.AsDisplayed => 2,
@@ -76,6 +80,14 @@ public partial class PageSetupDialog
         UpdateScalingInputState();
         UpdateHeaderFooterPreview();
     }
+
+    private static WorksheetPageMargins ParseMarginsForDisplay(string marginsText) =>
+        PageMarginInputParser.TryParse(marginsText, out var margins, out _)
+            ? margins
+            : WorksheetPageMargins.Narrow;
+
+    private static string FitToDisplayText(string text) =>
+        string.IsNullOrWhiteSpace(text) ? "1" : text;
 
     private void ScalingMode_Changed(object sender, RoutedEventArgs e) => UpdateScalingInputState();
 

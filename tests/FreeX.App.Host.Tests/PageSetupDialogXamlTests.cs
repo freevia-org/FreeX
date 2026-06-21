@@ -428,29 +428,32 @@ public sealed class PageSetupDialogXamlTests
     [Fact]
     public void PageSetupHandler_AppliesHeaderFooterValuesReturnedByDialog()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.PageLayout.cs");
-        var builderSource = DialogSourceTestSupport.ReadHostSources("PageSetupCommandBuilder.cs");
+        var source = DialogSourceTestSupport.ReadHostSources(
+            "MainWindow.PageLayout.cs",
+            "PageSetupDialog.xaml.cs");
 
-        source.Should().Contain("PageSetupCommandBuilder.Build(sheetId, dialog)");
-        builderSource.Should().Contain("PageSetupCommandFactory.Build(sheetId, CreateRequest(dialog)).ToComposite()");
+        source.Should().Contain("var fields = dialog.Fields");
+        source.Should().Contain("PageSetupDialogModel.TryBuildCommandPlan(sheet, fields, sheetId).Plan!.ToComposite()");
         source.Should().Contain("new PageSetupDialog(");
         source.Should().Contain("SheetGrid.SelectedRange");
-        builderSource.Should().Contain("HeaderFooter = new PageSetupHeaderFooterRequest");
-        builderSource.Should().Contain("FirstPageHeader = dialog.FirstPageHeader");
-        builderSource.Should().Contain("EvenPageFooter = dialog.EvenPageFooter");
-        builderSource.Should().Contain("ScaleHeaderFooterWithDocument = dialog.ScaleHeaderFooterWithDocument");
-        builderSource.Should().Contain("AlignHeaderFooterWithMargins = dialog.AlignHeaderFooterWithMargins");
+        source.Should().Contain("Header = Header");
+        source.Should().Contain("FirstPageHeader = FirstPageHeader");
+        source.Should().Contain("EvenPageFooter = EvenPageFooter");
+        source.Should().Contain("HeaderPictures = HeaderPictures.DeepClone()");
+        source.Should().Contain("ScaleHeaderFooterWithDocument = ScaleWithDocumentBox.IsChecked == true");
+        source.Should().Contain("AlignHeaderFooterWithMargins = AlignWithMarginsBox.IsChecked == true");
     }
 
     [Fact]
     public void PageSetupHandler_AppliesPrintAreaReturnedByDialog()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.PageLayout.cs");
-        var builderSource = DialogSourceTestSupport.ReadHostSources("PageSetupCommandBuilder.cs");
+        var source = DialogSourceTestSupport.ReadHostSources(
+            "MainWindow.PageLayout.cs",
+            "PageSetupDialog.xaml.cs");
 
-        source.Should().Contain("PageSetupCommandBuilder.Build(sheetId, dialog)");
-        builderSource.Should().Contain("PrintArea = dialog.PrintArea");
-        builderSource.Should().Contain("PageSetupCommandFactory.Build(sheetId, CreateRequest(dialog)).ToComposite()");
+        source.Should().Contain("var fields = dialog.Fields");
+        source.Should().Contain("PrintAreaText = PrintAreaBox.Text");
+        source.Should().Contain("PageSetupDialogModel.TryBuildCommandPlan(sheet, fields, sheetId).Plan!.ToComposite()");
     }
 
     [Fact]
@@ -468,7 +471,9 @@ public sealed class PageSetupDialogXamlTests
                 SelectComboItemByTag((ComboBox)dialog.FindName("PageOrderBox"), "OverThenDown");
 
                 InvokePrivateAllowingNonModalDialogResult(dialog, "OkButton_Click");
-                var outcome = PageSetupCommandBuilder.Build(sheet.Id, dialog).Apply(new TestCommandContext(workbook));
+                var build = PageSetupDialogModel.TryBuildCommandPlan(sheet, dialog.Fields);
+                build.Success.Should().BeTrue(build.Error);
+                var outcome = build.Plan!.ToComposite().Apply(new TestCommandContext(workbook));
 
                 outcome.Success.Should().BeTrue(outcome.ErrorMessage);
                 sheet.CenterHorizontallyOnPage.Should().BeTrue();
@@ -498,8 +503,7 @@ public sealed class PageSetupDialogXamlTests
             "PageSetupDialog.HeaderFooter.cs",
             "PageSetupDialog.Population.cs",
             "PageSetupDialog.RangeSelection.cs",
-            "PageSetupDialog.ValidationFocus.cs",
-            "PageSetupCommandBuilder.cs");
+            "PageSetupDialog.ValidationFocus.cs");
 
     private static void SelectComboItemByTag(ComboBox comboBox, string tag)
     {

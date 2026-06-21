@@ -560,9 +560,20 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
+        var fields = dialog.Fields;
+        var validation = PageSetupDialogModel.TryBuildCommandPlan(sheet, fields);
+        if (!validation.Success)
+        {
+            DialogMessageHelper.ShowWarning(
+                this,
+                validation.Error ?? UiText.Get("PageSetup_PageSetup"),
+                UiText.Get("PageSetup_PageSetup"));
+            return;
+        }
+
         if (!TryExecuteGroupedSheetCommand(
                 "Page Setup",
-                sheetId => PageSetupCommandBuilder.Build(sheetId, dialog)))
+                sheetId => PageSetupDialogModel.TryBuildCommandPlan(sheet, fields, sheetId).Plan!.ToComposite()))
             return;
 
         UpdateViewport();
