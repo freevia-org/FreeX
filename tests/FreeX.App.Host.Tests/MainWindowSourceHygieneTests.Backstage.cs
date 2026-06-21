@@ -41,6 +41,33 @@ public sealed partial class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void FreeXBackstageRailEntries_UsePresentationNavigationPlanner()
+    {
+        var frameSource = DialogSourceTestSupport.ReadHostSources("MainWindow.BackstageFrame.cs");
+        var plannerSource = DialogSourceTestSupport.ReadPresentationSources("Backstage", "FreeXBackstageNavigationPlanner.cs");
+        var buildMethod = ExtractMethodSource(frameSource, "private IEnumerable<BackstageEntry> BuildBackstageEntries()");
+
+        frameSource.Should().Contain("BackstageFrameComposer.Build(");
+        frameSource.Should().Contain("new BackstageFrameComposerSpec(");
+        frameSource.Should().Contain("DecorateNavButtons = DecorateBackstageNavButton");
+        frameSource.Should().Contain("Closed = OnBackstageFrameClosed");
+        frameSource.Should().NotContain("new BackstageFrame()");
+        frameSource.Should().NotContain("frame.SetEntries(");
+        buildMethod.Should().Contain("FreeXBackstageNavigationPlanner.Build().Select(MapBackstageNavigationEntry)");
+        buildMethod.Should().NotContain("UiText.Get(\"MainWindow_Text_Home\")");
+        buildMethod.Should().NotContain("UiText.Get(\"MainWindow_Text_SaveAs\")");
+        buildMethod.Should().NotContain("BackstageSaveAsButton");
+        buildMethod.Should().NotContain("BackstageAccountButton");
+
+        frameSource.Should().Contain("ResolveBackstageCommand(FreeXBackstageCommandId command)");
+        frameSource.Should().Contain("ResolveBackstagePane(FreeXBackstagePaneId pane)");
+
+        plannerSource.Should().Contain("BackstageSaveAsButton");
+        plannerSource.Should().Contain("BackstageAccountButton");
+        plannerSource.Should().Contain("MainWindow_TooltipDescription_SaveSheetsTheCurrentSelectionOrTheWorkbookAsAPDFFileOrAnXPSPackage");
+    }
+
+    [Fact]
     public void BackstageSaveAs_ForcesSaveDialogInsteadOfExistingPathSave()
     {
         // The Save As handler still forces the dialog path (not the existing-path save) and closes the
