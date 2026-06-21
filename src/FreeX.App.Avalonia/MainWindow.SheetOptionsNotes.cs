@@ -8,6 +8,7 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 using FreeX.App.Presentation.PageLayout;
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
@@ -25,16 +26,15 @@ public sealed partial class MainWindow
     // backed by WorkbookSession.SetShowGridlines / SetShowHeadings).
     //
     // The print side IS modeled: Sheet.PrintGridlines / Sheet.PrintHeadings are real,
-    // editable fields persisted via SetPageSetupCommand (see PageSetupDialogFields /
-    // PageSetupDialogModel). We therefore present the same two-checkbox popup Excel does
-    // (View / Print), so the Page Layout buttons control BOTH the view setting and the
-    // print setting, with undo/redo for the print half (the view half routes through the
-    // existing session toggles which also support undo).
+    // editable fields persisted via SetPrintOptionsCommand. We therefore present the same
+    // two-checkbox popup Excel does (View / Print), so the Page Layout buttons control BOTH
+    // the view setting and the print setting, with undo/redo for the print half (the view
+    // half routes through the existing session toggles which also support undo).
 
     /// <summary>
     /// Page Layout ▸ Sheet Options ▸ Gridlines. Two-checkbox popup: View + Print.
-    /// View half reuses SetShowGridlines; Print half rebuilds the page setup via
-    /// PageSetupDialogModel.TryBuildCommand so it participates in undo/redo.
+    /// View half reuses SetShowGridlines; Print half routes through a narrow print-options command
+    /// so it participates in undo/redo without rebuilding the full Page Setup state.
     /// </summary>
     private async Task ShowGridlinesSheetOptionsAsync() =>
         await ShowSheetOptionTwoToggleAsync(
@@ -51,7 +51,7 @@ public sealed partial class MainWindow
                     ShowEditIssue(result.ErrorMessage ?? UiText.Get("ShellLoc_GridlinesFailed"));
                 return result.Success;
             },
-            buildPrintFields: (fields, print) => fields with { PrintGridlines = print });
+            buildPrintCommand: (sheet, print) => PageLayoutRibbonCommandPlanner.BuildPrintGridlinesCommand(sheet, print));
 
     /// <summary>
     /// Page Layout ▸ Sheet Options ▸ Headings. Two-checkbox popup: View + Print.
@@ -76,7 +76,7 @@ public sealed partial class MainWindow
                 RefreshViewportSizeForZoom();
                 return true;
             },
-            buildPrintFields: (fields, print) => fields with { PrintHeadings = print });
+            buildPrintCommand: (sheet, print) => PageLayoutRibbonCommandPlanner.BuildPrintHeadingsCommand(sheet, print));
 
     private async Task ShowSheetOptionTwoToggleAsync(
         string title,
@@ -84,7 +84,7 @@ public sealed partial class MainWindow
         Func<bool> getView,
         Func<bool> getPrint,
         Func<bool, bool> setView,
-        Func<PageSetupDialogFields, bool, PageSetupDialogFields> buildPrintFields)
+        Func<Sheet, bool, IWorkbookCommand> buildPrintCommand)
     {
         if (_isOpening || _isSaving)
             return;
@@ -156,15 +156,7 @@ public sealed partial class MainWindow
         if (wantPrint != getPrint())
         {
             var sheet = _session.ActiveSheet;
-            var fields = buildPrintFields(PageSetupDialogModel.FromSheet(sheet), wantPrint);
-            var build = PageSetupDialogModel.TryBuildCommand(sheet, fields);
-            if (!build.Success)
-            {
-                ShowEditIssue(build.Error ?? UiText.Get("ShellLoc_CouldNotUpdatePrintOptions"));
-                return;
-            }
-
-            var result = _session.ExecuteReviewCommand(build.Command!);
+            var result = _session.ExecuteReviewCommand(buildPrintCommand(sheet, wantPrint));
             if (!result.Success)
             {
                 ShowEditIssue(result.ErrorMessage ?? UiText.Get("ShellLoc_CouldNotUpdatePrintOptions"));

@@ -195,17 +195,23 @@ public partial class MainWindow
     }
     private void MarginNormalMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        TryExecuteGroupedSheetCommand("Page Margins", sheetId => new SetPageMarginsCommand(sheetId, WorksheetPageMargins.Normal));
+        TryExecuteGroupedSheetCommand(
+            "Page Margins",
+            sheetId => PageLayoutRibbonCommandPlanner.BuildMarginsCommand(sheetId, WorksheetPageMargins.Normal));
     }
 
     private void MarginWideMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        TryExecuteGroupedSheetCommand("Page Margins", sheetId => new SetPageMarginsCommand(sheetId, WorksheetPageMargins.Wide));
+        TryExecuteGroupedSheetCommand(
+            "Page Margins",
+            sheetId => PageLayoutRibbonCommandPlanner.BuildMarginsCommand(sheetId, WorksheetPageMargins.Wide));
     }
 
     private void MarginNarrowMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        TryExecuteGroupedSheetCommand("Page Margins", sheetId => new SetPageMarginsCommand(sheetId, WorksheetPageMargins.Narrow));
+        TryExecuteGroupedSheetCommand(
+            "Page Margins",
+            sheetId => PageLayoutRibbonCommandPlanner.BuildMarginsCommand(sheetId, WorksheetPageMargins.Narrow));
     }
 
     private void MarginCustomMenuItem_Click(object sender, RoutedEventArgs e)
@@ -222,14 +228,14 @@ public partial class MainWindow
     {
         TryExecuteGroupedSheetCommand(
             "Orientation",
-            sheetId => new SetPageOrientationCommand(sheetId, WorksheetPageOrientation.Portrait));
+            sheetId => PageLayoutRibbonCommandPlanner.BuildOrientationCommand(sheetId, WorksheetPageOrientation.Portrait));
     }
 
     private void OrientLandscapeMenuItem_Click(object sender, RoutedEventArgs e)
     {
         TryExecuteGroupedSheetCommand(
             "Orientation",
-            sheetId => new SetPageOrientationCommand(sheetId, WorksheetPageOrientation.Landscape));
+            sheetId => PageLayoutRibbonCommandPlanner.BuildOrientationCommand(sheetId, WorksheetPageOrientation.Landscape));
     }
 
     private void PageSizeBtn_Click(object sender, RoutedEventArgs e)
@@ -239,17 +245,23 @@ public partial class MainWindow
     }
     private void SizeLetter_Click(object sender, RoutedEventArgs e)
     {
-        TryExecuteGroupedSheetCommand("Paper Size", sheetId => new SetPaperSizeCommand(sheetId, WorksheetPaperSize.Letter));
+        TryExecuteGroupedSheetCommand(
+            "Paper Size",
+            sheetId => PageLayoutRibbonCommandPlanner.BuildPaperSizeCommand(sheetId, WorksheetPaperSize.Letter));
     }
 
     private void SizeA4_Click(object sender, RoutedEventArgs e)
     {
-        TryExecuteGroupedSheetCommand("Paper Size", sheetId => new SetPaperSizeCommand(sheetId, WorksheetPaperSize.A4));
+        TryExecuteGroupedSheetCommand(
+            "Paper Size",
+            sheetId => PageLayoutRibbonCommandPlanner.BuildPaperSizeCommand(sheetId, WorksheetPaperSize.A4));
     }
 
     private void SizeLegal_Click(object sender, RoutedEventArgs e)
     {
-        TryExecuteGroupedSheetCommand("Paper Size", sheetId => new SetPaperSizeCommand(sheetId, WorksheetPaperSize.Legal));
+        TryExecuteGroupedSheetCommand(
+            "Paper Size",
+            sheetId => PageLayoutRibbonCommandPlanner.BuildPaperSizeCommand(sheetId, WorksheetPaperSize.Legal));
     }
 
     private void SizeExecutive_Click(object sender, RoutedEventArgs e) => ShowPageSetupDialog(PageSetupInitialFocusTarget.PageOrientation);
@@ -268,14 +280,18 @@ public partial class MainWindow
     private void PrintAreaSetMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        if (!TryExecuteGroupedSheetCommand("Print Area", sheetId => new SetPrintAreaCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(range, sheetId))))
+        if (!TryExecuteGroupedSheetCommand(
+                "Print Area",
+                sheetId => PageLayoutRibbonCommandPlanner.BuildSetPrintAreaCommand(sheetId, range)))
             return;
         RefreshStatusBar();
     }
 
     private void PrintAreaClearMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        if (!TryExecuteGroupedSheetCommand("Print Area", sheetId => new ClearPrintAreaCommand(sheetId)))
+        if (!TryExecuteGroupedSheetCommand(
+                "Print Area",
+                sheetId => PageLayoutRibbonCommandPlanner.BuildClearPrintAreaCommand(sheetId)))
             return;
         RefreshStatusBar();
     }
@@ -381,7 +397,8 @@ public partial class MainWindow
             return;
         }
 
-        ApplyPageLayoutScaleToFit(CreateScaleToFitFromPageDimensions(current, wide, current.FitToPagesTall));
+        ApplyPageLayoutScaleToFit(
+            PageLayoutRibbonCommandPlanner.ResolveScaleToFitFromPageDimensions(current, wide, current.FitToPagesTall));
     }
 
     private void CommitPageLayoutScaleHeightBoxText(ComboBox? combo)
@@ -395,7 +412,8 @@ public partial class MainWindow
             return;
         }
 
-        ApplyPageLayoutScaleToFit(CreateScaleToFitFromPageDimensions(current, current.FitToPagesWide, tall));
+        ApplyPageLayoutScaleToFit(
+            PageLayoutRibbonCommandPlanner.ResolveScaleToFitFromPageDimensions(current, current.FitToPagesWide, tall));
     }
 
     private void CommitPageLayoutScalePercentBoxText(ComboBox? combo)
@@ -408,12 +426,14 @@ public partial class MainWindow
             return;
         }
 
-        ApplyPageLayoutScaleToFit(new WorksheetScaleToFit(percent ?? 100, null, null));
+        ApplyPageLayoutScaleToFit(PageLayoutRibbonCommandPlanner.ResolveScalePercent(percent));
     }
 
     private void ApplyPageLayoutScaleToFit(WorksheetScaleToFit scaleToFit)
     {
-        if (!TryExecuteGroupedSheetCommand("Scale To Fit", sheetId => new SetScaleToFitCommand(sheetId, scaleToFit)))
+        if (!TryExecuteGroupedSheetCommand(
+                "Scale To Fit",
+                sheetId => PageLayoutRibbonCommandPlanner.BuildScaleToFitCommand(sheetId, scaleToFit)))
             return;
 
         UpdateViewport();
@@ -422,17 +442,6 @@ public partial class MainWindow
 
     private static string GetComboBoxText(ComboBox comboBox) =>
         comboBox.SelectedItem?.ToString() ?? comboBox.Text ?? "";
-
-    private static WorksheetScaleToFit CreateScaleToFitFromPageDimensions(
-        WorksheetScaleToFit current,
-        int? pagesWide,
-        int? pagesTall)
-    {
-        if (pagesWide is not null || pagesTall is not null)
-            return new WorksheetScaleToFit(null, pagesWide, pagesTall);
-
-        return new WorksheetScaleToFit(current.ScalePercent ?? 100, null, null);
-    }
 
     private static void SetComboBoxTextIfChanged(ComboBox comboBox, string text)
     {
@@ -468,10 +477,13 @@ public partial class MainWindow
 
         if (SheetGrid.SelectedRange is not { } selectedRange) return;
 
-        var plan = PageBreakSelectionPlanner.Insert(selectedRange, sheet.RowPageBreaks, sheet.ColumnPageBreaks);
+        var plan = PageLayoutRibbonCommandPlanner.PlanInsertPageBreaks(
+            selectedRange,
+            sheet.RowPageBreaks,
+            sheet.ColumnPageBreaks);
         TryExecuteGroupedSheetCommand(
             "Page Breaks",
-            sheetId => new SetPageBreaksCommand(sheetId, plan.RowBreaks, plan.ColumnBreaks));
+            sheetId => PageLayoutRibbonCommandPlanner.BuildPageBreaksCommand(sheetId, plan));
     }
 
     private void RemovePageBreakMenuItem_Click(object sender, RoutedEventArgs e)
@@ -481,15 +493,21 @@ public partial class MainWindow
 
         if (SheetGrid.SelectedRange is not { } selectedRange) return;
 
-        var plan = PageBreakSelectionPlanner.Remove(selectedRange, sheet.RowPageBreaks, sheet.ColumnPageBreaks);
+        var plan = PageLayoutRibbonCommandPlanner.PlanRemovePageBreaks(
+            selectedRange,
+            sheet.RowPageBreaks,
+            sheet.ColumnPageBreaks);
         TryExecuteGroupedSheetCommand(
             "Page Breaks",
-            sheetId => new SetPageBreaksCommand(sheetId, plan.RowBreaks, plan.ColumnBreaks));
+            sheetId => PageLayoutRibbonCommandPlanner.BuildPageBreaksCommand(sheetId, plan));
     }
 
     private void ResetAllPageBreaksMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        TryExecuteGroupedSheetCommand("Page Breaks", sheetId => new SetPageBreaksCommand(sheetId, [], []));
+        var plan = PageLayoutRibbonCommandPlanner.PlanResetPageBreaks();
+        TryExecuteGroupedSheetCommand(
+            "Page Breaks",
+            sheetId => PageLayoutRibbonCommandPlanner.BuildPageBreaksCommand(sheetId, plan));
     }
 
     private void ShowPageBreakDialog(string defaultValue)
@@ -516,7 +534,10 @@ public partial class MainWindow
     {
         if (result.Action == PageBreakDialogAction.Clear)
         {
-            TryExecuteGroupedSheetCommand("Page Breaks", sheetId => new SetPageBreaksCommand(sheetId, [], []));
+            var resetPlan = PageLayoutRibbonCommandPlanner.PlanResetPageBreaks();
+            TryExecuteGroupedSheetCommand(
+                "Page Breaks",
+                sheetId => PageLayoutRibbonCommandPlanner.BuildPageBreaksCommand(sheetId, resetPlan));
             return;
         }
 
@@ -532,7 +553,9 @@ public partial class MainWindow
         if (result.ColumnBreak is { } columnBreak && !columnBreaks.Contains(columnBreak))
             columnBreaks.Add(columnBreak);
 
-        TryExecuteGroupedSheetCommand("Page Breaks", sheetId => new SetPageBreaksCommand(sheetId, rowBreaks, columnBreaks));
+        TryExecuteGroupedSheetCommand(
+            "Page Breaks",
+            sheetId => PageLayoutRibbonCommandPlanner.BuildPageBreaksCommand(sheetId, rowBreaks, columnBreaks));
     }
 
     private void PrintTitlesBtn_Click(object sender, RoutedEventArgs e)
@@ -616,7 +639,7 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         var isChecked = (sender as System.Windows.Controls.CheckBox)?.IsChecked == true;
         TryExecuteCommand(
-            new SetPrintOptionsCommand(_currentSheetId, isChecked, sheet?.PrintHeadings ?? false),
+            PageLayoutRibbonCommandPlanner.BuildPrintGridlinesCommand(_currentSheetId, isChecked, sheet?.PrintHeadings ?? false),
             "Print Gridlines");
     }
 
@@ -625,7 +648,7 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         var isChecked = (sender as System.Windows.Controls.CheckBox)?.IsChecked == true;
         TryExecuteCommand(
-            new SetPrintOptionsCommand(_currentSheetId, sheet?.PrintGridlines ?? false, isChecked),
+            PageLayoutRibbonCommandPlanner.BuildPrintHeadingsCommand(_currentSheetId, sheet?.PrintGridlines ?? false, isChecked),
             "Print Headings");
     }
 
