@@ -2,6 +2,12 @@ using System.IO;
 
 namespace Free.Shared.AppServices;
 
+public enum WindowTitleApplicationPlacement
+{
+    DocumentThenApplication,
+    ApplicationThenDocument
+}
+
 /// <summary>
 /// Neutral window-title composition: assembles a document title from its
 /// display name, an optional window/group suffix, a dirty marker, and the
@@ -31,6 +37,10 @@ public static class WindowTitlePlanner
     /// Optional suffix appended after the window suffix when applicable (e.g.
     /// " [Group]"). Defaults to none.
     /// </param>
+    /// <param name="applicationPlacement">
+    /// Whether the application name appears after the document portion or before it.
+    /// Defaults to document-first, matching the WPF hosts.
+    /// </param>
     public static string Compose(
         string displayName,
         string applicationName,
@@ -38,12 +48,18 @@ public static class WindowTitlePlanner
         string dirtyMarker,
         string separator,
         string windowSuffix = "",
-        string groupSuffix = "")
+        string groupSuffix = "",
+        WindowTitleApplicationPlacement applicationPlacement = WindowTitleApplicationPlacement.DocumentThenApplication)
     {
         var window = windowSuffix ?? "";
         var group = groupSuffix ?? "";
         var dirty = isDirty ? dirtyMarker : "";
-        return $"{displayName}{window}{group}{dirty}{separator}{applicationName}";
+        var documentTitle = $"{displayName}{window}{group}{dirty}";
+        return applicationPlacement switch
+        {
+            WindowTitleApplicationPlacement.ApplicationThenDocument => $"{applicationName}{separator}{documentTitle}",
+            _ => $"{documentTitle}{separator}{applicationName}",
+        };
     }
 
     /// <summary>

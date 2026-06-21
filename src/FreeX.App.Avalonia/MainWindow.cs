@@ -35,6 +35,11 @@ namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow : Window
 {
+    private const string ApplicationTitle = "FreeX";
+    private const string GroupTitleSuffix = " [Group]";
+    private const string DirtyTitleSuffix = " *";
+    private const string TitleSeparator = " - ";
+
     private enum CellBorderEdge
     {
         Top,
@@ -622,7 +627,7 @@ public sealed partial class MainWindow : Window
             _session = _sessionFactory.Create(source, InitialViewportHeight, InitialViewportWidth, includeObjects: true);
         }
 
-        Title = $"FreeX - {_session.DisplayName}";
+        Title = FormatWindowWorkbookTitle();
         Width = 1120;
         Height = 720;
         MinWidth = 820;
@@ -2674,9 +2679,14 @@ public sealed partial class MainWindow : Window
     }
 
     private string FormatWindowWorkbookTitle() =>
-        _session.IsWorkbookGrouped
-            ? $"{_session.DisplayName} [Group]"
-            : _session.DisplayName;
+        WindowTitlePlanner.Compose(
+            displayName: _session.DisplayName,
+            applicationName: ApplicationTitle,
+            isDirty: _session.IsDirty,
+            dirtyMarker: DirtyTitleSuffix,
+            separator: TitleSeparator,
+            groupSuffix: _session.IsWorkbookGrouped ? GroupTitleSuffix : "",
+            applicationPlacement: WindowTitleApplicationPlacement.ApplicationThenDocument);
 
     private void RefreshShell(string status)
     {
@@ -2688,7 +2698,6 @@ public sealed partial class MainWindow : Window
 
         _sheetGridHost.Content = BuildSheetGrid();
         _sheetTabsHost.Content = BuildSheetTabs();
-        Title = $"FreeX - {FormatWindowWorkbookTitle()}";
         _cellAddressText.Text = FormatCellReference(_session.ActiveCell);
         _formulaBox.Text = preserveFormulaEdit
             ? formulaText
@@ -2722,7 +2731,7 @@ public sealed partial class MainWindow : Window
         _statusText.Foreground = ShouldUseWarningStatusColor(status)
             ? Brush(143, 74, 18)
             : Brush(67, 113, 83);
-        Title = $"FreeX - {FormatWindowWorkbookTitle()}{(_session.IsDirty ? " *" : "")}";
+        Title = FormatWindowWorkbookTitle();
         UpdateViewportScrollBars();
         RefreshPivotFieldPane();
         _ribbonContextSource.OnPivotActive(

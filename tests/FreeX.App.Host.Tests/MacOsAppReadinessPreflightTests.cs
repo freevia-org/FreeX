@@ -2543,7 +2543,11 @@ public sealed class MacOsAppReadinessPreflightTests
                     _selectAllSheetsMenuItem.IsEnabled = isIdle && _session.SheetTabs.Count > 1;
                     _ungroupSheetsMenuItem.IsEnabled = isIdle && _session.IsWorkbookGrouped;
                     private string FormatWindowWorkbookTitle()
-                    ? $"{_session.DisplayName} [Group]"
+                    WindowTitlePlanner.Compose(
+                    applicationName: ApplicationTitle
+                    groupSuffix: _session.IsWorkbookGrouped ? GroupTitleSuffix : ""
+                    applicationPlacement: WindowTitleApplicationPlacement.ApplicationThenDocument
+                    Title = FormatWindowWorkbookTitle();
                     var isGroupedTab = tab.IsGrouped && _session.IsWorkbookGrouped;
                     tab.TabColor is { } tabColor ? Brush(tabColor) : Brushes.Transparent;
                     var clearColorItem = new NativeMenuItem { Header = "No Color" };
