@@ -463,6 +463,7 @@ public class CommentAndChartMediaRoundTripTests
         var doc = new TextDocument();
         doc.Preserved.ContentTypeDefaults["png"] = "image/png";
         doc.Preserved.Parts.Add(new PreservedPart("/word/media/image1.png", PngBytes));
+        doc.Preserved.Parts.Add(new PreservedPart("/word/embeddings/Microsoft_Excel_Worksheet1.xlsx", Encoding.UTF8.GetBytes("preserved workbook")));
         doc.Preserved.Parts.Add(new PreservedPart(
             "/word/charts/chart1.xml",
             Encoding.UTF8.GetBytes("<c:chartSpace xmlns:c=\"http://schemas.openxmlformats.org/drawingml/2006/chart\"/>"),
@@ -494,6 +495,8 @@ public class CommentAndChartMediaRoundTripTests
         names.Count(name => name == "word/charts/chart2.xml").Should().Be(1);
         names.Count(name => name == "word/charts/_rels/chart1.xml.rels").Should().Be(1);
         names.Count(name => name == "word/charts/_rels/chart2.xml.rels").Should().Be(1);
+        names.Count(name => name == "word/embeddings/Microsoft_Excel_Worksheet1.xlsx").Should().Be(1);
+        names.Count(name => name == "word/embeddings/Microsoft_Excel_Worksheet2.xlsx").Should().Be(1);
 
         var relTargets = EntryXml(bytes, "word/_rels/document.xml.rels")
             .Root!.Elements(Rel + "Relationship")
@@ -503,11 +506,75 @@ public class CommentAndChartMediaRoundTripTests
         relTargets.Should().Contain("charts/chart1.xml");
         relTargets.Should().Contain("charts/chart2.xml");
 
+        var chartRelTargets = EntryXml(bytes, "word/charts/_rels/chart2.xml.rels")
+            .Root!.Elements(Rel + "Relationship")
+            .Select(rel => rel.Attribute("Target")!.Value)
+            .ToList();
+        chartRelTargets.Should().Contain("../embeddings/Microsoft_Excel_Worksheet2.xlsx");
+
         var overrides = EntryXml(bytes, "[Content_Types].xml")
             .Root!.Elements(Ct + "Override")
             .Select(overrideElement => overrideElement.Attribute("PartName")!.Value)
             .ToList();
         overrides.Should().Contain("/word/charts/chart1.xml");
         overrides.Should().Contain("/word/charts/chart2.xml");
+    }
+
+    [Fact]
+    public void ModelledOleHeaderAndCommentMedia_AvoidPreservedPackagePartNameCollisions()
+    {
+        var doc = new TextDocument();
+        doc.Preserved.ContentTypeDefaults["png"] = "image/png";
+        doc.Preserved.Parts.Add(new PreservedPart("/word/embeddings/oleObject1.bin", Encoding.UTF8.GetBytes("preserved ole")));
+        doc.Preserved.Parts.Add(new PreservedPart("/word/media/image1.png", PngBytes));
+        doc.Preserved.Parts.Add(new PreservedPart("/word/media/header1_image1.png", PngBytes));
+        doc.Preserved.Parts.Add(new PreservedPart("/word/media/comment_image1.png", PngBytes));
+
+        var oleParagraph = new Paragraph();
+        oleParagraph.Runs.Add(Run.FromEmbeddedObject(EmbeddedObject.Create(
+            Encoding.UTF8.GetBytes("modelled ole"),
+            "Excel.Sheet.12",
+            new InlineImage(PngBytes, 24, 24, ImageFormat.Png))));
+        doc.Blocks.Add(oleParagraph);
+
+        doc.Header = new HeaderFooter();
+        doc.Header.Paragraphs.Add(new Paragraph());
+        doc.Header.Paragraphs[0].Runs.Add(Run.FromImage(new InlineImage(PngBytes, 18, 18, ImageFormat.Png)));
+
+        var comment = new Comment(0, "Image comment", "Rev", "RV");
+        comment.Content[0].Runs.Add(Run.FromImage(new InlineImage(PngBytes, 16, 16, ImageFormat.Png)));
+        doc.Comments[0] = comment;
+
+        var bytes = WriteBytes(doc);
+
+        using var zip = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read);
+        var names = zip.Entries.Select(entry => entry.FullName).ToList();
+        names.Count(name => name == "word/embeddings/oleObject1.bin").Should().Be(1);
+        names.Count(name => name == "word/embeddings/oleObject2.bin").Should().Be(1);
+        names.Count(name => name == "word/media/image1.png").Should().Be(1);
+        names.Count(name => name == "word/media/image2.png").Should().Be(1);
+        names.Count(name => name == "word/media/header1_image1.png").Should().Be(1);
+        names.Count(name => name == "word/media/header1_image2.png").Should().Be(1);
+        names.Count(name => name == "word/media/comment_image1.png").Should().Be(1);
+        names.Count(name => name == "word/media/comment_image2.png").Should().Be(1);
+
+        var documentRelTargets = EntryXml(bytes, "word/_rels/document.xml.rels")
+            .Root!.Elements(Rel + "Relationship")
+            .Select(rel => rel.Attribute("Target")!.Value)
+            .ToList();
+        documentRelTargets.Should().Contain("embeddings/oleObject2.bin");
+        documentRelTargets.Should().Contain("media/image2.png");
+
+        var headerRelTargets = EntryXml(bytes, "word/_rels/header1.xml.rels")
+            .Root!.Elements(Rel + "Relationship")
+            .Select(rel => rel.Attribute("Target")!.Value)
+            .ToList();
+        headerRelTargets.Should().Contain("media/header1_image2.png");
+
+        var commentRelTargets = EntryXml(bytes, "word/_rels/comments.xml.rels")
+            .Root!.Elements(Rel + "Relationship")
+            .Select(rel => rel.Attribute("Target")!.Value)
+            .ToList();
+        commentRelTargets.Should().Contain("media/comment_image2.png");
     }
 }

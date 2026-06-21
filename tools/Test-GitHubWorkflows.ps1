@@ -255,9 +255,15 @@ foreach ($workflow in $workflows) {
             break
         }
     }
+    $onBlock = Get-IndentedYamlBlock `
+        -Lines $lines `
+        -Pattern "^(?<indent>\s*)(?:['""]?on['""]?)\s*:\s*(?:#.*)?$"
+    $blockOnPullRequestTarget = -not [string]::IsNullOrWhiteSpace($onBlock) -and
+        $onBlock -match "(?m)^\s*-\s*['""]?pull_request_target['""]?\s*(?:#.*)?$"
 
     if ($content -match "(?m)^\s*(?:['""]?pull_request_target['""]?)\s*:" -or
-        $inlineOnPullRequestTarget) {
+        $inlineOnPullRequestTarget -or
+        $blockOnPullRequestTarget) {
         $errors.Add("$($workflow.Name): workflow must not use the privileged pull_request_target event.")
     }
 

@@ -56,6 +56,23 @@ public sealed partial class DocumentationIndexTests
     }
 
     [Fact]
+    public void CodeReviewLog_LinksEveryComprehensiveReviewReport()
+    {
+        var docsDirectory = WorkspaceFileLocator.FindDocsDirectory();
+        var log = WorkspaceFileLocator.ReadAllText("docs", "reviews", "code-review-log.md");
+        var reviewReports = Directory
+            .GetFiles(Path.Combine(docsDirectory, "reviews"), "comprehensive-code-review-*.md")
+            .Select(path => Path.GetFileName(path)!)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        reviewReports.Should().NotBeEmpty();
+        foreach (var report in reviewReports)
+            Regex.IsMatch(log, $@"\[[^\]]*{Regex.Escape(report)}\]\([^)]*{Regex.Escape(report)}\)")
+                .Should().BeTrue($"{report} should be linked from the code review log");
+    }
+
+    [Fact]
     public void NewestStatusReport_NamesCurrentPlanningSources()
     {
         var docsDirectory = WorkspaceFileLocator.FindDocsDirectory();

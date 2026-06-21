@@ -580,6 +580,44 @@ public sealed class GitHubWorkflowPreflightTests
     }
 
     [Theory]
+    [InlineData("- pull_request_target")]
+    [InlineData("- \"pull_request_target\"")]
+    [InlineData("- 'pull_request_target'")]
+    public void GitHubWorkflowPreflight_FailsWhenWorkflowUsesBlockListPullRequestTarget(string eventLine)
+    {
+        using var temp = new TestTemporaryDirectory();
+
+        File.WriteAllText(
+            Path.Combine(temp.Path, "broken.yml"),
+            $$"""
+            name: Broken
+
+            on:
+              {{eventLine}}
+              - push
+
+            permissions:
+              contents: read
+
+            jobs:
+              build:
+                runs-on: windows-latest
+                steps:
+                  - name: Safe shell
+                    shell: pwsh
+                    run: dotnet restore FreeX.slnx
+            """);
+
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Test-GitHubWorkflows.ps1",
+            $"-WorkflowDirectory \"{temp.Path}\"");
+
+        result.ExitCode.Should().NotBe(0);
+        result.CombinedOutput.Should().Contain("workflow must not use the privileged pull_request_target event");
+        result.CombinedOutput.Should().Contain("broken.yml");
+    }
+
+    [Theory]
     [InlineData("on: pull_request_target")]
     [InlineData("on: \"pull_request_target\"")]
     [InlineData("on: 'pull_request_target'")]
