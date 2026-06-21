@@ -15469,6 +15469,15 @@ internal static class ExcelOpenSmoke
             return true;
         }
 
+        if (path.Contains("/mc:AlternateContent", StringComparison.Ordinal) &&
+            path.Contains("/mc:Fallback", StringComparison.Ordinal) &&
+            path.Contains("/xdr:cNvPr", StringComparison.Ordinal) &&
+            description.Contains("unique value", StringComparison.OrdinalIgnoreCase) &&
+            description.Contains("duplicates with others", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
         return path.Contains("/x:pageSetup", StringComparison.Ordinal) &&
                description.Contains("Dpi", StringComparison.OrdinalIgnoreCase) &&
                description.Contains("MinInclusive", StringComparison.OrdinalIgnoreCase);

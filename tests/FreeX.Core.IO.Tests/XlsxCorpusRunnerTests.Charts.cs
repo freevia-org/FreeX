@@ -30,6 +30,28 @@ public partial class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void GeneratedSupportedChartRows_CoverEveryRenderableChartTypeExceptMap()
+    {
+        var expectedTypes = Enum.GetValues<ChartType>()
+            .Where(ChartTypeSupport.IsRenderable)
+            .OrderBy(type => type)
+            .ToArray();
+        expectedTypes.Should().NotContain(ChartType.Map, "Map charts stay in unsupported warning/retention coverage until they are renderable");
+
+        var actualTypes = ReadManifestRows()
+            .Where(row => row.SourceType == "generated")
+            .Where(row => row.ExpectedStatus == "supported-pass")
+            .Where(row => row.FeatureTags.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Contains("charts"))
+            .SelectMany(row => XlsxCorpusFixtureFactory.Create(row.Id).Sheets.SelectMany(sheet => sheet.Charts))
+            .Select(chart => chart.Type)
+            .Distinct()
+            .OrderBy(type => type)
+            .ToArray();
+
+        actualTypes.Should().Contain(expectedTypes);
+    }
+
+    [Fact]
     public void ChartSummary_IncludesProtectionAndPrintSettings()
     {
         var sheetId = SheetId.New();

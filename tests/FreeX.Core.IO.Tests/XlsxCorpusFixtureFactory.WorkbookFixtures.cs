@@ -922,6 +922,171 @@ internal static partial class XlsxCorpusFixtureFactory
         return workbook;
     }
 
+    private static Workbook CreateChartsClassicExtended()
+    {
+        var workbook = NewWorkbook("generated-charts-classic-extended-004");
+        var sheet = workbook.AddSheet("Classic Extended");
+        Set(sheet, "A1", new TextValue("Quarter"));
+        Set(sheet, "B1", new TextValue("North"));
+        Set(sheet, "C1", new TextValue("South"));
+        Set(sheet, "D1", new TextValue("East"));
+        Set(sheet, "A2", new TextValue("Q1"));
+        Set(sheet, "A3", new TextValue("Q2"));
+        Set(sheet, "A4", new TextValue("Q3"));
+        Set(sheet, "A5", new TextValue("Q4"));
+        Set(sheet, "B2", new NumberValue(18));
+        Set(sheet, "B3", new NumberValue(24));
+        Set(sheet, "B4", new NumberValue(21));
+        Set(sheet, "B5", new NumberValue(30));
+        Set(sheet, "C2", new NumberValue(12));
+        Set(sheet, "C3", new NumberValue(17));
+        Set(sheet, "C4", new NumberValue(22));
+        Set(sheet, "C5", new NumberValue(25));
+        Set(sheet, "D2", new NumberValue(10));
+        Set(sheet, "D3", new NumberValue(14));
+        Set(sheet, "D4", new NumberValue(18));
+        Set(sheet, "D5", new NumberValue(20));
+
+        var dataRange = Range(sheet, "A1", "D5");
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.PercentStackedColumn,
+            DataRange = dataRange,
+            Title = "Percent Stacked Column",
+            ShowLegend = true,
+            ChartTitleFontSize = 14,
+            LegendPosition = ChartLegendPosition.Bottom,
+            XAxisMajorTickStyle = ChartAxisTickStyle.None,
+            YAxisNumberFormat = ChartDataLabelNumberFormat.Percent,
+            ShowYAxisMajorGridlines = true,
+            YAxisGridlineThickness = 0.75,
+            YAxisMajorTickStyle = ChartAxisTickStyle.None
+        });
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.StackedBar,
+            DataRange = dataRange,
+            Title = "Stacked Bar",
+            ShowLegend = true,
+            ShowSeriesLines = true,
+            ChartTitleFontSize = 14,
+            LegendPosition = ChartLegendPosition.Bottom,
+            ShowXAxisMajorGridlines = true,
+            XAxisGridlineThickness = 0.75,
+            XAxisMajorTickStyle = ChartAxisTickStyle.None
+        });
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.PercentStackedBar,
+            DataRange = dataRange,
+            Title = "Percent Stacked Bar",
+            ShowLegend = true,
+            ShowSeriesLines = true,
+            ChartTitleFontSize = 14,
+            LegendPosition = ChartLegendPosition.Bottom,
+            XAxisNumberFormat = ChartDataLabelNumberFormat.Percent,
+            ShowXAxisMajorGridlines = true,
+            XAxisGridlineThickness = 0.75,
+            XAxisMajorTickStyle = ChartAxisTickStyle.None
+        });
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.ThreeDColumn,
+            DataRange = dataRange,
+            Title = "3D Column",
+            ShowLegend = true,
+            ThreeDView = new Chart3DViewModel { RotationX = 15, RotationY = 20, HeightPercent = 90, DepthPercent = 120, RightAngleAxes = true }
+        });
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.ThreeDBar,
+            DataRange = dataRange,
+            Title = "3D Bar",
+            ShowLegend = true,
+            ThreeDView = new Chart3DViewModel { RotationX = 10, RotationY = 25, HeightPercent = 80, DepthPercent = 150, RightAngleAxes = true }
+        });
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.ThreeDArea,
+            DataRange = dataRange,
+            Title = "3D Area",
+            ShowLegend = true,
+            ThreeDView = new Chart3DViewModel { RotationX = 20, RotationY = 30, HeightPercent = 70, DepthPercent = 130, RightAngleAxes = false, Perspective = 25 }
+        });
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.ThreeDLine,
+            DataRange = dataRange,
+            Title = "3D Line",
+            ShowLegend = true,
+            ShowDropLines = true,
+            ThreeDView = new Chart3DViewModel { RotationX = 18, RotationY = 25, HeightPercent = 80, DepthPercent = 120, RightAngleAxes = true }
+        });
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.ThreeDPie,
+            DataRange = Range(sheet, "A1", "B5"),
+            Title = "3D Pie",
+            ShowLegend = true,
+            ExplodedSliceIndex = 1,
+            ExplodedSliceDistance = 0.08,
+            ThreeDView = new Chart3DViewModel { RotationX = 30, RotationY = 0, RightAngleAxes = false }
+        });
+        return workbook;
+    }
+
+    private static Workbook CreateChartsChartEx()
+    {
+        var workbook = NewWorkbook("generated-charts-chartex-004");
+        var sheet = workbook.AddSheet("ChartEx");
+        Set(sheet, "A1", new TextValue("Category"));
+        Set(sheet, "B1", new TextValue("Value"));
+        Set(sheet, "C1", new TextValue("Group"));
+        Set(sheet, "A2", new TextValue("Opening"));
+        Set(sheet, "A3", new TextValue("Sales"));
+        Set(sheet, "A4", new TextValue("Returns"));
+        Set(sheet, "A5", new TextValue("Costs"));
+        Set(sheet, "A6", new TextValue("Closing"));
+        Set(sheet, "B2", new NumberValue(120));
+        Set(sheet, "B3", new NumberValue(45));
+        Set(sheet, "B4", new NumberValue(-18));
+        Set(sheet, "B5", new NumberValue(-32));
+        Set(sheet, "B6", new NumberValue(115));
+        Set(sheet, "C2", new TextValue("Base"));
+        Set(sheet, "C3", new TextValue("Movement"));
+        Set(sheet, "C4", new TextValue("Movement"));
+        Set(sheet, "C5", new TextValue("Movement"));
+        Set(sheet, "C6", new TextValue("Base"));
+
+        Set(sheet, "E1", new TextValue("Value"));
+        double[] histogramValues = [4, 7, 9, 11, 12, 16, 18, 19, 23, 27, 32, 38, 41, 47];
+        for (var index = 0; index < histogramValues.Length; index++)
+            Set(sheet, $"E{index + 2}", new NumberValue(histogramValues[index]));
+
+        Set(sheet, "G1", new TextValue("Sample"));
+        Set(sheet, "H1", new TextValue("North"));
+        Set(sheet, "I1", new TextValue("South"));
+        double[] north = [10, 13, 15, 16, 18, 21, 23, 24];
+        double[] south = [8, 11, 14, 16, 19, 20, 25, 29];
+        for (var index = 0; index < north.Length; index++)
+        {
+            var row = index + 2;
+            Set(sheet, $"G{row}", new TextValue((index + 1).ToString(System.Globalization.CultureInfo.InvariantCulture)));
+            Set(sheet, $"H{row}", new NumberValue(north[index]));
+            Set(sheet, $"I{row}", new NumberValue(south[index]));
+        }
+
+        var singleSeries = Range(sheet, "A1", "B6");
+        sheet.Charts.Add(new ChartModel { Type = ChartType.Treemap, DataRange = singleSeries, Title = "Treemap", ShowLegend = false, LegendPosition = ChartLegendPosition.None });
+        sheet.Charts.Add(new ChartModel { Type = ChartType.Sunburst, DataRange = Range(sheet, "A1", "C6"), Title = "Sunburst", ShowLegend = false, LegendPosition = ChartLegendPosition.None });
+        sheet.Charts.Add(new ChartModel { Type = ChartType.Histogram, DataRange = Range(sheet, "E1", "E15"), Title = "Histogram", FirstColIsCategories = false, ShowLegend = false, LegendPosition = ChartLegendPosition.None });
+        sheet.Charts.Add(new ChartModel { Type = ChartType.Pareto, DataRange = singleSeries, Title = "Pareto", ShowLegend = false, LegendPosition = ChartLegendPosition.None });
+        sheet.Charts.Add(new ChartModel { Type = ChartType.BoxAndWhisker, DataRange = Range(sheet, "G1", "I9"), Title = "Box and Whisker", ShowLegend = true });
+        sheet.Charts.Add(new ChartModel { Type = ChartType.Waterfall, DataRange = singleSeries, Title = "Waterfall", ShowLegend = false, LegendPosition = ChartLegendPosition.None, ShowSeriesLines = false, WaterfallTotalPointIndices = [0, 4] });
+        sheet.Charts.Add(new ChartModel { Type = ChartType.Funnel, DataRange = singleSeries, Title = "Funnel", ShowLegend = false, LegendPosition = ChartLegendPosition.None });
+        return workbook;
+    }
+
     private static Workbook CreateStructuredTables()
     {
         var workbook = NewWorkbook("generated-structured-tables-001");

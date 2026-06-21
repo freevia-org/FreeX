@@ -64,6 +64,19 @@ public sealed class XlsxChartSchemaOrderingTests
     }
 
     [Fact]
+    public void ThreeDPieChart_WithFirstSliceAngle_DoesNotWriteInvalidFirstSliceElement()
+    {
+        var workbook = CreatePieChartWorkbook(ChartType.ThreeDPie);
+        workbook.GetSheetAt(0).Charts.Single().FirstSliceAngle = 45;
+        var saved = XlsxPackageTestHelper.SaveToBytes(workbook);
+
+        SchemaErrors(saved).Should().BeEmpty();
+        var chartXml = LoadChartXml(saved);
+        var pieChart = chartXml.Descendants(ChartNs + "pie3DChart").Single();
+        pieChart.Element(ChartNs + "firstSliceAng").Should().BeNull();
+    }
+
+    [Fact]
     public void LineChart_WithGuideLinesAndUpDownBars_ProducesSchemaValidOrder()
     {
         var saved = XlsxPackageTestHelper.SaveToBytes(CreateLineGuideChartWorkbook());
@@ -490,7 +503,7 @@ public sealed class XlsxChartSchemaOrderingTests
         return workbook;
     }
 
-    private static Workbook CreatePieChartWorkbook()
+    private static Workbook CreatePieChartWorkbook(ChartType chartType = ChartType.Pie)
     {
         var workbook = new Workbook("ChartSchemaOrderingPie");
         var sheet = workbook.AddSheet("Data");
@@ -505,7 +518,7 @@ public sealed class XlsxChartSchemaOrderingTests
 
         sheet.Charts.Add(new ChartModel
         {
-            Type = ChartType.Pie,
+            Type = chartType,
             Title = "Share",
             DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 2)),
             FirstSliceAngle = 45,
