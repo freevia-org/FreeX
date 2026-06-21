@@ -11,6 +11,7 @@
     <!-- Portable shell tier: IShellStrings/ShellStrings the WPF helpers consume,
          plus the neutral planners these realizers sit alongside. -->
     <ProjectReference Include="..\Free.Shared.Shell\Free.Shared.Shell.csproj" />
+    <ProjectReference Include="..\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -19,6 +20,7 @@
     <InternalsVisibleTo Include="FreeX.App.Host" />
     <InternalsVisibleTo Include="FreeX.App.Host.Tests" />
     <InternalsVisibleTo Include="FreeX.App.Host.Logic.Tests" />
+    <InternalsVisibleTo Include="FreeW.App.Host.Tests" />
   </ItemGroup>
 
 </Project>
