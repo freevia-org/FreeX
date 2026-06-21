@@ -6,6 +6,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using FreeX.App.Presentation.PageLayout;
+using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -117,18 +118,19 @@ public partial class MainWindow
 
     private async void BackgroundChooseMenuItem_Click(object sender, RoutedEventArgs e)
     {
+        var openPlan = SheetBackgroundPickerPlanner.BuildOpenDialogPlan();
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
             Title = UiText.Get("MainWindowDialog_SheetBackgroundTitle"),
             Filter = UiText.Get("MainWindowDialog_ImageFilesFilter"),
-            CheckFileExists = true,
-            Multiselect = false
+            CheckFileExists = openPlan.CheckFileExists,
+            Multiselect = openPlan.Multiselect
         };
 
         if (dialog.ShowDialog(this) != true)
             return;
 
-        if (!IsSupportedSheetBackgroundFile(dialog.FileName))
+        if (!SheetBackgroundPickerPlanner.IsSupportedImagePath(dialog.FileName))
         {
             ShowOwnedMessage(
                 UiText.Get("MainWindowMessage_SheetBackgroundUnsupportedImageType"),
@@ -162,23 +164,22 @@ public partial class MainWindow
             return;
         }
 
-        var background = new WorksheetBackgroundImage(
-            bytes,
-            DrawingInputParser.GetImageContentType(dialog.FileName),
-            Path.GetFileName(dialog.FileName));
+        if (!SheetBackgroundPickerPlanner.TryBuildBackgroundImage(bytes, dialog.FileName, out var background)
+            || background is null)
+        {
+            ShowOwnedMessage(
+                UiText.Get("MainWindowMessage_SheetBackgroundUnsupportedImageType"),
+                UiText.Get("MainWindowMessage_SheetBackgroundTitle"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
 
         if (!TryExecuteGroupedSheetCommand("Sheet Background", sheetId => new SetWorksheetBackgroundCommand(sheetId, background)))
             return;
 
         UpdateViewport();
     }
-
-    private static bool IsSupportedSheetBackgroundFile(string fileName) =>
-        Path.GetExtension(fileName).ToLowerInvariant() switch
-        {
-            ".png" or ".jpg" or ".jpeg" or ".bmp" or ".gif" => true,
-            _ => false
-        };
 
     private void BackgroundClearMenuItem_Click(object sender, RoutedEventArgs e)
     {

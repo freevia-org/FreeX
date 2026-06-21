@@ -278,11 +278,13 @@ public sealed partial class MainWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
+        var pickerPlan = SheetBackgroundPickerPlanner.BuildOpenPickerPlan();
+        var fileTypes = CreateFilePickerFileTypes(pickerPlan.FileTypes);
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
             Title = UiText.Get("RibbonWire_BackgroundPickerTitle"),
             AllowMultiple = false,
-            FileTypeFilter = [PictureFileType],
+            FileTypeFilter = fileTypes,
         });
 
         IStorageFile? file = null;
@@ -295,8 +297,7 @@ public sealed partial class MainWindow
         if (file is null)
             return;
 
-        var contentType = InsertPictureCommandFactory.ContentTypeForPath(file.Name);
-        if (contentType is null)
+        if (!SheetBackgroundPickerPlanner.IsSupportedImagePath(file.Name))
         {
             ShowEditIssue(UiText.Get("RibbonWire_BackgroundUnsupported"));
             return;
@@ -322,7 +323,13 @@ public sealed partial class MainWindow
             return;
         }
 
-        var background = new WorksheetBackgroundImage(imageBytes, contentType, file.Name);
+        if (!SheetBackgroundPickerPlanner.TryBuildBackgroundImage(imageBytes, file.Name, out var background)
+            || background is null)
+        {
+            ShowEditIssue(UiText.Get("RibbonWire_BackgroundUnsupported"));
+            return;
+        }
+
         var result = _session.ExecuteReviewCommand(
             new SetWorksheetBackgroundCommand(_session.ActiveSheet.Id, background));
         RefreshShell(result.Success
