@@ -438,8 +438,7 @@ public sealed class MainWindow : Window
 
         if (path is null)
         {
-            _session.ClearCurrentPath();
-            _session.MarkSaved();
+            _session.MarkSavedWithoutPath();
         }
         else
         {

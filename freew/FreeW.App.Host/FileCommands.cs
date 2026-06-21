@@ -102,10 +102,11 @@ internal sealed class FileCommands
             return false;
 
         _editor.LoadModel(TextDocument.CreateEmpty());
-        _session.ClearCurrentPath();
-        _session.MarkSaved();
-        _editor.CurrentFileName = null;
-        _onChanged();
+        _session.MarkSavedWithoutPath(() =>
+        {
+            _editor.CurrentFileName = null;
+            _onChanged();
+        });
         return true;
     }
 
@@ -151,10 +152,11 @@ internal sealed class FileCommands
             if (format!.OpensAsTemplate)
             {
                 // A template seeds a new untitled document: clear the path so the next Save becomes Save-As.
-                _session.ClearCurrentPath();
-                _session.MarkSaved();
-                _editor.CurrentFileName = null;
-                _onChanged();
+                _session.MarkSavedWithoutPath(() =>
+                {
+                    _editor.CurrentFileName = null;
+                    _onChanged();
+                });
             }
             else
             {
@@ -299,11 +301,12 @@ internal sealed class FileCommands
 
     private void SetSaved(string path, bool suppressRecentFiles)
     {
-        _session.MarkSavedWithPath(path, suppressRecentFiles, _options.RecentFilesCap);
-        // Surface the file name to the editor so FILENAME field runs resolve to it at render.
-        _editor.CurrentFileName = Path.GetFileName(path);
-
-        _onChanged();
+        _session.MarkSavedWithPath(path, suppressRecentFiles, _options.RecentFilesCap, () =>
+        {
+            // Surface the file name to the editor so FILENAME field runs resolve to it at render.
+            _editor.CurrentFileName = Path.GetFileName(path);
+            _onChanged();
+        });
     }
 
     // ── Host seams (WPF) ─────────────────────────────────────────────────────

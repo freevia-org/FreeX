@@ -65,6 +65,20 @@ public sealed class FileCommandSession
 
     public void MarkSaved() => _state.MarkSaved();
 
+    public void MarkSavedWithoutPath()
+    {
+        _state.ClearCurrentFilePath();
+        _state.MarkSaved();
+    }
+
+    public void MarkSavedWithoutPath(Action onChanged)
+    {
+        ArgumentNullException.ThrowIfNull(onChanged);
+
+        MarkSavedWithoutPath();
+        onChanged();
+    }
+
     public void MarkDirty() => _state.MarkDirty();
 
     public bool MarkDirtyIfClean(Action onChanged)
@@ -94,6 +108,18 @@ public sealed class FileCommandSession
         {
             // Recent files are a convenience; never block open/save on a corrupt store or bad path.
         }
+    }
+
+    public void MarkSavedWithPath(
+        string path,
+        bool suppressRecentFiles,
+        int maxRecentEntries,
+        Action onChanged)
+    {
+        ArgumentNullException.ThrowIfNull(onChanged);
+
+        MarkSavedWithPath(path, suppressRecentFiles, maxRecentEntries);
+        onChanged();
     }
 
     public bool ConfirmDiscardOrSave(

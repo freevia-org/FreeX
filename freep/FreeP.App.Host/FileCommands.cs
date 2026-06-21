@@ -77,9 +77,7 @@ internal sealed class FileCommands
             return false;
 
         _loadModel(Presentation.CreateEmpty());
-        _session.ClearCurrentPath();
-        _session.MarkSaved();
-        _onChanged();
+        _session.MarkSavedWithoutPath(_onChanged);
         return true;
     }
 
@@ -166,9 +164,7 @@ internal sealed class FileCommands
 
     private void SetSaved(string path, bool suppressRecentFiles)
     {
-        _session.MarkSavedWithPath(path, suppressRecentFiles, _options.RecentFilesCap);
-
-        _onChanged();
+        _session.MarkSavedWithPath(path, suppressRecentFiles, _options.RecentFilesCap, _onChanged);
     }
 
     // ── Host seams (WPF) ─────────────────────────────────────────────────────

@@ -52,6 +52,23 @@ public sealed class FileCommandSessionTests : IDisposable
     }
 
     [Fact]
+    public void MarkSavedWithoutPath_ClearsPathMarksCleanAndNotifies()
+    {
+        var session = new FileCommandSession();
+        var changes = 0;
+
+        session.MarkSavedWithPath(Path.Combine(_tempDir, "Deck.fxp"), suppressRecentFiles: true, maxRecentEntries: 5);
+        session.MarkDirty();
+
+        session.MarkSavedWithoutPath(() => changes++);
+
+        session.IsDirty.Should().BeFalse();
+        session.CurrentPath.Should().BeNull();
+        session.DisplayName.Should().Be("Untitled");
+        changes.Should().Be(1);
+    }
+
+    [Fact]
     public void DisplayNameFromPath_UsesFileNameWithoutExtensionOrFallback()
     {
         FileCommandSession.DisplayNameFromPath(@"C:\Docs\Quarterly Review.fxp")
@@ -135,6 +152,26 @@ public sealed class FileCommandSessionTests : IDisposable
 
         session.CurrentPath.Should().Be(path);
         RecentFilesStore.Load(storePath).Entries.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void MarkSavedWithPath_WithNotification_UpdatesStateAndNotifies()
+    {
+        var storePath = Path.Combine(_tempDir, "recent.json");
+        var session = new FileCommandSession(loadRecentFilesStore: () => RecentFilesStore.Load(storePath));
+        var path = Path.Combine(_tempDir, "saved.fxp");
+        var changes = 0;
+
+        session.MarkDirty();
+        session.MarkSavedWithPath(path, suppressRecentFiles: false, maxRecentEntries: 5, () => changes++);
+
+        session.IsDirty.Should().BeFalse();
+        session.CurrentPath.Should().Be(path);
+        changes.Should().Be(1);
+        RecentFilesStore.Load(storePath).Entries
+            .Select(entry => entry.Path)
+            .Should()
+            .Equal(path);
     }
 
     [Fact]
