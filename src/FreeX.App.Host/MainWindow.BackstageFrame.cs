@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Wpf;
+using FreeX.App.Presentation.Backstage;
 
 namespace FreeX.App.Host;
 
@@ -23,180 +24,141 @@ public partial class MainWindow
 
     // Language-invariant pane identifiers (the frame's automation ids) so ShowInfoView()/ShowPrintView()
     // and Ctrl+P can land on a specific pane regardless of the current UI language.
-    private const string BackstageHomePaneId = "BackstageHomeButton";
-    private const string BackstageInfoPaneId = "BackstageInfoButton";
-    private const string BackstagePrintPaneId = "BackstagePrintButton";
+    private const string BackstageHomePaneId = FreeXBackstageNavigationPlanner.HomePaneAutomationId;
+    private const string BackstageInfoPaneId = FreeXBackstageNavigationPlanner.InfoPaneAutomationId;
+    private const string BackstagePrintPaneId = FreeXBackstageNavigationPlanner.PrintPaneAutomationId;
 
     private void InitializeBackstageFrame()
     {
-        var frame = new BackstageFrame();
-        // FreeX navy rail with darker hover/selection bands, matching the title bar.
-        frame.SetAccent(
-            sidebar: System.Windows.Media.Color.FromRgb(0x10, 0x25, 0x3A),
-            hover: System.Windows.Media.Color.FromRgb(0x1C, 0x3A, 0x55),
-            selected: System.Windows.Media.Color.FromRgb(0x24, 0x44, 0x5E),
-            separator: System.Windows.Media.Color.FromRgb(0x24, 0x44, 0x5E));
-
-        // FreeX's panes (SsHomeView/SsInfoView/SsPrintView) carry their own internal padding, so drop the
-        // frame's default content inset to land them exactly where the hand-rolled rail did (no double-inset).
-        frame.SetContentPadding(new Thickness(0));
-
-        frame.ConfigureBackButton(
-            automationId: "BackstageBackButton",
-            automationName: UiText.Get("MainWindow_TooltipTitle_Back"),
-            automationHelpText: UiText.Get("MainWindow_ToolTip_BackToWorkbook"),
-            toolTip: UiText.Get("MainWindow_ToolTip_BackToWorkbook"),
-            tooltipTitle: UiText.Get("MainWindow_TooltipTitle_Back"),
-            keyTip: "B");
-
-        frame.SetEntries(BuildBackstageEntries());
-
-        // The shared frame stamps the *shared* RibbonTooltip attached properties on each nav button, but
-        // FreeX's Alt-keytip overlay (MainWindow.KeyTips.cs) reads FreeX's own RibbonTooltip attached
-        // properties. Mirror key-tip/title/description onto the FreeX properties so the rail still lights up
-        // under Alt and shows the Excel-style hover card, exactly as the hand-rolled rail did.
-        frame.DecorateNavButtons((entry, button) =>
+        var frame = BackstageFrameComposer.Build(new BackstageFrameComposerSpec(
+            new BackstageAccent(
+                System.Windows.Media.Color.FromRgb(0x10, 0x25, 0x3A),
+                System.Windows.Media.Color.FromRgb(0x1C, 0x3A, 0x55),
+                System.Windows.Media.Color.FromRgb(0x24, 0x44, 0x5E),
+                System.Windows.Media.Color.FromRgb(0x24, 0x44, 0x5E)),
+            BuildBackstageEntries())
         {
-            var keyTip = entry?.KeyTip ?? "B"; // null entry == back arrow
-            var title = entry?.TooltipTitle ?? UiText.Get("MainWindow_TooltipTitle_Back");
-            RibbonTooltip.SetKeyTip(button, keyTip);
-            RibbonTooltip.SetTitle(button, title);
-            if (entry?.TooltipDescription is { } description)
-                RibbonTooltip.SetDescription(button, description);
+            // FreeX's panes (SsHomeView/SsInfoView/SsPrintView) carry their own internal padding, so drop
+            // the frame's default content inset to land them exactly where the hand-rolled rail did.
+            ContentPadding = new Thickness(0),
+            BackButton = new BackstageBackButtonSpec(
+                AutomationId: "BackstageBackButton",
+                AutomationName: UiText.Get("MainWindow_TooltipTitle_Back"),
+                AutomationHelpText: UiText.Get("MainWindow_ToolTip_BackToWorkbook"),
+                ToolTip: UiText.Get("MainWindow_ToolTip_BackToWorkbook"),
+                TooltipTitle: UiText.Get("MainWindow_TooltipTitle_Back"),
+                KeyTip: "B"),
+            DecorateNavButtons = DecorateBackstageNavButton,
+            Closed = OnBackstageFrameClosed
         });
-
-        // The frame closes itself (Esc / back arrow / an action entry). Funnel that through HideStartScreen
-        // so the overlay collapses and worksheet focus is restored, exactly as the old rail did.
-        frame.Closed += () =>
-        {
-            StartScreenOverlay.Visibility = Visibility.Collapsed;
-            SheetGrid.Focus();
-        };
 
         StartScreenFrameHost.Content = frame;
         _backstageFrame = frame;
     }
 
-    private System.Collections.Generic.IEnumerable<BackstageEntry> BuildBackstageEntries()
+    private void DecorateBackstageNavButton(BackstageEntry? entry, Button button)
+    {
+        // The shared frame stamps the shared RibbonTooltip attached properties on each nav button, but
+        // FreeX's Alt-keytip overlay (MainWindow.KeyTips.cs) reads FreeX's own RibbonTooltip attached
+        // properties. Mirror key-tip/title/description onto the FreeX properties so the rail still lights up
+        // under Alt and shows the Excel-style hover card, exactly as the hand-rolled rail did.
+        var keyTip = entry?.KeyTip ?? "B"; // null entry == back arrow
+        var title = entry?.TooltipTitle ?? UiText.Get("MainWindow_TooltipTitle_Back");
+        RibbonTooltip.SetKeyTip(button, keyTip);
+        RibbonTooltip.SetTitle(button, title);
+        if (entry?.TooltipDescription is { } description)
+            RibbonTooltip.SetDescription(button, description);
+    }
+
+    private void OnBackstageFrameClosed()
+    {
+        // The frame closes itself (Esc / back arrow / an action entry). Funnel that through HideStartScreen
+        // so the overlay collapses and worksheet focus is restored, exactly as the old rail did.
+        StartScreenOverlay.Visibility = Visibility.Collapsed;
+        SheetGrid.Focus();
+    }
+
+    private IEnumerable<BackstageEntry> BuildBackstageEntries()
     {
         // Pane entries swap the content host to the existing FreeX pane after running its refresh logic;
         // command entries fire an existing handler and the frame closes itself first (matching FreeW).
-        // iconName routes each rail glyph to FreeX's Office SVG of that name (the same CommandName the old
-        // XAML RibbonIcon used); the Kind is the geometry fallback.
-
-        yield return BackstageEntry.Pane(
-            UiText.Get("MainWindow_Text_Home"), RibbonCommandIconKind.Grid, BuildHomePane,
-            keyTip: "H", automationId: BackstageHomePaneId,
-            automationName: UiText.Get("MainWindow_Text_Home"),
-            automationHelpText: UiText.Get("MainWindow_TooltipTitle_Home"),
-            tooltipTitle: UiText.Get("MainWindow_TooltipTitle_Home"),
-            iconName: "Home");
-
-        yield return BackstageEntry.Command(
-            UiText.Get("MainWindow_Text_New"), RibbonCommandIconKind.Insert,
-            async () => await RequestNewWorkbookAsync(),
-            keyTip: "N", automationId: "BackstageNewButton",
-            automationName: UiText.Get("MainWindow_Text_New"),
-            automationHelpText: UiText.Get("MainWindow_TooltipDescription_CreateANewWorkbook"),
-            tooltipTitle: UiText.Get("MainWindow_TooltipTitle_New"),
-            iconName: "New");
-
-        yield return BackstageEntry.Command(
-            UiText.Get("MainWindow_Text_Open"), RibbonCommandIconKind.GetData,
-            () => OpenButton_Click(this, new RoutedEventArgs()),
-            keyTip: "O", automationId: "BackstageOpenButton",
-            automationName: UiText.Get("MainWindow_Text_Open"),
-            automationHelpText: UiText.Get("MainWindow_TooltipDescription_OpenAnExistingWorkbook"),
-            tooltipTitle: UiText.Get("MainWindow_TooltipTitle_Open"),
-            iconName: "Open");
-
-        yield return BackstageEntry.Command(
-            UiText.Get("MainWindow_Text_Share"), RibbonCommandIconKind.Share,
-            async () => await ShareWorkbookAsync(),
-            keyTip: "SH", automationId: "BackstageShareButton",
-            automationName: UiText.Get("MainWindow_Text_Share"),
-            automationHelpText: UiText.Get("MainWindow_TooltipDescription_SaveTheWorkbookIfNeededAndOpenWindowsShareForTheFile"),
-            tooltipTitle: UiText.Get("MainWindow_TooltipTitle_Share"),
-            tooltipDescription: UiText.Get("MainWindow_TooltipDescription_SaveTheWorkbookIfNeededAndOpenWindowsShareForTheFile"),
-            iconName: "Share");
-
-        yield return BackstageEntry.Divider();
-
-        yield return BackstageEntry.Pane(
-            UiText.Get("MainWindow_Text_Info"), RibbonCommandIconKind.Info, BuildInfoPane,
-            keyTip: "I", automationId: BackstageInfoPaneId,
-            automationName: UiText.Get("MainWindow_Text_Info"),
-            automationHelpText: UiText.Get("MainWindow_Text_ReviewLocalFileStatusAndUnsupportedWorkbookFeatureWarnings"),
-            tooltipTitle: UiText.Get("MainWindow_TooltipTitle_Info"),
-            iconName: "Info");
-
-        yield return BackstageEntry.Command(
-            UiText.Get("MainWindow_Text_Save"), RibbonCommandIconKind.Save,
-            () => SaveButton_Click(this, new RoutedEventArgs()),
-            keyTip: "S", automationId: "BackstageSaveButton",
-            automationName: UiText.Get("MainWindow_AutomationName_Save"),
-            automationHelpText: UiText.Get("MainWindow_TooltipDescription_SaveTheWorkbook"),
-            tooltipTitle: UiText.Get("MainWindow_TooltipTitle_Save"),
-            iconName: "Save");
-
-        yield return BackstageEntry.Command(
-            UiText.Get("MainWindow_Text_SaveAs"), RibbonCommandIconKind.Save,
-            () => SaveAsButton_Click(this, new RoutedEventArgs()),
-            keyTip: "A", automationId: "BackstageSaveAsButton",
-            automationName: UiText.Get("MainWindow_TooltipTitle_SaveAs"),
-            automationHelpText: UiText.Get("MainWindow_TooltipDescription_SaveTheWorkbookWithANewNameOrFormat"),
-            tooltipTitle: UiText.Get("MainWindow_TooltipTitle_SaveAs"),
-            iconName: "Save As");
-
-        yield return BackstageEntry.Pane(
-            UiText.Get("MainWindow_Text_Print"), RibbonCommandIconKind.Print, BuildPrintPane,
-            keyTip: "P", automationId: BackstagePrintPaneId,
-            automationName: UiText.Get("MainWindow_AutomationName_Print"),
-            automationHelpText: UiText.Get("MainWindow_AutomationHelpText_OpenPrintPreviewWithWorksheetSettingsAndNativePrintAccess"),
-            tooltipTitle: UiText.Get("MainWindow_TooltipTitle_Print"),
-            tooltipDescription: UiText.Get("MainWindow_TooltipDescription_OpenThePrintPreviewAndNativePrintDialogForTheRenderedWorksheet"),
-            iconName: "Print");
-
-        yield return BackstageEntry.Command(
-            UiText.Get("MainWindow_Text_Export"), RibbonCommandIconKind.Share,
-            () => ExportPdfButton_Click(this, new RoutedEventArgs()),
-            keyTip: "E", automationId: "BackstageExportButton",
-            automationName: UiText.Get("MainWindow_TooltipTitle_ExportPDFXPS"),
-            automationHelpText: UiText.Get("MainWindow_TooltipDescription_SaveSheetsTheCurrentSelectionOrTheWorkbookAsAPDFFileOrAnXPSPackage"),
-            tooltipTitle: UiText.Get("MainWindow_TooltipTitle_ExportPDFXPS"),
-            tooltipDescription: UiText.Get("MainWindow_TooltipDescription_SaveSheetsTheCurrentSelectionOrTheWorkbookAsAPDFFileOrAnXPSPackage"),
-            iconName: "Export");
-
-        yield return BackstageEntry.Command(
-            UiText.Get("MainWindow_Text_Close"), RibbonCommandIconKind.WindowClose,
-            Close,
-            keyTip: "C", automationId: "BackstageCloseButton",
-            automationName: UiText.Get("MainWindow_AutomationName_Close"),
-            automationHelpText: UiText.Get("MainWindow_TooltipTitle_Close"),
-            tooltipTitle: UiText.Get("MainWindow_TooltipTitle_Close"),
-            iconName: "Close");
-
-        yield return BackstageEntry.Divider(dockBottom: true);
-
-        yield return BackstageEntry.Command(
-            UiText.Get("MainWindow_Text_Account"), RibbonCommandIconKind.Info,
-            () => SsAccountBtn_Click(this, new RoutedEventArgs()), dockBottom: true,
-            keyTip: "AC", automationId: "BackstageAccountButton",
-            automationName: UiText.Get("MainWindow_AutomationName_Account"),
-            automationHelpText: UiText.Get("MainWindow_AutomationHelpText_ShowLocalAccountInformationForFreeX"),
-            tooltipTitle: UiText.Get("MainWindow_TooltipTitle_LocalAccount"),
-            tooltipDescription: UiText.Get("MainWindow_TooltipDescription_MicrosoftAccountIntegrationIsNotImplementedFreeXUsesLocalFilesAndLocalOp_EC989658"),
-            iconName: "Account");
-
-        yield return BackstageEntry.Command(
-            UiText.Get("MainWindow_Text_Options"), RibbonCommandIconKind.View,
-            () => SsOptionsBtn_Click(this, new RoutedEventArgs()), dockBottom: true,
-            keyTip: "T", automationId: "BackstageOptionsButton",
-            automationName: UiText.Get("MainWindow_AutomationName_Options"),
-            automationHelpText: UiText.Get("MainWindow_AutomationHelpText_OpenFreeXSettingsAndFormulaErrorCheckingOptions"),
-            tooltipTitle: UiText.Get("MainWindow_TooltipTitle_Options"),
-            iconName: "Options");
+        // IconCommandName routes each rail glyph to FreeX's Office SVG of that name (the same CommandName
+        // the old XAML RibbonIcon used); Icon is the geometry fallback.
+        return FreeXBackstageNavigationPlanner.Build().Select(MapBackstageNavigationEntry);
     }
+
+    private BackstageEntry MapBackstageNavigationEntry(FreeXBackstageNavigationEntry entry)
+    {
+        if (entry.Kind == FreeXBackstageNavigationEntryKind.Divider)
+            return BackstageEntry.Divider(entry.DockBottom);
+
+        var label = ResolveBackstageText(entry.LabelKey);
+        var automationName = ResolveOptionalBackstageText(entry.AutomationNameKey);
+        var automationHelpText = ResolveOptionalBackstageText(entry.AutomationHelpTextKey);
+        var tooltipTitle = ResolveOptionalBackstageText(entry.TooltipTitleKey);
+        var tooltipDescription = ResolveOptionalBackstageText(entry.TooltipDescriptionKey);
+
+        return entry.Kind switch
+        {
+            FreeXBackstageNavigationEntryKind.Pane => BackstageEntry.Pane(
+                label,
+                entry.Icon,
+                ResolveBackstagePane(entry.Pane!.Value),
+                entry.DockBottom,
+                entry.KeyTip,
+                entry.AutomationId,
+                automationName,
+                automationHelpText,
+                tooltipTitle,
+                tooltipDescription,
+                entry.IconCommandName),
+
+            FreeXBackstageNavigationEntryKind.Command => BackstageEntry.Command(
+                label,
+                entry.Icon,
+                ResolveBackstageCommand(entry.Command!.Value),
+                entry.DockBottom,
+                entry.KeyTip,
+                entry.AutomationId,
+                automationName,
+                automationHelpText,
+                tooltipTitle,
+                tooltipDescription,
+                entry.IconCommandName),
+
+            _ => throw new InvalidOperationException($"Unsupported Backstage entry kind '{entry.Kind}'.")
+        };
+    }
+
+    private static string ResolveBackstageText(string? key) =>
+        key is null ? string.Empty : UiText.Get(key);
+
+    private static string? ResolveOptionalBackstageText(string? key) =>
+        key is null ? null : UiText.Get(key);
+
+    private Func<UIElement> ResolveBackstagePane(FreeXBackstagePaneId pane) =>
+        pane switch
+        {
+            FreeXBackstagePaneId.Home => BuildHomePane,
+            FreeXBackstagePaneId.Info => BuildInfoPane,
+            FreeXBackstagePaneId.Print => BuildPrintPane,
+            _ => throw new InvalidOperationException($"Unsupported Backstage pane '{pane}'.")
+        };
+
+    private Action ResolveBackstageCommand(FreeXBackstageCommandId command) =>
+        command switch
+        {
+            FreeXBackstageCommandId.New => async () => await RequestNewWorkbookAsync(),
+            FreeXBackstageCommandId.Open => () => OpenButton_Click(this, new RoutedEventArgs()),
+            FreeXBackstageCommandId.Share => async () => await ShareWorkbookAsync(),
+            FreeXBackstageCommandId.Save => () => SaveButton_Click(this, new RoutedEventArgs()),
+            FreeXBackstageCommandId.SaveAs => () => SaveAsButton_Click(this, new RoutedEventArgs()),
+            FreeXBackstageCommandId.Export => () => ExportPdfButton_Click(this, new RoutedEventArgs()),
+            FreeXBackstageCommandId.Close => Close,
+            FreeXBackstageCommandId.Account => () => SsAccountBtn_Click(this, new RoutedEventArgs()),
+            FreeXBackstageCommandId.Options => () => SsOptionsBtn_Click(this, new RoutedEventArgs()),
+            _ => throw new InvalidOperationException($"Unsupported Backstage command '{command}'.")
+        };
 
     // ── Pane content factories ──────────────────────────────────────────────────
     // Each runs the same live-refresh the old Show*View methods did, then hands the existing pane element to
