@@ -5,7 +5,7 @@ namespace Free.Shared.Ribbon.Wpf;
 /// <summary>
 /// Attached metadata that the <see cref="RibbonWpfRenderer"/> stamps onto rendered controls
 /// (command name, catalog id, role). Platform-neutral except for the WPF dependency-property
-/// plumbing — ported verbatim from FreeX's app-neutral helper so a second app can reuse it.
+/// plumbing so multiple WPF apps can reuse the same renderer and adaptive behavior.
 /// </summary>
 public static class RibbonMetadata
 {
@@ -15,6 +15,27 @@ public static class RibbonMetadata
             typeof(RibbonMetadataRole),
             typeof(RibbonMetadata),
             new FrameworkPropertyMetadata(RibbonMetadataRole.None));
+
+    public static readonly DependencyProperty CompactFullWidthProperty =
+        DependencyProperty.RegisterAttached(
+            "CompactFullWidth",
+            typeof(double),
+            typeof(RibbonMetadata),
+            new FrameworkPropertyMetadata(double.NaN));
+
+    public static readonly DependencyProperty CompactWidthProperty =
+        DependencyProperty.RegisterAttached(
+            "CompactWidth",
+            typeof(double),
+            typeof(RibbonMetadata),
+            new FrameworkPropertyMetadata(double.NaN));
+
+    public static readonly DependencyProperty CommandContentLayoutProperty =
+        DependencyProperty.RegisterAttached(
+            "CommandContentLayout",
+            typeof(RibbonCommandContentLayout),
+            typeof(RibbonMetadata),
+            new FrameworkPropertyMetadata(RibbonCommandContentLayout.None));
 
     public static readonly DependencyProperty GroupNameProperty =
         DependencyProperty.RegisterAttached(
@@ -37,11 +58,57 @@ public static class RibbonMetadata
             typeof(RibbonMetadata),
             new FrameworkPropertyMetadata(""));
 
+    public static readonly DependencyProperty DropdownMenuButtonProperty =
+        DependencyProperty.RegisterAttached(
+            "DropdownMenuButton",
+            typeof(bool),
+            typeof(RibbonMetadata),
+            new FrameworkPropertyMetadata(false));
+
+    public static readonly RoutedEvent DropdownClickEvent =
+        EventManager.RegisterRoutedEvent(
+            "DropdownClick",
+            RoutingStrategy.Bubble,
+            typeof(RoutedEventHandler),
+            typeof(RibbonMetadata));
+
+    public static readonly DependencyProperty DropdownZoneHandlerAttachedProperty =
+        DependencyProperty.RegisterAttached(
+            "DropdownZoneHandlerAttached",
+            typeof(bool),
+            typeof(RibbonMetadata),
+            new FrameworkPropertyMetadata(false));
+
+    public static readonly DependencyProperty DropdownZoneHighlightAttachedProperty =
+        DependencyProperty.RegisterAttached(
+            "DropdownZoneHighlightAttached",
+            typeof(bool),
+            typeof(RibbonMetadata),
+            new FrameworkPropertyMetadata(false));
+
     public static RibbonMetadataRole GetRole(DependencyObject element) =>
         (RibbonMetadataRole)element.GetValue(RoleProperty);
 
     public static void SetRole(DependencyObject element, RibbonMetadataRole value) =>
         element.SetValue(RoleProperty, value);
+
+    public static double GetCompactFullWidth(DependencyObject element) =>
+        (double)element.GetValue(CompactFullWidthProperty);
+
+    public static void SetCompactFullWidth(DependencyObject element, double value) =>
+        element.SetValue(CompactFullWidthProperty, value);
+
+    public static double GetCompactWidth(DependencyObject element) =>
+        (double)element.GetValue(CompactWidthProperty);
+
+    public static void SetCompactWidth(DependencyObject element, double value) =>
+        element.SetValue(CompactWidthProperty, value);
+
+    public static RibbonCommandContentLayout GetCommandContentLayout(DependencyObject element) =>
+        (RibbonCommandContentLayout)element.GetValue(CommandContentLayoutProperty);
+
+    public static void SetCommandContentLayout(DependencyObject element, RibbonCommandContentLayout value) =>
+        element.SetValue(CommandContentLayoutProperty, value);
 
     public static string GetGroupName(DependencyObject element) =>
         (string)element.GetValue(GroupNameProperty);
@@ -61,11 +128,135 @@ public static class RibbonMetadata
     public static void SetCatalogId(DependencyObject element, string value) =>
         element.SetValue(CatalogIdProperty, value);
 
+    public static bool GetDropdownMenuButton(DependencyObject element) =>
+        (bool)element.GetValue(DropdownMenuButtonProperty);
+
+    public static void SetDropdownMenuButton(DependencyObject element, bool value) =>
+        element.SetValue(DropdownMenuButtonProperty, value);
+
+    public static void AddDropdownClickHandler(DependencyObject element, RoutedEventHandler handler)
+    {
+        if (element is UIElement uiElement)
+            uiElement.AddHandler(DropdownClickEvent, handler);
+    }
+
+    public static void RemoveDropdownClickHandler(DependencyObject element, RoutedEventHandler handler)
+    {
+        if (element is UIElement uiElement)
+            uiElement.RemoveHandler(DropdownClickEvent, handler);
+    }
+
+    public static bool GetDropdownZoneHandlerAttached(DependencyObject element) =>
+        (bool)element.GetValue(DropdownZoneHandlerAttachedProperty);
+
+    public static void SetDropdownZoneHandlerAttached(DependencyObject element, bool value) =>
+        element.SetValue(DropdownZoneHandlerAttachedProperty, value);
+
+    public static bool GetDropdownZoneHighlightAttached(DependencyObject element) =>
+        (bool)element.GetValue(DropdownZoneHighlightAttachedProperty);
+
+    public static void SetDropdownZoneHighlightAttached(DependencyObject element, bool value) =>
+        element.SetValue(DropdownZoneHighlightAttachedProperty, value);
+
+    public static void SetCompactWidths(DependencyObject element, double fullWidth, double compactWidth)
+    {
+        SetCompactFullWidth(element, fullWidth);
+        SetCompactWidth(element, compactWidth);
+    }
+
+    public static bool TryGetCompactWidths(DependencyObject element, out double fullWidth, out double compactWidth)
+    {
+        fullWidth = GetCompactFullWidth(element);
+        compactWidth = GetCompactWidth(element);
+        if (double.IsFinite(fullWidth) &&
+            double.IsFinite(compactWidth) &&
+            fullWidth > 0 &&
+            compactWidth > 0 &&
+            compactWidth <= fullWidth)
+        {
+            return true;
+        }
+
+        fullWidth = 0;
+        compactWidth = 0;
+        return false;
+    }
+
+    public static bool IsCommandLabel(DependencyObject element) =>
+        GetRole(element) == RibbonMetadataRole.CommandLabel;
+
+    public static bool IsCommandIcon(DependencyObject element) =>
+        GetRole(element) is RibbonMetadataRole.CommandIcon or RibbonMetadataRole.CollapsedChevron;
+
+    public static bool IsCollapsedChevron(DependencyObject element) =>
+        GetRole(element) == RibbonMetadataRole.CollapsedChevron;
+
+    public static bool IsDropdownChevron(DependencyObject element) =>
+        GetRole(element) == RibbonMetadataRole.DropdownChevron;
+
+    public static bool IsDropdownMenuButton(DependencyObject element) =>
+        GetDropdownMenuButton(element);
+
     public static bool IsCollapsedGroupButton(DependencyObject element) =>
         GetRole(element) == RibbonMetadataRole.CollapsedGroupButton;
 
+    public static bool IsCommandSpacer(DependencyObject element) =>
+        GetRole(element) == RibbonMetadataRole.CommandSpacer;
+
     public static bool IsRibbonGroup(DependencyObject element) =>
         GetRole(element) == RibbonMetadataRole.RibbonGroup;
+
+    public static bool TryGetGroupName(DependencyObject element, out string groupName)
+    {
+        groupName = GetGroupName(element);
+        if (!string.IsNullOrWhiteSpace(groupName))
+        {
+            groupName = groupName.Trim();
+            return true;
+        }
+
+        groupName = "";
+        return false;
+    }
+
+    public static bool TryGetCommandName(DependencyObject element, out string commandName)
+    {
+        commandName = GetCommandName(element);
+        if (!string.IsNullOrWhiteSpace(commandName))
+        {
+            commandName = commandName.Trim();
+            return true;
+        }
+
+        commandName = "";
+        return false;
+    }
+
+    public static bool TryGetCatalogId(DependencyObject element, out string catalogId)
+    {
+        catalogId = GetCatalogId(element);
+        if (!string.IsNullOrWhiteSpace(catalogId))
+        {
+            catalogId = catalogId.Trim();
+            return true;
+        }
+
+        catalogId = "";
+        return false;
+    }
+
+    public static bool TryGetCommandContentLayout(DependencyObject? element, out RibbonCommandContentLayout layout)
+    {
+        layout = RibbonCommandContentLayout.None;
+        if (element is null)
+            return false;
+
+        layout = GetCommandContentLayout(element);
+        if (layout != RibbonCommandContentLayout.None)
+            return true;
+
+        return false;
+    }
 }
 
 public enum RibbonMetadataRole
@@ -78,4 +269,13 @@ public enum RibbonMetadataRole
     CommandSpacer,
     RibbonGroup,
     DropdownChevron
+}
+
+public enum RibbonCommandContentLayout
+{
+    None,
+    Small,
+    Medium,
+    Large,
+    IconOnly
 }

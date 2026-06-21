@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
+using SharedRibbonTooltip = Free.Shared.Ribbon.Wpf.RibbonTooltip;
 
 namespace FreeX.App.Host;
 
@@ -25,13 +26,25 @@ public static class RibbonTooltip
             new PropertyMetadata(null, OnKeyTipChanged));
 
     public static void SetTitle(DependencyObject o, string v) => o.SetValue(TitleProperty, v);
-    public static string? GetTitle(DependencyObject o) => (string?)o.GetValue(TitleProperty);
+    public static string? GetTitle(DependencyObject o)
+    {
+        var value = (string?)o.GetValue(TitleProperty);
+        return string.IsNullOrWhiteSpace(value) ? SharedRibbonTooltip.GetTitle(o) : value;
+    }
 
     public static void SetDescription(DependencyObject o, string v) => o.SetValue(DescriptionProperty, v);
-    public static string? GetDescription(DependencyObject o) => (string?)o.GetValue(DescriptionProperty);
+    public static string? GetDescription(DependencyObject o)
+    {
+        var value = (string?)o.GetValue(DescriptionProperty);
+        return string.IsNullOrWhiteSpace(value) ? SharedRibbonTooltip.GetDescription(o) : value;
+    }
 
     public static void SetKeyTip(DependencyObject o, string v) => o.SetValue(KeyTipProperty, v);
-    public static string? GetKeyTip(DependencyObject o) => (string?)o.GetValue(KeyTipProperty);
+    public static string? GetKeyTip(DependencyObject o)
+    {
+        var value = (string?)o.GetValue(KeyTipProperty);
+        return string.IsNullOrWhiteSpace(value) ? SharedRibbonTooltip.GetKeyTip(o) : value;
+    }
 
     public static bool TryOpenSubmenuForKeyTip(ItemsControl menu, string keyTip) =>
         TryOpenSubmenuForKeyTip(menu, keyTip, out _);

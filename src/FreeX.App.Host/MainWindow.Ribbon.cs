@@ -8,6 +8,7 @@ using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+using SharedRibbonIcon = Free.Shared.Ribbon.Wpf.RibbonIcon;
 
 namespace FreeX.App.Host;
 
@@ -1087,7 +1088,7 @@ public partial class MainWindow
     {
         switch (content)
         {
-            case RibbonIcon:
+            case RibbonIcon or SharedRibbonIcon:
                 return true;
             case Panel panel:
                 return panel.Children.Cast<object>().Any(ContainsUnreplacedRibbonIcon);
@@ -1109,6 +1110,9 @@ public partial class MainWindow
             case RibbonIcon ribbonIcon:
                 owner.Content = CreateStaticRibbonCommandIcon(owner, ribbonIcon, tall);
                 return;
+            case SharedRibbonIcon ribbonIcon:
+                owner.Content = CreateStaticRibbonCommandIcon(owner, ribbonIcon, tall);
+                return;
             case TextBlock textBlock when IsRibbonIconTextBlock(textBlock):
                 owner.Content = CreateStaticRibbonVectorIcon(owner, textBlock, tall);
                 return;
@@ -1118,6 +1122,14 @@ public partial class MainWindow
                     if (panel.Children[i] is RibbonIcon childRibbonIcon)
                     {
                         var replacement = CreateStaticRibbonCommandIcon(owner, childRibbonIcon, tall);
+                        panel.Children.RemoveAt(i);
+                        panel.Children.Insert(i, replacement);
+                        continue;
+                    }
+
+                    if (panel.Children[i] is SharedRibbonIcon childSharedRibbonIcon)
+                    {
+                        var replacement = CreateStaticRibbonCommandIcon(owner, childSharedRibbonIcon, tall);
                         panel.Children.RemoveAt(i);
                         panel.Children.Insert(i, replacement);
                         continue;
@@ -1138,6 +1150,8 @@ public partial class MainWindow
             case Decorator decorator:
                 if (decorator.Child is RibbonIcon decoratorRibbonIcon)
                     decorator.Child = CreateStaticRibbonCommandIcon(owner, decoratorRibbonIcon, tall);
+                else if (decorator.Child is SharedRibbonIcon decoratorSharedRibbonIcon)
+                    decorator.Child = CreateStaticRibbonCommandIcon(owner, decoratorSharedRibbonIcon, tall);
                 else if (decorator.Child is TextBlock decoratorText && IsRibbonIconTextBlock(decoratorText))
                     decorator.Child = CreateStaticRibbonVectorIcon(owner, decoratorText, tall);
                 else
@@ -1146,6 +1160,8 @@ public partial class MainWindow
             case ContentControl contentControl when !ReferenceEquals(contentControl, owner):
                 if (contentControl.Content is RibbonIcon contentRibbonIcon)
                     contentControl.Content = CreateStaticRibbonCommandIcon(owner, contentRibbonIcon, tall);
+                else if (contentControl.Content is SharedRibbonIcon contentSharedRibbonIcon)
+                    contentControl.Content = CreateStaticRibbonCommandIcon(owner, contentSharedRibbonIcon, tall);
                 else if (contentControl.Content is TextBlock contentText && IsRibbonIconTextBlock(contentText))
                     contentControl.Content = CreateStaticRibbonVectorIcon(owner, contentText, tall);
                 else
@@ -1160,6 +1176,27 @@ public partial class MainWindow
     }
 
     private static FrameworkElement CreateStaticRibbonCommandIcon(ButtonBase owner, RibbonIcon source, bool tall)
+    {
+        var commandName = !string.IsNullOrWhiteSpace(source.CommandName)
+            ? source.CommandName.Trim()
+            : source.Kind == RibbonCommandIconKind.Previous
+            ? "Back to workbook"
+            : GetStaticRibbonIconCommandName(owner, source.Kind.ToString());
+        var fallbackIcon = new RibbonCommandIcon(source.Kind);
+        var iconSize = IsWhiteBrush(source.Foreground) ? source.IconSize : tall ? 32 : 22;
+        var commandIcon = RibbonIconFactory.CreateCommandIcon(
+            commandName,
+            fallbackIcon,
+            iconSize,
+            source.Foreground ?? owner.Foreground);
+        RibbonMetadata.SetRole(commandIcon, RibbonMetadataRole.CommandIcon);
+        commandIcon.HorizontalAlignment = source.HorizontalAlignment;
+        commandIcon.VerticalAlignment = source.VerticalAlignment;
+        commandIcon.Margin = source.Margin;
+        return commandIcon;
+    }
+
+    private static FrameworkElement CreateStaticRibbonCommandIcon(ButtonBase owner, SharedRibbonIcon source, bool tall)
     {
         var commandName = !string.IsNullOrWhiteSpace(source.CommandName)
             ? source.CommandName.Trim()
