@@ -129,6 +129,109 @@ public sealed class FreeWRibbonParityTests
             registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must execute from the Review comments group");
     }
 
+    [Fact]
+    public void Build_ExposesWordStyleTableDesignAndTableLayoutContextualTabs()
+    {
+        var definition = FreeWRibbon.Build();
+
+        definition.ContextualTabs.Select(tab => tab.Id)
+            .Should()
+            .ContainInOrder("picture-format", "table-design", "table-layout");
+
+        foreach (var tabId in new[] { "table-design", "table-layout" })
+        {
+            var tab = definition.FindTab(tabId);
+
+            tab.Should().NotBeNull();
+            tab!.Context.Should().NotBeNull();
+            tab.Context!.ActivationKey.Should().Be("table");
+            tab.Context.Label.Should().Be("Table Tools");
+            tab.Context.Color.Should().Be(RibbonContextColor.Teal);
+        }
+    }
+
+    [StaFact]
+    public void TableDesign_ContextualTabContainsOnlyImplementedStyleCommands()
+    {
+        var definition = FreeWRibbon.Build();
+        var tableDesign = definition.FindTab("table-design");
+        var editor = new DocumentView();
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        tableDesign.Should().NotBeNull();
+        tableDesign!.Groups.Select(group => group.Id)
+            .Should()
+            .Equal("table-style");
+
+        CommandIds(tableDesign)
+            .Should()
+            .Equal(
+                "freew.cell-shading",
+                "freew.table-header-row",
+                "freew.table-banded-rows");
+
+        foreach (var commandId in CommandIds(tableDesign))
+            registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must execute from the Table Design tab");
+    }
+
+    [StaFact]
+    public void TableLayout_ContextualTabContainsImplementedTableLayoutCommands()
+    {
+        var definition = FreeWRibbon.Build();
+        var tableLayout = definition.FindTab("table-layout");
+        var editor = new DocumentView();
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        tableLayout.Should().NotBeNull();
+        tableLayout!.Groups.Select(group => group.Id)
+            .Should()
+            .Equal("table-properties", "table-rows-cols", "table-merge", "table-data");
+
+        CommandIds(tableLayout)
+            .Should()
+            .Equal(
+                "freew.table-properties",
+                "freew.table-insert-row",
+                "freew.table-delete-row",
+                "freew.table-insert-col",
+                "freew.table-delete-col",
+                "freew.merge-cells",
+                "freew.split-cell",
+                "freew.table-repeat-header",
+                "freew.table-formula");
+
+        foreach (var commandId in CommandIds(tableLayout))
+            registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must execute from the Table Layout tab");
+    }
+
+    [Fact]
+    public void InsertTab_DoesNotExposeTableMutationToolsOutsideTableContext()
+    {
+        var insert = FreeWRibbon.Build().FindTab("insert");
+
+        insert.Should().NotBeNull();
+        insert!.Groups.Select(group => group.Id)
+            .Should()
+            .NotContain("table-tools");
+
+        CommandIds(insert).Should().Contain("freew.table");
+        CommandIds(insert).Should().NotContain(new[]
+        {
+            "freew.table-insert-row",
+            "freew.table-delete-row",
+            "freew.table-insert-col",
+            "freew.table-delete-col",
+            "freew.cell-shading",
+            "freew.merge-cells",
+            "freew.split-cell",
+            "freew.table-header-row",
+            "freew.table-banded-rows",
+            "freew.table-repeat-header",
+            "freew.table-formula",
+            "freew.table-properties"
+        });
+    }
+
     private static IEnumerable<string> CommandIds(RibbonTab tab)
     {
         foreach (var control in tab.Groups.SelectMany(group => group.Controls))

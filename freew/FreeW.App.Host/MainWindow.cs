@@ -104,8 +104,8 @@ public sealed class MainWindow : Window
     private UIElement _ribbon = null!;
     private TabControl _ribbonTabs = null!;
 
-    // Manages the Word-style contextual "Tools" tabs (Picture Format / Table Design): the shared controller
-    // shows them only while their selection context is active (an image selected, the caret in a table).
+    // Manages the Word-style contextual "Tools" tabs (Picture Format / Table Design / Table Layout):
+    // the shared controller shows them only while their selection context is active.
     private RibbonContextualTabController _contextualTabs = null!;
 
     // File ribbon tab (Word-style Backstage entry): selecting it opens Backstage and the shared router
@@ -429,7 +429,7 @@ public sealed class MainWindow : Window
     }
 
     // Recompute which contextual "Tools" tabs apply to the current selection and let the shared controller
-    // show/hide them: Picture Format when an image is selected, Table Design when the caret is in a table.
+    // show/hide them: Picture Format when an image is selected, table tabs when the caret is in a table.
     // The activation keys ("picture"/"table") match the RibbonTabContext keys declared in FreeWRibbon.
     private void RefreshContextualTabs()
     {
@@ -1769,7 +1769,7 @@ public sealed class MainWindow : Window
         //    opens the Backstage overlay rather than swapping the ribbon body to an empty tab. Like FreeX,
         //    the File tab never *stays* selected: the SelectionChanged handler shows the Backstage and
         //    immediately reverts the selection to the previously-active content tab (index 1 = Home).
-        // Contextual "Tools" tabs (Picture Format / Table Design) are declared in the ribbon model and
+        // Contextual "Tools" tabs (Picture Format / table tabs) are declared in the ribbon model and
         // managed by the shared controller — hidden until their selection context is active. Default revert
         // tab is Home (index 1; index 0 is the File pill).
             // V5 galleries: inject the live-preview Word-style galleries into the rendered group content.

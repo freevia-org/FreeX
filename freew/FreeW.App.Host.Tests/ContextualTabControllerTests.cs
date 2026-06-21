@@ -14,7 +14,7 @@ namespace FreeW.App.Host.Tests;
 /// </summary>
 public sealed class ContextualTabControllerTests
 {
-    private static (TabControl Tabs, TabItem Home, TabItem Picture, TabItem Table) Build()
+    private static (TabControl Tabs, TabItem Home, TabItem Picture, TabItem TableDesign, TabItem TableLayout) Build()
     {
         var tabs = new TabControl();
         tabs.Items.Add(new TabItem { Header = "File" });           // 0
@@ -22,16 +22,18 @@ public sealed class ContextualTabControllerTests
         tabs.Items.Add(home);
         var picture = new TabItem { Header = "Picture Format" };    // 2
         tabs.Items.Add(picture);
-        var table = new TabItem { Header = "Table Design" };        // 3
-        tabs.Items.Add(table);
+        var tableDesign = new TabItem { Header = "Table Design" };  // 3
+        tabs.Items.Add(tableDesign);
+        var tableLayout = new TabItem { Header = "Table Layout" };  // 4
+        tabs.Items.Add(tableLayout);
         tabs.SelectedItem = home;
-        return (tabs, home, picture, table);
+        return (tabs, home, picture, tableDesign, tableLayout);
     }
 
     [StaFact]
     public void Register_HidesTab_AndTintsHeaderWithContextColor()
     {
-        var (tabs, _, picture, table) = Build();
+        var (tabs, _, picture, table, _) = Build();
         var controller = new RibbonContextualTabController(tabs, defaultTabIndex: 1);
 
         controller.Register(picture, "picture", RibbonContextColor.Orange);
@@ -45,7 +47,7 @@ public sealed class ContextualTabControllerTests
     [StaFact]
     public void Apply_ShowsActiveContext_AndHidesInactive()
     {
-        var (tabs, _, picture, table) = Build();
+        var (tabs, _, picture, table, _) = Build();
         var controller = new RibbonContextualTabController(tabs, defaultTabIndex: 1);
         controller.Register(picture, "picture");
         controller.Register(table, "table");
@@ -60,9 +62,25 @@ public sealed class ContextualTabControllerTests
     }
 
     [StaFact]
+    public void Apply_ShowsAllTabsRegisteredForTheSameActiveContext()
+    {
+        var (tabs, _, picture, tableDesign, tableLayout) = Build();
+        var controller = new RibbonContextualTabController(tabs, defaultTabIndex: 1);
+        controller.Register(picture, "picture");
+        controller.Register(tableDesign, "table", RibbonContextColor.Teal);
+        controller.Register(tableLayout, "table", RibbonContextColor.Teal);
+
+        controller.Apply(RibbonContextState.None.With("table"));
+
+        Assert.Equal(Visibility.Collapsed, picture.Visibility);
+        Assert.Equal(Visibility.Visible, tableDesign.Visibility);
+        Assert.Equal(Visibility.Visible, tableLayout.Visibility);
+    }
+
+    [StaFact]
     public void Apply_RevertsSelection_WhenTheActiveContextualTabIsHidden()
     {
-        var (tabs, _, picture, _) = Build();
+        var (tabs, _, picture, _, _) = Build();
         var controller = new RibbonContextualTabController(tabs, defaultTabIndex: 1);
         controller.Register(picture, "picture");
 
@@ -79,7 +97,7 @@ public sealed class ContextualTabControllerTests
     [StaFact]
     public void Apply_DoesNotDisturbSelection_WhenHiddenTabWasNotActive()
     {
-        var (tabs, home, picture, _) = Build();
+        var (tabs, home, picture, _, _) = Build();
         var controller = new RibbonContextualTabController(tabs, defaultTabIndex: 1);
         controller.Register(picture, "picture");
 

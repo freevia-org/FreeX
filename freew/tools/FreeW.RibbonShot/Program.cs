@@ -13,7 +13,8 @@ using FreeW.App.Host;
 //
 // Usage: FreeW.RibbonShot <outDir> [tabIndex|all] [width] [height]
 //   tabIndex: 0=File/Backstage 1=Home 2=Insert 3=Design 4=Layout 5=References 6=Mailings 7=Review 8=View,
-//             "all" captures content/contextual tabs (skipping File), and "backstage" captures File.
+//             9=Picture Format 10=Table Design 11=Table Layout; "all" captures content/contextual tabs
+//             (skipping File), and "backstage" captures File.
 
 string outDir = args.Length > 0 ? args[0] : Directory.GetCurrentDirectory();
 string tabArg = args.Length > 1 ? args[1] : "0";
