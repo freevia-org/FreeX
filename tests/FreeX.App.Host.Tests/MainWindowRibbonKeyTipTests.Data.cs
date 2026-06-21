@@ -37,6 +37,30 @@ public sealed partial class MainWindowRibbonKeyTipTests
     }
 
     [Fact]
+    public void LegacyAltEditPasteSpecialKeyTip_ES_RoutesToPasteSpecialAndClosesKeyTips()
+    {
+        RunSta(() =>
+        {
+            System.Windows.Clipboard.Clear();
+            using var harness = MainWindowHarness.Create();
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.E);
+            harness.KeyTipScope.Should().Be("Commands");
+            harness.HandleKeyTip(Key.S);
+
+            harness.KeyTipScope.Should().Be("None");
+
+            System.Windows.Clipboard.Clear();
+            harness.HandleDirectTopLevelKeyTip(Key.E).Should().BeTrue();
+            harness.KeyTipScope.Should().Be("Commands");
+            harness.HandleKeyTip(Key.S);
+
+            harness.KeyTipScope.Should().Be("None");
+        });
+    }
+
+    [Fact]
     public void DataWhatIfKeyTip_OpensAnalysisMenuWithExcelChoices()
     {
         RunSta(() =>

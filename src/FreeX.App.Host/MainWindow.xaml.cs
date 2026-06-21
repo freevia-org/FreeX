@@ -44,6 +44,7 @@ public partial class MainWindow : Window, IWorkbookWindow
     private RibbonKeyTipScope _ribbonKeyTipScope = RibbonKeyTipScope.None;
     private string _ribbonKeyTipSequence = "";
     private bool _legacyDataKeyTipSequence;
+    private bool _legacyEditKeyTipSequence;
     private ContextMenu? _activeRibbonKeyTipMenu;
     private ItemsControl? _activeRibbonKeyTipItemsControl;
     private readonly WorkbookRef _workbookRef;

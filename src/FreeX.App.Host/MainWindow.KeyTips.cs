@@ -30,6 +30,7 @@ public partial class MainWindow
         _ribbonKeyTipScope = scope;
         _ribbonKeyTipSequence = "";
         _legacyDataKeyTipSequence = false;
+        _legacyEditKeyTipSequence = false;
         _activeRibbonKeyTipMenu = null;
         _activeRibbonKeyTipItemsControl = null;
         InvalidateKeyTipCandidateCaches();
@@ -45,6 +46,7 @@ public partial class MainWindow
         _ribbonKeyTipScope = RibbonKeyTipScope.None;
         _ribbonKeyTipSequence = "";
         _legacyDataKeyTipSequence = false;
+        _legacyEditKeyTipSequence = false;
         _activeRibbonKeyTipMenu = null;
         _activeRibbonKeyTipItemsControl = null;
         InvalidateKeyTipCandidateCaches();
@@ -74,7 +76,12 @@ public partial class MainWindow
                 return;
 
             var topLevelSequence = _ribbonKeyTipSequence;
-            if (TryHandleTopLevelRibbonKeyTip(topLevelSequence))
+            if (TryHandleLegacyEditTopLevelKeyTip(topLevelSequence))
+            {
+                EnterRibbonKeyTipMode(RibbonKeyTipScope.Commands);
+                _legacyEditKeyTipSequence = true;
+            }
+            else if (TryHandleTopLevelRibbonKeyTip(topLevelSequence))
             {
                 EnterRibbonKeyTipMode(RibbonKeyTipScope.Commands);
                 _legacyDataKeyTipSequence = string.Equals(topLevelSequence, "D", StringComparison.OrdinalIgnoreCase);
@@ -94,6 +101,19 @@ public partial class MainWindow
                 ExitRibbonKeyTipMode();
             else if (!HasActiveMenuItemKeyTipPrefix(_ribbonKeyTipSequence))
                 ExitRibbonKeyTipMode();
+
+            return;
+        }
+
+        // Legacy Excel access-key route Alt+E, S (Edit > Paste Special).
+        if (_legacyEditKeyTipSequence &&
+            "S".StartsWith(_ribbonKeyTipSequence, StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.Equals(_ribbonKeyTipSequence, "S", StringComparison.OrdinalIgnoreCase))
+            {
+                PasteSpecialBtn_Click(this, new RoutedEventArgs());
+                ExitRibbonKeyTipMode();
+            }
 
             return;
         }
@@ -136,6 +156,13 @@ public partial class MainWindow
         if (token is null)
             return false;
 
+        if (TryHandleLegacyEditTopLevelKeyTip(token))
+        {
+            EnterRibbonKeyTipMode(RibbonKeyTipScope.Commands);
+            _legacyEditKeyTipSequence = true;
+            return true;
+        }
+
         if (TryHandleTopLevelRibbonKeyTip(token))
         {
             EnterRibbonKeyTipMode(RibbonKeyTipScope.Commands);
@@ -145,6 +172,9 @@ public partial class MainWindow
 
         return TryInvokeTopLevelQatKeyTip(token);
     }
+
+    private static bool TryHandleLegacyEditTopLevelKeyTip(string token) =>
+        string.Equals(token, "E", StringComparison.OrdinalIgnoreCase);
 
     private void ShowKeyTipOverlay(RibbonKeyTipScope scope)
     {
