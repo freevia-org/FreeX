@@ -1,7 +1,10 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Shapes;
+using Avalonia.Controls.Templates;
+using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -26,10 +29,12 @@ public static class AvaloniaRibbonRenderer
 {
     private const string FileRibbonTabId = "FileTab";
     private const string MenuChevron = "\u25BE";
-    private const double SmallRowHeight = 21;
-    private const double LargeIconSize = 30;
-    private const double MediumIconSize = 16;
-    private const double SmallIconSize = 18;
+    private const string SelectedTabUnderlineTag = "FreeX.SelectedTabUnderline";
+    private const double SmallRowHeight = 26;
+    private const double TabHeaderHeight = 28;
+    private const double LargeIconSize = 32;
+    private const double MediumIconSize = 22;
+    private const double SmallIconSize = 22;
     private const int MaxRowsPerColumn = 3;
 
     // Ribbon palette — matched 1:1 to the WPF resources so the Avalonia ribbon visually replicates
@@ -43,7 +48,7 @@ public static class AvaloniaRibbonRenderer
     //   HoverBorder     = FreeXBorderStrongBrush       (#C8CCD0) — ThemeResources.xaml:21
     //   CheckedColor    = FreeXAccentPressedBrush      (#CCEAF2) — ThemeResources.xaml:11 (toggle IsChecked fill)
     //   TabHoverColor   = FreeXAccentSoftBrush         (#E6F6FA) — ThemeResources.xaml:10
-    //   TabStripColor   = chrome surface               (#F5F6F7) — the light-gray surround behind the tabs
+    //   TabStripColor   = FreeXChromeSurfaceBrush      (#F7F8F8) — the light-gray surround behind the tabs
     //                     (FreeXChromeSurfaceBrush analog) so the white selected tab pops out of a gray strip.
     //   TabTextColor    = FreeXTextBrush               (#1F1F1F) — ThemeResources.xaml:13 (near-black tab labels)
     internal static readonly Color SurfaceColor = Color.FromRgb(0xFF, 0xFF, 0xFF);
@@ -53,9 +58,9 @@ public static class AvaloniaRibbonRenderer
     internal static readonly Color GroupLabelColor = Color.FromRgb(0x5F, 0x63, 0x68);
     internal static readonly Color HoverColor = Color.FromRgb(0xBE, 0xE6, 0xFD);
     internal static readonly Color HoverBorderColor = Color.FromRgb(0xC8, 0xCC, 0xD0);
-    internal static readonly Color CheckedColor = Color.FromRgb(0xCC, 0xEA, 0xF2);
+    internal static readonly Color CheckedColor = Color.FromRgb(0xE6, 0xF6, 0xFA);
     internal static readonly Color TabHoverColor = Color.FromRgb(0xE6, 0xF6, 0xFA);
-    internal static readonly Color TabStripColor = Color.FromRgb(0xF5, 0xF6, 0xF7);
+    internal static readonly Color TabStripColor = Color.FromRgb(0xF7, 0xF8, 0xF8);
     internal static readonly Color TabTextColor = Color.FromRgb(0x1F, 0x1F, 0x1F);
 
     private static readonly IBrush SurfaceBrush = new SolidColorBrush(SurfaceColor);
@@ -69,6 +74,46 @@ public static class AvaloniaRibbonRenderer
     private static readonly IBrush TabHoverBrush = new SolidColorBrush(TabHoverColor);
     private static readonly IBrush TabStripBrush = new SolidColorBrush(TabStripColor);
     private static readonly IBrush TabTextBrush = new SolidColorBrush(TabTextColor);
+    private static readonly FontFamily RibbonFontFamily =
+        new("Arial Narrow, Aptos Narrow, Liberation Sans Narrow, Nimbus Sans Narrow, DejaVu Sans Condensed, Arial, Liberation Sans, Noto Sans, DejaVu Sans, Helvetica, sans-serif");
+    private static readonly FuncControlTemplate<ToggleButton> RibbonToggleButtonTemplate = new((button, _) =>
+    {
+        var presenter = new ContentPresenter();
+        presenter.Bind(ContentPresenter.ContentProperty, new Binding(nameof(ContentControl.Content)) { Source = button });
+        presenter.Bind(ContentPresenter.ContentTemplateProperty, new Binding(nameof(ContentControl.ContentTemplate)) { Source = button });
+        presenter.Bind(Layoutable.HorizontalAlignmentProperty, new Binding(nameof(ContentControl.HorizontalContentAlignment)) { Source = button });
+        presenter.Bind(Layoutable.VerticalAlignmentProperty, new Binding(nameof(ContentControl.VerticalContentAlignment)) { Source = button });
+
+        var border = new Border
+        {
+            CornerRadius = new CornerRadius(1),
+            Child = presenter,
+        };
+        border.Bind(Border.BackgroundProperty, new Binding(nameof(TemplatedControl.Background)) { Source = button });
+        border.Bind(Border.BorderBrushProperty, new Binding(nameof(TemplatedControl.BorderBrush)) { Source = button });
+        border.Bind(Border.BorderThicknessProperty, new Binding(nameof(TemplatedControl.BorderThickness)) { Source = button });
+        border.Bind(Border.PaddingProperty, new Binding(nameof(TemplatedControl.Padding)) { Source = button });
+        return border;
+    });
+    private static readonly FuncControlTemplate<TabItem> RibbonTabItemTemplate = new((tabItem, _) =>
+    {
+        var presenter = new ContentPresenter
+        {
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch,
+        };
+        presenter.Bind(ContentPresenter.ContentProperty, new Binding(nameof(HeaderedContentControl.Header)) { Source = tabItem });
+
+        var border = new Border
+        {
+            Child = presenter,
+        };
+        border.Bind(Border.BackgroundProperty, new Binding(nameof(TemplatedControl.Background)) { Source = tabItem });
+        border.Bind(Border.BorderBrushProperty, new Binding(nameof(TemplatedControl.BorderBrush)) { Source = tabItem });
+        border.Bind(Border.BorderThicknessProperty, new Binding(nameof(TemplatedControl.BorderThickness)) { Source = tabItem });
+        border.Bind(Border.PaddingProperty, new Binding(nameof(TemplatedControl.Padding)) { Source = tabItem });
+        return border;
+    });
 
     /// <summary>
     /// Syncs every <see cref="ToggleButton"/> in the ribbon's live visual tree with its command's
@@ -88,6 +133,7 @@ public static class AvaloniaRibbonRenderer
                 var state = stateful.GetState();
                 toggle.IsChecked = state.IsChecked;
                 toggle.IsEnabled = state.IsEnabled;
+                ApplyToggleCheckedChrome(toggle);
             }
         }
     }
@@ -120,13 +166,46 @@ public static class AvaloniaRibbonRenderer
         };
     }
 
-    private static TextBlock BuildTabHeader(string header) => new()
+    private static Control BuildTabHeader(string header)
     {
-        Text = header,
-        FontSize = 12,
-        Foreground = TabTextBrush,
-        VerticalAlignment = VerticalAlignment.Center,
-    };
+        var grid = new Grid
+        {
+            RowDefinitions =
+            {
+                new RowDefinition { Height = new GridLength(1, GridUnitType.Star) },
+                new RowDefinition { Height = new GridLength(3) },
+            },
+            Height = TabHeaderHeight,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            MinWidth = 42,
+        };
+        AddHeaderChild(grid, new TextBlock
+        {
+            Text = header,
+            FontSize = 12,
+            FontFamily = RibbonFontFamily,
+            Foreground = TabTextBrush,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(5, 0),
+        }, 0);
+        AddHeaderChild(grid, new Border
+        {
+            Tag = SelectedTabUnderlineTag,
+            Height = 3,
+            Background = AccentBrush,
+            IsVisible = false,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Bottom,
+        }, 1);
+        return grid;
+    }
+
+    private static void AddHeaderChild(Grid grid, Control child, int row)
+    {
+        Grid.SetRow(child, row);
+        grid.Children.Add(child);
+    }
 
     /// <summary>Builds a single <see cref="TabItem"/> for a tab (header + content), tagged with the tab id.</summary>
     private static TabItem BuildTabItem(RibbonTab tab, IRibbonCommandRegistry? registry) => new()
@@ -185,7 +264,8 @@ public static class AvaloniaRibbonRenderer
 
         if (tabControl.Items.Count > 0)
             tabControl.SelectedIndex = tabControl.Items.Count > 1 ? 1 : 0;
-
+        UpdateTabHeaderSelectionStates(tabControl);
+        tabControl.SelectionChanged += (_, _) => UpdateTabHeaderSelectionStates(tabControl);
         if (contextSource is not null)
             contextSource.ContextChanged += (_, _) => SyncContextualTabs(tabControl, definition, registry, contextSource);
 
@@ -232,6 +312,38 @@ public static class AvaloniaRibbonRenderer
             tabControl.SelectedIndex = restoreIndex;
         else if (tabControl.Items.Count > 0)
             tabControl.SelectedIndex = tabControl.Items.Count > 1 ? 1 : 0;
+
+        UpdateTabHeaderSelectionStates(tabControl);
+    }
+
+    private static void UpdateTabHeaderSelectionStates(TabControl tabControl)
+    {
+        foreach (var item in tabControl.Items.OfType<TabItem>())
+            SetTabHeaderSelected(item.Header as Control, ReferenceEquals(item, tabControl.SelectedItem));
+    }
+
+    private static void SetTabHeaderSelected(Control? header, bool isSelected)
+    {
+        if (header is null)
+            return;
+
+        foreach (var border in EnumerateHeaderBorders(header))
+        {
+            if (border.Tag is string tag && string.Equals(tag, SelectedTabUnderlineTag, StringComparison.Ordinal))
+                border.IsVisible = isSelected;
+        }
+    }
+
+    private static IEnumerable<Border> EnumerateHeaderBorders(Control control)
+    {
+        if (control is Border border)
+            yield return border;
+        if (control is Panel panel)
+        {
+            foreach (var child in panel.Children.OfType<Control>())
+            foreach (var match in EnumerateHeaderBorders(child))
+                yield return match;
+        }
     }
 
     private static int IndexOfTab(TabControl tabControl, string tabId)
@@ -308,12 +420,14 @@ public static class AvaloniaRibbonRenderer
                 new Setter(TemplatedControl.BorderBrushProperty, Brushes.Transparent),
                 new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0)),
                 new Setter(TemplatedControl.FontSizeProperty, 12d),
+                new Setter(TemplatedControl.FontFamilyProperty, RibbonFontFamily),
+                new Setter(TemplatedControl.TemplateProperty, RibbonTabItemTemplate),
                 new Setter(TemplatedControl.ForegroundProperty, TabTextBrush),
                 // Avalonia Fluent default tab height is ~48px vs WPF's compact header row; constrain it.
                 new Setter(Layoutable.MinHeightProperty, 0d),
-                new Setter(Layoutable.HeightProperty, 22d),
-                new Setter(TemplatedControl.PaddingProperty, new Thickness(9, 0, 9, 0)),
-                new Setter(Layoutable.MarginProperty, new Thickness(0, 0, 1, 0)),
+                new Setter(Layoutable.HeightProperty, TabHeaderHeight),
+                new Setter(TemplatedControl.PaddingProperty, new Thickness(0)),
+                new Setter(Layoutable.MarginProperty, new Thickness(0)),
                 new Setter(InputElement.CursorProperty, new Cursor(StandardCursorType.Hand)),
             },
         };
@@ -331,11 +445,21 @@ public static class AvaloniaRibbonRenderer
         {
             Setters =
             {
-                // WPF selected tab: white body + accent bottom border, near-black label (no green text).
+                // WPF selected tab: white body + near-black label. The underline is drawn inside
+                // BuildTabHeader so Avalonia Fluent cannot stack a second selected line under it.
                 new Setter(TemplatedControl.BackgroundProperty, SurfaceBrush),
                 new Setter(TemplatedControl.ForegroundProperty, TabTextBrush),
                 new Setter(TemplatedControl.BorderBrushProperty, AccentBrush),
                 new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0)),
+            },
+        };
+
+        var tabTemplateBorder = new Style(x => x.OfType<TabItem>().Class(":selected").Template().OfType<Border>())
+        {
+            Setters =
+            {
+                new Setter(Border.BorderBrushProperty, Brushes.Transparent),
+                new Setter(Border.BorderThicknessProperty, new Thickness(0)),
             },
         };
 
@@ -353,7 +477,11 @@ public static class AvaloniaRibbonRenderer
         // targeting the rendered TextBlock directly wins over any theme-level override.
         var tabTextForeground = new Style(x => x.OfType<TabItem>().Descendant().OfType<TextBlock>())
         {
-            Setters = { new Setter(TextBlock.ForegroundProperty, TabTextBrush) },
+            Setters =
+            {
+                new Setter(TextBlock.ForegroundProperty, TabTextBrush),
+                new Setter(TextBlock.FontFamilyProperty, RibbonFontFamily),
+            },
         };
 
         // ── Buttons: flat, transparent idle; light hover tint + subtle border on pointer-over. ──
@@ -364,6 +492,7 @@ public static class AvaloniaRibbonRenderer
                 new Setter(TemplatedControl.BackgroundProperty, Brushes.Transparent),
                 new Setter(TemplatedControl.BorderBrushProperty, Brushes.Transparent),
                 new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(1)),
+                new Setter(TemplatedControl.FontFamilyProperty, RibbonFontFamily),
             },
         };
         var buttonHover = new Style(x => x.OfType<Button>().Class(":pointerover"))
@@ -383,6 +512,7 @@ public static class AvaloniaRibbonRenderer
                 new Setter(TemplatedControl.BackgroundProperty, Brushes.Transparent),
                 new Setter(TemplatedControl.BorderBrushProperty, Brushes.Transparent),
                 new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(1)),
+                new Setter(TemplatedControl.FontFamilyProperty, RibbonFontFamily),
             },
         };
         var toggleHover = new Style(x => x.OfType<ToggleButton>().Class(":pointerover"))
@@ -399,6 +529,25 @@ public static class AvaloniaRibbonRenderer
             {
                 new Setter(TemplatedControl.BackgroundProperty, CheckedBrush),
                 new Setter(TemplatedControl.BorderBrushProperty, AccentBrush),
+                new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(1)),
+            },
+        };
+        var toggleCheckedHover = new Style(x => x.OfType<ToggleButton>().Class(":checked").Class(":pointerover"))
+        {
+            Setters =
+            {
+                new Setter(TemplatedControl.BackgroundProperty, CheckedBrush),
+                new Setter(TemplatedControl.BorderBrushProperty, AccentBrush),
+                new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(1)),
+            },
+        };
+        var toggleCheckedTemplateBorder = new Style(x => x.OfType<ToggleButton>().Class(":checked").Template().OfType<Border>())
+        {
+            Setters =
+            {
+                new Setter(Border.BackgroundProperty, CheckedBrush),
+                new Setter(Border.BorderBrushProperty, AccentBrush),
+                new Setter(Border.BorderThicknessProperty, new Thickness(1)),
             },
         };
 
@@ -411,7 +560,20 @@ public static class AvaloniaRibbonRenderer
                 new Setter(Layoutable.HeightProperty, SmallRowHeight),
                 new Setter(Layoutable.MaxHeightProperty, SmallRowHeight),
                 new Setter(TemplatedControl.FontSizeProperty, 12d),
+                new Setter(TemplatedControl.FontFamilyProperty, RibbonFontFamily),
                 new Setter(TemplatedControl.PaddingProperty, new Thickness(6, 0, 18, 0)),
+            },
+        };
+
+        var checkBase = new Style(x => x.OfType<CheckBox>())
+        {
+            Setters =
+            {
+                new Setter(Layoutable.MinHeightProperty, 22d),
+                new Setter(Layoutable.HeightProperty, 22d),
+                new Setter(TemplatedControl.FontSizeProperty, 12d),
+                new Setter(TemplatedControl.FontFamilyProperty, RibbonFontFamily),
+                new Setter(TemplatedControl.PaddingProperty, new Thickness(0)),
             },
         };
 
@@ -436,13 +598,17 @@ public static class AvaloniaRibbonRenderer
         tabControl.Styles.Add(tabHover);
         tabControl.Styles.Add(tabSelected);
         tabControl.Styles.Add(tabSelectedHover);
+        tabControl.Styles.Add(tabTemplateBorder);
         tabControl.Styles.Add(tabTextForeground);
         tabControl.Styles.Add(buttonBase);
         tabControl.Styles.Add(buttonHover);
         tabControl.Styles.Add(toggleBase);
         tabControl.Styles.Add(toggleHover);
         tabControl.Styles.Add(toggleChecked);
+        tabControl.Styles.Add(toggleCheckedHover);
+        tabControl.Styles.Add(toggleCheckedTemplateBorder);
         tabControl.Styles.Add(comboBase);
+        tabControl.Styles.Add(checkBase);
         tabControl.Styles.Add(disabledButtons);
         tabControl.Styles.Add(disabledToggles);
         tabControl.Styles.Add(disabledChecks);
@@ -475,6 +641,7 @@ public static class AvaloniaRibbonRenderer
             {
                 Text = group.Header,
                 FontSize = 12,
+                FontFamily = RibbonFontFamily,
                 Foreground = GroupLabelBrush,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -616,7 +783,8 @@ public static class AvaloniaRibbonRenderer
         {
             Content = check.Label,
             FontSize = 12,
-            Height = SmallRowHeight,
+            FontFamily = RibbonFontFamily,
+            Height = 22,
             VerticalContentAlignment = VerticalAlignment.Center,
             Margin = new Thickness(2, 1, 2, 1),
             Tag = check.CommandId.Value,
@@ -643,11 +811,12 @@ public static class AvaloniaRibbonRenderer
         {
             Text = control.Label,
             FontSize = 12,
+            FontFamily = RibbonFontFamily,
             TextAlignment = TextAlignment.Center,
             TextWrapping = TextWrapping.WrapWithOverflow,
             HorizontalAlignment = HorizontalAlignment.Center,
             Margin = new Thickness(0, 2, 0, 0),
-            MaxWidth = 64,
+            MaxWidth = 74,
         });
 
         // Large split/dropdown affordance: a centered chevron on its OWN line under the label, so the
@@ -659,7 +828,8 @@ public static class AvaloniaRibbonRenderer
             stack.Children.Add(new TextBlock
             {
                 Text = MenuChevron,
-                FontSize = 10,
+                FontSize = 12,
+                FontFamily = RibbonFontFamily,
                 TextAlignment = TextAlignment.Center,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 Margin = new Thickness(0, 1, 0, 0),
@@ -668,9 +838,9 @@ public static class AvaloniaRibbonRenderer
 
         // WPF RibbonLargeButton: compact hero column, Padding 3,2.
         var button = NewButtonLike(control);
-        button.Width = 68;
-        button.Height = 72;
-        button.Padding = new Thickness(3, 2);
+        button.Width = 80;
+        button.Height = 76;
+        button.Padding = new Thickness(4, 2);
         ((ContentControl)button).Content = stack;
         WireControl(button, control, registry);
         return button;
@@ -685,6 +855,7 @@ public static class AvaloniaRibbonRenderer
         {
             Text = control.Label,
             FontSize = 12,
+            FontFamily = RibbonFontFamily,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(4, 0, 2, 0),
         });
@@ -694,9 +865,10 @@ public static class AvaloniaRibbonRenderer
         // WPF RibbonBtn: Height 22, MinWidth 84, left-aligned content, Padding 4,2.
         var button = NewButtonLike(control);
         button.Height = SmallRowHeight;
-        button.MinWidth = 84;
+        button.MinWidth = 88;
         button.Padding = new Thickness(4, 2);
         button.HorizontalContentAlignment = HorizontalAlignment.Left;
+        button.VerticalContentAlignment = VerticalAlignment.Center;
         ((ContentControl)button).Content = content;
         WireControl(button, control, registry);
         return button;
@@ -719,12 +891,13 @@ public static class AvaloniaRibbonRenderer
             content = NewIcon(control, SmallIconSize, HorizontalAlignment.Center);
         }
 
-        // WPF RibbonIconButton / RibbonIconToggleButton: Width 24 (34 with menu), Height 22, Padding 2.
+        // WPF RibbonIconButton / RibbonIconToggleButton: icon-centred compact button, wider when a menu chevron is present.
         var button = NewButtonLike(control);
-        button.Width = hasMenu ? 34 : 24;
+        button.Width = hasMenu ? 42 : 30;
         button.Height = SmallRowHeight;
-        button.Padding = new Thickness(2);
+        button.Padding = new Thickness(1, 0);
         button.HorizontalContentAlignment = HorizontalAlignment.Center;
+        button.VerticalContentAlignment = VerticalAlignment.Center;
         ((ContentControl)button).Content = content;
         WireControl(button, control, registry);
         return button;
@@ -739,6 +912,7 @@ public static class AvaloniaRibbonRenderer
             MinHeight = SmallRowHeight,
             MaxHeight = SmallRowHeight,
             FontSize = 12,
+            FontFamily = RibbonFontFamily,
             Padding = new Thickness(6, 0, 18, 0),
             VerticalContentAlignment = VerticalAlignment.Center,
             Margin = new Thickness(1, 0, 1, 0),
@@ -766,12 +940,12 @@ public static class AvaloniaRibbonRenderer
 
     private static Control NewIcon(RibbonControl control, double size, HorizontalAlignment h)
     {
-        // Pass the command id so the icon builder can resolve the per-command SVG glyph (the SAME file
-        // the WPF host loads); it falls back to the kind glyph when no SVG matches.
+        // Pass the visible command label so the icon builder resolves the same per-command SVG slug the
+        // WPF host uses; internal ids like "home.underline" deliberately stay out of the asset lookup.
         var icon = AvaloniaRibbonIcons.Build(
             control.Icon?.Kind ?? RibbonCommandIconKind.Generic,
             size,
-            control.CommandId.Value);
+            control.Label);
         icon.HorizontalAlignment = h;
         icon.VerticalAlignment = VerticalAlignment.Center;
         return icon;
@@ -780,7 +954,8 @@ public static class AvaloniaRibbonRenderer
     private static TextBlock Chevron() => new()
     {
         Text = MenuChevron,
-        FontSize = 9,
+        FontSize = 11,
+        FontFamily = RibbonFontFamily,
         VerticalAlignment = VerticalAlignment.Center,
         Margin = new Thickness(1, 0, 1, 0),
     };
@@ -788,9 +963,37 @@ public static class AvaloniaRibbonRenderer
     private static ContentControl NewButtonLike(RibbonControl control)
     {
         if (control is RibbonToggleButton or RibbonCheckBox)
-            return new ToggleButton { Tag = control.CommandId.Value };
+        {
+            var toggle = new ToggleButton
+            {
+                Tag = control.CommandId.Value,
+                Template = RibbonToggleButtonTemplate,
+            };
+            toggle.PropertyChanged += (_, args) =>
+            {
+                if (args.Property == ToggleButton.IsCheckedProperty)
+                    ApplyToggleCheckedChrome(toggle);
+            };
+            ApplyToggleCheckedChrome(toggle);
+            return toggle;
+        }
 
         return new Button { Tag = control.CommandId.Value };
+    }
+
+    private static void ApplyToggleCheckedChrome(ToggleButton toggle)
+    {
+        if (toggle.IsChecked == true)
+        {
+            toggle.Background = CheckedBrush;
+            toggle.BorderBrush = AccentBrush;
+            toggle.BorderThickness = new Thickness(1);
+            return;
+        }
+
+        toggle.ClearValue(TemplatedControl.BackgroundProperty);
+        toggle.ClearValue(TemplatedControl.BorderBrushProperty);
+        toggle.BorderThickness = new Thickness(1);
     }
 
     /// <summary>

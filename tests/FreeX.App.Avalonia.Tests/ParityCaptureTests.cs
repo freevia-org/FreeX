@@ -50,6 +50,22 @@ public sealed class ParityCaptureTests
                     .Should().OnlyContain(r => r.Captured, "ribbon tabs render the shell window");
                 File.Exists(Path.Combine(outputDirectory, "tab.Home.png")).Should().BeTrue();
 
+                var contextualSurfaces = results
+                    .Where(r => r.Id.StartsWith("contextual.", StringComparison.Ordinal))
+                    .ToList();
+                contextualSurfaces.Should().OnlyContain(r => r.Captured, "contextual ribbon tabs should be selected and rendered headlessly");
+                contextualSurfaces.Select(r => r.Id)
+                    .Should().Contain(["contextual.PivotTableAnalyze", "contextual.PivotTableDesign"]);
+                foreach (var contextual in contextualSurfaces)
+                    File.Exists(Path.Combine(outputDirectory, contextual.PngFileName))
+                        .Should().BeTrue($"{contextual.PngFileName} should be written for captured contextual tab {contextual.Id}");
+                File.ReadAllBytes(Path.Combine(outputDirectory, "contextual.PivotTableAnalyze.png"))
+                    .Should().NotEqual(File.ReadAllBytes(Path.Combine(outputDirectory, "tab.Home.png")),
+                        "PivotTable Analyze must render its contextual tab, not the Home fallback");
+                File.ReadAllBytes(Path.Combine(outputDirectory, "contextual.PivotTableDesign.png"))
+                    .Should().NotEqual(File.ReadAllBytes(Path.Combine(outputDirectory, "tab.Home.png")),
+                        "PivotTable Design must render its contextual tab, not the Home fallback");
+
                 // At least one dialog surface should be captured to a PNG via the modal-capture path.
                 var capturedDialogs = results
                     .Where(r => r.Id.StartsWith("dialog.", StringComparison.Ordinal) && r.Captured)
@@ -59,11 +75,13 @@ public sealed class ParityCaptureTests
                     File.Exists(Path.Combine(outputDirectory, dialog.PngFileName))
                         .Should().BeTrue($"{dialog.PngFileName} should be written for captured dialog {dialog.Id}");
 
-                results.Where(r => r.Id.StartsWith("backstage.", StringComparison.Ordinal))
-                    .Should()
-                    .OnlyContain(
-                        r => !r.Captured && r.Note.Contains("dialog-based", StringComparison.Ordinal),
-                        "Avalonia must not compare modal File dialogs as if they were the Windows Backstage overlay");
+                var backstageSurfaces = results
+                    .Where(r => r.Id.StartsWith("backstage.", StringComparison.Ordinal))
+                    .ToList();
+                backstageSurfaces.Should().OnlyContain(r => r.Captured, "File surfaces should render as full-window Backstage captures");
+                foreach (var backstage in backstageSurfaces)
+                    File.Exists(Path.Combine(outputDirectory, backstage.PngFileName))
+                        .Should().BeTrue($"{backstage.PngFileName} should be written for captured backstage pane {backstage.Id}");
 
                 window.Close();
             }, CancellationToken.None);

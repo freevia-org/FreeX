@@ -34,7 +34,7 @@ public sealed partial class MainWindow
         AvaloniaStatusBarSource.BuildModel(
             _session.SelectionStats,
             ClampZoomPercent(_session.ZoomPercent),
-            readyText);
+            NormalizeStatusBarReadyText(readyText));
 
     /// <summary>
     /// Renders the footer readout (<see cref="_selectionStatsText"/>) and ready text
@@ -44,16 +44,19 @@ public sealed partial class MainWindow
     /// </summary>
     private void ApplyStatusBarModel(string status)
     {
-        var model = BuildStatusBarViewModel(status);
+        var normalizedStatus = NormalizeStatusBarReadyText(status);
+        var model = BuildStatusBarViewModel(normalizedStatus);
 
         // Render the neutral StatusBarViewModel: the readout is the model's visible aggregate readouts
         // (filtered by the customize toggles); zoom comes from the model; CellMode/Zoom toggles gate the
         // status / zoom controls — mirroring the WPF host's per-option StatusBarShow* gating.
-        _statusText.Text = status;
-        _statusText.IsVisible = GetStatusBarOption("CellMode");
-
         var readouts = AvaloniaStatusBarSource.FormatVisibleReadouts(model, _statusBarOptionVisibility);
+        _statusText.Text = normalizedStatus;
+        _statusText.Foreground = StatusBarForeground;
+        _statusText.IsVisible = GetStatusBarOption("CellMode") && readouts.Length == 0;
+
         _selectionStatsText.Text = readouts;
+        _selectionStatsText.Foreground = StatusBarForeground;
         _selectionStatsText.IsVisible = readouts.Length > 0;
         // Keep the accessible NAME a stable label ("Selection statistics"); the dynamic readouts are the
         // element's Text (value/content). Overwriting Name with the readouts broke the launch-smoke /
@@ -61,7 +64,36 @@ public sealed partial class MainWindow
         AutomationProperties.SetName(_selectionStatsText, "Selection statistics");
 
         _zoomText.IsVisible = GetStatusBarOption("Zoom");
+        _zoomText.Foreground = StatusBarForeground;
         _zoomText.Text = FormatZoomPercent(model.ZoomPercent);
+
+        var showViewShortcuts = GetStatusBarOption("ViewShortcuts");
+        _statusNormalViewButton.IsVisible = showViewShortcuts;
+        _statusPageLayoutViewButton.IsVisible = showViewShortcuts;
+        _statusPageBreakPreviewButton.IsVisible = showViewShortcuts;
+
+        var showZoomSlider = GetStatusBarOption("ZoomSlider");
+        _statusZoomSliderHost.IsVisible = showZoomSlider;
+        _statusZoomSlider.IsVisible = showZoomSlider;
+        _isUpdatingStatusZoomSlider = true;
+        try
+        {
+            _statusZoomSlider.Value = ClampZoomPercent(model.ZoomPercent);
+            UpdateStatusZoomSliderThumb(model.ZoomPercent);
+        }
+        finally
+        {
+            _isUpdatingStatusZoomSlider = false;
+        }
+    }
+
+    private static string NormalizeStatusBarReadyText(string status)
+    {
+        if (status.StartsWith("Showing ", StringComparison.OrdinalIgnoreCase) ||
+            status.StartsWith("Hiding ", StringComparison.OrdinalIgnoreCase))
+            return "Ready";
+
+        return string.IsNullOrWhiteSpace(status) ? "Ready" : status;
     }
 
     // ── "Customize Status Bar" right-click menu ───────────────────────────────

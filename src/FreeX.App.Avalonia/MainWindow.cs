@@ -2,7 +2,10 @@ using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Templates;
+using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
@@ -16,6 +19,7 @@ using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Services;
 using FreeX.App.Services.Ribbon;
 using FreeX.App.Services.Updates;
+using Free.Shared.AppServices;
 using FreeX.Ribbon.Avalonia;
 using Free.Shared.Ribbon;
 using FreeX.Core.Calc;
@@ -278,12 +282,17 @@ public sealed partial class MainWindow : Window
     private const double DoubleUnderlineSecondStrokeOffset = 2;
     private const string GeneralNumberFormat = "General";
     private const string PercentNumberFormat = "0%";
-    private const double HeaderColumnWidth = 34;
-    private const double HeaderRowHeight = 20;
+    private const double HeaderColumnWidth = 30;
+    private const double HeaderRowHeight = 18;
     private const double InitialViewportHeight = 880;
     private const double InitialViewportWidth = 1440;
     private const double MinimumDisplayedColumnWidth = 48;
     private const double MinimumDisplayedRowHeight = 20;
+    private const double WorksheetFontSizeDisplayOffset = 1;
+    private const double SheetHorizontalScrollbarDefaultWidth = 380;
+    private const double SheetHorizontalScrollbarMinimumWidth = 260;
+    private const double SheetHorizontalScrollbarMaximumWidth = 420;
+    private const double SheetHorizontalScrollbarWindowRatio = 0.34;
     private const uint PortablePdfColumnsPerPage = 8;
     private const uint PortablePdfRowsPerPage = 28;
     private const double ZoomToSelectionDefaultColumnWidth = 80;
@@ -302,28 +311,53 @@ public sealed partial class MainWindow : Window
         ShellFocusRegion.StatusBar
     ];
     private static readonly IBrush WindowBackground = Brush(246, 247, 249);
-    private static readonly IBrush HeaderBackground = Brush(241, 243, 246);
-    private static readonly IBrush HeaderForeground = Brush(73, 80, 93);
-    private static readonly IBrush GridLine = Brush(218, 222, 228);
+    private static readonly IBrush HeaderBackground = Brush(242, 242, 242);
+    private static readonly IBrush HeaderForeground = Brushes.Black;
+    private static readonly IBrush GridLine = Brush(231, 231, 231);
     private static readonly IBrush ToolbarBorder = Brush(218, 222, 228);
+    private static readonly IBrush FormulaBarControlBorder = Brush(192, 192, 192);
+    private static readonly FontFamily FormulaBarFontFamily =
+        new("Segoe UI, Arial Narrow, Aptos Narrow, Liberation Sans Narrow, Nimbus Sans Narrow, DejaVu Sans Condensed, Arial, Liberation Sans, sans-serif");
 
     // Shell chrome surface — shared by the toolbar and the sheet-tabs/status bar so the window chrome reads
     // as one cohesive light surface (the same #F5F6F7 the ribbon theme uses). Exposed for tests.
     internal static readonly global::Avalonia.Media.Color ChromeSurfaceColor =
-        global::Avalonia.Media.Color.FromRgb(0xF5, 0xF6, 0xF7);
+        global::Avalonia.Media.Color.FromRgb(0xF7, 0xF8, 0xF8);
     private static readonly IBrush ChromeSurface = new SolidColorBrush(ChromeSurfaceColor);
+    private static readonly IBrush StatusBarSurface = Brush(23, 50, 77);
+    private static readonly IBrush SheetTabContourBrush = Brush(15, 109, 140);
+    private static readonly IBrush CheckedCommandBackground = Brush(230, 246, 250);
+    private static readonly FuncControlTemplate<ToggleButton> StatusBarViewButtonTemplate = new((button, _) =>
+    {
+        var presenter = new ContentPresenter();
+        presenter.Bind(ContentPresenter.ContentProperty, new Binding(nameof(ContentControl.Content)) { Source = button });
+        presenter.Bind(ContentPresenter.ContentTemplateProperty, new Binding(nameof(ContentControl.ContentTemplate)) { Source = button });
+        presenter.Bind(Layoutable.HorizontalAlignmentProperty, new Binding(nameof(ContentControl.HorizontalContentAlignment)) { Source = button });
+        presenter.Bind(Layoutable.VerticalAlignmentProperty, new Binding(nameof(ContentControl.VerticalContentAlignment)) { Source = button });
+
+        var border = new Border
+        {
+            CornerRadius = new CornerRadius(1),
+            Child = presenter,
+        };
+        border.Bind(Border.BackgroundProperty, new Binding(nameof(TemplatedControl.Background)) { Source = button });
+        border.Bind(Border.BorderBrushProperty, new Binding(nameof(TemplatedControl.BorderBrush)) { Source = button });
+        border.Bind(Border.BorderThicknessProperty, new Binding(nameof(TemplatedControl.BorderThickness)) { Source = button });
+        border.Bind(Border.PaddingProperty, new Binding(nameof(TemplatedControl.Padding)) { Source = button });
+        return border;
+    });
 
     // Status-bar text token — the muted header foreground, applied uniformly to the status / selection-stats
     // / zoom texts so the status bar reads consistently (was scattered inline 73,80,93 magic values).
-    private static readonly IBrush StatusBarForeground = HeaderForeground;
+    private static readonly IBrush StatusBarForeground = Brushes.White;
 
     // Toolbar/chrome ink tokens — the primary (title text, glyph rules) and secondary (detail text) inks,
     // named so the chrome typography stays consistent instead of repeating inline 25,31,40 / 94,103,116.
     private static readonly IBrush PrimaryInk = Brush(25, 31, 40);
     private static readonly IBrush SecondaryInk = Brush(94, 103, 116);
-    private static readonly IBrush SelectionBorder = Brush(11, 112, 116);
-    private static readonly IBrush SelectionHeaderBackground = Brush(225, 244, 242);
-    private static readonly IBrush SelectionHeaderForeground = Brush(13, 86, 89);
+    private static readonly IBrush SelectionBorder = Brush(33, 115, 70);
+    private static readonly IBrush SelectionHeaderBackground = Brush(218, 232, 218);
+    private static readonly IBrush SelectionHeaderForeground = Brush(31, 31, 31);
     private static readonly IBrush DrawingObjectBoundsFill = Brush(42, 11, 112, 116);
     private static readonly IBrush DrawingObjectBoundsBorder = Brush(11, 112, 116);
     private static readonly IBrush DrawingObjectBoundsForeground = Brush(5, 67, 69);
@@ -338,16 +372,27 @@ public sealed partial class MainWindow : Window
     private readonly ContentControl _sheetGridHost = new();
     private readonly ContentControl _sheetTabsHost = new();
     private readonly ScrollViewer _sheetScrollViewer = new();
+    private readonly ScrollViewer _sheetTabsScroller = new();
+    private readonly Canvas _sheetTabsContourLayer = new();
     private readonly ScrollBar _verticalWorksheetScrollBar = new();
     private readonly ScrollBar _horizontalWorksheetScrollBar = new();
+    private readonly Button _sheetTabLeftNavButton = new();
+    private readonly Button _sheetTabRightNavButton = new();
     private readonly TextBlock _titleText = new();
     private readonly TextBlock _detailText = new();
     private readonly TextBlock _statusText = new();
     private readonly TextBlock _selectionStatsText = new();
     private readonly TextBlock _zoomText = new();
+    private readonly ToggleButton _statusNormalViewButton = new();
+    private readonly ToggleButton _statusPageLayoutViewButton = new();
+    private readonly ToggleButton _statusPageBreakPreviewButton = new();
+    private readonly AvaloniaGrid _statusZoomSliderHost = new();
+    private readonly Border _statusZoomSliderThumb = new();
+    private readonly Slider _statusZoomSlider = new();
     private readonly TextBlock _cellAddressText = new();
     private readonly TextBox _formulaBox = new();
     private readonly Border _formulaBarHost = new();
+    private readonly Button _formulaExpandButton = new();
     private readonly Button _openButton = new();
     private readonly Button _saveButton = new();
     private readonly Button _saveAsButton = new();
@@ -355,6 +400,7 @@ public sealed partial class MainWindow : Window
     private readonly Button _updateReadyIndicator = new();
     private IUpdateService? _updateService;
     private string? _stagedUpdateVersion;
+    private bool _formulaBarExpanded;
     private readonly Button _undoButton = new();
     private readonly Button _redoButton = new();
     private readonly Button _cutButton = new();
@@ -581,6 +627,7 @@ public sealed partial class MainWindow : Window
     private bool _allowCloseWithoutDirtyPrompt;
     private bool _isDirtyCloseDialogOpen;
     private bool _isUpdatingWorksheetScrollBars;
+    private bool _isUpdatingStatusZoomSlider;
     private SelectionPaneObjectKind? _selectedDrawingObjectKind;
     private Guid? _selectedDrawingObjectId;
     private readonly AvaloniaRibbonContextSource _ribbonContextSource = new();
@@ -622,7 +669,7 @@ public sealed partial class MainWindow : Window
             _session = _sessionFactory.Create(source, InitialViewportHeight, InitialViewportWidth, includeObjects: true);
         }
 
-        Title = $"FreeX - {_session.DisplayName}";
+        Title = FormatWindowTitle();
         Width = 1120;
         Height = 720;
         MinWidth = 820;
@@ -1218,26 +1265,28 @@ public sealed partial class MainWindow : Window
 
     private Control BuildSheetTabsChrome()
     {
-        _sheetTabsHost.Content = BuildSheetTabs();
         _newSheetButton.Content = "+";
-        _newSheetButton.Width = 30;
-        _newSheetButton.Height = 24;
-        _newSheetButton.MinWidth = 30;
+        _newSheetButton.Width = 44;
+        _newSheetButton.Height = 27;
+        _newSheetButton.MinWidth = 44;
         _newSheetButton.Padding = new Thickness(0);
-        _newSheetButton.FontSize = 15;
+        _newSheetButton.FontSize = 16;
         _newSheetButton.FontWeight = FontWeight.SemiBold;
         _newSheetButton.Background = Brushes.Transparent;
         _newSheetButton.BorderThickness = new Thickness(0);
-        _newSheetButton.Foreground = SelectionBorder;
+        _newSheetButton.Foreground = SheetTabContourBrush;
         _newSheetButton.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
         _newSheetButton.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
         _newSheetButton.Click += (_, _) => AddNewSheet();
         AutomationProperties.SetName(_newSheetButton, "New Sheet");
         AutomationProperties.SetHelpText(_newSheetButton, "Adds a worksheet to the current workbook.");
+        _sheetTabsHost.Content = BuildSheetTabs();
 
         _horizontalWorksheetScrollBar.Orientation = Orientation.Horizontal;
         _horizontalWorksheetScrollBar.Height = 16;
-        _horizontalWorksheetScrollBar.MinWidth = 300;
+        _horizontalWorksheetScrollBar.Width = SheetHorizontalScrollbarDefaultWidth;
+        _horizontalWorksheetScrollBar.MinWidth = SheetHorizontalScrollbarMinimumWidth;
+        _horizontalWorksheetScrollBar.MaxWidth = SheetHorizontalScrollbarMaximumWidth;
         _horizontalWorksheetScrollBar.AllowAutoHide = false;
         _horizontalWorksheetScrollBar.ValueChanged += WorksheetScrollBar_ValueChanged;
 
@@ -1260,84 +1309,242 @@ public sealed partial class MainWindow : Window
             _updateReadyIndicator,
             "A new version of FreeX has been downloaded. Click to restart and update.");
 
-        var tabsScroller = new ScrollViewer
-        {
-            Height = 24,
-            MinHeight = 24,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            Content = _sheetTabsHost,
-        };
+        _sheetTabsScroller.Height = 27;
+        _sheetTabsScroller.MinHeight = 27;
+        _sheetTabsScroller.HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden;
+        _sheetTabsScroller.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;
+        _sheetTabsScroller.Content = _sheetTabsHost;
+        _sheetTabsScroller.SizeChanged += (_, _) => UpdateSheetTabNavigationVisibility();
 
-        var leftNav = CreateSheetTabNavigationButton("<", "Scroll Tabs Left", -1);
-        var rightNav = CreateSheetTabNavigationButton(">", "Scroll Tabs Right", 1);
+        _sheetTabsContourLayer.Height = 27;
+        _sheetTabsContourLayer.IsHitTestVisible = false;
+        _sheetTabsContourLayer.ClipToBounds = false;
+        _sheetTabsContourLayer.VerticalAlignment = AvaloniaVerticalAlignment.Top;
+        _sheetTabsContourLayer.ZIndex = 20;
+        _sheetTabsContourLayer.SizeChanged += (_, _) => UpdateSheetTabsContourLayer();
+
+        ConfigureSheetTabNavigationButton(_sheetTabLeftNavButton, "<", "Scroll Tabs Left", -1);
+        ConfigureSheetTabNavigationButton(_sheetTabRightNavButton, ">", "Scroll Tabs Right", 1);
+        var leadingNavSlot = new Border
+        {
+            Width = HeaderColumnWidth,
+            Height = 27,
+            Background = ChromeSurface,
+            Child = _sheetTabLeftNavButton,
+        };
         var tabCluster = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             Spacing = 0,
             VerticalAlignment = AvaloniaVerticalAlignment.Top,
         };
-        tabCluster.Children.Add(leftNav);
-        tabCluster.Children.Add(tabsScroller);
-        tabCluster.Children.Add(rightNav);
-        tabCluster.Children.Add(_newSheetButton);
+        tabCluster.Children.Add(_sheetTabsScroller);
+        tabCluster.Children.Add(_sheetTabRightNavButton);
 
         var chrome = new DockPanel
         {
-            LastChildFill = true,
-            MinHeight = 24,
+            LastChildFill = false,
+            MinHeight = 27,
         };
-        var leadingSpacer = new Border
-        {
-            Width = HeaderColumnWidth,
-            Height = 24,
-            Background = ChromeSurface,
-        };
-        DockPanel.SetDock(leadingSpacer, Dock.Left);
-        chrome.Children.Add(leadingSpacer);
+        DockPanel.SetDock(leadingNavSlot, Dock.Left);
+        chrome.Children.Add(leadingNavSlot);
         DockPanel.SetDock(tabCluster, Dock.Left);
         chrome.Children.Add(tabCluster);
         DockPanel.SetDock(_updateReadyIndicator, Dock.Right);
         chrome.Children.Add(_updateReadyIndicator);
         DockPanel.SetDock(_horizontalWorksheetScrollBar, Dock.Right);
         chrome.Children.Add(_horizontalWorksheetScrollBar);
-        chrome.Children.Add(new Border { Background = ChromeSurface });
+
+        var shell = new AvaloniaGrid
+        {
+            RowDefinitions =
+            {
+                new RowDefinition { Height = GridLength.Auto },
+            },
+        };
+        AddGridChild(shell, chrome, 0, 0);
+        AddGridChild(shell, _sheetTabsContourLayer, 0, 0);
+        UpdateSheetTabNavigationVisibility();
 
         return new Border
         {
             Background = ChromeSurface,
-            BorderBrush = ToolbarBorder,
-            BorderThickness = new Thickness(0, 1, 0, 0),
+            BorderThickness = new Thickness(0),
             Padding = new Thickness(0),
-            Child = chrome,
+            Child = shell,
         };
     }
 
-    private Button CreateSheetTabNavigationButton(string glyph, string automationName, int direction)
+    private void ConfigureSheetTabNavigationButton(Button button, string glyph, string automationName, int direction)
     {
-        var button = new Button
+        button.Content = glyph;
+        button.Width = 24;
+        button.Height = 27;
+        button.Padding = new Thickness(0);
+        button.FontSize = 15;
+        button.FontWeight = FontWeight.SemiBold;
+        button.Background = ChromeSurface;
+        button.BorderBrush = Brushes.Transparent;
+        button.BorderThickness = new Thickness(0);
+        button.Foreground = SheetTabContourBrush;
+        button.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
+        button.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+        button.VerticalAlignment = AvaloniaVerticalAlignment.Top;
+        button.Margin = new Thickness(0);
+        button.Focusable = true;
+        button.IsVisible = false;
+        button.Template = new FuncControlTemplate<Button>((control, _) =>
         {
-            Content = glyph,
-            Width = 22,
-            Height = 24,
-            Padding = new Thickness(0),
-            FontSize = 13,
-            Background = Brushes.Transparent,
-            BorderThickness = new Thickness(0),
-            Foreground = SelectionBorder,
-            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
-            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
-            VerticalAlignment = AvaloniaVerticalAlignment.Top,
-            Margin = new Thickness(0),
-            Focusable = true,
-        };
+            var presenter = new ContentPresenter
+            {
+                HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
+                VerticalAlignment = AvaloniaVerticalAlignment.Center,
+                Margin = new Thickness(0, -2, 0, 0),
+            };
+            presenter.Bind(ContentPresenter.ContentProperty, new Binding(nameof(ContentControl.Content)) { Source = control });
+
+            var border = new Border
+            {
+                Child = presenter,
+            };
+            border.Bind(Border.BackgroundProperty, new Binding(nameof(TemplatedControl.Background)) { Source = control });
+            return border;
+        });
         button.Click += (_, _) => SelectAdjacentVisibleSheetFromKeyboard(direction, selectRange: false);
         AutomationProperties.SetName(button, automationName);
         AutomationProperties.SetHelpText(button, direction < 0
             ? "Moves to the previous visible worksheet tab."
             : "Moves to the next visible worksheet tab.");
-        return button;
     }
+
+    private void UpdateSheetTabNavigationVisibility()
+    {
+        UpdateSheetTabHorizontalScrollbarWidth();
+        var availableWidth = Bounds.Width > 0 ? Bounds.Width : InitialViewportWidth;
+        var baseTabsViewportWidth = Math.Max(80, availableWidth - HeaderColumnWidth - _horizontalWorksheetScrollBar.Width);
+        var contentWidth = _session.SheetTabs.Sum(tab => EstimateSheetTabWidth(tab.Name)) + _newSheetButton.Width;
+        var hasOverflow = contentWidth > baseTabsViewportWidth + 0.5;
+        var rightNavigationWidth = hasOverflow ? _sheetTabRightNavButton.Width : 0;
+        var maxTabsViewportWidth = Math.Max(80, baseTabsViewportWidth - rightNavigationWidth);
+        _sheetTabsScroller.Width = hasOverflow
+            ? maxTabsViewportWidth
+            : Math.Max(0, Math.Min(contentWidth, maxTabsViewportWidth));
+        var activeIndex = FindActiveSheetTabIndex();
+
+        _sheetTabLeftNavButton.IsVisible = hasOverflow;
+        _sheetTabRightNavButton.IsVisible = hasOverflow;
+        _sheetTabLeftNavButton.IsEnabled = hasOverflow && activeIndex > 0;
+        _sheetTabRightNavButton.IsEnabled = hasOverflow && activeIndex >= 0 && activeIndex < _session.SheetTabs.Count - 1;
+        UpdateSheetTabsContourLayer();
+    }
+
+    private void UpdateSheetTabHorizontalScrollbarWidth()
+    {
+        var availableWidth = Bounds.Width > 0 ? Bounds.Width : InitialViewportWidth;
+        var desiredWidth = Math.Clamp(
+            availableWidth * SheetHorizontalScrollbarWindowRatio,
+            SheetHorizontalScrollbarMinimumWidth,
+            SheetHorizontalScrollbarMaximumWidth);
+        _horizontalWorksheetScrollBar.Width = desiredWidth;
+    }
+
+    private void UpdateSheetTabsContourLayer()
+    {
+        _sheetTabsContourLayer.Children.Clear();
+
+        var totalWidth = _sheetTabsContourLayer.Bounds.Width > 0
+            ? _sheetTabsContourLayer.Bounds.Width
+            : Bounds.Width;
+        if (totalWidth <= HeaderColumnWidth + 12 || _session.SheetTabs.Count == 0)
+            return;
+
+        var activeIndex = FindActiveSheetTabIndex();
+        if (activeIndex < 0)
+            return;
+
+        var activeLeft = HeaderColumnWidth;
+        var activeWidth = EstimateSheetTabWidth(activeIndex);
+        if (_sheetTabsHost.Content is Panel tabPanel)
+        {
+            activeLeft += tabPanel.Children
+                .Take(activeIndex)
+                .OfType<Control>()
+                .Sum(control => control.Bounds.Width > 0 ? control.Bounds.Width : EstimateSheetTabWidth(control));
+            if (activeIndex < tabPanel.Children.Count && tabPanel.Children[activeIndex] is Control activeControl)
+                activeWidth = activeControl.Bounds.Width > 0 ? activeControl.Bounds.Width : activeWidth;
+        }
+        else
+        {
+            for (var i = 0; i < activeIndex; i++)
+                activeLeft += EstimateSheetTabWidth(i);
+        }
+
+        activeLeft -= _sheetTabsScroller.Offset.X;
+        var activeRight = activeLeft + activeWidth;
+        var ruleLeft = 0d;
+        var ruleRight = Math.Max(ruleLeft, HeaderColumnWidth + _sheetTabsScroller.Width);
+
+        activeLeft = Math.Clamp(activeLeft, ruleLeft, Math.Max(ruleLeft, ruleRight - 16));
+        activeRight = Math.Clamp(activeRight, activeLeft + 16, ruleRight);
+
+        var corner = Math.Min(9, Math.Max(6, activeWidth * 0.10));
+        var topY = 1d;
+        var sideY = 10d;
+        var tabBottomY = 27d;
+        var leftJoin = Math.Max(ruleLeft, activeLeft - corner);
+        var rightJoin = Math.Min(ruleRight, activeRight + corner);
+        AddSheetTabContourPath(
+            $"M {Geom(ruleLeft)} {Geom(topY)} L {Geom(leftJoin)} {Geom(topY)} " +
+            $"M {Geom(rightJoin)} {Geom(topY)} L {Geom(ruleRight)} {Geom(topY)}",
+            strokeThickness: 1.0);
+
+        var path =
+            $"M {Geom(leftJoin)} {Geom(topY)} " +
+            $"C {Geom(activeLeft)} {Geom(topY)} {Geom(activeLeft)} {Geom(sideY - 4)} {Geom(activeLeft)} {Geom(sideY)} " +
+            $"L {Geom(activeLeft)} {Geom(tabBottomY - 4)} " +
+            $"Q {Geom(activeLeft)} {Geom(tabBottomY)} {Geom(activeLeft + 4)} {Geom(tabBottomY)} " +
+            $"L {Geom(activeRight - 4)} {Geom(tabBottomY)} " +
+            $"Q {Geom(activeRight)} {Geom(tabBottomY)} {Geom(activeRight)} {Geom(tabBottomY - 4)} " +
+            $"L {Geom(activeRight)} {Geom(sideY)} " +
+            $"C {Geom(activeRight)} {Geom(sideY - 4)} {Geom(activeRight)} {Geom(topY)} {Geom(rightJoin)} {Geom(topY)}";
+        AddSheetTabContourPath(path, strokeThickness: 1.0);
+    }
+
+    private double EstimateSheetTabWidth(int tabIndex)
+    {
+        if ((uint)tabIndex >= (uint)_session.SheetTabs.Count)
+            return 64;
+        return EstimateSheetTabWidth(_session.SheetTabs[tabIndex].Name);
+    }
+
+    private static double EstimateSheetTabWidth(Control control)
+    {
+        if (control is Button { Content: AvaloniaGrid grid })
+        {
+            foreach (var label in grid.Children.OfType<TextBlock>())
+                if (!string.IsNullOrEmpty(label.Text))
+                    return EstimateSheetTabWidth(label.Text);
+        }
+        return 64;
+    }
+
+    private static double EstimateSheetTabWidth(string tabName) =>
+        Math.Clamp(20 + Math.Max(1, tabName.Length) * 6.6, 60, 168);
+
+    private void AddSheetTabContourPath(string data, double strokeThickness)
+    {
+        _sheetTabsContourLayer.Children.Add(new global::Avalonia.Controls.Shapes.Path
+        {
+            Data = Geometry.Parse(data),
+            Stroke = SheetTabContourBrush,
+            StrokeThickness = strokeThickness,
+            Fill = Brushes.Transparent,
+            IsHitTestVisible = false,
+        });
+    }
+
+    private static string Geom(double value) =>
+        Math.Round(value, 2).ToString("0.##", CultureInfo.InvariantCulture);
 
     /// <summary>
     /// Wires the update service and starts a background check. When an update has been
@@ -2171,7 +2378,8 @@ public sealed partial class MainWindow : Window
     private Control BuildToolbar()
     {
         _titleText.FontSize = 14;
-        _titleText.FontWeight = FontWeight.SemiBold;
+        _titleText.FontFamily = new FontFamily("Arial Narrow, Aptos Narrow, Liberation Sans Narrow, Nimbus Sans Narrow, DejaVu Sans Condensed, Arial, Liberation Sans, sans-serif");
+        _titleText.FontWeight = FontWeight.Normal;
         _titleText.Foreground = PrimaryInk;
         _titleText.MaxWidth = 180;
         _titleText.TextTrimming = TextTrimming.CharacterEllipsis;
@@ -2522,7 +2730,8 @@ public sealed partial class MainWindow : Window
         _alignRightButton.Click += AlignRightButton_Click;
 
         _cellAddressText.Width = 58;
-        _cellAddressText.FontSize = 12;
+        _cellAddressText.FontFamily = FormulaBarFontFamily;
+        _cellAddressText.FontSize = 13;
         _cellAddressText.FontWeight = FontWeight.SemiBold;
         _cellAddressText.Foreground = Brush(28, 38, 48);
         _cellAddressText.TextAlignment = TextAlignment.Center;
@@ -2532,11 +2741,15 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetHelpText(_cellAddressText, "Shows the active cell address.");
 
         _formulaBox.MinWidth = 320;
-        _formulaBox.Height = 24;
-        _formulaBox.MinHeight = 24;
-        _formulaBox.FontSize = 13;
-        _formulaBox.Padding = new Thickness(6, 2);
+        _formulaBox.Height = 30;
+        _formulaBox.MinHeight = 30;
+        _formulaBox.FontFamily = FormulaBarFontFamily;
+        _formulaBox.FontSize = 15;
+        _formulaBox.Padding = new Thickness(6, 4, 6, 2);
         _formulaBox.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _formulaBox.Background = Brushes.Transparent;
+        _formulaBox.BorderBrush = FormulaBarControlBorder;
+        _formulaBox.BorderThickness = new Thickness(1);
         _formulaBox.GotFocus += FormulaBox_GotFocus;
         _formulaBox.KeyDown += FormulaBox_KeyDown;
         AutomationProperties.SetAutomationId(_formulaBox, "FormulaBox");
@@ -2560,12 +2773,12 @@ public sealed partial class MainWindow : Window
         var cellAddressBorder = new Border
         {
             Width = 80,
-            Height = 24,
+            Height = 30,
             Background = Brushes.White,
-            BorderBrush = ToolbarBorder,
+            BorderBrush = FormulaBarControlBorder,
             BorderThickness = new Thickness(1),
-            Padding = new Thickness(5, 0, 3, 0),
-            Margin = new Thickness(4, 0, 3, 0),
+            Padding = new Thickness(5, 3, 3, 3),
+            Margin = new Thickness(4, 0, 4, 0),
             Child = cellAddressChrome,
         };
         DockPanel.SetDock(cellAddressBorder, Dock.Left);
@@ -2576,58 +2789,97 @@ public sealed partial class MainWindow : Window
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
             Margin = new Thickness(0, 0, 2, 0),
         };
-        formulaButtons.Children.Add(CreateFormulaBarButton("X", Brush(192, 0, 0), "Cancel formula edit", () =>
+        formulaButtons.Children.Add(CreateFormulaBarPathButton("M4,4 L12,12 M12,4 L4,12", Brush(192, 0, 0), 1.55, "Cancel formula edit", () =>
         {
             _session.CancelFormulaEdit();
             _formulaBoxEditOriginalText = null;
             RefreshShell("Ready");
         }));
-        formulaButtons.Children.Add(CreateFormulaBarButton("\u2713", Brush(0, 128, 0), "Enter formula edit", () => CommitFormulaBox()));
-        formulaButtons.Children.Add(CreateFormulaBarButton("fx", Brush(68, 68, 68), "Insert Function", InsertFunction, FontStyle.Italic));
+        formulaButtons.Children.Add(CreateFormulaBarPathButton("M3,8 L6,11 L13,4", Brush(0, 128, 0), 1.65, "Enter formula edit", () => CommitFormulaBox()));
+        formulaButtons.Children.Add(CreateFormulaBarTextButton("fx", Brush(68, 68, 68), "Insert Function", InsertFunction, FontStyle.Italic));
         DockPanel.SetDock(formulaButtons, Dock.Left);
+
+        ConfigureFormulaExpandButton();
+        DockPanel.SetDock(_formulaExpandButton, Dock.Right);
 
         var formulaFill = new Border
         {
-            Padding = new Thickness(3, 0, 6, 0),
+            Padding = new Thickness(3, 0, 2, 0),
             Child = _formulaBox,
         };
 
         var formulaDock = new DockPanel { LastChildFill = true };
         formulaDock.Children.Add(cellAddressBorder);
         formulaDock.Children.Add(formulaButtons);
+        formulaDock.Children.Add(_formulaExpandButton);
         formulaDock.Children.Add(formulaFill);
 
         _formulaBarHost.Background = Brushes.White;
         _formulaBarHost.BorderBrush = ToolbarBorder;
         _formulaBarHost.BorderThickness = new Thickness(0, 0, 0, 1);
-        _formulaBarHost.Height = 30;
+        _formulaBarHost.Height = 40;
         _formulaBarHost.Child = formulaDock;
+        ApplyFormulaBarExpansion();
         AutomationProperties.SetAutomationId(_formulaBarHost, "FormulaBarRow");
         AutomationProperties.SetName(_formulaBarHost, "Formula bar row");
         return _formulaBarHost;
     }
 
-    private static Button CreateFormulaBarButton(
+    private Button CreateFormulaBarPathButton(
+        string pathData,
+        IBrush stroke,
+        double strokeThickness,
+        string automationName,
+        Action action)
+    {
+        var path = new global::Avalonia.Controls.Shapes.Path
+        {
+            Data = Geometry.Parse(pathData),
+            Width = 16,
+            Height = 16,
+            Stroke = stroke,
+            StrokeThickness = strokeThickness,
+            StrokeLineCap = PenLineCap.Round,
+            StrokeJoin = PenLineJoin.Round,
+            Stretch = Stretch.Uniform,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+        };
+        return CreateFormulaBarChromeButton(path, width: 22, height: 22, automationName, action);
+    }
+
+    private Button CreateFormulaBarTextButton(
         string content,
         IBrush foreground,
         string automationName,
         Action action,
         FontStyle fontStyle = FontStyle.Normal)
     {
+        var text = new TextBlock
+        {
+            Text = content,
+            FontSize = 12,
+            FontWeight = FontWeight.Bold,
+            FontStyle = fontStyle,
+            Foreground = foreground,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+        };
+        return CreateFormulaBarChromeButton(text, width: 24, height: 22, automationName, action);
+    }
+
+    private static Button CreateFormulaBarChromeButton(
+        Control content,
+        double width,
+        double height,
+        string automationName,
+        Action action)
+    {
         var button = new Button
         {
-            Content = new TextBlock
-            {
-                Text = content,
-                FontSize = 12,
-                FontWeight = FontWeight.Bold,
-                FontStyle = fontStyle,
-                Foreground = foreground,
-                HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
-                VerticalAlignment = AvaloniaVerticalAlignment.Center,
-            },
-            Width = 22,
-            Height = 22,
+            Content = content,
+            Width = width,
+            Height = height,
             Padding = new Thickness(0),
             Margin = new Thickness(0, 0, 1, 0),
             Background = Brushes.Transparent,
@@ -2641,12 +2893,85 @@ public sealed partial class MainWindow : Window
         return button;
     }
 
+    private void ConfigureFormulaExpandButton()
+    {
+        _formulaExpandButton.Width = 18;
+        _formulaExpandButton.Height = 18;
+        _formulaExpandButton.Padding = new Thickness(0);
+        _formulaExpandButton.Margin = new Thickness(2, 6, 5, 0);
+        _formulaExpandButton.Background = Brushes.Transparent;
+        _formulaExpandButton.BorderThickness = new Thickness(0);
+        _formulaExpandButton.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
+        _formulaExpandButton.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+        _formulaExpandButton.VerticalAlignment = AvaloniaVerticalAlignment.Top;
+        _formulaExpandButton.Click += (_, _) =>
+        {
+            _formulaBarExpanded = !_formulaBarExpanded;
+            ApplyFormulaBarExpansion();
+        };
+        AutomationProperties.SetName(_formulaExpandButton, "Expand formula bar");
+        AutomationProperties.SetHelpText(_formulaExpandButton, "Expands or collapses the formula bar.");
+    }
+
+    private void ApplyFormulaBarExpansion()
+    {
+        _formulaBox.AcceptsReturn = _formulaBarExpanded;
+        _formulaBox.Height = _formulaBarExpanded ? 84 : 30;
+        _formulaBox.MinHeight = _formulaBarExpanded ? 84 : 30;
+        _formulaBarHost.Height = _formulaBarExpanded ? 94 : 40;
+        _formulaExpandButton.Content = CreateFormulaBarChevron(pointsUp: _formulaBarExpanded);
+        AutomationProperties.SetName(_formulaExpandButton, _formulaBarExpanded ? "Collapse formula bar" : "Expand formula bar");
+    }
+
+    private static Control CreateFormulaBarChevron(bool pointsUp)
+    {
+        var data = pointsUp ? "M2,6 L5,3 L8,6" : "M2,3 L5,6 L8,3";
+        return new global::Avalonia.Controls.Shapes.Path
+        {
+            Data = Geometry.Parse(data),
+            Width = 10,
+            Height = 7,
+            Stroke = Brush(31, 31, 31),
+            StrokeThickness = 1.45,
+            StrokeLineCap = PenLineCap.Round,
+            StrokeJoin = PenLineJoin.Round,
+            Stretch = Stretch.Uniform,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+        };
+    }
+
     private Control BuildStatusBar()
     {
         var statusBarCustomizeMenu = BuildStatusBarCustomizeContextMenu();
         _statusText.ContextMenu = statusBarCustomizeMenu;
         _selectionStatsText.ContextMenu = statusBarCustomizeMenu;
         _zoomText.ContextMenu = statusBarCustomizeMenu;
+        _statusZoomSliderHost.ContextMenu = statusBarCustomizeMenu;
+        _statusZoomSlider.ContextMenu = statusBarCustomizeMenu;
+        _statusZoomSlider.Minimum = SetWorksheetZoomCommand.MinZoomPercent;
+        _statusZoomSlider.Maximum = SetWorksheetZoomCommand.MaxZoomPercent;
+        _statusZoomSlider.SmallChange = 5;
+        _statusZoomSlider.LargeChange = 10;
+        _statusZoomSlider.Width = 120;
+        _statusZoomSlider.Height = 22;
+        _statusZoomSlider.Margin = new Thickness(0);
+        _statusZoomSlider.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _statusZoomSlider.ValueChanged += (_, args) =>
+        {
+            UpdateStatusZoomSliderThumb(args.NewValue);
+            if (_isUpdatingStatusZoomSlider)
+                return;
+            ApplyZoomPercent((int)Math.Round(args.NewValue), "Zoom failed.");
+        };
+        AutomationProperties.SetName(_statusZoomSlider, "Zoom slider");
+        AutomationProperties.SetHelpText(_statusZoomSlider, "Adjusts the worksheet zoom from 10 to 400 percent.");
+        _statusText.FontSize = 12;
+        _statusText.Foreground = StatusBarForeground;
+        _selectionStatsText.FontSize = 12;
+        _selectionStatsText.Foreground = StatusBarForeground;
+        _zoomText.FontSize = 12;
+        _zoomText.Foreground = StatusBarForeground;
 
         var leftPanel = new StackPanel
         {
@@ -2655,28 +2980,286 @@ public sealed partial class MainWindow : Window
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
         };
         leftPanel.Children.Add(_statusText);
-        leftPanel.Children.Add(_selectionStatsText);
 
-        DockPanel.SetDock(_zoomText, Dock.Right);
-        var dock = new DockPanel { LastChildFill = true };
-        dock.Children.Add(_zoomText);
-        dock.Children.Add(leftPanel);
+        var statsViewport = new Border
+        {
+            Margin = new Thickness(8, 0, 12, 0),
+            ClipToBounds = true,
+            Child = _selectionStatsText,
+        };
+        _selectionStatsText.HorizontalAlignment = AvaloniaHorizontalAlignment.Right;
+        _selectionStatsText.TextTrimming = TextTrimming.CharacterEllipsis;
+
+        var viewButtons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Height = 24,
+            Margin = new Thickness(0, 0, 10, 0),
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+        };
+        ConfigureStatusBarViewButton(
+            _statusNormalViewButton,
+            RibbonCommandIconKind.Grid,
+            "Normal view",
+            SetNormalView,
+            new Thickness(0));
+        ConfigureStatusBarViewButton(
+            _statusPageLayoutViewButton,
+            RibbonCommandIconKind.Page,
+            "Page layout view",
+            SetPageLayoutView,
+            new Thickness(2, 0, 0, 0));
+        ConfigureStatusBarViewButton(
+            _statusPageBreakPreviewButton,
+            RibbonCommandIconKind.PageBreak,
+            "Page break preview",
+            TogglePageBreakPreview,
+            new Thickness(2, 0, 0, 0));
+        viewButtons.Children.Add(_statusNormalViewButton);
+        viewButtons.Children.Add(_statusPageLayoutViewButton);
+        viewButtons.Children.Add(_statusPageBreakPreviewButton);
+
+        var zoomPanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Height = 24,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+        };
+        zoomPanel.Children.Add(CreateStatusBarZoomButton(isZoomIn: false));
+        zoomPanel.Children.Add(BuildStatusZoomSliderHost());
+        zoomPanel.Children.Add(CreateStatusBarZoomButton(isZoomIn: true));
+        _zoomText.Width = 38;
+        _zoomText.Margin = new Thickness(8, 0, 0, 0);
+        zoomPanel.Children.Add(_zoomText);
+
+        var rightPanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+        };
+        rightPanel.Children.Add(viewButtons);
+        rightPanel.Children.Add(zoomPanel);
+
+        var grid = new AvaloniaGrid
+        {
+            ColumnDefinitions =
+            {
+                new ColumnDefinition { Width = GridLength.Auto },
+                new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
+                new ColumnDefinition { Width = GridLength.Auto },
+            },
+        };
+        AddGridChild(grid, leftPanel, 0, 0);
+        AddGridChild(grid, statsViewport, 0, 1);
+        AddGridChild(grid, rightPanel, 0, 2);
 
         return new Border
         {
-            Background = ChromeSurface,
-            BorderBrush = ToolbarBorder,
-            BorderThickness = new Thickness(0, 1, 0, 0),
-            Height = 22,
-            Padding = new Thickness(8, 0),
-            Child = dock,
+            Background = StatusBarSurface,
+            BorderThickness = new Thickness(0),
+            Height = 28,
+            Padding = new Thickness(8, 3),
+            Child = grid,
         };
+    }
+
+    private Control BuildStatusZoomSliderHost()
+    {
+        _statusZoomSliderHost.Width = 120;
+        _statusZoomSliderHost.Height = 22;
+        _statusZoomSliderHost.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _statusZoomSliderHost.ClipToBounds = true;
+        _statusZoomSliderHost.Children.Clear();
+        var track = new Border
+        {
+            Height = 4,
+            Margin = new Thickness(8, 0),
+            Background = Brush(218, 222, 228),
+            BorderBrush = Brush(175, 184, 193),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(0),
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+        };
+        track.ZIndex = 0;
+        _statusZoomSliderHost.Children.Add(track);
+
+        _statusZoomSliderThumb.Width = 9;
+        _statusZoomSliderThumb.Height = 16;
+        _statusZoomSliderThumb.Background = Brush(248, 249, 250);
+        _statusZoomSliderThumb.BorderBrush = Brush(124, 133, 143);
+        _statusZoomSliderThumb.BorderThickness = new Thickness(1);
+        _statusZoomSliderThumb.CornerRadius = new CornerRadius(1);
+        _statusZoomSliderThumb.HorizontalAlignment = AvaloniaHorizontalAlignment.Left;
+        _statusZoomSliderThumb.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _statusZoomSliderThumb.IsHitTestVisible = false;
+        _statusZoomSliderThumb.ZIndex = 10;
+        _statusZoomSliderHost.Children.Add(_statusZoomSliderThumb);
+
+        // Keep the native slider for keyboard/pointer behavior while the host supplies the WPF-like chrome.
+        _statusZoomSlider.Opacity = 0.01;
+        _statusZoomSlider.Background = Brushes.Transparent;
+        _statusZoomSlider.ZIndex = 20;
+        _statusZoomSliderHost.Children.Add(_statusZoomSlider);
+        _statusZoomSliderHost.Children.Add(BuildStatusZoomTick(left: 8));
+        _statusZoomSliderHost.Children.Add(BuildStatusZoomTick(left: 60, isMiddle: true));
+        _statusZoomSliderHost.Children.Add(BuildStatusZoomTick(left: 111));
+        UpdateStatusZoomSliderThumb(_statusZoomSlider.Value);
+        return _statusZoomSliderHost;
+    }
+
+    private static Control BuildStatusZoomTick(double left, bool isMiddle = false) =>
+        new Border
+        {
+            Width = isMiddle ? 2 : 1,
+            Height = isMiddle ? 8 : 4,
+            Margin = new Thickness(left, 0, 0, isMiddle ? 0 : 2),
+            Background = isMiddle ? Brush(92, 102, 112) : Brush(232, 236, 240),
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+            VerticalAlignment = AvaloniaVerticalAlignment.Bottom,
+            IsHitTestVisible = false,
+            ZIndex = 30,
+        };
+
+    private void UpdateStatusZoomSliderThumb(double zoomPercent)
+    {
+        var normalized = NormalizeStatusZoomSliderPosition(zoomPercent);
+        var trackWidth = Math.Max(1, _statusZoomSliderHost.Width - 16);
+        var left = 8 + normalized * trackWidth - (_statusZoomSliderThumb.Width / 2);
+        _statusZoomSliderThumb.Margin = new Thickness(Math.Clamp(left, 0, _statusZoomSliderHost.Width - _statusZoomSliderThumb.Width), 0, 0, 0);
+    }
+
+    private static double NormalizeStatusZoomSliderPosition(double zoomPercent)
+    {
+        var min = SetWorksheetZoomCommand.MinZoomPercent;
+        var max = SetWorksheetZoomCommand.MaxZoomPercent;
+        var midpoint = Math.Clamp(100d, min, max);
+        var clamped = Math.Clamp(zoomPercent, min, max);
+        if (max <= min)
+            return 0;
+        if (clamped <= midpoint)
+        {
+            var lowerRange = Math.Max(1, midpoint - min);
+            return 0.5 * ((clamped - min) / lowerRange);
+        }
+
+        var upperRange = Math.Max(1, max - midpoint);
+        return 0.5 + 0.5 * ((clamped - midpoint) / upperRange);
+    }
+
+    private static void ConfigureStatusBarViewButton(
+        ToggleButton button,
+        RibbonCommandIconKind iconKind,
+        string automationName,
+        Action action,
+        Thickness margin)
+    {
+        button.Width = 22;
+        button.Height = 22;
+        button.Margin = margin;
+        button.Padding = new Thickness(0);
+        button.Template = StatusBarViewButtonTemplate;
+        button.Foreground = Brushes.White;
+        button.Content = AvaloniaRibbonIcons.Build(new RibbonCommandIcon(iconKind), 15, Brushes.White);
+        button.Tag = iconKind;
+        button.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
+        button.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+        button.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        button.Click += (_, _) => action();
+        AutomationProperties.SetName(button, automationName);
+        AutomationProperties.SetHelpText(button, automationName);
+    }
+
+    private void UpdateStatusBarViewButtons()
+    {
+        ApplyStatusBarViewButtonState(_statusNormalViewButton, !_isPageBreakPreviewActive);
+        ApplyStatusBarViewButtonState(_statusPageLayoutViewButton, _isPageBreakPreviewActive);
+        ApplyStatusBarViewButtonState(_statusPageBreakPreviewButton, _isPageBreakPreviewActive);
+    }
+
+    private static void ApplyStatusBarViewButtonState(ToggleButton button, bool isChecked)
+    {
+        button.IsChecked = isChecked;
+        var foreground = Brushes.White;
+        button.Background = isChecked ? SheetTabContourBrush : Brushes.Transparent;
+        button.BorderBrush = isChecked ? Brush(10, 87, 112) : Brushes.Transparent;
+        button.BorderThickness = new Thickness(1);
+        if (button.Tag is RibbonCommandIconKind iconKind)
+            button.Content = AvaloniaRibbonIcons.Build(new RibbonCommandIcon(iconKind), 15, foreground);
+    }
+
+    private Button CreateStatusBarZoomButton(bool isZoomIn)
+    {
+        var button = new Button
+        {
+            Width = 22,
+            Height = 22,
+            Padding = new Thickness(0),
+            Background = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            Foreground = Brushes.White,
+            Content = CreateStatusBarZoomGlyph(isZoomIn),
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
+        };
+        button.Click += (_, _) =>
+        {
+            if (isZoomIn)
+                ZoomIn();
+            else
+                ZoomOut();
+        };
+        AutomationProperties.SetName(button, isZoomIn ? "Zoom in" : "Zoom out");
+        AutomationProperties.SetHelpText(button, isZoomIn
+            ? "Increases the worksheet zoom."
+            : "Decreases the worksheet zoom.");
+        return button;
+    }
+
+    private static Control CreateStatusBarZoomGlyph(bool isZoomIn)
+    {
+        var grid = new AvaloniaGrid
+        {
+            Width = 14,
+            Height = 14,
+        };
+        grid.Children.Add(new AvaloniaRectangle
+        {
+            Width = 12,
+            Height = 2,
+            Fill = Brushes.White,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+        });
+        if (isZoomIn)
+        {
+            grid.Children.Add(new AvaloniaRectangle
+            {
+                Width = 2,
+                Height = 12,
+                Fill = Brushes.White,
+                HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
+                VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            });
+        }
+
+        return grid;
     }
 
     private string FormatWindowWorkbookTitle() =>
         _session.IsWorkbookGrouped
             ? $"{_session.DisplayName} [Group]"
             : _session.DisplayName;
+
+    private string FormatWindowTitle() =>
+        WindowTitlePlanner.Compose(
+            displayName: _session.DisplayName,
+            applicationName: "FreeX",
+            isDirty: _session.IsDirty,
+            dirtyMarker: "*",
+            separator: " - ",
+            groupSuffix: _session.IsWorkbookGrouped ? " [Group]" : "");
 
     private void RefreshShell(string status)
     {
@@ -2688,7 +3271,8 @@ public sealed partial class MainWindow : Window
 
         _sheetGridHost.Content = BuildSheetGrid();
         _sheetTabsHost.Content = BuildSheetTabs();
-        Title = $"FreeX - {FormatWindowWorkbookTitle()}";
+        UpdateSheetTabNavigationVisibility();
+        Title = FormatWindowTitle();
         _cellAddressText.Text = FormatCellReference(_session.ActiveCell);
         _formulaBox.Text = preserveFormulaEdit
             ? formulaText
@@ -2719,10 +3303,11 @@ public sealed partial class MainWindow : Window
         _selectionStatsText.Text = _session.SelectionStatsText;
         _zoomText.Text = FormatZoomPercent(_session.ZoomPercent);
         ApplyStatusBarModel(status);
+        UpdateStatusBarViewButtons();
         _statusText.Foreground = ShouldUseWarningStatusColor(status)
             ? Brush(143, 74, 18)
-            : Brush(67, 113, 83);
-        Title = $"FreeX - {FormatWindowWorkbookTitle()}{(_session.IsDirty ? " *" : "")}";
+            : StatusBarForeground;
+        Title = FormatWindowTitle();
         UpdateViewportScrollBars();
         RefreshPivotFieldPane();
         _ribbonContextSource.OnPivotActive(
@@ -3016,7 +3601,7 @@ public sealed partial class MainWindow : Window
             var label = new TextBlock
             {
                 Text = tab.Name,
-                FontSize = 12,
+                FontSize = 13,
                 FontWeight = tab.IsActive || isGroupedTab ? FontWeight.SemiBold : FontWeight.Normal,
                 Foreground = tab.IsActive ? PrimaryInk : HeaderForeground,
                 TextTrimming = TextTrimming.CharacterEllipsis,
@@ -3036,19 +3621,19 @@ public sealed partial class MainWindow : Window
 
             var button = new Button
             {
-                MinWidth = 72,
+                MinWidth = 64,
                 MaxWidth = 168,
-                MinHeight = 24,
-                Height = 24,
+                MinHeight = 27,
+                Height = 27,
                 Focusable = true,
-                Padding = new Thickness(12, 1, 12, 0),
+                Padding = new Thickness(8, 0, 8, 0),
                 Background = tab.IsActive
                     ? Brushes.White
                     : isGroupedTab
                         ? Brush(236, 246, 255)
                         : Brushes.Transparent,
-                BorderBrush = tab.IsActive || isGroupedTab ? ToolbarBorder : Brushes.Transparent,
-                BorderThickness = tab.IsActive ? new Thickness(1, 1, 1, 0) : new Thickness(0),
+                BorderBrush = tab.IsActive ? Brushes.Transparent : Brush(213, 217, 223),
+                BorderThickness = tab.IsActive ? new Thickness(0) : new Thickness(0, 0, 1, 0),
                 Content = content,
                 Tag = tab.Id,
                 Margin = new Thickness(0),
@@ -3063,7 +3648,15 @@ public sealed partial class MainWindow : Window
             panel.Children.Add(button);
         }
 
+        DetachNewSheetButtonFromParent();
+        panel.Children.Add(_newSheetButton);
         return panel;
+    }
+
+    private void DetachNewSheetButtonFromParent()
+    {
+        if (_newSheetButton.Parent is Panel parent)
+            parent.Children.Remove(_newSheetButton);
     }
 
     private ContextMenu CreateSheetTabContextMenu(WorkbookSheetTab tab)
@@ -3987,10 +4580,11 @@ public sealed partial class MainWindow : Window
             TextWrapping.NoWrap,
             FontWeight.SemiBold,
             FontStyle.Normal,
-            fontSize: 12,
+            fontSize: 11,
             textDecorations: null,
             selected: false,
-            zoomFactor: zoomFactor);
+            zoomFactor: zoomFactor,
+            horizontalPadding: 2);
 
     /// <summary>
     /// Builds a clickable column header. Left-click selects the whole column (Shift extends from the
@@ -4109,7 +4703,7 @@ public sealed partial class MainWindow : Window
         var textWrapping = style?.WrapText == true ? TextWrapping.Wrap : TextWrapping.NoWrap;
         var weight = style?.Bold == true ? FontWeight.SemiBold : FontWeight.Normal;
         var fontStyle = style?.Italic == true ? FontStyle.Italic : FontStyle.Normal;
-        var fontSize = style?.FontSize ?? CellStyle.Default.FontSize;
+        var fontSize = (style?.FontSize ?? CellStyle.Default.FontSize) + WorksheetFontSizeDisplayOffset;
         var textDecorations = BuildTextDecorations(style);
         var indentPadding = GetCellIndentPadding(style);
         var textRotation = style?.TextRotation ?? CellStyle.Default.TextRotation;
@@ -4475,12 +5069,13 @@ public sealed partial class MainWindow : Window
         bool isNumeric = false,
         CfDataBarRenderInstruction? conditionalDataBar = null,
         CfIconRenderInstruction? conditionalIcon = null,
-        Control? sparklineLayer = null)
+        Control? sparklineLayer = null,
+        double horizontalPadding = 8)
     {
         var effectiveText = FormatTextForRotation(text, textRotation);
         var effectiveTextWrapping = textRotation == 255 ? TextWrapping.NoWrap : textWrapping;
         var scaledFontSize = Math.Max(1, fontSize * zoomFactor);
-        var scaledHorizontalPadding = 8 * zoomFactor;
+        var scaledHorizontalPadding = horizontalPadding * zoomFactor;
         var scaledIndentPadding = indentPadding * zoomFactor;
         var textBlock = new TextBlock
         {
@@ -4517,7 +5112,11 @@ public sealed partial class MainWindow : Window
         {
             Background = background,
             BorderBrush = selected ? SelectionBorder : showGridlines ? GridLine : Brushes.Transparent,
-            BorderThickness = new Thickness(1),
+            BorderThickness = selected
+                ? new Thickness(1)
+                : showGridlines
+                    ? new Thickness(1)
+                    : new Thickness(0),
             ClipToBounds = true,
             Child = content,
         };

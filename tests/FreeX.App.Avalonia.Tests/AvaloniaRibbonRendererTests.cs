@@ -207,10 +207,14 @@ public sealed class AvaloniaRibbonRendererTests
         var ribbon = AvaloniaRibbonRenderer.BuildRibbon(definition, registry);
 
         var tabControl = Assert.IsType<TabControl>(ribbon);
-        Assert.Contains(tabControl.Styles, style => style is Style concrete && HasSetter(concrete, Layoutable.HeightProperty, 22d));
-        Assert.Contains(tabControl.Styles, style => style is Style concrete && HasSetter(concrete, TemplatedControl.PaddingProperty, new Thickness(9, 0, 9, 0)));
+        Assert.Contains(tabControl.Styles, style => style is Style concrete && HasSetter(concrete, Layoutable.HeightProperty, 28d));
+        Assert.Contains(tabControl.Styles, style => style is Style concrete && HasSetter(concrete, TemplatedControl.PaddingProperty, new Thickness(0)));
+        Assert.Contains(tabControl.Styles, style => style is Style concrete && HasSetter(concrete, TemplatedControl.TemplateProperty));
         Assert.Contains(tabControl.Styles, style => style is Style concrete && HasSetter(concrete, TemplatedControl.BorderThicknessProperty, new Thickness(0)));
-        Assert.Contains(tabControl.Styles, style => style is Style concrete && HasSetter(concrete, Layoutable.MaxHeightProperty, 21d));
+        Assert.Contains(tabControl.Styles, style => style is Style concrete && HasSetter(concrete, Border.BorderThicknessProperty, new Thickness(0)));
+        Assert.DoesNotContain(tabControl.Styles, style => style is Style concrete && HasSetter(concrete, TemplatedControl.BorderThicknessProperty, new Thickness(0, 0, 0, 3)));
+        Assert.Contains(tabControl.Styles, style => style is Style concrete && HasSetter(concrete, Layoutable.MaxHeightProperty, 26d));
+        Assert.Contains(tabControl.Styles, style => style is Style concrete && HasSetter(concrete, Layoutable.HeightProperty, 22d));
     });
 
     [Fact]
@@ -234,9 +238,9 @@ public sealed class AvaloniaRibbonRendererTests
 
         var combo = content.GetLogicalDescendants().OfType<ComboBox>().Single();
 
-        Assert.Equal(21, combo.Height);
-        Assert.Equal(21, combo.MinHeight);
-        Assert.Equal(21, combo.MaxHeight);
+        Assert.Equal(26, combo.Height);
+        Assert.Equal(26, combo.MinHeight);
+        Assert.Equal(26, combo.MaxHeight);
         Assert.Equal(new Thickness(6, 0, 18, 0), combo.Padding);
         Assert.Equal(VerticalAlignment.Center, combo.VerticalContentAlignment);
     });
@@ -293,6 +297,21 @@ public sealed class AvaloniaRibbonRendererTests
         Assert.Equal(new[] { "FileTab", "HomeTab", "ChartDesignTab", "ChartFormatTab", "HelpTab" }, ids);
     });
 
+    [Fact]
+    public void ParityCaptureContext_IgnoresNormalContextRefreshUntilCleared()
+    {
+        var source = new AvaloniaRibbonContextSource();
+
+        source.SetParityCaptureContext("pivot.active");
+        source.OnPivotActive(false);
+
+        Assert.True(source.Current.IsActive("pivot.active"));
+
+        source.SetParityCaptureContext(null);
+
+        Assert.False(source.Current.IsActive("pivot.active"));
+    }
+
     private sealed class FakeContextSource : IRibbonContextSource
     {
         public RibbonContextState Current { get; private set; } = RibbonContextState.None;
@@ -308,6 +327,11 @@ public sealed class AvaloniaRibbonRendererTests
         style.Setters
             .OfType<Setter>()
             .Any(setter => setter.Property == property && Equals(setter.Value, expectedValue));
+
+    private static bool HasSetter(Style style, AvaloniaProperty property) =>
+        style.Setters
+            .OfType<Setter>()
+            .Any(setter => setter.Property == property);
 
     [Fact]
     public Task UnregisteredCommand_RendersDisabled() => RunOnUiThread(() =>
@@ -416,6 +440,15 @@ public sealed class AvaloniaRibbonRendererTests
     });
 
     [Theory]
+    [InlineData("Bold")]
+    [InlineData("Italic")]
+    [InlineData("Underline")]
+    [InlineData("Strikethrough")]
+    [InlineData("Font Color")]
+    [InlineData("Accounting Number Format")]
+    [InlineData("AutoSum")]
+    [InlineData("Find & Select")]
+    [InlineData("Sort & Filter")]
     [InlineData("Paste")]
     [InlineData("Format Painter")]
     [InlineData("Conditional Formatting")]

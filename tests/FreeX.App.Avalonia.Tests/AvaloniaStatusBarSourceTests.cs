@@ -64,8 +64,8 @@ public sealed class AvaloniaStatusBarSourceTests
 
         var text = AvaloniaStatusBarSource.FormatVisibleReadouts(model, visibility);
 
-        // Defaults show Average, Count, Numerical Count, Sum (Min/Max off), separated by three spaces.
-        Assert.Equal("Average: 20   Count: 4   Numerical Count: 3   Sum: 60", text);
+        // Defaults mirror WPF: Average, Count, Sum are on; Numerical Count/Min/Max are off.
+        Assert.Equal("Average: 20   Count: 4   Sum: 60", text);
     }
 
     [Fact]
@@ -73,6 +73,7 @@ public sealed class AvaloniaStatusBarSourceTests
     {
         var visibility = AvaloniaStatusBarSource.CreateDefaultOptionVisibility();
         visibility["Average"] = false;
+        visibility["NumericalCount"] = true;
         visibility["Sum"] = false;
         visibility["Maximum"] = true;
         var model = AvaloniaStatusBarSource.BuildModel(SampleStats(), zoomPercent: 100, readyText: "Ready");
@@ -123,6 +124,7 @@ public sealed class AvaloniaStatusBarSourceTests
 
         // The toggle items are checkboxes reflecting the supplied option state.
         Assert.True(registered["Sum"].IsChecked);     // default-on
+        Assert.False(registered["NumericalCount"].IsChecked); // default-off
         Assert.False(registered["Minimum"].IsChecked); // default-off
         Assert.All(registered.Values, item => Assert.Equal(MenuItemToggleType.CheckBox, item.ToggleType));
 

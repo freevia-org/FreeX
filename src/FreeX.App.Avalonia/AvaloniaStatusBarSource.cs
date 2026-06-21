@@ -26,7 +26,7 @@ internal static class AvaloniaStatusBarSource
             ["PageNumber"] = false,
             ["Average"] = true,
             ["Count"] = true,
-            ["NumericalCount"] = true,
+            ["NumericalCount"] = false,
             ["Minimum"] = false,
             ["Maximum"] = false,
             ["Sum"] = true,

@@ -52,7 +52,7 @@ public sealed class WorkbookViewportScrollPlannerTests
     }
 
     [Fact]
-    public void Create_UsesVisibleScrollableSpanForMaximum()
+    public void Create_UsesVisibleSpanAsMinimumScrollbarMaximum()
     {
         var sheet = new Sheet(SheetId.New(), "Sheet1");
         var viewport = new ViewportModel(
@@ -66,8 +66,30 @@ public sealed class WorkbookViewportScrollPlannerTests
 
         var state = WorkbookViewportScrollPlanner.Create(sheet, viewport);
 
-        state.Vertical.Maximum.Should().Be(CellAddress.MaxRow - 40 + 1);
-        state.Horizontal.Maximum.Should().Be(CellAddress.MaxCol - 20 + 1);
+        state.Vertical.Maximum.Should().Be(40);
+        state.Horizontal.Maximum.Should().Be(20);
+        state.Vertical.IsEnabled.Should().BeTrue();
+        state.Horizontal.IsEnabled.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Create_UsesUsedRangeForScrollbarMaximum()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 80, 35), new TextValue("tail"));
+        var viewport = new ViewportModel(
+            [],
+            Enumerable.Range(1, 40)
+                .Select(row => new RowMetric((uint)row, 20, (row - 1) * 20))
+                .ToList(),
+            Enumerable.Range(1, 20)
+                .Select(col => new ColMetric((uint)col, 64, (col - 1) * 64))
+                .ToList());
+
+        var state = WorkbookViewportScrollPlanner.Create(sheet, viewport);
+
+        state.Vertical.Maximum.Should().Be(80);
+        state.Horizontal.Maximum.Should().Be(35);
         state.Vertical.IsEnabled.Should().BeTrue();
         state.Horizontal.IsEnabled.Should().BeTrue();
     }
