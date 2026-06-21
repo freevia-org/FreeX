@@ -42,10 +42,15 @@ public sealed class SisterAppFrameHelperTests
 
         source.Should().Contain("RibbonShellBuilder.Build(");
         source.Should().Contain("SisterAppWindowFrameBuilder.Build(");
+        source.Should().Contain("SisterQuickAccessToolbarBuilder.Render(");
         source.Should().Contain("AppStoragePathPlanner.GetOptionsFilePathLabelOrFallback(");
         source.Should().NotContain("RibbonTabControlFactory.Create(");
         source.Should().NotContain("RibbonFileTabRouter.Attach(");
         source.Should().NotContain("RibbonWpfRenderer.BuildTabContent(");
+        source.Should().NotContain("new QuickAccessToolbarItem(\"Save\"");
+        source.Should().NotContain("new QuickAccessToolbarItem(\"Undo\"");
+        source.Should().NotContain("new QuickAccessToolbarItem(\"Redo\"");
+        source.Should().NotContain("private void OnQuickAccessCommand");
         source.Should().NotContain("new FrameworkElementFactory(typeof(Border), \"FileTabBorder\")");
         source.Should().NotContain("$\"%LOCALAPPDATA%\\\\{AppProduct.Current.ProductDirectoryName}\"");
         source.Should().NotContain("belowTitle.Children.Add(root)");

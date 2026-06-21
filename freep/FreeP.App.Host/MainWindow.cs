@@ -220,33 +220,14 @@ public sealed class MainWindow : Window
     private void UpdateSlideCount() =>
         _slideCountText.Text = $"Slides: {_presentation.Slides.Count}   Data folder: {ResolveDataFolderLabel()}";
 
-    private void AddQuickAccessButtons(StackPanel host)
-    {
-        var items = new[]
-        {
-            new QuickAccessToolbarItem("Save", "Save (Ctrl+S)", RibbonCommandIconKind.Save),
-            new QuickAccessToolbarItem("Undo", "Undo (Ctrl+Z)", RibbonCommandIconKind.Undo),
-            new QuickAccessToolbarItem("Redo", "Redo (Ctrl+Y)", RibbonCommandIconKind.Redo)
-        };
-
-        QuickAccessToolbarRenderer.Render(host, this, items, OnQuickAccessCommand);
-    }
-
-    private void OnQuickAccessCommand(string commandId)
-    {
-        switch (commandId)
-        {
-            case "Save":
-                _file.Save();
-                break;
-            case "Undo":
-                _commandBus.Undo();
-                break;
-            case "Redo":
-                _commandBus.Redo();
-                break;
-        }
-    }
+    private void AddQuickAccessButtons(StackPanel host) =>
+        SisterQuickAccessToolbarBuilder.Render(
+            host,
+            this,
+            new SisterQuickAccessToolbarActions(
+                Save: () => _file.Save(),
+                Undo: () => _commandBus.Undo(),
+                Redo: () => _commandBus.Redo()));
 
     private void UpdateTitle()
     {
