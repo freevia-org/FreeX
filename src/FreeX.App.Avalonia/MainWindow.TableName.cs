@@ -108,13 +108,14 @@ public sealed partial class MainWindow
             return;
         }
 
+        var renameValues = values!;
         var result = _session.ExecuteReviewCommand(
-            new RenameStructuredTableCommand(sheetId, table.Id, values!.Name));
+            TableDesignCommandPlanner.BuildRenameCommand(sheetId, table, renameValues));
 
         if (result.Success)
         {
             RefreshTableContextualTab();
-            RefreshShell(UiText.Format("TableName_Renamed", values.Name));
+            RefreshShell(UiText.Format("TableName_Renamed", renameValues.Name));
         }
         else
         {

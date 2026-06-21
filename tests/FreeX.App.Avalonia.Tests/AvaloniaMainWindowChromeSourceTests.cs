@@ -125,6 +125,26 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     }
 
     [Fact]
+    public void TableDesign_DelegatesCommandCompositionToSharedPlanner()
+    {
+        var tableTabSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.TableDesignTab.cs"));
+        var tableNameSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.TableName.cs"));
+        var tableResizeSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.TableResize.cs"));
+        var tableStyleSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.TableStyleGallery.cs"));
+
+        tableTabSource.Should().Contain("TableDesignCommandPlanner.TryGetActiveStructuredTable(");
+        tableTabSource.Should().Contain("TableDesignCommandPlanner.BuildConvertToRangeCommand(");
+        tableTabSource.Should().Contain("TableDesignCommandPlanner.BuildStyleOptionsCommand(");
+        tableTabSource.Should().Contain("TableDesignCommandPlanner.GetDisplayName(table)");
+        tableNameSource.Should().Contain("TableDesignCommandPlanner.BuildRenameCommand(");
+        tableResizeSource.Should().Contain("TableDesignCommandPlanner.BuildResizeCommand(");
+        tableStyleSource.Should().Contain("TableDesignCommandPlanner.BuildApplyStyleCommand(");
+        tableTabSource.Should().NotContain("new ReapplyStructuredTableStyleCommand(");
+        tableTabSource.Should().NotContain("new SetStructuredTableTotalsRowCommand(");
+        tableResizeSource.Should().NotContain("private IWorkbookCommand BuildResizeCommand(");
+    }
+
+    [Fact]
     public void StatusBarZoomSlider_UsesIdenticalMinMiddleMaxMarks()
     {
         var mainSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
