@@ -18,10 +18,13 @@ public sealed class BackstagePaneDedupSourceTests
             "BackstageView.cs"));
 
         source.Should().Contain("BackstagePaneComposer");
+        source.Should().Contain("SisterBackstageEntryBuilder.Build(");
         source.Should().Contain("Panes.BuildInfoPane(");
         source.Should().Contain("Panes.BuildRecentPane(");
         source.Should().Contain("Panes.BuildTemplatePane(");
         source.Should().Contain("Panes.BuildOptionsPane(");
+        source.Should().NotContain("BackstageEntry.Pane(\"Info\"");
+        source.Should().NotContain("BackstageEntry.Command(\"Save\"");
         source.Should().NotContain("TextTrimming = TextTrimming.CharacterEllipsis");
         source.Should().NotContain("Path.GetFileName(path)");
         source.Should().NotContain("var gallery = new WrapPanel");
