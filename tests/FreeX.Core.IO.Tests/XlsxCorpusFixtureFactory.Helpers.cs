@@ -49,6 +49,14 @@ internal static partial class XlsxCorpusFixtureFactory
         document.Save(stream);
     }
 
+    private static void ReplacePackageBytes(ZipArchive archive, string entryName, byte[] content)
+    {
+        archive.GetEntry(entryName)?.Delete();
+        var entry = archive.CreateEntry(entryName);
+        using var stream = entry.Open();
+        stream.Write(content, 0, content.Length);
+    }
+
     private static Workbook NewWorkbook(string name) => new(name);
 
     private static CellAddress Addr(Sheet sheet, string a1) => CellAddress.Parse(a1, sheet.Id);
@@ -88,6 +96,9 @@ internal static partial class XlsxCorpusFixtureFactory
         0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
         0x42, 0x60, 0x82
     ];
+
+    private static byte[] MinimalJpegBytes() => Convert.FromBase64String(
+        "/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQERMUFRUVDA8XGBYUGBIUFRT/2wBDAQMEBAUEBQkFBQkUDQsNFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBT/wAARCAAQABADASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD9U6KKKAP/2Q==");
 
     private static MemoryStream CreatePackage(params (string Name, string Content)[] entries)
     {

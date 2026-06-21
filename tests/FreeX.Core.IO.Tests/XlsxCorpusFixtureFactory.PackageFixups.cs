@@ -369,6 +369,12 @@ internal static partial class XlsxCorpusFixtureFactory
             return;
         }
 
+        if (string.Equals(id, "generated-cf-retention-package-003", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyConditionalFormatRetentionStylesFixup(archive);
+            return;
+        }
+
         if (!string.Equals(id, "generated-external-links-001", StringComparison.OrdinalIgnoreCase))
             return;
 
@@ -1127,7 +1133,6 @@ internal static partial class XlsxCorpusFixtureFactory
 
     private static void ApplyCalcChainReferenceFixup(ZipArchive archive)
     {
-        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
 
         var contentTypesEntry = archive.GetEntry("[Content_Types].xml");
@@ -1188,7 +1193,7 @@ internal static partial class XlsxCorpusFixtureFactory
         if (contentTypesEntry is not null)
         {
             var contentTypes = LoadPackageXml(contentTypesEntry);
-            EnsureContentTypeOverride(contentTypes, "/docProps/thumbnail.png", "image/png");
+            EnsureContentTypeOverride(contentTypes, "/docProps/thumbnail.jpeg", "image/jpeg");
             ReplacePackageXml(archive, "[Content_Types].xml", contentTypes);
         }
 
@@ -1200,7 +1205,7 @@ internal static partial class XlsxCorpusFixtureFactory
             packageRelsXml,
             "rIdFreeXDocumentThumbnail1",
             "http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail",
-            "docProps/thumbnail.png");
+            "docProps/thumbnail.jpeg");
         ReplacePackageXml(archive, packageRelsPath, packageRelsXml);
     }
 
@@ -1285,12 +1290,19 @@ internal static partial class XlsxCorpusFixtureFactory
         if (worksheetEntry is not null)
         {
             var worksheetXml = LoadPackageXml(worksheetEntry);
+            worksheetXml.Root?.Elements(worksheetNs + "headerFooter").Remove();
             worksheetXml.Root?.Elements(worksheetNs + "legacyDrawingHF").Remove();
-            worksheetXml.Root?.Add(new XElement(
-                worksheetNs + "legacyDrawingHF",
-                new XAttribute(officeRelNs + "id", "rIdHeaderFooterDrawing1")));
+            worksheetXml.Root?.Add(
+                new XElement(
+                    worksheetNs + "headerFooter",
+                    new XElement(worksheetNs + "oddHeader", "&L&G")),
+                new XElement(
+                    worksheetNs + "legacyDrawingHF",
+                    new XAttribute(officeRelNs + "id", "rIdHeaderFooterDrawing1")));
             ReplacePackageXml(archive, worksheetPath, worksheetXml);
         }
+
+        ReplacePackageBytes(archive, "xl/media/headerFooterImage1.png", MinimalPngBytes());
 
         var worksheetRelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
         var worksheetRelsXml = archive.GetEntry(worksheetRelsPath) is { } worksheetRelsEntry
@@ -1696,10 +1708,14 @@ internal static partial class XlsxCorpusFixtureFactory
     private static void ApplyWorksheetSingleXmlCellsFixup(ZipArchive archive)
     {
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
         const string singleCellTablePath = "xl/tables/tableSingleCells1.xml";
         const string relationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/tableSingleCells";
         const string contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.tableSingleCells+xml";
+        const string xmlMapsRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/xmlMaps";
+        const string customXmlRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml";
+        const string customXmlPropsRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXmlProps";
 
         var worksheetPath = "xl/worksheets/sheet1.xml";
         var worksheetEntry = archive.GetEntry(worksheetPath);
@@ -1724,15 +1740,67 @@ internal static partial class XlsxCorpusFixtureFactory
                     new XElement(
                         worksheetNs + "xmlPr",
                         new XAttribute("mapId", "1"),
-                        new XAttribute("xpath", "/freex/singleXmlCell1"),
+                        new XAttribute("xpath", "/root/singleXmlCell1"),
                         new XAttribute("xmlDataType", "string")))))));
 
         if (archive.GetEntry("[Content_Types].xml") is { } contentTypesEntry)
         {
             var contentTypesXml = LoadPackageXml(contentTypesEntry);
             EnsureContentTypeOverride(contentTypesXml, $"/{singleCellTablePath}", contentType);
+            EnsureContentTypeOverride(contentTypesXml, "/xl/xmlMaps.xml", "application/xml");
+            EnsureContentTypeOverride(contentTypesXml, "/customXml/item1.xml", "application/xml");
+            EnsureContentTypeOverride(contentTypesXml, "/customXml/itemProps1.xml", "application/vnd.openxmlformats-officedocument.customXmlProperties+xml");
             ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
         }
+
+        ReplacePackageXml(
+            archive,
+            "xl/xmlMaps.xml",
+            new XDocument(new XElement(
+                worksheetNs + "MapInfo",
+                new XAttribute("SelectionNamespaces", "xmlns:fx='urn:freex:single-xml-cell'"),
+                new XElement(
+                    worksheetNs + "Schema",
+                    new XAttribute("ID", "schema1"),
+                    new XAttribute("SchemaRef", "../customXml/item1.xml")),
+                new XElement(
+                    worksheetNs + "Map",
+                    new XAttribute("ID", "1"),
+                    new XAttribute("Name", "FreeXSingleXmlCellMap"),
+                    new XAttribute("RootElement", "root"),
+                    new XAttribute("SchemaID", "schema1"),
+                    new XAttribute("AutoFit", "1"),
+                    new XAttribute("Append", "0"),
+                    new XAttribute("PreserveSortAFLayout", "1"),
+                    new XAttribute("PreserveFormat", "1"),
+                    new XAttribute("ShowImportExportValidationErrors", "1")))));
+
+        ReplacePackageXml(
+            archive,
+            "customXml/item1.xml",
+            new XDocument(new XElement("root", new XElement("singleXmlCell1", "FreeX"))));
+        ReplacePackageXml(
+            archive,
+            "customXml/itemProps1.xml",
+            new XDocument(new XElement(
+                XNamespace.Get("http://schemas.openxmlformats.org/officeDocument/2006/customXml") + "datastoreItem",
+                new XAttribute(XNamespace.Get("http://schemas.openxmlformats.org/officeDocument/2006/customXml") + "itemID", "{33333333-3333-3333-3333-333333333333}"),
+                new XElement(XNamespace.Get("http://schemas.openxmlformats.org/officeDocument/2006/customXml") + "schemaRefs"))));
+
+        var customXmlRelsPath = "customXml/_rels/item1.xml.rels";
+        var customXmlRelsXml = archive.GetEntry(customXmlRelsPath) is { } customXmlRelsEntry
+            ? LoadPackageXml(customXmlRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(customXmlRelsXml, "rIdFreeXSingleXmlCustomXmlProps1", customXmlPropsRelationshipType, "itemProps1.xml");
+        ReplacePackageXml(archive, customXmlRelsPath, customXmlRelsXml);
+
+        var workbookRelsPath = "xl/_rels/workbook.xml.rels";
+        var workbookRelsXml = archive.GetEntry(workbookRelsPath) is { } workbookRelsEntry
+            ? LoadPackageXml(workbookRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(workbookRelsXml, "rIdFreeXSingleXmlMaps1", xmlMapsRelationshipType, "xmlMaps.xml");
+        EnsureRelationship(workbookRelsXml, "rIdFreeXSingleXmlCustomXml1", customXmlRelationshipType, "../customXml/item1.xml");
+        ReplacePackageXml(archive, workbookRelsPath, workbookRelsXml);
 
         var worksheetRelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
         var worksheetRelsEntry = archive.GetEntry(worksheetRelsPath);
@@ -1749,6 +1817,38 @@ internal static partial class XlsxCorpusFixtureFactory
             relationshipType,
             "../tables/tableSingleCells1.xml");
         ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
+    }
+
+    private static void ApplyConditionalFormatRetentionStylesFixup(ZipArchive archive)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var stylesPath = "xl/styles.xml";
+        var stylesEntry = archive.GetEntry(stylesPath);
+        if (stylesEntry is null)
+            return;
+
+        var stylesXml = LoadPackageXml(stylesEntry);
+        stylesXml.Root?.Elements(workbookNs + "dxfs").Remove();
+        stylesXml.Root?.Add(new XElement(
+            workbookNs + "dxfs",
+            new XAttribute("count", "2"),
+            new XElement(
+                workbookNs + "dxf",
+                new XElement(
+                    workbookNs + "fill",
+                    new XElement(
+                        workbookNs + "patternFill",
+                        new XAttribute("patternType", "solid"),
+                        new XElement(workbookNs + "fgColor", new XAttribute("rgb", "FFFFC7CE")),
+                        new XElement(workbookNs + "bgColor", new XAttribute("indexed", "64"))))),
+            new XElement(
+                workbookNs + "dxf",
+                new XElement(
+                    workbookNs + "font",
+                    new XElement(workbookNs + "b"),
+                    new XElement(workbookNs + "color", new XAttribute("rgb", "FF006100"))))));
+        ReplacePackageXml(archive, stylesPath, stylesXml);
     }
 
     private static void ApplyWorksheetCalculationPropertiesFixup(ZipArchive archive)

@@ -2046,6 +2046,9 @@ public partial class XlsxCorpusRunnerTests
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
         var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         worksheetXml.Root!.Element(worksheetNs + "singleXmlCells").Should().BeNull(because);
+        archive.GetEntry("xl/xmlMaps.xml").Should().NotBeNull("single XML cells must keep a workbook XML map graph");
+        archive.GetEntry("customXml/item1.xml").Should().NotBeNull("single XML cells must keep mapped custom XML data");
+        archive.GetEntry("customXml/itemProps1.xml").Should().NotBeNull("custom XML data must keep its properties sidecar");
 
         var relsXml = LoadPackageXml(archive, "xl/worksheets/_rels/sheet1.xml.rels");
         var relationship = relsXml.Root!
@@ -2073,6 +2076,17 @@ public partial class XlsxCorpusRunnerTests
         xmlCellPr.Should().NotBeNull(because);
         xmlCellPr!.Attribute("id")!.Value.Should().Be("1", because);
         xmlCellPr.Element(worksheetNs + "xmlPr")!.Attribute("mapId")!.Value.Should().Be("1", because);
+
+        var workbookRelsXml = LoadPackageXml(archive, "xl/_rels/workbook.xml.rels");
+        workbookRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Should()
+            .Contain(
+                rel => rel.Attribute("Type") != null &&
+                       rel.Attribute("Target") != null &&
+                       string.Equals(rel.Attribute("Type")!.Value, "http://schemas.openxmlformats.org/officeDocument/2006/relationships/xmlMaps", StringComparison.OrdinalIgnoreCase) &&
+                       string.Equals(rel.Attribute("Target")!.Value, "xmlMaps.xml", StringComparison.OrdinalIgnoreCase),
+                because);
     }
 
     private static void AssertWorksheetSingleXmlCellsModel(Sheet sheet, string because)
@@ -3009,10 +3023,15 @@ public partial class XlsxCorpusRunnerTests
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
         var volatileDependencies = LoadPackageXml(archive, "xl/volatileDependencies.xml");
         volatileDependencies.Root!.Name.Should().Be(spreadsheetNs + "volTypes", because);
-        volatileDependencies.Root.Elements(spreadsheetNs + "volType")
+        var volatileType = volatileDependencies.Root.Elements(spreadsheetNs + "volType")
             .Where(element => element.Attribute("type")?.Value == "realTimeData")
             .Should()
-            .ContainSingle(because);
+            .ContainSingle(because)
+            .Subject;
+        volatileType.Element(spreadsheetNs + "main")?
+            .Element(spreadsheetNs + "tp")
+            .Should()
+            .NotBeNull("volatileDependencies main elements require topic payloads for Open XML SDK and Excel validity");
         AssertContentTypeOverride(
             archive,
             "/xl/volatileDependencies.xml",
@@ -3034,15 +3053,23 @@ public partial class XlsxCorpusRunnerTests
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        archive.GetEntry("docProps/thumbnail.png").Should().NotBeNull(because);
-        AssertContentTypeOverride(archive, "/docProps/thumbnail.png", "image/png", because);
+        var thumbnailEntry = archive.GetEntry("docProps/thumbnail.jpeg");
+        thumbnailEntry.Should().NotBeNull(because);
+        using (var thumbnailStream = thumbnailEntry!.Open())
+        {
+            var signature = new byte[3];
+            thumbnailStream.Read(signature, 0, signature.Length).Should().Be(signature.Length, because);
+            signature.Should().Equal([0xFF, 0xD8, 0xFF], because);
+        }
+
+        AssertContentTypeOverride(archive, "/docProps/thumbnail.jpeg", "image/jpeg", because);
 
         var packageRelsXml = LoadPackageXml(archive, "_rels/.rels");
         packageRelsXml.Root!
             .Elements(packageRelNs + "Relationship")
             .Where(rel =>
                 string.Equals(rel.Attribute("Type")?.Value, "http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail", StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(rel.Attribute("Target")?.Value, "docProps/thumbnail.png", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(rel.Attribute("Target")?.Value, "docProps/thumbnail.jpeg", StringComparison.OrdinalIgnoreCase) &&
                 rel.Attribute("TargetMode") is null)
             .Should()
             .ContainSingle(because);

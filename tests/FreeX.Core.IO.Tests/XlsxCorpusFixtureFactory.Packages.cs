@@ -17,8 +17,21 @@ internal static partial class XlsxCorpusFixtureFactory
             </xdr:wsDr>
             """)),
         "generated-threaded-comments-001" => CreatePackage(
-            ("xl/threadedComments/threadedComment1.xml", "<threadedComments/>"),
-            ("xl/persons/person.xml", "<persons/>")),
+            ("xl/threadedComments/threadedComment1.xml", """
+                <ThreadedComments xmlns="http://schemas.microsoft.com/office/spreadsheetml/2018/threadedcomments">
+                  <threadedComment ref="A1"
+                                   personId="{11111111-1111-1111-1111-111111111111}"
+                                   id="{22222222-2222-2222-2222-222222222222}"
+                                   dT="2026-06-21T12:00:00Z">
+                    <text>FreeX threaded comment fixture</text>
+                  </threadedComment>
+                </ThreadedComments>
+                """),
+            ("xl/persons/person.xml", """
+                <personList xmlns="http://schemas.microsoft.com/office/spreadsheetml/2018/threadedcomments">
+                  <person displayName="FreeX Fixture" id="{11111111-1111-1111-1111-111111111111}"/>
+                </personList>
+                """)),
         "generated-track-changes-001" => CreatePackage(
             ("xl/revisionHeaders/revisionHeader1.xml", "<revisionHeader/>"),
             ("xl/revisions/revisionLog1.xml", "<revisionLog/>")),
@@ -78,7 +91,12 @@ internal static partial class XlsxCorpusFixtureFactory
         "generated-volatile-dependencies-001" => CreatePackage(("xl/volatileDependencies.xml", """
             <volTypes xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
               <volType type="realTimeData">
-                <main first="1"/>
+                <main first="1">
+                  <tp t="s">
+                    <v>FreeX</v>
+                    <tr r="A1" s="1"/>
+                  </tp>
+                </main>
               </volType>
             </volTypes>
             """)),
@@ -102,7 +120,7 @@ internal static partial class XlsxCorpusFixtureFactory
                   <Manager>Workbook Fidelity</Manager>
                 </Properties>
                 """)),
-        "generated-document-thumbnail-001" => CreatePackage(("docProps/thumbnail.png", "FreeX generated thumbnail placeholder")),
+        "generated-document-thumbnail-001" => CreatePackage(("docProps/thumbnail.jpeg", MinimalJpegBytes())),
         "generated-header-footer-legacy-drawing-001" => CreatePackage(
             ("xl/drawings/vmlDrawing1.vml", """
                 <xml xmlns:v="urn:schemas-microsoft-com:vml"
@@ -1066,7 +1084,7 @@ internal static partial class XlsxCorpusFixtureFactory
             "xl/printerSettings/printerSettings1.bin" => "application/vnd.openxmlformats-officedocument.spreadsheetml.printerSettings",
             "xl/calcChain.xml" => "application/vnd.openxmlformats-officedocument.spreadsheetml.calcChain+xml",
             "xl/volatileDependencies.xml" => "application/vnd.openxmlformats-officedocument.spreadsheetml.volatileDependencies+xml",
-            "docProps/thumbnail.png" => "image/png",
+            "docProps/thumbnail.jpeg" => "image/jpeg",
             "xl/chartsheets/sheet1.xml" => "application/vnd.openxmlformats-officedocument.spreadsheetml.chartsheet+xml",
             "xl/dialogSheets/sheet2.xml" => "application/vnd.openxmlformats-officedocument.spreadsheetml.dialogsheet+xml",
             "xl/macroSheets/sheet3.xml" => "application/vnd.ms-excel.macrosheet+xml",

@@ -224,7 +224,12 @@ public sealed class XlsxVolatileDependenciesPackageGraphTests
         WriteTextEntry(archive, VolatileDependenciesPath, $"""
             <volTypes xmlns="{SpreadsheetNs}">
               <volType type="realTimeData">
-                <main first="1"/>
+                <main first="1">
+                  <tp t="s">
+                    <v>FreeX</v>
+                    <tr r="A1" s="1"/>
+                  </tp>
+                </main>
               </volType>
             </volTypes>
             """);

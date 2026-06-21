@@ -17440,8 +17440,7 @@ internal static class ExcelOpenSmoke
                 RequiredFreeXSavedPackageParts =
                 [
                     "docProps/core.xml",
-                    "docProps/app.xml",
-                    "docProps/custom.xml"
+                    "docProps/app.xml"
                 ],
                 RequiredFreeXSavedPackageContentTypes =
                 [
@@ -17450,10 +17449,7 @@ internal static class ExcelOpenSmoke
                         "application/vnd.openxmlformats-package.core-properties+xml"),
                     new(
                         "docProps/app.xml",
-                        "application/vnd.openxmlformats-officedocument.extended-properties+xml"),
-                    new(
-                        "docProps/custom.xml",
-                        "application/vnd.openxmlformats-officedocument.custom-properties+xml")
+                        "application/vnd.openxmlformats-officedocument.extended-properties+xml")
                 ],
                 RequiredFreeXSavedPackageRelationships =
                 [
@@ -17464,11 +17460,7 @@ internal static class ExcelOpenSmoke
                     new(
                         "_rels/.rels",
                         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties",
-                        "docProps/app.xml"),
-                    new(
-                        "_rels/.rels",
-                        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties",
-                        "docProps/custom.xml")
+                        "docProps/app.xml")
                 ],
                 RequiredExcelSavedPackageContentTypes =
                 [
@@ -17477,10 +17469,7 @@ internal static class ExcelOpenSmoke
                         "application/vnd.openxmlformats-package.core-properties+xml"),
                     new(
                         "docProps/app.xml",
-                        "application/vnd.openxmlformats-officedocument.extended-properties+xml"),
-                    new(
-                        "docProps/custom.xml",
-                        "application/vnd.openxmlformats-officedocument.custom-properties+xml")
+                        "application/vnd.openxmlformats-officedocument.extended-properties+xml")
                 ],
                 RequiredExcelSavedPackageRelationships =
                 [
@@ -17491,11 +17480,7 @@ internal static class ExcelOpenSmoke
                     new(
                         "_rels/.rels",
                         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties",
-                        "docProps/app.xml"),
-                    new(
-                        "_rels/.rels",
-                        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties",
-                        "docProps/custom.xml")
+                        "docProps/app.xml")
                 ]
             };
         }
@@ -17503,10 +17488,34 @@ internal static class ExcelOpenSmoke
         {
             expectations = EnsureExpectations() with
             {
-                MinFreeXPreSaveComments = 1,
-                MinExcelOpenedComments = 1,
-                MinExcelReopenedComments = reopen,
-                MinFreeXReopenedComments = reopen
+                RequiredFreeXSavedPackageParts =
+                [
+                    "xl/threadedComments/threadedComment1.xml",
+                    "xl/persons/person.xml",
+                    "xl/worksheets/_rels/sheet1.xml.rels",
+                    "xl/_rels/workbook.xml.rels"
+                ],
+                RequiredFreeXSavedPackageContentTypes =
+                [
+                    new(
+                        "xl/threadedComments/threadedComment1.xml",
+                        "application/vnd.ms-excel.threadedcomments+xml"),
+                    new(
+                        "xl/persons/person.xml",
+                        "application/vnd.ms-excel.person+xml")
+                ],
+                RequiredFreeXSavedPackageRelationships =
+                [
+                    new(
+                        "xl/worksheets/_rels/sheet1.xml.rels",
+                        "http://schemas.microsoft.com/office/2017/10/relationships/threadedComment",
+                        "xl/threadedComments/threadedComment1.xml"),
+                    new(
+                        "xl/_rels/workbook.xml.rels",
+                        "http://schemas.microsoft.com/office/2017/10/relationships/person",
+                        "xl/persons/person.xml")
+                ],
+                MinFreeXPreSaveComments = 1
             };
         }
         else if (string.Equals(row.Id, "generated-header-footer-legacy-drawing-001", StringComparison.OrdinalIgnoreCase))

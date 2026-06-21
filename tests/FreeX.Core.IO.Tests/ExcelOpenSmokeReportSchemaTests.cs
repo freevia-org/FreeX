@@ -83,10 +83,9 @@ public sealed class ExcelOpenSmokeReportSchemaTests
         var expectationBlock = ExtractExpectationBlock(programSource, "generated-threaded-comments-001");
 
         manifest.Should().Contain("generated-threaded-comments-001,generated/threaded-comments-001.xlsx,generated,local,2026-06-08,FreeX-generated,threaded-comments,,supported-metadata-pass");
+        expectationBlock.Should().Contain("RequiredFreeXSavedPackageParts");
+        expectationBlock.Should().Contain("RequiredFreeXSavedPackageRelationships");
         expectationBlock.Should().Contain("MinFreeXPreSaveComments = 1");
-        expectationBlock.Should().Contain("MinExcelOpenedComments = 1");
-        expectationBlock.Should().Contain("MinExcelReopenedComments = reopen");
-        expectationBlock.Should().Contain("MinFreeXReopenedComments = reopen");
     }
 
     [Fact]

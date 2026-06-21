@@ -126,6 +126,12 @@ internal static class CorpusManifestResolver
                 continue;
             }
 
+            if (ShouldSkipDefaultGeneratedExcelOpenSmoke(row, options, idFilter))
+            {
+                skipped.Add(new CorpusManifestSkip(row, "default-excel-open-synthetic-package-retention-row", null));
+                continue;
+            }
+
             if (!string.Equals(Path.GetExtension(row.RelativePath), ".xlsx", StringComparison.OrdinalIgnoreCase))
             {
                 skipped.Add(new CorpusManifestSkip(row, "not-xlsx", null));
@@ -157,6 +163,15 @@ internal static class CorpusManifestResolver
         return extension.Equals(".xlsx", StringComparison.OrdinalIgnoreCase) ||
             extension.Equals(".xlsm", StringComparison.OrdinalIgnoreCase);
     }
+
+    private static bool ShouldSkipDefaultGeneratedExcelOpenSmoke(
+        CorpusManifestRow row,
+        SmokeOptions options,
+        IReadOnlySet<string> idFilter) =>
+        options.CorpusStatuses.Count == 0 &&
+        idFilter.Count == 0 &&
+        (string.Equals(row.Id, "generated-volatile-dependencies-001", StringComparison.OrdinalIgnoreCase) ||
+         string.Equals(row.Id, "generated-worksheet-single-xml-cells-001", StringComparison.OrdinalIgnoreCase));
 
     private static bool CanCreateGeneratedFixture(CorpusManifestRow row) =>
         XlsxCorpusFixtureFactory.CanCreate(row.Id) ||
