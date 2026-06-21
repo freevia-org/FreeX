@@ -216,7 +216,8 @@ public sealed class MainWindow : Window
             onAcceptThisChange: AcceptSelectedRevision,
             onRejectThisChange: RejectSelectedRevision,
             onPreviousChange: () => StepRevision(-1),
-            onNextChange: () => StepRevision(+1));
+            onNextChange: () => StepRevision(+1),
+            onFindReplace: OpenFindReplace);
         _file = new FileCommands(this, editor, UpdateTitle, _options);
         editor.TextChanged += (_, _) => { _file.MarkDirty(); UpdateCounts(); RefreshOutline(); RefreshContextualTabs(); RefreshReviewPane(); };
         // Live selection stats: when the caret/selection moves, refresh the status-bar counts so a

@@ -48,6 +48,7 @@ internal static class FreeWRibbon
                     g.IconToggle("freew.bold", "Bold", RibbonCommandIconKind.Bold, "1");
                     g.IconToggle("freew.italic", "Italic", RibbonCommandIconKind.Italic, "2");
                     g.IconToggle("freew.underline", "Underline", RibbonCommandIconKind.Underline, "3");
+                    g.Icon("freew.strikethrough", "Strikethrough", RibbonCommandIconKind.Strikethrough);
                     g.Icon("freew.subscript", "Subscript", RibbonCommandIconKind.Subscript);
                     g.Icon("freew.superscript", "Superscript", RibbonCommandIconKind.Superscript);
                     g.Icon("freew.change-case", "Change Case", RibbonCommandIconKind.ChangeCase);
@@ -88,7 +89,7 @@ internal static class FreeWRibbon
                     g.Icon("freew.keep-lines", "Keep Lines Together", RibbonCommandIconKind.TextFunction);
                     g.Icon("freew.widow-control", "Widow/Orphan Control", RibbonCommandIconKind.TextFunction);
                 });
-                tab.Group("styles", "Styles", "S", 70, g =>
+                tab.Group("styles", "Styles", "S", 65, g =>
                 {
                     g.ComboBox("freew.style", "Style", c => c with
                     {
@@ -101,6 +102,12 @@ internal static class FreeWRibbon
                     g.Button("freew.style-title", "Title", b => Icon(b, RibbonCommandIconKind.TextBox));
                     g.Button("freew.new-style", "New Style", b => Icon(b, RibbonCommandIconKind.TextBox));
                     g.Button("freew.manage-styles", "Manage Styles", b => Icon(b, RibbonCommandIconKind.TextBox));
+                });
+                tab.Group("editing", "Editing", "E", 75, g =>
+                {
+                    g.Medium("freew.find", "Find", RibbonCommandIconKind.Search, "F");
+                    g.Medium("freew.replace", "Replace", RibbonCommandIconKind.Search, "R");
+                    g.Medium("freew.select", "Select", RibbonCommandIconKind.Search, "SL");
                 });
             })
             .Tab("insert", "Insert", "N", tab =>
@@ -208,31 +215,6 @@ internal static class FreeWRibbon
                     g.Icon("freew.building-blocks-organizer", "Building Blocks Organizer", RibbonCommandIconKind.QuickParts);
                     g.Icon("freew.insert-file", "Text from File", RibbonCommandIconKind.TextFromFile);
                 });
-                tab.Group("references", "References", "R", 65, g =>
-                {
-                    g.Icon("freew.footnote", "Footnote", RibbonCommandIconKind.Footnote);
-                    g.Icon("freew.endnote", "Endnote", RibbonCommandIconKind.Endnote);
-                    g.Icon("freew.footnote-endnote-options", "Footnote/Endnote Options…", RibbonCommandIconKind.Footnote);
-                    g.Icon("freew.toc", "Table of Contents", RibbonCommandIconKind.TableOfContents);
-                    g.Icon("freew.toc-refresh", "Update TOC", RibbonCommandIconKind.Refresh);
-                    g.Icon("freew.citation", "Citation", RibbonCommandIconKind.Citation);
-                    g.ComboBox("freew.citation-style", "Citation Style", c => c with
-                    {
-                        Items = new[] { "APA", "MLA", "Chicago", "IEEE" },
-                        Width = 90
-                    });
-                    g.RowBreak();
-                    g.Icon("freew.bibliography", "Bibliography", RibbonCommandIconKind.Bibliography);
-                    g.Icon("freew.caption", "Caption", RibbonCommandIconKind.Caption);
-                    g.Icon("freew.cross-reference", "Cross-reference", RibbonCommandIconKind.CrossReference);
-                    g.Icon("freew.index-mark", "Mark Entry", RibbonCommandIconKind.Index);
-                    g.Icon("freew.index-insert", "Insert Index", RibbonCommandIconKind.Index);
-                    g.Icon("freew.tof", "Table of Figures", RibbonCommandIconKind.TableOfContents);
-                    g.Icon("freew.tof-refresh", "Update Figures", RibbonCommandIconKind.Refresh);
-                    g.Icon("freew.mark-citation", "Mark Citation", RibbonCommandIconKind.Citation);
-                    g.Icon("freew.table-of-authorities", "Table of Authorities", RibbonCommandIconKind.Bibliography);
-                    g.Icon("freew.table-of-authorities-refresh", "Update Authorities", RibbonCommandIconKind.Refresh);
-                });
                 tab.Group("controls", "Controls", "O", 62, g =>
                 {
                     g.Medium("freew.cc-text", "Text Control", RibbonCommandIconKind.TextBox);
@@ -254,6 +236,49 @@ internal static class FreeWRibbon
                     g.Medium("freew.symbol", "Symbol", RibbonCommandIconKind.Symbol);
                     g.Medium("freew.datetime", "Date & Time", RibbonCommandIconKind.Date);
                     g.Medium("freew.field", "Field", RibbonCommandIconKind.Field);
+                });
+            })
+            .Tab("references", "References", "R", tab =>
+            {
+                tab.Group("table-of-contents", "Table of Contents", "T", 100, g =>
+                {
+                    g.Medium("freew.toc", "Table of Contents", RibbonCommandIconKind.TableOfContents);
+                    g.Medium("freew.toc-refresh", "Update Table", RibbonCommandIconKind.Refresh);
+                });
+                tab.Group("footnotes", "Footnotes", "F", 92, g =>
+                {
+                    g.Medium("freew.footnote", "Insert Footnote", RibbonCommandIconKind.Footnote);
+                    g.Medium("freew.endnote", "Insert Endnote", RibbonCommandIconKind.Endnote);
+                    g.Medium("freew.footnote-endnote-options", "Footnote/Endnote Options…", RibbonCommandIconKind.Footnote);
+                });
+                tab.Group("citations", "Citations & Bibliography", "C", 84, g =>
+                {
+                    g.Medium("freew.citation", "Insert Citation", RibbonCommandIconKind.Citation);
+                    g.ComboBox("freew.citation-style", "Style", c => c with
+                    {
+                        Items = new[] { "APA", "MLA", "Chicago", "IEEE" },
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Citation),
+                        Width = 90
+                    });
+                    g.Medium("freew.bibliography", "Bibliography", RibbonCommandIconKind.Bibliography);
+                });
+                tab.Group("captions", "Captions", "P", 78, g =>
+                {
+                    g.Medium("freew.caption", "Insert Caption", RibbonCommandIconKind.Caption);
+                    g.Medium("freew.tof", "Insert Table of Figures", RibbonCommandIconKind.TableOfContents);
+                    g.Medium("freew.tof-refresh", "Update Table", RibbonCommandIconKind.Refresh);
+                    g.Medium("freew.cross-reference", "Cross-reference", RibbonCommandIconKind.CrossReference);
+                });
+                tab.Group("index", "Index", "I", 72, g =>
+                {
+                    g.Medium("freew.index-mark", "Mark Entry", RibbonCommandIconKind.Index);
+                    g.Medium("freew.index-insert", "Insert Index", RibbonCommandIconKind.Index);
+                });
+                tab.Group("authorities", "Table of Authorities", "A", 66, g =>
+                {
+                    g.Medium("freew.mark-citation", "Mark Citation", RibbonCommandIconKind.Citation);
+                    g.Medium("freew.table-of-authorities", "Insert Table of Authorities", RibbonCommandIconKind.Bibliography);
+                    g.Medium("freew.table-of-authorities-refresh", "Update Table", RibbonCommandIconKind.Refresh);
                 });
             })
             .Tab("layout", "Layout", "L", tab =>

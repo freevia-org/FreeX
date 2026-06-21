@@ -12,7 +12,8 @@ using FreeW.App.Host;
 // at a given size, and rasterises it.
 //
 // Usage: FreeW.RibbonShot <outDir> [tabIndex|all] [width] [height]
-//   tabIndex: 0=Home 1=Insert 2=Layout 3=Design 4=View 5=Mailings 6=Review, or "all".
+//   tabIndex: 0=File/Backstage 1=Home 2=Insert 3=References 4=Layout 5=Design 6=View 7=Mailings 8=Review,
+//             "all" captures content/contextual tabs (skipping File), and "backstage" captures File.
 
 string outDir = args.Length > 0 ? args[0] : Directory.GetCurrentDirectory();
 string tabArg = args.Length > 1 ? args[1] : "0";
@@ -83,7 +84,7 @@ static int Run(string outDir, string tabArg, double w, double h)
 
         var tabs = FindTabControl(win);
         var indices = tabArg == "all"
-            ? Enumerable.Range(0, tabs?.Items.Count ?? 1).ToList()
+            ? Enumerable.Range(1, Math.Max(0, (tabs?.Items.Count ?? 1) - 1)).ToList()
             : [int.Parse(tabArg)];
 
         foreach (var i in indices)

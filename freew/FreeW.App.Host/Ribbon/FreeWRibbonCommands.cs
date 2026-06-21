@@ -102,7 +102,8 @@ internal static class FreeWRibbonCommands
         Action? onAcceptThisChange = null,
         Action? onRejectThisChange = null,
         Action? onPreviousChange = null,
-        Action? onNextChange = null)
+        Action? onNextChange = null,
+        Action? onFindReplace = null)
     {
         var registry = new RibbonCommandRegistry();
         var stateful = new List<(RibbonCommandId Id, IRibbonStatefulCommand Command)>();
@@ -136,6 +137,7 @@ internal static class FreeWRibbonCommands
         // offsets; small caps / all caps map to WPF typography. Each is a toggle over the selection.
         registry.Register("freew.superscript", new CharacterEffectCommand(editor, CharacterEffect.Superscript));
         registry.Register("freew.subscript", new CharacterEffectCommand(editor, CharacterEffect.Subscript));
+        registry.Register("freew.strikethrough", new CharacterEffectCommand(editor, CharacterEffect.Strikethrough));
         registry.Register("freew.smallcaps", new CharacterEffectCommand(editor, CharacterEffect.SmallCaps));
         registry.Register("freew.allcaps", new CharacterEffectCommand(editor, CharacterEffect.AllCaps));
 
@@ -146,6 +148,12 @@ internal static class FreeWRibbonCommands
         Routed("freew.align-right", EditingCommands.AlignRight);
         Routed("freew.bullets", EditingCommands.ToggleBullets);
         Routed("freew.numbering", EditingCommands.ToggleNumbering);
+        Routed("freew.select", ApplicationCommands.SelectAll);
+        if (onFindReplace is not null)
+        {
+            registry.Register("freew.find", new ActionCommand(onFindReplace));
+            registry.Register("freew.replace", new ActionCommand(onFindReplace));
+        }
         // Home > Paragraph: apply multilevel/legal outline numbering (1, 1.1, 1.1.1) to the selected
         // paragraph(s); the outline definition persists to word/numbering.xml. Tab/Shift+Tab demote
         // and promote the outline depth (ListLevel) of the selected list paragraphs.
@@ -671,12 +679,13 @@ internal static class FreeWRibbonCommands
         return registry;
     }
 
-    // The four Home > Font character effects wired by CharacterEffectCommand.
-    private enum CharacterEffect { Superscript, Subscript, SmallCaps, AllCaps }
+    // Home > Font character effects wired by CharacterEffectCommand.
+    private enum CharacterEffect { Superscript, Subscript, Strikethrough, SmallCaps, AllCaps }
 
     // Home > Font: apply a character effect to the selection as a toggle. Superscript/subscript set
-    // Inline.BaselineAlignment (and shrink the font, mirroring DocumentView's render); small/all caps
-    // set Typography.Capitals. Applying an effect that is already present clears it. These properties
+    // Inline.BaselineAlignment (and shrink the font, mirroring DocumentView's render); strikethrough
+    // toggles TextDecorations, and small/all caps set Typography.Capitals. Applying an effect that is
+    // already present clears it. These properties
     // are exactly what DocumentView.ReadRunFormatting reads back, so the effect round-trips to docx.
     private sealed class CharacterEffectCommand(DocumentView editor, CharacterEffect effect) : IRibbonCommand
     {
@@ -698,6 +707,9 @@ internal static class FreeWRibbonCommands
                     break;
                 case CharacterEffect.AllCaps:
                     ToggleCapitals(selection, FontCapitals.AllSmallCaps);
+                    break;
+                case CharacterEffect.Strikethrough:
+                    ToggleTextDecoration(selection, TextDecorations.Strikethrough[0]);
                     break;
             }
         }
@@ -737,6 +749,24 @@ internal static class FreeWRibbonCommands
             var alreadyOn = current is FontCapitals c && c == target;
             selection.ApplyPropertyValue(Typography.CapitalsProperty,
                 alreadyOn ? FontCapitals.Normal : target);
+        }
+
+        private static void ToggleTextDecoration(TextSelection selection, TextDecoration target)
+        {
+            var current = selection.GetPropertyValue(Inline.TextDecorationsProperty);
+            var decorations = current is TextDecorationCollection collection
+                ? new TextDecorationCollection(collection)
+                : new TextDecorationCollection();
+
+            var existing = decorations.FirstOrDefault(decoration => decoration.Location == target.Location);
+            if (existing is null)
+                decorations.Add(target);
+            else
+                decorations.Remove(existing);
+
+            selection.ApplyPropertyValue(
+                Inline.TextDecorationsProperty,
+                decorations.Count == 0 ? null : decorations);
         }
     }
 
