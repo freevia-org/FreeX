@@ -42,8 +42,10 @@ public sealed class StatusBarCustomizeMenuSourceTests
         optionsSource.Should().Contain("public bool StatusBarShowZoomSlider { get; set; } = true;");
         gridStatusSource.Should().Contain("private void StatusBarCustomizeMenu_Opened(object sender, RoutedEventArgs e)");
         gridStatusSource.Should().Contain("private void StatusBarCustomizeMenuItem_Click(object sender, RoutedEventArgs e)");
+        gridStatusSource.Should().Contain("StatusBarPresentationPlanner.Build(");
         gridStatusSource.Should().Contain("_options.StatusBarShowAverage = isChecked;");
         gridStatusSource.Should().Contain("_options.Save()");
-        gridStatusSource.Should().Contain("ApplyStatusBarInteractiveDisplayState();");
+        gridStatusSource.Should().Contain("ApplyStatusBarInteractiveDisplayState(BuildStatusBarPresentationPlan(state).Visibility);");
+        gridStatusSource.Should().Contain("ApplyStatusBarInteractiveDisplayState(visibility);");
     }
 }

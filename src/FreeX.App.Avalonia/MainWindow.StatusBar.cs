@@ -50,36 +50,35 @@ public sealed partial class MainWindow
         // Render the neutral StatusBarViewModel: the readout is the model's visible aggregate readouts
         // (filtered by the customize toggles); zoom comes from the model; CellMode/Zoom toggles gate the
         // status / zoom controls — mirroring the WPF host's per-option StatusBarShow* gating.
-        var readouts = AvaloniaStatusBarSource.FormatVisibleReadouts(model, _statusBarOptionVisibility);
-        _statusText.Text = normalizedStatus;
+        var plan = AvaloniaStatusBarSource.BuildPresentation(model, _statusBarOptionVisibility);
+        var visibility = plan.Visibility;
+        _statusText.Text = plan.ReadyText;
         _statusText.Foreground = StatusBarForeground;
-        _statusText.IsVisible = GetStatusBarOption("CellMode") && readouts.Length == 0;
+        _statusText.IsVisible = visibility.ReadyTextVisible && plan.VisibleReadoutText.Length == 0;
 
-        _selectionStatsText.Text = readouts;
+        _selectionStatsText.Text = plan.VisibleReadoutText;
         _selectionStatsText.Foreground = StatusBarForeground;
-        _selectionStatsText.IsVisible = readouts.Length > 0;
+        _selectionStatsText.IsVisible = visibility.StatsPanelVisible && plan.VisibleReadoutText.Length > 0;
         // Keep the accessible NAME a stable label ("Selection statistics"); the dynamic readouts are the
         // element's Text (value/content). Overwriting Name with the readouts broke the launch-smoke /
         // accessibility contract (GetName must equal "Selection statistics") whenever a selection had stats.
         AutomationProperties.SetName(_selectionStatsText, "Selection statistics");
 
-        _zoomText.IsVisible = GetStatusBarOption("Zoom");
+        _zoomText.IsVisible = visibility.ZoomVisible;
         _zoomText.Foreground = StatusBarForeground;
-        _zoomText.Text = FormatZoomPercent(model.ZoomPercent);
+        _zoomText.Text = FormatZoomPercent(plan.ZoomPercent);
 
-        var showViewShortcuts = GetStatusBarOption("ViewShortcuts");
-        _statusNormalViewButton.IsVisible = showViewShortcuts;
-        _statusPageLayoutViewButton.IsVisible = showViewShortcuts;
-        _statusPageBreakPreviewButton.IsVisible = showViewShortcuts;
+        _statusNormalViewButton.IsVisible = visibility.ViewShortcutsVisible;
+        _statusPageLayoutViewButton.IsVisible = visibility.ViewShortcutsVisible;
+        _statusPageBreakPreviewButton.IsVisible = visibility.ViewShortcutsVisible;
 
-        var showZoomSlider = GetStatusBarOption("ZoomSlider");
-        _statusZoomSliderHost.IsVisible = showZoomSlider;
-        _statusZoomSlider.IsVisible = showZoomSlider;
+        _statusZoomSliderHost.IsVisible = visibility.ZoomSliderVisible;
+        _statusZoomSlider.IsVisible = visibility.ZoomSliderVisible;
         _isUpdatingStatusZoomSlider = true;
         try
         {
-            _statusZoomSlider.Value = ClampZoomPercent(model.ZoomPercent);
-            UpdateStatusZoomSliderThumb(model.ZoomPercent);
+            _statusZoomSlider.Value = ClampZoomPercent(plan.ZoomPercent);
+            UpdateStatusZoomSliderThumb(plan.ZoomPercent);
         }
         finally
         {

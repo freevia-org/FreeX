@@ -97,6 +97,24 @@ public sealed class AvaloniaStatusBarSourceTests
     }
 
     [Fact]
+    public void BuildPresentation_UsesSharedStatusBarPlan()
+    {
+        var visibility = AvaloniaStatusBarSource.CreateDefaultOptionVisibility();
+        visibility["NumericalCount"] = true;
+        visibility["Sum"] = false;
+        var model = AvaloniaStatusBarSource.BuildModel(SampleStats(), zoomPercent: 90, readyText: "Ready");
+
+        var plan = AvaloniaStatusBarSource.BuildPresentation(model, visibility);
+
+        Assert.True(plan.Visibility.StatsPanelVisible);
+        Assert.True(plan.Visibility.ZoomVisible);
+        Assert.Equal(90, plan.ZoomPercent);
+        Assert.Equal("Sum: 60", plan.SumText);
+        Assert.Equal("Average: 20   Count: 4   Numerical Count: 3", plan.VisibleReadoutText);
+        Assert.Equal("Average: 20; Count: 4; Numerical Count: 3", plan.AutomationText);
+    }
+
+    [Fact]
     public Task CustomizeMenu_IsBuiltFromPlanner_WithExpectedToggleItems() => RunOnUiThread(() =>
     {
         var options = AvaloniaStatusBarSource.CreateDefaultOptionVisibility();
