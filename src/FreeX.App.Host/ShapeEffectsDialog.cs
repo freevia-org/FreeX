@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.App.Presentation.DrawingUI;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -19,51 +20,22 @@ internal static class ShapeEffectsDialogPlanner
 {
     public static ShapeEffectsDialogPlan CreatePlan(DrawingShapeEffectPreset currentPreset)
     {
-        var options = CreateOptions();
-        var selected = NormalizePreset(currentPreset);
-        return new ShapeEffectsDialogPlan(options, selected);
+        var plan = ShapeEffectsPlanner.CreatePlan(currentPreset);
+        return new ShapeEffectsDialogPlan(
+            plan.Options.Select(ToDialogOption).ToArray(),
+            plan.SelectedPreset);
     }
 
     public static DrawingShapeEffectPreset NormalizePreset(DrawingShapeEffectPreset preset) =>
-        Enum.IsDefined(preset)
-            ? preset
-            : DrawingShapeEffectPreset.None;
+        ShapeEffectsPlanner.NormalizePreset(preset);
 
     public static IReadOnlyList<ShapeEffectsDialogOption> CreateOptions() =>
-    [
-        new(
-            DrawingShapeEffectPreset.None,
-            UiText.Get("ShapeEffects_None"),
-            UiText.Get("ShapeEffects_NoneDescription")),
-        new(
-            DrawingShapeEffectPreset.Shadow,
-            UiText.Get("ShapeEffects_Shadow"),
-            UiText.Get("ShapeEffects_ShadowDescription")),
-        new(
-            DrawingShapeEffectPreset.InnerShadow,
-            UiText.Get("ShapeEffects_InnerShadow"),
-            UiText.Get("ShapeEffects_InnerShadowDescription")),
-        new(
-            DrawingShapeEffectPreset.Reflection,
-            UiText.Get("ShapeEffects_Reflection"),
-            UiText.Get("ShapeEffects_ReflectionDescription")),
-        new(
-            DrawingShapeEffectPreset.Glow,
-            UiText.Get("ShapeEffects_Glow"),
-            UiText.Get("ShapeEffects_GlowDescription")),
-        new(
-            DrawingShapeEffectPreset.SoftEdges,
-            UiText.Get("ShapeEffects_SoftEdges"),
-            UiText.Get("ShapeEffects_SoftEdgesDescription")),
-        new(
-            DrawingShapeEffectPreset.Bevel,
-            UiText.Get("ShapeEffects_Bevel"),
-            UiText.Get("ShapeEffects_BevelDescription")),
-        new(
-            DrawingShapeEffectPreset.ThreeDRotation,
-            UiText.Get("ShapeEffects_ThreeDRotation"),
-            UiText.Get("ShapeEffects_ThreeDRotationDescription"))
-    ];
+        ShapeEffectsPlanner.CreateOptions()
+            .Select(ToDialogOption)
+            .ToArray();
+
+    private static ShapeEffectsDialogOption ToDialogOption(ShapeEffectsPlanner.ShapeEffectOption option) =>
+        new(option.Preset, UiText.Get(option.LabelKey), UiText.Get(option.DescriptionKey));
 }
 
 public sealed record ShapeEffectsDialogResult(DrawingShapeEffectPreset Preset);
@@ -109,7 +81,7 @@ public sealed class ShapeEffectsDialog : Window
         out ShapeEffectsDialogResult result)
     {
         result = new ShapeEffectsDialogResult(DrawingShapeEffectPreset.None);
-        if (!Enum.IsDefined(preset))
+        if (ShapeEffectsDialogPlanner.NormalizePreset(preset) != preset)
             return false;
 
         result = new ShapeEffectsDialogResult(preset);
