@@ -52,31 +52,13 @@ public sealed record InsertObjectPlan(
 /// </summary>
 public static class InsertObjectPlanner
 {
-    /// <summary>Image extensions that can be embedded directly as picture content (mirrors the picture-insert path).</summary>
-    private static readonly IReadOnlyDictionary<string, string> ImageContentTypes =
-        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-        {
-            [".png"] = "image/png",
-            [".jpg"] = "image/jpeg",
-            [".jpeg"] = "image/jpeg",
-            [".gif"] = "image/gif",
-            [".bmp"] = "image/bmp",
-            [".webp"] = "image/webp",
-            [".tif"] = "image/tiff",
-            [".tiff"] = "image/tiff",
-        };
-
     /// <summary>The image MIME content type for an extension, or <c>null</c> when the file is not a supported image.</summary>
-    public static string? ImageContentTypeForPath(string path)
-    {
-        var extension = Path.GetExtension(path);
-        return extension is { Length: > 0 } && ImageContentTypes.TryGetValue(extension, out var contentType)
-            ? contentType
-            : null;
-    }
+    public static string? ImageContentTypeForPath(string path) =>
+        InsertPictureCommandFactory.ContentTypeForPath(path);
 
     /// <summary>True when the path has a supported image extension (and would embed as real picture content).</summary>
-    public static bool IsEmbeddableImagePath(string path) => ImageContentTypeForPath(path) is not null;
+    public static bool IsEmbeddableImagePath(string path) =>
+        InsertPictureCommandFactory.IsSupportedImagePath(path);
 
     /// <summary>
     /// Validates a create-from-file request and produces an <see cref="InsertObjectPlan"/>.

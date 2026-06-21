@@ -1,17 +1,15 @@
 using System.IO;
-
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Avalonia;
+namespace FreeX.App.Services;
 
 /// <summary>
 /// UI-free factory that turns chosen image bytes into the Core <see cref="InsertPictureCommand"/> the shell
-/// runs to place a picture on the sheet. Keeps the content-type mapping and size clamping testable without a
-/// running shell or a real image decoder (the shell decodes the native size via Avalonia and passes it in;
-/// non-positive sizes fall back to a default so the Core size guard is always satisfied).
+/// runs to place a picture on the sheet. Shells still own image picking and native-size decoding; this
+/// factory owns shared content-type mapping and safe size fallback.
 /// </summary>
-internal static class InsertPictureCommandFactory
+public static class InsertPictureCommandFactory
 {
     public const double DefaultWidth = 240d;
     public const double DefaultHeight = 140d;

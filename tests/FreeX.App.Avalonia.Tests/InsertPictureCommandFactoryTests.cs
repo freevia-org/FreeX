@@ -1,6 +1,6 @@
 using FluentAssertions;
 
-using FreeX.App.Avalonia;
+using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
