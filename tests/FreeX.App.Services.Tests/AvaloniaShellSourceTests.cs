@@ -936,7 +936,11 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("ConfirmDirtyWorkbookCloseAsync(\"Quit FreeX\", \"Discard and Quit\")");
         source.Should().Contain("_allowCloseWithoutDirtyPrompt = true;");
         source.Should().Contain("private async Task<bool> ConfirmDirtyWorkbookCloseAsync(string title, string discardButtonText)");
-        source.Should().Contain("await SaveCurrentWorkbookAsync();");
+        source.Should().Contain("FileLifecyclePlanner.PlanDirtyGate(_session.IsDirty)");
+        source.Should().Contain("FileLifecyclePlanner.ResolveDirtyGate(ToSaveChangesPrompt(choice))");
+        source.Should().Contain("DirtyGateAction.SaveThenProceed => await SaveCurrentWorkbookThenConfirmCleanAsync()");
+        source.Should().Contain("private static SaveChangesPrompt ToSaveChangesPrompt(DirtyWorkbookCloseChoice choice)");
+        source.Should().Contain("FileLifecyclePlanner.PlanSave(_session.IsDirty, _session.CurrentFilePath)");
         source.Should().Contain("private async Task<DirtyWorkbookCloseChoice> ShowDirtyWorkbookCloseDialogAsync(");
         source.Should().Contain("AutomationProperties.SetAutomationId(saveButton, \"DirtyWorkbookSaveButton\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(discardButton, \"DirtyWorkbookDiscardButton\");");
