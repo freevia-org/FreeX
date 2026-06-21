@@ -79,13 +79,11 @@ internal sealed class BackstageView : UserControl
             DisplayName: _file.DisplayName,
             IsDirty: _file.IsDirty,
             Location: _file.CurrentPath,
-            Properties:
-            [
-                new("Title", BackstageVisualKit.Or(properties.Title)),
-                new("Author", BackstageVisualKit.Or(properties.Author)),
-                new("Subject", BackstageVisualKit.Or(properties.Subject)),
-                new("Keywords", BackstageVisualKit.Or(properties.Keywords)),
-            ],
+            Properties: BackstageCorePropertiesPlanner.Build(new BackstageCoreProperties(
+                properties.Title,
+                properties.Author,
+                properties.Subject,
+                properties.Keywords)),
             Statistics:
             [
                 new("Slides", model.Slides.Count.ToString()),

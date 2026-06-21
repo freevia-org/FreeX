@@ -132,6 +132,22 @@ public sealed class SharedBackstagePaneComposerTests
         edited.Should().BeTrue();
     }
 
+    [Fact]
+    public void BackstageCorePropertiesPlanner_BuildsCommonPropertyRows()
+    {
+        var rows = BackstageCorePropertiesPlanner.Build(new BackstageCoreProperties(
+            Title: "Budget",
+            Author: "",
+            Subject: "Planning",
+            Keywords: null));
+
+        rows.Should().Equal(
+            new BackstageFieldRow(BackstageCorePropertiesPlanner.TitleLabel, "Budget"),
+            new BackstageFieldRow(BackstageCorePropertiesPlanner.AuthorLabel, "—"),
+            new BackstageFieldRow(BackstageCorePropertiesPlanner.SubjectLabel, "Planning"),
+            new BackstageFieldRow(BackstageCorePropertiesPlanner.KeywordsLabel, "—"));
+    }
+
     [StaFact]
     public void BuildInfoPane_RendersDirtyLocationPropertiesStatsAndOptionalEditButton()
     {

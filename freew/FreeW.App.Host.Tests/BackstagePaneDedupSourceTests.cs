@@ -20,6 +20,7 @@ public sealed class BackstagePaneDedupSourceTests
         source.Should().Contain("BackstagePaneComposer");
         source.Should().Contain("SisterBackstageEntryBuilder.Build(");
         source.Should().Contain("Panes.BuildInfoPane(");
+        source.Should().Contain("BackstageCorePropertiesPlanner.Build(");
         source.Should().Contain("Panes.BuildRecentPane(");
         source.Should().Contain("Panes.BuildTemplatePane(");
         source.Should().Contain("Panes.BuildOptionsPane(");
@@ -30,6 +31,10 @@ public sealed class BackstagePaneDedupSourceTests
         source.Should().NotContain("new(\"Default save format\"");
         source.Should().NotContain("new(\"UI language\"");
         source.Should().NotContain("new(\"Data folder\"");
+        source.Should().NotContain("new(\"Title\"");
+        source.Should().NotContain("new(\"Author\"");
+        source.Should().NotContain("new(\"Subject\"");
+        source.Should().NotContain("new(\"Keywords\"");
         source.Should().NotContain("TextTrimming = TextTrimming.CharacterEllipsis");
         source.Should().NotContain("Path.GetFileName(path)");
         source.Should().NotContain("var gallery = new WrapPanel");
