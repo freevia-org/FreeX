@@ -137,142 +137,80 @@ public partial class MainWindow
         if (sender is not MenuItem { Tag: QuickAnalysisOption option })
             return;
 
-        var command = option.Command;
-        switch (command)
+        var route = QuickAnalysisCommandRouter.Route(option);
+        switch (route.Kind)
         {
-            case QuickAnalysisCommand.DataBar:
-                ShowCfDialog("Data Bar");
+            case QuickAnalysisCommandKind.ConditionalFormat when route.ConditionalFormat is { } conditionalFormat:
+                ShowCfDialog(QuickAnalysisConditionalFormatDialogTitle(conditionalFormat));
                 break;
-            case QuickAnalysisCommand.ColorScale:
-                ShowCfDialog("Color Scale");
-                break;
-            case QuickAnalysisCommand.IconSet:
-                ShowCfDialog("Icon Set");
-                break;
-            case QuickAnalysisCommand.GreaterThan:
-                ShowCfDialog("Greater Than");
-                break;
-            case QuickAnalysisCommand.LessThan:
-                ShowCfDialog("Less Than");
-                break;
-            case QuickAnalysisCommand.Between:
-                ShowCfDialog("Between");
-                break;
-            case QuickAnalysisCommand.EqualTo:
-                ShowCfDialog("Equal To");
-                break;
-            case QuickAnalysisCommand.TextContains:
-                ShowCfDialog("Text Contains");
-                break;
-            case QuickAnalysisCommand.DateOccurring:
-                ShowCfDialog("Date Occurring");
-                break;
-            case QuickAnalysisCommand.DuplicateValues:
-                ShowCfDialog("Duplicate Values");
-                break;
-            case QuickAnalysisCommand.Top10:
-                ShowCfDialog("Top 10 Items");
-                break;
-            case QuickAnalysisCommand.Top10Percent:
-                ShowCfDialog("Top 10%");
-                break;
-            case QuickAnalysisCommand.Bottom10:
-                ShowCfDialog("Bottom 10 Items");
-                break;
-            case QuickAnalysisCommand.Bottom10Percent:
-                ShowCfDialog("Bottom 10%");
-                break;
-            case QuickAnalysisCommand.AboveAverage:
-                ShowCfDialog("Above Average");
-                break;
-            case QuickAnalysisCommand.BelowAverage:
-                ShowCfDialog("Below Average");
-                break;
-            case QuickAnalysisCommand.ClearConditionalFormatting:
+            case QuickAnalysisCommandKind.ClearConditionalFormatting:
                 CfClearRulesMenuItem_Click(sender, e);
                 break;
-            case QuickAnalysisCommand.ColumnChart:
-                ChartColumnMenuItem_Click(sender, e);
+            case QuickAnalysisCommandKind.InsertChart when route.ChartType is { } chartType:
+                InsertChartOfType(chartType);
                 break;
-            case QuickAnalysisCommand.StackedColumnChart:
-                ChartStackedColumnMenuItem_Click(sender, e);
-                break;
-            case QuickAnalysisCommand.PercentStackedColumnChart:
-                ChartPercentStackedColumnMenuItem_Click(sender, e);
-                break;
-            case QuickAnalysisCommand.LineChart:
-                ChartLineMenuItem_Click(sender, e);
-                break;
-            case QuickAnalysisCommand.PieChart:
-                ChartPieMenuItem_Click(sender, e);
-                break;
-            case QuickAnalysisCommand.DoughnutChart:
-                ChartDoughnutMenuItem_Click(sender, e);
-                break;
-            case QuickAnalysisCommand.BarChart:
-                ChartBarMenuItem_Click(sender, e);
-                break;
-            case QuickAnalysisCommand.StackedBarChart:
-                ChartStackedBarMenuItem_Click(sender, e);
-                break;
-            case QuickAnalysisCommand.PercentStackedBarChart:
-                ChartPercentStackedBarMenuItem_Click(sender, e);
-                break;
-            case QuickAnalysisCommand.AreaChart:
-                ChartAreaMenuItem_Click(sender, e);
-                break;
-            case QuickAnalysisCommand.ScatterChart:
-                ChartScatterMenuItem_Click(sender, e);
-                break;
-            case QuickAnalysisCommand.BubbleChart:
-                ChartBubbleMenuItem_Click(sender, e);
-                break;
-            case QuickAnalysisCommand.RadarChart:
-                ChartRadarMenuItem_Click(sender, e);
-                break;
-            case QuickAnalysisCommand.StockChart:
-                ChartStockMenuItem_Click(sender, e);
-                break;
-            case QuickAnalysisCommand.MoreCharts:
+            case QuickAnalysisCommandKind.MoreCharts:
                 InsertChartPickerBtn_Click(sender, e);
                 break;
-            case QuickAnalysisCommand.Sum:
-                InsertQuickAnalysisTotalFormulas(range => QuickAnalysisTotalsPlanner.BuildAggregateEdits(range, "SUM"), "Quick Analysis Sum");
+            case QuickAnalysisCommandKind.InsertTotalFormula
+                when route.TotalFormulaKind == QuickAnalysisTotalFormulaKind.Aggregate &&
+                     !string.IsNullOrWhiteSpace(route.TotalFunction):
+                InsertQuickAnalysisTotalFormulas(
+                    range => QuickAnalysisTotalsPlanner.BuildAggregateEdits(range, route.TotalFunction),
+                    $"Quick Analysis {option.Label}");
                 break;
-            case QuickAnalysisCommand.Average:
-                InsertQuickAnalysisTotalFormulas(range => QuickAnalysisTotalsPlanner.BuildAggregateEdits(range, "AVERAGE"), "Quick Analysis Average");
-                break;
-            case QuickAnalysisCommand.Count:
-                InsertQuickAnalysisTotalFormulas(range => QuickAnalysisTotalsPlanner.BuildAggregateEdits(range, "COUNT"), "Quick Analysis Count");
-                break;
-            case QuickAnalysisCommand.PercentTotal:
+            case QuickAnalysisCommandKind.InsertTotalFormula
+                when route.TotalFormulaKind == QuickAnalysisTotalFormulaKind.PercentTotal:
                 InsertQuickAnalysisTotalFormulas(QuickAnalysisTotalsPlanner.BuildPercentTotalEdits, "Quick Analysis % Total");
                 break;
-            case QuickAnalysisCommand.RunningTotal:
+            case QuickAnalysisCommandKind.InsertTotalFormula
+                when route.TotalFormulaKind == QuickAnalysisTotalFormulaKind.RunningTotal:
                 InsertQuickAnalysisTotalFormulas(QuickAnalysisTotalsPlanner.BuildRunningTotalEdits, "Quick Analysis Running Total");
                 break;
-            case QuickAnalysisCommand.Max:
-                InsertQuickAnalysisTotalFormulas(range => QuickAnalysisTotalsPlanner.BuildAggregateEdits(range, "MAX"), "Quick Analysis Max");
-                break;
-            case QuickAnalysisCommand.Min:
-                InsertQuickAnalysisTotalFormulas(range => QuickAnalysisTotalsPlanner.BuildAggregateEdits(range, "MIN"), "Quick Analysis Min");
-                break;
-            case QuickAnalysisCommand.FormatAsTable:
+            case QuickAnalysisCommandKind.Table:
                 TableBtn_Click(sender, e);
                 break;
-            case QuickAnalysisCommand.PivotTable:
+            case QuickAnalysisCommandKind.PivotTable:
                 PivotTableBtn_Click(sender, e);
                 break;
-            case QuickAnalysisCommand.LineSparkline:
-                SparklineLineBtn_Click(sender, e);
-                break;
-            case QuickAnalysisCommand.ColumnSparkline:
-                SparklineColumnBtn_Click(sender, e);
-                break;
-            case QuickAnalysisCommand.WinLossSparkline:
-                SparklineWinLossBtn_Click(sender, e);
+            case QuickAnalysisCommandKind.Sparkline when route.SparklineKind is { } sparklineKind:
+                InsertQuickAnalysisSparkline(sparklineKind);
                 break;
         }
+    }
+
+    private static string QuickAnalysisConditionalFormatDialogTitle(QuickAnalysisConditionalFormatCommand command) =>
+        command switch
+        {
+            QuickAnalysisConditionalFormatCommand.DataBar => "Data Bar",
+            QuickAnalysisConditionalFormatCommand.ColorScale => "Color Scale",
+            QuickAnalysisConditionalFormatCommand.IconSet => "Icon Set",
+            QuickAnalysisConditionalFormatCommand.GreaterThan => "Greater Than",
+            QuickAnalysisConditionalFormatCommand.LessThan => "Less Than",
+            QuickAnalysisConditionalFormatCommand.Between => "Between",
+            QuickAnalysisConditionalFormatCommand.EqualTo => "Equal To",
+            QuickAnalysisConditionalFormatCommand.TextContains => "Text Contains",
+            QuickAnalysisConditionalFormatCommand.DateOccurring => "Date Occurring",
+            QuickAnalysisConditionalFormatCommand.DuplicateValues => "Duplicate Values",
+            QuickAnalysisConditionalFormatCommand.Top10Items => "Top 10 Items",
+            QuickAnalysisConditionalFormatCommand.Top10Percent => "Top 10%",
+            QuickAnalysisConditionalFormatCommand.Bottom10Items => "Bottom 10 Items",
+            QuickAnalysisConditionalFormatCommand.Bottom10Percent => "Bottom 10%",
+            QuickAnalysisConditionalFormatCommand.AboveAverage => "Above Average",
+            QuickAnalysisConditionalFormatCommand.BelowAverage => "Below Average",
+            _ => command.ToString()
+        };
+
+    private void InsertQuickAnalysisSparkline(SparklineKind kind)
+    {
+        var dialogKind = kind switch
+        {
+            SparklineKind.Column => "column",
+            SparklineKind.WinLoss => "winloss",
+            _ => "line"
+        };
+
+        InsertSparkline(dialogKind);
     }
 
     private void InsertQuickAnalysisTotalFormulas(
