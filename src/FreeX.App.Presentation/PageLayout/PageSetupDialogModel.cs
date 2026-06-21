@@ -27,7 +27,7 @@ public enum PageSetupScalingMode
 /// A snapshot of every editable page-setup field, decoupled from the Core.Model so the dialog can edit
 /// strings/enums without mutating the sheet until the user commits. Built from a <see cref="Sheet"/>
 /// via <see cref="PageSetupDialogModel.FromSheet"/> and turned back into commands via
-/// <see cref="PageSetupDialogModel.TryBuildCommand"/> / <see cref="PageSetupDialogModel.BuildHeaderFooterCommand"/>.
+/// <see cref="PageSetupDialogModel.TryBuildCommand"/> / <see cref="PageSetupDialogModel.TryBuildCommandPlan"/>.
 /// </summary>
 public sealed record PageSetupDialogFields
 {
@@ -83,6 +83,16 @@ public sealed record PageSetupDialogFields
     /// <summary>Header/footer center text (the dialog edits center-only presets; left/right preserved).</summary>
     public WorksheetHeaderFooter Header { get; init; } = new("", "", "");
     public WorksheetHeaderFooter Footer { get; init; } = new("", "", "");
+    public WorksheetHeaderFooter FirstPageHeader { get; init; } = new("", "", "");
+    public WorksheetHeaderFooter FirstPageFooter { get; init; } = new("", "", "");
+    public WorksheetHeaderFooter EvenPageHeader { get; init; } = new("", "", "");
+    public WorksheetHeaderFooter EvenPageFooter { get; init; } = new("", "", "");
+    public WorksheetHeaderFooterPictureSet HeaderPictures { get; init; } = WorksheetHeaderFooterPictureSet.Empty;
+    public WorksheetHeaderFooterPictureSet FooterPictures { get; init; } = WorksheetHeaderFooterPictureSet.Empty;
+    public WorksheetHeaderFooterPictureSet FirstPageHeaderPictures { get; init; } = WorksheetHeaderFooterPictureSet.Empty;
+    public WorksheetHeaderFooterPictureSet FirstPageFooterPictures { get; init; } = WorksheetHeaderFooterPictureSet.Empty;
+    public WorksheetHeaderFooterPictureSet EvenPageHeaderPictures { get; init; } = WorksheetHeaderFooterPictureSet.Empty;
+    public WorksheetHeaderFooterPictureSet EvenPageFooterPictures { get; init; } = WorksheetHeaderFooterPictureSet.Empty;
     public bool DifferentFirstPage { get; init; }
     public bool DifferentOddEvenPages { get; init; }
     public bool ScaleHeaderFooterWithDocument { get; init; } = true;
@@ -99,6 +109,17 @@ public sealed record PageSetupCommandBuildResult(SetPageSetupCommand? Command, s
 
     public static PageSetupCommandBuildResult Ok(SetPageSetupCommand command) => new(command, null);
     public static PageSetupCommandBuildResult Fail(string error) => new(null, error);
+}
+
+/// <summary>
+/// The complete shared Page Setup command plan, or the first validation error that prevented building it.
+/// </summary>
+public sealed record PageSetupCommandPlanBuildResult(PageSetupCommandPlan? Plan, string? Error)
+{
+    public bool Success => Plan is not null;
+
+    public static PageSetupCommandPlanBuildResult Ok(PageSetupCommandPlan plan) => new(plan, null);
+    public static PageSetupCommandPlanBuildResult Fail(string error) => new(null, error);
 }
 
 public static class PageSetupDialogModel
@@ -167,6 +188,16 @@ public static class PageSetupDialogModel
             PageOrder = sheet.PageOrder,
             Header = sheet.PageHeader,
             Footer = sheet.PageFooter,
+            FirstPageHeader = sheet.FirstPageHeader,
+            FirstPageFooter = sheet.FirstPageFooter,
+            EvenPageHeader = sheet.EvenPageHeader,
+            EvenPageFooter = sheet.EvenPageFooter,
+            HeaderPictures = sheet.PageHeaderPictures.DeepClone(),
+            FooterPictures = sheet.PageFooterPictures.DeepClone(),
+            FirstPageHeaderPictures = sheet.FirstPageHeaderPictures.DeepClone(),
+            FirstPageFooterPictures = sheet.FirstPageFooterPictures.DeepClone(),
+            EvenPageHeaderPictures = sheet.EvenPageHeaderPictures.DeepClone(),
+            EvenPageFooterPictures = sheet.EvenPageFooterPictures.DeepClone(),
             DifferentFirstPage = sheet.DifferentFirstPageHeaderFooter,
             DifferentOddEvenPages = sheet.DifferentOddEvenHeaderFooter,
             ScaleHeaderFooterWithDocument = sheet.HeaderFooterScaleWithDocument,
@@ -184,102 +215,71 @@ public static class PageSetupDialogModel
     /// </summary>
     public static PageSetupCommandBuildResult TryBuildCommand(Sheet sheet, PageSetupDialogFields fields)
     {
-        ArgumentNullException.ThrowIfNull(sheet);
-        ArgumentNullException.ThrowIfNull(fields);
+        var plan = TryBuildCommandPlan(sheet, fields);
+        return plan.Success
+            ? PageSetupCommandBuildResult.Ok(plan.Plan!.PageSetupCommand)
+            : PageSetupCommandBuildResult.Fail(plan.Error ?? "Page setup is invalid.");
+    }
 
-        if (!Enum.IsDefined(fields.Orientation))
-            return PageSetupCommandBuildResult.Fail("Choose a page orientation.");
-        if (!Enum.IsDefined(fields.PaperSize))
-            return PageSetupCommandBuildResult.Fail("Choose a paper size.");
-        if (!Enum.IsDefined(fields.PageOrder))
-            return PageSetupCommandBuildResult.Fail("Choose a page order.");
-        if (!Enum.IsDefined(fields.PrintErrorValue))
-            return PageSetupCommandBuildResult.Fail("Choose how cell errors print.");
-        if (!Enum.IsDefined(fields.PrintComments))
-            return PageSetupCommandBuildResult.Fail("Choose how comments print.");
+    /// <summary>
+    /// Validates dialog fields and builds the shared command plan. The renderer decides whether to run
+    /// the commands separately or compose them into a single undoable command.
+    /// </summary>
+    public static PageSetupCommandPlanBuildResult TryBuildCommandPlan(
+        Sheet sheet,
+        PageSetupDialogFields fields) =>
+        TryBuildCommandPlan(sheet, fields, sheet.Id);
 
-        if (!PageMarginInputParser.TryParse(fields.MarginsText, out var margins, out var marginError))
-            return PageSetupCommandBuildResult.Fail(marginError ?? "Margins are invalid.");
-
-        if (!TryParseMargin(fields.HeaderMarginText, sheet.HeaderMargin, out var headerMargin))
-            return PageSetupCommandBuildResult.Fail("Header margin must be a non-negative number of inches.");
-
-        if (!TryParseMargin(fields.FooterMarginText, sheet.FooterMargin, out var footerMargin))
-            return PageSetupCommandBuildResult.Fail("Footer margin must be a non-negative number of inches.");
-
-        if (!TryResolveScaleToFit(fields, out var scaleToFit, out var scaleError))
-            return PageSetupCommandBuildResult.Fail(scaleError!);
-
-        if (!TryParseFirstPageNumber(fields.FirstPageNumberText, out var firstPageNumber))
-            return PageSetupCommandBuildResult.Fail("First page number must be a positive whole number or blank for automatic.");
-
-        if (!TryParsePrintQualityDpi(fields.PrintQualityDpiText, out var printQualityDpi))
-            return PageSetupCommandBuildResult.Fail("Print quality must be a positive DPI value or blank.");
-
-        if (!TryParsePrintArea(fields.PrintAreaText, sheet.Id, out _))
-            return PageSetupCommandBuildResult.Fail("Print area must be a cell range like A1:D20.");
-
-        if (!PageLayoutInputParser.TryParseRepeatRows(fields.RepeatRowsText, out var repeatRows))
-            return PageSetupCommandBuildResult.Fail("Rows to repeat at top must be a row range like 1:2.");
-
-        if (!PageLayoutInputParser.TryParseRepeatColumns(fields.RepeatColumnsText, out var repeatColumns))
-            return PageSetupCommandBuildResult.Fail("Columns to repeat at left must be a column range like A:B.");
-
-        var command = new SetPageSetupCommand(
-            sheet.Id,
-            fields.Orientation,
-            fields.PaperSize,
-            margins,
-            fields.PrintGridlines,
-            fields.PrintHeadings,
-            scaleToFit,
-            repeatRows,
-            repeatColumns,
-            fields.CenterHorizontally,
-            fields.CenterVertically,
-            fields.PageOrder,
-            firstPageNumber,
-            headerMargin,
-            footerMargin,
-            fields.PrintBlackAndWhite,
-            fields.PrintDraftQuality,
-            printQualityDpi,
-            fields.PrintErrorValue,
-            fields.PrintComments);
-
-        // The print area lives outside SetPageSetupCommand; the shell applies it separately. We still
-        // validate it here so the dialog rejects a bad range before committing anything.
-        return PageSetupCommandBuildResult.Ok(command);
+    /// <summary>
+    /// Validates dialog fields and builds the shared command plan for a grouped edit target.
+    /// </summary>
+    public static PageSetupCommandPlanBuildResult TryBuildCommandPlan(
+        Sheet sheet,
+        PageSetupDialogFields fields,
+        SheetId targetSheetId)
+    {
+        var request = TryBuildRequest(sheet, fields);
+        return request.Success
+            ? PageSetupCommandPlanBuildResult.Ok(PageSetupCommandFactory.Build(targetSheetId, request.Request!))
+            : PageSetupCommandPlanBuildResult.Fail(request.Error ?? "Page setup is invalid.");
     }
 
     /// <summary>
     /// Builds the companion <see cref="SetHeaderFooterCommand"/> that applies the dialog's header/footer
-    /// text, preserving the sheet's existing first-page / even-page text and pictures (the simple Page
-    /// Setup surface only edits the center preset; the dedicated Header/Footer dialog edits the rest).
+    /// text and picture state.
     /// </summary>
-    public static SetHeaderFooterCommand BuildHeaderFooterCommand(Sheet sheet, PageSetupDialogFields fields)
+    public static SetHeaderFooterCommand BuildHeaderFooterCommand(Sheet sheet, PageSetupDialogFields fields) =>
+        BuildHeaderFooterCommand(sheet, fields, sheet.Id);
+
+    /// <summary>
+    /// Builds the companion <see cref="SetHeaderFooterCommand"/> for a grouped edit target.
+    /// </summary>
+    public static SetHeaderFooterCommand BuildHeaderFooterCommand(
+        Sheet sheet,
+        PageSetupDialogFields fields,
+        SheetId targetSheetId)
     {
         ArgumentNullException.ThrowIfNull(sheet);
         ArgumentNullException.ThrowIfNull(fields);
 
         return new SetHeaderFooterCommand(
-            sheet.Id,
+            targetSheetId,
             fields.Header,
             fields.Footer,
-            sheet.FirstPageHeader,
-            sheet.FirstPageFooter,
-            sheet.EvenPageHeader,
-            sheet.EvenPageFooter,
+            fields.FirstPageHeader,
+            fields.FirstPageFooter,
+            fields.EvenPageHeader,
+            fields.EvenPageFooter,
             fields.DifferentFirstPage,
             fields.DifferentOddEvenPages,
             fields.ScaleHeaderFooterWithDocument,
             fields.AlignHeaderFooterWithMargins,
-            sheet.PageHeaderPictures,
-            sheet.PageFooterPictures,
-            sheet.FirstPageHeaderPictures,
-            sheet.FirstPageFooterPictures,
-            sheet.EvenPageHeaderPictures,
-            sheet.EvenPageFooterPictures);
+            fields.HeaderPictures,
+            fields.FooterPictures,
+            fields.FirstPageHeaderPictures,
+            fields.FirstPageFooterPictures,
+            fields.EvenPageHeaderPictures,
+            fields.EvenPageFooterPictures);
     }
 
     /// <summary>
@@ -334,6 +334,101 @@ public static class PageSetupDialogModel
     /// <summary>Parses the print-area free-text field; blank input yields a null range (clear).</summary>
     public static bool TryParsePrintArea(string input, SheetId sheetId, out GridRange? printArea) =>
         PageLayoutInputParser.TryParseOptionalPrintArea(input, sheetId, out printArea);
+
+    private static PageSetupRequestBuildResult TryBuildRequest(Sheet sheet, PageSetupDialogFields fields)
+    {
+        ArgumentNullException.ThrowIfNull(sheet);
+        ArgumentNullException.ThrowIfNull(fields);
+
+        if (!Enum.IsDefined(fields.Orientation))
+            return PageSetupRequestBuildResult.Fail("Choose a page orientation.");
+        if (!Enum.IsDefined(fields.PaperSize))
+            return PageSetupRequestBuildResult.Fail("Choose a paper size.");
+        if (!Enum.IsDefined(fields.PageOrder))
+            return PageSetupRequestBuildResult.Fail("Choose a page order.");
+        if (!Enum.IsDefined(fields.PrintErrorValue))
+            return PageSetupRequestBuildResult.Fail("Choose how cell errors print.");
+        if (!Enum.IsDefined(fields.PrintComments))
+            return PageSetupRequestBuildResult.Fail("Choose how comments print.");
+
+        if (!PageMarginInputParser.TryParse(fields.MarginsText, out var margins, out var marginError))
+            return PageSetupRequestBuildResult.Fail(marginError ?? "Margins are invalid.");
+
+        if (!TryParseMargin(fields.HeaderMarginText, sheet.HeaderMargin, out var headerMargin))
+            return PageSetupRequestBuildResult.Fail("Header margin must be a non-negative number of inches.");
+
+        if (!TryParseMargin(fields.FooterMarginText, sheet.FooterMargin, out var footerMargin))
+            return PageSetupRequestBuildResult.Fail("Footer margin must be a non-negative number of inches.");
+
+        if (!TryResolveScaleToFit(fields, out var scaleToFit, out var scaleError))
+            return PageSetupRequestBuildResult.Fail(scaleError!);
+
+        if (!TryParseFirstPageNumber(fields.FirstPageNumberText, out var firstPageNumber))
+            return PageSetupRequestBuildResult.Fail("First page number must be a positive whole number or blank for automatic.");
+
+        if (!TryParsePrintQualityDpi(fields.PrintQualityDpiText, out var printQualityDpi))
+            return PageSetupRequestBuildResult.Fail("Print quality must be a positive DPI value or blank.");
+
+        if (!TryParsePrintArea(fields.PrintAreaText, sheet.Id, out var printArea))
+            return PageSetupRequestBuildResult.Fail("Print area must be a cell range like A1:D20.");
+
+        if (!PageLayoutInputParser.TryParseRepeatRows(fields.RepeatRowsText, out var repeatRows))
+            return PageSetupRequestBuildResult.Fail("Rows to repeat at top must be a row range like 1:2.");
+
+        if (!PageLayoutInputParser.TryParseRepeatColumns(fields.RepeatColumnsText, out var repeatColumns))
+            return PageSetupRequestBuildResult.Fail("Columns to repeat at left must be a column range like A:B.");
+
+        return PageSetupRequestBuildResult.Ok(new PageSetupCommandRequest
+        {
+            PrintArea = printArea,
+            Orientation = fields.Orientation,
+            PaperSize = fields.PaperSize,
+            Margins = margins,
+            PrintGridlines = fields.PrintGridlines,
+            PrintHeadings = fields.PrintHeadings,
+            ScaleToFit = scaleToFit,
+            PrintTitleRows = repeatRows,
+            PrintTitleColumns = repeatColumns,
+            CenterHorizontally = fields.CenterHorizontally,
+            CenterVertically = fields.CenterVertically,
+            PageOrder = fields.PageOrder,
+            FirstPageNumber = firstPageNumber,
+            HeaderMargin = headerMargin,
+            FooterMargin = footerMargin,
+            PrintBlackAndWhite = fields.PrintBlackAndWhite,
+            PrintDraftQuality = fields.PrintDraftQuality,
+            PrintQualityDpi = printQualityDpi,
+            PrintErrorValue = fields.PrintErrorValue,
+            PrintComments = fields.PrintComments,
+            HeaderFooter = new PageSetupHeaderFooterRequest
+            {
+                Header = fields.Header,
+                Footer = fields.Footer,
+                FirstPageHeader = fields.FirstPageHeader,
+                FirstPageFooter = fields.FirstPageFooter,
+                EvenPageHeader = fields.EvenPageHeader,
+                EvenPageFooter = fields.EvenPageFooter,
+                DifferentFirstPage = fields.DifferentFirstPage,
+                DifferentOddEvenPages = fields.DifferentOddEvenPages,
+                ScaleHeaderFooterWithDocument = fields.ScaleHeaderFooterWithDocument,
+                AlignHeaderFooterWithMargins = fields.AlignHeaderFooterWithMargins,
+                HeaderPictures = fields.HeaderPictures,
+                FooterPictures = fields.FooterPictures,
+                FirstPageHeaderPictures = fields.FirstPageHeaderPictures,
+                FirstPageFooterPictures = fields.FirstPageFooterPictures,
+                EvenPageHeaderPictures = fields.EvenPageHeaderPictures,
+                EvenPageFooterPictures = fields.EvenPageFooterPictures,
+            }
+        });
+    }
+
+    private sealed record PageSetupRequestBuildResult(PageSetupCommandRequest? Request, string? Error)
+    {
+        public bool Success => Request is not null;
+
+        public static PageSetupRequestBuildResult Ok(PageSetupCommandRequest request) => new(request, null);
+        public static PageSetupRequestBuildResult Fail(string error) => new(null, error);
+    }
 
     private static bool TryParseFitToPages(string input, out int? pages)
     {

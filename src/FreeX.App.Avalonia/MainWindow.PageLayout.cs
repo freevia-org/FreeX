@@ -62,41 +62,35 @@ public sealed partial class MainWindow
 
     private void ApplyPageSetupFields(Sheet sheet, PageSetupDialogFields fields)
     {
-        var build = PageSetupDialogModel.TryBuildCommand(sheet, fields);
+        var build = PageSetupDialogModel.TryBuildCommandPlan(sheet, fields);
         if (!build.Success)
         {
             ShowEditIssue(build.Error ?? UiText.Get("ShellLoc_PageSetupInvalid"));
             return;
         }
 
-        if (!PageSetupDialogModel.TryParsePrintArea(fields.PrintAreaText, sheet.Id, out var printArea))
-        {
-            ShowEditIssue(UiText.Get("ShellLoc_PrintAreaMustBeRange"));
-            return;
-        }
-
-        var pageSetupResult = _session.ExecuteReviewCommand(build.Command!);
+        var plan = build.Plan!;
+        var pageSetupResult = _session.ExecuteReviewCommand(plan.PageSetupCommand);
         if (!pageSetupResult.Success)
         {
             ShowEditIssue(pageSetupResult.ErrorMessage ?? UiText.Get("ShellLoc_PageSetupFailed"));
             return;
         }
 
-        var headerFooterCommand = PageSetupDialogModel.BuildHeaderFooterCommand(sheet, fields);
-        var headerFooterResult = _session.ExecuteReviewCommand(headerFooterCommand);
+        var headerFooterResult = _session.ExecuteReviewCommand(plan.HeaderFooterCommand);
         if (!headerFooterResult.Success)
         {
             ShowEditIssue(headerFooterResult.ErrorMessage ?? UiText.Get("ShellLoc_HeaderFooterUpdateFailed"));
             return;
         }
 
-        if (!ApplyPrintArea(sheet, printArea))
+        if (!ApplyPrintArea(sheet, plan.PrintArea, plan.PrintAreaCommand))
             return;
 
         RefreshShell(UiText.Get("ShellLoc_PageSetupUpdated"));
     }
 
-    private bool ApplyPrintArea(Sheet sheet, GridRange? printArea)
+    private bool ApplyPrintArea(Sheet sheet, GridRange? printArea, IWorkbookCommand command)
     {
         var current = sheet.PrintArea is { } existing && existing.Start.Sheet == sheet.Id
             ? existing
@@ -104,10 +98,6 @@ public sealed partial class MainWindow
 
         if (Equals(current, printArea))
             return true;
-
-        var command = printArea is { } range
-            ? (IWorkbookCommand)new SetPrintAreaCommand(sheet.Id, range)
-            : new ClearPrintAreaCommand(sheet.Id);
 
         var result = _session.ExecuteReviewCommand(command);
         if (!result.Success)
@@ -548,7 +538,7 @@ public sealed partial class MainWindow
             _ => WorksheetPrintComments.None,
         };
 
-        PageSetupDialogFields ReadFields() => new()
+        PageSetupDialogFields ReadFields() => initial with
         {
             Orientation = orientationBox.SelectedIndex == 1
                 ? WorksheetPageOrientation.Landscape

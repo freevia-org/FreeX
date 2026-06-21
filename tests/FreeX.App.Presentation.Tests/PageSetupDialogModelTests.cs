@@ -372,6 +372,70 @@ public sealed class PageSetupDialogModelTests
         sheet.DifferentOddEvenHeaderFooter.Should().BeFalse();
     }
 
+    [Fact]
+    public void TryBuildCommandPlan_RemapsPrintAreaToTargetSheet()
+    {
+        var workbook = new Workbook("Book");
+        var source = workbook.AddSheet("Sheet1");
+        var target = workbook.AddSheet("Sheet2");
+        var ctx = new PageSetupTestCommandContext(workbook);
+
+        var fields = PageSetupDialogModel.FromSheet(source) with
+        {
+            Orientation = WorksheetPageOrientation.Landscape,
+            PrintAreaText = "B2:D5",
+        };
+
+        var result = PageSetupDialogModel.TryBuildCommandPlan(source, fields, target.Id);
+
+        result.Success.Should().BeTrue(result.Error);
+        var plan = result.Plan!;
+        plan.PrintArea.Should().NotBeNull();
+        plan.PrintArea!.Value.Start.Sheet.Should().Be(target.Id);
+        plan.PrintArea.Value.Start.Row.Should().Be(2u);
+        plan.PrintArea.Value.Start.Col.Should().Be(2u);
+        plan.PrintArea.Value.End.Row.Should().Be(5u);
+        plan.PrintArea.Value.End.Col.Should().Be(4u);
+
+        plan.PageSetupCommand.Apply(ctx).Success.Should().BeTrue();
+        plan.PrintAreaCommand.Apply(ctx).Success.Should().BeTrue();
+        target.PageOrientation.Should().Be(WorksheetPageOrientation.Landscape);
+        target.PrintArea.Should().Be(plan.PrintArea);
+    }
+
+    [Fact]
+    public void CommandFactory_CompositePreservesAdvancedHeaderFooterPictures()
+    {
+        var workbook = new Workbook("Book");
+        var sheet = workbook.AddSheet("Sheet1");
+        var ctx = new PageSetupTestCommandContext(workbook);
+        var picture = new WorksheetHeaderFooterPicture([1, 2, 3], "image/png", "logo.png", 120, 80);
+
+        var request = new PageSetupCommandRequest
+        {
+            HeaderFooter = new PageSetupHeaderFooterRequest
+            {
+                Header = new WorksheetHeaderFooter("", "Main", ""),
+                FirstPageHeader = new WorksheetHeaderFooter("First", "", ""),
+                EvenPageFooter = new WorksheetHeaderFooter("", "", "Even"),
+                HeaderPictures = new WorksheetHeaderFooterPictureSet(null, picture, null),
+                DifferentFirstPage = true,
+                DifferentOddEvenPages = true,
+            }
+        };
+
+        var command = PageSetupCommandFactory.Build(sheet.Id, request).ToComposite();
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        sheet.PageHeader.Center.Should().Be("Main");
+        sheet.FirstPageHeader.Left.Should().Be("First");
+        sheet.EvenPageFooter.Right.Should().Be("Even");
+        sheet.PageHeaderPictures.Center.Should().NotBeNull();
+        sheet.PageHeaderPictures.Center!.FileName.Should().Be("logo.png");
+        sheet.DifferentFirstPageHeaderFooter.Should().BeTrue();
+        sheet.DifferentOddEvenHeaderFooter.Should().BeTrue();
+    }
+
     private sealed class PageSetupTestCommandContext(Workbook workbook) : ICommandContext
     {
         public Workbook Workbook { get; } = workbook;

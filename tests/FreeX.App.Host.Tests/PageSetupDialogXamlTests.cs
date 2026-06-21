@@ -432,14 +432,14 @@ public sealed class PageSetupDialogXamlTests
         var builderSource = DialogSourceTestSupport.ReadHostSources("PageSetupCommandBuilder.cs");
 
         source.Should().Contain("PageSetupCommandBuilder.Build(sheetId, dialog)");
-        builderSource.Should().Contain("new CompositeWorkbookCommand(");
+        builderSource.Should().Contain("PageSetupCommandFactory.Build(sheetId, CreateRequest(dialog)).ToComposite()");
         source.Should().Contain("new PageSetupDialog(");
         source.Should().Contain("SheetGrid.SelectedRange");
-        builderSource.Should().Contain("new SetHeaderFooterCommand(");
-        builderSource.Should().Contain("dialog.FirstPageHeader");
-        builderSource.Should().Contain("dialog.EvenPageFooter");
-        builderSource.Should().Contain("dialog.ScaleHeaderFooterWithDocument");
-        builderSource.Should().Contain("dialog.AlignHeaderFooterWithMargins");
+        builderSource.Should().Contain("HeaderFooter = new PageSetupHeaderFooterRequest");
+        builderSource.Should().Contain("FirstPageHeader = dialog.FirstPageHeader");
+        builderSource.Should().Contain("EvenPageFooter = dialog.EvenPageFooter");
+        builderSource.Should().Contain("ScaleHeaderFooterWithDocument = dialog.ScaleHeaderFooterWithDocument");
+        builderSource.Should().Contain("AlignHeaderFooterWithMargins = dialog.AlignHeaderFooterWithMargins");
     }
 
     [Fact]
@@ -449,9 +449,8 @@ public sealed class PageSetupDialogXamlTests
         var builderSource = DialogSourceTestSupport.ReadHostSources("PageSetupCommandBuilder.cs");
 
         source.Should().Contain("PageSetupCommandBuilder.Build(sheetId, dialog)");
-        builderSource.Should().Contain("CreatePrintAreaCommand(sheetId, dialog.PrintArea)");
-        builderSource.Should().Contain("new SetPrintAreaCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(range, sheetId))");
-        builderSource.Should().Contain("new ClearPrintAreaCommand(sheetId)");
+        builderSource.Should().Contain("PrintArea = dialog.PrintArea");
+        builderSource.Should().Contain("PageSetupCommandFactory.Build(sheetId, CreateRequest(dialog)).ToComposite()");
     }
 
     [Fact]
