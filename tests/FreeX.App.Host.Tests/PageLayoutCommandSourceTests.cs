@@ -23,9 +23,9 @@ public sealed class PageLayoutCommandSourceTests
         source.Should().Contain("ShowWorkbookThemeDialog(WorkbookThemeDialogMode.Colors)");
         source.Should().Contain("ShowWorkbookThemeDialog(WorkbookThemeDialogMode.Effects)");
         source.Should().Contain("new SetWorkbookThemeCommand(theme)");
-        source.Should().Contain("new SetPageMarginsCommand(sheetId, WorksheetPageMargins.Normal)");
-        source.Should().Contain("new SetPageOrientationCommand(sheetId, WorksheetPageOrientation.Portrait)");
-        source.Should().Contain("new SetPaperSizeCommand(sheetId, WorksheetPaperSize.Letter)");
+        source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildMarginsCommand(sheetId, WorksheetPageMargins.Normal)");
+        source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildOrientationCommand(sheetId, WorksheetPageOrientation.Portrait)");
+        source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildPaperSizeCommand(sheetId, WorksheetPaperSize.Letter)");
         SourceMethodExtractor.ExtractMethodSource(source, "private void PageSetupDialogBtn_Click(")
             .Should().Contain("ShowPageSetupDialog(PageSetupInitialFocusTarget.PageOrientation);");
         SourceMethodExtractor.ExtractMethodSource(source, "private void PrintAreaBtn_Click(")
@@ -34,20 +34,20 @@ public sealed class PageLayoutCommandSourceTests
             .Should().Contain("OpenRibbonContextMenu(btn, cm);");
         SourceMethodExtractor.ExtractMethodSource(source, "private void BackgroundBtn_Click(")
             .Should().Contain("BackgroundChooseMenuItem_Click(sender, e);");
-        source.Should().Contain("new SetPrintAreaCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(range, sheetId))");
-        source.Should().Contain("new ClearPrintAreaCommand(sheetId)");
+        source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildSetPrintAreaCommand(sheetId, range)");
+        source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildClearPrintAreaCommand(sheetId)");
         source.Should().Contain("ShowPageSetupDialog(PageSetupInitialFocusTarget.ScaleToFit)");
         source.Should().Contain("InitializePageLayoutScaleToFitControls()");
         source.Should().Contain("PageLayoutInputParser.TryParseScalePages(text, out var wide)");
         source.Should().Contain("SyncPageLayoutScaleToFitControls(_workbook.GetSheet(_currentSheetId))");
-        source.Should().Contain("CreateScaleToFitFromPageDimensions(current, wide, current.FitToPagesTall)");
-        source.Should().Contain("PageBreakSelectionPlanner.Insert(selectedRange, sheet.RowPageBreaks, sheet.ColumnPageBreaks)");
-        source.Should().Contain("PageBreakSelectionPlanner.Remove(selectedRange, sheet.RowPageBreaks, sheet.ColumnPageBreaks)");
-        source.Should().Contain("new SetPageBreaksCommand(sheetId, rowBreaks, columnBreaks)");
+        source.Should().Contain("PageLayoutRibbonCommandPlanner.ResolveScaleToFitFromPageDimensions(current, wide, current.FitToPagesTall)");
+        source.Should().Contain("PageLayoutRibbonCommandPlanner.PlanInsertPageBreaks(");
+        source.Should().Contain("PageLayoutRibbonCommandPlanner.PlanRemovePageBreaks(");
+        source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildPageBreaksCommand(sheetId, rowBreaks, columnBreaks)");
         source.Should().Contain("PageSetupDialogModel.TryBuildCommandPlan(sheet, fields, sheetId).Plan!.ToComposite()");
         source.Should().Contain("NativePrintDialogService.ShowPrinterOptionsDialog(this)");
-        source.Should().Contain("new SetPrintOptionsCommand(_currentSheetId, isChecked, sheet?.PrintHeadings ?? false)");
-        source.Should().Contain("new SetPrintOptionsCommand(_currentSheetId, sheet?.PrintGridlines ?? false, isChecked)");
+        source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildPrintGridlinesCommand(_currentSheetId, isChecked, sheet?.PrintHeadings ?? false)");
+        source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildPrintHeadingsCommand(_currentSheetId, sheet?.PrintGridlines ?? false, isChecked)");
     }
 
 }

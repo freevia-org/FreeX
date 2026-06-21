@@ -7,6 +7,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
 
+using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -226,26 +227,29 @@ public sealed partial class MainWindow
     // ── Page Layout ▸ Page Setup group quick presets ─────────────────────────────
     private void ApplyPageMargins(WorksheetPageMargins margins, string statusKey)
     {
-        var result = _session.ExecuteReviewCommand(new SetPageMarginsCommand(_session.ActiveSheet.Id, margins));
+        var result = _session.ExecuteReviewCommand(
+            PageLayoutRibbonCommandPlanner.BuildMarginsCommand(_session.ActiveSheet.Id, margins));
         RefreshShell(result.Success ? UiText.Get(statusKey) : result.ErrorMessage ?? UiText.Get(statusKey));
     }
 
     private void ApplyPageOrientation(WorksheetPageOrientation orientation, string statusKey)
     {
-        var result = _session.ExecuteReviewCommand(new SetPageOrientationCommand(_session.ActiveSheet.Id, orientation));
+        var result = _session.ExecuteReviewCommand(
+            PageLayoutRibbonCommandPlanner.BuildOrientationCommand(_session.ActiveSheet.Id, orientation));
         RefreshShell(result.Success ? UiText.Get(statusKey) : result.ErrorMessage ?? UiText.Get(statusKey));
     }
 
     private void ApplyPaperSize(WorksheetPaperSize paperSize, string statusKey)
     {
-        var result = _session.ExecuteReviewCommand(new SetPaperSizeCommand(_session.ActiveSheet.Id, paperSize));
+        var result = _session.ExecuteReviewCommand(
+            PageLayoutRibbonCommandPlanner.BuildPaperSizeCommand(_session.ActiveSheet.Id, paperSize));
         RefreshShell(result.Success ? UiText.Get(statusKey) : result.ErrorMessage ?? UiText.Get(statusKey));
     }
 
     private void SetPrintAreaFromSelection()
     {
         var result = _session.ExecuteReviewCommand(
-            new SetPrintAreaCommand(_session.ActiveSheet.Id, _session.SelectedRange));
+            PageLayoutRibbonCommandPlanner.BuildSetPrintAreaCommand(_session.ActiveSheet.Id, _session.SelectedRange));
         RefreshShell(result.Success
             ? UiText.Get("RibbonWire_PrintAreaSet")
             : result.ErrorMessage ?? UiText.Get("RibbonWire_PrintAreaSetFailed"));
@@ -253,7 +257,8 @@ public sealed partial class MainWindow
 
     private void ClearPrintArea()
     {
-        var result = _session.ExecuteReviewCommand(new ClearPrintAreaCommand(_session.ActiveSheet.Id));
+        var result = _session.ExecuteReviewCommand(
+            PageLayoutRibbonCommandPlanner.BuildClearPrintAreaCommand(_session.ActiveSheet.Id));
         RefreshShell(result.Success
             ? UiText.Get("RibbonWire_PrintAreaCleared")
             : result.ErrorMessage ?? UiText.Get("RibbonWire_PrintAreaClearFailed"));
