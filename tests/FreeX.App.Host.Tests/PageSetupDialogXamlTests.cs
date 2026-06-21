@@ -144,6 +144,40 @@ public sealed class PageSetupDialogXamlTests
     }
 
     [Fact]
+    public void PageSetupDialog_DelegatesChoiceMappingAndValidationRoutesToSharedModel()
+    {
+        var source = ReadPageSetupDialogSource();
+
+        source.Should().Contain("PageSetupDialogModel.ChoiceIndex(");
+        source.Should().Contain("PageSetupDialogModel.ChoiceValue(");
+        source.Should().Contain("PageSetupDialogModel.GetValidationRoute(target)");
+        source.Should().NotContain("((PageOrderBox.SelectedItem as ComboBoxItem)?.Tag as string)");
+        source.Should().NotContain("WorksheetPrintErrorValue SelectedPrintErrorValue() =>\r\n        ((PrintErrorValueBox.SelectedItem as ComboBoxItem)");
+    }
+
+    [Fact]
+    public void PageSetupDialog_ComboOrderMatchesSharedChoiceOrder()
+    {
+        var document = XamlLocalizationTestHelper.LoadLocalizedXaml("PageSetupDialog.xaml");
+
+        ComboItemTags(document, "OrientationBox")
+            .Should()
+            .Equal(PageSetupDialogModel.OrientationChoices.Select(choice => choice.Value.ToString()));
+        ComboItemTags(document, "PaperSizeBox")
+            .Should()
+            .Equal(PageSetupDialogModel.PaperSizeChoices.Select(choice => choice.Value.ToString()));
+        ComboItemTags(document, "PageOrderBox")
+            .Should()
+            .Equal(PageSetupDialogModel.PageOrderChoices.Select(choice => choice.Value.ToString()));
+        ComboItemTags(document, "PrintErrorValueBox")
+            .Should()
+            .Equal(PageSetupDialogModel.PrintErrorValueChoices.Select(choice => choice.Value.ToString()));
+        ComboItemTags(document, "PrintCommentsBox")
+            .Should()
+            .Equal(PageSetupDialogModel.PrintCommentChoices.Select(choice => choice.Value.ToString()));
+    }
+
+    [Fact]
     public void HeaderFooterTab_ReusesSupportedPresetAndCustomDialogConcepts()
     {
         var document = XamlLocalizationTestHelper.LoadLocalizedXaml("PageSetupDialog.xaml");
@@ -504,6 +538,19 @@ public sealed class PageSetupDialogXamlTests
             "PageSetupDialog.Population.cs",
             "PageSetupDialog.RangeSelection.cs",
             "PageSetupDialog.ValidationFocus.cs");
+
+    private static IReadOnlyList<string> ComboItemTags(XDocument document, string comboBoxName)
+    {
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        return document
+            .Descendants(presentation + "ComboBox")
+            .Single(element => element.Attribute(x + "Name")?.Value == comboBoxName)
+            .Elements(presentation + "ComboBoxItem")
+            .Select(element => element.Attribute("Tag")?.Value ?? "")
+            .ToList();
+    }
 
     private static void SelectComboItemByTag(ComboBox comboBox, string tag)
     {

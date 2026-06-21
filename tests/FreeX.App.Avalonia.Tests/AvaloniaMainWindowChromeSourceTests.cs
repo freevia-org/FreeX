@@ -145,6 +145,24 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     }
 
     [Fact]
+    public void PageSetup_DelegatesChoiceMappingToSharedModel()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PageLayout.cs"));
+
+        source.Should().Contain("PageSetupDialogModel.OrientationChoices");
+        source.Should().Contain("PageSetupDialogModel.PaperSizeChoices");
+        source.Should().Contain("PageSetupDialogModel.PageOrderChoices");
+        source.Should().Contain("PageSetupDialogModel.PrintErrorValueChoices");
+        source.Should().Contain("PageSetupDialogModel.PrintCommentChoices");
+        source.Should().Contain("PageSetupDialogModel.ChoiceIndex(");
+        source.Should().Contain("PageSetupDialogModel.ChoiceValue(");
+        source.Should().Contain("PageSetupDialogModel.GetValidationRoute(build.Target)");
+        source.Should().NotContain("initial.PageOrder == WorksheetPageOrder.OverThenDown ? 1 : 0");
+        source.Should().NotContain("WorksheetPrintErrorValue ReadErrorValue()");
+        source.Should().NotContain("WorksheetPrintComments ReadComments()");
+    }
+
+    [Fact]
     public void StatusBarZoomSlider_UsesIdenticalMinMiddleMaxMarks()
     {
         var mainSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));

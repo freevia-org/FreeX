@@ -361,6 +361,9 @@
   <data name="PageSetup_Portrait" xml:space="preserve"><value>Portrait</value></data>
   <data name="PageSetup_Landscape" xml:space="preserve"><value>Landscape</value></data>
   <data name="PageSetup_PaperSize" xml:space="preserve"><value>Paper size</value></data>
+  <data name="PageSetup_Letter85X11" xml:space="preserve"><value>Letter (8.5" x 11")</value></data>
+  <data name="PageSetup_A4210X297Mm" xml:space="preserve"><value>A4 (210mm x 297mm)</value></data>
+  <data name="PageSetup_Legal85X14" xml:space="preserve"><value>Legal (8.5" x 14")</value></data>
   <data name="PageSetup_Scaling" xml:space="preserve"><value>Scaling</value></data>
   <data name="PageSetup_AdjustTo" xml:space="preserve"><value>Adjust to (% of normal size)</value></data>
   <data name="PageSetup_FitTo" xml:space="preserve"><value>Fit to</value></data>

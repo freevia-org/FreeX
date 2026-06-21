@@ -188,87 +188,84 @@ public partial class PageSetupDialog : Window
 
     private void FocusValidationTarget(PageSetupValidationTarget? target)
     {
-        switch (target)
+        var route = PageSetupDialogModel.GetValidationRoute(target);
+        switch (route.Field)
         {
-            case PageSetupValidationTarget.Margins:
+            case PageSetupDialogField.Margins:
                 FocusInvalidMarginInput();
                 break;
-            case PageSetupValidationTarget.HeaderMargin:
-            case PageSetupValidationTarget.FooterMargin:
+            case PageSetupDialogField.HeaderMargin:
+            case PageSetupDialogField.FooterMargin:
                 FocusInvalidHeaderFooterMargin();
                 break;
-            case PageSetupValidationTarget.Scaling:
+            case PageSetupDialogField.Scaling:
                 FocusInvalidScalingInput();
                 break;
-            case PageSetupValidationTarget.FirstPageNumber:
+            case PageSetupDialogField.FirstPageNumber:
                 FocusInvalidPageTabNumber(FirstPageNumberBox);
                 break;
-            case PageSetupValidationTarget.PrintQuality:
+            case PageSetupDialogField.PrintQuality:
                 FocusInvalidPageTabNumber(PrintQualityBox);
                 break;
-            case PageSetupValidationTarget.PrintArea:
+            case PageSetupDialogField.PrintArea:
                 FocusInvalidPrintArea();
                 break;
-            case PageSetupValidationTarget.RepeatRows:
-            case PageSetupValidationTarget.RepeatColumns:
+            case PageSetupDialogField.RepeatRows:
+            case PageSetupDialogField.RepeatColumns:
                 FocusInvalidPrintTitles();
                 break;
-            case PageSetupValidationTarget.PaperSize:
+            case PageSetupDialogField.PaperSize:
                 PageSetupTabs.SelectedItem = PageTab;
                 PaperSizeBox.Focus();
                 break;
-            case PageSetupValidationTarget.PageOrder:
+            case PageSetupDialogField.PageOrder:
                 PageSetupTabs.SelectedItem = SheetTab;
                 PageOrderBox.Focus();
                 break;
-            case PageSetupValidationTarget.PrintErrorValue:
+            case PageSetupDialogField.PrintErrorValue:
                 PageSetupTabs.SelectedItem = SheetTab;
                 PrintErrorValueBox.Focus();
                 break;
-            case PageSetupValidationTarget.PrintComments:
+            case PageSetupDialogField.PrintComments:
                 PageSetupTabs.SelectedItem = SheetTab;
                 PrintCommentsBox.Focus();
                 break;
             default:
+                PageSetupTabs.SelectedItem = PageTab;
                 OrientationBox.Focus();
                 break;
         }
     }
 
     private WorksheetPageOrientation SelectedOrientation() =>
-        ((OrientationBox.SelectedItem as ComboBoxItem)?.Tag as string) == "Landscape"
-            ? WorksheetPageOrientation.Landscape
-            : WorksheetPageOrientation.Portrait;
+        PageSetupDialogModel.ChoiceValue(
+            PageSetupDialogModel.OrientationChoices,
+            OrientationBox.SelectedIndex,
+            WorksheetPageOrientation.Portrait);
 
     private WorksheetPaperSize SelectedPaperSize() =>
-        ((PaperSizeBox.SelectedItem as ComboBoxItem)?.Tag as string) switch
-        {
-            "Letter" => WorksheetPaperSize.Letter,
-            "Legal" => WorksheetPaperSize.Legal,
-            _ => WorksheetPaperSize.A4
-        };
+        PageSetupDialogModel.ChoiceValue(
+            PageSetupDialogModel.PaperSizeChoices,
+            PaperSizeBox.SelectedIndex,
+            WorksheetPaperSize.A4);
 
     private WorksheetPageOrder SelectedPageOrder() =>
-        ((PageOrderBox.SelectedItem as ComboBoxItem)?.Tag as string) == "OverThenDown"
-            ? WorksheetPageOrder.OverThenDown
-            : WorksheetPageOrder.DownThenOver;
+        PageSetupDialogModel.ChoiceValue(
+            PageSetupDialogModel.PageOrderChoices,
+            PageOrderBox.SelectedIndex,
+            WorksheetPageOrder.DownThenOver);
 
     private WorksheetPrintErrorValue SelectedPrintErrorValue() =>
-        ((PrintErrorValueBox.SelectedItem as ComboBoxItem)?.Tag as string) switch
-        {
-            "Blank" => WorksheetPrintErrorValue.Blank,
-            "Dash" => WorksheetPrintErrorValue.Dash,
-            "NotAvailable" => WorksheetPrintErrorValue.NotAvailable,
-            _ => WorksheetPrintErrorValue.Displayed
-        };
+        PageSetupDialogModel.ChoiceValue(
+            PageSetupDialogModel.PrintErrorValueChoices,
+            PrintErrorValueBox.SelectedIndex,
+            WorksheetPrintErrorValue.Displayed);
 
     private WorksheetPrintComments SelectedPrintComments() =>
-        ((PrintCommentsBox.SelectedItem as ComboBoxItem)?.Tag as string) switch
-        {
-            "AtEnd" => WorksheetPrintComments.AtEnd,
-            "AsDisplayed" => WorksheetPrintComments.AsDisplayed,
-            _ => WorksheetPrintComments.None
-        };
+        PageSetupDialogModel.ChoiceValue(
+            PageSetupDialogModel.PrintCommentChoices,
+            PrintCommentsBox.SelectedIndex,
+            WorksheetPrintComments.None);
 }
 
 public enum PageSetupDialogAction

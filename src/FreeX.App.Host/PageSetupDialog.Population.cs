@@ -14,13 +14,14 @@ public partial class PageSetupDialog
         var fields = Fields;
         var margins = ParseMarginsForDisplay(fields.MarginsText);
 
-        OrientationBox.SelectedIndex = fields.Orientation == WorksheetPageOrientation.Landscape ? 1 : 0;
-        PaperSizeBox.SelectedIndex = fields.PaperSize switch
-        {
-            WorksheetPaperSize.Letter => 0,
-            WorksheetPaperSize.Legal => 2,
-            _ => 1
-        };
+        OrientationBox.SelectedIndex = PageSetupDialogModel.ChoiceIndex(
+            PageSetupDialogModel.OrientationChoices,
+            fields.Orientation,
+            WorksheetPageOrientation.Portrait);
+        PaperSizeBox.SelectedIndex = PageSetupDialogModel.ChoiceIndex(
+            PageSetupDialogModel.PaperSizeChoices,
+            fields.PaperSize,
+            WorksheetPaperSize.A4);
         LeftMarginBox.Text = margins.Left.ToString(CultureInfo.InvariantCulture);
         RightMarginBox.Text = margins.Right.ToString(CultureInfo.InvariantCulture);
         TopMarginBox.Text = margins.Top.ToString(CultureInfo.InvariantCulture);
@@ -55,22 +56,20 @@ public partial class PageSetupDialog
             : fields.RepeatColumnsText;
         PrintGridlinesBox.IsChecked = fields.PrintGridlines;
         PrintHeadingsBox.IsChecked = fields.PrintHeadings;
-        PageOrderBox.SelectedIndex = fields.PageOrder == WorksheetPageOrder.OverThenDown ? 1 : 0;
+        PageOrderBox.SelectedIndex = PageSetupDialogModel.ChoiceIndex(
+            PageSetupDialogModel.PageOrderChoices,
+            fields.PageOrder,
+            WorksheetPageOrder.DownThenOver);
         PrintBlackAndWhiteBox.IsChecked = fields.PrintBlackAndWhite;
         PrintDraftQualityBox.IsChecked = fields.PrintDraftQuality;
-        PrintErrorValueBox.SelectedIndex = fields.PrintErrorValue switch
-        {
-            WorksheetPrintErrorValue.Blank => 1,
-            WorksheetPrintErrorValue.Dash => 2,
-            WorksheetPrintErrorValue.NotAvailable => 3,
-            _ => 0
-        };
-        PrintCommentsBox.SelectedIndex = fields.PrintComments switch
-        {
-            WorksheetPrintComments.AtEnd => 1,
-            WorksheetPrintComments.AsDisplayed => 2,
-            _ => 0
-        };
+        PrintErrorValueBox.SelectedIndex = PageSetupDialogModel.ChoiceIndex(
+            PageSetupDialogModel.PrintErrorValueChoices,
+            fields.PrintErrorValue,
+            WorksheetPrintErrorValue.Displayed);
+        PrintCommentsBox.SelectedIndex = PageSetupDialogModel.ChoiceIndex(
+            PageSetupDialogModel.PrintCommentChoices,
+            fields.PrintComments,
+            WorksheetPrintComments.None);
         SelectPreset(HeaderPresetBox, Header.Center);
         SelectPreset(FooterPresetBox, Footer.Center);
         DifferentFirstPageBox.IsChecked = DifferentFirstPage;
