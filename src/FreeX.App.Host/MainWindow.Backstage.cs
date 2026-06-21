@@ -48,42 +48,29 @@ public partial class MainWindow
 
     private void ConfigureBackstageInfoActionButtons()
     {
-        InfoProtectWorkbookButton.Click += InfoProtectWorkbookBtn_Click;
-        System.Windows.Automation.AutomationProperties.SetAutomationId(
-            InfoProtectWorkbookButton,
-            "BackstageInfoProtectWorkbookButton");
-        RibbonTooltip.SetKeyTip(InfoProtectWorkbookButton, "PW");
-        RefreshBackstageInfoProtectionButton();
+        foreach (var action in FreeXBackstagePaneCatalog.BuildInfoActions(FreeXBackstageInfoSurface.WpfInfoPane))
+        {
+            if (action.Id == FreeXBackstageInfoActionId.ProtectWorkbook)
+            {
+                InfoProtectWorkbookButton.Click += InfoProtectWorkbookBtn_Click;
+                System.Windows.Automation.AutomationProperties.SetAutomationId(
+                    InfoProtectWorkbookButton,
+                    action.AutomationId);
+                RibbonTooltip.SetKeyTip(InfoProtectWorkbookButton, action.KeyTip ?? string.Empty);
+                RefreshBackstageInfoProtectionButton();
+                continue;
+            }
 
-        ConfigureBackstageInfoActionButton(
-            InfoCheckAccessibilityButton,
-            UiText.Get("MainWindow_Text_CheckAccessibility"),
-            UiText.Get("MainWindow_AutomationHelpText_FindMergedCellsBlankTableHeadersObjectsMissingAlternateTextAndChartsWith_AD813E90"),
-            UiText.Get("MainWindow_TooltipTitle_CheckAccessibility"),
-            UiText.Get("MainWindow_TooltipDescription_FindMergedCellsBlankTableHeadersObjectsMissingAlternateTextAndChartsWith_4FECDB20"),
-            "BackstageInfoCheckAccessibilityButton",
-            "CA",
-            InfoAccessibilityCheckerBtn_Click);
-
-        ConfigureBackstageInfoActionButton(
-            InfoWorkbookStatisticsButton,
-            UiText.Get("MainWindow_Content_WorkbookStatistics"),
-            UiText.Get("MainWindow_AutomationHelpText_ShowWorkbookCountsForSheetsCellsFormulasCommentsAndObjects"),
-            UiText.Get("MainWindow_TooltipTitle_WorkbookStatistics"),
-            UiText.Get("MainWindow_TooltipDescription_ShowWorkbookCountsForSheetsCellsFormulasCommentsAndObjects"),
-            "BackstageInfoWorkbookStatisticsButton",
-            "W",
-            InfoWorkbookStatisticsBtn_Click);
-
-        ConfigureBackstageInfoActionButton(
-            InfoErrorCheckingButton,
-            UiText.Get("MainWindow_Content_ErrorChecking"),
-            UiText.Get("MainWindow_TooltipDescription_CheckForCommonErrorsInTheFormulasOnThisSheetOrOpenErrorCheckingOptions"),
-            UiText.Get("MainWindow_TooltipTitle_ErrorChecking"),
-            UiText.Get("MainWindow_TooltipDescription_CheckForCommonErrorsInTheFormulasOnThisSheetOrOpenErrorCheckingOptions"),
-            "BackstageInfoErrorCheckingButton",
-            "EC",
-            InfoErrorCheckingBtn_Click);
+            ConfigureBackstageInfoActionButton(
+                ResolveBackstageInfoActionButton(action.Id),
+                UiText.Get(action.LabelKey),
+                UiText.Get(action.AutomationHelpTextKey ?? action.TooltipDescriptionKey ?? action.LabelKey),
+                UiText.Get(action.TooltipTitleKey ?? action.LabelKey),
+                UiText.Get(action.TooltipDescriptionKey ?? action.AutomationHelpTextKey ?? action.LabelKey),
+                action.AutomationId,
+                action.KeyTip ?? string.Empty,
+                ResolveBackstageInfoActionHandler(action.Id));
+        }
     }
 
     private static void ConfigureBackstageInfoActionButton(
@@ -104,6 +91,24 @@ public partial class MainWindow
         RibbonTooltip.SetDescription(button, tooltipDescription);
         RibbonTooltip.SetKeyTip(button, keyTip);
     }
+
+    private Button ResolveBackstageInfoActionButton(FreeXBackstageInfoActionId id) =>
+        id switch
+        {
+            FreeXBackstageInfoActionId.CheckAccessibility => InfoCheckAccessibilityButton,
+            FreeXBackstageInfoActionId.WorkbookStatistics => InfoWorkbookStatisticsButton,
+            FreeXBackstageInfoActionId.ErrorChecking => InfoErrorCheckingButton,
+            _ => throw new ArgumentOutOfRangeException(nameof(id), id, null)
+        };
+
+    private RoutedEventHandler ResolveBackstageInfoActionHandler(FreeXBackstageInfoActionId id) =>
+        id switch
+        {
+            FreeXBackstageInfoActionId.CheckAccessibility => InfoAccessibilityCheckerBtn_Click,
+            FreeXBackstageInfoActionId.WorkbookStatistics => InfoWorkbookStatisticsBtn_Click,
+            FreeXBackstageInfoActionId.ErrorChecking => InfoErrorCheckingBtn_Click,
+            _ => throw new ArgumentOutOfRangeException(nameof(id), id, null)
+        };
 
     private bool TryHandleBackstageShellFocusCycle(bool reverse)
     {

@@ -59,20 +59,14 @@ public sealed partial class MainWindow
         // File section
         content.Children.Add(CreateBackstageSectionHeader(UiText.Get("Backstage_Info_FileSectionHeader")));
         var fileGrid = CreateBackstageDetailGrid();
-        AddBackstageDetailRow(fileGrid, UiText.Get("Backstage_Info_NameLabel"), display.WorkbookName, "BackstageInfoName");
-        AddBackstageDetailRow(
-            fileGrid,
-            UiText.Get("Backstage_Info_PathLabel"),
-            display.FilePath,
-            "BackstageInfoPath");
-        AddBackstageDetailRow(fileGrid, UiText.Get("Backstage_Info_FormatLabel"), display.Format, "BackstageInfoFormat");
-        AddBackstageDetailRow(fileGrid, UiText.Get("Backstage_Info_SizeLabel"), display.FileSize, "BackstageInfoSize");
-        AddBackstageDetailRow(fileGrid, UiText.Get("Backstage_Info_ModifiedLabel"), display.LastModified, "BackstageInfoModified");
-        AddBackstageDetailRow(
-            fileGrid,
-            UiText.Get("Backstage_Info_SheetsLabel"),
-            display.SheetCount,
-            "BackstageInfoSheets");
+        foreach (var detail in FreeXBackstagePaneCatalog.BuildInfoDetails(FreeXBackstageInfoSurface.AvaloniaInfoDialog))
+        {
+            AddBackstageDetailRow(
+                fileGrid,
+                UiText.Get(detail.LabelKey),
+                ResolveBackstageInfoDetailValue(detail.Id, display),
+                detail.ValueAutomationId);
+        }
         content.Children.Add(fileGrid);
 
         if (display.UnsavedChangesNote is { } unsavedChangesNote)
@@ -88,21 +82,14 @@ public sealed partial class MainWindow
             Orientation = Orientation.Horizontal,
             Spacing = 8,
         };
-        protectActions.Children.Add(CreateBackstageActionButton(
-            UiText.Get("Backstage_Info_ProtectSheetAction"),
-            "BackstageInfoProtectSheetButton",
-            dialog,
-            ProtectSheet));
-        protectActions.Children.Add(CreateBackstageActionButton(
-            UiText.Get("Backstage_Info_ProtectWorkbookAction"),
-            "BackstageInfoProtectWorkbookButton",
-            dialog,
-            ProtectWorkbook));
-        protectActions.Children.Add(CreateBackstageActionButton(
-            UiText.Get("Backstage_Info_InspectAction"),
-            "BackstageInfoInspectButton",
-            dialog,
-            () => _ = ShowReviewSummaryDialogAsync()));
+        foreach (var action in FreeXBackstagePaneCatalog.BuildInfoActions(FreeXBackstageInfoSurface.AvaloniaInfoDialog))
+        {
+            protectActions.Children.Add(CreateBackstageActionButton(
+                UiText.Get(action.LabelKey),
+                action.AutomationId,
+                dialog,
+                ResolveBackstageInfoAction(action.Id)));
+        }
         content.Children.Add(protectActions);
 
         // Statistics section
@@ -169,6 +156,29 @@ public sealed partial class MainWindow
     private static WorkbookInfoDisplayStrings CreateWorkbookInfoDisplayStrings() =>
         new(UiText.Get, (key, args) => UiText.Format(key, args));
 
+    private static string ResolveBackstageInfoDetailValue(
+        FreeXBackstageInfoDetailId id,
+        WorkbookInfoDisplayPlan display) =>
+        id switch
+        {
+            FreeXBackstageInfoDetailId.WorkbookName => display.WorkbookName,
+            FreeXBackstageInfoDetailId.FilePath => display.FilePath,
+            FreeXBackstageInfoDetailId.Format => display.Format,
+            FreeXBackstageInfoDetailId.FileSize => display.FileSize,
+            FreeXBackstageInfoDetailId.LastModified => display.LastModified,
+            FreeXBackstageInfoDetailId.SheetCount => display.SheetCount,
+            _ => throw new ArgumentOutOfRangeException(nameof(id), id, null)
+        };
+
+    private Action ResolveBackstageInfoAction(FreeXBackstageInfoActionId id) =>
+        id switch
+        {
+            FreeXBackstageInfoActionId.ProtectSheet => ProtectSheet,
+            FreeXBackstageInfoActionId.ProtectWorkbook => ProtectWorkbook,
+            FreeXBackstageInfoActionId.InspectWorkbook => () => _ = ShowReviewSummaryDialogAsync(),
+            _ => throw new ArgumentOutOfRangeException(nameof(id), id, null)
+        };
+
     // ── File ▸ Export ────────────────────────────────────────────────────────────
     private void ShowBackstageExport() => _ = ShowBackstageExportDialogAsync();
 
@@ -214,12 +224,12 @@ public sealed partial class MainWindow
             var radio = new RadioButton
             {
                 GroupName = "BackstageExportScope",
-                Content = FormatExportScopeLabel(option.Scope, option.IsAvailable),
+                Content = UiText.Get(FreeXBackstagePaneCatalog.GetExportScopeLabelKey(option.Scope, option.IsAvailable)),
                 IsEnabled = option.IsAvailable,
                 IsChecked = option.IsDefault,
                 Margin = new Thickness(0, 2),
             };
-            AutomationProperties.SetAutomationId(radio, "BackstageExportScope_" + option.Scope);
+            AutomationProperties.SetAutomationId(radio, FreeXBackstagePaneCatalog.GetExportScopeAutomationId(option.Scope));
             var capturedScope = option.Scope;
             radio.IsCheckedChanged += (_, _) =>
             {
@@ -237,13 +247,11 @@ public sealed partial class MainWindow
             var formatRadio = new RadioButton
             {
                 GroupName = "BackstageExportFormat",
-                Content = outputKind == WorkbookExportPrintOutputKind.Xps
-                    ? UiText.Get("Backstage_Export_FormatXps")
-                    : UiText.Get("Backstage_Export_FormatPdf"),
+                Content = UiText.Get(FreeXBackstagePaneCatalog.GetExportOutputKindLabelKey(outputKind)),
                 IsChecked = outputKind == scopePlan.DefaultOutputKind,
                 Margin = new Thickness(0, 2),
             };
-            AutomationProperties.SetAutomationId(formatRadio, "BackstageExportFormat_" + outputKind);
+            AutomationProperties.SetAutomationId(formatRadio, FreeXBackstagePaneCatalog.GetExportOutputKindAutomationId(outputKind));
             var capturedKind = outputKind;
             formatRadio.IsCheckedChanged += (_, _) =>
             {
@@ -308,16 +316,6 @@ public sealed partial class MainWindow
         await dialog.ShowDialog(this);
     }
 
-    private static string FormatExportScopeLabel(WorkbookExportPrintScope scope, bool isAvailable) =>
-        scope switch
-        {
-            WorkbookExportPrintScope.SelectedRange => isAvailable
-                ? UiText.Get("Backstage_Export_ScopeSelection")
-                : UiText.Get("Backstage_Export_ScopeSelectionUnavailable"),
-            WorkbookExportPrintScope.VisibleWorkbook => UiText.Get("Backstage_Export_ScopeWorkbook"),
-            _ => UiText.Get("Backstage_Export_ScopeActiveSheet")
-        };
-
     // ── File ▸ Account ────────────────────────────────────────────────────────────
     private void ShowBackstageAccount() => _ = ShowBackstageAccountDialogAsync();
 
@@ -345,16 +343,14 @@ public sealed partial class MainWindow
 
         content.Children.Add(CreateBackstageSectionHeader(UiText.Get("Backstage_Account_ProductSectionHeader")));
         var grid = CreateBackstageDetailGrid();
-        AddBackstageDetailRow(grid, UiText.Get("Backstage_Account_ProductLabel"), plan.ProductName, "BackstageAccountProduct");
-        AddBackstageDetailRow(grid, UiText.Get("Backstage_Account_VersionLabel"), plan.VersionText, "BackstageAccountVersion");
-        AddBackstageDetailRow(grid, UiText.Get("Backstage_Account_DeviceLabel"), plan.DeviceName, "BackstageAccountDevice");
-        AddBackstageDetailRow(
-            grid,
-            UiText.Get("Backstage_Account_UserLabel"),
-            string.IsNullOrWhiteSpace(plan.UserName)
-                ? UiText.Get("Backstage_Account_UserLocalOnly")
-                : plan.UserName,
-            "BackstageAccountUser");
+        foreach (var detail in FreeXBackstagePaneCatalog.BuildAccountDetails())
+        {
+            AddBackstageDetailRow(
+                grid,
+                UiText.Get(detail.LabelKey),
+                ResolveBackstageAccountDetailValue(detail.Id, plan),
+                detail.ValueAutomationId);
+        }
         content.Children.Add(grid);
 
         content.Children.Add(CreateBackstageNote(UiText.Get("Backstage_Account_LocalOnlyNote"), "BackstageAccountLocalOnlyNote"));
@@ -364,25 +360,23 @@ public sealed partial class MainWindow
             Orientation = Orientation.Horizontal,
             Spacing = 8,
         };
-        if (plan.OptionsAvailable)
+        foreach (var action in FreeXBackstagePaneCatalog.BuildAccountActions(plan.OptionsAvailable))
         {
             actionRow.Children.Add(CreateBackstageActionButton(
-                UiText.Get("Backstage_Account_OptionsButton"),
-                "BackstageAccountOptionsButton",
+                UiText.Get(action.LabelKey),
+                action.AutomationId,
                 dialog,
-                ShowOptions));
+                ResolveBackstageAccountAction(action.Id)));
         }
-        actionRow.Children.Add(CreateBackstageActionButton(
-            UiText.Get("Backstage_Account_LegalNoticesButton"),
-            "BackstageAccountLegalNoticesButton",
-            dialog,
-            () => _ = ShowLegalNoticesDialogAsync()));
         content.Children.Add(actionRow);
 
         content.Children.Add(CreateBackstageSectionHeader(UiText.Get("Backstage_Account_NoticesSectionHeader")));
-        content.Children.Add(CreateBackstageNote(plan.TrademarkNotice, "BackstageAccountTrademark"));
-        content.Children.Add(CreateBackstageNote(plan.LicenseNotice, "BackstageAccountLicense"));
-        content.Children.Add(CreateBackstageNote(plan.PrivacyNotice, "BackstageAccountPrivacy"));
+        foreach (var notice in FreeXBackstagePaneCatalog.BuildAccountNotices())
+        {
+            content.Children.Add(CreateBackstageNote(
+                ResolveBackstageAccountNoticeValue(notice.Id, plan),
+                notice.AutomationId));
+        }
 
         var closeButton = new Button
         {
@@ -417,6 +411,39 @@ public sealed partial class MainWindow
         dialog.Opened += (_, _) => closeButton.Focus();
         await dialog.ShowDialog(this);
     }
+
+    private static string ResolveBackstageAccountDetailValue(
+        FreeXBackstageAccountDetailId id,
+        LocalAccountInfoPlan plan) =>
+        id switch
+        {
+            FreeXBackstageAccountDetailId.Product => plan.ProductName,
+            FreeXBackstageAccountDetailId.Version => plan.VersionText,
+            FreeXBackstageAccountDetailId.Device => plan.DeviceName,
+            FreeXBackstageAccountDetailId.User => string.IsNullOrWhiteSpace(plan.UserName)
+                ? UiText.Get("Backstage_Account_UserLocalOnly")
+                : plan.UserName,
+            _ => throw new ArgumentOutOfRangeException(nameof(id), id, null)
+        };
+
+    private Action ResolveBackstageAccountAction(FreeXBackstageAccountActionId id) =>
+        id switch
+        {
+            FreeXBackstageAccountActionId.Options => ShowOptions,
+            FreeXBackstageAccountActionId.LegalNotices => () => _ = ShowLegalNoticesDialogAsync(),
+            _ => throw new ArgumentOutOfRangeException(nameof(id), id, null)
+        };
+
+    private static string ResolveBackstageAccountNoticeValue(
+        FreeXBackstageAccountNoticeId id,
+        LocalAccountInfoPlan plan) =>
+        id switch
+        {
+            FreeXBackstageAccountNoticeId.Trademark => plan.TrademarkNotice,
+            FreeXBackstageAccountNoticeId.License => plan.LicenseNotice,
+            FreeXBackstageAccountNoticeId.Privacy => plan.PrivacyNotice,
+            _ => throw new ArgumentOutOfRangeException(nameof(id), id, null)
+        };
 
     private static string SafeEnvironment(Func<string> read)
     {
