@@ -73,6 +73,7 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         captureSource.Should().Contain("CreateParityCapturedQatButton(RibbonCommandIconKind.ChevronDown, width: 12, iconSize: 9, isEnabled: false)");
         captureSource.Should().Contain("CreateParityCapturedTitleBarButton(RibbonCommandIconKind.WindowMinimize)");
         hostCaptureSource.Should().Contain("EnsureFormulaBarVisibleForParityCapture(window);");
+        hostCaptureSource.Should().Contain("window?.SuppressNextClosePrompt();");
         hostCaptureSource.Should().Contain("window.FindName(\"FormulaBarBorder\")");
         captureSource.Should().Contain("CaptureBackstageSurface(outputDirectory, surfaceId)");
         captureSource.Should().Contain("CreateParityCapturedBackstageSurface(surfaceId)");

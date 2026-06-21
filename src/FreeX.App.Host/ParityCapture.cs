@@ -199,6 +199,7 @@ internal static class ParityCapture
         finally
         {
             try { window?.Hide(); } catch { /* best-effort teardown */ }
+            try { window?.SuppressNextClosePrompt(); } catch { /* best-effort teardown */ }
             try { window?.Close(); } catch { /* best-effort teardown */ }
             PumpDispatcher();
         }
