@@ -411,7 +411,8 @@ public partial class MainWindow
                 return;
             }
 
-            if (_ribbonKeyTipMode.IsActive && Keyboard.Modifiers == ModifierKeys.None)
+            if (_ribbonKeyTipMode.IsActive &&
+                IsRibbonKeyTipContinuationModifierState(Keyboard.Modifiers))
             {
                 HandleActiveRibbonKeyTip(keyTipKey);
                 e.Handled = true;

@@ -21,6 +21,9 @@ public partial class MainWindow
     private static bool IsStandaloneAltKey(Key key) =>
         StandaloneAltKeyTipTracker.IsStandaloneAltKey(key);
 
+    private static bool IsRibbonKeyTipContinuationModifierState(ModifierKeys modifiers) =>
+        modifiers is ModifierKeys.None or ModifierKeys.Alt;
+
     private void EnterRibbonKeyTipMode(RibbonKeyTipScope scope)
     {
         _ribbonKeyTipMode.Enter();

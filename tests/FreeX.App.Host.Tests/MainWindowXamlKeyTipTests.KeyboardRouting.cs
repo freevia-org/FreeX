@@ -93,6 +93,24 @@ public sealed partial class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void AltHeldKeyTipContinuation_IsHandledBeforeDirectTopLevelAltRouting()
+    {
+        var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
+        var keyTipSource = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyTips.cs");
+
+        var activeContinuationIndex = selectionSource.IndexOf(
+            "IsRibbonKeyTipContinuationModifierState(Keyboard.Modifiers)",
+            StringComparison.Ordinal);
+        var directTopLevelIndex = selectionSource.IndexOf(
+            "if (Keyboard.Modifiers == ModifierKeys.Alt && TryHandleDirectRibbonKeyTip(keyTipKey))",
+            StringComparison.Ordinal);
+
+        activeContinuationIndex.Should().BeGreaterThanOrEqualTo(0);
+        directTopLevelIndex.Should().BeGreaterThan(activeContinuationIndex);
+        keyTipSource.Should().Contain("modifiers is ModifierKeys.None or ModifierKeys.Alt");
+    }
+
+    [Fact]
     public void F6ShellFocusCycle_ContinuesWhenRegionRejectsFocus()
     {
         var keyboardFocusSource = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyboardFocus.cs");
