@@ -28,6 +28,20 @@ public static class AppStoragePathPlanner
             OptionsFileName);
     }
 
+    public static string GetOptionsFilePathLabelOrFallback(IApplicationDataPathProvider pathProvider)
+    {
+        ArgumentNullException.ThrowIfNull(pathProvider);
+
+        try
+        {
+            return GetOptionsFilePath(pathProvider);
+        }
+        catch
+        {
+            return $"%LOCALAPPDATA%\\{ProductDirectoryName}";
+        }
+    }
+
     public static string ResolveOptionsFilePath(
         IApplicationDataPathProvider pathProvider,
         string? overridePath)

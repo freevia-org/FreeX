@@ -1721,16 +1721,7 @@ public sealed class MainWindow : Window
 
     // Shows that AppProduct = "FreeW" routes the shared storage helpers to FreeW's own folder.
     private static string ResolveDataFolderLabel()
-    {
-        try
-        {
-            return AppStoragePathPlanner.GetOptionsFilePath(PlatformApplicationDataPathProvider.LocalInstance);
-        }
-        catch
-        {
-            return $"%LOCALAPPDATA%\\{AppProduct.Current.ProductDirectoryName}";
-        }
-    }
+        => AppStoragePathPlanner.GetOptionsFilePathLabelOrFallback(PlatformApplicationDataPathProvider.LocalInstance);
 
     // A sample document that exercises the model's styles + run/paragraph formatting.
     private static TextDocument CreateSampleDocument()
@@ -1852,38 +1843,9 @@ public sealed class MainWindow : Window
     // text, a darker hover/press, comfortable padding. Distinct from the flat content-tab headers so it
     // reads as the Backstage entry point. Authored in code to keep parity with the code-only shell.
     private static Style BuildFileTabStyle()
-    {
         // FreeX accent (#0F6D8C teal) with a darker hover, so the File pill reads as the accent-coloured
         // Backstage entry against the deep-navy title bar.
-        var accent = Freeze(Color.FromRgb(0x0F, 0x6D, 0x8C));
-        var accentHover = Freeze(Color.FromRgb(0x0B, 0x55, 0x6E));
-
-        var style = new Style(typeof(TabItem));
-        style.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(16, 6, 16, 6)));
-        style.Setters.Add(new Setter(Control.FontSizeProperty, 12.0));
-        style.Setters.Add(new Setter(Control.ForegroundProperty, Brushes.White));
-        style.Setters.Add(new Setter(Control.FontWeightProperty, FontWeights.SemiBold));
-        style.Setters.Add(new Setter(FrameworkElement.MarginProperty, new Thickness(0, 0, 2, 0)));
-        style.Setters.Add(new Setter(UIElement.FocusableProperty, true));
-
-        var border = new FrameworkElementFactory(typeof(Border), "FileTabBorder");
-        border.SetValue(Border.BackgroundProperty, accent);
-        border.SetValue(Border.PaddingProperty, new TemplateBindingExtension(Control.PaddingProperty));
-        border.SetValue(FrameworkElement.CursorProperty, Cursors.Hand);
-
-        var content = new FrameworkElementFactory(typeof(ContentPresenter));
-        content.SetValue(ContentPresenter.ContentSourceProperty, "Header");
-        content.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
-        content.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
-        border.AppendChild(content);
-
-        var template = new ControlTemplate(typeof(TabItem)) { VisualTree = border };
-        var hover = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
-        hover.Setters.Add(new Setter(Border.BackgroundProperty, accentHover, "FileTabBorder"));
-        template.Triggers.Add(hover);
-        style.Setters.Add(new Setter(Control.TemplateProperty, template));
-        return style;
-    }
+        => RibbonFileTabStyle.Build(Color.FromRgb(0x0F, 0x6D, 0x8C), Color.FromRgb(0x0B, 0x55, 0x6E));
 
     private static Brush Freeze(Color color)
     {

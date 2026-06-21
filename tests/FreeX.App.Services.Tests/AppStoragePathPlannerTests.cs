@@ -28,6 +28,14 @@ public sealed class AppStoragePathPlannerTests
     }
 
     [Fact]
+    public void GetOptionsFilePathLabelOrFallback_UsesFallbackWhenPlatformProviderFails()
+    {
+        var path = AppStoragePathPlanner.GetOptionsFilePathLabelOrFallback(new ThrowingApplicationDataPathProvider());
+
+        path.Should().Be(@"%LOCALAPPDATA%\FreeX");
+    }
+
+    [Fact]
     public void GetRecentColorsFilePath_UsesApplicationDataPathProvider()
     {
         using var temp = new TestTemporaryDirectory();
@@ -126,6 +134,11 @@ public sealed class AppStoragePathPlannerTests
     private sealed class TestApplicationDataPathProvider(string path) : IApplicationDataPathProvider
     {
         public string GetApplicationDataDirectory() => path;
+    }
+
+    private sealed class ThrowingApplicationDataPathProvider : IApplicationDataPathProvider
+    {
+        public string GetApplicationDataDirectory() => throw new InvalidOperationException("missing profile");
     }
 
     private sealed class TestDiagnosticsPathProvider(string path) : IAppDiagnosticsPathProvider
