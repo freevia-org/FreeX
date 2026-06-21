@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -34,6 +33,7 @@ internal sealed class BackstageView : UserControl
     // live in the shared Free.Shared.Shell.Wpf kit; FreeW supplies its teal link accent (#0F6D8C, matching the
     // ribbon accent) and the portrait document tile.
     private static readonly BackstageVisualKit Kit = new(Color.FromRgb(0x0F, 0x6D, 0x8C), tileWidth: 150, tileHeight: 190);
+    private static readonly BackstagePaneComposer Panes = new(Kit);
 
     private readonly DocumentView _editor;
     private readonly FileCommands _file;
@@ -91,29 +91,26 @@ internal sealed class BackstageView : UserControl
         var stats = WordCount.Of(model);
         var properties = model.Properties;
 
-        var panel = new StackPanel { MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left };
-        panel.Children.Add(Kit.HeadingText("Info"));
-
-        var path = _file.CurrentPath;
-        panel.Children.Add(Kit.Field("Document", _file.DisplayName + (_file.IsDirty ? "  (unsaved changes)" : "")));
-        panel.Children.Add(Kit.Field("Location", path ?? "Not saved yet"));
-
-        panel.Children.Add(Kit.SubHeading("Properties"));
-        panel.Children.Add(Kit.Field("Title", BackstageVisualKit.Or(properties.Title)));
-        panel.Children.Add(Kit.Field("Author", BackstageVisualKit.Or(properties.Author)));
-        panel.Children.Add(Kit.Field("Subject", BackstageVisualKit.Or(properties.Subject)));
-        panel.Children.Add(Kit.Field("Keywords", BackstageVisualKit.Or(properties.Keywords)));
-
-        var edit = Kit.LinkButton("Edit document properties…", () => { Hide(); _actions.EditProperties(); });
-        edit.Margin = new Thickness(0, 8, 0, 0);
-        panel.Children.Add(edit);
-
-        panel.Children.Add(Kit.SubHeading("Statistics"));
-        panel.Children.Add(Kit.Field("Words", stats.Words.ToString()));
-        panel.Children.Add(Kit.Field("Characters", stats.CharactersWithSpaces.ToString()));
-        panel.Children.Add(Kit.Field("Paragraphs", stats.Paragraphs.ToString()));
-
-        return Kit.Scroll(panel);
+        return Panes.BuildInfoPane(new BackstageInfoPaneSpec(
+            DocumentKindLabel: "Document",
+            DisplayName: _file.DisplayName,
+            IsDirty: _file.IsDirty,
+            Location: _file.CurrentPath,
+            Properties:
+            [
+                new("Title", BackstageVisualKit.Or(properties.Title)),
+                new("Author", BackstageVisualKit.Or(properties.Author)),
+                new("Subject", BackstageVisualKit.Or(properties.Subject)),
+                new("Keywords", BackstageVisualKit.Or(properties.Keywords)),
+            ],
+            Statistics:
+            [
+                new("Words", stats.Words.ToString()),
+                new("Characters", stats.CharactersWithSpaces.ToString()),
+                new("Paragraphs", stats.Paragraphs.ToString()),
+            ],
+            EditPropertiesText: "Edit document properties…",
+            EditProperties: () => { Hide(); _actions.EditProperties(); }));
     }
 
     // ── Export pane ────────────────────────────────────────────────────────────
@@ -156,64 +153,21 @@ internal sealed class BackstageView : UserControl
     // Lists RecentFilesStore entries (name + path); a click opens via the host and closes the backstage.
     private UIElement BuildRecentPane()
     {
-        var panel = new StackPanel { MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left };
-        panel.Children.Add(Kit.HeadingText("Recent"));
-
-        var entries = _file.RecentEntries;
-        if (entries.Count == 0)
-        {
-            panel.Children.Add(new TextBlock
-            {
-                Text = "No recent documents.",
-                Foreground = Kit.Muted,
-                Margin = new Thickness(0, 4, 0, 0)
-            });
-            return panel;
-        }
-
-        foreach (var entry in entries)
-        {
-            var path = entry.Path;
-            var item = new StackPanel { Margin = new Thickness(0, 0, 0, 12), Cursor = System.Windows.Input.Cursors.Hand };
-
-            item.Children.Add(new TextBlock
-            {
-                Text = Path.GetFileName(path),
-                Foreground = Kit.Link,
-                FontSize = 14
-            });
-            item.Children.Add(new TextBlock
-            {
-                Text = path,
-                Foreground = Kit.Muted,
-                FontSize = 11,
-                TextTrimming = TextTrimming.CharacterEllipsis
-            });
-            item.MouseLeftButtonUp += (_, _) => { Hide(); _actions.OpenPath(path); };
-            panel.Children.Add(item);
-        }
-
-        return Kit.Scroll(panel);
+        return Panes.BuildRecentPane(new BackstageRecentPaneSpec(
+            _file.RecentEntries.Select(entry => entry.Path).ToArray(),
+            "No recent documents.",
+            path => { Hide(); _actions.OpenPath(path); }));
     }
 
     // ── New pane ───────────────────────────────────────────────────────────────
     // A "Blank document" tile (the only template FreeW ships), styled like Office's New gallery.
     private UIElement BuildNewPane()
     {
-        var panel = new StackPanel { HorizontalAlignment = HorizontalAlignment.Left };
-        panel.Children.Add(Kit.HeadingText("New"));
-
-        var gallery = new WrapPanel { Orientation = Orientation.Horizontal };
-        gallery.Children.Add(Kit.TemplateTile("Blank document", () => { Hide(); _actions.New(); }));
-        panel.Children.Add(gallery);
-
-        panel.Children.Add(new TextBlock
-        {
-            Text = "More templates are not available in this build.",
-            Foreground = Kit.Muted,
-            Margin = new Thickness(0, 18, 0, 0)
-        });
-        return panel;
+        return Panes.BuildTemplatePane(new BackstageTemplatePaneSpec(
+            "New",
+            "Blank document",
+            "More templates are not available in this build.",
+            () => { Hide(); _actions.New(); }));
     }
 
     // ── Options pane ───────────────────────────────────────────────────────────
@@ -224,28 +178,16 @@ internal sealed class BackstageView : UserControl
     {
         var options = _actions.CurrentOptions();
 
-        var panel = new StackPanel { MaxWidth = 560, HorizontalAlignment = HorizontalAlignment.Left };
-        panel.Children.Add(Kit.HeadingText("Options"));
-        panel.Children.Add(new TextBlock
-        {
-            Text = "FreeW application settings. These persist between sessions and apply immediately.",
-            Foreground = Kit.Muted,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 16)
-        });
-
-        panel.Children.Add(Kit.Field("Recent files kept", options.RecentFilesCap.ToString()));
-        panel.Children.Add(Kit.Field("Default save format", options.DefaultSaveFormat));
-        panel.Children.Add(Kit.Field(
-            "UI language",
-            string.IsNullOrEmpty(options.UiLanguage) ? "System default" : options.UiLanguage));
-        panel.Children.Add(Kit.Field("Data folder", _actions.DataFolder()));
-
-        var edit = Kit.LinkButton("Edit options…", () => { Hide(); _actions.EditOptions(); });
-        edit.Margin = new Thickness(0, 14, 0, 0);
-        panel.Children.Add(edit);
-
-        return panel;
+        return Panes.BuildOptionsPane(new BackstageOptionsPaneSpec(
+            "FreeW application settings. These persist between sessions and apply immediately.",
+            [
+                new("Recent files kept", options.RecentFilesCap.ToString()),
+                new("Default save format", options.DefaultSaveFormat),
+                new("UI language", string.IsNullOrEmpty(options.UiLanguage) ? "System default" : options.UiLanguage),
+                new("Data folder", _actions.DataFolder()),
+            ],
+            EditText: "Edit options…",
+            Edit: () => { Hide(); _actions.EditOptions(); }));
     }
 }
 

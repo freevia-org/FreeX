@@ -1,4 +1,3 @@
-using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -28,6 +27,7 @@ internal sealed class BackstageView : UserControl
     // The code-built backstage-pane visual helpers (Heading/SubHeading/Field/TemplateTile/Scroll/Or) live in
     // the shared Free.Shared.Shell.Wpf kit; FreeP supplies its link accent (brick) and the landscape slide tile.
     private static readonly BackstageVisualKit Kit = new(Color.FromRgb(0xB7, 0x47, 0x2A), tileWidth: 190, tileHeight: 150);
+    private static readonly BackstagePaneComposer Panes = new(Kit);
 
     private readonly Func<Presentation> _getModel;
     private readonly FileCommands _file;
@@ -76,79 +76,41 @@ internal sealed class BackstageView : UserControl
         var model = _getModel();
         var properties = model.Properties;
 
-        var panel = new StackPanel { MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left };
-        panel.Children.Add(Kit.HeadingText("Info"));
-
-        var path = _file.CurrentPath;
-        panel.Children.Add(Kit.Field("Presentation", _file.DisplayName + (_file.IsDirty ? "  (unsaved changes)" : "")));
-        panel.Children.Add(Kit.Field("Location", path ?? "Not saved yet"));
-
-        panel.Children.Add(Kit.SubHeading("Properties"));
-        panel.Children.Add(Kit.Field("Title", BackstageVisualKit.Or(properties.Title)));
-        panel.Children.Add(Kit.Field("Author", BackstageVisualKit.Or(properties.Author)));
-        panel.Children.Add(Kit.Field("Subject", BackstageVisualKit.Or(properties.Subject)));
-        panel.Children.Add(Kit.Field("Keywords", BackstageVisualKit.Or(properties.Keywords)));
-
-        panel.Children.Add(Kit.SubHeading("Statistics"));
-        panel.Children.Add(Kit.Field("Slides", model.Slides.Count.ToString()));
-
-        return Kit.Scroll(panel);
+        return Panes.BuildInfoPane(new BackstageInfoPaneSpec(
+            DocumentKindLabel: "Presentation",
+            DisplayName: _file.DisplayName,
+            IsDirty: _file.IsDirty,
+            Location: _file.CurrentPath,
+            Properties:
+            [
+                new("Title", BackstageVisualKit.Or(properties.Title)),
+                new("Author", BackstageVisualKit.Or(properties.Author)),
+                new("Subject", BackstageVisualKit.Or(properties.Subject)),
+                new("Keywords", BackstageVisualKit.Or(properties.Keywords)),
+            ],
+            Statistics:
+            [
+                new("Slides", model.Slides.Count.ToString()),
+            ]));
     }
 
     // ── Recent pane ────────────────────────────────────────────────────────────
     private UIElement BuildRecentPane()
     {
-        var panel = new StackPanel { MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left };
-        panel.Children.Add(Kit.HeadingText("Recent"));
-
-        var entries = _file.RecentEntries;
-        if (entries.Count == 0)
-        {
-            panel.Children.Add(new TextBlock
-            {
-                Text = "No recent presentations.",
-                Foreground = Kit.Muted,
-                Margin = new Thickness(0, 4, 0, 0)
-            });
-            return panel;
-        }
-
-        foreach (var entry in entries)
-        {
-            var path = entry.Path;
-            var item = new StackPanel { Margin = new Thickness(0, 0, 0, 12), Cursor = System.Windows.Input.Cursors.Hand };
-            item.Children.Add(new TextBlock { Text = Path.GetFileName(path), Foreground = Kit.Link, FontSize = 14 });
-            item.Children.Add(new TextBlock
-            {
-                Text = path,
-                Foreground = Kit.Muted,
-                FontSize = 11,
-                TextTrimming = TextTrimming.CharacterEllipsis
-            });
-            item.MouseLeftButtonUp += (_, _) => { Hide(); _actions.OpenPath(path); };
-            panel.Children.Add(item);
-        }
-
-        return Kit.Scroll(panel);
+        return Panes.BuildRecentPane(new BackstageRecentPaneSpec(
+            _file.RecentEntries.Select(entry => entry.Path).ToArray(),
+            "No recent presentations.",
+            path => { Hide(); _actions.OpenPath(path); }));
     }
 
     // ── New pane ───────────────────────────────────────────────────────────────
     private UIElement BuildNewPane()
     {
-        var panel = new StackPanel { HorizontalAlignment = HorizontalAlignment.Left };
-        panel.Children.Add(Kit.HeadingText("New"));
-
-        var gallery = new WrapPanel { Orientation = Orientation.Horizontal };
-        gallery.Children.Add(Kit.TemplateTile("Blank presentation", () => { Hide(); _actions.New(); }));
-        panel.Children.Add(gallery);
-
-        panel.Children.Add(new TextBlock
-        {
-            Text = "More templates are not available in this build.",
-            Foreground = Kit.Muted,
-            Margin = new Thickness(0, 18, 0, 0)
-        });
-        return panel;
+        return Panes.BuildTemplatePane(new BackstageTemplatePaneSpec(
+            "New",
+            "Blank presentation",
+            "More templates are not available in this build.",
+            () => { Hide(); _actions.New(); }));
     }
 
     // ── Options pane ───────────────────────────────────────────────────────────
@@ -156,24 +118,14 @@ internal sealed class BackstageView : UserControl
     {
         var options = _actions.CurrentOptions();
 
-        var panel = new StackPanel { MaxWidth = 560, HorizontalAlignment = HorizontalAlignment.Left };
-        panel.Children.Add(Kit.HeadingText("Options"));
-        panel.Children.Add(new TextBlock
-        {
-            Text = "FreeP application settings. These persist between sessions.",
-            Foreground = Kit.Muted,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 16)
-        });
-
-        panel.Children.Add(Kit.Field("Recent files kept", options.RecentFilesCap.ToString()));
-        panel.Children.Add(Kit.Field("Default save format", options.DefaultSaveFormat));
-        panel.Children.Add(Kit.Field(
-            "UI language",
-            string.IsNullOrEmpty(options.UiLanguage) ? "System default" : options.UiLanguage));
-        panel.Children.Add(Kit.Field("Data folder", _actions.DataFolder()));
-
-        return panel;
+        return Panes.BuildOptionsPane(new BackstageOptionsPaneSpec(
+            "FreeP application settings. These persist between sessions.",
+            [
+                new("Recent files kept", options.RecentFilesCap.ToString()),
+                new("Default save format", options.DefaultSaveFormat),
+                new("UI language", string.IsNullOrEmpty(options.UiLanguage) ? "System default" : options.UiLanguage),
+                new("Data folder", _actions.DataFolder()),
+            ]));
     }
 }
 
