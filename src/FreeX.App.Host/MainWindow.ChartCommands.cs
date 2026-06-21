@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
+using FreeX.App.Presentation.Charts;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -23,12 +24,10 @@ public partial class MainWindow
         {
             var currentRange = SheetGrid.SelectedRange ?? range;
             var sheet = _workbook.GetSheet(_currentSheetId);
-            var dataRange = sheet is null
-                ? currentRange
-                : ChartDataSourcePlanner.ResolveInsertionRange(sheet, currentRange);
-            command = new AddChartSheetCommand(
+            command = ChartInsertionPlanner.BuildChartSheetCommand(
+                sheet,
                 _currentSheetId,
-                dataRange,
+                currentRange,
                 ChartType.Column,
                 "Chart");
             return command;
@@ -70,30 +69,23 @@ public partial class MainWindow
                 currentRange =>
                 {
                     var sheet = _workbook.GetSheet(_currentSheetId);
-                    var dataRange = sheet is null
-                        ? currentRange
-                        : ChartDataSourcePlanner.ResolveInsertionRange(sheet, currentRange);
-                    var placement = sheet is null
-                        ? new ChartInsertionPlacement(
-                            20,
-                            20,
-                            ChartInsertionPlacementPlanner.DefaultChartWidth,
-                            ChartInsertionPlacementPlanner.DefaultChartHeight)
-                        : ChartInsertionPlacementPlanner.CreatePlacement(
+                    var plan = sheet is null
+                        ? ChartInsertionPlanner.CreateEmbeddedChartPlan(
+                            _currentSheetId,
+                            currentRange,
+                            type,
+                            "Chart",
+                            ChartInsertionPlanner.DefaultPlacement)
+                        : ChartInsertionPlanner.CreateEmbeddedChartPlan(
                             sheet,
-                            dataRange,
-                            SheetGrid.Viewport,
-                            CalculateViewportAvailableWidth(SheetGrid.ActualWidth, SheetGrid.ActualRowHeaderWidth, _zoomLevel),
-                            Math.Max(0, (SheetGrid.ActualHeight - SheetGrid.EffectiveColHeaderHeight) / _zoomLevel));
-                    command = new AddChartCommand(
-                        _currentSheetId,
-                        dataRange,
-                        type,
-                        "Chart",
-                        placement.Left,
-                        placement.Top,
-                        placement.Width,
-                        placement.Height);
+                            currentRange,
+                            type,
+                            new ChartInsertionViewport(
+                                SheetGrid.Viewport,
+                                CalculateViewportAvailableWidth(SheetGrid.ActualWidth, SheetGrid.ActualRowHeaderWidth, _zoomLevel),
+                                Math.Max(0, (SheetGrid.ActualHeight - SheetGrid.EffectiveColHeaderHeight) / _zoomLevel)),
+                            "Chart");
+                    command = plan.Command;
                     return command;
                 }))
             return;

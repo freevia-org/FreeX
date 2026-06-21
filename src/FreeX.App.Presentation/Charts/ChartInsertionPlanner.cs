@@ -1,20 +1,156 @@
 using FreeX.Core.Calc;
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Presentation.Charts;
 
-internal readonly record struct ChartInsertionPlacement(
+public readonly record struct ChartInsertionPlacement(
     double Left,
     double Top,
     double Width,
     double Height);
 
-internal static class ChartInsertionPlacementPlanner
+public readonly record struct ChartInsertionViewport(
+    ViewportModel? Viewport,
+    double AvailableWidth,
+    double AvailableHeight);
+
+public readonly record struct ChartInsertionPlan(
+    GridRange DataRange,
+    ChartInsertionPlacement Placement,
+    AddChartCommand Command);
+
+public static class ChartInsertionPlanner
 {
+    public const double DefaultLeft = 20d;
+    public const double DefaultTop = 20d;
     public const double DefaultChartWidth = 400d;
     public const double DefaultChartHeight = 300d;
     private const double PlacementGap = 16d;
     private const double ViewportInset = 20d;
+
+    public static ChartInsertionPlacement DefaultPlacement { get; } =
+        new(DefaultLeft, DefaultTop, DefaultChartWidth, DefaultChartHeight);
+
+    public static ChartType? ChartTypeForRibbonCommand(string commandId) => commandId switch
+    {
+        "insert.column" => ChartType.Column,
+        "insert.colClustered" => ChartType.Column,
+        "insert.colStacked" => ChartType.StackedColumn,
+        "insert.col100" => ChartType.PercentStackedColumn,
+        "insert.bar" => ChartType.Bar,
+        "insert.line" => ChartType.Line,
+        "insert.area" => ChartType.Area,
+        "insert.pie" => ChartType.Pie,
+        "insert.doughnut" => ChartType.Doughnut,
+        "insert.scatter" => ChartType.Scatter,
+        "insert.recommended" => ChartType.Column,
+
+        "Recommended Charts" => ChartType.Column,
+        "Column Chart" => ChartType.Column,
+        "Stacked Column Chart" => ChartType.StackedColumn,
+        "100% Stacked Column Chart" => ChartType.PercentStackedColumn,
+        "Bar Chart" => ChartType.Bar,
+        "Stacked Bar Chart" => ChartType.StackedBar,
+        "100% Stacked Bar Chart" => ChartType.PercentStackedBar,
+        "Line Chart" => ChartType.Line,
+        "Area Chart" => ChartType.Area,
+        "Pie Chart" => ChartType.Pie,
+        "Doughnut Chart" => ChartType.Doughnut,
+        "Scatter Chart" => ChartType.Scatter,
+        "Stock Chart" => ChartType.Stock,
+        "Bubble Chart" => ChartType.Bubble,
+        "Radar Chart" => ChartType.Radar,
+        _ => null,
+    };
+
+    public static GridRange ResolveDataRange(Sheet? sheet, GridRange selectedRange) =>
+        sheet is null
+            ? selectedRange
+            : ChartDataSourcePlanner.ResolveInsertionRange(sheet, selectedRange);
+
+    public static ChartInsertionPlan CreateEmbeddedChartPlan(
+        Sheet sheet,
+        GridRange selectedRange,
+        ChartType chartType,
+        ChartInsertionViewport viewport,
+        string? title = "Chart")
+    {
+        var dataRange = ResolveDataRange(sheet, selectedRange);
+        var placement = CreatePlacement(
+            sheet,
+            dataRange,
+            viewport.Viewport,
+            viewport.AvailableWidth,
+            viewport.AvailableHeight);
+        return CreateEmbeddedChartPlan(sheet.Id, dataRange, chartType, title, placement);
+    }
+
+    public static ChartInsertionPlan CreateEmbeddedChartPlan(
+        Sheet sheet,
+        GridRange selectedRange,
+        ChartType chartType,
+        string? title = null,
+        ChartInsertionPlacement? placement = null)
+    {
+        var dataRange = ResolveDataRange(sheet, selectedRange);
+        return CreateEmbeddedChartPlan(
+            sheet.Id,
+            dataRange,
+            chartType,
+            title,
+            placement ?? DefaultPlacement);
+    }
+
+    public static ChartInsertionPlan CreateEmbeddedChartPlan(
+        SheetId sheetId,
+        GridRange dataRange,
+        ChartType chartType,
+        string? title,
+        ChartInsertionPlacement placement)
+    {
+        var command = BuildEmbeddedChartCommand(sheetId, dataRange, chartType, title, placement);
+        return new ChartInsertionPlan(dataRange, placement, command);
+    }
+
+    public static AddChartCommand BuildEmbeddedChartCommand(
+        SheetId sheetId,
+        GridRange dataRange,
+        ChartType chartType,
+        string? title,
+        ChartInsertionPlacement placement) =>
+        new(
+            sheetId,
+            dataRange,
+            chartType,
+            title,
+            placement.Left,
+            placement.Top,
+            placement.Width,
+            placement.Height);
+
+    public static AddChartCommand BuildEmbeddedChartCommand(
+        Sheet sheet,
+        GridRange selectedRange,
+        ChartType chartType,
+        string? title = null,
+        ChartInsertionPlacement? placement = null) =>
+        CreateEmbeddedChartPlan(sheet, selectedRange, chartType, title, placement).Command;
+
+    public static AddChartSheetCommand BuildChartSheetCommand(
+        Sheet? sheet,
+        SheetId sheetId,
+        GridRange selectedRange,
+        ChartType chartType,
+        string title) =>
+        BuildChartSheetCommand(sheetId, ResolveDataRange(sheet, selectedRange), chartType, title);
+
+    public static AddChartSheetCommand BuildChartSheetCommand(
+        SheetId sheetId,
+        GridRange dataRange,
+        ChartType chartType,
+        string title) =>
+        new(sheetId, dataRange, chartType, title);
 
     public static ChartInsertionPlacement CreatePlacement(
         Sheet sheet,

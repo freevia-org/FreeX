@@ -69,6 +69,23 @@ public sealed class InsertChartCommandFactoryTests
     }
 
     [Fact]
+    public void Build_WithSheetExpandsSingleCellSelectionToCurrentRegion()
+    {
+        var (workbook, sheet) = BuildPopulatedWorkbook();
+        var selection = Range(sheet.Id, 2, 1, 2, 1);
+        var expectedRange = Range(sheet.Id, 1, 1, 4, 2);
+
+        var command = InsertChartCommandFactory.Build(sheet, selection, ChartType.Column);
+        var outcome = command.Apply(new TestCommandContext(workbook));
+
+        outcome.Success.Should().BeTrue();
+        var chart = sheet.Charts.Should().ContainSingle().Subject;
+        chart.DataRange.Should().Be(expectedRange);
+        chart.Left.Should().Be(InsertChartCommandFactory.DefaultLeft);
+        chart.Top.Should().Be(InsertChartCommandFactory.DefaultTop);
+    }
+
+    [Fact]
     public void Build_TargetsRequestedRangeAndType_ForScatter()
     {
         var (workbook, sheet) = BuildPopulatedWorkbook();

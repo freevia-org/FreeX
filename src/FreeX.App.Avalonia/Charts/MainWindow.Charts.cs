@@ -164,7 +164,7 @@ public sealed partial class MainWindow
             return;
 
         var range = _session.SelectedRange;
-        var command = InsertChartCommandFactory.Build(_session.ActiveSheet.Id, range, chartType);
+        var command = InsertChartCommandFactory.Build(_session.ActiveSheet, range, chartType);
         var result = _session.ExecuteReviewCommand(command);
         if (!result.Success)
         {

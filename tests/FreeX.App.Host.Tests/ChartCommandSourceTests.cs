@@ -17,8 +17,9 @@ public sealed class ChartCommandSourceTests
         source.Should().Contain("private void InsertChartOfType(ChartType type)");
         source.Should().Contain("ChartAuthoringPlanner.CanAuthor(type)");
         source.Should().Contain("ShowDeferredChartFamilyMessage();");
-        source.Should().Contain("ChartDataSourcePlanner.ResolveInsertionRange(sheet, currentRange)");
-        source.Should().Contain("new AddChartCommand(");
+        source.Should().Contain("ChartInsertionPlanner.CreateEmbeddedChartPlan(");
+        source.Should().Contain("ChartInsertionPlanner.BuildChartSheetCommand(");
+        source.Should().NotContain("new AddChartCommand(");
         source.Should().Contain("UiText.Get(\"MainWindowMessage_ChartFamilyDeferred\")");
         source.Should().Contain("private void ChangeChartTypeBtn_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("new ChangeChartTypeDialog(chart.Type)");
@@ -40,8 +41,8 @@ public sealed class ChartCommandSourceTests
     {
         var source = ReadHostSourceFile("MainWindow.ChartCommands.cs");
 
-        source.Should().Contain("ChartInsertionPlacementPlanner.CreatePlacement(");
-        source.Should().Contain("command = new AddChartCommand(");
+        source.Should().Contain("new ChartInsertionViewport(");
+        source.Should().Contain("command = plan.Command;");
         source.Should().Contain("SelectInsertedChart(command.ChartId)");
         source.Should().Contain("SheetGrid.SelectedObjectKind = FreeX.App.UI.ObjectKind.Chart");
     }

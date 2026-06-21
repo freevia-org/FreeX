@@ -273,7 +273,7 @@ internal sealed class InsertChartRibbonCommand : IRibbonCommand
         if (_session() is not { } session)
             return;
 
-        var command = InsertChartCommandFactory.Build(session.ActiveSheet.Id, session.SelectedRange, _chartType);
+        var command = InsertChartCommandFactory.Build(session.ActiveSheet, session.SelectedRange, _chartType);
         var result = session.ExecuteReviewCommand(command);
         _setStatus(result.Success
             ? $"Inserted {_chartType} chart"
