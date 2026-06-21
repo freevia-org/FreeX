@@ -25,6 +25,8 @@ public class DocumentThemeTests
 
         DocumentTheme.Apply(doc, slate);
 
+        doc.Theme.Should().BeSameAs(slate);
+
         // Title takes the primary accent colour and heading font.
         doc.Styles["Title"].Run.ColorHex.Should().Be(slate.PrimaryColorHex);
         doc.Styles["Title"].Run.FontFamily.Should().Be(slate.HeadingFont);

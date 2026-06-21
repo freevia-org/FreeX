@@ -552,10 +552,11 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.new-style", new NewStyleCommand(editor));
         registry.Register("freew.manage-styles", new ManageStylesCommand(editor));
 
-        // Design > Document Formatting: the Themes dropdown. Picking a theme name applies that built-in
-        // colour/font scheme to the document's style catalog (rewriting heading/title colours + fonts and
-        // the body face) and re-renders so the change is visible at once.
+        // Design > Document Formatting: Themes / Colors both resolve a catalog theme. FreeW stores the
+        // palette with the theme today, so Colors shares the same backed apply path rather than faking
+        // a separate unsupported colour-scheme model.
         registry.Register("freew.theme", new ApplyThemeCommand(editor));
+        registry.Register("freew.theme-colors", new ApplyThemeCommand(editor));
 
         // Layout tab — page settings (applied to the model; honoured by docx save + print).
         registry.Register("freew.orientation", new PageCommand(editor, page =>
@@ -608,7 +609,7 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.watermark", new WatermarkCommand(editor));
 
         // Design tab — Page Background: pick the whole-page background colour (Word's Page Color). Opens a
-        // swatch palette + No Color + More Colours… and sets the model's page BackgroundColorHex (which
+        // swatch palette + No Color + More Colors... and sets the model's page BackgroundColorHex (which
         // already round-trips as w:background in docx); the editor recolours the page sheet immediately.
         registry.Register("freew.page-color", new PageColorCommand(editor));
 
@@ -1044,14 +1045,14 @@ internal static class FreeWRibbonCommands
     private static IReadOnlyDictionary<string, string> StyleNamesById(TextDocument model) =>
         model.Styles.ToDictionary(kv => kv.Key, kv => kv.Value.Name);
 
-    // Design > Document Formatting: apply a built-in document theme. The dropdown's value is a theme
-    // name (e.g. "Slate"); this resolves it to a DocumentTheme in the catalog and asks the view to
-    // rewrite the style catalog + re-render so the new heading colours/fonts and body face show at once.
+    // Design > Document Formatting: apply a built-in document theme. The selected name may arrive from
+    // a combo value, older host context, or a WPF menu item header; all resolve to the same catalog entry.
     private sealed class ApplyThemeCommand(DocumentView editor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
-            if (!context.Parameters.TryGetValue("value", out var raw) || raw is not string value || value.Length == 0)
+            var value = context.SelectedValue ?? LegacyValue(context) ?? MenuHeaderValue(context);
+            if (string.IsNullOrWhiteSpace(value))
                 return;
             if (DocumentTheme.FindByName(value) is not { } theme)
                 return;
@@ -1059,6 +1060,15 @@ internal static class FreeWRibbonCommands
             editor.Focus();
             editor.ApplyTheme(theme);
         }
+
+        private static string? LegacyValue(RibbonCommandContext context) =>
+            context.Parameters.TryGetValue("value", out var raw) ? raw as string : null;
+
+        private static string? MenuHeaderValue(RibbonCommandContext context) =>
+            context.Parameters.TryGetValue(Free.Shared.Ribbon.Wpf.RibbonWpfRenderer.SenderKey, out var sender)
+            && sender is System.Windows.Controls.MenuItem { Tag: string header }
+                ? header
+                : null;
     }
 
     // Home > Font: pick a colour from a small fixed palette and apply it to the selection. When
@@ -3308,7 +3318,7 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // Layout > Watermark: prompt for the page watermark text (seeded with the current one). An empty
+    // Design > Page Background > Watermark: prompt for the page watermark text (seeded with the current one). An empty
     // result clears the watermark. Delegates to the view, which mutates PageSettings and re-renders.
     private sealed class WatermarkCommand(DocumentView editor) : IRibbonCommand
     {
@@ -3325,13 +3335,13 @@ internal static class FreeWRibbonCommands
     }
 
     // Design > Page Background > Page Color (Word's Page Color): pick the whole-page background colour from
-    // a theme-style swatch palette, clear it with "No Color", or open "More Colours…" to type a hex value.
+    // a theme-style swatch palette, clear it with "No Color", or open "More Colors..." to type a hex value.
     // The chosen value sets the model's page BackgroundColorHex through DocumentView.SetPageColor (commit +
     // re-render via ApplyPageSettings); it already round-trips as w:background in docx. Mirrors the swatch
     // picker used by Cell Shading / Paragraph Shading.
     private sealed class PageColorCommand(DocumentView editor) : IRibbonCommand
     {
-        // Word's "Theme Colors" top row plus standard colours — a sensible page-tint palette.
+        // Word's "Theme Colors" top row plus standard colors: a sensible page-tint palette.
         private static readonly string[] Palette =
         [
             "#FFFFFF", "#F2F2F2", "#DDD9C3", "#C6D9F1", "#DBE5F1", "#F2DCDB",

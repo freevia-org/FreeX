@@ -149,6 +149,30 @@ public sealed class FreeWRibbonParityTests
             registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must execute from Design > Page Background");
     }
 
+    [StaFact]
+    public void DesignDocumentFormatting_ExposesBackedWordStyleThemeAndColorsSurfaces()
+    {
+        var definition = FreeWRibbon.Build();
+        var design = definition.FindTab("design");
+        var documentFormatting = design!.FindGroup("themes");
+        var editor = new DocumentView();
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        design.Groups.Select(group => group.Id)
+            .Should()
+            .Equal("themes", "page-background");
+        documentFormatting.Should().NotBeNull();
+        CommandIds(documentFormatting!)
+            .Should()
+            .Equal("freew.theme", "freew.theme-colors");
+        Labels(documentFormatting!)
+            .Should()
+            .Equal("Themes", "Colors");
+
+        foreach (var commandId in CommandIds(documentFormatting!))
+            registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must execute from Design > Document Formatting");
+    }
+
     [Fact]
     public void LayoutTab_DoesNotExposeDesignPageBackgroundCommands()
     {

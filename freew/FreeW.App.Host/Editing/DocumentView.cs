@@ -569,7 +569,7 @@ public sealed class DocumentView : RichTextBox
     /// <summary>
     /// Toggle the whole-page border (w:sectPr/w:pgBorders). When the page has no border one is added
     /// (<paramref name="colorHex"/>/<paramref name="widthPt"/>); otherwise it is cleared. Re-renders so
-    /// the change shows immediately and round-trips through the model on save. Layout-ribbon command.
+    /// the change shows immediately and round-trips through the model on save. Design-ribbon command.
     /// </summary>
     public void TogglePageBorder(string colorHex = "#000000", double widthPt = 1.0) =>
         ApplyPageSettings(page => page.PageBorder =
@@ -577,7 +577,7 @@ public sealed class DocumentView : RichTextBox
 
     /// <summary>
     /// Set (or clear) the page watermark text. A null/empty value removes the watermark. Re-renders so
-    /// the faint diagonal text shows immediately and round-trips on save. Layout-ribbon command.
+    /// the faint diagonal text shows immediately and round-trips on save. Design-ribbon command.
     /// </summary>
     public void SetWatermark(string? text) =>
         ApplyPageSettings(page => page.Watermark = string.IsNullOrWhiteSpace(text) ? null : text.Trim());
@@ -643,8 +643,8 @@ public sealed class DocumentView : RichTextBox
     // (which clears the editor selection) doesn't make later previews target nothing.
     private IReadOnlyList<int>? _stylePreviewTargets;
 
-    // Snapshot of the document's pre-theme look (DefaultRun + each affected style's Run) for theme preview.
-    private (RunFormatting DefaultRun, Dictionary<string, RunFormatting> Runs)? _themeSnapshot;
+    // Snapshot of the document's pre-theme look (Theme + DefaultRun + each affected style's Run) for theme preview.
+    private (DocumentTheme Theme, RunFormatting DefaultRun, Dictionary<string, RunFormatting> Runs)? _themeSnapshot;
 
     /// <summary>
     /// Preview a paragraph style on the current selection without committing: snapshot the selected
@@ -729,7 +729,7 @@ public sealed class DocumentView : RichTextBox
                 runs[id] = style.Run;
         }
 
-        _themeSnapshot = (_model.DefaultRun, runs);
+        _themeSnapshot = (_model.Theme, _model.DefaultRun, runs);
         DocumentTheme.Apply(_model, theme);
         Render();
     }
@@ -748,6 +748,7 @@ public sealed class DocumentView : RichTextBox
     {
         if (_themeSnapshot is not { } snapshot)
             return;
+        _model.Theme = snapshot.Theme;
         _model.DefaultRun = snapshot.DefaultRun;
         foreach (var (id, run) in snapshot.Runs)
         {

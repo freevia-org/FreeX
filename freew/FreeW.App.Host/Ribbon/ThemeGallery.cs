@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
 using FreeW.App.Host.Editing;
@@ -8,31 +9,46 @@ namespace FreeW.App.Host;
 
 /// <summary>
 /// Word-style galleries for the Design tab: a Themes gallery (one swatch per built-in
-/// <see cref="DocumentTheme"/> — Office / Slate / Berlin / Ion) and a theme-colours gallery (each
+/// <see cref="DocumentTheme"/> — Office / Slate / Berlin / Ion) and a Colors gallery (each
 /// theme's palette as a small colour strip). Hovering a theme swatch live-previews it on the document
 /// via <see cref="DocumentView.PreviewTheme"/>; leaving reverts via <see cref="DocumentView.EndThemePreview"/>;
-/// clicking commits through <see cref="DocumentView.ApplyTheme"/>. Hovering a colours swatch previews
-/// the same theme (the palette is the theme's colours), so the two galleries stay coherent. Hosted as
+/// clicking commits through <see cref="DocumentView.ApplyTheme"/>. Hovering a Colors swatch previews
+/// the same theme (the palette is the theme's colors), so the two galleries stay coherent. Hosted as
 /// app-side custom content — no shared <c>RibbonGallery</c> render involved.
 /// </summary>
 internal static class ThemeGallery
 {
-    /// <summary>Build the Themes gallery: a horizontal strip of theme thumbnail swatches.</summary>
+    /// <summary>Build the Themes gallery: a labelled horizontal strip of theme thumbnail swatches.</summary>
     public static FrameworkElement BuildThemes(DocumentView editor)
     {
         var strip = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         foreach (var theme in DocumentTheme.Catalog)
             strip.Children.Add(BuildThemeSwatch(editor, theme));
-        return strip;
+        return WithLabel("Themes", strip);
     }
 
-    /// <summary>Build the theme-colours gallery: each theme's palette rendered as a colour strip.</summary>
+    /// <summary>Build Word's Colors gallery: each theme's palette rendered as a colour strip.</summary>
     public static FrameworkElement BuildColours(DocumentView editor)
     {
         var strip = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         foreach (var theme in DocumentTheme.Catalog)
             strip.Children.Add(BuildColourSwatch(editor, theme));
-        return strip;
+        return WithLabel("Colors", strip);
+    }
+
+    private static FrameworkElement WithLabel(string label, FrameworkElement content)
+    {
+        var host = new StackPanel { Margin = new Thickness(0, 0, 8, 0) };
+        AutomationProperties.SetName(host, label);
+        host.Children.Add(new TextBlock
+        {
+            Text = label,
+            FontSize = 11,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(4, 0, 0, 1)
+        });
+        host.Children.Add(content);
+        return host;
     }
 
     // A theme thumbnail: a small page-like preview (title + two heading bars in the theme palette) over
@@ -70,7 +86,7 @@ internal static class ThemeGallery
         return WrapAsButton(editor, theme, thumb, theme.Name);
     }
 
-    // A colour swatch: the theme's three palette colours as adjacent cells over the theme name.
+    // A color swatch: the theme's three palette colors as adjacent cells over the theme name.
     private static FrameworkElement BuildColourSwatch(DocumentView editor, DocumentTheme theme)
     {
         var thumb = new StackPanel { Margin = new Thickness(4, 3, 4, 3), Width = 52 };
@@ -90,7 +106,7 @@ internal static class ThemeGallery
         thumb.Children.Add(border);
         thumb.Children.Add(new TextBlock { Text = theme.Name, FontSize = 11, TextAlignment = System.Windows.TextAlignment.Center, Margin = new Thickness(0, 2, 0, 0) });
 
-        return WrapAsButton(editor, theme, thumb, theme.Name + " colours");
+        return WrapAsButton(editor, theme, thumb, theme.Name + " colors");
     }
 
     // Wrap a thumbnail in a borderless button that previews on hover, reverts on leave, commits on click.

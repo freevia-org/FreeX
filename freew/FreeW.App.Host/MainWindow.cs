@@ -1781,9 +1781,9 @@ public sealed class MainWindow : Window
                 // New Style / Manage Styles buttons, prepending the live-preview gallery before them.
                 InjectGallery(content, "styles", StylesGallery.Build(_editor), removeKind: RemoveKind.Combos);
             if (tab.Id == "design")
-                // The Design > themes group's only control is the placeholder Themes combo; replace it
-                // wholesale with the Themes gallery plus the theme-colours gallery.
-                InjectGallery(content, "themes", ThemeGallery.BuildThemes(_editor), removeKind: RemoveKind.All,
+                // Replace the placeholder Themes combo with gallery previews, but keep the backed
+                // Colors dropdown beside them so the group matches Word's Document Formatting shape.
+                InjectGallery(content, "themes", ThemeGallery.BuildThemes(_editor), removeKind: RemoveKind.Combos,
                     extra: ThemeGallery.BuildColours(_editor));
 
             }
@@ -1808,7 +1808,7 @@ public sealed class MainWindow : Window
     // placeholder controls are removed first: All clears the lane (the gallery fully owns the group);
     // Combos drops only ComboBox columns (so a placeholder combo the gallery supersedes goes away while
     // command buttons like New Style / Manage Styles remain). An optional `extra` gallery is appended
-    // after the first (e.g. the Design theme-colours strip).
+    // after the first (e.g. the Design Colors strip).
     private static void InjectGallery(DependencyObject content, string groupId, FrameworkElement gallery, RemoveKind removeKind, FrameworkElement? extra = null)
     {
         var grid = FindGroupGrid(content, groupId);

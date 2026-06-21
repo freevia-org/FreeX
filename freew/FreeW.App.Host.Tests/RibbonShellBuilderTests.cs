@@ -76,6 +76,55 @@ public sealed class RibbonShellBuilderTests
         contextualTab.Visibility.Should().Be(Visibility.Visible);
     }
 
+    [StaFact]
+    public void BuildTabContent_ComboSelectionExecutesCommandWithSelectedValue()
+    {
+        string? selected = null;
+        var registry = new RibbonCommandRegistry();
+        registry.Register("theme", new CaptureValueCommand(value => selected = value));
+        var tab = new RibbonTab(
+            "design",
+            "Design",
+            KeyTip: null,
+            Context: null,
+            Groups:
+            [
+                new RibbonGroup(
+                    "themes",
+                    "Document Formatting",
+                    KeyTip: null,
+                    Priority: 0,
+                    Controls: [new RibbonComboBox("theme", "Themes") { Items = ["Office", "Slate"] }],
+                    RibbonGroupSizing.Default)
+            ]);
+
+        var content = RibbonWpfRenderer.BuildTabContent(tab, new Button(), registry, new RibbonStateStore());
+        var combo = FindLogicalChild<ComboBox>(content)!;
+
+        combo.SelectedIndex = 1;
+
+        selected.Should().Be("Slate");
+    }
+
+    private sealed class CaptureValueCommand(Action<string?> capture) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context) => capture(context.SelectedValue);
+    }
+
+    private static T? FindLogicalChild<T>(DependencyObject root) where T : DependencyObject
+    {
+        if (root is T match)
+            return match;
+
+        foreach (var child in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>())
+        {
+            if (FindLogicalChild<T>(child) is { } matchChild)
+                return matchChild;
+        }
+
+        return null;
+    }
+
     private static RibbonTab Tab(string id, string header, RibbonTabContext? context = null) =>
         new(
             id,

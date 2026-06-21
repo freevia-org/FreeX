@@ -1,0 +1,39 @@
+using System.Windows;
+using System.Windows.Automation;
+using System.Windows.Controls;
+using FreeW.App.Host.Editing;
+
+namespace FreeW.App.Host.Tests;
+
+public sealed class ThemeGalleryTests
+{
+    [StaFact]
+    public void DesignGalleries_AreLabelledThemesAndColors_WithCatalogOrder()
+    {
+        var editor = new DocumentView();
+
+        var themes = ThemeGallery.BuildThemes(editor);
+        var colors = ThemeGallery.BuildColours(editor);
+
+        AutomationProperties.GetName(themes).Should().Be("Themes");
+        AutomationProperties.GetName(colors).Should().Be("Colors");
+        Captions(themes).Should().Equal("Themes", "Office", "Slate", "Berlin", "Ion");
+        Captions(colors).Should().Equal("Colors", "Office", "Slate", "Berlin", "Ion");
+    }
+
+    private static IReadOnlyList<string> Captions(DependencyObject root)
+    {
+        var captions = new List<string>();
+        Collect(root, captions);
+        return captions;
+    }
+
+    private static void Collect(DependencyObject root, List<string> captions)
+    {
+        if (root is TextBlock { Text.Length: > 0 } text)
+            captions.Add(text.Text);
+
+        foreach (var child in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>())
+            Collect(child, captions);
+    }
+}

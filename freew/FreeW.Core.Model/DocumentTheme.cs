@@ -112,6 +112,8 @@ public sealed record DocumentTheme(
         ArgumentNullException.ThrowIfNull(doc);
         ArgumentNullException.ThrowIfNull(theme);
 
+        doc.Theme = theme;
+
         // Body font: document default run + the Normal style's run face.
         doc.DefaultRun = doc.DefaultRun with { FontFamily = theme.BodyFont };
         SetRun(doc, "Normal", run => run with { FontFamily = theme.BodyFont });

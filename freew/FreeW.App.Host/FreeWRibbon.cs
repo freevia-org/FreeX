@@ -13,6 +13,11 @@ internal static class FreeWRibbon
     {
         static RibbonButton Icon(RibbonButton button, RibbonCommandIconKind kind, RibbonCommandIconAccent accent = RibbonCommandIconAccent.None) =>
             button with { Icon = new RibbonCommandIcon(kind, accent) };
+        static void ThemeMenu(string commandId, RibbonMenuBuilder menu)
+        {
+            foreach (var theme in DocumentTheme.Catalog)
+                menu.Item(commandId, theme.Name, theme.Name[0].ToString());
+        }
 
         var definition = new RibbonDefinitionBuilder()
             .Tab("home", "Home", "H", tab =>
@@ -314,9 +319,10 @@ internal static class FreeWRibbon
                         Icon = new RibbonCommandIcon(RibbonCommandIconKind.Theme, RibbonCommandIconAccent.Theme),
                         Width = 140
                     });
+                    g.Medium("freew.theme-colors", "Colors", RibbonCommandIconKind.Color, "C", menu: m => ThemeMenu("freew.theme-colors", m), accent: RibbonCommandIconAccent.Color);
                 });
                 // Design > Page Background: set the whole-page background colour (Word's Page Color). The
-                // command opens a swatch palette (+ No Color + More Colours…) and writes the model's page
+                // command opens a swatch palette (+ No Color + More Colors...) and writes the model's page
                 // BackgroundColorHex, which already round-trips as w:background in docx.
                 tab.Group("page-background", "Page Background", "B", 90, g =>
                 {

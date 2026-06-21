@@ -3,6 +3,7 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using Free.Shared.Ribbon;
@@ -457,7 +458,30 @@ public static class RibbonWpfRenderer
         if (combo.Items.Count > 0)
             box.SelectedIndex = 0;
         WireMetadata(box, combo, registry, stateStore, RibbonWpfRendererOptions.Default);
+        if (registry is not null)
+        {
+            var commandId = combo.CommandId;
+            box.SelectionChanged += (_, _) => ExecuteComboValue(box, commandId, registry);
+            box.KeyDown += (_, e) =>
+            {
+                if (e.Key != Key.Enter)
+                    return;
+                ExecuteComboValue(box, commandId, registry);
+                e.Handled = true;
+            };
+        }
         return box;
+    }
+
+    private static void ExecuteComboValue(ComboBox box, RibbonCommandId commandId, IRibbonCommandRegistry registry)
+    {
+        if (!registry.TryGet(commandId, out var command) || command is null)
+            return;
+
+        var value = box.SelectedItem?.ToString();
+        if (string.IsNullOrWhiteSpace(value))
+            value = box.Text;
+        command.Execute(RibbonCommandContext.ForSelectedValue(value));
     }
 
     private static RibbonIcon NewIcon(RibbonControl control, double size, HorizontalAlignment h, VerticalAlignment v = VerticalAlignment.Center)
