@@ -151,7 +151,7 @@ internal static class FreeWRibbon
                     });
                 });
                 // Media is a compact icon cluster (Word keeps these small), kept icon-only so the dense
-                // 12-group Insert tab fits without collapsing the trailing groups at ~1500-1600px.
+                // 11-group Insert tab fits without collapsing the trailing groups at ~1500-1600px.
                 tab.Group("media", "Media", "M", 78, g =>
                 {
                     // Equation gallery: the top-level id inserts the default sample equation (E = mc²),
@@ -180,7 +180,7 @@ internal static class FreeWRibbon
                     g.Icon("freew.object", "Object", RibbonCommandIconKind.Object);
                 });
                 // Links/Quick Parts/References are dense, lower-priority clusters (Word keeps them compact),
-                // so they stay icon-only — this also keeps the 12-group Insert tab fitting at ~1500-1600px.
+                // so they stay icon-only — this also keeps the 11-group Insert tab fitting at ~1500-1600px.
                 tab.Group("links", "Links", "K", 70, g =>
                 {
                     g.Icon("freew.hyperlink", "Link", RibbonCommandIconKind.Link);
@@ -198,15 +198,6 @@ internal static class FreeWRibbon
                     g.Icon("freew.save-quickpart", "Save Selection", RibbonCommandIconKind.QuickParts);
                     g.Icon("freew.building-blocks-organizer", "Building Blocks Organizer", RibbonCommandIconKind.QuickParts);
                     g.Icon("freew.insert-file", "Text from File", RibbonCommandIconKind.TextFromFile);
-                });
-                tab.Group("controls", "Controls", "O", 62, g =>
-                {
-                    g.Medium("freew.cc-text", "Text Control", RibbonCommandIconKind.TextBox);
-                    g.Medium("freew.cc-richtext", "Rich Text", RibbonCommandIconKind.QuickParts);
-                    g.Medium("freew.cc-checkbox", "Check Box", RibbonCommandIconKind.CheckBox);
-                    g.Medium("freew.cc-date", "Date Picker", RibbonCommandIconKind.Date);
-                    g.Medium("freew.cc-dropdown", "Drop-Down List", RibbonCommandIconKind.List);
-                    g.Medium("freew.cc-combo", "Combo Box", RibbonCommandIconKind.ChevronDown);
                 });
                 tab.Group("header-footer", "Header & Footer", "H", 60, g =>
                 {
@@ -445,11 +436,23 @@ internal static class FreeWRibbon
                     g.Medium("freew.check-accessibility", "Check Accessibility", RibbonCommandIconKind.Accessibility);
                 });
             })
+            .Tab("developer", "Developer", "D", tab =>
+            {
+                tab.Group("controls", "Controls", "O", 100, g =>
+                {
+                    g.Medium("freew.cc-text", "Text Control", RibbonCommandIconKind.TextBox);
+                    g.Medium("freew.cc-richtext", "Rich Text", RibbonCommandIconKind.QuickParts);
+                    g.Medium("freew.cc-checkbox", "Check Box", RibbonCommandIconKind.CheckBox);
+                    g.Medium("freew.cc-date", "Date Picker", RibbonCommandIconKind.Date);
+                    g.Medium("freew.cc-dropdown", "Drop-Down List", RibbonCommandIconKind.List);
+                    g.Medium("freew.cc-combo", "Combo Box", RibbonCommandIconKind.ChevronDown);
+                });
+            })
             // ── Contextual tabs (Word "Tools" tabs) ───────────────────────────────────────────────────
             // Declared individually here, but shown/hidden by the shared RibbonContextualTabController only
             // while their selection context is active: "picture" when an image is selected, "table" when the
-            // caret is in a table. Same command ids as the Insert tab — the contextual tab just surfaces them
-            // in one place when relevant, exactly like Word's Picture Format / Table Design tabs.
+            // caret is in a table. Contextual tabs reuse the same command ids but group them by active selection,
+            // exactly like Word's Picture Format / Table Design tabs.
             .ContextualTab("picture-format", "Picture Format",
                 new RibbonTabContext("picture", "Picture Tools", RibbonContextColor.Orange), tab =>
             {
@@ -516,7 +519,8 @@ internal static class FreeWRibbon
             "references",
             "mailings",
             "review",
-            "view"
+            "view",
+            "developer"
         ];
 
         var visibleOrder = wordOrder
