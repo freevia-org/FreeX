@@ -89,67 +89,42 @@ public sealed class ChartTrendlineCalculatorTests
     }
 
     [Fact]
-    public void Calculate_MovingAverage_UsesRollingWindowWithoutPerPointLinq()
+    public void Calculate_MovingAverage_DelegatesToPresentationCalculator()
     {
         var source = AppUiSourceTestSupport.ReadAppUiSources("ChartTrendlineCalculator.cs");
-        var movingAverage = source[
-            source.IndexOf("private static IReadOnlyList<DataPoint> CalculateMovingAverageTrendline", StringComparison.Ordinal)..
-            source.IndexOf("private static IReadOnlyList<DataPoint> CalculatePolynomialTrendline", StringComparison.Ordinal)];
 
-        movingAverage.Should().Contain("var runningTotal = 0.0;");
-        movingAverage.Should().Contain("runningTotal -= points[i - windowSize].Y;");
-        movingAverage.Should().NotContain(".Skip(");
-        movingAverage.Should().NotContain(".Take(");
-        movingAverage.Should().NotContain(".Average(");
+        source.Should().Contain("TrendlineCalculator.Calculate");
+        source.Should().NotContain("CalculateMovingAverageTrendline");
     }
 
     [Fact]
-    public void Calculate_RegressionTrendlines_AggregatePointsInSinglePasses()
+    public void Calculate_RegressionTrendlines_DelegatesToPresentationCalculator()
     {
         var source = AppUiSourceTestSupport.ReadAppUiSources("ChartTrendlineCalculator.cs");
-        var regressionBlock = source[
-            source.IndexOf("private static IReadOnlyList<DataPoint> CalculateLinearTrendline", StringComparison.Ordinal)..
-            source.IndexOf("private static IReadOnlyList<DataPoint> CalculateMovingAverageTrendline", StringComparison.Ordinal)];
 
-        regressionBlock.Should().Contain("for (var i = 0; i < points.Count; i++)");
-        regressionBlock.Should().NotContain(".Where(");
-        regressionBlock.Should().NotContain(".ToList(");
-        regressionBlock.Should().NotContain(".Sum(");
-        regressionBlock.Should().NotContain("points.Min(");
-        regressionBlock.Should().NotContain("points.Max(");
+        source.Should().Contain("ToTrendPoints");
+        source.Should().NotContain("CalculateLinearTrendline");
+        source.Should().NotContain("CalculateExponentialTrendline");
+        source.Should().NotContain("CalculateLogarithmicTrendline");
+        source.Should().NotContain("CalculatePowerTrendline");
     }
 
     [Fact]
-    public void Calculate_PolynomialTrendline_AggregatesLeastSquaresInputsWithoutLinqPasses()
+    public void Calculate_PolynomialTrendline_DelegatesToPresentationCalculator()
     {
         var source = AppUiSourceTestSupport.ReadAppUiSources("ChartTrendlineCalculator.cs");
-        var polynomialBlock = source[
-            source.IndexOf("private static IReadOnlyList<DataPoint> CalculatePolynomialTrendline", StringComparison.Ordinal)..
-            source.IndexOf("private static double EvaluatePolynomial", StringComparison.Ordinal)];
 
-        polynomialBlock.Should().Contain("var xPowerSums = new double[(degree * 2) + 1];");
-        polynomialBlock.Should().Contain("xPower *= point.X;");
-        polynomialBlock.Should().NotContain(".Sum(");
-        polynomialBlock.Should().NotContain("Math.Pow(");
-        polynomialBlock.Should().NotContain("points.Min(");
-        polynomialBlock.Should().NotContain("points.Max(");
+        source.Should().Contain("TrendlineCalculator.Calculate");
+        source.Should().NotContain("SolvePolynomialLeastSquares");
     }
 
     [Fact]
-    public void TryCalculateRSquared_AggregatesMatchesWithoutIntermediateListOrLinqPasses()
+    public void TryCalculateRSquared_DelegatesToPresentationCalculator()
     {
         var source = AppUiSourceTestSupport.ReadAppUiSources("ChartTrendlineCalculator.cs");
-        var rSquaredBlock = source[
-            source.IndexOf("public static bool TryCalculateRSquared", StringComparison.Ordinal)..
-            source.IndexOf("private static bool TryInterpolateTrendY", StringComparison.Ordinal)];
 
-        rSquaredBlock.Should().Contain("var sumActual = 0.0;");
-        rSquaredBlock.Should().Contain("var sumActualSquared = 0.0;");
-        rSquaredBlock.Should().Contain("var residual = 0.0;");
-        rSquaredBlock.Should().Contain("count++;");
-        rSquaredBlock.Should().NotContain("new List<");
-        rSquaredBlock.Should().NotContain(".Average(");
-        rSquaredBlock.Should().NotContain(".Sum(");
+        source.Should().Contain("TrendlineCalculator.TryCalculateRSquared");
+        source.Should().NotContain("TryInterpolateTrendY");
     }
 
     [Fact]

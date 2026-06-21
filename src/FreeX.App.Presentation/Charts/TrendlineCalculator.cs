@@ -33,6 +33,78 @@ public static class TrendlineCalculator
             _ => CalculateLinear(points),
         };
 
+    public static bool TryCalculateRSquared(
+        IReadOnlyList<TrendPoint> sourcePoints,
+        IReadOnlyList<TrendPoint> trendPoints,
+        out double rSquared,
+        bool logTransformY = false)
+    {
+        rSquared = 0;
+        var count = 0;
+        var sumActual = 0.0;
+        var sumActualSquared = 0.0;
+        var residual = 0.0;
+        foreach (var point in sourcePoints)
+        {
+            if (!TryInterpolateTrendY(trendPoints, point.X, out var predicted))
+                continue;
+
+            // Excel reports exponential/power trendline R-squared on the linearized
+            // (log-Y) regression, not the original-scale residuals.
+            var actualY = point.Y;
+            if (logTransformY)
+            {
+                if (actualY <= 0 || predicted <= 0)
+                    continue;
+                actualY = Math.Log(actualY);
+                predicted = Math.Log(predicted);
+            }
+
+            count++;
+            sumActual += actualY;
+            sumActualSquared += actualY * actualY;
+            residual += Math.Pow(actualY - predicted, 2);
+        }
+
+        if (count < 2)
+            return false;
+
+        var total = sumActualSquared - (sumActual * sumActual / count);
+        if (Math.Abs(total) < double.Epsilon)
+            return false;
+
+        rSquared = 1 - (residual / total);
+        return !double.IsNaN(rSquared) && !double.IsInfinity(rSquared);
+    }
+
+    private static bool TryInterpolateTrendY(IReadOnlyList<TrendPoint> trendPoints, double x, out double y)
+    {
+        y = 0;
+        if (trendPoints.Count == 0 || x < trendPoints[0].X || x > trendPoints[^1].X)
+            return false;
+
+        for (var i = 1; i < trendPoints.Count; i++)
+        {
+            var left = trendPoints[i - 1];
+            var right = trendPoints[i];
+            if (x > right.X)
+                continue;
+
+            var dx = right.X - left.X;
+            if (Math.Abs(dx) < double.Epsilon)
+            {
+                y = right.Y;
+                return true;
+            }
+
+            var t = (x - left.X) / dx;
+            y = left.Y + ((right.Y - left.Y) * t);
+            return true;
+        }
+
+        return false;
+    }
+
     private static IReadOnlyList<TrendPoint> CalculateLinear(IReadOnlyList<TrendPoint> points)
     {
         var n = points.Count;

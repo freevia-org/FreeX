@@ -9,6 +9,12 @@ public sealed class TrendlineCalculatorTests
     private static IReadOnlyList<TrendPoint> Points(params (double X, double Y)[] points) =>
         points.Select(p => new TrendPoint(p.X, p.Y)).ToArray();
 
+    private static string ReadTrendlineCalculatorSource()
+    {
+        var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
+        return File.ReadAllText(Path.Combine(presentationRoot, "Charts", "TrendlineCalculator.cs"));
+    }
+
     [Fact]
     public void Linear_fit_recovers_slope_and_intercept_at_endpoints()
     {
@@ -131,6 +137,21 @@ public sealed class TrendlineCalculatorTests
     }
 
     [Fact]
+    public void Moving_average_uses_rolling_window_without_per_point_linq()
+    {
+        var source = ReadTrendlineCalculatorSource();
+        var movingAverage = source[
+            source.IndexOf("private static IReadOnlyList<TrendPoint> CalculateMovingAverage", StringComparison.Ordinal)..
+            source.IndexOf("private static IReadOnlyList<TrendPoint> CalculatePolynomial", StringComparison.Ordinal)];
+
+        movingAverage.Should().Contain("var runningTotal = 0.0;");
+        movingAverage.Should().Contain("runningTotal -= points[i - windowSize].Y;");
+        movingAverage.Should().NotContain(".Skip(");
+        movingAverage.Should().NotContain(".Take(");
+        movingAverage.Should().NotContain(".Average(");
+    }
+
+    [Fact]
     public void Moving_average_returns_empty_when_window_exceeds_points()
     {
         TrendlineCalculator.Calculate(ChartTrendlineType.MovingAverage, Points((0, 1), (1, 2)), 5, 2)
@@ -155,10 +176,98 @@ public sealed class TrendlineCalculatorTests
     }
 
     [Fact]
+    public void Regression_trendlines_aggregate_points_in_single_passes()
+    {
+        var source = ReadTrendlineCalculatorSource();
+        var regressionBlock = source[
+            source.IndexOf("private static IReadOnlyList<TrendPoint> CalculateLinear", StringComparison.Ordinal)..
+            source.IndexOf("private static IReadOnlyList<TrendPoint> CalculateMovingAverage", StringComparison.Ordinal)];
+
+        regressionBlock.Should().Contain("for (var i = 0; i < points.Count; i++)");
+        regressionBlock.Should().NotContain(".Where(");
+        regressionBlock.Should().NotContain(".ToList(");
+        regressionBlock.Should().NotContain(".Sum(");
+        regressionBlock.Should().NotContain("points.Min(");
+        regressionBlock.Should().NotContain("points.Max(");
+    }
+
+    [Fact]
+    public void Polynomial_trendline_aggregates_least_squares_inputs_without_linq_passes()
+    {
+        var source = ReadTrendlineCalculatorSource();
+        var polynomialBlock = source[
+            source.IndexOf("private static IReadOnlyList<TrendPoint> CalculatePolynomial", StringComparison.Ordinal)..
+            source.IndexOf("private static double EvaluatePolynomial", StringComparison.Ordinal)];
+
+        polynomialBlock.Should().Contain("var xPowerSums = new double[(degree * 2) + 1];");
+        polynomialBlock.Should().Contain("xPower *= point.X;");
+        polynomialBlock.Should().NotContain(".Sum(");
+        polynomialBlock.Should().NotContain("Math.Pow(");
+        polynomialBlock.Should().NotContain("points.Min(");
+        polynomialBlock.Should().NotContain("points.Max(");
+    }
+
+    [Fact]
     public void Polynomial_returns_empty_when_points_do_not_exceed_degree()
     {
         // Degree clamps to 2; need more than 2 points.
         TrendlineCalculator.Calculate(ChartTrendlineType.Polynomial, Points((0, 1), (1, 2)), 2, 2)
             .Should().BeEmpty();
+    }
+
+    [Fact]
+    public void TryCalculateRSquared_aggregates_matches_without_intermediate_list_or_linq_passes()
+    {
+        var source = ReadTrendlineCalculatorSource();
+        var rSquaredBlock = source[
+            source.IndexOf("public static bool TryCalculateRSquared", StringComparison.Ordinal)..
+            source.IndexOf("private static bool TryInterpolateTrendY", StringComparison.Ordinal)];
+
+        rSquaredBlock.Should().Contain("var sumActual = 0.0;");
+        rSquaredBlock.Should().Contain("var sumActualSquared = 0.0;");
+        rSquaredBlock.Should().Contain("var residual = 0.0;");
+        rSquaredBlock.Should().Contain("count++;");
+        rSquaredBlock.Should().NotContain("new List<");
+        rSquaredBlock.Should().NotContain(".Average(");
+        rSquaredBlock.Should().NotContain(".Sum(");
+    }
+
+    [Fact]
+    public void TryCalculateRSquared_returns_one_for_perfect_fit()
+    {
+        var source = Points((0, 1), (1, 3), (2, 5));
+        var trend = TrendlineCalculator.Calculate(ChartTrendlineType.Linear, source, period: 2, order: 2);
+
+        TrendlineCalculator.TryCalculateRSquared(source, trend, out var rSquared).Should().BeTrue();
+        rSquared.Should().BeApproximately(1.0, 0.000001);
+    }
+
+    [Fact]
+    public void TryCalculateRSquared_exponential_uses_log_space_fit()
+    {
+        // Points exactly on y = 2 * e^(0.5x): a perfect exponential fit. Excel reports the
+        // R-squared of the linearized (ln y vs x) regression, which is 1.0 here.
+        var source = Points(
+            (0, 2 * Math.Exp(0.0)),
+            (1, 2 * Math.Exp(0.5)),
+            (2, 2 * Math.Exp(1.0)),
+            (3, 2 * Math.Exp(1.5)));
+        var trend = TrendlineCalculator.Calculate(ChartTrendlineType.Exponential, source, period: 2, order: 2);
+
+        TrendlineCalculator.TryCalculateRSquared(source, trend, out var rSquared, logTransformY: true).Should().BeTrue();
+        rSquared.Should().BeApproximately(1.0, 1e-6);
+    }
+
+    [Fact]
+    public void TryCalculateRSquared_log_space_differs_from_original_scale_for_noisy_exponential_data()
+    {
+        // Noisy exponential-ish data: the log-space R-squared (Excel's) differs from the
+        // original-scale R-squared, confirming the transform is actually applied.
+        var source = Points((0, 2.0), (1, 3.0), (2, 6.5), (3, 8.0));
+        var trend = TrendlineCalculator.Calculate(ChartTrendlineType.Exponential, source, period: 2, order: 2);
+
+        TrendlineCalculator.TryCalculateRSquared(source, trend, out var original, logTransformY: false).Should().BeTrue();
+        TrendlineCalculator.TryCalculateRSquared(source, trend, out var logSpace, logTransformY: true).Should().BeTrue();
+        logSpace.Should().NotBeApproximately(original, 1e-3);
     }
 }
