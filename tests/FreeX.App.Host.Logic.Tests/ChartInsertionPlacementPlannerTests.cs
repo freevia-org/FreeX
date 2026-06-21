@@ -6,6 +6,15 @@ namespace FreeX.App.Host.Tests;
 public sealed class ChartInsertionPlacementPlannerTests
 {
     [Fact]
+    public void CreatePlacement_UsesSharedColumnWidthPixelMapperForWorksheetCoordinates()
+    {
+        var source = LocalizedXamlTestSupport.ReadHostSourceFile("ChartInsertionPlacementPlanner.cs");
+
+        source.Should().Contain("ColumnWidthPixelMapper.ColumnWidthToPixels(width)");
+        source.Should().NotContain("private static double ColumnWidthToPixels(double width)");
+    }
+
+    [Fact]
     public void CreatePlacement_PlacesChartNextToSourceRangeInCurrentViewport()
     {
         var workbook = new Workbook("test");

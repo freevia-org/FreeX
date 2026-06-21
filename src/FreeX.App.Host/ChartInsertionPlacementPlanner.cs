@@ -1,3 +1,4 @@
+using FreeX.Core.Calc;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -142,7 +143,7 @@ internal static class ChartInsertionPlacementPlanner
         GetRowTop(sheet, row) + GetRowHeight(sheet, row);
 
     private static double GetDefaultColumnWidthPixels(Sheet sheet) =>
-        Math.Max(1, ColumnWidthToPixels(sheet.DefaultColumnWidth));
+        GetColumnWidthPixels(sheet.DefaultColumnWidth);
 
     private static double GetColumnWidthPixels(Sheet sheet, uint column) =>
         sheet.IsColEffectivelyHidden(column)
@@ -150,20 +151,10 @@ internal static class ChartInsertionPlacementPlanner
             : GetRawColumnWidthPixels(sheet, column);
 
     private static double GetRawColumnWidthPixels(Sheet sheet, uint column) =>
-        Math.Max(1, ColumnWidthToPixels(sheet.ColumnWidths.GetValueOrDefault(column, sheet.DefaultColumnWidth)));
+        GetColumnWidthPixels(sheet.ColumnWidths.GetValueOrDefault(column, sheet.DefaultColumnWidth));
 
     private static double GetColumnWidthPixels(double width) =>
-        Math.Max(1, ColumnWidthToPixels(width));
-
-    private static double ColumnWidthToPixels(double width)
-    {
-        if (!double.IsFinite(width) || width <= 0)
-            return 0;
-
-        return width < 1
-            ? Math.Round(width * 12.0, MidpointRounding.AwayFromZero)
-            : Math.Round(width * 7.0 + 5.0, MidpointRounding.AwayFromZero);
-    }
+        Math.Max(1, ColumnWidthPixelMapper.ColumnWidthToPixels(width));
 
     private static double GetDefaultRowHeight(Sheet sheet) =>
         GetRowHeight(sheet.DefaultRowHeight);
