@@ -264,6 +264,7 @@ public partial class MainWindow
         if (result.CopyToCell is { } destinationCell)
             SetActiveCell(destinationCell);
         UpdateViewport();
+        RefreshStatusBar();
     }
 
     private void ApplyAdvancedFilterRangeSelection(

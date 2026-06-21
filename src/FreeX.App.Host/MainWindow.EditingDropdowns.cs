@@ -165,6 +165,7 @@ public partial class MainWindow
             if (!ApplyAutoFilterDialogResult(plan.Range, plan.FilterColumnOffset, result, "AutoFilter"))
                 return;
             UpdateViewport();
+            RefreshStatusBar();
         };
 
         // Track the flyout so a sheet switch can dismiss it (it is a separate modeless window that
