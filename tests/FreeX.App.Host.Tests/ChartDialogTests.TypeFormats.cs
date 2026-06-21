@@ -13,6 +13,28 @@ namespace FreeX.App.Host.Tests;
 public sealed partial class ChartDialogTests
 {
     [Fact]
+    public void ChartTypeFormatDialogResults_DelegateProjectionToSharedEditingPlanners()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("ChartTypeFormatDialogs.cs");
+
+        source.Should().Contain("ChartBarFormatPlanner.Read(chart)");
+        source.Should().Contain("ChartBarFormatPlanner.Plan(ToInput())");
+        source.Should().Contain("ChartPieFormatPlanner.Read(chart)");
+        source.Should().Contain("ChartPieFormatPlanner.Plan(ToInput())");
+        source.Should().Contain("ChartBubbleFormatPlanner.Read(chart)");
+        source.Should().Contain("ChartBubbleFormatPlanner.Plan(ToInput())");
+        source.Should().Contain("ChartStockFormatPlanner.Read(chart)");
+        source.Should().Contain("ChartStockFormatPlanner.Plan(ToInput())");
+        source.Should().Contain("ChartBubbleFormatPlanner.GetSizeRepresentsChoices()");
+
+        source.Should().NotContain("chart.BarGapWidth ?? 150");
+        source.Should().NotContain("chart.UpDownBarGapWidth ?? 150");
+        source.Should().NotContain("Enum.GetValues<ChartBubbleSizeRepresents>()");
+        source.Should().NotContain("new(BarGapWidth: BarGapWidth");
+        source.Should().NotContain("new(BubbleScale: BubbleScale");
+    }
+
+    [Fact]
     public void ChartBarFormatDialogResult_ClampsGapWidthTo0To500()
     {
         ChartBarFormatDialogResult.CreateResult(-10, 0).BarGapWidth.Should().Be(0);
