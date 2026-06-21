@@ -536,13 +536,17 @@ public sealed partial class MainWindowSourceHygieneTests
         var exportPdfMethod = ExtractMethodSource(source, "private async Task<bool> ExportAsPdf(");
         var exportXpsMethod = ExtractMethodSource(source, "private async Task<bool> ExportAsXps(");
 
+        exportMethod.Should().Contain("var savePlan = ExportFilePickerPlanner.BuildPdfXpsDialogPlan(_workbook.Name, \"FreeX\");");
         exportMethod.Should().Contain("new Microsoft.Win32.SaveFileDialog");
         exportMethod.Should().Contain("Title      = UiText.Get(\"MainWindowDialog_ExportPdfXpsTitle\")");
         exportMethod.Should().Contain("Filter     = UiText.Get(\"MainWindowDialog_ExportPdfXpsFilter\")");
-        exportMethod.Should().Contain("DefaultExt = \".pdf\"");
+        exportMethod.Should().Contain("DefaultExt = savePlan.DefaultExtensionWithDot");
+        exportMethod.Should().Contain("FileName   = savePlan.SuggestedFileName");
+        exportMethod.Should().Contain("FilterIndex = savePlan.DefaultFilterIndex");
         exportMethod.Should().Contain("AddExtension = true");
         exportMethod.Should().Contain("OverwritePrompt = true");
-        exportMethod.Should().Contain("var selectedFormat = saveDlg.FilterIndex == 2");
+        exportMethod.Should().Contain("var selectedExportFileFormat = ExportFilePickerPlanner.FormatFromPdfXpsFilterIndex(saveDlg.FilterIndex)");
+        exportMethod.Should().Contain("var selectedFormat = selectedExportFileFormat == ExportFileFormat.Xps");
         exportMethod.Should().Contain("ExportPlanner.PlanExport(saveDlg.FileName, selectedFormat, optionsDialog.Result)");
         exportMethod.Should().Contain("ExportPlanner.TryValidatePublishOptions(request.Options, request.Format, out var publishOptionsError)");
         exportMethod.Should().Contain("publishOptionsError ?? UiText.Get(\"MainWindowMessage_ExportUnsupportedOptions\")");
