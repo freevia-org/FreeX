@@ -60,6 +60,17 @@ public sealed class RibbonTooltipTests
     }
 
     [Fact]
+    public void KeyTip_AttachedProperty_RoundTripsExplicitClear()
+    {
+        var button = new DependencyObject();
+        RibbonTooltip.SetKeyTip(button, "H1");
+
+        RibbonTooltip.SetKeyTip(button, "");
+
+        RibbonTooltip.GetKeyTip(button).Should().Be("");
+    }
+
+    [Fact]
     public void Title_OnFrameworkElement_SetsAutomationNameWhenMissing()
     {
         RunSta(() =>

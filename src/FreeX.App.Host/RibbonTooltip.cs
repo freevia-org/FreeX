@@ -42,8 +42,11 @@ public static class RibbonTooltip
     public static void SetKeyTip(DependencyObject o, string v) => o.SetValue(KeyTipProperty, v);
     public static string? GetKeyTip(DependencyObject o)
     {
-        var value = (string?)o.GetValue(KeyTipProperty);
-        return string.IsNullOrWhiteSpace(value) ? SharedRibbonTooltip.GetKeyTip(o) : value;
+        var localValue = o.ReadLocalValue(KeyTipProperty);
+        if (localValue is string value)
+            return value;
+
+        return SharedRibbonTooltip.GetKeyTip(o);
     }
 
     public static bool TryOpenSubmenuForKeyTip(ItemsControl menu, string keyTip) =>
