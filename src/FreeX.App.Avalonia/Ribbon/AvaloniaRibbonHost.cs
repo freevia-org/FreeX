@@ -174,6 +174,12 @@ internal sealed record AvaloniaRibbonHostCallbacks
     /// Keys are the Avalonia dotted ids; the registry re-keys them to canonical ids via the adapter.
     /// </summary>
     public IReadOnlyDictionary<string, Action>? ExtraCommands { get; init; }
+
+    /// <summary>
+    /// Optional command-id -> state bindings for entries in <see cref="ExtraCommands"/> that render checked or
+    /// disabled state, such as the View-tab show/hide checkboxes.
+    /// </summary>
+    public IReadOnlyDictionary<string, Func<RibbonCommandState>>? ExtraCommandStates { get; init; }
 }
 
 /// <summary>An <see cref="IRibbonCommand"/> that invokes a host-supplied callback (e.g. opens a dialog).</summary>
@@ -185,6 +191,23 @@ internal sealed class RelayRibbonCommand : IRibbonCommand
         => _execute = execute ?? throw new ArgumentNullException(nameof(execute));
 
     public void Execute(RibbonCommandContext context) => _execute();
+}
+
+/// <summary>An <see cref="IRibbonStatefulCommand"/> that invokes a host callback and reports live UI state.</summary>
+internal sealed class StatefulRelayRibbonCommand : IRibbonStatefulCommand
+{
+    private readonly Action _execute;
+    private readonly Func<RibbonCommandState> _getState;
+
+    public StatefulRelayRibbonCommand(Action execute, Func<RibbonCommandState> getState)
+    {
+        _execute = execute ?? throw new ArgumentNullException(nameof(execute));
+        _getState = getState ?? throw new ArgumentNullException(nameof(getState));
+    }
+
+    public void Execute(RibbonCommandContext context) => _execute();
+
+    public RibbonCommandState GetState() => _getState() ?? RibbonCommandState.Default;
 }
 
 /// <summary>
@@ -329,7 +352,19 @@ internal static class AvaloniaRibbonComposition
         void Bind(string avaloniaId, Action? action)
         {
             if (action is not null)
-                Register(registry, avaloniaId, new RelayRibbonCommand(action));
+                Register(registry, avaloniaId, CreateRelayCommand(avaloniaId, action));
+        }
+
+        IRibbonCommand CreateRelayCommand(string avaloniaId, Action action)
+        {
+            var canonicalId = AvaloniaCommandIdAdapter.ToCanonical(avaloniaId);
+            if (callbacks.ExtraCommandStates?.TryGetValue(avaloniaId, out var state) == true ||
+                callbacks.ExtraCommandStates?.TryGetValue(canonicalId, out state) == true)
+            {
+                return new StatefulRelayRibbonCommand(action, state);
+            }
+
+            return new RelayRibbonCommand(action);
         }
 
         Bind("data.textToColumns", callbacks.OpenTextToColumns);
