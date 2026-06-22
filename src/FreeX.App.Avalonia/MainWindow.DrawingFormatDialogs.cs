@@ -534,9 +534,9 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(dialog, "ShapeGradientDialog");
 
-        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 80 };
+        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 76, Width = 76 };
         AutomationProperties.SetAutomationId(ok, "ShapeGradientOkButton");
-        var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 80 };
+        var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 76, Width = 76 };
         AutomationProperties.SetAutomationId(cancel, "ShapeGradientCancelButton");
         cancel.Click += (_, _) => dialog.Close(false);
         ok.Click += (_, _) =>
@@ -555,13 +555,13 @@ public sealed partial class MainWindow
 
         var stopGrid = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("132,32,198,*"),
+            ColumnDefinitions = new ColumnDefinitions("136,40,*,54"),
             RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto"),
             Margin = new Thickness(0, 4, 0, 0),
         };
 
-        AddGradientStopRow(stopGrid, 0, "Stop 1 color (RGB):", startSwatch, startBox, "0%");
-        AddGradientStopRow(stopGrid, 1, "Stop 2 color (RGB):", endSwatch, endBox, "100%");
+        AddGradientStopRow(stopGrid, 0, UiText.Get("ShapeGradient_Stop1ColorLabel"), startSwatch, startBox, "0%");
+        AddGradientStopRow(stopGrid, 1, UiText.Get("ShapeGradient_Stop2ColorLabel"), endSwatch, endBox, "100%");
         AddGradientDirectionRow(stopGrid, directionBox);
         Grid.SetRow(preview, 3);
         Grid.SetColumnSpan(preview, 4);
@@ -656,8 +656,8 @@ public sealed partial class MainWindow
 
         directionBox.Margin = new Thickness(0, 8, 0, 0);
         Grid.SetRow(directionBox, 2);
-        Grid.SetColumn(directionBox, 2);
-        Grid.SetColumnSpan(directionBox, 2);
+        Grid.SetColumn(directionBox, 1);
+        Grid.SetColumnSpan(directionBox, 3);
         grid.Children.Add(directionBox);
     }
 
