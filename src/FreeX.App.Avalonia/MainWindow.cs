@@ -11946,40 +11946,35 @@ public sealed partial class MainWindow : Window
         await ShowTextDialogAsync("Remove Duplicates", status, 420, 220);
     }
 
-    private async Task<RemoveDuplicatesPlan?> ShowRemoveDuplicatesInputDialogAsync()
+    private async Task<RemoveDuplicatesPlan?> ShowRemoveDuplicatesInputDialogAsync(bool? forceHasHeaders = null)
     {
         RemoveDuplicatesPlan? result = null;
         var range = _session.SelectedRange;
-        var hasHeaders = RemoveDuplicatesPlanner.GuessHasHeaders(_session.ActiveSheet, range);
+        var hasHeaders = forceHasHeaders ?? RemoveDuplicatesPlanner.GuessHasHeaders(_session.ActiveSheet, range);
         IReadOnlyList<RemoveDuplicateColumnChoice> columns =
             RemoveDuplicatesPlanner.BuildColumnChoices(_session.ActiveSheet, range, hasHeaders);
 
         var dialog = new Window
         {
             Title = "Remove Duplicates",
-            Width = 440,
-            Height = 430,
-            MinWidth = 380,
-            MinHeight = 340,
+            Width = 360,
+            Height = 360,
+            MinWidth = 360,
+            MinHeight = 360,
+            MaxWidth = 360,
+            MaxHeight = 360,
+            CanResize = false,
+            FontFamily = FormulaBarFontFamily,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
         AutomationProperties.SetAutomationId(dialog, "RemoveDuplicatesCompactDialog");
 
-        var rangeText = new TextBlock
-        {
-            Text = $"Range: {FormatRangeReference(range)}",
-            Foreground = HeaderForeground,
-            TextWrapping = TextWrapping.Wrap,
-        };
-        AutomationProperties.SetName(rangeText, "Remove Duplicates range");
-        AutomationProperties.SetAutomationId(rangeText, "RemoveDuplicatesRangeSummaryText");
-        AutomationProperties.SetHelpText(rangeText, "Shows the selected range checked for duplicates.");
-
         var hasHeadersBox = new CheckBox
         {
             Content = "My data has headers",
             IsChecked = hasHeaders,
+            Margin = new Thickness(0, 0, 0, 8),
         };
         AutomationProperties.SetName(hasHeadersBox, "My data has headers");
         AutomationProperties.SetAutomationId(hasHeadersBox, "RemoveDuplicatesHasHeadersBox");
@@ -12010,22 +12005,29 @@ public sealed partial class MainWindow : Window
                 {
                     Content = column.Label,
                     IsChecked = column.IsSelected,
+                    Margin = new Thickness(0, 0, 0, 4),
                 };
                 AutomationProperties.SetName(box, column.Label);
                 AutomationProperties.SetAutomationId(box, $"RemoveDuplicatesColumn{column.Offset}Box");
                 AutomationProperties.SetHelpText(box, "Include this column when comparing duplicate rows.");
+                box.PropertyChanged += (_, e) =>
+                {
+                    if (e.Property == ToggleButton.IsCheckedProperty)
+                        RefreshBulkButtonState();
+                };
                 columnBoxes.Add(box);
                 columnsPanel.Children.Add(box);
             }
-        }
 
-        RenderColumns(columns);
+            RefreshBulkButtonState();
+        }
 
         var selectAllButton = new Button
         {
             Content = "Select All",
-            MinWidth = 92,
-            Padding = new Thickness(10, 4),
+            Width = 112,
+            MinWidth = 112,
+            Margin = new Thickness(0, 0, 8, 0),
         };
         AutomationProperties.SetName(selectAllButton, "Select All");
         AutomationProperties.SetAutomationId(selectAllButton, "RemoveDuplicatesSelectAllButton");
@@ -12034,8 +12036,8 @@ public sealed partial class MainWindow : Window
         var unselectAllButton = new Button
         {
             Content = "Unselect All",
-            MinWidth = 92,
-            Padding = new Thickness(10, 4),
+            Width = 112,
+            MinWidth = 112,
         };
         AutomationProperties.SetName(unselectAllButton, "Unselect All");
         AutomationProperties.SetAutomationId(unselectAllButton, "RemoveDuplicatesUnselectAllButton");
@@ -12045,6 +12047,7 @@ public sealed partial class MainWindow : Window
         {
             Foreground = Brush(143, 74, 18),
             TextWrapping = TextWrapping.Wrap,
+            IsVisible = false,
         };
         AutomationProperties.SetName(errorText, "Remove Duplicates validation");
         AutomationProperties.SetAutomationId(errorText, "RemoveDuplicatesErrorText");
@@ -12053,8 +12056,9 @@ public sealed partial class MainWindow : Window
         var okButton = new Button
         {
             Content = "OK",
-            MinWidth = 84,
-            Padding = new Thickness(10, 4),
+            Width = 72,
+            MinWidth = 72,
+            IsDefault = true,
         };
         AutomationProperties.SetName(okButton, "OK");
         AutomationProperties.SetAutomationId(okButton, "RemoveDuplicatesOkButton");
@@ -12063,12 +12067,20 @@ public sealed partial class MainWindow : Window
         var cancelButton = new Button
         {
             Content = "Cancel",
-            MinWidth = 84,
-            Padding = new Thickness(10, 4),
+            Width = 72,
+            MinWidth = 72,
+            IsCancel = true,
         };
         AutomationProperties.SetName(cancelButton, "Cancel");
         AutomationProperties.SetAutomationId(cancelButton, "RemoveDuplicatesCancelButton");
         AutomationProperties.SetHelpText(cancelButton, "Close Remove Duplicates without changes.");
+
+        void RefreshBulkButtonState()
+        {
+            var selectedCount = columnBoxes.Count(static box => box.IsChecked == true);
+            selectAllButton.IsEnabled = selectedCount < columnBoxes.Count;
+            unselectAllButton.IsEnabled = selectedCount > 0;
+        }
 
         void RebuildColumnsForHeaderState()
         {
@@ -12094,6 +12106,7 @@ public sealed partial class MainWindow : Window
             if (!planResult.IsReady || planResult.Plan is null)
             {
                 errorText.Text = planResult.StatusText;
+                errorText.IsVisible = true;
                 Control focusTarget = selectAllButton;
                 foreach (var columnBox in columnBoxes)
                 {
@@ -12117,15 +12130,18 @@ public sealed partial class MainWindow : Window
         selectAllButton.Click += (_, _) =>
         {
             errorText.Text = "";
+            errorText.IsVisible = false;
             RenderColumns(RemoveDuplicatesPlanner.SelectAll(CaptureColumns()));
         };
         unselectAllButton.Click += (_, _) =>
         {
             errorText.Text = "";
+            errorText.IsVisible = false;
             RenderColumns(RemoveDuplicatesPlanner.ClearAll(CaptureColumns()));
         };
         okButton.Click += (_, _) => Accept();
         cancelButton.Click += (_, _) => dialog.Close();
+        RenderColumns(columns);
 
         dialog.KeyDown += (_, e) =>
         {
@@ -12143,53 +12159,54 @@ public sealed partial class MainWindow : Window
 
         dialog.Content = new Border
         {
-            Padding = new Thickness(16),
-            Child = new StackPanel
+            Padding = new Thickness(12),
+            Child = new AvaloniaGrid
             {
-                Spacing = 12,
+                RowDefinitions =
+                {
+                    new RowDefinition { Height = GridLength.Auto },
+                    new RowDefinition { Height = GridLength.Auto },
+                    new RowDefinition { Height = GridLength.Auto },
+                    new RowDefinition { Height = new GridLength(1, GridUnitType.Star) },
+                    new RowDefinition { Height = GridLength.Auto },
+                    new RowDefinition { Height = GridLength.Auto },
+                },
                 Children =
                 {
-                    rangeText,
                     hasHeadersBox,
-                    new TextBlock
+                    Positioned(1, new TextBlock
                     {
-                        Text = "Columns",
-                        FontWeight = FontWeight.SemiBold,
-                    },
-                    new StackPanel
+                        Text = "Columns:",
+                        Margin = new Thickness(0, 0, 0, 8),
+                    }),
+                    Positioned(2, new StackPanel
                     {
                         Orientation = Orientation.Horizontal,
-                        Spacing = 8,
+                        Margin = new Thickness(0, 0, 0, 8),
                         Children =
                         {
                             selectAllButton,
                             unselectAllButton,
                         },
-                    },
-                    new Border
+                    }),
+                    Positioned(3, new ScrollViewer
                     {
-                        BorderBrush = ToolbarBorder,
-                        BorderThickness = new Thickness(1),
-                        Padding = new Thickness(8),
-                        Child = new ScrollViewer
-                        {
-                            MaxHeight = 170,
-                            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                            Content = columnsPanel,
-                        },
-                    },
-                    errorText,
-                    new StackPanel
+                        VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                        Content = columnsPanel,
+                    }),
+                    Positioned(4, errorText),
+                    Positioned(5, new StackPanel
                     {
                         Orientation = Orientation.Horizontal,
                         HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
                         Spacing = 8,
+                        Margin = new Thickness(0, 12, 0, 0),
                         Children =
                         {
                             okButton,
                             cancelButton,
                         },
-                    },
+                    }),
                 },
             },
         };
@@ -12197,6 +12214,12 @@ public sealed partial class MainWindow : Window
 
         await dialog.ShowDialog(this);
         return result;
+
+        static Control Positioned(int row, Control control)
+        {
+            AvaloniaGrid.SetRow(control, row);
+            return control;
+        }
     }
 
     private static string FormatRemoveDuplicatesStatus(

@@ -119,6 +119,7 @@ public sealed partial class MainWindow
         ("dialog.Sort", () => ShowSortDialogAsync()),
         ("dialog.SortOptions", async () => { await ShowSortOptionsDialogAsync(new SortDialogOptions()); }),
         ("dialog.AdvancedFilter", () => ShowAdvancedFilterParityDialogAsync()),
+        ("dialog.RemoveDuplicates", () => ShowRemoveDuplicatesParityDialogAsync()),
         ("dialog.DataValidation", () => ShowDataValidationDialogAsync()),
         ("dialog.ConditionalFormatNewRule", () => ShowConditionalFormatNewRuleDialogAsync()),
         ("dialog.ConditionalFormatManage", () => ShowManageConditionalFormatsDialogAsync()),
@@ -141,6 +142,34 @@ public sealed partial class MainWindow
         }
         finally
         {
+            _session.SelectRange(previousSelection);
+            RefreshShell(_statusText.Text ?? "Ready");
+        }
+    }
+
+    private async Task ShowRemoveDuplicatesParityDialogAsync()
+    {
+        var previousSheetId = _session.ActiveSheet.Id;
+        var previousSelection = _session.SelectedRange;
+        var sheetId = _session.Workbook.Sheets.Count > 0
+            ? _session.Workbook.Sheets[0].Id
+            : previousSheetId;
+        if (!previousSheetId.Equals(sheetId))
+            _session.SelectSheet(sheetId);
+
+        _session.SelectRange(new GridRange(
+            new CellAddress(sheetId, 1, 1),
+            new CellAddress(sheetId, 4, 4)));
+        RefreshShell(_statusText.Text ?? "Ready");
+
+        try
+        {
+            await ShowRemoveDuplicatesInputDialogAsync(forceHasHeaders: true);
+        }
+        finally
+        {
+            if (!previousSheetId.Equals(_session.ActiveSheet.Id))
+                _session.SelectSheet(previousSheetId);
             _session.SelectRange(previousSelection);
             RefreshShell(_statusText.Text ?? "Ready");
         }
