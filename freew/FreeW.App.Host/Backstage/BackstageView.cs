@@ -58,6 +58,8 @@ internal sealed class BackstageView : UserControl
         {
             SaveCopy = _actions.SaveCopy,
             Print = _actions.Print,
+            BuildHomePane = BuildHomePane,
+            UseNewPane = true,
             BuildOpenPane = BuildOpenPane,
             BuildSaveAsPane = BuildSaveAsPane,
             BuildExportPane = BuildExportPane
@@ -121,6 +123,27 @@ internal sealed class BackstageView : UserControl
                 [
                     new("This PC", "Browse local folders and connected drives.", () => { Hide(); _actions.Open(); }),
                     new("Browse", "Open the Windows file picker.", () => { Hide(); _actions.Open(); }),
+                ]),
+            ]));
+    }
+
+    private UIElement BuildHomePane()
+    {
+        var newPaneSpec = PaneSpecs.BuildNewPaneSpec(() => { Hide(); _actions.New(); });
+
+        return Panes.BuildActionPane(new BackstageActionPaneSpec(
+            Heading: "Home",
+            Description: "Start a document or open one stored on this PC.",
+            Groups:
+            [
+                new("New",
+                [
+                    new(newPaneSpec.TileCaption, "Create a new document.", newPaneSpec.Create),
+                ]),
+                new("Open",
+                [
+                    new("Browse", "Open the Windows file picker.", () => { Hide(); _actions.Open(); }),
+                    new("Recent", "Show recent documents in the File rail.", () => _shell.Show("Recent")),
                 ]),
             ]));
     }

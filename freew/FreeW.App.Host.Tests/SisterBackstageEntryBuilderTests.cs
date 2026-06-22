@@ -31,15 +31,18 @@ public sealed class SisterBackstageEntryBuilderTests
         {
             SaveCopy = () => { },
             Print = () => { },
+            BuildHomePane = Pane,
+            UseNewPane = true,
             BuildOpenPane = Pane,
             BuildSaveAsPane = Pane,
             BuildExportPane = Pane
         });
 
         entries.Select(EntryLabel).Should().Equal(
-            "Info",
+            "Home",
             "New",
             "Open",
+            "Info",
             "|",
             "Save",
             "Save As",
@@ -47,11 +50,13 @@ public sealed class SisterBackstageEntryBuilderTests
             "Print",
             "Export",
             "Recent",
-            "New from template",
             "Options",
             "Close");
         entries.Single(entry => entry.Label == "Options").DockBottom.Should().BeTrue();
         entries.Single(entry => entry.Label == "Close").DockBottom.Should().BeTrue();
+        entries.Single(entry => entry.Label == "Home").ContentFactory.Should().NotBeNull();
+        entries.Single(entry => entry.Label == "New").ContentFactory.Should().NotBeNull();
+        entries.Single(entry => entry.Label == "New").Action.Should().BeNull();
         entries.Single(entry => entry.Label == "Open").ContentFactory.Should().NotBeNull();
         entries.Single(entry => entry.Label == "Save As").ContentFactory.Should().NotBeNull();
         entries.Single(entry => entry.Label == "Export").ContentFactory.Should().NotBeNull();
@@ -78,6 +83,7 @@ public sealed class SisterBackstageEntryBuilderTests
         entries.Should().NotContain(entry => entry.Label == "Print");
         entries.Should().NotContain(entry => entry.Label == "Export");
         entries.Should().NotContain(entry => entry.Label == "Save a Copy");
+        entries.Should().NotContain(entry => entry.Label == "Home");
     }
 
     [Fact]
