@@ -1,9 +1,9 @@
 using FluentAssertions;
+using FreeX.App.Presentation.QuickAnalysis;
 using FreeX.Core.Model;
 using System;
 using System.Diagnostics;
 using System.Linq;
-using System.Windows;
 
 namespace FreeX.App.Host.Tests;
 
@@ -35,7 +35,7 @@ public sealed class QuickAnalysisMenuPlacementPlannerTests
             rowHeaderWidth: 44,
             columnHeaderHeight: 24);
 
-        anchor.Should().Be(new Point(368, 108));
+        anchor.Should().Be(new QuickAnalysisMenuAnchor(368, 108));
     }
 
     [Fact]
@@ -61,16 +61,16 @@ public sealed class QuickAnalysisMenuPlacementPlannerTests
             rowHeaderWidth: 44,
             columnHeaderHeight: 24);
 
-        anchor.Should().Be(new Point(288, 108));
+        anchor.Should().Be(new QuickAnalysisMenuAnchor(288, 108));
     }
 
     [Fact]
     public void BuildAnchor_UsesIndexedMetricScans()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("QuickAnalysisMenuPlacementPlanner.cs");
+        var source = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisMenuPlacementPlanner.cs");
 
         var method = source[
-            source.IndexOf("public static Point BuildAnchor", StringComparison.Ordinal)..
+            source.IndexOf("public static QuickAnalysisMenuAnchor BuildAnchor", StringComparison.Ordinal)..
             source.IndexOf("private static RowMetric?", StringComparison.Ordinal)];
         method.Should().NotContain(".Where(");
         method.Should().NotContain(".OrderByDescending(");
@@ -93,7 +93,7 @@ public sealed class QuickAnalysisMenuPlacementPlannerTests
         var selection = new GridRange(new CellAddress(sheetId, 250, 100), new CellAddress(sheetId, 260, 110));
 
         var sw = Stopwatch.StartNew();
-        Point anchor = default;
+        QuickAnalysisMenuAnchor anchor = default;
         for (var i = 0; i < 2_000; i++)
         {
             anchor = QuickAnalysisMenuPlacementPlanner.BuildAnchor(
@@ -105,7 +105,7 @@ public sealed class QuickAnalysisMenuPlacementPlannerTests
 
         sw.Stop();
         Console.WriteLine($"Quick Analysis anchor large metric scan: {sw.ElapsedMilliseconds}ms for 2000 runs");
-        anchor.Should().Be(new Point(8848, 5228));
+        anchor.Should().Be(new QuickAnalysisMenuAnchor(8848, 5228));
         sw.ElapsedMilliseconds.Should().BeLessThan(500);
     }
 }

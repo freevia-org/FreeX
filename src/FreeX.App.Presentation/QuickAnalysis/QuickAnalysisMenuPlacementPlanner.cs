@@ -1,13 +1,14 @@
-using System.Windows;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Presentation.QuickAnalysis;
+
+public readonly record struct QuickAnalysisMenuAnchor(double X, double Y);
 
 public static class QuickAnalysisMenuPlacementPlanner
 {
     private const double MenuOffset = 4;
 
-    public static Point BuildAnchor(
+    public static QuickAnalysisMenuAnchor BuildAnchor(
         GridRange selection,
         ViewportModel viewport,
         double rowHeaderWidth,
@@ -20,9 +21,9 @@ public static class QuickAnalysisMenuPlacementPlanner
         column ??= viewport.ColMetrics.Count == 0 ? null : viewport.ColMetrics[^1];
 
         if (row is null || column is null)
-            return new Point(rowHeaderWidth + MenuOffset, columnHeaderHeight + MenuOffset);
+            return new QuickAnalysisMenuAnchor(rowHeaderWidth + MenuOffset, columnHeaderHeight + MenuOffset);
 
-        return new Point(
+        return new QuickAnalysisMenuAnchor(
             rowHeaderWidth + column.LeftOffset + column.Width + MenuOffset,
             columnHeaderHeight + row.TopOffset + row.Height + MenuOffset);
     }

@@ -384,7 +384,7 @@ public sealed class ShortcutParityBehaviorTests
     [Fact]
     public void QuickAnalysisMenu_AnchorsToCellRangeBottomRightCornerOnKeyboardActivation()
     {
-        var plannerSource = DialogSourceTestSupport.ReadHostSources("QuickAnalysisMenuPlacementPlanner.cs");
+        var plannerSource = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisMenuPlacementPlanner.cs");
 
         // Anchor is computed from the last visible row and column in the selection,
         // placing the menu at the selection's visible bottom-right corner.
