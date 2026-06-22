@@ -4831,6 +4831,13 @@ public sealed partial class MainWindow : Window
                 return;
             }
 
+            if (point.Properties.IsLeftButtonPressed &&
+                TryInsertFormulaPointReference(address))
+            {
+                args.Handled = true;
+                return;
+            }
+
             if (args.KeyModifiers.HasFlag(KeyModifiers.Shift))
                 SelectRange(address);
             else
@@ -4844,6 +4851,34 @@ public sealed partial class MainWindow : Window
         };
         return DecorateAutoFilterHeaderCell(border, address);
     }
+
+    private bool TryInsertFormulaPointReference(CellAddress address)
+    {
+        if (_session.FormulaEditAddress is null ||
+            !IsFormulaPointModeText(_formulaBox.Text))
+        {
+            return false;
+        }
+
+        var reference = FormatCellReference(address);
+        var text = _formulaBox.Text ?? "";
+        var selectionStart = Math.Clamp(Math.Min(_formulaBox.SelectionStart, _formulaBox.SelectionEnd), 0, text.Length);
+        var selectionEnd = Math.Clamp(Math.Max(_formulaBox.SelectionStart, _formulaBox.SelectionEnd), 0, text.Length);
+        _formulaBox.Text = string.Concat(
+            text.AsSpan(0, selectionStart),
+            reference,
+            text.AsSpan(selectionEnd));
+        var caret = selectionStart + reference.Length;
+        _formulaBox.CaretIndex = caret;
+        _formulaBox.SelectionStart = caret;
+        _formulaBox.SelectionEnd = caret;
+        _formulaBox.Focus();
+        return true;
+    }
+
+    private static bool IsFormulaPointModeText(string? text) =>
+        !string.IsNullOrEmpty(text) &&
+        text[0] == '=';
 
     /// <summary>
     /// Builds and opens the worksheet cell context menu for <paramref name="anchor"/>. The menu is
@@ -9863,13 +9898,20 @@ public sealed partial class MainWindow : Window
     {
         if (e.Key == Key.Enter)
         {
+            var rowDelta = e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? -1 : 1;
             if (_isOpening || _isSaving)
             {
                 ShowSaveIssue("Finish saving before editing cells.");
             }
+            else if (CommitFormulaBox())
+            {
+                _session.MoveActiveCell(rowDelta, 0);
+                RefreshShell("Ready");
+                FocusShellRegion(ShellFocusRegion.Worksheet);
+            }
             else
             {
-                CommitFormulaBox();
+                _formulaBox.Focus();
             }
 
             e.Handled = true;
@@ -9881,6 +9923,7 @@ public sealed partial class MainWindow : Window
             {
                 _session.MoveActiveCell(0, colDelta);
                 RefreshShell("Ready");
+                FocusShellRegion(ShellFocusRegion.Worksheet);
             }
 
             e.Handled = true;
@@ -9890,6 +9933,7 @@ public sealed partial class MainWindow : Window
             _session.CancelFormulaEdit();
             _formulaBoxEditOriginalText = null;
             RefreshShell("Ready");
+            FocusShellRegion(ShellFocusRegion.Worksheet);
             e.Handled = true;
         }
     }

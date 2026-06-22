@@ -71,6 +71,26 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     }
 
     [Fact]
+    public void FormulaEditing_PointModeAndEnterRestoreWorksheetKeyboardRouting()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("TryInsertFormulaPointReference(address)");
+        source.Should().Contain("private bool TryInsertFormulaPointReference(CellAddress address)");
+        source.Should().Contain("_session.FormulaEditAddress is null");
+        source.Should().Contain("!IsFormulaPointModeText(_formulaBox.Text)");
+        source.Should().Contain("var reference = FormatCellReference(address);");
+        source.Should().Contain("_formulaBox.Text = string.Concat(");
+        source.Should().Contain("_formulaBox.Focus();");
+
+        source.Should().Contain("var rowDelta = e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? -1 : 1;");
+        source.Should().Contain("_session.MoveActiveCell(rowDelta, 0);");
+        source.Should().Contain("FocusShellRegion(ShellFocusRegion.Worksheet);");
+        source.Should().Contain("_session.MoveActiveCell(0, colDelta);");
+        source.Should().Contain("private static bool IsFormulaPointModeText(string? text)");
+    }
+
+    [Fact]
     public void ParityCapture_UsesSameResolutionAndDoesNotMislabelBackstageDialogs()
     {
         var captureSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
