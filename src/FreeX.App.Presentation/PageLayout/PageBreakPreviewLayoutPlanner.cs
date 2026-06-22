@@ -145,32 +145,28 @@ public static class PageBreakPreviewLayoutPlanner
         double actualHeight)
     {
         var pages = new List<PageBreakPreviewPageLayout>(rowSegments.Count * columnSegments.Count);
-        for (var rowIndex = 0; rowIndex < rowSegments.Count; rowIndex++)
+        foreach (var page in PrintPageGridPlanner.BuildVisualIndexes(rowSegments.Count, columnSegments.Count, pageOrder))
         {
-            for (var columnIndex = 0; columnIndex < columnSegments.Count; columnIndex++)
+            var rowSegment = rowSegments[page.RowPageIndex];
+            var columnSegment = columnSegments[page.ColumnPageIndex];
+            var pageRange = new GridRange(
+                new CellAddress(printArea.Start.Sheet, rowSegment.Start, columnSegment.Start),
+                new CellAddress(printArea.Start.Sheet, rowSegment.End, columnSegment.End));
+
+            if (!TryCalculateVisibleRangeBounds(
+                    viewport,
+                    pageRange,
+                    rowHeaderWidth,
+                    columnHeaderHeight,
+                    actualWidth,
+                    actualHeight,
+                    out var pageBounds,
+                    out var visibleEdges))
             {
-                var pageRange = new GridRange(
-                    new CellAddress(printArea.Start.Sheet, rowSegments[rowIndex].Start, columnSegments[columnIndex].Start),
-                    new CellAddress(printArea.Start.Sheet, rowSegments[rowIndex].End, columnSegments[columnIndex].End));
-
-                if (!TryCalculateVisibleRangeBounds(
-                        viewport,
-                        pageRange,
-                        rowHeaderWidth,
-                        columnHeaderHeight,
-                        actualWidth,
-                        actualHeight,
-                        out var pageBounds,
-                        out var visibleEdges))
-                {
-                    continue;
-                }
-
-                var pageNumber = pageOrder == WorksheetPageOrder.OverThenDown
-                    ? (rowIndex * columnSegments.Count) + columnIndex + 1
-                    : (columnIndex * rowSegments.Count) + rowIndex + 1;
-                pages.Add(new PageBreakPreviewPageLayout(pageNumber, pageBounds, visibleEdges));
+                continue;
             }
+
+            pages.Add(new PageBreakPreviewPageLayout(page.SheetPageNumber, pageBounds, visibleEdges));
         }
 
         return pages;

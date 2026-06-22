@@ -174,22 +174,11 @@ public static class PageContentRenderModelBuilder
         PagePaginationResult pagePlan,
         int pageIndex)
     {
-        // Mirror the source page order: OverThenDown walks all columns within a row band before
-        // advancing the row band; DownThenOver walks all rows within a column band first.
-        if (pageOrder == WorksheetPageOrder.OverThenDown)
-        {
-            var columnsPerBand = pagePlan.ColumnPageCount;
-            var rowIndex = pageIndex / columnsPerBand;
-            var colIndex = pageIndex % columnsPerBand;
-            return (pagePlan.RowSegments[rowIndex], pagePlan.ColumnSegments[colIndex]);
-        }
-        else
-        {
-            var rowsPerBand = pagePlan.RowPageCount;
-            var colIndex = pageIndex / rowsPerBand;
-            var rowIndex = pageIndex % rowsPerBand;
-            return (pagePlan.RowSegments[rowIndex], pagePlan.ColumnSegments[colIndex]);
-        }
+        var page = PrintPageGridPlanner.BuildIndexes(
+            pagePlan.RowPageCount,
+            pagePlan.ColumnPageCount,
+            pageOrder)[pageIndex];
+        return (pagePlan.RowSegments[page.RowPageIndex], pagePlan.ColumnSegments[page.ColumnPageIndex]);
     }
 
     private static IReadOnlyList<uint> BuildAxisIndexes(WorksheetRepeatRange? repeat, PageAxisSegment segment)
