@@ -585,18 +585,21 @@
   <data name="ShapeEffects_ThreeDRotation" xml:space="preserve"><value>3-D Rotation</value></data>
   <data name="ShapeEffects_ThreeDRotationDescription" xml:space="preserve"><value>Tilt the shape in three-dimensional space.</value></data>
   <!-- Shape Gradient dialog -->
-  <data name="ShapeGradient_Title" xml:space="preserve"><value>Gradient Fill</value></data>
+  <data name="ShapeGradient_Title" xml:space="preserve"><value>Shape Gradient</value></data>
   <data name="ShapeGradient_StartColorLabel" xml:space="preserve"><value>Start color:</value></data>
   <data name="ShapeGradient_EndColorLabel" xml:space="preserve"><value>End color:</value></data>
+  <data name="ShapeGradient_Stop1ColorLabel" xml:space="preserve"><value>Stop 1 color (RGB):</value></data>
+  <data name="ShapeGradient_Stop2ColorLabel" xml:space="preserve"><value>Stop 2 color (RGB):</value></data>
+  <data name="ShapeGradient_GradientStopsGroup" xml:space="preserve"><value>Gradient stops</value></data>
   <data name="ShapeGradient_DirectionLabel" xml:space="preserve"><value>Direction:</value></data>
   <data name="ShapeGradient_ChooseStartColor" xml:space="preserve"><value>Start color...</value></data>
   <data name="ShapeGradient_ChooseEndColor" xml:space="preserve"><value>End color...</value></data>
   <data name="ShapeGradient_PreviewLabel" xml:space="preserve"><value>Preview</value></data>
   <data name="ShapeGradient_Applied" xml:space="preserve"><value>Shape gradient set ({0} → {1}).</value></data>
-  <data name="ShapeGradient_DirectionDiagonalDown" xml:space="preserve"><value>Diagonal down</value></data>
+  <data name="ShapeGradient_DirectionDiagonalDown" xml:space="preserve"><value>Diagonal Stripe</value></data>
   <data name="ShapeGradient_DirectionHorizontal" xml:space="preserve"><value>Horizontal</value></data>
   <data name="ShapeGradient_DirectionVertical" xml:space="preserve"><value>Vertical</value></data>
-  <data name="ShapeGradient_DirectionDiagonalUp" xml:space="preserve"><value>Diagonal up</value></data>
+  <data name="ShapeGradient_DirectionDiagonalUp" xml:space="preserve"><value>Reverse Diagonal Stripe</value></data>
   <!-- Crop Picture dialog -->
   <data name="PictureCrop_Title" xml:space="preserve"><value>Crop Picture</value></data>
   <data name="PictureCrop_LeftLabel" xml:space="preserve"><value>Left (%):</value></data>

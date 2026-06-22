@@ -34,6 +34,14 @@ public sealed class LocTests
     }
 
     [Fact]
+    public void Get_NeutralCulture_UsesWindowsShapeGradientLabels()
+    {
+        WithUiCulture("en-US", () => Loc.Get("ShapeGradient_Title")).Should().Be("Shape Gradient");
+        WithUiCulture("en-US", () => Loc.Get("ShapeGradient_GradientStopsGroup")).Should().Be("Gradient stops");
+        WithUiCulture("en-US", () => Loc.Get("ShapeGradient_DirectionDiagonalDown")).Should().Be("Diagonal Stripe");
+    }
+
+    [Fact]
     public void Get_FrenchCulture_ReturnsTranslation()
     {
         WithUiCulture("fr-FR", () => Loc.Get("Common_Cancel")).Should().Be("Annuler");
@@ -104,6 +112,7 @@ public sealed class LocTests
         var keys = Loc.GetNeutralResourceKeys();
         keys.Should().Contain("Common_Cancel");
         keys.Should().Contain("PivotOptions_Title");
+        keys.Should().Contain("ShapeGradient_GradientStopsGroup");
     }
 
     [Fact]
