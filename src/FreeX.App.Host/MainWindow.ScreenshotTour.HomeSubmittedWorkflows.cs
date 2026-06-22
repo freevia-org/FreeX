@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows;
 using FreeX.App.Services;
+using FreeX.App.Services.Ribbon;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -74,7 +75,7 @@ public partial class MainWindow
 
             ExecuteHomeSubmittedRepeatableCommand(
                 "Hide Row",
-                () => RowColumnDimensionPlanner.CreateRowsHiddenCommand(_currentSheetId, context.HideRowRange, hidden: true));
+                () => RowColumnSizingPlanner.CreateRowsHiddenCommand(_currentSheetId, context.HideRowRange, hidden: true));
             captures.Add(await CaptureHomeSubmittedWorkflowsWindowAsync(
                 outputDir,
                 context,
@@ -82,12 +83,12 @@ public partial class MainWindow
                 "freex_home_submitted_workflows_hidden_row_result",
                 "Hide Row result omits row 7 from the visible grid while adjacent rows remain visible.",
                 "Hidden row result grid",
-                "CommandBus.ExecuteRepeatable -> RowColumnDimensionPlanner.CreateRowsHiddenCommand(hidden: true)",
+                "CommandBus.ExecuteRepeatable -> RowColumnSizingPlanner.CreateRowsHiddenCommand(hidden: true)",
                 context.HideRowRange));
 
             ExecuteHomeSubmittedRepeatableCommand(
                 "Unhide Row",
-                () => RowColumnDimensionPlanner.CreateRowsHiddenCommand(_currentSheetId, context.HideRowRange, hidden: false));
+                () => RowColumnSizingPlanner.CreateRowsHiddenCommand(_currentSheetId, context.HideRowRange, hidden: false));
             captures.Add(await CaptureHomeSubmittedWorkflowsWindowAsync(
                 outputDir,
                 context,
@@ -95,7 +96,7 @@ public partial class MainWindow
                 "freex_home_submitted_workflows_unhidden_row_result",
                 "Unhide Row result restores row 7 to the visible grid through the matching row-dimension command path.",
                 "Unhidden row result grid",
-                "CommandBus.ExecuteRepeatable -> RowColumnDimensionPlanner.CreateRowsHiddenCommand(hidden: false)",
+                "CommandBus.ExecuteRepeatable -> RowColumnSizingPlanner.CreateRowsHiddenCommand(hidden: false)",
                 context.HideRowRange));
 
             ExecuteHomeSubmittedRepeatableCommand(

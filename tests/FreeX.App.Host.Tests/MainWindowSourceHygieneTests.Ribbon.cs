@@ -907,17 +907,16 @@ public sealed partial class MainWindowSourceHygieneTests
     public void AutoFitMenuHandlers_UsePlannerAndPerTargetExplicitSizes()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.CellsCommands.cs");
-        var planner = DialogSourceTestSupport.ReadHostSources("AutoFitPlanner.cs");
-        var dimensionPlanner = DialogSourceTestSupport.ReadHostSources("RowColumnDimensionPlanner.cs");
+        var planner = DialogSourceTestSupport.ReadAppServicesRibbonSource("RowColumnSizingPlanner.cs");
 
-        source.Should().Contain("AutoFitPlanner.PlanRowHeights");
-        source.Should().Contain("AutoFitPlanner.PlanColumnWidths");
-        source.Should().Contain("RowColumnDimensionPlanner.CreateAutoFitRowHeightCommand(sheetId, plans)");
-        source.Should().Contain("RowColumnDimensionPlanner.CreateAutoFitColumnWidthCommand(sheetId, plans)");
-        dimensionPlanner.Should().Contain("if (plans.Count == 1)");
-        dimensionPlanner.Should().Contain("return createCommand(plans[0]);");
-        dimensionPlanner.Should().Contain("new SetRowHeightCommand(sheetId, plan.Index, plan.Index, plan.Size)");
-        dimensionPlanner.Should().Contain("new SetColumnWidthCommand(sheetId, plan.Index, plan.Index, plan.Size)");
+        source.Should().Contain("RowColumnSizingPlanner.PlanAutoFitRowHeights");
+        source.Should().Contain("RowColumnSizingPlanner.PlanAutoFitColumnWidths");
+        source.Should().Contain("RowColumnSizingPlanner.CreateAutoFitRowHeightCommand(sheetId, plans)");
+        source.Should().Contain("RowColumnSizingPlanner.CreateAutoFitColumnWidthCommand(sheetId, plans)");
+        planner.Should().Contain("if (plans.Count == 1)");
+        planner.Should().Contain("return createCommand(plans[0]);");
+        planner.Should().Contain("new SetRowHeightCommand(sheetId, plan.Index, plan.Index, plan.Size)");
+        planner.Should().Contain("new SetColumnWidthCommand(sheetId, plan.Index, plan.Index, plan.Size)");
         source.Should().NotContain("return new SetRowHeightCommand(sheetId, range.Start.Row, range.End.Row, height)");
         source.Should().NotContain("return new SetColumnWidthCommand(sheetId, range.Start.Col, range.End.Col, width)");
         planner.Should().Contain("AutoFitSizingService.EstimateRowHeight");
