@@ -1,5 +1,3 @@
-using System.Collections;
-using System.Globalization;
 using System.Resources;
 using FreeX.App.Localization;
 
@@ -9,6 +7,7 @@ internal static class UiText
 {
     private const string ResourceBaseName = "FreeX.App.Host.Resources.Strings";
     private static readonly ResourceManager ResourceManager = new(ResourceBaseName, typeof(UiText).Assembly);
+    private static readonly LocalizedTextCatalog Catalog = new(ResourceManager);
 
     public static string Ok => Get("Common_Ok");
     public static string Cancel => Get("Common_Cancel");
@@ -17,43 +16,16 @@ internal static class UiText
     public static string InformationTitle => Get("Common_InformationTitle");
     public static string ConfirmTitle => Get("Common_ConfirmTitle");
 
-    public static string Get(string key)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        var text = ResourceManager.GetString(key, CultureInfo.CurrentUICulture);
-        if (text is null)
-            return CreateMissingText(key);
+    public static string Get(string key) => Catalog.Get(key);
 
-        if (!AppLanguageCatalog.IsPseudoLocalizationCulture(CultureInfo.CurrentUICulture.Name))
-            return text;
+    internal static string GetNeutral(string key) => Catalog.GetNeutral(key);
 
-        var neutralText = ResourceManager.GetString(key, CultureInfo.InvariantCulture);
-        return PseudoLocalization.Expand(neutralText ?? text);
-    }
+    public static string Format(string key, params object?[] args) => Catalog.Format(key, args);
 
-    internal static string GetNeutral(string key)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        return ResourceManager.GetString(key, CultureInfo.InvariantCulture) ?? CreateMissingText(key);
-    }
-
-    public static string Format(string key, params object?[] args) =>
-        string.Format(CultureInfo.CurrentCulture, Get(key), args);
-
-    public static IReadOnlySet<string> GetNeutralResourceKeys()
-    {
-        var resourceSet = ResourceManager.GetResourceSet(CultureInfo.InvariantCulture, createIfNotExists: true, tryParents: true);
-        if (resourceSet is null)
-            return new HashSet<string>(StringComparer.Ordinal);
-
-        return resourceSet
-            .Cast<DictionaryEntry>()
-            .Select(entry => (string)entry.Key)
-            .ToHashSet(StringComparer.Ordinal);
-    }
+    public static IReadOnlySet<string> GetNeutralResourceKeys() => Catalog.GetNeutralResourceKeys();
 
     public static string CreateAutomationName(string textWithAccessKey) =>
-        textWithAccessKey.Replace("_", string.Empty, StringComparison.Ordinal);
+        LocalizedTextCatalog.CreateAutomationName(textWithAccessKey);
 
-    public static string CreateMissingText(string key) => "[[" + key + "]]";
+    public static string CreateMissingText(string key) => LocalizedTextCatalog.CreateMissingText(key);
 }

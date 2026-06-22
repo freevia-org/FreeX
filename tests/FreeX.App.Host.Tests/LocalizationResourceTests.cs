@@ -29,6 +29,14 @@ public sealed partial class LocalizationResourceTests
     }
 
     [Fact]
+    public void UiText_SharedHelpers_MatchLocalizationCatalog()
+    {
+        UiText.CreateAutomationName("_Cancel").Should().Be(LocalizedTextCatalog.CreateAutomationName("_Cancel"));
+        UiText.CreateMissingText("Missing_Key").Should().Be(LocalizedTextCatalog.CreateMissingText("Missing_Key"));
+        UiText.GetNeutralResourceKeys().Should().Contain("Common_Cancel");
+    }
+
+    [Fact]
     public void UiText_Format_UsesCurrentCultureForArguments()
     {
         using var cultureScope = TestCultureScope.CurrentCultureAndUICulture(currentCulture: "fr-FR", currentUICulture: "en-US");

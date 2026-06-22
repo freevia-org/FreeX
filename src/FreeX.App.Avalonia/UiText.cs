@@ -14,4 +14,10 @@ internal static class UiText
     public static string Format(string key, params object?[] args) => Loc.Format(key, args);
 
     public static string GetNeutral(string key) => Loc.GetNeutral(key);
+
+    public static IReadOnlySet<string> GetNeutralResourceKeys() => Loc.GetNeutralResourceKeys();
+
+    public static string CreateAutomationName(string textWithAccessKey) => Loc.CreateAutomationName(textWithAccessKey);
+
+    public static string CreateMissingText(string key) => Loc.CreateMissingText(key);
 }
