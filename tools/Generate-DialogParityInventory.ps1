@@ -202,6 +202,7 @@ $routes = @(
     @{
         RouteId = "dialog.RemoveDuplicates"; DisplayName = "Remove Duplicates"
         Wpf = @("screenshots\data-tools-dialogs-tour\freex_data_tools_remove_duplicates_*.png")
+        Shared = @("src\FreeX.App.Services\RemoveDuplicatesPlanner.cs")
     },
     @{
         RouteId = "dialog.GoalSeek"; DisplayName = "Goal Seek"

@@ -2509,6 +2509,7 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresNativeRemoveDuplicatesThroughSharedPlannerSessionAndCompactDialog()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var parityCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "RemoveDuplicatesPlanner.cs"));
         var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
@@ -2536,9 +2537,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("RefreshShell(status);");
         source.Should().Contain("ShowTextDialogAsync(\"Remove Duplicates\", status, 420, 220)");
 
-        source.Should().Contain("private async Task<RemoveDuplicatesPlan?> ShowRemoveDuplicatesInputDialogAsync()");
+        source.Should().Contain("private async Task<RemoveDuplicatesPlan?> ShowRemoveDuplicatesInputDialogAsync(bool? forceHasHeaders = null)");
         source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"RemoveDuplicatesCompactDialog\");");
-        source.Should().Contain("AutomationProperties.SetAutomationId(rangeText, \"RemoveDuplicatesRangeSummaryText\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(hasHeadersBox, \"RemoveDuplicatesHasHeadersBox\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(columnsPanel, \"RemoveDuplicatesColumnsPanel\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(box, $\"RemoveDuplicatesColumn{column.Offset}Box\");");
@@ -2563,6 +2563,9 @@ public sealed class AvaloniaShellSourceTests
         plannerSource.Should().Contain("public static bool GuessHasHeaders(Sheet sheet, GridRange range)");
         plannerSource.Should().Contain("public static GridRange ExcludeHeaderRow(GridRange range, bool hasHeaders)");
         plannerSource.Should().Contain("public RemoveDuplicateRowsCommand CreateCommand(SheetId sheetId, GridRange activeRange)");
+        parityCaptureSource.Should().Contain("(\"dialog.RemoveDuplicates\", () => ShowRemoveDuplicatesParityDialogAsync()),");
+        parityCaptureSource.Should().Contain("private async Task ShowRemoveDuplicatesParityDialogAsync()");
+        parityCaptureSource.Should().Contain("await ShowRemoveDuplicatesInputDialogAsync(forceHasHeaders: true);");
 
         var handlerIndex = normalizedSource.IndexOf("private async Task ShowRemoveDuplicatesDialogAsync()", StringComparison.Ordinal);
         handlerIndex.Should().BeGreaterThanOrEqualTo(0);
@@ -2670,8 +2673,6 @@ public sealed class AvaloniaShellSourceTests
             "AutomationProperties.SetHelpText(summaryBelowBox, \"Place summary rows below the grouped data.\");",
             "AutomationProperties.SetName(errorText, \"Subtotal validation\");",
             "AutomationProperties.SetHelpText(errorText, \"Shows Subtotal validation messages.\");",
-            "AutomationProperties.SetName(rangeText, \"Remove Duplicates range\");",
-            "AutomationProperties.SetHelpText(rangeText, \"Shows the selected range checked for duplicates.\");",
             "AutomationProperties.SetName(hasHeadersBox, \"My data has headers\");",
             "AutomationProperties.SetHelpText(hasHeadersBox, \"Treat the first row as headers when comparing duplicates.\");",
             "AutomationProperties.SetName(columnsPanel, \"Columns\");",
