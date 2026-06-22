@@ -16286,21 +16286,21 @@ public sealed partial class MainWindow : Window
         var manageConditionalFormatsClosedWithoutAccept = false;
         await ShowManageConditionalFormatsDialogAsync(probe =>
         {
-            hasManageConditionalFormatsDialog = HasLaunchSmokeDialog(probe.Dialog, "Manage Conditional Formatting Rules");
+            hasManageConditionalFormatsDialog = HasLaunchSmokeDialog(probe.Dialog, UiText.Get("ManageConditionalFormats_ConditionalFormattingRulesManager"));
             hasManageConditionalFormatsListControls =
                 HasLaunchSmokeAutomationId(probe.ListBox, "ManageConditionalFormatsListBox") &&
-                string.Equals(AutomationProperties.GetName(probe.ListBox), "Conditional formatting rules", StringComparison.Ordinal);
+                HasLaunchSmokeText(AutomationProperties.GetName(probe.ListBox), UiText.Get("ManageConditionalFormats_ConditionalFormattingRules"));
             hasManageConditionalFormatsReorderControls =
-                HasLaunchSmokeButton(probe.MoveUpButton, "ManageConditionalFormatsMoveUpButton", "Move Up") &&
-                HasLaunchSmokeButton(probe.MoveDownButton, "ManageConditionalFormatsMoveDownButton", "Move Down");
+                HasLaunchSmokeNamedButton(probe.MoveUpButton, "ManageConditionalFormatsMoveUpButton", UiText.Get("ManageConditionalFormats_MoveUp")) &&
+                HasLaunchSmokeNamedButton(probe.MoveDownButton, "ManageConditionalFormatsMoveDownButton", UiText.Get("ManageConditionalFormats_MoveDown"));
             hasManageConditionalFormatsAppliesToControls =
                 HasLaunchSmokeAutomationId(probe.AppliesToBox, "ManageConditionalFormatsAppliesToBox") &&
-                HasLaunchSmokeButton(probe.ApplyAppliesToButton, "ManageConditionalFormatsApplyAppliesToButton", "Apply Range");
+                HasLaunchSmokeButton(probe.ApplyAppliesToButton, "ManageConditionalFormatsApplyAppliesToButton", UiText.Get("ManageConditionalFormats_Apply"));
             hasManageConditionalFormatsActionButtons =
-                HasLaunchSmokeButton(probe.NewButton, "ManageConditionalFormatsNewButton", "New…") &&
-                HasLaunchSmokeButton(probe.EditButton, "ManageConditionalFormatsEditButton", "Edit…") &&
-                HasLaunchSmokeButton(probe.DeleteButton, "ManageConditionalFormatsDeleteButton", "Delete") &&
-                HasLaunchSmokeButton(probe.CloseButton, "ManageConditionalFormatsCloseButton", "Close");
+                HasLaunchSmokeButton(probe.NewButton, "ManageConditionalFormatsNewButton", UiText.Get("ManageConditionalFormats_NewRule")) &&
+                HasLaunchSmokeButton(probe.EditButton, "ManageConditionalFormatsEditButton", UiText.Get("ManageConditionalFormats_EditRule")) &&
+                HasLaunchSmokeButton(probe.DeleteButton, "ManageConditionalFormatsDeleteButton", UiText.Get("ManageConditionalFormats_DeleteRule")) &&
+                HasLaunchSmokeButton(probe.CloseButton, "ManageConditionalFormatsCloseButton", UiText.Get("Common_Ok"));
             hasManageConditionalFormatsCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 560, height: 460, minWidth: 480, minHeight: 360);
             manageConditionalFormatsClosedWithoutAccept = true;
         });
@@ -16398,15 +16398,25 @@ public sealed partial class MainWindow : Window
 
     private static bool HasLaunchSmokeButton(Button button, string automationId, string content) =>
         HasLaunchSmokeAutomationId(button, automationId) &&
-        string.Equals(button.Content?.ToString(), content, StringComparison.Ordinal);
+        HasLaunchSmokeText(button.Content?.ToString(), content);
+
+    private static bool HasLaunchSmokeNamedButton(Button button, string automationId, string name) =>
+        HasLaunchSmokeAutomationId(button, automationId) &&
+        HasLaunchSmokeText(AutomationProperties.GetName(button), name);
 
     private static bool HasLaunchSmokeCheckBox(CheckBox checkBox, string automationId, string content) =>
         HasLaunchSmokeAutomationId(checkBox, automationId) &&
-        string.Equals(checkBox.Content?.ToString(), content, StringComparison.Ordinal);
+        HasLaunchSmokeText(checkBox.Content?.ToString(), content);
 
     private static bool HasLaunchSmokeComboBox(ComboBox comboBox, string automationId, string name) =>
         HasLaunchSmokeAutomationId(comboBox, automationId) &&
-        string.Equals(AutomationProperties.GetName(comboBox), name, StringComparison.Ordinal);
+        HasLaunchSmokeText(AutomationProperties.GetName(comboBox), name);
+
+    private static bool HasLaunchSmokeText(string? actual, string expected) =>
+        string.Equals(NormalizeLaunchSmokeText(actual), NormalizeLaunchSmokeText(expected), StringComparison.Ordinal);
+
+    private static string NormalizeLaunchSmokeText(string? text) =>
+        (text ?? string.Empty).Replace("_", string.Empty, StringComparison.Ordinal);
 
     private static bool HasLaunchSmokeAutomationId(Control control, string automationId) =>
         string.Equals(AutomationProperties.GetAutomationId(control), automationId, StringComparison.Ordinal);

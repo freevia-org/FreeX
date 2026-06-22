@@ -4807,7 +4807,11 @@ public sealed class AvaloniaShellSourceTests
         cfSource.Should().Contain("private sealed record ConditionalFormatRuleDialogSmokeProbe(");
         cfSource.Should().Contain("private sealed record ManageConditionalFormatsDialogSmokeProbe(");
         windowSource.Should().Contain("HasLaunchSmokeDialog(probe.Dialog, \"New Formatting Rule\")");
-        windowSource.Should().Contain("HasLaunchSmokeDialog(probe.Dialog, \"Manage Conditional Formatting Rules\")");
+        windowSource.Should().Contain("HasLaunchSmokeDialog(probe.Dialog, UiText.Get(\"ManageConditionalFormats_ConditionalFormattingRulesManager\"))");
+        windowSource.Should().Contain("HasLaunchSmokeText(AutomationProperties.GetName(probe.ListBox), UiText.Get(\"ManageConditionalFormats_ConditionalFormattingRules\"))");
+        windowSource.Should().Contain("HasLaunchSmokeNamedButton(probe.MoveUpButton, \"ManageConditionalFormatsMoveUpButton\", UiText.Get(\"ManageConditionalFormats_MoveUp\"))");
+        windowSource.Should().Contain("HasLaunchSmokeButton(probe.ApplyAppliesToButton, \"ManageConditionalFormatsApplyAppliesToButton\", UiText.Get(\"ManageConditionalFormats_Apply\"))");
+        windowSource.Should().Contain("NormalizeLaunchSmokeText(string? text)");
 
         // Snapshot fields, IsPassed gating, and report lines for the two CF dialogs.
         smokeSource.Should().Contain("bool HasConditionalFormatRuleDialog = false,");
