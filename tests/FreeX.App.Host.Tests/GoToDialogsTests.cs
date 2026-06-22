@@ -265,24 +265,27 @@ public sealed class GoToDialogsTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("GoToSpecialDialog.cs");
 
-        foreach (var expected in new[]
+        source.Should().Contain("GoToSpecialDialogPlanner.BuildChoices(CreateDialogText())");
+        source.Should().Contain("private static GoToSpecialDialogText CreateDialogText()");
+
+        foreach (var expectedResource in new[]
         {
-            "new(GoToSpecialKind.Blanks, UiText.Get(\"GoToSpecial_Blanks\"))",
-            "new(GoToSpecialKind.Constants, UiText.Get(\"GoToSpecial_Constants\"))",
-            "new(GoToSpecialKind.Formulas, UiText.Get(\"GoToSpecial_Formulas\"))",
-            "new(GoToSpecialKind.Comments, UiText.Get(\"GoToSpecial_Comments\"))",
-            "new(GoToSpecialKind.CurrentRegion, UiText.Get(\"GoToSpecial_CurrentRegion\"))",
-            "new(GoToSpecialKind.RowDifferences, UiText.Get(\"GoToSpecial_RowDifferences\"))",
-            "new(GoToSpecialKind.ColumnDifferences, UiText.Get(\"GoToSpecial_ColumnDifferences\"))",
-            "new(GoToSpecialKind.LastCell, UiText.Get(\"GoToSpecial_LastCell\"))",
-            "new(GoToSpecialKind.ConditionalFormats, UiText.Get(\"GoToSpecial_ConditionalFormats\"))",
-            "new(GoToSpecialKind.Objects, UiText.Get(\"GoToSpecial_Objects\"))",
-            "new(GoToSpecialKind.Precedents, UiText.Get(\"GoToSpecial_Precedents\"))",
-            "new(GoToSpecialKind.Dependents, UiText.Get(\"GoToSpecial_Dependents\"))",
-            "new(GoToSpecialKind.DataValidation, UiText.Get(\"GoToSpecial_DataValidation\"))",
-            "new(GoToSpecialKind.VisibleCellsOnly, UiText.Get(\"GoToSpecial_VisibleCellsOnly\"))"
+            "GoToSpecial_Blanks",
+            "GoToSpecial_Constants",
+            "GoToSpecial_Formulas",
+            "GoToSpecial_Comments",
+            "GoToSpecial_CurrentRegion",
+            "GoToSpecial_RowDifferences",
+            "GoToSpecial_ColumnDifferences",
+            "GoToSpecial_LastCell",
+            "GoToSpecial_ConditionalFormats",
+            "GoToSpecial_Objects",
+            "GoToSpecial_Precedents",
+            "GoToSpecial_Dependents",
+            "GoToSpecial_DataValidation",
+            "GoToSpecial_VisibleCellsOnly"
         })
-            source.Should().Contain(expected);
+            source.Should().Contain($"UiText.Get(\"{expectedResource}\")");
 
         source.Should().Contain("Header = UiText.Get(\"GoToSpecial_GoToSpecial\")");
         source.Should().NotContain("Header = \"Additional Excel options\"");
@@ -315,9 +318,8 @@ public sealed class GoToDialogsTests
         source.Should().Contain("Content = UiText.Get(\"GoToSpecial_Logicals\")");
         source.Should().Contain("Content = UiText.Get(\"GoToSpecial_Errors\")");
         source.Should().Contain("RefreshValueTypeOptions");
-        source.Should().Contain("UsesValueTypeOptions(SelectedKind)");
-        source.Should().Contain("new GoToSpecialOptions(GetSelectedValueTypes())");
-        source.Should().Contain("new GoToSpecialOptions()");
+        source.Should().Contain("GoToSpecialDialogPlanner.UsesValueTypeOptions(kind)");
+        source.Should().Contain("GoToSpecialDialogPlanner.BuildOptions(SelectedKind, GetSelectedValueTypes())");
         source.Should().NotContain("valueTypes == GoToSpecialValueTypes.None ? GoToSpecialValueTypes.All : valueTypes");
     }
 
