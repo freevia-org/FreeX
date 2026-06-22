@@ -94,6 +94,8 @@ internal static class ExcelSmokeFixtures
             Path.Combine(outputDirectory, "Excel_native_pivot_multiple_pivots_one_cache_001.xlsx"),
             Path.Combine(outputDirectory, "Excel_native_pivot_filters_sorts_002.xlsx"),
             Path.Combine(outputDirectory, "Excel_native_pivot_layout_options_002.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_pivot_date_grouping_003.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_pivot_calculated_field_item_003.xlsx"),
         ];
     }
 
@@ -221,6 +223,10 @@ internal static class ExcelSmokeFixtures
                 AddNativePivotFiltersSorts(workbook, dataSheet);
             else if (fileName.Contains("layout_options", StringComparison.OrdinalIgnoreCase))
                 AddNativePivotLayoutOptions(workbook, dataSheet);
+            else if (fileName.Contains("date_grouping", StringComparison.OrdinalIgnoreCase))
+                AddNativePivotDateGrouping(workbook, dataSheet);
+            else if (fileName.Contains("calculated_field_item", StringComparison.OrdinalIgnoreCase))
+                AddNativePivotCalculatedFieldItem(workbook, dataSheet);
             else
                 throw new InvalidOperationException($"Unknown Excel native PivotTable fixture: {fileName}");
 
@@ -1414,6 +1420,111 @@ internal static class ExcelSmokeFixtures
         }
     }
 
+    private static void AddNativePivotDateGrouping(object workbook, object sourceWorksheet)
+    {
+        object? pivotSheet = null;
+        object? cache = null;
+        object? pivot = null;
+        object? saleDateField = null;
+        object? salesField = null;
+        object? dataField = null;
+        object? application = null;
+        object? groupingCell = null;
+        try
+        {
+            pivotSheet = AddWorksheetAfter(workbook, sourceWorksheet, "Pivot Date Group");
+            SetExcelCellValue(pivotSheet, 1, 1, "Native PivotTable true date grouping");
+            cache = CreateWorksheetRangePivotCache(workbook, "'SalesData'!R1C1:R13C7");
+            pivot = ((dynamic)cache).CreatePivotTable("'Pivot Date Group'!R3C1", "NativePivotDateGrouping");
+
+            saleDateField = ((dynamic)pivot).PivotFields("SaleDate");
+            ((dynamic)saleDateField).Orientation = XlRowField;
+            salesField = ((dynamic)pivot).PivotFields("Sales");
+            dataField = ((dynamic)pivot).AddDataField(salesField, "Sum of Sales", XlSum);
+            ((dynamic)dataField).NumberFormat = "$#,##0";
+            ((dynamic)pivot).TableStyle2 = "PivotStyleMedium6";
+            RefreshExcelPivotTable(pivot);
+
+            application = ((dynamic)workbook).Application;
+            ((dynamic)pivotSheet).Activate();
+            groupingCell = ((dynamic)pivotSheet).Range("A4");
+            ((dynamic)groupingCell).Select();
+            ((dynamic)application).Selection.Group(true, true, Missing.Value, CreateExcelDatePeriodsArray(months: true, years: true));
+
+            RefreshExcelPivotTable(pivot);
+            AutoFitExcelColumns(pivotSheet, "A:D");
+        }
+        finally
+        {
+            ReleaseComObject(groupingCell);
+            ReleaseComObject(application);
+            ReleaseComObject(dataField);
+            ReleaseComObject(salesField);
+            ReleaseComObject(saleDateField);
+            ReleaseComObject(pivot);
+            ReleaseComObject(cache);
+            ReleaseComObject(pivotSheet);
+        }
+    }
+
+    private static void AddNativePivotCalculatedFieldItem(object workbook, object sourceWorksheet)
+    {
+        object? pivotSheet = null;
+        object? cache = null;
+        object? pivot = null;
+        object? regionField = null;
+        object? categoryField = null;
+        object? salesField = null;
+        object? calculatedFields = null;
+        object? calculatedField = null;
+        object? calculatedItems = null;
+        object? calculatedItem = null;
+        object? salesDataField = null;
+        object? calculatedDataField = null;
+        try
+        {
+            pivotSheet = AddWorksheetAfter(workbook, sourceWorksheet, "Pivot Calculations");
+            SetExcelCellValue(pivotSheet, 1, 1, "Native PivotTable calculated field and item");
+            cache = CreateWorksheetRangePivotCache(workbook, "'SalesData'!R1C1:R13C7");
+            pivot = ((dynamic)cache).CreatePivotTable("'Pivot Calculations'!R3C1", "NativePivotCalculatedFieldItem");
+
+            regionField = ((dynamic)pivot).PivotFields("Region");
+            ((dynamic)regionField).Orientation = XlRowField;
+            categoryField = ((dynamic)pivot).PivotFields("Category");
+            ((dynamic)categoryField).Orientation = XlColumnField;
+            salesField = ((dynamic)pivot).PivotFields("Sales");
+            salesDataField = ((dynamic)pivot).AddDataField(salesField, "Sum of Sales", XlSum);
+            ((dynamic)salesDataField).NumberFormat = "$#,##0";
+            RefreshExcelPivotTable(pivot);
+
+            calculatedFields = ((dynamic)pivot).CalculatedFields();
+            calculatedField = ((dynamic)calculatedFields).Add("Sales Bonus", "=Sales*0.10");
+            calculatedDataField = ((dynamic)pivot).AddDataField(calculatedField, "Sum of Sales Bonus", XlSum);
+            ((dynamic)calculatedDataField).NumberFormat = "$#,##0";
+
+            calculatedItems = ((dynamic)regionField).CalculatedItems();
+            calculatedItem = ((dynamic)calculatedItems).Add("North South", "=North+South");
+            ((dynamic)pivot).TableStyle2 = "PivotStyleMedium7";
+            RefreshExcelPivotTable(pivot);
+            AutoFitExcelColumns(pivotSheet, "A:H");
+        }
+        finally
+        {
+            ReleaseComObject(calculatedDataField);
+            ReleaseComObject(salesDataField);
+            ReleaseComObject(calculatedItem);
+            ReleaseComObject(calculatedItems);
+            ReleaseComObject(calculatedField);
+            ReleaseComObject(calculatedFields);
+            ReleaseComObject(salesField);
+            ReleaseComObject(categoryField);
+            ReleaseComObject(regionField);
+            ReleaseComObject(pivot);
+            ReleaseComObject(cache);
+            ReleaseComObject(pivotSheet);
+        }
+    }
+
     private static object[] CreateExcelBooleanArray(bool value)
     {
         var values = new object[12];
@@ -1421,6 +1532,24 @@ internal static class ExcelSmokeFixtures
             values[index] = value;
         return values;
     }
+
+    private static object[] CreateExcelDatePeriodsArray(
+        bool seconds = false,
+        bool minutes = false,
+        bool hours = false,
+        bool days = false,
+        bool months = false,
+        bool quarters = false,
+        bool years = false) =>
+    [
+        seconds,
+        minutes,
+        hours,
+        days,
+        months,
+        quarters,
+        years
+    ];
 
     private static object AddWorksheetAfter(object workbook, object afterWorksheet, string name)
     {

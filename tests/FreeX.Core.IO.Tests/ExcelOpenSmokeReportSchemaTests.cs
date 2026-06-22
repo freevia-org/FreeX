@@ -31,6 +31,8 @@ public sealed class ExcelOpenSmokeReportSchemaTests
         fixturesSource.Should().Contain("Excel_native_pivot_multiple_pivots_one_cache_001.xlsx");
         fixturesSource.Should().Contain("Excel_native_pivot_filters_sorts_002.xlsx");
         fixturesSource.Should().Contain("Excel_native_pivot_layout_options_002.xlsx");
+        fixturesSource.Should().Contain("Excel_native_pivot_date_grouping_003.xlsx");
+        fixturesSource.Should().Contain("Excel_native_pivot_calculated_field_item_003.xlsx");
         programSource.Should().Contain("ExcelNativePivotCorpusExpectations");
     }
 
