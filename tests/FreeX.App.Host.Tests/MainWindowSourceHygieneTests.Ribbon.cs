@@ -1037,9 +1037,13 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAnalysis.cs");
         var planner = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisPlanner.cs");
+        var shellPlanner = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisShellPlanner.cs");
 
         source.Should().Contain("ToolTip = option.PreviewText");
+        source.Should().Contain("QuickAnalysisShellPlanner.GroupOptions(options)");
+        source.Should().Contain("QuickAnalysisShellPlanner.GroupTitleFallback(group.Group)");
         planner.Should().Contain("QuickAnalysisPreviewKind");
+        shellPlanner.Should().Contain("GroupTitleFallback(QuickAnalysisGroup group)");
     }
 
     [Fact]

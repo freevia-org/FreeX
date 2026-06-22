@@ -7,6 +7,16 @@ namespace FreeX.App.Avalonia.Tests;
 public sealed class AvaloniaMainWindowChromeSourceTests
 {
     [Fact]
+    public void QuickAnalysisShell_UsesSharedGroupTitleMetadata()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.QuickAnalysis.cs"));
+
+        source.Should().Contain("QuickAnalysisShellPlanner.GroupTitleResourceKey(group.Group)");
+        source.Should().NotContain("QuickAnalysisGroupTitle(");
+        source.Should().NotContain("QuickAnalysisGroup.Formatting => UiText.Get");
+    }
+
+    [Fact]
     public void WorksheetChrome_UsesCompactGridMetricsAndExcelSheetTabOrder()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));

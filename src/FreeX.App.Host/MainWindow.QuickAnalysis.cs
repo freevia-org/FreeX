@@ -59,35 +59,33 @@ public partial class MainWindow
             _suppressNextQuickAnalysisClosedStatusReset = false;
         };
 
-        string? currentGroup = null;
-        foreach (var option in options)
+        foreach (var group in QuickAnalysisShellPlanner.GroupOptions(options))
         {
-            if (currentGroup != option.Group)
-            {
-                if (currentGroup is not null)
-                    menu.Items.Add(new Separator());
+            if (menu.Items.Count > 0)
+                menu.Items.Add(new Separator());
 
-                menu.Items.Add(new MenuItem
+            menu.Items.Add(new MenuItem
+            {
+                Header = QuickAnalysisShellPlanner.GroupTitleFallback(group.Group),
+                IsEnabled = false
+            });
+
+            foreach (var option in group.Options)
+            {
+                var item = new MenuItem
                 {
-                    Header = option.Group,
-                    IsEnabled = false
-                });
-                currentGroup = option.Group;
+                    Header = option.Label,
+                    Tag = option,
+                    ToolTip = option.PreviewText,
+                    Icon = QuickAnalysisPreviewIconFactory.Create(option.PreviewVisual)
+                };
+                item.MouseEnter += QuickAnalysisMenuItem_MouseEnter;
+                item.MouseLeave += QuickAnalysisMenuItem_MouseLeave;
+                item.GotKeyboardFocus += QuickAnalysisMenuItem_GotKeyboardFocus;
+                item.LostKeyboardFocus += QuickAnalysisMenuItem_LostKeyboardFocus;
+                item.Click += QuickAnalysisMenuItem_Click;
+                menu.Items.Add(item);
             }
-
-            var item = new MenuItem
-            {
-                Header = option.Label,
-                Tag = option,
-                ToolTip = option.PreviewText,
-                Icon = QuickAnalysisPreviewIconFactory.Create(option.PreviewVisual)
-            };
-            item.MouseEnter += QuickAnalysisMenuItem_MouseEnter;
-            item.MouseLeave += QuickAnalysisMenuItem_MouseLeave;
-            item.GotKeyboardFocus += QuickAnalysisMenuItem_GotKeyboardFocus;
-            item.LostKeyboardFocus += QuickAnalysisMenuItem_LostKeyboardFocus;
-            item.Click += QuickAnalysisMenuItem_Click;
-            menu.Items.Add(item);
         }
 
         MenuKeyTipAssigner.AssignUniqueKeyTips(menu.Items.OfType<MenuItem>().Where(item => item.IsEnabled));

@@ -15,18 +15,6 @@ namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
-    /// <summary>The display title for each Quick Analysis group, in model order.</summary>
-    private static string QuickAnalysisGroupTitle(QuickAnalysisGroup group) =>
-        group switch
-        {
-            QuickAnalysisGroup.Formatting => UiText.Get("TableLoc_QaGroupFormatting"),
-            QuickAnalysisGroup.Charts => UiText.Get("TableLoc_QaGroupCharts"),
-            QuickAnalysisGroup.Totals => UiText.Get("TableLoc_QaGroupTotals"),
-            QuickAnalysisGroup.Tables => UiText.Get("TableLoc_QaGroupTables"),
-            QuickAnalysisGroup.Sparklines => UiText.Get("TableLoc_QaGroupSparklines"),
-            _ => group.ToString(),
-        };
-
     /// <summary>
     /// Opens the Quick Analysis popup for the current multi-cell selection. The selection is described by
     /// the UI-free <see cref="QuickAnalysisSelectionReader"/>, then turned into grouped suggestions by the
@@ -72,7 +60,7 @@ public sealed partial class MainWindow
         {
             groupsPanel.Children.Add(new TextBlock
             {
-                Text = QuickAnalysisGroupTitle(group.Group),
+                Text = UiText.Get(QuickAnalysisShellPlanner.GroupTitleResourceKey(group.Group)),
                 Foreground = HeaderForeground,
                 FontWeight = FontWeight.SemiBold,
             });

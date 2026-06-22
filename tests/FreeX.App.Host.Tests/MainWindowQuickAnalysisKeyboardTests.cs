@@ -280,7 +280,7 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
         {
             var option = CurrentOptions()
                 .FirstOrDefault(option =>
-                    option.Group == group &&
+                    QuickAnalysisShellPlanner.GroupTitleFallback(option.Group) == group &&
                     option.Label == header)
                 ?? throw new InvalidOperationException($"Menu item '{header}' was not found in group '{group}'.");
 
@@ -316,16 +316,12 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
         private static IReadOnlyList<string> BuildOpenMenuHeaders(IReadOnlyList<QuickAnalysisOption> options)
         {
             var headers = new List<string>();
-            string? currentGroup = null;
-            foreach (var option in options)
+            foreach (var group in QuickAnalysisShellPlanner.GroupOptions(options))
             {
-                if (currentGroup != option.Group)
-                {
-                    headers.Add(option.Group);
-                    currentGroup = option.Group;
-                }
+                headers.Add(QuickAnalysisShellPlanner.GroupTitleFallback(group.Group));
 
-                headers.Add(option.Label);
+                foreach (var option in group.Options)
+                    headers.Add(option.Label);
             }
 
             return headers;

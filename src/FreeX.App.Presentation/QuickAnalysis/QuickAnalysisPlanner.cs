@@ -63,27 +63,27 @@ public static class QuickAnalysisPlanner
         QuickAnalysisCommand command,
         string previewText,
         QuickAnalysisPreviewVisualKind visualKind) =>
-        new("Formatting", label, command, QuickAnalysisPreviewKind.ConditionalFormat, previewText, new QuickAnalysisPreviewVisual(visualKind));
+        new(QuickAnalysisGroup.Formatting, label, command, QuickAnalysisPreviewKind.ConditionalFormat, previewText, new QuickAnalysisPreviewVisual(visualKind));
 
     private static QuickAnalysisOption Chart(
         string label,
         QuickAnalysisCommand command,
         string previewText,
         QuickAnalysisPreviewVisualKind visualKind) =>
-        new("Charts", label, command, QuickAnalysisPreviewKind.Chart, previewText, new QuickAnalysisPreviewVisual(visualKind));
+        new(QuickAnalysisGroup.Charts, label, command, QuickAnalysisPreviewKind.Chart, previewText, new QuickAnalysisPreviewVisual(visualKind));
 
     private static QuickAnalysisOption Total(string label, QuickAnalysisCommand command, string previewText) =>
-        new("Totals", label, command, QuickAnalysisPreviewKind.Total, previewText, new QuickAnalysisPreviewVisual(QuickAnalysisPreviewVisualKind.TotalFormula));
+        new(QuickAnalysisGroup.Totals, label, command, QuickAnalysisPreviewKind.Total, previewText, new QuickAnalysisPreviewVisual(QuickAnalysisPreviewVisualKind.TotalFormula));
 
     private static QuickAnalysisOption Table(string label, QuickAnalysisCommand command, string previewText) =>
-        new("Tables", label, command, QuickAnalysisPreviewKind.Table, previewText, new QuickAnalysisPreviewVisual(QuickAnalysisPreviewVisualKind.Table));
+        new(QuickAnalysisGroup.Tables, label, command, QuickAnalysisPreviewKind.Table, previewText, new QuickAnalysisPreviewVisual(QuickAnalysisPreviewVisualKind.Table));
 
     private static QuickAnalysisOption Sparkline(
         string label,
         QuickAnalysisCommand command,
         string previewText,
         QuickAnalysisPreviewVisualKind visualKind) =>
-        new("Sparklines", label, command, QuickAnalysisPreviewKind.Sparkline, previewText, new QuickAnalysisPreviewVisual(visualKind));
+        new(QuickAnalysisGroup.Sparklines, label, command, QuickAnalysisPreviewKind.Sparkline, previewText, new QuickAnalysisPreviewVisual(visualKind));
 
     public static QuickAnalysisHoverPreview BuildHoverPreview(GridRange selection, QuickAnalysisOption option)
     {
@@ -104,7 +104,7 @@ public static class QuickAnalysisPlanner
 }
 
 public sealed record QuickAnalysisOption(
-    string Group,
+    QuickAnalysisGroup Group,
     string Label,
     QuickAnalysisCommand Command,
     QuickAnalysisPreviewKind PreviewKind,

@@ -189,7 +189,7 @@ public sealed class QuickAnalysisCommandRouterTests
 
     private static QuickAnalysisOption Option(QuickAnalysisCommand command) =>
         new(
-            "Formatting",
+            QuickAnalysisGroup.Formatting,
             command.ToString(),
             command,
             QuickAnalysisPreviewKind.ConditionalFormat,

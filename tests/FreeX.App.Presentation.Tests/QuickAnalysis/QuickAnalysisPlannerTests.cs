@@ -26,7 +26,12 @@ public sealed class QuickAnalysisPlannerTests
         options.Select(option => option.Group)
             .Distinct()
             .Should()
-            .Equal("Formatting", "Charts", "Totals", "Tables", "Sparklines");
+            .Equal(
+                QuickAnalysisGroup.Formatting,
+                QuickAnalysisGroup.Charts,
+                QuickAnalysisGroup.Totals,
+                QuickAnalysisGroup.Tables,
+                QuickAnalysisGroup.Sparklines);
         options.Select(option => option.Command)
             .Should()
             .Contain([
@@ -66,7 +71,7 @@ public sealed class QuickAnalysisPlannerTests
                 QuickAnalysisCommand.LineSparkline
             ]);
 
-        options.Where(option => option.Group == "Formatting")
+        options.Where(option => option.Group == QuickAnalysisGroup.Formatting)
             .Select(option => option.Label)
             .Should()
             .Equal(
@@ -88,7 +93,7 @@ public sealed class QuickAnalysisPlannerTests
                 "Below Average",
                 "Clear Conditional Formatting");
 
-        options.Where(option => option.Group == "Charts")
+        options.Where(option => option.Group == QuickAnalysisGroup.Charts)
             .Select(option => option.Label)
             .Should()
             .Equal(
@@ -110,6 +115,42 @@ public sealed class QuickAnalysisPlannerTests
 
         options.Single(option => option.Label == "More Charts...")
             .Command.Should().Be(QuickAnalysisCommand.MoreCharts);
+    }
+
+    [Fact]
+    public void BuildOptions_GroupsThroughSharedShellPlanner()
+    {
+        var sheetId = SheetId.New();
+        var selection = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 5, 4));
+
+        var groups = QuickAnalysisShellPlanner.GroupOptions(QuickAnalysisPlanner.BuildOptions(selection));
+
+        groups.Select(group => group.Group)
+            .Should()
+            .Equal(
+                QuickAnalysisGroup.Formatting,
+                QuickAnalysisGroup.Charts,
+                QuickAnalysisGroup.Totals,
+                QuickAnalysisGroup.Tables,
+                QuickAnalysisGroup.Sparklines);
+        groups[0].Options.Select(option => option.Label)
+            .Should()
+            .StartWith(["Data Bars", "Color Scale", "Icon Set"]);
+    }
+
+    [Theory]
+    [InlineData(QuickAnalysisGroup.Formatting, "TableLoc_QaGroupFormatting", "Formatting")]
+    [InlineData(QuickAnalysisGroup.Charts, "TableLoc_QaGroupCharts", "Charts")]
+    [InlineData(QuickAnalysisGroup.Totals, "TableLoc_QaGroupTotals", "Totals")]
+    [InlineData(QuickAnalysisGroup.Tables, "TableLoc_QaGroupTables", "Tables")]
+    [InlineData(QuickAnalysisGroup.Sparklines, "TableLoc_QaGroupSparklines", "Sparklines")]
+    public void ShellPlanner_CentralizesGroupTitles(
+        QuickAnalysisGroup group,
+        string expectedResourceKey,
+        string expectedFallback)
+    {
+        QuickAnalysisShellPlanner.GroupTitleResourceKey(group).Should().Be(expectedResourceKey);
+        QuickAnalysisShellPlanner.GroupTitleFallback(group).Should().Be(expectedFallback);
     }
 
     [Fact]
