@@ -67,7 +67,7 @@ internal static class AvaloniaExtraCommandIds
         "Ruler", "Switch Windows", "Reset Window Position", "Custom Views",
         "Freeze Panes#FreezeAtSelectionMenuItem_Click", "Freeze Top Row", "Freeze First Column",
         "Unfreeze Panes", "Tiled", "Cascade", "Vertical", "Horizontal#ArrangeAllMenuItem_Click",
-        "200%", "100%#ZoomPresetMenuItem_Click", "75%", "50%", "25%",
+        "200%", "100%#ZoomPresetMenuItem_Click", "75%", "50%", "25%", "More",
         // ── Page Layout menu items ────────────────────────────────────────────────────────────────────
         "Custom Margins", "Narrow", "Wide", "Normal", "Portrait", "Landscape",
         "Set Print Area", "Clear Print Area", "Choose Background", "Delete Background",
