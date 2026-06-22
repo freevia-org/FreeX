@@ -478,8 +478,10 @@ public sealed class AvaloniaShellSourceTests
         optionsSource.Should().Contain("AppOptionsStore.Save(projected)");
         optionsSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"OptionsDialog\");");
         optionsSource.Should().Contain("AutomationProperties.SetAutomationId(okButton, \"OptionsOkButton\");");
-        optionsSource.Should().Contain("AutomationProperties.SetAutomationId(applyButton, \"OptionsApplyButton\");");
         optionsSource.Should().Contain("AutomationProperties.SetAutomationId(cancelButton, \"OptionsCancelButton\");");
+        optionsSource.Should().Contain("OptionsText(\"Options_CategoryQuickAccessToolbar\")");
+        optionsSource.Should().Contain("OptionsText(\"Options_CategoryTrustCenter\")");
+        optionsSource.Should().NotContain("OptionsApplyButton");
 
         // Live application of the cheap view/calc settings to the running session.
         optionsSource.Should().Contain("private void ApplyLiveOptions(OptionsDialogPlanner.OptionsDialogInput input)");
