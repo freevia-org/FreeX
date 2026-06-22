@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows.Input;
 using System.Xml.Linq;
 using FluentAssertions;
+using Free.Shared.AppServices;
 using FreeX.App.Host;
 
 namespace FreeX.App.Host.Tests;

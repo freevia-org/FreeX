@@ -3,7 +3,6 @@ using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Free.Shared.AppServices;
-using FreeX.App.Services.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
 
 namespace FreeX.App.Avalonia.Tests;
