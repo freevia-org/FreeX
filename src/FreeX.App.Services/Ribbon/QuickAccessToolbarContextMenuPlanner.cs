@@ -3,7 +3,7 @@ namespace FreeX.App.Services.Ribbon;
 /// <summary>
 /// Platform-neutral planner that describes the Quick Access Toolbar (QAT) right-click context menus as
 /// declarative command trees, mirroring <see cref="SheetTabContextMenuPlanner"/> and
-/// <see cref="StatusBarCustomizeContextMenuPlanner"/>. Two menus live here:
+/// <see cref="Free.Shared.AppServices.StatusBarCustomizeContextMenuPlanner"/>. Two menus live here:
 /// <list type="bullet">
 /// <item>
 /// The <b>customization</b> menu opened from a ribbon command (or a QAT button): a single dynamic item that

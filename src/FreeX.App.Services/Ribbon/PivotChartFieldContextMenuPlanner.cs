@@ -2,7 +2,7 @@ namespace FreeX.App.Services.Ribbon;
 
 /// <summary>
 /// Platform-neutral planner that describes the PivotChart field-button (and pivot header-dropdown) context
-/// menu as a declarative command tree, mirroring <see cref="StatusBarCustomizeContextMenuPlanner"/> and
+/// menu as a declarative command tree, mirroring <see cref="Free.Shared.AppServices.StatusBarCustomizeContextMenuPlanner"/> and
 /// <see cref="QuickAccessToolbarContextMenuPlanner"/>. Unlike the static field-area menu modelled by
 /// <see cref="PivotFieldContextMenuPlanner"/>, this menu is built dynamically from the clicked field's live
 /// filter/sort state: it shows an optional disabled summary banner, dynamic sort/filter headers, and

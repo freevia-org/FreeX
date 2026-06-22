@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
-using FreeX.App.Services.Ribbon;
+using Free.Shared.AppServices;
 
 namespace FreeX.App.Avalonia;
 

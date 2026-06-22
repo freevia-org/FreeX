@@ -1,14 +1,13 @@
-namespace FreeX.App.Services.Ribbon;
+namespace Free.Shared.AppServices;
 
 /// <summary>
 /// Platform-neutral planner that describes the status-bar "Customize Status Bar" right-click menu as a
-/// declarative command tree, mirroring <see cref="SheetTabContextMenuPlanner"/>. The menu is the Excel-style
-/// list of toggles that control which status-bar fields (Cell Mode, aggregates such as Average/Count/Sum,
-/// zoom controls, …) are shown. Each toggle carries its persisted-option <see cref="OptionTag"/> (matching
-/// the value the host's <c>StatusBarCustomizeMenuItem_Click</c> switch reads from <c>Tag</c>) and its
-/// stable <see cref="AutomationId"/>. The host resolves <see cref="ResourceKey"/> to a localized header,
-/// applies the explicit <see cref="KeyTip"/>, and renders <see cref="IsCheckable"/> items with the live
-/// checked state supplied at open time.
+/// declarative command tree, mirroring sister app context-menu planners. The menu is the Excel-style list of
+/// toggles that control which status-bar fields (Cell Mode, aggregates such as Average/Count/Sum, zoom controls,
+/// and so on) are shown. Each toggle carries its persisted-option <see cref="OptionTag"/> and stable
+/// <see cref="AutomationId"/>. The host resolves <see cref="ResourceKey"/> to a localized header, applies the
+/// explicit <see cref="KeyTip"/>, and renders <see cref="IsCheckable"/> items with the live checked state supplied
+/// at open time.
 /// </summary>
 public static class StatusBarCustomizeContextMenuPlanner
 {
