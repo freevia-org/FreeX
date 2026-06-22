@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 
 namespace Free.Shared.Shell.Wpf;
 
@@ -146,10 +147,77 @@ public sealed class BackstagePaneComposer
         return panel;
     }
 
+    public UIElement BuildActionPane(BackstageActionPaneSpec spec)
+    {
+        ArgumentNullException.ThrowIfNull(spec);
+
+        var panel = new StackPanel { MaxWidth = 720, HorizontalAlignment = HorizontalAlignment.Left };
+        panel.Children.Add(_kit.HeadingText(spec.Heading));
+
+        if (!string.IsNullOrWhiteSpace(spec.Description))
+        {
+            panel.Children.Add(new TextBlock
+            {
+                Text = spec.Description,
+                Foreground = _kit.Muted,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 16)
+            });
+        }
+
+        foreach (var group in spec.Groups)
+        {
+            panel.Children.Add(_kit.SubHeading(group.Heading));
+
+            foreach (var action in group.Actions)
+                panel.Children.Add(ActionRow(action));
+        }
+
+        return _kit.Scroll(panel);
+    }
+
     private void AddFields(Panel panel, IReadOnlyList<BackstageFieldRow> fields)
     {
         foreach (var field in fields)
             panel.Children.Add(_kit.Field(field.Label, field.Value));
+    }
+
+    private UIElement ActionRow(BackstageActionRow action)
+    {
+        var button = new Button
+        {
+            Background = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            Padding = new Thickness(0),
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            Cursor = Cursors.Hand,
+            FocusVisualStyle = null,
+            Margin = new Thickness(0, 0, 0, 10)
+        };
+        button.Click += (_, _) => action.Invoke();
+
+        var stack = new StackPanel();
+        stack.Children.Add(new TextBlock
+        {
+            Text = action.Label,
+            Foreground = _kit.Link,
+            FontSize = 14
+        });
+
+        if (!string.IsNullOrWhiteSpace(action.Description))
+        {
+            stack.Children.Add(new TextBlock
+            {
+                Text = action.Description,
+                Foreground = _kit.Muted,
+                FontSize = 11,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 2, 0, 0)
+            });
+        }
+
+        button.Content = stack;
+        return button;
     }
 }
 
@@ -181,3 +249,17 @@ public sealed record BackstageOptionsPaneSpec(
     IReadOnlyList<BackstageFieldRow> Fields,
     string? EditText = null,
     Action? Edit = null);
+
+public sealed record BackstageActionPaneSpec(
+    string Heading,
+    string Description,
+    IReadOnlyList<BackstageActionGroup> Groups);
+
+public sealed record BackstageActionGroup(
+    string Heading,
+    IReadOnlyList<BackstageActionRow> Actions);
+
+public sealed record BackstageActionRow(
+    string Label,
+    string Description,
+    Action Invoke);
