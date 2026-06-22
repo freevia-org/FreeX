@@ -114,6 +114,7 @@ public sealed partial class MainWindow
         ("dialog.FormatCells", () => ShowFormatCellsDialogAsync()),
         ("dialog.FindReplace", () => ShowFindDialogAsync()),
         ("dialog.GoTo", () => ShowGoToDialogAsync()),
+        ("dialog.GoToSpecial", () => ShowGoToSpecialDialogAsync()),
         ("dialog.Sort", () => ShowSortDialogAsync()),
         ("dialog.SortOptions", async () => { await ShowSortOptionsDialogAsync(new SortDialogOptions()); }),
         ("dialog.DataValidation", () => ShowDataValidationDialogAsync()),

@@ -12,7 +12,7 @@ public sealed partial class GoToDialog
         string defaultAddress,
         IEnumerable<string>? recentReferences,
         IEnumerable<string>? definedNames)
-        => WorkbookReferenceNavigator.BuildReferenceChoices(defaultAddress, recentReferences, definedNames);
+        => GoToDialogPlanner.BuildReferenceChoices(defaultAddress, recentReferences, definedNames);
 
     public static bool TryParseReference(
         string text,
@@ -26,5 +26,5 @@ public sealed partial class GoToDialog
         SheetId sheetId,
         IReadOnlyDictionary<string, GridRange>? definedNames,
         out GridRange range)
-        => WorkbookReferenceNavigator.TryParseReferenceRange(text, sheetId, definedNames, out range);
+        => GoToDialogPlanner.TryParseReferenceRange(text, sheetId, definedNames, out range);
 }

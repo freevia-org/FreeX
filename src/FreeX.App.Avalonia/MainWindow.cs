@@ -183,7 +183,7 @@ public sealed partial class MainWindow : Window
         GoToSpecialOptions? SpecialOptions);
     private sealed record GoToSpecialDialogSmokeProbe(
         Window Dialog,
-        ComboBox KindBox,
+        Control KindBox,
         CheckBox NumbersBox,
         CheckBox TextBox,
         CheckBox LogicalsBox,
@@ -191,10 +191,6 @@ public sealed partial class MainWindow : Window
         Button OkButton,
         Button CancelButton);
     private sealed record GoToSpecialDialogResult(GoToSpecialKind Kind, GoToSpecialOptions Options);
-    private sealed record GoToSpecialChoice(GoToSpecialKind Kind, string Label)
-    {
-        public override string ToString() => Label;
-    }
     private sealed record SortDialogSmokeProbe(
         Window Dialog,
         CheckBox HeadersCheckBox,
@@ -7213,7 +7209,7 @@ public sealed partial class MainWindow : Window
     }
 
     private IReadOnlyList<string> BuildGoToReferenceChoices(string defaultReference) =>
-        WorkbookReferenceNavigator.BuildReferenceChoices(
+        GoToDialogPlanner.BuildReferenceChoices(
             defaultReference,
             recentReferences: null,
             definedNames: _session.Workbook.NamedRanges.Keys);
@@ -7225,10 +7221,13 @@ public sealed partial class MainWindow : Window
         var dialog = new Window
         {
             Title = "Go To",
-            Width = 380,
+            Width = 420,
             Height = 320,
-            MinWidth = 340,
-            MinHeight = 280,
+            MinWidth = 420,
+            MinHeight = 320,
+            MaxWidth = 420,
+            MaxHeight = 320,
+            CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -7238,16 +7237,24 @@ public sealed partial class MainWindow : Window
         var historyList = new ListBox
         {
             ItemsSource = BuildGoToReferenceChoices(defaultReference),
-            MinHeight = 120,
+            Background = Brushes.White,
+            MinHeight = 150,
         };
-        AutomationProperties.SetName(historyList, "Go to");
+        var historyBorder = new Border
+        {
+            Background = Brushes.White,
+            BorderBrush = FormulaBarControlBorder,
+            BorderThickness = new Thickness(1),
+            Child = historyList,
+        };
+        AutomationProperties.SetName(historyList, "Go To");
         AutomationProperties.SetHelpText(historyList, "Recent references and defined names");
         AutomationProperties.SetAutomationId(historyList, "GoToHistoryList");
 
         var inputBox = new TextBox
         {
             Text = defaultReference,
-            MinWidth = 280,
+            MinWidth = 330,
         };
         AutomationProperties.SetName(inputBox, "Reference");
         AutomationProperties.SetAutomationId(inputBox, "GoToReferenceBox");
@@ -7255,24 +7262,26 @@ public sealed partial class MainWindow : Window
         var specialButton = new Button
         {
             Content = "Special...",
-            MinWidth = 84,
-            Padding = new Thickness(10, 4),
+            Width = 86,
+            MinWidth = 86,
         };
         AutomationProperties.SetAutomationId(specialButton, "GoToSpecialButton");
 
         var acceptButton = new Button
         {
-            Content = "Go",
-            MinWidth = 84,
-            Padding = new Thickness(10, 4),
+            Content = "OK",
+            Width = 72,
+            MinWidth = 72,
+            IsDefault = true,
         };
         AutomationProperties.SetAutomationId(acceptButton, "GoToReferenceBoxAcceptButton");
 
         var cancelButton = new Button
         {
             Content = "Cancel",
-            MinWidth = 84,
-            Padding = new Thickness(10, 4),
+            Width = 72,
+            MinWidth = 72,
+            IsCancel = true,
         };
         AutomationProperties.SetAutomationId(cancelButton, "GoToReferenceBoxCancelButton");
 
@@ -7329,24 +7338,55 @@ public sealed partial class MainWindow : Window
             Children =
             {
                 specialButton,
-                cancelButton,
                 acceptButton,
+                cancelButton,
             },
         };
 
-        dialog.Content = new StackPanel
+        var root = new AvaloniaGrid
         {
-            Margin = new Thickness(16),
-            Spacing = 8,
-            Children =
-            {
-                new TextBlock { Text = "Go to" },
-                historyList,
-                new TextBlock { Text = "Reference" },
-                inputBox,
-                buttonRow,
-            },
+            Margin = new Thickness(12),
         };
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(90) });
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var historyLabel = new TextBlock
+        {
+            Text = "Go to:",
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 6),
+        };
+        Grid.SetRow(historyLabel, 0);
+        Grid.SetColumnSpan(historyLabel, 2);
+        root.Children.Add(historyLabel);
+
+        Grid.SetRow(historyBorder, 1);
+        Grid.SetColumnSpan(historyBorder, 2);
+        root.Children.Add(historyBorder);
+
+        var referenceLabel = new TextBlock
+        {
+            Text = "Reference:",
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            Margin = new Thickness(0, 10, 8, 12),
+        };
+        Grid.SetRow(referenceLabel, 2);
+        root.Children.Add(referenceLabel);
+
+        inputBox.Margin = new Thickness(0, 10, 0, 12);
+        Grid.SetRow(inputBox, 2);
+        Grid.SetColumn(inputBox, 1);
+        root.Children.Add(inputBox);
+
+        Grid.SetRow(buttonRow, 3);
+        Grid.SetColumnSpan(buttonRow, 2);
+        root.Children.Add(buttonRow);
+
+        dialog.Content = root;
         dialog.Opened += (_, _) =>
         {
             inputBox.Focus();
@@ -7463,23 +7503,21 @@ public sealed partial class MainWindow : Window
         var dialog = new Window
         {
             Title = "Go To Special",
-            Width = 420,
-            Height = 310,
-            MinWidth = 360,
-            MinHeight = 280,
+            Width = 430,
+            Height = 520,
+            MinWidth = 430,
+            MinHeight = 520,
+            MaxWidth = 430,
+            MaxHeight = 520,
+            CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
 
         var choices = CreateGoToSpecialChoices();
-        var kindBox = new ComboBox
-        {
-            ItemsSource = choices,
-            SelectedIndex = 0,
-            MinWidth = 300,
-        };
-        AutomationProperties.SetName(kindBox, "Go to");
-        AutomationProperties.SetAutomationId(kindBox, "GoToSpecialKindBox");
+        var kindButtons = new List<RadioButton>(choices.Length);
+        var choiceGrid = CreateGoToSpecialChoiceGrid(choices, kindButtons);
+        AutomationProperties.SetAutomationId(choiceGrid, "GoToSpecialKindBox");
 
         var numbersBox = CreateGoToSpecialValueTypeBox("Numbers", "GoToSpecialNumbersBox");
         var textBox = CreateGoToSpecialValueTypeBox("Text", "GoToSpecialTextBox");
@@ -7489,23 +7527,25 @@ public sealed partial class MainWindow : Window
         var okButton = new Button
         {
             Content = "OK",
-            MinWidth = 84,
-            Padding = new Thickness(10, 4),
+            Width = 72,
+            MinWidth = 72,
+            IsDefault = true,
         };
         AutomationProperties.SetAutomationId(okButton, "GoToSpecialOkButton");
 
         var cancelButton = new Button
         {
             Content = "Cancel",
-            MinWidth = 84,
-            Padding = new Thickness(10, 4),
+            Width = 72,
+            MinWidth = 72,
+            IsCancel = true,
         };
         AutomationProperties.SetAutomationId(cancelButton, "GoToSpecialCancelButton");
 
         void RefreshValueTypeState()
         {
-            var enabled = kindBox.SelectedItem is GoToSpecialChoice choice &&
-                UsesGoToSpecialValueTypeOptions(choice.Kind);
+            var enabled = SelectedGoToSpecialChoice(kindButtons) is { } choice &&
+                GoToSpecialDialogPlanner.UsesValueTypeOptions(choice.Kind);
             numbersBox.IsEnabled = enabled;
             textBox.IsEnabled = enabled;
             logicalsBox.IsEnabled = enabled;
@@ -7528,17 +7568,22 @@ public sealed partial class MainWindow : Window
 
         void Accept()
         {
-            var choice = kindBox.SelectedItem as GoToSpecialChoice ?? choices[0];
-            var options = UsesGoToSpecialValueTypeOptions(choice.Kind)
-                ? new GoToSpecialOptions(GetValueTypes())
-                : new GoToSpecialOptions();
+            var choice = SelectedGoToSpecialChoice(kindButtons) ?? choices[0];
+            var options = GoToSpecialDialogPlanner.BuildOptions(choice.Kind, GetValueTypes());
             result = new GoToSpecialDialogResult(choice.Kind, options);
             dialog.Close();
         }
 
-        kindBox.SelectionChanged += (_, _) => RefreshValueTypeState();
         okButton.Click += (_, _) => Accept();
         cancelButton.Click += (_, _) => dialog.Close();
+        foreach (var button in kindButtons)
+        {
+            button.PropertyChanged += (_, e) =>
+            {
+                if (e.Property == ToggleButton.IsCheckedProperty)
+                    RefreshValueTypeState();
+            };
+        }
         dialog.KeyDown += (_, e) =>
         {
             if (e.Key == Key.Enter)
@@ -7556,7 +7601,8 @@ public sealed partial class MainWindow : Window
         var valueTypeRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 12,
+            Spacing = 16,
+            Margin = new Thickness(8, 6, 8, 4),
             Children =
             {
                 numbersBox,
@@ -7571,30 +7617,46 @@ public sealed partial class MainWindow : Window
             Orientation = Orientation.Horizontal,
             Spacing = 8,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Margin = new Thickness(0, 10, 0, 0),
             Children =
             {
-                cancelButton,
                 okButton,
+                cancelButton,
             },
         };
 
         dialog.Content = new StackPanel
         {
-            Margin = new Thickness(16),
-            Spacing = 8,
+            Margin = new Thickness(12),
             Children =
             {
-                new TextBlock { Text = "Go to" },
-                kindBox,
-                new TextBlock { Text = "Value types" },
-                valueTypeRow,
+                new TextBlock
+                {
+                    Text = "Select",
+                    FontWeight = FontWeight.SemiBold,
+                    Margin = new Thickness(0, 0, 0, 6),
+                },
+                new GroupBox
+                {
+                    Header = "Go To Special",
+                    Margin = new Thickness(0, 0, 0, 10),
+                    Padding = new Thickness(8, 6, 8, 4),
+                    Content = choiceGrid,
+                },
+                new GroupBox
+                {
+                    Header = "Values for constants and formulas",
+                    Margin = new Thickness(0, 0, 0, 10),
+                    Padding = new Thickness(0),
+                    Content = valueTypeRow,
+                },
                 buttonRow,
             },
         };
         dialog.Opened += (_, _) =>
         {
             RefreshValueTypeState();
-            kindBox.Focus();
+            kindButtons.FirstOrDefault()?.Focus();
         };
         if (launchSmokeProbe is not null)
         {
@@ -7604,7 +7666,7 @@ public sealed partial class MainWindow : Window
                     dialog,
                     () => launchSmokeProbe(new GoToSpecialDialogSmokeProbe(
                         dialog,
-                        kindBox,
+                        choiceGrid,
                         numbersBox,
                         textBox,
                         logicalsBox,
@@ -7618,37 +7680,63 @@ public sealed partial class MainWindow : Window
         return result;
     }
 
+    private static AvaloniaGrid CreateGoToSpecialChoiceGrid(
+        IReadOnlyList<GoToSpecialChoice> choices,
+        ICollection<RadioButton> buttons)
+    {
+        var grid = new AvaloniaGrid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        for (var index = 0; index < choices.Count; index++)
+        {
+            var row = index / 2;
+            while (grid.RowDefinitions.Count <= row)
+                grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            var choice = choices[index];
+            var button = new RadioButton
+            {
+                Content = choice.Label,
+                Tag = choice,
+                GroupName = "GoToSpecialKind",
+                Margin = new Thickness(0, 0, 12, 6),
+                IsChecked = index == 0,
+            };
+            buttons.Add(button);
+            Grid.SetRow(button, row);
+            Grid.SetColumn(button, index % 2);
+            grid.Children.Add(button);
+        }
+
+        return grid;
+    }
+
+    private static GoToSpecialChoice? SelectedGoToSpecialChoice(IEnumerable<RadioButton> buttons)
+    {
+        foreach (var button in buttons)
+        {
+            if (button.IsChecked == true && button.Tag is GoToSpecialChoice choice)
+                return choice;
+        }
+
+        return null;
+    }
+
     private static CheckBox CreateGoToSpecialValueTypeBox(string label, string automationId)
     {
         var checkBox = new CheckBox
         {
             Content = label,
             IsChecked = true,
+            Margin = new Thickness(0, 0, 4, 0),
         };
         AutomationProperties.SetAutomationId(checkBox, automationId);
         return checkBox;
     }
 
     private static GoToSpecialChoice[] CreateGoToSpecialChoices() =>
-    [
-        new(GoToSpecialKind.Blanks, "Blanks"),
-        new(GoToSpecialKind.Constants, "Constants"),
-        new(GoToSpecialKind.Formulas, "Formulas"),
-        new(GoToSpecialKind.Comments, "Comments"),
-        new(GoToSpecialKind.CurrentRegion, "Current region"),
-        new(GoToSpecialKind.RowDifferences, "Row differences"),
-        new(GoToSpecialKind.ColumnDifferences, "Column differences"),
-        new(GoToSpecialKind.LastCell, "Last cell"),
-        new(GoToSpecialKind.ConditionalFormats, "Conditional formats"),
-        new(GoToSpecialKind.Objects, "Objects"),
-        new(GoToSpecialKind.Precedents, "Precedents"),
-        new(GoToSpecialKind.Dependents, "Dependents"),
-        new(GoToSpecialKind.DataValidation, "Data validation"),
-        new(GoToSpecialKind.VisibleCellsOnly, "Visible cells only"),
-    ];
-
-    private static bool UsesGoToSpecialValueTypeOptions(GoToSpecialKind kind) =>
-        kind is GoToSpecialKind.Constants or GoToSpecialKind.Formulas;
+        GoToSpecialDialogPlanner.BuildChoices().ToArray();
 
     private bool SelectGoToSpecial(GoToSpecialKind kind, GoToSpecialOptions? options = null)
     {
@@ -15100,15 +15188,15 @@ public sealed partial class MainWindow : Window
                 hasGoToDialog = HasLaunchSmokeDialog(probe.Dialog, "Go To");
                 hasGoToDialogReferenceControls =
                     HasLaunchSmokeAutomationId(probe.InputBox, "GoToReferenceBox") &&
-                    HasLaunchSmokeButton(probe.AcceptButton, "GoToReferenceBoxAcceptButton", "Go") &&
+                    HasLaunchSmokeButton(probe.AcceptButton, "GoToReferenceBoxAcceptButton", "OK") &&
                     HasLaunchSmokeButton(probe.CancelButton, "GoToReferenceBoxCancelButton", "Cancel");
                 hasGoToDialogHistoryControls =
                     HasLaunchSmokeAutomationId(probe.HistoryList, "GoToHistoryList") &&
-                    string.Equals(AutomationProperties.GetName(probe.HistoryList), "Go to", StringComparison.Ordinal) &&
+                    string.Equals(AutomationProperties.GetName(probe.HistoryList), "Go To", StringComparison.Ordinal) &&
                     probe.HistoryList.ItemCount > 0;
                 hasGoToDialogSpecialControl =
                     HasLaunchSmokeButton(probe.SpecialButton, "GoToSpecialButton", "Special...");
-                hasGoToDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 380, height: 320, minWidth: 340, minHeight: 280);
+                hasGoToDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 420, height: 320, minWidth: 420, minHeight: 320);
             });
 
         var hasGoToSpecialDialog = false;
@@ -15118,9 +15206,12 @@ public sealed partial class MainWindow : Window
         var goToSpecialDialogResult = await ShowGoToSpecialInputDialogAsync(probe =>
         {
             hasGoToSpecialDialog = HasLaunchSmokeDialog(probe.Dialog, "Go To Special");
+            var hasSelectedKind =
+                probe.KindBox is AvaloniaGrid kindGrid &&
+                kindGrid.Children.OfType<RadioButton>().Any(button => button.IsChecked == true);
             hasGoToSpecialKindControls =
                 HasLaunchSmokeAutomationId(probe.KindBox, "GoToSpecialKindBox") &&
-                probe.KindBox.SelectedIndex == 0 &&
+                hasSelectedKind &&
                 HasLaunchSmokeButton(probe.OkButton, "GoToSpecialOkButton", "OK") &&
                 HasLaunchSmokeButton(probe.CancelButton, "GoToSpecialCancelButton", "Cancel");
             hasGoToSpecialValueTypeControls =
@@ -15128,7 +15219,7 @@ public sealed partial class MainWindow : Window
                 HasLaunchSmokeCheckBox(probe.TextBox, "GoToSpecialTextBox", "Text") &&
                 HasLaunchSmokeCheckBox(probe.LogicalsBox, "GoToSpecialLogicalsBox", "Logicals") &&
                 HasLaunchSmokeCheckBox(probe.ErrorsBox, "GoToSpecialErrorsBox", "Errors");
-            hasGoToSpecialDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 420, height: 310, minWidth: 360, minHeight: 280);
+            hasGoToSpecialDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 430, height: 520, minWidth: 430, minHeight: 520);
         });
 
         var hasFormatCellsDialog = false;

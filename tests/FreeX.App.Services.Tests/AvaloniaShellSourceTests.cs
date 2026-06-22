@@ -4268,7 +4268,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("StyleDiff? ReplacementFormat);");
         source.Should().Contain("private sealed record FindOptionsControls(");
         source.Should().Contain("private sealed record GoToSpecialDialogResult(GoToSpecialKind Kind, GoToSpecialOptions Options);");
-        source.Should().Contain("private sealed record GoToSpecialChoice(GoToSpecialKind Kind, string Label)");
+        source.Should().Contain("GoToDialogPlanner.BuildReferenceChoices(");
+        source.Should().Contain("GoToSpecialDialogPlanner.BuildChoices().ToArray()");
+        source.Should().Contain("GoToSpecialDialogPlanner.BuildOptions(choice.Kind, GetValueTypes())");
         source.Should().Contain("_findMenuItem.Header = \"Find...\";");
         source.Should().Contain("_findMenuItem.Gesture = new KeyGesture(Key.F, KeyModifiers.Meta);");
         source.Should().Contain("_findMenuItem.Click += async (_, _) => await ShowFindDialogAsync();");
@@ -4304,8 +4306,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private async Task ShowGoToSpecialDialogAsync()");
         source.Should().Contain("private async Task<GoToSpecialDialogResult?> ShowGoToSpecialInputDialogAsync(Action<GoToSpecialDialogSmokeProbe>? launchSmokeProbe = null)");
         source.Should().Contain("private static CheckBox CreateGoToSpecialValueTypeBox(string label, string automationId)");
+        source.Should().Contain("private static AvaloniaGrid CreateGoToSpecialChoiceGrid(");
         source.Should().Contain("private static GoToSpecialChoice[] CreateGoToSpecialChoices()");
-        source.Should().Contain("private static bool UsesGoToSpecialValueTypeOptions(GoToSpecialKind kind)");
         source.Should().Contain("private bool SelectGoToSpecial(GoToSpecialKind kind, GoToSpecialOptions? options = null)");
         source.Should().Contain("private async Task<string?> ShowSingleInputDialogAsync(");
         source.Should().Contain("\"FindTextBox\"");
@@ -4343,8 +4345,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("\"GoToSpecialLogicalsBox\"");
         source.Should().Contain("\"GoToSpecialErrorsBox\"");
         source.Should().Contain("\"GoToSpecialOkButton\"");
-        source.Should().Contain("new(GoToSpecialKind.Blanks, \"Blanks\")");
-        source.Should().Contain("new(GoToSpecialKind.VisibleCellsOnly, \"Visible cells only\")");
+        source.Should().Contain("Header = \"Go To Special\"");
+        source.Should().Contain("Header = \"Values for constants and formulas\"");
         source.Should().Contain("private FindOptions CreateFindOptions(FindOptionsControls controls, StyleDiff? requiredFormat = null)");
         source.Should().Contain("private static FindOptionsControls CreateFindOptionsControls(string automationPrefix, int defaultLookInIndex)");
         source.Should().Contain("private static Button CreateFindReplaceFormatButton(string automationId, string content)");
@@ -4475,8 +4477,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("Dispatcher.UIThread.Post(() => dialog.Close());");
         source.Should().Contain("HasLaunchSmokeCompactDialog(probe.Dialog, width: 420, height: 430, minWidth: 360, minHeight: 390)");
         source.Should().Contain("HasLaunchSmokeCompactDialog(probe.Dialog, width: 420, height: 520, minWidth: 360, minHeight: 480)");
-        source.Should().Contain("HasLaunchSmokeCompactDialog(probe.Dialog, width: 380, height: 320, minWidth: 340, minHeight: 280)");
-        source.Should().Contain("HasLaunchSmokeCompactDialog(probe.Dialog, width: 420, height: 310, minWidth: 360, minHeight: 280)");
+        source.Should().Contain("HasLaunchSmokeCompactDialog(probe.Dialog, width: 420, height: 320, minWidth: 420, minHeight: 320)");
+        source.Should().Contain("HasLaunchSmokeCompactDialog(probe.Dialog, width: 430, height: 520, minWidth: 430, minHeight: 520)");
         source.Should().Contain("HasLaunchSmokeButton(probe.ChooseFormatButton, \"FindChooseFormatFromCellButton\", \"Choose From Cell\")");
         source.Should().Contain("HasLaunchSmokeButton(probe.ChooseFindFormatButton, \"ReplaceFindChooseFormatFromCellButton\", \"Choose From Cell\")");
         source.Should().Contain("ShowGoToInputDialogAsync(");

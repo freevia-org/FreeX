@@ -1,11 +1,10 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.App.Services;
 using FreeX.Core.Commands;
 
 namespace FreeX.App.Host;
-
-public sealed record GoToSpecialChoice(GoToSpecialKind Kind, string Label);
 
 public sealed class GoToSpecialDialog : Window
 {
@@ -73,34 +72,10 @@ public sealed class GoToSpecialDialog : Window
     }
 
     public static IReadOnlyList<GoToSpecialChoice> GetChoices() =>
-        [
-            new(GoToSpecialKind.Blanks, UiText.Get("GoToSpecial_Blanks")),
-            new(GoToSpecialKind.Constants, UiText.Get("GoToSpecial_Constants")),
-            new(GoToSpecialKind.Formulas, UiText.Get("GoToSpecial_Formulas")),
-            new(GoToSpecialKind.Comments, UiText.Get("GoToSpecial_Comments")),
-            new(GoToSpecialKind.CurrentRegion, UiText.Get("GoToSpecial_CurrentRegion")),
-            new(GoToSpecialKind.RowDifferences, UiText.Get("GoToSpecial_RowDifferences")),
-            new(GoToSpecialKind.ColumnDifferences, UiText.Get("GoToSpecial_ColumnDifferences")),
-            new(GoToSpecialKind.LastCell, UiText.Get("GoToSpecial_LastCell")),
-            new(GoToSpecialKind.ConditionalFormats, UiText.Get("GoToSpecial_ConditionalFormats")),
-            new(GoToSpecialKind.Objects, UiText.Get("GoToSpecial_Objects")),
-            new(GoToSpecialKind.Precedents, UiText.Get("GoToSpecial_Precedents")),
-            new(GoToSpecialKind.Dependents, UiText.Get("GoToSpecial_Dependents")),
-            new(GoToSpecialKind.DataValidation, UiText.Get("GoToSpecial_DataValidation")),
-            new(GoToSpecialKind.VisibleCellsOnly, UiText.Get("GoToSpecial_VisibleCellsOnly"))
-        ];
+        GoToSpecialDialogPlanner.BuildChoices(CreateDialogText());
 
     public static bool TryParseChoice(string text, out GoToSpecialKind kind)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            kind = default;
-            return false;
-        }
-
-        kind = GoToSpecialInputParser.Parse(text);
-        return true;
-    }
+        => GoToSpecialDialogPlanner.TryParseChoice(text, out kind, CreateDialogText());
 
     private static Grid CreateChoiceGrid()
     {
@@ -148,9 +123,7 @@ public sealed class GoToSpecialDialog : Window
     {
         var selected = SelectedButton();
         SelectedKind = selected?.Tag is GoToSpecialKind kind ? kind : GoToSpecialKind.Blanks;
-        SelectedOptions = UsesValueTypeOptions(SelectedKind)
-            ? new GoToSpecialOptions(GetSelectedValueTypes())
-            : new GoToSpecialOptions();
+        SelectedOptions = GoToSpecialDialogPlanner.BuildOptions(SelectedKind, GetSelectedValueTypes());
         DialogResult = true;
     }
 
@@ -171,7 +144,7 @@ public sealed class GoToSpecialDialog : Window
     private void RefreshValueTypeOptions()
     {
         var selected = SelectedButton();
-        var enabled = selected?.Tag is GoToSpecialKind kind && UsesValueTypeOptions(kind);
+        var enabled = selected?.Tag is GoToSpecialKind kind && GoToSpecialDialogPlanner.UsesValueTypeOptions(kind);
         _numbersBox.IsEnabled = enabled;
         _textBox.IsEnabled = enabled;
         _logicalsBox.IsEnabled = enabled;
@@ -197,6 +170,20 @@ public sealed class GoToSpecialDialog : Window
         return null;
     }
 
-    private static bool UsesValueTypeOptions(GoToSpecialKind kind) =>
-        kind is GoToSpecialKind.Constants or GoToSpecialKind.Formulas;
+    private static GoToSpecialDialogText CreateDialogText() =>
+        new(
+            UiText.Get("GoToSpecial_Blanks"),
+            UiText.Get("GoToSpecial_Constants"),
+            UiText.Get("GoToSpecial_Formulas"),
+            UiText.Get("GoToSpecial_Comments"),
+            UiText.Get("GoToSpecial_CurrentRegion"),
+            UiText.Get("GoToSpecial_RowDifferences"),
+            UiText.Get("GoToSpecial_ColumnDifferences"),
+            UiText.Get("GoToSpecial_LastCell"),
+            UiText.Get("GoToSpecial_ConditionalFormats"),
+            UiText.Get("GoToSpecial_Objects"),
+            UiText.Get("GoToSpecial_Precedents"),
+            UiText.Get("GoToSpecial_Dependents"),
+            UiText.Get("GoToSpecial_DataValidation"),
+            UiText.Get("GoToSpecial_VisibleCellsOnly"));
 }
