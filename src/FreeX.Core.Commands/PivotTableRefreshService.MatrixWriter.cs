@@ -21,6 +21,24 @@ public static partial class PivotTableRefreshService
             // The prefix key identifies this outer group (e.g. ["Q1"] for a Quarter subtotal).
             public PivotKey PrefixKey { get; } = prefixKey;
         }
+
+        public sealed class CalculatedItem(
+            PivotKey key,
+            PivotCalculatedItemModel item,
+            int fieldPosition,
+            IReadOnlyList<string> parentPrefix,
+            IReadOnlyList<string> suffix) : ColumnSlot
+        {
+            public PivotKey Key { get; } = key;
+
+            public PivotCalculatedItemModel Item { get; } = item;
+
+            public int FieldPosition { get; } = fieldPosition;
+
+            public IReadOnlyList<string> ParentPrefix { get; } = parentPrefix;
+
+            public IReadOnlyList<string> Suffix { get; } = suffix;
+        }
     }
 
     // Builds the ordered list of column slots from the sorted leaf column keys.
@@ -29,13 +47,17 @@ public static partial class PivotTableRefreshService
     private static List<ColumnSlot> BuildColumnSlots(
         IReadOnlyList<PivotKey> columnKeys,
         IReadOnlyList<PivotFieldModel> columnFields,
-        bool emitSubtotals)
+        bool emitSubtotals,
+        IReadOnlyList<(PivotCalculatedItemModel Item, int FieldPosition)> calculatedItems)
     {
         var slots = new List<ColumnSlot>(columnKeys.Count);
         if (!emitSubtotals || columnFields.Count <= 1)
         {
-            foreach (var key in columnKeys)
-                slots.Add(new ColumnSlot.Leaf(key));
+            for (var index = 0; index < columnKeys.Count; index++)
+            {
+                slots.Add(new ColumnSlot.Leaf(columnKeys[index]));
+                AppendCalculatedColumnItemSlots(slots, columnKeys, index, calculatedItems);
+            }
             return slots;
         }
 
@@ -48,6 +70,7 @@ public static partial class PivotTableRefreshService
         for (var i = 0; i < columnKeys.Count; i++)
         {
             slots.Add(new ColumnSlot.Leaf(columnKeys[i]));
+            AppendCalculatedColumnItemSlots(slots, columnKeys, i, calculatedItems);
 
             // After emitting this leaf, check each outer level (outermost first):
             // if the NEXT leaf has a different prefix at this level (or there is no next leaf),
@@ -66,6 +89,81 @@ public static partial class PivotTableRefreshService
         }
 
         return slots;
+    }
+
+    private static void AppendCalculatedColumnItemSlots(
+        List<ColumnSlot> slots,
+        IReadOnlyList<PivotKey> columnKeys,
+        int columnKeyIndex,
+        IReadOnlyList<(PivotCalculatedItemModel Item, int FieldPosition)> calculatedItems)
+    {
+        if (columnKeyIndex < 0 || columnKeyIndex >= columnKeys.Count)
+            return;
+
+        var columnKey = columnKeys[columnKeyIndex];
+        foreach (var (calculatedItem, fieldPosition) in calculatedItems)
+        {
+            if (!IsEndOfCalculatedColumnItemParent(columnKeys, columnKeyIndex, fieldPosition))
+                continue;
+
+            var parentPrefix = columnKey.Values.Take(fieldPosition).ToArray();
+            foreach (var suffix in CalculatedColumnItemSuffixes(columnKeys, fieldPosition, parentPrefix))
+            {
+                var calculatedKey = new PivotKey(parentPrefix
+                    .Concat([calculatedItem.Name])
+                    .Concat(suffix)
+                    .ToArray());
+                slots.Add(new ColumnSlot.CalculatedItem(calculatedKey, calculatedItem, fieldPosition, parentPrefix, suffix));
+            }
+        }
+    }
+
+    private static List<string[]> CalculatedColumnItemSuffixes(
+        IReadOnlyList<PivotKey> columnKeys,
+        int fieldPosition,
+        IReadOnlyList<string> parentPrefix)
+    {
+        var suffixes = new List<string[]>();
+        foreach (var columnKey in columnKeys)
+        {
+            if (!ColumnKeyHasPrefix(columnKey, parentPrefix))
+                continue;
+
+            var suffix = columnKey.Values.Skip(fieldPosition + 1).ToArray();
+            if (!suffixes.Any(existing => existing.SequenceEqual(suffix, StringComparer.CurrentCultureIgnoreCase)))
+                suffixes.Add(suffix);
+        }
+
+        return suffixes
+            .OrderBy(suffix => new PivotKey(suffix), PivotKeyComparer.Instance)
+            .ToList();
+    }
+
+    private static bool ColumnKeyHasPrefix(PivotKey columnKey, IReadOnlyList<string> parentPrefix)
+    {
+        if (columnKey.Values.Count < parentPrefix.Count)
+            return false;
+
+        for (var index = 0; index < parentPrefix.Count; index++)
+        {
+            if (!string.Equals(columnKey.Values[index], parentPrefix[index], StringComparison.CurrentCultureIgnoreCase))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool IsEndOfCalculatedColumnItemParent(
+        IReadOnlyList<PivotKey> columnKeys,
+        int columnKeyIndex,
+        int fieldPosition)
+    {
+        if (columnKeyIndex < 0 || columnKeyIndex >= columnKeys.Count - 1)
+            return true;
+
+        var currentParent = columnKeys[columnKeyIndex].Values.Take(fieldPosition);
+        var nextParent = columnKeys[columnKeyIndex + 1].Values.Take(fieldPosition);
+        return !currentParent.SequenceEqual(nextParent, StringComparer.CurrentCultureIgnoreCase);
     }
 
     // Returns the source rows for a slot in a given row-group context.
@@ -152,6 +250,7 @@ public static partial class PivotTableRefreshService
         var visibleRows = RowsForColumnKeys(rowsByColumnKey, columnKeys, retainedRows);
         var visibleRowsByColumnKey = BuildColumnRowsByKey(visibleRows, columnFields);
         var singleDataField = pivotTable.DataFields.Count == 1;
+        var columnCalculatedItems = CalculatedItemsForFields(pivotTable, columnFields);
 
         // Build prefix-row lookup maps for the row hierarchy (for % of Parent Row Total).
         // prefixRowsByLevel[k] maps (row-prefix of length k+1) → source rows.
@@ -181,7 +280,7 @@ public static partial class PivotTableRefreshService
         // Build the ordered column slot list.  Subtotal slots are emitted only when
         // ShowSubtotals is on AND there are 2+ column fields.
         var emitColumnSubtotals = pivotTable.ShowSubtotals && columnFields.Count > 1;
-        var columnSlots = BuildColumnSlots(columnKeys, columnFields, emitColumnSubtotals);
+        var columnSlots = BuildColumnSlots(columnKeys, columnFields, emitColumnSubtotals, columnCalculatedItems);
 
         if (pivotTable.ReportLayout == PivotReportLayout.Compact && rowFields.Count > 1)
             SetPivotCell(sheet, new CellAddress(sheet.Id, start.Row, start.Col), new TextValue("Row Labels"));
@@ -218,6 +317,10 @@ public static partial class PivotTableRefreshService
                         }
                         // Rows below the prefix level are left blank in a subtotal column header.
                     }
+                }
+                else if (slot is ColumnSlot.CalculatedItem calculated)
+                {
+                    WriteColumnHeader(sheet, start.Row, outputColumn, calculated.Key, dataField, singleDataField);
                 }
                 outputColumn++;
             }
@@ -387,8 +490,34 @@ public static partial class PivotTableRefreshService
 
             // Site 2: data row value loop — route through slot list.
             outputColumn = valueStartCol;
+            var rowCalculatedItemTotals = new double[pivotTable.DataFields.Count];
             foreach (var slot in columnSlots)
             {
+                if (slot is ColumnSlot.CalculatedItem calculated)
+                {
+                    for (var index = 0; index < pivotTable.DataFields.Count; index++)
+                    {
+                        var calculatedValue = EvaluateCalculatedColumnItemSlot(
+                            calculated,
+                            columnKeys,
+                            rowGroupRowsByColumnKey,
+                            pivotTable.DataFields[index],
+                            pivotTable,
+                            headers);
+                        SetPivotValueCell(
+                            workbook,
+                            sheet,
+                            new CellAddress(sheet.Id, outputRow, outputColumn),
+                            calculatedValue,
+                            pivotTable.DataFields[index],
+                            pivotTable);
+                        rowCalculatedItemTotals[index] += calculatedValue;
+                        outputColumn++;
+                    }
+
+                    continue;
+                }
+
                 // Rows in this row group that fall under this slot.
                 var columnRows = RowsForSlot(slot, rowGroupRowsByColumnKey, columnFields);
                 // Column-total rows across all row groups for this slot.
@@ -427,14 +556,15 @@ public static partial class PivotTableRefreshService
             }
             if (pivotTable.ShowRowGrandTotals)
             {
-                foreach (var dataField in pivotTable.DataFields)
+                for (var index = 0; index < pivotTable.DataFields.Count; index++)
                 {
+                    var dataField = pivotTable.DataFields[index];
                     SetPivotValueCell(workbook, sheet, new CellAddress(sheet.Id, outputRow, outputColumn), DisplayAggregate(
                         visibleRowGroupRows,
                         new PivotDisplayContext(visibleRows, visibleRowGroupRows, visibleRows),
                         dataField,
                         pivotTable,
-                        headers),
+                        headers) + rowCalculatedItemTotals[index],
                         dataField,
                         pivotTable,
                         isEmptyIntersection: visibleRowGroupRows.Count == 0);
@@ -488,8 +618,34 @@ public static partial class PivotTableRefreshService
             SetPivotCell(sheet, new CellAddress(sheet.Id, outputRow, start.Col), new TextValue(GrandTotalCaption(pivotTable)));
             // Site 4: grand-total row loop — route through slot list.
             outputColumn = valueStartCol;
+            var grandRowCalculatedItemTotals = new double[pivotTable.DataFields.Count];
             foreach (var slot in columnSlots)
             {
+                if (slot is ColumnSlot.CalculatedItem calculated)
+                {
+                    for (var index = 0; index < pivotTable.DataFields.Count; index++)
+                    {
+                        var calculatedValue = EvaluateCalculatedColumnItemSlot(
+                            calculated,
+                            columnKeys,
+                            rowsByColumnKey,
+                            pivotTable.DataFields[index],
+                            pivotTable,
+                            headers);
+                        SetPivotValueCell(
+                            workbook,
+                            sheet,
+                            new CellAddress(sheet.Id, outputRow, outputColumn),
+                            calculatedValue,
+                            pivotTable.DataFields[index],
+                            pivotTable);
+                        grandRowCalculatedItemTotals[index] += calculatedValue;
+                        outputColumn++;
+                    }
+
+                    continue;
+                }
+
                 // Use rows from ALL retained rows (not filtered by row group) for the grand-total row.
                 var columnRows = RowsForSlot(slot, rowsByColumnKey, columnFields);
                 foreach (var dataField in pivotTable.DataFields)
@@ -507,14 +663,15 @@ public static partial class PivotTableRefreshService
             }
             if (pivotTable.ShowRowGrandTotals)
             {
-                foreach (var dataField in pivotTable.DataFields)
+                for (var index = 0; index < pivotTable.DataFields.Count; index++)
                 {
+                    var dataField = pivotTable.DataFields[index];
                     SetPivotValueCell(workbook, sheet, new CellAddress(sheet.Id, outputRow, outputColumn), DisplayAggregate(
                         visibleRows,
                         new PivotDisplayContext(visibleRows, visibleRows, visibleRows),
                         dataField,
                         pivotTable,
-                        headers),
+                        headers) + grandRowCalculatedItemTotals[index],
                         dataField,
                         pivotTable);
                     outputColumn++;
@@ -522,6 +679,24 @@ public static partial class PivotTableRefreshService
             }
         }
     }
+
+    private static double EvaluateCalculatedColumnItemSlot(
+        ColumnSlot.CalculatedItem calculated,
+        IReadOnlyList<PivotKey> columnKeys,
+        PivotColumnRowMap rowsByColumnKey,
+        PivotDataFieldModel dataField,
+        PivotTableModel pivotTable,
+        IReadOnlyList<string> headers) =>
+        EvaluateCalculatedItemForField(
+            calculated.Item.Formula,
+            columnKeys,
+            key => RowsForColumnKey(rowsByColumnKey, key),
+            calculated.FieldPosition,
+            calculated.ParentPrefix,
+            dataField,
+            pivotTable,
+            headers,
+            calculated.Suffix);
 
     private static void WriteMatrixSubtotalRow(
         Workbook workbook,
@@ -559,8 +734,34 @@ public static partial class PivotTableRefreshService
 
         // Site 3: subtotal row value loop — route through slot list.
         var outputColumn = valueStartCol;
+        var subtotalCalculatedItemTotals = new double[pivotTable.DataFields.Count];
         foreach (var slot in columnSlots)
         {
+            if (slot is ColumnSlot.CalculatedItem calculated)
+            {
+                for (var index = 0; index < pivotTable.DataFields.Count; index++)
+                {
+                    var calculatedValue = EvaluateCalculatedColumnItemSlot(
+                        calculated,
+                        leafColumnKeys,
+                        subtotalRowsByColumnKey,
+                        pivotTable.DataFields[index],
+                        pivotTable,
+                        headers);
+                    SetPivotValueCell(
+                        workbook,
+                        sheet,
+                        new CellAddress(sheet.Id, outputRow, outputColumn),
+                        calculatedValue,
+                        pivotTable.DataFields[index],
+                        pivotTable);
+                    subtotalCalculatedItemTotals[index] += calculatedValue;
+                    outputColumn++;
+                }
+
+                continue;
+            }
+
             var subtotalColumnRows = RowsForSlot(slot, subtotalRowsByColumnKey, columnFields);
             var columnTotalRows = ColumnTotalRowsForSlot(slot, visibleRowsByColumnKey, columnFields);
 
@@ -604,8 +805,9 @@ public static partial class PivotTableRefreshService
         if (pivotTable.ShowRowGrandTotals)
         {
             // Row grand total of the subtotal row: parent is grand total (default fallback)
-            foreach (var dataField in pivotTable.DataFields)
+            for (var index = 0; index < pivotTable.DataFields.Count; index++)
             {
+                var dataField = pivotTable.DataFields[index];
                 SetPivotValueCell(
                     workbook,
                     sheet,
@@ -616,7 +818,7 @@ public static partial class PivotTableRefreshService
                             ParentRowRows: parentRowRows),
                         dataField,
                         pivotTable,
-                        headers),
+                        headers) + subtotalCalculatedItemTotals[index],
                     dataField,
                     pivotTable,
                     isEmptyIntersection: visibleSubtotalRows.Count == 0);

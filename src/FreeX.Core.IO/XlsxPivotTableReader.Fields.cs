@@ -129,6 +129,7 @@ internal static partial class XlsxPivotTableReader
 
     private static List<PivotFieldModel> ReadPivotPageFields(
         XElement? fieldsElement,
+        PivotCacheModel? pivotCache,
         XNamespace workbookNs,
         IReadOnlyDictionary<int, IReadOnlyList<string>>? nativeFieldSelections = null,
         IReadOnlyDictionary<int, PivotFieldModel>? nativeFieldGroups = null,
@@ -144,7 +145,7 @@ internal static partial class XlsxPivotTableReader
                 var fieldIndex = XlsxXmlAttributeReader.ReadIntAttribute(field, "fld") ?? -1;
                 return CreatePivotFieldModel(
                     fieldIndex,
-                    field.Attribute("name")?.Value,
+                    field.Attribute("name")?.Value ?? ReadNativePageFieldSelectedItem(field, pivotCache, fieldIndex),
                     ReadCsvAttribute(field.Attribute("selectedItems")?.Value) ?? ReadNativePivotFieldSelection(nativeFieldSelections, fieldIndex),
                     ReadPivotFieldGrouping(field.Attribute("groupBy")?.Value, ReadNativePivotFieldGroup(nativeFieldGroups, fieldIndex)?.Grouping ?? PivotFieldGrouping.None),
                     XlsxXmlAttributeReader.ReadDoubleAttribute(field, "groupStart") ?? ReadNativePivotFieldGroup(nativeFieldGroups, fieldIndex)?.GroupStart,
@@ -158,6 +159,25 @@ internal static partial class XlsxPivotTableReader
             return pageFields;
 
         return ReadPivotFieldIndexes(fieldsElement, workbookNs, nativeFieldSelections, nativeFieldGroups, nativeFieldMetadata);
+    }
+
+    private static string? ReadNativePageFieldSelectedItem(
+        XElement pageField,
+        PivotCacheModel? pivotCache,
+        int fieldIndex)
+    {
+        if (pivotCache is null ||
+            fieldIndex < 0 ||
+            fieldIndex >= pivotCache.Fields.Count ||
+            pivotCache.Fields[fieldIndex].SharedItems is not { Count: > 0 } sharedItems)
+        {
+            return null;
+        }
+
+        var itemIndex = XlsxXmlAttributeReader.ReadIntAttribute(pageField, "item");
+        return itemIndex is >= 0 && itemIndex.Value < sharedItems.Count
+            ? sharedItems[itemIndex.Value]
+            : null;
     }
 
     private static PivotFieldModel CreatePivotFieldModel(

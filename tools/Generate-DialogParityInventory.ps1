@@ -157,10 +157,12 @@ $routes = @(
     @{
         RouteId = "dialog.GoTo"; DisplayName = "Go To"
         Wpf = @("screenshots\home-clipboard-cells-editing-tour\freex_home_clipboard_cells_editing_go_to_dialog.png")
+        Shared = @("src\FreeX.App.Services\GoToDialogPlanner.cs", "src\FreeX.App.Services\WorkbookReferenceNavigator.cs")
     },
     @{
         RouteId = "dialog.GoToSpecial"; DisplayName = "Go To Special"
         Wpf = @("screenshots\home-clipboard-cells-editing-tour\freex_home_clipboard_cells_editing_go_to_special_dialog.png")
+        Shared = @("src\FreeX.App.Services\GoToDialogPlanner.cs")
     },
     @{
         RouteId = "dialog.Sort"; DisplayName = "Sort"
@@ -190,6 +192,7 @@ $routes = @(
     @{
         RouteId = "dialog.AdvancedFilter"; DisplayName = "Advanced Filter"
         Wpf = @("screenshots\data-tools-dialogs-tour\freex_data_tools_advanced_filter_dialog.png")
+        Shared = @("src\FreeX.App.Services\AdvancedFilterPlanner.cs")
     },
     @{
         RouteId = "dialog.Consolidate"; DisplayName = "Consolidate"
@@ -199,6 +202,7 @@ $routes = @(
     @{
         RouteId = "dialog.RemoveDuplicates"; DisplayName = "Remove Duplicates"
         Wpf = @("screenshots\data-tools-dialogs-tour\freex_data_tools_remove_duplicates_*.png")
+        Shared = @("src\FreeX.App.Services\RemoveDuplicatesPlanner.cs")
     },
     @{
         RouteId = "dialog.GoalSeek"; DisplayName = "Goal Seek"

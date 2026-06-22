@@ -208,7 +208,8 @@ internal static partial class XlsxPivotTableWriter
                     : CreateCalculatedFieldIndexMap(pivot);
             var pivotPath = $"xl/pivotTables/pivotTable{pivotIndex++}.xml";
             var cacheRelId = "rIdPivotCache";
-            XlsxPackageXmlEditor.ReplaceXml(archive, pivotPath, ToPivotTableDefinitionXml(pivot, calculatedFieldIndexes, workbookNs, cacheRelId, numberFormatIdMap));
+            cacheById.TryGetValue(pivot.CacheId, out var pivotCache);
+            XlsxPackageXmlEditor.ReplaceXml(archive, pivotPath, ToPivotTableDefinitionXml(pivot, pivotCache, calculatedFieldIndexes, workbookNs, cacheRelId, numberFormatIdMap));
             XlsxPackageXmlEditor.ReplaceXml(archive, XlsxPackagePath.GetRelationshipPartPath(pivotPath), new XDocument(
                 new XElement(packageRelNs + "Relationships",
                     new XElement(packageRelNs + "Relationship",
@@ -241,6 +242,7 @@ internal static partial class XlsxPivotTableWriter
 
     private static XDocument ToPivotTableDefinitionXml(
         PivotTableModel pivot,
+        PivotCacheModel? pivotCache,
         IReadOnlyDictionary<string, int> calculatedFieldIndexes,
         XNamespace workbookNs,
         string cacheRelId,
@@ -309,7 +311,7 @@ internal static partial class XlsxPivotTableWriter
             ToPivotFieldsXml(pivot, calculatedFieldIndexes, workbookNs),
             ToPivotFieldCollectionXml("rowFields", pivot.RowFields, workbookNs),
             ToPivotFieldCollectionXml("colFields", pivot.ColumnFields, workbookNs),
-            ToPivotPageFieldsXml(pivot.PageFields, workbookNs),
+            ToPivotPageFieldsXml(pivot.PageFields, pivotCache, workbookNs),
             ToPivotDataFieldsXml(pivot.DataFields, calculatedFieldIndexes, workbookNs, numberFormatIdMap),
             ToPivotCalculatedItemsXml(pivot.CalculatedItems, workbookNs),
             ToPivotValueFiltersXml(pivot.ValueFilters, workbookNs),
@@ -453,7 +455,10 @@ internal static partial class XlsxPivotTableWriter
                     workbookNs + "field",
                     new XAttribute("x", field.SourceFieldIndex.ToString(CultureInfo.InvariantCulture)))));
 
-    private static XElement? ToPivotPageFieldsXml(IReadOnlyList<PivotFieldModel> fields, XNamespace workbookNs) =>
+    private static XElement? ToPivotPageFieldsXml(
+        IReadOnlyList<PivotFieldModel> fields,
+        PivotCacheModel? pivotCache,
+        XNamespace workbookNs) =>
         fields.Count == 0
             ? null
             : new XElement(
@@ -462,7 +467,41 @@ internal static partial class XlsxPivotTableWriter
                 fields.Select(field => new XElement(
                     workbookNs + "pageField",
                     new XAttribute("fld", field.SourceFieldIndex.ToString(CultureInfo.InvariantCulture)),
-                    string.IsNullOrWhiteSpace(field.SelectedItem) ? null : new XAttribute("name", field.SelectedItem))));
+                    ToPivotPageFieldItemAttribute(field, pivotCache),
+                    ToPivotPageFieldNameAttribute(field, pivotCache))));
+
+    private static XAttribute? ToPivotPageFieldItemAttribute(PivotFieldModel field, PivotCacheModel? pivotCache)
+    {
+        var itemIndex = ResolvePivotPageFieldSelectedItemIndex(field, pivotCache);
+        return itemIndex is null
+            ? null
+            : new XAttribute("item", itemIndex.Value.ToString(CultureInfo.InvariantCulture));
+    }
+
+    private static XAttribute? ToPivotPageFieldNameAttribute(PivotFieldModel field, PivotCacheModel? pivotCache) =>
+        string.IsNullOrWhiteSpace(field.SelectedItem) || ResolvePivotPageFieldSelectedItemIndex(field, pivotCache) is not null
+            ? null
+            : new XAttribute("name", field.SelectedItem);
+
+    private static int? ResolvePivotPageFieldSelectedItemIndex(PivotFieldModel field, PivotCacheModel? pivotCache)
+    {
+        if (string.IsNullOrWhiteSpace(field.SelectedItem) ||
+            pivotCache is null ||
+            field.SourceFieldIndex < 0 ||
+            field.SourceFieldIndex >= pivotCache.Fields.Count ||
+            pivotCache.Fields[field.SourceFieldIndex].SharedItems is not { Count: > 0 } sharedItems)
+        {
+            return null;
+        }
+
+        for (var index = 0; index < sharedItems.Count; index++)
+        {
+            if (string.Equals(sharedItems[index], field.SelectedItem, StringComparison.Ordinal))
+                return index;
+        }
+
+        return null;
+    }
 
     private static XElement? ToPivotDataFieldsXml(
         IReadOnlyList<PivotDataFieldModel> fields,

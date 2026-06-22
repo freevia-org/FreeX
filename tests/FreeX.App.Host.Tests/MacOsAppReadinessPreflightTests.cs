@@ -2256,7 +2256,9 @@ public sealed class MacOsAppReadinessPreflightTests
                         CheckBox MatchEntireCellBox,
                         Control Panel);
                     private sealed record GoToSpecialDialogResult(GoToSpecialKind Kind, GoToSpecialOptions Options);
-                    private sealed record GoToSpecialChoice(GoToSpecialKind Kind, string Label)
+                    GoToDialogPlanner.BuildReferenceChoices(
+                    GoToSpecialDialogPlanner.BuildChoices().ToArray()
+                    GoToSpecialDialogPlanner.BuildOptions(choice.Kind, GetValueTypes())
                     _findMenuItem.Header = "Find...";
                     _findMenuItem.Gesture = new KeyGesture(Key.F, KeyModifiers.Meta);
                     _findMenuItem.Click += async (_, _) => await ShowFindDialogAsync();

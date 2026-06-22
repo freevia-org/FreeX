@@ -5,6 +5,7 @@ namespace FreeX.Core.Commands;
 public static partial class PivotTableRefreshService
 {
     public sealed record PivotDetailRows(IReadOnlyList<string> Headers, IReadOnlyList<IReadOnlyList<ScalarValue>> Rows);
+    private sealed record DetailRowSelection(IReadOnlyList<string> Keys, bool IsRowGrandTotal, bool IsSubtotal);
 
     public static PivotDetailRows ExtractDetailRows(
         Workbook workbook,
@@ -28,14 +29,45 @@ public static partial class PivotTableRefreshService
         if (pivotCell.Col < firstValueColumn)
             return new PivotDetailRows(headers, []);
 
+        var rowSelection = ReadDetailRowSelection(targetSheet, pivotTable, outputRow, firstDataRow, rowFields);
+        if (rowSelection is null)
+            return new PivotDetailRows(headers, []);
+
+        var columnKeys = ReadDetailColumnKeys(targetSheet, pivotTable, pivotCell, columnFields);
+        if (columnKeys is null)
+            return new PivotDetailRows(headers, []);
+
+        var rows = ReadSourceRows(sourceSheet, pivotTable.SourceRange, headers.Count)
+            .Where(row => MatchesFieldSelections(row, pivotTable.PageFields))
+            .Where(row => MatchesFieldSelections(row, rowFields))
+            .Where(row => MatchesFieldSelections(row, columnFields))
+            .Where(row => RowDetailMatches(row, rowFields, rowSelection.Keys, rowSelection.IsRowGrandTotal, rowSelection.IsSubtotal))
+            .Where(row => ColumnDetailMatches(row, columnFields, columnKeys))
+            .ToList();
+        return new PivotDetailRows(headers, rows);
+    }
+
+    private static DetailRowSelection? ReadDetailRowSelection(
+        Sheet sheet,
+        PivotTableModel pivotTable,
+        uint outputRow,
+        uint firstDataRow,
+        IReadOnlyList<PivotFieldModel> rowFields)
+    {
+        if (rowFields.Count == 0)
+            return new DetailRowSelection([], IsRowGrandTotal: false, IsSubtotal: false);
+
+        if (pivotTable.ReportLayout == PivotReportLayout.Compact && rowFields.Count > 1)
+            return ReadCompactDetailRowSelection(sheet, pivotTable, outputRow, firstDataRow, rowFields.Count);
+
         var keys = new List<string>();
         var isRowGrandTotal = false;
         var isSubtotal = false;
         for (var index = 0; index < rowFields.Count; index++)
         {
-            var key = ReadDetailRowKey(targetSheet, pivotTable, outputRow, firstDataRow, index, rowFields.Count);
+            var key = ReadDetailRowKey(sheet, pivotTable, outputRow, firstDataRow, index, rowFields.Count);
             if (key is null)
-                return new PivotDetailRows(headers, []);
+                return null;
             if (IsPivotGrandTotalCaption(pivotTable, key))
             {
                 keys.Clear();
@@ -53,18 +85,56 @@ public static partial class PivotTableRefreshService
             keys.Add(key);
         }
 
-        var columnKeys = ReadDetailColumnKeys(targetSheet, pivotTable, pivotCell, columnFields);
-        if (columnKeys is null)
-            return new PivotDetailRows(headers, []);
+        return new DetailRowSelection(keys, isRowGrandTotal, isSubtotal);
+    }
 
-        var rows = ReadSourceRows(sourceSheet, pivotTable.SourceRange, headers.Count)
-            .Where(row => MatchesFieldSelections(row, pivotTable.PageFields))
-            .Where(row => MatchesFieldSelections(row, rowFields))
-            .Where(row => MatchesFieldSelections(row, columnFields))
-            .Where(row => RowDetailMatches(row, rowFields, keys, isRowGrandTotal, isSubtotal))
-            .Where(row => ColumnDetailMatches(row, columnFields, columnKeys))
-            .ToList();
-        return new PivotDetailRows(headers, rows);
+    private static DetailRowSelection? ReadCompactDetailRowSelection(
+        Sheet sheet,
+        PivotTableModel pivotTable,
+        uint outputRow,
+        uint firstDataRow,
+        int rowFieldCount)
+    {
+        var labelColumn = pivotTable.TargetRange.Start.Col;
+        var labelValue = sheet.GetCell(outputRow, labelColumn)?.Value;
+        if (labelValue is null)
+            return null;
+
+        var label = KeyText(labelValue);
+        if (IsPivotGrandTotalCaption(pivotTable, label))
+            return new DetailRowSelection([], IsRowGrandTotal: true, IsSubtotal: false);
+
+        if (label.EndsWith(" Total", StringComparison.OrdinalIgnoreCase))
+            return new DetailRowSelection([label[..^" Total".Length]], IsRowGrandTotal: false, IsSubtotal: true);
+
+        var keys = new List<string> { label };
+        var firstValueColumn = pivotTable.TargetRange.Start.Col + (uint)RowFieldOutputColumnCount(pivotTable);
+        for (var row = outputRow - 1; row >= firstDataRow && keys.Count < rowFieldCount; row--)
+        {
+            var candidateValue = sheet.GetCell(row, labelColumn)?.Value;
+            if (candidateValue is not null &&
+                sheet.GetCell(row, firstValueColumn)?.Value is null)
+            {
+                keys.Insert(0, KeyText(candidateValue));
+            }
+
+            if (row == firstDataRow)
+                break;
+        }
+
+        if (keys.Count == rowFieldCount)
+            return new DetailRowSelection(keys, IsRowGrandTotal: false, IsSubtotal: false);
+
+        var combined = SplitCompactCombinedLabel(label, rowFieldCount);
+        return combined is null
+            ? null
+            : new DetailRowSelection(combined, IsRowGrandTotal: false, IsSubtotal: false);
+    }
+
+    private static IReadOnlyList<string>? SplitCompactCombinedLabel(string label, int rowFieldCount)
+    {
+        var parts = label.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length == rowFieldCount ? parts : null;
     }
 
     private static string? ReadDetailRowKey(
@@ -122,7 +192,7 @@ public static partial class PivotTableRefreshService
         if (columnFields.Count == 0)
             return [];
 
-        var firstValueColumn = pivotTable.TargetRange.Start.Col + (uint)pivotTable.RowFields.Count;
+        var firstValueColumn = pivotTable.TargetRange.Start.Col + (uint)RowFieldOutputColumnCount(pivotTable);
         if (pivotCell.Col < firstValueColumn)
             return null;
 

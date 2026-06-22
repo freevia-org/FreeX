@@ -2454,6 +2454,10 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"AdvancedFilterCompactDialog\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(listRangeBox, \"AdvancedFilterListRangeBox\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(criteriaRangeBox, \"AdvancedFilterCriteriaRangeBox\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(pickerButton, pickerAutomationId);");
+        source.Should().Contain("\"AdvancedFilterSelectListRangeButton\"");
+        source.Should().Contain("\"AdvancedFilterSelectCriteriaRangeButton\"");
+        source.Should().Contain("\"AdvancedFilterSelectCopyToButton\"");
         source.Should().Contain("AutomationProperties.SetAutomationId(inPlaceButton, \"AdvancedFilterInPlaceButton\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(copyToAnotherLocationButton, \"AdvancedFilterCopyToAnotherLocationButton\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(copyToBox, \"AdvancedFilterCopyToBox\");");
@@ -2461,7 +2465,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("AutomationProperties.SetAutomationId(errorText, \"AdvancedFilterErrorText\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(okButton, \"AdvancedFilterOkButton\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(cancelButton, \"AdvancedFilterCancelButton\");");
-        source.Should().Contain("Text = FormatRangeReference(_session.SelectedRange)");
+        source.Should().Contain("Text = FormatRangeReference(AdvancedFilterPlanner.CreateDefaultListRange(_session.ActiveSheet, _session.SelectedRange))");
         source.Should().Contain("var selectedOutputMode = copyToAnotherLocationButton.IsChecked == true");
         source.Should().Contain("AdvancedFilterOutputMode.CopyToAnotherLocation");
         source.Should().Contain("AdvancedFilterOutputMode.FilterInPlace");
@@ -2477,11 +2481,13 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private static string FormatAdvancedFilterStatus(AdvancedFilterPlan plan)");
         source.Should().Contain("private static string FormatAdvancedFilterPlanError(AdvancedFilterPlanResult result)");
         source.Should().Contain("private static void FocusAdvancedFilterErrorField(");
-        source.Should().Contain("private static StackPanel CreateAdvancedFilterField(string label, Control control)");
+        source.Should().Contain("new GroupBox");
+        source.Should().Contain("Header = \"Action\"");
 
         sessionSource.Should().Contain("public WorkbookCellEditResult ExecuteAdvancedFilterPlan(AdvancedFilterPlan plan)");
         sessionSource.Should().Contain("ApplySuccessfulRangeEditResult(result, GetAdvancedFilterSelectedRange(plan));");
         plannerSource.Should().Contain("public static AdvancedFilterPlanResult CreatePlan(");
+        plannerSource.Should().Contain("public static GridRange CreateDefaultListRange(Sheet sheet, GridRange selectedRange)");
         plannerSource.Should().Contain("public AdvancedFilterCommand CreateCommand()");
 
         var handlerIndex = normalizedSource.IndexOf("private async Task ShowAdvancedFilterDialogAsync()", StringComparison.Ordinal);
@@ -2503,6 +2509,7 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresNativeRemoveDuplicatesThroughSharedPlannerSessionAndCompactDialog()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var parityCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "RemoveDuplicatesPlanner.cs"));
         var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
@@ -2530,9 +2537,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("RefreshShell(status);");
         source.Should().Contain("ShowTextDialogAsync(\"Remove Duplicates\", status, 420, 220)");
 
-        source.Should().Contain("private async Task<RemoveDuplicatesPlan?> ShowRemoveDuplicatesInputDialogAsync()");
+        source.Should().Contain("private async Task<RemoveDuplicatesPlan?> ShowRemoveDuplicatesInputDialogAsync(bool? forceHasHeaders = null)");
         source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"RemoveDuplicatesCompactDialog\");");
-        source.Should().Contain("AutomationProperties.SetAutomationId(rangeText, \"RemoveDuplicatesRangeSummaryText\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(hasHeadersBox, \"RemoveDuplicatesHasHeadersBox\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(columnsPanel, \"RemoveDuplicatesColumnsPanel\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(box, $\"RemoveDuplicatesColumn{column.Offset}Box\");");
@@ -2557,6 +2563,9 @@ public sealed class AvaloniaShellSourceTests
         plannerSource.Should().Contain("public static bool GuessHasHeaders(Sheet sheet, GridRange range)");
         plannerSource.Should().Contain("public static GridRange ExcludeHeaderRow(GridRange range, bool hasHeaders)");
         plannerSource.Should().Contain("public RemoveDuplicateRowsCommand CreateCommand(SheetId sheetId, GridRange activeRange)");
+        parityCaptureSource.Should().Contain("(\"dialog.RemoveDuplicates\", () => ShowRemoveDuplicatesParityDialogAsync()),");
+        parityCaptureSource.Should().Contain("private async Task ShowRemoveDuplicatesParityDialogAsync()");
+        parityCaptureSource.Should().Contain("await ShowRemoveDuplicatesInputDialogAsync(forceHasHeaders: true);");
 
         var handlerIndex = normalizedSource.IndexOf("private async Task ShowRemoveDuplicatesDialogAsync()", StringComparison.Ordinal);
         handlerIndex.Should().BeGreaterThanOrEqualTo(0);
@@ -2664,8 +2673,6 @@ public sealed class AvaloniaShellSourceTests
             "AutomationProperties.SetHelpText(summaryBelowBox, \"Place summary rows below the grouped data.\");",
             "AutomationProperties.SetName(errorText, \"Subtotal validation\");",
             "AutomationProperties.SetHelpText(errorText, \"Shows Subtotal validation messages.\");",
-            "AutomationProperties.SetName(rangeText, \"Remove Duplicates range\");",
-            "AutomationProperties.SetHelpText(rangeText, \"Shows the selected range checked for duplicates.\");",
             "AutomationProperties.SetName(hasHeadersBox, \"My data has headers\");",
             "AutomationProperties.SetHelpText(hasHeadersBox, \"Treat the first row as headers when comparing duplicates.\");",
             "AutomationProperties.SetName(columnsPanel, \"Columns\");",
@@ -4268,7 +4275,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("StyleDiff? ReplacementFormat);");
         source.Should().Contain("private sealed record FindOptionsControls(");
         source.Should().Contain("private sealed record GoToSpecialDialogResult(GoToSpecialKind Kind, GoToSpecialOptions Options);");
-        source.Should().Contain("private sealed record GoToSpecialChoice(GoToSpecialKind Kind, string Label)");
+        source.Should().Contain("GoToDialogPlanner.BuildReferenceChoices(");
+        source.Should().Contain("GoToSpecialDialogPlanner.BuildChoices().ToArray()");
+        source.Should().Contain("GoToSpecialDialogPlanner.BuildOptions(choice.Kind, GetValueTypes())");
         source.Should().Contain("_findMenuItem.Header = \"Find...\";");
         source.Should().Contain("_findMenuItem.Gesture = new KeyGesture(Key.F, KeyModifiers.Meta);");
         source.Should().Contain("_findMenuItem.Click += async (_, _) => await ShowFindDialogAsync();");
@@ -4304,8 +4313,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private async Task ShowGoToSpecialDialogAsync()");
         source.Should().Contain("private async Task<GoToSpecialDialogResult?> ShowGoToSpecialInputDialogAsync(Action<GoToSpecialDialogSmokeProbe>? launchSmokeProbe = null)");
         source.Should().Contain("private static CheckBox CreateGoToSpecialValueTypeBox(string label, string automationId)");
+        source.Should().Contain("private static AvaloniaGrid CreateGoToSpecialChoiceGrid(");
         source.Should().Contain("private static GoToSpecialChoice[] CreateGoToSpecialChoices()");
-        source.Should().Contain("private static bool UsesGoToSpecialValueTypeOptions(GoToSpecialKind kind)");
         source.Should().Contain("private bool SelectGoToSpecial(GoToSpecialKind kind, GoToSpecialOptions? options = null)");
         source.Should().Contain("private async Task<string?> ShowSingleInputDialogAsync(");
         source.Should().Contain("\"FindTextBox\"");
@@ -4343,8 +4352,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("\"GoToSpecialLogicalsBox\"");
         source.Should().Contain("\"GoToSpecialErrorsBox\"");
         source.Should().Contain("\"GoToSpecialOkButton\"");
-        source.Should().Contain("new(GoToSpecialKind.Blanks, \"Blanks\")");
-        source.Should().Contain("new(GoToSpecialKind.VisibleCellsOnly, \"Visible cells only\")");
+        source.Should().Contain("Header = \"Go To Special\"");
+        source.Should().Contain("Header = \"Values for constants and formulas\"");
         source.Should().Contain("private FindOptions CreateFindOptions(FindOptionsControls controls, StyleDiff? requiredFormat = null)");
         source.Should().Contain("private static FindOptionsControls CreateFindOptionsControls(string automationPrefix, int defaultLookInIndex)");
         source.Should().Contain("private static Button CreateFindReplaceFormatButton(string automationId, string content)");
@@ -4475,8 +4484,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("Dispatcher.UIThread.Post(() => dialog.Close());");
         source.Should().Contain("HasLaunchSmokeCompactDialog(probe.Dialog, width: 420, height: 430, minWidth: 360, minHeight: 390)");
         source.Should().Contain("HasLaunchSmokeCompactDialog(probe.Dialog, width: 420, height: 520, minWidth: 360, minHeight: 480)");
-        source.Should().Contain("HasLaunchSmokeCompactDialog(probe.Dialog, width: 380, height: 320, minWidth: 340, minHeight: 280)");
-        source.Should().Contain("HasLaunchSmokeCompactDialog(probe.Dialog, width: 420, height: 310, minWidth: 360, minHeight: 280)");
+        source.Should().Contain("HasLaunchSmokeCompactDialog(probe.Dialog, width: 420, height: 320, minWidth: 420, minHeight: 320)");
+        source.Should().Contain("HasLaunchSmokeCompactDialog(probe.Dialog, width: 430, height: 520, minWidth: 430, minHeight: 520)");
         source.Should().Contain("HasLaunchSmokeButton(probe.ChooseFormatButton, \"FindChooseFormatFromCellButton\", \"Choose From Cell\")");
         source.Should().Contain("HasLaunchSmokeButton(probe.ChooseFindFormatButton, \"ReplaceFindChooseFormatFromCellButton\", \"Choose From Cell\")");
         source.Should().Contain("ShowGoToInputDialogAsync(");

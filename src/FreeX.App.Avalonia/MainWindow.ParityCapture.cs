@@ -13,6 +13,7 @@ using Free.Shared.Ribbon.Avalonia;
 using FreeX.App.Avalonia.Ribbon;
 using FreeX.App.Presentation.Backstage;
 using FreeX.App.Services;
+using FreeX.Core.Model;
 
 using AvaloniaGrid = Avalonia.Controls.Grid;
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
@@ -114,14 +115,65 @@ public sealed partial class MainWindow
         ("dialog.FormatCells", () => ShowFormatCellsDialogAsync()),
         ("dialog.FindReplace", () => ShowFindDialogAsync()),
         ("dialog.GoTo", () => ShowGoToDialogAsync()),
+        ("dialog.GoToSpecial", () => ShowGoToSpecialDialogAsync()),
         ("dialog.Sort", () => ShowSortDialogAsync()),
         ("dialog.SortOptions", async () => { await ShowSortOptionsDialogAsync(new SortDialogOptions()); }),
+        ("dialog.AdvancedFilter", () => ShowAdvancedFilterParityDialogAsync()),
+        ("dialog.RemoveDuplicates", () => ShowRemoveDuplicatesParityDialogAsync()),
         ("dialog.DataValidation", () => ShowDataValidationDialogAsync()),
         ("dialog.ConditionalFormatNewRule", () => ShowConditionalFormatNewRuleDialogAsync()),
         ("dialog.ConditionalFormatManage", () => ShowManageConditionalFormatsDialogAsync()),
         ("dialog.PageSetup", () => ShowPageSetupDialogAsync()),
         ("dialog.Options", () => ShowOptionsDialogAsync()),
     ];
+
+    private async Task ShowAdvancedFilterParityDialogAsync()
+    {
+        var previousSelection = _session.SelectedRange;
+        var sheetId = _session.ActiveSheet.Id;
+        _session.SelectRange(new GridRange(
+            new CellAddress(sheetId, 1, 1),
+            new CellAddress(sheetId, 4, 4)));
+        RefreshShell(_statusText.Text ?? "Ready");
+
+        try
+        {
+            await ShowAdvancedFilterDialogAsync();
+        }
+        finally
+        {
+            _session.SelectRange(previousSelection);
+            RefreshShell(_statusText.Text ?? "Ready");
+        }
+    }
+
+    private async Task ShowRemoveDuplicatesParityDialogAsync()
+    {
+        var previousSheetId = _session.ActiveSheet.Id;
+        var previousSelection = _session.SelectedRange;
+        var sheetId = _session.Workbook.Sheets.Count > 0
+            ? _session.Workbook.Sheets[0].Id
+            : previousSheetId;
+        if (!previousSheetId.Equals(sheetId))
+            _session.SelectSheet(sheetId);
+
+        _session.SelectRange(new GridRange(
+            new CellAddress(sheetId, 1, 1),
+            new CellAddress(sheetId, 4, 4)));
+        RefreshShell(_statusText.Text ?? "Ready");
+
+        try
+        {
+            await ShowRemoveDuplicatesInputDialogAsync(forceHasHeaders: true);
+        }
+        finally
+        {
+            if (!previousSheetId.Equals(_session.ActiveSheet.Id))
+                _session.SelectSheet(previousSheetId);
+            _session.SelectRange(previousSelection);
+            RefreshShell(_statusText.Text ?? "Ready");
+        }
+    }
 
     private void PrepareSheetTabsOverflowParityCapture()
     {

@@ -183,7 +183,7 @@ public sealed partial class MainWindow : Window
         GoToSpecialOptions? SpecialOptions);
     private sealed record GoToSpecialDialogSmokeProbe(
         Window Dialog,
-        ComboBox KindBox,
+        Control KindBox,
         CheckBox NumbersBox,
         CheckBox TextBox,
         CheckBox LogicalsBox,
@@ -191,10 +191,6 @@ public sealed partial class MainWindow : Window
         Button OkButton,
         Button CancelButton);
     private sealed record GoToSpecialDialogResult(GoToSpecialKind Kind, GoToSpecialOptions Options);
-    private sealed record GoToSpecialChoice(GoToSpecialKind Kind, string Label)
-    {
-        public override string ToString() => Label;
-    }
     private sealed record SortDialogSmokeProbe(
         Window Dialog,
         CheckBox HeadersCheckBox,
@@ -7213,7 +7209,7 @@ public sealed partial class MainWindow : Window
     }
 
     private IReadOnlyList<string> BuildGoToReferenceChoices(string defaultReference) =>
-        WorkbookReferenceNavigator.BuildReferenceChoices(
+        GoToDialogPlanner.BuildReferenceChoices(
             defaultReference,
             recentReferences: null,
             definedNames: _session.Workbook.NamedRanges.Keys);
@@ -7225,10 +7221,13 @@ public sealed partial class MainWindow : Window
         var dialog = new Window
         {
             Title = "Go To",
-            Width = 380,
+            Width = 420,
             Height = 320,
-            MinWidth = 340,
-            MinHeight = 280,
+            MinWidth = 420,
+            MinHeight = 320,
+            MaxWidth = 420,
+            MaxHeight = 320,
+            CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -7238,16 +7237,24 @@ public sealed partial class MainWindow : Window
         var historyList = new ListBox
         {
             ItemsSource = BuildGoToReferenceChoices(defaultReference),
-            MinHeight = 120,
+            Background = Brushes.White,
+            MinHeight = 150,
         };
-        AutomationProperties.SetName(historyList, "Go to");
+        var historyBorder = new Border
+        {
+            Background = Brushes.White,
+            BorderBrush = FormulaBarControlBorder,
+            BorderThickness = new Thickness(1),
+            Child = historyList,
+        };
+        AutomationProperties.SetName(historyList, "Go To");
         AutomationProperties.SetHelpText(historyList, "Recent references and defined names");
         AutomationProperties.SetAutomationId(historyList, "GoToHistoryList");
 
         var inputBox = new TextBox
         {
             Text = defaultReference,
-            MinWidth = 280,
+            MinWidth = 330,
         };
         AutomationProperties.SetName(inputBox, "Reference");
         AutomationProperties.SetAutomationId(inputBox, "GoToReferenceBox");
@@ -7255,24 +7262,26 @@ public sealed partial class MainWindow : Window
         var specialButton = new Button
         {
             Content = "Special...",
-            MinWidth = 84,
-            Padding = new Thickness(10, 4),
+            Width = 86,
+            MinWidth = 86,
         };
         AutomationProperties.SetAutomationId(specialButton, "GoToSpecialButton");
 
         var acceptButton = new Button
         {
-            Content = "Go",
-            MinWidth = 84,
-            Padding = new Thickness(10, 4),
+            Content = "OK",
+            Width = 72,
+            MinWidth = 72,
+            IsDefault = true,
         };
         AutomationProperties.SetAutomationId(acceptButton, "GoToReferenceBoxAcceptButton");
 
         var cancelButton = new Button
         {
             Content = "Cancel",
-            MinWidth = 84,
-            Padding = new Thickness(10, 4),
+            Width = 72,
+            MinWidth = 72,
+            IsCancel = true,
         };
         AutomationProperties.SetAutomationId(cancelButton, "GoToReferenceBoxCancelButton");
 
@@ -7329,24 +7338,55 @@ public sealed partial class MainWindow : Window
             Children =
             {
                 specialButton,
-                cancelButton,
                 acceptButton,
+                cancelButton,
             },
         };
 
-        dialog.Content = new StackPanel
+        var root = new AvaloniaGrid
         {
-            Margin = new Thickness(16),
-            Spacing = 8,
-            Children =
-            {
-                new TextBlock { Text = "Go to" },
-                historyList,
-                new TextBlock { Text = "Reference" },
-                inputBox,
-                buttonRow,
-            },
+            Margin = new Thickness(12),
         };
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(90) });
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var historyLabel = new TextBlock
+        {
+            Text = "Go to:",
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 6),
+        };
+        Grid.SetRow(historyLabel, 0);
+        Grid.SetColumnSpan(historyLabel, 2);
+        root.Children.Add(historyLabel);
+
+        Grid.SetRow(historyBorder, 1);
+        Grid.SetColumnSpan(historyBorder, 2);
+        root.Children.Add(historyBorder);
+
+        var referenceLabel = new TextBlock
+        {
+            Text = "Reference:",
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            Margin = new Thickness(0, 10, 8, 12),
+        };
+        Grid.SetRow(referenceLabel, 2);
+        root.Children.Add(referenceLabel);
+
+        inputBox.Margin = new Thickness(0, 10, 0, 12);
+        Grid.SetRow(inputBox, 2);
+        Grid.SetColumn(inputBox, 1);
+        root.Children.Add(inputBox);
+
+        Grid.SetRow(buttonRow, 3);
+        Grid.SetColumnSpan(buttonRow, 2);
+        root.Children.Add(buttonRow);
+
+        dialog.Content = root;
         dialog.Opened += (_, _) =>
         {
             inputBox.Focus();
@@ -7463,23 +7503,21 @@ public sealed partial class MainWindow : Window
         var dialog = new Window
         {
             Title = "Go To Special",
-            Width = 420,
-            Height = 310,
-            MinWidth = 360,
-            MinHeight = 280,
+            Width = 430,
+            Height = 520,
+            MinWidth = 430,
+            MinHeight = 520,
+            MaxWidth = 430,
+            MaxHeight = 520,
+            CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
 
         var choices = CreateGoToSpecialChoices();
-        var kindBox = new ComboBox
-        {
-            ItemsSource = choices,
-            SelectedIndex = 0,
-            MinWidth = 300,
-        };
-        AutomationProperties.SetName(kindBox, "Go to");
-        AutomationProperties.SetAutomationId(kindBox, "GoToSpecialKindBox");
+        var kindButtons = new List<RadioButton>(choices.Length);
+        var choiceGrid = CreateGoToSpecialChoiceGrid(choices, kindButtons);
+        AutomationProperties.SetAutomationId(choiceGrid, "GoToSpecialKindBox");
 
         var numbersBox = CreateGoToSpecialValueTypeBox("Numbers", "GoToSpecialNumbersBox");
         var textBox = CreateGoToSpecialValueTypeBox("Text", "GoToSpecialTextBox");
@@ -7489,23 +7527,25 @@ public sealed partial class MainWindow : Window
         var okButton = new Button
         {
             Content = "OK",
-            MinWidth = 84,
-            Padding = new Thickness(10, 4),
+            Width = 72,
+            MinWidth = 72,
+            IsDefault = true,
         };
         AutomationProperties.SetAutomationId(okButton, "GoToSpecialOkButton");
 
         var cancelButton = new Button
         {
             Content = "Cancel",
-            MinWidth = 84,
-            Padding = new Thickness(10, 4),
+            Width = 72,
+            MinWidth = 72,
+            IsCancel = true,
         };
         AutomationProperties.SetAutomationId(cancelButton, "GoToSpecialCancelButton");
 
         void RefreshValueTypeState()
         {
-            var enabled = kindBox.SelectedItem is GoToSpecialChoice choice &&
-                UsesGoToSpecialValueTypeOptions(choice.Kind);
+            var enabled = SelectedGoToSpecialChoice(kindButtons) is { } choice &&
+                GoToSpecialDialogPlanner.UsesValueTypeOptions(choice.Kind);
             numbersBox.IsEnabled = enabled;
             textBox.IsEnabled = enabled;
             logicalsBox.IsEnabled = enabled;
@@ -7528,17 +7568,22 @@ public sealed partial class MainWindow : Window
 
         void Accept()
         {
-            var choice = kindBox.SelectedItem as GoToSpecialChoice ?? choices[0];
-            var options = UsesGoToSpecialValueTypeOptions(choice.Kind)
-                ? new GoToSpecialOptions(GetValueTypes())
-                : new GoToSpecialOptions();
+            var choice = SelectedGoToSpecialChoice(kindButtons) ?? choices[0];
+            var options = GoToSpecialDialogPlanner.BuildOptions(choice.Kind, GetValueTypes());
             result = new GoToSpecialDialogResult(choice.Kind, options);
             dialog.Close();
         }
 
-        kindBox.SelectionChanged += (_, _) => RefreshValueTypeState();
         okButton.Click += (_, _) => Accept();
         cancelButton.Click += (_, _) => dialog.Close();
+        foreach (var button in kindButtons)
+        {
+            button.PropertyChanged += (_, e) =>
+            {
+                if (e.Property == ToggleButton.IsCheckedProperty)
+                    RefreshValueTypeState();
+            };
+        }
         dialog.KeyDown += (_, e) =>
         {
             if (e.Key == Key.Enter)
@@ -7556,7 +7601,8 @@ public sealed partial class MainWindow : Window
         var valueTypeRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 12,
+            Spacing = 16,
+            Margin = new Thickness(8, 6, 8, 4),
             Children =
             {
                 numbersBox,
@@ -7571,30 +7617,46 @@ public sealed partial class MainWindow : Window
             Orientation = Orientation.Horizontal,
             Spacing = 8,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Margin = new Thickness(0, 10, 0, 0),
             Children =
             {
-                cancelButton,
                 okButton,
+                cancelButton,
             },
         };
 
         dialog.Content = new StackPanel
         {
-            Margin = new Thickness(16),
-            Spacing = 8,
+            Margin = new Thickness(12),
             Children =
             {
-                new TextBlock { Text = "Go to" },
-                kindBox,
-                new TextBlock { Text = "Value types" },
-                valueTypeRow,
+                new TextBlock
+                {
+                    Text = "Select",
+                    FontWeight = FontWeight.SemiBold,
+                    Margin = new Thickness(0, 0, 0, 6),
+                },
+                new GroupBox
+                {
+                    Header = "Go To Special",
+                    Margin = new Thickness(0, 0, 0, 10),
+                    Padding = new Thickness(8, 6, 8, 4),
+                    Content = choiceGrid,
+                },
+                new GroupBox
+                {
+                    Header = "Values for constants and formulas",
+                    Margin = new Thickness(0, 0, 0, 10),
+                    Padding = new Thickness(0),
+                    Content = valueTypeRow,
+                },
                 buttonRow,
             },
         };
         dialog.Opened += (_, _) =>
         {
             RefreshValueTypeState();
-            kindBox.Focus();
+            kindButtons.FirstOrDefault()?.Focus();
         };
         if (launchSmokeProbe is not null)
         {
@@ -7604,7 +7666,7 @@ public sealed partial class MainWindow : Window
                     dialog,
                     () => launchSmokeProbe(new GoToSpecialDialogSmokeProbe(
                         dialog,
-                        kindBox,
+                        choiceGrid,
                         numbersBox,
                         textBox,
                         logicalsBox,
@@ -7618,37 +7680,63 @@ public sealed partial class MainWindow : Window
         return result;
     }
 
+    private static AvaloniaGrid CreateGoToSpecialChoiceGrid(
+        IReadOnlyList<GoToSpecialChoice> choices,
+        ICollection<RadioButton> buttons)
+    {
+        var grid = new AvaloniaGrid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        for (var index = 0; index < choices.Count; index++)
+        {
+            var row = index / 2;
+            while (grid.RowDefinitions.Count <= row)
+                grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            var choice = choices[index];
+            var button = new RadioButton
+            {
+                Content = choice.Label,
+                Tag = choice,
+                GroupName = "GoToSpecialKind",
+                Margin = new Thickness(0, 0, 12, 6),
+                IsChecked = index == 0,
+            };
+            buttons.Add(button);
+            Grid.SetRow(button, row);
+            Grid.SetColumn(button, index % 2);
+            grid.Children.Add(button);
+        }
+
+        return grid;
+    }
+
+    private static GoToSpecialChoice? SelectedGoToSpecialChoice(IEnumerable<RadioButton> buttons)
+    {
+        foreach (var button in buttons)
+        {
+            if (button.IsChecked == true && button.Tag is GoToSpecialChoice choice)
+                return choice;
+        }
+
+        return null;
+    }
+
     private static CheckBox CreateGoToSpecialValueTypeBox(string label, string automationId)
     {
         var checkBox = new CheckBox
         {
             Content = label,
             IsChecked = true,
+            Margin = new Thickness(0, 0, 4, 0),
         };
         AutomationProperties.SetAutomationId(checkBox, automationId);
         return checkBox;
     }
 
     private static GoToSpecialChoice[] CreateGoToSpecialChoices() =>
-    [
-        new(GoToSpecialKind.Blanks, "Blanks"),
-        new(GoToSpecialKind.Constants, "Constants"),
-        new(GoToSpecialKind.Formulas, "Formulas"),
-        new(GoToSpecialKind.Comments, "Comments"),
-        new(GoToSpecialKind.CurrentRegion, "Current region"),
-        new(GoToSpecialKind.RowDifferences, "Row differences"),
-        new(GoToSpecialKind.ColumnDifferences, "Column differences"),
-        new(GoToSpecialKind.LastCell, "Last cell"),
-        new(GoToSpecialKind.ConditionalFormats, "Conditional formats"),
-        new(GoToSpecialKind.Objects, "Objects"),
-        new(GoToSpecialKind.Precedents, "Precedents"),
-        new(GoToSpecialKind.Dependents, "Dependents"),
-        new(GoToSpecialKind.DataValidation, "Data validation"),
-        new(GoToSpecialKind.VisibleCellsOnly, "Visible cells only"),
-    ];
-
-    private static bool UsesGoToSpecialValueTypeOptions(GoToSpecialKind kind) =>
-        kind is GoToSpecialKind.Constants or GoToSpecialKind.Formulas;
+        GoToSpecialDialogPlanner.BuildChoices().ToArray();
 
     private bool SelectGoToSpecial(GoToSpecialKind kind, GoToSpecialOptions? options = null)
     {
@@ -11149,10 +11237,13 @@ public sealed partial class MainWindow : Window
         var dialog = new Window
         {
             Title = "Advanced Filter",
-            Width = 500,
-            Height = 390,
-            MinWidth = 420,
-            MinHeight = 350,
+            Width = 630,
+            Height = 478,
+            MinWidth = 630,
+            MinHeight = 478,
+            MaxWidth = 630,
+            MaxHeight = 478,
+            CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -11160,8 +11251,8 @@ public sealed partial class MainWindow : Window
 
         var listRangeBox = new TextBox
         {
-            Text = FormatRangeReference(_session.SelectedRange),
-            MinWidth = 280,
+            Text = FormatRangeReference(AdvancedFilterPlanner.CreateDefaultListRange(_session.ActiveSheet, _session.SelectedRange)),
+            MinWidth = 0,
         };
         AutomationProperties.SetName(listRangeBox, "List range");
         AutomationProperties.SetAutomationId(listRangeBox, "AdvancedFilterListRangeBox");
@@ -11169,7 +11260,7 @@ public sealed partial class MainWindow : Window
 
         var criteriaRangeBox = new TextBox
         {
-            MinWidth = 280,
+            MinWidth = 0,
         };
         AutomationProperties.SetName(criteriaRangeBox, "Criteria range");
         AutomationProperties.SetAutomationId(criteriaRangeBox, "AdvancedFilterCriteriaRangeBox");
@@ -11177,7 +11268,7 @@ public sealed partial class MainWindow : Window
 
         var inPlaceButton = new RadioButton
         {
-            Content = "Filter in-place",
+            Content = "Filter the list, in-place",
             GroupName = "AdvancedFilterOutputMode",
             IsChecked = true,
         };
@@ -11197,7 +11288,7 @@ public sealed partial class MainWindow : Window
         var copyToBox = new TextBox
         {
             IsEnabled = false,
-            MinWidth = 280,
+            MinWidth = 0,
         };
         AutomationProperties.SetName(copyToBox, "Copy to");
         AutomationProperties.SetAutomationId(copyToBox, "AdvancedFilterCopyToBox");
@@ -11206,6 +11297,7 @@ public sealed partial class MainWindow : Window
         var uniqueBox = new CheckBox
         {
             Content = "Unique records only",
+            Margin = new Thickness(0, 10, 0, 0),
         };
         AutomationProperties.SetName(uniqueBox, "Unique records only");
         AutomationProperties.SetAutomationId(uniqueBox, "AdvancedFilterUniqueRecordsOnlyBox");
@@ -11215,6 +11307,8 @@ public sealed partial class MainWindow : Window
         {
             Foreground = Brush(143, 74, 18),
             TextWrapping = TextWrapping.Wrap,
+            IsVisible = false,
+            Margin = new Thickness(0, 6, 0, 0),
         };
         AutomationProperties.SetName(errorText, "Advanced Filter validation");
         AutomationProperties.SetAutomationId(errorText, "AdvancedFilterErrorText");
@@ -11223,8 +11317,9 @@ public sealed partial class MainWindow : Window
         var okButton = new Button
         {
             Content = "OK",
-            MinWidth = 84,
-            Padding = new Thickness(10, 4),
+            Width = 76,
+            MinWidth = 76,
+            IsDefault = true,
         };
         AutomationProperties.SetName(okButton, "OK");
         AutomationProperties.SetAutomationId(okButton, "AdvancedFilterOkButton");
@@ -11233,8 +11328,9 @@ public sealed partial class MainWindow : Window
         var cancelButton = new Button
         {
             Content = "Cancel",
-            MinWidth = 84,
-            Padding = new Thickness(10, 4),
+            Width = 76,
+            MinWidth = 76,
+            IsCancel = true,
         };
         AutomationProperties.SetName(cancelButton, "Cancel");
         AutomationProperties.SetAutomationId(cancelButton, "AdvancedFilterCancelButton");
@@ -11256,18 +11352,81 @@ public sealed partial class MainWindow : Window
                 sheetName => _session.Workbook.GetSheet(sheetName)?.Id);
         }
 
-        void RefreshPlanStatus()
+        (AvaloniaGrid Row, Button PickerButton, TextBlock Label) CreateReferenceRow(
+            string label,
+            TextBox textBox,
+            string pickerAutomationId)
+        {
+            var labelBlock = new TextBlock
+            {
+                Text = label,
+                VerticalAlignment = AvaloniaVerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 8, 0),
+            };
+            var pickerButton = new Button
+            {
+                Content = "...",
+                Width = 40,
+                MinWidth = 40,
+                Padding = new Thickness(0),
+                Margin = new Thickness(0, 0, 8, 0),
+            };
+            AutomationProperties.SetAutomationId(pickerButton, pickerAutomationId);
+            pickerButton.Click += (_, _) =>
+            {
+                textBox.Focus();
+                textBox.SelectAll();
+            };
+
+            var row = new AvaloniaGrid { Margin = new Thickness(0, 8, 0, 0) };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(128) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            Grid.SetColumn(labelBlock, 0);
+            Grid.SetColumn(pickerButton, 1);
+            Grid.SetColumn(textBox, 2);
+            row.Children.Add(labelBlock);
+            row.Children.Add(pickerButton);
+            row.Children.Add(textBox);
+            return (row, pickerButton, labelBlock);
+        }
+
+        var listRangeRow = CreateReferenceRow("List range:", listRangeBox, "AdvancedFilterSelectListRangeButton");
+        var criteriaRangeRow = CreateReferenceRow("Criteria range:", criteriaRangeBox, "AdvancedFilterSelectCriteriaRangeButton");
+        var copyToRow = CreateReferenceRow("Copy to:", copyToBox, "AdvancedFilterSelectCopyToButton");
+        var copyToHint = new TextBlock
+        {
+            Text = "Copy to is available when Copy to another location is selected.",
+            Foreground = SecondaryInk,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 4, 0, 0),
+        };
+        var criteriaHint = new TextBlock
+        {
+            Text = "Criteria should include column labels in the first row, matching Excel Advanced Filter.",
+            Foreground = SecondaryInk,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 10, 0, 0),
+        };
+
+        var showInteractiveValidation = false;
+
+        void RefreshPlanStatus(bool showInvalid = false)
         {
             var planResult = CreatePlan();
             errorText.Text = planResult.Success
                 ? "Ready to run Advanced Filter."
                 : FormatAdvancedFilterPlanError(planResult);
+            errorText.IsVisible = showInvalid && !planResult.Success;
         }
 
-        void RefreshCopyToState()
+        void RefreshCopyToState(bool showInvalid = false)
         {
-            copyToBox.IsEnabled = copyToAnotherLocationButton.IsChecked == true;
-            RefreshPlanStatus();
+            var isCopyToEnabled = copyToAnotherLocationButton.IsChecked == true;
+            copyToRow.Row.IsEnabled = isCopyToEnabled;
+            copyToBox.IsEnabled = isCopyToEnabled;
+            copyToHint.IsVisible = !isCopyToEnabled;
+            RefreshPlanStatus(showInvalid);
         }
 
         void Accept()
@@ -11276,6 +11435,7 @@ public sealed partial class MainWindow : Window
             if (!planResult.Success || planResult.Plan is null)
             {
                 errorText.Text = FormatAdvancedFilterPlanError(planResult);
+                errorText.IsVisible = true;
                 FocusAdvancedFilterErrorField(planResult.Error, listRangeBox, criteriaRangeBox, copyToBox);
                 return;
             }
@@ -11284,25 +11444,28 @@ public sealed partial class MainWindow : Window
             dialog.Close();
         }
 
+        void RefreshPlanStatusAfterInput() =>
+            RefreshPlanStatus(showInvalid: showInteractiveValidation);
+
         okButton.Click += (_, _) => Accept();
         cancelButton.Click += (_, _) => dialog.Close();
-        listRangeBox.TextChanged += (_, _) => RefreshPlanStatus();
-        criteriaRangeBox.TextChanged += (_, _) => RefreshPlanStatus();
-        copyToBox.TextChanged += (_, _) => RefreshPlanStatus();
+        listRangeBox.TextChanged += (_, _) => RefreshPlanStatusAfterInput();
+        criteriaRangeBox.TextChanged += (_, _) => RefreshPlanStatusAfterInput();
+        copyToBox.TextChanged += (_, _) => RefreshPlanStatusAfterInput();
         uniqueBox.PropertyChanged += (_, e) =>
         {
             if (e.Property == ToggleButton.IsCheckedProperty)
-                RefreshPlanStatus();
+                RefreshPlanStatusAfterInput();
         };
         inPlaceButton.PropertyChanged += (_, e) =>
         {
             if (e.Property == ToggleButton.IsCheckedProperty)
-                RefreshCopyToState();
+                RefreshCopyToState(showInvalid: showInteractiveValidation);
         };
         copyToAnotherLocationButton.PropertyChanged += (_, e) =>
         {
             if (e.Property == ToggleButton.IsCheckedProperty)
-                RefreshCopyToState();
+                RefreshCopyToState(showInvalid: showInteractiveValidation);
         };
         dialog.KeyDown += (_, e) =>
         {
@@ -11326,46 +11489,51 @@ public sealed partial class MainWindow : Window
             Margin = new Thickness(0, 10, 0, 0),
             Children =
             {
-                cancelButton,
                 okButton,
+                cancelButton,
             },
         };
         DockPanel.SetDock(buttonRow, Dock.Bottom);
 
         RefreshCopyToState();
-        dialog.Content = new DockPanel
+        var actionPanel = new StackPanel
         {
-            Margin = new Thickness(16),
+            Margin = new Thickness(8, 6, 8, 8),
             Children =
             {
-                buttonRow,
-                new StackPanel
+                inPlaceButton,
+                copyToAnotherLocationButton,
+            },
+        };
+        inPlaceButton.Margin = new Thickness(0, 0, 0, 4);
+
+        dialog.Content = new StackPanel
+        {
+            Margin = new Thickness(12),
+            Children =
+            {
+                new GroupBox
                 {
-                    Spacing = 10,
-                    Children =
-                    {
-                        CreateAdvancedFilterField("List range", listRangeBox),
-                        CreateAdvancedFilterField("Criteria range", criteriaRangeBox),
-                        new StackPanel
-                        {
-                            Spacing = 6,
-                            Children =
-                            {
-                                inPlaceButton,
-                                copyToAnotherLocationButton,
-                            },
-                        },
-                        CreateAdvancedFilterField("Copy to", copyToBox),
-                        uniqueBox,
-                        errorText,
-                    },
+                    Header = "Action",
+                    Margin = new Thickness(0, 0, 0, 10),
+                    Content = actionPanel,
                 },
+                listRangeRow.Row,
+                criteriaRangeRow.Row,
+                copyToRow.Row,
+                copyToHint,
+                uniqueBox,
+                criteriaHint,
+                errorText,
+                buttonRow,
             },
         };
         dialog.Opened += (_, _) =>
         {
             criteriaRangeBox.Focus();
             criteriaRangeBox.SelectAll();
+            errorText.IsVisible = false;
+            Dispatcher.UIThread.Post(() => showInteractiveValidation = true);
         };
 
         await dialog.ShowDialog(this);
@@ -11430,17 +11598,6 @@ public sealed partial class MainWindow : Window
         target.Focus();
         target.SelectAll();
     }
-
-    private static StackPanel CreateAdvancedFilterField(string label, Control control) =>
-        new()
-        {
-            Spacing = 4,
-            Children =
-            {
-                new TextBlock { Text = label },
-                control,
-            },
-        };
 
     private async Task ShowSubtotalDialogAsync()
     {
@@ -11789,40 +11946,35 @@ public sealed partial class MainWindow : Window
         await ShowTextDialogAsync("Remove Duplicates", status, 420, 220);
     }
 
-    private async Task<RemoveDuplicatesPlan?> ShowRemoveDuplicatesInputDialogAsync()
+    private async Task<RemoveDuplicatesPlan?> ShowRemoveDuplicatesInputDialogAsync(bool? forceHasHeaders = null)
     {
         RemoveDuplicatesPlan? result = null;
         var range = _session.SelectedRange;
-        var hasHeaders = RemoveDuplicatesPlanner.GuessHasHeaders(_session.ActiveSheet, range);
+        var hasHeaders = forceHasHeaders ?? RemoveDuplicatesPlanner.GuessHasHeaders(_session.ActiveSheet, range);
         IReadOnlyList<RemoveDuplicateColumnChoice> columns =
             RemoveDuplicatesPlanner.BuildColumnChoices(_session.ActiveSheet, range, hasHeaders);
 
         var dialog = new Window
         {
             Title = "Remove Duplicates",
-            Width = 440,
-            Height = 430,
-            MinWidth = 380,
-            MinHeight = 340,
+            Width = 360,
+            Height = 360,
+            MinWidth = 360,
+            MinHeight = 360,
+            MaxWidth = 360,
+            MaxHeight = 360,
+            CanResize = false,
+            FontFamily = FormulaBarFontFamily,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
         AutomationProperties.SetAutomationId(dialog, "RemoveDuplicatesCompactDialog");
 
-        var rangeText = new TextBlock
-        {
-            Text = $"Range: {FormatRangeReference(range)}",
-            Foreground = HeaderForeground,
-            TextWrapping = TextWrapping.Wrap,
-        };
-        AutomationProperties.SetName(rangeText, "Remove Duplicates range");
-        AutomationProperties.SetAutomationId(rangeText, "RemoveDuplicatesRangeSummaryText");
-        AutomationProperties.SetHelpText(rangeText, "Shows the selected range checked for duplicates.");
-
         var hasHeadersBox = new CheckBox
         {
             Content = "My data has headers",
             IsChecked = hasHeaders,
+            Margin = new Thickness(0, 0, 0, 8),
         };
         AutomationProperties.SetName(hasHeadersBox, "My data has headers");
         AutomationProperties.SetAutomationId(hasHeadersBox, "RemoveDuplicatesHasHeadersBox");
@@ -11853,22 +12005,29 @@ public sealed partial class MainWindow : Window
                 {
                     Content = column.Label,
                     IsChecked = column.IsSelected,
+                    Margin = new Thickness(0, 0, 0, 4),
                 };
                 AutomationProperties.SetName(box, column.Label);
                 AutomationProperties.SetAutomationId(box, $"RemoveDuplicatesColumn{column.Offset}Box");
                 AutomationProperties.SetHelpText(box, "Include this column when comparing duplicate rows.");
+                box.PropertyChanged += (_, e) =>
+                {
+                    if (e.Property == ToggleButton.IsCheckedProperty)
+                        RefreshBulkButtonState();
+                };
                 columnBoxes.Add(box);
                 columnsPanel.Children.Add(box);
             }
-        }
 
-        RenderColumns(columns);
+            RefreshBulkButtonState();
+        }
 
         var selectAllButton = new Button
         {
             Content = "Select All",
-            MinWidth = 92,
-            Padding = new Thickness(10, 4),
+            Width = 112,
+            MinWidth = 112,
+            Margin = new Thickness(0, 0, 8, 0),
         };
         AutomationProperties.SetName(selectAllButton, "Select All");
         AutomationProperties.SetAutomationId(selectAllButton, "RemoveDuplicatesSelectAllButton");
@@ -11877,8 +12036,8 @@ public sealed partial class MainWindow : Window
         var unselectAllButton = new Button
         {
             Content = "Unselect All",
-            MinWidth = 92,
-            Padding = new Thickness(10, 4),
+            Width = 112,
+            MinWidth = 112,
         };
         AutomationProperties.SetName(unselectAllButton, "Unselect All");
         AutomationProperties.SetAutomationId(unselectAllButton, "RemoveDuplicatesUnselectAllButton");
@@ -11888,6 +12047,7 @@ public sealed partial class MainWindow : Window
         {
             Foreground = Brush(143, 74, 18),
             TextWrapping = TextWrapping.Wrap,
+            IsVisible = false,
         };
         AutomationProperties.SetName(errorText, "Remove Duplicates validation");
         AutomationProperties.SetAutomationId(errorText, "RemoveDuplicatesErrorText");
@@ -11896,8 +12056,9 @@ public sealed partial class MainWindow : Window
         var okButton = new Button
         {
             Content = "OK",
-            MinWidth = 84,
-            Padding = new Thickness(10, 4),
+            Width = 72,
+            MinWidth = 72,
+            IsDefault = true,
         };
         AutomationProperties.SetName(okButton, "OK");
         AutomationProperties.SetAutomationId(okButton, "RemoveDuplicatesOkButton");
@@ -11906,12 +12067,20 @@ public sealed partial class MainWindow : Window
         var cancelButton = new Button
         {
             Content = "Cancel",
-            MinWidth = 84,
-            Padding = new Thickness(10, 4),
+            Width = 72,
+            MinWidth = 72,
+            IsCancel = true,
         };
         AutomationProperties.SetName(cancelButton, "Cancel");
         AutomationProperties.SetAutomationId(cancelButton, "RemoveDuplicatesCancelButton");
         AutomationProperties.SetHelpText(cancelButton, "Close Remove Duplicates without changes.");
+
+        void RefreshBulkButtonState()
+        {
+            var selectedCount = columnBoxes.Count(static box => box.IsChecked == true);
+            selectAllButton.IsEnabled = selectedCount < columnBoxes.Count;
+            unselectAllButton.IsEnabled = selectedCount > 0;
+        }
 
         void RebuildColumnsForHeaderState()
         {
@@ -11937,6 +12106,7 @@ public sealed partial class MainWindow : Window
             if (!planResult.IsReady || planResult.Plan is null)
             {
                 errorText.Text = planResult.StatusText;
+                errorText.IsVisible = true;
                 Control focusTarget = selectAllButton;
                 foreach (var columnBox in columnBoxes)
                 {
@@ -11960,15 +12130,18 @@ public sealed partial class MainWindow : Window
         selectAllButton.Click += (_, _) =>
         {
             errorText.Text = "";
+            errorText.IsVisible = false;
             RenderColumns(RemoveDuplicatesPlanner.SelectAll(CaptureColumns()));
         };
         unselectAllButton.Click += (_, _) =>
         {
             errorText.Text = "";
+            errorText.IsVisible = false;
             RenderColumns(RemoveDuplicatesPlanner.ClearAll(CaptureColumns()));
         };
         okButton.Click += (_, _) => Accept();
         cancelButton.Click += (_, _) => dialog.Close();
+        RenderColumns(columns);
 
         dialog.KeyDown += (_, e) =>
         {
@@ -11986,53 +12159,54 @@ public sealed partial class MainWindow : Window
 
         dialog.Content = new Border
         {
-            Padding = new Thickness(16),
-            Child = new StackPanel
+            Padding = new Thickness(12),
+            Child = new AvaloniaGrid
             {
-                Spacing = 12,
+                RowDefinitions =
+                {
+                    new RowDefinition { Height = GridLength.Auto },
+                    new RowDefinition { Height = GridLength.Auto },
+                    new RowDefinition { Height = GridLength.Auto },
+                    new RowDefinition { Height = new GridLength(1, GridUnitType.Star) },
+                    new RowDefinition { Height = GridLength.Auto },
+                    new RowDefinition { Height = GridLength.Auto },
+                },
                 Children =
                 {
-                    rangeText,
                     hasHeadersBox,
-                    new TextBlock
+                    Positioned(1, new TextBlock
                     {
-                        Text = "Columns",
-                        FontWeight = FontWeight.SemiBold,
-                    },
-                    new StackPanel
+                        Text = "Columns:",
+                        Margin = new Thickness(0, 0, 0, 8),
+                    }),
+                    Positioned(2, new StackPanel
                     {
                         Orientation = Orientation.Horizontal,
-                        Spacing = 8,
+                        Margin = new Thickness(0, 0, 0, 8),
                         Children =
                         {
                             selectAllButton,
                             unselectAllButton,
                         },
-                    },
-                    new Border
+                    }),
+                    Positioned(3, new ScrollViewer
                     {
-                        BorderBrush = ToolbarBorder,
-                        BorderThickness = new Thickness(1),
-                        Padding = new Thickness(8),
-                        Child = new ScrollViewer
-                        {
-                            MaxHeight = 170,
-                            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                            Content = columnsPanel,
-                        },
-                    },
-                    errorText,
-                    new StackPanel
+                        VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                        Content = columnsPanel,
+                    }),
+                    Positioned(4, errorText),
+                    Positioned(5, new StackPanel
                     {
                         Orientation = Orientation.Horizontal,
                         HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
                         Spacing = 8,
+                        Margin = new Thickness(0, 12, 0, 0),
                         Children =
                         {
                             okButton,
                             cancelButton,
                         },
-                    },
+                    }),
                 },
             },
         };
@@ -12040,6 +12214,12 @@ public sealed partial class MainWindow : Window
 
         await dialog.ShowDialog(this);
         return result;
+
+        static Control Positioned(int row, Control control)
+        {
+            AvaloniaGrid.SetRow(control, row);
+            return control;
+        }
     }
 
     private static string FormatRemoveDuplicatesStatus(
@@ -15100,15 +15280,15 @@ public sealed partial class MainWindow : Window
                 hasGoToDialog = HasLaunchSmokeDialog(probe.Dialog, "Go To");
                 hasGoToDialogReferenceControls =
                     HasLaunchSmokeAutomationId(probe.InputBox, "GoToReferenceBox") &&
-                    HasLaunchSmokeButton(probe.AcceptButton, "GoToReferenceBoxAcceptButton", "Go") &&
+                    HasLaunchSmokeButton(probe.AcceptButton, "GoToReferenceBoxAcceptButton", "OK") &&
                     HasLaunchSmokeButton(probe.CancelButton, "GoToReferenceBoxCancelButton", "Cancel");
                 hasGoToDialogHistoryControls =
                     HasLaunchSmokeAutomationId(probe.HistoryList, "GoToHistoryList") &&
-                    string.Equals(AutomationProperties.GetName(probe.HistoryList), "Go to", StringComparison.Ordinal) &&
+                    string.Equals(AutomationProperties.GetName(probe.HistoryList), "Go To", StringComparison.Ordinal) &&
                     probe.HistoryList.ItemCount > 0;
                 hasGoToDialogSpecialControl =
                     HasLaunchSmokeButton(probe.SpecialButton, "GoToSpecialButton", "Special...");
-                hasGoToDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 380, height: 320, minWidth: 340, minHeight: 280);
+                hasGoToDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 420, height: 320, minWidth: 420, minHeight: 320);
             });
 
         var hasGoToSpecialDialog = false;
@@ -15118,9 +15298,12 @@ public sealed partial class MainWindow : Window
         var goToSpecialDialogResult = await ShowGoToSpecialInputDialogAsync(probe =>
         {
             hasGoToSpecialDialog = HasLaunchSmokeDialog(probe.Dialog, "Go To Special");
+            var hasSelectedKind =
+                probe.KindBox is AvaloniaGrid kindGrid &&
+                kindGrid.Children.OfType<RadioButton>().Any(button => button.IsChecked == true);
             hasGoToSpecialKindControls =
                 HasLaunchSmokeAutomationId(probe.KindBox, "GoToSpecialKindBox") &&
-                probe.KindBox.SelectedIndex == 0 &&
+                hasSelectedKind &&
                 HasLaunchSmokeButton(probe.OkButton, "GoToSpecialOkButton", "OK") &&
                 HasLaunchSmokeButton(probe.CancelButton, "GoToSpecialCancelButton", "Cancel");
             hasGoToSpecialValueTypeControls =
@@ -15128,7 +15311,7 @@ public sealed partial class MainWindow : Window
                 HasLaunchSmokeCheckBox(probe.TextBox, "GoToSpecialTextBox", "Text") &&
                 HasLaunchSmokeCheckBox(probe.LogicalsBox, "GoToSpecialLogicalsBox", "Logicals") &&
                 HasLaunchSmokeCheckBox(probe.ErrorsBox, "GoToSpecialErrorsBox", "Errors");
-            hasGoToSpecialDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 420, height: 310, minWidth: 360, minHeight: 280);
+            hasGoToSpecialDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 430, height: 520, minWidth: 430, minHeight: 520);
         });
 
         var hasFormatCellsDialog = false;

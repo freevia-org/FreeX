@@ -29,6 +29,10 @@ public sealed class ExcelOpenSmokeReportSchemaTests
         usageSource.Should().Contain("--generate-excel-pivot-corpus-fixtures");
         fixturesSource.Should().Contain("GetExcelPivotCorpusFixturePaths");
         fixturesSource.Should().Contain("Excel_native_pivot_multiple_pivots_one_cache_001.xlsx");
+        fixturesSource.Should().Contain("Excel_native_pivot_filters_sorts_002.xlsx");
+        fixturesSource.Should().Contain("Excel_native_pivot_layout_options_002.xlsx");
+        fixturesSource.Should().Contain("Excel_native_pivot_date_grouping_003.xlsx");
+        fixturesSource.Should().Contain("Excel_native_pivot_calculated_field_item_003.xlsx");
         programSource.Should().Contain("ExcelNativePivotCorpusExpectations");
     }
 
@@ -45,7 +49,24 @@ public sealed class ExcelOpenSmokeReportSchemaTests
         source.Should().Contain("ResolveExcelPivotVisualRanges");
         source.Should().Contain("TableRange2");
         source.Should().Contain("ExportExcelReferencePngs");
+        source.Should().Contain("LoadExcelReferenceDimensions");
+        source.Should().Contain("targetPixelDimensions");
+        source.Should().Contain("render FreeX to the same pixel canvas");
+        source.Should().Contain("IsLikelyBlankReferencePng");
+        source.Should().Contain("opaqueRatio");
+        source.Should().Contain("TrySaveClipboardImageToPng");
+        source.Should().Contain("CopyEnhMetaFile");
+        source.Should().Contain("selected bitmap");
+        source.Should().Contain("Excel range PNG export produced a blank-looking image");
         source.Should().Contain("CopyPicture");
+        source.Should().Contain("GetPngDimensions");
+        source.Should().Contain("--fail-on-dimension-mismatch");
+        source.Should().Contain("Dimension gate: native Excel and FreeX PNG dimensions must match exactly.");
+        source.Should().Contain("Dimension check: native Excel and FreeX PNG dimensions are reported");
+        source.Should().Contain("Dimension mismatch: Excel");
+        source.Should().Contain("Dimension mismatch warning: Excel");
+        source.Should().Contain("800x600 compatibility resize fallback");
+        source.Should().Contain("ComparisonFailed");
     }
 
     [Fact]

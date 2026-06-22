@@ -69,6 +69,28 @@ public sealed record AdvancedFilterRangeSelectionRequest(
 
 public static class AdvancedFilterPlanner
 {
+    public static GridRange CreateDefaultListRange(Sheet sheet, GridRange selectedRange)
+    {
+        if (selectedRange.RowCount == 1 &&
+            selectedRange.ColCount == 1 &&
+            SelectionRangeService.GetCurrentRegion(sheet, selectedRange.Start) is { } currentRegion &&
+            currentRegion.RowCount > 1)
+        {
+            return currentRegion;
+        }
+
+        if (selectedRange.RowCount == 1 &&
+            selectedRange.ColCount == 1 &&
+            sheet.GetUsedRange() is { } usedRange &&
+            usedRange.RowCount > 1 &&
+            usedRange.Contains(selectedRange.Start))
+        {
+            return usedRange;
+        }
+
+        return selectedRange;
+    }
+
     public static AdvancedFilterPlanResult CreatePlan(
         SheetId currentSheetId,
         string? listRangeText,

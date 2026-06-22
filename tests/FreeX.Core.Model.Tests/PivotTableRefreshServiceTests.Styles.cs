@@ -425,7 +425,7 @@ public sealed partial class PivotTableRefreshServiceTests
     }
 
     [Theory]
-    [InlineData("PivotStyleMedium2", 31, 78, 121, 232, 240, 248)]
+    [InlineData("PivotStyleMedium2", 126, 53, 14, 247, 199, 172)]
     [InlineData("PivotStyleLight16", 217, 225, 242, 242, 248, 238)]
     [InlineData("PivotStyleMedium10", 237, 125, 49, 253, 239, 230)]
     [InlineData("PivotStyleMedium17", 112, 48, 160, 243, 235, 250)]
@@ -462,6 +462,7 @@ public sealed partial class PivotTableRefreshServiceTests
         {
             Theme = WorkbookTheme.Office
                 .WithColor(WorkbookThemeColorSlot.Accent1, new CellColor(10, 80, 120))
+                .WithColor(WorkbookThemeColorSlot.Accent2, new CellColor(120, 40, 20))
         };
         var sheet = workbook.AddSheet("Data");
         SeedSalesData(sheet);
@@ -480,11 +481,175 @@ public sealed partial class PivotTableRefreshServiceTests
         PivotTableRefreshService.Refresh(workbook, sheet, pivot);
 
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "E2"))!.StyleId)
-            .FillColor.Should().Be(new CellColor(10, 80, 120));
+            .FillColor.Should().Be(new CellColor(120, 40, 20));
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "E3"))!.StyleId)
-            .FillColor.Should().Be(new CellColor(230, 238, 242));
+            .FillColor.Should().Be(new CellColor(242, 234, 232));
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "F5"))!.StyleId)
-            .FillColor.Should().Be(new CellColor(182, 202, 214));
+            .FillColor.Should().Be(new CellColor(214, 190, 184));
+    }
+
+    [Fact]
+    public void Refresh_AppliesMedium2BodyFillAndDarkGrandTotalStyle()
+    {
+        var workbook = new Workbook("PivotStyleMedium2BodyRenderTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "G6"),
+            StyleName = "PivotStyleMedium2",
+            ShowRowStripes = false
+        };
+        pivot.RowFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Count of Amount", "count"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "E2"))!.StyleId)
+            .FillColor.Should().Be(new CellColor(126, 53, 14));
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "E3"))!.StyleId)
+            .FillColor.Should().Be(new CellColor(247, 199, 172));
+        var totalStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "E5"))!.StyleId);
+        totalStyle.FillColor.Should().Be(new CellColor(126, 53, 14));
+        totalStyle.FontColor.Should().Be(CellColor.White);
+    }
+
+    [Fact]
+    public void Refresh_UsesBuiltInMedium2PaletteForOfficeEquivalentTheme()
+    {
+        var workbook = new Workbook("PivotStyleMedium2OfficeEquivalentThemeTest")
+        {
+            Theme = WorkbookTheme.Office
+                .WithColor(WorkbookThemeColorSlot.Dark2, new CellColor(14, 40, 65))
+                .WithColor(WorkbookThemeColorSlot.Light2, new CellColor(232, 232, 232))
+                .WithColor(WorkbookThemeColorSlot.Hyperlink, new CellColor(70, 120, 134))
+                .WithColor(WorkbookThemeColorSlot.FollowedHyperlink, new CellColor(150, 96, 125))
+                .WithNativeColorSchemeXml("<a:clrScheme name=\"Office\" />")
+        };
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "G6"),
+            StyleName = "PivotStyleMedium2",
+            ShowRowStripes = false
+        };
+        pivot.RowFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Count of Amount", "count"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "E2"))!.StyleId)
+            .FillColor.Should().Be(new CellColor(126, 53, 14));
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "E3"))!.StyleId)
+            .FillColor.Should().Be(new CellColor(247, 199, 172));
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "E5"))!.StyleId)
+            .FillColor.Should().Be(new CellColor(126, 53, 14));
+    }
+
+    [Fact]
+    public void ApplyLoadedPivotStyles_PreservesExistingExcelVisualStyles()
+    {
+        var workbook = new Workbook("LoadedPivotPreserveStyleTest");
+        var sheet = workbook.AddSheet("Data");
+        var headerStyleId = workbook.RegisterStyle(new CellStyle
+        {
+            Bold = true,
+            FillColor = new CellColor(126, 53, 14),
+            FontColor = CellColor.White
+        });
+        var bodyStyleId = workbook.RegisterStyle(new CellStyle
+        {
+            FillColor = new CellColor(247, 199, 172)
+        });
+        sheet.SetCell(Addr(sheet, "E2"), new Cell { Value = new TextValue("Row Labels"), StyleId = headerStyleId });
+        sheet.SetCell(Addr(sheet, "F2"), new Cell { Value = new TextValue("Count of Sales"), StyleId = headerStyleId });
+        sheet.SetCell(Addr(sheet, "E3"), new Cell { Value = new TextValue("Hardware"), StyleId = bodyStyleId });
+        sheet.SetCell(Addr(sheet, "F3"), new Cell { Value = new NumberValue(4), StyleId = bodyStyleId });
+        sheet.SetCell(Addr(sheet, "E4"), new Cell { Value = new TextValue("Grand Total"), StyleId = headerStyleId });
+        sheet.SetCell(Addr(sheet, "F4"), new Cell { Value = new NumberValue(4), StyleId = headerStyleId });
+        sheet.PivotTables.Add(new PivotTableModel
+        {
+            Name = "NativePivotSharedCacheB",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "B2"),
+            TargetRange = Range(sheet, "E2", "F4"),
+            LastRenderedRange = Range(sheet, "E2", "F4"),
+            StyleName = "PivotStyleDark3"
+        });
+
+        PivotTableRefreshService.ApplyLoadedPivotStyles(workbook);
+
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "E2"))!.StyleId).FillColor.Should().Be(new CellColor(126, 53, 14));
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "E3"))!.StyleId).FillColor.Should().Be(new CellColor(247, 199, 172));
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "E4"))!.StyleId).FontColor.Should().Be(CellColor.White);
+    }
+
+    [Fact]
+    public void ApplyLoadedPivotStyles_UsesFirstSharedCacheStyleForLoadedCache()
+    {
+        var workbook = new Workbook("LoadedPivotSharedCacheStyleTest");
+        var sheet = workbook.AddSheet("Data");
+        var defaultThemeFontStyle = workbook.RegisterStyle(new CellStyle
+        {
+            FontThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Dark1)
+        });
+        sheet.SetCell(Addr(sheet, "A1"), new TextValue("Category"));
+        sheet.SetCell(Addr(sheet, "B1"), new TextValue("Sales"));
+        sheet.SetCell(Addr(sheet, "A2"), new TextValue("Hardware"));
+        sheet.SetCell(Addr(sheet, "B2"), new NumberValue(4));
+
+        sheet.SetCell(Addr(sheet, "A4"), new TextValue("Row Labels"));
+        sheet.SetCell(Addr(sheet, "B4"), new TextValue("Count of Sales"));
+        sheet.SetCell(Addr(sheet, "A5"), new TextValue("Hardware"));
+        sheet.SetCell(Addr(sheet, "B5"), new NumberValue(4));
+        sheet.SetCell(Addr(sheet, "A6"), new TextValue("Grand Total"));
+        sheet.SetCell(Addr(sheet, "B6"), new NumberValue(4));
+        sheet.SetCell(Addr(sheet, "E4"), new Cell { Value = new TextValue("Row Labels"), StyleId = defaultThemeFontStyle });
+        sheet.SetCell(Addr(sheet, "F4"), new Cell { Value = new TextValue("Count of Sales"), StyleId = defaultThemeFontStyle });
+        sheet.SetCell(Addr(sheet, "E5"), new Cell { Value = new TextValue("Hardware"), StyleId = defaultThemeFontStyle });
+        sheet.SetCell(Addr(sheet, "F5"), new Cell { Value = new NumberValue(4), StyleId = defaultThemeFontStyle });
+        sheet.SetCell(Addr(sheet, "E6"), new Cell { Value = new TextValue("Grand Total"), StyleId = defaultThemeFontStyle });
+        sheet.SetCell(Addr(sheet, "F6"), new Cell { Value = new NumberValue(4), StyleId = defaultThemeFontStyle });
+
+        var firstPivot = new PivotTableModel
+        {
+            Name = "SharedCacheA",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "B2"),
+            TargetRange = Range(sheet, "A4", "B6"),
+            LastRenderedRange = Range(sheet, "A4", "B6"),
+            StyleName = "PivotStyleMedium2"
+        };
+        firstPivot.RowFields.Add(new PivotFieldModel(0));
+        firstPivot.DataFields.Add(new PivotDataFieldModel(1, "Count of Sales", "count"));
+        var secondPivot = new PivotTableModel
+        {
+            Name = "SharedCacheB",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "B2"),
+            TargetRange = Range(sheet, "E4", "F6"),
+            LastRenderedRange = Range(sheet, "E4", "F6"),
+            StyleName = "PivotStyleDark3"
+        };
+        secondPivot.RowFields.Add(new PivotFieldModel(0));
+        secondPivot.DataFields.Add(new PivotDataFieldModel(1, "Count of Sales", "count"));
+        sheet.PivotTables.Add(secondPivot);
+        sheet.PivotTables.Add(firstPivot);
+
+        PivotTableRefreshService.ApplyLoadedPivotStyles(workbook);
+
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "E4"))!.StyleId)
+            .FillColor.Should().Be(new CellColor(126, 53, 14));
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "E5"))!.StyleId)
+            .FillColor.Should().Be(new CellColor(247, 199, 172));
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "E6"))!.StyleId).FontColor.Should().Be(CellColor.White);
     }
 
     [Theory]

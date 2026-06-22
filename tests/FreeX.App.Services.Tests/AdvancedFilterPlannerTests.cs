@@ -9,6 +9,38 @@ public sealed class AdvancedFilterPlannerTests
     private static readonly SheetId SheetId = SheetId.New();
 
     [Fact]
+    public void CreateDefaultListRange_ExpandsSingleCellSelectionToCurrentRegion()
+    {
+        var sheet = new Sheet(SheetId, "Data");
+        sheet.SetCell(new CellAddress(SheetId, 1, 1), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(SheetId, 1, 2), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(SheetId, 2, 1), new TextValue("East"));
+        sheet.SetCell(new CellAddress(SheetId, 2, 2), new NumberValue(42));
+
+        var selectedCell = new CellAddress(SheetId, 1, 1);
+
+        AdvancedFilterPlanner.CreateDefaultListRange(sheet, new GridRange(selectedCell, selectedCell))
+            .Should().Be(new GridRange(
+                new CellAddress(SheetId, 1, 1),
+                new CellAddress(SheetId, 2, 2)));
+    }
+
+    [Fact]
+    public void CreateDefaultListRange_FallsBackToUsedRangeWhenCurrentRegionIsSingleCell()
+    {
+        var sheet = new Sheet(SheetId, "Data");
+        sheet.SetCell(new CellAddress(SheetId, 1, 1), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(SheetId, 4, 4), new NumberValue(42));
+
+        var selectedCell = new CellAddress(SheetId, 1, 1);
+
+        AdvancedFilterPlanner.CreateDefaultListRange(sheet, new GridRange(selectedCell, selectedCell))
+            .Should().Be(new GridRange(
+                new CellAddress(SheetId, 1, 1),
+                new CellAddress(SheetId, 4, 4)));
+    }
+
+    [Fact]
     public void CreatePlan_BuildsCopyToPlanAndCommandForHeaderRange()
     {
         var criteriaSheetId = SheetId.New();

@@ -18,12 +18,19 @@ internal static partial class XlsxPivotTableWriter
     {
         var cacheFields = GetEffectivePivotCacheFields(cache, calculatedFields);
         var source = new XElement(workbookNs + "worksheetSource");
-        if (!string.IsNullOrWhiteSpace(cache.SourceTableName))
+        if (cache.SourceType == PivotCacheSourceType.Table && !string.IsNullOrWhiteSpace(cache.SourceTableName))
+        {
             source.SetAttributeValue("name", cache.SourceTableName);
-        if (!string.IsNullOrWhiteSpace(cache.SourceSheetName))
-            source.SetAttributeValue("sheet", cache.SourceSheetName);
-        if (!string.IsNullOrWhiteSpace(cache.SourceReference))
-            source.SetAttributeValue("ref", cache.SourceReference);
+        }
+        else
+        {
+            if (!string.IsNullOrWhiteSpace(cache.SourceTableName))
+                source.SetAttributeValue("name", cache.SourceTableName);
+            if (!string.IsNullOrWhiteSpace(cache.SourceSheetName))
+                source.SetAttributeValue("sheet", cache.SourceSheetName);
+            if (!string.IsNullOrWhiteSpace(cache.SourceReference))
+                source.SetAttributeValue("ref", cache.SourceReference);
+        }
         var cacheSource = new XElement(
             workbookNs + "cacheSource",
             new XAttribute("type", cache.SourceType == PivotCacheSourceType.External ? "external" : "worksheet"),
