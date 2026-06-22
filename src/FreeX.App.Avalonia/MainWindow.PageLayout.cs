@@ -5,7 +5,6 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 
-using FreeX.App.Avalonia.Dialogs;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
