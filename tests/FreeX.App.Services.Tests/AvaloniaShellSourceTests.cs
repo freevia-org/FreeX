@@ -2337,6 +2337,13 @@ public sealed class AvaloniaShellSourceTests
         drawingFormatSource.Should().Contain("AutomationProperties.SetAutomationId(descriptionText, \"ShapeEffectsDescriptionText\");");
         drawingFormatSource.Should().Contain("UiText.Get(\"ShapeEffects_Label\")");
         drawingFormatSource.Should().Contain("new SetDrawingShapeEffectCommand(_session.ActiveSheet.Id, current.Id, normalized)");
+        drawingFormatSource.Should().Contain("UiText.Get(\"ShapeGradient_GradientStopsGroup\")");
+        drawingFormatSource.Should().Contain("UiText.Get(\"ShapeGradient_Stop1ColorLabel\")");
+        drawingFormatSource.Should().Contain("UiText.Get(\"ShapeGradient_Stop2ColorLabel\")");
+        drawingFormatSource.Should().Contain("ColumnDefinitions = new ColumnDefinitions(\"136,40,*,54\")");
+        drawingFormatSource.Should().Contain("Grid.SetColumn(directionBox, 1);");
+        drawingFormatSource.Should().Contain("Grid.SetColumnSpan(directionBox, 3);");
+        drawingFormatSource.Should().Contain("Content = UiText.Get(\"Common_Ok\"), IsDefault = true, MinWidth = 76, Width = 76");
     }
 
     [Fact]

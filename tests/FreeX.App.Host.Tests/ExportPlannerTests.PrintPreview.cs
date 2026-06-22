@@ -71,32 +71,14 @@ public partial class ExportPlannerTests
         pageNumber.Should().Be(expectedPage);
     }
 
-    [Theory]
-    [InlineData(1, 3, 1, 3, false, false, true, true, "Page 1 of 3")]
-    [InlineData(2, 3, 2, 3, true, true, true, true, "Page 2 of 3")]
-    [InlineData(3, 3, 3, 3, true, true, false, false, "Page 3 of 3")]
-    [InlineData(0, 0, 1, 1, false, false, false, false, "Page 1 of 1")]
-    [InlineData(5, 3, 3, 3, true, true, false, false, "Page 3 of 3")]
-    public void PrintPreviewDialog_CreateNavigationState_NormalizesPageStatusAndButtonStates(
-        int currentPage,
-        int totalPages,
-        int expectedCurrentPage,
-        int expectedTotalPages,
-        bool canGoFirst,
-        bool canGoPrevious,
-        bool canGoNext,
-        bool canGoLast,
-        string statusText)
+    [Fact]
+    public void PrintPreviewDialog_CreateNavigationState_DelegatesToSharedNavigationState()
     {
-        var state = PrintPreviewDialog.CreateNavigationState(currentPage, totalPages);
+        var source = ReadPrintPreviewDialogSources();
 
-        state.CurrentPage.Should().Be(expectedCurrentPage);
-        state.TotalPages.Should().Be(expectedTotalPages);
-        state.CanGoFirst.Should().Be(canGoFirst);
-        state.CanGoPrevious.Should().Be(canGoPrevious);
-        state.CanGoNext.Should().Be(canGoNext);
-        state.CanGoLast.Should().Be(canGoLast);
-        state.StatusText.Should().Be(statusText);
+        source.Should().Contain("PrintPreviewNavigationState.Create(currentPage, totalPages)");
+        source.Should().NotContain("Math.Clamp(currentPage");
+        source.Should().NotContain("StatusText: $\"Page");
     }
 
     [Theory]

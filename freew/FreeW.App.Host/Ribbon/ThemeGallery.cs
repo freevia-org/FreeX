@@ -26,6 +26,7 @@ internal static class ThemeGallery
         host.Children.Add(BuildColours(editor));
         host.Children.Add(BuildFonts(editor));
         host.Children.Add(BuildParagraphSpacingMenu(editor));
+        host.Children.Add(BuildEffectsMenu(editor));
         return host;
     }
 
@@ -72,6 +73,15 @@ internal static class ThemeGallery
         foreach (var spacingSet in DocumentParagraphSpacingSet.Catalog)
             strip.Children.Add(BuildParagraphSpacingSwatch(editor, spacingSet));
         return WithLabel("Paragraph Spacing", strip);
+    }
+
+    /// <summary>Build Word's Effects gallery: DrawingML format-scheme thumbnails.</summary>
+    public static FrameworkElement BuildEffects(DocumentView editor)
+    {
+        var strip = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        foreach (var effectSet in DocumentEffectSet.Catalog)
+            strip.Children.Add(BuildEffectSwatch(editor, effectSet));
+        return WithLabel("Effects", strip);
     }
 
     private static FrameworkElement BuildParagraphSpacingMenu(DocumentView editor)
@@ -138,6 +148,99 @@ internal static class ThemeGallery
         menu.Closed += (_, _) =>
         {
             editor.EndParagraphSpacingSetPreview();
+            button.Background = Brushes.Transparent;
+            button.BorderBrush = Brushes.Transparent;
+        };
+        button.ContextMenu = menu;
+        button.Click += (_, _) =>
+        {
+            button.ContextMenu.PlacementTarget = button;
+            button.ContextMenu.IsOpen = true;
+        };
+        return button;
+    }
+
+    private static FrameworkElement BuildEffectsMenu(DocumentView editor)
+    {
+        var button = new Button
+        {
+            Margin = new Thickness(4, 17, 4, 3),
+            Padding = new Thickness(6, 3, 6, 3),
+            MinWidth = 70,
+            Background = Brushes.Transparent,
+            BorderBrush = Brushes.Transparent,
+            BorderThickness = new Thickness(1),
+            Cursor = System.Windows.Input.Cursors.Hand,
+            ToolTip = "Effects"
+        };
+        AutomationProperties.SetName(button, "Effects");
+
+        var stack = new StackPanel { Orientation = Orientation.Vertical, HorizontalAlignment = HorizontalAlignment.Center };
+        var tile = new Border
+        {
+            Width = 34,
+            Height = 26,
+            Background = BrushFor("#FFFFFF"),
+            BorderBrush = BrushFor("#2F5496"),
+            BorderThickness = new Thickness(1.4),
+            Effect = new System.Windows.Media.Effects.DropShadowEffect
+            {
+                BlurRadius = 4,
+                ShadowDepth = 1,
+                Opacity = 0.25,
+                Color = Colors.Black
+            },
+            Child = new TextBlock
+            {
+                Text = "Fx",
+                FontSize = 12,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = BrushFor("#2F5496"),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            }
+        };
+        stack.Children.Add(tile);
+        stack.Children.Add(new TextBlock
+        {
+            Text = "Effects",
+            FontSize = 11,
+            TextAlignment = System.Windows.TextAlignment.Center,
+            Margin = new Thickness(0, 2, 0, 0)
+        });
+        button.Content = stack;
+
+        var hover = new SolidColorBrush(Color.FromRgb(0xEA, 0xF1, 0xFB));
+        button.MouseEnter += (_, _) =>
+        {
+            button.Background = hover;
+            button.BorderBrush = new SolidColorBrush(Color.FromRgb(0x2B, 0x57, 0x9A));
+        };
+        button.MouseLeave += (_, _) =>
+        {
+            if (button.ContextMenu is null || !button.ContextMenu.IsOpen)
+            {
+                button.Background = Brushes.Transparent;
+                button.BorderBrush = Brushes.Transparent;
+            }
+        };
+
+        var menu = new ContextMenu();
+        foreach (var effectSet in DocumentEffectSet.Catalog)
+        {
+            var item = new MenuItem { Header = effectSet.Name, Tag = effectSet };
+            item.MouseEnter += (_, _) => editor.PreviewEffectSet(effectSet);
+            item.MouseLeave += (_, _) => editor.EndEffectSetPreview();
+            item.Click += (_, _) =>
+            {
+                editor.EndEffectSetPreview();
+                editor.ApplyEffectSet(effectSet);
+            };
+            menu.Items.Add(item);
+        }
+        menu.Closed += (_, _) =>
+        {
+            editor.EndEffectSetPreview();
             button.Background = Brushes.Transparent;
             button.BorderBrush = Brushes.Transparent;
         };
@@ -345,6 +448,52 @@ internal static class ThemeGallery
         return WrapAsParagraphSpacingSetButton(editor, spacingSet, thumb, spacingSet.Name + " paragraph spacing");
     }
 
+    private static FrameworkElement BuildEffectSwatch(DocumentView editor, DocumentEffectSet effectSet)
+    {
+        var thumb = new StackPanel { Margin = new Thickness(4, 3, 4, 3), Width = 58 };
+
+        var shape = new Border
+        {
+            Background = Brushes.White,
+            BorderBrush = BrushFor("#2F5496"),
+            BorderThickness = new Thickness(effectSet.LineWidthEmu / 6350.0),
+            Height = 40,
+            CornerRadius = new CornerRadius(effectSet.SoftEdges ? 4 : 0),
+            SnapsToDevicePixels = true,
+            Effect = effectSet.OuterShadow
+                ? new System.Windows.Media.Effects.DropShadowEffect
+                {
+                    BlurRadius = effectSet.SoftEdges ? 7 : 4,
+                    ShadowDepth = effectSet.SoftEdges ? 2 : 1,
+                    Opacity = effectSet.SoftEdges ? 0.35 : 0.24,
+                    Color = Colors.Black
+                }
+                : null,
+            Child = new TextBlock
+            {
+                Text = "Fx",
+                FontSize = 15,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = BrushFor("#2F5496"),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            }
+        };
+
+        thumb.Children.Add(shape);
+        thumb.Children.Add(new TextBlock
+        {
+            Text = effectSet.Name,
+            FontSize = 10.5,
+            TextAlignment = System.Windows.TextAlignment.Center,
+            TextWrapping = TextWrapping.Wrap,
+            LineHeight = 11,
+            Margin = new Thickness(0, 2, 0, 0)
+        });
+
+        return WrapAsEffectSetButton(editor, effectSet, thumb, effectSet.Name + " effects");
+    }
+
     // Wrap a thumbnail in a borderless button that previews on hover, reverts on leave, commits on click.
     private static FrameworkElement WrapAsButton(DocumentView editor, DocumentTheme theme, FrameworkElement content, string tip)
     {
@@ -512,6 +661,40 @@ internal static class ThemeGallery
         {
             editor.EndParagraphSpacingSetPreview();
             editor.ApplyParagraphSpacingSet(spacingSet);
+        };
+        return button;
+    }
+
+    private static FrameworkElement WrapAsEffectSetButton(DocumentView editor, DocumentEffectSet effectSet, FrameworkElement content, string tip)
+    {
+        var button = new Button
+        {
+            Content = content,
+            Background = Brushes.Transparent,
+            BorderBrush = Brushes.Transparent,
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(1),
+            Cursor = System.Windows.Input.Cursors.Hand,
+            ToolTip = tip
+        };
+
+        var hover = new SolidColorBrush(Color.FromRgb(0xEA, 0xF1, 0xFB));
+        button.MouseEnter += (_, _) =>
+        {
+            button.Background = hover;
+            button.BorderBrush = new SolidColorBrush(Color.FromRgb(0x2B, 0x57, 0x9A));
+            editor.PreviewEffectSet(effectSet);
+        };
+        button.MouseLeave += (_, _) =>
+        {
+            button.Background = Brushes.Transparent;
+            button.BorderBrush = Brushes.Transparent;
+            editor.EndEffectSetPreview();
+        };
+        button.Click += (_, _) =>
+        {
+            editor.EndEffectSetPreview();
+            editor.ApplyEffectSet(effectSet);
         };
         return button;
     }

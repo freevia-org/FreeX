@@ -4510,13 +4510,15 @@ public static class DocxWriter
     /// <summary>
     /// Builds word/theme/theme1.xml (a:theme): the document's <see cref="DocumentTheme"/> serialised as a
     /// real DrawingML theme — an a:clrScheme (the twelve <see cref="ThemeColorScheme"/> colour slots), an
-    /// a:fontScheme (major = the theme's heading font, minor = its body font) and a minimal-but-valid
-    /// a:fmtScheme (one fill/line/effect/bg-fill entry each, as Word requires at least one of each). The
-    /// reader recovers the colour + font scheme and infers the preset (see DocxReader.ReadTheme).
+    /// a:fontScheme (major = the theme's heading font, minor = its body font) and a backed
+    /// a:fmtScheme from <see cref="DocumentEffectSet"/> (three fill/line/effect/bg-fill entries, matching
+    /// Word's required structure). The reader recovers the colour/font/effect scheme and infers the preset
+    /// (see DocxReader.ReadTheme).
     /// </summary>
     private static XDocument BuildTheme(DocumentTheme theme)
     {
         var scheme = theme.ColorScheme;
+        var effects = DocumentEffectSet.FromTheme(theme);
 
         XElement Srgb(string slot, string hex) =>
             new(A + slot, new XElement(A + "srgbClr", new XAttribute("val", hex)));
@@ -4549,20 +4551,22 @@ public static class DocxWriter
             new XElement(A + "majorFont", Font("latin", theme.HeadingFont).Elements()),
             new XElement(A + "minorFont", Font("latin", theme.BodyFont).Elements()));
 
-        // A minimal-but-valid format scheme: one of each style the schema requires at least one of
-        // (fill / line / effect / background fill). A flat solid fill keyed to phClr is the simplest
-        // shape Word accepts; the document never reads these back (only the clr/font schemes round-trip).
+        // A Word-style format scheme: three fills, lines, effects, and background fills. The selected
+        // effect-set name is the durable part FreeW reads back; the line/effect entries make the theme
+        // visibly meaningful to downstream shape/SmartArt/WordArt consumers.
         XElement SolidPhClr() => new(A + "solidFill", new XElement(A + "schemeClr", new XAttribute("val", "phClr")));
 
         var fmtScheme = new XElement(A + "fmtScheme",
-            new XAttribute("name", theme.Name),
+            new XAttribute("name", effects.Name),
             new XElement(A + "fillStyleLst", SolidPhClr(), SolidPhClr(), SolidPhClr()),
             new XElement(A + "lnStyleLst",
-                Line(), Line(), Line()),
+                Line(effects.LineWidthEmu),
+                Line(effects.LineWidthEmu * 2),
+                Line(effects.LineWidthEmu * 3)),
             new XElement(A + "effectStyleLst",
-                new XElement(A + "effectStyle", new XElement(A + "effectLst")),
-                new XElement(A + "effectStyle", new XElement(A + "effectLst")),
-                new XElement(A + "effectStyle", new XElement(A + "effectLst"))),
+                EffectStyle(effects, 1),
+                EffectStyle(effects, 2),
+                EffectStyle(effects, 3)),
             new XElement(A + "bgFillStyleLst", SolidPhClr(), SolidPhClr(), SolidPhClr()));
 
         var themeElements = new XElement(A + "themeElements", clrScheme, fontScheme, fmtScheme);
@@ -4575,13 +4579,33 @@ public static class DocxWriter
                 new XElement(A + "objectDefaults"),
                 new XElement(A + "extraClrSchemeLst")));
 
-        static XElement Line() => new(A + "ln",
-            new XAttribute("w", 6350),
+        static XElement Line(int widthEmu) => new(A + "ln",
+            new XAttribute("w", widthEmu),
             new XAttribute("cap", "flat"),
             new XAttribute("cmpd", "sng"),
             new XAttribute("algn", "ctr"),
             new XElement(A + "solidFill", new XElement(A + "schemeClr", new XAttribute("val", "phClr"))),
             new XElement(A + "prstDash", new XAttribute("val", "solid")));
+
+        static XElement EffectStyle(DocumentEffectSet set, int depth)
+        {
+            var effectList = new XElement(A + "effectLst");
+            if (set.OuterShadow)
+            {
+                effectList.Add(new XElement(A + "outerShdw",
+                    new XAttribute("blurRad", 40000 * depth),
+                    new XAttribute("dist", 20000 * depth),
+                    new XAttribute("dir", 5400000),
+                    new XAttribute("algn", "ctr"),
+                    new XAttribute("rotWithShape", 0),
+                    new XElement(A + "srgbClr",
+                        new XAttribute("val", "000000"),
+                        new XElement(A + "alpha", new XAttribute("val", Math.Max(18000, 42000 - (depth * 6000)))))));
+            }
+            if (set.SoftEdges)
+                effectList.Add(new XElement(A + "softEdge", new XAttribute("rad", 12000 * depth)));
+            return new XElement(A + "effectStyle", effectList);
+        }
     }
 
     private static XDocument BuildStyles(TextDocument document, PreservedNumberingPlan? preservedNumbering = null)

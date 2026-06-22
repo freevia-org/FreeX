@@ -861,6 +861,8 @@ public sealed class ChartEditingPlannerTests
         ChartQuickFormatCycler.NextChartTitleFontSize(24).Should().Be(12);
         ChartQuickFormatCycler.NextAxisTitleFontSize(18).Should().Be(9);
         ChartQuickFormatCycler.NextLegendFontSize(16).Should().Be(9);
+        ChartQuickFormatCycler.NextDataLabelBorderThickness(0.75).Should().Be(1.5);
+        ChartQuickFormatCycler.NextDataLabelBorderThickness(3).Should().Be(0.75);
     }
 
     [Fact]

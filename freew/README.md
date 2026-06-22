@@ -269,7 +269,8 @@ linked (overflowing) text boxes, and master/subdocuments.
 A few shipped features are **data-faithful but visually simplified**: charts embed their data as literal
 caches rather than an editable companion xlsx (Word's "Edit Data" is unavailable); SmartArt round-trips its
 node text/structure but no rendered `dsp` geometry (Word re-lays-out on open); `wp:wrapTight` carries no wrap
-polygon; the theme `a:fmtScheme` is stock-but-valid and not read back. Each is noted in code at its site.
+polygon; theme `a:fmtScheme` effect-set selection round-trips, while deeper DrawingML effect consumption by
+every object type remains incremental. Each is noted in code at its site.
 
 ---
 

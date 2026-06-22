@@ -60,4 +60,28 @@ public sealed class ChartCommandSourceTests
         commandExecutionSource.Should().Contain("chart.Id == SheetGrid.SelectedObjectId");
     }
 
+    [Fact]
+    public void ChartQuickFormatHandlers_UseSharedCycler()
+    {
+        var chartSource = ReadHostSourceFile("MainWindow.ChartCommands.cs");
+        var axisSource = ReadHostSourceFile("MainWindow.ChartAxisCommands.cs");
+        var cyclerSource = ReadHostSourceFile("ChartOptionCycler.cs");
+
+        chartSource.Should().Contain("ChartQuickFormatCycler.NextSeriesColor(");
+        chartSource.Should().Contain("ChartQuickFormatCycler.NextChartTitleFontSize(");
+        chartSource.Should().Contain("ChartQuickFormatCycler.NextAxisTitleFontSize(");
+        chartSource.Should().Contain("ChartQuickFormatCycler.NextLegendFontSize(");
+        chartSource.Should().Contain("ChartQuickFormatCycler.NextDataLabelBorderThickness(");
+        chartSource.Should().Contain("ChartQuickFormatCycler.NextComboLineSeries(chart)");
+        chartSource.Should().Contain("ChartQuickFormatCycler.ReadFirstSeriesFormat(chart)");
+        chartSource.Should().Contain("ChartQuickFormatCycler.MergeFirstSeriesFormat(chart, updated)");
+        chartSource.Should().Contain("ChartQuickFormatCycler.NextSeriesDash(");
+        chartSource.Should().Contain("ChartQuickFormatCycler.NextMarkerSize(");
+        chartSource.Should().NotContain("IndexOfSeriesFormat");
+
+        axisSource.Should().Contain("ChartQuickFormatCycler.NextSeriesColor(");
+        cyclerSource.Should().NotContain("public static CellColor NextSeriesColor(");
+        cyclerSource.Should().NotContain("GetNextComboLineSeries(");
+    }
+
 }

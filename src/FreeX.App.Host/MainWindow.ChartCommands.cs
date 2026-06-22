@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using FreeX.App.Presentation.Charts;
+using FreeX.App.Presentation.Charts.Editing;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -617,7 +618,7 @@ public partial class MainWindow
             "Data Label Fill",
             chart => new ChartLayoutOptions(
                 ShowDataLabels: true,
-                DataLabelFillColor: ChartOptionCycler.NextSeriesColor(chart.DataLabelFillColor)));
+                DataLabelFillColor: ChartQuickFormatCycler.NextSeriesColor(chart.DataLabelFillColor)));
     }
 
     private void ChartDataLabelTextBtn_Click(object sender, RoutedEventArgs e)
@@ -626,7 +627,7 @@ public partial class MainWindow
             "Data Label Text",
             chart => new ChartLayoutOptions(
                 ShowDataLabels: true,
-                DataLabelTextColor: ChartOptionCycler.NextSeriesColor(chart.DataLabelTextColor)));
+                DataLabelTextColor: ChartQuickFormatCycler.NextSeriesColor(chart.DataLabelTextColor)));
     }
 
     private void ChartDataLabelBorderBtn_Click(object sender, RoutedEventArgs e)
@@ -635,8 +636,8 @@ public partial class MainWindow
             "Data Label Border",
             chart => new ChartLayoutOptions(
                 ShowDataLabels: true,
-                DataLabelBorderColor: ChartOptionCycler.NextSeriesColor(chart.DataLabelBorderColor),
-                DataLabelBorderThickness: chart.DataLabelBorderThickness >= 3 ? 0.75 : chart.DataLabelBorderThickness + 0.75));
+                DataLabelBorderColor: ChartQuickFormatCycler.NextSeriesColor(chart.DataLabelBorderColor),
+                DataLabelBorderThickness: ChartQuickFormatCycler.NextDataLabelBorderThickness(chart.DataLabelBorderThickness)));
     }
 
     private void ChartDataLabelSizeBtn_Click(object sender, RoutedEventArgs e)
@@ -672,10 +673,10 @@ public partial class MainWindow
                     var current = existingIndex >= 0 ? formats[existingIndex] : new ChartPointDataLabelFormat(0, 0);
                     var updated = current with
                     {
-                        FillColor = ChartOptionCycler.NextSeriesColor(current.FillColor),
-                        BorderColor = ChartOptionCycler.NextSeriesColor(current.BorderColor ?? current.FillColor),
+                        FillColor = ChartQuickFormatCycler.NextSeriesColor(current.FillColor),
+                        BorderColor = ChartQuickFormatCycler.NextSeriesColor(current.BorderColor ?? current.FillColor),
                         BorderThickness = current.BorderThickness is null or >= 3 ? 0.75 : current.BorderThickness.Value + 0.75,
-                        TextColor = ChartOptionCycler.NextSeriesColor(current.TextColor),
+                        TextColor = ChartQuickFormatCycler.NextSeriesColor(current.TextColor),
                         FontSize = current.FontSize is null or >= 16 ? 9 : current.FontSize.Value + 1
                     };
                     if (existingIndex >= 0)
@@ -707,14 +708,14 @@ public partial class MainWindow
     {
         ToggleChartAreaOption(
             "Chart Area Fill",
-            chart => new ChartLayoutOptions(ChartAreaFillColor: ChartOptionCycler.NextSeriesColor(chart.ChartAreaFillColor)));
+            chart => new ChartLayoutOptions(ChartAreaFillColor: ChartQuickFormatCycler.NextSeriesColor(chart.ChartAreaFillColor)));
     }
 
     private void ChartTitleColorBtn_Click(object sender, RoutedEventArgs e)
     {
         ToggleChartAreaOption(
             "Chart Title Color",
-            chart => new ChartLayoutOptions(ChartTitleTextColor: ChartOptionCycler.NextSeriesColor(chart.ChartTitleTextColor)));
+            chart => new ChartLayoutOptions(ChartTitleTextColor: ChartQuickFormatCycler.NextSeriesColor(chart.ChartTitleTextColor)));
     }
 
     private void ChartTitlesBtn_Click(object sender, RoutedEventArgs e)
@@ -734,28 +735,28 @@ public partial class MainWindow
     {
         ToggleChartAreaOption(
             "Chart Title Size",
-            chart => new ChartLayoutOptions(ChartTitleFontSize: chart.ChartTitleFontSize >= 24 ? 12 : chart.ChartTitleFontSize + 2));
+            chart => new ChartLayoutOptions(ChartTitleFontSize: ChartQuickFormatCycler.NextChartTitleFontSize(chart.ChartTitleFontSize)));
     }
 
     private void ChartAxisTitleColorBtn_Click(object sender, RoutedEventArgs e)
     {
         ToggleChartAreaOption(
             "Axis Title Color",
-            chart => new ChartLayoutOptions(AxisTitleTextColor: ChartOptionCycler.NextSeriesColor(chart.AxisTitleTextColor)));
+            chart => new ChartLayoutOptions(AxisTitleTextColor: ChartQuickFormatCycler.NextSeriesColor(chart.AxisTitleTextColor)));
     }
 
     private void ChartAxisTitleSizeBtn_Click(object sender, RoutedEventArgs e)
     {
         ToggleChartAreaOption(
             "Axis Title Size",
-            chart => new ChartLayoutOptions(AxisTitleFontSize: chart.AxisTitleFontSize >= 18 ? 9 : chart.AxisTitleFontSize + 1));
+            chart => new ChartLayoutOptions(AxisTitleFontSize: ChartQuickFormatCycler.NextAxisTitleFontSize(chart.AxisTitleFontSize)));
     }
 
     private void ChartPlotAreaFillBtn_Click(object sender, RoutedEventArgs e)
     {
         ToggleChartAreaOption(
             "Plot Area Fill",
-            chart => new ChartLayoutOptions(PlotAreaFillColor: ChartOptionCycler.NextSeriesColor(chart.PlotAreaFillColor)));
+            chart => new ChartLayoutOptions(PlotAreaFillColor: ChartQuickFormatCycler.NextSeriesColor(chart.PlotAreaFillColor)));
     }
 
     private void ChartPlotAreaBorderBtn_Click(object sender, RoutedEventArgs e)
@@ -763,7 +764,7 @@ public partial class MainWindow
         ToggleChartAreaOption(
             "Plot Area Border",
             chart => new ChartLayoutOptions(
-                PlotAreaBorderColor: ChartOptionCycler.NextSeriesColor(chart.PlotAreaBorderColor),
+                PlotAreaBorderColor: ChartQuickFormatCycler.NextSeriesColor(chart.PlotAreaBorderColor),
                 PlotAreaBorderThickness: chart.PlotAreaBorderThickness >= 3 ? 1 : chart.PlotAreaBorderThickness + 0.75));
     }
 
@@ -771,14 +772,14 @@ public partial class MainWindow
     {
         ToggleChartAreaOption(
             "Legend Text",
-            chart => new ChartLayoutOptions(LegendTextColor: ChartOptionCycler.NextSeriesColor(chart.LegendTextColor)));
+            chart => new ChartLayoutOptions(LegendTextColor: ChartQuickFormatCycler.NextSeriesColor(chart.LegendTextColor)));
     }
 
     private void ChartLegendFillBtn_Click(object sender, RoutedEventArgs e)
     {
         ToggleChartAreaOption(
             "Legend Fill",
-            chart => new ChartLayoutOptions(LegendFillColor: ChartOptionCycler.NextSeriesColor(chart.LegendFillColor)));
+            chart => new ChartLayoutOptions(LegendFillColor: ChartQuickFormatCycler.NextSeriesColor(chart.LegendFillColor)));
     }
 
     private void ChartLegendBorderBtn_Click(object sender, RoutedEventArgs e)
@@ -786,7 +787,7 @@ public partial class MainWindow
         ToggleChartAreaOption(
             "Legend Border",
             chart => new ChartLayoutOptions(
-                LegendBorderColor: ChartOptionCycler.NextSeriesColor(chart.LegendBorderColor),
+                LegendBorderColor: ChartQuickFormatCycler.NextSeriesColor(chart.LegendBorderColor),
                 LegendBorderThickness: chart.LegendBorderThickness >= 3 ? 0.75 : chart.LegendBorderThickness + 0.75));
     }
 
@@ -794,7 +795,7 @@ public partial class MainWindow
     {
         ToggleChartAreaOption(
             "Legend Font Size",
-            chart => new ChartLayoutOptions(LegendFontSize: chart.LegendFontSize >= 16 ? 9 : chart.LegendFontSize + 1));
+            chart => new ChartLayoutOptions(LegendFontSize: ChartQuickFormatCycler.NextLegendFontSize(chart.LegendFontSize)));
     }
 
     private void ChartLegendOverlayBtn_Click(object sender, RoutedEventArgs e)
@@ -1012,9 +1013,9 @@ public partial class MainWindow
                 UiText.Get("MainWindowMessage_ChartComboUnsupported"),
                 chart =>
                 {
-                    var nextIndexes = ChartOptionCycler.GetNextComboLineSeries(chart, ChartOptionCycler.GetSeriesCount(chart));
+                    var nextIndexes = ChartQuickFormatCycler.NextComboLineSeries(chart);
                     return new ChartLayoutOptions(
-                        UseComboLineForSecondarySeries: nextIndexes.Length > 0,
+                        UseComboLineForSecondarySeries: nextIndexes.Count > 0,
                         ComboLineSeriesIndexes: nextIndexes);
                 }))
             return;
@@ -1043,13 +1044,7 @@ public partial class MainWindow
             "Series Dash",
             format => format with
             {
-                DashStyle = format.DashStyle switch
-                {
-                    null => ChartLineDashStyle.Dash,
-                    ChartLineDashStyle.Dash => ChartLineDashStyle.Dot,
-                    ChartLineDashStyle.Dot => ChartLineDashStyle.Solid,
-                    _ => null
-                }
+                DashStyle = ChartQuickFormatCycler.NextSeriesDash(format.DashStyle)
             });
     }
 
@@ -1083,7 +1078,7 @@ public partial class MainWindow
             "Marker Size",
             format => format with
             {
-                MarkerSize = format.MarkerSize is null or >= 12 ? 5 : format.MarkerSize.Value + 2
+                MarkerSize = ChartQuickFormatCycler.NextMarkerSize(format.MarkerSize)
             },
             chart => ChartTypeSupport.SupportsSeriesMarkers(chart.Type),
             UiText.Get("MainWindowMessage_ChartSeriesMarkersSupportedTypes"));
@@ -1102,28 +1097,13 @@ public partial class MainWindow
                 unsupportedMessage ?? UiText.Get("MainWindowMessage_ChartSeriesFormattingNeedsDataSeries"),
                 chart =>
                 {
-                    var formats = chart.SeriesFormats.ToList();
-                    var existingIndex = IndexOfSeriesFormat(formats, 0);
-                    var current = existingIndex >= 0 ? formats[existingIndex] : new ChartSeriesFormat(0);
+                    var current = ChartQuickFormatCycler.ReadFirstSeriesFormat(chart);
                     var updated = update(current);
-                    if (existingIndex >= 0)
-                        formats[existingIndex] = updated;
-                    else
-                        formats.Add(updated);
-                    return new ChartLayoutOptions(SeriesFormats: formats);
+                    return new ChartLayoutOptions(SeriesFormats: ChartQuickFormatCycler.MergeFirstSeriesFormat(chart, updated));
                 }))
             return;
 
         UpdateViewport();
-    }
-
-    private static int IndexOfSeriesFormat(IReadOnlyList<ChartSeriesFormat> formats, int seriesIndex)
-    {
-        for (var index = 0; index < formats.Count; index++)
-            if (formats[index].SeriesIndex == seriesIndex)
-                return index;
-
-        return -1;
     }
 
     private void InsertChartOfType(string type)

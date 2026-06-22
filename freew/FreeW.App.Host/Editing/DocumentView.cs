@@ -658,6 +658,17 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Apply a Design &gt; Document Formatting effect set to the document theme. This affects DrawingML
+    /// theme consumers such as shapes, SmartArt, charts, and WordArt via the saved <c>a:fmtScheme</c>.
+    /// </summary>
+    public void ApplyEffectSet(DocumentEffectSet effectSet)
+    {
+        CommitToModel();
+        DocumentEffectSet.Apply(_model, effectSet);
+        Render();
+    }
+
+    /// <summary>
     /// Re-render the surface after the document's <see cref="TextDocument.Styles"/> catalog has been
     /// mutated out-of-band (e.g. a style created/modified/deleted via <see cref="StyleManager"/>), so the
     /// new run/paragraph formatting resolves for any paragraph referencing the affected style. Commits the
@@ -697,6 +708,9 @@ public sealed class DocumentView : RichTextBox
 
     // Snapshot of the document's pre-paragraph-spacing look for spacing-set preview.
     private (ParagraphFormatting DefaultParagraph, Dictionary<string, ParagraphFormatting> Paragraphs)? _paragraphSpacingSetSnapshot;
+
+    // Snapshot of the document's pre-effect-set theme for effect-set preview.
+    private DocumentTheme? _effectSetSnapshot;
 
     /// <summary>
     /// Preview a paragraph style on the current selection without committing: snapshot the selected
@@ -974,6 +988,40 @@ public sealed class DocumentView : RichTextBox
                 style.Paragraph = paragraph;
         }
         _paragraphSpacingSetSnapshot = null;
+    }
+
+    /// <summary>
+    /// Preview a document effect set without committing. Used by the Design Effects gallery/menu.
+    /// </summary>
+    public void PreviewEffectSet(DocumentEffectSet effectSet)
+    {
+        ArgumentNullException.ThrowIfNull(effectSet);
+
+        if (_effectSetSnapshot is null)
+            CommitToModel();
+        else
+            RestoreEffectSetPreview();
+
+        _effectSetSnapshot = _model.Theme;
+        DocumentEffectSet.Apply(_model, effectSet);
+        Render();
+    }
+
+    /// <summary>Revert an effect-set preview started by <see cref="PreviewEffectSet"/>.</summary>
+    public void EndEffectSetPreview()
+    {
+        if (_effectSetSnapshot is null)
+            return;
+        RestoreEffectSetPreview();
+        Render();
+    }
+
+    private void RestoreEffectSetPreview()
+    {
+        if (_effectSetSnapshot is null)
+            return;
+        _model.Theme = _effectSetSnapshot;
+        _effectSetSnapshot = null;
     }
 
     /// <summary>

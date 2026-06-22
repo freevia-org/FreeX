@@ -562,6 +562,7 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.theme-colors", new ApplyThemeColorsCommand(editor));
         registry.Register("freew.theme-fonts", new ApplyFontSetCommand(editor));
         registry.Register("freew.paragraph-spacing", new ApplyParagraphSpacingSetCommand(editor));
+        registry.Register("freew.theme-effects", new ApplyEffectSetCommand(editor));
 
         // Layout tab — page settings (applied to the model; honoured by docx save + print).
         registry.Register("freew.orientation", new PageCommand(editor, page =>
@@ -1171,6 +1172,30 @@ internal static class FreeWRibbonCommands
 
             editor.Focus();
             editor.ApplyParagraphSpacingSet(spacingSet);
+        }
+
+        private static string? LegacyValue(RibbonCommandContext context) =>
+            context.Parameters.TryGetValue("value", out var raw) ? raw as string : null;
+
+        private static string? MenuHeaderValue(RibbonCommandContext context) =>
+            context.Parameters.TryGetValue(Free.Shared.Ribbon.Wpf.RibbonWpfRenderer.SenderKey, out var sender)
+            && sender is System.Windows.Controls.MenuItem { Tag: string header }
+                ? header
+                : null;
+    }
+
+    private sealed class ApplyEffectSetCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            var value = context.SelectedValue ?? LegacyValue(context) ?? MenuHeaderValue(context);
+            if (string.IsNullOrWhiteSpace(value))
+                return;
+            if (DocumentEffectSet.FindByName(value) is not { } effectSet)
+                return;
+
+            editor.Focus();
+            editor.ApplyEffectSet(effectSet);
         }
 
         private static string? LegacyValue(RibbonCommandContext context) =>

@@ -70,7 +70,7 @@ public static class DocxReader
     /// <summary>
     /// Resolves and parses word/theme/theme1.xml (via the document's "/theme" relationship, falling back
     /// to the conventional path), recovering the a:clrScheme colours and the a:fontScheme major/minor
-    /// fonts, then inferring the closest <see cref="DocumentTheme"/> preset (see
+    /// fonts and the a:fmtScheme name, then inferring the closest <see cref="DocumentTheme"/> preset (see
     /// <see cref="DocumentTheme.InferPreset"/>). A missing or unparseable theme part leaves the document
     /// at <see cref="DocumentTheme.Default"/> ("Office"). Inference is best-effort: a theme whose accent
     /// colours / fonts match no FreeW preset falls back to "Office".
@@ -84,6 +84,7 @@ public static class DocxReader
 
         var clr = elements.Element(A + "clrScheme");
         var fonts = elements.Element(A + "fontScheme");
+        var fmt = elements.Element(A + "fmtScheme");
         if (clr is null || fonts is null)
             return;
 
@@ -108,7 +109,11 @@ public static class DocxReader
         string LatinFont(string fontElement) =>
             fonts.Element(A + fontElement)?.Element(A + "latin")?.Attribute("typeface")?.Value ?? string.Empty;
 
-        document.Theme = DocumentTheme.InferPreset(scheme, LatinFont("majorFont"), LatinFont("minorFont"));
+        document.Theme = DocumentTheme.InferPreset(
+            scheme,
+            LatinFont("majorFont"),
+            LatinFont("minorFont"),
+            fmt?.Attribute("name")?.Value);
     }
 
     /// <summary>

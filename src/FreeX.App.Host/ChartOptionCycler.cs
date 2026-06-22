@@ -97,17 +97,6 @@ public static class ChartOptionCycler
         return (false, false);
     }
 
-    public static CellColor NextSeriesColor(CellColor? current)
-    {
-        if (current is null)
-            return new CellColor(0, 114, 178);
-        if (current.Value.R == 0 && current.Value.G == 114 && current.Value.B == 178)
-            return new CellColor(213, 94, 0);
-        if (current.Value.R == 213 && current.Value.G == 94 && current.Value.B == 0)
-            return new CellColor(0, 158, 115);
-        return new CellColor(0, 114, 178);
-    }
-
     public static ChartType ParseChartType(string type)
     {
         var normalized = type.Trim().ToLowerInvariant();
@@ -206,15 +195,4 @@ public static class ChartOptionCycler
         return (true, []);
     }
 
-    public static int[] GetNextComboLineSeries(ChartModel chart, int seriesCount)
-    {
-        if (!chart.UseComboLineForSecondarySeries || chart.ComboLineSeriesIndexes.Count == 0)
-            return [1];
-
-        var current = chart.ComboLineSeriesIndexes.Min();
-        if (current + 1 < seriesCount)
-            return [current + 1];
-
-        return [];
-    }
 }

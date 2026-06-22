@@ -13,13 +13,15 @@ namespace FreeW.Core.Model;
 /// <param name="PrimaryColorHex">Primary accent colour (RRGGBB hex) used for the Title style.</param>
 /// <param name="HeadingColorHex">Colour for Heading 1 / Heading 2 (RRGGBB hex).</param>
 /// <param name="HeadingAccentColorHex">A darker accent for Heading 3 (RRGGBB hex).</param>
+/// <param name="EffectSetName">DrawingML effect-set name serialised as the theme's <c>a:fmtScheme</c>.</param>
 public sealed record DocumentTheme(
     string Name,
     string HeadingFont,
     string BodyFont,
     string PrimaryColorHex,
     string HeadingColorHex,
-    string HeadingAccentColorHex)
+    string HeadingAccentColorHex,
+    string EffectSetName = "Office")
 {
     /// <summary>
     /// The built-in theme catalog, in display order. "Office" reproduces the model's default
@@ -77,9 +79,10 @@ public sealed record DocumentTheme(
     /// the round-trip is therefore exact for any document FreeW wrote, and degrades gracefully for foreign
     /// themes whose accents/fonts FreeW does not recognise.
     /// </summary>
-    public static DocumentTheme InferPreset(ThemeColorScheme scheme, string majorFont, string minorFont)
+    public static DocumentTheme InferPreset(ThemeColorScheme scheme, string majorFont, string minorFont, string? effectSetName = null)
     {
         ArgumentNullException.ThrowIfNull(scheme);
+        var effectSet = DocumentEffectSet.FindByName(effectSetName ?? string.Empty) ?? DocumentEffectSet.Default;
         foreach (var theme in Catalog)
         {
             var candidate = theme.ColorScheme;
@@ -88,7 +91,9 @@ public sealed record DocumentTheme(
                 && string.Equals(candidate.Accent3, scheme.Accent3, StringComparison.OrdinalIgnoreCase)
                 && string.Equals(theme.HeadingFont, majorFont, StringComparison.OrdinalIgnoreCase)
                 && string.Equals(theme.BodyFont, minorFont, StringComparison.OrdinalIgnoreCase))
-                return theme;
+                return string.Equals(effectSet.Name, theme.EffectSetName, StringComparison.OrdinalIgnoreCase)
+                    ? theme
+                    : theme with { EffectSetName = effectSet.Name };
         }
         return new DocumentTheme(
             "Custom",
@@ -96,7 +101,8 @@ public sealed record DocumentTheme(
             string.IsNullOrWhiteSpace(minorFont) ? Default.BodyFont : minorFont,
             HashOrDefault(scheme.Accent1, Default.PrimaryColorHex),
             HashOrDefault(scheme.Accent2, Default.HeadingColorHex),
-            HashOrDefault(scheme.Accent3, Default.HeadingAccentColorHex));
+            HashOrDefault(scheme.Accent3, Default.HeadingAccentColorHex),
+            effectSet.Name);
     }
 
     private static string HashOrDefault(string value, string fallback) =>

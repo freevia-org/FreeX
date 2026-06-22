@@ -9,10 +9,8 @@ namespace FreeX.App.Avalonia;
 /// the Text group's chart-title / axis-title / legend / data-label color and font-size buttons, and the
 /// Shape Styles group's Series Dash, Series Marker (opens the full series dialog) and Marker Size, plus the
 /// Chart Design Type group's Combo Chart Series toggle. Each resolves the selected chart, computes the next
-/// value through the shared <see cref="ChartQuickFormatCycler"/> (which mirrors the WPF host's
-/// <c>ChartOptionCycler</c> step values), and applies it through the shared <see cref="SetChartLayoutCommand"/>
-/// via <see cref="ApplyChartLayout"/>. The WPF host's <c>MainWindow.ChartCommands.cs</c> button handlers are
-/// the behavior reference.
+/// value through the shared <see cref="ChartQuickFormatCycler"/>, and applies it through the shared
+/// <see cref="SetChartLayoutCommand"/> via <see cref="ApplyChartLayout"/>.
 /// </summary>
 public sealed partial class MainWindow
 {
