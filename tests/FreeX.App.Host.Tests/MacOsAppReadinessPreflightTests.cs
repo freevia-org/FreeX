@@ -353,7 +353,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("var dataMenu = new NativeMenu();");
         script.Should().Contain("dataMenu.Items.Add(_sortAscendingMenuItem);");
         script.Should().Contain("Header = `\"Data`\",");
-        script.Should().Contain("var hasNativeDataMenu = _nativeMenu?.Items.OfType<NativeMenuItem>().Any(item =>");
+        script.Should().Contain("var hasNativeDataMenu = HasNativeTopLevelMenu(`\"Data`\");");
         script.Should().Contain("HasNativeDataMenu: hasNativeDataMenu");
         script.Should().Contain("HasNativeReviewMenu: hasNativeReviewMenu");
         script.Should().Contain("private readonly NativeMenuItem _flashFillMenuItem = new();");
@@ -1487,12 +1487,15 @@ public sealed class MacOsAppReadinessPreflightTests
                       grep -q "native_workbook_statistics_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_export_pdf_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_share_workbook_menu_item=true" "$artifact_root/launch.txt"
-                      grep -q "native_edit_menu=true" "$artifact_root/launch.txt"
+                      grep -q "native_top_level_menu_order=File|Home|Insert|Page Layout|Formulas|Data|Review|View|Sheet|Window|Help" "$artifact_root/launch.txt"
+                      grep -q "native_home_menu=true" "$artifact_root/launch.txt"
+                      grep -q "native_insert_menu=true" "$artifact_root/launch.txt"
+                      grep -q "native_page_layout_menu=true" "$artifact_root/launch.txt"
+                      grep -q "native_formulas_menu=true" "$artifact_root/launch.txt"
                       grep -q "native_close_workbook_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_data_menu=true" "$artifact_root/launch.txt"
                       grep -q "native_flash_fill_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_review_menu=true" "$artifact_root/launch.txt"
-                      grep -q "native_format_menu=true" "$artifact_root/launch.txt"
                       grep -q "native_view_menu=true" "$artifact_root/launch.txt"
                       grep -q "native_sheet_menu=true" "$artifact_root/launch.txt"
                       grep -q "native_window_menu=true" "$artifact_root/launch.txt"
@@ -1994,7 +1997,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     AutomationProperties.SetHelpText(_formatPainterButton, "Copy formatting from the selection and apply it to another range.");
                     _formatPainterMenuItem.Header = "Format Painter";
                     _formatPainterMenuItem.Click += (_, _) => CaptureFormatPainterSource(persistent: false);
-                    editMenu.Items.Add(_formatPainterMenuItem);
+                    homeMenu.Items.Add(_formatPainterMenuItem);
                     _formatPainterButton.IsEnabled = isIdle;
                     _formatPainterMenuItem.IsEnabled = _formatPainterButton.IsEnabled;
                     _autoSumButton.Content = "AutoSum";
@@ -2010,7 +2013,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     _autoSumMenuItem.Header = "AutoSum";
                     _autoSumMenuItem.Menu = CreateNativeAutoSumMenu();
                     _autoSumSumMenuItem.Gesture = new KeyGesture(Key.OemPlus, KeyModifiers.Alt);
-                    editMenu.Items.Add(_autoSumMenuItem);
+                    formulasMenu.Items.Add(_autoSumMenuItem);
                     _autoSumButton.IsEnabled = isIdle;
                     _autoSumMenuItem.IsEnabled = _autoSumButton.IsEnabled;
                     private MenuFlyout CreateAutoSumFlyout()
@@ -2036,7 +2039,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     _fillCellsMenuItem.Menu = CreateNativeFillCellsMenu();
                     _fillDownMenuItem.Gesture = new KeyGesture(Key.D, KeyModifiers.Control);
                     _fillRightMenuItem.Gesture = new KeyGesture(Key.R, KeyModifiers.Control);
-                    editMenu.Items.Add(_fillCellsMenuItem);
+                    homeMenu.Items.Add(_fillCellsMenuItem);
                     _fillDownFlyoutItem.IsEnabled = isIdle && _session.CanFillSelectedRange(FillCellsDirection.Down);
                     _fillRightFlyoutItem.IsEnabled = isIdle && _session.CanFillSelectedRange(FillCellsDirection.Right);
                     _fillUpFlyoutItem.IsEnabled = isIdle && _session.CanFillSelectedRange(FillCellsDirection.Up);
@@ -2063,7 +2066,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     _clearCommentsMenuItem.Click += (_, _) => ClearSelectedRangeComments();
                     _clearHyperlinksMenuItem.Header = "Clear Hyperlinks";
                     _clearHyperlinksMenuItem.Click += (_, _) => ClearSelectedRangeHyperlinks();
-                    editMenu.Items.Add(_clearMenuItem);
+                    homeMenu.Items.Add(_clearMenuItem);
                     _clearButton.IsEnabled = isIdle;
                     _clearMenuItem.IsEnabled = _clearButton.IsEnabled;
                     _bordersButton.Flyout = CreateBorderPresetFlyout();
@@ -2071,7 +2074,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     AutomationProperties.SetHelpText(_bordersButton, "Apply or change borders on the selected cells.");
                     _bordersMenuItem.Header = "Borders";
                     _bordersMenuItem.Menu = CreateNativeBorderPresetMenu();
-                    formatMenu.Items.Add(_bordersMenuItem);
+                    homeMenu.Items.Add(_bordersMenuItem);
                     _bordersButton.IsEnabled = isIdle;
                     _bordersMenuItem.IsEnabled = _bordersButton.IsEnabled;
                     CreateNativePasteSpecialMenu();
@@ -2231,7 +2234,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     _selectAllMenuItem.Header = "Select All";
                     _selectAllMenuItem.Gesture = new KeyGesture(Key.A, KeyModifiers.Meta);
                     _selectAllMenuItem.Click += (_, _) => SelectCurrentRegionOrAll();
-                    editMenu.Items.Add(_selectAllMenuItem);
+                    homeMenu.Items.Add(_selectAllMenuItem);
                     _selectAllMenuItem.IsEnabled = isIdle;
                     private readonly NativeMenuItem _findMenuItem = new();
                     private readonly NativeMenuItem _findNextMenuItem = new();
@@ -2296,11 +2299,11 @@ public sealed class MacOsAppReadinessPreflightTests
                     dataMenu.Items.Add(_flashFillMenuItem);
                     Header = "Data",
                     Menu = dataMenu,
-                    editMenu.Items.Add(_findMenuItem);
-                    editMenu.Items.Add(_findNextMenuItem);
-                    editMenu.Items.Add(_replaceMenuItem);
-                    editMenu.Items.Add(_goToMenuItem);
-                    editMenu.Items.Add(_goToSpecialMenuItem);
+                    homeMenu.Items.Add(_findMenuItem);
+                    homeMenu.Items.Add(_findNextMenuItem);
+                    homeMenu.Items.Add(_replaceMenuItem);
+                    homeMenu.Items.Add(_goToMenuItem);
+                    homeMenu.Items.Add(_goToSpecialMenuItem);
                     _findMenuItem.IsEnabled = isIdle;
                     _findNextMenuItem.IsEnabled = isIdle && !string.IsNullOrWhiteSpace(_session.LastFindText);
                     _replaceMenuItem.IsEnabled = isIdle;
@@ -2314,8 +2317,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     _session.SortSelectedRange(ascending)
                     private void FlashFillSelectedRange()
                     _session.FlashFillSelectedRange()
-                    var hasNativeDataMenu = _nativeMenu?.Items.OfType<NativeMenuItem>().Any(item =>
-                    string.Equals(item.Header?.ToString(), "Data", StringComparison.Ordinal)
+                    var hasNativeDataMenu = HasNativeTopLevelMenu("Data");
                     HasNativeDataMenu: hasNativeDataMenu
                     HasNativeFindMenuItem: HasNativeMenuItem(_findMenuItem, "Find...");
                     HasNativeFindNextMenuItem: HasNativeMenuItem(_findNextMenuItem, "Find Next");
@@ -2375,8 +2377,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     reviewMenu.Items.Add(_previousCommentMenuItem);
                     Header = "Review",
                     Menu = reviewMenu,
-                    var hasNativeReviewMenu = _nativeMenu?.Items.OfType<NativeMenuItem>().Any(item =>
-                    string.Equals(item.Header?.ToString(), "Review", StringComparison.Ordinal)
+                    var hasNativeReviewMenu = HasNativeTopLevelMenu("Review");
                     HasNativeReviewMenu: hasNativeReviewMenu
                     _advancedFilterMenuItem.IsEnabled = isIdle;
                     _removeDuplicatesMenuItem.IsEnabled = isIdle && _session.SelectedRange.RowCount > 1;
@@ -2747,7 +2748,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     _formatCellsMenuItem.Header = "Format Cells...";
                     _formatCellsMenuItem.Gesture = new KeyGesture(Key.D1, KeyModifiers.Meta);
                     _formatCellsMenuItem.Click += async (_, _) => await ShowFormatCellsDialogAsync();
-                    formatMenu.Items.Add(_formatCellsMenuItem);
+                    homeMenu.Items.Add(_formatCellsMenuItem);
                     _formatCellsMenuItem.IsEnabled = isIdle;
                     Key.D1;
                     HasOnlyCommandModifier(e.KeyModifiers);
@@ -2827,8 +2828,8 @@ public sealed class MacOsAppReadinessPreflightTests
                     _mergeAndCenterMenuItem.Click += async (_, _) => await MergeAndCenterSelectedRangeAsync();
                     _unmergeCellsMenuItem.Header = "Unmerge Cells";
                     _unmergeCellsMenuItem.Click += (_, _) => UnmergeSelectedRange();
-                    formatMenu.Items.Add(_mergeAndCenterMenuItem);
-                    formatMenu.Items.Add(_unmergeCellsMenuItem);
+                    homeMenu.Items.Add(_mergeAndCenterMenuItem);
+                    homeMenu.Items.Add(_unmergeCellsMenuItem);
                     _mergeAndCenterButton.IsEnabled = isIdle;
                     _mergeAndCenterMenuItem.IsEnabled = _mergeAndCenterButton.IsEnabled;
                     _unmergeCellsMenuItem.IsEnabled = isIdle && _session.IsSelectedRangeMerged;
@@ -3105,10 +3106,12 @@ public sealed class MacOsAppReadinessPreflightTests
             {
                 public bool IsPassed =>
                     HasNativeFileMenu &&
-                    HasNativeEditMenu &&
+                    HasNativeHomeMenu &&
+                    HasNativeInsertMenu &&
+                    HasNativePageLayoutMenu &&
+                    HasNativeFormulasMenu &&
                     HasNativeDataMenu &&
                     HasNativeReviewMenu &&
-                    HasNativeFormatMenu &&
                     HasNativeViewMenu &&
                     HasNativeSheetMenu &&
                     HasNativeWindowMenu &&
@@ -3278,9 +3281,11 @@ public sealed class MacOsAppReadinessPreflightTests
                     HasSelectionStatsAutomationHelp &&
                     HasSelectionStatsAutomationId;
                 private bool HasNativeFileMenu { get; }
-                private bool HasNativeEditMenu { get; }
+                private bool HasNativeHomeMenu { get; }
+                private bool HasNativeInsertMenu { get; }
+                private bool HasNativePageLayoutMenu { get; }
+                private bool HasNativeFormulasMenu { get; }
                 private bool HasNativeDataMenu { get; }
-                private bool HasNativeFormatMenu { get; }
                 private bool HasNativeViewMenu { get; }
                 private bool HasNativeSheetMenu { get; }
                 private bool HasNativeWindowMenu { get; }

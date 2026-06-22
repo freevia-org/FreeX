@@ -193,6 +193,69 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     }
 
     [Fact]
+    public void NativeMenuBar_UsesRibbonAndBackstageTopLevelOrder()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var smokeSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+        var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        var nativeMenuBlock = ExtractSourceBlock(
+            normalizedSource,
+            "_nativeMenu = new NativeMenu();",
+            "_nativeMenu.NeedsUpdate += (_, _) => UpdateSaveButton();");
+
+        nativeMenuBlock.Should().Contain("Header = \"File\"");
+        nativeMenuBlock.Should().Contain("Header = \"Home\"");
+        nativeMenuBlock.Should().Contain("Header = \"Insert\"");
+        nativeMenuBlock.Should().Contain("Header = \"Page Layout\"");
+        nativeMenuBlock.Should().Contain("Header = \"Formulas\"");
+        nativeMenuBlock.Should().Contain("Header = \"Data\"");
+        nativeMenuBlock.Should().Contain("Header = \"Review\"");
+        nativeMenuBlock.Should().Contain("Header = \"View\"");
+        nativeMenuBlock.Should().Contain("Header = \"Sheet\"");
+        nativeMenuBlock.Should().Contain("Header = \"Window\"");
+        nativeMenuBlock.Should().Contain("Header = \"Help\"");
+        nativeMenuBlock.Should().NotContain("Header = \"Edit\"");
+        nativeMenuBlock.Should().NotContain("Header = \"Format\"");
+
+        AssertBefore(nativeMenuBlock, "Header = \"File\"", "Header = \"Home\"");
+        AssertBefore(nativeMenuBlock, "Header = \"Home\"", "Header = \"Insert\"");
+        AssertBefore(nativeMenuBlock, "Header = \"Insert\"", "Header = \"Page Layout\"");
+        AssertBefore(nativeMenuBlock, "Header = \"Page Layout\"", "Header = \"Formulas\"");
+        AssertBefore(nativeMenuBlock, "Header = \"Formulas\"", "Header = \"Data\"");
+        AssertBefore(nativeMenuBlock, "Header = \"Data\"", "Header = \"Review\"");
+        AssertBefore(nativeMenuBlock, "Header = \"Review\"", "Header = \"View\"");
+        AssertBefore(nativeMenuBlock, "Header = \"View\"", "Header = \"Sheet\"");
+        AssertBefore(nativeMenuBlock, "Header = \"Sheet\"", "Header = \"Window\"");
+        AssertBefore(nativeMenuBlock, "Header = \"Window\"", "Header = \"Help\"");
+
+        var homeMenuBlock = ExtractSourceBlock(
+            normalizedSource,
+            "var homeMenu = new NativeMenu();",
+            "homeMenu.Items.Add(_openHyperlinkMenuItem);");
+        homeMenuBlock.Should().Contain("homeMenu.Items.Add(_formatPainterMenuItem);");
+        homeMenuBlock.Should().Contain("homeMenu.Items.Add(_conditionalFormattingMenuItem);");
+        homeMenuBlock.Should().Contain("homeMenu.Items.Add(_fillCellsMenuItem);");
+        homeMenuBlock.Should().Contain("homeMenu.Items.Add(_clearMenuItem);");
+        homeMenuBlock.Should().Contain("homeMenu.Items.Add(_findMenuItem);");
+
+        var pageLayoutMenuBlock = ExtractSourceBlock(
+            normalizedSource,
+            "var pageLayoutMenu = new NativeMenu();",
+            "pageLayoutMenu.Items.Add(_printHeadingsMenuItem);");
+        pageLayoutMenuBlock.Should().Contain("pageLayoutMenu.Items.Add(_themesMenuItem);");
+        pageLayoutMenuBlock.Should().Contain("pageLayoutMenu.Items.Add(_pageMarginsMenuItem);");
+        pageLayoutMenuBlock.Should().Contain("pageLayoutMenu.Items.Add(_printAreaMenuItem);");
+        pageLayoutMenuBlock.Should().Contain("pageLayoutMenu.Items.Add(_pageBreaksMenuItem);");
+        pageLayoutMenuBlock.Should().Contain("pageLayoutMenu.Items.Add(_sheetBackgroundMenuItem);");
+        pageLayoutMenuBlock.Should().Contain("pageLayoutMenu.Items.Add(_pageSetupMenuItem);");
+
+        smokeSource.Should().Contain("NativeTopLevelMenuOrder");
+        smokeSource.Should().Contain("File|Home|Insert|Page Layout|Formulas|Data|Review|View|Sheet|Window|Help");
+        smokeSource.Should().Contain("native_top_level_menu_order={snapshot.NativeTopLevelMenuOrder}");
+    }
+
+    [Fact]
     public void InsertObjects_DelegatesDrawingInsertionToSharedPlanner()
     {
         var insertObjectsSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.InsertObjects.cs"));

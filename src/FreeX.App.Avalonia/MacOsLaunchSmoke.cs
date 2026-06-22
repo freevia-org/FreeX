@@ -513,11 +513,14 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasSheetTabContextNoColorMenuItem,
     bool HasSheetTabContextSelectAllSheetsMenuItem,
     bool HasSheetTabContextUngroupSheetsMenuItem,
+    string NativeTopLevelMenuOrder,
     bool HasNativeFileMenu,
-    bool HasNativeEditMenu,
+    bool HasNativeHomeMenu,
+    bool HasNativeInsertMenu,
+    bool HasNativePageLayoutMenu,
+    bool HasNativeFormulasMenu,
     bool HasNativeDataMenu,
     bool HasNativeReviewMenu,
-    bool HasNativeFormatMenu,
     bool HasNativeViewMenu,
     bool HasNativeSheetMenu,
     bool HasNativeWindowMenu,
@@ -724,11 +727,14 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasSheetTabContextNoColorMenuItem &&
         HasSheetTabContextSelectAllSheetsMenuItem &&
         HasSheetTabContextUngroupSheetsMenuItem &&
+        string.Equals(NativeTopLevelMenuOrder, "File|Home|Insert|Page Layout|Formulas|Data|Review|View|Sheet|Window|Help", StringComparison.Ordinal) &&
         HasNativeFileMenu &&
-        HasNativeEditMenu &&
+        HasNativeHomeMenu &&
+        HasNativeInsertMenu &&
+        HasNativePageLayoutMenu &&
+        HasNativeFormulasMenu &&
         HasNativeDataMenu &&
         HasNativeReviewMenu &&
-        HasNativeFormatMenu &&
         HasNativeViewMenu &&
         HasNativeSheetMenu &&
         HasNativeWindowMenu &&
@@ -1283,11 +1289,14 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"sheet_tab_context_no_color_menu_item={FormatBool(snapshot.HasSheetTabContextNoColorMenuItem)}",
                 $"sheet_tab_context_select_all_sheets_menu_item={FormatBool(snapshot.HasSheetTabContextSelectAllSheetsMenuItem)}",
                 $"sheet_tab_context_ungroup_sheets_menu_item={FormatBool(snapshot.HasSheetTabContextUngroupSheetsMenuItem)}",
+                $"native_top_level_menu_order={snapshot.NativeTopLevelMenuOrder}",
                 $"native_file_menu={FormatBool(snapshot.HasNativeFileMenu)}",
-                $"native_edit_menu={FormatBool(snapshot.HasNativeEditMenu)}",
+                $"native_home_menu={FormatBool(snapshot.HasNativeHomeMenu)}",
+                $"native_insert_menu={FormatBool(snapshot.HasNativeInsertMenu)}",
+                $"native_page_layout_menu={FormatBool(snapshot.HasNativePageLayoutMenu)}",
+                $"native_formulas_menu={FormatBool(snapshot.HasNativeFormulasMenu)}",
                 $"native_data_menu={FormatBool(snapshot.HasNativeDataMenu)}",
                 $"native_review_menu={FormatBool(snapshot.HasNativeReviewMenu)}",
-                $"native_format_menu={FormatBool(snapshot.HasNativeFormatMenu)}",
                 $"native_view_menu={FormatBool(snapshot.HasNativeViewMenu)}",
                 $"native_sheet_menu={FormatBool(snapshot.HasNativeSheetMenu)}",
                 $"native_window_menu={FormatBool(snapshot.HasNativeWindowMenu)}",

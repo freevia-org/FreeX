@@ -1,15 +1,14 @@
 using FluentAssertions;
 
-using FreeX.App.Avalonia.Dialogs;
 using FreeX.App.Presentation.Charts;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Avalonia.Tests;
+namespace FreeX.App.Presentation.Tests.PageLayout;
 
 /// <summary>
 /// Unit tests for the non-UI glue that turns the portable page-break-preview planner output into the
-/// Avalonia overlay's draw instructions, resolves the print range for a sheet, and re-projects the
+/// renderer's draw instructions, resolves the print range for a sheet, and re-projects the
 /// viewport metrics into display pixel space. No running UI.
 /// </summary>
 public sealed class PageBreakPreviewInstructionBuilderTests

@@ -3,14 +3,14 @@ using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Avalonia.Dialogs;
+namespace FreeX.App.Presentation.PageLayout;
 
 /// <summary>
-/// Non-UI glue between the portable <see cref="PageContentLayout"/> and the Avalonia print-preview
+/// Non-UI glue between the portable <see cref="PageContentLayout"/> and a print-preview
 /// canvas. It flattens one page's ordered render instructions (page background, cell fills, gridlines,
 /// per-edge cell borders, cell/heading/header-footer text) into a renderer-agnostic, ordered list of
-/// paint primitives (filled rectangles, line segments, positioned text runs). The canvas code only
-/// turns each primitive into an Avalonia shape, so all of the layout-to-primitive math is unit-tested
+/// paint primitives (filled rectangles, line segments, positioned text runs). Renderer code only
+/// turns each primitive into platform controls, so all of the layout-to-primitive math is unit-tested
 /// directly without a running UI.
 ///
 /// It also owns the page-enumeration / navigation math (page count from the pagination plan plus
