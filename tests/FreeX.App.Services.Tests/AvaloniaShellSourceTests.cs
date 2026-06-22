@@ -2223,6 +2223,7 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresNativeDataTableThroughSharedPlannerSessionAndCompactDialog()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var parityCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "DataTablePlanner.cs"));
         var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
@@ -2265,6 +2266,9 @@ public sealed class AvaloniaShellSourceTests
         sessionSource.Should().Contain("ApplySuccessfulRangeEditResult(result, plan.OutputRange);");
         plannerSource.Should().Contain("public static DataTablePlanResult CreatePlan(");
         plannerSource.Should().Contain("public IWorkbookCommand CreateCommand()");
+        parityCaptureSource.Should().Contain("(\"dialog.DataTable\", () => ShowDataTableParityDialogAsync()),");
+        parityCaptureSource.Should().Contain("private Task ShowDataTableParityDialogAsync()");
+        parityCaptureSource.Should().Contain("async () => { await ShowDataTableInputDialogAsync(); }");
 
         var handlerIndex = normalizedSource.IndexOf("private async Task ShowDataTableDialogAsync()", StringComparison.Ordinal);
         handlerIndex.Should().BeGreaterThanOrEqualTo(0);
@@ -2286,6 +2290,7 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresNativeForecastSheetThroughSharedPlannerSessionAndCompactDialog()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var parityCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
 
@@ -2338,6 +2343,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("CreateForecastSheetField(\"Forecast periods\", periodsBox)");
 
         sessionSource.Should().Contain("public WorkbookCellEditResult ExecuteForecastSheetPlan(ForecastSheetPlan plan)");
+        parityCaptureSource.Should().Contain("(\"dialog.ForecastSheet\", () => ShowForecastSheetParityDialogAsync()),");
+        parityCaptureSource.Should().Contain("private Task ShowForecastSheetParityDialogAsync()");
+        parityCaptureSource.Should().Contain("async () => { await ShowForecastSheetInputDialogAsync(); }");
 
         var handlerIndex = normalizedSource.IndexOf("private async Task ShowForecastSheetDialogAsync()", StringComparison.Ordinal);
         handlerIndex.Should().BeGreaterThanOrEqualTo(0);
@@ -2364,6 +2372,7 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresNativeScenarioManagerThroughSharedPlannerSessionAndCompactDialog()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var parityCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "ScenarioManagerPlanner.cs"));
         var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
@@ -2417,6 +2426,9 @@ public sealed class AvaloniaShellSourceTests
         plannerSource.Should().Contain("public static ScenarioManagerPlan CreateShowPlan(");
         plannerSource.Should().Contain("public static ScenarioManagerPlan CreateDeletePlan(");
         plannerSource.Should().Contain("public static ScenarioManagerPlan CreateSummaryReportPlan(");
+        parityCaptureSource.Should().Contain("(\"dialog.ScenarioManager\", () => ShowScenarioManagerParityDialogAsync()),");
+        parityCaptureSource.Should().Contain("private async Task ShowScenarioManagerParityDialogAsync()");
+        parityCaptureSource.Should().Contain("await ShowScenarioManagerCompactDialogAsync(plan);");
 
         var handlerIndex = normalizedSource.IndexOf("private async Task ShowScenarioManagerDialogAsync()", StringComparison.Ordinal);
         handlerIndex.Should().BeGreaterThanOrEqualTo(0);
@@ -2605,6 +2617,7 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresNativeSubtotalThroughSharedWorkbookSessionAndCompactDialog()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var parityCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
         var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
@@ -2653,6 +2666,9 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("bool HasNativeSubtotalMenuItem,");
         smokeSource.Should().Contain("HasNativeSubtotalMenuItem &&");
         smokeSource.Should().Contain("native_subtotal_menu_item={FormatBool(snapshot.HasNativeSubtotalMenuItem)}");
+        parityCaptureSource.Should().Contain("(\"dialog.Subtotal\", () => ShowSubtotalParityDialogAsync()),");
+        parityCaptureSource.Should().Contain("private Task ShowSubtotalParityDialogAsync()");
+        parityCaptureSource.Should().Contain("async () => { await ShowSubtotalInputDialogAsync(); }");
 
         var handlerIndex = normalizedSource.IndexOf("private async Task ShowSubtotalDialogAsync()", StringComparison.Ordinal);
         handlerIndex.Should().BeGreaterThanOrEqualTo(0);

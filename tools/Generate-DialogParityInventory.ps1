@@ -217,18 +217,22 @@ $routes = @(
     @{
         RouteId = "dialog.DataTable"; DisplayName = "Data Table"
         Wpf = @("screenshots\data-tools-dialogs-tour\freex_data_tools_data_table_dialog.png", "screenshots\data-what-if-workflows-tour\freex_data_what_if_workflows_data_table_dialog.png")
+        Shared = @("src\FreeX.App.Services\DataTablePlanner.cs", "src\FreeX.App.Services\WorkbookSession.cs")
     },
     @{
         RouteId = "dialog.ScenarioManager"; DisplayName = "Scenario Manager"
         Wpf = @("screenshots\data-tools-dialogs-tour\freex_data_tools_scenario_manager_dialog.png", "screenshots\data-what-if-workflows-tour\freex_data_what_if_workflows_scenario_manager_dialog.png")
+        Shared = @("src\FreeX.App.Services\ScenarioManagerPlanner.cs", "src\FreeX.App.Services\WorkbookSession.cs")
     },
     @{
         RouteId = "dialog.ForecastSheet"; DisplayName = "Forecast Sheet"
         Wpf = @("screenshots\data-tools-dialogs-tour\freex_data_tools_forecast_sheet_dialog.png")
+        Shared = @("src\FreeX.App.Services\ForecastSheetPlanner.cs", "src\FreeX.App.Services\WorkbookSession.cs")
     },
     @{
         RouteId = "dialog.Subtotal"; DisplayName = "Subtotal"
         Wpf = @("screenshots\data-sort-filter-outline-tour\freex_data_sort_filter_outline_subtotal_dialog.png")
+        Shared = @("src\FreeX.App.Services\SubtotalPlanner.cs", "src\FreeX.App.Services\WorkbookSession.cs")
     },
     @{
         RouteId = "dialog.CreateTable"; DisplayName = "Create Table"

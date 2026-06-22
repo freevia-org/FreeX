@@ -123,6 +123,10 @@ public sealed partial class MainWindow
         ("dialog.RemoveDuplicates", () => ShowRemoveDuplicatesParityDialogAsync()),
         ("dialog.GoalSeek", () => ShowGoalSeekParityDialogAsync()),
         ("dialog.GoalSeekStatus", () => ShowGoalSeekStatusParityDialogAsync()),
+        ("dialog.DataTable", () => ShowDataTableParityDialogAsync()),
+        ("dialog.ScenarioManager", () => ShowScenarioManagerParityDialogAsync()),
+        ("dialog.ForecastSheet", () => ShowForecastSheetParityDialogAsync()),
+        ("dialog.Subtotal", () => ShowSubtotalParityDialogAsync()),
         ("dialog.DataValidation", () => ShowDataValidationDialogAsync()),
         ("dialog.ConditionalFormatNewRule", () => ShowConditionalFormatNewRuleDialogAsync()),
         ("dialog.ConditionalFormatManage", () => ShowManageConditionalFormatsDialogAsync()),
@@ -222,6 +226,57 @@ public sealed partial class MainWindow
             new WorkbookCellEditResult(true, null, [request.ChangingCell], null));
 
         return ShowGoalSeekStatusDialogAsync(result);
+    }
+
+    private Task ShowDataTableParityDialogAsync() =>
+        ShowWithParitySelectionAsync(
+            new CellAddress(_session.ActiveSheet.Id, 1, 1),
+            new CellAddress(_session.ActiveSheet.Id, 4, 4),
+            async () => { await ShowDataTableInputDialogAsync(); });
+
+    private async Task ShowScenarioManagerParityDialogAsync()
+    {
+        await ShowWithParitySelectionAsync(
+            new CellAddress(_session.ActiveSheet.Id, 2, 2),
+            new CellAddress(_session.ActiveSheet.Id, 3, 3),
+            async () =>
+            {
+                var plan = ScenarioManagerPlanner.CreateDialogPlan(_session.Workbook);
+                if (plan.IsReady)
+                    await ShowScenarioManagerCompactDialogAsync(plan);
+            });
+    }
+
+    private Task ShowForecastSheetParityDialogAsync() =>
+        ShowWithParitySelectionAsync(
+            new CellAddress(_session.ActiveSheet.Id, 1, 1),
+            new CellAddress(_session.ActiveSheet.Id, 4, 2),
+            async () => { await ShowForecastSheetInputDialogAsync(); });
+
+    private Task ShowSubtotalParityDialogAsync() =>
+        ShowWithParitySelectionAsync(
+            new CellAddress(_session.ActiveSheet.Id, 1, 1),
+            new CellAddress(_session.ActiveSheet.Id, 4, 4),
+            async () => { await ShowSubtotalInputDialogAsync(); });
+
+    private async Task ShowWithParitySelectionAsync(
+        CellAddress start,
+        CellAddress end,
+        Func<Task> showDialogAsync)
+    {
+        var previousSelection = _session.SelectedRange;
+        _session.SelectRange(new GridRange(start, end));
+        RefreshShell(_statusText.Text ?? "Ready");
+
+        try
+        {
+            await showDialogAsync();
+        }
+        finally
+        {
+            _session.SelectRange(previousSelection);
+            RefreshShell(_statusText.Text ?? "Ready");
+        }
     }
 
     private void PrepareSheetTabsOverflowParityCapture()
