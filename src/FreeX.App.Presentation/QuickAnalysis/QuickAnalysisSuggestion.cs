@@ -46,6 +46,9 @@ public sealed record QuickAnalysisSuggestion
     /// <summary>Populated when <see cref="ActionKind"/> is <see cref="QuickAnalysisActionKind.InsertSparklines"/>.</summary>
     public QuickAnalysisSparklineAction? Sparkline { get; private init; }
 
+    /// <summary>Builds the renderer-facing display item for this suggestion from the shared catalog.</summary>
+    public QuickAnalysisDisplayItem ToDisplayItem() => QuickAnalysisCatalog.BuildDisplayItem(Id);
+
     internal static QuickAnalysisSuggestion Formatting(
         string id,
         string label,
@@ -133,4 +136,21 @@ public sealed record QuickAnalysisModel(IReadOnlyList<QuickAnalysisSuggestionGro
 
     /// <summary>True when the model contains the given group.</summary>
     public bool HasGroup(QuickAnalysisGroup group) => SuggestionsFor(group).Count > 0;
+
+    /// <summary>Builds the renderer-facing display model for the suggestions in this model.</summary>
+    public QuickAnalysisDisplayModel ToDisplayModel()
+    {
+        if (IsEmpty)
+            return QuickAnalysisDisplayModel.Empty;
+
+        var groups = new List<QuickAnalysisDisplayGroup>(Groups.Count);
+        foreach (var group in Groups)
+        {
+            var items = group.Suggestions.Select(suggestion => suggestion.ToDisplayItem()).ToArray();
+            if (items.Length > 0)
+                groups.Add(new QuickAnalysisDisplayGroup(group.Group, items));
+        }
+
+        return groups.Count == 0 ? QuickAnalysisDisplayModel.Empty : new QuickAnalysisDisplayModel(groups);
+    }
 }

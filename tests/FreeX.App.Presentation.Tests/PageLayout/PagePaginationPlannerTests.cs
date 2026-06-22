@@ -99,6 +99,35 @@ public sealed class PagePaginationPlannerTests
     }
 
     [Fact]
+    public void BuildPlan_ExposesRendererRowAndColumnPlansWithTitlesAndManualBreaks()
+    {
+        var plan = PagePaginationPlanner.BuildPlan(
+            Range(1, 1, 8, 8),
+            WorksheetScaleToFit.Default,
+            printTitleRows: new WorksheetRepeatRange(1, 1),
+            printTitleColumns: new WorksheetRepeatRange(1, 1),
+            WorksheetPaperSize.A4,
+            WorksheetPageOrientation.Portrait,
+            WorksheetPageMargins.Narrow,
+            rowPageBreaks: [5],
+            columnPageBreaks: [5]);
+
+        plan.Capacity.Should().Be(new PageCapacity(RowsPerPage: 51, ColumnsPerPage: 17));
+        plan.RowPageCount.Should().Be(2);
+        plan.ColumnPageCount.Should().Be(2);
+        plan.PageCount.Should().Be(4);
+        plan.RowPlans[0].TitleRows.Should().Equal(1u);
+        plan.RowPlans[1].TitleRows.Should().Equal(1u);
+        plan.RowPlans[0].BodyRows.Should().Equal(2u, 3u, 4u);
+        plan.RowPlans[1].BodyRows.Should().Equal(5u, 6u, 7u, 8u);
+        plan.ColumnPlans[0].TitleColumns.Should().Equal(1u);
+        plan.ColumnPlans[1].TitleColumns.Should().Equal(1u);
+        plan.ColumnPlans[0].BodyColumns.Should().Equal(2u, 3u, 4u);
+        plan.ColumnPlans[1].BodyColumns.Should().Equal(5u, 6u, 7u, 8u);
+        plan.EffectiveScalePercent.Should().Be(100.0);
+    }
+
+    [Fact]
     public void Paginate_FitToOneWideCollapsesColumnsOntoASinglePage()
     {
         var result = PagePaginationPlanner.Paginate(

@@ -647,6 +647,17 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Apply a Design &gt; Document Formatting paragraph-spacing preset to the document style catalog and
+    /// default paragraph formatting, preserving direct paragraph overrides.
+    /// </summary>
+    public void ApplyParagraphSpacingSet(DocumentParagraphSpacingSet spacingSet)
+    {
+        CommitToModel();
+        DocumentParagraphSpacingSet.Apply(_model, spacingSet);
+        Render();
+    }
+
+    /// <summary>
     /// Re-render the surface after the document's <see cref="TextDocument.Styles"/> catalog has been
     /// mutated out-of-band (e.g. a style created/modified/deleted via <see cref="StyleManager"/>), so the
     /// new run/paragraph formatting resolves for any paragraph referencing the affected style. Commits the
@@ -683,6 +694,9 @@ public sealed class DocumentView : RichTextBox
 
     // Snapshot of the document's pre-font-set look for font-set preview.
     private (DocumentTheme Theme, RunFormatting DefaultRun, Dictionary<string, RunFormatting> Runs)? _fontSetSnapshot;
+
+    // Snapshot of the document's pre-paragraph-spacing look for spacing-set preview.
+    private (ParagraphFormatting DefaultParagraph, Dictionary<string, ParagraphFormatting> Paragraphs)? _paragraphSpacingSetSnapshot;
 
     /// <summary>
     /// Preview a paragraph style on the current selection without committing: snapshot the selected
@@ -913,6 +927,53 @@ public sealed class DocumentView : RichTextBox
                 style.Run = run;
         }
         _fontSetSnapshot = null;
+    }
+
+    /// <summary>
+    /// Preview a document paragraph-spacing preset without committing. Used by the Design Paragraph
+    /// Spacing gallery.
+    /// </summary>
+    public void PreviewParagraphSpacingSet(DocumentParagraphSpacingSet spacingSet)
+    {
+        ArgumentNullException.ThrowIfNull(spacingSet);
+
+        if (_paragraphSpacingSetSnapshot is null)
+            CommitToModel();
+        else
+            RestoreParagraphSpacingSetPreview();
+
+        var paragraphs = new Dictionary<string, ParagraphFormatting>();
+        foreach (var id in new[] { "Normal", "Title", "Subtitle", "Heading1", "Heading2", "Heading3", "Quote" })
+        {
+            if (_model.Styles.TryGetValue(id, out var style))
+                paragraphs[id] = style.Paragraph;
+        }
+
+        _paragraphSpacingSetSnapshot = (_model.DefaultParagraph, paragraphs);
+        DocumentParagraphSpacingSet.Apply(_model, spacingSet);
+        Render();
+    }
+
+    /// <summary>Revert a paragraph-spacing preview started by <see cref="PreviewParagraphSpacingSet"/>.</summary>
+    public void EndParagraphSpacingSetPreview()
+    {
+        if (_paragraphSpacingSetSnapshot is null)
+            return;
+        RestoreParagraphSpacingSetPreview();
+        Render();
+    }
+
+    private void RestoreParagraphSpacingSetPreview()
+    {
+        if (_paragraphSpacingSetSnapshot is not { } snapshot)
+            return;
+        _model.DefaultParagraph = snapshot.DefaultParagraph;
+        foreach (var (id, paragraph) in snapshot.Paragraphs)
+        {
+            if (_model.Styles.TryGetValue(id, out var style))
+                style.Paragraph = paragraph;
+        }
+        _paragraphSpacingSetSnapshot = null;
     }
 
     /// <summary>

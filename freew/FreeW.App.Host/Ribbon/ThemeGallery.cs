@@ -25,6 +25,7 @@ internal static class ThemeGallery
         host.Children.Add(BuildStyleSets(editor));
         host.Children.Add(BuildColours(editor));
         host.Children.Add(BuildFonts(editor));
+        host.Children.Add(BuildParagraphSpacingMenu(editor));
         return host;
     }
 
@@ -62,6 +63,91 @@ internal static class ThemeGallery
         foreach (var fontSet in DocumentFontSet.Catalog)
             strip.Children.Add(BuildFontSwatch(editor, fontSet));
         return WithLabel("Fonts", strip);
+    }
+
+    /// <summary>Build Word's Paragraph Spacing gallery: line/spacing preset thumbnails.</summary>
+    public static FrameworkElement BuildParagraphSpacing(DocumentView editor)
+    {
+        var strip = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        foreach (var spacingSet in DocumentParagraphSpacingSet.Catalog)
+            strip.Children.Add(BuildParagraphSpacingSwatch(editor, spacingSet));
+        return WithLabel("Paragraph Spacing", strip);
+    }
+
+    private static FrameworkElement BuildParagraphSpacingMenu(DocumentView editor)
+    {
+        var button = new Button
+        {
+            Margin = new Thickness(4, 17, 4, 3),
+            Padding = new Thickness(6, 3, 6, 3),
+            MinWidth = 86,
+            Background = Brushes.Transparent,
+            BorderBrush = Brushes.Transparent,
+            BorderThickness = new Thickness(1),
+            Cursor = System.Windows.Input.Cursors.Hand,
+            ToolTip = "Paragraph Spacing"
+        };
+        AutomationProperties.SetName(button, "Paragraph Spacing");
+
+        var stack = new StackPanel { Orientation = Orientation.Vertical, HorizontalAlignment = HorizontalAlignment.Center };
+        var glyph = new StackPanel { Width = 34, HorizontalAlignment = HorizontalAlignment.Center };
+        glyph.Children.Add(Bar("#2F5496", 28, 2.5));
+        glyph.Children.Add(new Border { Height = 3 });
+        glyph.Children.Add(Bar("#808080", 22, 2.5));
+        glyph.Children.Add(new Border { Height = 3 });
+        glyph.Children.Add(Bar("#A0A0A0", 26, 2.5));
+        stack.Children.Add(glyph);
+        stack.Children.Add(new TextBlock
+        {
+            Text = "Paragraph\nSpacing",
+            FontSize = 11,
+            TextAlignment = System.Windows.TextAlignment.Center,
+            LineHeight = 12,
+            Margin = new Thickness(0, 2, 0, 0)
+        });
+        button.Content = stack;
+
+        var hover = new SolidColorBrush(Color.FromRgb(0xEA, 0xF1, 0xFB));
+        button.MouseEnter += (_, _) =>
+        {
+            button.Background = hover;
+            button.BorderBrush = new SolidColorBrush(Color.FromRgb(0x2B, 0x57, 0x9A));
+        };
+        button.MouseLeave += (_, _) =>
+        {
+            if (button.ContextMenu is null || !button.ContextMenu.IsOpen)
+            {
+                button.Background = Brushes.Transparent;
+                button.BorderBrush = Brushes.Transparent;
+            }
+        };
+
+        var menu = new ContextMenu();
+        foreach (var spacingSet in DocumentParagraphSpacingSet.Catalog)
+        {
+            var item = new MenuItem { Header = spacingSet.Name, Tag = spacingSet };
+            item.MouseEnter += (_, _) => editor.PreviewParagraphSpacingSet(spacingSet);
+            item.MouseLeave += (_, _) => editor.EndParagraphSpacingSetPreview();
+            item.Click += (_, _) =>
+            {
+                editor.EndParagraphSpacingSetPreview();
+                editor.ApplyParagraphSpacingSet(spacingSet);
+            };
+            menu.Items.Add(item);
+        }
+        menu.Closed += (_, _) =>
+        {
+            editor.EndParagraphSpacingSetPreview();
+            button.Background = Brushes.Transparent;
+            button.BorderBrush = Brushes.Transparent;
+        };
+        button.ContextMenu = menu;
+        button.Click += (_, _) =>
+        {
+            button.ContextMenu.PlacementTarget = button;
+            button.ContextMenu.IsOpen = true;
+        };
+        return button;
     }
 
     private static FrameworkElement WithLabel(string label, FrameworkElement content)
@@ -222,6 +308,43 @@ internal static class ThemeGallery
         return WrapAsFontSetButton(editor, fontSet, thumb, fontSet.Name + " fonts");
     }
 
+    private static FrameworkElement BuildParagraphSpacingSwatch(DocumentView editor, DocumentParagraphSpacingSet spacingSet)
+    {
+        var thumb = new StackPanel { Margin = new Thickness(4, 3, 4, 3), Width = 72 };
+
+        var page = new Border
+        {
+            Background = Brushes.White,
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
+            BorderThickness = new Thickness(1),
+            Height = 40,
+            Padding = new Thickness(5, 4, 5, 4),
+            SnapsToDevicePixels = true
+        };
+
+        var sample = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        var gap = Math.Max(1.0, spacingSet.SpaceAfterPt / 3.0 + spacingSet.LineSpacing - 1.0);
+        sample.Children.Add(Bar("#2F5496", 34, 2.5));
+        sample.Children.Add(new Border { Height = gap });
+        sample.Children.Add(Bar("#808080", 26, 2.5));
+        sample.Children.Add(new Border { Height = gap });
+        sample.Children.Add(Bar("#A0A0A0", 30, 2.5));
+        page.Child = sample;
+
+        thumb.Children.Add(page);
+        thumb.Children.Add(new TextBlock
+        {
+            Text = spacingSet.Name,
+            FontSize = 10.5,
+            TextAlignment = System.Windows.TextAlignment.Center,
+            TextWrapping = TextWrapping.Wrap,
+            LineHeight = 11,
+            Margin = new Thickness(0, 2, 0, 0)
+        });
+
+        return WrapAsParagraphSpacingSetButton(editor, spacingSet, thumb, spacingSet.Name + " paragraph spacing");
+    }
+
     // Wrap a thumbnail in a borderless button that previews on hover, reverts on leave, commits on click.
     private static FrameworkElement WrapAsButton(DocumentView editor, DocumentTheme theme, FrameworkElement content, string tip)
     {
@@ -355,6 +478,40 @@ internal static class ThemeGallery
         {
             editor.EndFontSetPreview();
             editor.ApplyFontSet(fontSet);
+        };
+        return button;
+    }
+
+    private static FrameworkElement WrapAsParagraphSpacingSetButton(DocumentView editor, DocumentParagraphSpacingSet spacingSet, FrameworkElement content, string tip)
+    {
+        var button = new Button
+        {
+            Content = content,
+            Background = Brushes.Transparent,
+            BorderBrush = Brushes.Transparent,
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(1),
+            Cursor = System.Windows.Input.Cursors.Hand,
+            ToolTip = tip
+        };
+
+        var hover = new SolidColorBrush(Color.FromRgb(0xEA, 0xF1, 0xFB));
+        button.MouseEnter += (_, _) =>
+        {
+            button.Background = hover;
+            button.BorderBrush = new SolidColorBrush(Color.FromRgb(0x2B, 0x57, 0x9A));
+            editor.PreviewParagraphSpacingSet(spacingSet);
+        };
+        button.MouseLeave += (_, _) =>
+        {
+            button.Background = Brushes.Transparent;
+            button.BorderBrush = Brushes.Transparent;
+            editor.EndParagraphSpacingSetPreview();
+        };
+        button.Click += (_, _) =>
+        {
+            editor.EndParagraphSpacingSetPreview();
+            editor.ApplyParagraphSpacingSet(spacingSet);
         };
         return button;
     }

@@ -7,6 +7,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using FreeX.App.Presentation.TableUI;
 using FreeX.App.Services;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
@@ -1407,7 +1408,7 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
 
-        var sourceRange = CreateTableSourceRangePlanner.PlanSourceRange(sheet, range);
+        var sourceRange = TableCreationPlanner.PlanSourceRange(sheet, range);
         var tableStyle = TableStyleGalleryPlanner.GetOption(variant, _workbook.Theme);
         var tableStyleName = tableStyle.StyleName;
         CreateTableDialog? dialog = null;
@@ -1422,7 +1423,7 @@ public partial class MainWindow
         range = dialog.Result.Range;
         if (!TryExecuteGroupedSheetCommand(
                 "Format as Table",
-                sheetId => new CreateStyledStructuredTableCommand(
+                sheetId => TableCreationPlanner.BuildStyledCommand(
                     sheetId,
                     GroupedSheetRangePlanner.RemapRangeToSheet(dialog.Result.Range, sheetId),
                     dialog.Result.TableStyleName,

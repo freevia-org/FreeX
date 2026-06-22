@@ -13,6 +13,7 @@ public sealed class QuickAnalysisPlannerTests
         var selection = new GridRange(new CellAddress(sheetId, 4, 2), new CellAddress(sheetId, 4, 2));
 
         QuickAnalysisPlanner.BuildOptions(selection).Should().BeEmpty();
+        QuickAnalysisPlanner.BuildDisplayModel(selection).IsEmpty.Should().BeTrue();
     }
 
     [Fact]
@@ -138,6 +139,35 @@ public sealed class QuickAnalysisPlannerTests
             .StartWith(["Data Bars", "Color Scale", "Icon Set"]);
     }
 
+    [Fact]
+    public void BuildDisplayModel_ReturnsRendererFacingItemsWithRoutesAndPreviewMetadata()
+    {
+        var sheetId = SheetId.New();
+        var selection = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 5, 4));
+
+        var model = QuickAnalysisPlanner.BuildDisplayModel(selection);
+
+        model.Groups.Select(group => group.Group)
+            .Should()
+            .Equal(
+                QuickAnalysisGroup.Formatting,
+                QuickAnalysisGroup.Charts,
+                QuickAnalysisGroup.Totals,
+                QuickAnalysisGroup.Tables,
+                QuickAnalysisGroup.Sparklines);
+
+        var dataBars = model.AllItems().Single(item => item.Id == "format.databars");
+        dataBars.Label.Should().Be("Data Bars");
+        dataBars.Command.Should().Be(QuickAnalysisCommand.DataBar);
+        dataBars.Route.Kind.Should().Be(QuickAnalysisCommandKind.ConditionalFormat);
+        dataBars.Route.ConditionalFormat.Should().Be(QuickAnalysisConditionalFormatCommand.DataBar);
+        dataBars.PreviewVisual.Kind.Should().Be(QuickAnalysisPreviewVisualKind.DataBars);
+
+        var percentTotal = model.AllItems().Single(item => item.Id == "total.percenttotal");
+        percentTotal.Route.TotalFormulaKind.Should().Be(QuickAnalysisTotalFormulaKind.PercentTotal);
+        percentTotal.PreviewKind.Should().Be(QuickAnalysisPreviewKind.Total);
+    }
+
     [Theory]
     [InlineData(QuickAnalysisGroup.Formatting, "TableLoc_QaGroupFormatting", "Formatting")]
     [InlineData(QuickAnalysisGroup.Charts, "TableLoc_QaGroupCharts", "Charts")]
@@ -211,6 +241,23 @@ public sealed class QuickAnalysisPlannerTests
 
         preview.PreviewVisual.Kind.Should().Be(QuickAnalysisPreviewVisualKind.DataBars);
         preview.Range.Should().Be(selection);
+    }
+
+    [Fact]
+    public void BuildHoverPreview_FromDisplayItem_CarriesRouteAndVisualKind()
+    {
+        var sheetId = SheetId.New();
+        var selection = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 5, 4));
+        var dataBars = QuickAnalysisPlanner.BuildDisplayModel(selection)
+            .AllItems()
+            .Single(item => item.Id == "format.databars");
+
+        var preview = QuickAnalysisPlanner.BuildHoverPreview(selection, dataBars);
+
+        preview.PreviewVisual.Kind.Should().Be(QuickAnalysisPreviewVisualKind.DataBars);
+        preview.Route.Should().Be(dataBars.Route);
+        preview.Range.Should().Be(selection);
+        preview.StatusText.Should().Be(dataBars.PreviewText);
     }
 
     [Fact]

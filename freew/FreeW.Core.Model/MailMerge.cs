@@ -150,6 +150,16 @@ public sealed class MergeData
     }
 }
 
+/// <summary>Backed FreeW subset of Word's Start Mail Merge document types.</summary>
+public enum MailMergeOutputMode
+{
+    /// <summary>Start each merged record on a new page, matching Word's letter-style merge output.</summary>
+    Letters,
+
+    /// <summary>Append records continuously, matching Word's directory/catalog-style merge output.</summary>
+    Directory
+}
+
 /// <summary>
 /// Pure, deterministic mail-merge helpers over the FreeW document model. A merge field is the literal
 /// text <c>«FieldName»</c> — the field name wrapped in guillemets (U+00AB «, U+00BB ») — carried inside
@@ -314,6 +324,31 @@ public static class MailMerge
         return result;
     }
 
+    /// <summary>
+    /// Combine already-merged records into a single document using the selected output mode. Letters force
+    /// a page break before each record after the first; Directory appends records continuously. The merged
+    /// record documents are consumed into the returned document.
+    /// </summary>
+    public static TextDocument CombineMergedRecords(IReadOnlyList<TextDocument> records, MailMergeOutputMode mode)
+    {
+        ArgumentNullException.ThrowIfNull(records);
+        if (records.Count == 0)
+            return TextDocument.CreateEmpty();
+
+        var first = records[0];
+        for (var d = 1; d < records.Count; d++)
+        {
+            var blocks = records[d].Blocks;
+            if (mode == MailMergeOutputMode.Letters)
+                ForcePageBreakBeforeRecord(first, blocks);
+
+            foreach (var block in blocks)
+                first.Blocks.Add(block);
+        }
+
+        return first;
+    }
+
     // Enumerate the raw (untrimmed) field-name spans found between matched «…» delimiters in order.
     private static IEnumerable<string> EnumerateFields(string text)
     {
@@ -328,6 +363,20 @@ public static class MailMerge
                 yield break;
             yield return text.Substring(open + 1, close - open - 1);
             i = close + 1;
+        }
+    }
+
+    private static void ForcePageBreakBeforeRecord(TextDocument first, IList<Block> blocks)
+    {
+        // Word's Letters output starts each record on a new page. If the record starts with a paragraph,
+        // keep the content and put the break on that paragraph; otherwise insert a dedicated break block.
+        if (blocks.Count > 0 && blocks[0] is Paragraph lead)
+        {
+            lead.Formatting = lead.Formatting with { PageBreakBefore = true };
+        }
+        else
+        {
+            first.Blocks.Add(DocumentOps.CreatePageBreak());
         }
     }
 

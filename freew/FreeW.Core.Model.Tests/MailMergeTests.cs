@@ -151,6 +151,39 @@ public class MailMergeTests
     }
 
     [Fact]
+    public void CombineMergedRecords_Letters_StartsEachAdditionalRecordOnANewPage()
+    {
+        var docs = new[]
+        {
+            new TextDocument { Blocks = { new Paragraph("Ada") } },
+            new TextDocument { Blocks = { new Paragraph("Grace") } }
+        };
+
+        var combined = MailMerge.CombineMergedRecords(docs, MailMergeOutputMode.Letters);
+
+        combined.Blocks.Should().HaveCount(2);
+        ((Paragraph)combined.Blocks[0]).Formatting.PageBreakBefore.Should().BeFalse();
+        ((Paragraph)combined.Blocks[1]).Formatting.PageBreakBefore.Should().BeTrue();
+        combined.PlainText.Should().Be("Ada\nGrace");
+    }
+
+    [Fact]
+    public void CombineMergedRecords_Directory_AppendsRecordsContinuously()
+    {
+        var docs = new[]
+        {
+            new TextDocument { Blocks = { new Paragraph("Ada") } },
+            new TextDocument { Blocks = { new Paragraph("Grace") } }
+        };
+
+        var combined = MailMerge.CombineMergedRecords(docs, MailMergeOutputMode.Directory);
+
+        combined.Blocks.Should().HaveCount(2);
+        ((Paragraph)combined.Blocks[1]).Formatting.PageBreakBefore.Should().BeFalse();
+        combined.PlainText.Should().Be("Ada\nGrace");
+    }
+
+    [Fact]
     public void FromCsv_ParsesHeaderAndRows()
     {
         const string csv = "First,Last\nAda,Lovelace\nGrace,Hopper";

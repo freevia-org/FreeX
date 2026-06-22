@@ -25,6 +25,12 @@ internal static class FreeWRibbon
                 menu.Item(commandId, fontSet.Name, fontSet.Name[0].ToString());
         }
 
+        static void ParagraphSpacingMenu(string commandId, RibbonMenuBuilder menu)
+        {
+            foreach (var spacingSet in DocumentParagraphSpacingSet.Catalog)
+                menu.Item(commandId, spacingSet.Name, spacingSet.Name[0].ToString());
+        }
+
         var definition = new RibbonDefinitionBuilder()
             .Tab("home", "Home", "H", tab =>
             {
@@ -333,6 +339,7 @@ internal static class FreeWRibbon
                     });
                     g.Medium("freew.theme-colors", "Colors", RibbonCommandIconKind.Color, "C", menu: m => ThemeMenu("freew.theme-colors", m), accent: RibbonCommandIconAccent.Color);
                     g.Medium("freew.theme-fonts", "Fonts", RibbonCommandIconKind.Font, "F", menu: m => FontSetMenu("freew.theme-fonts", m), accent: RibbonCommandIconAccent.Theme);
+                    g.Medium("freew.paragraph-spacing", "Paragraph Spacing", RibbonCommandIconKind.LineSpacing, "P", menu: m => ParagraphSpacingMenu("freew.paragraph-spacing", m), accent: RibbonCommandIconAccent.Theme);
                 });
                 // Design > Page Background: set the whole-page background colour (Word's Page Color). The
                 // command opens a swatch palette (+ No Color + More Colors...) and writes the model's page
@@ -368,9 +375,17 @@ internal static class FreeWRibbon
             })
             .Tab("mailings", "Mailings", "M", tab =>
             {
-                tab.Group("merge-data", "Start Mail Merge", "D", 135, g =>
+                tab.Group("merge-data", "Start Mail Merge", "D", 155, g =>
                 {
+                    g.Medium("freew.start-mail-merge", "Start Mail Merge", RibbonCommandIconKind.Envelope, "S", menu: m =>
+                    {
+                        m.Item("freew.start-mail-merge-letters", "Letters", "L");
+                        m.Item("freew.start-mail-merge-directory", "Directory", "D");
+                        m.Separator();
+                        m.Item("freew.start-mail-merge-normal", "Normal Word Document", "N");
+                    });
                     g.Medium("freew.merge-data", "Select Recipients", RibbonCommandIconKind.Recipients);
+                    g.Medium("freew.merge-edit-recipients", "Edit Recipient List", RibbonCommandIconKind.Recipients);
                 });
                 // Each Mailings group is a single labelled command so Word's command names stay readable.
                 tab.Group("merge-write", "Write & Insert Fields", "W", 145, g =>

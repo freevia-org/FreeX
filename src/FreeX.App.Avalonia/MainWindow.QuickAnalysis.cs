@@ -17,9 +17,9 @@ public sealed partial class MainWindow
 {
     /// <summary>
     /// Opens the Quick Analysis popup for the current multi-cell selection. The selection is described by
-    /// the UI-free <see cref="QuickAnalysisSelectionReader"/>, then turned into grouped suggestions by the
-    /// portable <see cref="QuickAnalysisModelBuilder"/>. Each suggestion is a button wired through
-    /// <see cref="QuickAnalysisCommandRouter"/> to an existing shell command path; the few suggestions
+    /// the UI-free <see cref="QuickAnalysisSelectionReader"/>, then turned into grouped display items by the
+    /// portable <see cref="QuickAnalysisModelBuilder"/>. Each item is a button wired through
+    /// <see cref="QuickAnalysisCommandRouter"/> to an existing shell command path; the few items
     /// without a shell command (PivotTable, running/percent totals) stay visible but report that they are
     /// not yet available.
     /// </summary>
@@ -37,7 +37,8 @@ public sealed partial class MainWindow
 
         var description = QuickAnalysisSelectionReader.Describe(_session.ActiveSheet, range);
         var model = QuickAnalysisModelBuilder.Build(description);
-        if (model.IsEmpty)
+        var displayModel = model.ToDisplayModel();
+        if (displayModel.IsEmpty)
         {
             ShowEditIssue(UiText.Format("TableLoc_QaNoSuggestions", FormatRangeReference(range)));
             return;
@@ -56,7 +57,7 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(dialog, "QuickAnalysisDialog");
 
         var groupsPanel = new StackPanel { Spacing = 14 };
-        foreach (var group in model.Groups)
+        foreach (var group in displayModel.Groups)
         {
             groupsPanel.Children.Add(new TextBlock
             {
@@ -66,20 +67,20 @@ public sealed partial class MainWindow
             });
 
             var buttonRow = new WrapPanel { Orientation = Orientation.Horizontal };
-            foreach (var suggestion in group.Suggestions)
+            foreach (var item in group.Items)
             {
-                var captured = suggestion;
+                var captured = item;
                 var button = new Button
                 {
-                    Content = suggestion.Label,
+                    Content = item.Label,
                     MinWidth = 116,
                     Margin = new Thickness(0, 0, 8, 8),
                 };
-                AutomationProperties.SetAutomationId(button, $"QuickAnalysis_{suggestion.Id}");
+                AutomationProperties.SetAutomationId(button, $"QuickAnalysis_{item.Id}");
                 button.Click += (_, _) =>
                 {
                     dialog.Close();
-                    ApplyQuickAnalysisSuggestion(captured);
+                    ApplyQuickAnalysisItem(captured);
                 };
                 buttonRow.Children.Add(button);
             }
@@ -128,18 +129,18 @@ public sealed partial class MainWindow
     }
 
     /// <summary>
-    /// Executes a chosen Quick Analysis suggestion by routing it to the matching existing shell command
+    /// Executes a chosen Quick Analysis item by routing it to the matching existing shell command
     /// path. Conditional-format presets reuse the preset command path, Totals reuse AutoSum, Sparklines
     /// reuse the sparkline insert command, Charts reuse the add-chart command, Tables reuse the create-table
     /// command; the remaining deferred suggestions (PivotTable, running/percent totals) report a status note
     /// without changing the workbook.
     /// </summary>
-    private void ApplyQuickAnalysisSuggestion(QuickAnalysisSuggestion suggestion)
+    private void ApplyQuickAnalysisItem(QuickAnalysisDisplayItem item)
     {
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var route = QuickAnalysisCommandRouter.Route(suggestion);
+        var route = QuickAnalysisCommandRouter.Route(item);
         switch (route.Kind)
         {
             case QuickAnalysisCommandKind.ConditionalFormat

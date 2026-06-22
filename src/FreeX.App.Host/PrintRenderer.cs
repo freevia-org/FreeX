@@ -6,6 +6,7 @@ using System.Windows.Documents;
 using System.Windows.Markup;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -16,7 +17,6 @@ namespace FreeX.App.Host;
 public static partial class PrintRenderer
 {
     private const double PrintFontSize = 9.0;
-    private const double MinimumPrintColumnWidth = 40.0;
 
     public static FixedDocument RenderWorksheet(
         Workbook workbook,
@@ -27,7 +27,7 @@ public static partial class PrintRenderer
         double pageWidthInches = 8.27,
         double pageHeightInches = 11.69)
     {
-        const double dpi = 96.0;
+        const double dpi = PagePaginationPlanner.Dpi;
         double pageW = pageWidthInches * dpi;
         double pageH = pageHeightInches * dpi;
         var doc = new FixedDocument();
@@ -35,11 +35,9 @@ public static partial class PrintRenderer
         var sheet = workbook.GetSheet(sheetId);
         if (sheet == null) return doc;
 
-        (pageW, pageH) = GetPaperSizeInches(sheet.PaperSize);
-        pageW *= dpi;
-        pageH *= dpi;
-        if (sheet.PageOrientation == WorksheetPageOrientation.Landscape)
-            (pageW, pageH) = (pageH, pageW);
+        var pageSize = WorksheetPageLayout.GetPageSizeInches(sheet.PaperSize, sheet.PageOrientation);
+        pageW = pageSize.Width * dpi;
+        pageH = pageSize.Height * dpi;
 
         var margins = sheet.PageMargins;
         double marginLeft = margins.Left * dpi;
@@ -76,39 +74,18 @@ public static partial class PrintRenderer
                 AvailableWidth: (double)maxViewportCol * 9999));
 
         var cellLookup = viewport.Cells.ToDictionary(c => (c.Row, c.Col));
-        double rowHeight = 20.0;
-
-        uint rowsPerPage = (uint)Math.Floor(printableH / rowHeight);
-        if (rowsPerPage < 1) rowsPerPage = 1;
-        uint columnsPerPage = (uint)Math.Floor(printableW / MinimumPrintColumnWidth);
-        if (columnsPerPage < 1) columnsPerPage = 1;
-        rowsPerPage = ApplyScaleToFitCapacity(
-            rowsPerPage,
-            usedRange.Value.Start.Row,
-            usedRange.Value.End.Row,
-            sheet.PrintTitleRows,
-            CellAddress.MaxRow,
-            sheet.ScaleToFit.ScalePercent,
-            sheet.ScaleToFit.FitToPagesTall);
-        columnsPerPage = ApplyScaleToFitCapacity(
-            columnsPerPage,
-            usedRange.Value.Start.Col,
-            usedRange.Value.End.Col,
-            sheet.PrintTitleColumns,
-            CellAddress.MaxCol,
-            sheet.ScaleToFit.ScalePercent,
-            sheet.ScaleToFit.FitToPagesWide);
-
-        var rowPlans = PrintLayoutPlanner.BuildRowPlans(
+        var paginationPlan = PagePaginationPlanner.BuildPlan(
             usedRange.Value,
+            sheet.ScaleToFit,
             sheet.PrintTitleRows,
-            rowsPerPage,
-            sheet.RowPageBreaks);
-        var columnPlans = PrintLayoutPlanner.BuildColumnPlans(
-            usedRange.Value,
             sheet.PrintTitleColumns,
-            columnsPerPage,
+            sheet.PaperSize,
+            sheet.PageOrientation,
+            sheet.PageMargins,
+            sheet.RowPageBreaks,
             sheet.ColumnPageBreaks);
+        var rowPlans = paginationPlan.RowPlans;
+        var columnPlans = paginationPlan.ColumnPlans;
         IReadOnlyList<IReadOnlyList<KeyValuePair<CellAddress, string>>> commentSummaryPages =
             sheet.PrintComments == WorksheetPrintComments.AtEnd
                 ? BuildCommentSummaryPages(sheet.Comments, sheet.ThreadedComments, pageH, marginTop)
@@ -306,62 +283,6 @@ public static partial class PrintRenderer
         var clone = new PageContent();
         ((IAddChild)clone).AddChild(fixedPage);
         return clone;
-    }
-
-    private static (double Width, double Height) GetPaperSizeInches(WorksheetPaperSize paperSize) =>
-        paperSize switch
-        {
-            WorksheetPaperSize.Letter => (8.5, 11.0),
-            WorksheetPaperSize.Legal => (8.5, 14.0),
-            _ => (8.27, 11.69)
-        };
-
-    private static uint ApplyScaleToFitCapacity(
-        uint baseItemsPerPage,
-        uint start,
-        uint end,
-        WorksheetRepeatRange? repeat,
-        uint maxItem,
-        int? scalePercent,
-        int? fitToPages)
-    {
-        if (scalePercent is { } percent and >= 10 and <= 400)
-            return Math.Max(1, (uint)Math.Floor(baseItemsPerPage * (100d / percent)));
-
-        if (fitToPages is not { } pageCount || pageCount < 1)
-            return baseItemsPerPage;
-
-        var titleCount = CountRepeatItems(repeat, maxItem);
-        var bodyCount = CountBodyItems(start, end, repeat);
-        if (bodyCount == 0)
-            return Math.Max(1, titleCount);
-
-        var bodyItemsPerPage = (uint)Math.Ceiling(bodyCount / (double)pageCount);
-        return Math.Max(1, bodyItemsPerPage + titleCount);
-    }
-
-    private static uint CountRepeatItems(WorksheetRepeatRange? repeat, uint maxItem)
-    {
-        if (repeat is not { } range || range.Start == 0 || range.Start > maxItem || range.End < range.Start)
-            return 0;
-
-        return Math.Min(range.End, maxItem) - range.Start + 1;
-    }
-
-    private static uint CountBodyItems(uint start, uint end, WorksheetRepeatRange? repeat)
-    {
-        if (end < start)
-            return 0;
-
-        var count = end - start + 1;
-        if (repeat is not { } range || range.End < start || range.Start > end)
-            return count;
-
-        var overlapStart = Math.Max(start, range.Start);
-        var overlapEnd = Math.Min(end, range.End);
-        return overlapEnd >= overlapStart
-            ? count - (overlapEnd - overlapStart + 1)
-            : count;
     }
 
     private sealed record PdfLinkTarget(

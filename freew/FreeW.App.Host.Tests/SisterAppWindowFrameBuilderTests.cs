@@ -1,6 +1,8 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Linq;
+using System.Windows.Media;
+using System.Windows.Shapes;
 using Free.Shared.Ribbon.Wpf;
 using Xunit;
 
@@ -25,5 +27,66 @@ public sealed class SisterAppWindowFrameBuilderTests
         Grid.GetRow(result.BelowTitle).Should().Be(1);
 
         result.BelowTitle.Children.Cast<UIElement>().Should().Equal(body, backstage);
+    }
+
+    [StaFact]
+    public void ClientFrameBuilder_ComposesChromeBodyAndStatusRows()
+    {
+        var chrome = new Border();
+        var body = new Grid();
+        var status = new Border();
+
+        var result = SisterAppClientFrameBuilder.Build(new SisterAppClientFrameSpec(chrome, body, status));
+
+        result.Root.RowDefinitions.Should().HaveCount(3);
+        result.Root.RowDefinitions[0].Height.Should().Be(GridLength.Auto);
+        result.Root.RowDefinitions[1].Height.Should().Be(new GridLength(1, GridUnitType.Star));
+        result.Root.RowDefinitions[2].Height.Should().Be(GridLength.Auto);
+        result.Root.Children.Cast<UIElement>().Should().Equal(chrome, body, status);
+        Grid.GetRow(chrome).Should().Be(0);
+        Grid.GetRow(body).Should().Be(1);
+        Grid.GetRow(status).Should().Be(2);
+    }
+
+    [StaFact]
+    public void StatusBarChrome_ComposesElasticLeftContentAndPinnedRightItems()
+    {
+        var background = new SolidColorBrush(Color.FromRgb(1, 2, 3));
+        var left = new TextBlock();
+        var right1 = new Button();
+        var right2 = new Slider();
+
+        var result = SisterAppStatusBarChrome.Build(new SisterAppStatusBarSpec(background, left, [right1, right2]));
+
+        result.Root.Background.Should().BeSameAs(background);
+        result.Root.MinHeight.Should().Be(26);
+        result.Root.Child.Should().BeSameAs(result.Layout);
+        result.Layout.ColumnDefinitions.Should().HaveCount(3);
+        result.Layout.ColumnDefinitions[0].Width.Should().Be(new GridLength(1, GridUnitType.Star));
+        result.Layout.ColumnDefinitions[1].Width.Should().Be(GridLength.Auto);
+        result.Layout.ColumnDefinitions[2].Width.Should().Be(GridLength.Auto);
+        result.LeftHost.Children.Cast<UIElement>().Should().Equal(left);
+        Grid.GetColumn(result.LeftHost).Should().Be(0);
+        Grid.GetColumn(right1).Should().Be(1);
+        Grid.GetColumn(right2).Should().Be(2);
+    }
+
+    [StaFact]
+    public void StatusBarChrome_CreatesSharedInfoTextAndSeparatorStyles()
+    {
+        var text = SisterAppStatusBarChrome.CreateInfoText("Slides: 1");
+        var separator = SisterAppStatusBarChrome.CreateSeparator();
+
+        text.Text.Should().Be("Slides: 1");
+        text.Foreground.Should().Be(Brushes.White);
+        text.FontSize.Should().Be(12);
+        text.VerticalAlignment.Should().Be(VerticalAlignment.Center);
+        text.TextTrimming.Should().Be(TextTrimming.CharacterEllipsis);
+
+        separator.Width.Should().Be(1);
+        separator.Margin.Should().Be(new Thickness(8, 3, 8, 3));
+        separator.VerticalAlignment.Should().Be(VerticalAlignment.Stretch);
+        separator.Fill.Should().BeOfType<SolidColorBrush>()
+            .Which.Color.Should().Be(Color.FromArgb(0x66, 0xFF, 0xFF, 0xFF));
     }
 }

@@ -40,6 +40,24 @@ public sealed class QuickAnalysisCommandRouterTests
         route.ConditionalFormat.Should().Be(expected);
     }
 
+    [Fact]
+    public void Route_DisplayItem_UsesSharedDisplayRoute()
+    {
+        var sheetId = SheetId.New();
+        var selection = new GridRange(
+            new CellAddress(sheetId, 1, 1),
+            new CellAddress(sheetId, 4, 2));
+        var item = QuickAnalysisPlanner.BuildDisplayModel(selection)
+            .AllItems()
+            .Single(item => item.Id == "chart.clusteredcolumn");
+
+        var route = QuickAnalysisCommandRouter.Route(item);
+
+        route.Should().Be(item.Route);
+        route.Kind.Should().Be(QuickAnalysisCommandKind.InsertChart);
+        route.ChartType.Should().Be(ChartType.Column);
+    }
+
     [Theory]
     [InlineData(QuickAnalysisCommand.ColumnChart, ChartType.Column)]
     [InlineData(QuickAnalysisCommand.StackedColumnChart, ChartType.StackedColumn)]

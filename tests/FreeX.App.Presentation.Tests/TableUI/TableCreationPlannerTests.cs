@@ -1,28 +1,29 @@
 using FluentAssertions;
+using FreeX.App.Presentation.TableUI;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host.Tests;
+namespace FreeX.App.Presentation.Tests.TableUI;
 
-public sealed class CreateTableSourceRangePlannerTests
+public sealed class TableCreationPlannerTests
 {
     [Fact]
-    public void Create_ExpandsSingleCellSelectionToCurrentRegion()
+    public void PlanSourceRange_ExpandsSingleCellSelectionToCurrentRegion()
     {
         var sheet = CreateSheetWithList();
         var selectedCell = Address(sheet, 3, 2);
 
-        var range = CreateTableSourceRangePlanner.Create(sheet, new GridRange(selectedCell, selectedCell));
+        var range = TableCreationPlanner.PlanSourceRange(sheet, new GridRange(selectedCell, selectedCell));
 
         range.Should().Be(new GridRange(Address(sheet, 1, 1), Address(sheet, 4, 3)));
     }
 
     [Fact]
-    public void Create_KeepsExplicitRange()
+    public void PlanSourceRange_KeepsExplicitRange()
     {
         var sheet = CreateSheetWithList();
         var selectedRange = new GridRange(Address(sheet, 2, 1), Address(sheet, 4, 3));
 
-        CreateTableSourceRangePlanner.Create(sheet, selectedRange).Should().Be(selectedRange);
+        TableCreationPlanner.PlanSourceRange(sheet, selectedRange).Should().Be(selectedRange);
     }
 
     [Fact]
@@ -31,7 +32,7 @@ public sealed class CreateTableSourceRangePlannerTests
         var sheet = CreateSheetWithList();
         var selectedRange = new GridRange(Address(sheet, 1, 1), Address(sheet, 1, 3));
 
-        CreateTableSourceRangePlanner.PlanSourceRange(sheet, selectedRange)
+        TableCreationPlanner.PlanSourceRange(sheet, selectedRange)
             .Should()
             .Be(new GridRange(Address(sheet, 1, 1), Address(sheet, 4, 3)));
     }
@@ -43,19 +44,19 @@ public sealed class CreateTableSourceRangePlannerTests
         sheet.SetCell(Address(sheet, 6, 2), new TextValue("Separate"));
         var selectedCell = Address(sheet, 5, 2);
 
-        CreateTableSourceRangePlanner.PlanSourceRange(sheet, new GridRange(selectedCell, selectedCell))
+        TableCreationPlanner.PlanSourceRange(sheet, new GridRange(selectedCell, selectedCell))
             .Should()
             .Be(new GridRange(selectedCell, selectedCell));
     }
 
     [Fact]
-    public void Create_KeepsBlankSingleCell()
+    public void PlanSourceRange_KeepsBlankSingleCell()
     {
         var workbook = new Workbook("Book1");
         var sheet = workbook.AddSheet("Sheet1");
         var selectedCell = Address(sheet, 8, 4);
 
-        CreateTableSourceRangePlanner.Create(sheet, new GridRange(selectedCell, selectedCell))
+        TableCreationPlanner.PlanSourceRange(sheet, new GridRange(selectedCell, selectedCell))
             .Should()
             .Be(new GridRange(selectedCell, selectedCell));
     }

@@ -1,3 +1,4 @@
+using FreeX.App.Presentation.TableUI;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -29,12 +30,12 @@ internal static class PivotTableSourceRangePlanner
 
         var sourceRange = IsValidExplicitPivotRange(selectedRange.Value)
             ? selectedRange.Value
-            : CreateTableSourceRangePlanner.ExpandToCurrentRegion(sheet, selectedRange.Value);
+            : TableCreationPlanner.ExpandToCurrentRegion(sheet, selectedRange.Value);
 
         if (sourceRange.RowCount < 2 || sourceRange.ColCount < 2)
             return new PivotTableSourceRangePlan(sourceRange, PivotTableSourceRangeError.MinimumShape);
 
-        if (!CreateTableSourceRangePlanner.HasCompleteHeaderRow(sheet, sourceRange))
+        if (!TableCreationPlanner.HasCompleteHeaderRow(sheet, sourceRange))
             return new PivotTableSourceRangePlan(sourceRange, PivotTableSourceRangeError.MissingHeaders);
 
         return new PivotTableSourceRangePlan(sourceRange, PivotTableSourceRangeError.None);

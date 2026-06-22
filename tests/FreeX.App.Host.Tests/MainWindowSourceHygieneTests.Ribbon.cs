@@ -1038,9 +1038,10 @@ public sealed partial class MainWindowSourceHygieneTests
         var planner = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisPlanner.cs");
         var shellPlanner = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisShellPlanner.cs");
 
-        source.Should().Contain("ToolTip = option.PreviewText");
-        source.Should().Contain("QuickAnalysisShellPlanner.GroupOptions(options)");
+        source.Should().Contain("ToolTip = item.PreviewText");
+        source.Should().Contain("QuickAnalysisPlanner.BuildDisplayModel(range)");
         source.Should().Contain("QuickAnalysisShellPlanner.GroupTitleFallback(group.Group)");
+        source.Should().Contain("foreach (var group in displayModel.Groups)");
         planner.Should().Contain("QuickAnalysisPreviewKind");
         shellPlanner.Should().Contain("GroupTitleFallback(QuickAnalysisGroup group)");
     }
@@ -1068,7 +1069,7 @@ public sealed partial class MainWindowSourceHygieneTests
         var planner = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisPlanner.cs");
 
         planner.Should().Contain("QuickAnalysisPreviewVisual");
-        source.Should().Contain("QuickAnalysisPreviewIconFactory.Create(option.PreviewVisual)");
+        source.Should().Contain("QuickAnalysisPreviewIconFactory.Create(item.PreviewVisual)");
     }
 
     [Fact]
@@ -1093,7 +1094,7 @@ public sealed partial class MainWindowSourceHygieneTests
 
         source.Should().Contain("QuickAnalysisMenuItem_MouseEnter");
         source.Should().Contain("QuickAnalysisMenuItem_MouseLeave");
-        source.Should().Contain("QuickAnalysisPlanner.BuildHoverPreview(range, option)");
+        source.Should().Contain("QuickAnalysisPlanner.BuildHoverPreview(range, item)");
         source.Should().Contain("StatusReadyText.Text = preview.StatusText");
         source.Should().Contain("StatusReadyText.Text = UiText.Get(\"MainWindow_Text_Ready\")");
     }
@@ -1105,7 +1106,7 @@ public sealed partial class MainWindowSourceHygieneTests
         var routeSource = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisCommandRouter.cs");
         var catalogSource = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisCatalog.cs");
 
-        hostSource.Should().Contain("QuickAnalysisCommandRouter.Route(option)");
+        hostSource.Should().Contain("QuickAnalysisCommandRouter.Route(item)");
         hostSource.Should().Contain("ShowCfDialog(QuickAnalysisConditionalFormatDialogTitle(conditionalFormat))");
         hostSource.Should().Contain("QuickAnalysisConditionalFormatCommand.LessThan => \"Less Than\"");
         hostSource.Should().Contain("QuickAnalysisConditionalFormatCommand.Between => \"Between\"");
@@ -1119,7 +1120,7 @@ public sealed partial class MainWindowSourceHygieneTests
         hostSource.Should().Contain("QuickAnalysisConditionalFormatCommand.AboveAverage => \"Above Average\"");
         hostSource.Should().Contain("QuickAnalysisConditionalFormatCommand.BelowAverage => \"Below Average\"");
 
-        routeSource.Should().Contain("return QuickAnalysisCatalog.Route(option.Command);");
+        routeSource.Should().Contain("return item.Route;");
         catalogSource.Should().Contain("QuickAnalysisFormatKind.LessThan => QuickAnalysisConditionalFormatCommand.LessThan");
         catalogSource.Should().Contain("QuickAnalysisFormatKind.Between => QuickAnalysisConditionalFormatCommand.Between");
         catalogSource.Should().Contain("QuickAnalysisFormatKind.EqualTo => QuickAnalysisConditionalFormatCommand.EqualTo");
@@ -1239,10 +1240,12 @@ public sealed partial class MainWindowSourceHygieneTests
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
 
         source.Should().Contain("new CreateTableDialog");
-        source.Should().Contain("new CreateStyledStructuredTableCommand(");
+        source.Should().Contain("TableCreationPlanner.BuildStyledCommand(");
         source.Should().Contain("TableStyleGalleryPlanner.GetOption(variant, _workbook.Theme)");
         source.Should().NotContain("new CreateStructuredTableCommand(");
+        source.Should().NotContain("new CreateStyledStructuredTableCommand(");
         source.Should().Contain("GroupedSheetRangePlanner.RemapRangeToSheet(dialog.Result.Range, sheetId)");
+        source.Should().Contain("dialog.Result.TableStyleName");
         source.Should().Contain("tableStyle.Banding");
     }
 

@@ -257,71 +257,71 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
             if (_selectedRange is not { } range)
                 return;
 
-            var options = QuickAnalysisPlanner.BuildOptions(range);
-            if (options.Count == 0)
+            var displayModel = QuickAnalysisPlanner.BuildDisplayModel(range);
+            if (displayModel.IsEmpty)
                 return;
 
             _contextMenuPlacementTargetName = "SheetGrid";
-            _openMenuHeaders = BuildOpenMenuHeaders(options);
+            _openMenuHeaders = BuildOpenMenuHeaders(displayModel);
             ActiveContextMenu!.IsOpen = false;
             PumpDispatcher();
-            PreviewOption(options[0]);
+            PreviewItem(displayModel.AllItems().First());
         }
 
         public void FocusMenuItem(string header)
         {
-            var option = CurrentOptions()
-                .FirstOrDefault(option => option.Label == header)
+            var item = CurrentItems()
+                .FirstOrDefault(item => item.Label == header)
                 ?? throw new InvalidOperationException($"Menu item '{header}' was not found.");
-            PreviewOption(option);
+            PreviewItem(item);
         }
 
         public void FocusMenuItem(string header, string group)
         {
-            var option = CurrentOptions()
-                .FirstOrDefault(option =>
-                    QuickAnalysisShellPlanner.GroupTitleFallback(option.Group) == group &&
-                    option.Label == header)
+            var item = CurrentItems()
+                .FirstOrDefault(item =>
+                    QuickAnalysisShellPlanner.GroupTitleFallback(item.Group) == group &&
+                    item.Label == header)
                 ?? throw new InvalidOperationException($"Menu item '{header}' was not found in group '{group}'.");
 
-            PreviewOption(option);
+            PreviewItem(item);
         }
 
-        private void PreviewOption(QuickAnalysisOption option)
+        private void PreviewItem(QuickAnalysisDisplayItem item)
         {
             SheetGrid.SelectedRange = _selectedRange;
-            _focusedMenuHeader = option.Label;
-            var item = new MenuItem
+            _focusedMenuHeader = item.Label;
+            var menuItem = new MenuItem
             {
-                Header = option.Label,
-                Tag = option
+                Header = item.Label,
+                Tag = item
             };
-            _showQuickAnalysisPreview.Invoke(_window, [item]);
+            _showQuickAnalysisPreview.Invoke(_window, [menuItem]);
             PumpDispatcher();
             PumpDispatcher();
             if (SheetGrid.QuickAnalysisPreviewVisual == QuickAnalysisPreviewVisualKind.None &&
                 _selectedRange is { } range)
             {
-                var preview = QuickAnalysisPlanner.BuildHoverPreview(range, option);
+                var preview = QuickAnalysisPlanner.BuildHoverPreview(range, item);
                 SheetGrid.QuickAnalysisPreviewRange = preview.Range;
                 SheetGrid.QuickAnalysisPreviewVisual = preview.PreviewVisual.Kind;
             }
         }
 
-        private IReadOnlyList<QuickAnalysisOption> CurrentOptions() =>
+        private IReadOnlyList<QuickAnalysisDisplayItem> CurrentItems() =>
             _selectedRange is { } range
-                ? QuickAnalysisPlanner.BuildOptions(range)
+                ? QuickAnalysisPlanner.BuildDisplayModel(range).AllItems().ToArray()
                 : [];
 
-        private static IReadOnlyList<string> BuildOpenMenuHeaders(IReadOnlyList<QuickAnalysisOption> options)
+        private static IReadOnlyList<string> BuildOpenMenuHeaders(QuickAnalysisDisplayModel displayModel)
         {
             var headers = new List<string>();
-            foreach (var group in QuickAnalysisShellPlanner.GroupOptions(options))
+            foreach (var group in displayModel.Groups)
             {
                 headers.Add(QuickAnalysisShellPlanner.GroupTitleFallback(group.Group));
 
-                foreach (var option in group.Options)
-                    headers.Add(option.Label);
+                foreach (var item in group.Items)
+                    headers.Add(item.Label);
             }
 
             return headers;

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Windows;
+using System.Windows.Input;
 using System.Windows.Media;
 using FreeW.Core.Model;
 
@@ -21,9 +22,10 @@ namespace FreeW.App.Host.Editing;
 /// <c>DocumentView.ApplyPageChrome</c> places the page on the grey workspace — so the ruler's ticks line up
 /// with the text column underneath.
 ///
-/// NOTE: marker dragging is intentionally NOT wired for this milestone. The ruler reflects the current
-/// margins / indents / tab stops faithfully (read-only); dragging a marker to change them is a future
-/// enhancement. Editing indents still happens through the Layout ribbon / Paragraph dialog.
+/// The horizontal ruler also exposes the backed Word-style editing affordances FreeW can faithfully
+/// support today: click the text ruler to add a left tab stop, drag an existing tab mark to move it, or
+/// drag the indent markers to update the selected paragraph indents through the editor's undoable model
+/// commands.
 /// </summary>
 public sealed class Ruler : FrameworkElement
 {
@@ -42,9 +44,12 @@ public sealed class Ruler : FrameworkElement
     private static readonly Brush IndentBrush = Frozen(Color.FromRgb(0x2B, 0x57, 0x9A));
     private static readonly Pen IndentPen = FrozenPen(Color.FromRgb(0x2B, 0x57, 0x9A), 1.0);
     private static readonly Pen TabPen = FrozenPen(Color.FromRgb(0x40, 0x40, 0x40), 1.0);
+    private const double HitRadius = 7;
+    private const double TabGridPt = 6;
 
     private readonly DocumentView _editor;
     private readonly Orientation _orientation;
+    private DragOperation? _drag;
 
     public Ruler(DocumentView editor, Orientation orientation)
     {
@@ -61,12 +66,68 @@ public sealed class Ruler : FrameworkElement
         // change so the indent/tab markers follow the caret.
         _editor.LayoutChanged += (_, _) => Refresh();
         _editor.ZoomChanged += (_, _) => Refresh();
+
+        if (orientation == Orientation.Horizontal)
+        {
+            Focusable = true;
+            Cursor = Cursors.Arrow;
+        }
     }
 
     /// <summary>Force a redraw (used by the host on caret/selection changes so the markers follow the caret).</summary>
     public void Refresh() => InvalidateVisual();
 
     public enum Orientation { Horizontal, Vertical }
+
+    internal enum DragKind { None, LeftIndent, FirstLineIndent, RightIndent, TabStop, NewTabStop }
+
+    private sealed record DragOperation(DragKind Kind, int TabIndex, ParagraphFormatting StartFormatting, Point Start);
+
+    internal sealed record HorizontalMetrics(double ContentStart, double ContentEnd, double Zoom)
+    {
+        public double PointToContentPt(double x) =>
+            Math.Clamp((x - ContentStart) / (DipPerPoint * Zoom), 0, Math.Max(0, (ContentEnd - ContentStart) / (DipPerPoint * Zoom)));
+
+        public double ContentPtToX(double pt) => ContentStart + PageLayout.PointsToDip(pt) * Zoom;
+    }
+
+    internal static IReadOnlyList<TabStop> MoveOrAddLeftTabStop(
+        IReadOnlyList<TabStop> stops,
+        int index,
+        double positionPt)
+    {
+        var snapped = SnapPoint(positionPt);
+        var result = stops.ToList();
+        var replacement = new TabStop(snapped, TabStopAlignment.Left);
+        if (index >= 0 && index < result.Count)
+        {
+            var current = result[index];
+            replacement = current with { PositionPt = snapped };
+            result[index] = replacement;
+        }
+        else
+        {
+            result.Add(replacement);
+        }
+
+        return result
+            .Where(s => s.PositionPt >= 0)
+            .OrderBy(s => s.PositionPt)
+            .ThenBy(s => s.Alignment)
+            .ThenBy(s => s.Leader)
+            .ToArray();
+    }
+
+    internal static double SnapPoint(double pt) =>
+        Math.Max(0, Math.Round(pt / TabGridPt, MidpointRounding.AwayFromZero) * TabGridPt);
+
+    internal static ParagraphFormatting IndentsForDrag(ParagraphFormatting start, DragKind kind, double pointPt) => kind switch
+    {
+        DragKind.LeftIndent => Indentation.SetIndents(start, SnapPoint(pointPt), start.IndentRightPt, start.FirstLineIndentPt),
+        DragKind.FirstLineIndent => Indentation.SetIndents(start, start.IndentLeftPt, start.IndentRightPt, SnapPoint(pointPt - start.IndentLeftPt)),
+        DragKind.RightIndent => Indentation.SetIndents(start, start.IndentLeftPt, SnapPoint(pointPt), start.FirstLineIndentPt),
+        _ => start
+    };
 
     protected override void OnRender(DrawingContext dc)
     {
@@ -115,6 +176,111 @@ public sealed class Ruler : FrameworkElement
         DrawTicks(dc, contentStart, contentEnd, step, bottom, horizontal: true);
 
         DrawHorizontalIndentMarkers(dc, contentStart, contentEnd, zoom, bottom);
+    }
+
+    protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)
+    {
+        base.OnMouseLeftButtonDown(e);
+        if (_orientation != Orientation.Horizontal || !_editor.PrintLayoutEnabled || TryMetrics(RenderSize, _editor.Model.Page, _editor.ZoomLevel) is not { } metrics)
+            return;
+
+        Focus();
+        var point = e.GetPosition(this);
+        var formatting = _editor.CurrentParagraphFormatting;
+        _drag = HitTest(point, metrics, formatting);
+        CaptureMouse();
+        e.Handled = true;
+    }
+
+    protected override void OnMouseMove(MouseEventArgs e)
+    {
+        base.OnMouseMove(e);
+        if (_orientation != Orientation.Horizontal || TryMetrics(RenderSize, _editor.Model.Page, _editor.ZoomLevel) is not { } metrics)
+            return;
+
+        var point = e.GetPosition(this);
+        Cursor = HitTest(point, metrics, _editor.CurrentParagraphFormatting).Kind switch
+        {
+            DragKind.LeftIndent or DragKind.FirstLineIndent or DragKind.RightIndent or DragKind.TabStop => Cursors.SizeWE,
+            _ => Cursors.Arrow
+        };
+    }
+
+    protected override void OnMouseLeftButtonUp(MouseButtonEventArgs e)
+    {
+        base.OnMouseLeftButtonUp(e);
+        if (_drag is not { } drag || TryMetrics(RenderSize, _editor.Model.Page, _editor.ZoomLevel) is not { } metrics)
+        {
+            ReleaseMouseCapture();
+            _drag = null;
+            return;
+        }
+
+        var pointPt = metrics.PointToContentPt(e.GetPosition(this).X);
+        switch (drag.Kind)
+        {
+            case DragKind.None:
+                break;
+            case DragKind.LeftIndent:
+            case DragKind.FirstLineIndent:
+                var next = IndentsForDrag(drag.StartFormatting, drag.Kind, pointPt);
+                _editor.SetParagraphIndents(next.IndentLeftPt, next.IndentRightPt, next.FirstLineIndentPt);
+                break;
+            case DragKind.RightIndent:
+                var right = IndentsForDrag(drag.StartFormatting, drag.Kind, metrics.PointToContentPt(metrics.ContentEnd) - pointPt);
+                _editor.SetParagraphIndents(right.IndentLeftPt, right.IndentRightPt, right.FirstLineIndentPt);
+                break;
+            case DragKind.TabStop:
+            case DragKind.NewTabStop:
+                var stops = MoveOrAddLeftTabStop(drag.StartFormatting.TabStops, drag.TabIndex, pointPt);
+                _editor.SetParagraphTabStops(stops);
+                break;
+        }
+
+        ReleaseMouseCapture();
+        _drag = null;
+        Refresh();
+        e.Handled = true;
+    }
+
+    private DragOperation HitTest(Point point, HorizontalMetrics metrics, ParagraphFormatting f)
+    {
+        if (point.X < metrics.ContentStart || point.X > metrics.ContentEnd)
+            return new DragOperation(DragKind.None, -1, f, point);
+
+        var leftX = metrics.ContentPtToX(f.IndentLeftPt);
+        var firstX = metrics.ContentPtToX(f.IndentLeftPt + f.FirstLineIndentPt);
+        var rightX = metrics.ContentEnd - PageLayout.PointsToDip(f.IndentRightPt) * metrics.Zoom;
+
+        if (Math.Abs(point.X - firstX) <= HitRadius && point.Y <= Thickness * 0.55)
+            return new DragOperation(DragKind.FirstLineIndent, -1, f, point);
+        if (Math.Abs(point.X - leftX) <= HitRadius && point.Y >= Thickness * 0.45)
+            return new DragOperation(DragKind.LeftIndent, -1, f, point);
+        if (Math.Abs(point.X - rightX) <= HitRadius && point.Y >= Thickness * 0.45)
+            return new DragOperation(DragKind.RightIndent, -1, f, point);
+
+        for (var i = 0; i < f.TabStops.Count; i++)
+        {
+            var x = metrics.ContentPtToX(f.TabStops[i].PositionPt);
+            if (Math.Abs(point.X - x) <= HitRadius)
+                return new DragOperation(DragKind.TabStop, i, f, point);
+        }
+
+        return new DragOperation(DragKind.NewTabStop, -1, f, point);
+    }
+
+    internal static HorizontalMetrics? TryMetrics(Size size, PageSettings page, double zoom)
+    {
+        if (size.Width <= 0 || zoom <= 0)
+            return null;
+
+        var pageWidth = PageLayout.PointsToDip(page.WidthPt) * zoom;
+        var left = PageLayout.PointsToDip(page.MarginLeftPt) * zoom;
+        var right = PageLayout.PointsToDip(page.MarginRightPt) * zoom;
+        var pageX = Math.Max(0, (size.Width - pageWidth) / 2);
+        var contentStart = pageX + left;
+        var contentEnd = pageX + pageWidth - right;
+        return contentEnd <= contentStart ? null : new HorizontalMetrics(contentStart, contentEnd, zoom);
     }
 
     private void RenderVertical(DrawingContext dc, Size size, PageSettings page, double zoom)

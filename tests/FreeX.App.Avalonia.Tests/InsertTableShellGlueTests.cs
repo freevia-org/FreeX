@@ -4,6 +4,7 @@ using FluentAssertions;
 
 using FreeX.App.Avalonia;
 using FreeX.App.Presentation.QuickAnalysis;
+using FreeX.App.Presentation.TableUI;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -90,10 +91,10 @@ public sealed class InsertTableShellGlueTests
         description.HasHeaderRow.Should().BeFalse();
     }
 
-    // Insert-table factory: selection + header -> CreateStructuredTableCommand
+    // Shared table planner: selection + header -> CreateStructuredTableCommand
 
     [Fact]
-    public void InsertTableFactory_BuildsCommand_OverSelection_WithDetectedHeaders_AndCreatesTableOnApply()
+    public void InsertTablePlanner_BuildsCommand_OverSelection_WithDetectedHeaders_AndCreatesTableOnApply()
     {
         var workbook = new Workbook("Tables");
         var sheet = workbook.AddSheet("Sheet1");
@@ -109,7 +110,7 @@ public sealed class InsertTableShellGlueTests
         var hasHeaderRow = QuickAnalysisSelectionReader.Describe(sheet, range).HasHeaderRow;
         hasHeaderRow.Should().BeTrue();
 
-        var command = InsertTableCommandFactory.Build(sheet.Id, range, hasHeaderRow);
+        var command = TableCreationPlanner.BuildInsertCommand(sheet.Id, range, hasHeaderRow);
         command.Apply(new TestCommandContext(workbook)).Success.Should().BeTrue();
 
         sheet.StructuredTables.Should().ContainSingle();
@@ -120,7 +121,7 @@ public sealed class InsertTableShellGlueTests
     }
 
     [Fact]
-    public void InsertTableFactory_WithoutHeaders_GeneratesColumnNames()
+    public void InsertTablePlanner_WithoutHeaders_GeneratesColumnNames()
     {
         var workbook = new Workbook("Tables");
         var sheet = workbook.AddSheet("Sheet1");
@@ -131,7 +132,7 @@ public sealed class InsertTableShellGlueTests
         }
 
         var range = Range(sheet, 1, 1, 3, 2);
-        var command = InsertTableCommandFactory.Build(sheet.Id, range, firstRowHasHeaders: false);
+        var command = TableCreationPlanner.BuildInsertCommand(sheet.Id, range, firstRowHasHeaders: false);
         command.Apply(new TestCommandContext(workbook)).Success.Should().BeTrue();
 
         sheet.StructuredTables[0].Columns.Select(c => c.Name).Should().Equal("Column1", "Column2");

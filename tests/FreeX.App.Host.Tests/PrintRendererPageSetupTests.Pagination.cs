@@ -7,6 +7,17 @@ namespace FreeX.App.Host.Tests;
 public sealed partial class PrintRendererPageSetupTests
 {
     [Fact]
+    public void RenderWorksheet_UsesSharedPagePaginationPlannerForPrintPagination()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("PrintRenderer.cs");
+
+        source.Should().Contain("PagePaginationPlanner.BuildPlan(");
+        source.Should().NotContain("ApplyScaleToFitCapacity(");
+        source.Should().NotContain("GetPaperSizeInches(");
+        source.Should().NotContain("MinimumPrintColumnWidth");
+    }
+
+    [Fact]
     public void RenderWorksheet_UsesLandscapeLetterPageSetupForExport()
     {
         StaTestRunner.Run(() =>

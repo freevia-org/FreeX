@@ -12,6 +12,7 @@ using Avalonia.Platform.Storage;
 
 using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Presentation.QuickAnalysis;
+using FreeX.App.Presentation.TableUI;
 using FreeX.App.Services;
 
 namespace FreeX.App.Avalonia;
@@ -205,7 +206,7 @@ public sealed partial class MainWindow
 
         var range = _session.SelectedRange;
         var hasHeaderRow = QuickAnalysisSelectionReader.Describe(_session.ActiveSheet, range).HasHeaderRow;
-        var command = InsertTableCommandFactory.Build(_session.ActiveSheet.Id, range, hasHeaderRow);
+        var command = TableCreationPlanner.BuildInsertCommand(_session.ActiveSheet.Id, range, hasHeaderRow);
         var result = _session.ExecuteReviewCommand(command);
         if (!result.Success)
         {

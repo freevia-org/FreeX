@@ -24,8 +24,8 @@ public partial class MainWindow
             return;
         }
 
-        var options = QuickAnalysisPlanner.BuildOptions(range);
-        if (options.Count == 0)
+        var displayModel = QuickAnalysisPlanner.BuildDisplayModel(range);
+        if (displayModel.IsEmpty)
         {
             ShowQuickAnalysisUnsupportedSelectionStatus();
             return;
@@ -59,7 +59,7 @@ public partial class MainWindow
             _suppressNextQuickAnalysisClosedStatusReset = false;
         };
 
-        foreach (var group in QuickAnalysisShellPlanner.GroupOptions(options))
+        foreach (var group in displayModel.Groups)
         {
             if (menu.Items.Count > 0)
                 menu.Items.Add(new Separator());
@@ -70,21 +70,21 @@ public partial class MainWindow
                 IsEnabled = false
             });
 
-            foreach (var option in group.Options)
+            foreach (var item in group.Items)
             {
-                var item = new MenuItem
+                var menuItem = new MenuItem
                 {
-                    Header = option.Label,
-                    Tag = option,
-                    ToolTip = option.PreviewText,
-                    Icon = QuickAnalysisPreviewIconFactory.Create(option.PreviewVisual)
+                    Header = item.Label,
+                    Tag = item,
+                    ToolTip = item.PreviewText,
+                    Icon = QuickAnalysisPreviewIconFactory.Create(item.PreviewVisual)
                 };
-                item.MouseEnter += QuickAnalysisMenuItem_MouseEnter;
-                item.MouseLeave += QuickAnalysisMenuItem_MouseLeave;
-                item.GotKeyboardFocus += QuickAnalysisMenuItem_GotKeyboardFocus;
-                item.LostKeyboardFocus += QuickAnalysisMenuItem_LostKeyboardFocus;
-                item.Click += QuickAnalysisMenuItem_Click;
-                menu.Items.Add(item);
+                menuItem.MouseEnter += QuickAnalysisMenuItem_MouseEnter;
+                menuItem.MouseLeave += QuickAnalysisMenuItem_MouseLeave;
+                menuItem.GotKeyboardFocus += QuickAnalysisMenuItem_GotKeyboardFocus;
+                menuItem.LostKeyboardFocus += QuickAnalysisMenuItem_LostKeyboardFocus;
+                menuItem.Click += QuickAnalysisMenuItem_Click;
+                menu.Items.Add(menuItem);
             }
         }
 
@@ -132,10 +132,10 @@ public partial class MainWindow
 
     private void QuickAnalysisMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not MenuItem { Tag: QuickAnalysisOption option })
+        if (sender is not MenuItem { Tag: QuickAnalysisDisplayItem item })
             return;
 
-        var route = QuickAnalysisCommandRouter.Route(option);
+        var route = QuickAnalysisCommandRouter.Route(item);
         switch (route.Kind)
         {
             case QuickAnalysisCommandKind.ConditionalFormat when route.ConditionalFormat is { } conditionalFormat:
@@ -155,7 +155,7 @@ public partial class MainWindow
                      !string.IsNullOrWhiteSpace(route.TotalFunction):
                 InsertQuickAnalysisTotalFormulas(
                     range => QuickAnalysisTotalsPlanner.BuildAggregateEdits(range, route.TotalFunction),
-                    $"Quick Analysis {option.Label}");
+                    $"Quick Analysis {item.Label}");
                 break;
             case QuickAnalysisCommandKind.InsertTotalFormula
                 when route.TotalFormulaKind == QuickAnalysisTotalFormulaKind.PercentTotal:
@@ -255,13 +255,13 @@ public partial class MainWindow
 
     private void ShowQuickAnalysisPreview(object sender)
     {
-        if (sender is not MenuItem { Tag: QuickAnalysisOption option } ||
+        if (sender is not MenuItem { Tag: QuickAnalysisDisplayItem item } ||
             SheetGrid.SelectedRange is not { } range)
         {
             return;
         }
 
-        var preview = QuickAnalysisPlanner.BuildHoverPreview(range, option);
+        var preview = QuickAnalysisPlanner.BuildHoverPreview(range, item);
         _preserveQuickAnalysisUnsupportedStatus = false;
         ApplyQuickAnalysisPreview(
             preview.Range,

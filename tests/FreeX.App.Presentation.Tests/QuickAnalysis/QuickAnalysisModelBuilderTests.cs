@@ -374,6 +374,31 @@ public sealed class QuickAnalysisModelBuilderTests
     }
 
     [Fact]
+    public void ToDisplayModel_CarriesSuggestionLabelsRoutesAndPreviewMetadata()
+    {
+        var selection = Selection(1, 1, 6, 3, hasHeaderRow: true, Numeric(3));
+
+        var displayModel = QuickAnalysisModelBuilder.Build(selection).ToDisplayModel();
+
+        displayModel.Groups.Select(group => group.Group).Should().ContainInOrder(
+            QuickAnalysisGroup.Formatting,
+            QuickAnalysisGroup.Charts,
+            QuickAnalysisGroup.Totals,
+            QuickAnalysisGroup.Tables,
+            QuickAnalysisGroup.Sparklines);
+
+        var dataBars = displayModel.AllItems().Single(item => item.Id == "format.databars");
+        dataBars.Label.Should().Be("Data Bars");
+        dataBars.Route.Kind.Should().Be(QuickAnalysisCommandKind.ConditionalFormat);
+        dataBars.PreviewVisual.Kind.Should().Be(QuickAnalysisPreviewVisualKind.DataBars);
+
+        var rowSum = displayModel.AllItems().Single(item => item.Id == "total.sum.row");
+        rowSum.Command.Should().BeNull();
+        rowSum.Route.TotalFunction.Should().Be("SUM");
+        rowSum.PreviewVisual.Kind.Should().Be(QuickAnalysisPreviewVisualKind.TotalFormula);
+    }
+
+    [Fact]
     public void EverySuggestion_PopulatesExactlyTheDescriptorForItsActionKind()
     {
         var selection = Selection(1, 1, 6, 1, hasHeaderRow: true, QuickAnalysisColumnKind.Numeric);

@@ -17,6 +17,21 @@ public readonly record struct PageAxisSegment(uint Start, uint End);
 public readonly record struct PageCapacity(uint RowsPerPage, uint ColumnsPerPage);
 
 /// <summary>
+/// Renderer-facing worksheet pagination plan. The neutral planner owns the page capacity and row/
+/// column slicing; renderers consume the row and column plans and keep only platform drawing code.
+/// </summary>
+public sealed record PagePaginationPlan(
+    IReadOnlyList<PrintPageRowPlan> RowPlans,
+    IReadOnlyList<PrintPageColumnPlan> ColumnPlans,
+    PageCapacity Capacity,
+    double EffectiveScalePercent)
+{
+    public int RowPageCount => RowPlans.Count;
+    public int ColumnPageCount => ColumnPlans.Count;
+    public int PageCount => RowPlans.Count * ColumnPlans.Count;
+}
+
+/// <summary>
 /// The result of slicing a print range into pages: the row and column segments along each axis (the
 /// cross product of which forms the page grid), plus the effective scale percent that a fit-to-pages
 /// request resolves to. <see cref="EffectiveScalePercent"/> is the explicit scale when one is set,
@@ -103,7 +118,7 @@ public static class PagePaginationPlanner
     /// scale percent (when set) wins, otherwise a fit-to-pages request resolves to the shrink ratio
     /// that makes the body fit the requested page count.
     /// </summary>
-    public static PagePaginationResult Paginate(
+    public static PagePaginationPlan BuildPlan(
         GridRange printRange,
         WorksheetScaleToFit scaleToFit,
         WorksheetRepeatRange? printTitleRows,
@@ -123,19 +138,53 @@ public static class PagePaginationPlanner
             orientation,
             margins);
 
-        var rowSegments = BuildSegments(PrintLayoutPlanner.BuildRowPlans(
+        var rowPlans = PrintLayoutPlanner.BuildRowPlans(
             printRange,
             printTitleRows,
             capacity.RowsPerPage,
-            rowPageBreaks));
-        var columnSegments = BuildSegments(PrintLayoutPlanner.BuildColumnPlans(
+            rowPageBreaks);
+        var columnPlans = PrintLayoutPlanner.BuildColumnPlans(
             printRange,
             printTitleColumns,
             capacity.ColumnsPerPage,
-            columnPageBreaks));
+            columnPageBreaks);
 
-        var effectiveScale = CalculateEffectiveScalePercent(scaleToFit, rowSegments.Count, columnSegments.Count);
-        return new PagePaginationResult(rowSegments, columnSegments, effectiveScale);
+        var effectiveScale = CalculateEffectiveScalePercent(scaleToFit, rowPlans.Count, columnPlans.Count);
+        return new PagePaginationPlan(rowPlans, columnPlans, capacity, effectiveScale);
+    }
+
+    /// <summary>
+    /// Slices a print range into page segments along both axes and reports the effective scale.
+    /// Title rows/columns are reprinted on every page; manual breaks force a new page; the explicit
+    /// scale percent (when set) wins, otherwise a fit-to-pages request resolves to the shrink ratio
+    /// that makes the body fit the requested page count.
+    /// </summary>
+    public static PagePaginationResult Paginate(
+        GridRange printRange,
+        WorksheetScaleToFit scaleToFit,
+        WorksheetRepeatRange? printTitleRows,
+        WorksheetRepeatRange? printTitleColumns,
+        WorksheetPaperSize paperSize,
+        WorksheetPageOrientation orientation,
+        WorksheetPageMargins margins,
+        IReadOnlyCollection<uint>? rowPageBreaks = null,
+        IReadOnlyCollection<uint>? columnPageBreaks = null)
+    {
+        var plan = BuildPlan(
+            printRange,
+            scaleToFit,
+            printTitleRows,
+            printTitleColumns,
+            paperSize,
+            orientation,
+            margins,
+            rowPageBreaks,
+            columnPageBreaks);
+
+        return new PagePaginationResult(
+            BuildSegments(plan.RowPlans),
+            BuildSegments(plan.ColumnPlans),
+            plan.EffectiveScalePercent);
     }
 
     /// <summary>

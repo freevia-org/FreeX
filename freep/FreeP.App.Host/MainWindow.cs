@@ -68,13 +68,6 @@ public sealed class MainWindow : Window
         _commandBus = new PresentationCommandBus(_presentation);
         _commandBus.Changed += () => { _file.MarkDirty(); RefreshCanvas(); UpdateSlideCount(); UpdateTitle(); };
 
-        // Root layout: row 0 = ribbon (the title bar lives in the OUTER grid), row 1 = body (canvas),
-        // row 2 = status bar.
-        var root = new Grid();
-        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                     // ribbon
-        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // body
-        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                     // status bar
-
         // File commands over the shared lifecycle planner + the .fxp adapter.
         _file = new FileCommands(this, () => _presentation, LoadModel, UpdateTitle, _options);
 
@@ -88,18 +81,14 @@ public sealed class MainWindow : Window
         var stateStore = new RibbonStateStore();
         var commands = FreePRibbonCommands.Build(stateStore, NewSlide);
         var ribbon = BuildRibbon(FreePRibbon.Build(), commands, stateStore);
-        Grid.SetRow(ribbon, 0);
-        root.Children.Add(ribbon);
 
         // Placeholder slide canvas (NOT a real renderer): a grey "stage" with a centred white slide page.
         var body = BuildCanvas();
-        Grid.SetRow(body, 1);
-        root.Children.Add(body);
 
         // Status bar.
         var status = BuildStatusBar();
-        Grid.SetRow(status, 2);
-        root.Children.Add(status);
+        var clientFrame = SisterAppClientFrameBuilder.Build(new SisterAppClientFrameSpec(ribbon, body, status));
+        var root = clientFrame.Root;
 
         // File commands routed to keyboard shortcuts.
         CommandBindings.Add(new CommandBinding(ApplicationCommands.New, (_, _) => _file.New()));
@@ -196,25 +185,12 @@ public sealed class MainWindow : Window
 
     private Border BuildStatusBar()
     {
-        var grid = new Grid { VerticalAlignment = VerticalAlignment.Center };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        _slideCountText = SisterAppStatusBarChrome.CreateInfoText();
 
-        _slideCountText = new TextBlock
-        {
-            Foreground = Brushes.White,
-            FontSize = 12,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(12, 0, 0, 0)
-        };
-        Grid.SetColumn(_slideCountText, 0);
-        grid.Children.Add(_slideCountText);
-
-        return new Border
-        {
-            Background = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
-            MinHeight = 26,
-            Child = grid
-        };
+        return SisterAppStatusBarChrome.Build(new SisterAppStatusBarSpec(
+            new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
+            _slideCountText,
+            LeftMargin: new Thickness(12, 0, 0, 0))).Root;
     }
 
     private void UpdateSlideCount() =>

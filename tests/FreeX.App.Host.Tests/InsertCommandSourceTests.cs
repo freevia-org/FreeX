@@ -16,7 +16,7 @@ public sealed class InsertCommandSourceTests
         insertSource.Should().Contain("private void TableBtn_Click(object sender, RoutedEventArgs e) => ApplyTableFormat(0);");
         insertSource.Should().NotContain("RecommendedPivotTablesMenuItem_Click");
         insertSource.Should().NotContain("RecommendedPivotTablesDialog");
-        homeFormattingSource.Should().Contain("CreateTableSourceRangePlanner.PlanSourceRange(sheet, range)");
+        homeFormattingSource.Should().Contain("TableCreationPlanner.PlanSourceRange(sheet, range)");
         insertSource.Should().Contain("private void SparklineLineBtn_Click(object sender, RoutedEventArgs e) => InsertSparkline(\"line\");");
         insertSource.Should().Contain("private void SparklineColumnBtn_Click(object sender, RoutedEventArgs e) => InsertSparkline(\"column\");");
         insertSource.Should().Contain("private void SparklineWinLossBtn_Click(object sender, RoutedEventArgs e) => InsertSparkline(\"winloss\");");
