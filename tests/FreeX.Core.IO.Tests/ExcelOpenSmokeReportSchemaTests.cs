@@ -30,15 +30,20 @@ public sealed class ExcelOpenSmokeReportSchemaTests
         fixturesSource.Should().Contain("GetExcelPivotCorpusFixturePaths");
         fixturesSource.Should().Contain("Excel_native_pivot_multiple_pivots_one_cache_001.xlsx");
         fixturesSource.Should().Contain("Excel_native_pivot_report_filters_001.xlsx");
+        fixturesSource.Should().Contain("Excel_native_pivot_slicer_timeline_001.xlsx");
         fixturesSource.Should().Contain("Excel_native_pivot_filters_sorts_002.xlsx");
         fixturesSource.Should().Contain("Excel_native_pivot_layout_options_002.xlsx");
         fixturesSource.Should().Contain("Excel_native_pivot_date_grouping_003.xlsx");
         fixturesSource.Should().Contain("Excel_native_pivot_calculated_field_item_003.xlsx");
         fixturesSource.Should().Contain("AddNativePivotReportFilters");
         fixturesSource.Should().Contain("XlPageField");
+        fixturesSource.Should().Contain("XlTimeline");
+        fixturesSource.Should().Contain("SlicerCaches");
         fixturesSource.Should().Contain("PageFieldOrder");
         fixturesSource.Should().Contain("PageFieldWrapCount");
         programSource.Should().Contain("ExcelNativePivotCorpusExpectations");
+        programSource.Should().Contain("TimelineRelationshipType2011");
+        programSource.Should().Contain("IsExpectedSlicerTimelineRelationshipType");
     }
 
     [Fact]
@@ -47,8 +52,11 @@ public sealed class ExcelOpenSmokeReportSchemaTests
         var source = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.SheetGridImageCompare", "Program.cs");
 
         source.Should().Contain("--pivot-ranges");
+        source.Should().Contain("--pivot-sheet-ranges");
         source.Should().Contain("--export-excel-pngs");
         source.Should().Contain("EnumeratePivotVisualRanges");
+        source.Should().Contain("EnumeratePivotSheetVisualRanges");
+        source.Should().Contain("SheetUsedRangeWithNativeVisualFilters");
         source.Should().Contain("ResolvePivotVisualRange");
         source.Should().Contain("InferPivotVisualRangeFromCells");
         source.Should().Contain("ResolveExcelPivotVisualRanges");

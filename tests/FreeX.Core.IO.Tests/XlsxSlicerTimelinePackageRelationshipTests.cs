@@ -8,15 +8,41 @@ public sealed class XlsxSlicerTimelinePackageRelationshipTests
 {
     private static readonly XNamespace ContentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
     private static readonly XNamespace PackageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+    private static readonly XNamespace WorkbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
     private static readonly XNamespace RelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
     private static readonly XNamespace SlicerNs = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
     private static readonly XNamespace TimelineNs = "http://schemas.microsoft.com/office/spreadsheetml/2010/11/main";
+    private const string TimelineRelationshipType = "http://schemas.microsoft.com/office/2010/relationships/Timeline";
+    private const string TimelineCacheRelationshipType = "http://schemas.microsoft.com/office/2010/relationships/TimelineCache";
+    private const string TimelineRelationshipType2011 = "http://schemas.microsoft.com/office/2011/relationships/timeline";
+    private const string TimelineCacheRelationshipType2011 = "http://schemas.microsoft.com/office/2011/relationships/timelineCache";
+    private const string SlicerCachesWorkbookExtensionUri = "{BBE1A952-AA13-448e-AADC-164F8A28A991}";
 
     [Fact]
-    public void MergeRelationshipParts_PreservesSlicerTimelineGraphToGeneratedPartsAndRebindsCollidingRefs()
+    public void MergeRelationshipParts_PreservesSlicerTimelineGraphToGeneratedPartsAndRebindsCollidingRefs() =>
+        AssertSlicerTimelineGraphPreserved(TimelineRelationshipType, TimelineCacheRelationshipType);
+
+    [Fact]
+    public void MergeRelationshipParts_PreservesExcel2011TimelineGraphToGeneratedPartsAndRebindsCollidingRefs() =>
+        AssertSlicerTimelineGraphPreserved(TimelineRelationshipType2011, TimelineCacheRelationshipType2011);
+
+    [Fact]
+    public void MergeRelationshipParts_ReconstructsWorkbookSlicerTimelineExtensionRefsWhenGeneratedWorkbookHasNoExtList() =>
+        AssertSlicerTimelineGraphPreserved(
+            TimelineRelationshipType2011,
+            TimelineCacheRelationshipType2011,
+            includeTargetWorkbookExtensions: false);
+
+    private static void AssertSlicerTimelineGraphPreserved(
+        string timelineRelationshipType,
+        string timelineCacheRelationshipType,
+        bool includeTargetWorkbookExtensions = true)
     {
-        using var sourcePackage = CreateSlicerTimelineSourcePackage();
+        using var sourcePackage = CreateSlicerTimelineSourcePackage(timelineRelationshipType, timelineCacheRelationshipType);
         using var targetPackage = CreateGeneratedSlicerTimelineTargetPackage();
+        if (!includeTargetWorkbookExtensions)
+            RemoveWorkbookExtensionList(targetPackage);
+
         using var sourceArchive = new ZipArchive(sourcePackage, ZipArchiveMode.Read, leaveOpen: true);
         using var targetArchive = new ZipArchive(targetPackage, ZipArchiveMode.Update, leaveOpen: true);
 
@@ -44,10 +70,17 @@ public sealed class XlsxSlicerTimelinePackageRelationshipTests
         var timelineCacheRelId = AssertRelationshipRebound(
             workbookRels,
             "rIdTimelineCache",
-            "http://schemas.microsoft.com/office/2010/relationships/TimelineCache",
+            timelineCacheRelationshipType,
             "timelineCaches/timelineCache1.xml");
 
         var workbookXml = XlsxPackageTestFixtures.LoadPackageXml(targetArchive, "xl/workbook.xml");
+        workbookXml.Root!
+            .Elements(WorkbookNs + "extLst")
+            .Elements(WorkbookNs + "ext")
+            .Should()
+            .ContainSingle(element =>
+                (string?)element.Attribute("uri") == SlicerCachesWorkbookExtensionUri &&
+                element.Element(SlicerNs + "slicerCaches") != null);
         workbookXml.Root!
             .Descendants(SlicerNs + "slicerCache")
             .Should()
@@ -66,7 +99,7 @@ public sealed class XlsxSlicerTimelinePackageRelationshipTests
         var timelineRelId = AssertRelationshipRebound(
             sheetRels,
             "rIdTimeline",
-            "http://schemas.microsoft.com/office/2010/relationships/Timeline",
+            timelineRelationshipType,
             "../timelines/timeline1.xml");
 
         var worksheetXml = XlsxPackageTestFixtures.LoadPackageXml(targetArchive, "xl/worksheets/sheet1.xml");
@@ -86,8 +119,20 @@ public sealed class XlsxSlicerTimelinePackageRelationshipTests
 
         var timelinePartRels = LoadRelationships(targetArchive, "xl/timelines/_rels/timeline1.xml.rels");
         timelinePartRels.Should().ContainSingle(element =>
-            (string?)element.Attribute("Type") == "http://schemas.microsoft.com/office/2010/relationships/TimelineCache" &&
+            (string?)element.Attribute("Type") == timelineCacheRelationshipType &&
             (string?)element.Attribute("Target") == "../timelineCaches/timelineCache1.xml");
+    }
+
+    private static void RemoveWorkbookExtensionList(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var workbookXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/workbook.xml");
+            workbookXml.Root!.Elements(WorkbookNs + "extLst").Remove();
+            XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
+        }
+
+        packageStream.Position = 0;
     }
 
     private static List<XElement> LoadRelationships(ZipArchive archive, string relationshipPath)
@@ -141,7 +186,9 @@ public sealed class XlsxSlicerTimelinePackageRelationshipTests
             (string?)element.Attribute("ContentType") == "application/vnd.ms-excel.TimelineCache+xml");
     }
 
-    private static MemoryStream CreateSlicerTimelineSourcePackage() =>
+    private static MemoryStream CreateSlicerTimelineSourcePackage(
+        string timelineRelationshipType,
+        string timelineCacheRelationshipType) =>
         XlsxPackageTestFixtures.CreatePackage(
             ("[Content_Types].xml", """
                 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
@@ -179,10 +226,10 @@ public sealed class XlsxSlicerTimelinePackageRelationshipTests
                                 Type="http://schemas.microsoft.com/office/2007/relationships/slicerCache"
                                 Target="slicerCaches/slicerCache1.xml"/>
                   <Relationship Id="rIdTimelineCache"
-                                Type="http://schemas.microsoft.com/office/2010/relationships/TimelineCache"
+                                Type="TIMELINE_CACHE_REL_TYPE"
                                 Target="timelineCaches/timelineCache1.xml"/>
                 </Relationships>
-                """),
+                """.Replace("TIMELINE_CACHE_REL_TYPE", timelineCacheRelationshipType, StringComparison.Ordinal)),
             ("xl/worksheets/sheet1.xml", """
                 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
                            xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -209,10 +256,10 @@ public sealed class XlsxSlicerTimelinePackageRelationshipTests
                                 Type="http://schemas.microsoft.com/office/2007/relationships/slicer"
                                 Target="../slicers/slicer1.xml"/>
                   <Relationship Id="rIdTimeline"
-                                Type="http://schemas.microsoft.com/office/2010/relationships/Timeline"
+                                Type="TIMELINE_REL_TYPE"
                                 Target="../timelines/timeline1.xml"/>
                 </Relationships>
-                """),
+                """.Replace("TIMELINE_REL_TYPE", timelineRelationshipType, StringComparison.Ordinal)),
             ("xl/slicers/slicer1.xml", """
                 <slicers xmlns="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main">
                   <slicer name="Region Slicer" cache="Slicer_Region"/>
@@ -236,10 +283,10 @@ public sealed class XlsxSlicerTimelinePackageRelationshipTests
             ("xl/timelines/_rels/timeline1.xml.rels", """
                 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
                   <Relationship Id="rIdTimelinePartCache"
-                                Type="http://schemas.microsoft.com/office/2010/relationships/TimelineCache"
+                                Type="TIMELINE_CACHE_REL_TYPE"
                                 Target="../timelineCaches/timelineCache1.xml"/>
                 </Relationships>
-                """),
+                """.Replace("TIMELINE_CACHE_REL_TYPE", timelineCacheRelationshipType, StringComparison.Ordinal)),
             ("xl/timelineCaches/timelineCache1.xml", """
                 <timelineCacheDefinition xmlns="http://schemas.microsoft.com/office/spreadsheetml/2010/11/main" name="Timeline_Date"/>
                 """));

@@ -2259,6 +2259,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     GoToDialogPlanner.BuildReferenceChoices(
                     GoToSpecialDialogPlanner.BuildChoices().ToArray()
                     GoToSpecialDialogPlanner.BuildOptions(choice.Kind, GetValueTypes())
+                    private static AvaloniaGrid CreateGoToSpecialChoiceGrid(
                     _findMenuItem.Header = "Find...";
                     _findMenuItem.Gesture = new KeyGesture(Key.F, KeyModifiers.Meta);
                     _findMenuItem.Click += async (_, _) => await ShowFindDialogAsync();

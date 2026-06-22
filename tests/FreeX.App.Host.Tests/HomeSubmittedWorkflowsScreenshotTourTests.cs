@@ -20,8 +20,8 @@ public sealed class HomeSubmittedWorkflowsScreenshotTourTests
         source.Should().Contain("PasteSpecialContentKind.ValuesAndSourceFormatting");
         source.Should().Contain("new InsertRowsCommand(_currentSheetId, context.InsertRow, 1)");
         source.Should().Contain("new DeleteCellsCommand(_currentSheetId, context.DeleteCellsRange, DeleteCellsShiftDirection.Left)");
-        source.Should().Contain("RowColumnDimensionPlanner.CreateRowsHiddenCommand(_currentSheetId, context.HideRowRange, hidden: true)");
-        source.Should().Contain("RowColumnDimensionPlanner.CreateRowsHiddenCommand(_currentSheetId, context.HideRowRange, hidden: false)");
+        source.Should().Contain("RowColumnSizingPlanner.CreateRowsHiddenCommand(_currentSheetId, context.HideRowRange, hidden: true)");
+        source.Should().Contain("RowColumnSizingPlanner.CreateRowsHiddenCommand(_currentSheetId, context.HideRowRange, hidden: false)");
         source.Should().Contain("new ClearContentsCommand(_currentSheetId, context.ClearContentsRange)");
         source.Should().Contain("new ApplyStyleCommand(_currentSheetId, context.ClearFormatsRange, CellStyleDiffPlanner.ClearFormatsDiff())");
         source.Should().Contain("FindReplaceService.TryReplaceAll");

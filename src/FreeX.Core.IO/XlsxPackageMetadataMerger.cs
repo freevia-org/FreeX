@@ -24,6 +24,10 @@ internal static class XlsxPackageMetadataMerger
     private const string SlicerCacheRelationshipType = "http://schemas.microsoft.com/office/2007/relationships/slicerCache";
     private const string TimelineRelationshipType = "http://schemas.microsoft.com/office/2010/relationships/Timeline";
     private const string TimelineCacheRelationshipType = "http://schemas.microsoft.com/office/2010/relationships/TimelineCache";
+    private const string TimelineRelationshipType2011 = "http://schemas.microsoft.com/office/2011/relationships/timeline";
+    private const string TimelineCacheRelationshipType2011 = "http://schemas.microsoft.com/office/2011/relationships/timelineCache";
+    private const string SlicerCachesWorkbookExtensionUri = "{BBE1A952-AA13-448e-AADC-164F8A28A991}";
+    private const string TimelineCachesWorkbookExtensionUri = "{D0CA8CA8-9F24-4464-BF8E-62219DCF47F9}";
 
     public static IReadOnlySet<string> CopyUnknownPackageParts(
         ZipArchive sourceArchive,
@@ -245,6 +249,8 @@ internal static class XlsxPackageMetadataMerger
                     copiedPartRelationshipIdMap);
             }
         }
+
+        EnsureSlicerTimelineWorkbookExtensionReferences(targetIndex);
     }
 
     public static void NormalizeCustomXmlPackageGraph(ZipArchive archive)
@@ -941,7 +947,7 @@ internal static class XlsxPackageMetadataMerger
                     string.Equals(relationshipType, SlicerCacheRelationshipType, StringComparison.OrdinalIgnoreCase)) ||
                    (targetPart.StartsWith("xl/timelineCaches/", StringComparison.OrdinalIgnoreCase) &&
                     targetPart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
-                    string.Equals(relationshipType, TimelineCacheRelationshipType, StringComparison.OrdinalIgnoreCase));
+                    IsTimelineCacheRelationshipType(relationshipType));
         }
 
         if (sourcePart.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
@@ -952,7 +958,7 @@ internal static class XlsxPackageMetadataMerger
                     string.Equals(relationshipType, SlicerRelationshipType, StringComparison.OrdinalIgnoreCase)) ||
                    (targetPart.StartsWith("xl/timelines/", StringComparison.OrdinalIgnoreCase) &&
                     targetPart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
-                    string.Equals(relationshipType, TimelineRelationshipType, StringComparison.OrdinalIgnoreCase));
+                    IsTimelineRelationshipType(relationshipType));
         }
 
         return (sourcePart.StartsWith("xl/slicers/", StringComparison.OrdinalIgnoreCase) &&
@@ -964,7 +970,7 @@ internal static class XlsxPackageMetadataMerger
                 sourcePart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
                 targetPart.StartsWith("xl/timelineCaches/", StringComparison.OrdinalIgnoreCase) &&
                 targetPart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(relationshipType, TimelineCacheRelationshipType, StringComparison.OrdinalIgnoreCase));
+                IsTimelineCacheRelationshipType(relationshipType));
     }
 
     private static bool IsQueryTablePackageGraphRelationship(
@@ -1163,9 +1169,193 @@ internal static class XlsxPackageMetadataMerger
                string.Equals(relationshipType, WebExtensionRelationshipType, StringComparison.OrdinalIgnoreCase) ||
                string.Equals(relationshipType, SlicerRelationshipType, StringComparison.OrdinalIgnoreCase) ||
                string.Equals(relationshipType, SlicerCacheRelationshipType, StringComparison.OrdinalIgnoreCase) ||
-               string.Equals(relationshipType, TimelineRelationshipType, StringComparison.OrdinalIgnoreCase) ||
-               string.Equals(relationshipType, TimelineCacheRelationshipType, StringComparison.OrdinalIgnoreCase);
+               IsTimelineRelationshipType(relationshipType) ||
+               IsTimelineCacheRelationshipType(relationshipType);
     }
+
+    private static bool IsTimelineRelationshipType(string? relationshipType) =>
+        string.Equals(relationshipType, TimelineRelationshipType, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(relationshipType, TimelineRelationshipType2011, StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsTimelineCacheRelationshipType(string? relationshipType) =>
+        string.Equals(relationshipType, TimelineCacheRelationshipType, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(relationshipType, TimelineCacheRelationshipType2011, StringComparison.OrdinalIgnoreCase);
+
+    private static void EnsureSlicerTimelineWorkbookExtensionReferences(ArchiveEntryIndex targetIndex)
+    {
+        var workbookEntry = targetIndex.Get("xl/workbook.xml");
+        var relationshipsEntry = targetIndex.Get("xl/_rels/workbook.xml.rels");
+        if (workbookEntry is null || relationshipsEntry is null)
+            return;
+
+        XDocument workbookXml;
+        XDocument relationshipsXml;
+        try
+        {
+            workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+            relationshipsXml = XlsxPackageXmlEditor.LoadXml(relationshipsEntry);
+        }
+        catch
+        {
+            return;
+        }
+
+        var workbookRoot = workbookXml.Root;
+        var relationshipsRoot = relationshipsXml.Root;
+        if (workbookRoot is null || relationshipsRoot is null)
+            return;
+
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace x14Ns = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
+        XNamespace x15Ns = "http://schemas.microsoft.com/office/spreadsheetml/2010/11/main";
+
+        var slicerCacheRelationshipIds = FindWorkbookRelationshipIds(
+            relationshipsRoot,
+            packageRelNs,
+            SlicerCacheRelationshipType,
+            targetPart => targetPart.StartsWith("xl/slicerCaches/", StringComparison.OrdinalIgnoreCase));
+        var timelineCacheRelationshipIds = FindWorkbookRelationshipIds(
+            relationshipsRoot,
+            packageRelNs,
+            relationshipType => IsTimelineCacheRelationshipType(relationshipType),
+            targetPart => targetPart.StartsWith("xl/timelineCaches/", StringComparison.OrdinalIgnoreCase));
+
+        if (slicerCacheRelationshipIds.Count == 0 && timelineCacheRelationshipIds.Count == 0)
+            return;
+
+        var changed = false;
+        var extensionList = workbookRoot.Element(workbookNs + "extLst");
+        if (extensionList is null)
+        {
+            extensionList = new XElement(workbookNs + "extLst");
+            workbookRoot.Add(extensionList);
+            changed = true;
+        }
+
+        changed |= EnsureWorkbookRelationshipExtensionReferences(
+            extensionList,
+            workbookNs,
+            x14Ns,
+            relNs,
+            SlicerCachesWorkbookExtensionUri,
+            x14Ns + "slicerCaches",
+            x14Ns + "slicerCache",
+            slicerCacheRelationshipIds);
+        changed |= EnsureWorkbookRelationshipExtensionReferences(
+            extensionList,
+            workbookNs,
+            x15Ns,
+            relNs,
+            TimelineCachesWorkbookExtensionUri,
+            x15Ns + "timelineCacheRefs",
+            x15Ns + "timelineCacheRef",
+            timelineCacheRelationshipIds);
+
+        if (changed)
+            WriteXml(targetIndex, "xl/workbook.xml", workbookXml, workbookEntry.LastWriteTime, SaveOptions.DisableFormatting);
+    }
+
+    private static List<string> FindWorkbookRelationshipIds(
+        XElement relationshipsRoot,
+        XNamespace packageRelNs,
+        string relationshipType,
+        Func<string, bool> targetPredicate) =>
+        FindWorkbookRelationshipIds(
+            relationshipsRoot,
+            packageRelNs,
+            candidate => string.Equals(candidate, relationshipType, StringComparison.OrdinalIgnoreCase),
+            targetPredicate);
+
+    private static List<string> FindWorkbookRelationshipIds(
+        XElement relationshipsRoot,
+        XNamespace packageRelNs,
+        Func<string?, bool> relationshipTypePredicate,
+        Func<string, bool> targetPredicate)
+    {
+        var ids = new List<string>();
+        foreach (var relationship in relationshipsRoot.Elements(packageRelNs + "Relationship"))
+        {
+            var id = relationship.Attribute("Id")?.Value;
+            var target = NormalizeRelationshipTarget(relationship);
+            if (string.IsNullOrWhiteSpace(id) ||
+                string.IsNullOrWhiteSpace(target) ||
+                !relationshipTypePredicate(NormalizeRelationshipType(relationship)))
+            {
+                continue;
+            }
+
+            var targetPart = XlsxPackagePath.ResolveRelationshipTarget("xl/workbook.xml", target);
+            if (targetPredicate(targetPart))
+                ids.Add(id);
+        }
+
+        return ids;
+    }
+
+    private static bool EnsureWorkbookRelationshipExtensionReferences(
+        XElement extensionList,
+        XNamespace workbookNs,
+        XNamespace extensionNs,
+        XNamespace relNs,
+        string extensionUri,
+        XName containerName,
+        XName referenceName,
+        IReadOnlyList<string> relationshipIds)
+    {
+        if (relationshipIds.Count == 0)
+            return false;
+
+        var extension = extensionList
+            .Elements(workbookNs + "ext")
+            .FirstOrDefault(element => string.Equals(element.Attribute("uri")?.Value, extensionUri, StringComparison.OrdinalIgnoreCase));
+        var changed = false;
+        if (extension is null)
+        {
+            extension = new XElement(
+                workbookNs + "ext",
+                new XAttribute("uri", extensionUri),
+                new XAttribute(XNamespace.Xmlns + PreferredExtensionPrefix(extensionNs), extensionNs.NamespaceName));
+            extensionList.Add(extension);
+            changed = true;
+        }
+        else if (!string.Equals(extension.Attribute("uri")?.Value, extensionUri, StringComparison.Ordinal))
+        {
+            extension.SetAttributeValue("uri", extensionUri);
+            changed = true;
+        }
+
+        var container = extension.Element(containerName);
+        if (container is null)
+        {
+            container = new XElement(containerName);
+            extension.Add(container);
+            changed = true;
+        }
+
+        var existingIds = container
+            .Elements(referenceName)
+            .Select(element => element.Attribute(relNs + "id")?.Value)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var relationshipId in relationshipIds)
+        {
+            if (existingIds.Contains(relationshipId))
+                continue;
+
+            container.Add(new XElement(referenceName, new XAttribute(relNs + "id", relationshipId)));
+            existingIds.Add(relationshipId);
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private static string PreferredExtensionPrefix(XNamespace extensionNs) =>
+        string.Equals(extensionNs.NamespaceName, "http://schemas.microsoft.com/office/spreadsheetml/2010/11/main", StringComparison.Ordinal)
+            ? "x15"
+            : "x14";
 
     private static void RebindCopiedPartRelationshipReferences(
         ArchiveEntryIndex targetIndex,
