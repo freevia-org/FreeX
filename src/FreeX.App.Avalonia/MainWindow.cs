@@ -18757,11 +18757,60 @@ public sealed partial class MainWindow : Window
     private async Task ShowAboutDialogAsync()
     {
         var versionText = AppHelpInfo.GetVersionText(typeof(MainWindow).Assembly);
-        await ShowTextDialogAsync(
-            "About FreeX",
-            AppHelpInfo.BuildAboutText(versionText, PlatformAboutSummary),
-            560,
-            460);
+        var title = "About FreeX";
+        var dialog = new Window
+        {
+            Title = title,
+            Width = 544,
+            Height = 384,
+            MinWidth = 480,
+            MinHeight = 320,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+        AutomationProperties.SetName(dialog, title);
+        AutomationProperties.SetAutomationId(dialog, "AboutFreeXDialog");
+        AutomationProperties.SetHelpText(dialog, "View version and license information about FreeX.");
+
+        var aboutTextBox = new TextBox
+        {
+            Text = AppHelpInfo.BuildAboutText(versionText, PlatformAboutSummary),
+            IsReadOnly = true,
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.Wrap,
+            FontSize = 13,
+            Padding = new Thickness(8),
+            BorderThickness = new Thickness(1),
+            Background = Brushes.White,
+            MinHeight = 220,
+        };
+        AutomationProperties.SetName(aboutTextBox, title);
+        AutomationProperties.SetAutomationId(aboutTextBox, "AboutFreeXText");
+        AutomationProperties.SetHelpText(aboutTextBox, "Read-only About FreeX text.");
+
+        var okButton = new Button
+        {
+            Content = "OK",
+            Width = 84,
+            Padding = new Thickness(10, 4),
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+        };
+        AutomationProperties.SetName(okButton, "OK");
+        AutomationProperties.SetAutomationId(okButton, "AboutFreeXOkButton");
+        AutomationProperties.SetHelpText(okButton, "Close About FreeX.");
+        okButton.Click += (_, _) => dialog.Close();
+
+        var root = new DockPanel
+        {
+            Margin = new Thickness(16),
+        };
+        DockPanel.SetDock(okButton, Dock.Bottom);
+        root.Children.Add(okButton);
+        root.Children.Add(aboutTextBox);
+
+        dialog.Content = root;
+        dialog.Opened += (_, _) => aboutTextBox.Focus();
+        await dialog.ShowDialog(this);
     }
 
     private async Task ShowLegalNoticesDialogAsync()

@@ -983,7 +983,13 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("TopLevel.GetTopLevel(this)?.Launcher");
         source.Should().Contain("await launcher.LaunchUriAsync(uri)");
         source.Should().Contain("private async Task ShowAboutDialogAsync()");
+        source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"AboutFreeXDialog\");");
+        source.Should().Contain("Width = 544,");
+        source.Should().Contain("Height = 384,");
         source.Should().Contain("AppHelpInfo.BuildAboutText(versionText, PlatformAboutSummary)");
+        source.Should().Contain("AutomationProperties.SetAutomationId(aboutTextBox, \"AboutFreeXText\");");
+        source.Should().Contain("Content = \"OK\",");
+        source.Should().Contain("AutomationProperties.SetAutomationId(okButton, \"AboutFreeXOkButton\");");
         source.Should().Contain("private async Task ShowLegalNoticesDialogAsync()");
         source.Should().Contain("LegalNoticeProvider.GetDocuments().Select(document =>");
         source.Should().Contain("await dialog.ShowDialog(this);");
