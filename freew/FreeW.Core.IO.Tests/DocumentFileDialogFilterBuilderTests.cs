@@ -32,6 +32,27 @@ public class DocumentFileDialogFilterBuilderTests
         filter.Should().Contain("Word Document (*.docx)|*.docx");
     }
 
+    [Fact]
+    public void SaveFilter_ListsEveryWritableFormatInCatalogOrder()
+    {
+        var filter = DocumentFileDialogFilterBuilder.BuildSaveFilter(Catalog());
+
+        filter.Split('|').Should().Equal(
+            "Word Document (*.docx)", "*.docx",
+            "Word Macro-Enabled Document (*.docm)", "*.docm",
+            "Word Template (*.dotx)", "*.dotx",
+            "Word Macro-Enabled Template (*.dotm)", "*.dotm",
+            "Word XML Document (*.xml)", "*.xml",
+            "Rich Text Format (*.rtf)", "*.rtf",
+            "HTML document (*.html)", "*.html",
+            "HTML document (*.htm)", "*.htm",
+            "MHTML document (*.mhtml)", "*.mhtml",
+            "MHTML document (*.mht)", "*.mht",
+            "Plain text (*.txt)", "*.txt",
+            "Plain text (*.text)", "*.text",
+            "Log file (*.log)", "*.log");
+    }
+
     [Theory]
     [InlineData(".txt")]
     [InlineData("txt")]

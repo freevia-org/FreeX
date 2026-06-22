@@ -77,6 +77,9 @@ internal sealed class FileCommands
 
     public string DisplayName => _workflow.DisplayName;
 
+    public IReadOnlyList<FileFormatDescriptor> SaveFormats =>
+        _adapters.SelectMany(adapter => adapter.Formats).Where(format => format.CanSave).ToArray();
+
     /// <summary>Load a recovered autosave snapshot, targeting the original path and marking dirty.</summary>
     public void OpenSnapshot(string snapshotPath, string? originalPath)
     {
@@ -168,8 +171,10 @@ internal sealed class FileCommands
     public bool Save() => _workflow.Save(SaveToCurrentPath, SaveAs);
 
     /// <summary>File &gt; Save As. Always prompts for a target. Returns true on a successful save.</summary>
-    public bool SaveAs() =>
-        TryPromptSaveTarget(out var path, out var adapter) && SaveTo(path, adapter);
+    public bool SaveAs() => SaveAs(preferredExtension: null);
+
+    public bool SaveAs(string? preferredExtension) =>
+        TryPromptSaveTarget(preferredExtension, out var path, out var adapter) && SaveTo(path, adapter);
 
     /// <summary>
     /// File &gt; Save a Copy. Writes to a chosen path WITHOUT changing the current file or dirty state,
@@ -177,7 +182,7 @@ internal sealed class FileCommands
     /// </summary>
     public bool SaveCopy()
     {
-        if (!TryPromptSaveTarget(out var path, out var adapter))
+        if (!TryPromptSaveTarget(preferredExtension: null, out var path, out var adapter))
             return false;
         try
         {
@@ -232,24 +237,31 @@ internal sealed class FileCommands
     /// from the CHOSEN filename's extension (not the selected filter row), so a user-typed extension wins.
     /// Returns false on cancel or when the chosen extension is not a writable format.
     /// </summary>
-    private bool TryPromptSaveTarget(out string path, out IDocumentFileAdapter adapter)
+    private bool TryPromptSaveTarget(string? preferredExtension, out string path, out IDocumentFileAdapter adapter)
     {
         path = "";
         adapter = null!;
 
-        var currentExtension = _workflow.CurrentPath is { } existing
+        var normalizedPreferred = DocumentFileFormatResolver.NormalizeExtension(preferredExtension ?? string.Empty);
+        var currentExtension = normalizedPreferred.Length > 0
+            ? normalizedPreferred
+            : _workflow.CurrentPath is { } existing
             ? Path.GetExtension(existing)
             : DefaultSaveExtension;
+        var fileName = _workflow.CurrentPath is null
+            ? "Document" + currentExtension
+            : Path.GetFileName(_workflow.CurrentPath);
+        if (normalizedPreferred.Length > 0)
+            fileName = Path.ChangeExtension(fileName, normalizedPreferred);
+
         var dialog = new SaveFileDialog
         {
             Filter = DocumentFileDialogFilterBuilder.BuildSaveFilter(_adapters),
             FilterIndex = DocumentFileDialogFilterBuilder.FindSaveFilterIndex(_adapters, currentExtension),
-            DefaultExt = DefaultSaveExtension,
+            DefaultExt = currentExtension,
             AddExtension = true,
             OverwritePrompt = true,
-            FileName = _workflow.CurrentPath is null
-                ? "Document" + DefaultSaveExtension
-                : Path.GetFileName(_workflow.CurrentPath),
+            FileName = fileName,
         };
         if (dialog.ShowDialog(_window) != true)
             return false;
