@@ -2,16 +2,16 @@ using FreeX.App.Presentation.Charts;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Avalonia.Dialogs;
+namespace FreeX.App.Presentation.PageLayout;
 
 /// <summary>
-/// Non-UI glue between <see cref="PageBreakPreviewLayoutPlanner"/> and the Avalonia page-break overlay
+/// Non-UI glue between <see cref="PageBreakPreviewLayoutPlanner"/> and a page-break preview overlay
 /// canvas. It resolves the active print range for a sheet (explicit print area, else used range), maps
 /// the on-screen viewport metrics into the display pixel space the grid actually renders in (zoom +
 /// minimum row/column sizing + header offset), and flattens the planner's layout into a renderer-
 /// agnostic list of draw instructions (masks, page borders with their visible edges, break lines, and
 /// the centered "Page N" watermark with its font size). All pure data, so it is unit-tested directly;
-/// the canvas code only turns each instruction into an Avalonia shape.
+/// renderer code only turns each instruction into platform controls.
 /// </summary>
 
 /// <summary>A semi-transparent rectangle dimming the area outside the print range.</summary>
@@ -80,7 +80,7 @@ public static class PageBreakPreviewInstructionBuilder
     }
 
     /// <summary>
-    /// Re-projects the session's viewport metrics into the display pixel space the Avalonia grid draws
+    /// Re-projects the session's viewport metrics into the display pixel space the grid renderer draws
     /// in: each column/row gets <c>max(minimum, size) × zoom</c> and cumulative offsets accumulate in
     /// that same space, so the overlay lines up with the rendered cells. Mirrors the grid's
     /// GetDisplayedColumnWidth / GetDisplayedRowHeight sizing.

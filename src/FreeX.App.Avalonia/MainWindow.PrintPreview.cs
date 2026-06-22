@@ -6,7 +6,6 @@ using Avalonia.Layout;
 using Avalonia.Media;
 
 using FreeX.App.Avalonia.Charts;
-using FreeX.App.Avalonia.Dialogs;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Presentation.Text;
@@ -385,7 +384,7 @@ internal sealed class PrintPreviewPaginationContext
         ArgumentNullException.ThrowIfNull(workbook);
         ArgumentNullException.ThrowIfNull(sheet);
 
-        if (!Dialogs.PageBreakPreviewInstructionBuilder.TryResolvePrintRange(sheet, out var printRange))
+        if (!PageBreakPreviewInstructionBuilder.TryResolvePrintRange(sheet, out var printRange))
         {
             context = null!;
             return false;

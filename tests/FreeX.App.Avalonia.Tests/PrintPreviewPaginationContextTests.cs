@@ -97,14 +97,14 @@ public sealed class PrintPreviewPaginationContextTests
 
         layout.Should().NotBeNull();
 
-        var painting = Dialogs.PrintPreviewInstructionBuilder.Build(layout!);
+        var painting = PrintPreviewInstructionBuilder.Build(layout!);
 
         // Page background is always present; gridlines + headings + cell text add more primitives.
         painting.Instructions.Should().NotBeEmpty();
-        painting.Instructions[0].Kind.Should().Be(Dialogs.PrintPreviewPaintKind.Rectangle);
-        painting.Instructions.Should().Contain(i => i.Kind == Dialogs.PrintPreviewPaintKind.Line);
+        painting.Instructions[0].Kind.Should().Be(PrintPreviewPaintKind.Rectangle);
+        painting.Instructions.Should().Contain(i => i.Kind == PrintPreviewPaintKind.Line);
         painting.Instructions.Should().Contain(i =>
-            i.Kind == Dialogs.PrintPreviewPaintKind.Text && i.Text == "Apples");
+            i.Kind == PrintPreviewPaintKind.Text && i.Text == "Apples");
         painting.PageNumber.Should().Be(1);
     }
 }

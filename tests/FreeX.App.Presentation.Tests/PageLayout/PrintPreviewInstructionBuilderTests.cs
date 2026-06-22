@@ -1,16 +1,15 @@
 using FluentAssertions;
 
-using FreeX.App.Avalonia.Dialogs;
 using FreeX.App.Presentation.Charts;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Avalonia.Tests;
+namespace FreeX.App.Presentation.Tests.PageLayout;
 
 /// <summary>
 /// Unit tests for the non-UI glue that flattens a portable <see cref="PageContentLayout"/> into the
-/// Avalonia print-preview canvas's ordered paint primitives (rectangles, lines, text runs). The layouts
+/// print-preview canvas's ordered paint primitives (rectangles, lines, text runs). The layouts
 /// are hand-built so the mapping is verified deterministically without a running UI or font backend.
 /// </summary>
 public sealed class PrintPreviewInstructionBuilderTests

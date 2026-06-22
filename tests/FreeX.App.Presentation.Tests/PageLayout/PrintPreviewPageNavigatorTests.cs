@@ -1,8 +1,8 @@
 using FluentAssertions;
 
-using FreeX.App.Avalonia.Dialogs;
+using FreeX.App.Presentation.PageLayout;
 
-namespace FreeX.App.Avalonia.Tests;
+namespace FreeX.App.Presentation.Tests.PageLayout;
 
 /// <summary>
 /// Unit tests for the pure page-enumeration / navigation math behind the print-preview window's
