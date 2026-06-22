@@ -1,4 +1,7 @@
 using FreeX.Core.IO;
+using FileDialogRequestPlanner = Free.Shared.IO.FileDialogRequestPlanner;
+using SharedFileDialogFormatDescriptor = Free.Shared.IO.FileDialogFormatDescriptor;
+using SharedFileDialogPickerTypeDescriptor = Free.Shared.IO.FileDialogPickerTypeDescriptor;
 
 namespace FreeX.App.Services;
 
@@ -26,7 +29,8 @@ public static class WorkbookFilePickerPlanner
     public const string AllSupportedWorkbooksName = "All supported workbooks";
 
     public static WorkbookOpenDialogPlan BuildOpenDialogPlan(IEnumerable<IFileAdapter> adapters) =>
-        new(FileDialogFilterBuilder.BuildOpenFilter(adapters));
+        new(FileDialogRequestPlanner.BuildOpenDialogPlan(ToSharedDescriptors(GetFormats(adapters, static format => format.CanOpen)))
+            .Filter);
 
     public static WorkbookSaveDialogPlan BuildSaveDialogPlan(
         IEnumerable<IFileAdapter> adapters,
@@ -34,11 +38,15 @@ public static class WorkbookFilePickerPlanner
         string? preferredDefaultFormat)
     {
         var defaultExtension = ResolveSaveDialogDefaultExtension(adapters, preferredDefaultFormat);
-        return new WorkbookSaveDialogPlan(
-            FileDialogFilterBuilder.BuildSaveFilter(adapters),
+        var plan = FileDialogRequestPlanner.BuildSaveDialogPlan(
+            ToSharedDescriptors(GetFormats(adapters, static format => format.CanSave)),
             workbookName,
-            defaultExtension,
-            FileDialogFilterBuilder.FindSaveFilterIndex(adapters, defaultExtension));
+            defaultExtension);
+        return new WorkbookSaveDialogPlan(
+            plan.Filter,
+            plan.SuggestedFileName,
+            plan.DefaultExtensionWithDot,
+            plan.FilterIndex);
     }
 
     public static bool TryResolveSaveDialogTarget(
@@ -47,8 +55,13 @@ public static class WorkbookFilePickerPlanner
         out FileSaveTarget? target) =>
         FileSavePlanner.TryResolveExistingPath(path, adapters, out target);
 
-    public static WorkbookOpenPickerPlan BuildOpenPickerPlan(IEnumerable<FileFormatDescriptor> openFormats) =>
-        new(FileDialogFilterBuilder.BuildOpenPickerTypes(openFormats, AllSupportedWorkbooksName));
+    public static WorkbookOpenPickerPlan BuildOpenPickerPlan(IEnumerable<FileFormatDescriptor> openFormats)
+    {
+        var plan = FileDialogRequestPlanner.BuildOpenPickerPlan(
+            openFormats.Select(ToSharedDescriptor),
+            AllSupportedWorkbooksName);
+        return new WorkbookOpenPickerPlan(MapPickerTypes(plan.FileTypes));
+    }
 
     public static WorkbookSavePickerPlan BuildSavePickerPlan(
         IEnumerable<FileFormatDescriptor> saveFormats,
@@ -57,10 +70,16 @@ public static class WorkbookFilePickerPlanner
         string preferredExtension)
     {
         var normalizedExtension = FileFormatResolver.NormalizeExtension(preferredExtension);
+        var plan = FileDialogRequestPlanner.BuildSavePickerPlan(
+            saveFormats.Select(ToSharedDescriptor),
+            sourceName,
+            fallbackDisplayName,
+            normalizedExtension,
+            preferredFirstExtension: normalizedExtension);
         return new WorkbookSavePickerPlan(
-            FileDialogFilterBuilder.BuildSavePickerTypes(saveFormats, preferredFirstExtension: normalizedExtension),
-            BuildSuggestedSaveAsFileName(sourceName, fallbackDisplayName, normalizedExtension),
-            normalizedExtension[1..]);
+            MapPickerTypes(plan.FileTypes),
+            plan.SuggestedFileName,
+            plan.DefaultExtensionWithoutDot);
     }
 
     public static string BuildSuggestedSaveAsFileName(
@@ -69,14 +88,14 @@ public static class WorkbookFilePickerPlanner
         string defaultExtension)
     {
         var normalizedExtension = FileFormatResolver.NormalizeExtension(defaultExtension);
-        var effectiveSourceName = string.IsNullOrWhiteSpace(sourceName)
-            ? fallbackDisplayName
-            : sourceName;
-        var baseName = Path.GetFileNameWithoutExtension(effectiveSourceName);
-        if (string.IsNullOrWhiteSpace(baseName))
-            baseName = "Workbook";
-
-        return baseName + normalizedExtension;
+        var effectiveFallbackDisplayName = string.IsNullOrWhiteSpace(sourceName) &&
+            string.IsNullOrWhiteSpace(fallbackDisplayName)
+            ? "Workbook"
+            : fallbackDisplayName;
+        return FileDialogRequestPlanner.BuildSuggestedSaveAsFileName(
+            sourceName,
+            effectiveFallbackDisplayName,
+            normalizedExtension);
     }
 
     public static string ResolveSaveDialogDefaultExtension(
@@ -88,4 +107,21 @@ public static class WorkbookFilePickerPlanner
             ? AppOptions.XlsxDefaultFormat
             : preferredExtension;
     }
+
+    private static List<FileFormatDescriptor> GetFormats(
+        IEnumerable<IFileAdapter> adapters,
+        Func<FileFormatDescriptor, bool> predicate) =>
+        adapters.SelectMany(adapter => adapter.Formats).Where(predicate).ToList();
+
+    private static IEnumerable<SharedFileDialogFormatDescriptor> ToSharedDescriptors(IEnumerable<FileFormatDescriptor> formats) =>
+        formats.Select(ToSharedDescriptor);
+
+    private static SharedFileDialogFormatDescriptor ToSharedDescriptor(FileFormatDescriptor format) =>
+        new(format.Extension, format.FormatName, format.CanOpen, format.CanSave);
+
+    private static IReadOnlyList<FilePickerTypeDescriptor> MapPickerTypes(
+        IEnumerable<SharedFileDialogPickerTypeDescriptor> descriptors) =>
+        descriptors
+            .Select(descriptor => new FilePickerTypeDescriptor(descriptor.DisplayName, descriptor.Patterns))
+            .ToList();
 }
