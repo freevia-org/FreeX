@@ -12,6 +12,14 @@ public static class QuickAnalysisPlanner
         return QuickAnalysisCatalog.BuildOptions();
     }
 
+    public static QuickAnalysisDisplayModel BuildDisplayModel(GridRange selection)
+    {
+        if (selection.RowCount == 1 && selection.ColCount == 1)
+            return QuickAnalysisDisplayModel.Empty;
+
+        return QuickAnalysisDisplayModel.FromItems(QuickAnalysisCatalog.BuildOptionDisplayItems());
+    }
+
     public static QuickAnalysisHoverPreview BuildHoverPreview(GridRange selection, QuickAnalysisOption option)
     {
         var previewRange = option.PreviewKind is QuickAnalysisPreviewKind.Total or QuickAnalysisPreviewKind.Sparkline
@@ -27,6 +35,25 @@ public static class QuickAnalysisPlanner
             option.PreviewText,
             option.Command,
             option.PreviewVisual);
+    }
+
+    public static QuickAnalysisDisplayHoverPreview BuildHoverPreview(GridRange selection, QuickAnalysisDisplayItem item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+
+        var previewRange = item.PreviewKind is QuickAnalysisPreviewKind.Total or QuickAnalysisPreviewKind.Sparkline
+            ? new GridRange(
+                new CellAddress(selection.Start.Sheet, selection.Start.Row, selection.End.Col + 1),
+                new CellAddress(selection.Start.Sheet, selection.End.Row, selection.End.Col + 1))
+            : selection;
+
+        return new QuickAnalysisDisplayHoverPreview(
+            previewRange,
+            item.PreviewKind,
+            item.Label,
+            item.PreviewText,
+            item.Route,
+            item.PreviewVisual);
     }
 }
 

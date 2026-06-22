@@ -350,6 +350,9 @@ internal static class QuickAnalysisCatalog
     public static IReadOnlyList<QuickAnalysisOption> BuildOptions() =>
         Entries.Where(entry => entry.IncludeAsOption).Select(entry => entry.ToOption()).ToArray();
 
+    public static IReadOnlyList<QuickAnalysisDisplayItem> BuildOptionDisplayItems() =>
+        Entries.Where(entry => entry.IncludeAsOption).Select(entry => entry.ToOptionDisplayItem()).ToArray();
+
     public static IReadOnlyList<QuickAnalysisSuggestion> BuildSuggestions(params QuickAnalysisCommand[] commands) =>
         commands.Select(command => EntryFor(command).ToSuggestion()).ToArray();
 
@@ -358,6 +361,12 @@ internal static class QuickAnalysisCatalog
 
     public static QuickAnalysisCommandRoute Route(QuickAnalysisCommand command) =>
         EntryFor(command).Route;
+
+    public static QuickAnalysisCommandRoute Route(string id) =>
+        EntryFor(id).Route;
+
+    public static QuickAnalysisDisplayItem BuildDisplayItem(string id) =>
+        EntryFor(id).ToSuggestionDisplayItem();
 
     private static QuickAnalysisCatalogEntry EntryFor(QuickAnalysisCommand command) =>
         EntriesByCommand.TryGetValue(command, out var entry)
@@ -615,6 +624,33 @@ internal sealed record QuickAnalysisCatalogEntry(
             PreviewText,
             new QuickAnalysisPreviewVisual(PreviewVisualKind));
     }
+
+    public QuickAnalysisDisplayItem ToOptionDisplayItem()
+    {
+        if (Command is not { } command)
+            throw new InvalidOperationException($"Quick Analysis catalog entry '{Id}' is not an option-backed entry.");
+
+        return new QuickAnalysisDisplayItem(
+            Id,
+            Group,
+            OptionLabel,
+            Route,
+            PreviewKind,
+            PreviewText,
+            new QuickAnalysisPreviewVisual(PreviewVisualKind),
+            command);
+    }
+
+    public QuickAnalysisDisplayItem ToSuggestionDisplayItem() =>
+        new(
+            Id,
+            Group,
+            SuggestionLabel,
+            Route,
+            PreviewKind,
+            PreviewText,
+            new QuickAnalysisPreviewVisual(PreviewVisualKind),
+            Command);
 
     public QuickAnalysisSuggestion ToSuggestion() =>
         ActionKind switch
