@@ -345,6 +345,7 @@ internal static class FreeWRibbon
                 });
                 tab.Group("show", "Show", "S", 90, g =>
                 {
+                    g.MediumToggle("freew.ruler", "Ruler", RibbonCommandIconKind.Ruler);
                     g.MediumToggle("freew.nav-pane", "Navigation Pane", RibbonCommandIconKind.NavigationPane);
                     g.MediumToggle("freew.formatting-marks", "Show ¶", RibbonCommandIconKind.FormattingMarks);
                     g.MediumToggle("freew.reveal-formatting", "Reveal Formatting", RibbonCommandIconKind.Info);

@@ -224,6 +224,40 @@ public sealed class FreeWRibbonParityTests
     }
 
     [StaFact]
+    public void ViewShow_ExposesWordStyleRulerToggle()
+    {
+        var definition = FreeWRibbon.Build();
+        var show = definition.FindTab("view")!.FindGroup("show");
+        var editor = new DocumentView();
+        var registry = FreeWRibbonCommands.Build(
+            editor,
+            new RibbonStateStore(),
+            onPrintPreview: null,
+            onToggleNavPane: () => { },
+            isNavPaneVisible: () => false,
+            onToggleReadMode: null,
+            isReadModeActive: null,
+            onTogglePrintLayout: null,
+            isPrintLayoutActive: null,
+            onToggleOutlineView: null,
+            isOutlineViewActive: null,
+            onZoomDialog: null,
+            onToggleRuler: () => { },
+            isRulerVisible: () => true);
+
+        show.Should().NotBeNull();
+        CommandIds(show!)
+            .Should()
+            .Equal("freew.ruler", "freew.nav-pane", "freew.formatting-marks", "freew.reveal-formatting");
+        Labels(show!)
+            .Should()
+            .Equal("Ruler", "Navigation Pane", "Show ¶", "Reveal Formatting");
+
+        registry.TryGet("freew.ruler", out var command).Should().BeTrue("Word exposes View > Show > Ruler");
+        command.Should().BeAssignableTo<IRibbonStatefulCommand>();
+    }
+
+    [StaFact]
     public void DeveloperControls_ExposesAndRegistersImplementedContentControlCommands()
     {
         var definition = FreeWRibbon.Build();
