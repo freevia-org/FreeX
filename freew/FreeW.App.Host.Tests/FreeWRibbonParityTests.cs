@@ -28,6 +28,74 @@ public sealed class FreeWRibbonParityTests
             .NotContain("references", "Word exposes References as a dedicated top-level tab, not as an Insert group");
     }
 
+    [StaFact]
+    public void InsertTab_GroupsBackedCommandsLikeWord()
+    {
+        var definition = FreeWRibbon.Build();
+        var insert = definition.FindTab("insert");
+        var editor = new DocumentView();
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        insert.Should().NotBeNull();
+        insert!.Groups.Select(group => group.Id)
+            .Should()
+            .Equal("pages", "tables", "illustrations", "links", "header-footer", "text", "symbols");
+
+        CommandIds(insert.FindGroup("illustrations")!)
+            .Should()
+            .Equal("freew.picture", "freew.shapes", "freew.smartart", "freew.chart", "freew.screenshot");
+        Labels(insert.FindGroup("illustrations")!)
+            .Should()
+            .Equal("Pictures", "Shapes", "SmartArt", "Chart", "Screenshot");
+
+        CommandIds(insert.FindGroup("text")!)
+            .Should()
+            .Equal(
+                "freew.shape-textbox",
+                "freew.insert-quickpart",
+                "freew.insert-file",
+                "freew.wordart",
+                "freew.drop-cap",
+                "freew.datetime",
+                "freew.field",
+                "freew.object",
+                "freew.save-quickpart",
+                "freew.building-blocks-organizer");
+
+        CommandIds(insert.FindGroup("symbols")!)
+            .Should()
+            .Equal("freew.equation", "freew.symbol");
+
+        insert.Groups.Select(group => group.Id)
+            .Should()
+            .NotContain(new[] { "media", "quick-parts" });
+        CommandIds(insert)
+            .Should()
+            .NotContain(new[] { "freew.image-size", "freew.image-alt-text", "freew.image-align-left", "freew.image-align-center", "freew.image-align-right" });
+
+        var backedParityCommandIds = new[]
+        {
+            "freew.picture",
+            "freew.smartart",
+            "freew.chart",
+            "freew.shape-textbox",
+            "freew.insert-quickpart",
+            "freew.insert-file",
+            "freew.wordart",
+            "freew.drop-cap",
+            "freew.datetime",
+            "freew.field",
+            "freew.object",
+            "freew.save-quickpart",
+            "freew.building-blocks-organizer",
+            "freew.equation",
+            "freew.symbol"
+        };
+
+        foreach (var commandId in backedParityCommandIds)
+            registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must execute from the Insert tab");
+    }
+
     [Fact]
     public void ReferencesTab_GroupsImplementedReferenceCommandsLikeWord()
     {
