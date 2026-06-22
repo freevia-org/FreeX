@@ -600,6 +600,18 @@ public sealed partial class MainWindow : Window
     private readonly NativeMenuItem _unmergeCellsMenuItem = new();
     private readonly NativeMenuItem _decreaseIndentMenuItem = new();
     private readonly NativeMenuItem _increaseIndentMenuItem = new();
+    private readonly NativeMenuItem _themesMenuItem = new();
+    private readonly NativeMenuItem _themeColorsMenuItem = new();
+    private readonly NativeMenuItem _themeFontsMenuItem = new();
+    private readonly NativeMenuItem _themeEffectsMenuItem = new();
+    private readonly NativeMenuItem _pageMarginsMenuItem = new();
+    private readonly NativeMenuItem _pageOrientationMenuItem = new();
+    private readonly NativeMenuItem _paperSizeMenuItem = new();
+    private readonly NativeMenuItem _printAreaMenuItem = new();
+    private readonly NativeMenuItem _pageBreaksMenuItem = new();
+    private readonly NativeMenuItem _sheetBackgroundMenuItem = new();
+    private readonly NativeMenuItem _printGridlinesMenuItem = new();
+    private readonly NativeMenuItem _printHeadingsMenuItem = new();
     private readonly NativeMenuItem _showGridlinesMenuItem = new();
     private readonly NativeMenuItem _showHeadingsMenuItem = new();
     private readonly NativeMenuItem _zoomInMenuItem = new();
@@ -2090,6 +2102,42 @@ public sealed partial class MainWindow : Window
         _alignRightMenuItem.Header = "Align Right";
         _alignRightMenuItem.Click += (_, _) => ApplySelectedRangeHorizontalAlignment(CellHAlign.Right);
 
+        _themesMenuItem.Header = "Themes";
+        _themesMenuItem.Click += async (_, _) => await ShowThemesGalleryAsync();
+
+        _themeColorsMenuItem.Header = "Theme Colors";
+        _themeColorsMenuItem.Click += async (_, _) => await ShowThemeColorsGalleryAsync();
+
+        _themeFontsMenuItem.Header = "Theme Fonts";
+        _themeFontsMenuItem.Click += async (_, _) => await ShowThemeFontsGalleryAsync();
+
+        _themeEffectsMenuItem.Header = "Theme Effects";
+        _themeEffectsMenuItem.Click += async (_, _) => await ShowThemeEffectsGalleryAsync();
+
+        _pageMarginsMenuItem.Header = "Margins";
+        _pageMarginsMenuItem.Menu = CreateNativeMarginsMenu();
+
+        _pageOrientationMenuItem.Header = "Page Orientation";
+        _pageOrientationMenuItem.Menu = CreateNativePageOrientationMenu();
+
+        _paperSizeMenuItem.Header = "Paper Size";
+        _paperSizeMenuItem.Menu = CreateNativePaperSizeMenu();
+
+        _printAreaMenuItem.Header = "Print Area";
+        _printAreaMenuItem.Menu = CreateNativePrintAreaMenu();
+
+        _pageBreaksMenuItem.Header = "Breaks...";
+        _pageBreaksMenuItem.Click += (_, _) => ShowPageBreaksMenu();
+
+        _sheetBackgroundMenuItem.Header = "Background";
+        _sheetBackgroundMenuItem.Menu = CreateNativeSheetBackgroundMenu();
+
+        _printGridlinesMenuItem.Header = "Gridlines...";
+        _printGridlinesMenuItem.Click += async (_, _) => await ShowGridlinesSheetOptionsAsync();
+
+        _printHeadingsMenuItem.Header = "Headings...";
+        _printHeadingsMenuItem.Click += async (_, _) => await ShowHeadingsSheetOptionsAsync();
+
         _showGridlinesMenuItem.Header = "Gridlines";
         _showGridlinesMenuItem.ToggleType = MenuItemToggleType.CheckBox;
         _showGridlinesMenuItem.Click += (_, _) => ToggleShowGridlines();
@@ -2195,31 +2243,72 @@ public sealed partial class MainWindow : Window
         fileMenu.Items.Add(new NativeMenuItemSeparator());
         fileMenu.Items.Add(_quitMenuItem);
 
-        var editMenu = new NativeMenu();
-        editMenu.Items.Add(_undoMenuItem);
-        editMenu.Items.Add(_redoMenuItem);
-        editMenu.Items.Add(new NativeMenuItemSeparator());
-        editMenu.Items.Add(_cutMenuItem);
-        editMenu.Items.Add(_copyMenuItem);
-        editMenu.Items.Add(_pasteMenuItem);
-        editMenu.Items.Add(_pasteSpecialMenuItem);
-        editMenu.Items.Add(_formatPainterMenuItem);
-        editMenu.Items.Add(new NativeMenuItemSeparator());
-        editMenu.Items.Add(_selectAllMenuItem);
-        editMenu.Items.Add(new NativeMenuItemSeparator());
-        editMenu.Items.Add(_findMenuItem);
-        editMenu.Items.Add(_findNextMenuItem);
-        editMenu.Items.Add(_replaceMenuItem);
-        editMenu.Items.Add(_goToMenuItem);
-        editMenu.Items.Add(_goToSpecialMenuItem);
-        editMenu.Items.Add(_openHyperlinkMenuItem);
-        editMenu.Items.Add(_insertHyperlinkMenuItem);
-        editMenu.Items.Add(new NativeMenuItemSeparator());
-        editMenu.Items.Add(_autoSumMenuItem);
-        editMenu.Items.Add(_fillCellsMenuItem);
-        editMenu.Items.Add(_clearMenuItem);
+        var homeMenu = new NativeMenu();
+        homeMenu.Items.Add(_undoMenuItem);
+        homeMenu.Items.Add(_redoMenuItem);
+        homeMenu.Items.Add(new NativeMenuItemSeparator());
+        homeMenu.Items.Add(_cutMenuItem);
+        homeMenu.Items.Add(_copyMenuItem);
+        homeMenu.Items.Add(_pasteMenuItem);
+        homeMenu.Items.Add(_pasteSpecialMenuItem);
+        homeMenu.Items.Add(_formatPainterMenuItem);
+        homeMenu.Items.Add(new NativeMenuItemSeparator());
+        homeMenu.Items.Add(_boldMenuItem);
+        homeMenu.Items.Add(_italicMenuItem);
+        homeMenu.Items.Add(_underlineMenuItem);
+        homeMenu.Items.Add(_doubleUnderlineMenuItem);
+        homeMenu.Items.Add(_strikethroughMenuItem);
+        homeMenu.Items.Add(_increaseFontSizeMenuItem);
+        homeMenu.Items.Add(_decreaseFontSizeMenuItem);
+        homeMenu.Items.Add(_fillColorMenuItem);
+        homeMenu.Items.Add(_clearFillMenuItem);
+        homeMenu.Items.Add(_fontColorMenuItem);
+        homeMenu.Items.Add(_bordersMenuItem);
+        homeMenu.Items.Add(_cellStylesMenuItem);
+        homeMenu.Items.Add(_formatCellsMenuItem);
+        _conditionalFormattingMenuItem.Header = "Conditional Formatting";
+        _conditionalFormattingMenuItem.Menu = CreateNativeConditionalFormatMenu();
+        homeMenu.Items.Add(_conditionalFormattingMenuItem);
+        homeMenu.Items.Add(new NativeMenuItemSeparator());
+        homeMenu.Items.Add(_horizontalTextMenuItem);
+        homeMenu.Items.Add(_angleCounterclockwiseMenuItem);
+        homeMenu.Items.Add(_angleClockwiseMenuItem);
+        homeMenu.Items.Add(_verticalTextMenuItem);
+        homeMenu.Items.Add(_rotateTextUpMenuItem);
+        homeMenu.Items.Add(_rotateTextDownMenuItem);
+        homeMenu.Items.Add(new NativeMenuItemSeparator());
+        homeMenu.Items.Add(_currencyFormatMenuItem);
+        homeMenu.Items.Add(_percentFormatMenuItem);
+        homeMenu.Items.Add(_commaStyleMenuItem);
+        homeMenu.Items.Add(_increaseDecimalMenuItem);
+        homeMenu.Items.Add(_decreaseDecimalMenuItem);
+        homeMenu.Items.Add(new NativeMenuItemSeparator());
+        homeMenu.Items.Add(_alignTopMenuItem);
+        homeMenu.Items.Add(_alignMiddleMenuItem);
+        homeMenu.Items.Add(_alignBottomMenuItem);
+        homeMenu.Items.Add(_wrapTextMenuItem);
+        homeMenu.Items.Add(_mergeAndCenterMenuItem);
+        homeMenu.Items.Add(_unmergeCellsMenuItem);
+        homeMenu.Items.Add(_decreaseIndentMenuItem);
+        homeMenu.Items.Add(_increaseIndentMenuItem);
+        homeMenu.Items.Add(_alignLeftMenuItem);
+        homeMenu.Items.Add(_alignCenterMenuItem);
+        homeMenu.Items.Add(_alignRightMenuItem);
+        homeMenu.Items.Add(new NativeMenuItemSeparator());
+        homeMenu.Items.Add(_fillCellsMenuItem);
+        homeMenu.Items.Add(_clearMenuItem);
+        homeMenu.Items.Add(_selectAllMenuItem);
+        homeMenu.Items.Add(new NativeMenuItemSeparator());
+        homeMenu.Items.Add(_findMenuItem);
+        homeMenu.Items.Add(_findNextMenuItem);
+        homeMenu.Items.Add(_replaceMenuItem);
+        homeMenu.Items.Add(_goToMenuItem);
+        homeMenu.Items.Add(_goToSpecialMenuItem);
+        homeMenu.Items.Add(_openHyperlinkMenuItem);
 
         var insertMenu = new NativeMenu();
+        insertMenu.Items.Add(_insertHyperlinkMenuItem);
+        insertMenu.Items.Add(new NativeMenuItemSeparator());
         insertMenu.Items.Add(_insertColumnChartMenuItem);
         insertMenu.Items.Add(_insertBarChartMenuItem);
         insertMenu.Items.Add(_insertLineChartMenuItem);
@@ -2233,6 +2322,33 @@ public sealed partial class MainWindow : Window
         insertMenu.Items.Add(_insertPictureMenuItem);
         insertMenu.Items.Add(_insertShapeMenuItem);
         insertMenu.Items.Add(_insertTextBoxMenuItem);
+
+        var pageLayoutMenu = new NativeMenu();
+        pageLayoutMenu.Items.Add(_themesMenuItem);
+        pageLayoutMenu.Items.Add(_themeColorsMenuItem);
+        pageLayoutMenu.Items.Add(_themeFontsMenuItem);
+        pageLayoutMenu.Items.Add(_themeEffectsMenuItem);
+        pageLayoutMenu.Items.Add(new NativeMenuItemSeparator());
+        pageLayoutMenu.Items.Add(_pageMarginsMenuItem);
+        pageLayoutMenu.Items.Add(_pageOrientationMenuItem);
+        pageLayoutMenu.Items.Add(_paperSizeMenuItem);
+        pageLayoutMenu.Items.Add(_printAreaMenuItem);
+        pageLayoutMenu.Items.Add(_pageBreaksMenuItem);
+        pageLayoutMenu.Items.Add(_sheetBackgroundMenuItem);
+        pageLayoutMenu.Items.Add(_pageSetupMenuItem);
+        pageLayoutMenu.Items.Add(new NativeMenuItemSeparator());
+        pageLayoutMenu.Items.Add(_printGridlinesMenuItem);
+        pageLayoutMenu.Items.Add(_printHeadingsMenuItem);
+
+        var formulasMenu = new NativeMenu();
+        formulasMenu.Items.Add(_autoSumMenuItem);
+        formulasMenu.Items.Add(_insertFunctionMenuItem);
+        formulasMenu.Items.Add(new NativeMenuItemSeparator());
+        formulasMenu.Items.Add(_nameManagerMenuItem);
+        formulasMenu.Items.Add(_defineNameMenuItem);
+        formulasMenu.Items.Add(_createNamesFromSelectionMenuItem);
+        formulasMenu.Items.Add(new NativeMenuItemSeparator());
+        formulasMenu.Items.Add(_showFormulasMenuItem);
 
         var dataMenu = new NativeMenu();
         dataMenu.Items.Add(_sortAscendingMenuItem);
@@ -2255,13 +2371,6 @@ public sealed partial class MainWindow : Window
         dataMenu.Items.Add(_whatIfAnalysisMenuItem);
         dataMenu.Items.Add(_forecastSheetMenuItem);
 
-        var formulasMenu = new NativeMenu();
-        formulasMenu.Items.Add(_insertFunctionMenuItem);
-        formulasMenu.Items.Add(new NativeMenuItemSeparator());
-        formulasMenu.Items.Add(_nameManagerMenuItem);
-        formulasMenu.Items.Add(_defineNameMenuItem);
-        formulasMenu.Items.Add(_createNamesFromSelectionMenuItem);
-
         var reviewMenu = new NativeMenu();
         reviewMenu.Items.Add(_reviewSummaryMenuItem);
         reviewMenu.Items.Add(_checkAccessibilityMenuItem);
@@ -2274,49 +2383,6 @@ public sealed partial class MainWindow : Window
         reviewMenu.Items.Add(new NativeMenuItemSeparator());
         reviewMenu.Items.Add(_nextCommentMenuItem);
         reviewMenu.Items.Add(_previousCommentMenuItem);
-
-        var formatMenu = new NativeMenu();
-        formatMenu.Items.Add(_boldMenuItem);
-        formatMenu.Items.Add(_italicMenuItem);
-        formatMenu.Items.Add(_underlineMenuItem);
-        formatMenu.Items.Add(_doubleUnderlineMenuItem);
-        formatMenu.Items.Add(_strikethroughMenuItem);
-        formatMenu.Items.Add(_increaseFontSizeMenuItem);
-        formatMenu.Items.Add(_decreaseFontSizeMenuItem);
-        formatMenu.Items.Add(_fillColorMenuItem);
-        formatMenu.Items.Add(_clearFillMenuItem);
-        formatMenu.Items.Add(_fontColorMenuItem);
-        formatMenu.Items.Add(_bordersMenuItem);
-        formatMenu.Items.Add(_cellStylesMenuItem);
-        formatMenu.Items.Add(_formatCellsMenuItem);
-        _conditionalFormattingMenuItem.Header = "Conditional Formatting";
-        _conditionalFormattingMenuItem.Menu = CreateNativeConditionalFormatMenu();
-        formatMenu.Items.Add(_conditionalFormattingMenuItem);
-        formatMenu.Items.Add(new NativeMenuItemSeparator());
-        formatMenu.Items.Add(_horizontalTextMenuItem);
-        formatMenu.Items.Add(_angleCounterclockwiseMenuItem);
-        formatMenu.Items.Add(_angleClockwiseMenuItem);
-        formatMenu.Items.Add(_verticalTextMenuItem);
-        formatMenu.Items.Add(_rotateTextUpMenuItem);
-        formatMenu.Items.Add(_rotateTextDownMenuItem);
-        formatMenu.Items.Add(new NativeMenuItemSeparator());
-        formatMenu.Items.Add(_currencyFormatMenuItem);
-        formatMenu.Items.Add(_percentFormatMenuItem);
-        formatMenu.Items.Add(_commaStyleMenuItem);
-        formatMenu.Items.Add(_increaseDecimalMenuItem);
-        formatMenu.Items.Add(_decreaseDecimalMenuItem);
-        formatMenu.Items.Add(new NativeMenuItemSeparator());
-        formatMenu.Items.Add(_alignTopMenuItem);
-        formatMenu.Items.Add(_alignMiddleMenuItem);
-        formatMenu.Items.Add(_alignBottomMenuItem);
-        formatMenu.Items.Add(_wrapTextMenuItem);
-        formatMenu.Items.Add(_mergeAndCenterMenuItem);
-        formatMenu.Items.Add(_unmergeCellsMenuItem);
-        formatMenu.Items.Add(_decreaseIndentMenuItem);
-        formatMenu.Items.Add(_increaseIndentMenuItem);
-        formatMenu.Items.Add(_alignLeftMenuItem);
-        formatMenu.Items.Add(_alignCenterMenuItem);
-        formatMenu.Items.Add(_alignRightMenuItem);
 
         var viewMenu = new NativeMenu();
         viewMenu.Items.Add(_showGridlinesMenuItem);
@@ -2331,8 +2397,6 @@ public sealed partial class MainWindow : Window
         viewMenu.Items.Add(_freezeTopRowMenuItem);
         viewMenu.Items.Add(_freezeFirstColumnMenuItem);
         viewMenu.Items.Add(_unfreezePanesMenuItem);
-        viewMenu.Items.Add(new NativeMenuItemSeparator());
-        viewMenu.Items.Add(_showFormulasMenuItem);
         viewMenu.Items.Add(_pageBreakPreviewMenuItem);
 
         var sheetMenu = new NativeMenu();
@@ -2372,8 +2436,8 @@ public sealed partial class MainWindow : Window
         });
         _nativeMenu.Items.Add(new NativeMenuItem
         {
-            Header = "Edit",
-            Menu = editMenu,
+            Header = "Home",
+            Menu = homeMenu,
         });
         _nativeMenu.Items.Add(new NativeMenuItem
         {
@@ -2382,8 +2446,8 @@ public sealed partial class MainWindow : Window
         });
         _nativeMenu.Items.Add(new NativeMenuItem
         {
-            Header = "Data",
-            Menu = dataMenu,
+            Header = "Page Layout",
+            Menu = pageLayoutMenu,
         });
         _nativeMenu.Items.Add(new NativeMenuItem
         {
@@ -2392,13 +2456,13 @@ public sealed partial class MainWindow : Window
         });
         _nativeMenu.Items.Add(new NativeMenuItem
         {
-            Header = "Review",
-            Menu = reviewMenu,
+            Header = "Data",
+            Menu = dataMenu,
         });
         _nativeMenu.Items.Add(new NativeMenuItem
         {
-            Header = "Format",
-            Menu = formatMenu,
+            Header = "Review",
+            Menu = reviewMenu,
         });
         _nativeMenu.Items.Add(new NativeMenuItem
         {
@@ -2423,6 +2487,59 @@ public sealed partial class MainWindow : Window
         _nativeMenu.NeedsUpdate += (_, _) => UpdateSaveButton();
 
         InstallNativeMenu(_nativeMenu);
+    }
+
+    private NativeMenu CreateNativeMarginsMenu()
+    {
+        var menu = new NativeMenu();
+        menu.Items.Add(CreateNativeMenuItem("Normal", () => ApplyPageMargins(WorksheetPageMargins.Normal, "RibbonWire_MarginsNormal")));
+        menu.Items.Add(CreateNativeMenuItem("Wide", () => ApplyPageMargins(WorksheetPageMargins.Wide, "RibbonWire_MarginsWide")));
+        menu.Items.Add(CreateNativeMenuItem("Narrow", () => ApplyPageMargins(WorksheetPageMargins.Narrow, "RibbonWire_MarginsNarrow")));
+        menu.Items.Add(new NativeMenuItemSeparator());
+        menu.Items.Add(CreateNativeMenuItem("Custom Margins...", async () => await ShowPageSetupDialogAsync()));
+        return menu;
+    }
+
+    private NativeMenu CreateNativePageOrientationMenu()
+    {
+        var menu = new NativeMenu();
+        menu.Items.Add(CreateNativeMenuItem("Portrait", () => ApplyPageOrientation(WorksheetPageOrientation.Portrait, "RibbonWire_OrientationPortrait")));
+        menu.Items.Add(CreateNativeMenuItem("Landscape", () => ApplyPageOrientation(WorksheetPageOrientation.Landscape, "RibbonWire_OrientationLandscape")));
+        return menu;
+    }
+
+    private NativeMenu CreateNativePaperSizeMenu()
+    {
+        var menu = new NativeMenu();
+        menu.Items.Add(CreateNativeMenuItem("Letter", () => ApplyPaperSize(WorksheetPaperSize.Letter, "RibbonWire_PaperLetter")));
+        menu.Items.Add(CreateNativeMenuItem("Legal", () => ApplyPaperSize(WorksheetPaperSize.Legal, "RibbonWire_PaperLegal")));
+        menu.Items.Add(CreateNativeMenuItem("A4", () => ApplyPaperSize(WorksheetPaperSize.A4, "RibbonWire_PaperA4")));
+        menu.Items.Add(new NativeMenuItemSeparator());
+        menu.Items.Add(CreateNativeMenuItem("More Paper Sizes...", async () => await ShowPageSetupDialogAsync()));
+        return menu;
+    }
+
+    private NativeMenu CreateNativePrintAreaMenu()
+    {
+        var menu = new NativeMenu();
+        menu.Items.Add(CreateNativeMenuItem("Set Print Area", SetPrintAreaFromSelection));
+        menu.Items.Add(CreateNativeMenuItem("Clear Print Area", ClearPrintArea));
+        return menu;
+    }
+
+    private NativeMenu CreateNativeSheetBackgroundMenu()
+    {
+        var menu = new NativeMenu();
+        menu.Items.Add(CreateNativeMenuItem("Choose Background...", ChooseSheetBackground));
+        menu.Items.Add(CreateNativeMenuItem("Delete Background", DeleteSheetBackground));
+        return menu;
+    }
+
+    private static NativeMenuItem CreateNativeMenuItem(string header, Action action)
+    {
+        var item = new NativeMenuItem { Header = header };
+        item.Click += (_, _) => action();
+        return item;
     }
 
     private void InstallNativeMenu(NativeMenu menu)
@@ -3592,6 +3709,18 @@ public sealed partial class MainWindow : Window
         _unmergeCellsMenuItem.IsEnabled = isIdle && _session.IsSelectedRangeMerged;
         _decreaseIndentMenuItem.IsEnabled = _decreaseIndentButton.IsEnabled;
         _increaseIndentMenuItem.IsEnabled = _increaseIndentButton.IsEnabled;
+        _themesMenuItem.IsEnabled = isIdle;
+        _themeColorsMenuItem.IsEnabled = isIdle;
+        _themeFontsMenuItem.IsEnabled = isIdle;
+        _themeEffectsMenuItem.IsEnabled = isIdle;
+        _pageMarginsMenuItem.IsEnabled = isIdle;
+        _pageOrientationMenuItem.IsEnabled = isIdle;
+        _paperSizeMenuItem.IsEnabled = isIdle;
+        _printAreaMenuItem.IsEnabled = isIdle;
+        _pageBreaksMenuItem.IsEnabled = isIdle;
+        _sheetBackgroundMenuItem.IsEnabled = isIdle;
+        _printGridlinesMenuItem.IsEnabled = isIdle;
+        _printHeadingsMenuItem.IsEnabled = isIdle;
         _showGridlinesMenuItem.IsEnabled = isIdle;
         _showGridlinesMenuItem.IsChecked = _session.IsShowingGridlines;
         _showHeadingsMenuItem.IsEnabled = isIdle;
@@ -16145,33 +16274,20 @@ public sealed partial class MainWindow : Window
 
     internal MacOsLaunchSmokeSnapshot CreateLaunchSmokeSnapshot()
     {
-        var hasNativeFileMenu = _nativeMenu?.Items.OfType<NativeMenuItem>().Any(item =>
-            string.Equals(item.Header?.ToString(), "File", StringComparison.Ordinal) &&
-            item.Menu is not null) == true;
-        var hasNativeEditMenu = _nativeMenu?.Items.OfType<NativeMenuItem>().Any(item =>
-            string.Equals(item.Header?.ToString(), "Edit", StringComparison.Ordinal) &&
-            item.Menu is not null) == true;
-        var hasNativeDataMenu = _nativeMenu?.Items.OfType<NativeMenuItem>().Any(item =>
-            string.Equals(item.Header?.ToString(), "Data", StringComparison.Ordinal) &&
-            item.Menu is not null) == true;
-        var hasNativeReviewMenu = _nativeMenu?.Items.OfType<NativeMenuItem>().Any(item =>
-            string.Equals(item.Header?.ToString(), "Review", StringComparison.Ordinal) &&
-            item.Menu is not null) == true;
-        var hasNativeFormatMenu = _nativeMenu?.Items.OfType<NativeMenuItem>().Any(item =>
-            string.Equals(item.Header?.ToString(), "Format", StringComparison.Ordinal) &&
-            item.Menu is not null) == true;
-        var hasNativeViewMenu = _nativeMenu?.Items.OfType<NativeMenuItem>().Any(item =>
-            string.Equals(item.Header?.ToString(), "View", StringComparison.Ordinal) &&
-            item.Menu is not null) == true;
-        var hasNativeSheetMenu = _nativeMenu?.Items.OfType<NativeMenuItem>().Any(item =>
-            string.Equals(item.Header?.ToString(), "Sheet", StringComparison.Ordinal) &&
-            item.Menu is not null) == true;
-        var hasNativeWindowMenu = _nativeMenu?.Items.OfType<NativeMenuItem>().Any(item =>
-            string.Equals(item.Header?.ToString(), "Window", StringComparison.Ordinal) &&
-            item.Menu is not null) == true;
-        var hasNativeHelpMenu = _nativeMenu?.Items.OfType<NativeMenuItem>().Any(item =>
-            string.Equals(item.Header?.ToString(), "Help", StringComparison.Ordinal) &&
-            item.Menu is not null) == true;
+        var nativeTopLevelMenuOrder = string.Join("|", _nativeMenu?.Items.OfType<NativeMenuItem>()
+            .Select(static item => item.Header?.ToString())
+            .Where(static header => !string.IsNullOrWhiteSpace(header)) ?? []);
+        var hasNativeFileMenu = HasNativeTopLevelMenu("File");
+        var hasNativeHomeMenu = HasNativeTopLevelMenu("Home");
+        var hasNativeInsertMenu = HasNativeTopLevelMenu("Insert");
+        var hasNativePageLayoutMenu = HasNativeTopLevelMenu("Page Layout");
+        var hasNativeFormulasMenu = HasNativeTopLevelMenu("Formulas");
+        var hasNativeDataMenu = HasNativeTopLevelMenu("Data");
+        var hasNativeReviewMenu = HasNativeTopLevelMenu("Review");
+        var hasNativeViewMenu = HasNativeTopLevelMenu("View");
+        var hasNativeSheetMenu = HasNativeTopLevelMenu("Sheet");
+        var hasNativeWindowMenu = HasNativeTopLevelMenu("Window");
+        var hasNativeHelpMenu = HasNativeTopLevelMenu("Help");
         var nativeCellStylesPresetCount = _cellStylesMenuItem.Menu?
             .Items
             .OfType<NativeMenuItem>()
@@ -16271,11 +16387,14 @@ public sealed partial class MainWindow : Window
             HasSheetTabContextNoColorMenuItem: HasSheetTabContextSubmenuItem("Tab Color", "No Color"),
             HasSheetTabContextSelectAllSheetsMenuItem: HasSheetTabContextMenuItem("Select All Sheets"),
             HasSheetTabContextUngroupSheetsMenuItem: HasSheetTabContextMenuItem("Ungroup Sheets"),
+            NativeTopLevelMenuOrder: nativeTopLevelMenuOrder,
             HasNativeFileMenu: hasNativeFileMenu,
-            HasNativeEditMenu: hasNativeEditMenu,
+            HasNativeHomeMenu: hasNativeHomeMenu,
+            HasNativeInsertMenu: hasNativeInsertMenu,
+            HasNativePageLayoutMenu: hasNativePageLayoutMenu,
+            HasNativeFormulasMenu: hasNativeFormulasMenu,
             HasNativeDataMenu: hasNativeDataMenu,
             HasNativeReviewMenu: hasNativeReviewMenu,
-            HasNativeFormatMenu: hasNativeFormatMenu,
             HasNativeViewMenu: hasNativeViewMenu,
             HasNativeSheetMenu: hasNativeSheetMenu,
             HasNativeWindowMenu: hasNativeWindowMenu,
@@ -16430,6 +16549,11 @@ public sealed partial class MainWindow : Window
 
     private static bool HasToolbarMenuItem(MenuItem item, string expectedHeader) =>
         string.Equals(item.Header?.ToString(), expectedHeader, StringComparison.Ordinal);
+
+    private bool HasNativeTopLevelMenu(string expectedHeader) =>
+        _nativeMenu?.Items.OfType<NativeMenuItem>().Any(item =>
+            string.Equals(item.Header?.ToString(), expectedHeader, StringComparison.Ordinal) &&
+            item.Menu is not null) == true;
 
     private static bool HasNativeMenuItem(NativeMenuItem item, string expectedHeader, bool requireGesture = true) =>
         string.Equals(item.Header?.ToString(), expectedHeader, StringComparison.Ordinal) &&

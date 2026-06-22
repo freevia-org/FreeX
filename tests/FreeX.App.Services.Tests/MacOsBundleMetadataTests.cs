@@ -307,9 +307,12 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("grep -q \"go_to_special_dialog_value_type_controls=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"go_to_special_dialog_compact_layout=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"go_to_special_dialog_result_closed_without_accept=true\" \"$launch_smoke_report\"");
-        workflow.Should().Contain("grep -q \"native_edit_menu=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_top_level_menu_order=File|Home|Insert|Page Layout|Formulas|Data|Review|View|Sheet|Window|Help\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_home_menu=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_insert_menu=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_page_layout_menu=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_formulas_menu=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_data_menu=true\" \"$launch_smoke_report\"");
-        workflow.Should().Contain("grep -q \"native_format_menu=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_view_menu=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_sheet_menu=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_window_menu=true\" \"$launch_smoke_report\"");
