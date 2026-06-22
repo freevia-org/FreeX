@@ -47,8 +47,8 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = state.IsProtected ? UiText.Get("ShellLoc_UnprotectSheetTitle") : UiText.Get("ShellLoc_ProtectSheetTitle"),
-            Width = 380,
-            Height = state.IsProtected ? 200 : 520,
+            Width = state.IsProtected ? 380 : 430,
+            Height = state.IsProtected ? 200 : 560,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -138,7 +138,7 @@ public sealed partial class MainWindow
                 Foreground = HeaderForeground,
                 Margin = new Thickness(0, 6, 0, 0),
             });
-            contentChildren.Add(new ScrollViewer { Content = checklist, MaxHeight = 240 });
+            contentChildren.Add(new ScrollViewer { Content = checklist, MaxHeight = 280 });
 
             okButton.Click += (_, _) =>
             {

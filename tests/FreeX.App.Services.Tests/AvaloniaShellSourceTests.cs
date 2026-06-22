@@ -2246,6 +2246,10 @@ public sealed class AvaloniaShellSourceTests
         parityCaptureSource.Should().Contain("(\"dialog.LegalNotices\", () => ShowLegalNoticesDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.SelectDataSource\", () => ShowSelectDataSourceParityDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.Zoom\", () => ShowZoomDialogAsync()),");
+        parityCaptureSource.Should().Contain("(\"dialog.CustomViews\", () => ShowCustomViewsParityDialogAsync()),");
+        parityCaptureSource.Should().Contain("(\"dialog.AllowEditRanges\", () => ShowAllowEditRangesParityDialogAsync()),");
+        parityCaptureSource.Should().Contain("(\"dialog.ProtectSheet\", () => ShowProtectSheetDialogAsync()),");
+        parityCaptureSource.Should().Contain("(\"dialog.ProtectWorkbook\", () => ShowProtectWorkbookDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.AccessibilityChecker\", () => ShowReviewSummaryDialogAsync(focusAccessibility: true)),");
 
         parityCaptureSource.Should().Contain("private Task ShowInsertHyperlinkParityDialogAsync()");
@@ -2260,6 +2264,10 @@ public sealed class AvaloniaShellSourceTests
         parityCaptureSource.Should().Contain("await ShowUnhideSheetDialogAsync([new WorkbookHiddenSheet(_session.ActiveSheet.Id, \"Archive\")]);");
         parityCaptureSource.Should().Contain("private async Task ShowSelectDataSourceParityDialogAsync()");
         parityCaptureSource.Should().Contain("await ShowSelectDataDialogAsync(\"Sheet1!$A$1:$D$4\", firstColumnIsCategories: true);");
+        parityCaptureSource.Should().Contain("private async Task ShowCustomViewsParityDialogAsync()");
+        parityCaptureSource.Should().Contain("CustomViewsPlanner.BuildSaveCommand(");
+        parityCaptureSource.Should().Contain("private async Task ShowAllowEditRangesParityDialogAsync()");
+        parityCaptureSource.Should().Contain("new AllowEditRangeCommand(sheetId, range)");
     }
 
     [Fact]

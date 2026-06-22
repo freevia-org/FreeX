@@ -12,8 +12,10 @@ using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
 using FreeX.App.Avalonia.Ribbon;
 using FreeX.App.Presentation.Backstage;
+using FreeX.App.Presentation.CustomViews;
 using FreeX.App.Services;
 using FreeX.Core.Calc;
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 using AvaloniaGrid = Avalonia.Controls.Grid;
@@ -137,6 +139,10 @@ public sealed partial class MainWindow
         ("dialog.LegalNotices", () => ShowLegalNoticesDialogAsync()),
         ("dialog.SelectDataSource", () => ShowSelectDataSourceParityDialogAsync()),
         ("dialog.Zoom", () => ShowZoomDialogAsync()),
+        ("dialog.CustomViews", () => ShowCustomViewsParityDialogAsync()),
+        ("dialog.AllowEditRanges", () => ShowAllowEditRangesParityDialogAsync()),
+        ("dialog.ProtectSheet", () => ShowProtectSheetDialogAsync()),
+        ("dialog.ProtectWorkbook", () => ShowProtectWorkbookDialogAsync()),
         ("dialog.AccessibilityChecker", () => ShowReviewSummaryDialogAsync(focusAccessibility: true)),
         ("dialog.DataValidation", () => ShowDataValidationDialogAsync()),
         ("dialog.ConditionalFormatNewRule", () => ShowConditionalFormatNewRuleDialogAsync()),
@@ -296,6 +302,48 @@ public sealed partial class MainWindow
 
     private async Task ShowSelectDataSourceParityDialogAsync() =>
         await ShowSelectDataDialogAsync("Sheet1!$A$1:$D$4", firstColumnIsCategories: true);
+
+    private async Task ShowCustomViewsParityDialogAsync()
+    {
+        const string viewName = "Quarterly View";
+        if (!_session.Workbook.CustomViews.Any(view => string.Equals(view.Name, viewName, StringComparison.OrdinalIgnoreCase)))
+        {
+            _session.ExecuteReviewCommand(CustomViewsPlanner.BuildSaveCommand(
+                viewName,
+                includePrintSettings: true,
+                includeHiddenRowsColumnsAndFilterSettings: true));
+            RefreshShell(_statusText.Text ?? "Ready");
+        }
+
+        await ShowCustomViewsManagerDialogAsync();
+    }
+
+    private async Task ShowAllowEditRangesParityDialogAsync()
+    {
+        var sheetId = _session.ActiveSheet.Id;
+        var previousSelection = _session.SelectedRange;
+        var range = new GridRange(
+            new CellAddress(sheetId, 2, 2),
+            new CellAddress(sheetId, 4, 4));
+        if (!_session.ActiveSheet.AllowEditRanges.Contains(range))
+        {
+            _session.ExecuteReviewCommand(new AllowEditRangeCommand(sheetId, range));
+            RefreshShell(_statusText.Text ?? "Ready");
+        }
+
+        _session.SelectRange(range);
+        RefreshShell(_statusText.Text ?? "Ready");
+
+        try
+        {
+            await ShowAllowEditRangeDialogAsync();
+        }
+        finally
+        {
+            _session.SelectRange(previousSelection);
+            RefreshShell(_statusText.Text ?? "Ready");
+        }
+    }
 
     private async Task ShowWithParitySelectionAsync(
         CellAddress start,
