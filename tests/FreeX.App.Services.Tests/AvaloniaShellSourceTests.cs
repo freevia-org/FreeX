@@ -2454,6 +2454,10 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"AdvancedFilterCompactDialog\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(listRangeBox, \"AdvancedFilterListRangeBox\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(criteriaRangeBox, \"AdvancedFilterCriteriaRangeBox\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(pickerButton, pickerAutomationId);");
+        source.Should().Contain("\"AdvancedFilterSelectListRangeButton\"");
+        source.Should().Contain("\"AdvancedFilterSelectCriteriaRangeButton\"");
+        source.Should().Contain("\"AdvancedFilterSelectCopyToButton\"");
         source.Should().Contain("AutomationProperties.SetAutomationId(inPlaceButton, \"AdvancedFilterInPlaceButton\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(copyToAnotherLocationButton, \"AdvancedFilterCopyToAnotherLocationButton\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(copyToBox, \"AdvancedFilterCopyToBox\");");
@@ -2461,7 +2465,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("AutomationProperties.SetAutomationId(errorText, \"AdvancedFilterErrorText\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(okButton, \"AdvancedFilterOkButton\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(cancelButton, \"AdvancedFilterCancelButton\");");
-        source.Should().Contain("Text = FormatRangeReference(_session.SelectedRange)");
+        source.Should().Contain("Text = FormatRangeReference(AdvancedFilterPlanner.CreateDefaultListRange(_session.ActiveSheet, _session.SelectedRange))");
         source.Should().Contain("var selectedOutputMode = copyToAnotherLocationButton.IsChecked == true");
         source.Should().Contain("AdvancedFilterOutputMode.CopyToAnotherLocation");
         source.Should().Contain("AdvancedFilterOutputMode.FilterInPlace");
@@ -2477,11 +2481,13 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private static string FormatAdvancedFilterStatus(AdvancedFilterPlan plan)");
         source.Should().Contain("private static string FormatAdvancedFilterPlanError(AdvancedFilterPlanResult result)");
         source.Should().Contain("private static void FocusAdvancedFilterErrorField(");
-        source.Should().Contain("private static StackPanel CreateAdvancedFilterField(string label, Control control)");
+        source.Should().Contain("new GroupBox");
+        source.Should().Contain("Header = \"Action\"");
 
         sessionSource.Should().Contain("public WorkbookCellEditResult ExecuteAdvancedFilterPlan(AdvancedFilterPlan plan)");
         sessionSource.Should().Contain("ApplySuccessfulRangeEditResult(result, GetAdvancedFilterSelectedRange(plan));");
         plannerSource.Should().Contain("public static AdvancedFilterPlanResult CreatePlan(");
+        plannerSource.Should().Contain("public static GridRange CreateDefaultListRange(Sheet sheet, GridRange selectedRange)");
         plannerSource.Should().Contain("public AdvancedFilterCommand CreateCommand()");
 
         var handlerIndex = normalizedSource.IndexOf("private async Task ShowAdvancedFilterDialogAsync()", StringComparison.Ordinal);

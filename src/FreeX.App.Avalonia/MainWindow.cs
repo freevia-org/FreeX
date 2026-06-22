@@ -11237,10 +11237,13 @@ public sealed partial class MainWindow : Window
         var dialog = new Window
         {
             Title = "Advanced Filter",
-            Width = 500,
-            Height = 390,
-            MinWidth = 420,
-            MinHeight = 350,
+            Width = 630,
+            Height = 478,
+            MinWidth = 630,
+            MinHeight = 478,
+            MaxWidth = 630,
+            MaxHeight = 478,
+            CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -11248,8 +11251,8 @@ public sealed partial class MainWindow : Window
 
         var listRangeBox = new TextBox
         {
-            Text = FormatRangeReference(_session.SelectedRange),
-            MinWidth = 280,
+            Text = FormatRangeReference(AdvancedFilterPlanner.CreateDefaultListRange(_session.ActiveSheet, _session.SelectedRange)),
+            MinWidth = 0,
         };
         AutomationProperties.SetName(listRangeBox, "List range");
         AutomationProperties.SetAutomationId(listRangeBox, "AdvancedFilterListRangeBox");
@@ -11257,7 +11260,7 @@ public sealed partial class MainWindow : Window
 
         var criteriaRangeBox = new TextBox
         {
-            MinWidth = 280,
+            MinWidth = 0,
         };
         AutomationProperties.SetName(criteriaRangeBox, "Criteria range");
         AutomationProperties.SetAutomationId(criteriaRangeBox, "AdvancedFilterCriteriaRangeBox");
@@ -11265,7 +11268,7 @@ public sealed partial class MainWindow : Window
 
         var inPlaceButton = new RadioButton
         {
-            Content = "Filter in-place",
+            Content = "Filter the list, in-place",
             GroupName = "AdvancedFilterOutputMode",
             IsChecked = true,
         };
@@ -11285,7 +11288,7 @@ public sealed partial class MainWindow : Window
         var copyToBox = new TextBox
         {
             IsEnabled = false,
-            MinWidth = 280,
+            MinWidth = 0,
         };
         AutomationProperties.SetName(copyToBox, "Copy to");
         AutomationProperties.SetAutomationId(copyToBox, "AdvancedFilterCopyToBox");
@@ -11294,6 +11297,7 @@ public sealed partial class MainWindow : Window
         var uniqueBox = new CheckBox
         {
             Content = "Unique records only",
+            Margin = new Thickness(0, 10, 0, 0),
         };
         AutomationProperties.SetName(uniqueBox, "Unique records only");
         AutomationProperties.SetAutomationId(uniqueBox, "AdvancedFilterUniqueRecordsOnlyBox");
@@ -11303,6 +11307,8 @@ public sealed partial class MainWindow : Window
         {
             Foreground = Brush(143, 74, 18),
             TextWrapping = TextWrapping.Wrap,
+            IsVisible = false,
+            Margin = new Thickness(0, 6, 0, 0),
         };
         AutomationProperties.SetName(errorText, "Advanced Filter validation");
         AutomationProperties.SetAutomationId(errorText, "AdvancedFilterErrorText");
@@ -11311,8 +11317,9 @@ public sealed partial class MainWindow : Window
         var okButton = new Button
         {
             Content = "OK",
-            MinWidth = 84,
-            Padding = new Thickness(10, 4),
+            Width = 76,
+            MinWidth = 76,
+            IsDefault = true,
         };
         AutomationProperties.SetName(okButton, "OK");
         AutomationProperties.SetAutomationId(okButton, "AdvancedFilterOkButton");
@@ -11321,8 +11328,9 @@ public sealed partial class MainWindow : Window
         var cancelButton = new Button
         {
             Content = "Cancel",
-            MinWidth = 84,
-            Padding = new Thickness(10, 4),
+            Width = 76,
+            MinWidth = 76,
+            IsCancel = true,
         };
         AutomationProperties.SetName(cancelButton, "Cancel");
         AutomationProperties.SetAutomationId(cancelButton, "AdvancedFilterCancelButton");
@@ -11344,18 +11352,81 @@ public sealed partial class MainWindow : Window
                 sheetName => _session.Workbook.GetSheet(sheetName)?.Id);
         }
 
-        void RefreshPlanStatus()
+        (AvaloniaGrid Row, Button PickerButton, TextBlock Label) CreateReferenceRow(
+            string label,
+            TextBox textBox,
+            string pickerAutomationId)
+        {
+            var labelBlock = new TextBlock
+            {
+                Text = label,
+                VerticalAlignment = AvaloniaVerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 8, 0),
+            };
+            var pickerButton = new Button
+            {
+                Content = "...",
+                Width = 40,
+                MinWidth = 40,
+                Padding = new Thickness(0),
+                Margin = new Thickness(0, 0, 8, 0),
+            };
+            AutomationProperties.SetAutomationId(pickerButton, pickerAutomationId);
+            pickerButton.Click += (_, _) =>
+            {
+                textBox.Focus();
+                textBox.SelectAll();
+            };
+
+            var row = new AvaloniaGrid { Margin = new Thickness(0, 8, 0, 0) };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(128) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            Grid.SetColumn(labelBlock, 0);
+            Grid.SetColumn(pickerButton, 1);
+            Grid.SetColumn(textBox, 2);
+            row.Children.Add(labelBlock);
+            row.Children.Add(pickerButton);
+            row.Children.Add(textBox);
+            return (row, pickerButton, labelBlock);
+        }
+
+        var listRangeRow = CreateReferenceRow("List range:", listRangeBox, "AdvancedFilterSelectListRangeButton");
+        var criteriaRangeRow = CreateReferenceRow("Criteria range:", criteriaRangeBox, "AdvancedFilterSelectCriteriaRangeButton");
+        var copyToRow = CreateReferenceRow("Copy to:", copyToBox, "AdvancedFilterSelectCopyToButton");
+        var copyToHint = new TextBlock
+        {
+            Text = "Copy to is available when Copy to another location is selected.",
+            Foreground = SecondaryInk,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 4, 0, 0),
+        };
+        var criteriaHint = new TextBlock
+        {
+            Text = "Criteria should include column labels in the first row, matching Excel Advanced Filter.",
+            Foreground = SecondaryInk,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 10, 0, 0),
+        };
+
+        var showInteractiveValidation = false;
+
+        void RefreshPlanStatus(bool showInvalid = false)
         {
             var planResult = CreatePlan();
             errorText.Text = planResult.Success
                 ? "Ready to run Advanced Filter."
                 : FormatAdvancedFilterPlanError(planResult);
+            errorText.IsVisible = showInvalid && !planResult.Success;
         }
 
-        void RefreshCopyToState()
+        void RefreshCopyToState(bool showInvalid = false)
         {
-            copyToBox.IsEnabled = copyToAnotherLocationButton.IsChecked == true;
-            RefreshPlanStatus();
+            var isCopyToEnabled = copyToAnotherLocationButton.IsChecked == true;
+            copyToRow.Row.IsEnabled = isCopyToEnabled;
+            copyToBox.IsEnabled = isCopyToEnabled;
+            copyToHint.IsVisible = !isCopyToEnabled;
+            RefreshPlanStatus(showInvalid);
         }
 
         void Accept()
@@ -11364,6 +11435,7 @@ public sealed partial class MainWindow : Window
             if (!planResult.Success || planResult.Plan is null)
             {
                 errorText.Text = FormatAdvancedFilterPlanError(planResult);
+                errorText.IsVisible = true;
                 FocusAdvancedFilterErrorField(planResult.Error, listRangeBox, criteriaRangeBox, copyToBox);
                 return;
             }
@@ -11372,25 +11444,28 @@ public sealed partial class MainWindow : Window
             dialog.Close();
         }
 
+        void RefreshPlanStatusAfterInput() =>
+            RefreshPlanStatus(showInvalid: showInteractiveValidation);
+
         okButton.Click += (_, _) => Accept();
         cancelButton.Click += (_, _) => dialog.Close();
-        listRangeBox.TextChanged += (_, _) => RefreshPlanStatus();
-        criteriaRangeBox.TextChanged += (_, _) => RefreshPlanStatus();
-        copyToBox.TextChanged += (_, _) => RefreshPlanStatus();
+        listRangeBox.TextChanged += (_, _) => RefreshPlanStatusAfterInput();
+        criteriaRangeBox.TextChanged += (_, _) => RefreshPlanStatusAfterInput();
+        copyToBox.TextChanged += (_, _) => RefreshPlanStatusAfterInput();
         uniqueBox.PropertyChanged += (_, e) =>
         {
             if (e.Property == ToggleButton.IsCheckedProperty)
-                RefreshPlanStatus();
+                RefreshPlanStatusAfterInput();
         };
         inPlaceButton.PropertyChanged += (_, e) =>
         {
             if (e.Property == ToggleButton.IsCheckedProperty)
-                RefreshCopyToState();
+                RefreshCopyToState(showInvalid: showInteractiveValidation);
         };
         copyToAnotherLocationButton.PropertyChanged += (_, e) =>
         {
             if (e.Property == ToggleButton.IsCheckedProperty)
-                RefreshCopyToState();
+                RefreshCopyToState(showInvalid: showInteractiveValidation);
         };
         dialog.KeyDown += (_, e) =>
         {
@@ -11414,46 +11489,51 @@ public sealed partial class MainWindow : Window
             Margin = new Thickness(0, 10, 0, 0),
             Children =
             {
-                cancelButton,
                 okButton,
+                cancelButton,
             },
         };
         DockPanel.SetDock(buttonRow, Dock.Bottom);
 
         RefreshCopyToState();
-        dialog.Content = new DockPanel
+        var actionPanel = new StackPanel
         {
-            Margin = new Thickness(16),
+            Margin = new Thickness(8, 6, 8, 8),
             Children =
             {
-                buttonRow,
-                new StackPanel
+                inPlaceButton,
+                copyToAnotherLocationButton,
+            },
+        };
+        inPlaceButton.Margin = new Thickness(0, 0, 0, 4);
+
+        dialog.Content = new StackPanel
+        {
+            Margin = new Thickness(12),
+            Children =
+            {
+                new GroupBox
                 {
-                    Spacing = 10,
-                    Children =
-                    {
-                        CreateAdvancedFilterField("List range", listRangeBox),
-                        CreateAdvancedFilterField("Criteria range", criteriaRangeBox),
-                        new StackPanel
-                        {
-                            Spacing = 6,
-                            Children =
-                            {
-                                inPlaceButton,
-                                copyToAnotherLocationButton,
-                            },
-                        },
-                        CreateAdvancedFilterField("Copy to", copyToBox),
-                        uniqueBox,
-                        errorText,
-                    },
+                    Header = "Action",
+                    Margin = new Thickness(0, 0, 0, 10),
+                    Content = actionPanel,
                 },
+                listRangeRow.Row,
+                criteriaRangeRow.Row,
+                copyToRow.Row,
+                copyToHint,
+                uniqueBox,
+                criteriaHint,
+                errorText,
+                buttonRow,
             },
         };
         dialog.Opened += (_, _) =>
         {
             criteriaRangeBox.Focus();
             criteriaRangeBox.SelectAll();
+            errorText.IsVisible = false;
+            Dispatcher.UIThread.Post(() => showInteractiveValidation = true);
         };
 
         await dialog.ShowDialog(this);
@@ -11518,17 +11598,6 @@ public sealed partial class MainWindow : Window
         target.Focus();
         target.SelectAll();
     }
-
-    private static StackPanel CreateAdvancedFilterField(string label, Control control) =>
-        new()
-        {
-            Spacing = 4,
-            Children =
-            {
-                new TextBlock { Text = label },
-                control,
-            },
-        };
 
     private async Task ShowSubtotalDialogAsync()
     {

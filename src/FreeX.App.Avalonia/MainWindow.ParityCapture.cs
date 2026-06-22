@@ -13,6 +13,7 @@ using Free.Shared.Ribbon.Avalonia;
 using FreeX.App.Avalonia.Ribbon;
 using FreeX.App.Presentation.Backstage;
 using FreeX.App.Services;
+using FreeX.Core.Model;
 
 using AvaloniaGrid = Avalonia.Controls.Grid;
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
@@ -117,12 +118,33 @@ public sealed partial class MainWindow
         ("dialog.GoToSpecial", () => ShowGoToSpecialDialogAsync()),
         ("dialog.Sort", () => ShowSortDialogAsync()),
         ("dialog.SortOptions", async () => { await ShowSortOptionsDialogAsync(new SortDialogOptions()); }),
+        ("dialog.AdvancedFilter", () => ShowAdvancedFilterParityDialogAsync()),
         ("dialog.DataValidation", () => ShowDataValidationDialogAsync()),
         ("dialog.ConditionalFormatNewRule", () => ShowConditionalFormatNewRuleDialogAsync()),
         ("dialog.ConditionalFormatManage", () => ShowManageConditionalFormatsDialogAsync()),
         ("dialog.PageSetup", () => ShowPageSetupDialogAsync()),
         ("dialog.Options", () => ShowOptionsDialogAsync()),
     ];
+
+    private async Task ShowAdvancedFilterParityDialogAsync()
+    {
+        var previousSelection = _session.SelectedRange;
+        var sheetId = _session.ActiveSheet.Id;
+        _session.SelectRange(new GridRange(
+            new CellAddress(sheetId, 1, 1),
+            new CellAddress(sheetId, 4, 4)));
+        RefreshShell(_statusText.Text ?? "Ready");
+
+        try
+        {
+            await ShowAdvancedFilterDialogAsync();
+        }
+        finally
+        {
+            _session.SelectRange(previousSelection);
+            RefreshShell(_statusText.Text ?? "Ready");
+        }
+    }
 
     private void PrepareSheetTabsOverflowParityCapture()
     {

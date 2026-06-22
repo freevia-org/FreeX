@@ -192,6 +192,7 @@ $routes = @(
     @{
         RouteId = "dialog.AdvancedFilter"; DisplayName = "Advanced Filter"
         Wpf = @("screenshots\data-tools-dialogs-tour\freex_data_tools_advanced_filter_dialog.png")
+        Shared = @("src\FreeX.App.Services\AdvancedFilterPlanner.cs")
     },
     @{
         RouteId = "dialog.Consolidate"; DisplayName = "Consolidate"
