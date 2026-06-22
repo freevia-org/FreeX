@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Data;
+using Free.Shared.AppServices;
 using FreeX.App.Services.Ribbon;
 
 namespace FreeX.App.Host;
