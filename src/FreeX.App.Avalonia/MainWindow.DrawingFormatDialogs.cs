@@ -471,15 +471,18 @@ public sealed partial class MainWindow
             Height = 40,
             BorderBrush = HeaderForeground,
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(2),
         };
         AutomationProperties.SetAutomationId(preview, "ShapeGradientPreview");
         AutomationProperties.SetName(preview, UiText.Get("ShapeGradient_PreviewLabel"));
 
         var startSwatch = new Border { Width = 26, Height = 20, BorderBrush = HeaderForeground, BorderThickness = new Thickness(1) };
         var endSwatch = new Border { Width = 26, Height = 20, BorderBrush = HeaderForeground, BorderThickness = new Thickness(1) };
+        var startBox = new TextBox { Text = FormatRgb(startColor), Width = 198, Height = 24 };
+        var endBox = new TextBox { Text = FormatRgb(endColor), Width = 198, Height = 24 };
+        AutomationProperties.SetAutomationId(startBox, "ShapeGradientStartColorBox");
+        AutomationProperties.SetAutomationId(endBox, "ShapeGradientEndColorBox");
 
-        var directionBox = new ComboBox { MinWidth = 180 };
+        var directionBox = new ComboBox { Width = 292, Height = 24 };
         foreach (var option in directionOptions)
             directionBox.Items.Add(UiText.Get(option.LabelKey));
         directionBox.SelectedIndex = ShapeGradientPlanner.FindDirectionIndex(directionOptions, values.Direction);
@@ -493,6 +496,8 @@ public sealed partial class MainWindow
         {
             startSwatch.Background = SolidColor(startColor);
             endSwatch.Background = SolidColor(endColor);
+            startBox.Text = FormatRgb(startColor);
+            endBox.Text = FormatRgb(endColor);
             var (sx, sy, ex, ey) = ShapeGradientPlanner.PreviewVector(SelectedDirection(), preview.Bounds.Width, preview.Bounds.Height);
             preview.Background = new LinearGradientBrush
             {
@@ -513,39 +518,15 @@ public sealed partial class MainWindow
                 UpdatePreview();
         };
 
-        var startButton = new Button { Content = UiText.Get("ShapeGradient_ChooseStartColor"), MinWidth = 130 };
-        AutomationProperties.SetAutomationId(startButton, "ShapeGradientStartColorButton");
-        startButton.Click += async (_, _) =>
-        {
-            var chosen = await ShowMoreColorsDialogAsync(UiText.Get("ShapeGradient_StartColorLabel"), startColor);
-            if (chosen is { } c)
-            {
-                startColor = c;
-                UpdatePreview();
-            }
-        };
-
-        var endButton = new Button { Content = UiText.Get("ShapeGradient_ChooseEndColor"), MinWidth = 130 };
-        AutomationProperties.SetAutomationId(endButton, "ShapeGradientEndColorButton");
-        endButton.Click += async (_, _) =>
-        {
-            var chosen = await ShowMoreColorsDialogAsync(UiText.Get("ShapeGradient_EndColorLabel"), endColor);
-            if (chosen is { } c)
-            {
-                endColor = c;
-                UpdatePreview();
-            }
-        };
-
         var dialog = new Window
         {
             Title = UiText.Get("ShapeGradient_Title"),
-            Width = 360,
-            Height = 300,
-            MinWidth = 360,
-            MinHeight = 300,
-            MaxWidth = 360,
-            MaxHeight = 300,
+            Width = 500,
+            Height = 295,
+            MinWidth = 500,
+            MinHeight = 295,
+            MaxWidth = 500,
+            MaxHeight = 295,
             Background = Brushes.White,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
@@ -558,27 +539,49 @@ public sealed partial class MainWindow
         var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 80 };
         AutomationProperties.SetAutomationId(cancel, "ShapeGradientCancelButton");
         cancel.Click += (_, _) => dialog.Close(false);
-        ok.Click += (_, _) => dialog.Close(true);
-
-        StackPanel ColorRow(string label, Border swatch, Button button) => new()
+        ok.Click += (_, _) =>
         {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            VerticalAlignment = AvaloniaVerticalAlignment.Center,
-            Children =
+            if (!TryParseRgb(startBox.Text, out startColor) || !TryParseRgb(endBox.Text, out endColor))
             {
-                new TextBlock { Text = label, Width = 96, VerticalAlignment = AvaloniaVerticalAlignment.Center, Foreground = HeaderForeground },
-                swatch,
-                button,
-            },
+                ShowEditIssue(UiText.Get("FormatCells_InvalidColor"));
+                return;
+            }
+
+            dialog.Close(true);
         };
 
-        var content = new StackPanel { Spacing = 8, Margin = new Thickness(12) };
-        content.Children.Add(ColorRow(UiText.Get("ShapeGradient_StartColorLabel"), startSwatch, startButton));
-        content.Children.Add(ColorRow(UiText.Get("ShapeGradient_EndColorLabel"), endSwatch, endButton));
-        content.Children.Add(FormRow(UiText.Get("ShapeGradient_DirectionLabel"), directionBox));
-        content.Children.Add(new TextBlock { Text = UiText.Get("ShapeGradient_PreviewLabel"), Foreground = HeaderForeground });
-        content.Children.Add(preview);
+        startBox.LostFocus += (_, _) => { if (TryParseRgb(startBox.Text, out var parsed)) { startColor = parsed; UpdatePreview(); } };
+        endBox.LostFocus += (_, _) => { if (TryParseRgb(endBox.Text, out var parsed)) { endColor = parsed; UpdatePreview(); } };
+
+        var stopGrid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("132,32,198,*"),
+            RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto"),
+            Margin = new Thickness(0, 4, 0, 0),
+        };
+
+        AddGradientStopRow(stopGrid, 0, "Stop 1 color (RGB):", startSwatch, startBox, "0%");
+        AddGradientStopRow(stopGrid, 1, "Stop 2 color (RGB):", endSwatch, endBox, "100%");
+        AddGradientDirectionRow(stopGrid, directionBox);
+        Grid.SetRow(preview, 3);
+        Grid.SetColumnSpan(preview, 4);
+        preview.Margin = new Thickness(0, 10, 0, 0);
+        stopGrid.Children.Add(preview);
+
+        startSwatch.PointerPressed += async (_, _) => await ChooseGradientColorAsync(UiText.Get("ShapeGradient_StartColorLabel"), c => startColor = c);
+        endSwatch.PointerPressed += async (_, _) => await ChooseGradientColorAsync(UiText.Get("ShapeGradient_EndColorLabel"), c => endColor = c);
+
+        var gradientGroup = new GroupBox
+        {
+            Header = UiText.Get("ShapeGradient_GradientStopsGroup"),
+            Content = stopGrid,
+            Margin = new Thickness(0, 0, 0, 4),
+        };
+
+        var content = new StackPanel { Spacing = 0, Margin = new Thickness(18, 8, 18, 8) };
+        content.Children.Add(gradientGroup);
+        content.Children.Add(new TextBlock { Text = $"Start: {FormatRgb(startColor)}", Foreground = Brushes.DimGray });
+        content.Children.Add(new TextBlock { Text = $"End: {FormatRgb(endColor)}", Foreground = Brushes.DimGray, Margin = new Thickness(0, 2, 0, 8) });
         content.Children.Add(new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -602,6 +605,79 @@ public sealed partial class MainWindow
             new SetDrawingShapeGradientCommand(_session.ActiveSheet.Id, current.Id, result.StartColor, result.EndColor, result.Direction),
             UiText.Format("ShapeGradient_Applied", FormatHex(result.StartColor), FormatHex(result.EndColor)),
             "Shape Gradient");
+
+        async System.Threading.Tasks.Task ChooseGradientColorAsync(string title, Action<CellColor> apply)
+        {
+            var current = title == UiText.Get("ShapeGradient_StartColorLabel") ? startColor : endColor;
+            var chosen = await ShowMoreColorsDialogAsync(title, current);
+            if (chosen is not { } c)
+                return;
+
+            apply(c);
+            UpdatePreview();
+        }
+    }
+
+    private static void AddGradientStopRow(Grid grid, int row, string label, Border swatch, TextBox box, string stopText)
+    {
+        var labelBlock = new TextBlock { Text = label, Foreground = HeaderForeground, VerticalAlignment = AvaloniaVerticalAlignment.Center };
+        Grid.SetRow(labelBlock, row);
+        Grid.SetColumn(labelBlock, 0);
+        grid.Children.Add(labelBlock);
+
+        swatch.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        Grid.SetRow(swatch, row);
+        Grid.SetColumn(swatch, 1);
+        grid.Children.Add(swatch);
+
+        box.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+        Grid.SetRow(box, row);
+        Grid.SetColumn(box, 2);
+        grid.Children.Add(box);
+
+        var stopBlock = new TextBlock { Text = stopText, Foreground = HeaderForeground, HorizontalAlignment = AvaloniaHorizontalAlignment.Right, VerticalAlignment = AvaloniaVerticalAlignment.Center };
+        Grid.SetRow(stopBlock, row);
+        Grid.SetColumn(stopBlock, 3);
+        grid.Children.Add(stopBlock);
+    }
+
+    private static void AddGradientDirectionRow(Grid grid, ComboBox directionBox)
+    {
+        var labelBlock = new TextBlock
+        {
+            Text = UiText.Get("ShapeGradient_DirectionLabel"),
+            Foreground = HeaderForeground,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            Margin = new Thickness(0, 8, 0, 0),
+        };
+        Grid.SetRow(labelBlock, 2);
+        Grid.SetColumn(labelBlock, 0);
+        grid.Children.Add(labelBlock);
+
+        directionBox.Margin = new Thickness(0, 8, 0, 0);
+        Grid.SetRow(directionBox, 2);
+        Grid.SetColumn(directionBox, 2);
+        Grid.SetColumnSpan(directionBox, 2);
+        grid.Children.Add(directionBox);
+    }
+
+    private static string FormatRgb(CellColor color) =>
+        $"{color.R},{color.G},{color.B}";
+
+    private static bool TryParseRgb(string? text, out CellColor color)
+    {
+        color = new CellColor(0, 0, 0);
+        var parts = (text ?? "").Split(',', StringSplitOptions.TrimEntries);
+        if (parts.Length != 3)
+            return false;
+
+        if (!byte.TryParse(parts[0], out var r) ||
+            !byte.TryParse(parts[1], out var g) ||
+            !byte.TryParse(parts[2], out var b))
+            return false;
+
+        color = new CellColor(r, g, b);
+        return true;
     }
 
     private static IBrush SolidColor(CellColor color) => new SolidColorBrush(ToColor(color));

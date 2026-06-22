@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using FreeX.App.Services;
+using FreeX.Core.Calc;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 using FreeX.Ribbon.Definitions;
@@ -406,8 +407,132 @@ internal static class ParityCapture
         CaptureDialog(results, "dialog.GoTo", outDir, () =>
             new GoToDialog(sheet.Id));
 
+        CaptureDialog(results, "dialog.GoToSpecial", outDir, () =>
+            new GoToSpecialDialog());
+
         CaptureDialog(results, "dialog.Sort", outDir, () =>
             new SortDialog());
+
+        CaptureDialog(results, "dialog.SortOptions", outDir, () =>
+            new SortOptionsDialog(new SortDialogOptions()));
+
+        CaptureDialog(results, "dialog.TextToColumns", outDir, () =>
+            new TextToColumnsDialog(
+                ["North,Widget,120", "South,Gadget,85", "East,Sprocket,200"],
+                new CellAddress(sheet.Id, 2, 6)));
+
+        CaptureDialog(results, "dialog.AdvancedFilter", outDir, () =>
+            new AdvancedFilterDialog(sheet.Id, "Sheet1!$A$1:$D$5", ResolveSheetId(workbook)));
+
+        CaptureDialog(results, "dialog.Consolidate", outDir, () =>
+            new ConsolidateDialog(sheet.Id, "Sheet1!$B$2:$D$5", "Sheet1!$G$2", resolveSheetId: ResolveSheetId(workbook)));
+
+        CaptureDialog(results, "dialog.RemoveDuplicates", outDir, () =>
+            new RemoveDuplicatesDialog(CreateColumnChoices("Region", "Product", "Revenue", "Units")));
+
+        CaptureDialog(results, "dialog.GoalSeek", outDir, () =>
+            new GoalSeekDialog(sheet.Id, new CellAddress(sheet.Id, 2, 4)));
+
+        CaptureDialog(results, "dialog.GoalSeekStatus", outDir, () =>
+            new GoalSeekStatusDialog(new GoalSeekResult(true, 125d, 5000d, 7), 5000d));
+
+        CaptureDialog(results, "dialog.DataTable", outDir, () =>
+            new DataTableDialog(sheet.Id, range));
+
+        CaptureDialog(results, "dialog.ScenarioManager", outDir, () =>
+            new ScenarioManagerDialog(workbook, sheet.Id, ResolveSheetId(workbook)));
+
+        CaptureDialog(results, "dialog.ForecastSheet", outDir, () =>
+            new ForecastSheetDialog());
+
+        CaptureDialog(results, "dialog.Subtotal", outDir, () =>
+            new SubtotalDialog(CreateSubtotalChoices("Region", "Product", "Revenue", "Units")));
+
+        CaptureDialog(results, "dialog.Sparkline", outDir, () =>
+            new SparklineDialog("Sheet1!$D$2:$D$5", "Sheet1!$H$2:$H$5", SparklineKindChoice.Line, sheetId: sheet.Id));
+
+        CaptureDialog(results, "dialog.InsertHyperlink", outDir, () =>
+            new HyperlinkDialog("https://freex.local/report", "Quarterly report"));
+
+        CaptureDialog(results, "dialog.EvaluateFormula", outDir, () =>
+            new EvaluateFormulaDialog(CreateFormulaEvaluationSummary(sheet.Id)));
+
+        CaptureDialog(results, "dialog.WatchWindow", outDir, () =>
+            new WatchWindowDialog(
+                () => CreateWatchEntries(sheet.Id),
+                addWatch: null,
+                getSelectionText: () => "Sheet1!$D$2",
+                navigateTo: _ => { },
+                removeWatch: _ => { }));
+
+        CaptureDialog(results, "dialog.WorkbookStatistics", outDir, () =>
+            new WorkbookStatisticsDialog(WorkbookStatisticsService.GetStatistics(workbook)));
+
+        CaptureDialog(results, "dialog.RenameSheet", outDir, () =>
+            new SheetNameDialog(sheet.Name));
+
+        CaptureDialog(results, "dialog.UnhideSheet", outDir, () =>
+            new UnhideSheetDialog(["Archive"]));
+
+        CaptureDialog(results, "dialog.About", outDir, () =>
+            new AboutDialog());
+
+        CaptureDialog(results, "dialog.LegalNotices", outDir, () =>
+            new LegalNoticesDialog());
+
+        CaptureDialog(results, "dialog.SelectDataSource", outDir, () =>
+            new SelectDataSourceDialog("Sheet1!$A$1:$D$5", firstColumnIsCategories: true, sheetId: sheet.Id, resolveSheetId: ResolveSheetId(workbook)));
+
+        CaptureDialog(results, "dialog.ChangeChartType", outDir, () =>
+            new ChangeChartTypeDialog(ChartType.Column));
+
+        CaptureDialog(results, "dialog.FormatChartArea", outDir, () =>
+            new ChartAreaLegendDialog(CreateChart(sheet.Id)));
+
+        CaptureDialog(results, "dialog.ShapeEffects", outDir, () =>
+            new ShapeEffectsDialog(DrawingShapeEffectPreset.Shadow));
+
+        CaptureDialog(results, "dialog.ShapeGradient", outDir, () =>
+            new ShapeGradientDialog());
+
+        CaptureDialog(results, "dialog.Zoom", outDir, () =>
+            new ZoomDialog(100));
+
+        CaptureDialog(results, "dialog.CustomViews", outDir, () =>
+            new CustomViewsDialog(workbook, new CommandBus(_ => new WorkbookCommandContext(workbook))));
+
+        CaptureDialog(results, "dialog.SelectionPane", outDir, () =>
+            new SelectionPaneDialog(CreateSelectionPaneItems()));
+
+        CaptureDialog(results, "dialog.PivotTableOptions", outDir, () =>
+        {
+            var (pivot, cache, _) = CreatePivotModels(sheet.Id);
+            return new PivotTableOptionsDialog(pivot, cache);
+        });
+
+        CaptureDialog(results, "dialog.PivotFieldFilter", outDir, () =>
+            new PivotFieldFilterDialog(["North", "South", "East", "West"], selectedItems: ["North", "South"]));
+
+        CaptureDialog(results, "dialog.PivotValueFieldSettings", outDir, () =>
+            new PivotValueFieldSettingsDialog(new PivotDataFieldModel(4, "Sum of Revenue", "sum"), CreatePivotHeaders()));
+
+        CaptureDialog(results, "dialog.InsertSlicer", outDir, () =>
+            new InsertSlicerDialog(CreatePivotHeaders(), selectedField: "Region"));
+
+        CaptureDialog(results, "dialog.InsertTimeline", outDir, () =>
+            new InsertTimelineDialog(CreatePivotHeaders(), selectedField: "Date"));
+
+        CaptureDialog(results, "dialog.AllowEditRanges", outDir, () =>
+            new AllowEditRangeDialog(sheet.Id, "Sheet1!$B$2:$D$5", [range]));
+
+        CaptureDialog(results, "dialog.ProtectSheet", outDir, () =>
+            new PasswordProtectionDialog(UiText.Get("Protection_ProtectSheetTitle"), UiText.Get("Protection_PasswordToUnprotectSheet")));
+
+        CaptureDialog(results, "dialog.ProtectWorkbook", outDir, () =>
+            new PasswordProtectionDialog(UiText.Get("Protection_ProtectWorkbookTitle"), UiText.Get("Protection_PasswordToUnprotectWorkbook")));
+
+        CaptureDialog(results, "dialog.AccessibilityChecker", outDir, () =>
+            new AccessibilityCheckerDialog(CreateAccessibilityIssues(sheet.Id, sheet.Name)));
 
         CaptureDialog(results, "dialog.DataValidation", outDir, () =>
             new DataValidationDialog());
@@ -424,6 +549,108 @@ internal static class ParityCapture
         CaptureDialog(results, "dialog.Options", outDir, () =>
             new OptionsDialog(FreeXOptions.Load()));
     }
+
+    private static Func<string, SheetId?> ResolveSheetId(Workbook workbook) =>
+        name => workbook.Sheets.FirstOrDefault(sheet => string.Equals(sheet.Name, name, StringComparison.OrdinalIgnoreCase))?.Id;
+
+    private static IReadOnlyList<RemoveDuplicateColumnChoice> CreateColumnChoices(params string[] headers) =>
+        headers.Select((header, index) => new RemoveDuplicateColumnChoice((uint)index, header, true)).ToArray();
+
+    private static IReadOnlyList<SubtotalColumnChoice> CreateSubtotalChoices(params string[] headers) =>
+        headers.Select((header, index) => new SubtotalColumnChoice((uint)index, header, index >= 2)).ToArray();
+
+    private static FormulaEvaluationSummary CreateFormulaEvaluationSummary(SheetId sheetId)
+    {
+        var address = new CellAddress(sheetId, 6, 4);
+        return new FormulaEvaluationSummary(
+            sheetId,
+            "Sheet1",
+            address,
+            "=SUM(D2:D5)",
+            "469",
+            [
+                new FormulaEvaluationStep("SUM(D2:D5)", "469"),
+                new FormulaEvaluationStep("D2:D5", "{120;85;200;64}"),
+                new FormulaEvaluationStep("=SUM(D2:D5)", "469"),
+            ]);
+    }
+
+    private static IReadOnlyList<WatchWindowEntry> CreateWatchEntries(SheetId sheetId) =>
+    [
+        new WatchWindowEntry(sheetId, "Sheet1", new CellAddress(sheetId, 2, 4), "120", "=C2*D2"),
+        new WatchWindowEntry(sheetId, "Sheet1", new CellAddress(sheetId, 3, 4), "85", null),
+    ];
+
+    private static ChartModel CreateChart(SheetId sheetId) =>
+        new()
+        {
+            Name = "Revenue Chart",
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 5, 4)),
+            Title = "Revenue by region",
+            XAxisTitle = "Region",
+            YAxisTitle = "Revenue",
+            ShowLegend = true,
+            LegendPosition = ChartLegendPosition.Right,
+            ChartAreaFillColor = new CellColor(255, 255, 255),
+            PlotAreaFillColor = new CellColor(248, 250, 252),
+        };
+
+    private static IReadOnlyList<SelectionPaneItem> CreateSelectionPaneItems() =>
+    [
+        new SelectionPaneItem(SelectionPaneObjectKind.Chart, Guid.NewGuid(), "Revenue Chart", true, false, true),
+        new SelectionPaneItem(SelectionPaneObjectKind.Shape, Guid.NewGuid(), "Rectangle 1", true, true, false),
+    ];
+
+    private static string[] CreatePivotHeaders() =>
+        ["Region", "Product", "Date", "Units", "Revenue"];
+
+    private static (PivotTableModel Pivot, PivotCacheModel Cache, IReadOnlyList<string> Headers) CreatePivotModels(SheetId sheetId)
+    {
+        var headers = CreatePivotHeaders();
+        var sourceRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 5, 5));
+        var cache = new PivotCacheModel
+        {
+            CacheId = 1,
+            SourceType = PivotCacheSourceType.WorksheetRange,
+            SourceSheetName = "Sheet1",
+            SourceReference = "$A$1:$E$5",
+            RecordCount = 4,
+        };
+        foreach (var header in headers)
+            cache.Fields.Add(new PivotCacheFieldModel(header, ContainsString: true));
+
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = cache.CacheId,
+            SourceRange = sourceRange,
+            TargetRange = new GridRange(new CellAddress(sheetId, 8, 1), new CellAddress(sheetId, 12, 4)),
+            StyleName = "PivotStyleLight16",
+            ShowSubtotals = true,
+            ShowRowStripes = true,
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.ColumnFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(4, "Sum of Revenue", "sum"));
+        return (pivot, cache, headers);
+    }
+
+    private static IReadOnlyList<AccessibilityIssue> CreateAccessibilityIssues(SheetId sheetId, string sheetName) =>
+    [
+        new AccessibilityIssue(
+            AccessibilityIssueKind.DefaultWorksheetName,
+            sheetId,
+            sheetName,
+            sheetName,
+            "Worksheet tab names should describe their contents."),
+        new AccessibilityIssue(
+            AccessibilityIssueKind.MissingAltText,
+            sheetId,
+            sheetName,
+            "Revenue Chart",
+            "Charts should include descriptive alternative text."),
+    ];
 
     private static void CaptureDialog(
         List<SurfaceResult> results, string surfaceId, string outDir, Func<Window> factory)

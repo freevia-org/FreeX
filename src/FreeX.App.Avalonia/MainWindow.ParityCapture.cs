@@ -352,8 +352,17 @@ public sealed partial class MainWindow
     private async Task ShowShapeEffectsParityDialogAsync() =>
         await ShowWithSelectedParityShapeAsync(OpenShapeEffectsDialogAsync);
 
-    private async Task ShowShapeGradientParityDialogAsync() =>
+    private async Task ShowShapeGradientParityDialogAsync()
+    {
+        if (EnsureParityShape() is { } shape)
+        {
+            shape.FillColor = new CellColor(31, 119, 180);
+            shape.GradientFillEndColor = new CellColor(180, 210, 240);
+            shape.GradientFillDirection = DrawingShapeGradientDirection.DiagonalDown;
+        }
+
         await ShowWithSelectedParityShapeAsync(OpenShapeGradientDialogAsync);
+    }
 
     private async Task ShowSelectionPaneParityDialogAsync()
     {
