@@ -2325,7 +2325,7 @@ public sealed class AvaloniaShellSourceTests
         parityCaptureSource.Should().Contain("new PivotCacheModel");
         parityCaptureSource.Should().Contain("new PivotDataFieldModel(4, \"Sum of Revenue\", \"sum\")");
         parityCaptureSource.Should().Contain("private async Task ShowCustomViewsParityDialogAsync()");
-        parityCaptureSource.Should().Contain("CustomViewsPlanner.BuildSaveCommand(");
+        parityCaptureSource.Should().Contain("_session.Workbook.CustomViews.Clear();");
         parityCaptureSource.Should().Contain("private async Task ShowAllowEditRangesParityDialogAsync()");
         parityCaptureSource.Should().Contain("new AllowEditRangeCommand(sheetId, range)");
 
@@ -4943,6 +4943,11 @@ public sealed class AvaloniaShellSourceTests
         customViewsSource.Should().Contain("AutomationProperties.SetAutomationId(deleteButton, \"CustomViewsDeleteButton\");");
         customViewsSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"CustomViewAddDialog\");");
         customViewsSource.Should().Contain("AutomationProperties.SetAutomationId(nameBox, \"CustomViewNameBox\");");
+        customViewsSource.Should().Contain("Width = 640,");
+        customViewsSource.Should().Contain("CreateCustomViewsHeader()");
+        customViewsSource.Should().Contain("AddCustomViewsHeaderCell(header, 1, UiText.Get(\"CustomViews_Sheets\"));");
+        customViewsSource.Should().Contain("new ColumnDefinitions(\"200,70,110,210\")");
+        customViewsSource.Should().Contain("Children = { showButton, addButton, deleteButton, closeButton }");
 
         // All Custom Views logic flows through the portable planner + the shared session command path.
         customViewsSource.Should().Contain("CustomViewsPlanner.BuildRows(_session.Workbook)");
