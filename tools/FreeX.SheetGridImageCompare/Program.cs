@@ -440,7 +440,7 @@ internal static class Program
         var scaleX = hasTargetDimensions ? pixelW / viewW : RenderScale;
         var scaleY = hasTargetDimensions ? pixelH / viewH : RenderScale;
         var rtb = hasTargetDimensions
-            ? new RenderTargetBitmap(pixelW, pixelH, 96.0 * scaleX, 96.0 * scaleY, PixelFormats.Pbgra32)
+            ? new RenderTargetBitmap(pixelW, pixelH, 96.0, 96.0, PixelFormats.Pbgra32)
             : new RenderTargetBitmap(pixelW, pixelH, RenderDpi, RenderDpi, PixelFormats.Pbgra32);
 
         // Apply DPI scale transform so logical DIPs map to the correct pixel count

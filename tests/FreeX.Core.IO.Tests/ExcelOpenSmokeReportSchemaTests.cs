@@ -65,6 +65,8 @@ public sealed class ExcelOpenSmokeReportSchemaTests
         source.Should().Contain("LoadExcelReferenceDimensions");
         source.Should().Contain("targetPixelDimensions");
         source.Should().Contain("render FreeX to the same pixel canvas");
+        source.Should().Contain("new RenderTargetBitmap(pixelW, pixelH, 96.0, 96.0, PixelFormats.Pbgra32)");
+        source.Should().Contain("ctx.PushTransform(new ScaleTransform(scaleX, scaleY))");
         source.Should().Contain("PivotHeaderDropdownPlanner.BuildTargets");
         source.Should().Contain("new PivotHeaderDropdownButton(target.HeaderCell, target.IsActive)");
         source.Should().Contain("IsLikelyBlankReferencePng");
