@@ -568,7 +568,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             if (pivotMetadata.PivotTablesBySheetName.TryGetValue(xlSheet.Name, out var pivotTables))
             {
                 foreach (var pivotTable in pivotTables)
-                    sheet.PivotTables.Add(pivotTable.ToPivotTableModel(sheet.Id));
+                    sheet.PivotTables.Add(pivotTable.ToPivotTableModel(workbook, sheet.Id));
             }
             if (structuredTableMetadata.TablesBySheetName.TryGetValue(xlSheet.Name, out var structuredTables))
             {

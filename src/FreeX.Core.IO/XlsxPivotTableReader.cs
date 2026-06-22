@@ -210,7 +210,7 @@ internal static partial class XlsxPivotTableReader
         IReadOnlyDictionary<int, string> numberFormatCatalog,
         out PendingPivotTableModel pivotTable)
     {
-        pivotTable = new PendingPivotTableModel("", 0, "", "", pivotPath, null, null, null, true, 1, 1, 1, false, PivotSubtotalPlacement.Bottom, true, true, true, true, false, PivotReportLayout.Tabular, 1, "PivotStyleLight16", true, true, false, false, true, true, true, false, false, false, false, false, 0, true, true, false, true, true, true, false, true, true, true, true, true, true, false, false, null, null, null, null, null, null, [], [], [], [], [], [], [], [], []);
+        pivotTable = new PendingPivotTableModel("", 0, "", "", "", pivotPath, null, null, null, true, 1, 1, 1, false, PivotSubtotalPlacement.Bottom, true, true, true, true, false, PivotReportLayout.Tabular, 1, "PivotStyleLight16", true, true, false, false, true, true, true, false, false, false, false, false, 0, true, true, false, true, true, true, false, true, true, true, true, true, true, false, false, null, null, null, null, null, null, [], [], [], [], [], [], [], [], []);
         var root = pivotXml.Root;
         if (root is null)
             return false;
@@ -259,6 +259,7 @@ internal static partial class XlsxPivotTableReader
             cacheId,
             targetReference,
             pivotCache?.SourceReference ?? "",
+            pivotCache?.SourceSheetName ?? "",
             pivotPath,
             XlsxXmlAttributeReader.ReadIntAttribute(root, "createdVersion"),
             XlsxXmlAttributeReader.ReadIntAttribute(root, "updatedVersion"),

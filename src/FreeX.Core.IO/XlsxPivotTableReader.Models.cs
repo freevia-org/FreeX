@@ -4,16 +4,17 @@ namespace FreeX.Core.IO;
 
 internal static partial class XlsxPivotTableReader
 {
-    private static PivotTableModel ToPivotTableModel(PendingPivotTableModel pending, SheetId sheetId)
+    private static PivotTableModel ToPivotTableModel(PendingPivotTableModel pending, Workbook workbook, SheetId sheetId)
     {
         // A pivot table's <location ref="..."> can collapse to a single cell (e.g. "D6") for an
         // empty or freshly-anchored pivot; accept both single-cell and multi-cell references.
         var targetRange = GridRange.ParseCellOrRange(pending.TargetReference, sheetId);
+        var sourceSheetId = ResolveSourceSheetId(pending, workbook, sheetId);
         var pivotTable = new PivotTableModel
         {
             Name = pending.Name,
             CacheId = pending.CacheId,
-            SourceRange = ParseOptionalRange(pending.SourceReference, sheetId),
+            SourceRange = ParseOptionalRange(pending.SourceReference, sourceSheetId),
             TargetRange = targetRange,
             LastRenderedRange = targetRange,
             PackagePart = pending.PackagePart,
@@ -81,6 +82,17 @@ internal static partial class XlsxPivotTableReader
         return pivotTable;
     }
 
+    private static SheetId ResolveSourceSheetId(PendingPivotTableModel pending, Workbook workbook, SheetId fallbackSheetId)
+    {
+        if (!string.IsNullOrWhiteSpace(pending.SourceSheetName) &&
+            workbook.GetSheet(pending.SourceSheetName) is { } sourceSheet)
+        {
+            return sourceSheet.Id;
+        }
+
+        return fallbackSheetId;
+    }
+
     private static GridRange ParseOptionalRange(string reference, SheetId sheetId)
     {
         if (string.IsNullOrWhiteSpace(reference))
@@ -110,6 +122,7 @@ internal static partial class XlsxPivotTableReader
         int CacheId,
         string TargetReference,
         string SourceReference,
+        string SourceSheetName,
         string PackagePart,
         int? CreatedVersion,
         int? UpdatedVersion,
@@ -172,7 +185,7 @@ internal static partial class XlsxPivotTableReader
         IReadOnlyList<PivotLabelFilterModel> LabelFilters,
         IReadOnlyList<PivotSortModel> Sorts)
     {
-        public PivotTableModel ToPivotTableModel(SheetId sheetId) =>
-            XlsxPivotTableReader.ToPivotTableModel(this, sheetId);
+        public PivotTableModel ToPivotTableModel(Workbook workbook, SheetId sheetId) =>
+            XlsxPivotTableReader.ToPivotTableModel(this, workbook, sheetId);
     }
 }
