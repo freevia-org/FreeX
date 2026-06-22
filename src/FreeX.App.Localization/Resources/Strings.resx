@@ -530,6 +530,7 @@
   <data name="CustomViews_Hint" xml:space="preserve"><value>A custom view saves the current display settings (view mode, frozen/split panes, gridlines, headings, zoom and scroll position) and the active sheet so you can switch back to them later.</value></data>
   <data name="CustomViews_ListLabel" xml:space="preserve"><value>Views</value></data>
   <data name="CustomViews_ColumnName" xml:space="preserve"><value>Name</value></data>
+  <data name="CustomViews_Sheets" xml:space="preserve"><value>Sheets</value></data>
   <data name="CustomViews_Show" xml:space="preserve"><value>Show</value></data>
   <data name="CustomViews_Add" xml:space="preserve"><value>Add...</value></data>
   <data name="CustomViews_Delete" xml:space="preserve"><value>Delete</value></data>
@@ -542,6 +543,8 @@
   <data name="CustomViews_SaveFailed" xml:space="preserve"><value>The custom view could not be saved.</value></data>
   <data name="CustomViews_Deleted" xml:space="preserve"><value>Custom view '{0}' deleted.</value></data>
   <data name="CustomViews_DeleteFailed" xml:space="preserve"><value>The custom view could not be deleted.</value></data>
+  <data name="CustomViews_Included" xml:space="preserve"><value>Included</value></data>
+  <data name="CustomViews_NotIncluded" xml:space="preserve"><value>Not included</value></data>
   <!-- Add Custom View name dialog -->
   <data name="CustomViews_AddTitle" xml:space="preserve"><value>Add View</value></data>
   <data name="CustomViews_NameLabel" xml:space="preserve"><value>Name:</value></data>
