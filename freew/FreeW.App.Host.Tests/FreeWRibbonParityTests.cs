@@ -164,10 +164,10 @@ public sealed class FreeWRibbonParityTests
         documentFormatting.Should().NotBeNull();
         CommandIds(documentFormatting!)
             .Should()
-            .Equal("freew.theme", "freew.style-set", "freew.theme-colors", "freew.theme-fonts", "freew.paragraph-spacing");
+            .Equal("freew.theme", "freew.style-set", "freew.theme-colors", "freew.theme-fonts", "freew.paragraph-spacing", "freew.theme-effects");
         Labels(documentFormatting!)
             .Should()
-            .Equal("Themes", "Style Sets", "Colors", "Fonts", "Paragraph Spacing");
+            .Equal("Themes", "Style Sets", "Colors", "Fonts", "Paragraph Spacing", "Effects");
 
         foreach (var commandId in CommandIds(documentFormatting!))
             registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must execute from Design > Document Formatting");

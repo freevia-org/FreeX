@@ -31,6 +31,12 @@ internal static class FreeWRibbon
                 menu.Item(commandId, spacingSet.Name, spacingSet.Name[0].ToString());
         }
 
+        static void EffectsMenu(string commandId, RibbonMenuBuilder menu)
+        {
+            foreach (var effectSet in DocumentEffectSet.Catalog)
+                menu.Item(commandId, effectSet.Name, effectSet.Name[0].ToString());
+        }
+
         var definition = new RibbonDefinitionBuilder()
             .Tab("home", "Home", "H", tab =>
             {
@@ -340,6 +346,7 @@ internal static class FreeWRibbon
                     g.Medium("freew.theme-colors", "Colors", RibbonCommandIconKind.Color, "C", menu: m => ThemeMenu("freew.theme-colors", m), accent: RibbonCommandIconAccent.Color);
                     g.Medium("freew.theme-fonts", "Fonts", RibbonCommandIconKind.Font, "F", menu: m => FontSetMenu("freew.theme-fonts", m), accent: RibbonCommandIconAccent.Theme);
                     g.Medium("freew.paragraph-spacing", "Paragraph Spacing", RibbonCommandIconKind.LineSpacing, "P", menu: m => ParagraphSpacingMenu("freew.paragraph-spacing", m), accent: RibbonCommandIconAccent.Theme);
+                    g.Medium("freew.theme-effects", "Effects", RibbonCommandIconKind.Effects, "E", menu: m => EffectsMenu("freew.theme-effects", m), accent: RibbonCommandIconAccent.Theme);
                 });
                 // Design > Page Background: set the whole-page background colour (Word's Page Color). The
                 // command opens a swatch palette (+ No Color + More Colors...) and writes the model's page

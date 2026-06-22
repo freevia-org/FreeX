@@ -193,6 +193,21 @@ public class DocumentThemeTests
     }
 
     [Fact]
+    public void InferPreset_PreservesRecognisedEffectSetName()
+    {
+        var berlin = DocumentTheme.FindByName("Berlin")!;
+
+        var inferred = DocumentTheme.InferPreset(
+            berlin.ColorScheme,
+            berlin.HeadingFont,
+            berlin.BodyFont,
+            "Intense");
+
+        inferred.Name.Should().Be("Berlin");
+        inferred.EffectSetName.Should().Be("Intense");
+    }
+
+    [Fact]
     public void InferPreset_FallsBackToOffice_ForAnUnrecognisedScheme()
     {
         var foreign = new ThemeColorScheme(

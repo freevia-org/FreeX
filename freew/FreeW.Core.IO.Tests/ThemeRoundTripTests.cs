@@ -115,10 +115,43 @@ public class ThemeRoundTripTests
 
         // The format scheme has at least one fill/line/effect/bg entry (Word requires three of each).
         var fmt = elements.Element(A + "fmtScheme")!;
+        fmt.Attribute("name")!.Value.Should().Be("Office");
         fmt.Element(A + "fillStyleLst")!.Elements().Should().NotBeEmpty();
         fmt.Element(A + "lnStyleLst")!.Elements().Should().NotBeEmpty();
         fmt.Element(A + "effectStyleLst")!.Elements().Should().NotBeEmpty();
         fmt.Element(A + "bgFillStyleLst")!.Elements().Should().NotBeEmpty();
+    }
+
+    [Theory]
+    [InlineData("Subtle")]
+    [InlineData("Moderate")]
+    [InlineData("Intense")]
+    public void EffectSet_RoundTripsThroughThemeFormatScheme(string effectName)
+    {
+        var doc = DocumentWithTheme(DocumentTheme.FindByName("Berlin")!);
+        DocumentEffectSet.Apply(doc, DocumentEffectSet.FindByName(effectName)!);
+
+        var reloaded = RoundTrip(doc);
+
+        reloaded.Theme.Name.Should().Be("Berlin");
+        reloaded.Theme.EffectSetName.Should().Be(effectName);
+    }
+
+    [Fact]
+    public void EffectSet_WritesNamedFormatSchemeWithEffectEntries()
+    {
+        var doc = DocumentWithTheme(DocumentTheme.Default);
+        DocumentEffectSet.Apply(doc, DocumentEffectSet.FindByName("Moderate")!);
+
+        var theme = EntryXml(WriteBytes(doc), "word/theme/theme1.xml");
+        var fmt = theme.Root!.Element(A + "themeElements")!.Element(A + "fmtScheme")!;
+
+        fmt.Attribute("name")!.Value.Should().Be("Moderate");
+        fmt.Element(A + "lnStyleLst")!.Elements(A + "ln")
+            .Select(ln => (int)ln.Attribute("w")!)
+            .Should().Equal(12700, 25400, 38100);
+        fmt.Element(A + "effectStyleLst")!.Descendants(A + "outerShdw").Should().NotBeEmpty();
+        fmt.Element(A + "effectStyleLst")!.Descendants(A + "softEdge").Should().NotBeEmpty();
     }
 
     [Fact]
