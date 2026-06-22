@@ -48,8 +48,28 @@ public sealed class GridViewTextDecorationTests
         var fontName = GridView.ResolveCellFontNameForDisplay(
             "Aptos Narrow",
             candidate => string.Equals(candidate, "Calibri", StringComparison.OrdinalIgnoreCase));
+        var stretch = GridView.ResolveCellFontStretchForDisplay(
+            "Aptos Narrow",
+            candidate => string.Equals(candidate, "Calibri", StringComparison.OrdinalIgnoreCase));
 
         fontName.Should().Be("Calibri");
+        stretch.Should().Be(FontStretches.Condensed);
+    }
+
+    [Fact]
+    public void ResolveCellFontNameForDisplay_PrefersNarrowFallbackForUnavailableAptosNarrow()
+    {
+        var fontName = GridView.ResolveCellFontNameForDisplay(
+            "Aptos Narrow",
+            candidate => string.Equals(candidate, "Arial Narrow", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(candidate, "Calibri", StringComparison.OrdinalIgnoreCase));
+        var stretch = GridView.ResolveCellFontStretchForDisplay(
+            "Aptos Narrow",
+            candidate => string.Equals(candidate, "Arial Narrow", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(candidate, "Calibri", StringComparison.OrdinalIgnoreCase));
+
+        fontName.Should().Be("Arial Narrow");
+        stretch.Should().Be(FontStretches.Normal);
     }
 
     [Fact]
