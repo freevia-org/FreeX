@@ -81,6 +81,13 @@ public sealed class ExcelOpenSmokeReportSchemaTests
         source.Should().Contain("Dimension mismatch: Excel");
         source.Should().Contain("Dimension mismatch warning: Excel");
         source.Should().Contain("800x600 compatibility resize fallback");
+        source.Should().Contain("ComputeExactPixelDiff");
+        source.Should().Contain("Exact same-size pixel metrics");
+        source.Should().Contain("Exact pixels: mean=");
+        source.Should().Contain("--pixel-tolerance");
+        source.Should().Contain("--strict-pixel-threshold");
+        source.Should().Contain("Strict pixel gate");
+        source.Should().Contain("PixelDiffMetrics");
         source.Should().Contain("ComparisonFailed");
     }
 

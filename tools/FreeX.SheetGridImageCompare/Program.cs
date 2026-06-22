@@ -279,7 +279,7 @@ internal static class Program
 
         string reportPath;
         if (hasDiffDir)
-            reportPath = RunDiffMode(workbook, sheetResults, freexOutputDir, excelInputDir, options.ThresholdPercent, options.FailOnDimensionMismatch);
+            reportPath = RunDiffMode(workbook, sheetResults, freexOutputDir, excelInputDir, options);
         else
             reportPath = WriteSimpleIndex(sheetResults, freexOutputDir, xlsxPath);
 
@@ -1278,8 +1278,7 @@ internal static class Program
         IReadOnlyList<SheetResult> results,
         string freexOutputDir,
         string excelInputDir,
-        double thresholdPercent,
-        bool failOnDimensionMismatch)
+        GridImageCompareOptions options)
     {
         Console.WriteLine($"  Diff mode: Excel PNGs found in {excelInputDir}");
 
@@ -1329,12 +1328,24 @@ internal static class Program
                     row.DimensionMismatch = row.ExcelDimensions != row.FreeXDimensions;
                     if (row.DimensionMismatch)
                     {
-                        row.Status = failOnDimensionMismatch ? "DIM_FAIL" : "DIM_WARN";
-                        row.Error = failOnDimensionMismatch
+                        row.Status = options.FailOnDimensionMismatch ? "DIM_FAIL" : "DIM_WARN";
+                        row.Error = options.FailOnDimensionMismatch
                             ? $"Dimension mismatch: Excel {row.ExcelDimensions}, FreeX {row.FreeXDimensions}. Mean pixel diff uses 800x600 compatibility resize fallback only."
                             : $"Dimension mismatch warning: Excel {row.ExcelDimensions}, FreeX {row.FreeXDimensions}. Mean pixel diff uses 800x600 compatibility resize fallback only.";
-                        if (failOnDimensionMismatch)
+                        if (options.FailOnDimensionMismatch)
                             r.ComparisonFailed = true;
+                    }
+                    else
+                    {
+                        var exactPixelMetrics = ComputeExactPixelDiff(excelPng, r.FreeXPngPath!, options.PixelTolerance);
+                        row.ExactPixelMetrics = exactPixelMetrics;
+                        if (options.StrictPixelThresholdPercent is { } strictPixelThreshold &&
+                            exactPixelMetrics.ChangedPixelPercent > strictPixelThreshold)
+                        {
+                            row.Status = "PIX_FAIL";
+                            row.Error = $"Strict pixel threshold exceeded: changed pixels {exactPixelMetrics.ChangedPixelPercent:F2}% > {strictPixelThreshold:F2}% with channel tolerance {options.PixelTolerance}.";
+                            r.ComparisonFailed = true;
+                        }
                     }
 
                     row.DiffPercent = ComputeMeanPixelDiff(excelPng, r.FreeXPngPath!);
@@ -1382,11 +1393,15 @@ internal static class Program
         var sb = new StringBuilder();
         sb.AppendLine("FreeX vs Excel Sheet Fidelity Report (GridView renderer)");
         sb.AppendLine($"Generated: {DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss zzz}");
-        sb.AppendLine($"Threshold: {thresholdPercent:F2}%");
-        sb.AppendLine(failOnDimensionMismatch
+        sb.AppendLine($"Threshold: {options.ThresholdPercent:F2}%");
+        sb.AppendLine(options.FailOnDimensionMismatch
             ? "Dimension gate: native Excel and FreeX PNG dimensions must match exactly."
             : "Dimension check: native Excel and FreeX PNG dimensions are reported; pass --fail-on-dimension-mismatch to make mismatches fail.");
         sb.AppendLine("Mean pixel diff: 800x600 compatibility resize fallback.");
+        sb.AppendLine($"Exact same-size pixel metrics: alpha-composited over white; changed pixels use max channel delta > {options.PixelTolerance}.");
+        sb.AppendLine(options.StrictPixelThresholdPercent is { } strictThreshold
+            ? $"Strict pixel gate: changed pixels above tolerance must be <= {strictThreshold:F2}%."
+            : "Strict pixel gate: not enabled; pass --strict-pixel-threshold <percent> to fail on exact changed-pixel percentage.");
         sb.AppendLine();
         sb.AppendLine("=== RANKED BY DIFF% (worst first) ===");
         sb.AppendLine($"{"NN",-4}  {"Diff%",7}  {"Status",-8}  {"PNG dimensions",-34}  Sheet");
@@ -1396,9 +1411,11 @@ internal static class Program
         {
             var diffStr = r.DiffPercent >= 0 ? $"{r.DiffPercent:F1}%" : "  N/A";
             var status = r.DimensionMismatch
-                ? (failOnDimensionMismatch ? "DIM_FAIL" : "DIM_WARN")
-                : r.DiffPercent > thresholdPercent ? "FAIL" : r.Status;
+                ? (options.FailOnDimensionMismatch ? "DIM_FAIL" : "DIM_WARN")
+                : r.Status == "OK" && r.DiffPercent > options.ThresholdPercent ? "FAIL" : r.Status;
             sb.AppendLine($"{r.NN.ToString("D2"),-4}  {diffStr,7}  {status,-8}  {FormatDimensions(r),-34}  {r.SheetName}");
+            if (r.ExactPixelMetrics is { } metrics)
+                sb.AppendLine($"       Exact pixels: mean={metrics.MeanDiffPercent:F3}% changed>{metrics.PixelTolerance}={metrics.ChangedPixelPercent:F2}% maxDelta={metrics.MaxChannelDelta}");
             if (r.Error != null)
                 sb.AppendLine($"       NOTE: {r.Error}");
 
@@ -1463,6 +1480,56 @@ internal static class Program
 
         double maxDiff = (double)pixelCount * 3 * 255;
         return totalDiff / maxDiff * 100.0;
+    }
+
+    private static PixelDiffMetrics ComputeExactPixelDiff(string excelPath, string freexPath, int pixelTolerance)
+    {
+        var excelBmp = LoadBitmap(excelPath);
+        var freexBmp = File.Exists(freexPath)
+            ? LoadBitmap(freexPath)
+            : CreateWhite(excelBmp.PixelWidth, excelBmp.PixelHeight);
+        if (excelBmp.PixelWidth != freexBmp.PixelWidth ||
+            excelBmp.PixelHeight != freexBmp.PixelHeight)
+        {
+            throw new InvalidOperationException("Exact pixel diff requires matching PNG dimensions.");
+        }
+
+        var width = excelBmp.PixelWidth;
+        var height = excelBmp.PixelHeight;
+        var excelPixels = GetBgra32Pixels(excelBmp, width, height);
+        var freexPixels = GetBgra32Pixels(freexBmp, width, height);
+
+        long totalDiff = 0;
+        var changedPixels = 0;
+        var maxChannelDelta = 0;
+        var pixelCount = width * height;
+        for (var index = 0; index < pixelCount; index++)
+        {
+            var offset = index * 4;
+            var pixelMaxDelta = 0;
+            var excelAlpha = excelPixels[offset + 3] / 255.0;
+            var freexAlpha = freexPixels[offset + 3] / 255.0;
+
+            for (var channel = 0; channel < 3; channel++)
+            {
+                var excelValue = excelPixels[offset + channel] * excelAlpha + 255 * (1 - excelAlpha);
+                var freexValue = freexPixels[offset + channel] * freexAlpha + 255 * (1 - freexAlpha);
+                var delta = (int)Math.Round(Math.Abs(excelValue - freexValue));
+                totalDiff += delta;
+                pixelMaxDelta = Math.Max(pixelMaxDelta, delta);
+                maxChannelDelta = Math.Max(maxChannelDelta, delta);
+            }
+
+            if (pixelMaxDelta > pixelTolerance)
+                changedPixels++;
+        }
+
+        var maxDiff = (double)pixelCount * 3 * 255;
+        return new PixelDiffMetrics(
+            totalDiff / maxDiff * 100.0,
+            (double)changedPixels / pixelCount * 100.0,
+            maxChannelDelta,
+            pixelTolerance);
     }
 
     private static BitmapSource ResizeTo(BitmapSource source, int w, int h)
@@ -1675,12 +1742,19 @@ internal sealed class DiffRow
     public PngDimensions? ExcelDimensions { get; set; }
     public PngDimensions? FreeXDimensions { get; set; }
     public bool    DimensionMismatch { get; set; }
+    public PixelDiffMetrics? ExactPixelMetrics { get; set; }
 }
 
 internal readonly record struct PngDimensions(int Width, int Height)
 {
     public override string ToString() => $"{Width}x{Height}";
 }
+
+internal readonly record struct PixelDiffMetrics(
+    double MeanDiffPercent,
+    double ChangedPixelPercent,
+    int MaxChannelDelta,
+    int PixelTolerance);
 
 internal sealed record GridImageCompareOptions(
     string? WorkbookPath,
@@ -1689,7 +1763,9 @@ internal sealed record GridImageCompareOptions(
     bool PivotRangesOnly,
     bool PivotSheetRanges,
     double ThresholdPercent,
-    bool FailOnDimensionMismatch)
+    bool FailOnDimensionMismatch,
+    int PixelTolerance,
+    double? StrictPixelThresholdPercent)
 {
     public static GridImageCompareOptions Parse(string[] args)
     {
@@ -1700,6 +1776,8 @@ internal sealed record GridImageCompareOptions(
         var pivotSheetRanges = false;
         var thresholdPercent = 12.0;
         var failOnDimensionMismatch = false;
+        var pixelTolerance = 8;
+        double? strictPixelThresholdPercent = null;
 
         for (var index = 0; index < args.Length; index++)
         {
@@ -1725,6 +1803,16 @@ internal sealed record GridImageCompareOptions(
                         double.TryParse(args[++index], NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed))
                         thresholdPercent = parsed;
                     break;
+                case "--pixel-tolerance":
+                    if (index + 1 < args.Length &&
+                        int.TryParse(args[++index], NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedTolerance))
+                        pixelTolerance = Math.Clamp(parsedTolerance, 0, 255);
+                    break;
+                case "--strict-pixel-threshold":
+                    if (index + 1 < args.Length &&
+                        double.TryParse(args[++index], NumberStyles.Float, CultureInfo.InvariantCulture, out var parsedStrictThreshold))
+                        strictPixelThresholdPercent = Math.Clamp(parsedStrictThreshold, 0.0, 100.0);
+                    break;
                 default:
                     if (!args[index].StartsWith("-", StringComparison.Ordinal))
                         workbookPath ??= args[index];
@@ -1735,7 +1823,7 @@ internal sealed record GridImageCompareOptions(
         if (pivotSheetRanges)
             pivotRangesOnly = false;
 
-        return new GridImageCompareOptions(workbookPath, outputDirectory, exportExcelPngs, pivotRangesOnly, pivotSheetRanges, thresholdPercent, failOnDimensionMismatch);
+        return new GridImageCompareOptions(workbookPath, outputDirectory, exportExcelPngs, pivotRangesOnly, pivotSheetRanges, thresholdPercent, failOnDimensionMismatch, pixelTolerance, strictPixelThresholdPercent);
     }
 }
 
