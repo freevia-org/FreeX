@@ -398,6 +398,10 @@ public sealed class MainWindow : Window
             ExportPdf: ExportToPdf,
             ExportXps: ExportToXps,
             EditProperties: OpenProperties,
+            MarkAsFinal: ToggleMarkAsFinal,
+            RestrictEditing: OpenRestrictEditing,
+            InspectDocument: InspectDocument,
+            CheckAccessibility: CheckAccessibility,
             EditOptions: OpenOptions,
             CurrentOptions: () => _options,
             OnClosed: () => SetEditorAdornersVisible(true),
@@ -1666,6 +1670,39 @@ public sealed class MainWindow : Window
         var dialog = new PropertiesDialog(this, _editor.Model.Properties);
         if (dialog.ShowDialog() == true)
             _file.MarkDirty();
+    }
+
+    private void ToggleMarkAsFinal()
+    {
+        _editor.Focus();
+        _editor.SetMarkedAsFinal(!_editor.IsMarkedAsFinal);
+    }
+
+    private void OpenRestrictEditing()
+    {
+        _editor.Focus();
+        var chosen = RestrictEditingDialog.Prompt(this, _editor.ProtectionMode);
+        if (chosen is { } mode)
+            _editor.SetProtection(mode);
+    }
+
+    private void InspectDocument()
+    {
+        _editor.CommitToModel();
+        var result = DocumentInspector.Inspect(_editor.Model);
+        var choice = DocumentInspectorDialog.Show(this, result);
+        if (choice is null)
+            return;
+
+        _editor.ApplyInspectorRemovals(choice.Comments, choice.Revisions, choice.Properties, choice.Bookmarks);
+    }
+
+    private void CheckAccessibility()
+    {
+        _editor.CommitToModel();
+        var report = AccessibilityChecker.Check(_editor.Model);
+        var dialog = new AccessibilityReportDialog(this, report);
+        dialog.ShowDialog();
     }
 
     // Opens the modal FreeW Options editor. On OK it applies the edited settings live (by mutating the

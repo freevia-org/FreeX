@@ -277,6 +277,40 @@ public sealed class SharedBackstagePaneComposerTests
         edited.Should().BeTrue();
     }
 
+    [StaFact]
+    public void BuildInfoPane_RendersOptionalActionGroups()
+    {
+        var invoked = false;
+
+        var pane = _composer.BuildInfoPane(new BackstageInfoPaneSpec(
+            DocumentKindLabel: "Document",
+            DisplayName: "Report",
+            IsDirty: false,
+            Location: @"C:\Docs\Report.docx",
+            Properties: [],
+            Statistics: [],
+            ActionGroups:
+            [
+                new("Protect Document",
+                [
+                    new("Mark as Final", "Make the document read-only.", () => invoked = true),
+                ]),
+            ]));
+
+        Texts(pane).Should().Contain([
+            "Info",
+            "Protect Document",
+            "Mark as Final",
+            "Make the document read-only.",
+        ]);
+
+        var action = Descendants<Button>(pane).Single();
+        action.Content.Should().NotBeNull();
+        action.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+        invoked.Should().BeTrue();
+    }
+
     private static IReadOnlyList<string> Texts(DependencyObject root)
     {
         var values = new List<string>();
