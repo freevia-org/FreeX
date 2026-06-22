@@ -21,6 +21,9 @@ internal static class SmokeUsage
               --generate-chart-fixtures     Generate FreeX histogram and waterfall XLSX smoke files.
               --generate-excel-fixture      Generate an Excel-authored XLSX fixture through COM, including
                                             a native PivotTable, then load/save it through FreeX.
+              --generate-excel-pivot-corpus-fixtures
+                                            Generate Excel-authored native PivotTable fixtures through COM,
+                                            excluding external, Data Model, and OLAP pivots.
               --freex-resave-before-excel   For user inputs, corpus rows, and generated FreeX fixtures,
                                             load/save through FreeX before Excel validation.
               --corpus-manifest <csv>       Add existing .xlsx/.xlsm rows from the XLSX corpus manifest.
@@ -36,6 +39,7 @@ internal static class SmokeUsage
             Examples:
               dotnet run --project tools/FreeX.ExcelOpenSmoke -- --save-reopen --generate-freex-fixture --generate-excel-fixture
               dotnet run --project tools/FreeX.ExcelOpenSmoke -- --save-reopen --generate-freex-feature-fixtures
+              dotnet run --project tools/FreeX.ExcelOpenSmoke -- --save-reopen --generate-excel-pivot-corpus-fixtures
               dotnet run --project tools/FreeX.ExcelOpenSmoke -- --save-reopen --freex-resave-before-excel --generate-freex-feature-fixtures
               dotnet run --project tools/FreeX.ExcelOpenSmoke -- --save-reopen --freex-resave-before-excel --generate-supported-corpus-fixtures --corpus-manifest test-corpus\manifest.csv
               dotnet run --project tools/FreeX.ExcelOpenSmoke -- --save-reopen --freex-resave-before-excel --generate-supported-corpus-fixtures --corpus-manifest test-corpus\manifest.csv --corpus-id generated-slicers-001

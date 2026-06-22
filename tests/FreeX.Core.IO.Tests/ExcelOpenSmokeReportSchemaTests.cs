@@ -17,6 +17,34 @@ public sealed class ExcelOpenSmokeReportSchemaTests
     }
 
     [Fact]
+    public void ExcelOpenSmoke_ExposesExcelAuthoredPivotCorpusGeneration()
+    {
+        var optionsSource = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.ExcelOpenSmoke", "SmokeOptions.cs");
+        var usageSource = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.ExcelOpenSmoke", "SmokeUsage.cs");
+        var fixturesSource = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.ExcelOpenSmoke", "ExcelSmokeFixtures.cs");
+        var programSource = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.ExcelOpenSmoke", "Program.cs");
+
+        optionsSource.Should().Contain("GenerateExcelPivotCorpusFixtures");
+        optionsSource.Should().Contain("--generate-excel-pivot-corpus-fixtures");
+        usageSource.Should().Contain("--generate-excel-pivot-corpus-fixtures");
+        fixturesSource.Should().Contain("GetExcelPivotCorpusFixturePaths");
+        fixturesSource.Should().Contain("Excel_native_pivot_multiple_pivots_one_cache_001.xlsx");
+        programSource.Should().Contain("ExcelNativePivotCorpusExpectations");
+    }
+
+    [Fact]
+    public void SheetGridImageCompare_ExposesPivotRangeVisualComparisonMode()
+    {
+        var source = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.SheetGridImageCompare", "Program.cs");
+
+        source.Should().Contain("--pivot-ranges");
+        source.Should().Contain("--export-excel-pngs");
+        source.Should().Contain("EnumeratePivotVisualRanges");
+        source.Should().Contain("ExportExcelReferencePngs");
+        source.Should().Contain("CopyPicture");
+    }
+
+    [Fact]
     public void SaveReopenValidation_CoversCorePackageHealthOnBothSavedPaths()
     {
         var programSource = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.ExcelOpenSmoke", "Program.cs");
