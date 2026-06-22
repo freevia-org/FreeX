@@ -20,6 +20,7 @@
     <ProjectReference Include="..\..\shared\Free.Shared.Shell\Free.Shared.Shell.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Shell.Wpf\Free.Shared.Shell.Wpf.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.IO\Free.Shared.IO.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Commands\Free.Shared.Commands.csproj" />
     <ProjectReference Include="..\FreeP.Core.Model\FreeP.Core.Model.csproj" />
     <ProjectReference Include="..\FreeP.Core.IO\FreeP.Core.IO.csproj" />

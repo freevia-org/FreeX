@@ -18,6 +18,14 @@ public static class FileDialogFilterBuilder
         return BuildFilter(saveFormats, includeAllSupported: false, includeAllFiles: false, allSupportedName: "");
     }
 
+    public static string BuildPerFormatFilter(
+        IEnumerable<FileDialogFormatDescriptor> formats,
+        bool includeAllFiles = true)
+    {
+        var formatRows = formats.ToList();
+        return BuildFilter(formatRows, includeAllSupported: false, includeAllFiles, allSupportedName: "");
+    }
+
     public static IReadOnlyList<FileDialogPickerTypeDescriptor> BuildOpenPickerTypes(
         IEnumerable<FileDialogFormatDescriptor> formats,
         string allSupportedName = "All supported files")
@@ -54,6 +62,14 @@ public static class FileDialogFilterBuilder
         }
 
         return 1;
+    }
+
+    public static string GetDefaultExtension(IEnumerable<FileDialogFormatDescriptor> formats)
+    {
+        foreach (var format in formats)
+            return NormalizeExtension(format.Extension);
+
+        return "";
     }
 
     public static string NormalizeExtension(string extension)

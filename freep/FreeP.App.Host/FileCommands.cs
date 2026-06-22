@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows;
 using Microsoft.Win32;
 using Free.Shared.AppServices;
+using Free.Shared.IO;
 using Free.Shared.Shell;
 using FreeP.Core.IO;
 using FreeP.Core.Model;
@@ -16,7 +17,7 @@ namespace FreeP.App.Host;
 /// resolution, and recent-files registration — is decided by the shared, neutral
 /// <see cref="FileLifecyclePlanner"/>. FreeP supplies only the thin host side: the native
 /// <see cref="OpenFileDialog"/>/<see cref="SaveFileDialog"/> for its single <c>.fxp</c> format (via the shared
-/// <see cref="FileDialogFilter"/>), the actual <c>.fxp</c> read/write, and the message prompts. Dirty/path
+/// <see cref="FileDialogFilterBuilder"/>), the actual <c>.fxp</c> read/write, and the message prompts. Dirty/path
 /// state and lifecycle ceremony live in the shared <see cref="FileCommandWorkflow"/>; recent files in the
 /// shared <see cref="RecentFilesStore"/>. Mirrors FreeW.FileCommands exactly (FreeW already adopted these seams).
 /// </para>
@@ -36,13 +37,13 @@ internal sealed class FileCommands
     private readonly FileCommandWorkflow _workflow;
     private readonly FreePOptions _options;
 
-    // FreeP ships a single .fxp format; the filter/default-extension are composed by the shared
-    // FileDialogFilter so any future format additions stay a data change, not a string edit.
-    private static readonly IReadOnlyList<FileFormatChoice> Formats =
-        [new FileFormatChoice("FreeP presentations", FxpFormat.Extension)];
+    // FreeP ships a single .fxp format; the filter/default-extension are composed by the shared I/O
+    // FileDialogFilterBuilder so any future format additions stay a data change, not a string edit.
+    private static readonly IReadOnlyList<FileDialogFormatDescriptor> Formats =
+        [new FileDialogFormatDescriptor(FxpFormat.Extension, "FreeP presentations")];
 
-    private static readonly string Filter = FileDialogFilter.Build(Formats);
-    private static readonly string DefaultExtension = FileDialogFilter.DefaultExtension(Formats);
+    private static readonly string Filter = FileDialogFilterBuilder.BuildPerFormatFilter(Formats);
+    private static readonly string DefaultExtension = FileDialogFilterBuilder.GetDefaultExtension(Formats);
 
     public FileCommands(
         Window window,

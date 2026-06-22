@@ -34,6 +34,32 @@ public sealed class FileDialogFilterBuilderTests
     }
 
     [Fact]
+    public void SharedBuildPerFormatFilter_BuildsSimpleFormatRowsWithoutAllSupportedGroup()
+    {
+        var formats = new[]
+        {
+            new Free.Shared.IO.FileDialogFormatDescriptor("fxp", "FreeP presentations")
+        };
+
+        Free.Shared.IO.FileDialogFilterBuilder.BuildPerFormatFilter(formats)
+            .Should().Be("FreeP presentations (*.fxp)|*.fxp|All files (*.*)|*.*");
+        Free.Shared.IO.FileDialogFilterBuilder.BuildPerFormatFilter(formats, includeAllFiles: false)
+            .Should().Be("FreeP presentations (*.fxp)|*.fxp");
+    }
+
+    [Fact]
+    public void SharedGetDefaultExtension_UsesFirstFormatOrEmpty()
+    {
+        Free.Shared.IO.FileDialogFilterBuilder.GetDefaultExtension([
+                new Free.Shared.IO.FileDialogFormatDescriptor("fxp", "FreeP presentations")
+            ])
+            .Should().Be(".fxp");
+
+        Free.Shared.IO.FileDialogFilterBuilder.GetDefaultExtension([])
+            .Should().Be("");
+    }
+
+    [Fact]
     public void BuildOpenFilter_IncludesAllOpenExtensionsGroupedByFormat()
     {
         var adapters = new IFileAdapter[]
