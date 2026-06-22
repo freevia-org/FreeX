@@ -10,9 +10,11 @@ using Avalonia.VisualTree;
 using Free.Shared.AppServices;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
+using FreeX.App.Avalonia.Pivot;
 using FreeX.App.Avalonia.Ribbon;
 using FreeX.App.Presentation.Backstage;
 using FreeX.App.Presentation.CustomViews;
+using FreeX.App.Presentation.PivotUI;
 using FreeX.App.Services;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
@@ -121,7 +123,9 @@ public sealed partial class MainWindow
         ("dialog.GoToSpecial", () => ShowGoToSpecialDialogAsync()),
         ("dialog.Sort", () => ShowSortDialogAsync()),
         ("dialog.SortOptions", async () => { await ShowSortOptionsDialogAsync(new SortDialogOptions()); }),
+        ("dialog.TextToColumns", () => ShowTextToColumnsParityDialogAsync()),
         ("dialog.AdvancedFilter", () => ShowAdvancedFilterParityDialogAsync()),
+        ("dialog.Consolidate", () => ShowConsolidateDialogAsync()),
         ("dialog.RemoveDuplicates", () => ShowRemoveDuplicatesParityDialogAsync()),
         ("dialog.GoalSeek", () => ShowGoalSeekParityDialogAsync()),
         ("dialog.GoalSeekStatus", () => ShowGoalSeekStatusParityDialogAsync()),
@@ -129,6 +133,7 @@ public sealed partial class MainWindow
         ("dialog.ScenarioManager", () => ShowScenarioManagerParityDialogAsync()),
         ("dialog.ForecastSheet", () => ShowForecastSheetParityDialogAsync()),
         ("dialog.Subtotal", () => ShowSubtotalParityDialogAsync()),
+        ("dialog.Sparkline", () => ShowSparklineParityDialogAsync()),
         ("dialog.InsertHyperlink", () => ShowInsertHyperlinkParityDialogAsync()),
         ("dialog.EvaluateFormula", () => ShowEvaluateFormulaParityDialogAsync()),
         ("dialog.WatchWindow", () => ShowWatchWindowParityDialogAsync()),
@@ -144,6 +149,12 @@ public sealed partial class MainWindow
         ("dialog.ShapeGradient", () => ShowShapeGradientParityDialogAsync()),
         ("dialog.Zoom", () => ShowZoomDialogAsync()),
         ("dialog.CustomViews", () => ShowCustomViewsParityDialogAsync()),
+        ("dialog.SelectionPane", () => ShowSelectionPaneParityDialogAsync()),
+        ("dialog.PivotTableOptions", () => ShowPivotTableOptionsParityDialogAsync()),
+        ("dialog.PivotFieldFilter", () => ShowPivotFieldFilterParityDialogAsync()),
+        ("dialog.PivotValueFieldSettings", () => ShowPivotValueFieldSettingsParityDialogAsync()),
+        ("dialog.InsertSlicer", () => ShowInsertSlicerParityDialogAsync()),
+        ("dialog.InsertTimeline", () => ShowInsertTimelineParityDialogAsync()),
         ("dialog.AllowEditRanges", () => ShowAllowEditRangesParityDialogAsync()),
         ("dialog.ProtectSheet", () => ShowProtectSheetDialogAsync()),
         ("dialog.ProtectWorkbook", () => ShowProtectWorkbookDialogAsync()),
@@ -154,6 +165,25 @@ public sealed partial class MainWindow
         ("dialog.PageSetup", () => ShowPageSetupDialogAsync()),
         ("dialog.Options", () => ShowOptionsDialogAsync()),
     ];
+
+    private Task ShowTextToColumnsParityDialogAsync()
+    {
+        var sheet = _session.ActiveSheet;
+        var samples = new[]
+        {
+            "North,Widget,120",
+            "South,Gadget,85",
+            "East,Sprocket,200",
+            "West,Gizmo,64",
+        };
+        for (var i = 0; i < samples.Length; i++)
+            sheet.SetCell(new CellAddress(sheet.Id, (uint)(2 + i), 6), Cell.FromValue(new TextValue(samples[i])));
+
+        return ShowWithParitySelectionAsync(
+            new CellAddress(sheet.Id, 2, 6),
+            new CellAddress(sheet.Id, 5, 6),
+            ShowTextToColumnsDialogAsync);
+    }
 
     private async Task ShowAdvancedFilterParityDialogAsync()
     {
@@ -280,6 +310,12 @@ public sealed partial class MainWindow
             new CellAddress(_session.ActiveSheet.Id, 4, 4),
             async () => { await ShowSubtotalInputDialogAsync(); });
 
+    private Task ShowSparklineParityDialogAsync() =>
+        ShowWithParitySelectionAsync(
+            new CellAddress(_session.ActiveSheet.Id, 2, 5),
+            new CellAddress(_session.ActiveSheet.Id, 7, 5),
+            async () => { await ShowInsertSparklineDialogAsync(SparklineKind.Line); });
+
     private Task ShowInsertHyperlinkParityDialogAsync() =>
         ShowWithParitySelectionAsync(
             new CellAddress(_session.ActiveSheet.Id, 2, 2),
@@ -318,6 +354,177 @@ public sealed partial class MainWindow
 
     private async Task ShowShapeGradientParityDialogAsync() =>
         await ShowWithSelectedParityShapeAsync(OpenShapeGradientDialogAsync);
+
+    private async Task ShowSelectionPaneParityDialogAsync()
+    {
+        _ = EnsureParityShape();
+        await OpenSelectionPaneDialogAsync();
+    }
+
+    private async Task ShowWithParityPivotAsync(Func<Task> showDialogAsync)
+    {
+        var previousSelection = _session.SelectedRange;
+        var pivot = EnsureParityPivot();
+        if (pivot is null)
+            return;
+
+        _session.SelectRange(new GridRange(pivot.TargetRange.Start, pivot.TargetRange.Start));
+        RefreshShell(_statusText.Text ?? "Ready");
+
+        try
+        {
+            await showDialogAsync();
+        }
+        finally
+        {
+            _session.SelectRange(previousSelection);
+            RefreshShell(_statusText.Text ?? "Ready");
+        }
+    }
+
+    private async Task ShowPivotTableOptionsParityDialogAsync()
+    {
+        var pivot = EnsureParityPivot();
+        if (pivot is null)
+            return;
+
+        await OpenPivotTableOptionsDialogAsync(pivot);
+    }
+
+    private async Task ShowPivotFieldFilterParityDialogAsync()
+    {
+        var pivot = EnsureParityPivot();
+        if (pivot is null || pivot.RowFields.Count == 0)
+            return;
+
+        var headers = PivotSourceContext.ReadHeaders(_session.Workbook, pivot);
+        var field = pivot.RowFields[0];
+        var target = new PivotHeaderDropdownTargetModel(
+            pivot.Name,
+            PivotFieldListPaneBuilder.FieldCaption(headers, field.SourceFieldIndex),
+            field.SourceFieldIndex,
+            PivotHeaderArea.Row,
+            IsActive: false);
+
+        await OpenPivotItemFilterDialogAsync(pivot, headers, target);
+    }
+
+    private async Task ShowPivotValueFieldSettingsParityDialogAsync()
+    {
+        var pivot = EnsureParityPivot();
+        if (pivot is null || pivot.DataFields.Count == 0)
+            return;
+
+        var headers = PivotSourceContext.ReadHeaders(_session.Workbook, pivot);
+        var field = pivot.DataFields[0];
+        var caption = string.IsNullOrWhiteSpace(field.Name)
+            ? PivotFieldListPaneBuilder.FieldCaption(headers, field.SourceFieldIndex)
+            : field.Name;
+        var target = new PivotHeaderDropdownTargetModel(
+            pivot.Name,
+            caption,
+            field.SourceFieldIndex,
+            PivotHeaderArea.Value,
+            IsActive: false,
+            DataFieldIndex: 0);
+
+        await OpenPivotValueFieldSettingsDialogAsync(pivot, headers, target);
+    }
+
+    private async Task ShowInsertSlicerParityDialogAsync()
+    {
+        var pivot = EnsureParityPivot();
+        if (pivot is null)
+            return;
+
+        await ShowPivotControlPickerParityDialogAsync(
+            title: UiText.Get("PivotLoc_InsertSlicersTitle"),
+            automationId: "InsertSlicerDialog",
+            fieldListAutomationId: "InsertSlicerFieldList",
+            prompt: UiText.Format("PivotLoc_ChooseFieldsForSlicers", pivot.Name),
+            selectAll: false);
+    }
+
+    private async Task ShowInsertTimelineParityDialogAsync()
+    {
+        var pivot = EnsureParityPivot();
+        if (pivot is null)
+            return;
+
+        await ShowPivotControlPickerParityDialogAsync(
+            title: UiText.Get("PivotLoc_InsertTimelinesTitle"),
+            automationId: "InsertTimelineDialog",
+            fieldListAutomationId: "InsertTimelineFieldList",
+            prompt: UiText.Format("PivotLoc_ChooseDateFieldsForTimelines", pivot.Name),
+            selectAll: false);
+    }
+
+    private async Task ShowPivotControlPickerParityDialogAsync(
+        string title,
+        string automationId,
+        string fieldListAutomationId,
+        string prompt,
+        bool selectAll)
+    {
+        var pivot = EnsureParityPivot();
+        if (pivot is null)
+            return;
+
+        var headers = PivotSourceContext.ReadHeaders(_session.Workbook, pivot);
+        if (headers.Count == 0)
+            return;
+
+        var dialog = new Window
+        {
+            Title = title,
+            Width = 320,
+            Height = 420,
+            MinWidth = 280,
+            MinHeight = 320,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+        AutomationProperties.SetAutomationId(dialog, automationId);
+
+        var fieldStack = new StackPanel { Spacing = 4 };
+        foreach (var header in headers)
+            fieldStack.Children.Add(new CheckBox { Content = header, IsChecked = selectAll });
+        var fieldList = new Border
+        {
+            BorderBrush = Brush(200, 200, 200),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(8),
+            Height = 250,
+            Child = fieldStack,
+        };
+        AutomationProperties.SetAutomationId(fieldList, fieldListAutomationId);
+
+        var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 84 };
+        var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 84 };
+        okButton.Click += (_, _) => dialog.Close();
+        cancelButton.Click += (_, _) => dialog.Close();
+
+        dialog.Content = new StackPanel
+        {
+            Margin = new Thickness(16),
+            Spacing = 8,
+            Children =
+            {
+                new TextBlock { Text = prompt, TextWrapping = TextWrapping.Wrap },
+                fieldList,
+                new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 8,
+                    HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+                    Margin = new Thickness(0, 8, 0, 0),
+                    Children = { cancelButton, okButton },
+                },
+            },
+        };
+
+        await dialog.ShowDialog(this);
+    }
 
     private async Task ShowCustomViewsParityDialogAsync()
     {
@@ -455,6 +662,90 @@ public sealed partial class MainWindow
         RefreshShell(_statusText.Text ?? "Ready");
         return sheet.DrawingShapes.FirstOrDefault(shape => shape.Id == command.ShapeId)
             ?? sheet.DrawingShapes.FirstOrDefault(shape => shape.IsVisible);
+    }
+
+    private PivotTableModel? EnsureParityPivot()
+    {
+        var sheet = _session.ActiveSheet;
+        if (sheet.PivotTables.FirstOrDefault() is { } existing)
+            return existing;
+
+        var sheetId = sheet.Id;
+        SeedParityPivotSource(sheet);
+        var sourceRange = new GridRange(
+            new CellAddress(sheetId, 1, 1),
+            new CellAddress(sheetId, 8, 5));
+        var targetRange = new GridRange(
+            new CellAddress(sheetId, 2, 7),
+            new CellAddress(sheetId, 2, 7));
+        var cacheId = _session.Workbook.PivotCaches.Count == 0
+            ? 1
+            : _session.Workbook.PivotCaches.Max(cache => cache.CacheId) + 1;
+        var cache = new PivotCacheModel
+        {
+            CacheId = cacheId,
+            SourceType = PivotCacheSourceType.WorksheetRange,
+            SourceSheetName = sheet.Name,
+            SourceReference = sourceRange.ToString(),
+        };
+        for (var col = sourceRange.Start.Col; col <= sourceRange.End.Col; col++)
+            cache.Fields.Add(new PivotCacheFieldModel(ParityPivotHeader(sheet, sourceRange.Start.Row, col)));
+        _session.Workbook.PivotCaches.Add(cache);
+
+        var pivot = new PivotTableModel
+        {
+            Name = "ParityPivot",
+            CacheId = cacheId,
+            SourceRange = sourceRange,
+            TargetRange = targetRange,
+            LastRenderedRange = new GridRange(
+                targetRange.Start,
+                new CellAddress(sheetId, targetRange.Start.Row + 4, targetRange.Start.Col + 2)),
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(4, "Sum of Revenue", "sum"));
+        sheet.PivotTables.Add(pivot);
+
+        RefreshShell(_statusText.Text ?? "Ready");
+        return sheet.PivotTables.FirstOrDefault(item => string.Equals(item.Name, "ParityPivot", StringComparison.Ordinal))
+            ?? sheet.PivotTables.FirstOrDefault();
+    }
+
+    private static string ParityPivotHeader(Sheet sheet, uint row, uint col) =>
+        sheet.GetCell(row, col)?.Value switch
+        {
+            TextValue { Value.Length: > 0 } text => text.Value,
+            NumberValue number => number.Value.ToString(CultureInfo.InvariantCulture),
+            DateTimeValue date => date.Value.ToString(CultureInfo.InvariantCulture),
+            BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
+            _ => $"Column{col}",
+        };
+
+    private static void SeedParityPivotSource(Sheet sheet)
+    {
+        string[][] rows =
+        {
+            ["Region", "Product", "Units", "Price", "Revenue"],
+            ["North", "Widget", "120", "9.5", "1140"],
+            ["South", "Gadget", "85", "14.25", "1211.25"],
+            ["East", "Sprocket", "200", "3.75", "750"],
+            ["West", "Gizmo", "64", "21", "1344"],
+            ["North", "Cog", "310", "1.2", "372"],
+            ["South", "Widget", "150", "9.5", "1425"],
+            ["East", "Gadget", "95", "14.25", "1353.75"],
+        };
+
+        for (var r = 0; r < rows.Length; r++)
+        {
+            for (var c = 0; c < rows[r].Length; c++)
+            {
+                var text = rows[r][c];
+                var value = r > 0 && c >= 2 && double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var number)
+                    ? new NumberValue(number)
+                    : (ScalarValue)new TextValue(text);
+                sheet.SetCell(new CellAddress(sheet.Id, (uint)(r + 1), (uint)(c + 1)), Cell.FromValue(value));
+            }
+        }
     }
 
     private void RestoreParityDrawingSelection(SelectionPaneObjectKind? previousKind, Guid? previousId)

@@ -130,7 +130,12 @@ public sealed partial class MainWindow
         {
             Title = UiText.Get("PivotFilter_ItemsTitle"),
             Width = 300,
-            SizeToContent = SizeToContent.Height,
+            Height = 250,
+            MinWidth = 300,
+            MinHeight = 250,
+            MaxWidth = 300,
+            MaxHeight = 250,
+            Background = Brushes.White,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
         };

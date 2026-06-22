@@ -83,7 +83,12 @@ public sealed partial class MainWindow
             fieldStack.Children.Add(checkBox);
         }
 
-        var fieldList = new ListBox { ItemsSource = checkBoxes };
+        var fieldList = new ScrollViewer
+        {
+            Content = fieldStack,
+            Height = 260,
+            MaxHeight = 260,
+        };
         AutomationProperties.SetAutomationId(fieldList, "InsertSlicerFieldList");
 
         var warningText = new TextBlock
@@ -194,10 +199,20 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(dialog, "InsertTimelineDialog");
 
         var checkBoxes = new List<CheckBox>(headers.Count);
+        var fieldStack = new StackPanel { Spacing = 4 };
         foreach (var header in headers)
-            checkBoxes.Add(new CheckBox { Content = header });
+        {
+            var checkBox = new CheckBox { Content = header };
+            checkBoxes.Add(checkBox);
+            fieldStack.Children.Add(checkBox);
+        }
 
-        var fieldList = new ListBox { ItemsSource = checkBoxes };
+        var fieldList = new ScrollViewer
+        {
+            Content = fieldStack,
+            Height = 260,
+            MaxHeight = 260,
+        };
         AutomationProperties.SetAutomationId(fieldList, "InsertTimelineFieldList");
 
         var warningText = new TextBlock
