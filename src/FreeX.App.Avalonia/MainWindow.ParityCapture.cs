@@ -13,6 +13,7 @@ using Free.Shared.Ribbon.Avalonia;
 using FreeX.App.Avalonia.Ribbon;
 using FreeX.App.Presentation.Backstage;
 using FreeX.App.Services;
+using FreeX.Core.Calc;
 using FreeX.Core.Model;
 
 using AvaloniaGrid = Avalonia.Controls.Grid;
@@ -120,6 +121,8 @@ public sealed partial class MainWindow
         ("dialog.SortOptions", async () => { await ShowSortOptionsDialogAsync(new SortDialogOptions()); }),
         ("dialog.AdvancedFilter", () => ShowAdvancedFilterParityDialogAsync()),
         ("dialog.RemoveDuplicates", () => ShowRemoveDuplicatesParityDialogAsync()),
+        ("dialog.GoalSeek", () => ShowGoalSeekParityDialogAsync()),
+        ("dialog.GoalSeekStatus", () => ShowGoalSeekStatusParityDialogAsync()),
         ("dialog.DataValidation", () => ShowDataValidationDialogAsync()),
         ("dialog.ConditionalFormatNewRule", () => ShowConditionalFormatNewRuleDialogAsync()),
         ("dialog.ConditionalFormatManage", () => ShowManageConditionalFormatsDialogAsync()),
@@ -173,6 +176,52 @@ public sealed partial class MainWindow
             _session.SelectRange(previousSelection);
             RefreshShell(_statusText.Text ?? "Ready");
         }
+    }
+
+    private async Task ShowGoalSeekParityDialogAsync()
+    {
+        var previousSheetId = _session.ActiveSheet.Id;
+        var previousSelection = _session.SelectedRange;
+        var sheetId = _session.Workbook.Sheets.Count > 0
+            ? _session.Workbook.Sheets[0].Id
+            : previousSheetId;
+        if (!previousSheetId.Equals(sheetId))
+            _session.SelectSheet(sheetId);
+
+        _session.SelectRange(new GridRange(
+            new CellAddress(sheetId, 2, 3),
+            new CellAddress(sheetId, 2, 3)));
+        RefreshShell(_statusText.Text ?? "Ready");
+
+        try
+        {
+            await ShowGoalSeekInputDialogAsync(
+                initialSetCellText: "C2",
+                initialTargetValueText: "5000",
+                initialChangingCellText: "E2");
+        }
+        finally
+        {
+            if (!previousSheetId.Equals(_session.ActiveSheet.Id))
+                _session.SelectSheet(previousSheetId);
+            _session.SelectRange(previousSelection);
+            RefreshShell(_statusText.Text ?? "Ready");
+        }
+    }
+
+    private Task ShowGoalSeekStatusParityDialogAsync()
+    {
+        var sheetId = _session.ActiveSheet.Id;
+        var request = new GoalSeekRequest(
+            new CellAddress(sheetId, 2, 3),
+            5000d,
+            new CellAddress(sheetId, 2, 5));
+        var result = WorkbookGoalSeekResult.AppliedResult(
+            request,
+            new GoalSeekResult(true, 125d, 5000d, 7),
+            new WorkbookCellEditResult(true, null, [request.ChangingCell], null));
+
+        return ShowGoalSeekStatusDialogAsync(result);
     }
 
     private void PrepareSheetTabsOverflowParityCapture()

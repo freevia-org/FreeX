@@ -10864,16 +10864,23 @@ public sealed partial class MainWindow : Window
         ShowEditIssue(FormatGoalSeekStatus(result));
     }
 
-    private async Task<GoalSeekRequest?> ShowGoalSeekInputDialogAsync()
+    private async Task<GoalSeekRequest?> ShowGoalSeekInputDialogAsync(
+        string? initialSetCellText = null,
+        string? initialTargetValueText = null,
+        string? initialChangingCellText = null)
     {
         GoalSeekRequest? result = null;
         var dialog = new Window
         {
             Title = "Goal Seek",
-            Width = 420,
-            Height = 270,
-            MinWidth = 360,
-            MinHeight = 245,
+            Width = 380,
+            Height = 210,
+            MinWidth = 380,
+            MinHeight = 210,
+            MaxWidth = 380,
+            MaxHeight = 210,
+            CanResize = false,
+            FontFamily = FormulaBarFontFamily,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -10881,8 +10888,9 @@ public sealed partial class MainWindow : Window
 
         var setCellBox = new TextBox
         {
-            Text = FormatCellReference(_session.ActiveCell),
-            MinWidth = 220,
+            Text = initialSetCellText ?? FormatCellReference(_session.ActiveCell),
+            MinWidth = 0,
+            Margin = new Thickness(0, 4),
         };
         AutomationProperties.SetName(setCellBox, "Set cell");
         AutomationProperties.SetAutomationId(setCellBox, "GoalSeekSetCellBox");
@@ -10890,7 +10898,9 @@ public sealed partial class MainWindow : Window
 
         var targetValueBox = new TextBox
         {
-            MinWidth = 220,
+            Text = initialTargetValueText ?? "",
+            MinWidth = 0,
+            Margin = new Thickness(0, 4),
         };
         AutomationProperties.SetName(targetValueBox, "To value");
         AutomationProperties.SetAutomationId(targetValueBox, "GoalSeekTargetValueBox");
@@ -10898,7 +10908,9 @@ public sealed partial class MainWindow : Window
 
         var changingCellBox = new TextBox
         {
-            MinWidth = 220,
+            Text = initialChangingCellText ?? "",
+            MinWidth = 0,
+            Margin = new Thickness(0, 4),
         };
         AutomationProperties.SetName(changingCellBox, "By changing cell");
         AutomationProperties.SetAutomationId(changingCellBox, "GoalSeekChangingCellBox");
@@ -10908,6 +10920,7 @@ public sealed partial class MainWindow : Window
         {
             Foreground = Brush(143, 74, 18),
             TextWrapping = TextWrapping.Wrap,
+            IsVisible = false,
         };
         AutomationProperties.SetName(errorText, "Goal Seek validation");
         AutomationProperties.SetAutomationId(errorText, "GoalSeekErrorText");
@@ -10916,8 +10929,10 @@ public sealed partial class MainWindow : Window
         var okButton = new Button
         {
             Content = "OK",
-            MinWidth = 84,
-            Padding = new Thickness(10, 4),
+            Width = 75,
+            MinWidth = 75,
+            IsDefault = true,
+            Margin = new Thickness(0, 0, 6, 0),
         };
         AutomationProperties.SetName(okButton, "OK");
         AutomationProperties.SetAutomationId(okButton, "GoalSeekOkButton");
@@ -10926,8 +10941,9 @@ public sealed partial class MainWindow : Window
         var cancelButton = new Button
         {
             Content = "Cancel",
-            MinWidth = 84,
-            Padding = new Thickness(10, 4),
+            Width = 75,
+            MinWidth = 75,
+            IsCancel = true,
         };
         AutomationProperties.SetName(cancelButton, "Cancel");
         AutomationProperties.SetAutomationId(cancelButton, "GoalSeekCancelButton");
@@ -10943,6 +10959,7 @@ public sealed partial class MainWindow : Window
             if (!parseResult.Success)
             {
                 errorText.Text = FormatGoalSeekParseError(parseResult);
+                errorText.IsVisible = true;
                 FocusGoalSeekErrorField(parseResult.Error, setCellBox, targetValueBox, changingCellBox);
                 return;
             }
@@ -10970,36 +10987,38 @@ public sealed partial class MainWindow : Window
         var buttonRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 8,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 10, 0, 0),
+            Margin = new Thickness(0, 8, 0, 0),
             Children =
             {
-                cancelButton,
                 okButton,
+                cancelButton,
             },
         };
-        DockPanel.SetDock(buttonRow, Dock.Bottom);
 
-        dialog.Content = new DockPanel
+        var body = new AvaloniaGrid
         {
             Margin = new Thickness(16),
-            Children =
+            RowDefinitions =
             {
-                buttonRow,
-                new StackPanel
-                {
-                    Spacing = 10,
-                    Children =
-                    {
-                        CreateGoalSeekField("Set cell", setCellBox),
-                        CreateGoalSeekField("To value", targetValueBox),
-                        CreateGoalSeekField("By changing cell", changingCellBox),
-                        errorText,
-                    },
-                },
+                new RowDefinition { Height = GridLength.Auto },
+                new RowDefinition { Height = GridLength.Auto },
+                new RowDefinition { Height = GridLength.Auto },
+                new RowDefinition { Height = new GridLength(1, GridUnitType.Star) },
+                new RowDefinition { Height = GridLength.Auto },
             },
         };
+        body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(140) });
+        body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(34) });
+        AddGoalSeekField(body, row: 0, "Set cell:", setCellBox, CreateGoalSeekPickerButton(setCellBox, "GoalSeekSetCellPickerButton"));
+        AddGoalSeekField(body, row: 1, "To value:", targetValueBox, pickerButton: null);
+        AddGoalSeekField(body, row: 2, "By changing cell:", changingCellBox, CreateGoalSeekPickerButton(changingCellBox, "GoalSeekChangingCellPickerButton"));
+        AddGridChild(body, errorText, 3, 0);
+        AvaloniaGrid.SetColumnSpan(errorText, 3);
+        AddGridChild(body, buttonRow, 4, 0);
+        AvaloniaGrid.SetColumnSpan(buttonRow, 3);
+        dialog.Content = body;
         dialog.Opened += (_, _) =>
         {
             setCellBox.Focus();
@@ -11018,10 +11037,14 @@ public sealed partial class MainWindow : Window
         var dialog = new Window
         {
             Title = "Goal Seek Status",
-            Width = 420,
-            Height = 220,
-            MinWidth = 360,
-            MinHeight = 200,
+            Width = 380,
+            Height = result.Status == WorkbookGoalSeekStatus.Applied ? 190 : 170,
+            MinWidth = 380,
+            MinHeight = result.Status == WorkbookGoalSeekStatus.Applied ? 190 : 170,
+            MaxWidth = 380,
+            MaxHeight = result.Status == WorkbookGoalSeekStatus.Applied ? 190 : 170,
+            CanResize = false,
+            FontFamily = FormulaBarFontFamily,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -11031,7 +11054,7 @@ public sealed partial class MainWindow : Window
         {
             Text = FormatGoalSeekStatus(result),
             TextWrapping = TextWrapping.Wrap,
-            LineHeight = 21,
+            Margin = new Thickness(0, 0, 0, 16),
         };
         AutomationProperties.SetName(summaryBlock, "Goal Seek Status");
         AutomationProperties.SetAutomationId(summaryBlock, "GoalSeekStatusText");
@@ -11040,9 +11063,7 @@ public sealed partial class MainWindow : Window
         var buttonRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 8,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 12, 0, 0),
         };
         DockPanel.SetDock(buttonRow, Dock.Bottom);
 
@@ -11052,8 +11073,10 @@ public sealed partial class MainWindow : Window
             var restoreButton = new Button
             {
                 Content = "Restore Original Values",
-                MinWidth = 150,
-                Padding = new Thickness(10, 4),
+                Width = 180,
+                MinWidth = 180,
+                Margin = new Thickness(4, 0, 0, 0),
+                IsCancel = true,
             };
             AutomationProperties.SetName(restoreButton, "Restore Original Values");
             AutomationProperties.SetAutomationId(restoreButton, "GoalSeekRestoreOriginalValuesButton");
@@ -11062,8 +11085,10 @@ public sealed partial class MainWindow : Window
             var keepButton = new Button
             {
                 Content = "Keep Result",
+                Width = 104,
                 MinWidth = 104,
-                Padding = new Thickness(10, 4),
+                Margin = new Thickness(4, 0, 0, 0),
+                IsDefault = true,
             };
             AutomationProperties.SetName(keepButton, "Keep Result");
             AutomationProperties.SetAutomationId(keepButton, "GoalSeekKeepResultButton");
@@ -11079,8 +11104,8 @@ public sealed partial class MainWindow : Window
                 choice = GoalSeekStatusDialogChoice.KeepResult;
                 dialog.Close();
             };
-            buttonRow.Children.Add(restoreButton);
             buttonRow.Children.Add(keepButton);
+            buttonRow.Children.Add(restoreButton);
             defaultButton = keepButton;
         }
         else
@@ -11088,8 +11113,11 @@ public sealed partial class MainWindow : Window
             var okButton = new Button
             {
                 Content = "OK",
-                MinWidth = 84,
-                Padding = new Thickness(10, 4),
+                Width = 76,
+                MinWidth = 76,
+                Margin = new Thickness(4, 0, 0, 0),
+                IsDefault = true,
+                IsCancel = true,
             };
             AutomationProperties.SetName(okButton, "OK");
             AutomationProperties.SetAutomationId(okButton, "GoalSeekStatusOkButton");
@@ -11117,12 +11145,7 @@ public sealed partial class MainWindow : Window
             Children =
             {
                 buttonRow,
-                new ScrollViewer
-                {
-                    HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                    Content = summaryBlock,
-                },
+                summaryBlock,
             },
         };
         dialog.Opened += (_, _) => defaultButton.Focus();
@@ -11155,14 +11178,14 @@ public sealed partial class MainWindow : Window
                     "Goal Seek found a solution.",
                     $"Target value: {FormatGoalSeekNumber(result.Request.TargetValue)}",
                     $"Current value: {FormatGoalSeekNumber(seekResult.ActualResult)}",
-                    $"Changing cell {changingCell}: {FormatGoalSeekNumber(seekResult.FoundValue)}"),
+                    $"Changing cell value: {FormatGoalSeekNumber(seekResult.FoundValue)}"),
             WorkbookGoalSeekStatus.NotConverged when result.SeekResult is { } seekResult =>
                 string.Join(
                     Environment.NewLine,
                     "Goal Seek could not find a solution.",
                     $"Target value: {FormatGoalSeekNumber(result.Request.TargetValue)}",
                     $"Current value: {FormatGoalSeekNumber(seekResult.ActualResult)}",
-                    $"Changing cell {changingCell}: {FormatGoalSeekNumber(seekResult.FoundValue)}"),
+                    $"Changing cell value: {FormatGoalSeekNumber(seekResult.FoundValue)}"),
             WorkbookGoalSeekStatus.InvalidRequest =>
                 result.ErrorMessage ?? $"Goal Seek request for {setCell} is invalid.",
             WorkbookGoalSeekStatus.ApplyFailed =>
@@ -11194,16 +11217,43 @@ public sealed partial class MainWindow : Window
         target.SelectAll();
     }
 
-    private static StackPanel CreateGoalSeekField(string label, Control control) =>
-        new()
+    private static Button CreateGoalSeekPickerButton(TextBox target, string automationId)
+    {
+        var button = new Button
         {
-            Spacing = 4,
-            Children =
-            {
-                new TextBlock { Text = label },
-                control,
-            },
+            Content = "...",
+            MinWidth = 26,
+            Padding = new Thickness(0),
+            Margin = new Thickness(6, 4, 0, 4),
         };
+        AutomationProperties.SetAutomationId(button, automationId);
+        button.Click += (_, _) =>
+        {
+            target.Focus();
+            target.SelectAll();
+        };
+
+        return button;
+    }
+
+    private static void AddGoalSeekField(
+        AvaloniaGrid grid,
+        int row,
+        string label,
+        TextBox input,
+        Button? pickerButton)
+    {
+        var labelBlock = new TextBlock
+        {
+            Text = label,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            Margin = new Thickness(0, 4),
+        };
+        AddGridChild(grid, labelBlock, row, 0);
+        AddGridChild(grid, input, row, 1);
+        if (pickerButton is not null)
+            AddGridChild(grid, pickerButton, row, 2);
+    }
 
     private async Task ShowAdvancedFilterDialogAsync()
     {

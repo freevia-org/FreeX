@@ -207,10 +207,12 @@ $routes = @(
     @{
         RouteId = "dialog.GoalSeek"; DisplayName = "Goal Seek"
         Wpf = @("screenshots\data-tools-dialogs-tour\freex_data_tools_goal_seek_dialog.png", "screenshots\data-what-if-workflows-tour\freex_data_what_if_workflows_goal_seek_dialog.png")
+        Shared = @("src\FreeX.App.Services\GoalSeekRequestParser.cs", "src\FreeX.App.Services\WorkbookSession.cs")
     },
     @{
         RouteId = "dialog.GoalSeekStatus"; DisplayName = "Goal Seek Status"
         Wpf = @("screenshots\data-tools-dialogs-tour\freex_data_tools_goal_seek_status_dialog.png", "screenshots\data-what-if-workflows-tour\freex_data_what_if_workflows_goal_seek_status_*.png")
+        Shared = @("src\FreeX.App.Services\WorkbookGoalSeekResult.cs")
     },
     @{
         RouteId = "dialog.DataTable"; DisplayName = "Data Table"

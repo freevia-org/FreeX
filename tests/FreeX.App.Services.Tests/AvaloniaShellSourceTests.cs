@@ -2135,6 +2135,7 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresNativeGoalSeekThroughSharedParserSessionAndStatusDialog()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var parityCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var parserSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "GoalSeekRequestParser.cs"));
         var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
@@ -2170,6 +2171,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("AutomationProperties.SetAutomationId(setCellBox, \"GoalSeekSetCellBox\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(targetValueBox, \"GoalSeekTargetValueBox\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(changingCellBox, \"GoalSeekChangingCellBox\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(button, automationId);");
+        source.Should().Contain("CreateGoalSeekPickerButton(setCellBox, \"GoalSeekSetCellPickerButton\")");
+        source.Should().Contain("CreateGoalSeekPickerButton(changingCellBox, \"GoalSeekChangingCellPickerButton\")");
         source.Should().Contain("AutomationProperties.SetAutomationId(errorText, \"GoalSeekErrorText\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(okButton, \"GoalSeekOkButton\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(cancelButton, \"GoalSeekCancelButton\");");
@@ -2186,6 +2190,13 @@ public sealed class AvaloniaShellSourceTests
 
         sessionSource.Should().Contain("public WorkbookGoalSeekResult ExecuteGoalSeek(GoalSeekRequest request)");
         parserSource.Should().Contain("public static GoalSeekRequestParseResult Parse(");
+        parityCaptureSource.Should().Contain("(\"dialog.GoalSeek\", () => ShowGoalSeekParityDialogAsync()),");
+        parityCaptureSource.Should().Contain("(\"dialog.GoalSeekStatus\", () => ShowGoalSeekStatusParityDialogAsync()),");
+        parityCaptureSource.Should().Contain("private async Task ShowGoalSeekParityDialogAsync()");
+        parityCaptureSource.Should().Contain("private Task ShowGoalSeekStatusParityDialogAsync()");
+        parityCaptureSource.Should().Contain("initialSetCellText: \"C2\"");
+        parityCaptureSource.Should().Contain("initialTargetValueText: \"5000\"");
+        parityCaptureSource.Should().Contain("initialChangingCellText: \"E2\"");
 
         var handlerIndex = normalizedSource.IndexOf("private async Task ShowGoalSeekDialogAsync()", StringComparison.Ordinal);
         handlerIndex.Should().BeGreaterThanOrEqualTo(0);
