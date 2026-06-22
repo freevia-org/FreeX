@@ -72,6 +72,34 @@ internal static partial class XlsxPivotTableReader
         return result;
     }
 
+    private static Dictionary<int, PivotFieldModel> ReadNativePivotCacheFieldGroups(PivotCacheModel? pivotCache)
+    {
+        if (pivotCache is null)
+            return [];
+
+        var result = new Dictionary<int, PivotFieldModel>();
+        for (var fieldIndex = 0; fieldIndex < pivotCache.Fields.Count; fieldIndex++)
+        {
+            var field = pivotCache.Fields[fieldIndex];
+            if (field.Grouping == PivotFieldGrouping.None &&
+                field.GroupStart is null &&
+                field.GroupEnd is null &&
+                field.GroupInterval is null)
+            {
+                continue;
+            }
+
+            result[fieldIndex] = new PivotFieldModel(
+                fieldIndex,
+                Grouping: field.Grouping,
+                GroupStart: field.GroupStart,
+                GroupEnd: field.GroupEnd,
+                GroupInterval: field.GroupInterval);
+        }
+
+        return result;
+    }
+
     private static Dictionary<int, PivotFieldNativeMetadata> ReadNativePivotFieldMetadata(
         XElement? pivotFieldsElement,
         XNamespace workbookNs)

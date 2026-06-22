@@ -133,7 +133,7 @@ internal static partial class XlsxPivotTableReader
             ? null
             : value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
 
-    private static PivotFieldGrouping ReadPivotFieldGrouping(string? value, PivotFieldGrouping defaultValue = PivotFieldGrouping.None) =>
+    internal static PivotFieldGrouping ReadPivotFieldGrouping(string? value, PivotFieldGrouping defaultValue = PivotFieldGrouping.None) =>
         value?.Trim().ToLowerInvariant() switch
         {
             "years" or "year" => PivotFieldGrouping.Year,

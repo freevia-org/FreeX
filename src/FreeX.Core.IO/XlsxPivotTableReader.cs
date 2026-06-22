@@ -235,7 +235,9 @@ internal static partial class XlsxPivotTableReader
             ReadFreeXPivotFieldSelections(root, workbookNs));
         var nativeFieldGroups = MergeMissing(
             ReadNativePivotFieldGroups(pivotFieldsElement, workbookNs),
-            ReadFreeXPivotFieldGroups(root, workbookNs));
+            MergeMissing(
+                ReadNativePivotCacheFieldGroups(pivotCache),
+                ReadFreeXPivotFieldGroups(root, workbookNs)));
         var nativeFieldMetadata = ReadNativePivotFieldMetadata(pivotFieldsElement, workbookNs);
         var firstPivotFieldElement = FindFirstPivotFieldElement(pivotFieldsElement, workbookNs);
         var nativeFiltersElement = root.Element(workbookNs + "filters");
