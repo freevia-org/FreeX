@@ -751,6 +751,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("var result = _session.SetShowHeadings(showHeadings);");
         source.Should().Contain("RefreshViewportSizeForZoom();");
         source.Should().Contain("RefreshShell(showHeadings ? \"Showing headings\" : \"Hiding headings\");");
+        source.Should().Contain("[\"view.zoom\"] = () => _ = ShowZoomDialogAsync(),");
+        source.Should().Contain("[\"More\"] = () => _ = ShowZoomDialogAsync(),");
         source.Should().Contain("private void ZoomIn() =>");
         source.Should().Contain("ApplyZoomPercent(_session.ZoomPercent + ZoomStepPercent, \"Zoom In failed.\")");
         source.Should().Contain("private void ZoomOut() =>");
@@ -758,6 +760,16 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private void ZoomTo100Percent() =>");
         source.Should().Contain("ApplyZoomPercent(100, \"100% Zoom failed.\")");
         source.Should().Contain("private void ZoomToSelection()");
+        source.Should().Contain("private async Task ShowZoomDialogAsync()");
+        source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"ZoomDialog\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(button, $\"ZoomPreset{zoom}Button\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(fitSelectionButton, \"ZoomFitSelectionButton\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(customButton, \"ZoomCustomButton\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(customBox, \"ZoomCustomPercentBox\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(okButton, \"ZoomOkButton\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(cancelButton, \"ZoomCancelButton\");");
+        source.Should().Contain("ZoomLevelMapper.TryParseZoomPercent(customBox.Text, out var customZoom)");
+        source.Should().Contain("selectedZoomPercent = CalculateZoomToSelectionPercent();");
         source.Should().Contain("private void ApplyZoomPercent(int zoomPercent, string errorMessage)");
         source.Should().Contain("var result = _session.SetZoomPercent(zoomPercent);");
         source.Should().Contain("RefreshShell($\"Zoom {FormatZoomPercent(_session.ZoomPercent)}\");");
@@ -2232,6 +2244,9 @@ public sealed class AvaloniaShellSourceTests
         parityCaptureSource.Should().Contain("(\"dialog.UnhideSheet\", () => ShowUnhideSheetParityDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.About\", () => ShowAboutDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.LegalNotices\", () => ShowLegalNoticesDialogAsync()),");
+        parityCaptureSource.Should().Contain("(\"dialog.SelectDataSource\", () => ShowSelectDataSourceParityDialogAsync()),");
+        parityCaptureSource.Should().Contain("(\"dialog.Zoom\", () => ShowZoomDialogAsync()),");
+        parityCaptureSource.Should().Contain("(\"dialog.AccessibilityChecker\", () => ShowReviewSummaryDialogAsync(focusAccessibility: true)),");
 
         parityCaptureSource.Should().Contain("private Task ShowInsertHyperlinkParityDialogAsync()");
         parityCaptureSource.Should().Contain("async () => { await ShowInsertHyperlinkInputDialogAsync(); }");
@@ -2243,6 +2258,8 @@ public sealed class AvaloniaShellSourceTests
         parityCaptureSource.Should().Contain("await ShowRenameSheetDialogAsync(_session.ActiveSheet.Name);");
         parityCaptureSource.Should().Contain("private async Task ShowUnhideSheetParityDialogAsync()");
         parityCaptureSource.Should().Contain("await ShowUnhideSheetDialogAsync([new WorkbookHiddenSheet(_session.ActiveSheet.Id, \"Archive\")]);");
+        parityCaptureSource.Should().Contain("private async Task ShowSelectDataSourceParityDialogAsync()");
+        parityCaptureSource.Should().Contain("await ShowSelectDataDialogAsync(\"Sheet1!$A$1:$D$4\", firstColumnIsCategories: true);");
     }
 
     [Fact]

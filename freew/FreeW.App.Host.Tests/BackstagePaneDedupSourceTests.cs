@@ -39,6 +39,8 @@ public sealed class BackstagePaneDedupSourceTests
             source.Should().Contain("_file.SaveFormats");
             source.Should().Contain("BackstageExportFileTypePlanner.BuildChangeFileTypeGroup(");
             source.Should().Contain("BuildOpenPane = BuildOpenPane");
+            source.Should().Contain("BackstageOpenPanePlanner.Build(");
+            source.Should().Contain("_file.RecentEntries");
             source.Should().Contain("BuildSaveAsPane = BuildSaveAsPane");
             source.Should().Contain("BuildPrintPane = BuildPrintPane");
             source.Should().Contain("BackstagePrintPanePlanner.Build(");
@@ -54,7 +56,6 @@ public sealed class BackstagePaneDedupSourceTests
             source.Should().Contain("Panes.BuildActionPane(");
             source.Should().Contain("new BackstageActionPaneSpec(");
             source.Should().Contain("Heading: \"Home\"");
-            source.Should().Contain("Recover Unsaved Documents");
             source.Should().Contain("RecoverUnsaved");
         }
         else

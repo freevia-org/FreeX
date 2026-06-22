@@ -158,19 +158,12 @@ internal sealed class BackstageView : UserControl
     {
         return Panes.BuildActionPane(new BackstageActionPaneSpec(
             Heading: "Open",
-            Description: "Open a document stored on this PC. Recent documents remain available from the Recent entry.",
-            Groups:
-            [
-                new("Places",
-                [
-                    new("This PC", "Browse local folders and connected drives.", () => { Hide(); _actions.Open(); }),
-                    new("Browse", "Open the Windows file picker.", () => { Hide(); _actions.Open(); }),
-                ]),
-                new("Recovery",
-                [
-                    new("Recover Unsaved Documents", "Open the latest autosave recovery snapshot saved by FreeW.", () => { Hide(); _actions.RecoverUnsaved(); }),
-                ]),
-            ]));
+            Description: "Open a recent document or browse for one stored on this PC.",
+            Groups: BackstageOpenPanePlanner.Build(
+                _file.RecentEntries,
+                path => { Hide(); _actions.OpenPath(path); },
+                () => { Hide(); _actions.Open(); },
+                () => { Hide(); _actions.RecoverUnsaved(); })));
     }
 
     private UIElement BuildHomePane()

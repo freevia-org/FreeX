@@ -114,26 +114,12 @@ public static partial class PrintRenderer
                 ? BuildCommentSummaryPages(sheet.Comments, sheet.ThreadedComments, pageH, marginTop)
                 : [];
         var totalPages = rowPlans.Count * columnPlans.Count + commentSummaryPages.Count;
-        var pageNumber = sheet.FirstPageNumber ?? 1;
+        var nextPageNumber = sheet.FirstPageNumber ?? 1;
         var printableHyperlinks = BuildPrintableHyperlinkLookup(workbook, sheet);
         var printableCellDestinations = BuildPrintableCellDestinationLookup(workbook, sheet);
 
-        if (sheet.PageOrder == WorksheetPageOrder.OverThenDown)
-        {
-            foreach (var rowPlan in rowPlans)
-            {
-                foreach (var columnPlan in columnPlans)
-                    AddPrintPage(rowPlan, columnPlan);
-            }
-        }
-        else
-        {
-            foreach (var columnPlan in columnPlans)
-            {
-                foreach (var rowPlan in rowPlans)
-                    AddPrintPage(rowPlan, columnPlan);
-            }
-        }
+        foreach (var page in PrintPageGridPlanner.Build(rowPlans, columnPlans, sheet.PageOrder))
+            AddPrintPage(page);
 
         if (commentSummaryPages.Count > 0)
         {
@@ -141,13 +127,16 @@ public static partial class PrintRenderer
                 AddCommentSummaryPage(commentsForPage);
         }
 
-        void AddPrintPage(PrintPageRowPlan rowPlan, PrintPageColumnPlan columnPlan)
+        void AddPrintPage(PrintPageGridEntry page)
         {
+            var rowPlan = page.RowPlan;
+            var columnPlan = page.ColumnPlan;
             var pageRows = rowPlan.TitleRows.Concat(rowPlan.BodyRows).ToList();
             var pageColumns = columnPlan.TitleColumns.Concat(columnPlan.BodyColumns).ToList();
             if (pageRows.Count == 0 || pageColumns.Count == 0)
                 return;
 
+            var pageNumber = nextPageNumber++;
             var measurement = PrintLayoutPlanner.MeasurePrintableGrid(
                 printableW,
                 printableH,
@@ -196,7 +185,6 @@ public static partial class PrintRenderer
                 totalPages,
                 sheet.PrintDraftQuality,
                 sheet.PrintBlackAndWhite);
-            pageNumber++;
 
             var container = new VisualHost
             {

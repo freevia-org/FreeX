@@ -784,7 +784,7 @@ public sealed partial class MainWindow : Window
                     ["Custom Views"] = () => RunGuarded(OpenCustomViewsDialogAsync),
                     ["view.gridlines"] = ToggleShowGridlines,
                     ["view.headings"] = ToggleShowHeadings,
-                    ["view.zoom"] = ZoomIn,
+                    ["view.zoom"] = () => _ = ShowZoomDialogAsync(),
                     ["view.zoom100"] = ZoomTo100Percent,
                     ["view.zoomToSelection"] = ZoomToSelection,
                     ["view.freezePanes"] = FreezePanesAtActiveCell,
@@ -1206,6 +1206,7 @@ public sealed partial class MainWindow : Window
                     ["75%"] = () => ApplyZoomPercentPreset(75),
                     ["50%"] = () => ApplyZoomPercentPreset(50),
                     ["25%"] = () => ApplyZoomPercentPreset(25),
+                    ["More"] = () => _ = ShowZoomDialogAsync(),
                 },
                 ExtraCommandStates = new Dictionary<string, Func<RibbonCommandState>>(StringComparer.Ordinal)
                 {
@@ -6754,6 +6755,205 @@ public sealed partial class MainWindow : Window
     {
         var zoomPercent = CalculateZoomToSelectionPercent();
         ApplyZoomPercent(zoomPercent, "Zoom to Selection failed.");
+    }
+
+    private async Task ShowZoomDialogAsync()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        int? selectedZoomPercent = null;
+        var currentZoom = ClampZoomPercent(_session.ZoomPercent);
+        var dialog = new Window
+        {
+            Title = "Zoom",
+            Width = 300,
+            Height = 380,
+            MinWidth = 300,
+            MinHeight = 380,
+            MaxWidth = 300,
+            MaxHeight = 380,
+            CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+        AutomationProperties.SetAutomationId(dialog, "ZoomDialog");
+
+        var presetButtons = new List<RadioButton>();
+        var presetPanel = new StackPanel { Spacing = 6 };
+        foreach (var zoom in new[] { 200, 100, 75, 50, 25 })
+        {
+            var button = new RadioButton
+            {
+                Content = $"{zoom}%",
+                GroupName = "ZoomDialogOptions",
+                IsChecked = currentZoom == zoom,
+            };
+            AutomationProperties.SetAutomationId(button, $"ZoomPreset{zoom}Button");
+            presetButtons.Add(button);
+            presetPanel.Children.Add(button);
+        }
+
+        var fitSelectionButton = new RadioButton
+        {
+            Content = "Fit selection",
+            GroupName = "ZoomDialogOptions",
+        };
+        AutomationProperties.SetAutomationId(fitSelectionButton, "ZoomFitSelectionButton");
+
+        var customButton = new RadioButton
+        {
+            Content = "Custom:",
+            GroupName = "ZoomDialogOptions",
+            IsChecked = !presetButtons.Any(button => button.IsChecked == true),
+        };
+        AutomationProperties.SetAutomationId(customButton, "ZoomCustomButton");
+
+        var customBox = new TextBox
+        {
+            Text = currentZoom.ToString(CultureInfo.InvariantCulture),
+            Width = 58,
+            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Right,
+        };
+        AutomationProperties.SetAutomationId(customBox, "ZoomCustomPercentBox");
+        AutomationProperties.SetName(customBox, "Custom zoom percentage");
+
+        customBox.GotFocus += (_, _) => customButton.IsChecked = true;
+
+        var errorText = new TextBlock
+        {
+            Foreground = Brush(143, 74, 18),
+            TextWrapping = TextWrapping.Wrap,
+            IsVisible = false,
+        };
+        AutomationProperties.SetAutomationId(errorText, "ZoomValidationText");
+
+        var okButton = new Button
+        {
+            Content = "OK",
+            Width = 75,
+            IsDefault = true,
+        };
+        AutomationProperties.SetAutomationId(okButton, "ZoomOkButton");
+
+        var cancelButton = new Button
+        {
+            Content = "Cancel",
+            Width = 75,
+            IsCancel = true,
+        };
+        AutomationProperties.SetAutomationId(cancelButton, "ZoomCancelButton");
+
+        void Accept()
+        {
+            foreach (var (button, zoom) in presetButtons.Zip(new[] { 200, 100, 75, 50, 25 }))
+            {
+                if (button.IsChecked == true)
+                {
+                    selectedZoomPercent = zoom;
+                    dialog.Close();
+                    return;
+                }
+            }
+
+            if (fitSelectionButton.IsChecked == true)
+            {
+                selectedZoomPercent = CalculateZoomToSelectionPercent();
+                dialog.Close();
+                return;
+            }
+
+            if (!ZoomLevelMapper.TryParseZoomPercent(customBox.Text, out var customZoom))
+            {
+                errorText.Text = $"Enter a value from {SetWorksheetZoomCommand.MinZoomPercent} to {SetWorksheetZoomCommand.MaxZoomPercent}.";
+                errorText.IsVisible = true;
+                customButton.IsChecked = true;
+                customBox.Focus();
+                customBox.SelectAll();
+                return;
+            }
+
+            selectedZoomPercent = ClampZoomPercent((int)Math.Round(customZoom));
+            dialog.Close();
+        }
+
+        customBox.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter)
+            {
+                e.Handled = true;
+                Accept();
+            }
+        };
+
+        okButton.Click += (_, _) => Accept();
+        cancelButton.Click += (_, _) => dialog.Close();
+        dialog.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Escape)
+            {
+                e.Handled = true;
+                dialog.Close();
+            }
+        };
+
+        var customRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+            Children =
+            {
+                customButton,
+                customBox,
+                new TextBlock { Text = "%", VerticalAlignment = AvaloniaVerticalAlignment.Center },
+            },
+        };
+
+        var buttonRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Children =
+            {
+                okButton,
+                cancelButton,
+            },
+        };
+
+        dialog.Content = new StackPanel
+        {
+            Margin = new Thickness(16),
+            Spacing = 10,
+            Children =
+            {
+                new TextBlock { Text = "Magnification" },
+                presetPanel,
+                fitSelectionButton,
+                customRow,
+                errorText,
+                buttonRow,
+            },
+        };
+        dialog.Opened += (_, _) =>
+        {
+            if (customButton.IsChecked == true)
+            {
+                customBox.Focus();
+                customBox.SelectAll();
+            }
+            else
+            {
+                okButton.Focus();
+            }
+        };
+
+        await dialog.ShowDialog(this);
+        if (selectedZoomPercent is { } zoomPercent)
+            ApplyZoomPercent(zoomPercent, "Zoom failed.");
     }
 
     private void ApplyZoomPercent(int zoomPercent, string errorMessage)

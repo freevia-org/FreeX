@@ -130,51 +130,35 @@ public static class PortablePdfExportPlanner
         int sheetIndex,
         List<PortablePdfExportPageRequest> pageRequests)
     {
-        var sheetPageNumber = 1;
-        if (sheetPlan.PageOrder == WorksheetPageOrder.OverThenDown)
-        {
-            for (var rowPageIndex = 0; rowPageIndex < sheetPlan.RowPageCount; rowPageIndex++)
-            {
-                for (var columnPageIndex = 0; columnPageIndex < sheetPlan.ColumnPageCount; columnPageIndex++)
-                    AddPageRequest(sheetPlan, sheetIndex, rowPageIndex, columnPageIndex, sheetPageNumber++, pageRequests);
-            }
-
-            return;
-        }
-
-        for (var columnPageIndex = 0; columnPageIndex < sheetPlan.ColumnPageCount; columnPageIndex++)
-        {
-            for (var rowPageIndex = 0; rowPageIndex < sheetPlan.RowPageCount; rowPageIndex++)
-                AddPageRequest(sheetPlan, sheetIndex, rowPageIndex, columnPageIndex, sheetPageNumber++, pageRequests);
-        }
+        foreach (var page in PrintPageGridPlanner.Build(
+                     sheetPlan.RowPagePlans,
+                     sheetPlan.ColumnPagePlans,
+                     sheetPlan.PageOrder))
+            AddPageRequest(sheetPlan, sheetIndex, page, pageRequests);
     }
 
     private static void AddPageRequest(
         WorkbookSheetExportPrintPlanSummary sheetPlan,
         int sheetIndex,
-        int rowPageIndex,
-        int columnPageIndex,
-        int sheetPageNumber,
+        PrintPageGridEntry page,
         List<PortablePdfExportPageRequest> pageRequests)
     {
-        var rowPlan = sheetPlan.RowPagePlans[rowPageIndex];
-        var columnPlan = sheetPlan.ColumnPagePlans[columnPageIndex];
         pageRequests.Add(new PortablePdfExportPageRequest(
             pageRequests.Count + 1,
             sheetIndex,
             sheetPlan.SheetName,
-            sheetPageNumber,
+            page.SheetPageNumber,
             sheetPlan.PrintRange,
             sheetPlan.RangeSource,
-            rowPageIndex,
-            columnPageIndex,
+            page.RowPageIndex,
+            page.ColumnPageIndex,
             sheetPlan.RowPageCount,
             sheetPlan.ColumnPageCount,
             new PortablePdfExportPageSpans(
-                rowPlan.TitleRows.ToArray(),
-                rowPlan.BodyRows.ToArray(),
-                columnPlan.TitleColumns.ToArray(),
-                columnPlan.BodyColumns.ToArray()),
+                page.RowPlan.TitleRows.ToArray(),
+                page.RowPlan.BodyRows.ToArray(),
+                page.ColumnPlan.TitleColumns.ToArray(),
+                page.ColumnPlan.BodyColumns.ToArray()),
             sheetPlan.PageOrder));
     }
 
