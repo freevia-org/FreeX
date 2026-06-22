@@ -56,6 +56,48 @@ public sealed class PivotLoadedStyleApplicationTests
         PivotTableRefreshService.ApplyLoadedPivotStyles(workbook).Should().BeFalse();
     }
 
+    [Fact]
+    public void ApplyLoadedPivotStyles_StylesCompactGroupedParentRowsFromNativeIndentation()
+    {
+        var workbook = new Workbook("PivotLoadedGroupedStyle");
+        var source = workbook.AddSheet("SalesData");
+        var sheet = workbook.AddSheet("Pivot");
+        var childStyle = workbook.RegisterStyle(new CellStyle { IndentLevel = 1 });
+        var pivot = new PivotTableModel
+        {
+            Name = "NativePivotDateGrouping",
+            CacheId = 1,
+            SourceRange = Range(source, 1, 1, 13, 7),
+            TargetRange = Range(sheet, 3, 1, 9, 2),
+            LastRenderedRange = Range(sheet, 3, 1, 9, 2),
+            ReportLayout = PivotReportLayout.Compact,
+            FirstDataRow = 1,
+            StyleName = "PivotStyleMedium6"
+        };
+        pivot.RowFields.Add(new PivotFieldModel(8, Grouping: PivotFieldGrouping.Year));
+        pivot.RowFields.Add(new PivotFieldModel(7, Grouping: PivotFieldGrouping.Month));
+        pivot.DataFields.Add(new PivotDataFieldModel(6, "Sum of Sales", "sum"));
+        sheet.PivotTables.Add(pivot);
+        SetText(sheet, 3, 1, "Row Labels");
+        SetText(sheet, 3, 2, "Sum of Sales");
+        SetText(sheet, 4, 1, "2026");
+        SetNumber(sheet, 4, 2, 28730);
+        SetText(sheet, 5, 1, "Jan", childStyle);
+        SetNumber(sheet, 5, 2, 6550);
+        SetText(sheet, 6, 1, "Feb", childStyle);
+        SetNumber(sheet, 6, 2, 7135);
+        SetText(sheet, 9, 1, "Grand Total");
+        SetNumber(sheet, 9, 2, 28730);
+
+        PivotTableRefreshService.ApplyLoadedPivotStyles(workbook).Should().BeTrue();
+
+        var parentStyle = workbook.GetStyle(sheet.GetCell(4, 1)!.StyleId);
+        parentStyle.FillColor.Should().NotBeNull("expanded grouped parent rows get PivotTable group styling");
+        parentStyle.FontColor.Should().Be(CellColor.White);
+        workbook.GetStyle(sheet.GetCell(5, 1)!.StyleId).IndentLevel.Should().Be(1);
+        workbook.GetStyle(sheet.GetCell(5, 1)!.StyleId).FillColor.Should().BeNull();
+    }
+
     private static bool AnyBoldInRange(Workbook workbook, Sheet sheet, GridRange range)
     {
         for (var row = range.Start.Row; row <= range.End.Row; row++)
@@ -95,4 +137,15 @@ public sealed class PivotLoadedStyleApplicationTests
 
     private static GridRange Range(Sheet sheet, uint startRow, uint startCol, uint endRow, uint endCol) =>
         new(new CellAddress(sheet.Id, startRow, startCol), new CellAddress(sheet.Id, endRow, endCol));
+
+    private static void SetText(Sheet sheet, uint row, uint col, string text, StyleId? styleId = null)
+    {
+        var cell = Cell.FromValue(new TextValue(text));
+        if (styleId is { } id)
+            cell.StyleId = id;
+        sheet.SetCell(new CellAddress(sheet.Id, row, col), cell);
+    }
+
+    private static void SetNumber(Sheet sheet, uint row, uint col, double value) =>
+        sheet.SetCell(new CellAddress(sheet.Id, row, col), new NumberValue(value));
 }

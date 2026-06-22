@@ -276,7 +276,7 @@ public partial class GridView
         var fontSize = ToDisplayFontSize((style?.FontSize > 0) ? style!.FontSize : DefaultCellFontSizePoints);
         Brush textBrush = TextBrush;
 
-        var indentPx = (style?.IndentLevel ?? 0) * 8.0;
+        var indentPx = (style?.IndentLevel ?? 0) * 8.0 + GetPivotRowLabelAdornmentTextPadding(cell.Row, cell.Col);
         if (style?.ShrinkToFit == true && !wrapText)
         {
             var typefaceKey = CreateCellTypefaceKeyWithTheme(style);
@@ -569,7 +569,7 @@ public partial class GridView
             double fontSize = ToDisplayFontSize((style?.FontSize > 0) ? style!.FontSize : DefaultCellFontSizePoints);
 
             Brush textBrush = TextBrush;
-            double indentPx = (style?.IndentLevel ?? 0) * 8.0;
+            double indentPx = (style?.IndentLevel ?? 0) * 8.0 + GetPivotRowLabelAdornmentTextPadding(cell.Row, cell.Col);
             if (style?.ShrinkToFit == true && !wrapText)
             {
                 var typefaceKey = CreateCellTypefaceKeyWithTheme(style);

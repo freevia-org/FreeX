@@ -2823,7 +2823,8 @@ public partial class FileAdapterSmokeTests
         {
             HorizontalAlignment = HorizontalAlignment.Distributed,
             VerticalAlignment = VerticalAlignment.Justify,
-            ShrinkToFit = true
+            ShrinkToFit = true,
+            IndentLevel = 3
         };
         var styleId = workbook.RegisterStyle(style);
 
@@ -2844,6 +2845,7 @@ public partial class FileAdapterSmokeTests
         loadedStyle.HorizontalAlignment.Should().Be(HorizontalAlignment.Distributed);
         loadedStyle.VerticalAlignment.Should().Be(VerticalAlignment.Justify);
         loadedStyle.ShrinkToFit.Should().BeTrue();
+        loadedStyle.IndentLevel.Should().Be(3);
     }
 
     [Fact]

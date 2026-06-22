@@ -27,6 +27,14 @@ public static partial class PivotTableRefreshService
             BorderTop = new CellBorder(BorderStyle.Thin, palette.Border),
             BorderBottom = new CellBorder(BorderStyle.Thin, palette.Border)
         });
+        var compactGroupHeaderStyle = workbook.RegisterStyle(new CellStyle
+        {
+            Bold = true,
+            FontColor = palette.HeaderFont,
+            FillColor = palette.SubtotalFill,
+            BorderTop = new CellBorder(BorderStyle.Thin, palette.Border),
+            BorderBottom = new CellBorder(BorderStyle.Thin, palette.Border)
+        });
         var grandTotalStyle = workbook.RegisterStyle(new CellStyle
         {
             Bold = true,
@@ -53,6 +61,7 @@ public static partial class PivotTableRefreshService
         var subtotalRows = new HashSet<uint>();
         var grandTotalRows = new HashSet<uint>();
         var grandTotalColumns = new HashSet<uint>();
+        var compactGroupHeaderRows = FindCompactGroupHeaderRows(workbook, sheet, pivotTable, materialized, headerEndRow);
         for (var row = materialized.Start.Row; row <= materialized.End.Row; row++)
         for (var col = materialized.Start.Col; col <= materialized.End.Col; col++)
         {
@@ -106,6 +115,12 @@ public static partial class PivotTableRefreshService
                 continue;
             }
 
+            if (compactGroupHeaderRows.Contains(row))
+            {
+                ApplyPivotVisualStyle(workbook, cell, compactGroupHeaderStyle, preserveExistingVisualStyles);
+                continue;
+            }
+
             if (subtotalRows.Contains(row))
             {
                 ApplyPivotVisualStyle(workbook, cell, subtotalStyle, preserveExistingVisualStyles);
@@ -123,6 +138,70 @@ public static partial class PivotTableRefreshService
         }
 
         ApplyCompactRowLabelIndent(workbook, sheet, pivotTable, materialized, headerEndRow, subtotalRows, grandTotalRows);
+    }
+
+    private static IReadOnlySet<uint> FindCompactGroupHeaderRows(
+        Workbook workbook,
+        Sheet sheet,
+        PivotTableModel pivotTable,
+        GridRange materialized,
+        uint headerEndRow)
+    {
+        if (pivotTable.ReportLayout != PivotReportLayout.Compact ||
+            pivotTable.RowFields.Count <= 1)
+        {
+            return new HashSet<uint>();
+        }
+
+        var rows = new HashSet<uint>();
+        var labelCol = materialized.Start.Col;
+        for (var row = headerEndRow + 1; row < materialized.End.Row; row++)
+        {
+            if (sheet.GetCell(row, labelCol)?.Value is not TextValue currentText ||
+                string.IsNullOrWhiteSpace(currentText.Value) ||
+                IsPivotGrandTotalCaption(pivotTable, currentText.Value))
+            {
+                continue;
+            }
+
+            var currentIndent = GetLoadedRowLabelIndent(workbook, sheet, row, labelCol);
+            var nextIndent = FindNextLoadedRowLabelIndent(workbook, sheet, pivotTable, materialized, row + 1, labelCol);
+            if (nextIndent > currentIndent)
+                rows.Add(row);
+        }
+
+        return rows;
+    }
+
+    private static int FindNextLoadedRowLabelIndent(
+        Workbook workbook,
+        Sheet sheet,
+        PivotTableModel pivotTable,
+        GridRange materialized,
+        uint startRow,
+        uint labelCol)
+    {
+        for (var row = startRow; row <= materialized.End.Row; row++)
+        {
+            if (sheet.GetCell(row, labelCol)?.Value is not TextValue text ||
+                string.IsNullOrWhiteSpace(text.Value) ||
+                IsPivotGrandTotalCaption(pivotTable, text.Value))
+            {
+                continue;
+            }
+
+            return GetLoadedRowLabelIndent(workbook, sheet, row, labelCol);
+        }
+
+        return -1;
+    }
+
+    private static int GetLoadedRowLabelIndent(Workbook workbook, Sheet sheet, uint row, uint col)
+    {
+        var cell = sheet.GetCell(row, col);
+        return cell is null
+            ? 0
+            : Math.Clamp(workbook.GetStyle(cell.StyleId).IndentLevel, 0, 15);
     }
 
     private static void MaterializePivotTotalStyleFootprintCells(

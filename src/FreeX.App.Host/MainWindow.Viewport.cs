@@ -423,6 +423,9 @@ public partial class MainWindow
         SheetGrid.PivotHeaderDropdowns = pivotHeaderDropdownTargets
             .Select(target => new FreeX.App.UI.PivotHeaderDropdownButton(target.HeaderCell, target.IsActive))
             .ToList();
+        SheetGrid.PivotRowLabelAdornments = sheet is null
+            ? []
+            : PivotRowLabelAdornmentPlanner.BuildAdornments(_workbook, sheet);
         SheetGrid.FormulaTraceSheetId = _currentSheetId;
         SheetGrid.FormulaTraceArrows = _formulaTraceArrows;
         SheetGrid.HyperlinkCells = sheet is null

@@ -193,6 +193,7 @@ internal static class XlsxClosedXmlCellMapper
             },
             WrapText = xlStyle.Alignment.WrapText,
             ShrinkToFit = xlStyle.Alignment.ShrinkToFit,
+            IndentLevel = Math.Clamp(xlStyle.Alignment.Indent, 0, 15),
             TextRotation = IsSupportedTextRotation(xlStyle.Alignment.TextRotation)
                 ? xlStyle.Alignment.TextRotation
                 : 0,
@@ -306,6 +307,9 @@ internal static class XlsxClosedXmlCellMapper
 
         if (style.ShrinkToFit != def.ShrinkToFit)
             xlStyle.Alignment.ShrinkToFit = style.ShrinkToFit;
+
+        if (style.IndentLevel != def.IndentLevel)
+            xlStyle.Alignment.Indent = Math.Clamp(style.IndentLevel, 0, 15);
 
         if (style.TextRotation != def.TextRotation && IsSupportedTextRotation(style.TextRotation))
             xlStyle.Alignment.TextRotation = style.TextRotation;

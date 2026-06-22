@@ -59,6 +59,7 @@ public partial class GridView
         RenderGridLines(dc);
         RenderCells(dc);
         RenderSplitPaneCells(dc);
+        RenderPivotRowLabelAdornments(dc);
         RenderAutoFilterButtons(dc);
         RenderPivotHeaderDropdownButtons(dc);
         RenderViewportContinuation(dc);

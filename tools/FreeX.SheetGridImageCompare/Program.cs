@@ -418,6 +418,7 @@ internal static class Program
         grid.PivotHeaderDropdowns = FreeX.App.Host.PivotHeaderDropdownPlanner.BuildTargets(workbook, sheet)
             .Select(target => new PivotHeaderDropdownButton(target.HeaderCell, target.IsActive))
             .ToArray();
+        grid.PivotRowLabelAdornments = FreeX.App.Host.PivotRowLabelAdornmentPlanner.BuildAdornments(workbook, sheet);
 
         // Step 4: Off-screen layout pass
         grid.Measure(new Size(viewW, viewH));

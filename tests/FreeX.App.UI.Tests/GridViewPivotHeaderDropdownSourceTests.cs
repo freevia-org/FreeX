@@ -15,10 +15,15 @@ public sealed class GridViewPivotHeaderDropdownSourceTests
 
         properties.Should().Contain("public static readonly DependencyProperty PivotHeaderDropdownsProperty");
         properties.Should().Contain("public IReadOnlyList<PivotHeaderDropdownButton>? PivotHeaderDropdowns");
+        properties.Should().Contain("public static readonly DependencyProperty PivotRowLabelAdornmentsProperty");
+        properties.Should().Contain("public IReadOnlyList<PivotRowLabelAdornment>? PivotRowLabelAdornments");
         eventsSource.Should().Contain("public event Action<CellAddress, System.Windows.Point>? PivotHeaderDropdownRequested;");
         renderDispatch.Should().Contain("RenderPivotHeaderDropdownButtons(dc);");
+        renderDispatch.Should().Contain("RenderPivotRowLabelAdornments(dc);");
         rendering.Should().Contain("private void RenderPivotHeaderDropdownButtons(DrawingContext dc)");
         rendering.Should().Contain("DrawAutoFilterGlyph(dc, rect, button.IsActive)");
+        rendering.Should().Contain("private void RenderPivotRowLabelAdornments(DrawingContext dc)");
+        rendering.Should().Contain("DrawPivotExpandCollapseButton(dc, rect, adornment.IsExpanded);");
         rendering.Should().Contain("private bool TryHitTestPivotHeaderDropdownButton(Point pos, out CellAddress headerCell)");
     }
 

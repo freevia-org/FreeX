@@ -324,6 +324,15 @@ public partial class GridView
         set => SetValue(PivotHeaderDropdownsProperty, value);
     }
 
+    public static readonly DependencyProperty PivotRowLabelAdornmentsProperty =
+        DependencyProperty.Register(nameof(PivotRowLabelAdornments), typeof(IReadOnlyList<PivotRowLabelAdornment>), typeof(GridView),
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+    public IReadOnlyList<PivotRowLabelAdornment>? PivotRowLabelAdornments
+    {
+        get => (IReadOnlyList<PivotRowLabelAdornment>?)GetValue(PivotRowLabelAdornmentsProperty);
+        set => SetValue(PivotRowLabelAdornmentsProperty, value);
+    }
+
     public static readonly DependencyProperty ShowGridLinesProperty =
         DependencyProperty.Register(nameof(ShowGridLines), typeof(bool), typeof(GridView),
             new FrameworkPropertyMetadata(true, FrameworkPropertyMetadataOptions.AffectsRender));
