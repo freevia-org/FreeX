@@ -58,6 +58,8 @@ internal sealed class BackstageView : UserControl
         {
             SaveCopy = _actions.SaveCopy,
             Print = _actions.Print,
+            BuildOpenPane = BuildOpenPane,
+            BuildSaveAsPane = BuildSaveAsPane,
             BuildExportPane = BuildExportPane
         });
     }
@@ -91,34 +93,55 @@ internal sealed class BackstageView : UserControl
 
     private UIElement BuildExportPane()
     {
-        var panel = new StackPanel { MaxWidth = 560, HorizontalAlignment = HorizontalAlignment.Left };
-        panel.Children.Add(Kit.HeadingText("Export"));
-        panel.Children.Add(new TextBlock
-        {
-            Text = "Create a PDF copy of this document. The PDF matches Print / Print Preview, "
-                 + "including page size, margins, headers and footers.",
-            Foreground = Kit.Muted,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 16)
-        });
-        panel.Children.Add(Kit.LinkButton("Export to PDF\u2026", () => { Hide(); _actions.ExportPdf(); }));
-        panel.Children.Add(new TextBlock
-        {
-            Text = "Or export to XPS, which preserves selectable, searchable vector text.",
-            Foreground = Kit.Muted,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 18, 0, 8)
-        });
-        panel.Children.Add(Kit.LinkButton("Export to XPS\u2026", () => { Hide(); _actions.ExportXps(); }));
-        panel.Children.Add(new TextBlock
-        {
-            Text = "Or use Save As to write an editable Word document (.docx).",
-            Foreground = Kit.Muted,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 18, 0, 8)
-        });
-        panel.Children.Add(Kit.LinkButton("Save As\u2026", () => { Hide(); _actions.SaveAs(); }));
-        return panel;
+        return Panes.BuildActionPane(new BackstageActionPaneSpec(
+            Heading: "Export",
+            Description: "Create a fixed-layout copy or choose an editable document format.",
+            Groups:
+            [
+                new("Create PDF/XPS Document",
+                [
+                    new("Create PDF or XPS", "Publish a fixed-layout copy for sharing or printing.", () => { Hide(); _actions.ExportPdf(); }),
+                    new("Export to XPS", "Publish an XPS document with selectable, searchable vector text.", () => { Hide(); _actions.ExportXps(); }),
+                ]),
+                new("Change File Type",
+                [
+                    new("Word Document (*.docx)", "Save an editable Word document using Save As.", () => { Hide(); _actions.SaveAs(); }),
+                ]),
+            ]));
+    }
+
+    private UIElement BuildOpenPane()
+    {
+        return Panes.BuildActionPane(new BackstageActionPaneSpec(
+            Heading: "Open",
+            Description: "Open a document stored on this PC. Recent documents remain available from the Recent entry.",
+            Groups:
+            [
+                new("Places",
+                [
+                    new("This PC", "Browse local folders and connected drives.", () => { Hide(); _actions.Open(); }),
+                    new("Browse", "Open the Windows file picker.", () => { Hide(); _actions.Open(); }),
+                ]),
+            ]));
+    }
+
+    private UIElement BuildSaveAsPane()
+    {
+        return Panes.BuildActionPane(new BackstageActionPaneSpec(
+            Heading: "Save As",
+            Description: "Choose where to save this document and select an editable file type.",
+            Groups:
+            [
+                new("Places",
+                [
+                    new("This PC", "Save to local folders and connected drives.", () => { Hide(); _actions.SaveAs(); }),
+                    new("Browse", "Open the Windows save dialog.", () => { Hide(); _actions.SaveAs(); }),
+                ]),
+                new("File Types",
+                [
+                    new("Word Document (*.docx)", "Save in FreeW's editable Word document format.", () => { Hide(); _actions.SaveAs(); }),
+                ]),
+            ]));
     }
 
     private UIElement BuildRecentPane()

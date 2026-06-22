@@ -29,6 +29,15 @@ public sealed class BackstagePaneDedupSourceTests
         source.Should().Contain("PaneSpecs.BuildNewPaneSpec(");
         source.Should().Contain("Panes.BuildOptionsPane(");
         source.Should().Contain("PaneSpecs.BuildOptionsPaneSpec(");
+
+        if (appFolder == "freew")
+        {
+            source.Should().Contain("BuildOpenPane = BuildOpenPane");
+            source.Should().Contain("BuildSaveAsPane = BuildSaveAsPane");
+            source.Should().Contain("Panes.BuildActionPane(");
+            source.Should().Contain("new BackstageActionPaneSpec(");
+        }
+
         source.Should().NotContain("BackstageEntry.Pane(\"Info\"");
         source.Should().NotContain("BackstageEntry.Command(\"Save\"");
         source.Should().NotContain("BackstageApplicationOptionsPanePlanner.Build(");

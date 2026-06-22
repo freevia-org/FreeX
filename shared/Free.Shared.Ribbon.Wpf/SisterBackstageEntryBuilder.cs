@@ -17,6 +17,10 @@ public sealed record SisterBackstageEntrySpec(
 
     public Action? SaveCopy { get; init; }
 
+    public Func<UIElement>? BuildOpenPane { get; init; }
+
+    public Func<UIElement>? BuildSaveAsPane { get; init; }
+
     public Func<UIElement>? BuildExportPane { get; init; }
 }
 
@@ -42,11 +46,17 @@ public static class SisterBackstageEntryBuilder
         {
             BackstageEntry.Pane("Info", RibbonCommandIconKind.Info, spec.BuildInfoPane, iconName: "info"),
             BackstageEntry.Command("New", RibbonCommandIconKind.Insert, spec.New, iconName: "new"),
-            BackstageEntry.Command("Open", RibbonCommandIconKind.GetData, spec.Open, iconName: "open"),
-            BackstageEntry.Divider(),
-            BackstageEntry.Command("Save", RibbonCommandIconKind.Save, spec.Save, iconName: "save"),
-            BackstageEntry.Command("Save As", RibbonCommandIconKind.Save, spec.SaveAs, iconName: "save-as"),
         };
+
+        entries.Add(spec.BuildOpenPane is null
+            ? BackstageEntry.Command("Open", RibbonCommandIconKind.GetData, spec.Open, iconName: "open")
+            : BackstageEntry.Pane("Open", RibbonCommandIconKind.GetData, spec.BuildOpenPane, iconName: "open"));
+
+        entries.Add(BackstageEntry.Divider());
+        entries.Add(BackstageEntry.Command("Save", RibbonCommandIconKind.Save, spec.Save, iconName: "save"));
+        entries.Add(spec.BuildSaveAsPane is null
+            ? BackstageEntry.Command("Save As", RibbonCommandIconKind.Save, spec.SaveAs, iconName: "save-as")
+            : BackstageEntry.Pane("Save As", RibbonCommandIconKind.Save, spec.BuildSaveAsPane, iconName: "save-as"));
 
         if (spec.SaveCopy is not null)
             entries.Add(BackstageEntry.Command("Save a Copy", RibbonCommandIconKind.Save, spec.SaveCopy, iconName: "save-copy"));

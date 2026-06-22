@@ -107,6 +107,48 @@ public sealed class SharedBackstagePaneComposerTests
         edited.Should().BeTrue();
     }
 
+    [StaFact]
+    public void BuildActionPane_RendersGroupedRowsAndInvokesActions()
+    {
+        var invoked = new List<string>();
+
+        var pane = _composer.BuildActionPane(new BackstageActionPaneSpec(
+            Heading: "Save As",
+            Description: "Choose where to save this document.",
+            Groups:
+            [
+                new("Places",
+                [
+                    new("This PC", "Save to local folders.", () => invoked.Add("pc")),
+                    new("Browse", "Open the Windows save dialog.", () => invoked.Add("browse")),
+                ]),
+                new("File Types",
+                [
+                    new("Word Document (*.docx)", "Save an editable Word document.", () => invoked.Add("docx")),
+                ]),
+            ]));
+
+        var scroller = Assert.IsType<ScrollViewer>(pane);
+        var panel = Assert.IsType<StackPanel>(scroller.Content);
+
+        Texts(panel).Should().Contain([
+            "Save As",
+            "Choose where to save this document.",
+            "Places",
+            "This PC",
+            "Save to local folders.",
+            "Browse",
+            "File Types",
+            "Word Document (*.docx)",
+        ]);
+
+        var buttons = Descendants<Button>(panel).ToList();
+        buttons.Should().HaveCount(3);
+        buttons[1].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+        invoked.Should().Equal("browse");
+    }
+
     [Fact]
     public void BackstageApplicationOptionsPanePlanner_AdaptsSharedSummaryRows()
     {

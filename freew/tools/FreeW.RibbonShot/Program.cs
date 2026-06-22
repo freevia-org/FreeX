@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using Free.Shared.Ribbon.Wpf;
 using FreeW.App.Host;
 
 // FreeW.RibbonShot — renders the FreeW MainWindow offscreen to a PNG so the ribbon can be visually
@@ -14,7 +15,8 @@ using FreeW.App.Host;
 // Usage: FreeW.RibbonShot <outDir> [tabIndex|all] [width] [height]
 //   tabIndex: 0=File/Backstage 1=Home 2=Insert 3=Design 4=Layout 5=References 6=Mailings 7=Review 8=View,
 //             9=Developer 10=Picture Format 11=Table Design 12=Table Layout; "all" captures content/contextual
-//             tabs (skipping File), and "backstage" captures File.
+//             tabs (skipping File), "backstage" captures File, and "backstage:<entry label>" selects one
+//             Backstage rail entry before capture.
 
 string outDir = args.Length > 0 ? args[0] : Directory.GetCurrentDirectory();
 string tabArg = args.Length > 1 ? args[1] : "0";
@@ -43,7 +45,7 @@ static int Run(string outDir, string tabArg, double w, double h)
         // window the compositor never paints content shown post-Show(), so RenderTargetBitmap captures a
         // blank-white surface. For that mode we show the window on-screen so the overlay actually composites,
         // then capture. (Tab shots stay offscreen — their content is present from the first frame.)
-        bool backstageMode = tabArg == "backstage";
+        bool backstageMode = tabArg == "backstage" || tabArg.StartsWith("backstage:", StringComparison.OrdinalIgnoreCase);
         var win = new MainWindow
         {
             Width = w,
@@ -70,11 +72,31 @@ static int Run(string outDir, string tabArg, double w, double h)
                 fileTab.IsSelected = true;
                 win.UpdateLayout();
             }
+            PumpFrames(win.Dispatcher, TimeSpan.FromMilliseconds(250));
+
+            string? backstageEntry = null;
+            const string backstagePrefix = "backstage:";
+            if (tabArg.StartsWith(backstagePrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                backstageEntry = tabArg[backstagePrefix.Length..];
+                var backstageFrame = FindVisualChildren<BackstageFrame>(win).FirstOrDefault();
+                if (backstageFrame is not null)
+                {
+                    backstageFrame.Show(backstageEntry);
+                }
+                else if (!TryClickBackstageEntry(win, backstageEntry))
+                {
+                    Console.WriteLine($"Backstage entry '{backstageEntry}' not found; captured default pane.");
+                }
+                win.UpdateLayout();
+            }
+
             // Let the compositor paint the just-shown overlay (RibbonIcon glyphs build on Loaded too).
             PumpFrames(win.Dispatcher, TimeSpan.FromMilliseconds(700));
             var bmp0 = new RenderTargetBitmap((int)w, (int)h, 96, 96, PixelFormats.Pbgra32);
             bmp0.Render(win);
-            var p0 = Path.Combine(outDir, "backstage.png");
+            var suffix = backstageEntry is null ? string.Empty : "-" + SanitizeFileName(backstageEntry);
+            var p0 = Path.Combine(outDir, $"backstage{suffix}.png");
             var enc0 = new PngBitmapEncoder();
             enc0.Frames.Add(BitmapFrame.Create(bmp0));
             using (var fs0 = File.Create(p0)) enc0.Save(fs0);
@@ -209,6 +231,80 @@ static TabControl? FindTabControl(DependencyObject root)
         if (found is not null) return found;
     }
     return null;
+}
+
+static bool TryClickBackstageEntry(DependencyObject root, string label)
+{
+    foreach (var button in FindVisualChildren<Button>(root))
+    {
+        if (ButtonHasText(button, label))
+        {
+            button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static bool ButtonHasText(Button button, string label)
+{
+    if (button.Content is string text)
+        return string.Equals(text, label, StringComparison.OrdinalIgnoreCase);
+
+    if (button.Content is DependencyObject content)
+    {
+        foreach (var textBlock in FindVisualChildren<TextBlock>(content))
+        {
+            if (string.Equals(textBlock.Text, label, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        foreach (var textBlock in FindLogicalChildren<TextBlock>(content))
+        {
+            if (string.Equals(textBlock.Text, label, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+    }
+
+    return false;
+}
+
+static IEnumerable<T> FindVisualChildren<T>(DependencyObject root)
+    where T : DependencyObject
+{
+    if (root is T match)
+        yield return match;
+
+    int n = VisualTreeHelper.GetChildrenCount(root);
+    for (int i = 0; i < n; i++)
+    {
+        foreach (var child in FindVisualChildren<T>(VisualTreeHelper.GetChild(root, i)))
+            yield return child;
+    }
+}
+
+static IEnumerable<T> FindLogicalChildren<T>(DependencyObject root)
+    where T : DependencyObject
+{
+    if (root is T match)
+        yield return match;
+
+    foreach (var child in LogicalTreeHelper.GetChildren(root))
+    {
+        if (child is DependencyObject dependencyObject)
+        {
+            foreach (var descendant in FindLogicalChildren<T>(dependencyObject))
+                yield return descendant;
+        }
+    }
+}
+
+static string SanitizeFileName(string value)
+{
+    var invalid = Path.GetInvalidFileNameChars();
+    var chars = value.Select(ch => invalid.Contains(ch) || char.IsWhiteSpace(ch) ? '-' : char.ToLowerInvariant(ch)).ToArray();
+    return new string(chars).Trim('-');
 }
 
 // Concrete DialogWindow used only by the dialog-probe render mode.
