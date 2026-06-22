@@ -42,6 +42,8 @@ public sealed class BackstagePaneDedupSourceTests
             source.Should().Contain("Panes.BuildActionPane(");
             source.Should().Contain("new BackstageActionPaneSpec(");
             source.Should().Contain("Heading: \"Home\"");
+            source.Should().Contain("Recover Unsaved Documents");
+            source.Should().Contain("RecoverUnsaved");
         }
         else
         {

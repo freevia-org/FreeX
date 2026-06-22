@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows;
 using System.Windows.Media;
@@ -41,6 +42,8 @@ internal static class Program
     // normally-placed on-page objects are reliably captured.
     private const double MaxDrawingContentWidth  = 8000.0;
     private const double MaxDrawingContentHeight = 8000.0;
+    private const int XlScreen = 1;
+    private const int XlPicture = -4147;
 
     [STAThread]
     public static int Main(string[] args)
@@ -52,14 +55,21 @@ internal static class Program
         CultureInfo.DefaultThreadCurrentCulture = culture;
         CultureInfo.DefaultThreadCurrentUICulture = culture;
 
-        var xlsxPath = args.Length > 0 ? args[0] : DefaultWorkbookPath;
+        var options = GridImageCompareOptions.Parse(args);
+        var xlsxPath = options.WorkbookPath ?? DefaultWorkbookPath;
 
         // Derive output dir from workbook file name (matches SheetImageCompare convention)
         var baseName = Path.GetFileNameWithoutExtension(xlsxPath).ToLowerInvariant()
             .Replace(" ", "").Replace("-", "").Replace("_", "");
-        var freexOutputDir = Path.Combine(Path.GetTempPath(), $"{baseName}-gridview");
-        var excelInputDir  = Path.Combine(Path.GetTempPath(), $"{baseName}-excel");
+        var freexOutputDir = options.OutputDirectory is null
+            ? Path.Combine(Path.GetTempPath(), $"{baseName}-gridview")
+            : Path.Combine(Path.GetFullPath(options.OutputDirectory), "freex");
+        var excelInputDir = options.OutputDirectory is null
+            ? Path.Combine(Path.GetTempPath(), $"{baseName}-excel")
+            : Path.Combine(Path.GetFullPath(options.OutputDirectory), "excel");
         Directory.CreateDirectory(freexOutputDir);
+        if (options.ExportExcelPngs)
+            Directory.CreateDirectory(excelInputDir);
 
         Console.WriteLine("=== FreeX Sheet Grid Image Compare (GridView renderer) ===");
         Console.WriteLine($"Workbook    : {xlsxPath}");
@@ -104,15 +114,57 @@ internal static class Program
         // ------------------------------------------------------------------
         var viewportService = new ViewportService();
 
+        if (options.ExportExcelPngs)
+        {
+            Console.WriteLine("\n[2/4] Exporting Excel PNGs...");
+            ExportExcelReferencePngs(xlsxPath, workbook, excelInputDir, options);
+        }
+
         // ------------------------------------------------------------------
         // 3. Render each visible sheet to PNG using GridView
         // ------------------------------------------------------------------
-        Console.WriteLine("\n[2/3] Rendering sheets via GridView...");
+        Console.WriteLine(options.ExportExcelPngs
+            ? "\n[3/4] Rendering sheets via GridView..."
+            : "\n[2/3] Rendering sheets via GridView...");
 
         var sheetResults = new List<SheetResult>();
         int sheetIndex = 1;
 
-        foreach (var sheet in workbook.Sheets)
+        if (options.PivotRangesOnly)
+        {
+            foreach (var (sheet, pivot, range) in EnumeratePivotVisualRanges(workbook))
+            {
+                var safeName = SanitizeFileName($"{sheet.Name}_{pivot.Name}");
+                var outFileName = $"freex_{sheetIndex:D2}_{safeName}.png";
+                var outPath = Path.Combine(freexOutputDir, outFileName);
+
+                Console.Write($"  [{sheetIndex:D2}] {sheet.Name}!{range} ({pivot.Name}) ... ");
+
+                var result = new SheetResult
+                {
+                    NN = sheetIndex,
+                    SheetName = $"{sheet.Name} - {pivot.Name}",
+                    FreeXPngPath = outPath,
+                    FreeXPngFileName = outFileName,
+                };
+
+                try
+                {
+                    RenderSheetToGridViewPng(workbook, sheet, viewportService, outPath, range);
+                    result.Rendered = true;
+                    Console.WriteLine($"-> {outFileName}");
+                }
+                catch (Exception ex)
+                {
+                    result.Error = $"{ex.GetType().Name}: {ex.Message}";
+                    Console.WriteLine($"ERROR: {result.Error}");
+                }
+
+                sheetResults.Add(result);
+                sheetIndex++;
+            }
+        }
+        else foreach (var sheet in workbook.Sheets)
         {
             if (sheet.IsHidden || sheet.IsVeryHidden)
             {
@@ -137,7 +189,7 @@ internal static class Program
 
             try
             {
-                RenderSheetToGridViewPng(workbook, sheet, viewportService, outPath);
+                RenderSheetToGridViewPng(workbook, sheet, viewportService, outPath, captureRange: null);
                 result.Rendered = true;
                 Console.WriteLine($"-> {outFileName}");
             }
@@ -154,14 +206,14 @@ internal static class Program
         // ------------------------------------------------------------------
         // 4. Optional diff mode or simple index
         // ------------------------------------------------------------------
-        Console.WriteLine("\n[3/3] Building report...");
+        Console.WriteLine(options.ExportExcelPngs ? "\n[4/4] Building report..." : "\n[3/3] Building report...");
 
         bool hasDiffDir = Directory.Exists(excelInputDir) &&
             Directory.EnumerateFiles(excelInputDir, "excel_*.png").Any();
 
         string reportPath;
         if (hasDiffDir)
-            reportPath = RunDiffMode(workbook, sheetResults, freexOutputDir, excelInputDir);
+            reportPath = RunDiffMode(workbook, sheetResults, freexOutputDir, excelInputDir, options.ThresholdPercent);
         else
             reportPath = WriteSimpleIndex(sheetResults, freexOutputDir, xlsxPath);
 
@@ -175,7 +227,10 @@ internal static class Program
         Console.WriteLine($"Errors   : {errors}");
         Console.WriteLine($"Report   : {reportPath}");
         Console.WriteLine("\nDONE.");
-        return errors > 0 ? 2 : 0;
+        var diffFailures = hasDiffDir
+            ? sheetResults.Count(r => r.DiffPercent > options.ThresholdPercent)
+            : 0;
+        return errors > 0 || diffFailures > 0 ? 2 : 0;
     }
 
     // -----------------------------------------------------------------------
@@ -185,17 +240,20 @@ internal static class Program
         Workbook workbook,
         Sheet sheet,
         ViewportService viewportService,
-        string outPath)
+        string outPath,
+        GridRange? captureRange)
     {
         // Step 1: Determine viewport dimensions from the sheet's used range.
         // Row heights are already in WPF DIPs; column widths need the pixel mapper.
-        var usedRange = sheet.GetUsedRange();
+        var usedRange = captureRange ?? sheet.GetUsedRange();
+        uint topRow = captureRange?.Start.Row ?? 1u;
+        uint leftCol = captureRange?.Start.Col ?? 1u;
         uint maxRow = usedRange?.End.Row ?? 40u;
         uint maxCol = usedRange?.End.Col ?? 10u;
 
         // Sum column widths (in pixels/DIPs) for the used range
         double totalColWidth = 0;
-        for (uint c = 1; c <= maxCol; c++)
+        for (uint c = leftCol; c <= maxCol; c++)
         {
             if (sheet.IsColEffectivelyHidden(c)) continue;
             var charWidth = sheet.ColumnWidths.GetValueOrDefault(c, sheet.DefaultColumnWidth);
@@ -204,7 +262,7 @@ internal static class Program
 
         // Sum row heights (already in DIPs) for the used range
         double totalRowHeight = 0;
-        for (uint r = 1; r <= maxRow; r++)
+        for (uint r = topRow; r <= maxRow; r++)
         {
             if (sheet.IsRowEffectivelyHidden(r)) continue;
             totalRowHeight += sheet.RowHeights.GetValueOrDefault(r, sheet.DefaultRowHeight);
@@ -214,35 +272,36 @@ internal static class Program
         // (b) the bounding box of every anchored drawing object on the sheet (charts/pictures/
         // shapes/text boxes). Without this the capture stops at the data table and clips out charts/
         // pictures positioned BELOW or BESIDE it, so the harness can't validate them.
-        ExpandRegionForDrawingObjects(workbook, sheet, ref maxRow, ref maxCol, ref totalColWidth, ref totalRowHeight);
+        if (captureRange is null)
+            ExpandRegionForDrawingObjects(workbook, sheet, ref maxRow, ref maxCol, ref totalColWidth, ref totalRowHeight);
 
         // Estimate row-header width (uses GridView's static helper with a placeholder viewport)
         // We need an approximate lastVisibleRow for the header width calc.
-        const double RowHeaderWidth = GridView.RowHeaderWidth; // 30
-        const double ColHeaderHeight = GridView.ColHeaderHeight; // 18
+        var rowHeaderWidth = captureRange is null ? GridView.RowHeaderWidth : 0.0;
+        var colHeaderHeight = captureRange is null ? GridView.ColHeaderHeight : 0.0;
 
         // The viewport is capped so huge sheets don't explode. The cap must be at least as large as
         // the drawing-content cap; otherwise an object that sits just past MaxViewportWidth/Height
         // (e.g. a chart below a tall table) would be clipped again here even though the region above
         // already accounted for it. ExpandRegionForDrawingObjects bounds totalColWidth/totalRowHeight
         // to MaxDrawingContentWidth/Height, so these effective caps stay bounded.
-        double maxViewW = Math.Max(MaxViewportWidth,  MaxDrawingContentWidth  + RowHeaderWidth  + 20);
-        double maxViewH = Math.Max(MaxViewportHeight, MaxDrawingContentHeight + ColHeaderHeight + 20);
+        double maxViewW = Math.Max(MaxViewportWidth,  MaxDrawingContentWidth  + rowHeaderWidth  + 20);
+        double maxViewH = Math.Max(MaxViewportHeight, MaxDrawingContentHeight + colHeaderHeight + 20);
 
-        double viewW = Math.Min(maxViewW, totalColWidth  + RowHeaderWidth  + 20);
-        double viewH = Math.Min(maxViewH, totalRowHeight + ColHeaderHeight + 20);
+        double viewW = Math.Min(maxViewW, totalColWidth  + rowHeaderWidth  + 20);
+        double viewH = Math.Min(maxViewH, totalRowHeight + colHeaderHeight + 20);
 
         // Ensure minimum size
         viewW = Math.Max(viewW, 200);
         viewH = Math.Max(viewH, 100);
 
         // Step 2: Build viewport — available area excludes headers
-        var availableW = viewW - RowHeaderWidth;
-        var availableH = viewH - ColHeaderHeight;
+        var availableW = viewW - rowHeaderWidth;
+        var availableH = viewH - colHeaderHeight;
 
         var request = new ViewportRequest(
-            TopRow: 1,
-            LeftCol: 1,
+            TopRow: topRow,
+            LeftCol: leftCol,
             AvailableHeight: availableH,
             AvailableWidth: availableW,
             IncludeObjects: true,
@@ -281,7 +340,7 @@ internal static class Program
             WorksheetBackground = null,
             ObjectDisplayMode = GridObjectDisplayMode.All,
             ShowGridLines   = sheet.ShowGridlines,
-            ShowHeaders     = sheet.ShowHeadings,
+            ShowHeaders     = captureRange is null && sheet.ShowHeadings,
             ZoomFactor      = 1.0,
             WorksheetViewMode = sheet.ViewMode,
         };
@@ -542,6 +601,113 @@ internal static class Program
         return reportPath;
     }
 
+    private static IEnumerable<(Sheet Sheet, PivotTableModel Pivot, GridRange Range)> EnumeratePivotVisualRanges(Workbook workbook)
+    {
+        foreach (var sheet in workbook.Sheets)
+        {
+            if (sheet.IsHidden || sheet.IsVeryHidden)
+                continue;
+
+            foreach (var pivot in sheet.PivotTables)
+                yield return (sheet, pivot, pivot.LastRenderedRange ?? pivot.TargetRange);
+        }
+    }
+
+    private static void ExportExcelReferencePngs(
+        string workbookPath,
+        Workbook workbook,
+        string outputDirectory,
+        GridImageCompareOptions options)
+    {
+        object? excel = null;
+        object? workbooks = null;
+        object? workbookObject = null;
+        try
+        {
+            var excelType = Type.GetTypeFromProgID("Excel.Application")
+                ?? throw new InvalidOperationException("Excel.Application COM registration not found.");
+            excel = Activator.CreateInstance(excelType)
+                ?? throw new InvalidOperationException("Excel.Application activation returned null.");
+            dynamic app = excel;
+            app.Visible = false;
+            app.DisplayAlerts = false;
+            workbooks = app.Workbooks;
+            workbookObject = ((dynamic)workbooks).Open(Path.GetFullPath(workbookPath), 0);
+
+            var ordinal = 1;
+            var ranges = options.PivotRangesOnly
+                ? EnumeratePivotVisualRanges(workbook).ToArray()
+                : workbook.Sheets
+                    .Where(sheet => !sheet.IsHidden && !sheet.IsVeryHidden)
+                    .Select(sheet => (Sheet: sheet, Pivot: (PivotTableModel?)null, Range: sheet.GetUsedRange()))
+                    .Where(item => item.Range is not null)
+                    .Select(item => (item.Sheet, Pivot: new PivotTableModel { Name = item.Sheet.Name }, Range: item.Range!.Value))
+                    .ToArray();
+
+            foreach (var (sheet, pivot, range) in ranges)
+            {
+                var safeName = SanitizeFileName($"{sheet.Name}_{pivot.Name}");
+                var outPath = Path.Combine(outputDirectory, $"excel_{ordinal:D2}_{safeName}.png");
+                ExportExcelRangeToPng(workbookObject, sheet.Name, range, outPath);
+                Console.WriteLine($"  [{ordinal:D2}] {sheet.Name}!{range} -> {Path.GetFileName(outPath)}");
+                ordinal++;
+            }
+
+            ((dynamic)workbookObject).Close(false);
+        }
+        finally
+        {
+            try
+            {
+                if (workbookObject is not null)
+                    ((dynamic)workbookObject).Close(false);
+            }
+            catch { }
+
+            try
+            {
+                if (excel is not null)
+                    ((dynamic)excel).Quit();
+            }
+            catch { }
+
+            ReleaseComObject(workbookObject);
+            ReleaseComObject(workbooks);
+            ReleaseComObject(excel);
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+        }
+    }
+
+    private static void ExportExcelRangeToPng(object workbook, string sheetName, GridRange range, string outPath)
+    {
+        object? worksheet = null;
+        object? excelRange = null;
+        object? chartObjects = null;
+        object? chartObject = null;
+        object? chart = null;
+        try
+        {
+            worksheet = ((dynamic)workbook).Worksheets[sheetName];
+            excelRange = ((dynamic)worksheet).Range(range.ToString());
+            ((dynamic)excelRange).CopyPicture(XlScreen, XlPicture);
+            chartObjects = ((dynamic)worksheet).ChartObjects();
+            chartObject = ((dynamic)chartObjects).Add(0, 0, Math.Max(120, (double)((dynamic)excelRange).Width), Math.Max(80, (double)((dynamic)excelRange).Height));
+            chart = ((dynamic)chartObject).Chart;
+            ((dynamic)chart).Paste();
+            ((dynamic)chart).Export(outPath, "PNG", false);
+            ((dynamic)chartObject).Delete();
+        }
+        finally
+        {
+            ReleaseComObject(chart);
+            ReleaseComObject(chartObject);
+            ReleaseComObject(chartObjects);
+            ReleaseComObject(excelRange);
+            ReleaseComObject(worksheet);
+        }
+    }
+
     // -----------------------------------------------------------------------
     // Diff mode: compare FreeX PNGs against Excel PNGs
     // -----------------------------------------------------------------------
@@ -549,7 +715,8 @@ internal static class Program
         Workbook workbook,
         IReadOnlyList<SheetResult> results,
         string freexOutputDir,
-        string excelInputDir)
+        string excelInputDir,
+        double thresholdPercent)
     {
         Console.WriteLine($"  Diff mode: Excel PNGs found in {excelInputDir}");
 
@@ -595,11 +762,13 @@ internal static class Program
                 try
                 {
                     row.DiffPercent = ComputeMeanPixelDiff(excelPng, r.FreeXPngPath!);
+                    r.DiffPercent = row.DiffPercent;
                 }
                 catch (Exception ex)
                 {
                     row.Error       = $"Diff failed: {ex.Message}";
                     row.DiffPercent = 100.0;
+                    r.DiffPercent = row.DiffPercent;
                 }
             }
             else
@@ -637,6 +806,7 @@ internal static class Program
         var sb = new StringBuilder();
         sb.AppendLine("FreeX vs Excel Sheet Fidelity Report (GridView renderer)");
         sb.AppendLine($"Generated: {DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss zzz}");
+        sb.AppendLine($"Threshold: {thresholdPercent:F2}%");
         sb.AppendLine();
         sb.AppendLine("=== RANKED BY DIFF% (worst first) ===");
         sb.AppendLine($"{"NN",-4}  {"Diff%",7}  {"Status",-8}  Sheet");
@@ -645,7 +815,8 @@ internal static class Program
         foreach (var r in rows.OrderByDescending(r => r.DiffPercent))
         {
             var diffStr = r.DiffPercent >= 0 ? $"{r.DiffPercent:F1}%" : "  N/A";
-            sb.AppendLine($"{r.NN.ToString("D2"),-4}  {diffStr,7}  {r.Status,-8}  {r.SheetName}");
+            var status = r.DiffPercent > thresholdPercent ? "FAIL" : r.Status;
+            sb.AppendLine($"{r.NN.ToString("D2"),-4}  {diffStr,7}  {status,-8}  {r.SheetName}");
             if (r.Error != null)
                 sb.AppendLine($"       NOTE: {r.Error}");
         }
@@ -776,6 +947,22 @@ internal static class Program
         encoder.Save(stream);
     }
 
+    private static void ReleaseComObject(object? value)
+    {
+        if (value is null)
+            return;
+
+        try
+        {
+            if (Marshal.IsComObject(value))
+                Marshal.FinalReleaseComObject(value);
+        }
+        catch
+        {
+            // Best-effort cleanup for visual comparison tooling.
+        }
+    }
+
     private static FormattedText MakeText(string text, double size, Brush brush, FontWeight weight) =>
         new FormattedText(
             text,
@@ -823,6 +1010,7 @@ internal sealed class SheetResult
     public bool    Skipped         { get; set; }
     public string? SkipReason      { get; set; }
     public string? Error           { get; set; }
+    public double  DiffPercent     { get; set; } = -1;
 }
 
 internal sealed class DiffRow
@@ -834,4 +1022,48 @@ internal sealed class DiffRow
     public string  Status      { get; set; } = "";
     public string? Error       { get; set; }
     public double  DiffPercent { get; set; } = -1;
+}
+
+internal sealed record GridImageCompareOptions(
+    string? WorkbookPath,
+    string? OutputDirectory,
+    bool ExportExcelPngs,
+    bool PivotRangesOnly,
+    double ThresholdPercent)
+{
+    public static GridImageCompareOptions Parse(string[] args)
+    {
+        string? workbookPath = null;
+        string? outputDirectory = null;
+        var exportExcelPngs = false;
+        var pivotRangesOnly = false;
+        var thresholdPercent = 12.0;
+
+        for (var index = 0; index < args.Length; index++)
+        {
+            switch (args[index])
+            {
+                case "--out":
+                    outputDirectory = index + 1 < args.Length ? args[++index] : null;
+                    break;
+                case "--export-excel-pngs":
+                    exportExcelPngs = true;
+                    break;
+                case "--pivot-ranges":
+                    pivotRangesOnly = true;
+                    break;
+                case "--threshold":
+                    if (index + 1 < args.Length &&
+                        double.TryParse(args[++index], NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed))
+                        thresholdPercent = parsed;
+                    break;
+                default:
+                    if (!args[index].StartsWith("-", StringComparison.Ordinal))
+                        workbookPath ??= args[index];
+                    break;
+            }
+        }
+
+        return new GridImageCompareOptions(workbookPath, outputDirectory, exportExcelPngs, pivotRangesOnly, thresholdPercent);
+    }
 }

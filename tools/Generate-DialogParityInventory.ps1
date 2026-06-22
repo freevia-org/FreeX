@@ -321,6 +321,7 @@ $routes = @(
     @{
         RouteId = "dialog.Options"; DisplayName = "Options"
         Wpf = @()
+        Shared = @("src\FreeX.App.Services\OptionsDialogPlanner.cs")
     },
     @{
         RouteId = "dialog.ConditionalFormatNewRule"; DisplayName = "New Conditional Formatting Rule"

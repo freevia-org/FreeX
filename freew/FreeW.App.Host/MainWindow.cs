@@ -392,6 +392,7 @@ public sealed class MainWindow : Window
             SaveAs: () => _file.SaveAs(),
             SaveAsType: extension => _file.SaveAs(extension),
             SaveCopy: () => _file.SaveCopy(),
+            RecoverUnsaved: () => _autosave.RecoverUnsavedDocuments(this),
             Close: CloseDocument,
             Print: Print,
             ExportPdf: ExportToPdf,

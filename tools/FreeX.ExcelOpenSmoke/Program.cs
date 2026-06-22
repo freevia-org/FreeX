@@ -323,6 +323,19 @@ internal static class ExcelOpenSmoke
                     Expectations: ExcelAuthoredFixtureExpectations(options.SaveReopen)));
             }
 
+            if (options.GenerateExcelPivotCorpusFixtures)
+            {
+                foreach (var fixturePath in GetExcelPivotCorpusFixturePaths(Path.Combine(runDirectory, "generated-excel-pivots")))
+                {
+                    AddUniqueInput(smokeInputs, new WorkbookSmokeInput(
+                        fixturePath,
+                        WorkbookValidationWorkflow.FreeXSaveThenExcel,
+                        "Excel-authored native PivotTable corpus fixture",
+                        GenerateWithExcel: true,
+                        Expectations: ExcelNativePivotCorpusExpectations(options.SaveReopen)));
+                }
+            }
+
             if (smokeInputs.Count == 0)
             {
                 if (CorpusSelectionHasOnlyMissingOptionalPrivateRows(corpusSelection))
@@ -18354,6 +18367,20 @@ internal static class ExcelOpenSmoke
             MinFreeXPreSavePivotCaches: 1,
             MinExcelOpenedPivotTables: 1,
             MinExcelReopenedPivotTables: saveReopen ? 1 : 0,
+            MinFreeXReopenedPivotTables: saveReopen ? 1 : 0,
+            MinFreeXReopenedPivotCaches: saveReopen ? 1 : 0,
+            RequireNoFreeXLoadWarnings: true);
+
+    private static WorkbookSmokeExpectations ExcelNativePivotCorpusExpectations(bool saveReopen) =>
+        new(
+            MinFreeXPreSaveStructuredTables: 1,
+            MinFreeXPreSavePivotTables: 1,
+            MinFreeXPreSavePivotCaches: 1,
+            MinExcelOpenedStructuredTables: 1,
+            MinExcelOpenedPivotTables: 1,
+            MinExcelReopenedStructuredTables: saveReopen ? 1 : 0,
+            MinExcelReopenedPivotTables: saveReopen ? 1 : 0,
+            MinFreeXReopenedStructuredTables: saveReopen ? 1 : 0,
             MinFreeXReopenedPivotTables: saveReopen ? 1 : 0,
             MinFreeXReopenedPivotCaches: saveReopen ? 1 : 0,
             RequireNoFreeXLoadWarnings: true);

@@ -31,11 +31,11 @@ internal static class ExcelInspector
                 dynamic ws = workbook.Worksheets.Item(s);
                 string sheetName = Convert.ToString(ws.Name, CultureInfo.InvariantCulture) ?? $"Sheet{s}";
 
-                try { inv.Charts += (int)ws.ChartObjects().Count; } catch { }
-                try { inv.PivotTables += (int)ws.PivotTables().Count; } catch { }
-                try { inv.Tables += (int)ws.ListObjects.Count; } catch { }
-                try { inv.Hyperlinks += (int)ws.Hyperlinks.Count; } catch { }
-                try { inv.Comments += (int)ws.Comments.Count; } catch { }
+                try { inv.Charts += InvokeWithComRetry(() => (int)ws.ChartObjects().Count, "ChartObjects.Count"); } catch { }
+                try { inv.PivotTables += InvokeWithComRetry(() => (int)ws.PivotTables().Count, "PivotTables.Count"); } catch { }
+                try { inv.Tables += InvokeWithComRetry(() => (int)ws.ListObjects.Count, "ListObjects.Count"); } catch { }
+                try { inv.Hyperlinks += InvokeWithComRetry(() => (int)ws.Hyperlinks.Count, "Hyperlinks.Count"); } catch { }
+                try { inv.Comments += InvokeWithComRetry(() => (int)ws.Comments.Count, "Comments.Count"); } catch { }
 
                 var cells = ReadSheetValues(ws);
                 var key = result.ExcelCells.ContainsKey(sheetName) ? $"{sheetName}#{s}" : sheetName;
@@ -96,7 +96,6 @@ internal static class ExcelInspector
         return hr is 0x800706BA   // RPC server is unavailable
                   or 0x80010108   // RPC_E_DISCONNECTED
                   or 0x800706BE   // RPC call failed
-                  or 0x80010001   // RPC_E_CALL_REJECTED
             || ex.Message.Contains("RPC", StringComparison.OrdinalIgnoreCase);
     }
 
@@ -104,15 +103,15 @@ internal static class ExcelInspector
     {
         var cells = new Dictionary<(int, int), CellVal>();
         dynamic used;
-        try { used = ws.UsedRange; } catch { return cells; }
-        int rows = (int)used.Rows.Count;
-        int cols = (int)used.Columns.Count;
+        try { used = InvokeWithComRetry(() => ws.UsedRange, "UsedRange"); } catch { return cells; }
+        int rows = InvokeWithComRetry(() => (int)used.Rows.Count, "UsedRange.Rows.Count");
+        int cols = InvokeWithComRetry(() => (int)used.Columns.Count, "UsedRange.Columns.Count");
         if (rows <= 0 || cols <= 0 || (long)rows * cols > MaxCellsPerSheet)
             return cells;
 
-        int top = (int)used.Row;
-        int left = (int)used.Column;
-        object value2 = used.Value2;
+        int top = InvokeWithComRetry(() => (int)used.Row, "UsedRange.Row");
+        int left = InvokeWithComRetry(() => (int)used.Column, "UsedRange.Column");
+        object value2 = InvokeWithComRetry(() => (object)used.Value2, "UsedRange.Value2");
         if (value2 is null)
             return cells;
 
@@ -135,6 +134,35 @@ internal static class ExcelInspector
         }
 
         return cells;
+    }
+
+    private static T InvokeWithComRetry<T>(Func<T> action, string operation)
+    {
+        Exception? last = null;
+        for (var attempt = 1; attempt <= 8; attempt++)
+        {
+            try
+            {
+                return action();
+            }
+            catch (Exception ex) when (LooksLikeExcelBusy(ex))
+            {
+                last = ex;
+                System.Threading.Thread.Sleep(Math.Min(attempt * 500, 2500));
+            }
+        }
+
+        throw new InvalidOperationException($"{operation} failed after Excel busy retries: {last?.Message}", last);
+    }
+
+    private static bool LooksLikeExcelBusy(Exception ex)
+    {
+        var hr = (uint)ex.HResult;
+        return hr is 0x80010001 // RPC_E_CALL_REJECTED
+                  or 0x8001010A // RPC_E_SERVERCALL_RETRYLATER
+            || ex.Message.Contains("0x80010001", StringComparison.OrdinalIgnoreCase)
+            || ex.Message.Contains("Call was rejected", StringComparison.OrdinalIgnoreCase)
+            || ex.Message.Contains("server is busy", StringComparison.OrdinalIgnoreCase);
     }
 
     private static CellVal Normalize(object? raw)
