@@ -16,28 +16,6 @@ public enum GridObjectDisplayMode
     Nothing
 }
 
-public enum GridQuickAnalysisPreviewVisualKind
-{
-    None,
-    DataBars,
-    ColorScale,
-    IconSet,
-    Highlight,
-    ClearFormat,
-    TotalFormula,
-    Table,
-    LineSparkline,
-    ColumnSparkline,
-    WinLossSparkline,
-    ColumnChart,
-    LineChart,
-    BarChart,
-    StackedColumnChart,
-    PieChart,
-    AreaChart,
-    ScatterChart
-}
-
 /// <summary>
 /// A high-performance, virtualized spreadsheet grid control.
 /// Renders only the visible portion of the workbook using low-level DrawingContext.

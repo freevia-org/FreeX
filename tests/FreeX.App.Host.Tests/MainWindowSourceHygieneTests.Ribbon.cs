@@ -1051,7 +1051,7 @@ public sealed partial class MainWindowSourceHygieneTests
         var applyPreview = ExtractMethodSource(source, "private void ApplyQuickAnalysisPreview(");
 
         showPreview.Should().Contain("ApplyQuickAnalysisPreview(");
-        clearPreview.Should().Contain("ApplyQuickAnalysisPreview(null, GridQuickAnalysisPreviewVisualKind.None)");
+        clearPreview.Should().Contain("ApplyQuickAnalysisPreview(null, QuickAnalysisPreviewVisualKind.None)");
         showPreview.Should().NotContain("SheetGrid.QuickAnalysisPreviewRange = preview.Range");
         clearPreview.Should().NotContain("SheetGrid.QuickAnalysisPreviewRange = null");
         applyPreview.Should().Contain("if (SheetGrid.QuickAnalysisPreviewRange != range)");

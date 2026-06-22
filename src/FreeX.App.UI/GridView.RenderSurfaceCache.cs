@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Media;
 
+using FreeX.App.Presentation.QuickAnalysis;
 using FreeX.Core.Model;
 
 namespace FreeX.App.UI;
@@ -54,7 +55,7 @@ public partial class GridView
         IReadOnlyDictionary<Guid, IReadOnlyList<double>>? SparklineValues,
         int SparklineValueCount,
         GridRange? QuickAnalysisPreviewRange,
-        GridQuickAnalysisPreviewVisualKind QuickAnalysisPreviewVisual);
+        QuickAnalysisPreviewVisualKind QuickAnalysisPreviewVisual);
 
     private void RenderPreSelectionLayersWithCache(
         DrawingContext dc,

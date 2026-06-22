@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Media;
 
+using FreeX.App.Presentation.QuickAnalysis;
 using FreeX.Core.Model;
 
 namespace FreeX.App.UI;
@@ -107,83 +108,83 @@ public partial class GridView
         dc.DrawRectangle(QuickAnalysisPreviewBrush, QuickAnalysisPreviewPen, rect.Value);
         switch (QuickAnalysisPreviewVisual)
         {
-            case GridQuickAnalysisPreviewVisualKind.DataBars:
+            case QuickAnalysisPreviewVisualKind.DataBars:
                 DrawQuickAnalysisDataBarPreview(dc, range, rowHeaderWidth, columnHeaderHeight);
                 break;
-            case GridQuickAnalysisPreviewVisualKind.ColorScale:
+            case QuickAnalysisPreviewVisualKind.ColorScale:
                 DrawQuickAnalysisColorScalePreview(dc, range, rowHeaderWidth, columnHeaderHeight);
                 break;
-            case GridQuickAnalysisPreviewVisualKind.IconSet:
+            case QuickAnalysisPreviewVisualKind.IconSet:
                 DrawQuickAnalysisIconSetPreview(dc, range, rowHeaderWidth, columnHeaderHeight);
                 break;
-            case GridQuickAnalysisPreviewVisualKind.Highlight:
+            case QuickAnalysisPreviewVisualKind.Highlight:
                 DrawQuickAnalysisCellOverlays(
                     dc,
                     range,
                     rowHeaderWidth,
                     columnHeaderHeight,
-                    GridQuickAnalysisPreviewVisualKind.Highlight,
+                    QuickAnalysisPreviewVisualKind.Highlight,
                     QuickAnalysisHighlightPreviewBrush,
                     QuickAnalysisHighlightPreviewPen);
                 break;
-            case GridQuickAnalysisPreviewVisualKind.ClearFormat:
+            case QuickAnalysisPreviewVisualKind.ClearFormat:
                 DrawQuickAnalysisCellOverlays(
                     dc,
                     range,
                     rowHeaderWidth,
                     columnHeaderHeight,
-                    GridQuickAnalysisPreviewVisualKind.ClearFormat,
+                    QuickAnalysisPreviewVisualKind.ClearFormat,
                     QuickAnalysisClearFormatPreviewBrush,
                     QuickAnalysisClearFormatPreviewPen);
                 break;
-            case GridQuickAnalysisPreviewVisualKind.TotalFormula:
+            case QuickAnalysisPreviewVisualKind.TotalFormula:
                 DrawQuickAnalysisCellOverlays(
                     dc,
                     range,
                     rowHeaderWidth,
                     columnHeaderHeight,
-                    GridQuickAnalysisPreviewVisualKind.TotalFormula,
+                    QuickAnalysisPreviewVisualKind.TotalFormula,
                     QuickAnalysisTotalPreviewBrush,
                     QuickAnalysisTotalPreviewPen);
                 break;
-            case GridQuickAnalysisPreviewVisualKind.Table:
+            case QuickAnalysisPreviewVisualKind.Table:
                 DrawQuickAnalysisCellOverlays(
                     dc,
                     range,
                     rowHeaderWidth,
                     columnHeaderHeight,
-                    GridQuickAnalysisPreviewVisualKind.Table,
+                    QuickAnalysisPreviewVisualKind.Table,
                     QuickAnalysisTablePreviewBrush,
                     QuickAnalysisTablePreviewPen);
                 break;
-            case GridQuickAnalysisPreviewVisualKind.LineSparkline:
+            case QuickAnalysisPreviewVisualKind.LineSparkline:
                 DrawQuickAnalysisLineSparklinePreview(dc, range, rowHeaderWidth, columnHeaderHeight);
                 break;
-            case GridQuickAnalysisPreviewVisualKind.ColumnSparkline:
+            case QuickAnalysisPreviewVisualKind.ColumnSparkline:
                 DrawQuickAnalysisColumnSparklinePreview(dc, range, rowHeaderWidth, columnHeaderHeight);
                 break;
-            case GridQuickAnalysisPreviewVisualKind.WinLossSparkline:
+            case QuickAnalysisPreviewVisualKind.WinLossSparkline:
                 DrawQuickAnalysisWinLossSparklinePreview(dc, range, rowHeaderWidth, columnHeaderHeight);
                 break;
-            case GridQuickAnalysisPreviewVisualKind.ColumnChart:
+            case QuickAnalysisPreviewVisualKind.ColumnChart:
                 DrawQuickAnalysisColumnChartPreview(dc, rect.Value);
                 break;
-            case GridQuickAnalysisPreviewVisualKind.LineChart:
+            case QuickAnalysisPreviewVisualKind.LineChart:
                 DrawQuickAnalysisLineChartPreview(dc, rect.Value);
                 break;
-            case GridQuickAnalysisPreviewVisualKind.BarChart:
+            case QuickAnalysisPreviewVisualKind.BarChart:
                 DrawQuickAnalysisBarChartPreview(dc, rect.Value);
                 break;
-            case GridQuickAnalysisPreviewVisualKind.StackedColumnChart:
+            case QuickAnalysisPreviewVisualKind.StackedColumnChart:
                 DrawQuickAnalysisStackedColumnChartPreview(dc, rect.Value);
                 break;
-            case GridQuickAnalysisPreviewVisualKind.PieChart:
+            case QuickAnalysisPreviewVisualKind.PieChart:
                 DrawQuickAnalysisPieChartPreview(dc, rect.Value);
                 break;
-            case GridQuickAnalysisPreviewVisualKind.AreaChart:
+            case QuickAnalysisPreviewVisualKind.AreaChart:
                 DrawQuickAnalysisAreaChartPreview(dc, rect.Value);
                 break;
-            case GridQuickAnalysisPreviewVisualKind.ScatterChart:
+            case QuickAnalysisPreviewVisualKind.ScatterChart:
                 DrawQuickAnalysisScatterChartPreview(dc, rect.Value);
                 break;
         }
@@ -266,7 +267,7 @@ public partial class GridView
     {
         var viewport = Viewport!;
         var cache = GetQuickAnalysisPreviewGeometryCache(
-                GridQuickAnalysisPreviewVisualKind.ColorScale,
+                QuickAnalysisPreviewVisualKind.ColorScale,
                 viewport,
                 range,
                 rowHeaderWidth,
@@ -324,7 +325,7 @@ public partial class GridView
         }
 
         return CacheQuickAnalysisPreviewGeometry(
-            GridQuickAnalysisPreviewVisualKind.ColorScale,
+            QuickAnalysisPreviewVisualKind.ColorScale,
             viewport,
             range,
             rowHeaderWidth,
@@ -342,7 +343,7 @@ public partial class GridView
     {
         var viewport = Viewport!;
         var cache = GetQuickAnalysisPreviewGeometryCache(
-                GridQuickAnalysisPreviewVisualKind.IconSet,
+                QuickAnalysisPreviewVisualKind.IconSet,
                 viewport,
                 range,
                 rowHeaderWidth,
@@ -400,7 +401,7 @@ public partial class GridView
         }
 
         return CacheQuickAnalysisPreviewGeometry(
-            GridQuickAnalysisPreviewVisualKind.IconSet,
+            QuickAnalysisPreviewVisualKind.IconSet,
             viewport,
             range,
             rowHeaderWidth,
@@ -415,7 +416,7 @@ public partial class GridView
         GridRange range,
         double rowHeaderWidth,
         double columnHeaderHeight,
-        GridQuickAnalysisPreviewVisualKind visual,
+        QuickAnalysisPreviewVisualKind visual,
         Brush brush,
         Pen pen)
     {
@@ -428,7 +429,7 @@ public partial class GridView
     }
 
     private QuickAnalysisPreviewGeometryCache BuildQuickAnalysisCellOverlayGeometryCache(
-        GridQuickAnalysisPreviewVisualKind visual,
+        QuickAnalysisPreviewVisualKind visual,
         ViewportModel viewport,
         GridRange range,
         double rowHeaderWidth,
@@ -471,7 +472,7 @@ public partial class GridView
     {
         var viewport = Viewport!;
         var cache = GetQuickAnalysisPreviewGeometryCache(
-                GridQuickAnalysisPreviewVisualKind.LineSparkline,
+                QuickAnalysisPreviewVisualKind.LineSparkline,
                 viewport,
                 range,
                 rowHeaderWidth,
@@ -509,7 +510,7 @@ public partial class GridView
         }
 
         return CacheQuickAnalysisPreviewGeometry(
-            GridQuickAnalysisPreviewVisualKind.LineSparkline,
+            QuickAnalysisPreviewVisualKind.LineSparkline,
             viewport,
             range,
             rowHeaderWidth,
@@ -525,7 +526,7 @@ public partial class GridView
     {
         var viewport = Viewport!;
         var cache = GetQuickAnalysisPreviewGeometryCache(
-                GridQuickAnalysisPreviewVisualKind.ColumnSparkline,
+                QuickAnalysisPreviewVisualKind.ColumnSparkline,
                 viewport,
                 range,
                 rowHeaderWidth,
@@ -563,7 +564,7 @@ public partial class GridView
         }
 
         return CacheQuickAnalysisPreviewGeometry(
-            GridQuickAnalysisPreviewVisualKind.ColumnSparkline,
+            QuickAnalysisPreviewVisualKind.ColumnSparkline,
             viewport,
             range,
             rowHeaderWidth,
@@ -579,7 +580,7 @@ public partial class GridView
     {
         var viewport = Viewport!;
         var cache = GetQuickAnalysisPreviewGeometryCache(
-                GridQuickAnalysisPreviewVisualKind.WinLossSparkline,
+                QuickAnalysisPreviewVisualKind.WinLossSparkline,
                 viewport,
                 range,
                 rowHeaderWidth,
@@ -628,7 +629,7 @@ public partial class GridView
         }
 
         return CacheQuickAnalysisPreviewGeometry(
-            GridQuickAnalysisPreviewVisualKind.WinLossSparkline,
+            QuickAnalysisPreviewVisualKind.WinLossSparkline,
             viewport,
             range,
             rowHeaderWidth,
@@ -638,7 +639,7 @@ public partial class GridView
     }
 
     private QuickAnalysisPreviewGeometryCache? GetQuickAnalysisPreviewGeometryCache(
-        GridQuickAnalysisPreviewVisualKind visual,
+        QuickAnalysisPreviewVisualKind visual,
         ViewportModel viewport,
         GridRange range,
         double rowHeaderWidth,
@@ -658,7 +659,7 @@ public partial class GridView
     }
 
     private QuickAnalysisPreviewGeometryCache CacheQuickAnalysisPreviewGeometry(
-        GridQuickAnalysisPreviewVisualKind visual,
+        QuickAnalysisPreviewVisualKind visual,
         ViewportModel viewport,
         GridRange range,
         double rowHeaderWidth,
@@ -772,7 +773,7 @@ public partial class GridView
         GridRange Range,
         double RowHeaderWidth,
         double ColumnHeaderHeight,
-        GridQuickAnalysisPreviewVisualKind Visual,
+        QuickAnalysisPreviewVisualKind Visual,
         Geometry? Geometry,
         Geometry? SecondaryGeometry,
         Geometry?[]? BrushGeometries);

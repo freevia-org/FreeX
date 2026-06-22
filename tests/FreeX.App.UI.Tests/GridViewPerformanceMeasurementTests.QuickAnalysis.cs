@@ -4,6 +4,7 @@ using System.Reflection;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using FreeX.App.Presentation.QuickAnalysis;
 using FreeX.App.UI;
 using FreeX.Core.Model;
 using FluentAssertions;
@@ -16,15 +17,15 @@ public sealed partial class GridViewPerformanceMeasurementTests
     {
         StaTestRunner.Run(() =>
         {
-            MeasureQuickAnalysisPreviewVariant(GridQuickAnalysisPreviewVisualKind.ColorScale, "COLOR_SCALE");
-            MeasureQuickAnalysisPreviewVariant(GridQuickAnalysisPreviewVisualKind.IconSet, "ICON_SET");
-            MeasureQuickAnalysisPreviewVariant(GridQuickAnalysisPreviewVisualKind.Highlight, "HIGHLIGHT");
-            MeasureQuickAnalysisPreviewVariant(GridQuickAnalysisPreviewVisualKind.ClearFormat, "CLEAR_FORMAT");
-            MeasureQuickAnalysisPreviewVariant(GridQuickAnalysisPreviewVisualKind.TotalFormula, "TOTAL_FORMULA");
-            MeasureQuickAnalysisPreviewVariant(GridQuickAnalysisPreviewVisualKind.Table, "TABLE");
-            MeasureQuickAnalysisPreviewVariant(GridQuickAnalysisPreviewVisualKind.LineSparkline, "LINE_SPARKLINE");
-            MeasureQuickAnalysisPreviewVariant(GridQuickAnalysisPreviewVisualKind.ColumnSparkline, "COLUMN_SPARKLINE");
-            MeasureQuickAnalysisPreviewVariant(GridQuickAnalysisPreviewVisualKind.WinLossSparkline, "WIN_LOSS_SPARKLINE");
+            MeasureQuickAnalysisPreviewVariant(QuickAnalysisPreviewVisualKind.ColorScale, "COLOR_SCALE");
+            MeasureQuickAnalysisPreviewVariant(QuickAnalysisPreviewVisualKind.IconSet, "ICON_SET");
+            MeasureQuickAnalysisPreviewVariant(QuickAnalysisPreviewVisualKind.Highlight, "HIGHLIGHT");
+            MeasureQuickAnalysisPreviewVariant(QuickAnalysisPreviewVisualKind.ClearFormat, "CLEAR_FORMAT");
+            MeasureQuickAnalysisPreviewVariant(QuickAnalysisPreviewVisualKind.TotalFormula, "TOTAL_FORMULA");
+            MeasureQuickAnalysisPreviewVariant(QuickAnalysisPreviewVisualKind.Table, "TABLE");
+            MeasureQuickAnalysisPreviewVariant(QuickAnalysisPreviewVisualKind.LineSparkline, "LINE_SPARKLINE");
+            MeasureQuickAnalysisPreviewVariant(QuickAnalysisPreviewVisualKind.ColumnSparkline, "COLUMN_SPARKLINE");
+            MeasureQuickAnalysisPreviewVariant(QuickAnalysisPreviewVisualKind.WinLossSparkline, "WIN_LOSS_SPARKLINE");
         });
     }
 
@@ -36,7 +37,7 @@ public sealed partial class GridViewPerformanceMeasurementTests
             const int iterations = 12;
             const int width = 1440;
             const int height = 900;
-            var grid = CreateQuickAnalysisGrid(width, height, GridQuickAnalysisPreviewVisualKind.DataBars);
+            var grid = CreateQuickAnalysisGrid(width, height, QuickAnalysisPreviewVisualKind.DataBars);
 
             RenderOnce(grid, width, height);
             RenderOnce(grid, width, height);
@@ -82,7 +83,7 @@ public sealed partial class GridViewPerformanceMeasurementTests
             var grid = CreateQuickAnalysisGrid(
                 width,
                 height,
-                GridQuickAnalysisPreviewVisualKind.DataBars,
+                QuickAnalysisPreviewVisualKind.DataBars,
                 (row, column) => -((row.Row * 7) + (column.Col * 3)),
                 includeDisplayText: false);
 

@@ -267,45 +267,22 @@ public partial class MainWindow
         _preserveQuickAnalysisUnsupportedStatus = false;
         ApplyQuickAnalysisPreview(
             preview.Range,
-            MapQuickAnalysisPreviewVisual(preview.PreviewVisual.Kind));
+            preview.PreviewVisual.Kind);
         StatusReadyText.Text = preview.StatusText;
     }
 
     private void ClearQuickAnalysisPreview(bool resetStatus = true)
     {
-        ApplyQuickAnalysisPreview(null, GridQuickAnalysisPreviewVisualKind.None);
+        ApplyQuickAnalysisPreview(null, QuickAnalysisPreviewVisualKind.None);
         if (resetStatus && !_preserveQuickAnalysisUnsupportedStatus)
             StatusReadyText.Text = UiText.Get("MainWindow_Text_Ready");
     }
 
-    private void ApplyQuickAnalysisPreview(GridRange? range, GridQuickAnalysisPreviewVisualKind visual)
+    private void ApplyQuickAnalysisPreview(GridRange? range, QuickAnalysisPreviewVisualKind visual)
     {
         if (SheetGrid.QuickAnalysisPreviewRange != range)
             SheetGrid.QuickAnalysisPreviewRange = range;
         if (SheetGrid.QuickAnalysisPreviewVisual != visual)
             SheetGrid.QuickAnalysisPreviewVisual = visual;
     }
-
-    private static GridQuickAnalysisPreviewVisualKind MapQuickAnalysisPreviewVisual(QuickAnalysisPreviewVisualKind kind) =>
-        kind switch
-        {
-            QuickAnalysisPreviewVisualKind.DataBars => GridQuickAnalysisPreviewVisualKind.DataBars,
-            QuickAnalysisPreviewVisualKind.ColorScale => GridQuickAnalysisPreviewVisualKind.ColorScale,
-            QuickAnalysisPreviewVisualKind.IconSet => GridQuickAnalysisPreviewVisualKind.IconSet,
-            QuickAnalysisPreviewVisualKind.Highlight => GridQuickAnalysisPreviewVisualKind.Highlight,
-            QuickAnalysisPreviewVisualKind.ClearFormat => GridQuickAnalysisPreviewVisualKind.ClearFormat,
-            QuickAnalysisPreviewVisualKind.TotalFormula => GridQuickAnalysisPreviewVisualKind.TotalFormula,
-            QuickAnalysisPreviewVisualKind.Table => GridQuickAnalysisPreviewVisualKind.Table,
-            QuickAnalysisPreviewVisualKind.LineSparkline => GridQuickAnalysisPreviewVisualKind.LineSparkline,
-            QuickAnalysisPreviewVisualKind.ColumnSparkline => GridQuickAnalysisPreviewVisualKind.ColumnSparkline,
-            QuickAnalysisPreviewVisualKind.WinLossSparkline => GridQuickAnalysisPreviewVisualKind.WinLossSparkline,
-            QuickAnalysisPreviewVisualKind.ColumnChart => GridQuickAnalysisPreviewVisualKind.ColumnChart,
-            QuickAnalysisPreviewVisualKind.LineChart => GridQuickAnalysisPreviewVisualKind.LineChart,
-            QuickAnalysisPreviewVisualKind.BarChart => GridQuickAnalysisPreviewVisualKind.BarChart,
-            QuickAnalysisPreviewVisualKind.StackedColumnChart => GridQuickAnalysisPreviewVisualKind.StackedColumnChart,
-            QuickAnalysisPreviewVisualKind.PieChart => GridQuickAnalysisPreviewVisualKind.PieChart,
-            QuickAnalysisPreviewVisualKind.AreaChart => GridQuickAnalysisPreviewVisualKind.AreaChart,
-            QuickAnalysisPreviewVisualKind.ScatterChart => GridQuickAnalysisPreviewVisualKind.ScatterChart,
-            _ => GridQuickAnalysisPreviewVisualKind.None
-        };
 }

@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Windows;
+using FreeX.App.Presentation.QuickAnalysis;
 using FreeX.App.Services;
 using FreeX.App.UI;
 using FreeX.Core.IO;
@@ -182,7 +183,7 @@ public partial class MainWindow
             SheetGrid.SelectedRange = null;
             SheetGrid.SelectedRanges = null;
             SheetGrid.QuickAnalysisPreviewRange = null;
-            SheetGrid.QuickAnalysisPreviewVisual = FreeX.App.UI.GridQuickAnalysisPreviewVisualKind.None;
+            SheetGrid.QuickAnalysisPreviewVisual = QuickAnalysisPreviewVisualKind.None;
             SheetGrid.EditingCell = null;
             SheetGrid.FormulaTraceArrows = null;
             SheetGrid.FormulaTraceSheetId = default;

@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using FreeX.App.Presentation.QuickAnalysis;
 using FreeX.Core.Model;
 
 namespace FreeX.App.UI;
@@ -99,11 +100,11 @@ public partial class GridView
     }
 
     public static readonly DependencyProperty QuickAnalysisPreviewVisualProperty =
-        DependencyProperty.Register(nameof(QuickAnalysisPreviewVisual), typeof(GridQuickAnalysisPreviewVisualKind), typeof(GridView),
-            new FrameworkPropertyMetadata(GridQuickAnalysisPreviewVisualKind.None, FrameworkPropertyMetadataOptions.AffectsRender));
-    public GridQuickAnalysisPreviewVisualKind QuickAnalysisPreviewVisual
+        DependencyProperty.Register(nameof(QuickAnalysisPreviewVisual), typeof(QuickAnalysisPreviewVisualKind), typeof(GridView),
+            new FrameworkPropertyMetadata(QuickAnalysisPreviewVisualKind.None, FrameworkPropertyMetadataOptions.AffectsRender));
+    public QuickAnalysisPreviewVisualKind QuickAnalysisPreviewVisual
     {
-        get => (GridQuickAnalysisPreviewVisualKind)GetValue(QuickAnalysisPreviewVisualProperty);
+        get => (QuickAnalysisPreviewVisualKind)GetValue(QuickAnalysisPreviewVisualProperty);
         set => SetValue(QuickAnalysisPreviewVisualProperty, value);
     }
 

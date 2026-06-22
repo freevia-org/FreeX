@@ -29,79 +29,79 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
             harness.FocusedMenuHeader.Should().Be("Data Bars");
             harness.ContextMenuPlacementTargetName.Should().Be("SheetGrid");
             harness.OpenMenuHeaders.Should().ContainInOrder(["Formatting", "Data Bars", "Color Scale", "Icon Set"]);
-            harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.DataBars);
+            harness.QuickAnalysisPreviewVisual.Should().Be(QuickAnalysisPreviewVisualKind.DataBars);
             harness.QuickAnalysisPreviewRange.Should().Be((1u, 1u, 3u, 2u));
 
             harness.FocusMenuItem("Color Scale");
 
             harness.FocusedMenuHeader.Should().Be("Color Scale");
-            harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.ColorScale);
+            harness.QuickAnalysisPreviewVisual.Should().Be(QuickAnalysisPreviewVisualKind.ColorScale);
             harness.QuickAnalysisPreviewRange.Should().Be((1u, 1u, 3u, 2u));
 
             harness.FocusMenuItem("Icon Set");
 
             harness.FocusedMenuHeader.Should().Be("Icon Set");
-            harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.IconSet);
+            harness.QuickAnalysisPreviewVisual.Should().Be(QuickAnalysisPreviewVisualKind.IconSet);
             harness.QuickAnalysisPreviewRange.Should().Be((1u, 1u, 3u, 2u));
 
             harness.FocusMenuItem("Column", "Charts");
 
             harness.FocusedMenuHeader.Should().Be("Column");
-            harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.ColumnChart);
+            harness.QuickAnalysisPreviewVisual.Should().Be(QuickAnalysisPreviewVisualKind.ColumnChart);
             harness.QuickAnalysisPreviewRange.Should().Be((1u, 1u, 3u, 2u));
 
             harness.FocusMenuItem("Stacked Column");
 
             harness.FocusedMenuHeader.Should().Be("Stacked Column");
-            harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.StackedColumnChart);
+            harness.QuickAnalysisPreviewVisual.Should().Be(QuickAnalysisPreviewVisualKind.StackedColumnChart);
             harness.QuickAnalysisPreviewRange.Should().Be((1u, 1u, 3u, 2u));
 
             harness.FocusMenuItem("100% Stacked Column");
 
             harness.FocusedMenuHeader.Should().Be("100% Stacked Column");
-            harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.StackedColumnChart);
+            harness.QuickAnalysisPreviewVisual.Should().Be(QuickAnalysisPreviewVisualKind.StackedColumnChart);
             harness.QuickAnalysisPreviewRange.Should().Be((1u, 1u, 3u, 2u));
 
             harness.FocusMenuItem("Line");
 
             harness.FocusedMenuHeader.Should().Be("Line");
-            harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.LineChart);
+            harness.QuickAnalysisPreviewVisual.Should().Be(QuickAnalysisPreviewVisualKind.LineChart);
             harness.QuickAnalysisPreviewRange.Should().Be((1u, 1u, 3u, 2u));
 
             harness.FocusMenuItem("Bar");
 
             harness.FocusedMenuHeader.Should().Be("Bar");
-            harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.BarChart);
+            harness.QuickAnalysisPreviewVisual.Should().Be(QuickAnalysisPreviewVisualKind.BarChart);
             harness.QuickAnalysisPreviewRange.Should().Be((1u, 1u, 3u, 2u));
 
             harness.FocusMenuItem("Pie");
 
             harness.FocusedMenuHeader.Should().Be("Pie");
-            harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.PieChart);
+            harness.QuickAnalysisPreviewVisual.Should().Be(QuickAnalysisPreviewVisualKind.PieChart);
             harness.QuickAnalysisPreviewRange.Should().Be((1u, 1u, 3u, 2u));
 
             harness.FocusMenuItem("Doughnut");
 
             harness.FocusedMenuHeader.Should().Be("Doughnut");
-            harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.PieChart);
+            harness.QuickAnalysisPreviewVisual.Should().Be(QuickAnalysisPreviewVisualKind.PieChart);
             harness.QuickAnalysisPreviewRange.Should().Be((1u, 1u, 3u, 2u));
 
             harness.FocusMenuItem("Area");
 
             harness.FocusedMenuHeader.Should().Be("Area");
-            harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.AreaChart);
+            harness.QuickAnalysisPreviewVisual.Should().Be(QuickAnalysisPreviewVisualKind.AreaChart);
             harness.QuickAnalysisPreviewRange.Should().Be((1u, 1u, 3u, 2u));
 
             harness.FocusMenuItem("Scatter");
 
             harness.FocusedMenuHeader.Should().Be("Scatter");
-            harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.ScatterChart);
+            harness.QuickAnalysisPreviewVisual.Should().Be(QuickAnalysisPreviewVisualKind.ScatterChart);
             harness.QuickAnalysisPreviewRange.Should().Be((1u, 1u, 3u, 2u));
 
             harness.FocusMenuItem("Bubble");
 
             harness.FocusedMenuHeader.Should().Be("Bubble");
-            harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.ScatterChart);
+            harness.QuickAnalysisPreviewVisual.Should().Be(QuickAnalysisPreviewVisualKind.ScatterChart);
             harness.QuickAnalysisPreviewRange.Should().Be((1u, 1u, 3u, 2u));
         });
     }
@@ -115,13 +115,13 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
 
             harness.SelectRange(1, 1, 3, 2);
             harness.OpenQuickAnalysisMenu();
-            harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.DataBars);
+            harness.QuickAnalysisPreviewVisual.Should().Be(QuickAnalysisPreviewVisualKind.DataBars);
 
             harness.ClearSelection();
             harness.OpenQuickAnalysisMenu();
 
             harness.FocusedMenuHeader.Should().BeNull();
-            harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.None);
+            harness.QuickAnalysisPreviewVisual.Should().Be(QuickAnalysisPreviewVisualKind.None);
             harness.QuickAnalysisPreviewRange.Should().BeNull();
             harness.StatusText.Should().Be("Select a range to use Quick Analysis.");
         });
@@ -140,31 +140,31 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
             harness.FocusMenuItem("Sum", "Totals");
 
             harness.FocusedMenuHeader.Should().Be("Sum");
-            harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.TotalFormula);
+            harness.QuickAnalysisPreviewVisual.Should().Be(QuickAnalysisPreviewVisualKind.TotalFormula);
             harness.QuickAnalysisPreviewRange.Should().Be((1u, 3u, 3u, 3u));
 
             harness.FocusMenuItem("Running Total", "Totals");
 
             harness.FocusedMenuHeader.Should().Be("Running Total");
-            harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.TotalFormula);
+            harness.QuickAnalysisPreviewVisual.Should().Be(QuickAnalysisPreviewVisualKind.TotalFormula);
             harness.QuickAnalysisPreviewRange.Should().Be((1u, 3u, 3u, 3u));
 
             harness.FocusMenuItem("Line", "Sparklines");
 
             harness.FocusedMenuHeader.Should().Be("Line");
-            harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.LineSparkline);
+            harness.QuickAnalysisPreviewVisual.Should().Be(QuickAnalysisPreviewVisualKind.LineSparkline);
             harness.QuickAnalysisPreviewRange.Should().Be((1u, 3u, 3u, 3u));
 
             harness.FocusMenuItem("Column", "Sparklines");
 
             harness.FocusedMenuHeader.Should().Be("Column");
-            harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.ColumnSparkline);
+            harness.QuickAnalysisPreviewVisual.Should().Be(QuickAnalysisPreviewVisualKind.ColumnSparkline);
             harness.QuickAnalysisPreviewRange.Should().Be((1u, 3u, 3u, 3u));
 
             harness.FocusMenuItem("Win/Loss", "Sparklines");
 
             harness.FocusedMenuHeader.Should().Be("Win/Loss");
-            harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.WinLossSparkline);
+            harness.QuickAnalysisPreviewVisual.Should().Be(QuickAnalysisPreviewVisualKind.WinLossSparkline);
             harness.QuickAnalysisPreviewRange.Should().Be((1u, 3u, 3u, 3u));
         });
     }
@@ -209,7 +209,7 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
                 .Select(item => item.Header?.ToString() ?? "")
                 .ToList() ?? _openMenuHeaders;
 
-        public GridQuickAnalysisPreviewVisualKind QuickAnalysisPreviewVisual =>
+        public QuickAnalysisPreviewVisualKind QuickAnalysisPreviewVisual =>
             SheetGrid.QuickAnalysisPreviewVisual;
 
         public (uint StartRow, uint StartCol, uint EndRow, uint EndCol)? QuickAnalysisPreviewRange
@@ -299,37 +299,14 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
             _showQuickAnalysisPreview.Invoke(_window, [item]);
             PumpDispatcher();
             PumpDispatcher();
-            if (SheetGrid.QuickAnalysisPreviewVisual == GridQuickAnalysisPreviewVisualKind.None &&
+            if (SheetGrid.QuickAnalysisPreviewVisual == QuickAnalysisPreviewVisualKind.None &&
                 _selectedRange is { } range)
             {
                 var preview = QuickAnalysisPlanner.BuildHoverPreview(range, option);
                 SheetGrid.QuickAnalysisPreviewRange = preview.Range;
-                SheetGrid.QuickAnalysisPreviewVisual = MapPreviewVisual(preview.PreviewVisual.Kind);
+                SheetGrid.QuickAnalysisPreviewVisual = preview.PreviewVisual.Kind;
             }
         }
-
-        private static GridQuickAnalysisPreviewVisualKind MapPreviewVisual(QuickAnalysisPreviewVisualKind kind) =>
-            kind switch
-            {
-                QuickAnalysisPreviewVisualKind.DataBars => GridQuickAnalysisPreviewVisualKind.DataBars,
-                QuickAnalysisPreviewVisualKind.ColorScale => GridQuickAnalysisPreviewVisualKind.ColorScale,
-                QuickAnalysisPreviewVisualKind.IconSet => GridQuickAnalysisPreviewVisualKind.IconSet,
-                QuickAnalysisPreviewVisualKind.Highlight => GridQuickAnalysisPreviewVisualKind.Highlight,
-                QuickAnalysisPreviewVisualKind.ClearFormat => GridQuickAnalysisPreviewVisualKind.ClearFormat,
-                QuickAnalysisPreviewVisualKind.TotalFormula => GridQuickAnalysisPreviewVisualKind.TotalFormula,
-                QuickAnalysisPreviewVisualKind.Table => GridQuickAnalysisPreviewVisualKind.Table,
-                QuickAnalysisPreviewVisualKind.LineSparkline => GridQuickAnalysisPreviewVisualKind.LineSparkline,
-                QuickAnalysisPreviewVisualKind.ColumnSparkline => GridQuickAnalysisPreviewVisualKind.ColumnSparkline,
-                QuickAnalysisPreviewVisualKind.WinLossSparkline => GridQuickAnalysisPreviewVisualKind.WinLossSparkline,
-                QuickAnalysisPreviewVisualKind.ColumnChart => GridQuickAnalysisPreviewVisualKind.ColumnChart,
-                QuickAnalysisPreviewVisualKind.LineChart => GridQuickAnalysisPreviewVisualKind.LineChart,
-                QuickAnalysisPreviewVisualKind.BarChart => GridQuickAnalysisPreviewVisualKind.BarChart,
-                QuickAnalysisPreviewVisualKind.StackedColumnChart => GridQuickAnalysisPreviewVisualKind.StackedColumnChart,
-                QuickAnalysisPreviewVisualKind.PieChart => GridQuickAnalysisPreviewVisualKind.PieChart,
-                QuickAnalysisPreviewVisualKind.AreaChart => GridQuickAnalysisPreviewVisualKind.AreaChart,
-                QuickAnalysisPreviewVisualKind.ScatterChart => GridQuickAnalysisPreviewVisualKind.ScatterChart,
-                _ => GridQuickAnalysisPreviewVisualKind.None
-            };
 
         private IReadOnlyList<QuickAnalysisOption> CurrentOptions() =>
             _selectedRange is { } range

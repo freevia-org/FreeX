@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using FreeX.App.Presentation.QuickAnalysis;
 using FreeX.App.UI;
 using FreeX.Core.Model;
 using FluentAssertions;
@@ -747,7 +748,7 @@ public sealed partial class GridViewPerformanceMeasurementTests
     private static GridView CreateQuickAnalysisGrid(
         double width,
         double height,
-        GridQuickAnalysisPreviewVisualKind visual,
+        QuickAnalysisPreviewVisualKind visual,
         Func<RowMetric, ColMetric, double>? valueFactory = null,
         bool includeDisplayText = true)
     {
@@ -805,7 +806,7 @@ public sealed partial class GridViewPerformanceMeasurementTests
     }
 
     private static void MeasureQuickAnalysisPreviewVariant(
-        GridQuickAnalysisPreviewVisualKind visual,
+        QuickAnalysisPreviewVisualKind visual,
         string label)
     {
         const int iterations = 96;
