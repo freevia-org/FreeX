@@ -87,6 +87,15 @@ public static partial class PivotTableRefreshService
             subtotalRows,
             grandTotalRows,
             grandTotalColumns);
+        MaterializePivotBandStyleFootprintCells(
+            sheet,
+            pivotTable,
+            materialized,
+            bodyStart,
+            headerEndRow);
+
+        var firstDataRow = GetStyledPivotFirstDataRow(pivotTable, bodyStart, headerEndRow);
+        var firstDataColumn = GetStyledPivotFirstDataColumn(pivotTable, materialized);
 
         for (var row = materialized.Start.Row; row <= materialized.End.Row; row++)
         for (var col = materialized.Start.Col; col <= materialized.End.Col; col++)
@@ -128,12 +137,12 @@ public static partial class PivotTableRefreshService
             }
 
             var bodyRowIndex = row - headerEndRow - 1;
-            var bodyColIndex = col - materialized.Start.Col;
+            var bodyColIndex = col - firstDataColumn;
             if (bodyStyle is not null)
                 ApplyPivotVisualStyle(workbook, cell, bodyStyle.Value, preserveExistingVisualStyles);
-            if (pivotTable.ShowRowStripes && bodyRowIndex % 2 == 0)
+            if (pivotTable.ShowRowStripes && row >= firstDataRow && bodyRowIndex % 2 == 0)
                 ApplyPivotVisualStyle(workbook, cell, stripeStyle, preserveExistingVisualStyles);
-            if (pivotTable.ShowColumnStripes && bodyColIndex % 2 == 1)
+            if (pivotTable.ShowColumnStripes && col >= firstDataColumn && IsPivotColumnStripeColumn(pivotTable, bodyColIndex))
                 ApplyPivotVisualStyle(workbook, cell, stripeStyle, preserveExistingVisualStyles);
         }
 
@@ -219,6 +228,35 @@ public static partial class PivotTableRefreshService
 
         foreach (var col in grandTotalColumns)
             MaterializePivotBlankColumnCells(sheet, pivotTable, bodyStart.Row, headerEndRow, col);
+    }
+
+    private static void MaterializePivotBandStyleFootprintCells(
+        Sheet sheet,
+        PivotTableModel pivotTable,
+        GridRange materialized,
+        CellAddress bodyStart,
+        uint headerEndRow)
+    {
+        if (!HasLoadedNativePivotLocation(pivotTable))
+            return;
+
+        for (var row = bodyStart.Row; row <= headerEndRow; row++)
+            MaterializePivotBlankRowCells(sheet, pivotTable, row, materialized.Start.Col, materialized.End.Col);
+
+        if (!pivotTable.ShowRowStripes && !pivotTable.ShowColumnStripes)
+            return;
+
+        var firstDataRow = GetStyledPivotFirstDataRow(pivotTable, bodyStart, headerEndRow);
+        var firstDataColumn = GetStyledPivotFirstDataColumn(pivotTable, materialized);
+        for (var row = firstDataRow; row <= materialized.End.Row; row++)
+        for (var col = materialized.Start.Col; col <= materialized.End.Col; col++)
+        {
+            if (pivotTable.ShowColumnStripes && col >= firstDataColumn ||
+                pivotTable.ShowRowStripes)
+            {
+                MaterializePivotBlankCell(sheet, pivotTable, row, col);
+            }
+        }
     }
 
     private static void MaterializePivotBlankRowCells(
@@ -348,6 +386,13 @@ public static partial class PivotTableRefreshService
         PivotTableModel pivotTable,
         CellAddress bodyStart)
     {
+        if (HasLoadedNativePivotLocation(pivotTable) &&
+            pivotTable.FirstDataRow > 0 &&
+            !HasLoadedNativePageFieldCaptionLayout(pivotTable))
+        {
+            return bodyStart.Row + checked((uint)pivotTable.FirstDataRow) - 1;
+        }
+
         var headerRowCount = Math.Max(1, pivotTable.ColumnFields.Count);
         if (HasLoadedNativeMatrixHeaderPreamble(sheet, pivotTable, bodyStart))
             headerRowCount++;
@@ -355,12 +400,46 @@ public static partial class PivotTableRefreshService
         return bodyStart.Row + (uint)headerRowCount - 1;
     }
 
+    private static uint GetStyledPivotFirstDataRow(
+        PivotTableModel pivotTable,
+        CellAddress bodyStart,
+        uint headerEndRow)
+    {
+        if (HasLoadedNativePivotLocation(pivotTable) && pivotTable.FirstDataRow > 0)
+            return bodyStart.Row + checked((uint)pivotTable.FirstDataRow);
+
+        return headerEndRow + 1;
+    }
+
+    private static uint GetStyledPivotFirstDataColumn(
+        PivotTableModel pivotTable,
+        GridRange materialized)
+    {
+        if (HasLoadedNativePivotLocation(pivotTable) && pivotTable.FirstDataColumn > 0)
+            return Math.Min(
+                materialized.End.Col,
+                pivotTable.TargetRange.Start.Col + checked((uint)pivotTable.FirstDataColumn));
+
+        return materialized.Start.Col;
+    }
+
+    private static bool IsPivotColumnStripeColumn(PivotTableModel pivotTable, uint bodyColIndex) =>
+        HasLoadedNativePivotLocation(pivotTable)
+            ? bodyColIndex % 2 == 0
+            : bodyColIndex % 2 == 1;
+
+    private static bool HasLoadedNativePivotLocation(PivotTableModel pivotTable) =>
+        pivotTable.LastRenderedRange is not null;
+
     private static bool HasLoadedNativeMatrixHeaderPreamble(
         Sheet sheet,
         PivotTableModel pivotTable,
         CellAddress bodyStart)
     {
         if (pivotTable.RowFields.Count == 0 || pivotTable.ColumnFields.Count == 0)
+            return false;
+
+        if (HasLoadedNativePageFieldCaptionLayout(pivotTable))
             return false;
 
         if (sheet.GetCell(bodyStart.Row, bodyStart.Col)?.Value is not TextValue firstCell ||
@@ -375,6 +454,11 @@ public static partial class PivotTableRefreshService
 
         return string.Equals(rowHeader.Value, "Row Labels", StringComparison.OrdinalIgnoreCase);
     }
+
+    private static bool HasLoadedNativePageFieldCaptionLayout(PivotTableModel pivotTable) =>
+        HasLoadedNativePivotLocation(pivotTable) &&
+        pivotTable.ShowFieldHeaders &&
+        pivotTable.PageFields.Count > 0;
 
     private static void ApplyCompactRowLabelIndent(
         Workbook workbook,

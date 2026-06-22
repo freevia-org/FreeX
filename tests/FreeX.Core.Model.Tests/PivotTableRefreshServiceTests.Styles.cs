@@ -652,6 +652,86 @@ public sealed partial class PivotTableRefreshServiceTests
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "E6"))!.StyleId).FontColor.Should().Be(CellColor.White);
     }
 
+    [Fact]
+    public void ApplyLoadedPivotStyles_UsesNativeLocationOffsetsForHeaderAndColumnStripeFootprints()
+    {
+        var workbook = new Workbook("LoadedPivotNativeLocationStyleTest");
+        var sheet = workbook.AddSheet("Pivot");
+        var plainThemeStyle = workbook.RegisterStyle(new CellStyle
+        {
+            FontThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Dark1)
+        });
+        sheet.SetCell(Addr(sheet, "A3"), new Cell { Value = new TextValue("Sum of Sales"), StyleId = plainThemeStyle });
+        sheet.SetCell(Addr(sheet, "D4"), new Cell { Value = new TextValue("Hardware"), StyleId = plainThemeStyle });
+        sheet.SetCell(Addr(sheet, "E4"), new Cell { Value = new TextValue("Services"), StyleId = plainThemeStyle });
+        sheet.SetCell(Addr(sheet, "A5"), new Cell { Value = new TextValue("East"), StyleId = plainThemeStyle });
+        sheet.SetCell(Addr(sheet, "B5"), new Cell { Value = new TextValue("Direct"), StyleId = plainThemeStyle });
+        sheet.SetCell(Addr(sheet, "D5"), new Cell { Value = new NumberValue(2360), StyleId = plainThemeStyle });
+        sheet.PivotTables.Add(new PivotTableModel
+        {
+            Name = "NativePivotLayoutOptions",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "D2"),
+            TargetRange = Range(sheet, "A3", "F6"),
+            LastRenderedRange = Range(sheet, "A3", "F6"),
+            StyleName = "PivotStyleMedium9",
+            FirstHeaderRow = 1,
+            FirstDataRow = 2,
+            FirstDataColumn = 2,
+            ShowFieldHeaders = false,
+            ShowColumnStripes = true
+        });
+
+        PivotTableRefreshService.ApplyLoadedPivotStyles(workbook);
+
+        sheet.GetCell(Addr(sheet, "F4"))!.Value.Should().Be(BlankValue.Instance);
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "F4"))!.StyleId)
+            .FillColor.Should().Be(new CellColor(21, 96, 130));
+        sheet.GetCell(Addr(sheet, "C5"))!.Value.Should().Be(BlankValue.Instance);
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "B5"))!.StyleId)
+            .FillColor.Should().BeNull("native firstDataCol keeps row-label columns out of column striping");
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "C5"))!.StyleId)
+            .FillColor.Should().Be(new CellColor(232, 239, 242));
+    }
+
+    [Fact]
+    public void ApplyLoadedPivotStyles_KeepsPageFieldCaptionRowOutOfDarkHeaderFootprint()
+    {
+        var workbook = new Workbook("LoadedPivotVisibleCaptionsStyleTest");
+        var sheet = workbook.AddSheet("Pivot");
+        sheet.SetCell(Addr(sheet, "A5"), new TextValue("Sum of Sales"));
+        sheet.SetCell(Addr(sheet, "B5"), new TextValue("Column Labels"));
+        sheet.SetCell(Addr(sheet, "A6"), new TextValue("Row Labels"));
+        sheet.SetCell(Addr(sheet, "B6"), new TextValue("Jan-26"));
+        sheet.SetCell(Addr(sheet, "A7"), new TextValue("Hardware"));
+        sheet.SetCell(Addr(sheet, "B7"), new NumberValue(1250));
+        var pivot = new PivotTableModel
+        {
+            Name = "NativePivotReportFilters",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "B2"),
+            TargetRange = Range(sheet, "A5", "C8"),
+            LastRenderedRange = Range(sheet, "A5", "C8"),
+            StyleName = "PivotStyleMedium9",
+            FirstHeaderRow = 1,
+            FirstDataRow = 2,
+            FirstDataColumn = 1,
+            ShowFieldHeaders = true,
+            ShowRowStripes = true
+        };
+        pivot.PageFields.Add(new PivotFieldModel(0));
+        sheet.PivotTables.Add(pivot);
+
+        PivotTableRefreshService.ApplyLoadedPivotStyles(workbook);
+
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "A5"))!.StyleId)
+            .FillColor.Should().Be(new CellColor(21, 96, 130));
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "A6"))!.StyleId)
+            .FillColor.Should().BeNull();
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "B6"))!.StyleId)
+            .FillColor.Should().BeNull();
+    }
+
     [Theory]
     [InlineData("PivotStyleMedium3", WorkbookThemeColorSlot.Accent3)]
     [InlineData("PivotStyleMedium11", WorkbookThemeColorSlot.Accent3)]
