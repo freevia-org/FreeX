@@ -31,7 +31,7 @@ public static partial class PivotTableRefreshService
         {
             Bold = true,
             FontColor = palette.HeaderFont,
-            FillColor = palette.SubtotalFill,
+            FillColor = palette.CompactGroupHeaderFill ?? palette.SubtotalFill,
             BorderTop = new CellBorder(BorderStyle.Thin, palette.Border),
             BorderBottom = new CellBorder(BorderStyle.Thin, palette.Border)
         });

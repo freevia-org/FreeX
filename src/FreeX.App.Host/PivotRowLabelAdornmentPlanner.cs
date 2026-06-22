@@ -81,17 +81,20 @@ public static class PivotRowLabelAdornmentPlanner
         {
             var labelCol = labelStartCol + (uint)level;
             var address = new CellAddress(sheet.Id, row, labelCol);
-            if (!TryGetRowLabel(sheet, pivotTable, address, out _) ||
-                HasSamePrefixOnPreviousRow(sheet, pivotTable, row, labelStartCol, level) ||
-                !HasSamePrefixOnNextRow(sheet, pivotTable, row, labelStartCol, level))
+            if (!TryGetRowLabel(sheet, pivotTable, address, out _))
             {
                 continue;
             }
 
+            var hasPreviousPeer = HasSamePrefixOnPreviousRow(sheet, pivotTable, row, labelStartCol, level);
+            var hasNextPeer = HasSamePrefixOnNextRow(sheet, pivotTable, row, labelStartCol, level);
+            if (!hasPreviousPeer && !hasNextPeer)
+                continue;
+
             adornments.Add(new PivotRowLabelAdornment(
                 address,
                 IndentLevel: 0,
-                ShowExpandCollapseButton: true,
+                ShowExpandCollapseButton: !hasPreviousPeer && hasNextPeer,
                 IsExpanded: true));
         }
     }

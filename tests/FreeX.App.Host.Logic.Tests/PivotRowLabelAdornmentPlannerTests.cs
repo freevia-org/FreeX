@@ -67,7 +67,7 @@ public sealed class PivotRowLabelAdornmentPlannerTests
     }
 
     [Fact]
-    public void BuildAdornments_MarksFirstRepeatedParentRowsExpandableInTabularLayout()
+    public void BuildAdornments_ReservesRepeatedParentLabelPaddingInTabularLayout()
     {
         var workbook = new Workbook("PivotRowLabelAdornmentTabularPlannerTest");
         var source = workbook.AddSheet("SalesData");
@@ -104,9 +104,19 @@ public sealed class PivotRowLabelAdornmentPlannerTests
                 ShowExpandCollapseButton: true,
                 IsExpanded: true),
             new FreeX.App.UI.PivotRowLabelAdornment(
+                new CellAddress(sheet.Id, 6, 1),
+                IndentLevel: 0,
+                ShowExpandCollapseButton: false,
+                IsExpanded: true),
+            new FreeX.App.UI.PivotRowLabelAdornment(
                 new CellAddress(sheet.Id, 7, 1),
                 IndentLevel: 0,
                 ShowExpandCollapseButton: true,
+                IsExpanded: true),
+            new FreeX.App.UI.PivotRowLabelAdornment(
+                new CellAddress(sheet.Id, 8, 1),
+                IndentLevel: 0,
+                ShowExpandCollapseButton: false,
                 IsExpanded: true));
     }
 
