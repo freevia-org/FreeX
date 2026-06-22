@@ -36,6 +36,33 @@ public sealed class FileDialogRequestPlannerTests
     }
 
     [Fact]
+    public void BuildPerFormatOpenDialogPlan_PreservesSimpleSingleFormatFilter()
+    {
+        var plan = FileDialogRequestPlanner.BuildPerFormatOpenDialogPlan([
+            new FileDialogFormatDescriptor("fxp", "FreeP presentations"),
+        ]);
+
+        plan.Filter.Should().Be("FreeP presentations (*.fxp)|*.fxp|All files (*.*)|*.*");
+        plan.DefaultExtensionWithDot.Should().Be(".fxp");
+    }
+
+    [Fact]
+    public void BuildPerFormatSaveDialogPlanFromSourceName_BuildsSuggestedName()
+    {
+        var plan = FileDialogRequestPlanner.BuildPerFormatSaveDialogPlanFromSourceName(
+            [new FileDialogFormatDescriptor("fxp", "FreeP presentations")],
+            sourceName: null,
+            fallbackDisplayName: "Presentation",
+            defaultExtensionWithDot: ".fxp");
+
+        plan.Filter.Should().Be("FreeP presentations (*.fxp)|*.fxp|All files (*.*)|*.*");
+        plan.SuggestedFileName.Should().Be("Presentation.fxp");
+        plan.DefaultExtensionWithDot.Should().Be(".fxp");
+        plan.DefaultExtensionWithoutDot.Should().Be("fxp");
+        plan.FilterIndex.Should().Be(1);
+    }
+
+    [Fact]
     public void BuildSavePickerPlan_BuildsSuggestedNameAndPromotesPreferredExtension()
     {
         var plan = FileDialogRequestPlanner.BuildSavePickerPlan(

@@ -17,7 +17,7 @@ namespace FreeP.App.Host;
 /// resolution, and recent-files registration — is decided by the shared, neutral
 /// <see cref="FileLifecyclePlanner"/>. FreeP supplies only the thin host side: the native
 /// <see cref="OpenFileDialog"/>/<see cref="SaveFileDialog"/> for its single <c>.fxp</c> format (via the shared
-/// <see cref="FileDialogFilterBuilder"/>), the actual <c>.fxp</c> read/write, and the message prompts. Dirty/path
+/// <see cref="FileDialogRequestPlanner"/>), the actual <c>.fxp</c> read/write, and the message prompts. Dirty/path
 /// state and lifecycle ceremony live in the shared <see cref="FileCommandWorkflow"/>; recent files in the
 /// shared <see cref="RecentFilesStore"/>. Mirrors FreeW.FileCommands exactly (FreeW already adopted these seams).
 /// </para>
@@ -42,8 +42,10 @@ internal sealed class FileCommands
     private static readonly IReadOnlyList<FileDialogFormatDescriptor> Formats =
         [new FileDialogFormatDescriptor(FxpFormat.Extension, "FreeP presentations")];
 
-    private static readonly string Filter = FileDialogFilterBuilder.BuildPerFormatFilter(Formats);
-    private static readonly string DefaultExtension = FileDialogFilterBuilder.GetDefaultExtension(Formats);
+    private static readonly FileOpenDialogPlan OpenDialogPlan =
+        FileDialogRequestPlanner.BuildPerFormatOpenDialogPlan(Formats);
+
+    private static string DefaultExtension => OpenDialogPlan.DefaultExtensionWithDot;
 
     public FileCommands(
         Window window,
@@ -112,15 +114,14 @@ internal sealed class FileCommands
     /// <summary>File &gt; Save As. Always prompts for a target.</summary>
     public bool SaveAs()
     {
+        var plan = BuildSaveAsDialogPlan(_workflow.CurrentPath);
         var dialog = new SaveFileDialog
         {
-            Filter = Filter,
-            DefaultExt = DefaultExtension,
+            Filter = plan.Filter,
+            DefaultExt = plan.DefaultExtensionWithDot,
             AddExtension = true,
             OverwritePrompt = true,
-            FileName = _workflow.CurrentPath is null
-                ? "Presentation" + DefaultExtension
-                : Path.GetFileName(_workflow.CurrentPath)
+            FileName = plan.SuggestedFileName
         };
         return dialog.ShowDialog(_window) == true && SaveTo(dialog.FileName);
     }
@@ -150,9 +151,20 @@ internal sealed class FileCommands
 
     private string? PromptOpenPath()
     {
-        var dialog = new OpenFileDialog { Filter = Filter, DefaultExt = DefaultExtension };
+        var dialog = new OpenFileDialog
+        {
+            Filter = OpenDialogPlan.Filter,
+            DefaultExt = OpenDialogPlan.DefaultExtensionWithDot
+        };
         return dialog.ShowDialog(_window) == true ? dialog.FileName : null;
     }
+
+    private static FileSaveDialogPlan BuildSaveAsDialogPlan(string? currentPath) =>
+        FileDialogRequestPlanner.BuildPerFormatSaveDialogPlanFromSourceName(
+            Formats,
+            currentPath is null ? null : Path.GetFileName(currentPath),
+            "Presentation",
+            DefaultExtension);
 
     // ── Host seams (WPF) ─────────────────────────────────────────────────────
     private SaveChangesPrompt PromptSaveChanges(string action)
