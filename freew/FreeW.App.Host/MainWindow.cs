@@ -9,7 +9,6 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
-using System.Windows.Shapes;
 using System.Windows.Shell;
 using Free.Shared.Ribbon.Wpf;
 using FreeW.App.Host.Backstage;
@@ -176,22 +175,9 @@ public sealed class MainWindow : Window
         // App-specific ribbon brushes/styles still come from FreeWRibbonResources (merged at the ribbon).
         ShellChrome.ConfigureWindow(this, ChromeOptions);
 
-        // Root layout is an explicit 3-row grid so the footer (#3) is unambiguously a full-width row BELOW
-        // the body. Row 0 = window chrome (title bar + ribbon, stacked), row 1 = body (nav pane + workspace,
-        // where the vertical ruler lives), row 2 = status bar. The body's ruler therefore cannot draw over
-        // the footer: they occupy separate grid rows.
-        var root = new Grid();
-        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // chrome (title + ribbon)
-        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // body
-        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // status bar
-
         var chromeStack = new StackPanel { Orientation = Orientation.Vertical };
-        Grid.SetRow(chromeStack, 0);
-        root.Children.Add(chromeStack);
 
         var body = new DockPanel { LastChildFill = true };
-        Grid.SetRow(body, 1);
-        root.Children.Add(body);
 
         var editor = new DocumentView { Margin = new Thickness(40, 24, 40, 24) };
         _editor = editor;
@@ -256,8 +242,9 @@ public sealed class MainWindow : Window
         chromeStack.Children.Add(ribbon);
 
         var status = BuildStatusBar();
-        Grid.SetRow(status, 2);
-        root.Children.Add(status);
+        var clientFrame = SisterAppClientFrameBuilder.Build(
+            new SisterAppClientFrameSpec(chromeStack, body, status));
+        var root = clientFrame.Root;
 
         var navPane = BuildNavPane();
         DockPanel.SetDock(navPane, Dock.Left);
@@ -588,73 +575,42 @@ public sealed class MainWindow : Window
 
     private Border BuildStatusBar()
     {
-        var grid = new Grid { VerticalAlignment = VerticalAlignment.Center, ClipToBounds = true };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); // left info (condenses)
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });                       // view toggles (pinned)
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });                       // zoom (pinned)
-
         // ── Left info group: Page / Section / Words-Chars-Paragraphs / Data folder. Hosted in a clipping
         //    StackPanel so when space runs short the rightmost item (data folder) is clipped/ellipsized
         //    first while the pinned right-side controls keep their full width. ──
         var left = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, ClipToBounds = true };
 
-        TextBlock InfoText() => new()
-        {
-            Foreground = Brushes.White,
-            FontSize = 12,
-            VerticalAlignment = VerticalAlignment.Center,
-            TextTrimming = TextTrimming.CharacterEllipsis
-        };
-        UIElement InfoSep() => new Rectangle
-        {
-            Width = 1,
-            Margin = new Thickness(8, 3, 8, 3),
-            Fill = new SolidColorBrush(Color.FromArgb(0x66, 0xFF, 0xFF, 0xFF)),
-            VerticalAlignment = VerticalAlignment.Stretch
-        };
-
-        _pageText = InfoText();
+        _pageText = SisterAppStatusBarChrome.CreateInfoText();
         left.Children.Add(_pageText);
-        left.Children.Add(InfoSep());
-        _sectionText = InfoText();
+        left.Children.Add(SisterAppStatusBarChrome.CreateSeparator());
+        _sectionText = SisterAppStatusBarChrome.CreateInfoText();
         left.Children.Add(_sectionText);
-        left.Children.Add(InfoSep());
-        _countsText = InfoText();
+        left.Children.Add(SisterAppStatusBarChrome.CreateSeparator());
+        _countsText = SisterAppStatusBarChrome.CreateInfoText();
         left.Children.Add(_countsText);
 
         // The data folder is the lowest-priority item; wrap it so it ellipsizes and is the first to be
         // clipped when the window narrows (its separator + text live in one panel that can shrink away).
         var dataFolderPanel = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        dataFolderPanel.Children.Add(InfoSep());
-        _dataFolderText = InfoText();
+        dataFolderPanel.Children.Add(SisterAppStatusBarChrome.CreateSeparator());
+        _dataFolderText = SisterAppStatusBarChrome.CreateInfoText();
         _dataFolderText.Text = $"Data folder: {ResolveDataFolderLabel()}";
         _dataFolderText.ToolTip = _dataFolderText.Text;
         dataFolderPanel.Children.Add(_dataFolderText);
         _dataFolderItem = dataFolderPanel;
         left.Children.Add(dataFolderPanel);
 
-        var leftHost = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 4, 0), ClipToBounds = true };
-        leftHost.Children.Add(left);
-        Grid.SetColumn(leftHost, 0);
-        grid.Children.Add(leftHost);
-
         // ── Pinned right-side controls. ──
         _viewSwitchItem = (FrameworkElement)BuildViewSwitchControl();
-        Grid.SetColumn(_viewSwitchItem, 1);
-        grid.Children.Add(_viewSwitchItem);
 
         _zoomItem = (FrameworkElement)BuildZoomControl();
         _zoomItem.Margin = new Thickness(6, 0, 10, 0);
-        Grid.SetColumn(_zoomItem, 2);
-        grid.Children.Add(_zoomItem);
 
-        _status = new Border
-        {
+        _status = SisterAppStatusBarChrome.Build(new SisterAppStatusBarSpec(
             // FreeX status-bar surface (#17324D), matching the title bar (FreeXStatusSurfaceBrush).
-            Background = new SolidColorBrush(Color.FromRgb(0x17, 0x32, 0x4D)),
-            MinHeight = 26,
-            Child = grid
-        };
+            new SolidColorBrush(Color.FromRgb(0x17, 0x32, 0x4D)),
+            left,
+            [_viewSwitchItem, _zoomItem])).Root;
         return _status;
     }
 
