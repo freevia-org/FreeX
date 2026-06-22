@@ -11,6 +11,7 @@ using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
+using AvaloniaGrid = Avalonia.Controls.Grid;
 
 namespace FreeX.App.Avalonia;
 
@@ -714,9 +715,9 @@ public sealed partial class MainWindow
 
         var dialog = new Window
         {
-            Title = UiText.Get("ConditionalFormat_ManageTitle"),
+            Title = UiText.Get("ManageConditionalFormats_ConditionalFormattingRulesManager"),
             Width = 560,
-            Height = 460,
+            Height = 420,
             MinWidth = 480,
             MinHeight = 360,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -724,9 +725,14 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(dialog, "ManageConditionalFormatsDialog");
 
-        var listBox = new ListBox { MinHeight = 200 };
+        var listBox = new ListBox
+        {
+            MinHeight = 210,
+            Background = Brushes.White,
+            BorderThickness = new Thickness(0),
+        };
         AutomationProperties.SetAutomationId(listBox, "ManageConditionalFormatsListBox");
-        AutomationProperties.SetName(listBox, "Conditional formatting rules");
+        AutomationProperties.SetName(listBox, UiText.Get("ManageConditionalFormats_ConditionalFormattingRules"));
 
         var emptyText = new TextBlock
         {
@@ -735,15 +741,28 @@ public sealed partial class MainWindow
             IsVisible = false,
         };
 
-        var appliesToBox = new TextBox { MinWidth = 200 };
+        var appliesToBox = new TextBox { MinWidth = 160, IsVisible = false };
         AutomationProperties.SetAutomationId(appliesToBox, "ManageConditionalFormatsAppliesToBox");
-        AutomationProperties.SetName(appliesToBox, "Applies to");
+        AutomationProperties.SetName(appliesToBox, UiText.Get("ManageConditionalFormats_AppliesToColumn"));
+
+        var scopeBox = new ComboBox
+        {
+            MinWidth = 160,
+            ItemsSource = new[]
+            {
+                UiText.Get("ManageConditionalFormats_ScopeThisWorksheet").Replace("_", string.Empty, StringComparison.Ordinal),
+                UiText.Get("ManageConditionalFormats_ScopeCurrentSelection").Replace("_", string.Empty, StringComparison.Ordinal),
+            },
+            SelectedIndex = 1,
+            VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center,
+        };
+        AutomationProperties.SetAutomationId(scopeBox, "ManageConditionalFormatsScopeBox");
+        AutomationProperties.SetName(scopeBox, UiText.Get("ManageConditionalFormats_ShowFormattingRulesFor").Replace("_", string.Empty, StringComparison.Ordinal));
 
         void Reload(Guid? selectId = null)
         {
-            // A single-cell selection lists the whole sheet; a wider selection scopes to overlap.
             var selection = _session.SelectedRange;
-            GridRange? scope = selection.RowCount == 1 && selection.ColCount == 1 ? null : selection;
+            GridRange? scope = scopeBox.SelectedIndex == 1 ? selection : null;
             var items = ConditionalFormatManageModel.BuildList(_session.ActiveSheet.ConditionalFormats, scope);
             listBox.ItemsSource = items;
             emptyText.IsVisible = items.Count == 0;
@@ -760,6 +779,8 @@ public sealed partial class MainWindow
 
                 listBox.SelectedIndex = index;
             }
+
+            SyncCommandState();
         }
 
         void SyncAppliesTo()
@@ -769,24 +790,46 @@ public sealed partial class MainWindow
                 : string.Empty;
         }
 
-        var newButton = new Button { Content = UiText.Get("ConditionalFormat_ManageNew"), MinWidth = 84 };
+        var newButton = new Button { Content = UiText.Get("ManageConditionalFormats_NewRule"), Width = 104, Margin = new Thickness(0, 0, 6, 0) };
         AutomationProperties.SetAutomationId(newButton, "ManageConditionalFormatsNewButton");
-        var editButton = new Button { Content = UiText.Get("ConditionalFormat_ManageEdit"), MinWidth = 84 };
+        var editButton = new Button { Content = UiText.Get("ManageConditionalFormats_EditRule"), Width = 94, Margin = new Thickness(0, 0, 6, 0), IsEnabled = false };
         AutomationProperties.SetAutomationId(editButton, "ManageConditionalFormatsEditButton");
-        var deleteButton = new Button { Content = UiText.Get("ConditionalFormat_ManageDelete"), MinWidth = 84 };
+        var duplicateButton = new Button { Content = UiText.Get("ManageConditionalFormats_DuplicateRule"), Width = 118, Margin = new Thickness(0, 0, 6, 0), IsEnabled = false };
+        AutomationProperties.SetAutomationId(duplicateButton, "ManageConditionalFormatsDuplicateButton");
+        var deleteButton = new Button { Content = UiText.Get("ManageConditionalFormats_DeleteRule"), Width = 100, Margin = new Thickness(0, 0, 12, 0), IsEnabled = false };
         AutomationProperties.SetAutomationId(deleteButton, "ManageConditionalFormatsDeleteButton");
-        var moveUpButton = new Button { Content = UiText.Get("ConditionalFormat_ManageMoveUp"), MinWidth = 84 };
+        var moveUpButton = new Button { Content = "\u25B2", Width = 32, Margin = new Thickness(0, 0, 4, 0), IsEnabled = false };
         AutomationProperties.SetAutomationId(moveUpButton, "ManageConditionalFormatsMoveUpButton");
-        AutomationProperties.SetName(moveUpButton, "Move rule up");
-        var moveDownButton = new Button { Content = UiText.Get("ConditionalFormat_ManageMoveDown"), MinWidth = 84 };
+        AutomationProperties.SetName(moveUpButton, UiText.Get("ManageConditionalFormats_MoveUp"));
+        ToolTip.SetTip(moveUpButton, UiText.Get("ManageConditionalFormats_MoveSelectedRuleUp"));
+        var moveDownButton = new Button { Content = "\u25BC", Width = 32, IsEnabled = false };
         AutomationProperties.SetAutomationId(moveDownButton, "ManageConditionalFormatsMoveDownButton");
-        AutomationProperties.SetName(moveDownButton, "Move rule down");
-        var applyAppliesToButton = new Button { Content = UiText.Get("ConditionalFormat_ManageApplyRange"), MinWidth = 84 };
+        AutomationProperties.SetName(moveDownButton, UiText.Get("ManageConditionalFormats_MoveDown"));
+        ToolTip.SetTip(moveDownButton, UiText.Get("ManageConditionalFormats_MoveSelectedRuleDown"));
+        var applyAppliesToButton = new Button { Content = UiText.Get("ManageConditionalFormats_Apply"), Width = 72 };
         AutomationProperties.SetAutomationId(applyAppliesToButton, "ManageConditionalFormatsApplyAppliesToButton");
-        var closeButton = new Button { Content = UiText.Get("Common_Close"), IsCancel = true, MinWidth = 84 };
+        var closeButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, Width = 72, Margin = new Thickness(0, 0, 6, 0) };
         AutomationProperties.SetAutomationId(closeButton, "ManageConditionalFormatsCloseButton");
+        var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, Width = 72, Margin = new Thickness(0, 0, 6, 0) };
+        AutomationProperties.SetAutomationId(cancelButton, "ManageConditionalFormatsCancelButton");
 
-        listBox.SelectionChanged += (_, _) => SyncAppliesTo();
+        void SyncCommandState()
+        {
+            var hasSelection = listBox.SelectedItem is ConditionalFormatRuleListItem;
+            editButton.IsEnabled = hasSelection;
+            duplicateButton.IsEnabled = hasSelection;
+            deleteButton.IsEnabled = hasSelection;
+            moveUpButton.IsEnabled = hasSelection && listBox.SelectedIndex > 0;
+            moveDownButton.IsEnabled = hasSelection && listBox.SelectedIndex >= 0 && listBox.SelectedIndex < listBox.ItemCount - 1;
+            applyAppliesToButton.IsEnabled = hasSelection;
+        }
+
+        listBox.SelectionChanged += (_, _) =>
+        {
+            SyncAppliesTo();
+            SyncCommandState();
+        };
+        scopeBox.SelectionChanged += (_, _) => Reload();
 
         newButton.Click += async (_, _) =>
         {
@@ -832,6 +875,24 @@ public sealed partial class MainWindow
             Reload();
         };
 
+        duplicateButton.Click += async (_, _) =>
+        {
+            if (listBox.SelectedItem is not ConditionalFormatRuleListItem item)
+                return;
+
+            var duplicateId = Guid.NewGuid();
+            var command = ConditionalFormatManageModel.BuildDuplicateCommand(
+                _session.ActiveSheet.Id,
+                _session.ActiveSheet.ConditionalFormats,
+                item.Id,
+                duplicateId);
+            if (command is null)
+                return;
+
+            RunConditionalFormatCommand(command, UiText.Get("InsertLoc_CfAddedRule"));
+            Reload(duplicateId);
+        };
+
         void Move(ConditionalFormatRuleMoveDirection direction)
         {
             if (listBox.SelectedItem is not ConditionalFormatRuleListItem item)
@@ -872,55 +933,107 @@ public sealed partial class MainWindow
         };
 
         closeButton.Click += (_, _) => dialog.Close();
+        cancelButton.Click += (_, _) => dialog.Close();
+
+        var scopeRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Margin = new Thickness(0, 0, 0, 8),
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = UiText.Get("ManageConditionalFormats_ShowFormattingRulesFor").Replace("_", string.Empty, StringComparison.Ordinal),
+                    VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center,
+                    Margin = new Thickness(0, 0, 6, 0),
+                },
+                scopeBox,
+            },
+        };
+        DockPanel.SetDock(scopeRow, Dock.Top);
 
         var toolbarRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            Margin = new Thickness(0, 0, 0, 8),
-            Children = { newButton, editButton, deleteButton, moveUpButton, moveDownButton },
+            Margin = new Thickness(0, 0, 0, 6),
+            Children = { newButton, editButton, duplicateButton, deleteButton, moveUpButton, moveDownButton },
         };
-        DockPanel.SetDock(toolbarRow, Dock.Top);
-
-        var appliesToRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center,
-            Margin = new Thickness(0, 8, 0, 0),
-            Children =
-            {
-                new TextBlock { Text = UiText.Get("ConditionalFormat_AppliesToLabel"), VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center, Foreground = HeaderForeground },
-                appliesToBox,
-                applyAppliesToButton,
-            },
-        };
-        DockPanel.SetDock(appliesToRow, Dock.Bottom);
+        DockPanel.SetDock(toolbarRow, Dock.Bottom);
 
         var buttonRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 8,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 10, 0, 0),
-            Children = { closeButton },
+            Margin = new Thickness(0, 8, 0, 0),
+            Children = { closeButton, cancelButton, applyAppliesToButton },
         };
         DockPanel.SetDock(buttonRow, Dock.Bottom);
 
-        Reload();
-        SyncAppliesTo();
-        dialog.Content = new DockPanel
+        static TextBlock HeaderCell(string text, int column) =>
+            new()
+            {
+                Text = text,
+                FontWeight = FontWeight.SemiBold,
+                Padding = new Thickness(5, 3),
+                VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center,
+                [AvaloniaGrid.ColumnProperty] = column,
+            };
+
+        var headerGrid = new AvaloniaGrid
         {
-            Margin = new Thickness(16),
+            ColumnDefinitions = new ColumnDefinitions("34,200,95,170,84"),
+            Background = Brush(243, 243, 243),
             Children =
             {
-                toolbarRow,
+                HeaderCell("#", 0),
+                HeaderCell(UiText.Get("ManageConditionalFormats_RuleTypeColumn"), 1),
+                HeaderCell(UiText.Get("ManageConditionalFormats_FormatColumn"), 2),
+                HeaderCell(UiText.Get("ManageConditionalFormats_AppliesToColumn"), 3),
+                HeaderCell(UiText.Get("ManageConditionalFormats_StopIfTrueColumn"), 4),
+            },
+        };
+        DockPanel.SetDock(headerGrid, Dock.Top);
+
+        var rulesPanel = new DockPanel
+        {
+            Children =
+            {
+                headerGrid,
+                listBox,
+            },
+        };
+
+        var rulesFrame = new Border
+        {
+            BorderBrush = Brush(171, 173, 179),
+            BorderThickness = new Thickness(1),
+            Background = Brushes.White,
+            Child = rulesPanel,
+        };
+
+        Reload();
+        SyncAppliesTo();
+        SyncCommandState();
+        dialog.Content = new DockPanel
+        {
+            Margin = new Thickness(12),
+            Children =
+            {
+                scopeRow,
                 buttonRow,
-                appliesToRow,
+                toolbarRow,
                 new StackPanel
                 {
-                    Spacing = 8,
-                    Children = { emptyText, listBox },
+                    Spacing = 4,
+                    Children =
+                    {
+                        new TextBlock
+                        {
+                            Text = UiText.Get("ManageConditionalFormats_Rules").Replace("_", string.Empty, StringComparison.Ordinal),
+                        },
+                        rulesFrame,
+                        appliesToBox,
+                    },
                 },
             },
         };

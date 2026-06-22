@@ -390,6 +390,28 @@ public sealed class ConditionalFormatRuleBuilderTests
     }
 
     [Fact]
+    public void Manage_DuplicateCommand_InsertsCopiedRuleThroughSession()
+    {
+        var session = CreateSession();
+        var sheetId = session.ActiveSheet.Id;
+        var range = SelectionRange(session);
+        var rule = ConditionalFormatRuleBuilder.Build(
+            new CfRuleInput { RuleType = CfRuleType.CellValue, Value1 = "7" }, range);
+        session.ExecuteReviewCommand(ConditionalFormatRuleBuilder.ToApplyCommand(sheetId, rule));
+
+        var duplicateId = Guid.NewGuid();
+        var duplicateCommand = ConditionalFormatManageModel.BuildDuplicateCommand(
+            sheetId, session.ActiveSheet.ConditionalFormats, rule.Id, duplicateId);
+        duplicateCommand.Should().NotBeNull();
+        session.ExecuteReviewCommand(duplicateCommand!).Success.Should().BeTrue();
+
+        session.ActiveSheet.ConditionalFormats.Should().HaveCount(2);
+        var duplicate = session.ActiveSheet.ConditionalFormats.Single(r => r.Id == duplicateId);
+        duplicate.Value1.Should().Be("7");
+        duplicate.Priority.Should().Be(2);
+    }
+
+    [Fact]
     public void Manage_Describe_SummarizesRuleTypes()
     {
         var sheet = SheetId();

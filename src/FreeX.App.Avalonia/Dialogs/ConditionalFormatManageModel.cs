@@ -87,6 +87,28 @@ public static class ConditionalFormatManageModel
     }
 
     /// <summary>
+    /// The command that duplicates a rule immediately below the original, then replaces all rules
+    /// atomically. Returns <c>null</c> when the rule id is absent.
+    /// </summary>
+    public static ReplaceAllConditionalFormatsCommand? BuildDuplicateCommand(
+        SheetId sheetId,
+        IReadOnlyList<ConditionalFormat> sheetRules,
+        Guid ruleId,
+        Guid newId)
+    {
+        ArgumentNullException.ThrowIfNull(sheetRules);
+
+        var ordered = sheetRules.OrderBy(rule => rule.Priority).ToList();
+        var index = IndexOf(ordered, ruleId);
+        if (index < 0)
+            return null;
+
+        ordered.Insert(index + 1, CloneRule(ordered[index], newId));
+        Reprioritize(ordered);
+        return new ReplaceAllConditionalFormatsCommand(sheetId, ordered);
+    }
+
+    /// <summary>
     /// The command that moves a rule up or down in priority order (swapping it with its neighbour),
     /// then replaces all rules atomically. Returns <c>null</c> when the move is a no-op (rule absent,
     /// or already at the boundary in the requested direction).
@@ -207,5 +229,69 @@ public static class ConditionalFormatManageModel
     {
         for (var i = 0; i < rules.Count; i++)
             rules[i].Priority = i + 1;
+    }
+
+    private static ConditionalFormat CloneRule(ConditionalFormat source, Guid? id = null)
+    {
+        var clone = new ConditionalFormat
+        {
+            Id = id ?? source.Id,
+            AppliesTo = source.AppliesTo,
+            Priority = source.Priority,
+            RuleType = source.RuleType,
+            Operator = source.Operator,
+            Value1 = source.Value1,
+            Value2 = source.Value2,
+            FormatIfTrue = source.FormatIfTrue?.Clone(),
+            MinColor = source.MinColor,
+            MidColor = source.MidColor,
+            MaxColor = source.MaxColor,
+            UseThreeColorScale = source.UseThreeColorScale,
+            MinThresholdType = source.MinThresholdType,
+            MinThresholdValue = source.MinThresholdValue,
+            MinThresholdGreaterThanOrEqual = source.MinThresholdGreaterThanOrEqual,
+            MidThresholdType = source.MidThresholdType,
+            MidThresholdValue = source.MidThresholdValue,
+            MidThresholdGreaterThanOrEqual = source.MidThresholdGreaterThanOrEqual,
+            MaxThresholdType = source.MaxThresholdType,
+            MaxThresholdValue = source.MaxThresholdValue,
+            MaxThresholdGreaterThanOrEqual = source.MaxThresholdGreaterThanOrEqual,
+            DataBarColor = source.DataBarColor,
+            DataBarMinThresholdType = source.DataBarMinThresholdType,
+            DataBarMinThresholdValue = source.DataBarMinThresholdValue,
+            DataBarMaxThresholdType = source.DataBarMaxThresholdType,
+            DataBarMaxThresholdValue = source.DataBarMaxThresholdValue,
+            DataBarShowValue = source.DataBarShowValue,
+            DataBarMinLength = source.DataBarMinLength,
+            DataBarMaxLength = source.DataBarMaxLength,
+            DataBarGradient = source.DataBarGradient,
+            DataBarBorder = source.DataBarBorder,
+            DataBarAxisPosition = source.DataBarAxisPosition,
+            DataBarAxisColor = source.DataBarAxisColor,
+            DataBarNegativeFillColor = source.DataBarNegativeFillColor,
+            DataBarNegativeBorderColor = source.DataBarNegativeBorderColor,
+            AboveAverage = source.AboveAverage,
+            FormulaText = source.FormulaText,
+            IconSetStyle = source.IconSetStyle,
+            IconSetShowValue = source.IconSetShowValue,
+            IconSetReverse = source.IconSetReverse,
+            TopBottomRank = source.TopBottomRank,
+            TopBottomPercent = source.TopBottomPercent,
+            TextRuleText = source.TextRuleText,
+            DateOccurringPeriod = source.DateOccurringPeriod,
+            StopIfTrue = source.StopIfTrue,
+            NativeAttributes = source.NativeAttributes,
+            NativeChildXmls = id.HasValue && id.Value != source.Id
+                ? ConditionalFormatNativeMetadata.RemoveX14IdNativeChildXmls(source.NativeChildXmls)
+                : source.NativeChildXmls,
+            NativePayloadAttributes = source.NativePayloadAttributes,
+            NativePayloadChildXmls = source.NativePayloadChildXmls,
+            NativeContainerAttributes = source.NativeContainerAttributes,
+            NativeContainerChildXmls = source.NativeContainerChildXmls,
+        };
+
+        clone.IconSetThresholds.AddRange(source.IconSetThresholds);
+        clone.IconOverrides.AddRange(source.IconOverrides);
+        return clone;
     }
 }
