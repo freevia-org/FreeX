@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using Free.Shared.AppServices;
@@ -63,6 +64,7 @@ internal sealed class BackstageView : UserControl
             BuildHomePane = BuildHomePane,
             UseNewPane = true,
             BuildOpenPane = BuildOpenPane,
+            BuildSharePane = BuildSharePane,
             BuildSaveAsPane = BuildSaveAsPane,
             BuildPrintPane = BuildPrintPane,
             BuildExportPane = BuildExportPane,
@@ -164,6 +166,20 @@ internal sealed class BackstageView : UserControl
                 path => { Hide(); _actions.OpenPath(path); },
                 () => { Hide(); _actions.Open(); },
                 () => { Hide(); _actions.RecoverUnsaved(); })));
+    }
+
+    private UIElement BuildSharePane()
+    {
+        return Panes.BuildActionPane(new BackstageActionPaneSpec(
+            Heading: "Share",
+            Description: "Share a saved local document or create a copy that can be sent elsewhere.",
+            Groups: BackstageSharePanePlanner.Build(
+                _file.CurrentPath,
+                File.Exists,
+                () => { Hide(); _actions.SaveAs(); },
+                path => { Hide(); _actions.OpenContainingFolder(path); },
+                () => { Hide(); _actions.SaveCopy(); },
+                () => { Hide(); _actions.ExportPdf(); })));
     }
 
     private UIElement BuildHomePane()
@@ -307,6 +323,7 @@ internal sealed record BackstageActions(
     Action<string> SaveAsType,
     Action SaveCopy,
     Action RecoverUnsaved,
+    Action<string> OpenContainingFolder,
     Action Close,
     Action Print,
     Action PrintPreview,

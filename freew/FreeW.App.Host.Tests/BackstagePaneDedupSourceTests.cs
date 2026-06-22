@@ -41,6 +41,9 @@ public sealed class BackstagePaneDedupSourceTests
             source.Should().Contain("BuildOpenPane = BuildOpenPane");
             source.Should().Contain("BackstageOpenPanePlanner.Build(");
             source.Should().Contain("_file.RecentEntries");
+            source.Should().Contain("BuildSharePane = BuildSharePane");
+            source.Should().Contain("BackstageSharePanePlanner.Build(");
+            source.Should().Contain("OpenContainingFolder");
             source.Should().Contain("BuildSaveAsPane = BuildSaveAsPane");
             source.Should().Contain("BuildPrintPane = BuildPrintPane");
             source.Should().Contain("BackstagePrintPanePlanner.Build(");

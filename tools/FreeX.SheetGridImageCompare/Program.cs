@@ -166,6 +166,7 @@ internal static class Program
                     SheetName = $"{sheet.Name} - {pivot.Name} [{rangeSource}]",
                     FreeXPngPath = outPath,
                     FreeXPngFileName = outFileName,
+                    PivotDropdownSummary = DescribePivotDropdownTargets(workbook, sheet),
                 };
 
                 try
@@ -203,6 +204,7 @@ internal static class Program
                     SheetName = $"{item.Sheet.Name} [{item.RangeSource}]",
                     FreeXPngPath = outPath,
                     FreeXPngFileName = outFileName,
+                    PivotDropdownSummary = DescribePivotDropdownTargets(workbook, item.Sheet),
                 };
 
                 try
@@ -245,6 +247,7 @@ internal static class Program
                 SheetName = sheet.Name,
                 FreeXPngPath = outPath,
                 FreeXPngFileName = outFileName,
+                PivotDropdownSummary = DescribePivotDropdownTargets(workbook, sheet),
             };
 
             try
@@ -1398,6 +1401,10 @@ internal static class Program
             sb.AppendLine($"{r.NN.ToString("D2"),-4}  {diffStr,7}  {status,-8}  {FormatDimensions(r),-34}  {r.SheetName}");
             if (r.Error != null)
                 sb.AppendLine($"       NOTE: {r.Error}");
+
+            var source = results.FirstOrDefault(result => result.NN == r.NN);
+            if (!string.IsNullOrWhiteSpace(source?.PivotDropdownSummary))
+                sb.AppendLine($"       Pivot dropdowns: {source.PivotDropdownSummary}");
         }
 
         var reportPath = Path.Combine(freexOutputDir, "REPORT.txt");
@@ -1598,6 +1605,39 @@ internal static class Program
         return $"Excel {row.ExcelDimensions?.ToString() ?? "N/A"}; FreeX {row.FreeXDimensions?.ToString() ?? "N/A"}";
     }
 
+    private static string DescribePivotDropdownTargets(Workbook workbook, Sheet sheet)
+    {
+        var targets = FreeX.App.Host.PivotHeaderDropdownPlanner.BuildTargets(workbook, sheet);
+        if (targets.Count == 0)
+            return "";
+
+        return string.Join("; ", targets.Select(target =>
+        {
+            var active = target.IsActive ? "*" : "";
+            return $"{target.Axis}:{ToA1(target.HeaderCell)}:{target.FieldCaption}{active}";
+        }));
+    }
+
+    private static string ToA1(CellAddress address) =>
+        $"{ColumnName(address.Col)}{address.Row}";
+
+    private static string ColumnName(uint column)
+    {
+        var value = (int)column;
+        if (value <= 0)
+            return "?";
+
+        var builder = new StringBuilder();
+        while (value > 0)
+        {
+            value--;
+            builder.Insert(0, (char)('A' + value % 26));
+            value /= 26;
+        }
+
+        return builder.ToString();
+    }
+
     private static string Trunc(string? s, int max)
     {
         s ??= "";
@@ -1620,6 +1660,7 @@ internal sealed class SheetResult
     public string? Error           { get; set; }
     public double  DiffPercent     { get; set; } = -1;
     public bool    ComparisonFailed { get; set; }
+    public string? PivotDropdownSummary { get; set; }
 }
 
 internal sealed class DiffRow

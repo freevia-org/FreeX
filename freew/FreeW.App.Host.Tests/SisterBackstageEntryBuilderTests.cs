@@ -35,6 +35,7 @@ public sealed class SisterBackstageEntryBuilderTests
             BuildHomePane = Pane,
             UseNewPane = true,
             BuildOpenPane = Pane,
+            BuildSharePane = Pane,
             BuildSaveAsPane = Pane,
             BuildPrintPane = Pane,
             BuildExportPane = Pane,
@@ -45,6 +46,7 @@ public sealed class SisterBackstageEntryBuilderTests
             "Home",
             "New",
             "Open",
+            "Share",
             "Info",
             "|",
             "Save",
@@ -63,6 +65,7 @@ public sealed class SisterBackstageEntryBuilderTests
         entries.Single(entry => entry.Label == "New").ContentFactory.Should().NotBeNull();
         entries.Single(entry => entry.Label == "New").Action.Should().BeNull();
         entries.Single(entry => entry.Label == "Open").ContentFactory.Should().NotBeNull();
+        entries.Single(entry => entry.Label == "Share").ContentFactory.Should().NotBeNull();
         entries.Single(entry => entry.Label == "Save As").ContentFactory.Should().NotBeNull();
         entries.Single(entry => entry.Label == "Print").ContentFactory.Should().NotBeNull();
         entries.Single(entry => entry.Label == "Print").Action.Should().BeNull();

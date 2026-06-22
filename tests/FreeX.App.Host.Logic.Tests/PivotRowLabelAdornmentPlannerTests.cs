@@ -66,6 +66,50 @@ public sealed class PivotRowLabelAdornmentPlannerTests
         PivotRowLabelAdornmentPlanner.BuildAdornments(workbook, sheet).Should().BeEmpty();
     }
 
+    [Fact]
+    public void BuildAdornments_MarksFirstRepeatedParentRowsExpandableInTabularLayout()
+    {
+        var workbook = new Workbook("PivotRowLabelAdornmentTabularPlannerTest");
+        var source = workbook.AddSheet("SalesData");
+        var sheet = workbook.AddSheet("Pivot");
+        var pivot = new PivotTableModel
+        {
+            Name = "NativePivotLayoutOptions",
+            SourceRange = new GridRange(new CellAddress(source.Id, 1, 1), new CellAddress(source.Id, 13, 7)),
+            TargetRange = new GridRange(new CellAddress(sheet.Id, 3, 1), new CellAddress(sheet.Id, 9, 4)),
+            ReportLayout = PivotReportLayout.Tabular,
+            FirstDataRow = 2,
+            ShowExpandCollapseButtons = true
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.RowFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(6, "Sum of Sales", "sum"));
+        sheet.PivotTables.Add(pivot);
+        SetText(sheet, 5, 1, "East");
+        SetText(sheet, 5, 2, "Direct");
+        SetText(sheet, 6, 1, "East");
+        SetText(sheet, 6, 2, "Partner");
+        SetText(sheet, 7, 1, "West");
+        SetText(sheet, 7, 2, "Direct");
+        SetText(sheet, 8, 1, "West");
+        SetText(sheet, 8, 2, "Partner");
+        SetText(sheet, 9, 1, "Grand Total");
+
+        var adornments = PivotRowLabelAdornmentPlanner.BuildAdornments(workbook, sheet);
+
+        adornments.Should().Equal(
+            new FreeX.App.UI.PivotRowLabelAdornment(
+                new CellAddress(sheet.Id, 5, 1),
+                IndentLevel: 0,
+                ShowExpandCollapseButton: true,
+                IsExpanded: true),
+            new FreeX.App.UI.PivotRowLabelAdornment(
+                new CellAddress(sheet.Id, 7, 1),
+                IndentLevel: 0,
+                ShowExpandCollapseButton: true,
+                IsExpanded: true));
+    }
+
     private static void SetText(Sheet sheet, uint row, uint col, string text, StyleId? styleId = null)
     {
         var cell = Cell.FromValue(new TextValue(text));

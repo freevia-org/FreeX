@@ -70,6 +70,61 @@ public sealed class XlsxPivotTableNativeIoSemanticTests
     }
 
     [Fact]
+    public void Load_WorksheetRangeCacheSource_ResolvesPivotSourceRangeToCacheSheet()
+    {
+        var workbook = new Workbook("PivotNativeSourceSheet");
+        var sourceSheet = workbook.AddSheet("SalesData");
+        sourceSheet.SetCell(new CellAddress(sourceSheet.Id, 1, 1), new TextValue("Region"));
+        sourceSheet.SetCell(new CellAddress(sourceSheet.Id, 1, 2), new TextValue("Amount"));
+        sourceSheet.SetCell(new CellAddress(sourceSheet.Id, 2, 1), new TextValue("North"));
+        sourceSheet.SetCell(new CellAddress(sourceSheet.Id, 2, 2), new NumberValue(10));
+        sourceSheet.SetCell(new CellAddress(sourceSheet.Id, 3, 1), new TextValue("South"));
+        sourceSheet.SetCell(new CellAddress(sourceSheet.Id, 3, 2), new NumberValue(20));
+        var pivotSheet = workbook.AddSheet("Pivot");
+
+        var cache = new PivotCacheModel
+        {
+            CacheId = 1,
+            SourceType = PivotCacheSourceType.WorksheetRange,
+            SourceSheetName = sourceSheet.Name,
+            SourceReference = "A1:B3",
+            PackagePart = "xl/pivotCache/pivotCacheDefinition1.xml",
+            RecordCount = 2,
+        };
+        cache.Fields.Add(new PivotCacheFieldModel("Region", SharedItems: ["North", "South"]));
+        cache.Fields.Add(new PivotCacheFieldModel("Amount", ContainsNumber: true));
+        workbook.PivotCaches.Add(cache);
+
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = new GridRange(
+                new CellAddress(sourceSheet.Id, 1, 1),
+                new CellAddress(sourceSheet.Id, 3, 2)),
+            TargetRange = new GridRange(
+                new CellAddress(pivotSheet.Id, 2, 1),
+                new CellAddress(pivotSheet.Id, 5, 2)),
+            PackagePart = "xl/pivotTables/pivotTable1.xml",
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
+        pivotSheet.PivotTables.Add(pivot);
+
+        using var package = XlsxPackageTestHelper.SaveWorkbook(workbook);
+        var loaded = new XlsxFileAdapter().Load(package);
+
+        var loadedSourceSheet = loaded.GetSheet("SalesData");
+        loadedSourceSheet.Should().NotBeNull();
+        var loadedPivotSheet = loaded.GetSheet("Pivot");
+        loadedPivotSheet.Should().NotBeNull();
+        var loadedPivot = loadedPivotSheet!.PivotTables.Should().ContainSingle().Subject;
+        loadedPivot.SourceRange.Should().Be(new GridRange(
+            new CellAddress(loadedSourceSheet!.Id, 1, 1),
+            new CellAddress(loadedSourceSheet.Id, 3, 2)));
+    }
+
+    [Fact]
     public void Load_CacheLevelDateFieldGroup_MapsGroupingToPivotField()
     {
         using var package = CreatePivotWorkbookPackage(PivotCacheSourceType.WorksheetRange);

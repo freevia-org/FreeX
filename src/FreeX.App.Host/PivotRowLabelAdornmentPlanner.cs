@@ -23,10 +23,15 @@ public static class PivotRowLabelAdornmentPlanner
         PivotTableModel pivotTable,
         List<PivotRowLabelAdornment> adornments)
     {
-        if (pivotTable.ReportLayout != PivotReportLayout.Compact ||
-            pivotTable.RowFields.Count <= 1 ||
+        if (pivotTable.RowFields.Count <= 1 ||
             pivotTable.TargetRange.Start.Sheet != sheet.Id)
         {
+            return;
+        }
+
+        if (pivotTable.ReportLayout != PivotReportLayout.Compact)
+        {
+            AddNonCompactAdornments(sheet, pivotTable, adornments);
             return;
         }
 
@@ -55,6 +60,88 @@ public static class PivotRowLabelAdornmentPlanner
                 ShowExpandCollapseButton: true,
                 IsExpanded: true));
         }
+    }
+
+    private static void AddNonCompactAdornments(
+        Sheet sheet,
+        PivotTableModel pivotTable,
+        List<PivotRowLabelAdornment> adornments)
+    {
+        if (!pivotTable.ShowExpandCollapseButtons)
+            return;
+
+        var labelStartCol = pivotTable.TargetRange.Start.Col;
+        var dataStartRow = pivotTable.TargetRange.Start.Row + (uint)Math.Max(1, pivotTable.FirstDataRow);
+        if (dataStartRow > pivotTable.TargetRange.End.Row)
+            return;
+
+        var parentFieldCount = Math.Max(0, pivotTable.RowFields.Count - 1);
+        for (var row = dataStartRow; row <= pivotTable.TargetRange.End.Row; row++)
+        for (var level = 0; level < parentFieldCount; level++)
+        {
+            var labelCol = labelStartCol + (uint)level;
+            var address = new CellAddress(sheet.Id, row, labelCol);
+            if (!TryGetRowLabel(sheet, pivotTable, address, out _) ||
+                HasSamePrefixOnPreviousRow(sheet, pivotTable, row, labelStartCol, level) ||
+                !HasSamePrefixOnNextRow(sheet, pivotTable, row, labelStartCol, level))
+            {
+                continue;
+            }
+
+            adornments.Add(new PivotRowLabelAdornment(
+                address,
+                IndentLevel: 0,
+                ShowExpandCollapseButton: true,
+                IsExpanded: true));
+        }
+    }
+
+    private static bool HasSamePrefixOnPreviousRow(
+        Sheet sheet,
+        PivotTableModel pivotTable,
+        uint row,
+        uint labelStartCol,
+        int level)
+    {
+        if (row <= pivotTable.TargetRange.Start.Row)
+            return false;
+
+        return HasSamePrefix(sheet, pivotTable, row, row - 1, labelStartCol, level);
+    }
+
+    private static bool HasSamePrefixOnNextRow(
+        Sheet sheet,
+        PivotTableModel pivotTable,
+        uint row,
+        uint labelStartCol,
+        int level)
+    {
+        if (row >= pivotTable.TargetRange.End.Row)
+            return false;
+
+        return HasSamePrefix(sheet, pivotTable, row, row + 1, labelStartCol, level);
+    }
+
+    private static bool HasSamePrefix(
+        Sheet sheet,
+        PivotTableModel pivotTable,
+        uint row,
+        uint otherRow,
+        uint labelStartCol,
+        int level)
+    {
+        for (var offset = 0; offset <= level; offset++)
+        {
+            var col = labelStartCol + (uint)offset;
+            if (!TryGetRowLabel(sheet, pivotTable, new CellAddress(sheet.Id, row, col), out var text) ||
+                !TryGetRowLabel(sheet, pivotTable, new CellAddress(sheet.Id, otherRow, col), out var otherText) ||
+                !string.Equals(text, otherText, StringComparison.CurrentCultureIgnoreCase))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static int NextVisibleLabelIndent(

@@ -117,7 +117,12 @@ public sealed partial class MainWindow
         {
             Title = UiText.Format("PivotValueField_Title", target.FieldCaption),
             Width = 340,
-            SizeToContent = SizeToContent.Height,
+            Height = 250,
+            MinWidth = 340,
+            MinHeight = 250,
+            MaxWidth = 340,
+            MaxHeight = 250,
+            Background = Brushes.White,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
         };

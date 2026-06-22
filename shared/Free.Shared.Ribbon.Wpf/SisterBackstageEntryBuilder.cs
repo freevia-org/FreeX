@@ -25,6 +25,8 @@ public sealed record SisterBackstageEntrySpec(
 
     public Func<UIElement>? BuildOpenPane { get; init; }
 
+    public Func<UIElement>? BuildSharePane { get; init; }
+
     public Func<UIElement>? BuildSaveAsPane { get; init; }
 
     public Func<UIElement>? BuildPrintPane { get; init; }
@@ -69,6 +71,9 @@ public static class SisterBackstageEntryBuilder
         entries.Add(spec.BuildOpenPane is null
             ? BackstageEntry.Command("Open", RibbonCommandIconKind.GetData, spec.Open, iconName: "open")
             : BackstageEntry.Pane("Open", RibbonCommandIconKind.GetData, spec.BuildOpenPane, iconName: "open"));
+
+        if (spec.BuildSharePane is not null)
+            entries.Add(BackstageEntry.Pane("Share", RibbonCommandIconKind.Share, spec.BuildSharePane, iconName: "share"));
 
         if (hasHomePane)
             entries.Add(BackstageEntry.Pane("Info", RibbonCommandIconKind.Info, spec.BuildInfoPane, iconName: "info"));
