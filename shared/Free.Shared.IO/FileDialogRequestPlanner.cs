@@ -52,6 +52,48 @@ public static class FileDialogRequestPlanner
             FileDialogFilterBuilder.FindSaveFilterIndex(formatRows, normalizedExtension));
     }
 
+    public static FileOpenDialogPlan BuildPerFormatOpenDialogPlan(
+        IEnumerable<FileDialogFormatDescriptor> formats,
+        bool includeAllFiles = true)
+    {
+        ArgumentNullException.ThrowIfNull(formats);
+
+        var openRows = formats.Where(format => format.CanOpen).ToList();
+        return new FileOpenDialogPlan(
+            FileDialogFilterBuilder.BuildPerFormatFilter(openRows, includeAllFiles),
+            FileDialogFilterBuilder.GetDefaultExtension(openRows));
+    }
+
+    public static FileSaveDialogPlan BuildPerFormatSaveDialogPlan(
+        IEnumerable<FileDialogFormatDescriptor> formats,
+        string suggestedFileName,
+        string defaultExtensionWithDot,
+        bool includeAllFiles = true)
+    {
+        ArgumentNullException.ThrowIfNull(formats);
+
+        var saveRows = formats.Where(format => format.CanSave).ToList();
+        var normalizedExtension = FileDialogFilterBuilder.NormalizeExtension(defaultExtensionWithDot);
+        return new FileSaveDialogPlan(
+            FileDialogFilterBuilder.BuildPerFormatFilter(saveRows, includeAllFiles),
+            suggestedFileName,
+            normalizedExtension,
+            WithoutLeadingDot(normalizedExtension),
+            FileDialogFilterBuilder.FindSaveFilterIndex(saveRows, normalizedExtension));
+    }
+
+    public static FileSaveDialogPlan BuildPerFormatSaveDialogPlanFromSourceName(
+        IEnumerable<FileDialogFormatDescriptor> formats,
+        string? sourceName,
+        string fallbackDisplayName,
+        string defaultExtensionWithDot,
+        bool includeAllFiles = true) =>
+        BuildPerFormatSaveDialogPlan(
+            formats,
+            BuildSuggestedSaveAsFileName(sourceName, fallbackDisplayName, defaultExtensionWithDot),
+            defaultExtensionWithDot,
+            includeAllFiles);
+
     public static FileOpenPickerPlan BuildOpenPickerPlan(
         IEnumerable<FileDialogFormatDescriptor> formats,
         string allSupportedName = "All supported files")
