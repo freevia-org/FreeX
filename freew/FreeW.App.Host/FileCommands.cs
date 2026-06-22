@@ -83,16 +83,29 @@ internal sealed class FileCommands
     /// <summary>Load a recovered autosave snapshot, targeting the original path and marking dirty.</summary>
     public void OpenSnapshot(string snapshotPath, string? originalPath)
     {
+        OpenSnapshotCore(snapshotPath, originalPath);
+    }
+
+    public bool RecoverSnapshot(string snapshotPath, string? originalPath) =>
+        _workflow.Open(
+            "recovering an unsaved document",
+            () => snapshotPath,
+            path => OpenSnapshotCore(path, originalPath));
+
+    private bool OpenSnapshotCore(string snapshotPath, string? originalPath)
+    {
         try
         {
             _editor.LoadModel(DocxReader.Read(snapshotPath));
             _workflow.MarkDirtyWithPath(
                 originalPath,
                 () => _editor.CurrentFileName = originalPath is null ? null : Path.GetFileName(originalPath));
+            return true;
         }
         catch (Exception ex)
         {
             ShowError("Could not recover the document", ex);
+            return false;
         }
     }
 

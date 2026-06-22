@@ -125,6 +125,10 @@ internal sealed class BackstageView : UserControl
                     new("This PC", "Browse local folders and connected drives.", () => { Hide(); _actions.Open(); }),
                     new("Browse", "Open the Windows file picker.", () => { Hide(); _actions.Open(); }),
                 ]),
+                new("Recovery",
+                [
+                    new("Recover Unsaved Documents", "Open the latest autosave recovery snapshot saved by FreeW.", () => { Hide(); _actions.RecoverUnsaved(); }),
+                ]),
             ]));
     }
 
@@ -201,6 +205,7 @@ internal sealed record BackstageActions(
     Action SaveAs,
     Action<string> SaveAsType,
     Action SaveCopy,
+    Action RecoverUnsaved,
     Action Close,
     Action Print,
     Action ExportPdf,

@@ -149,6 +149,21 @@ public sealed class FileLifecycleTests : IDisposable
         Assert.Equal("Original", file.DisplayName);
     }
 
+    [StaFact]
+    public void RecoverSnapshot_OnCleanDocument_MarksDirtyAndTargetsOriginalPath()
+    {
+        var (_, _, file, _) = CreateHarness();
+        var original = Path.Combine(_tempDir, "Original.docx");
+        var snapshot = WriteDocx("recover.docx", "Recovered content");
+
+        var recovered = file.RecoverSnapshot(snapshot, original);
+
+        Assert.True(recovered);
+        Assert.True(file.IsDirty);
+        Assert.Equal(original, file.CurrentPath);
+        Assert.Equal("Original", file.DisplayName);
+    }
+
     private string WriteDocx(string name, string text)
     {
         var doc = TextDocument.CreateEmpty();

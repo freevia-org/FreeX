@@ -52,11 +52,11 @@ internal sealed class AutosaveCoordinator
             if (candidates.Count == 0)
                 return;
 
-            var candidate = candidates[0];
-            var name = string.IsNullOrEmpty(candidate.Sidecar.DisplayName) ? "a document" : candidate.Sidecar.DisplayName;
+            var candidate = AutosaveRecoveryCandidatePlanner.SelectLatest(candidates)!;
+            var name = AutosaveRecoveryCandidatePlanner.DisplayName(candidate);
             var answer = MessageBox.Show(owner,
                 $"FreeW found unsaved changes to {name} from a previous session. Recover them?",
-                "FreeW — Recover", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                "FreeW - Recover", MessageBoxButton.YesNo, MessageBoxImage.Question);
 
             if (answer == MessageBoxResult.Yes)
                 _file.OpenSnapshot(candidate.SnapshotPath, candidate.Sidecar.OriginalFilePath);
@@ -67,6 +67,42 @@ internal sealed class AutosaveCoordinator
         catch
         {
             // Recovery is best-effort; never block startup on it.
+        }
+    }
+
+    public bool RecoverUnsavedDocuments(Window owner)
+    {
+        try
+        {
+            var candidates = _store.EnumerateCandidates();
+            var candidate = AutosaveRecoveryCandidatePlanner.SelectLatest(candidates);
+            if (candidate is null)
+            {
+                MessageBox.Show(owner,
+                    "No unsaved documents were found.",
+                    "FreeW - Recover", MessageBoxButton.OK, MessageBoxImage.Information);
+                return false;
+            }
+
+            var name = AutosaveRecoveryCandidatePlanner.DisplayName(candidate);
+            var answer = MessageBox.Show(owner,
+                $"Recover unsaved changes to {name}?",
+                "FreeW - Recover", MessageBoxButton.OKCancel, MessageBoxImage.Question);
+            if (answer != MessageBoxResult.OK)
+                return false;
+
+            var recovered = _file.RecoverSnapshot(candidate.SnapshotPath, candidate.Sidecar.OriginalFilePath);
+            if (recovered)
+                AutosaveSnapshotStore.DeleteCandidate(candidate);
+
+            return recovered;
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(owner,
+                $"Could not recover the document.\n\n{ex.Message}",
+                "FreeW - Recover", MessageBoxButton.OK, MessageBoxImage.Error);
+            return false;
         }
     }
 
