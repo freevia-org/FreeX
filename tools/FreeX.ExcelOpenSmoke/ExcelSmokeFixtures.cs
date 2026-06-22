@@ -20,6 +20,7 @@ internal static class ExcelSmokeFixtures
     private const int XlAverage = -4106;
     private const int XlPercentOfGrandTotal = 8;
     private const int XlDescending = -4121;
+    private const int XlOverThenDown = 2;
     private const int XlTabularRow = 1;
     private const int XlOutlineRow = 2;
     private const int XlRepeatLabels = 2;
@@ -92,6 +93,7 @@ internal static class ExcelSmokeFixtures
             Path.Combine(outputDirectory, "Excel_native_pivot_table_source_filters_001.xlsx"),
             Path.Combine(outputDirectory, "Excel_native_pivot_grouping_show_values_001.xlsx"),
             Path.Combine(outputDirectory, "Excel_native_pivot_multiple_pivots_one_cache_001.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_pivot_report_filters_001.xlsx"),
             Path.Combine(outputDirectory, "Excel_native_pivot_filters_sorts_002.xlsx"),
             Path.Combine(outputDirectory, "Excel_native_pivot_layout_options_002.xlsx"),
             Path.Combine(outputDirectory, "Excel_native_pivot_date_grouping_003.xlsx"),
@@ -219,6 +221,8 @@ internal static class ExcelSmokeFixtures
                 AddNativePivotGroupingShowValues(workbook, dataSheet);
             else if (fileName.Contains("multiple_pivots_one_cache", StringComparison.OrdinalIgnoreCase))
                 AddNativePivotMultiplePivotsOneCache(workbook, dataSheet);
+            else if (fileName.Contains("report_filters", StringComparison.OrdinalIgnoreCase))
+                AddNativePivotReportFilters(workbook, dataSheet);
             else if (fileName.Contains("filters_sorts", StringComparison.OrdinalIgnoreCase))
                 AddNativePivotFiltersSorts(workbook, dataSheet);
             else if (fileName.Contains("layout_options", StringComparison.OrdinalIgnoreCase))
@@ -1315,6 +1319,61 @@ internal static class ExcelSmokeFixtures
             ReleaseComObject(regionField);
             ReleaseComObject(pivot2);
             ReleaseComObject(pivot1);
+            ReleaseComObject(cache);
+            ReleaseComObject(pivotSheet);
+        }
+    }
+
+    private static void AddNativePivotReportFilters(object workbook, object sourceWorksheet)
+    {
+        object? pivotSheet = null;
+        object? cache = null;
+        object? pivot = null;
+        object? regionField = null;
+        object? channelField = null;
+        object? hiddenChannelItem = null;
+        object? categoryField = null;
+        object? monthField = null;
+        object? salesField = null;
+        object? dataField = null;
+        try
+        {
+            pivotSheet = AddWorksheetAfter(workbook, sourceWorksheet, "Pivot Report Filters");
+            SetExcelCellValue(pivotSheet, 1, 1, "Native PivotTable report filters / page fields");
+            cache = CreateWorksheetRangePivotCache(workbook, "'SalesData'!R1C1:R13C7");
+            pivot = ((dynamic)cache).CreatePivotTable("'Pivot Report Filters'!R3C1", "NativePivotReportFilters");
+
+            regionField = ((dynamic)pivot).PivotFields("Region");
+            ((dynamic)regionField).Orientation = XlPageField;
+            ((dynamic)regionField).CurrentPage = "North";
+            channelField = ((dynamic)pivot).PivotFields("Channel");
+            ((dynamic)channelField).Orientation = XlPageField;
+            ((dynamic)channelField).EnableMultiplePageItems = true;
+            hiddenChannelItem = ((dynamic)channelField).PivotItems("Partner");
+            ((dynamic)hiddenChannelItem).Visible = false;
+            categoryField = ((dynamic)pivot).PivotFields("Category");
+            ((dynamic)categoryField).Orientation = XlRowField;
+            monthField = ((dynamic)pivot).PivotFields("Month");
+            ((dynamic)monthField).Orientation = XlColumnField;
+            salesField = ((dynamic)pivot).PivotFields("Sales");
+            dataField = ((dynamic)pivot).AddDataField(salesField, "Sum of Sales", XlSum);
+            ((dynamic)dataField).NumberFormat = "$#,##0";
+            ((dynamic)pivot).PageFieldOrder = XlOverThenDown;
+            ((dynamic)pivot).PageFieldWrapCount = 2;
+            ((dynamic)pivot).TableStyle2 = "PivotStyleMedium5";
+            RefreshExcelPivotTable(pivot);
+            AutoFitExcelColumns(pivotSheet, "A:F");
+        }
+        finally
+        {
+            ReleaseComObject(dataField);
+            ReleaseComObject(salesField);
+            ReleaseComObject(monthField);
+            ReleaseComObject(categoryField);
+            ReleaseComObject(hiddenChannelItem);
+            ReleaseComObject(channelField);
+            ReleaseComObject(regionField);
+            ReleaseComObject(pivot);
             ReleaseComObject(cache);
             ReleaseComObject(pivotSheet);
         }
