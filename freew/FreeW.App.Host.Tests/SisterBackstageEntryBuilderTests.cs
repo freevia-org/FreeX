@@ -36,7 +36,8 @@ public sealed class SisterBackstageEntryBuilderTests
             UseNewPane = true,
             BuildOpenPane = Pane,
             BuildSaveAsPane = Pane,
-            BuildExportPane = Pane
+            BuildExportPane = Pane,
+            BuildAccountPane = Pane
         });
 
         entries.Select(EntryLabel).Should().Equal(
@@ -52,8 +53,10 @@ public sealed class SisterBackstageEntryBuilderTests
             "Export",
             "Recent",
             "Close",
+            "Account",
             "Options");
         entries.Single(entry => entry.Label == "Options").DockBottom.Should().BeTrue();
+        entries.Single(entry => entry.Label == "Account").DockBottom.Should().BeTrue();
         entries.Single(entry => entry.Label == "Close").DockBottom.Should().BeFalse();
         entries.Single(entry => entry.Label == "Home").ContentFactory.Should().NotBeNull();
         entries.Single(entry => entry.Label == "New").ContentFactory.Should().NotBeNull();
@@ -61,6 +64,7 @@ public sealed class SisterBackstageEntryBuilderTests
         entries.Single(entry => entry.Label == "Open").ContentFactory.Should().NotBeNull();
         entries.Single(entry => entry.Label == "Save As").ContentFactory.Should().NotBeNull();
         entries.Single(entry => entry.Label == "Export").ContentFactory.Should().NotBeNull();
+        entries.Single(entry => entry.Label == "Account").ContentFactory.Should().NotBeNull();
         entries.Single(entry => entry.Label == "Print").Action.Should().NotBeNull();
         entries.Single(entry => entry.Label == "Save a Copy").Action.Should().NotBeNull();
         entries.Single(entry => entry.Label == "Close").Action.Should().NotBeNull();
@@ -84,6 +88,7 @@ public sealed class SisterBackstageEntryBuilderTests
             "Close");
         entries.Should().NotContain(entry => entry.Label == "Print");
         entries.Should().NotContain(entry => entry.Label == "Export");
+        entries.Should().NotContain(entry => entry.Label == "Account");
         entries.Should().NotContain(entry => entry.Label == "Save a Copy");
         entries.Should().NotContain(entry => entry.Label == "Home");
     }

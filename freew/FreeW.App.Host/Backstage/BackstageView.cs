@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
+using Free.Shared.AppServices;
 using Free.Shared.Ribbon.Wpf;
 using Free.Shared.Shell.Wpf;
 using FreeW.App.Host.Editing;
@@ -63,7 +64,8 @@ internal sealed class BackstageView : UserControl
             UseNewPane = true,
             BuildOpenPane = BuildOpenPane,
             BuildSaveAsPane = BuildSaveAsPane,
-            BuildExportPane = BuildExportPane
+            BuildExportPane = BuildExportPane,
+            BuildAccountPane = BuildAccountPane
         });
     }
 
@@ -194,6 +196,39 @@ internal sealed class BackstageView : UserControl
             options,
             _actions.DataFolder(),
             edit: () => { Hide(); _actions.EditOptions(); }));
+    }
+
+    private UIElement BuildAccountPane()
+    {
+        var plan = BackstageAccountPanePlanner.Build(
+            AppProduct.Current.ProductName,
+            EntryAssemblyVersion.Resolve(),
+            Environment.UserName,
+            Environment.MachineName,
+            _actions.DataFolder());
+
+        var panel = new StackPanel { MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left };
+        panel.Children.Add(Kit.HeadingText("Account"));
+        panel.Children.Add(new TextBlock
+        {
+            Text = plan.Description,
+            Foreground = Kit.Muted,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 16)
+        });
+
+        foreach (var group in plan.Groups)
+        {
+            panel.Children.Add(Kit.SubHeading(group.Heading));
+            foreach (var field in group.Fields)
+                panel.Children.Add(Kit.Field(field.Label, field.Value));
+        }
+
+        var options = Kit.LinkButton(plan.OptionsText, () => { Hide(); _actions.EditOptions(); });
+        options.Margin = new Thickness(0, 18, 0, 0);
+        panel.Children.Add(options);
+
+        return Kit.Scroll(panel);
     }
 }
 

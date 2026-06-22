@@ -28,6 +28,8 @@ public sealed record SisterBackstageEntrySpec(
     public Func<UIElement>? BuildSaveAsPane { get; init; }
 
     public Func<UIElement>? BuildExportPane { get; init; }
+
+    public Func<UIElement>? BuildAccountPane { get; init; }
 }
 
 /// <summary>
@@ -89,6 +91,8 @@ public static class SisterBackstageEntryBuilder
             entries.Add(BackstageEntry.Pane("New from template", RibbonCommandIconKind.Grid, spec.BuildNewPane, iconName: "new"));
         if (spec.Close is not null)
             entries.Add(BackstageEntry.Command("Close", RibbonCommandIconKind.Previous, spec.Close, iconName: "close"));
+        if (spec.BuildAccountPane is not null)
+            entries.Add(BackstageEntry.Pane("Account", RibbonCommandIconKind.Info, spec.BuildAccountPane, dockBottom: true, iconName: "account"));
         entries.Add(BackstageEntry.Pane("Options", RibbonCommandIconKind.View, spec.BuildOptionsPane, dockBottom: true, iconName: "options"));
         if (spec.Close is null)
             entries.Add(BackstageEntry.Command("Close", RibbonCommandIconKind.Previous, static () => { }, dockBottom: true, iconName: "close"));

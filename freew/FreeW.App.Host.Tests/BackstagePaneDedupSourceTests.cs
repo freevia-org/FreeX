@@ -39,6 +39,8 @@ public sealed class BackstagePaneDedupSourceTests
             source.Should().Contain("_file.SaveFormats");
             source.Should().Contain("BuildOpenPane = BuildOpenPane");
             source.Should().Contain("BuildSaveAsPane = BuildSaveAsPane");
+            source.Should().Contain("BuildAccountPane = BuildAccountPane");
+            source.Should().Contain("BackstageAccountPanePlanner.Build(");
             source.Should().Contain("Panes.BuildActionPane(");
             source.Should().Contain("new BackstageActionPaneSpec(");
             source.Should().Contain("Heading: \"Home\"");
