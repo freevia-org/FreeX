@@ -246,7 +246,12 @@ internal static class FreeWRibbonIcons
             ["freew.zoom-dialog"] = RibbonCommandIconKind.Zoom,
 
             // Mailings
+            ["freew.start-mail-merge"] = RibbonCommandIconKind.Envelope,
+            ["freew.start-mail-merge-letters"] = RibbonCommandIconKind.Envelope,
+            ["freew.start-mail-merge-directory"] = RibbonCommandIconKind.Labels,
+            ["freew.start-mail-merge-normal"] = RibbonCommandIconKind.Page,
             ["freew.merge-data"] = RibbonCommandIconKind.Recipients,
+            ["freew.merge-edit-recipients"] = RibbonCommandIconKind.Recipients,
             ["freew.merge-field"] = RibbonCommandIconKind.MergeField,
             ["freew.merge-preview"] = RibbonCommandIconKind.PreviewResults,
             ["freew.merge-finish"] = RibbonCommandIconKind.FinishMerge,

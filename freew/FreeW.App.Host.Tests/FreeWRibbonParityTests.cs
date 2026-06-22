@@ -207,20 +207,41 @@ public sealed class FreeWRibbonParityTests
         CommandIds(mailings)
             .Should()
             .Equal(
+                "freew.start-mail-merge",
                 "freew.merge-data",
+                "freew.merge-edit-recipients",
                 "freew.merge-field",
                 "freew.merge-preview",
                 "freew.merge-finish");
         Labels(mailings)
             .Should()
             .Equal(
+                "Start Mail Merge",
                 "Select Recipients",
+                "Edit Recipient List",
                 "Insert Merge Field",
                 "Preview Results",
                 "Finish & Merge");
 
+        var startMailMerge = mailings.Groups.Single(g => g.Id == "merge-data").Controls
+            .OfType<RibbonDropdown>()
+            .Single(c => c.CommandId.Value == "freew.start-mail-merge");
+        startMailMerge.Menu.Items
+            .Where(item => item.Kind == RibbonMenuItemKind.Command)
+            .Select(item => (item.CommandId!.Value, item.Header))
+            .Should()
+            .Equal(
+                ("freew.start-mail-merge-letters", "Letters"),
+                ("freew.start-mail-merge-directory", "Directory"),
+                ("freew.start-mail-merge-normal", "Normal Word Document"));
+
         foreach (var commandId in CommandIds(mailings))
             registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must execute from the Mailings tab");
+
+        foreach (var commandId in startMailMerge.Menu.Items
+                     .Where(item => item.Kind == RibbonMenuItemKind.Command)
+                     .Select(item => item.CommandId!.Value))
+            registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must execute from the Start Mail Merge menu");
     }
 
     [StaFact]

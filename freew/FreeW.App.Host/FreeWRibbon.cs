@@ -375,9 +375,17 @@ internal static class FreeWRibbon
             })
             .Tab("mailings", "Mailings", "M", tab =>
             {
-                tab.Group("merge-data", "Start Mail Merge", "D", 135, g =>
+                tab.Group("merge-data", "Start Mail Merge", "D", 155, g =>
                 {
+                    g.Medium("freew.start-mail-merge", "Start Mail Merge", RibbonCommandIconKind.Envelope, "S", menu: m =>
+                    {
+                        m.Item("freew.start-mail-merge-letters", "Letters", "L");
+                        m.Item("freew.start-mail-merge-directory", "Directory", "D");
+                        m.Separator();
+                        m.Item("freew.start-mail-merge-normal", "Normal Word Document", "N");
+                    });
                     g.Medium("freew.merge-data", "Select Recipients", RibbonCommandIconKind.Recipients);
+                    g.Medium("freew.merge-edit-recipients", "Edit Recipient List", RibbonCommandIconKind.Recipients);
                 });
                 // Each Mailings group is a single labelled command so Word's command names stay readable.
                 tab.Group("merge-write", "Write & Insert Fields", "W", 145, g =>

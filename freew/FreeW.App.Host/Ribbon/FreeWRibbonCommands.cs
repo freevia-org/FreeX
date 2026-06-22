@@ -680,12 +680,18 @@ internal static class FreeWRibbonCommands
 
         // Mailings tab — a simple mail merge. Field placeholders are the literal text «FieldName»
         // (ordinary run text, so they round-trip through docx as plain text). The four commands share a
-        // MailMergeSession: "Select Recipients" captures the CSV/typed records; "Insert Merge Field" drops a
-        // «Name» placeholder at the caret; "Preview Results" loads MergeRecord(template, row) into the
-        // editor with next/prev (restoring the template when exited); "Finish & Merge" concatenates every
-        // merged record into one document.
+        // MailMergeSession: Start Mail Merge selects the output mode; "Select Recipients" / "Edit
+        // Recipient List" capture CSV/typed records; "Insert Merge Field" drops a «Name» placeholder at
+        // the caret; "Preview Results" loads MergeRecord(template, row) into the editor with next/prev
+        // (restoring the template when exited); "Finish & Merge" combines every merged record according
+        // to the selected output mode.
         var mergeSession = new MailMergeSession();
+        registry.Register("freew.start-mail-merge", new SetMergeModeCommand(mergeSession, MailMergeOutputMode.Letters));
+        registry.Register("freew.start-mail-merge-letters", new SetMergeModeCommand(mergeSession, MailMergeOutputMode.Letters));
+        registry.Register("freew.start-mail-merge-directory", new SetMergeModeCommand(mergeSession, MailMergeOutputMode.Directory));
+        registry.Register("freew.start-mail-merge-normal", new ClearMergeSessionCommand(mergeSession));
         registry.Register("freew.merge-data", new SetMergeDataCommand(editor, mergeSession));
+        registry.Register("freew.merge-edit-recipients", new SetMergeDataCommand(editor, mergeSession));
         registry.Register("freew.merge-field", new InsertMergeFieldCommand(editor));
         registry.Register("freew.merge-preview", new PreviewMergeRecordCommand(editor, mergeSession));
         registry.Register("freew.merge-finish", new FinishMergeCommand(editor, mergeSession));
@@ -3062,6 +3068,7 @@ internal static class FreeWRibbonCommands
     private sealed class MailMergeSession
     {
         public MergeData? Data { get; set; }
+        public MailMergeOutputMode Mode { get; set; } = MailMergeOutputMode.Letters;
 
         // Non-null only while a preview is active: the document that was in the editor before the first
         // Preview, so leaving the preview restores it (the user's editable template).
@@ -3070,6 +3077,29 @@ internal static class FreeWRibbonCommands
         public int CurrentIndex { get; set; }
 
         public bool IsPreviewing => Template is not null;
+
+        public void Clear()
+        {
+            Data = null;
+            Template = null;
+            CurrentIndex = 0;
+            Mode = MailMergeOutputMode.Letters;
+        }
+    }
+
+    private sealed class SetMergeModeCommand(MailMergeSession session, MailMergeOutputMode mode) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            session.Mode = mode;
+            session.Template = null;
+            session.CurrentIndex = 0;
+        }
+    }
+
+    private sealed class ClearMergeSessionCommand(MailMergeSession session) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context) => session.Clear();
     }
 
     // Mailings > Insert Merge Field: prompt for a field name and insert the placeholder «Name» at the
@@ -3218,7 +3248,7 @@ internal static class FreeWRibbonCommands
             }
 
             var merged = MailMerge.MergeAll(template, data);
-            var combined = Concatenate(merged);
+            var combined = MailMerge.CombineMergedRecords(merged, session.Mode);
 
             editor.LoadModel(combined);
             session.Template = null;
@@ -3230,34 +3260,6 @@ internal static class FreeWRibbonCommands
             editor.Focus();
         }
 
-        // Concatenate the per-record documents into one, starting each record (after the first) on a new
-        // page. The first record's page settings / styles / header / footer carry the combined document.
-        private static TextDocument Concatenate(IReadOnlyList<TextDocument> docs)
-        {
-            if (docs.Count == 0)
-                return TextDocument.CreateEmpty();
-
-            var first = docs[0];
-            for (var d = 1; d < docs.Count; d++)
-            {
-                var blocks = docs[d].Blocks;
-                // Force a page break before each subsequent record's first paragraph (Word's "Start each
-                // record on a new page"). Falls back to a dedicated break paragraph if the record leads
-                // with a non-paragraph block (e.g. a table).
-                if (blocks.Count > 0 && blocks[0] is FreeW.Core.Model.Paragraph lead)
-                {
-                    lead.Formatting = lead.Formatting with { PageBreakBefore = true };
-                }
-                else
-                {
-                    first.Blocks.Add(DocumentOps.CreatePageBreak());
-                }
-
-                foreach (var block in blocks)
-                    first.Blocks.Add(block);
-            }
-            return first;
-        }
     }
 
     // The user's choice from the preview navigation dialog.
