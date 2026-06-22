@@ -143,67 +143,34 @@ internal static class FreeWRibbon
                     g.Medium("freew.page-break", "Page Break", RibbonCommandIconKind.PageBreak);
                     g.RowBreak();
                     g.Medium("freew.horizontal-rule", "Horizontal Rule", RibbonCommandIconKind.HorizontalRule);
-                    g.Medium("freew.drop-cap", "Drop Cap", RibbonCommandIconKind.DropCap);
                 });
                 // Single-command group → unmistakable Large hero button.
                 tab.Group("tables", "Tables", "T", 90, g => g.Large("freew.table", "Table", RibbonCommandIconKind.Table, dropdown: true));
-                tab.Group("illustrations", "Illustrations", "I", 80, g =>
+                tab.Group("illustrations", "Illustrations", "I", 88, g =>
                 {
-                    g.Large("freew.picture", "Picture", RibbonCommandIconKind.Picture);
-                    g.Icon("freew.image-size", "Image Size", RibbonCommandIconKind.Size);
-                    g.Icon("freew.image-alt-text", "Alt Text", RibbonCommandIconKind.Info);
-                    g.Icon("freew.image-align-left", "Align Left", RibbonCommandIconKind.AlignLeft);
-                    g.RowBreak();
-                    g.Icon("freew.image-align-center", "Align Center", RibbonCommandIconKind.AlignCenter);
-                    g.Icon("freew.image-align-right", "Align Right", RibbonCommandIconKind.AlignRight);
+                    g.Medium("freew.picture", "Pictures", RibbonCommandIconKind.Picture);
                     // Shapes gallery: a dropdown of the preset shape kinds, each inserting the matching
                     // Shape via DocumentView.InsertShape (the items dispatch their own freew.shape-* ids).
-                    g.Icon("freew.shapes", "Shapes", RibbonCommandIconKind.Shapes, "SH", menu: m =>
+                    g.Medium("freew.shapes", "Shapes", RibbonCommandIconKind.Shapes, "SH", menu: m =>
                     {
                         m.Item("freew.shape-rectangle", "Rectangle", "R");
                         m.Item("freew.shape-rounded", "Rounded Rectangle", "O");
                         m.Item("freew.shape-ellipse", "Ellipse", "E");
                         m.Item("freew.shape-textbox", "Text Box", "T");
                     });
+                    g.Medium("freew.smartart", "SmartArt", RibbonCommandIconKind.SmartArt);
+                    g.RowBreak();
+                    g.Medium("freew.chart", "Chart", RibbonCommandIconKind.ChartColumn, accent: RibbonCommandIconAccent.Chart);
                     // Screenshot gallery: "Screen Clipping" drag-selects a screen region and inserts the
                     // capture as an inline image (same path as Insert Picture). The top-level id only opens
                     // the menu (no direct insert), mirroring the Shapes dropdown above.
-                    g.Icon("freew.screenshot", "Screenshot", RibbonCommandIconKind.Picture, "SC", menu: m =>
+                    g.Medium("freew.screenshot", "Screenshot", RibbonCommandIconKind.Picture, "SC", menu: m =>
                     {
                         m.Item("freew.screen-clipping", "Screen Clipping", "C");
                     });
                 });
-                // Media is a compact icon cluster (Word keeps these small), kept icon-only so the dense
-                // 11-group Insert tab fits without collapsing the trailing groups at ~1500-1600px.
-                tab.Group("media", "Media", "M", 78, g =>
-                {
-                    // Equation gallery: the top-level id inserts the default sample equation (E = mc²),
-                    // and the dropdown offers Word's common structure presets — each a one-click insert
-                    // that drops the structure at the caret as a starting point the user can edit.
-                    g.Icon("freew.equation", "Equation", RibbonCommandIconKind.Equation, menu: m =>
-                    {
-                        m.Item("freew.equation-fraction", "Fraction", "F");
-                        m.Item("freew.equation-script", "Subscript / Superscript", "S");
-                        m.Item("freew.equation-radical", "Radical (Square Root)", "R");
-                        m.Item("freew.equation-nthroot", "Radical (nth Root)", "N");
-                        m.Item("freew.equation-integral", "Integral", "I");
-                        m.Item("freew.equation-summation", "Summation", "U");
-                        m.Item("freew.equation-product", "Product", "P");
-                        m.Item("freew.equation-accent", "Accent (Hat)", "A");
-                        m.Item("freew.equation-bar", "Overbar", "O");
-                        m.Item("freew.equation-bracket", "Bracket", "B");
-                        m.Item("freew.equation-matrix", "Matrix (2×2)", "M");
-                        m.Item("freew.equation-func", "Function (sin)", "C");
-                        m.Item("freew.equation-groupchr", "Group (brace)", "G");
-                    });
-                    g.Icon("freew.chart", "Chart", RibbonCommandIconKind.ChartColumn, RibbonCommandIconAccent.Chart);
-                    g.Icon("freew.wordart", "WordArt", RibbonCommandIconKind.WordArt);
-                    g.RowBreak();
-                    g.Icon("freew.smartart", "SmartArt", RibbonCommandIconKind.SmartArt);
-                    g.Icon("freew.object", "Object", RibbonCommandIconKind.Object);
-                });
-                // Links/Quick Parts/References are dense, lower-priority clusters (Word keeps them compact),
-                // so they stay icon-only — this also keeps the 11-group Insert tab fitting at ~1500-1600px.
+                // Links stay compact so the backed Insert surfaces fit without hiding commands at normal
+                // desktop widths.
                 tab.Group("links", "Links", "K", 70, g =>
                 {
                     g.Icon("freew.hyperlink", "Link", RibbonCommandIconKind.Link);
@@ -215,25 +182,48 @@ internal static class FreeWRibbon
                     g.Icon("freew.link-bookmark", "Link to Bookmark", RibbonCommandIconKind.Bookmark);
                     g.Icon("freew.bookmark-manager", "Bookmark Manager", RibbonCommandIconKind.Bookmark);
                 });
-                tab.Group("quick-parts", "Quick Parts", "Q", 67, g =>
-                {
-                    g.Icon("freew.insert-quickpart", "Insert Quick Part", RibbonCommandIconKind.QuickParts);
-                    g.Icon("freew.save-quickpart", "Save Selection", RibbonCommandIconKind.QuickParts);
-                    g.Icon("freew.building-blocks-organizer", "Building Blocks Organizer", RibbonCommandIconKind.QuickParts);
-                    g.Icon("freew.insert-file", "Text from File", RibbonCommandIconKind.TextFromFile);
-                });
                 tab.Group("header-footer", "Header & Footer", "H", 60, g =>
                 {
-                    // Small group → labelled Medium buttons, Word-style.
+                    // Small group -> labelled Medium buttons, Word-style.
                     g.Medium("freew.header", "Header", RibbonCommandIconKind.Header);
                     g.Medium("freew.footer", "Footer", RibbonCommandIconKind.Footer);
                     g.Medium("freew.page-number", "Page Number", RibbonCommandIconKind.PageNumber);
                 });
+                tab.Group("text", "Text", "X", 74, g =>
+                {
+                    g.Icon("freew.shape-textbox", "Text Box", RibbonCommandIconKind.TextBox);
+                    g.Icon("freew.insert-quickpart", "Quick Parts", RibbonCommandIconKind.QuickParts);
+                    g.Icon("freew.insert-file", "Text from File", RibbonCommandIconKind.TextFromFile);
+                    g.Icon("freew.wordart", "WordArt", RibbonCommandIconKind.WordArt);
+                    g.RowBreak();
+                    g.Icon("freew.drop-cap", "Drop Cap", RibbonCommandIconKind.DropCap);
+                    g.Icon("freew.datetime", "Date & Time", RibbonCommandIconKind.Date);
+                    g.Icon("freew.field", "Field", RibbonCommandIconKind.Field);
+                    g.Icon("freew.object", "Object", RibbonCommandIconKind.Object);
+                    g.Icon("freew.save-quickpart", "Save Selection", RibbonCommandIconKind.QuickParts);
+                    g.Icon("freew.building-blocks-organizer", "Building Blocks Organizer", RibbonCommandIconKind.QuickParts);
+                });
                 tab.Group("symbols", "Symbols", "Y", 50, g =>
                 {
+                    // Equation gallery: the top-level id inserts the default sample equation (E = mc^2),
+                    // and the dropdown offers Word's common structure presets.
+                    g.Medium("freew.equation", "Equation", RibbonCommandIconKind.Equation, menu: m =>
+                    {
+                        m.Item("freew.equation-fraction", "Fraction", "F");
+                        m.Item("freew.equation-script", "Subscript / Superscript", "S");
+                        m.Item("freew.equation-radical", "Radical (Square Root)", "R");
+                        m.Item("freew.equation-nthroot", "Radical (nth Root)", "N");
+                        m.Item("freew.equation-integral", "Integral", "I");
+                        m.Item("freew.equation-summation", "Summation", "U");
+                        m.Item("freew.equation-product", "Product", "P");
+                        m.Item("freew.equation-accent", "Accent (Hat)", "A");
+                        m.Item("freew.equation-bar", "Overbar", "O");
+                        m.Item("freew.equation-bracket", "Bracket", "B");
+                        m.Item("freew.equation-matrix", "Matrix (2x2)", "M");
+                        m.Item("freew.equation-func", "Function (sin)", "C");
+                        m.Item("freew.equation-groupchr", "Group (brace)", "G");
+                    });
                     g.Medium("freew.symbol", "Symbol", RibbonCommandIconKind.Symbol);
-                    g.Medium("freew.datetime", "Date & Time", RibbonCommandIconKind.Date);
-                    g.Medium("freew.field", "Field", RibbonCommandIconKind.Field);
                 });
             })
             .Tab("references", "References", "R", tab =>
