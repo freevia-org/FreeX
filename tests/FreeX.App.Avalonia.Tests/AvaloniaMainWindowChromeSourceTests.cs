@@ -178,6 +178,7 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         fileMenuBlock.Should().Contain("fileMenu.Items.Add(_printPreviewMenuItem);");
         fileMenuBlock.Should().Contain("fileMenu.Items.Add(_backstageExportMenuItem);");
         fileMenuBlock.Should().Contain("fileMenu.Items.Add(_exportPdfMenuItem);");
+        fileMenuBlock.Should().Contain("fileMenu.Items.Add(_filePageSetupMenuItem);");
         fileMenuBlock.Should().Contain("fileMenu.Items.Add(_backstageAccountMenuItem);");
         fileMenuBlock.Should().Contain("fileMenu.Items.Add(_optionsMenuItem);");
 
@@ -188,6 +189,8 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         AssertBefore(fileMenuBlock, "_printPreviewMenuItem", "_backstageExportMenuItem");
         AssertBefore(fileMenuBlock, "_backstageExportMenuItem", "_exportPdfMenuItem");
         AssertBefore(fileMenuBlock, "_exportPdfMenuItem", "_workbookStatisticsMenuItem");
+        AssertBefore(fileMenuBlock, "_workbookStatisticsMenuItem", "_filePageSetupMenuItem");
+        AssertBefore(fileMenuBlock, "_filePageSetupMenuItem", "_closeWorkbookMenuItem");
         AssertBefore(fileMenuBlock, "_closeWorkbookMenuItem", "_backstageAccountMenuItem");
         AssertBefore(fileMenuBlock, "_backstageAccountMenuItem", "_optionsMenuItem");
     }
@@ -253,6 +256,23 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         smokeSource.Should().Contain("NativeTopLevelMenuOrder");
         smokeSource.Should().Contain("File|Home|Insert|Page Layout|Formulas|Data|Review|View|Sheet|Window|Help");
         smokeSource.Should().Contain("native_top_level_menu_order={snapshot.NativeTopLevelMenuOrder}");
+    }
+
+    [Fact]
+    public void NativeMenuBar_DoesNotAttachTheSameMenuItemToMultipleParents()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var duplicates = System.Text.RegularExpressions.Regex
+            .Matches(source, @"\.Items\.Add\((_\w+MenuItem)\)")
+            .Select(match => match.Groups[1].Value)
+            .GroupBy(name => name, StringComparer.Ordinal)
+            .Where(group => group.Count() > 1)
+            .Select(group => $"{group.Key}:{group.Count()}")
+            .ToArray();
+
+        duplicates.Should().BeEmpty("Avalonia NativeMenuItem instances can only have one NativeMenu parent");
+        source.Should().Contain("ConfigurePageSetupNativeMenuItem(_filePageSetupMenuItem);");
+        source.Should().Contain("ConfigurePageSetupNativeMenuItem(_pageSetupMenuItem);");
     }
 
     [Fact]

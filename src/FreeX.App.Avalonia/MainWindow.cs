@@ -623,6 +623,7 @@ public sealed partial class MainWindow : Window
     private readonly NativeMenuItem _freezeFirstColumnMenuItem = new();
     private readonly NativeMenuItem _unfreezePanesMenuItem = new();
     private readonly NativeMenuItem _showFormulasMenuItem = new();
+    private readonly NativeMenuItem _filePageSetupMenuItem = new();
     private readonly NativeMenuItem _pageSetupMenuItem = new();
     private readonly NativeMenuItem _printPreviewMenuItem = new();
     private readonly NativeMenuItem _pageBreakPreviewMenuItem = new();
@@ -1685,8 +1686,8 @@ public sealed partial class MainWindow : Window
         _printMenuItem.Gesture = new KeyGesture(Key.P, KeyModifiers.Meta);
         _printMenuItem.Click += async (_, _) => await ShowPrintDialogAsync();
 
-        _pageSetupMenuItem.Header = UiText.Get("AvaloniaNativeMenu_PageSetup");
-        _pageSetupMenuItem.Click += async (_, _) => await ShowPageSetupDialogAsync();
+        ConfigurePageSetupNativeMenuItem(_filePageSetupMenuItem);
+        ConfigurePageSetupNativeMenuItem(_pageSetupMenuItem);
 
         _printPreviewMenuItem.Header = UiText.Get("AvaloniaNativeMenu_PrintPreview");
         _printPreviewMenuItem.Gesture = new KeyGesture(Key.P, KeyModifiers.Meta | KeyModifiers.Shift);
@@ -2235,7 +2236,7 @@ public sealed partial class MainWindow : Window
         fileMenu.Items.Add(_backstageExportMenuItem);
         fileMenu.Items.Add(_exportPdfMenuItem);
         fileMenu.Items.Add(_workbookStatisticsMenuItem);
-        fileMenu.Items.Add(_pageSetupMenuItem);
+        fileMenu.Items.Add(_filePageSetupMenuItem);
         fileMenu.Items.Add(new NativeMenuItemSeparator());
         fileMenu.Items.Add(_closeWorkbookMenuItem);
         fileMenu.Items.Add(new NativeMenuItemSeparator());
@@ -2488,6 +2489,12 @@ public sealed partial class MainWindow : Window
         _nativeMenu.NeedsUpdate += (_, _) => UpdateSaveButton();
 
         InstallNativeMenu(_nativeMenu);
+    }
+
+    private void ConfigurePageSetupNativeMenuItem(NativeMenuItem item)
+    {
+        item.Header = UiText.Get("AvaloniaNativeMenu_PageSetup");
+        item.Click += async (_, _) => await ShowPageSetupDialogAsync();
     }
 
     private NativeMenu CreateNativeMarginsMenu()
@@ -3736,6 +3743,7 @@ public sealed partial class MainWindow : Window
         _unfreezePanesMenuItem.IsEnabled = isIdle;
         _showFormulasMenuItem.IsEnabled = isIdle;
         _showFormulasMenuItem.IsChecked = _session.IsShowingFormulas;
+        _filePageSetupMenuItem.IsEnabled = isIdle;
         _pageSetupMenuItem.IsEnabled = isIdle;
         _printPreviewMenuItem.IsEnabled = isIdle;
         _pageBreakPreviewMenuItem.IsEnabled = isIdle;
