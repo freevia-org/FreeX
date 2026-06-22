@@ -1627,7 +1627,7 @@ public sealed partial class MainWindow : Window
     {
         _newWorkbookMenuItem.Header = UiText.Get("AvaloniaNativeMenu_NewWorkbook");
         _newWorkbookMenuItem.Gesture = new KeyGesture(Key.N, KeyModifiers.Meta);
-        _newWorkbookMenuItem.Click += (_, _) => CreateNewWorkbook();
+        _newWorkbookMenuItem.Click += async (_, _) => await CreateNewWorkbookAsync();
 
         _openMenuItem.Header = UiText.Get("AvaloniaNativeMenu_Open");
         _openMenuItem.Gesture = new KeyGesture(Key.O, KeyModifiers.Meta);
@@ -6172,7 +6172,7 @@ public sealed partial class MainWindow : Window
         RefreshShell($"Inserted {_session.ActiveSheet.Name}");
     }
 
-    private void CreateNewWorkbook()
+    private async Task CreateNewWorkbookAsync()
     {
         if (_isOpening || _isSaving)
             return;
@@ -6180,11 +6180,8 @@ public sealed partial class MainWindow : Window
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        if (_session.IsDirty)
-        {
-            ShowOpenIssue("Save changes before creating a new workbook.");
+        if (!await ConfirmBeforeDestructiveWorkbookActionAsync("New Workbook", "Discard and Create"))
             return;
-        }
 
         var (viewportHeight, viewportWidth) = GetCurrentSheetViewportSize();
         _session = _sessionFactory.CreateNew(viewportHeight, viewportWidth, includeObjects: true);
@@ -6201,7 +6198,7 @@ public sealed partial class MainWindow : Window
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        if (!await ConfirmDirtyWorkbookCloseAsync("Close Workbook", "Discard and Close"))
+        if (!await ConfirmBeforeDestructiveWorkbookActionAsync("Close Workbook", "Discard and Close"))
             return;
 
         ResetToNewWorkbook("Closed workbook.");
@@ -16355,7 +16352,7 @@ public sealed partial class MainWindow : Window
         else if (e.Key == Key.N)
         {
             e.Handled = true;
-            CreateNewWorkbook();
+            await CreateNewWorkbookAsync();
         }
         else if (e.Key == Key.W && HasOnlyCommandModifier(e.KeyModifiers))
         {
@@ -16579,7 +16576,7 @@ public sealed partial class MainWindow : Window
         // rather than escaping to the dispatcher and crashing the app mid-close.
         try
         {
-            if (await ConfirmDirtyWorkbookCloseAsync("Close FreeX", "Discard and Close"))
+            if (await ConfirmBeforeDestructiveWorkbookActionAsync("Close FreeX", "Discard and Close"))
             {
                 _allowCloseWithoutDirtyPrompt = true;
                 Close();
@@ -16602,7 +16599,7 @@ public sealed partial class MainWindow : Window
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        if (!await ConfirmDirtyWorkbookCloseAsync("Quit FreeX", "Discard and Quit"))
+        if (!await ConfirmBeforeDestructiveWorkbookActionAsync("Quit FreeX", "Discard and Quit"))
             return;
 
         _allowCloseWithoutDirtyPrompt = true;
@@ -16740,11 +16737,8 @@ public sealed partial class MainWindow : Window
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        if (_session.IsDirty)
-        {
-            ShowOpenIssue("Save changes before opening another workbook.");
+        if (!await ConfirmBeforeDestructiveWorkbookActionAsync("Open Workbook", "Discard and Open"))
             return;
-        }
 
         if (!StorageProvider.CanOpen)
         {
@@ -16787,13 +16781,14 @@ public sealed partial class MainWindow : Window
             }
 
             var fileAccessIdentity = await _workbookFileAccessService.CreateIdentityAsync(path, storageFile);
-            await OpenWorkbookPathAsync(path, fileAccessIdentity);
+            await OpenWorkbookPathAsync(path, fileAccessIdentity, confirmDirtyWorkbook: false);
         }
     }
 
     private async Task OpenWorkbookPathAsync(
         string path,
-        WorkbookFileAccessIdentity? fileAccessIdentity = null)
+        WorkbookFileAccessIdentity? fileAccessIdentity = null,
+        bool confirmDirtyWorkbook = true)
     {
         if (_isOpening || _isSaving)
             return;
@@ -16801,11 +16796,9 @@ public sealed partial class MainWindow : Window
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        if (_session.IsDirty)
-        {
-            ShowOpenIssue("Save changes before opening another workbook.");
+        if (confirmDirtyWorkbook &&
+            !await ConfirmBeforeDestructiveWorkbookActionAsync("Open Workbook", "Discard and Open"))
             return;
-        }
 
         if (!_session.TryResolveOpenTarget(path, fileAccessIdentity, out var target, out var message))
         {
@@ -16857,12 +16850,6 @@ public sealed partial class MainWindow : Window
         if (!TryCommitPendingFormulaEdit())
         {
             message = "Finish the current cell edit before opening another workbook.";
-            return false;
-        }
-
-        if (_session.IsDirty)
-        {
-            message = "Save changes before opening another workbook.";
             return false;
         }
 
@@ -17730,7 +17717,7 @@ public sealed partial class MainWindow : Window
         _statusText.Foreground = Brush(143, 74, 18);
     }
 
-    private async Task<bool> ConfirmDirtyWorkbookCloseAsync(string title, string discardButtonText)
+    private async Task<bool> ConfirmBeforeDestructiveWorkbookActionAsync(string title, string discardButtonText)
     {
         var confirmation = await WorkbookFileLifecycleCoordinator.ConfirmBeforeDestructiveActionAsync(
             _session.IsDirty,

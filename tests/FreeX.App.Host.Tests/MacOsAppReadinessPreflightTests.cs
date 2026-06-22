@@ -765,7 +765,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("TryCreateDrawingBitmap(imageBytes, out var bitmap)");
         script.Should().Contain("private static bool HasVisibleCellBorder(CellStyle? style)");
         script.Should().Contain("private readonly RecentFilesStore _recentFiles = RecentFilesStore.Load();");
-        script.Should().Contain("_newWorkbookMenuItem.Click += (_, _) => CreateNewWorkbook();");
+        script.Should().Contain("_newWorkbookMenuItem.Click += async (_, _) => await CreateNewWorkbookAsync();");
         script.Should().Contain("_openRecentMenuItem.Header = UiText.Get(`\"AvaloniaNativeMenu_OpenRecent`\");");
         script.Should().Contain("_selectAllMenuItem.Header = `\"Select All`\";");
         script.Should().Contain("_fillCellsButton.Content = `\"Fill Cells`\";");
@@ -784,7 +784,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("_sessionFactory.CreateNew(viewportHeight, viewportWidth, includeObjects: true)");
         script.Should().Contain("RefreshViewportSizeForZoom();");
         script.Should().Contain("private async void MainWindow_Closing(object? sender, WindowClosingEventArgs e)");
-        script.Should().Contain("private async Task<bool> ConfirmDirtyWorkbookCloseAsync(string title, string discardButtonText)");
+        script.Should().Contain("private async Task<bool> ConfirmBeforeDestructiveWorkbookActionAsync(string title, string discardButtonText)");
         script.Should().Contain("AutomationProperties.SetAutomationId(saveButton, `\"DirtyWorkbookSaveButton`\");");
         script.Should().Contain("public WorkbookSession CreateNew(");
         script.Should().Contain("WorkbookFactory.Create(options)");
@@ -2146,7 +2146,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     TryCreateDrawingBitmap(imageBytes, out var bitmap);
                     AddStyledCellBorderOverlay(content, style);
                     private readonly RecentFilesStore _recentFiles = RecentFilesStore.Load();
-                    _newWorkbookMenuItem.Click += (_, _) => CreateNewWorkbook();
+                    _newWorkbookMenuItem.Click += async (_, _) => await CreateNewWorkbookAsync();
                     _openRecentMenuItem.Header = UiText.Get("AvaloniaNativeMenu_OpenRecent");
                     _openRecentMenuItem.Menu = CreateNativeOpenRecentMenu(isIdle: true);
                     fileMenu.Items.Add(_openRecentMenuItem);
@@ -2517,11 +2517,11 @@ public sealed class MacOsAppReadinessPreflightTests
                     _sessionFactory.CreateNew(viewportHeight, viewportWidth, includeObjects: true);
                     RefreshViewportSizeForZoom();
                     Closing += MainWindow_Closing;
-                    ConfirmDirtyWorkbookCloseAsync("Close Workbook", "Discard and Close").ToString();
+                    ConfirmBeforeDestructiveWorkbookActionAsync("Close Workbook", "Discard and Close").ToString();
                     ResetToNewWorkbook("Closed workbook.");
-                    ConfirmDirtyWorkbookCloseAsync("Close FreeX", "Discard and Close").ToString();
+                    ConfirmBeforeDestructiveWorkbookActionAsync("Close FreeX", "Discard and Close").ToString();
                     TryQuitApplicationAsync().ToString();
-                    ConfirmDirtyWorkbookCloseAsync("Quit FreeX", "Discard and Quit").ToString();
+                    ConfirmBeforeDestructiveWorkbookActionAsync("Quit FreeX", "Discard and Quit").ToString();
                     _allowCloseWithoutDirtyPrompt = true;
                     SaveCurrentWorkbookAsync().ToString();
                     AutomationProperties.SetAutomationId(saveButton, "DirtyWorkbookSaveButton");
@@ -2927,12 +2927,12 @@ public sealed class MacOsAppReadinessPreflightTests
                 private async Task OpenRecentWorkbookAsync(string path, WorkbookFileAccessIdentity? fileAccessIdentity = null) => await Task.CompletedTask;
                 private void RecordStartupRecentWorkbook(StartupWorkbookLoadResult source) { }
                 private void RecordRecentWorkbook(string path, WorkbookFileAccessIdentity? fileAccessIdentity = null) { }
-                private void CreateNewWorkbook() { }
+                private async Task CreateNewWorkbookAsync() => await Task.CompletedTask;
                 private async Task CloseWorkbookAsync() => await Task.CompletedTask;
                 private void ResetToNewWorkbook(string status) { }
                 private async void MainWindow_Closing(object? sender, WindowClosingEventArgs e) => await Task.CompletedTask;
                 private async Task TryQuitApplicationAsync() => await Task.CompletedTask;
-                private async Task<bool> ConfirmDirtyWorkbookCloseAsync(string title, string discardButtonText) => await Task.FromResult(true);
+                private async Task<bool> ConfirmBeforeDestructiveWorkbookActionAsync(string title, string discardButtonText) => await Task.FromResult(true);
                 private async Task<DirtyWorkbookCloseChoice> ShowDirtyWorkbookCloseDialogAsync(string title, string discardButtonText) => await Task.FromResult(DirtyWorkbookCloseChoice.Cancel);
                 private async Task SaveDirtyWorkbookBeforeCloseAsync() => await SaveCurrentWorkbookAsync();
                 private async Task SaveCurrentWorkbookAsync() => await Task.CompletedTask;
