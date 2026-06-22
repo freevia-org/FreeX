@@ -419,10 +419,10 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.read-aloud", readAloud);
         stateful.Add(("freew.read-aloud", readAloud));
 
-        // Review tab — Tracking: toggle Track Changes mode (stateful so the ribbon reflects it). When
+        // Review tab — Tracking/Changes: toggle Track Changes mode (stateful so the ribbon reflects it). When
         // ON, marking the current selection as a tracked insertion/deletion is offered; turning it on
-        // with a non-empty selection marks that selection as an insertion (a pragmatic stand-in for live
-        // keystroke tracking). Accept All / Reject All resolve every tracked change on the model.
+        // with a non-empty selection marks that selection as an insertion. Accept All / Reject All resolve
+        // every tracked change on the model from the Changes dropdowns.
         registry.Register("freew.track-changes", new TrackChangesToggleCommand(editor));
         registry.Register("freew.accept-all", new ActionCommand(() => { editor.Focus(); editor.AcceptAllRevisions(); }));
         registry.Register("freew.reject-all", new ActionCommand(() => { editor.Focus(); editor.RejectAllRevisions(); }));

@@ -198,6 +198,57 @@ public sealed class FreeWRibbonParityTests
     }
 
     [StaFact]
+    public void ReviewTab_GroupsBackedCommandsLikeWord()
+    {
+        var definition = FreeWRibbon.Build();
+        var review = definition.FindTab("review");
+        var editor = new DocumentView();
+        var registry = FreeWRibbonCommands.Build(
+            editor,
+            new RibbonStateStore(),
+            onPrintPreview: null,
+            onToggleNavPane: null,
+            isNavPaneVisible: null,
+            onToggleReadMode: null,
+            isReadModeActive: null,
+            onTogglePrintLayout: null,
+            isPrintLayoutActive: null,
+            onToggleOutlineView: null,
+            isOutlineViewActive: null,
+            onZoomDialog: null,
+            onToggleReviewingPane: () => { },
+            isReviewingPaneVisible: () => false,
+            onAcceptThisChange: () => { },
+            onRejectThisChange: () => { },
+            onPreviousChange: () => { },
+            onNextChange: () => { });
+
+        review.Should().NotBeNull();
+        review!.Groups.Select(group => group.Id)
+            .Should()
+            .Equal("proofing", "speech", "accessibility", "comments", "tracking", "changes", "protect", "compare", "inspect");
+
+        CommandIds(review.FindGroup("accessibility")!)
+            .Should()
+            .Equal("freew.check-accessibility");
+        CommandIds(review.FindGroup("tracking")!)
+            .Should()
+            .Equal("freew.track-changes", "freew.reviewing-pane");
+        CommandIds(review.FindGroup("changes")!)
+            .Should()
+            .Equal("freew.accept-this", "freew.reject-this", "freew.previous-change", "freew.next-change");
+        MenuCommandIds(review.FindGroup("changes")!)
+            .Should()
+            .Equal("freew.accept-this", "freew.accept-all", "freew.reject-this", "freew.reject-all");
+        CommandIds(review.FindGroup("inspect")!)
+            .Should()
+            .Equal("freew.inspect-document");
+
+        foreach (var commandId in CommandIds(review).Concat(MenuCommandIds(review)).Distinct())
+            registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must execute from the Review tab");
+    }
+
+    [StaFact]
     public void DesignPageBackground_ExposesWordStyleWatermarkPageColorAndPageBorders()
     {
         var definition = FreeWRibbon.Build();
@@ -516,6 +567,37 @@ public sealed class FreeWRibbonParityTests
         {
             if (!string.IsNullOrWhiteSpace(control.CommandId.Value))
                 yield return control.CommandId.Value;
+        }
+    }
+
+    private static IEnumerable<string> MenuCommandIds(RibbonTab tab) =>
+        tab.Groups.SelectMany(MenuCommandIds);
+
+    private static IEnumerable<string> MenuCommandIds(RibbonGroup group)
+    {
+        foreach (var control in group.Controls)
+        {
+            foreach (var commandId in MenuCommandIds(control))
+                yield return commandId;
+        }
+    }
+
+    private static IEnumerable<string> MenuCommandIds(RibbonControl control) => control switch
+    {
+        RibbonDropdown dropdown => MenuCommandIds(dropdown.Menu.Items),
+        RibbonSplitButton splitButton => MenuCommandIds(splitButton.Menu.Items),
+        _ => Enumerable.Empty<string>()
+    };
+
+    private static IEnumerable<string> MenuCommandIds(IEnumerable<RibbonMenuItem> items)
+    {
+        foreach (var item in items)
+        {
+            if (item.CommandId is { } commandId && !string.IsNullOrWhiteSpace(commandId.Value))
+                yield return commandId.Value;
+
+            foreach (var childCommandId in MenuCommandIds(item.Children))
+                yield return childCommandId;
         }
     }
 
