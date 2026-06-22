@@ -90,6 +90,15 @@ public sealed class LocTests
     }
 
     [Fact]
+    public void SharedHelpers_ExposeCatalogContracts()
+    {
+        Loc.PseudoLocalizationCultureName.Should().Be(LocalizedTextCatalog.PseudoLocalizationCultureName);
+        Loc.IsPseudoLocalizationCulture("QPS-PLOC").Should().BeTrue();
+        Loc.CreateAutomationName("_Open _File").Should().Be("Open File");
+        Loc.CreateMissingText("Missing_Key").Should().Be("[[Missing_Key]]");
+    }
+
+    [Fact]
     public void GetNeutralResourceKeys_ContainsExpectedKeys()
     {
         var keys = Loc.GetNeutralResourceKeys();

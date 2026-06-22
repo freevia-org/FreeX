@@ -1,5 +1,3 @@
-using System.Collections;
-using System.Globalization;
 using System.Resources;
 
 namespace FreeX.App.Localization;
@@ -17,64 +15,39 @@ namespace FreeX.App.Localization;
 public static class Loc
 {
     /// <summary>Synthetic culture name used to request pseudo-localized output.</summary>
-    public const string PseudoLocalizationCultureName = "qps-ploc";
+    public const string PseudoLocalizationCultureName = LocalizedTextCatalog.PseudoLocalizationCultureName;
 
     private const string ResourceBaseName = "FreeX.App.Localization.Resources.Strings";
     private static readonly ResourceManager ResourceManager = new(ResourceBaseName, typeof(Loc).Assembly);
+    private static readonly LocalizedTextCatalog Catalog = new(ResourceManager);
 
     /// <summary>
     /// Returns the localized string for <paramref name="key"/> in the current UI culture, falling
     /// back to neutral English when the active culture lacks a translation. Returns a visible
     /// <c>[[missing]]</c> marker when the key is unknown so gaps are obvious.
     /// </summary>
-    public static string Get(string key)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(key);
-
-        var culture = CultureInfo.CurrentUICulture;
-        if (IsPseudoLocalizationCulture(culture.Name))
-        {
-            var neutral = ResourceManager.GetString(key, CultureInfo.InvariantCulture);
-            return neutral is null ? CreateMissingText(key) : PseudoLocalization.Expand(neutral);
-        }
-
-        return ResourceManager.GetString(key, culture) ?? CreateMissingText(key);
-    }
+    public static string Get(string key) => Catalog.Get(key);
 
     /// <summary>Returns the neutral (invariant English) string for <paramref name="key"/>.</summary>
-    public static string GetNeutral(string key)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        return ResourceManager.GetString(key, CultureInfo.InvariantCulture) ?? CreateMissingText(key);
-    }
+    public static string GetNeutral(string key) => Catalog.GetNeutral(key);
 
     /// <summary>
     /// Returns the localized format string for <paramref name="key"/> with <paramref name="args"/>
     /// substituted using the current culture's formatting rules.
     /// </summary>
-    public static string Format(string key, params object?[] args) =>
-        string.Format(CultureInfo.CurrentCulture, Get(key), args);
+    public static string Format(string key, params object?[] args) => Catalog.Format(key, args);
 
     /// <summary>Returns the full set of keys defined in the neutral catalog.</summary>
-    public static IReadOnlySet<string> GetNeutralResourceKeys()
-    {
-        var resourceSet = ResourceManager.GetResourceSet(CultureInfo.InvariantCulture, createIfNotExists: true, tryParents: true);
-        if (resourceSet is null)
-            return new HashSet<string>(StringComparer.Ordinal);
-
-        return resourceSet
-            .Cast<DictionaryEntry>()
-            .Select(entry => (string)entry.Key)
-            .ToHashSet(StringComparer.Ordinal);
-    }
+    public static IReadOnlySet<string> GetNeutralResourceKeys() => Catalog.GetNeutralResourceKeys();
 
     /// <summary>True when <paramref name="cultureName"/> requests pseudo-localized output.</summary>
     public static bool IsPseudoLocalizationCulture(string? cultureName) =>
-        string.Equals(cultureName, PseudoLocalizationCultureName, StringComparison.OrdinalIgnoreCase);
+        LocalizedTextCatalog.IsPseudoLocalizationCulture(cultureName);
 
     /// <summary>Strips access-key markers from menu/label text to derive an automation name.</summary>
     public static string CreateAutomationName(string textWithAccessKey) =>
-        textWithAccessKey.Replace("_", string.Empty, StringComparison.Ordinal);
+        LocalizedTextCatalog.CreateAutomationName(textWithAccessKey);
 
-    private static string CreateMissingText(string key) => "[[" + key + "]]";
+    /// <summary>Creates the visible missing-resource marker used by UI text wrappers.</summary>
+    public static string CreateMissingText(string key) => LocalizedTextCatalog.CreateMissingText(key);
 }
