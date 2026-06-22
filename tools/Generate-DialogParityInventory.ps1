@@ -165,10 +165,12 @@ $routes = @(
     @{
         RouteId = "dialog.Sort"; DisplayName = "Sort"
         Wpf = @("screenshots\data-sort-filter-outline-tour\freex_data_sort_filter_outline_sort_dialog.png", "screenshots\home-clipboard-cells-editing-tour\freex_home_clipboard_cells_editing_custom_sort_dialog.png")
+        Shared = @("src\FreeX.App.Services\SortDialogPlanner.cs")
     },
     @{
         RouteId = "dialog.SortOptions"; DisplayName = "Sort Options"
         Wpf = @("screenshots\data-sort-filter-outline-tour\freex_data_sort_filter_outline_sort_options_dialog.png")
+        Shared = @("src\FreeX.App.Services\SortDialogPlanner.cs")
     },
     @{
         RouteId = "dialog.AutoFilter"; DisplayName = "AutoFilter"

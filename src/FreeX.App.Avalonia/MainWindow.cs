@@ -198,10 +198,15 @@ public sealed partial class MainWindow : Window
     private sealed record SortDialogSmokeProbe(
         Window Dialog,
         CheckBox HeadersCheckBox,
-        StackPanel LevelsPanel,
+        Control LevelsGrid,
         ComboBox SortOnBox,
         ComboBox ColorBox,
         Button AddLevelButton,
+        Button DeleteLevelButton,
+        Button CopyLevelButton,
+        Button MoveUpButton,
+        Button MoveDownButton,
+        Button OptionsButton,
         Button OkButton,
         Button CancelButton);
     private sealed record DataValidationDialogResult(
@@ -239,7 +244,8 @@ public sealed partial class MainWindow : Window
     }
     private sealed record SortDialogResult(
         IReadOnlyList<SortDialogLevel> Levels,
-        bool HasHeaders);
+        bool HasHeaders,
+        SortDialogOptions Options);
     private sealed record SortDialogComboItem<T>(string Label, T Value)
     {
         public override string ToString() => Label;
@@ -10020,7 +10026,10 @@ public sealed partial class MainWindow : Window
 
         var rangeReference = FormatRangeReference(_session.SelectedRange);
         var keys = SortDialogPlanner.BuildSortKeys(selection.Levels);
-        var options = new SortOptions(CaseSensitive: false, LeftToRight: false);
+        if (CustomSortOrder.TryParse(selection.Options.FirstKeySortOrder, out var customOrder))
+            keys = SortDialogPlanner.ApplyCustomOrderToFirstKey(keys, customOrder);
+
+        var options = new SortOptions(selection.Options.CaseSensitive, selection.Options.LeftToRight);
         var result = _session.SortSelectedRange(keys, options, selection.HasHeaders);
         if (!result.Success)
         {
@@ -10041,6 +10050,8 @@ public sealed partial class MainWindow : Window
         SortDialogResult? result = null;
         var range = _session.SelectedRange;
         var levels = SortDialogPlanner.NormalizeLevels(null).ToList();
+        var optionsState = new SortDialogOptions();
+        var selectedLevelIndex = 0;
         var sortOnChoices = new[]
         {
             new SortOnChoice(SortDialogPlannerText.Default.SortOnCellValues),
@@ -10051,31 +10062,42 @@ public sealed partial class MainWindow : Window
         var fontColorChoices = SortDialogPlanner.BuildColorChoices(_session.Workbook, _session.ActiveSheet, range, SortOn.FontColor);
         var dialog = new Window
         {
-            Title = "Sort",
+            Title = "Custom Sort",
             Width = 760,
-            Height = 430,
-            MinWidth = 700,
-            MinHeight = 360,
+            Height = 500,
+            MinWidth = 680,
+            MinHeight = 420,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
         AutomationProperties.SetAutomationId(dialog, "SortCompactDialog");
         AutomationProperties.SetHelpText(
             dialog,
-            "macOS preview custom sort supports cell values, cell color, and font color by column; custom-list, case-sensitive, and left-to-right options remain WPF-only.");
+            "Custom sort supports cell values, cell color, font color, custom first-key sort order, case-sensitive sorting, and left-to-right sorting through the shared SortDialogPlanner.");
 
         var headersCheck = new CheckBox
         {
             Content = "My data has headers",
             IsChecked = true,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
         };
         AutomationProperties.SetAutomationId(headersCheck, "SortHeadersCheckBox");
 
-        var levelsPanel = new StackPanel
+        var levelsGrid = new AvaloniaGrid
         {
-            Spacing = 8,
+            RowDefinitions =
+            {
+                new RowDefinition(GridLength.Auto),
+            },
+            ColumnDefinitions =
+            {
+                new ColumnDefinition(new GridLength(1, GridUnitType.Star)),
+                new ColumnDefinition(new GridLength(140)),
+                new ColumnDefinition(new GridLength(150)),
+                new ColumnDefinition(new GridLength(115)),
+            },
         };
-        AutomationProperties.SetAutomationId(levelsPanel, "SortLevelsPanel");
+        AutomationProperties.SetAutomationId(levelsGrid, "SortLevelsGrid");
 
         var addLevelButton = new Button
         {
@@ -10085,10 +10107,27 @@ public sealed partial class MainWindow : Window
         };
         AutomationProperties.SetAutomationId(addLevelButton, "SortAddLevelButton");
 
+        var deleteLevelButton = new Button { Content = "Delete Level", MinWidth = 104, Padding = new Thickness(10, 4) };
+        AutomationProperties.SetAutomationId(deleteLevelButton, "SortDeleteLevelButton");
+        var copyLevelButton = new Button { Content = "Copy Level", MinWidth = 98, Padding = new Thickness(10, 4) };
+        AutomationProperties.SetAutomationId(copyLevelButton, "SortCopyLevelButton");
+        var moveUpButton = new Button { Content = "Move Up", MinWidth = 86, Padding = new Thickness(10, 4) };
+        AutomationProperties.SetAutomationId(moveUpButton, "SortMoveUpButton");
+        var moveDownButton = new Button { Content = "Move Down", MinWidth = 92, Padding = new Thickness(10, 4) };
+        AutomationProperties.SetAutomationId(moveDownButton, "SortMoveDownButton");
+        var optionsButton = new Button
+        {
+            Content = "Options...",
+            MinWidth = 92,
+            Padding = new Thickness(10, 4),
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+        };
+        AutomationProperties.SetAutomationId(optionsButton, "SortOptionsButton");
+
         var okButton = new Button
         {
             Content = "OK",
-            MinWidth = 84,
+            MinWidth = 76,
             Padding = new Thickness(10, 4),
         };
         AutomationProperties.SetAutomationId(okButton, "SortOkButton");
@@ -10096,7 +10135,7 @@ public sealed partial class MainWindow : Window
         var cancelButton = new Button
         {
             Content = "Cancel",
-            MinWidth = 84,
+            MinWidth = 76,
             Padding = new Thickness(10, 4),
         };
         AutomationProperties.SetAutomationId(cancelButton, "SortCancelButton");
@@ -10106,10 +10145,15 @@ public sealed partial class MainWindow : Window
 
         IReadOnlyList<SortColumnChoice> CurrentColumnChoices()
         {
-            var hasHeaders = headersCheck.IsChecked == true;
             var headerChoices = SortDialogPlanner.BuildColumnChoices(_session.ActiveSheet, range, hasHeaders: true);
             var genericChoices = SortDialogPlanner.BuildColumnChoices(_session.ActiveSheet, range, hasHeaders: false);
-            return hasHeaders ? headerChoices : genericChoices;
+            var rowChoices = SortDialogPlanner.BuildRowChoices(range);
+            return SortDialogPlanner.BuildActiveColumnChoices(
+                optionsState,
+                headersCheck.IsChecked == true,
+                headerChoices,
+                genericChoices,
+                rowChoices);
         }
 
         IReadOnlyList<SortDialogComboItem<SortColumnChoice>> CreateColumnItems() =>
@@ -10203,22 +10247,74 @@ public sealed partial class MainWindow : Window
         static bool IsColorSort(SortDialogLevel level) =>
             SortDialogPlanner.SortOnFromLabel(level.SortOn) is SortOn.CellColor or SortOn.FontColor;
 
-        StackPanel CreateSortField(string label, Control control, double width) =>
+        static Border CreateSortCell(Control child, int row, int column, bool selected = false)
+        {
+            var border = new Border
+            {
+                Child = child,
+                Background = selected ? Brush(0, 120, 215) : Brushes.White,
+                BorderBrush = Brush(90, 90, 90),
+                BorderThickness = new Thickness(0, 0, 1, 1),
+                Padding = new Thickness(4, 2),
+            };
+            AvaloniaGrid.SetRow(border, row);
+            AvaloniaGrid.SetColumn(border, column);
+            return border;
+        }
+
+        static Border CreateHeaderCell(string text, int column)
+        {
+            var border = new Border
+            {
+                Child = new TextBlock
+                {
+                    Text = text,
+                    FontSize = 15,
+                    VerticalAlignment = AvaloniaVerticalAlignment.Center,
+                },
+                Background = Brush(244, 244, 244),
+                BorderBrush = Brush(170, 170, 170),
+                BorderThickness = new Thickness(0, 0, 1, 1),
+                Padding = new Thickness(6, 4),
+            };
+            AvaloniaGrid.SetRow(border, 0);
+            AvaloniaGrid.SetColumn(border, column);
+            return border;
+        }
+
+        static TextBlock CreateCellText(string text, bool selected) =>
             new()
             {
-                Width = width,
-                Spacing = 4,
-                Children =
-                {
-                    new TextBlock { Text = label },
-                    control,
-                },
+                Text = text,
+                Foreground = selected ? Brushes.White : Brushes.Black,
+                FontSize = 14,
+                VerticalAlignment = AvaloniaVerticalAlignment.Center,
             };
+
+        void UpdateToolbarButtonStates()
+        {
+            var hasSelection = selectedLevelIndex >= 0 && selectedLevelIndex < levels.Count;
+            deleteLevelButton.IsEnabled = hasSelection && levels.Count > 1;
+            copyLevelButton.IsEnabled = hasSelection;
+            moveUpButton.IsEnabled = hasSelection && selectedLevelIndex > 0;
+            moveDownButton.IsEnabled = hasSelection && selectedLevelIndex < levels.Count - 1;
+        }
 
         void RebuildLevels()
         {
             levels = SortDialogPlanner.NormalizeLevels(levels).ToList();
-            levelsPanel.Children.Clear();
+            selectedLevelIndex = Math.Clamp(selectedLevelIndex, 0, Math.Max(0, levels.Count - 1));
+            levelsGrid.Children.Clear();
+            levelsGrid.RowDefinitions.Clear();
+            levelsGrid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+            for (var i = 0; i < Math.Max(6, levels.Count); i++)
+                levelsGrid.RowDefinitions.Add(new RowDefinition(new GridLength(38)));
+
+            levelsGrid.Children.Add(CreateHeaderCell(optionsState.LeftToRight ? "Sort by row" : "Sort by", 0));
+            levelsGrid.Children.Add(CreateHeaderCell("Sort On", 1));
+            levelsGrid.Children.Add(CreateHeaderCell("Order", 2));
+            levelsGrid.Children.Add(CreateHeaderCell("Color", 3));
+
             firstSortOnBox = null;
             firstColorBox = null;
             var columnChoices = CreateColumnItems();
@@ -10227,13 +10323,16 @@ public sealed partial class MainWindow : Window
             {
                 var levelIndex = index;
                 var level = levels[index];
+                var gridRow = levelIndex + 1;
+                var selected = levelIndex == selectedLevelIndex;
                 ApplyColorChoices(level);
                 var directionChoices = CreateOrderItems(level);
                 var colorChoices = CreateColorItems(level);
                 var columnBox = new ComboBox
                 {
                     ItemsSource = columnChoices,
-                    MinWidth = 150,
+                    MinWidth = 170,
+                    IsVisible = selected,
                 };
                 AutomationProperties.SetName(columnBox, "Sort by");
                 AutomationProperties.SetAutomationId(columnBox, $"SortLevel{levelIndex + 1}ColumnBox");
@@ -10248,6 +10347,7 @@ public sealed partial class MainWindow : Window
                 {
                     ItemsSource = sortOnItems,
                     MinWidth = 120,
+                    IsVisible = selected,
                 };
                 AutomationProperties.SetName(sortOnBox, "Sort On");
                 AutomationProperties.SetAutomationId(sortOnBox, $"SortLevel{levelIndex + 1}SortOnBox");
@@ -10256,7 +10356,8 @@ public sealed partial class MainWindow : Window
                 var orderBox = new ComboBox
                 {
                     ItemsSource = directionChoices,
-                    MinWidth = 105,
+                    MinWidth = 130,
+                    IsVisible = selected,
                 };
                 AutomationProperties.SetName(orderBox, "Order");
                 AutomationProperties.SetAutomationId(orderBox, $"SortLevel{levelIndex + 1}OrderBox");
@@ -10267,6 +10368,7 @@ public sealed partial class MainWindow : Window
                     ItemsSource = colorChoices,
                     MinWidth = 105,
                     IsEnabled = IsColorSort(level),
+                    IsVisible = selected,
                 };
                 AutomationProperties.SetName(colorBox, "Color");
                 AutomationProperties.SetAutomationId(colorBox, $"SortLevel{levelIndex + 1}ColorBox");
@@ -10314,51 +10416,83 @@ public sealed partial class MainWindow : Window
                         levels[levelIndex].TargetColor = colorChoice.Value.Label;
                 };
 
-                var removeButton = new Button
+                var columnCell = CreateSortCell(
+                    selected ? columnBox : CreateCellText(columnChoices.FirstOrDefault(choice => choice.Value.ColumnOffset == level.ColumnOffset)?.Label ?? "", selected),
+                    gridRow,
+                    0,
+                    selected);
+                var sortOnCell = CreateSortCell(selected ? sortOnBox : CreateCellText(level.SortOn, selected), gridRow, 1, selected);
+                var orderLabel = CreateOrderItems(level).FirstOrDefault(choice => choice.Value.Ascending == level.Ascending)?.Label ?? "";
+                var orderCell = CreateSortCell(selected ? orderBox : CreateCellText(orderLabel, selected), gridRow, 2, selected);
+                var colorLabel = string.IsNullOrWhiteSpace(level.TargetColor) ? "" : level.TargetColor;
+                var colorCell = CreateSortCell(selected ? colorBox : CreateCellText(colorLabel, selected), gridRow, 3, selected);
+                foreach (var cell in new[] { columnCell, sortOnCell, orderCell, colorCell })
                 {
-                    Content = "Remove",
-                    IsEnabled = levels.Count > 1,
-                    MinWidth = 82,
-                    Padding = new Thickness(10, 4),
-                    VerticalAlignment = AvaloniaVerticalAlignment.Bottom,
-                };
-                AutomationProperties.SetAutomationId(removeButton, $"SortLevel{levelIndex + 1}RemoveButton");
-                removeButton.Click += (_, _) =>
-                {
-                    var removeIndex = Math.Min(levelIndex, levels.Count - 1);
-                    levels = SortDialogPlanner.RemoveLevel(levels, removeIndex).ToList();
-                    RebuildLevels();
-                };
-
-                var row = new StackPanel
-                {
-                    Orientation = Orientation.Horizontal,
-                    Spacing = 8,
-                    Children =
+                    cell.PointerPressed += (_, _) =>
                     {
-                        CreateSortField("Sort by", columnBox, 190),
-                        CreateSortField("Sort On", sortOnBox, 130),
-                        CreateSortField("Order", orderBox, 115),
-                        CreateSortField("Color", colorBox, 120),
-                        removeButton,
-                    },
-                };
-                AutomationProperties.SetAutomationId(row, $"SortLevel{levelIndex + 1}Row");
-                levelsPanel.Children.Add(row);
+                        selectedLevelIndex = levelIndex;
+                        RebuildLevels();
+                    };
+                    levelsGrid.Children.Add(cell);
+                }
             }
+
+            for (var blankIndex = levels.Count; blankIndex < 6; blankIndex++)
+            {
+                var gridRow = blankIndex + 1;
+                for (var column = 0; column < 4; column++)
+                    levelsGrid.Children.Add(CreateSortCell(new TextBlock(), gridRow, column));
+            }
+
+            UpdateToolbarButtonStates();
         }
 
         void Accept()
         {
             result = new SortDialogResult(
                 SortDialogPlanner.NormalizeLevels(levels),
-                headersCheck.IsChecked == true);
+                headersCheck.IsChecked == true,
+                optionsState);
             dialog.Close();
         }
 
         addLevelButton.Click += (_, _) =>
         {
             levels = SortDialogPlanner.AddLevel(levels).ToList();
+            selectedLevelIndex = levels.Count - 1;
+            RebuildLevels();
+        };
+        deleteLevelButton.Click += (_, _) =>
+        {
+            levels = SortDialogPlanner.RemoveLevel(levels, selectedLevelIndex).ToList();
+            selectedLevelIndex = Math.Min(selectedLevelIndex, levels.Count - 1);
+            RebuildLevels();
+        };
+        copyLevelButton.Click += (_, _) =>
+        {
+            levels = SortDialogPlanner.CopyLevel(levels, selectedLevelIndex).ToList();
+            selectedLevelIndex = Math.Min(selectedLevelIndex + 1, levels.Count - 1);
+            RebuildLevels();
+        };
+        moveUpButton.Click += (_, _) =>
+        {
+            levels = SortDialogPlanner.MoveLevel(levels, selectedLevelIndex, -1).ToList();
+            selectedLevelIndex = Math.Max(0, selectedLevelIndex - 1);
+            RebuildLevels();
+        };
+        moveDownButton.Click += (_, _) =>
+        {
+            levels = SortDialogPlanner.MoveLevel(levels, selectedLevelIndex, 1).ToList();
+            selectedLevelIndex = Math.Min(levels.Count - 1, selectedLevelIndex + 1);
+            RebuildLevels();
+        };
+        optionsButton.Click += async (_, _) =>
+        {
+            var updated = await ShowSortOptionsDialogAsync(optionsState);
+            if (updated is null)
+                return;
+
+            optionsState = updated;
             RebuildLevels();
         };
         headersCheck.PropertyChanged += (_, e) =>
@@ -10383,40 +10517,76 @@ public sealed partial class MainWindow : Window
         };
 
         RebuildLevels();
-        dialog.Content = new StackPanel
+        var root = new AvaloniaGrid
         {
             Margin = new Thickness(16),
-            Spacing = 12,
-            Children =
+            RowDefinitions =
             {
-                headersCheck,
-                new ScrollViewer
-                {
-                    MaxHeight = 240,
-                    Content = levelsPanel,
-                },
-                new StackPanel
-                {
-                    Orientation = Orientation.Horizontal,
-                    Spacing = 8,
-                    Children =
-                    {
-                        addLevelButton,
-                    },
-                },
-                new StackPanel
-                {
-                    Orientation = Orientation.Horizontal,
-                    Spacing = 8,
-                    HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-                    Children =
-                    {
-                        cancelButton,
-                        okButton,
-                    },
-                },
+                new RowDefinition(GridLength.Auto),
+                new RowDefinition(new GridLength(1, GridUnitType.Star)),
+                new RowDefinition(GridLength.Auto),
+                new RowDefinition(GridLength.Auto),
             },
         };
+        var headerRow = new DockPanel { Margin = new Thickness(0, 0, 0, 10) };
+        DockPanel.SetDock(headersCheck, Dock.Right);
+        headerRow.Children.Add(headersCheck);
+        headerRow.Children.Add(new TextBlock
+        {
+            Text = "Sort levels",
+            FontWeight = FontWeight.SemiBold,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+        });
+        AvaloniaGrid.SetRow(headerRow, 0);
+        root.Children.Add(headerRow);
+
+        var levelsFrame = new Border
+        {
+            BorderBrush = Brush(80, 130, 190),
+            BorderThickness = new Thickness(1),
+            Child = levelsGrid,
+            MinHeight = 220,
+            Margin = new Thickness(0, 0, 0, 12),
+        };
+        AvaloniaGrid.SetRow(levelsFrame, 1);
+        root.Children.Add(levelsFrame);
+
+        var commandRow = new AvaloniaGrid { Margin = new Thickness(0, 0, 0, 12) };
+        commandRow.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(1, GridUnitType.Star)));
+        commandRow.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+        var helperRow = new WrapPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+        };
+        foreach (var button in new[] { addLevelButton, deleteLevelButton, copyLevelButton, moveUpButton, moveDownButton })
+        {
+            button.Margin = new Thickness(0, 0, 8, 6);
+            helperRow.Children.Add(button);
+        }
+        AvaloniaGrid.SetColumn(helperRow, 0);
+        commandRow.Children.Add(helperRow);
+        AvaloniaGrid.SetColumn(optionsButton, 1);
+        commandRow.Children.Add(optionsButton);
+        AvaloniaGrid.SetRow(commandRow, 2);
+        root.Children.Add(commandRow);
+
+        var buttons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Margin = new Thickness(0, 4, 0, 0),
+            Children =
+            {
+                okButton,
+                cancelButton,
+            },
+        };
+        AvaloniaGrid.SetRow(buttons, 3);
+        root.Children.Add(buttons);
+        dialog.Content = root;
+
         if (launchSmokeProbe is not null)
         {
             dialog.Opened += (_, _) =>
@@ -10426,15 +10596,149 @@ public sealed partial class MainWindow : Window
                     () => launchSmokeProbe(new SortDialogSmokeProbe(
                         dialog,
                         headersCheck,
-                        levelsPanel,
+                        levelsGrid,
                         firstSortOnBox!,
                         firstColorBox!,
                         addLevelButton,
+                        deleteLevelButton,
+                        copyLevelButton,
+                        moveUpButton,
+                        moveDownButton,
+                        optionsButton,
                         okButton,
                         cancelButton)));
             };
         }
 
+        await dialog.ShowDialog(this);
+        return result;
+    }
+
+    private async Task<SortDialogOptions?> ShowSortOptionsDialogAsync(SortDialogOptions current)
+    {
+        const string normalFirstKeySortOrder = "Normal";
+        SortDialogOptions? result = null;
+        var dialog = new Window
+        {
+            Title = "Sort Options",
+            Width = 360,
+            Height = 300,
+            CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+        AutomationProperties.SetAutomationId(dialog, "SortOptionsDialog");
+
+        var caseSensitiveBox = new CheckBox
+        {
+            Content = "Case sensitive",
+            IsChecked = current.CaseSensitive,
+            Margin = new Thickness(0, 0, 0, 10),
+        };
+        AutomationProperties.SetAutomationId(caseSensitiveBox, "SortOptionsCaseSensitiveCheckBox");
+
+        var firstKeyChoices = new[]
+        {
+            new SortDialogComboItem<string>("Normal", normalFirstKeySortOrder),
+            new SortDialogComboItem<string>("Sun, Mon, Tue, Wed, Thu, Fri, Sat", "Sun, Mon, Tue, Wed, Thu, Fri, Sat"),
+            new SortDialogComboItem<string>("Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday", "Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday"),
+            new SortDialogComboItem<string>("Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec", "Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec"),
+            new SortDialogComboItem<string>("January, February, March, April, May, June, July, August, September, October, November, December", "January, February, March, April, May, June, July, August, September, October, November, December"),
+        };
+        var normalizedFirstKey = firstKeyChoices.FirstOrDefault(choice =>
+            string.Equals(choice.Value, current.FirstKeySortOrder, StringComparison.Ordinal) ||
+            string.Equals(choice.Label, current.FirstKeySortOrder, StringComparison.Ordinal)) ?? firstKeyChoices[0];
+        var firstKeyBox = new ComboBox
+        {
+            ItemsSource = firstKeyChoices,
+            SelectedItem = normalizedFirstKey,
+            Margin = new Thickness(0, 0, 0, 10),
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
+        };
+        AutomationProperties.SetAutomationId(firstKeyBox, "SortOptionsFirstKeySortOrderBox");
+
+        var topToBottomButton = new RadioButton
+        {
+            Content = "Sort top to bottom",
+            IsChecked = !current.LeftToRight,
+            GroupName = "SortOptionsOrientation",
+        };
+        var leftToRightButton = new RadioButton
+        {
+            Content = "Sort left to right",
+            IsChecked = current.LeftToRight,
+            GroupName = "SortOptionsOrientation",
+        };
+        AutomationProperties.SetAutomationId(topToBottomButton, "SortOptionsTopToBottomRadio");
+        AutomationProperties.SetAutomationId(leftToRightButton, "SortOptionsLeftToRightRadio");
+
+        var okButton = new Button { Content = "OK", IsDefault = true, MinWidth = 72 };
+        var cancelButton = new Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+        AutomationProperties.SetAutomationId(okButton, "SortOptionsOkButton");
+        AutomationProperties.SetAutomationId(cancelButton, "SortOptionsCancelButton");
+
+        okButton.Click += (_, _) =>
+        {
+            result = new SortDialogOptions(
+                CaseSensitive: caseSensitiveBox.IsChecked == true,
+                LeftToRight: leftToRightButton.IsChecked == true,
+                FirstKeySortOrder: firstKeyBox.SelectedItem is SortDialogComboItem<string> choice
+                    ? choice.Value
+                    : normalFirstKeySortOrder);
+            dialog.Close();
+        };
+        cancelButton.Click += (_, _) => dialog.Close();
+        dialog.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter)
+            {
+                okButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Escape)
+            {
+                dialog.Close();
+                e.Handled = true;
+            }
+        };
+
+        var body = new StackPanel
+        {
+            Margin = new Thickness(12),
+            Children =
+            {
+                caseSensitiveBox,
+                new TextBlock { Text = "First key sort order:", Margin = new Thickness(0, 0, 0, 3) },
+                firstKeyBox,
+                new GroupBox
+                {
+                    Header = "Orientation",
+                    Padding = new Thickness(8),
+                    Margin = new Thickness(0, 0, 0, 10),
+                    Content = new StackPanel
+                    {
+                        Children =
+                        {
+                            topToBottomButton,
+                            leftToRightButton,
+                        },
+                    },
+                },
+                new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 8,
+                    HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+                    Margin = new Thickness(0, 6, 0, 0),
+                    Children =
+                    {
+                        okButton,
+                        cancelButton,
+                    },
+                },
+            },
+        };
+        dialog.Content = body;
         await dialog.ShowDialog(this);
         return result;
     }
@@ -14865,7 +15169,7 @@ public sealed partial class MainWindow : Window
         var hasSortDialogCompactLayout = false;
         var sortDialogResult = await ShowSortInputDialogAsync(probe =>
         {
-            hasSortDialog = HasLaunchSmokeDialog(probe.Dialog, "Sort");
+            hasSortDialog = HasLaunchSmokeDialog(probe.Dialog, "Custom Sort");
             hasSortDialogSortOnControls =
                 HasLaunchSmokeComboBox(probe.SortOnBox, "SortLevel1SortOnBox", "Sort On") &&
                 probe.SortOnBox.MinWidth >= 120 &&
@@ -14877,11 +15181,16 @@ public sealed partial class MainWindow : Window
                 string.Equals(probe.ColorBox.SelectedItem?.ToString(), "None", StringComparison.Ordinal);
             hasSortDialogActionButtons =
                 HasLaunchSmokeCheckBox(probe.HeadersCheckBox, "SortHeadersCheckBox", "My data has headers") &&
-                HasLaunchSmokeAutomationId(probe.LevelsPanel, "SortLevelsPanel") &&
+                HasLaunchSmokeAutomationId(probe.LevelsGrid, "SortLevelsGrid") &&
                 HasLaunchSmokeButton(probe.AddLevelButton, "SortAddLevelButton", "Add Level") &&
+                HasLaunchSmokeButton(probe.DeleteLevelButton, "SortDeleteLevelButton", "Delete Level") &&
+                HasLaunchSmokeButton(probe.CopyLevelButton, "SortCopyLevelButton", "Copy Level") &&
+                HasLaunchSmokeButton(probe.MoveUpButton, "SortMoveUpButton", "Move Up") &&
+                HasLaunchSmokeButton(probe.MoveDownButton, "SortMoveDownButton", "Move Down") &&
+                HasLaunchSmokeButton(probe.OptionsButton, "SortOptionsButton", "Options...") &&
                 HasLaunchSmokeButton(probe.OkButton, "SortOkButton", "OK") &&
                 HasLaunchSmokeButton(probe.CancelButton, "SortCancelButton", "Cancel");
-            hasSortDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 760, height: 430, minWidth: 700, minHeight: 360);
+            hasSortDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 760, height: 500, minWidth: 680, minHeight: 420);
         });
 
         var dropdown = CreateDataValidationDropdown(new DataValidationDropdownPlan(
