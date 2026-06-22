@@ -1103,6 +1103,7 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var hostSource = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAnalysis.cs");
         var routeSource = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisCommandRouter.cs");
+        var catalogSource = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisCatalog.cs");
 
         hostSource.Should().Contain("QuickAnalysisCommandRouter.Route(option)");
         hostSource.Should().Contain("ShowCfDialog(QuickAnalysisConditionalFormatDialogTitle(conditionalFormat))");
@@ -1118,44 +1119,48 @@ public sealed partial class MainWindowSourceHygieneTests
         hostSource.Should().Contain("QuickAnalysisConditionalFormatCommand.AboveAverage => \"Above Average\"");
         hostSource.Should().Contain("QuickAnalysisConditionalFormatCommand.BelowAverage => \"Below Average\"");
 
-        routeSource.Should().Contain("QuickAnalysisCommand.LessThan => ConditionalFormat(QuickAnalysisConditionalFormatCommand.LessThan)");
-        routeSource.Should().Contain("QuickAnalysisCommand.Between => ConditionalFormat(QuickAnalysisConditionalFormatCommand.Between)");
-        routeSource.Should().Contain("QuickAnalysisCommand.EqualTo => ConditionalFormat(QuickAnalysisConditionalFormatCommand.EqualTo)");
-        routeSource.Should().Contain("QuickAnalysisCommand.TextContains => ConditionalFormat(QuickAnalysisConditionalFormatCommand.TextContains)");
-        routeSource.Should().Contain("QuickAnalysisCommand.DateOccurring => ConditionalFormat(QuickAnalysisConditionalFormatCommand.DateOccurring)");
-        routeSource.Should().Contain("QuickAnalysisCommand.DuplicateValues => ConditionalFormat(QuickAnalysisConditionalFormatCommand.DuplicateValues)");
-        routeSource.Should().Contain("QuickAnalysisCommand.Top10Percent => ConditionalFormat(QuickAnalysisConditionalFormatCommand.Top10Percent)");
-        routeSource.Should().Contain("QuickAnalysisCommand.Bottom10 => ConditionalFormat(QuickAnalysisConditionalFormatCommand.Bottom10Items)");
-        routeSource.Should().Contain("QuickAnalysisCommand.Bottom10Percent => ConditionalFormat(QuickAnalysisConditionalFormatCommand.Bottom10Percent)");
-        routeSource.Should().Contain("QuickAnalysisCommand.AboveAverage => ConditionalFormat(QuickAnalysisConditionalFormatCommand.AboveAverage)");
-        routeSource.Should().Contain("QuickAnalysisCommand.BelowAverage => ConditionalFormat(QuickAnalysisConditionalFormatCommand.BelowAverage)");
+        routeSource.Should().Contain("return QuickAnalysisCatalog.Route(option.Command);");
+        catalogSource.Should().Contain("QuickAnalysisFormatKind.LessThan => QuickAnalysisConditionalFormatCommand.LessThan");
+        catalogSource.Should().Contain("QuickAnalysisFormatKind.Between => QuickAnalysisConditionalFormatCommand.Between");
+        catalogSource.Should().Contain("QuickAnalysisFormatKind.EqualTo => QuickAnalysisConditionalFormatCommand.EqualTo");
+        catalogSource.Should().Contain("QuickAnalysisFormatKind.TextContains => QuickAnalysisConditionalFormatCommand.TextContains");
+        catalogSource.Should().Contain("QuickAnalysisFormatKind.DateOccurring => QuickAnalysisConditionalFormatCommand.DateOccurring");
+        catalogSource.Should().Contain("QuickAnalysisFormatKind.DuplicateValues => QuickAnalysisConditionalFormatCommand.DuplicateValues");
+        catalogSource.Should().Contain("QuickAnalysisFormatKind.Top10Percent => QuickAnalysisConditionalFormatCommand.Top10Percent");
+        catalogSource.Should().Contain("QuickAnalysisFormatKind.Bottom10 => QuickAnalysisConditionalFormatCommand.Bottom10Items");
+        catalogSource.Should().Contain("QuickAnalysisFormatKind.Bottom10Percent => QuickAnalysisConditionalFormatCommand.Bottom10Percent");
+        catalogSource.Should().Contain("QuickAnalysisFormatKind.AboveAverage => QuickAnalysisConditionalFormatCommand.AboveAverage");
+        catalogSource.Should().Contain("QuickAnalysisFormatKind.BelowAverage => QuickAnalysisConditionalFormatCommand.BelowAverage");
     }
 
     [Fact]
     public void QuickAnalysisMenu_MoreChartsReusesInsertChartDialogPath()
     {
         var hostSource = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAnalysis.cs");
-        var routeSource = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisCommandRouter.cs");
+        var catalogSource = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisCatalog.cs");
 
         hostSource.Should().Contain("case QuickAnalysisCommandKind.MoreCharts:");
         hostSource.Should().Contain("InsertChartPickerBtn_Click(sender, e);");
-        routeSource.Should().Contain("QuickAnalysisCommand.MoreCharts => new(QuickAnalysisCommandKind.MoreCharts)");
+        catalogSource.Should().Contain("QuickAnalysisCommand.MoreCharts");
+        catalogSource.Should().Contain("new QuickAnalysisCommandRoute(QuickAnalysisCommandKind.MoreCharts)");
     }
 
     [Fact]
     public void QuickAnalysisMenu_RoutesExpandedTotalsGallery()
     {
         var hostSource = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAnalysis.cs");
-        var routeSource = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisCommandRouter.cs");
+        var catalogSource = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisCatalog.cs");
 
         hostSource.Should().Contain("QuickAnalysisTotalFormulaKind.PercentTotal");
         hostSource.Should().Contain("QuickAnalysisTotalFormulaKind.RunningTotal");
         hostSource.Should().Contain("QuickAnalysisTotalsPlanner.BuildPercentTotalEdits");
         hostSource.Should().Contain("QuickAnalysisTotalsPlanner.BuildRunningTotalEdits");
-        routeSource.Should().Contain("QuickAnalysisCommand.PercentTotal => new(QuickAnalysisCommandKind.InsertTotalFormula");
-        routeSource.Should().Contain("TotalFormulaKind: QuickAnalysisTotalFormulaKind.PercentTotal");
-        routeSource.Should().Contain("QuickAnalysisCommand.RunningTotal => new(QuickAnalysisCommandKind.InsertTotalFormula");
-        routeSource.Should().Contain("TotalFormulaKind: QuickAnalysisTotalFormulaKind.RunningTotal");
+        catalogSource.Should().Contain("QuickAnalysisCommand.PercentTotal");
+        catalogSource.Should().Contain("QuickAnalysisTotalFunction.PercentTotal");
+        catalogSource.Should().Contain("TotalFormulaKind: QuickAnalysisTotalFormulaKind.PercentTotal");
+        catalogSource.Should().Contain("QuickAnalysisCommand.RunningTotal");
+        catalogSource.Should().Contain("QuickAnalysisTotalFunction.RunningTotal");
+        catalogSource.Should().Contain("TotalFormulaKind: QuickAnalysisTotalFormulaKind.RunningTotal");
     }
 
     [Fact]

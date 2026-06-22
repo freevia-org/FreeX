@@ -52,29 +52,12 @@ public static class QuickAnalysisModelBuilder
         if (!selection.HasNumericColumn)
             return [];
 
-        return
-        [
-            QuickAnalysisSuggestion.Formatting(
-                "format.databars",
-                "Data Bars",
-                new QuickAnalysisConditionalFormatAction(QuickAnalysisFormatKind.DataBars, CfRuleType.DataBar)),
-            QuickAnalysisSuggestion.Formatting(
-                "format.colorscale",
-                "Color Scale",
-                new QuickAnalysisConditionalFormatAction(QuickAnalysisFormatKind.ColorScale, CfRuleType.ColorScale)),
-            QuickAnalysisSuggestion.Formatting(
-                "format.iconset",
-                "Icon Set",
-                new QuickAnalysisConditionalFormatAction(QuickAnalysisFormatKind.IconSet, CfRuleType.IconSet)),
-            QuickAnalysisSuggestion.Formatting(
-                "format.greaterthan",
-                "Greater Than",
-                new QuickAnalysisConditionalFormatAction(QuickAnalysisFormatKind.GreaterThan, CfRuleType.CellValue)),
-            QuickAnalysisSuggestion.Formatting(
-                "format.top10",
-                "Top 10%",
-                new QuickAnalysisConditionalFormatAction(QuickAnalysisFormatKind.Top10, CfRuleType.Top10))
-        ];
+        return QuickAnalysisCatalog.BuildSuggestions(
+            QuickAnalysisCommand.DataBar,
+            QuickAnalysisCommand.ColorScale,
+            QuickAnalysisCommand.IconSet,
+            QuickAnalysisCommand.GreaterThan,
+            QuickAnalysisCommand.Top10);
     }
 
     /// <summary>
@@ -86,29 +69,15 @@ public static class QuickAnalysisModelBuilder
         if (!selection.HasNumericColumn || !selection.HasDataRows)
             return [];
 
-        var suggestions = new List<QuickAnalysisSuggestion>(4)
-        {
-            QuickAnalysisSuggestion.ChartSuggestion(
-                "chart.clusteredcolumn",
-                "Clustered Column",
-                new QuickAnalysisChartAction(ChartType.Column)),
-            QuickAnalysisSuggestion.ChartSuggestion(
-                "chart.line",
-                "Line",
-                new QuickAnalysisChartAction(ChartType.Line)),
-            QuickAnalysisSuggestion.ChartSuggestion(
-                "chart.bar",
-                "Clustered Bar",
-                new QuickAnalysisChartAction(ChartType.Bar))
-        };
+        var suggestions = QuickAnalysisCatalog.BuildSuggestions(
+            QuickAnalysisCommand.ColumnChart,
+            QuickAnalysisCommand.LineChart,
+            QuickAnalysisCommand.BarChart).ToList();
 
         // A pie chart can only depict a single series, so offer it only for one numeric column.
         if (selection.NumericColumnCount == 1)
         {
-            suggestions.Add(QuickAnalysisSuggestion.ChartSuggestion(
-                "chart.pie",
-                "Pie",
-                new QuickAnalysisChartAction(ChartType.Pie)));
+            suggestions.Add(QuickAnalysisCatalog.BuildSuggestion("chart.pie"));
         }
 
         return suggestions;
@@ -124,40 +93,17 @@ public static class QuickAnalysisModelBuilder
         if (!selection.HasNumericColumn || !selection.HasDataRows)
             return [];
 
-        var suggestions = new List<QuickAnalysisSuggestion>
-        {
-            QuickAnalysisSuggestion.TotalSuggestion(
-                "total.sum",
-                "Sum",
-                new QuickAnalysisTotalAction(QuickAnalysisTotalFunction.Sum, QuickAnalysisTotalOrientation.Column)),
-            QuickAnalysisSuggestion.TotalSuggestion(
-                "total.average",
-                "Average",
-                new QuickAnalysisTotalAction(QuickAnalysisTotalFunction.Average, QuickAnalysisTotalOrientation.Column)),
-            QuickAnalysisSuggestion.TotalSuggestion(
-                "total.count",
-                "Count",
-                new QuickAnalysisTotalAction(QuickAnalysisTotalFunction.Count, QuickAnalysisTotalOrientation.Column)),
-            QuickAnalysisSuggestion.TotalSuggestion(
-                "total.percenttotal",
-                "% Total",
-                new QuickAnalysisTotalAction(QuickAnalysisTotalFunction.PercentTotal, QuickAnalysisTotalOrientation.Column)),
-            QuickAnalysisSuggestion.TotalSuggestion(
-                "total.runningtotal",
-                "Running Total",
-                new QuickAnalysisTotalAction(QuickAnalysisTotalFunction.RunningTotal, QuickAnalysisTotalOrientation.Column))
-        };
+        var suggestions = QuickAnalysisCatalog.BuildSuggestions(
+            QuickAnalysisCommand.Sum,
+            QuickAnalysisCommand.Average,
+            QuickAnalysisCommand.Count,
+            QuickAnalysisCommand.PercentTotal,
+            QuickAnalysisCommand.RunningTotal).ToList();
 
         if (selection.NumericColumnCount > 1)
         {
-            suggestions.Add(QuickAnalysisSuggestion.TotalSuggestion(
-                "total.sum.row",
-                "Sum (column)",
-                new QuickAnalysisTotalAction(QuickAnalysisTotalFunction.Sum, QuickAnalysisTotalOrientation.Row)));
-            suggestions.Add(QuickAnalysisSuggestion.TotalSuggestion(
-                "total.average.row",
-                "Average (column)",
-                new QuickAnalysisTotalAction(QuickAnalysisTotalFunction.Average, QuickAnalysisTotalOrientation.Row)));
+            suggestions.Add(QuickAnalysisCatalog.BuildSuggestion("total.sum.row"));
+            suggestions.Add(QuickAnalysisCatalog.BuildSuggestion("total.average.row"));
         }
 
         return suggestions;
@@ -173,20 +119,11 @@ public static class QuickAnalysisModelBuilder
         if (!looksTabular)
             return [];
 
-        var suggestions = new List<QuickAnalysisSuggestion>(2)
-        {
-            QuickAnalysisSuggestion.TableSuggestion(
-                "table.table",
-                "Table",
-                new QuickAnalysisTableAction(QuickAnalysisTableKind.Table))
-        };
+        var suggestions = QuickAnalysisCatalog.BuildSuggestions(QuickAnalysisCommand.FormatAsTable).ToList();
 
         if (selection.HasHeaderRow)
         {
-            suggestions.Add(QuickAnalysisSuggestion.TableSuggestion(
-                "table.pivottable",
-                "PivotTable",
-                new QuickAnalysisTableAction(QuickAnalysisTableKind.PivotTable)));
+            suggestions.Add(QuickAnalysisCatalog.BuildSuggestion("table.pivottable"));
         }
 
         return suggestions;
@@ -201,20 +138,9 @@ public static class QuickAnalysisModelBuilder
         if (!selection.HasNumericColumn || !selection.HasDataRows || selection.NumericColumnCount < 2)
             return [];
 
-        return
-        [
-            QuickAnalysisSuggestion.SparklineSuggestion(
-                "sparkline.line",
-                "Line",
-                new QuickAnalysisSparklineAction(QuickAnalysisSparklineKind.Line)),
-            QuickAnalysisSuggestion.SparklineSuggestion(
-                "sparkline.column",
-                "Column",
-                new QuickAnalysisSparklineAction(QuickAnalysisSparklineKind.Column)),
-            QuickAnalysisSuggestion.SparklineSuggestion(
-                "sparkline.winloss",
-                "Win/Loss",
-                new QuickAnalysisSparklineAction(QuickAnalysisSparklineKind.WinLoss))
-        ];
+        return QuickAnalysisCatalog.BuildSuggestions(
+            QuickAnalysisCommand.LineSparkline,
+            QuickAnalysisCommand.ColumnSparkline,
+            QuickAnalysisCommand.WinLossSparkline);
     }
 }

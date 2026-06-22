@@ -97,57 +97,7 @@ public static class QuickAnalysisCommandRouter
     {
         ArgumentNullException.ThrowIfNull(option);
 
-        return option.Command switch
-        {
-            QuickAnalysisCommand.DataBar => ConditionalFormat(QuickAnalysisConditionalFormatCommand.DataBar),
-            QuickAnalysisCommand.ColorScale => ConditionalFormat(QuickAnalysisConditionalFormatCommand.ColorScale),
-            QuickAnalysisCommand.IconSet => ConditionalFormat(QuickAnalysisConditionalFormatCommand.IconSet),
-            QuickAnalysisCommand.GreaterThan => ConditionalFormat(QuickAnalysisConditionalFormatCommand.GreaterThan),
-            QuickAnalysisCommand.LessThan => ConditionalFormat(QuickAnalysisConditionalFormatCommand.LessThan),
-            QuickAnalysisCommand.Between => ConditionalFormat(QuickAnalysisConditionalFormatCommand.Between),
-            QuickAnalysisCommand.EqualTo => ConditionalFormat(QuickAnalysisConditionalFormatCommand.EqualTo),
-            QuickAnalysisCommand.TextContains => ConditionalFormat(QuickAnalysisConditionalFormatCommand.TextContains),
-            QuickAnalysisCommand.DateOccurring => ConditionalFormat(QuickAnalysisConditionalFormatCommand.DateOccurring),
-            QuickAnalysisCommand.DuplicateValues => ConditionalFormat(QuickAnalysisConditionalFormatCommand.DuplicateValues),
-            QuickAnalysisCommand.Top10 => ConditionalFormat(QuickAnalysisConditionalFormatCommand.Top10Items),
-            QuickAnalysisCommand.Top10Percent => ConditionalFormat(QuickAnalysisConditionalFormatCommand.Top10Percent),
-            QuickAnalysisCommand.Bottom10 => ConditionalFormat(QuickAnalysisConditionalFormatCommand.Bottom10Items),
-            QuickAnalysisCommand.Bottom10Percent => ConditionalFormat(QuickAnalysisConditionalFormatCommand.Bottom10Percent),
-            QuickAnalysisCommand.AboveAverage => ConditionalFormat(QuickAnalysisConditionalFormatCommand.AboveAverage),
-            QuickAnalysisCommand.BelowAverage => ConditionalFormat(QuickAnalysisConditionalFormatCommand.BelowAverage),
-            QuickAnalysisCommand.ClearConditionalFormatting => new(QuickAnalysisCommandKind.ClearConditionalFormatting),
-
-            QuickAnalysisCommand.ColumnChart => Chart(ChartType.Column),
-            QuickAnalysisCommand.StackedColumnChart => Chart(ChartType.StackedColumn),
-            QuickAnalysisCommand.PercentStackedColumnChart => Chart(ChartType.PercentStackedColumn),
-            QuickAnalysisCommand.LineChart => Chart(ChartType.Line),
-            QuickAnalysisCommand.PieChart => Chart(ChartType.Pie),
-            QuickAnalysisCommand.DoughnutChart => Chart(ChartType.Doughnut),
-            QuickAnalysisCommand.BarChart => Chart(ChartType.Bar),
-            QuickAnalysisCommand.StackedBarChart => Chart(ChartType.StackedBar),
-            QuickAnalysisCommand.PercentStackedBarChart => Chart(ChartType.PercentStackedBar),
-            QuickAnalysisCommand.AreaChart => Chart(ChartType.Area),
-            QuickAnalysisCommand.ScatterChart => Chart(ChartType.Scatter),
-            QuickAnalysisCommand.BubbleChart => Chart(ChartType.Bubble),
-            QuickAnalysisCommand.RadarChart => Chart(ChartType.Radar),
-            QuickAnalysisCommand.StockChart => Chart(ChartType.Stock),
-            QuickAnalysisCommand.MoreCharts => new(QuickAnalysisCommandKind.MoreCharts),
-
-            QuickAnalysisCommand.Sum => Aggregate("SUM"),
-            QuickAnalysisCommand.Average => Aggregate("AVERAGE"),
-            QuickAnalysisCommand.Count => Aggregate("COUNT"),
-            QuickAnalysisCommand.PercentTotal => new(QuickAnalysisCommandKind.InsertTotalFormula, TotalFormulaKind: QuickAnalysisTotalFormulaKind.PercentTotal),
-            QuickAnalysisCommand.RunningTotal => new(QuickAnalysisCommandKind.InsertTotalFormula, TotalFormulaKind: QuickAnalysisTotalFormulaKind.RunningTotal),
-            QuickAnalysisCommand.Max => Aggregate("MAX"),
-            QuickAnalysisCommand.Min => Aggregate("MIN"),
-
-            QuickAnalysisCommand.FormatAsTable => new(QuickAnalysisCommandKind.Table),
-            QuickAnalysisCommand.PivotTable => new(QuickAnalysisCommandKind.PivotTable),
-            QuickAnalysisCommand.LineSparkline => Sparkline(SparklineKind.Line),
-            QuickAnalysisCommand.ColumnSparkline => Sparkline(SparklineKind.Column),
-            QuickAnalysisCommand.WinLossSparkline => Sparkline(SparklineKind.WinLoss),
-            _ => Deferred("This Quick Analysis command is not available."),
-        };
+        return QuickAnalysisCatalog.Route(option.Command);
     }
 
     private static QuickAnalysisCommandRoute RouteFormatting(QuickAnalysisSuggestion suggestion)
@@ -161,7 +111,18 @@ public static class QuickAnalysisCommandRouter
             QuickAnalysisFormatKind.ColorScale => QuickAnalysisConditionalFormatCommand.ColorScale,
             QuickAnalysisFormatKind.IconSet => QuickAnalysisConditionalFormatCommand.IconSet,
             QuickAnalysisFormatKind.GreaterThan => QuickAnalysisConditionalFormatCommand.GreaterThan,
+            QuickAnalysisFormatKind.LessThan => QuickAnalysisConditionalFormatCommand.LessThan,
+            QuickAnalysisFormatKind.Between => QuickAnalysisConditionalFormatCommand.Between,
+            QuickAnalysisFormatKind.EqualTo => QuickAnalysisConditionalFormatCommand.EqualTo,
+            QuickAnalysisFormatKind.TextContains => QuickAnalysisConditionalFormatCommand.TextContains,
+            QuickAnalysisFormatKind.DateOccurring => QuickAnalysisConditionalFormatCommand.DateOccurring,
+            QuickAnalysisFormatKind.DuplicateValues => QuickAnalysisConditionalFormatCommand.DuplicateValues,
             QuickAnalysisFormatKind.Top10 => QuickAnalysisConditionalFormatCommand.Top10Items,
+            QuickAnalysisFormatKind.Top10Percent => QuickAnalysisConditionalFormatCommand.Top10Percent,
+            QuickAnalysisFormatKind.Bottom10 => QuickAnalysisConditionalFormatCommand.Bottom10Items,
+            QuickAnalysisFormatKind.Bottom10Percent => QuickAnalysisConditionalFormatCommand.Bottom10Percent,
+            QuickAnalysisFormatKind.AboveAverage => QuickAnalysisConditionalFormatCommand.AboveAverage,
+            QuickAnalysisFormatKind.BelowAverage => QuickAnalysisConditionalFormatCommand.BelowAverage,
             _ => QuickAnalysisConditionalFormatCommand.DataBar,
         });
     }
@@ -178,6 +139,8 @@ public static class QuickAnalysisCommandRouter
             QuickAnalysisTotalFunction.Count => Aggregate("COUNT"),
             QuickAnalysisTotalFunction.PercentTotal => new(QuickAnalysisCommandKind.InsertTotalFormula, TotalFormulaKind: QuickAnalysisTotalFormulaKind.PercentTotal),
             QuickAnalysisTotalFunction.RunningTotal => new(QuickAnalysisCommandKind.InsertTotalFormula, TotalFormulaKind: QuickAnalysisTotalFormulaKind.RunningTotal),
+            QuickAnalysisTotalFunction.Max => Aggregate("MAX"),
+            QuickAnalysisTotalFunction.Min => Aggregate("MIN"),
             _ => Deferred("This total is not available."),
         };
     }
