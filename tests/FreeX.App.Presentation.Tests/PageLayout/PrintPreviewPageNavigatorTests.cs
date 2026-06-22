@@ -96,4 +96,32 @@ public sealed class PrintPreviewPageNavigatorTests
         nav.Next().CurrentIndex.Should().Be(0);
         nav.Previous().CurrentIndex.Should().Be(0);
     }
+
+    [Theory]
+    [InlineData(1, 3, 1, 3, false, false, true, true, "Page 1 of 3")]
+    [InlineData(2, 3, 2, 3, true, true, true, true, "Page 2 of 3")]
+    [InlineData(3, 3, 3, 3, true, true, false, false, "Page 3 of 3")]
+    [InlineData(0, 0, 1, 1, false, false, false, false, "Page 1 of 1")]
+    [InlineData(5, 3, 3, 3, true, true, false, false, "Page 3 of 3")]
+    public void NavigationState_NormalizesPageStatusAndButtonStates(
+        int currentPage,
+        int totalPages,
+        int expectedCurrentPage,
+        int expectedTotalPages,
+        bool canGoFirst,
+        bool canGoPrevious,
+        bool canGoNext,
+        bool canGoLast,
+        string statusText)
+    {
+        var state = PrintPreviewNavigationState.Create(currentPage, totalPages);
+
+        state.CurrentPage.Should().Be(expectedCurrentPage);
+        state.TotalPages.Should().Be(expectedTotalPages);
+        state.CanGoFirst.Should().Be(canGoFirst);
+        state.CanGoPrevious.Should().Be(canGoPrevious);
+        state.CanGoNext.Should().Be(canGoNext);
+        state.CanGoLast.Should().Be(canGoLast);
+        state.StatusText.Should().Be(statusText);
+    }
 }

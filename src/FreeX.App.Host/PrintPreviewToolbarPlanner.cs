@@ -1,25 +1,14 @@
 using System.Globalization;
 using System.Printing;
 using System.Windows.Documents;
+using FreeX.App.Presentation.PageLayout;
 
 namespace FreeX.App.Host;
 
 internal static class PrintPreviewToolbarPlanner
 {
     public static PrintPreviewNavigationState CreateNavigationState(int currentPage, int totalPages)
-    {
-        var normalizedTotalPages = Math.Max(1, totalPages);
-        var normalizedCurrentPage = Math.Clamp(currentPage, 1, normalizedTotalPages);
-
-        return new PrintPreviewNavigationState(
-            normalizedCurrentPage,
-            normalizedTotalPages,
-            CanGoFirst: normalizedCurrentPage > 1,
-            CanGoPrevious: normalizedCurrentPage > 1,
-            CanGoNext: normalizedCurrentPage < normalizedTotalPages,
-            CanGoLast: normalizedCurrentPage < normalizedTotalPages,
-            StatusText: $"Page {normalizedCurrentPage.ToString(CultureInfo.InvariantCulture)} of {normalizedTotalPages.ToString(CultureInfo.InvariantCulture)}");
-    }
+        => PrintPreviewNavigationState.Create(currentPage, totalPages);
 
     public static DocumentPaginator ResolvePrintPaginator(
         FixedDocument document,
@@ -69,11 +58,3 @@ internal static class PrintPreviewToolbarPlanner
     }
 }
 
-internal sealed record PrintPreviewNavigationState(
-    int CurrentPage,
-    int TotalPages,
-    bool CanGoFirst,
-    bool CanGoPrevious,
-    bool CanGoNext,
-    bool CanGoLast,
-    string StatusText);

@@ -5,6 +5,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
+using FreeX.App.Presentation.PageLayout;
 
 namespace FreeX.App.Host;
 
