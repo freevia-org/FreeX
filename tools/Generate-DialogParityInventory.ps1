@@ -316,6 +316,7 @@ $routes = @(
     @{
         RouteId = "dialog.SelectDataSource"; DisplayName = "Select Data Source"
         Wpf = @("screenshots\chart-data-layout-tour\freex_chart_data_layout_select_data_dialog.png", "screenshots\chart-object-selection-tour\freex_chart_object_selection_select_data_dialog.png")
+        Shared = @("src\FreeX.Core.Commands\ChartCommands.Mutate.cs", "src\FreeX.App.Presentation\Charts\*.cs")
     },
     @{
         RouteId = "dialog.FormatChartArea"; DisplayName = "Format Chart Area"
@@ -350,6 +351,7 @@ $routes = @(
     @{
         RouteId = "dialog.Zoom"; DisplayName = "Zoom"
         Wpf = @("screenshots\view-panes-zoom-tour\freex_view_panes_zoom_dialog_custom_125.png", "screenshots\status-footer-interactions-tour\freex_status_footer_interactions_zoom_dialog_*.png", "tools\foreground-captures\freex-status-zoom-text-dialog-click\*.png")
+        Shared = @("src\FreeX.App.Services\ZoomLevelMapper.cs", "src\FreeX.App.Services\WorkbookSession.cs")
     },
     @{
         RouteId = "dialog.CustomViews"; DisplayName = "Custom Views"
@@ -375,6 +377,7 @@ $routes = @(
     @{
         RouteId = "dialog.AccessibilityChecker"; DisplayName = "Accessibility Checker"
         Wpf = @("screenshots\review-comments-protection-tour\freex_review_accessibility_checker_dialog.png")
+        Shared = @("src\FreeX.Core.Commands\AccessibilityCheckerService*.cs", "src\FreeX.App.Services\ReviewWorkflowPlanner.cs")
     },
     @{
         RouteId = "dialog.AllowEditRanges"; DisplayName = "Allow Edit Ranges"

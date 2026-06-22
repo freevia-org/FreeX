@@ -135,6 +135,9 @@ public sealed partial class MainWindow
         ("dialog.UnhideSheet", () => ShowUnhideSheetParityDialogAsync()),
         ("dialog.About", () => ShowAboutDialogAsync()),
         ("dialog.LegalNotices", () => ShowLegalNoticesDialogAsync()),
+        ("dialog.SelectDataSource", () => ShowSelectDataSourceParityDialogAsync()),
+        ("dialog.Zoom", () => ShowZoomDialogAsync()),
+        ("dialog.AccessibilityChecker", () => ShowReviewSummaryDialogAsync(focusAccessibility: true)),
         ("dialog.DataValidation", () => ShowDataValidationDialogAsync()),
         ("dialog.ConditionalFormatNewRule", () => ShowConditionalFormatNewRuleDialogAsync()),
         ("dialog.ConditionalFormatManage", () => ShowManageConditionalFormatsDialogAsync()),
@@ -290,6 +293,9 @@ public sealed partial class MainWindow
 
     private async Task ShowUnhideSheetParityDialogAsync() =>
         await ShowUnhideSheetDialogAsync([new WorkbookHiddenSheet(_session.ActiveSheet.Id, "Archive")]);
+
+    private async Task ShowSelectDataSourceParityDialogAsync() =>
+        await ShowSelectDataDialogAsync("Sheet1!$A$1:$D$4", firstColumnIsCategories: true);
 
     private async Task ShowWithParitySelectionAsync(
         CellAddress start,

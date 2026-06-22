@@ -237,7 +237,13 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get("ChartLoc_SelectDataSourceTitle"),
-            SizeToContent = SizeToContent.WidthAndHeight,
+            Width = 360,
+            Height = 190,
+            MinWidth = 360,
+            MinHeight = 190,
+            MaxWidth = 360,
+            MaxHeight = 190,
+            Background = Brushes.White,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
