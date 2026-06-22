@@ -277,6 +277,7 @@ public sealed class RibbonAdaptiveLayoutEngineTests
             source.IndexOf("public static IReadOnlyList<double> BuildResizeThresholds", StringComparison.Ordinal) - planStart);
 
         method.Should().Contain("ApplyPlanOverridesInPlace(");
+        method.Should().Contain("Free.Shared.Ribbon.RibbonAdaptiveLayoutPlanner.Plan(");
         method.Should().NotContain("ApplyBreakpointOverrides(");
         method.Should().NotContain("ApplyRuntimePriorityStates(");
         method.Should().NotContain("ApplyRuntimeVisibilityStates(");

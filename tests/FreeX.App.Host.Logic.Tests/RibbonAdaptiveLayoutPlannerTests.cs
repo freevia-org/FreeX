@@ -95,7 +95,11 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
     [Fact]
     public void Plan_SourceAvoidsLinqScaffoldingOnRepeatedFitChecks()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("RibbonAdaptiveLayoutPlanner.cs");
+        var source = WorkspaceFileLocator.ReadAllText(
+            "shared",
+            "Free.Shared.Ribbon",
+            "Layout",
+            "RibbonAdaptiveLayoutPlanner.cs");
         source.Should().Contain("Array.Fill(states, RibbonAdaptiveGroupState.Full)");
         source.Should().Contain("TryFallbackNextGroup(states, groups, ref width)");
         source.Should().Contain("targetWidth >= currentWidth - 0.5");
@@ -139,7 +143,7 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
     [Fact]
     public void ApplyBreakpointOverrides_CollapsesAllGroupsAtVeryNarrowWidths()
     {
-        var states = RibbonAdaptiveLayoutPlanner.ApplyBreakpointOverrides(
+        var states = RibbonAdaptiveTabProfiles.ApplyBreakpointOverrides(
             700,
             ["Clipboard", "Font", "Alignment"],
             [RibbonAdaptiveGroupState.Full, RibbonAdaptiveGroupState.Full, RibbonAdaptiveGroupState.IconOnly]);
@@ -153,7 +157,7 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
     [Fact]
     public void ApplyBreakpointOverrides_AppliesHomeTabExcelLikeBreakpoints()
     {
-        var states = RibbonAdaptiveLayoutPlanner.ApplyBreakpointOverrides(
+        var states = RibbonAdaptiveTabProfiles.ApplyBreakpointOverrides(
             1120,
             ["Clipboard", "Font", "Alignment", "Number", "Styles", "Cells", "Editing"],
             Enumerable.Repeat(RibbonAdaptiveGroupState.Full, 7).ToArray());
@@ -171,7 +175,7 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
     [Fact]
     public void ApplyBreakpointOverrides_KeepsHomeCellsBeforeEditingAtWideWidths()
     {
-        var states = RibbonAdaptiveLayoutPlanner.ApplyBreakpointOverrides(
+        var states = RibbonAdaptiveTabProfiles.ApplyBreakpointOverrides(
             1366,
             ["Clipboard", "Font", "Alignment", "Number", "Styles", "Cells", "Editing"],
             Enumerable.Repeat(RibbonAdaptiveGroupState.Full, 7).ToArray());
@@ -183,7 +187,7 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
     [Fact]
     public void ApplyBreakpointOverrides_KeepsFormulasFunctionLibraryExpandedAtNormalWideWidths()
     {
-        var states = RibbonAdaptiveLayoutPlanner.ApplyBreakpointOverrides(
+        var states = RibbonAdaptiveTabProfiles.ApplyBreakpointOverrides(
             1120,
             ["Function Library", "Defined Names", "Formula Auditing", "Calculation"],
             Enumerable.Repeat(RibbonAdaptiveGroupState.Full, 4).ToArray());
@@ -198,7 +202,7 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
     [Fact]
     public void ApplyBreakpointOverrides_KeepsInsertTablesVisibleAtNormalNarrowWidths()
     {
-        var states = RibbonAdaptiveLayoutPlanner.ApplyBreakpointOverrides(
+        var states = RibbonAdaptiveTabProfiles.ApplyBreakpointOverrides(
             1120,
             ["Tables", "Charts", "Sparklines", "Filters", "Links", "Text", "Symbols", "Comments"],
             Enumerable.Repeat(RibbonAdaptiveGroupState.Full, 8).ToArray());
@@ -218,7 +222,7 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
     public void ApplyBreakpointOverrides_KeepsInsertChartsBeforeUtilityGroups()
     {
         var groupNames = new[] { "Tables", "Charts", "Sparklines", "Filters", "Links", "Text", "Symbols", "Comments" };
-        var states = RibbonAdaptiveLayoutPlanner.ApplyBreakpointOverrides(
+        var states = RibbonAdaptiveTabProfiles.ApplyBreakpointOverrides(
             1320,
             groupNames,
             Enumerable.Repeat(RibbonAdaptiveGroupState.Full, groupNames.Length).ToArray());
@@ -232,7 +236,7 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
     public void ApplyBreakpointOverrides_KeepsPageSetupBeforeThemesAtMediumWidths()
     {
         var groupNames = new[] { "Themes", "Page Setup", "Scale to Fit", "Sheet Options" };
-        var states = RibbonAdaptiveLayoutPlanner.ApplyBreakpointOverrides(
+        var states = RibbonAdaptiveTabProfiles.ApplyBreakpointOverrides(
             1120,
             groupNames,
             Enumerable.Repeat(RibbonAdaptiveGroupState.Full, groupNames.Length).ToArray());
@@ -245,7 +249,7 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
     public void ApplyBreakpointOverrides_RecognizesPageLayoutProfileWhenSheetOptionsAreAbsent()
     {
         var groupNames = new[] { "Themes", "Page Setup", "Scale to Fit" };
-        var states = RibbonAdaptiveLayoutPlanner.ApplyBreakpointOverrides(
+        var states = RibbonAdaptiveTabProfiles.ApplyBreakpointOverrides(
             1120,
             groupNames,
             Enumerable.Repeat(RibbonAdaptiveGroupState.Collapsed, groupNames.Length).ToArray());
@@ -260,7 +264,7 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
     public void ApplyBreakpointOverrides_RestoresPageSetupAfterPlannerCollapse()
     {
         var groupNames = new[] { "Themes", "Page Setup", "Scale to Fit", "Sheet Options" };
-        var states = RibbonAdaptiveLayoutPlanner.ApplyBreakpointOverrides(
+        var states = RibbonAdaptiveTabProfiles.ApplyBreakpointOverrides(
             900,
             groupNames,
             Enumerable.Repeat(RibbonAdaptiveGroupState.Collapsed, groupNames.Length).ToArray());
@@ -275,7 +279,7 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
     public void ApplyBreakpointOverrides_KeepsDataSortAndFilterBeforeConnectionsAtMediumWidths()
     {
         var groupNames = new[] { "Get & Transform Data", "Queries & Connections", "Sort & Filter", "Data Tools", "Forecast", "Outline" };
-        var states = RibbonAdaptiveLayoutPlanner.ApplyBreakpointOverrides(
+        var states = RibbonAdaptiveTabProfiles.ApplyBreakpointOverrides(
             1120,
             groupNames,
             Enumerable.Repeat(RibbonAdaptiveGroupState.Full, groupNames.Length).ToArray());
@@ -301,7 +305,7 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
     public void ApplyBreakpointOverrides_KeepsReviewAccessibilityVisibleAtMediumWidths()
     {
         var groupNames = new[] { "Proofing", "Accessibility", "Comments", "Notes", "Protect" };
-        var states = RibbonAdaptiveLayoutPlanner.ApplyBreakpointOverrides(
+        var states = RibbonAdaptiveTabProfiles.ApplyBreakpointOverrides(
             1120,
             groupNames,
             Enumerable.Repeat(RibbonAdaptiveGroupState.Full, groupNames.Length).ToArray());
@@ -317,7 +321,7 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
     public void ApplyBreakpointOverrides_RestoresViewShowWithPriorityGroupsAfterPlannerCollapse()
     {
         var groupNames = new[] { "Workbook Views", "Show", "Zoom", "Window" };
-        var states = RibbonAdaptiveLayoutPlanner.ApplyBreakpointOverrides(
+        var states = RibbonAdaptiveTabProfiles.ApplyBreakpointOverrides(
             1366,
             groupNames,
             Enumerable.Repeat(RibbonAdaptiveGroupState.Collapsed, groupNames.Length).ToArray());
@@ -335,7 +339,7 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
         string[] groupNames,
         int firstCollapsedIndex)
     {
-        var states = RibbonAdaptiveLayoutPlanner.ApplyBreakpointOverrides(
+        var states = RibbonAdaptiveTabProfiles.ApplyBreakpointOverrides(
             availableWidth,
             groupNames,
             Enumerable.Repeat(RibbonAdaptiveGroupState.Full, groupNames.Length).ToArray());
@@ -348,7 +352,7 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
     public void ApplyBreakpointOverrides_KeepsViewShowWithZoomAndWindowAtMediumWidths()
     {
         var groupNames = new[] { "Workbook Views", "Show", "Zoom", "Window" };
-        var states = RibbonAdaptiveLayoutPlanner.ApplyBreakpointOverrides(
+        var states = RibbonAdaptiveTabProfiles.ApplyBreakpointOverrides(
             1120,
             groupNames,
             Enumerable.Repeat(RibbonAdaptiveGroupState.Collapsed, groupNames.Length).ToArray());
@@ -367,7 +371,7 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
     {
         var groupNames = groupNameList.Split('|');
 
-        var states = RibbonAdaptiveLayoutPlanner.ApplyBreakpointOverrides(
+        var states = RibbonAdaptiveTabProfiles.ApplyBreakpointOverrides(
             1120,
             groupNames,
             Enumerable.Repeat(RibbonAdaptiveGroupState.Full, groupNames.Length).ToArray());
@@ -378,7 +382,7 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
     [Fact]
     public void ApplyBreakpointOverrides_AppliesGenericCollapseFromRules()
     {
-        var states = RibbonAdaptiveLayoutPlanner.ApplyBreakpointOverrides(
+        var states = RibbonAdaptiveTabProfiles.ApplyBreakpointOverrides(
             1120,
             ["Review", "Comments", "Protect"],
             Enumerable.Repeat(RibbonAdaptiveGroupState.Full, 3).ToArray());
