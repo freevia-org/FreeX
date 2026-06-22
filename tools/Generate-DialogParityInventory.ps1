@@ -250,6 +250,7 @@ $routes = @(
     @{
         RouteId = "dialog.InsertHyperlink"; DisplayName = "Insert Hyperlink"
         Wpf = @("screenshots\insert-objects-links-tour\freex_insert_hyperlink_dialog_address_focus.png")
+        Shared = @("src\FreeX.App.Services\HyperlinkDialogPlanner.cs", "src\FreeX.App.Services\WorkbookSession.cs")
     },
     @{
         RouteId = "dialog.SymbolPicker"; DisplayName = "Symbol Picker"
@@ -266,6 +267,7 @@ $routes = @(
     @{
         RouteId = "dialog.WatchWindow"; DisplayName = "Watch Window"
         Wpf = @("screenshots\formula-diagnostics-tour\freex_formula_diagnostics_watch_window_*.png")
+        Shared = @("src\FreeX.Core.Commands\WatchWindowService.cs")
     },
     @{
         RouteId = "dialog.AddWatch"; DisplayName = "Add Watch"
@@ -392,22 +394,27 @@ $routes = @(
     @{
         RouteId = "dialog.WorkbookStatistics"; DisplayName = "Workbook Statistics"
         Wpf = @("screenshots\review-stats-share-tour\freex_review_workbook_statistics_dialog.png")
+        Shared = @("src\FreeX.Core.Commands\WorkbookStatisticsService.cs", "src\FreeX.App.Services\WorkbookStatisticsFormatter.cs")
     },
     @{
         RouteId = "dialog.RenameSheet"; DisplayName = "Rename Sheet"
         Wpf = @("screenshots\sheet-tabs-tour\freex_sheet_tabs_rename_dialog_opened.png")
+        Shared = @("src\FreeX.App.Services\WorkbookSession.cs")
     },
     @{
         RouteId = "dialog.UnhideSheet"; DisplayName = "Unhide Sheet"
         Wpf = @("screenshots\sheet-tabs-tour\freex_sheet_tabs_unhide_dialog_opened.png")
+        Shared = @("src\FreeX.App.Services\WorkbookSheetSelectionService.cs", "src\FreeX.App.Services\WorkbookSession.cs")
     },
     @{
         RouteId = "dialog.About"; DisplayName = "About"
         Wpf = @("screenshots\help-about-legal-tour\freex_about_dialog.png")
+        Shared = @("src\FreeX.App.Services\AppHelpInfo.cs")
     },
     @{
         RouteId = "dialog.LegalNotices"; DisplayName = "Legal Notices"
         Wpf = @("screenshots\help-about-legal-tour\freex_legal_notices_dialog.png")
+        Shared = @("src\FreeX.App.Services\LegalNoticeProvider.cs")
     }
 )
 
