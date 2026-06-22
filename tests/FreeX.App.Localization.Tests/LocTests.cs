@@ -42,6 +42,15 @@ public sealed class LocTests
     }
 
     [Fact]
+    public void Get_NeutralCulture_UsesWindowsCustomViewsTableLabels()
+    {
+        WithUiCulture("en-US", () => Loc.Get("CustomViews_ListLabel")).Should().Be("Views");
+        WithUiCulture("en-US", () => Loc.Get("CustomViews_Sheets")).Should().Be("Sheets");
+        WithUiCulture("en-US", () => Loc.Get("CustomViews_Included")).Should().Be("Included");
+        WithUiCulture("en-US", () => Loc.Get("CustomViews_NotIncluded")).Should().Be("Not included");
+    }
+
+    [Fact]
     public void Get_FrenchCulture_ReturnsTranslation()
     {
         WithUiCulture("fr-FR", () => Loc.Get("Common_Cancel")).Should().Be("Annuler");
@@ -113,6 +122,7 @@ public sealed class LocTests
         keys.Should().Contain("Common_Cancel");
         keys.Should().Contain("PivotOptions_Title");
         keys.Should().Contain("ShapeGradient_GradientStopsGroup");
+        keys.Should().Contain("CustomViews_Sheets");
     }
 
     [Fact]

@@ -414,6 +414,10 @@ internal static class FreeWRibbon
                 {
                     g.MediumToggle("freew.read-aloud", "Read Aloud", RibbonCommandIconKind.ReadAloud);
                 });
+                tab.Group("accessibility", "Accessibility", "A", 92, g =>
+                {
+                    g.Medium("freew.check-accessibility", "Check Accessibility", RibbonCommandIconKind.Accessibility);
+                });
                 tab.Group("comments", "Comments", "C", 95, g =>
                 {
                     // Thread actions mirror Word's Review > Comments group and stay labelled at narrow widths.
@@ -428,18 +432,25 @@ internal static class FreeWRibbon
                 tab.Group("tracking", "Tracking", "G", 90, g =>
                 {
                     // Track Changes is the big toggle; the Reviewing Pane toggle opens the dockable revisions
-                    // list. Accept/Reject read as labelled Medium rows (the All variants resolve everything).
+                    // list. Accept/Reject live in Changes, mirroring Word's group geography.
                     g.MediumToggle("freew.track-changes", "Track Changes", RibbonCommandIconKind.History);
                     g.MediumToggle("freew.reviewing-pane", "Reviewing Pane", RibbonCommandIconKind.History);
-                    g.Medium("freew.accept-all", "Accept All", RibbonCommandIconKind.AcceptChange);
-                    g.Medium("freew.reject-all", "Reject All", RibbonCommandIconKind.RejectChange);
                 });
-                // Changes group: act on ONE revision at a time. Accept/Reject the selected change in the
-                // Reviewing Pane, and step Previous/Next through the document's tracked changes.
+                // Changes group: Accept/Reject expose the current-change action plus the all-changes
+                // variants through Word-style dropdowns, followed by Previous/Next navigation.
                 tab.Group("changes", "Changes", "H", 88, g =>
                 {
-                    g.Medium("freew.accept-this", "Accept", RibbonCommandIconKind.AcceptChange);
-                    g.Medium("freew.reject-this", "Reject", RibbonCommandIconKind.RejectChange);
+                    g.Medium("freew.accept-this", "Accept", RibbonCommandIconKind.AcceptChange, "A", menu: m =>
+                    {
+                        m.Item("freew.accept-this", "Accept This Change", "A");
+                        m.Item("freew.accept-all", "Accept All Changes", "L");
+                    });
+                    g.Medium("freew.reject-this", "Reject", RibbonCommandIconKind.RejectChange, "J", menu: m =>
+                    {
+                        m.Item("freew.reject-this", "Reject This Change", "R");
+                        m.Item("freew.reject-all", "Reject All Changes", "L");
+                    });
+                    g.RowBreak();
                     g.Medium("freew.previous-change", "Previous", RibbonCommandIconKind.History);
                     g.Medium("freew.next-change", "Next", RibbonCommandIconKind.History);
                 });
@@ -458,9 +469,7 @@ internal static class FreeWRibbon
                 });
                 tab.Group("inspect", "Inspect", "I", 75, g =>
                 {
-                    // Two commands → labelled Medium buttons.
                     g.Medium("freew.inspect-document", "Inspect Document", RibbonCommandIconKind.Search);
-                    g.Medium("freew.check-accessibility", "Check Accessibility", RibbonCommandIconKind.Accessibility);
                 });
             })
             .Tab("developer", "Developer", "D", tab =>

@@ -13,7 +13,6 @@ using Free.Shared.Ribbon.Avalonia;
 using FreeX.App.Avalonia.Pivot;
 using FreeX.App.Avalonia.Ribbon;
 using FreeX.App.Presentation.Backstage;
-using FreeX.App.Presentation.CustomViews;
 using FreeX.App.Presentation.PivotUI;
 using FreeX.App.Services;
 using FreeX.Core.Calc;
@@ -537,16 +536,7 @@ public sealed partial class MainWindow
 
     private async Task ShowCustomViewsParityDialogAsync()
     {
-        const string viewName = "Quarterly View";
-        if (!_session.Workbook.CustomViews.Any(view => string.Equals(view.Name, viewName, StringComparison.OrdinalIgnoreCase)))
-        {
-            _session.ExecuteReviewCommand(CustomViewsPlanner.BuildSaveCommand(
-                viewName,
-                includePrintSettings: true,
-                includeHiddenRowsColumnsAndFilterSettings: true));
-            RefreshShell(_statusText.Text ?? "Ready");
-        }
-
+        _session.Workbook.CustomViews.Clear();
         await ShowCustomViewsManagerDialogAsync();
     }
 
