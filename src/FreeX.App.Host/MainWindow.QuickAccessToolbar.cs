@@ -67,8 +67,8 @@ public partial class MainWindow
     // (style, glyph, size, hit-test-in-chrome, automation id/name — the construction FreeX and FreeW shared),
     // then layers FreeX-only decorations the renderer leaves to the host: the RibbonTooltip title/key-tip/
     // description, RibbonMetadata, the per-command customization context menu, and the sender/args click that
-    // forwards to ExecuteQuickAccessToolbarCommand. The QuickAccessToolbarCatalog (which commands + state)
-    // stays FreeX-side; only the button rendering goes through the shared helper.
+    // forwards to ExecuteQuickAccessToolbarCommand. The neutral QuickAccessToolbarCatalog and command state
+    // live in FreeX.App.Services.Ribbon; this WPF layer only renders and dispatches them.
     private Button CreateQuickAccessToolbarButton(
         QuickAccessToolbarCommandDefinition command,
         int visibleIndex,

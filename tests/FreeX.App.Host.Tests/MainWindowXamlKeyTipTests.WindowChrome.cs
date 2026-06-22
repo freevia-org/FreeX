@@ -43,7 +43,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     public void QuickAccessToolbar_BuildsPersistedCommandsWithKeyTipsAndSharedCommandRoutes()
     {
         var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
-        var catalogSource = DialogSourceTestSupport.ReadHostSources("QuickAccessToolbarCatalog.cs");
+        var catalogSource = DialogSourceTestSupport.ReadAppServicesRibbonSource("QuickAccessToolbarCatalog.cs");
         var qatSource = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAccessToolbar.cs");
         var keyTipSource = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyTips.cs");
         var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");

@@ -1,24 +1,24 @@
-namespace FreeX.App.Host;
+namespace FreeX.App.Services.Ribbon;
 
-internal enum QuickAccessToolbarCustomizationAction
+public enum QuickAccessToolbarCustomizationAction
 {
     Add,
     Remove
 }
 
-internal sealed record QuickAccessToolbarCustomizationPlan(
+public sealed record QuickAccessToolbarCustomizationPlan(
     string CommandId,
     QuickAccessToolbarCustomizationAction Action,
     bool IsEnabled,
     string HeaderResourceKey,
     string AutomationId);
 
-internal static class QuickAccessToolbarCustomizationPlanner
+public static class QuickAccessToolbarCustomizationPlanner
 {
-    public const string AddHeaderResourceKey = "MainWindow_QatContext_AddToQuickAccessToolbar";
-    public const string RemoveHeaderResourceKey = "MainWindow_QatContext_RemoveFromQuickAccessToolbar";
-    public const string AddAutomationId = "AddToQuickAccessToolbarMenuItem";
-    public const string RemoveAutomationId = "RemoveFromQuickAccessToolbarMenuItem";
+    public const string AddHeaderResourceKey = QuickAccessToolbarContextMenuPlanner.AddHeaderResourceKey;
+    public const string RemoveHeaderResourceKey = QuickAccessToolbarContextMenuPlanner.RemoveHeaderResourceKey;
+    public const string AddAutomationId = QuickAccessToolbarContextMenuPlanner.AddAutomationId;
+    public const string RemoveAutomationId = QuickAccessToolbarContextMenuPlanner.RemoveAutomationId;
 
     public static QuickAccessToolbarCustomizationPlan CreatePlan(
         string commandId,
