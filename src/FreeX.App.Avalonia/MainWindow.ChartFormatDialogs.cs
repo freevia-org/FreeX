@@ -623,6 +623,7 @@ public sealed partial class MainWindow
         {
             Title = title,
             SizeToContent = SizeToContent.WidthAndHeight,
+            Background = Brushes.White,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
