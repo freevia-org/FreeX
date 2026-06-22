@@ -342,6 +342,74 @@ public sealed partial class PivotTableRefreshServiceTests
     }
 
     [Fact]
+    public void Refresh_MatrixPercentOfParentTotal_UsesSelectedRowBaseFieldWithinColumnContext()
+    {
+        var workbook = new Workbook("PivotParentTotalRowBaseTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesChannelData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "D9"),
+            TargetRange = Range(sheet, "F2", "K12"),
+            ReportLayout = PivotReportLayout.Tabular
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.RowFields.Add(new PivotFieldModel(1));
+        pivot.ColumnFields.Add(new PivotFieldModel(2));
+        pivot.DataFields.Add(new PivotDataFieldModel(
+            3,
+            "% Region",
+            "sum",
+            ShowValuesAs: PivotShowValuesAs.PercentOfParentTotal,
+            BaseFieldIndex: 0,
+            BaseItem: "West"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Number(sheet, "H3").Should().BeApproximately(10d / 30d, 0.0000001);
+        Number(sheet, "I3").Should().BeApproximately(15d / 40d, 0.0000001);
+        Number(sheet, "J3").Should().BeApproximately(25d / 70d, 0.0000001);
+        Number(sheet, "H4").Should().BeApproximately(20d / 30d, 0.0000001);
+        Number(sheet, "I4").Should().BeApproximately(25d / 40d, 0.0000001);
+        Number(sheet, "J4").Should().BeApproximately(45d / 70d, 0.0000001);
+    }
+
+    [Fact]
+    public void Refresh_MatrixPercentOfParentTotal_UsesSelectedColumnBaseFieldWithinRowContext()
+    {
+        var workbook = new Workbook("PivotParentTotalColumnBaseTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesChannelData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "D9"),
+            TargetRange = Range(sheet, "F2", "L12"),
+            ReportLayout = PivotReportLayout.Tabular
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.ColumnFields.Add(new PivotFieldModel(1));
+        pivot.ColumnFields.Add(new PivotFieldModel(2));
+        pivot.DataFields.Add(new PivotDataFieldModel(
+            3,
+            "% Quarter",
+            "sum",
+            ShowValuesAs: PivotShowValuesAs.PercentOfParentTotal,
+            BaseFieldIndex: 1,
+            BaseItem: "Q2"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Number(sheet, "G4").Should().BeApproximately(10d / 25d, 0.0000001);
+        Number(sheet, "H4").Should().BeApproximately(15d / 25d, 0.0000001);
+        Number(sheet, "I4").Should().BeApproximately(20d / 45d, 0.0000001);
+        Number(sheet, "J4").Should().BeApproximately(25d / 45d, 0.0000001);
+    }
+
+    [Fact]
     public void Refresh_RowOnlyNestedShowValuesAsPercentOfParentRowTotal()
     {
         var workbook = new Workbook("PivotParentRowNestedTest");

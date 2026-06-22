@@ -187,8 +187,7 @@ public static partial class PivotTableRefreshService
             PivotShowValuesAs.PercentOfColumnTotal => context.ColumnTotalRows,
             PivotShowValuesAs.PercentOfParentRowTotal => context.ParentRowRows ?? context.GrandTotalRows,
             PivotShowValuesAs.PercentOfParentColumnTotal => context.ParentColumnRows ?? context.RowTotalRows,
-            // Base-field-driven "% of Parent Total" is not yet modeled; fall back to grand total.
-            PivotShowValuesAs.PercentOfParentTotal => context.GrandTotalRows,
+            PivotShowValuesAs.PercentOfParentTotal => PercentOfParentTotalRows(rows, context, dataField, pivotTable, headers),
             _ => null
         };
         if (denominatorRows is null)
@@ -197,6 +196,117 @@ public static partial class PivotTableRefreshService
         var denominator = AggregateDouble(denominatorRows, dataField with { ShowValuesAs = PivotShowValuesAs.None }, pivotTable, headers);
         var numVal = value ?? 0;
         return Math.Abs(denominator) < 0.0000001 ? 0 : numVal / denominator;
+    }
+
+    private static IEnumerable<IReadOnlyList<ScalarValue>> PercentOfParentTotalRows(
+        IEnumerable<IReadOnlyList<ScalarValue>> rows,
+        PivotDisplayContext context,
+        PivotDataFieldModel dataField,
+        PivotTableModel pivotTable,
+        IReadOnlyList<string> headers)
+    {
+        if (dataField.BaseFieldIndex is not { } baseFieldIndex ||
+            !IsValidField(baseFieldIndex, headers.Count))
+        {
+            return context.GrandTotalRows;
+        }
+
+        var rowFieldPosition = FindPivotFieldPosition(pivotTable.RowFields, baseFieldIndex);
+        if (rowFieldPosition >= 0)
+        {
+            return RowsForSharedAxisPrefix(
+                rows,
+                context.ColumnTotalRows,
+                pivotTable.RowFields,
+                rowFieldPosition) ?? rows;
+        }
+
+        var columnFieldPosition = FindPivotFieldPosition(pivotTable.ColumnFields, baseFieldIndex);
+        if (columnFieldPosition >= 0)
+        {
+            return RowsForSharedAxisPrefix(
+                rows,
+                context.RowTotalRows,
+                pivotTable.ColumnFields,
+                columnFieldPosition) ?? rows;
+        }
+
+        return context.GrandTotalRows;
+    }
+
+    private static IReadOnlyList<IReadOnlyList<ScalarValue>>? RowsForSharedAxisPrefix(
+        IEnumerable<IReadOnlyList<ScalarValue>> rows,
+        IEnumerable<IReadOnlyList<ScalarValue>> candidateRows,
+        IReadOnlyList<PivotFieldModel> axisFields,
+        int fieldPosition)
+    {
+        var rowList = rows is IReadOnlyList<IReadOnlyList<ScalarValue>> list ? list : rows.ToList();
+        if (rowList.Count == 0)
+            return [];
+
+        var prefix = SharedAxisPrefix(rowList, axisFields, fieldPosition);
+        if (prefix is null)
+            return null;
+
+        return candidateRows
+            .Where(row => MatchesAxisPrefix(row, axisFields, prefix))
+            .ToList();
+    }
+
+    private static IReadOnlyList<string>? SharedAxisPrefix(
+        IReadOnlyList<IReadOnlyList<ScalarValue>> rows,
+        IReadOnlyList<PivotFieldModel> axisFields,
+        int fieldPosition)
+    {
+        var first = rows[0];
+        var prefix = axisFields
+            .Take(fieldPosition + 1)
+            .Select(field => GroupKeyText(first[field.SourceFieldIndex], field))
+            .ToList();
+
+        foreach (var row in rows.Skip(1))
+        {
+            if (!MatchesAxisPrefix(row, axisFields, prefix))
+                return null;
+        }
+
+        return prefix;
+    }
+
+    private static bool MatchesAxisPrefix(
+        IReadOnlyList<ScalarValue> row,
+        IReadOnlyList<PivotFieldModel> axisFields,
+        IReadOnlyList<string> prefix)
+    {
+        if (prefix.Count > axisFields.Count)
+            return false;
+
+        for (var index = 0; index < prefix.Count; index++)
+        {
+            var field = axisFields[index];
+            if (!string.Equals(
+                    GroupKeyText(row[field.SourceFieldIndex], field),
+                    prefix[index],
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static int FindPivotFieldPosition(IEnumerable<PivotFieldModel> fields, int sourceFieldIndex)
+    {
+        var index = 0;
+        foreach (var field in fields)
+        {
+            if (field.SourceFieldIndex == sourceFieldIndex)
+                return index;
+            index++;
+        }
+
+        return -1;
     }
 
     private static double RunningTotal(

@@ -161,6 +161,32 @@ public sealed partial class PivotTableRefreshServiceTests
     }
 
     [Fact]
+    public void ExtractDetailRows_ForCompactLayoutValueCell_UsesRenderedValueColumnAndCollapsedRowLabels()
+    {
+        var workbook = new Workbook("PivotCompactDrillDownTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "H10"),
+            ReportLayout = PivotReportLayout.Compact
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.RowFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        var detail = PivotTableRefreshService.ExtractDetailRows(workbook, sheet, pivot, Addr(sheet, "F4"));
+
+        detail.Headers.Should().Equal("Region", "Quarter", "Amount");
+        detail.Rows.Should().ContainSingle();
+        detail.Rows[0].Select(PivotValueText).Should().Equal("East", "Q1", "10");
+    }
+
+    [Fact]
     public void ExtractDetailRows_ForColumnOnlyPivot_FiltersByColumnItem()
     {
         var workbook = new Workbook("PivotRefreshTest");
