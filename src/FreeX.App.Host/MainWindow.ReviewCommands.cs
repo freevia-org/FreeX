@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
+using Free.Shared.AppServices;
 using FreeX.App.UI;
 using FreeX.Core.Commands;
 using FreeX.Core.IO;
@@ -686,8 +687,10 @@ public partial class MainWindow
 
     private async Task ShareWorkbookAsync()
     {
-        var plan = ShareWorkbookPlanner.CreatePlan(_currentFilePath);
-        if (plan.Kind == ShareWorkbookPlanKind.SaveAsBeforeShare)
+        var plan = WorkbookShareReadinessPlanner.CreatePlan(
+            _currentFilePath,
+            WorkbookShareSurface.WindowsShare);
+        if (plan.Kind == WorkbookShareReadinessPlanKind.SaveAsBeforeShare)
         {
             if (!await SaveWorkbookWithDialogAsync())
                 return;
@@ -698,7 +701,7 @@ public partial class MainWindow
                 return;
         }
 
-        var sharePath = plan.Kind == ShareWorkbookPlanKind.ShareExistingFile
+        var sharePath = plan.Kind == WorkbookShareReadinessPlanKind.ShareExistingFile
             ? plan.Path
             : _currentFilePath;
         if (string.IsNullOrWhiteSpace(sharePath))
