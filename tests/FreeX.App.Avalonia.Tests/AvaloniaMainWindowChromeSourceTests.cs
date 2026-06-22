@@ -87,6 +87,8 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         hostCaptureSource.Should().Contain("window.FindName(\"FormulaBarBorder\")");
         captureSource.Should().Contain("CaptureBackstageSurface(outputDirectory, surfaceId)");
         captureSource.Should().Contain("CreateParityCapturedBackstageSurface(surfaceId)");
+        captureSource.Should().Contain("CreateParityCapturedBackstageContentScroll(content)");
+        captureSource.Should().Contain("CreateParityCapturedBackstageScrollbar()");
         captureSource.Should().Contain("CreateParityCapturedStatusBarFooter()");
         captureSource.Should().Contain("_ribbonContextSource.SetParityCaptureContext(null);");
         captureSource.Should().Contain("_ribbonContextSource.SetParityCaptureContext(activationKey);");
@@ -100,14 +102,20 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     public void StatusBarZoomSlider_UsesIdenticalMinMiddleMaxMarks()
     {
         var mainSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var statusBarSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.StatusBar.cs"));
         var captureSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
 
         mainSource.Should().Contain("_statusZoomSliderHost.Children.Add(BuildStatusZoomTick(left: 60));");
+        mainSource.Should().Contain("_statusZoomSlider.Minimum = FreeX.App.Services.ZoomLevelMapper.ZoomPercentToSlider(SetWorksheetZoomCommand.MinZoomPercent);");
+        mainSource.Should().Contain("_statusZoomSlider.Maximum = FreeX.App.Services.ZoomLevelMapper.ZoomPercentToSlider(SetWorksheetZoomCommand.MaxZoomPercent);");
+        mainSource.Should().Contain("FreeX.App.Services.ZoomLevelMapper.SliderToZoomPercent(args.NewValue)");
+        statusBarSource.Should().Contain("FreeX.App.Services.ZoomLevelMapper.ZoomPercentToSlider(model.ZoomPercent)");
         mainSource.Should().Contain("Width = 1,");
         mainSource.Should().Contain("Height = 4,");
         mainSource.Should().NotContain("BuildStatusZoomTick(left: 60, isMiddle: true)");
         mainSource.Should().NotContain("isMiddle ? 2 : 1");
         captureSource.Should().Contain("foreach (var left in new[] { 8d, 60d, 111d })");
+        captureSource.Should().Contain("Canvas.SetLeft(canvas.Children[^1], 55.5);");
         captureSource.Should().NotContain("isMiddle ? 2 : 1");
     }
 

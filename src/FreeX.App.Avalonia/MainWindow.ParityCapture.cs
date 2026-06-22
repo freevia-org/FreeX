@@ -718,13 +718,12 @@ public sealed partial class MainWindow
 
         AddGridChild(body, CreateParityCapturedBackstageRail(pane), 0, 0);
 
-        AddGridChild(body,
-            string.Equals(pane, "Info", StringComparison.Ordinal)
-                ? CreateParityCapturedBackstageInfoPane()
-                : string.Equals(pane, "Account", StringComparison.Ordinal)
-                    ? CreateParityCapturedBackstageAccountPane()
-                : CreateParityCapturedBackstageHomePane(),
-            0, 1);
+        var content = string.Equals(pane, "Info", StringComparison.Ordinal)
+            ? CreateParityCapturedBackstageInfoPane()
+            : string.Equals(pane, "Account", StringComparison.Ordinal)
+                ? CreateParityCapturedBackstageAccountPane()
+                : CreateParityCapturedBackstageHomePane();
+        AddGridChild(body, CreateParityCapturedBackstageContentScroll(content), 0, 1);
         AddGridChild(root, CreateParityCapturedStatusBarFooter(), 2, 0);
         ApplyParityBackstageTypography(root);
         return root;
@@ -858,8 +857,55 @@ public sealed partial class MainWindow
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(1),
         });
-        Canvas.SetLeft(canvas.Children[^1], 31);
+        Canvas.SetLeft(canvas.Children[^1], 55.5);
         Canvas.SetTop(canvas.Children[^1], 3);
+        return canvas;
+    }
+
+    private static Control CreateParityCapturedBackstageContentScroll(Control content)
+    {
+        var root = new AvaloniaGrid
+        {
+            Background = Brushes.White,
+            ColumnDefinitions =
+            {
+                new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
+                new ColumnDefinition { Width = new GridLength(14) },
+            },
+        };
+        AddGridChild(root, content, 0, 0);
+        AddGridChild(root, CreateParityCapturedBackstageScrollbar(), 0, 1);
+        return root;
+    }
+
+    private static Control CreateParityCapturedBackstageScrollbar()
+    {
+        const int statusBarHeight = 28;
+        var height = ParityCaptureWindowHeight - ParityCaptureTitleBarHeight - statusBarHeight;
+        var canvas = new Canvas
+        {
+            Width = 14,
+            Height = height,
+            Background = Brushes.White,
+        };
+        canvas.Children.Add(new Border
+        {
+            Width = 14,
+            Height = height,
+            Background = Brush(245, 245, 245),
+            BorderBrush = Brush(224, 224, 224),
+            BorderThickness = new Thickness(1, 0, 0, 0),
+        });
+        Canvas.SetTop(canvas.Children[^1], 0);
+        canvas.Children.Add(new Border
+        {
+            Width = 8,
+            Height = 120,
+            Background = Brush(197, 197, 197),
+            CornerRadius = new CornerRadius(4),
+        });
+        Canvas.SetLeft(canvas.Children[^1], 3);
+        Canvas.SetTop(canvas.Children[^1], 56);
         return canvas;
     }
 

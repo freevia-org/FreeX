@@ -78,8 +78,9 @@ public sealed partial class MainWindow
         _isUpdatingStatusZoomSlider = true;
         try
         {
-            _statusZoomSlider.Value = ClampZoomPercent(model.ZoomPercent);
-            UpdateStatusZoomSliderThumb(model.ZoomPercent);
+            var sliderValue = FreeX.App.Services.ZoomLevelMapper.ZoomPercentToSlider(model.ZoomPercent);
+            _statusZoomSlider.Value = sliderValue;
+            UpdateStatusZoomSliderThumb(sliderValue);
         }
         finally
         {
