@@ -68,4 +68,75 @@ public sealed partial class PivotTableRefreshServiceTests
         Number(sheet, "F6").Should().Be(140);
     }
 
+    [Fact]
+    public void Refresh_EvaluatesCalculatedItemsForColumnField()
+    {
+        var workbook = new Workbook("PivotRefreshTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "I4")
+        };
+        pivot.ColumnFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+        pivot.CalculatedItems.Add(new PivotCalculatedItemModel(1, "Q1 + Q2", "Q1+Q2"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "E2").Should().Be("Q1");
+        Number(sheet, "E3").Should().Be(30);
+        Text(sheet, "F2").Should().Be("Q2");
+        Number(sheet, "F3").Should().Be(40);
+        Text(sheet, "G2").Should().Be("Q1 + Q2");
+        Number(sheet, "G3").Should().Be(70);
+        Text(sheet, "H2").Should().Be("Grand Total");
+        Number(sheet, "H3").Should().Be(140);
+    }
+
+    [Fact]
+    public void Refresh_EvaluatesCalculatedItemsForInnerRowField()
+    {
+        var workbook = new Workbook("PivotRefreshTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "H10")
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.RowFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+        pivot.CalculatedItems.Add(new PivotCalculatedItemModel(1, "Q1 + Q2", "Q1+Q2"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "E3").Should().Be("East");
+        Text(sheet, "F3").Should().Be("Q1");
+        Number(sheet, "G3").Should().Be(10);
+        Text(sheet, "E4").Should().Be("East");
+        Text(sheet, "F4").Should().Be("Q2");
+        Number(sheet, "G4").Should().Be(15);
+        Text(sheet, "E5").Should().Be("East");
+        Text(sheet, "F5").Should().Be("Q1 + Q2");
+        Number(sheet, "G5").Should().Be(25);
+        Text(sheet, "E6").Should().Be("West");
+        Text(sheet, "F6").Should().Be("Q1");
+        Number(sheet, "G6").Should().Be(20);
+        Text(sheet, "E7").Should().Be("West");
+        Text(sheet, "F7").Should().Be("Q2");
+        Number(sheet, "G7").Should().Be(25);
+        Text(sheet, "E8").Should().Be("West");
+        Text(sheet, "F8").Should().Be("Q1 + Q2");
+        Number(sheet, "G8").Should().Be(45);
+        Text(sheet, "E9").Should().Be("Grand Total");
+        Number(sheet, "G9").Should().Be(140);
+    }
+
 }

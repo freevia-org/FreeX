@@ -29,6 +29,7 @@ public static partial class PivotTableRefreshService
         groups = ApplyValueFilters(groups, pivotTable, headers, rowFields);
         groups = ApplySorts(groups, pivotTable, headers, rowFields);
         var retainedRows = groups.SelectMany(group => group).ToList();
+        var rowCalculatedItems = CalculatedItemsForFields(pivotTable, rowFields);
 
         // subtotalLevelCount = rowFields.Count - 1; level 0 = outermost (R0), level N-2 = innermost subtotaled (second-to-last field)
         var subtotalLevelCount = rowFields.Count - 1;
@@ -217,33 +218,35 @@ public static partial class PivotTableRefreshService
                     isEmptyIntersection: groupRows.Count == 0);
             previousRowKey = group.Key;
             outputRow++;
+
+            foreach (var (calculatedItem, fieldPosition) in rowCalculatedItems)
+            {
+                if (!IsEndOfCalculatedItemParent(groups, group, fieldPosition))
+                    continue;
+
+                var parentPrefix = group.Key.Values.Take(fieldPosition).ToArray();
+                WriteRowCalculatedItem(
+                    workbook,
+                    sheet,
+                    pivotTable,
+                    headers,
+                    start,
+                    rowFieldOutputColumns,
+                    groups,
+                    calculatedItem,
+                    fieldPosition,
+                    parentPrefix,
+                    outputRow,
+                    compactRowIndentLevels,
+                    indentStep,
+                    calculatedItemTotals);
+                outputRow++;
+            }
+
             if (pivotTable.BlankLineAfterItems &&
                 rowFields.Count > 1 &&
                 IsEndOfOuterItem(groups, group, rowFields.Count))
             {
-                outputRow++;
-            }
-        }
-        if (rowFields.Count == 1)
-        {
-            foreach (var calculatedItem in pivotTable.CalculatedItems
-                         .Where(item => item.SourceFieldIndex == rowFields[0].SourceFieldIndex)
-                         .OrderBy(item => item.Name, StringComparer.CurrentCultureIgnoreCase))
-            {
-                SetPivotCell(sheet, new CellAddress(sheet.Id, outputRow, start.Col), new TextValue(calculatedItem.Name));
-                for (var index = 0; index < pivotTable.DataFields.Count; index++)
-                {
-                    var calculatedValue = EvaluateCalculatedItem(calculatedItem.Formula, groups, pivotTable.DataFields[index], pivotTable, headers);
-                    SetPivotValueCell(
-                        workbook,
-                        sheet,
-                        new CellAddress(sheet.Id, outputRow, start.Col + 1 + (uint)index),
-                        calculatedValue,
-                        pivotTable.DataFields[index],
-                        pivotTable);
-                    calculatedItemTotals[index] += calculatedValue;
-                }
-
                 outputRow++;
             }
         }
@@ -327,6 +330,9 @@ public static partial class PivotTableRefreshService
         columnKeys = ApplySorts(columnKeys, rowsByColumnKey, pivotTable, headers, columnFields, columnAggregateCache);
         var visibleRows = RowsForColumnKeys(rowsByColumnKey, columnKeys, rows);
         var singleDataField = pivotTable.DataFields.Count == 1;
+        var columnCalculatedItems = columnFields.Count == 1
+            ? CalculatedItemsForFields(pivotTable, columnFields)
+            : [];
 
         var outputColumn = start.Col;
         foreach (var columnKey in columnKeys)
@@ -334,6 +340,14 @@ public static partial class PivotTableRefreshService
             foreach (var dataField in pivotTable.DataFields)
             {
                 WriteColumnHeader(sheet, start.Row, outputColumn, columnKey, dataField, singleDataField);
+                outputColumn++;
+            }
+        }
+        foreach (var (calculatedItem, _) in columnCalculatedItems)
+        {
+            foreach (var dataField in pivotTable.DataFields)
+            {
+                WriteColumnHeader(sheet, start.Row, outputColumn, new PivotKey([calculatedItem.Name]), dataField, singleDataField);
                 outputColumn++;
             }
         }
@@ -352,6 +366,7 @@ public static partial class PivotTableRefreshService
 
         var outputRow = start.Row + (uint)columnFields.Count;
         outputColumn = start.Col;
+        var calculatedItemTotals = new double[pivotTable.DataFields.Count];
         foreach (var columnKey in columnKeys)
         {
             var columnRows = RowsForColumnKey(rowsByColumnKey, columnKey);
@@ -369,22 +384,182 @@ public static partial class PivotTableRefreshService
                 outputColumn++;
             }
         }
+        foreach (var (calculatedItem, fieldPosition) in columnCalculatedItems)
+        {
+            for (var index = 0; index < pivotTable.DataFields.Count; index++)
+            {
+                var calculatedValue = EvaluateCalculatedItemForField(
+                    calculatedItem.Formula,
+                    columnKeys,
+                    key => RowsForColumnKey(rowsByColumnKey, key),
+                    fieldPosition,
+                    [],
+                    pivotTable.DataFields[index],
+                    pivotTable,
+                    headers);
+                SetPivotValueCell(
+                    workbook,
+                    sheet,
+                    new CellAddress(sheet.Id, outputRow, outputColumn),
+                    calculatedValue,
+                    pivotTable.DataFields[index],
+                    pivotTable);
+                calculatedItemTotals[index] += calculatedValue;
+                outputColumn++;
+            }
+        }
 
         if (pivotTable.ShowRowGrandTotals)
         {
-            foreach (var dataField in pivotTable.DataFields)
+            for (var index = 0; index < pivotTable.DataFields.Count; index++)
             {
+                var dataField = pivotTable.DataFields[index];
                 SetPivotValueCell(workbook, sheet, new CellAddress(sheet.Id, outputRow, outputColumn), DisplayAggregate(
                     visibleRows,
                     new PivotDisplayContext(visibleRows, visibleRows, visibleRows),
                     dataField,
                     pivotTable,
-                    headers),
+                    headers) + calculatedItemTotals[index],
                     dataField,
                     pivotTable);
                 outputColumn++;
             }
         }
+    }
+
+    private static List<(PivotCalculatedItemModel Item, int FieldPosition)> CalculatedItemsForFields(
+        PivotTableModel pivotTable,
+        IReadOnlyList<PivotFieldModel> fields)
+    {
+        var calculatedItems = new List<(PivotCalculatedItemModel Item, int FieldPosition)>();
+        foreach (var calculatedItem in pivotTable.CalculatedItems)
+        {
+            for (var fieldPosition = 0; fieldPosition < fields.Count; fieldPosition++)
+            {
+                if (calculatedItem.SourceFieldIndex != fields[fieldPosition].SourceFieldIndex)
+                    continue;
+
+                calculatedItems.Add((calculatedItem, fieldPosition));
+                break;
+            }
+        }
+
+        return calculatedItems
+            .OrderByDescending(item => item.FieldPosition)
+            .ThenBy(item => item.Item.Name, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+    }
+
+    private static void WriteRowCalculatedItem(
+        Workbook workbook,
+        Sheet sheet,
+        PivotTableModel pivotTable,
+        IReadOnlyList<string> headers,
+        CellAddress start,
+        int rowFieldOutputColumns,
+        IReadOnlyList<IGrouping<PivotKey, IReadOnlyList<ScalarValue>>> groups,
+        PivotCalculatedItemModel calculatedItem,
+        int fieldPosition,
+        IReadOnlyList<string> parentPrefix,
+        uint outputRow,
+        Dictionary<uint, int>? compactRowIndentLevels,
+        int indentStep,
+        double[] calculatedItemTotals)
+    {
+        if (compactRowIndentLevels is not null)
+        {
+            SetPivotCell(sheet, new CellAddress(sheet.Id, outputRow, start.Col), new TextValue(calculatedItem.Name));
+            compactRowIndentLevels[outputRow] = fieldPosition * indentStep;
+        }
+        else
+        {
+            for (var index = 0; index < parentPrefix.Count; index++)
+                SetPivotCell(sheet, new CellAddress(sheet.Id, outputRow, start.Col + (uint)index), new TextValue(parentPrefix[index]));
+
+            SetPivotCell(sheet, new CellAddress(sheet.Id, outputRow, start.Col + (uint)fieldPosition), new TextValue(calculatedItem.Name));
+        }
+
+        var groupKeys = groups.Select(group => group.Key).ToList();
+        for (var index = 0; index < pivotTable.DataFields.Count; index++)
+        {
+            var calculatedValue = EvaluateCalculatedItemForField(
+                calculatedItem.Formula,
+                groupKeys,
+                key => groups.Where(group => group.Key.Equals(key)).SelectMany(group => group),
+                fieldPosition,
+                parentPrefix,
+                pivotTable.DataFields[index],
+                pivotTable,
+                headers);
+            SetPivotValueCell(
+                workbook,
+                sheet,
+                new CellAddress(sheet.Id, outputRow, start.Col + (uint)rowFieldOutputColumns + (uint)index),
+                calculatedValue,
+                pivotTable.DataFields[index],
+                pivotTable);
+            calculatedItemTotals[index] += calculatedValue;
+        }
+    }
+
+    private static double EvaluateCalculatedItemForField(
+        string formula,
+        IReadOnlyList<PivotKey> keys,
+        Func<PivotKey, IEnumerable<IReadOnlyList<ScalarValue>>> rowsForKey,
+        int fieldPosition,
+        IReadOnlyList<string> parentPrefix,
+        PivotDataFieldModel dataField,
+        PivotTableModel pivotTable,
+        IReadOnlyList<string> headers)
+    {
+        return PivotCalculatedExpressionEvaluator.Evaluate(formula, name =>
+        {
+            var rows = keys
+                .Where(key => CalculatedItemKeyMatches(key, fieldPosition, parentPrefix, name))
+                .SelectMany(rowsForKey);
+            return AggregateDouble(rows, dataField, pivotTable, headers);
+        });
+    }
+
+    private static bool CalculatedItemKeyMatches(
+        PivotKey key,
+        int fieldPosition,
+        IReadOnlyList<string> parentPrefix,
+        string itemName)
+    {
+        if (key.Values.Count <= fieldPosition || parentPrefix.Count != fieldPosition)
+            return false;
+
+        for (var index = 0; index < parentPrefix.Count; index++)
+        {
+            if (!string.Equals(key.Values[index], parentPrefix[index], StringComparison.CurrentCultureIgnoreCase))
+                return false;
+        }
+
+        return string.Equals(key.Values[fieldPosition], itemName, StringComparison.CurrentCultureIgnoreCase);
+    }
+
+    private static bool IsEndOfCalculatedItemParent(
+        IReadOnlyList<IGrouping<PivotKey, IReadOnlyList<ScalarValue>>> groups,
+        IGrouping<PivotKey, IReadOnlyList<ScalarValue>> group,
+        int fieldPosition)
+    {
+        var index = -1;
+        for (var i = 0; i < groups.Count; i++)
+        {
+            if (ReferenceEquals(groups[i], group))
+            {
+                index = i;
+                break;
+            }
+        }
+
+        if (index < 0 || index >= groups.Count - 1)
+            return true;
+
+        var currentParent = group.Key.Values.Take(fieldPosition);
+        var nextParent = groups[index + 1].Key.Values.Take(fieldPosition);
+        return !currentParent.SequenceEqual(nextParent, StringComparer.CurrentCultureIgnoreCase);
     }
 
     private static bool IsEndOfOuterItem(
