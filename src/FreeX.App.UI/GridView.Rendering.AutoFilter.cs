@@ -8,11 +8,15 @@ public partial class GridView
 {
     private const double AutoFilterButtonSize = 15;
     private const double AutoFilterButtonMargin = 2;
+    private const double PivotExpandCollapseButtonSize = 9;
+    private const double PivotExpandCollapseButtonReserve = 14;
 
     private static readonly Brush AutoFilterButtonBrush = CreateAutoFilterButtonBrush();
     private static readonly Pen AutoFilterButtonBorderPen = MakePen(MakeBrush(142, 153, 166), 1);
     private static readonly Brush AutoFilterGlyphBrush = MakeBrush(45, 55, 65);
     private static readonly Brush ActiveAutoFilterGlyphBrush = MakeBrush(15, 109, 140);
+    private static readonly Pen PivotExpandCollapseBorderPen = MakePen(MakeBrush(128, 128, 128), 1);
+    private static readonly Pen PivotExpandCollapseGlyphPen = MakePen(MakeBrush(64, 64, 64), 1);
 
     private void RenderAutoFilterButtons(DrawingContext dc)
     {
@@ -82,6 +86,34 @@ public partial class GridView
         }
     }
 
+    private void RenderPivotRowLabelAdornments(DrawingContext dc)
+    {
+        if (Viewport is null || PivotRowLabelAdornments is not { Count: > 0 } adornments)
+            return;
+
+        foreach (var adornment in adornments)
+        {
+            if (!adornment.ShowExpandCollapseButton ||
+                FindRowMetric(Viewport.RowMetrics, adornment.Cell.Row) is not { } row ||
+                FindColMetric(Viewport.ColMetrics, adornment.Cell.Col) is not { } column)
+            {
+                continue;
+            }
+
+            var size = Math.Min(PivotExpandCollapseButtonSize, Math.Max(0, Math.Min(row.Height, column.Width) - 4));
+            if (size <= 0)
+                continue;
+
+            var indent = Math.Clamp(adornment.IndentLevel, 0, 15) * 8.0;
+            var rect = new Rect(
+                ActualRowHeaderWidth + column.LeftOffset + 2 + indent,
+                EffectiveColHeaderHeight + row.TopOffset + Math.Max(0, (row.Height - size) / 2),
+                size,
+                size);
+            DrawPivotExpandCollapseButton(dc, rect, adornment.IsExpanded);
+        }
+    }
+
     private bool TryHitTestPivotHeaderDropdownButton(Point pos, out CellAddress headerCell)
     {
         headerCell = default;
@@ -101,6 +133,24 @@ public partial class GridView
         }
 
         return false;
+    }
+
+    private double GetPivotRowLabelAdornmentTextPadding(uint row, uint col)
+    {
+        if (PivotRowLabelAdornments is not { Count: > 0 } adornments)
+            return 0;
+
+        foreach (var adornment in adornments)
+        {
+            if (adornment.Cell.Row == row &&
+                adornment.Cell.Col == col &&
+                adornment.ShowExpandCollapseButton)
+            {
+                return PivotExpandCollapseButtonReserve;
+            }
+        }
+
+        return 0;
     }
 
     private Rect? GetDropdownButtonRect(CellAddress cell)
@@ -126,6 +176,20 @@ public partial class GridView
             EffectiveColHeaderHeight + row.TopOffset + Math.Max(0, (row.Height - size) / 2),
             size,
             size);
+    }
+
+    private static void DrawPivotExpandCollapseButton(DrawingContext dc, Rect rect, bool isExpanded)
+    {
+        dc.DrawRectangle(Brushes.White, PivotExpandCollapseBorderPen, rect);
+        var centerY = rect.Top + rect.Height / 2;
+        var left = rect.Left + 2;
+        var right = rect.Right - 2;
+        dc.DrawLine(PivotExpandCollapseGlyphPen, new Point(left, centerY), new Point(right, centerY));
+        if (!isExpanded)
+        {
+            var centerX = rect.Left + rect.Width / 2;
+            dc.DrawLine(PivotExpandCollapseGlyphPen, new Point(centerX, rect.Top + 2), new Point(centerX, rect.Bottom - 2));
+        }
     }
 
     private static void DrawAutoFilterGlyph(DrawingContext dc, Rect rect, bool isActive)
