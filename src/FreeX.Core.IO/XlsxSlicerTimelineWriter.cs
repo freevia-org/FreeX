@@ -11,7 +11,7 @@ internal static class XlsxSlicerTimelineWriter
     private const string SlicerCacheRelationshipType = "http://schemas.microsoft.com/office/2007/relationships/slicerCache";
     private const string TimelineRelationshipType = "http://schemas.microsoft.com/office/2010/relationships/Timeline";
     private const string TimelineCacheRelationshipType = "http://schemas.microsoft.com/office/2010/relationships/TimelineCache";
-    private const string SlicerWorkbookExtensionUri = "{BBE1A952-AA13-448E-AADC-164F8A28A991}";
+    private const string SlicerWorkbookExtensionUri = "{BBE1A952-AA13-448e-AADC-164F8A28A991}";
     private const string TimelineWorkbookExtensionUri = "{D0CA8CA8-9F24-4464-BF8E-62219DCF47F9}";
     private const string SlicerWorksheetExtensionUri = "{A8765BA9-456A-4DAB-B4F3-ACF838C121DE}";
     private const string TimelineWorksheetExtensionUri = "{7E03D99C-DC04-49D9-9315-930204A7B6E9}";
@@ -415,6 +415,7 @@ internal static class XlsxSlicerTimelineWriter
 
         if (extension is not null)
         {
+            extension.SetAttributeValue("uri", extensionUri);
             EnsureNamespace(extension, prefix, extensionNs);
             return extension;
         }

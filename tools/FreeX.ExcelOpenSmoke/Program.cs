@@ -168,6 +168,10 @@ internal static class ExcelOpenSmoke
         "http://schemas.microsoft.com/office/2010/relationships/Timeline";
     private const string TimelineCacheRelationshipType =
         "http://schemas.microsoft.com/office/2010/relationships/TimelineCache";
+    private const string TimelineRelationshipType2011 =
+        "http://schemas.microsoft.com/office/2011/relationships/timeline";
+    private const string TimelineCacheRelationshipType2011 =
+        "http://schemas.microsoft.com/office/2011/relationships/timelineCache";
     private const string PivotCacheDefinitionContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheDefinition+xml";
     private const string PivotCacheDefinitionRelationshipType =
@@ -14871,7 +14875,7 @@ internal static class ExcelOpenSmoke
                 continue;
             }
 
-            if (!string.Equals(relationship.Attribute("Type")?.Value, expectedRelationshipType, StringComparison.OrdinalIgnoreCase))
+            if (!IsExpectedSlicerTimelineRelationshipType(relationship.Attribute("Type")?.Value, expectedRelationshipType))
             {
                 issues.Add($"{reference.Description} #{reference.Ordinal} relationship {reference.RelationshipId} in {relationshipPart} has Type={relationship.Attribute("Type")?.Value}; expected {expectedRelationshipType}");
                 continue;
@@ -14959,7 +14963,7 @@ internal static class ExcelOpenSmoke
                         validatedPackageParts,
                         issues);
                 }
-                else if (string.Equals(relationshipType, TimelineRelationshipType, StringComparison.OrdinalIgnoreCase))
+                else if (IsTimelineRelationshipType(relationshipType))
                 {
                     AddSlicerTimelineRelationshipIssues(
                         archive,
@@ -14973,7 +14977,7 @@ internal static class ExcelOpenSmoke
                         validatedPackageParts,
                         issues);
                 }
-                else if (string.Equals(relationshipType, TimelineCacheRelationshipType, StringComparison.OrdinalIgnoreCase))
+                else if (IsTimelineCacheRelationshipType(relationshipType))
                 {
                     AddSlicerTimelineRelationshipIssues(
                         archive,
@@ -14990,6 +14994,21 @@ internal static class ExcelOpenSmoke
             }
         }
     }
+
+    private static bool IsExpectedSlicerTimelineRelationshipType(string? actualType, string expectedRelationshipType) =>
+        string.Equals(actualType, expectedRelationshipType, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(expectedRelationshipType, TimelineRelationshipType, StringComparison.OrdinalIgnoreCase) &&
+            IsTimelineRelationshipType(actualType) ||
+        string.Equals(expectedRelationshipType, TimelineCacheRelationshipType, StringComparison.OrdinalIgnoreCase) &&
+            IsTimelineCacheRelationshipType(actualType);
+
+    private static bool IsTimelineRelationshipType(string? relationshipType) =>
+        string.Equals(relationshipType, TimelineRelationshipType, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(relationshipType, TimelineRelationshipType2011, StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsTimelineCacheRelationshipType(string? relationshipType) =>
+        string.Equals(relationshipType, TimelineCacheRelationshipType, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(relationshipType, TimelineCacheRelationshipType2011, StringComparison.OrdinalIgnoreCase);
 
     private static void AddSlicerTimelineRelationshipIssues(
         ZipArchive archive,
