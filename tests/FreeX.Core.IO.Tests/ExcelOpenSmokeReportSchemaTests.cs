@@ -29,6 +29,8 @@ public sealed class ExcelOpenSmokeReportSchemaTests
         usageSource.Should().Contain("--generate-excel-pivot-corpus-fixtures");
         fixturesSource.Should().Contain("GetExcelPivotCorpusFixturePaths");
         fixturesSource.Should().Contain("Excel_native_pivot_multiple_pivots_one_cache_001.xlsx");
+        fixturesSource.Should().Contain("Excel_native_pivot_filters_sorts_002.xlsx");
+        fixturesSource.Should().Contain("Excel_native_pivot_layout_options_002.xlsx");
         programSource.Should().Contain("ExcelNativePivotCorpusExpectations");
     }
 

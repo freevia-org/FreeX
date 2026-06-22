@@ -19,6 +19,12 @@ internal static class ExcelSmokeFixtures
     private const int XlCount = -4112;
     private const int XlAverage = -4106;
     private const int XlPercentOfGrandTotal = 8;
+    private const int XlDescending = -4121;
+    private const int XlTabularRow = 1;
+    private const int XlOutlineRow = 2;
+    private const int XlRepeatLabels = 2;
+    private const int XlCaptionBeginsWith = 17;
+    private const int XlValueIsGreaterThan = 9;
     private const int XlValidateList = 3;
     private const int XlValidAlertStop = 1;
     private const int XlBetween = 1;
@@ -86,6 +92,8 @@ internal static class ExcelSmokeFixtures
             Path.Combine(outputDirectory, "Excel_native_pivot_table_source_filters_001.xlsx"),
             Path.Combine(outputDirectory, "Excel_native_pivot_grouping_show_values_001.xlsx"),
             Path.Combine(outputDirectory, "Excel_native_pivot_multiple_pivots_one_cache_001.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_pivot_filters_sorts_002.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_pivot_layout_options_002.xlsx"),
         ];
     }
 
@@ -209,6 +217,10 @@ internal static class ExcelSmokeFixtures
                 AddNativePivotGroupingShowValues(workbook, dataSheet);
             else if (fileName.Contains("multiple_pivots_one_cache", StringComparison.OrdinalIgnoreCase))
                 AddNativePivotMultiplePivotsOneCache(workbook, dataSheet);
+            else if (fileName.Contains("filters_sorts", StringComparison.OrdinalIgnoreCase))
+                AddNativePivotFiltersSorts(workbook, dataSheet);
+            else if (fileName.Contains("layout_options", StringComparison.OrdinalIgnoreCase))
+                AddNativePivotLayoutOptions(workbook, dataSheet);
             else
                 throw new InvalidOperationException($"Unknown Excel native PivotTable fixture: {fileName}");
 
@@ -1300,6 +1312,114 @@ internal static class ExcelSmokeFixtures
             ReleaseComObject(cache);
             ReleaseComObject(pivotSheet);
         }
+    }
+
+    private static void AddNativePivotFiltersSorts(object workbook, object sourceWorksheet)
+    {
+        object? pivotSheet = null;
+        object? cache = null;
+        object? pivot = null;
+        object? regionField = null;
+        object? categoryField = null;
+        object? salesField = null;
+        object? dataField = null;
+        try
+        {
+            pivotSheet = AddWorksheetAfter(workbook, sourceWorksheet, "Pivot Sort Filter");
+            SetExcelCellValue(pivotSheet, 1, 1, "Native PivotTable label filter, value filter, and sort");
+            cache = CreateWorksheetRangePivotCache(workbook, "'SalesData'!R1C1:R13C7");
+            pivot = ((dynamic)cache).CreatePivotTable("'Pivot Sort Filter'!R3C1", "NativePivotFiltersSorts");
+
+            regionField = ((dynamic)pivot).PivotFields("Region");
+            ((dynamic)regionField).Orientation = XlRowField;
+            categoryField = ((dynamic)pivot).PivotFields("Category");
+            ((dynamic)categoryField).Orientation = XlColumnField;
+            salesField = ((dynamic)pivot).PivotFields("Sales");
+            dataField = ((dynamic)pivot).AddDataField(salesField, "Sum of Sales", XlSum);
+            ((dynamic)dataField).NumberFormat = "$#,##0";
+            RefreshExcelPivotTable(pivot);
+
+            ((dynamic)regionField).PivotFilters.Add(XlCaptionBeginsWith, Missing.Value, "N");
+            ((dynamic)categoryField).PivotFilters.Add(XlValueIsGreaterThan, dataField, 2_500);
+            ((dynamic)regionField).AutoSort(XlDescending, "Sum of Sales");
+            ((dynamic)pivot).TableStyle2 = "PivotStyleMedium10";
+            RefreshExcelPivotTable(pivot);
+            AutoFitExcelColumns(pivotSheet, "A:F");
+        }
+        finally
+        {
+            ReleaseComObject(dataField);
+            ReleaseComObject(salesField);
+            ReleaseComObject(categoryField);
+            ReleaseComObject(regionField);
+            ReleaseComObject(pivot);
+            ReleaseComObject(cache);
+            ReleaseComObject(pivotSheet);
+        }
+    }
+
+    private static void AddNativePivotLayoutOptions(object workbook, object sourceWorksheet)
+    {
+        object? pivotSheet = null;
+        object? cache = null;
+        object? pivot = null;
+        object? regionField = null;
+        object? channelField = null;
+        object? categoryField = null;
+        object? salesField = null;
+        object? dataField = null;
+        try
+        {
+            pivotSheet = AddWorksheetAfter(workbook, sourceWorksheet, "Pivot Layout");
+            SetExcelCellValue(pivotSheet, 1, 1, "Native PivotTable layout and display options");
+            cache = CreateWorksheetRangePivotCache(workbook, "'SalesData'!R1C1:R13C7");
+            pivot = ((dynamic)cache).CreatePivotTable("'Pivot Layout'!R3C1", "NativePivotLayoutOptions");
+
+            regionField = ((dynamic)pivot).PivotFields("Region");
+            ((dynamic)regionField).Orientation = XlRowField;
+            channelField = ((dynamic)pivot).PivotFields("Channel");
+            ((dynamic)channelField).Orientation = XlRowField;
+            categoryField = ((dynamic)pivot).PivotFields("Category");
+            ((dynamic)categoryField).Orientation = XlColumnField;
+            salesField = ((dynamic)pivot).PivotFields("Sales");
+            dataField = ((dynamic)pivot).AddDataField(salesField, "Sum of Sales", XlSum);
+            ((dynamic)dataField).NumberFormat = "$#,##0";
+            RefreshExcelPivotTable(pivot);
+
+            ((dynamic)pivot).RowAxisLayout(XlTabularRow);
+            ((dynamic)pivot).ColumnGrand = false;
+            ((dynamic)pivot).RowGrand = true;
+            ((dynamic)pivot).DisplayFieldCaptions = false;
+            ((dynamic)pivot).ShowTableStyleRowStripes = true;
+            ((dynamic)pivot).ShowTableStyleColumnStripes = true;
+            ((dynamic)regionField).RepeatLabels = true;
+            ((dynamic)channelField).RepeatLabels = true;
+            ((dynamic)regionField).Subtotals = CreateExcelBooleanArray(false);
+            ((dynamic)channelField).Subtotals = CreateExcelBooleanArray(false);
+            ((dynamic)pivot).RepeatAllLabels(XlRepeatLabels);
+            ((dynamic)pivot).TableStyle2 = "PivotStyleMedium13";
+            RefreshExcelPivotTable(pivot);
+            AutoFitExcelColumns(pivotSheet, "A:G");
+        }
+        finally
+        {
+            ReleaseComObject(dataField);
+            ReleaseComObject(salesField);
+            ReleaseComObject(categoryField);
+            ReleaseComObject(channelField);
+            ReleaseComObject(regionField);
+            ReleaseComObject(pivot);
+            ReleaseComObject(cache);
+            ReleaseComObject(pivotSheet);
+        }
+    }
+
+    private static object[] CreateExcelBooleanArray(bool value)
+    {
+        var values = new object[12];
+        for (var index = 0; index < values.Length; index++)
+            values[index] = value;
+        return values;
     }
 
     private static object AddWorksheetAfter(object workbook, object afterWorksheet, string name)
