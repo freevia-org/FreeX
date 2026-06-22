@@ -2983,8 +2983,9 @@ public sealed partial class MainWindow : Window
         _zoomText.ContextMenu = statusBarCustomizeMenu;
         _statusZoomSliderHost.ContextMenu = statusBarCustomizeMenu;
         _statusZoomSlider.ContextMenu = statusBarCustomizeMenu;
-        _statusZoomSlider.Minimum = SetWorksheetZoomCommand.MinZoomPercent;
-        _statusZoomSlider.Maximum = SetWorksheetZoomCommand.MaxZoomPercent;
+        _statusZoomSlider.Minimum = FreeX.App.Services.ZoomLevelMapper.ZoomPercentToSlider(SetWorksheetZoomCommand.MinZoomPercent);
+        _statusZoomSlider.Maximum = FreeX.App.Services.ZoomLevelMapper.ZoomPercentToSlider(SetWorksheetZoomCommand.MaxZoomPercent);
+        _statusZoomSlider.Value = FreeX.App.Services.ZoomLevelMapper.ZoomPercentToSlider(_session.ZoomPercent);
         _statusZoomSlider.SmallChange = 5;
         _statusZoomSlider.LargeChange = 10;
         _statusZoomSlider.Width = 120;
@@ -2996,7 +2997,8 @@ public sealed partial class MainWindow : Window
             UpdateStatusZoomSliderThumb(args.NewValue);
             if (_isUpdatingStatusZoomSlider)
                 return;
-            ApplyZoomPercent((int)Math.Round(args.NewValue), "Zoom failed.");
+            var zoomPercent = (int)Math.Round(FreeX.App.Services.ZoomLevelMapper.SliderToZoomPercent(args.NewValue));
+            ApplyZoomPercent(zoomPercent, "Zoom failed.");
         };
         AutomationProperties.SetName(_statusZoomSlider, "Zoom slider");
         AutomationProperties.SetHelpText(_statusZoomSlider, "Adjusts the worksheet zoom from 10 to 400 percent.");
@@ -3155,30 +3157,15 @@ public sealed partial class MainWindow : Window
             ZIndex = 30,
         };
 
-    private void UpdateStatusZoomSliderThumb(double zoomPercent)
+    private void UpdateStatusZoomSliderThumb(double sliderValue)
     {
-        var normalized = NormalizeStatusZoomSliderPosition(zoomPercent);
+        var min = _statusZoomSlider.Minimum;
+        var max = _statusZoomSlider.Maximum;
+        var clamped = Math.Clamp(sliderValue, min, max);
+        var normalized = max <= min ? 0 : (clamped - min) / (max - min);
         var trackWidth = Math.Max(1, _statusZoomSliderHost.Width - 16);
         var left = 8 + normalized * trackWidth - (_statusZoomSliderThumb.Width / 2);
         _statusZoomSliderThumb.Margin = new Thickness(Math.Clamp(left, 0, _statusZoomSliderHost.Width - _statusZoomSliderThumb.Width), 0, 0, 0);
-    }
-
-    private static double NormalizeStatusZoomSliderPosition(double zoomPercent)
-    {
-        var min = SetWorksheetZoomCommand.MinZoomPercent;
-        var max = SetWorksheetZoomCommand.MaxZoomPercent;
-        var midpoint = Math.Clamp(100d, min, max);
-        var clamped = Math.Clamp(zoomPercent, min, max);
-        if (max <= min)
-            return 0;
-        if (clamped <= midpoint)
-        {
-            var lowerRange = Math.Max(1, midpoint - min);
-            return 0.5 * ((clamped - min) / lowerRange);
-        }
-
-        var upperRange = Math.Max(1, max - midpoint);
-        return 0.5 + 0.5 * ((clamped - midpoint) / upperRange);
     }
 
     private static void ConfigureStatusBarViewButton(
