@@ -19,6 +19,12 @@ internal static class FreeWRibbon
                 menu.Item(commandId, theme.Name, theme.Name[0].ToString());
         }
 
+        static void FontSetMenu(string commandId, RibbonMenuBuilder menu)
+        {
+            foreach (var fontSet in DocumentFontSet.Catalog)
+                menu.Item(commandId, fontSet.Name, fontSet.Name[0].ToString());
+        }
+
         var definition = new RibbonDefinitionBuilder()
             .Tab("home", "Home", "H", tab =>
             {
@@ -326,6 +332,7 @@ internal static class FreeWRibbon
                         Width = 140
                     });
                     g.Medium("freew.theme-colors", "Colors", RibbonCommandIconKind.Color, "C", menu: m => ThemeMenu("freew.theme-colors", m), accent: RibbonCommandIconAccent.Color);
+                    g.Medium("freew.theme-fonts", "Fonts", RibbonCommandIconKind.Font, "F", menu: m => FontSetMenu("freew.theme-fonts", m), accent: RibbonCommandIconAccent.Theme);
                 });
                 // Design > Page Background: set the whole-page background colour (Word's Page Color). The
                 // command opens a swatch palette (+ No Color + More Colors...) and writes the model's page

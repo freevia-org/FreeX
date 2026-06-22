@@ -2334,6 +2334,69 @@ public sealed class AvaloniaShellSourceTests
     }
 
     [Fact]
+    public void WpfParityCapture_RegistersSameDialogSurfaceIdsAsAvalonia()
+    {
+        var avaloniaCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+        var wpfCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Host", "ParityCapture.cs"));
+        var dialogIds = new[]
+        {
+            "dialog.FormatCells",
+            "dialog.FindReplace",
+            "dialog.GoTo",
+            "dialog.GoToSpecial",
+            "dialog.Sort",
+            "dialog.SortOptions",
+            "dialog.TextToColumns",
+            "dialog.AdvancedFilter",
+            "dialog.Consolidate",
+            "dialog.RemoveDuplicates",
+            "dialog.GoalSeek",
+            "dialog.GoalSeekStatus",
+            "dialog.DataTable",
+            "dialog.ScenarioManager",
+            "dialog.ForecastSheet",
+            "dialog.Subtotal",
+            "dialog.Sparkline",
+            "dialog.InsertHyperlink",
+            "dialog.EvaluateFormula",
+            "dialog.WatchWindow",
+            "dialog.WorkbookStatistics",
+            "dialog.RenameSheet",
+            "dialog.UnhideSheet",
+            "dialog.About",
+            "dialog.LegalNotices",
+            "dialog.SelectDataSource",
+            "dialog.ChangeChartType",
+            "dialog.FormatChartArea",
+            "dialog.ShapeEffects",
+            "dialog.ShapeGradient",
+            "dialog.Zoom",
+            "dialog.CustomViews",
+            "dialog.SelectionPane",
+            "dialog.PivotTableOptions",
+            "dialog.PivotFieldFilter",
+            "dialog.PivotValueFieldSettings",
+            "dialog.InsertSlicer",
+            "dialog.InsertTimeline",
+            "dialog.AllowEditRanges",
+            "dialog.ProtectSheet",
+            "dialog.ProtectWorkbook",
+            "dialog.AccessibilityChecker",
+            "dialog.DataValidation",
+            "dialog.ConditionalFormatNewRule",
+            "dialog.ConditionalFormatManage",
+            "dialog.PageSetup",
+            "dialog.Options",
+        };
+
+        foreach (var dialogId in dialogIds)
+        {
+            avaloniaCaptureSource.Should().Contain(dialogId);
+            wpfCaptureSource.Should().Contain(dialogId);
+        }
+    }
+
+    [Fact]
     public void MainWindow_WiresNativeDataTableThroughSharedPlannerSessionAndCompactDialog()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));

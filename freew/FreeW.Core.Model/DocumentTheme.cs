@@ -90,8 +90,17 @@ public sealed record DocumentTheme(
                 && string.Equals(theme.BodyFont, minorFont, StringComparison.OrdinalIgnoreCase))
                 return theme;
         }
-        return Default;
+        return new DocumentTheme(
+            "Custom",
+            string.IsNullOrWhiteSpace(majorFont) ? Default.HeadingFont : majorFont,
+            string.IsNullOrWhiteSpace(minorFont) ? Default.BodyFont : minorFont,
+            HashOrDefault(scheme.Accent1, Default.PrimaryColorHex),
+            HashOrDefault(scheme.Accent2, Default.HeadingColorHex),
+            HashOrDefault(scheme.Accent3, Default.HeadingAccentColorHex));
     }
+
+    private static string HashOrDefault(string value, string fallback) =>
+        value.Length == 6 ? "#" + value.ToUpperInvariant() : fallback;
 
     /// <summary>
     /// Apply <paramref name="theme"/> to <paramref name="doc"/>'s style catalog and document default,
@@ -125,6 +134,28 @@ public sealed record DocumentTheme(
         SetRun(doc, "Heading1", run => run with { FontFamily = theme.HeadingFont, ColorHex = theme.HeadingColorHex });
         SetRun(doc, "Heading2", run => run with { FontFamily = theme.HeadingFont, ColorHex = theme.HeadingColorHex });
         SetRun(doc, "Heading3", run => run with { FontFamily = theme.HeadingFont, ColorHex = theme.HeadingAccentColorHex });
+    }
+
+    /// <summary>
+    /// Apply only the colour palette from <paramref name="theme"/> to <paramref name="doc"/>, preserving the
+    /// document's current heading/body fonts. This backs Word's separate Design &gt; Colors surface.
+    /// </summary>
+    public static void ApplyColors(TextDocument doc, DocumentTheme theme)
+    {
+        ArgumentNullException.ThrowIfNull(doc);
+        ArgumentNullException.ThrowIfNull(theme);
+
+        doc.Theme = doc.Theme with
+        {
+            PrimaryColorHex = theme.PrimaryColorHex,
+            HeadingColorHex = theme.HeadingColorHex,
+            HeadingAccentColorHex = theme.HeadingAccentColorHex,
+        };
+
+        SetRun(doc, "Title", run => run with { ColorHex = theme.PrimaryColorHex });
+        SetRun(doc, "Heading1", run => run with { ColorHex = theme.HeadingColorHex });
+        SetRun(doc, "Heading2", run => run with { ColorHex = theme.HeadingColorHex });
+        SetRun(doc, "Heading3", run => run with { ColorHex = theme.HeadingAccentColorHex });
     }
 
     // Rewrite a single catalog style's run formatting in place, if the style exists.

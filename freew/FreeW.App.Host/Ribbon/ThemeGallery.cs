@@ -24,6 +24,7 @@ internal static class ThemeGallery
         host.Children.Add(BuildThemes(editor));
         host.Children.Add(BuildStyleSets(editor));
         host.Children.Add(BuildColours(editor));
+        host.Children.Add(BuildFonts(editor));
         return host;
     }
 
@@ -52,6 +53,15 @@ internal static class ThemeGallery
         foreach (var theme in DocumentTheme.Catalog)
             strip.Children.Add(BuildColourSwatch(editor, theme));
         return WithLabel("Colors", strip);
+    }
+
+    /// <summary>Build Word's Fonts gallery: heading/body font-pair thumbnails.</summary>
+    public static FrameworkElement BuildFonts(DocumentView editor)
+    {
+        var strip = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        foreach (var fontSet in DocumentFontSet.Catalog)
+            strip.Children.Add(BuildFontSwatch(editor, fontSet));
+        return WithLabel("Fonts", strip);
     }
 
     private static FrameworkElement WithLabel(string label, FrameworkElement content)
@@ -124,7 +134,7 @@ internal static class ThemeGallery
         thumb.Children.Add(border);
         thumb.Children.Add(new TextBlock { Text = theme.Name, FontSize = 11, TextAlignment = System.Windows.TextAlignment.Center, Margin = new Thickness(0, 2, 0, 0) });
 
-        return WrapAsButton(editor, theme, thumb, theme.Name + " colors");
+        return WrapAsColourButton(editor, theme, thumb, theme.Name + " colors");
     }
 
     private static FrameworkElement BuildStyleSetSwatch(DocumentView editor, DocumentStyleSet styleSet)
@@ -166,6 +176,52 @@ internal static class ThemeGallery
         return WrapAsStyleSetButton(editor, styleSet, thumb, styleSet.Name + " style set");
     }
 
+    private static FrameworkElement BuildFontSwatch(DocumentView editor, DocumentFontSet fontSet)
+    {
+        var thumb = new StackPanel { Margin = new Thickness(4, 3, 4, 3), Width = 66 };
+
+        var page = new Border
+        {
+            Background = Brushes.White,
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
+            BorderThickness = new Thickness(1),
+            Height = 40,
+            Padding = new Thickness(4),
+            SnapsToDevicePixels = true
+        };
+
+        var sample = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        sample.Children.Add(new TextBlock
+        {
+            Text = "Heading",
+            FontFamily = new FontFamily(fontSet.HeadingFont),
+            FontSize = 10.5,
+            FontWeight = FontWeights.Bold,
+            Foreground = BrushFor("#2F5496"),
+            LineHeight = 11
+        });
+        sample.Children.Add(new TextBlock
+        {
+            Text = "Body",
+            FontFamily = new FontFamily(fontSet.BodyFont),
+            FontSize = 9,
+            Foreground = Brushes.DimGray,
+            LineHeight = 9
+        });
+        page.Child = sample;
+
+        thumb.Children.Add(page);
+        thumb.Children.Add(new TextBlock
+        {
+            Text = fontSet.Name,
+            FontSize = 11,
+            TextAlignment = System.Windows.TextAlignment.Center,
+            Margin = new Thickness(0, 2, 0, 0)
+        });
+
+        return WrapAsFontSetButton(editor, fontSet, thumb, fontSet.Name + " fonts");
+    }
+
     // Wrap a thumbnail in a borderless button that previews on hover, reverts on leave, commits on click.
     private static FrameworkElement WrapAsButton(DocumentView editor, DocumentTheme theme, FrameworkElement content, string tip)
     {
@@ -201,6 +257,40 @@ internal static class ThemeGallery
         return button;
     }
 
+    private static FrameworkElement WrapAsColourButton(DocumentView editor, DocumentTheme theme, FrameworkElement content, string tip)
+    {
+        var button = new Button
+        {
+            Content = content,
+            Background = Brushes.Transparent,
+            BorderBrush = Brushes.Transparent,
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(1),
+            Cursor = System.Windows.Input.Cursors.Hand,
+            ToolTip = tip
+        };
+
+        var hover = new SolidColorBrush(Color.FromRgb(0xEA, 0xF1, 0xFB));
+        button.MouseEnter += (_, _) =>
+        {
+            button.Background = hover;
+            button.BorderBrush = new SolidColorBrush(Color.FromRgb(0x2B, 0x57, 0x9A));
+            editor.PreviewThemeColors(theme);
+        };
+        button.MouseLeave += (_, _) =>
+        {
+            button.Background = Brushes.Transparent;
+            button.BorderBrush = Brushes.Transparent;
+            editor.EndThemePreview();
+        };
+        button.Click += (_, _) =>
+        {
+            editor.EndThemePreview();
+            editor.ApplyThemeColors(theme);
+        };
+        return button;
+    }
+
     private static FrameworkElement WrapAsStyleSetButton(DocumentView editor, DocumentStyleSet styleSet, FrameworkElement content, string tip)
     {
         var button = new Button
@@ -231,6 +321,40 @@ internal static class ThemeGallery
         {
             editor.EndStyleSetPreview();
             editor.ApplyStyleSet(styleSet);
+        };
+        return button;
+    }
+
+    private static FrameworkElement WrapAsFontSetButton(DocumentView editor, DocumentFontSet fontSet, FrameworkElement content, string tip)
+    {
+        var button = new Button
+        {
+            Content = content,
+            Background = Brushes.Transparent,
+            BorderBrush = Brushes.Transparent,
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(1),
+            Cursor = System.Windows.Input.Cursors.Hand,
+            ToolTip = tip
+        };
+
+        var hover = new SolidColorBrush(Color.FromRgb(0xEA, 0xF1, 0xFB));
+        button.MouseEnter += (_, _) =>
+        {
+            button.Background = hover;
+            button.BorderBrush = new SolidColorBrush(Color.FromRgb(0x2B, 0x57, 0x9A));
+            editor.PreviewFontSet(fontSet);
+        };
+        button.MouseLeave += (_, _) =>
+        {
+            button.Background = Brushes.Transparent;
+            button.BorderBrush = Brushes.Transparent;
+            editor.EndFontSetPreview();
+        };
+        button.Click += (_, _) =>
+        {
+            editor.EndFontSetPreview();
+            editor.ApplyFontSet(fontSet);
         };
         return button;
     }
