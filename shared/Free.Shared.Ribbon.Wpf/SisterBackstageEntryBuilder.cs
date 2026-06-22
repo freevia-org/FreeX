@@ -17,6 +17,10 @@ public sealed record SisterBackstageEntrySpec(
 
     public Action? SaveCopy { get; init; }
 
+    public Func<UIElement>? BuildHomePane { get; init; }
+
+    public bool UseNewPane { get; init; }
+
     public Func<UIElement>? BuildOpenPane { get; init; }
 
     public Func<UIElement>? BuildSaveAsPane { get; init; }
@@ -42,15 +46,26 @@ public static class SisterBackstageEntryBuilder
         ArgumentNullException.ThrowIfNull(spec.BuildNewPane);
         ArgumentNullException.ThrowIfNull(spec.BuildOptionsPane);
 
-        var entries = new List<BackstageEntry>
-        {
-            BackstageEntry.Pane("Info", RibbonCommandIconKind.Info, spec.BuildInfoPane, iconName: "info"),
-            BackstageEntry.Command("New", RibbonCommandIconKind.Insert, spec.New, iconName: "new"),
-        };
+        var entries = new List<BackstageEntry>();
+
+        var hasHomePane = spec.BuildHomePane is not null;
+
+        if (spec.BuildHomePane is not null)
+            entries.Add(BackstageEntry.Pane("Home", RibbonCommandIconKind.Grid, spec.BuildHomePane, iconName: "home"));
+
+        if (!hasHomePane)
+            entries.Add(BackstageEntry.Pane("Info", RibbonCommandIconKind.Info, spec.BuildInfoPane, iconName: "info"));
+
+        entries.Add(spec.UseNewPane
+            ? BackstageEntry.Pane("New", RibbonCommandIconKind.Insert, spec.BuildNewPane, iconName: "new")
+            : BackstageEntry.Command("New", RibbonCommandIconKind.Insert, spec.New, iconName: "new"));
 
         entries.Add(spec.BuildOpenPane is null
             ? BackstageEntry.Command("Open", RibbonCommandIconKind.GetData, spec.Open, iconName: "open")
             : BackstageEntry.Pane("Open", RibbonCommandIconKind.GetData, spec.BuildOpenPane, iconName: "open"));
+
+        if (hasHomePane)
+            entries.Add(BackstageEntry.Pane("Info", RibbonCommandIconKind.Info, spec.BuildInfoPane, iconName: "info"));
 
         entries.Add(BackstageEntry.Divider());
         entries.Add(BackstageEntry.Command("Save", RibbonCommandIconKind.Save, spec.Save, iconName: "save"));
@@ -68,7 +83,8 @@ public static class SisterBackstageEntryBuilder
             entries.Add(BackstageEntry.Pane("Export", RibbonCommandIconKind.Share, spec.BuildExportPane, iconName: "export"));
 
         entries.Add(BackstageEntry.Pane("Recent", RibbonCommandIconKind.GetData, spec.BuildRecentPane, iconName: "recent"));
-        entries.Add(BackstageEntry.Pane("New from template", RibbonCommandIconKind.Grid, spec.BuildNewPane, iconName: "new"));
+        if (!spec.UseNewPane)
+            entries.Add(BackstageEntry.Pane("New from template", RibbonCommandIconKind.Grid, spec.BuildNewPane, iconName: "new"));
         entries.Add(BackstageEntry.Pane("Options", RibbonCommandIconKind.View, spec.BuildOptionsPane, dockBottom: true, iconName: "options"));
         entries.Add(BackstageEntry.Command("Close", RibbonCommandIconKind.Previous, static () => { }, dockBottom: true, iconName: "close"));
 

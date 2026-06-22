@@ -32,10 +32,18 @@ public sealed class BackstagePaneDedupSourceTests
 
         if (appFolder == "freew")
         {
+            source.Should().Contain("BuildHomePane = BuildHomePane");
+            source.Should().Contain("UseNewPane = true");
             source.Should().Contain("BuildOpenPane = BuildOpenPane");
             source.Should().Contain("BuildSaveAsPane = BuildSaveAsPane");
             source.Should().Contain("Panes.BuildActionPane(");
             source.Should().Contain("new BackstageActionPaneSpec(");
+            source.Should().Contain("Heading: \"Home\"");
+        }
+        else
+        {
+            source.Should().NotContain("BuildHomePane = BuildHomePane");
+            source.Should().NotContain("UseNewPane = true");
         }
 
         source.Should().NotContain("BackstageEntry.Pane(\"Info\"");
