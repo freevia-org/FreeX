@@ -391,6 +391,7 @@ public sealed class MainWindow : Window
             Save: () => _file.Save(),
             SaveAs: () => _file.SaveAs(),
             SaveCopy: () => _file.SaveCopy(),
+            Close: CloseDocument,
             Print: Print,
             ExportPdf: ExportToPdf,
             ExportXps: ExportToXps,
@@ -420,6 +421,11 @@ public sealed class MainWindow : Window
         // layer is hidden. Collapse it here and restore it in the backstage OnClosed callback.
         SetEditorAdornersVisible(false);
         _backstage.Show();
+    }
+
+    private void CloseDocument()
+    {
+        Close();
     }
 
     // Toggle the editor's AdornerLayer (page-break markers, etc.) so they don't draw over the backstage.

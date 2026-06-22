@@ -34,6 +34,7 @@ public sealed class BackstagePaneDedupSourceTests
         {
             source.Should().Contain("BuildHomePane = BuildHomePane");
             source.Should().Contain("UseNewPane = true");
+            source.Should().Contain("Close = _actions.Close");
             source.Should().Contain("BuildOpenPane = BuildOpenPane");
             source.Should().Contain("BuildSaveAsPane = BuildSaveAsPane");
             source.Should().Contain("Panes.BuildActionPane(");

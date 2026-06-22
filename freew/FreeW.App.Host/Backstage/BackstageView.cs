@@ -57,6 +57,7 @@ internal sealed class BackstageView : UserControl
             BuildOptionsPane)
         {
             SaveCopy = _actions.SaveCopy,
+            Close = _actions.Close,
             Print = _actions.Print,
             BuildHomePane = BuildHomePane,
             UseNewPane = true,
@@ -198,6 +199,7 @@ internal sealed record BackstageActions(
     Action Save,
     Action SaveAs,
     Action SaveCopy,
+    Action Close,
     Action Print,
     Action ExportPdf,
     Action ExportXps,
