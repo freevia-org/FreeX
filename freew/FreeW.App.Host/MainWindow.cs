@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
@@ -393,6 +394,7 @@ public sealed class MainWindow : Window
             SaveAsType: extension => _file.SaveAs(extension),
             SaveCopy: () => _file.SaveCopy(),
             RecoverUnsaved: () => _autosave.RecoverUnsavedDocuments(this),
+            OpenContainingFolder: OpenContainingFolder,
             Close: CloseDocument,
             Print: Print,
             PrintPreview: OpenPrintPreview,
@@ -433,6 +435,15 @@ public sealed class MainWindow : Window
     private void CloseDocument()
     {
         Close();
+    }
+
+    private static void OpenContainingFolder(string documentPath)
+    {
+        var folder = System.IO.Path.GetDirectoryName(documentPath);
+        if (string.IsNullOrWhiteSpace(folder))
+            return;
+
+        Process.Start(new ProcessStartInfo(folder) { UseShellExecute = true });
     }
 
     // Toggle the editor's AdornerLayer (page-break markers, etc.) so they don't draw over the backstage.
