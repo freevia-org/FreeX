@@ -4354,6 +4354,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("HasStatusTextAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_statusText), \"Shows the current workbook status.\", StringComparison.Ordinal)");
         source.Should().Contain("HasStatusTextAutomationId: string.Equals(AutomationProperties.GetAutomationId(_statusText), \"StatusText\", StringComparison.Ordinal)");
         source.Should().Contain("HasStatusTextValue: HasStatusBarAccessibleValue()");
+        source.Should().Contain("private bool HasStatusBarAccessibleValue() =>");
         source.Should().Contain("HasCellAddressAutomationName: string.Equals(AutomationProperties.GetName(_cellAddressText), \"Cell address\", StringComparison.Ordinal)");
         source.Should().Contain("HasCellAddressAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_cellAddressText), \"Shows the active cell address.\", StringComparison.Ordinal)");
         source.Should().Contain("HasCellAddressAutomationId: string.Equals(AutomationProperties.GetAutomationId(_cellAddressText), \"CellAddressText\", StringComparison.Ordinal)");
@@ -4806,7 +4807,11 @@ public sealed class AvaloniaShellSourceTests
         cfSource.Should().Contain("private sealed record ConditionalFormatRuleDialogSmokeProbe(");
         cfSource.Should().Contain("private sealed record ManageConditionalFormatsDialogSmokeProbe(");
         windowSource.Should().Contain("HasLaunchSmokeDialog(probe.Dialog, \"New Formatting Rule\")");
-        windowSource.Should().Contain("HasLaunchSmokeDialog(probe.Dialog, \"Manage Conditional Formatting Rules\")");
+        windowSource.Should().Contain("HasLaunchSmokeDialog(probe.Dialog, UiText.Get(\"ManageConditionalFormats_ConditionalFormattingRulesManager\"))");
+        windowSource.Should().Contain("HasLaunchSmokeText(AutomationProperties.GetName(probe.ListBox), UiText.Get(\"ManageConditionalFormats_ConditionalFormattingRules\"))");
+        windowSource.Should().Contain("HasLaunchSmokeNamedButton(probe.MoveUpButton, \"ManageConditionalFormatsMoveUpButton\", UiText.Get(\"ManageConditionalFormats_MoveUp\"))");
+        windowSource.Should().Contain("HasLaunchSmokeButton(probe.ApplyAppliesToButton, \"ManageConditionalFormatsApplyAppliesToButton\", UiText.Get(\"ManageConditionalFormats_Apply\"))");
+        windowSource.Should().Contain("NormalizeLaunchSmokeText(string? text)");
 
         // Snapshot fields, IsPassed gating, and report lines for the two CF dialogs.
         smokeSource.Should().Contain("bool HasConditionalFormatRuleDialog = false,");
