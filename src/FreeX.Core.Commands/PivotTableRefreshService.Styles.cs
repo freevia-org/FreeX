@@ -49,7 +49,7 @@ public static partial class PivotTableRefreshService
         var bodyStart = GetPivotBodyStart(pivotTable);
         var pageFieldRows = GetPageFieldRowSpan(pivotTable);
         var pageFieldEndRow = pageFieldRows == 0 ? 0 : pivotTable.TargetRange.Start.Row + pageFieldRows - 1;
-        var headerEndRow = bodyStart.Row + (uint)Math.Max(1, pivotTable.ColumnFields.Count) - 1;
+        var headerEndRow = GetStyledPivotHeaderEndRow(sheet, pivotTable, bodyStart);
         var subtotalRows = new HashSet<uint>();
         var grandTotalRows = new HashSet<uint>();
         var grandTotalColumns = new HashSet<uint>();
@@ -262,6 +262,39 @@ public static partial class PivotTableRefreshService
         return col < firstValueColumn
             ? pivotTable.ShowRowHeaders
             : pivotTable.ShowColumnHeaders;
+    }
+
+    private static uint GetStyledPivotHeaderEndRow(
+        Sheet sheet,
+        PivotTableModel pivotTable,
+        CellAddress bodyStart)
+    {
+        var headerRowCount = Math.Max(1, pivotTable.ColumnFields.Count);
+        if (HasLoadedNativeMatrixHeaderPreamble(sheet, pivotTable, bodyStart))
+            headerRowCount++;
+
+        return bodyStart.Row + (uint)headerRowCount - 1;
+    }
+
+    private static bool HasLoadedNativeMatrixHeaderPreamble(
+        Sheet sheet,
+        PivotTableModel pivotTable,
+        CellAddress bodyStart)
+    {
+        if (pivotTable.RowFields.Count == 0 || pivotTable.ColumnFields.Count == 0)
+            return false;
+
+        if (sheet.GetCell(bodyStart.Row, bodyStart.Col)?.Value is not TextValue firstCell ||
+            !pivotTable.DataFields.Any(field => string.Equals(field.Name, firstCell.Value, StringComparison.OrdinalIgnoreCase)))
+        {
+            return false;
+        }
+
+        var nextHeaderRow = bodyStart.Row + 1;
+        if (sheet.GetCell(nextHeaderRow, bodyStart.Col)?.Value is not TextValue rowHeader)
+            return false;
+
+        return string.Equals(rowHeader.Value, "Row Labels", StringComparison.OrdinalIgnoreCase);
     }
 
     private static void ApplyCompactRowLabelIndent(

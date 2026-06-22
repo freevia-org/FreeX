@@ -415,6 +415,9 @@ internal static class Program
             FreeX.App.Host.AutoFilterDropdownPlanner.TryGetAutoFilterRange(sheet, out var autoFilterRange)
                 ? autoFilterRange
                 : null;
+        grid.PivotHeaderDropdowns = FreeX.App.Host.PivotHeaderDropdownPlanner.BuildTargets(workbook, sheet)
+            .Select(target => new PivotHeaderDropdownButton(target.HeaderCell, target.IsActive))
+            .ToArray();
 
         // Step 4: Off-screen layout pass
         grid.Measure(new Size(viewW, viewH));

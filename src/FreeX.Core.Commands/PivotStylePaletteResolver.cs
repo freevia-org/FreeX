@@ -17,9 +17,18 @@ internal static class PivotStylePaletteResolver
             ["PivotStyleMedium6"] = WorkbookThemeColorSlot.Accent5,
             ["PivotStyleMedium13"] = WorkbookThemeColorSlot.Accent5,
             ["PivotStyleMedium17"] = WorkbookThemeColorSlot.Accent5,
-            ["PivotStyleMedium4"] = WorkbookThemeColorSlot.Accent6,
+            ["PivotStyleMedium4"] = WorkbookThemeColorSlot.Accent3,
             ["PivotStyleMedium7"] = WorkbookThemeColorSlot.Accent6,
             ["PivotStyleMedium14"] = WorkbookThemeColorSlot.Accent6
+        };
+
+    private static readonly IReadOnlyDictionary<string, WorkbookThemeColorSlot> DarkMediumThemeSlots =
+        new Dictionary<string, WorkbookThemeColorSlot>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["PivotStyleMedium4"] = WorkbookThemeColorSlot.Accent3,
+            ["PivotStyleMedium5"] = WorkbookThemeColorSlot.Accent4,
+            ["PivotStyleMedium6"] = WorkbookThemeColorSlot.Accent5,
+            ["PivotStyleMedium7"] = WorkbookThemeColorSlot.Accent6
         };
 
     public static PivotStylePalette Resolve(string styleName)
@@ -32,8 +41,25 @@ internal static class PivotStylePaletteResolver
         if (string.IsNullOrWhiteSpace(styleName))
             return LightPalette();
 
-        if (!IsOfficeTheme(theme) &&
-            TryResolveThemedPalette(styleName, theme, out var themedPalette))
+        if (string.Equals(styleName, "PivotStyleMedium2", StringComparison.OrdinalIgnoreCase) &&
+            IsModernOfficeTheme(theme))
+        {
+            return LegacyMedium2Palette();
+        }
+
+        if (string.Equals(styleName, "PivotStyleMedium17", StringComparison.OrdinalIgnoreCase) &&
+            IsModernOfficeTheme(theme))
+        {
+            return MediumPalette(new CellColor(112, 48, 160), new CellColor(229, 223, 236), new CellColor(204, 192, 218), new CellColor(243, 235, 250), new CellColor(178, 161, 199));
+        }
+
+        if (string.Equals(styleName, "PivotStyleDark7", StringComparison.OrdinalIgnoreCase) &&
+            IsModernOfficeTheme(theme))
+        {
+            return DarkPalette(new CellColor(31, 78, 121), new CellColor(217, 226, 243), new CellColor(184, 204, 228), new CellColor(232, 240, 248), new CellColor(149, 179, 215));
+        }
+
+        if (TryResolveThemedPalette(styleName, theme, out var themedPalette))
         {
             return themedPalette;
         }
@@ -42,17 +68,9 @@ internal static class PivotStylePaletteResolver
         {
             "PivotStyleDark4" => DarkPalette(new CellColor(68, 84, 106), new CellColor(217, 225, 242), new CellColor(180, 198, 231), new CellColor(242, 242, 242), new CellColor(142, 169, 219)),
             "PivotStyleDark7" => DarkPalette(new CellColor(31, 78, 121), new CellColor(217, 226, 243), new CellColor(184, 204, 228), new CellColor(232, 240, 248), new CellColor(149, 179, 215)),
-            "PivotStyleMedium2" => new(
-                HeaderFill: new CellColor(126, 53, 14),
-                HeaderFont: CellColor.White,
-                SubtotalFill: new CellColor(251, 226, 213),
-                GrandTotalFill: new CellColor(126, 53, 14),
-                GrandTotalFont: CellColor.White,
-                StripeFill: new CellColor(247, 199, 172),
-                Border: new CellColor(233, 113, 50),
-                BodyFill: new CellColor(247, 199, 172)),
+            "PivotStyleMedium2" => LegacyMedium2Palette(),
             "PivotStyleMedium4" => MediumPalette(new CellColor(112, 173, 71), new CellColor(226, 239, 218), new CellColor(198, 224, 180), new CellColor(235, 245, 230), new CellColor(169, 208, 142)),
-            "PivotStyleMedium9" => MediumPalette(new CellColor(91, 155, 213), new CellColor(221, 235, 247), new CellColor(221, 235, 247), new CellColor(234, 243, 252), new CellColor(157, 195, 230)),
+            "PivotStyleMedium9" => MediumPalette(new CellColor(91, 155, 213), new CellColor(221, 235, 247), null, new CellColor(234, 243, 252), new CellColor(157, 195, 230)),
             "PivotStyleMedium10" => MediumPalette(new CellColor(237, 125, 49), new CellColor(252, 228, 214), new CellColor(248, 203, 173), new CellColor(253, 239, 230), new CellColor(244, 177, 131)),
             "PivotStyleMedium17" => MediumPalette(new CellColor(112, 48, 160), new CellColor(229, 223, 236), new CellColor(204, 192, 218), new CellColor(243, 235, 250), new CellColor(178, 161, 199)),
             _ when styleName.StartsWith("PivotStyleDark", StringComparison.OrdinalIgnoreCase) =>
@@ -65,6 +83,18 @@ internal static class PivotStylePaletteResolver
 
     private static bool TryResolveThemedPalette(string styleName, WorkbookTheme theme, out PivotStylePalette palette)
     {
+        if (DarkMediumThemeSlots.TryGetValue(styleName, out var darkMediumSlot))
+        {
+            palette = ThemedDarkMediumPalette(theme, darkMediumSlot);
+            return true;
+        }
+
+        if (string.Equals(styleName, "PivotStyleMedium9", StringComparison.OrdinalIgnoreCase))
+        {
+            palette = ThemedMediumPalette(theme, WorkbookThemeColorSlot.Accent1) with { GrandTotalFill = null };
+            return true;
+        }
+
         if (TryResolveMediumThemeSlot(styleName, out var mediumSlot))
         {
             palette = ThemedMediumPalette(theme, mediumSlot);
@@ -93,8 +123,10 @@ internal static class PivotStylePaletteResolver
         return false;
     }
 
-    private static bool IsOfficeTheme(WorkbookTheme theme) =>
-        ReferenceEquals(theme, WorkbookTheme.Office) ||
+    private static bool TryResolveMediumThemeSlot(string styleName, out WorkbookThemeColorSlot slot) =>
+        MediumThemeSlots.TryGetValue(styleName, out slot);
+
+    private static bool IsModernOfficeTheme(WorkbookTheme theme) =>
         new[]
         {
             WorkbookThemeColorSlot.Accent1,
@@ -105,14 +137,11 @@ internal static class PivotStylePaletteResolver
             WorkbookThemeColorSlot.Accent6
         }.All(slot => theme.GetColor(slot) == WorkbookTheme.Office.GetColor(slot));
 
-    private static bool TryResolveMediumThemeSlot(string styleName, out WorkbookThemeColorSlot slot) =>
-        MediumThemeSlots.TryGetValue(styleName, out slot);
-
     private static bool TryResolveLightThemeSlot(string styleName, out WorkbookThemeColorSlot slot)
     {
         if (string.Equals(styleName, "PivotStyleLight16", StringComparison.OrdinalIgnoreCase))
         {
-            slot = WorkbookThemeColorSlot.Accent1;
+            slot = WorkbookThemeColorSlot.Accent4;
             return true;
         }
 
@@ -161,6 +190,14 @@ internal static class PivotStylePaletteResolver
             theme.ResolveColor(slot, 0.5));
     }
 
+    private static PivotStylePalette ThemedDarkMediumPalette(WorkbookTheme theme, WorkbookThemeColorSlot slot) =>
+        MediumPalette(
+            theme.ResolveColor(slot, -0.25),
+            theme.ResolveColor(slot, 0.8),
+            theme.ResolveColor(slot, 0.8),
+            theme.ResolveColor(slot, 0.9),
+            theme.ResolveColor(slot, 0.5));
+
     private static PivotStylePalette ThemedLightPalette(WorkbookTheme theme, WorkbookThemeColorSlot slot) =>
         new(
             HeaderFill: theme.ResolveColor(slot, 0.8),
@@ -183,10 +220,21 @@ internal static class PivotStylePaletteResolver
             Border: new CellColor(191, 191, 191),
             BodyFill: null);
 
+    private static PivotStylePalette LegacyMedium2Palette() =>
+        new(
+            HeaderFill: new CellColor(126, 53, 14),
+            HeaderFont: CellColor.White,
+            SubtotalFill: new CellColor(251, 226, 213),
+            GrandTotalFill: new CellColor(126, 53, 14),
+            GrandTotalFont: CellColor.White,
+            StripeFill: new CellColor(247, 199, 172),
+            Border: new CellColor(233, 113, 50),
+            BodyFill: new CellColor(247, 199, 172));
+
     private static PivotStylePalette MediumPalette(
         CellColor headerFill,
         CellColor subtotalFill,
-        CellColor grandTotalFill,
+        CellColor? grandTotalFill,
         CellColor stripeFill,
         CellColor border) =>
         new(headerFill, CellColor.White, subtotalFill, grandTotalFill, CellColor.Black, stripeFill, border, BodyFill: null);
@@ -204,7 +252,7 @@ internal sealed record PivotStylePalette(
     CellColor HeaderFill,
     CellColor HeaderFont,
     CellColor SubtotalFill,
-    CellColor GrandTotalFill,
+    CellColor? GrandTotalFill,
     CellColor GrandTotalFont,
     CellColor StripeFill,
     CellColor Border,

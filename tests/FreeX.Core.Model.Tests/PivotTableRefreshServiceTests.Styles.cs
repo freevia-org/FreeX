@@ -27,11 +27,11 @@ public sealed partial class PivotTableRefreshServiceTests
 
         var headerStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "E2"))!.StyleId);
         headerStyle.Bold.Should().BeTrue();
-        headerStyle.FillColor.Should().Be(new CellColor(91, 155, 213));
+        headerStyle.FillColor.Should().Be(new CellColor(21, 96, 130));
         headerStyle.FontColor.Should().Be(CellColor.White);
         var totalStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "E5"))!.StyleId);
         totalStyle.Bold.Should().BeTrue();
-        totalStyle.FillColor.Should().Be(new CellColor(221, 235, 247));
+        totalStyle.FillColor.Should().BeNull();
     }
 
     [Fact]
@@ -56,13 +56,13 @@ public sealed partial class PivotTableRefreshServiceTests
         PivotTableRefreshService.Refresh(workbook, sheet, pivot);
 
         var firstBodyStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "E3"))!.StyleId);
-        firstBodyStyle.FillColor.Should().Be(new CellColor(234, 243, 252));
+        firstBodyStyle.FillColor.Should().Be(new CellColor(232, 239, 242));
         var secondBodyStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "E4"))!.StyleId);
         secondBodyStyle.FillColor.Should().BeNull();
         var stripedValueStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "F4"))!.StyleId);
-        stripedValueStyle.FillColor.Should().Be(new CellColor(234, 243, 252));
+        stripedValueStyle.FillColor.Should().Be(new CellColor(232, 239, 242));
         var totalStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "F5"))!.StyleId);
-        totalStyle.FillColor.Should().Be(new CellColor(221, 235, 247));
+        totalStyle.FillColor.Should().BeNull();
     }
 
     [Fact]
@@ -87,9 +87,9 @@ public sealed partial class PivotTableRefreshServiceTests
 
         Text(sheet, "H2").Should().Be("Grand Total");
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "H3"))!.StyleId)
-            .FillColor.Should().Be(new CellColor(221, 235, 247));
+            .FillColor.Should().BeNull();
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "H4"))!.StyleId)
-            .FillColor.Should().Be(new CellColor(221, 235, 247));
+            .FillColor.Should().BeNull();
     }
 
     [Fact]
@@ -115,10 +115,10 @@ public sealed partial class PivotTableRefreshServiceTests
 
         Text(sheet, "E7").Should().Be("Grand Total");
         sheet.GetCell(Addr(sheet, "F7"))!.Value.Should().Be(BlankValue.Instance);
-        AssertPivotTotalStyle(workbook, sheet, "E7", new CellColor(221, 235, 247));
-        AssertPivotTotalStyle(workbook, sheet, "F7", new CellColor(221, 235, 247));
-        AssertPivotTotalStyle(workbook, sheet, "G7", new CellColor(221, 235, 247));
-        AssertPivotTotalStyle(workbook, sheet, "H7", new CellColor(221, 235, 247));
+        AssertPivotTotalStyle(workbook, sheet, "E7", null);
+        AssertPivotTotalStyle(workbook, sheet, "F7", null);
+        AssertPivotTotalStyle(workbook, sheet, "G7", null);
+        AssertPivotTotalStyle(workbook, sheet, "H7", null);
     }
 
     [Fact]
@@ -145,10 +145,10 @@ public sealed partial class PivotTableRefreshServiceTests
 
         Text(sheet, "E5").Should().Be("East Total");
         sheet.GetCell(Addr(sheet, "F5"))!.Value.Should().Be(BlankValue.Instance);
-        AssertPivotTotalStyle(workbook, sheet, "E5", new CellColor(221, 235, 247));
-        AssertPivotTotalStyle(workbook, sheet, "F5", new CellColor(221, 235, 247));
-        AssertPivotTotalStyle(workbook, sheet, "G5", new CellColor(221, 235, 247));
-        AssertPivotTotalStyle(workbook, sheet, "H5", new CellColor(221, 235, 247));
+        AssertPivotTotalStyle(workbook, sheet, "E5", new CellColor(208, 223, 230));
+        AssertPivotTotalStyle(workbook, sheet, "F5", new CellColor(208, 223, 230));
+        AssertPivotTotalStyle(workbook, sheet, "G5", new CellColor(208, 223, 230));
+        AssertPivotTotalStyle(workbook, sheet, "H5", new CellColor(208, 223, 230));
     }
 
     [Fact]
@@ -176,7 +176,7 @@ public sealed partial class PivotTableRefreshServiceTests
         sheet.GetCell(Addr(sheet, "J3"))!.Value.Should().Be(BlankValue.Instance);
         var headerStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "J3"))!.StyleId);
         headerStyle.Bold.Should().BeTrue();
-        headerStyle.FillColor.Should().Be(new CellColor(91, 155, 213));
+        headerStyle.FillColor.Should().Be(new CellColor(21, 96, 130));
         headerStyle.FontColor.Should().Be(CellColor.White);
         headerStyle.BorderBottom.Style.Should().Be(BorderStyle.Thin);
     }
@@ -203,7 +203,7 @@ public sealed partial class PivotTableRefreshServiceTests
         PivotTableRefreshService.Refresh(workbook, sheet, pivot);
 
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "E2"))!.StyleId).FillColor.Should().BeNull();
-        workbook.GetStyle(sheet.GetCell(Addr(sheet, "F2"))!.StyleId).FillColor.Should().Be(new CellColor(91, 155, 213));
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "F2"))!.StyleId).FillColor.Should().Be(new CellColor(21, 96, 130));
     }
 
     [Fact]
@@ -228,7 +228,7 @@ public sealed partial class PivotTableRefreshServiceTests
 
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "F3"))!.StyleId).NumberFormat.Should().Be("#,##0.00");
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "F5"))!.StyleId).NumberFormat.Should().Be("#,##0.00");
-        workbook.GetStyle(sheet.GetCell(Addr(sheet, "F5"))!.StyleId).FillColor.Should().Be(new CellColor(221, 235, 247));
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "F5"))!.StyleId).FillColor.Should().BeNull();
     }
 
     [Theory]
@@ -278,7 +278,7 @@ public sealed partial class PivotTableRefreshServiceTests
         PivotTableRefreshService.Refresh(workbook, sheet, pivot);
 
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "F3"))!.StyleId).NumberFormat.Should().Be("#,##0.0 \"kg\"");
-        workbook.GetStyle(sheet.GetCell(Addr(sheet, "F5"))!.StyleId).FillColor.Should().Be(new CellColor(221, 235, 247));
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "F5"))!.StyleId).FillColor.Should().BeNull();
     }
 
     [Fact]
@@ -303,7 +303,7 @@ public sealed partial class PivotTableRefreshServiceTests
 
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "F3"))!.StyleId).NumberFormat.Should().Be(CellStyle.Default.NumberFormat);
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "F5"))!.StyleId).NumberFormat.Should().Be(CellStyle.Default.NumberFormat);
-        workbook.GetStyle(sheet.GetCell(Addr(sheet, "F5"))!.StyleId).FillColor.Should().Be(new CellColor(221, 235, 247));
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "F5"))!.StyleId).FillColor.Should().BeNull();
     }
 
     [Fact]
@@ -333,7 +333,7 @@ public sealed partial class PivotTableRefreshServiceTests
         var headerStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "E2"))!.StyleId);
         headerStyle.Bold.Should().BeTrue();
         headerStyle.FontColor.Should().Be(CellColor.White);
-        headerStyle.FillColor.Should().Be(new CellColor(91, 155, 213));
+        headerStyle.FillColor.Should().Be(new CellColor(21, 96, 130));
         headerStyle.BorderBottom.Style.Should().Be(BorderStyle.Thin);
     }
 
@@ -361,7 +361,7 @@ public sealed partial class PivotTableRefreshServiceTests
         PivotTableRefreshService.Refresh(workbook, sheet, pivot);
 
         var headerStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "E2"))!.StyleId);
-        headerStyle.FillColor.Should().Be(new CellColor(91, 155, 213));
+        headerStyle.FillColor.Should().Be(new CellColor(21, 96, 130));
         headerStyle.Bold.Should().BeTrue();
         headerStyle.FontColor.Should().Be(CellColor.White);
         headerStyle.BorderBottom.Style.Should().Be(BorderStyle.Thin);
@@ -393,7 +393,7 @@ public sealed partial class PivotTableRefreshServiceTests
         headerStyle.BorderBottom.Style.Should().Be(BorderStyle.Thin);
         headerStyle.Bold.Should().BeTrue();
         headerStyle.FontColor.Should().Be(CellColor.White);
-        headerStyle.FillColor.Should().Be(new CellColor(91, 155, 213));
+        headerStyle.FillColor.Should().Be(new CellColor(21, 96, 130));
     }
 
     [Fact]
@@ -418,16 +418,16 @@ public sealed partial class PivotTableRefreshServiceTests
 
         PivotTableRefreshService.Refresh(workbook, sheet, pivot);
 
-        workbook.GetStyle(sheet.GetCell(Addr(sheet, "E2"))!.StyleId).FillColor.Should().Be(new CellColor(112, 173, 71));
-        workbook.GetStyle(sheet.GetCell(Addr(sheet, "G5"))!.StyleId).FillColor.Should().Be(new CellColor(226, 239, 218));
-        workbook.GetStyle(sheet.GetCell(Addr(sheet, "G9"))!.StyleId).FillColor.Should().Be(new CellColor(198, 224, 180));
-        workbook.GetStyle(sheet.GetCell(Addr(sheet, "F3"))!.StyleId).FillColor.Should().Be(new CellColor(235, 245, 230));
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "E2"))!.StyleId).FillColor.Should().Be(new CellColor(19, 80, 27));
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "G5"))!.StyleId).FillColor.Should().Be(new CellColor(209, 225, 211));
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "G9"))!.StyleId).FillColor.Should().Be(new CellColor(209, 225, 211));
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "F3"))!.StyleId).FillColor.Should().Be(new CellColor(232, 240, 233));
     }
 
     [Theory]
     [InlineData("PivotStyleMedium2", 126, 53, 14, 247, 199, 172)]
-    [InlineData("PivotStyleLight16", 217, 225, 242, 242, 248, 238)]
-    [InlineData("PivotStyleMedium10", 237, 125, 49, 253, 239, 230)]
+    [InlineData("PivotStyleLight16", 207, 236, 247, 243, 250, 253)]
+    [InlineData("PivotStyleMedium10", 233, 113, 50, 253, 241, 234)]
     [InlineData("PivotStyleMedium17", 112, 48, 160, 243, 235, 250)]
     [InlineData("PivotStyleDark7", 31, 78, 121, 232, 240, 248)]
     public void Refresh_MapsAdditionalBuiltInPivotStyleFamilies(string styleName, byte headerR, byte headerG, byte headerB, byte stripeR, byte stripeG, byte stripeB)
@@ -686,16 +686,26 @@ public sealed partial class PivotTableRefreshServiceTests
 
         PivotTableRefreshService.Refresh(workbook, sheet, pivot);
 
+        var expectedHeaderFill = styleName.Equals("PivotStyleMedium5", StringComparison.OrdinalIgnoreCase) ||
+                                 styleName.Equals("PivotStyleMedium6", StringComparison.OrdinalIgnoreCase) ||
+                                 styleName.Equals("PivotStyleMedium7", StringComparison.OrdinalIgnoreCase)
+            ? theme.ResolveColor(expectedSlot, -0.25)
+            : theme.ResolveColor(expectedSlot);
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "E2"))!.StyleId)
-            .FillColor.Should().Be(theme.ResolveColor(expectedSlot));
+            .FillColor.Should().Be(expectedHeaderFill);
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "E3"))!.StyleId)
             .FillColor.Should().Be(theme.ResolveColor(expectedSlot, 0.9));
+        var expectedGrandTotalFill = styleName.Equals("PivotStyleMedium5", StringComparison.OrdinalIgnoreCase) ||
+                                     styleName.Equals("PivotStyleMedium6", StringComparison.OrdinalIgnoreCase) ||
+                                     styleName.Equals("PivotStyleMedium7", StringComparison.OrdinalIgnoreCase)
+            ? theme.ResolveColor(expectedSlot, 0.8)
+            : theme.ResolveColor(expectedSlot, 0.7);
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "F5"))!.StyleId)
-            .FillColor.Should().Be(theme.ResolveColor(expectedSlot, 0.7));
+            .FillColor.Should().Be(expectedGrandTotalFill);
     }
 
     [Theory]
-    [InlineData("PivotStyleLight16", WorkbookThemeColorSlot.Accent1)]
+    [InlineData("PivotStyleLight16", WorkbookThemeColorSlot.Accent4)]
     [InlineData("PivotStyleLight17", WorkbookThemeColorSlot.Accent2)]
     [InlineData("PivotStyleLight18", WorkbookThemeColorSlot.Accent3)]
     [InlineData("PivotStyleLight19", WorkbookThemeColorSlot.Accent4)]
@@ -760,13 +770,13 @@ public sealed partial class PivotTableRefreshServiceTests
 
         var pageCaptionStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "E2"))!.StyleId);
         pageCaptionStyle.Bold.Should().BeTrue();
-        pageCaptionStyle.FillColor.Should().Be(new CellColor(91, 155, 213));
+        pageCaptionStyle.FillColor.Should().Be(new CellColor(21, 96, 130));
         var pageValueStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "F2"))!.StyleId);
         pageValueStyle.Bold.Should().BeTrue();
-        pageValueStyle.FillColor.Should().Be(new CellColor(91, 155, 213));
+        pageValueStyle.FillColor.Should().Be(new CellColor(21, 96, 130));
         var bodyHeaderStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "E4"))!.StyleId);
         bodyHeaderStyle.Bold.Should().BeTrue();
-        bodyHeaderStyle.FillColor.Should().Be(new CellColor(91, 155, 213));
+        bodyHeaderStyle.FillColor.Should().Be(new CellColor(21, 96, 130));
     }
 
     private static WorkbookTheme CreateDistinctPivotStyleTheme() =>
@@ -778,7 +788,7 @@ public sealed partial class PivotTableRefreshServiceTests
             .WithColor(WorkbookThemeColorSlot.Accent5, new CellColor(150, 45, 140))
             .WithColor(WorkbookThemeColorSlot.Accent6, new CellColor(80, 145, 35));
 
-    private static void AssertPivotTotalStyle(Workbook workbook, Sheet sheet, string a1, CellColor expectedFill)
+    private static void AssertPivotTotalStyle(Workbook workbook, Sheet sheet, string a1, CellColor? expectedFill)
     {
         var cell = sheet.GetCell(Addr(sheet, a1));
         cell.Should().NotBeNull();
