@@ -1,0 +1,106 @@
+using System.IO;
+using FluentAssertions;
+
+namespace FreeX.App.Avalonia.Tests;
+
+public sealed class AvaloniaGridInputSourceTests
+{
+    [Fact]
+    public void WorksheetHeaders_ExposeResizeHandlesAndCommitThroughSessionSizing()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("CreateColumnHeaderCell(col, viewport.ColMetrics[colIndex], selected, zoomFactor)");
+        source.Should().Contain("CreateRowHeaderCell(row, rowMetric, selectedRow, zoomFactor)");
+        source.Should().Contain("AddColumnResizeHandle(header, col, metric, zoomFactor)");
+        source.Should().Contain("AddRowResizeHandle(header, row, metric, zoomFactor)");
+        source.Should().Contain("BeginHeaderResize(args, handle, HeaderResizeKind.Column");
+        source.Should().Contain("BeginHeaderResize(args, handle, HeaderResizeKind.Row");
+        source.Should().Contain("GridResizeSizePlanner.ClampColumnSize(requestedSize)");
+        source.Should().Contain("GridResizeSizePlanner.ClampRowSize(requestedSize)");
+        source.Should().Contain("_session.SetSelectedColumnsWidth(ColumnWidthPixelMapper.PixelsToColumnWidth(clampedSize))");
+        source.Should().Contain("_session.SetSelectedRowsHeight(clampedSize)");
+    }
+
+    [Fact]
+    public void WorksheetCells_UsePointerCaptureForDragRangeSelection()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("private CellAddress? _cellDragSelectionAnchor;");
+        source.Should().Contain("BeginCellSelectionDrag(args, border, address);");
+        source.Should().Contain("border.PointerMoved += (_, args) => ContinueCellSelectionDrag(args, address);");
+        source.Should().Contain("border.PointerReleased += (_, args) => EndCellSelectionDrag(args);");
+        source.Should().Contain("args.Pointer.Capture(capture);");
+        source.Should().Contain("_cellDragSelectionPointer?.Capture(null);");
+        source.Should().Contain("_session.SelectRange(new GridRange(anchor, address));");
+    }
+
+    [Fact]
+    public void WorksheetHeaders_ResolvePointerDragAcrossVisibleHeaderMetrics()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("TryResolveColumnHeaderPointerIndex(args, out var col)");
+        source.Should().Contain("TryResolveRowHeaderPointerIndex(args, out var row)");
+        source.Should().Contain("var pos = args.GetPosition(_sheetGridHost);");
+        source.Should().Contain("foreach (var metric in _session.Viewport.ColMetrics)");
+        source.Should().Contain("foreach (var metric in _session.Viewport.RowMetrics)");
+        source.Should().Contain("SelectEntireColumn(targetCol, extend: true);");
+        source.Should().Contain("SelectEntireRow(targetRow, extend: true);");
+    }
+
+    [Fact]
+    public void WorksheetContextClick_AcceptsRightClickAndControlClick()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("private static bool IsContextClick(PointerPoint point, PointerEventArgs args)");
+        source.Should().Contain("point.Properties.IsRightButtonPressed");
+        source.Should().Contain("point.Properties.IsLeftButtonPressed && args.KeyModifiers.HasFlag(KeyModifiers.Control)");
+        source.Should().Contain("if (IsContextClick(point, args))");
+        source.Should().Contain("OpenWorksheetCellContextMenu(border);");
+        source.Should().Contain("OpenColumnHeaderContextMenu(header);");
+        source.Should().Contain("OpenRowHeaderContextMenu(header);");
+    }
+
+    [Fact]
+    public void SelectAllCorner_SelectsWholeSheetAndExposesStableAutomation()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("CreateSelectAllCornerCell(zoomFactor)");
+        source.Should().Contain("AutomationProperties.SetAutomationId(header, \"WorksheetSelectAllCorner\");");
+        source.Should().Contain("private void SelectAllCells()");
+        source.Should().Contain("new CellAddress(sheetId, 1, 1)");
+        source.Should().Contain("new CellAddress(sheetId, CellAddress.MaxRow, CellAddress.MaxCol)");
+        source.Should().Contain("_session.SelectRange(range);");
+    }
+
+    [Fact]
+    public void ShiftArrowNavigation_ExtendsRangeInsteadOfMovingAnchor()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("var extendSelection = e.KeyModifiers.HasFlag(KeyModifiers.Shift);");
+        source.Should().Contain("MoveOrExtendActiveCell(-1, 0, extendSelection);");
+        source.Should().Contain("MoveOrExtendActiveCell(1, 0, extendSelection);");
+        source.Should().Contain("MoveOrExtendActiveCell(0, -1, extendSelection);");
+        source.Should().Contain("MoveOrExtendActiveCell(0, 1, extendSelection);");
+        source.Should().Contain("var anchor = _session.SelectedRange.Start;");
+        source.Should().Contain("var cursor = _session.SelectedRange.End;");
+        source.Should().Contain("_session.SelectRange(new GridRange(anchor, target));");
+    }
+
+    private static string RepoFile(params string[] parts)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
+            directory = directory.Parent;
+
+        if (directory is null)
+            throw new DirectoryNotFoundException("Could not find repository root containing FreeX.slnx.");
+
+        return Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
+    }
+}

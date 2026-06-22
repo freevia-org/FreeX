@@ -15,6 +15,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using System.Globalization;
+using FreeX.App.Presentation.GridInteraction;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Services;
 using FreeX.App.Services.Ribbon;
@@ -627,6 +628,10 @@ public sealed partial class MainWindow : Window
     private readonly RecentColorsStore _recentColors = new();
     private MacOsLaunchSmokeDialogSnapshot _launchSmokeDialogEvidence = MacOsLaunchSmokeDialogSnapshot.Empty;
     private ComboBox? _activeDataValidationDropdown;
+    private CellAddress? _cellDragSelectionAnchor;
+    private Control? _cellDragSelectionCapture;
+    private IPointer? _cellDragSelectionPointer;
+    private HeaderResizeDrag? _headerResizeDrag;
     private IReadOnlyDictionary<(uint Row, uint Col), (IReadOnlyList<double> Values, SparklineKind Kind)> _sparklinesByCell =
         new Dictionary<(uint Row, uint Col), (IReadOnlyList<double>, SparklineKind)>();
     private string? _formulaBoxEditOriginalText;
@@ -640,6 +645,22 @@ public sealed partial class MainWindow : Window
     private Guid? _selectedDrawingObjectId;
     private readonly AvaloniaRibbonContextSource _ribbonContextSource = new();
     private Action? _refreshRibbonToggleStates;
+
+    private sealed record HeaderResizeDrag(
+        HeaderResizeKind Kind,
+        uint Index,
+        Control Capture,
+        IPointer Pointer,
+        double StartPointer,
+        double StartSize,
+        bool HadOriginalSize,
+        double OriginalSize);
+
+    private enum HeaderResizeKind
+    {
+        Column,
+        Row
+    }
 
     public MainWindow(IReadOnlyList<string> startupArguments)
         : this(
@@ -3810,12 +3831,12 @@ public sealed partial class MainWindow : Window
 
         if (showHeadings)
         {
-            AddGridChild(grid, CreateHeaderCell("", zoomFactor: zoomFactor), 0, 0);
+            AddGridChild(grid, CreateSelectAllCornerCell(zoomFactor), 0, 0);
             for (var colIndex = 0; colIndex < viewport.ColMetrics.Count; colIndex++)
             {
                 var col = viewport.ColMetrics[colIndex].Col;
                 var selected = IsSelectedColumn(col);
-                AddGridChild(grid, CreateColumnHeaderCell(col, selected, zoomFactor), 0, colIndex + headerOffset);
+                AddGridChild(grid, CreateColumnHeaderCell(col, viewport.ColMetrics[colIndex], selected, zoomFactor), 0, colIndex + headerOffset);
             }
         }
 
@@ -3827,7 +3848,7 @@ public sealed partial class MainWindow : Window
             if (showHeadings)
             {
                 var selectedRow = IsSelectedRow(row);
-                AddGridChild(grid, CreateRowHeaderCell(row, selectedRow, zoomFactor), rowIndex + headerOffset, 0);
+                AddGridChild(grid, CreateRowHeaderCell(row, rowMetric, selectedRow, zoomFactor), rowIndex + headerOffset, 0);
             }
 
             for (var colIndex = 0; colIndex < viewport.ColMetrics.Count; colIndex++)
@@ -4604,19 +4625,43 @@ public sealed partial class MainWindow : Window
             zoomFactor: zoomFactor,
             horizontalPadding: 2);
 
+    private Control CreateSelectAllCornerCell(double zoomFactor)
+    {
+        var header = CreateHeaderCell("", zoomFactor: zoomFactor);
+        header.Cursor = new Cursor(StandardCursorType.Hand);
+        ToolTip.SetTip(header, "Select all");
+        AutomationProperties.SetAutomationId(header, "WorksheetSelectAllCorner");
+        AutomationProperties.SetName(header, "Select all cells");
+        header.PointerPressed += (_, args) =>
+        {
+            var point = args.GetCurrentPoint(header);
+            if (IsContextClick(point, args))
+            {
+                SelectAllCells();
+                OpenWorksheetCellContextMenu(header);
+                args.Handled = true;
+                return;
+            }
+
+            SelectAllCells();
+            args.Handled = true;
+        };
+        return header;
+    }
+
     /// <summary>
     /// Builds a clickable column header. Left-click selects the whole column (Shift extends from the
     /// active cell); right-click selects then opens the shared column-header context menu, so Hide/
     /// Unhide Columns and the other column commands act on the column the user clicked.
     /// </summary>
-    private Control CreateColumnHeaderCell(uint col, bool selected, double zoomFactor)
+    private Control CreateColumnHeaderCell(uint col, ColMetric metric, bool selected, double zoomFactor)
     {
         var header = CreateHeaderCell(CellAddress.NumberToColumnName(col), selected, zoomFactor);
         header.Cursor = new Cursor(StandardCursorType.Hand);
         header.PointerPressed += (_, args) =>
         {
             var point = args.GetCurrentPoint(header);
-            if (point.Properties.IsRightButtonPressed)
+            if (IsContextClick(point, args))
             {
                 if (!IsSelectedColumn(col))
                     SelectEntireColumn(col);
@@ -4626,9 +4671,12 @@ public sealed partial class MainWindow : Window
             }
 
             SelectEntireColumn(col, extend: args.KeyModifiers.HasFlag(KeyModifiers.Shift));
+            BeginHeaderSelectionDrag(args, header, HeaderResizeKind.Column, col);
             args.Handled = true;
         };
-        return header;
+        header.PointerMoved += (_, args) => ContinueHeaderSelectionDrag(args, HeaderResizeKind.Column, col);
+        header.PointerReleased += (_, args) => EndHeaderSelectionDrag(args);
+        return AddColumnResizeHandle(header, col, metric, zoomFactor);
     }
 
     /// <summary>
@@ -4636,14 +4684,14 @@ public sealed partial class MainWindow : Window
     /// cell); right-click selects then opens the shared row-header context menu, so Hide/Unhide Rows
     /// and the other row commands act on the row the user clicked.
     /// </summary>
-    private Control CreateRowHeaderCell(uint row, bool selected, double zoomFactor)
+    private Control CreateRowHeaderCell(uint row, RowMetric metric, bool selected, double zoomFactor)
     {
         var header = CreateHeaderCell(row.ToString(), selected, zoomFactor);
         header.Cursor = new Cursor(StandardCursorType.Hand);
         header.PointerPressed += (_, args) =>
         {
             var point = args.GetCurrentPoint(header);
-            if (point.Properties.IsRightButtonPressed)
+            if (IsContextClick(point, args))
             {
                 if (!IsSelectedRow(row))
                     SelectEntireRow(row);
@@ -4653,9 +4701,315 @@ public sealed partial class MainWindow : Window
             }
 
             SelectEntireRow(row, extend: args.KeyModifiers.HasFlag(KeyModifiers.Shift));
+            BeginHeaderSelectionDrag(args, header, HeaderResizeKind.Row, row);
             args.Handled = true;
         };
-        return header;
+        header.PointerMoved += (_, args) => ContinueHeaderSelectionDrag(args, HeaderResizeKind.Row, row);
+        header.PointerReleased += (_, args) => EndHeaderSelectionDrag(args);
+        return AddRowResizeHandle(header, row, metric, zoomFactor);
+    }
+
+    private static bool IsContextClick(PointerPoint point, PointerEventArgs args) =>
+        point.Properties.IsRightButtonPressed ||
+        (point.Properties.IsLeftButtonPressed && args.KeyModifiers.HasFlag(KeyModifiers.Control));
+
+    private void BeginCellSelectionDrag(PointerPressedEventArgs args, Control capture, CellAddress address)
+    {
+        _cellDragSelectionAnchor = address;
+        _cellDragSelectionCapture = capture;
+        _cellDragSelectionPointer = args.Pointer;
+        capture.Focus();
+        args.Pointer.Capture(capture);
+    }
+
+    private void ContinueCellSelectionDrag(PointerEventArgs args, CellAddress address)
+    {
+        if (_cellDragSelectionAnchor is not { } anchor ||
+            _cellDragSelectionCapture is null ||
+            !args.GetCurrentPoint(_cellDragSelectionCapture).Properties.IsLeftButtonPressed)
+        {
+            return;
+        }
+
+        if (address == _session.SelectedRange.End)
+            return;
+
+        SelectRangeFromAnchor(anchor, address);
+        args.Handled = true;
+    }
+
+    private void EndCellSelectionDrag(PointerReleasedEventArgs args)
+    {
+        _cellDragSelectionPointer?.Capture(null);
+        _cellDragSelectionAnchor = null;
+        _cellDragSelectionCapture = null;
+        _cellDragSelectionPointer = null;
+        args.Handled = true;
+    }
+
+    private void BeginHeaderSelectionDrag(PointerPressedEventArgs args, Control capture, HeaderResizeKind kind, uint index)
+    {
+        if (_headerResizeDrag is not null)
+            return;
+
+        _cellDragSelectionAnchor = kind == HeaderResizeKind.Column
+            ? new CellAddress(_session.ActiveSheet.Id, 1, index)
+            : new CellAddress(_session.ActiveSheet.Id, index, 1);
+        _cellDragSelectionCapture = capture;
+        _cellDragSelectionPointer = args.Pointer;
+        capture.Focus();
+        args.Pointer.Capture(capture);
+    }
+
+    private void ContinueHeaderSelectionDrag(PointerEventArgs args, HeaderResizeKind kind, uint index)
+    {
+        if (_cellDragSelectionCapture is null ||
+            !args.GetCurrentPoint(_cellDragSelectionCapture).Properties.IsLeftButtonPressed)
+        {
+            return;
+        }
+
+        if (kind == HeaderResizeKind.Column)
+        {
+            var targetCol = TryResolveColumnHeaderPointerIndex(args, out var col) ? col : index;
+            SelectEntireColumn(targetCol, extend: true);
+        }
+        else
+        {
+            var targetRow = TryResolveRowHeaderPointerIndex(args, out var row) ? row : index;
+            SelectEntireRow(targetRow, extend: true);
+        }
+        args.Handled = true;
+    }
+
+    private bool TryResolveColumnHeaderPointerIndex(PointerEventArgs args, out uint col)
+    {
+        col = 0;
+        if (!_session.ActiveSheet.ShowHeadings)
+            return false;
+
+        var zoomFactor = GetActiveZoomFactor();
+        var pos = args.GetPosition(_sheetGridHost);
+        if (pos.Y < 0 || pos.Y > HeaderRowHeight * zoomFactor)
+            return false;
+
+        var left = HeaderColumnWidth * zoomFactor;
+        foreach (var metric in _session.Viewport.ColMetrics)
+        {
+            var right = left + GetDisplayedColumnWidth(metric, zoomFactor);
+            if (pos.X >= left && pos.X <= right)
+            {
+                col = metric.Col;
+                return true;
+            }
+
+            left = right;
+        }
+
+        return false;
+    }
+
+    private bool TryResolveRowHeaderPointerIndex(PointerEventArgs args, out uint row)
+    {
+        row = 0;
+        if (!_session.ActiveSheet.ShowHeadings)
+            return false;
+
+        var zoomFactor = GetActiveZoomFactor();
+        var pos = args.GetPosition(_sheetGridHost);
+        if (pos.X < 0 || pos.X > HeaderColumnWidth * zoomFactor)
+            return false;
+
+        var top = HeaderRowHeight * zoomFactor;
+        foreach (var metric in _session.Viewport.RowMetrics)
+        {
+            var bottom = top + GetDisplayedRowHeight(metric, zoomFactor);
+            if (pos.Y >= top && pos.Y <= bottom)
+            {
+                row = metric.Row;
+                return true;
+            }
+
+            top = bottom;
+        }
+
+        return false;
+    }
+
+    private void EndHeaderSelectionDrag(PointerReleasedEventArgs args)
+    {
+        if (_cellDragSelectionCapture is not null)
+        {
+            _cellDragSelectionPointer?.Capture(null);
+            _cellDragSelectionCapture = null;
+            _cellDragSelectionAnchor = null;
+            _cellDragSelectionPointer = null;
+            args.Handled = true;
+        }
+    }
+
+    private void SelectRangeFromAnchor(CellAddress anchor, CellAddress address)
+    {
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        ClearSelectedDrawingObject();
+        _session.SelectRange(new GridRange(anchor, address));
+        RefreshShell(UiText.Format("MainLoc_SelectedX", FormatRangeReference(_session.SelectedRange)));
+        RefreshTableContextualTab();
+        ApplyFormatPainterAfterTargetSelection();
+    }
+
+    private Control AddColumnResizeHandle(Border header, uint col, ColMetric metric, double zoomFactor)
+    {
+        var handle = CreateHeaderResizeHandle(HeaderResizeKind.Column);
+        handle.PointerPressed += (_, args) => BeginHeaderResize(args, handle, HeaderResizeKind.Column, col, GetDisplayedColumnWidth(metric, zoomFactor));
+        handle.PointerMoved += (_, args) => ContinueHeaderResize(args);
+        handle.PointerReleased += (_, args) => CommitHeaderResize(args);
+        return CreateHeaderWithResizeHandle(header, handle);
+    }
+
+    private Control AddRowResizeHandle(Border header, uint row, RowMetric metric, double zoomFactor)
+    {
+        var handle = CreateHeaderResizeHandle(HeaderResizeKind.Row);
+        handle.PointerPressed += (_, args) => BeginHeaderResize(args, handle, HeaderResizeKind.Row, row, GetDisplayedRowHeight(metric, zoomFactor));
+        handle.PointerMoved += (_, args) => ContinueHeaderResize(args);
+        handle.PointerReleased += (_, args) => CommitHeaderResize(args);
+        return CreateHeaderWithResizeHandle(header, handle);
+    }
+
+    private static Border CreateHeaderResizeHandle(HeaderResizeKind kind) =>
+        new()
+        {
+            Width = kind == HeaderResizeKind.Column ? 5 : double.NaN,
+            Height = kind == HeaderResizeKind.Row ? 5 : double.NaN,
+            Background = Brushes.Transparent,
+            HorizontalAlignment = kind == HeaderResizeKind.Column ? AvaloniaHorizontalAlignment.Right : AvaloniaHorizontalAlignment.Stretch,
+            VerticalAlignment = kind == HeaderResizeKind.Row ? AvaloniaVerticalAlignment.Bottom : AvaloniaVerticalAlignment.Stretch,
+            Cursor = new Cursor(kind == HeaderResizeKind.Column ? StandardCursorType.SizeWestEast : StandardCursorType.SizeNorthSouth),
+        };
+
+    private static AvaloniaGrid CreateHeaderWithResizeHandle(Border header, Border handle) =>
+        new()
+        {
+            Children = { header, handle },
+        };
+
+    private void BeginHeaderResize(PointerPressedEventArgs args, Control capture, HeaderResizeKind kind, uint index, double displayedSize)
+    {
+        var point = args.GetCurrentPoint(capture);
+        if (!point.Properties.IsLeftButtonPressed || args.KeyModifiers.HasFlag(KeyModifiers.Control))
+            return;
+
+        var sheet = _session.ActiveSheet;
+        var (hadOriginalSize, originalSize) = kind == HeaderResizeKind.Column
+            ? (sheet.ColumnWidths.TryGetValue(index, out var width), width)
+            : (sheet.RowHeights.TryGetValue(index, out var height), height);
+        var pointer = kind == HeaderResizeKind.Column
+            ? args.GetPosition(this).X
+            : args.GetPosition(this).Y;
+        _headerResizeDrag = new HeaderResizeDrag(kind, index, capture, args.Pointer, pointer, displayedSize, hadOriginalSize, originalSize);
+        args.Pointer.Capture(capture);
+        args.Handled = true;
+    }
+
+    private void ContinueHeaderResize(PointerEventArgs args)
+    {
+        if (_headerResizeDrag is not { } drag)
+            return;
+
+        var point = args.GetCurrentPoint(drag.Capture);
+        if (!point.Properties.IsLeftButtonPressed)
+        {
+            CancelHeaderResizePreview();
+            return;
+        }
+
+        var pointer = drag.Kind == HeaderResizeKind.Column
+            ? args.GetPosition(this).X
+            : args.GetPosition(this).Y;
+        var requestedSize = drag.StartSize + pointer - drag.StartPointer;
+        var clampedSize = drag.Kind == HeaderResizeKind.Column
+            ? GridResizeSizePlanner.ClampColumnSize(requestedSize)
+            : GridResizeSizePlanner.ClampRowSize(requestedSize);
+        PreviewHeaderResize(drag, clampedSize);
+        args.Handled = true;
+    }
+
+    private void CommitHeaderResize(PointerReleasedEventArgs args)
+    {
+        if (_headerResizeDrag is not { } drag)
+            return;
+
+        var pointer = drag.Kind == HeaderResizeKind.Column
+            ? args.GetPosition(this).X
+            : args.GetPosition(this).Y;
+        var requestedSize = drag.StartSize + pointer - drag.StartPointer;
+        var clampedSize = drag.Kind == HeaderResizeKind.Column
+            ? GridResizeSizePlanner.ClampColumnSize(requestedSize)
+            : GridResizeSizePlanner.ClampRowSize(requestedSize);
+
+        RestoreHeaderResizeOriginal(drag);
+        drag.Pointer.Capture(null);
+        _headerResizeDrag = null;
+
+        if (drag.Kind == HeaderResizeKind.Column)
+        {
+            SelectEntireColumn(drag.Index);
+            var result = _session.SetSelectedColumnsWidth(ColumnWidthPixelMapper.PixelsToColumnWidth(clampedSize));
+            RefreshShell(result.Success
+                ? UiText.Format("RowColumn_ColumnWidthApplied", FormatDimension(ColumnWidthPixelMapper.PixelsToColumnWidth(clampedSize)))
+                : result.ErrorMessage ?? UiText.Get("RowColumn_ColumnWidthFailed"));
+        }
+        else
+        {
+            SelectEntireRow(drag.Index);
+            var result = _session.SetSelectedRowsHeight(clampedSize);
+            RefreshShell(result.Success
+                ? UiText.Format("RowColumn_RowHeightApplied", FormatDimension(clampedSize))
+                : result.ErrorMessage ?? UiText.Get("RowColumn_RowHeightFailed"));
+        }
+
+        args.Handled = true;
+    }
+
+    private void PreviewHeaderResize(HeaderResizeDrag drag, double clampedSize)
+    {
+        if (drag.Kind == HeaderResizeKind.Column)
+            _session.ActiveSheet.ColumnWidths[drag.Index] = ColumnWidthPixelMapper.PixelsToColumnWidth(clampedSize);
+        else
+            _session.ActiveSheet.RowHeights[drag.Index] = clampedSize;
+
+        RefreshShell(UiText.Format("MainLoc_SelectedX", FormatRangeReference(_session.SelectedRange)));
+    }
+
+    private void CancelHeaderResizePreview()
+    {
+        if (_headerResizeDrag is not { } drag)
+            return;
+
+        RestoreHeaderResizeOriginal(drag);
+        drag.Pointer.Capture(null);
+        _headerResizeDrag = null;
+        RefreshShell(UiText.Format("MainLoc_SelectedX", FormatRangeReference(_session.SelectedRange)));
+    }
+
+    private void RestoreHeaderResizeOriginal(HeaderResizeDrag drag)
+    {
+        if (drag.Kind == HeaderResizeKind.Column)
+        {
+            if (drag.HadOriginalSize)
+                _session.ActiveSheet.ColumnWidths[drag.Index] = drag.OriginalSize;
+            else
+                _session.ActiveSheet.ColumnWidths.Remove(drag.Index);
+        }
+        else
+        {
+            if (drag.HadOriginalSize)
+                _session.ActiveSheet.RowHeights[drag.Index] = drag.OriginalSize;
+            else
+                _session.ActiveSheet.RowHeights.Remove(drag.Index);
+        }
     }
 
     /// <summary>
@@ -4821,7 +5175,7 @@ public sealed partial class MainWindow : Window
         border.PointerPressed += (_, args) =>
         {
             var point = args.GetCurrentPoint(border);
-            if (point.Properties.IsRightButtonPressed)
+            if (IsContextClick(point, args))
             {
                 // Right-click selects the clicked cell (so the menu commands target it) and then
                 // opens the worksheet cell context menu, built from the shared neutral plan.
@@ -4835,8 +5189,11 @@ public sealed partial class MainWindow : Window
                 SelectRange(address);
             else
                 SelectCell(address);
+            BeginCellSelectionDrag(args, border, address);
             args.Handled = true;
         };
+        border.PointerMoved += (_, args) => ContinueCellSelectionDrag(args, address);
+        border.PointerReleased += (_, args) => EndCellSelectionDrag(args);
         border.DoubleTapped += (_, args) =>
         {
             BeginFormulaEdit(address);
@@ -14045,6 +14402,23 @@ public sealed partial class MainWindow : Window
         RefreshShell(UiText.Format("MainLoc_SelectedX", FormatRangeReference(range)));
     }
 
+    private void SelectAllCells()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        ClearSelectedDrawingObject();
+        var sheetId = _session.ActiveSheet.Id;
+        var range = new GridRange(
+            new CellAddress(sheetId, 1, 1),
+            new CellAddress(sheetId, CellAddress.MaxRow, CellAddress.MaxCol));
+        _session.SelectRange(range);
+        RefreshShell(UiText.Format("MainLoc_SelectedX", FormatRangeReference(range)));
+    }
+
     private async Task PasteClipboardTextAsync()
     {
         if (_isOpening || _isSaving)
@@ -16674,31 +17048,32 @@ public sealed partial class MainWindow : Window
         var pageRows = Math.Max(1, _session.Viewport.RowMetrics.Count - 1);
         var pageCols = Math.Max(1, _session.Viewport.ColMetrics.Count - 1);
         var handled = true;
+        var extendSelection = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
         switch (e.Key)
         {
             case Key.Up:
-                _session.MoveActiveCell(-1, 0);
+                MoveOrExtendActiveCell(-1, 0, extendSelection);
                 break;
             case Key.Down:
-                _session.MoveActiveCell(1, 0);
+                MoveOrExtendActiveCell(1, 0, extendSelection);
                 break;
             case Key.Left:
-                _session.MoveActiveCell(0, -1);
+                MoveOrExtendActiveCell(0, -1, extendSelection);
                 break;
             case Key.Right:
-                _session.MoveActiveCell(0, 1);
+                MoveOrExtendActiveCell(0, 1, extendSelection);
                 break;
             case Key.PageUp:
-                _session.MoveActiveCell(-pageRows, 0);
+                MoveOrExtendActiveCell(-pageRows, 0, extendSelection);
                 break;
             case Key.PageDown:
-                _session.MoveActiveCell(pageRows, 0);
+                MoveOrExtendActiveCell(pageRows, 0, extendSelection);
                 break;
             case Key.Home:
-                _session.MoveActiveCell(0, 1 - checked((int)_session.ActiveCell.Col));
+                MoveOrExtendActiveCell(0, 1 - checked((int)_session.ActiveCell.Col), extendSelection);
                 break;
             case Key.End:
-                _session.MoveActiveCell(0, pageCols);
+                MoveOrExtendActiveCell(0, pageCols, extendSelection);
                 break;
             default:
                 handled = false;
@@ -16712,6 +17087,26 @@ public sealed partial class MainWindow : Window
         e.Handled = true;
         RefreshShell("Ready");
     }
+
+    private void MoveOrExtendActiveCell(int rowDelta, int colDelta, bool extendSelection)
+    {
+        if (!extendSelection)
+        {
+            _session.MoveActiveCell(rowDelta, colDelta);
+            return;
+        }
+
+        var anchor = _session.SelectedRange.Start;
+        var cursor = _session.SelectedRange.End;
+        var target = new CellAddress(
+            _session.ActiveSheet.Id,
+            OffsetCellIndex(cursor.Row, rowDelta, CellAddress.MaxRow),
+            OffsetCellIndex(cursor.Col, colDelta, CellAddress.MaxCol));
+        _session.SelectRange(new GridRange(anchor, target));
+    }
+
+    private static uint OffsetCellIndex(uint current, int delta, uint max) =>
+        (uint)Math.Clamp((long)current + delta, 1, max);
 
     private void MainWindow_TextInput(object? sender, TextInputEventArgs e)
     {
