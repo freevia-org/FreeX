@@ -52,6 +52,12 @@ public sealed class ExcelOpenSmokeReportSchemaTests
         source.Should().Contain("LoadExcelReferenceDimensions");
         source.Should().Contain("targetPixelDimensions");
         source.Should().Contain("render FreeX to the same pixel canvas");
+        source.Should().Contain("IsLikelyBlankReferencePng");
+        source.Should().Contain("opaqueRatio");
+        source.Should().Contain("TrySaveClipboardImageToPng");
+        source.Should().Contain("CopyEnhMetaFile");
+        source.Should().Contain("selected bitmap");
+        source.Should().Contain("Excel range PNG export produced a blank-looking image");
         source.Should().Contain("CopyPicture");
         source.Should().Contain("GetPngDimensions");
         source.Should().Contain("--fail-on-dimension-mismatch");

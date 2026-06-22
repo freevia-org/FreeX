@@ -46,6 +46,7 @@ internal static class Program
     private const uint MaxPivotVisualInferenceCols = 40;
     private const int XlScreen = 1;
     private const int XlPicture = -4147;
+    private const int XlBitmap = 2;
 
     [STAThread]
     public static int Main(string[] args)
@@ -160,7 +161,9 @@ internal static class Program
 
                 try
                 {
-                    excelReferenceDimensions.TryGetValue(sheetIndex, out var targetDimensions);
+                    var targetDimensions = excelReferenceDimensions.TryGetValue(sheetIndex, out var dimensions)
+                        ? dimensions
+                        : (PngDimensions?)null;
                     RenderSheetToGridViewPng(workbook, sheet, viewportService, outPath, range, targetDimensions);
                     result.Rendered = true;
                     Console.WriteLine($"-> {outFileName}");
@@ -200,7 +203,9 @@ internal static class Program
 
             try
             {
-                excelReferenceDimensions.TryGetValue(sheetIndex, out var targetDimensions);
+                var targetDimensions = excelReferenceDimensions.TryGetValue(sheetIndex, out var dimensions)
+                    ? dimensions
+                    : (PngDimensions?)null;
                 RenderSheetToGridViewPng(workbook, sheet, viewportService, outPath, captureRange: null, targetDimensions);
                 result.Rendered = true;
                 Console.WriteLine($"-> {outFileName}");
@@ -373,14 +378,17 @@ internal static class Program
         // Step 5: Rasterize to RenderTargetBitmap. When an Excel reference PNG exists,
         // render FreeX to the same pixel canvas so strict dimension checks validate the
         // compared range instead of the two tools' different capture DPI conventions.
+        var hasTargetDimensions = targetPixelDimensions is not null;
         int pixelW = targetPixelDimensions?.Width ?? Math.Max(1, (int)Math.Ceiling(viewW * RenderScale));
         int pixelH = targetPixelDimensions?.Height ?? Math.Max(1, (int)Math.Ceiling(viewH * RenderScale));
         pixelW = Math.Max(1, pixelW);
         pixelH = Math.Max(1, pixelH);
 
-        var scaleX = pixelW / viewW;
-        var scaleY = pixelH / viewH;
-        var rtb = new RenderTargetBitmap(pixelW, pixelH, 96.0 * scaleX, 96.0 * scaleY, PixelFormats.Pbgra32);
+        var scaleX = hasTargetDimensions ? pixelW / viewW : RenderScale;
+        var scaleY = hasTargetDimensions ? pixelH / viewH : RenderScale;
+        var rtb = hasTargetDimensions
+            ? new RenderTargetBitmap(pixelW, pixelH, 96.0 * scaleX, 96.0 * scaleY, PixelFormats.Pbgra32)
+            : new RenderTargetBitmap(pixelW, pixelH, RenderDpi, RenderDpi, PixelFormats.Pbgra32);
 
         // Apply DPI scale transform so logical DIPs map to the correct pixel count
         var dv = new System.Windows.Media.DrawingVisual();
@@ -392,9 +400,16 @@ internal static class Program
                 AlignmentX = AlignmentX.Left,
                 AlignmentY = AlignmentY.Top,
             };
-            ctx.PushTransform(new ScaleTransform(scaleX, scaleY));
-            ctx.DrawRectangle(vb, null, new Rect(0, 0, viewW, viewH));
-            ctx.Pop();
+            if (hasTargetDimensions)
+            {
+                ctx.PushTransform(new ScaleTransform(scaleX, scaleY));
+                ctx.DrawRectangle(vb, null, new Rect(0, 0, viewW, viewH));
+                ctx.Pop();
+            }
+            else
+            {
+                ctx.DrawRectangle(vb, null, new Rect(0, 0, viewW * RenderScale, viewH * RenderScale));
+            }
         }
         rtb.Render(dv);
 
@@ -759,7 +774,7 @@ internal static class Program
             excel = Activator.CreateInstance(excelType)
                 ?? throw new InvalidOperationException("Excel.Application activation returned null.");
             dynamic app = excel;
-            app.Visible = false;
+            app.Visible = true;
             app.DisplayAlerts = false;
             workbooks = app.Workbooks;
             workbookObject = ((dynamic)workbooks).Open(Path.GetFullPath(workbookPath), 0);
@@ -930,8 +945,43 @@ internal static class Program
 
     private static void ExportExcelRangeToPng(object workbook, string sheetName, GridRange range, string outPath)
     {
+        Exception? lastFailure = null;
+        foreach (var attempt in new[]
+        {
+            new ExcelRangePngExportAttempt(SelectRange: true, PictureFormat: XlPicture, Label: "selected picture"),
+            new ExcelRangePngExportAttempt(SelectRange: true, PictureFormat: XlBitmap, Label: "selected bitmap"),
+            new ExcelRangePngExportAttempt(SelectRange: false, PictureFormat: XlPicture, Label: "direct picture"),
+        })
+        {
+            try
+            {
+                ExportExcelRangeToPngAttempt(workbook, sheetName, range, outPath, attempt);
+                if (!IsLikelyBlankReferencePng(outPath))
+                    return;
+
+                lastFailure = new InvalidOperationException(
+                    $"Excel range PNG export produced a blank-looking image using {attempt.Label}.");
+            }
+            catch (Exception ex)
+            {
+                lastFailure = ex;
+            }
+        }
+
+        throw new InvalidOperationException(
+            $"Excel range PNG export failed for {sheetName}!{range}.", lastFailure);
+    }
+
+    private static void ExportExcelRangeToPngAttempt(
+        object workbook,
+        string sheetName,
+        GridRange range,
+        string outPath,
+        ExcelRangePngExportAttempt attempt)
+    {
         object? worksheet = null;
         object? excelRange = null;
+        object? activeWindow = null;
         object? chartObjects = null;
         object? chartObject = null;
         object? chart = null;
@@ -939,22 +989,158 @@ internal static class Program
         {
             worksheet = ((dynamic)workbook).Worksheets[sheetName];
             excelRange = ((dynamic)worksheet).Range(range.ToString());
-            ((dynamic)excelRange).CopyPicture(XlScreen, XlPicture);
+            ((dynamic)worksheet).Activate();
+            if (attempt.SelectRange)
+            {
+                ((dynamic)excelRange).Select();
+                var app = ((dynamic)workbook).Application;
+                activeWindow = ((dynamic)app).ActiveWindow;
+                if (activeWindow is not null)
+                {
+                    ((dynamic)activeWindow).ScrollRow = Math.Max(1, (int)range.Start.Row);
+                    ((dynamic)activeWindow).ScrollColumn = Math.Max(1, (int)range.Start.Col);
+                }
+            }
+
+            ((dynamic)excelRange).CopyPicture(XlScreen, attempt.PictureFormat);
+            System.Threading.Thread.Sleep(150);
+            if (TrySaveClipboardImageToPng(outPath))
+                return;
+
             chartObjects = ((dynamic)worksheet).ChartObjects();
             chartObject = ((dynamic)chartObjects).Add(0, 0, Math.Max(120, (double)((dynamic)excelRange).Width), Math.Max(80, (double)((dynamic)excelRange).Height));
+            ((dynamic)chartObject).Activate();
             chart = ((dynamic)chartObject).Chart;
+            try
+            {
+                ((dynamic)chart).ChartArea.Clear();
+            }
+            catch
+            {
+                // Some Excel versions reject Clear on an empty chart; paste can still proceed.
+            }
+
             ((dynamic)chart).Paste();
+            System.Threading.Thread.Sleep(150);
             ((dynamic)chart).Export(outPath, "PNG", false);
-            ((dynamic)chartObject).Delete();
         }
         finally
         {
+            try
+            {
+                if (chartObject is not null)
+                    ((dynamic)chartObject).Delete();
+            }
+            catch
+            {
+                // Best-effort cleanup; export will retry with a fresh chart object.
+            }
+
             ReleaseComObject(chart);
             ReleaseComObject(chartObject);
             ReleaseComObject(chartObjects);
+            ReleaseComObject(activeWindow);
             ReleaseComObject(excelRange);
             ReleaseComObject(worksheet);
         }
+    }
+
+    private static bool TrySaveClipboardImageToPng(string outPath)
+    {
+        try
+        {
+            if (!Clipboard.ContainsImage())
+                return TrySaveClipboardEnhancedMetafileToPng(outPath);
+
+            var image = Clipboard.GetImage();
+            if (image is not null)
+            {
+                var encoder = new PngBitmapEncoder();
+                encoder.Frames.Add(BitmapFrame.Create(image));
+                using var stream = File.Create(outPath);
+                encoder.Save(stream);
+                return true;
+            }
+
+            return TrySaveClipboardEnhancedMetafileToPng(outPath);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool TrySaveClipboardEnhancedMetafileToPng(string outPath)
+    {
+        var opened = false;
+        try
+        {
+            opened = OpenClipboard(IntPtr.Zero);
+            if (!opened)
+                return false;
+
+            var clipboardHandle = GetClipboardData(14); // CF_ENHMETAFILE
+            if (clipboardHandle == IntPtr.Zero)
+                return false;
+
+            var ownedHandle = CopyEnhMetaFile(clipboardHandle, null);
+            if (ownedHandle == IntPtr.Zero)
+                return false;
+
+            using var metafile = new System.Drawing.Imaging.Metafile(ownedHandle, deleteEmf: true);
+            var width = Math.Max(1, metafile.Width);
+            var height = Math.Max(1, metafile.Height);
+            using var bitmap = new System.Drawing.Bitmap(width, height);
+            bitmap.SetResolution(96, 96);
+            using (var graphics = System.Drawing.Graphics.FromImage(bitmap))
+            {
+                graphics.Clear(System.Drawing.Color.White);
+                graphics.DrawImage(metafile, 0, 0, width, height);
+            }
+
+            bitmap.Save(outPath, System.Drawing.Imaging.ImageFormat.Png);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+        finally
+        {
+            if (opened)
+                CloseClipboard();
+        }
+    }
+
+    private static bool IsLikelyBlankReferencePng(string path)
+    {
+        if (!File.Exists(path))
+            return true;
+
+        var bitmap = LoadBitmap(path);
+        var width = bitmap.PixelWidth;
+        var height = bitmap.PixelHeight;
+        if (width <= 1 || height <= 1)
+            return true;
+
+        var pixels = GetBgra32Pixels(bitmap, width, height);
+        var colors = new HashSet<int>();
+        var opaquePixels = 0;
+        for (var offset = 0; offset < pixels.Length; offset += 4)
+        {
+            if (pixels[offset + 3] > 16)
+                opaquePixels++;
+
+            var argb =
+                pixels[offset + 3] << 24 |
+                pixels[offset + 2] << 16 |
+                pixels[offset + 1] << 8 |
+                pixels[offset];
+            colors.Add(argb);
+        }
+
+        var opaqueRatio = (double)opaquePixels / (width * height);
+        return colors.Count <= 24 || opaqueRatio < 0.15;
     }
 
     // -----------------------------------------------------------------------
@@ -1241,6 +1427,18 @@ internal static class Program
         }
     }
 
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool OpenClipboard(IntPtr hWndNewOwner);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool CloseClipboard();
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr GetClipboardData(uint uFormat);
+
+    [DllImport("gdi32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+    private static extern IntPtr CopyEnhMetaFile(IntPtr hemfSrc, string? fileName);
+
     private static FormattedText MakeText(string text, double size, Brush brush, FontWeight weight) =>
         new FormattedText(
             text,
@@ -1373,3 +1571,8 @@ internal sealed record PivotVisualCase(
     PivotTableModel Pivot,
     GridRange Range,
     string RangeSource);
+
+internal sealed record ExcelRangePngExportAttempt(
+    bool SelectRange,
+    int PictureFormat,
+    string Label);

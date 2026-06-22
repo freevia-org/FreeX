@@ -20,6 +20,7 @@ public static partial class PivotTableRefreshService
     public static bool ApplyLoadedPivotStyles(Workbook workbook)
     {
         var styledAny = false;
+        var cacheStyleNames = GetFirstLoadedPivotStyleNameByCacheId(workbook);
         foreach (var sheet in workbook.Sheets)
         {
             foreach (var pivotTable in sheet.PivotTables)
@@ -29,7 +30,11 @@ public static partial class PivotTableRefreshService
 
                 try
                 {
-                    ApplyPivotTableStyle(workbook, sheet, pivotTable);
+                    var styleName = pivotTable.CacheId > 0 &&
+                                    cacheStyleNames.TryGetValue(pivotTable.CacheId, out var cacheStyleName)
+                        ? cacheStyleName
+                        : pivotTable.StyleName;
+                    ApplyPivotTableStyle(workbook, sheet, pivotTable, preserveExistingVisualStyles: true, styleNameOverride: styleName);
                     styledAny = true;
                 }
                 catch
@@ -40,6 +45,30 @@ public static partial class PivotTableRefreshService
         }
 
         return styledAny;
+    }
+
+    private static Dictionary<int, string> GetFirstLoadedPivotStyleNameByCacheId(Workbook workbook)
+    {
+        var result = new Dictionary<int, string>();
+        foreach (var entry in workbook.Sheets
+                     .Select((sheet, sheetIndex) => new { Sheet = sheet, SheetIndex = sheetIndex })
+                     .SelectMany(sheetEntry => sheetEntry.Sheet.PivotTables.Select(pivotTable => new
+                     {
+                         sheetEntry.SheetIndex,
+                         PivotTable = pivotTable
+                     }))
+                     .OrderBy(entry => entry.SheetIndex)
+                     .ThenBy(entry => entry.PivotTable.TargetRange.Start.Row)
+                     .ThenBy(entry => entry.PivotTable.TargetRange.Start.Col))
+        {
+            var pivotTable = entry.PivotTable;
+            if (pivotTable.CacheId <= 0 || string.IsNullOrEmpty(pivotTable.StyleName))
+                continue;
+
+            result.TryAdd(pivotTable.CacheId, pivotTable.StyleName);
+        }
+
+        return result;
     }
 
     public static void Refresh(Workbook workbook, Sheet targetSheet, PivotTableModel pivotTable)

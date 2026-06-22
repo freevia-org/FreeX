@@ -57,7 +57,7 @@ public sealed partial class PivotTableRefreshServiceTests
         Text(sheet, "E5").Should().Be("Overall Total");
         Number(sheet, "F5").Should().Be(70);
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "E5"))!.StyleId).FillColor
-            .Should().Be(new CellColor(189, 215, 238));
+            .Should().Be(new CellColor(126, 53, 14));
         var detail = PivotTableRefreshService.ExtractDetailRows(workbook, sheet, pivot, Addr(sheet, "F5"));
         detail.Rows.Should().HaveCount(4);
     }
