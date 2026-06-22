@@ -4,12 +4,14 @@ using FreeX.Core.IO;
 using FreeX.Core.Model;
 using NPOI.HSSF.Model;
 using NPOI.HSSF.Record;
+using NPOI.HSSF.Record.PivotTable;
 using NPOI.HSSF.UserModel;
 using NPOI.POIFS.FileSystem;
 using NPOI.SS.UserModel;
 using NPOI.SS.Util;
 using System.Globalization;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Xml.Linq;
@@ -742,11 +744,73 @@ public sealed class LegacyXlsFileAdapterTests
         selectedArgs[1].Should().Be(2);
     }
 
+    [Fact]
+    public void CreateLegacyPivotTable_ReadsBiffPivotViewRecords()
+    {
+        var workbook = new Workbook("LegacyPivot");
+        var sheet = workbook.AddSheet("Financial History PivotTable");
+        sheet.SetCell(new ModelCellAddress(sheet.Id, 6, 1), new TextValue("Category"));
+        sheet.SetCell(new ModelCellAddress(sheet.Id, 20, 4), new NumberValue(42));
+        var definition = CreateUninitializedPivotRecord<ViewDefinitionRecord>(
+            ("name", "PivotTable1"),
+            ("iCache", (short)0),
+            ("rwFirst", (short)5),
+            ("rwFirstHead", (short)6),
+            ("rwFirstData", (short)7),
+            ("rwLast", (short)19),
+            ("colFirst", (short)0),
+            ("colFirstData", (short)1),
+            ("colLast", (short)3),
+            ("dataField", "Data"));
+        var viewFields = new[]
+        {
+            CreateUninitializedPivotRecord<ViewFieldsRecord>(("sxaxis", (short)2)),
+            CreateUninitializedPivotRecord<ViewFieldsRecord>(("sxaxis", (short)4)),
+            CreateUninitializedPivotRecord<ViewFieldsRecord>(("sxaxis", (short)1)),
+            CreateUninitializedPivotRecord<ViewFieldsRecord>(("sxaxis", (short)8))
+        };
+        var dataItems = new[]
+        {
+            CreateUninitializedPivotRecord<DataItemRecord>(
+                ("isxvdData", (short)3),
+                ("df", (short)0),
+                ("ifmt", (short)171),
+                ("name", "Sum of Amount"))
+        };
+
+        var pivot = LegacyXlsFileAdapter.CreateLegacyPivotTable(sheet, definition, viewFields, dataItems, 1);
+
+        pivot.Should().NotBeNull();
+        pivot!.Name.Should().Be("PivotTable1");
+        pivot.CacheId.Should().Be(0);
+        pivot.TargetRange.Start.Should().Be(new ModelCellAddress(sheet.Id, 6, 1));
+        pivot.TargetRange.End.Should().Be(new ModelCellAddress(sheet.Id, 20, 4));
+        pivot.LastRenderedRange.Should().Be(pivot.TargetRange);
+        pivot.FirstHeaderRow.Should().Be(2);
+        pivot.FirstDataRow.Should().Be(3);
+        pivot.FirstDataColumn.Should().Be(2);
+        pivot.ColumnFields.Should().ContainSingle().Which.SourceFieldIndex.Should().Be(0);
+        pivot.PageFields.Should().ContainSingle().Which.SourceFieldIndex.Should().Be(1);
+        pivot.RowFields.Should().ContainSingle().Which.SourceFieldIndex.Should().Be(2);
+        pivot.DataFields.Should().ContainSingle().Which.Should().Be(
+            new PivotDataFieldModel(3, "Sum of Amount", "sum", 171));
+    }
+
     private static ScalarValue MapLegacyXlsValue(object? value)
     {
         var method = typeof(LegacyXlsFileAdapter).GetMethod("MapValue", BindingFlags.NonPublic | BindingFlags.Static);
         method.Should().NotBeNull();
         return (ScalarValue)method!.Invoke(null, [value])!;
+    }
+
+    private static T CreateUninitializedPivotRecord<T>(params (string FieldName, object? Value)[] fields)
+        where T : class
+    {
+        var record = (T)RuntimeHelpers.GetUninitializedObject(typeof(T));
+        foreach (var (fieldName, value) in fields)
+            SetPrivateField(record, fieldName, value);
+
+        return record;
     }
 
     private static void SetPrivateField(object target, string fieldName, object? value)

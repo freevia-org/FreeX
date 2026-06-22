@@ -36,6 +36,7 @@ test-corpus/public/contextures/
 # downloaded/local workbooks and generated run outputs are never committed.
 fidelity-corpus/files/
 fidelity-corpus/runs/
+fidelity-corpus/oracle-generated/
 
 # On-demand real-world DOCX fidelity corpus for FreeW. Only the manifest + downloader
 # are committed; downloaded/local documents and generated run outputs stay private.
