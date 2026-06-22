@@ -26,12 +26,15 @@ internal static class FreeXInspector
             }
         }
 
-        var inv = new Inventory { Sheets = workbook.SheetCount };
+        var comparableSheets = workbook.Sheets
+            .Select((Sheet, Index) => (Sheet, Index))
+            .Where(item => item.Sheet.Kind != SheetKind.DialogSheet)
+            .ToArray();
+        var inv = new Inventory { Sheets = comparableSheets.Length };
         try { inv.NamedRanges = workbook.NamedRanges.Count; } catch { /* optional */ }
 
-        for (var i = 0; i < workbook.SheetCount; i++)
+        foreach (var (sheet, i) in comparableSheets)
         {
-            var sheet = workbook.GetSheetAt(i);
             inv.Charts += sheet.Charts.Count;
             inv.PivotTables += sheet.PivotTables.Count;
             inv.ConditionalFormats += sheet.ConditionalFormats.Count;

@@ -5,6 +5,7 @@ using System.Xml.Linq;
 using ExcelDataReader;
 using NPOI.HSSF.Model;
 using NPOI.HSSF.Record;
+using NPOI.HSSF.Record.PivotTable;
 using FreeX.Core.Model;
 using NPOI.HSSF.UserModel;
 using NPOI.POIFS.FileSystem;
@@ -44,6 +45,51 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         typeof(HSSFSimpleShape).GetMethod(
             "GetObjRecord",
             BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
+    private static readonly FieldInfo? PivotViewDefinitionNameField =
+        typeof(ViewDefinitionRecord).GetField("name", BindingFlags.Instance | BindingFlags.NonPublic);
+
+    private static readonly FieldInfo? PivotViewDefinitionCacheField =
+        typeof(ViewDefinitionRecord).GetField("iCache", BindingFlags.Instance | BindingFlags.NonPublic);
+
+    private static readonly FieldInfo? PivotViewDefinitionFirstRowField =
+        typeof(ViewDefinitionRecord).GetField("rwFirst", BindingFlags.Instance | BindingFlags.NonPublic);
+
+    private static readonly FieldInfo? PivotViewDefinitionLastRowField =
+        typeof(ViewDefinitionRecord).GetField("rwLast", BindingFlags.Instance | BindingFlags.NonPublic);
+
+    private static readonly FieldInfo? PivotViewDefinitionFirstColumnField =
+        typeof(ViewDefinitionRecord).GetField("colFirst", BindingFlags.Instance | BindingFlags.NonPublic);
+
+    private static readonly FieldInfo? PivotViewDefinitionLastColumnField =
+        typeof(ViewDefinitionRecord).GetField("colLast", BindingFlags.Instance | BindingFlags.NonPublic);
+
+    private static readonly FieldInfo? PivotViewDefinitionFirstHeaderRowField =
+        typeof(ViewDefinitionRecord).GetField("rwFirstHead", BindingFlags.Instance | BindingFlags.NonPublic);
+
+    private static readonly FieldInfo? PivotViewDefinitionFirstDataRowField =
+        typeof(ViewDefinitionRecord).GetField("rwFirstData", BindingFlags.Instance | BindingFlags.NonPublic);
+
+    private static readonly FieldInfo? PivotViewDefinitionFirstDataColumnField =
+        typeof(ViewDefinitionRecord).GetField("colFirstData", BindingFlags.Instance | BindingFlags.NonPublic);
+
+    private static readonly FieldInfo? PivotViewDefinitionDataCaptionField =
+        typeof(ViewDefinitionRecord).GetField("dataField", BindingFlags.Instance | BindingFlags.NonPublic);
+
+    private static readonly FieldInfo? PivotViewFieldAxisField =
+        typeof(ViewFieldsRecord).GetField("sxaxis", BindingFlags.Instance | BindingFlags.NonPublic);
+
+    private static readonly FieldInfo? PivotDataItemSourceField =
+        typeof(DataItemRecord).GetField("isxvdData", BindingFlags.Instance | BindingFlags.NonPublic);
+
+    private static readonly FieldInfo? PivotDataItemFunctionField =
+        typeof(DataItemRecord).GetField("df", BindingFlags.Instance | BindingFlags.NonPublic);
+
+    private static readonly FieldInfo? PivotDataItemNumberFormatField =
+        typeof(DataItemRecord).GetField("ifmt", BindingFlags.Instance | BindingFlags.NonPublic);
+
+    private static readonly FieldInfo? PivotDataItemNameField =
+        typeof(DataItemRecord).GetField("name", BindingFlags.Instance | BindingFlags.NonPublic);
 
     private static readonly HashSet<string> ExcelReservedDefinedNames = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -133,6 +179,7 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
             LoadMergedRegions(sourceSheet, sheet);
             LoadCells(hssf, sourceSheet, workbook, sheet, styleCache);
             LoadDrawingObjects(hssf, workbook, sourceSheet, sheet);
+            LoadLegacyPivotTables(workbook, sourceSheet, sheet);
         }
 
         if (workbook.Sheets.Count == 0)
@@ -1303,6 +1350,172 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
                 sheet.DrawingShapes.Add(shape);
         }
     }
+
+    private static void LoadLegacyPivotTables(Workbook workbook, ISheet sourceSheet, Sheet sheet)
+    {
+        if (sourceSheet is not HSSFSheet hssfSheet)
+            return;
+
+        var records = hssfSheet.Sheet.Records.Cast<object>().ToArray();
+        for (var recordIndex = 0; recordIndex < records.Length; recordIndex++)
+        {
+            if (records[recordIndex] is not ViewDefinitionRecord definition)
+                continue;
+
+            var viewFields = new List<ViewFieldsRecord>();
+            var dataItems = new List<DataItemRecord>();
+            for (var nextIndex = recordIndex + 1; nextIndex < records.Length; nextIndex++)
+            {
+                if (records[nextIndex] is ViewDefinitionRecord)
+                    break;
+                if (records[nextIndex] is ViewFieldsRecord viewField)
+                    viewFields.Add(viewField);
+                else if (records[nextIndex] is DataItemRecord dataItem)
+                    dataItems.Add(dataItem);
+            }
+
+            if (CreateLegacyPivotTable(sheet, definition, viewFields, dataItems, sheet.PivotTables.Count + 1) is not { } pivot)
+                continue;
+
+            if (!workbook.PivotCaches.Any(cache => cache.CacheId == pivot.CacheId))
+            {
+                workbook.PivotCaches.Add(new PivotCacheModel
+                {
+                    CacheId = pivot.CacheId,
+                    SourceType = PivotCacheSourceType.Unknown
+                });
+            }
+
+            sheet.PivotTables.Add(pivot);
+        }
+    }
+
+    internal static PivotTableModel? CreateLegacyPivotTable(
+        Sheet sheet,
+        ViewDefinitionRecord definition,
+        IReadOnlyList<ViewFieldsRecord> viewFields,
+        IReadOnlyList<DataItemRecord> dataItems,
+        int ordinal)
+    {
+        if (!TryGetPivotRecordInt(definition, PivotViewDefinitionFirstRowField, out var firstRow) ||
+            !TryGetPivotRecordInt(definition, PivotViewDefinitionLastRowField, out var lastRow) ||
+            !TryGetPivotRecordInt(definition, PivotViewDefinitionFirstColumnField, out var firstColumn) ||
+            !TryGetPivotRecordInt(definition, PivotViewDefinitionLastColumnField, out var lastColumn))
+        {
+            return null;
+        }
+
+        if (lastRow < firstRow || lastColumn < firstColumn)
+            return null;
+
+        var cacheId = TryGetPivotRecordInt(definition, PivotViewDefinitionCacheField, out var cacheIndex)
+            ? Math.Max(0, cacheIndex)
+            : 0;
+        var targetRange = new GridRange(
+            new ModelCellAddress(sheet.Id, ToModelIndex(firstRow), ToModelIndex(firstColumn)),
+            new ModelCellAddress(sheet.Id, ToModelIndex(lastRow), ToModelIndex(lastColumn)));
+        var sourceRange = sheet.GetUsedRange() ?? targetRange;
+        var pivot = new PivotTableModel
+        {
+            Name = ReadPivotRecordString(definition, PivotViewDefinitionNameField) ?? $"PivotTable{ordinal}",
+            CacheId = cacheId,
+            SourceRange = sourceRange,
+            TargetRange = targetRange,
+            LastRenderedRange = targetRange,
+            FirstHeaderRow = ToOneBasedOffset(firstRow, PivotViewDefinitionFirstHeaderRowField, definition),
+            FirstDataRow = ToOneBasedOffset(firstRow, PivotViewDefinitionFirstDataRowField, definition),
+            FirstDataColumn = ToOneBasedOffset(firstColumn, PivotViewDefinitionFirstDataColumnField, definition),
+            DataCaption = ReadPivotRecordString(definition, PivotViewDefinitionDataCaptionField),
+            StyleName = "PivotStyleLight16"
+        };
+
+        for (var fieldIndex = 0; fieldIndex < viewFields.Count; fieldIndex++)
+        {
+            if (!TryGetPivotRecordInt(viewFields[fieldIndex], PivotViewFieldAxisField, out var axis))
+                continue;
+
+            var field = new PivotFieldModel(fieldIndex);
+            if ((axis & 0x1) != 0)
+                pivot.RowFields.Add(field);
+            if ((axis & 0x2) != 0)
+                pivot.ColumnFields.Add(field);
+            if ((axis & 0x4) != 0)
+                pivot.PageFields.Add(field);
+        }
+
+        foreach (var dataItem in dataItems)
+        {
+            var sourceFieldIndex = TryGetPivotRecordInt(dataItem, PivotDataItemSourceField, out var dataSource)
+                ? dataSource
+                : Math.Max(0, viewFields.Count - 1);
+            var numberFormatId = TryGetPivotRecordInt(dataItem, PivotDataItemNumberFormatField, out var formatId) && formatId >= 0
+                ? formatId
+                : null as int?;
+            var name = ReadPivotRecordString(dataItem, PivotDataItemNameField);
+            pivot.DataFields.Add(new PivotDataFieldModel(
+                sourceFieldIndex,
+                string.IsNullOrWhiteSpace(name) ? $"Data Field {pivot.DataFields.Count + 1}" : name,
+                MapLegacyPivotSummaryFunction(TryGetPivotRecordInt(dataItem, PivotDataItemFunctionField, out var function) ? function : 0),
+                numberFormatId));
+        }
+
+        if (pivot.DataFields.Count == 0 && viewFields.Count > 0)
+            pivot.DataFields.Add(new PivotDataFieldModel(viewFields.Count - 1, "Data Field 1", "sum"));
+
+        return pivot;
+    }
+
+    private static int ToOneBasedOffset(int firstZeroBased, FieldInfo? field, object record) =>
+        TryGetPivotRecordInt(record, field, out var absoluteZeroBased) && absoluteZeroBased >= firstZeroBased
+            ? absoluteZeroBased - firstZeroBased + 1
+            : 1;
+
+    private static bool TryGetPivotRecordInt(object record, FieldInfo? field, out int value)
+    {
+        value = 0;
+        if (field?.GetValue(record) is not { } raw)
+            return false;
+
+        switch (raw)
+        {
+            case byte byteValue:
+                value = byteValue;
+                return true;
+            case short shortValue:
+                value = shortValue;
+                return true;
+            case ushort ushortValue:
+                value = ushortValue;
+                return true;
+            case int intValue:
+                value = intValue;
+                return true;
+            case uint uintValue when uintValue <= int.MaxValue:
+                value = (int)uintValue;
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private static string? ReadPivotRecordString(object record, FieldInfo? field) =>
+        field?.GetValue(record) as string;
+
+    private static string MapLegacyPivotSummaryFunction(int function) =>
+        function switch
+        {
+            1 => "count",
+            2 => "average",
+            3 => "max",
+            4 => "min",
+            5 => "product",
+            6 => "countNums",
+            7 => "stdDev",
+            8 => "stdDevP",
+            9 => "var",
+            10 => "varP",
+            _ => "sum"
+        };
 
     private static IEnumerable<HSSFPicture> EnumeratePictures(IEnumerable<HSSFShape> shapes)
     {
