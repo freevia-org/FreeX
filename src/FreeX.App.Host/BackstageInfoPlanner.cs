@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.IO;
+using Free.Shared.AppServices;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -34,8 +35,11 @@ public static class BackstageInfoPlanner
         var accessibilityIssues = AccessibilityCheckerService.FindIssues(workbook);
         var formulaIssues = FormulaAuditingService.FindFormulaErrorIssues(workbook);
         var summary = InfoPanelSummaryPlanner.Create(workbook, activeSheet, culture);
-        var sharingStatus = ShareWorkbookPlanner.FormatStatus(
-            ShareWorkbookPlanner.CreatePlan(currentFilePath, fileExists));
+        var sharingStatus = WorkbookShareReadinessPlanner.FormatStatus(
+            WorkbookShareReadinessPlanner.CreatePlan(
+                currentFilePath,
+                WorkbookShareSurface.WindowsShare,
+                fileExists));
         var exportStatus = WorkbookExportReadinessPlanner.Create(workbook, hasSelection).StatusText;
         var fileInfo = TryGetFileInfo(currentFilePath, out var currentFileInfo)
             ? currentFileInfo

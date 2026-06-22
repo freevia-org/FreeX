@@ -1,4 +1,5 @@
 using System.IO;
+using Free.Shared.AppServices;
 using FreeX.App.Services;
 using FreeX.Core.Model;
 
@@ -42,7 +43,10 @@ public static class LocalAccountPlanner
         var optionsPath = Normalize(optionsPathProvider(), "Unknown");
         var workbookDisplayName = Normalize(workbookName, "Unsaved workbook");
         var workbookStatus = FormatWorkbookStatus(workbookDisplayName, currentFilePath, fileExists);
-        var sharingStatus = FormatSharingStatus(ShareWorkbookPlanner.CreatePlan(currentFilePath, fileExists));
+        var sharingStatus = FormatSharingStatus(WorkbookShareReadinessPlanner.CreatePlan(
+            currentFilePath,
+            WorkbookShareSurface.WindowsShare,
+            fileExists));
         var exportStatus = workbook is null
             ? WorkbookExportReadinessPlanner.CreateForAvailableWorkbook(hasSelection).StatusText
             : WorkbookExportReadinessPlanner.Create(workbook, hasSelection).StatusText;
@@ -94,23 +98,26 @@ public static class LocalAccountPlanner
         string? currentFilePath,
         Func<string, bool> fileExists)
     {
-        var sharePlan = ShareWorkbookPlanner.CreatePlan(currentFilePath, fileExists);
-        if (sharePlan.Kind == ShareWorkbookPlanKind.ShareExistingFile)
+        var sharePlan = WorkbookShareReadinessPlanner.CreatePlan(
+            currentFilePath,
+            WorkbookShareSurface.WindowsShare,
+            fileExists);
+        if (sharePlan.Kind == WorkbookShareReadinessPlanKind.ShareExistingFile)
             return $"{workbookDisplayName} ({sharePlan.Path})";
 
         return sharePlan.SaveAsReason switch
         {
-            ShareWorkbookSaveAsReason.MissingFile when !string.IsNullOrWhiteSpace(sharePlan.CandidatePath) =>
+            WorkbookShareReadinessSaveAsReason.MissingFile when !string.IsNullOrWhiteSpace(sharePlan.CandidatePath) =>
                 $"{workbookDisplayName} (saved path missing: {sharePlan.CandidatePath})",
-            ShareWorkbookSaveAsReason.InvalidPath when !string.IsNullOrWhiteSpace(sharePlan.CandidatePath) =>
+            WorkbookShareReadinessSaveAsReason.InvalidPath when !string.IsNullOrWhiteSpace(sharePlan.CandidatePath) =>
                 $"{workbookDisplayName} (saved path is not a valid local file path: {sharePlan.CandidatePath})",
             _ =>
                 $"{workbookDisplayName} (not saved yet)"
         };
     }
 
-    private static string FormatSharingStatus(ShareWorkbookPlan plan) =>
-        ShareWorkbookPlanner.FormatStatus(plan);
+    private static string FormatSharingStatus(WorkbookShareReadinessPlan plan) =>
+        WorkbookShareReadinessPlanner.FormatStatus(plan);
 
     private static string Normalize(string? value, string fallback) =>
         string.IsNullOrWhiteSpace(value)

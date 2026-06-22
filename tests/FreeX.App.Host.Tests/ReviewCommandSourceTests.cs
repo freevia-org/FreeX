@@ -56,7 +56,10 @@ public sealed class ReviewCommandSourceTests
         source.Should().Contain("new AllowEditRangeDialog(");
         source.Should().Contain("TryExecuteCommand(command, \"Allow Users to Edit Ranges\")");
         source.Should().Contain("_messageService.ShowInfo(successMessage, UiText.Get(\"MainWindowMessage_AllowEditRangesTitle\"))");
-        source.Should().Contain("ShareWorkbookPlanner.CreatePlan(_currentFilePath)");
+        source.Should().Contain("WorkbookShareReadinessPlanner.CreatePlan(");
+        source.Should().Contain("WorkbookShareSurface.WindowsShare");
+        source.Should().Contain("WorkbookShareReadinessPlanKind.SaveAsBeforeShare");
+        source.Should().NotContain("ShareWorkbookPlanner.CreatePlan(_currentFilePath)");
         source.Should().Contain("_shareService.ShareFileAsync(this, sharePath, _workbook.Name)");
     }
 

@@ -429,8 +429,10 @@ public sealed partial class MainWindowSourceHygieneTests
         var reviewSource = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
         var shareMethod = ExtractMethodSource(reviewSource, "private async Task ShareWorkbookAsync(");
 
-        shareMethod.Should().Contain("ShareWorkbookPlanner.CreatePlan(_currentFilePath)");
-        shareMethod.Should().Contain("ShareWorkbookPlanKind.SaveAsBeforeShare");
+        shareMethod.Should().Contain("WorkbookShareReadinessPlanner.CreatePlan(");
+        shareMethod.Should().Contain("WorkbookShareSurface.WindowsShare");
+        shareMethod.Should().Contain("WorkbookShareReadinessPlanKind.SaveAsBeforeShare");
+        shareMethod.Should().NotContain("ShareWorkbookPlanner.CreatePlan(_currentFilePath)");
         shareMethod.Should().Contain("SaveWorkbookWithDialogAsync()");
         shareMethod.Should().Contain("FileSavePlanner.TryResolveExistingPath(plan.Path, _fileAdapters, out var target)");
         shareMethod.Should().Contain("SaveWorkbookToTargetAsync(target!)");
