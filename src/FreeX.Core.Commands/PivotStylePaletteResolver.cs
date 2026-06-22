@@ -7,7 +7,7 @@ internal static class PivotStylePaletteResolver
     private static readonly IReadOnlyDictionary<string, WorkbookThemeColorSlot> MediumThemeSlots =
         new Dictionary<string, WorkbookThemeColorSlot>(StringComparer.OrdinalIgnoreCase)
         {
-            ["PivotStyleMedium2"] = WorkbookThemeColorSlot.Accent2,
+            ["PivotStyleMedium2"] = WorkbookThemeColorSlot.Accent1,
             ["PivotStyleMedium9"] = WorkbookThemeColorSlot.Accent1,
             ["PivotStyleMedium10"] = WorkbookThemeColorSlot.Accent2,
             ["PivotStyleMedium3"] = WorkbookThemeColorSlot.Accent3,
@@ -44,7 +44,7 @@ internal static class PivotStylePaletteResolver
         if (string.Equals(styleName, "PivotStyleMedium2", StringComparison.OrdinalIgnoreCase) &&
             IsModernOfficeTheme(theme))
         {
-            return LegacyMedium2Palette();
+            return ThemedMediumPalette(theme, WorkbookThemeColorSlot.Accent1) with { GrandTotalFill = null };
         }
 
         if (string.Equals(styleName, "PivotStyleMedium17", StringComparison.OrdinalIgnoreCase) &&
@@ -66,9 +66,9 @@ internal static class PivotStylePaletteResolver
 
         return styleName switch
         {
+            "PivotStyleDark3" => OrangeDarkPalette(),
             "PivotStyleDark4" => DarkPalette(new CellColor(68, 84, 106), new CellColor(217, 225, 242), new CellColor(180, 198, 231), new CellColor(242, 242, 242), new CellColor(142, 169, 219)),
             "PivotStyleDark7" => DarkPalette(new CellColor(31, 78, 121), new CellColor(217, 226, 243), new CellColor(184, 204, 228), new CellColor(232, 240, 248), new CellColor(149, 179, 215)),
-            "PivotStyleMedium2" => LegacyMedium2Palette(),
             "PivotStyleMedium4" => MediumPalette(new CellColor(112, 173, 71), new CellColor(226, 239, 218), new CellColor(198, 224, 180), new CellColor(235, 245, 230), new CellColor(169, 208, 142)),
             "PivotStyleMedium9" => MediumPalette(new CellColor(91, 155, 213), new CellColor(221, 235, 247), null, new CellColor(234, 243, 252), new CellColor(157, 195, 230)),
             "PivotStyleMedium10" => MediumPalette(new CellColor(237, 125, 49), new CellColor(252, 228, 214), new CellColor(248, 203, 173), new CellColor(253, 239, 230), new CellColor(244, 177, 131)),
@@ -86,6 +86,12 @@ internal static class PivotStylePaletteResolver
         if (DarkMediumThemeSlots.TryGetValue(styleName, out var darkMediumSlot))
         {
             palette = ThemedDarkMediumPalette(theme, darkMediumSlot);
+            if (string.Equals(styleName, "PivotStyleMedium5", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(styleName, "PivotStyleMedium6", StringComparison.OrdinalIgnoreCase))
+            {
+                palette = palette with { GrandTotalFill = null };
+            }
+
             return true;
         }
 
@@ -220,7 +226,7 @@ internal static class PivotStylePaletteResolver
             Border: new CellColor(191, 191, 191),
             BodyFill: null);
 
-    private static PivotStylePalette LegacyMedium2Palette() =>
+    private static PivotStylePalette OrangeDarkPalette() =>
         new(
             HeaderFill: new CellColor(126, 53, 14),
             HeaderFont: CellColor.White,

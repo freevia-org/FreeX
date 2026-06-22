@@ -425,7 +425,7 @@ public sealed partial class PivotTableRefreshServiceTests
     }
 
     [Theory]
-    [InlineData("PivotStyleMedium2", 126, 53, 14, 247, 199, 172)]
+    [InlineData("PivotStyleMedium2", 21, 96, 130, 232, 239, 242)]
     [InlineData("PivotStyleLight16", 207, 236, 247, 243, 250, 253)]
     [InlineData("PivotStyleMedium10", 233, 113, 50, 253, 241, 234)]
     [InlineData("PivotStyleMedium17", 112, 48, 160, 243, 235, 250)]
@@ -481,17 +481,17 @@ public sealed partial class PivotTableRefreshServiceTests
         PivotTableRefreshService.Refresh(workbook, sheet, pivot);
 
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "E2"))!.StyleId)
-            .FillColor.Should().Be(new CellColor(120, 40, 20));
+            .FillColor.Should().Be(new CellColor(10, 80, 120));
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "E3"))!.StyleId)
-            .FillColor.Should().Be(new CellColor(242, 234, 232));
+            .FillColor.Should().Be(new CellColor(230, 238, 242));
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "F5"))!.StyleId)
-            .FillColor.Should().Be(new CellColor(214, 190, 184));
+            .FillColor.Should().Be(new CellColor(182, 202, 214));
     }
 
     [Fact]
-    public void Refresh_AppliesMedium2BodyFillAndDarkGrandTotalStyle()
+    public void Refresh_AppliesModernOfficeMedium2HeaderWithoutBodyOrGrandTotalFill()
     {
-        var workbook = new Workbook("PivotStyleMedium2BodyRenderTest");
+        var workbook = new Workbook("PivotStyleMedium2ModernOfficeRenderTest");
         var sheet = workbook.AddSheet("Data");
         SeedSalesData(sheet);
         var pivot = new PivotTableModel
@@ -509,12 +509,12 @@ public sealed partial class PivotTableRefreshServiceTests
         PivotTableRefreshService.Refresh(workbook, sheet, pivot);
 
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "E2"))!.StyleId)
-            .FillColor.Should().Be(new CellColor(126, 53, 14));
+            .FillColor.Should().Be(new CellColor(21, 96, 130));
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "E3"))!.StyleId)
-            .FillColor.Should().Be(new CellColor(247, 199, 172));
+            .FillColor.Should().BeNull();
         var totalStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "E5"))!.StyleId);
-        totalStyle.FillColor.Should().Be(new CellColor(126, 53, 14));
-        totalStyle.FontColor.Should().Be(CellColor.White);
+        totalStyle.FillColor.Should().BeNull();
+        totalStyle.FontColor.Should().Be(CellColor.Black);
     }
 
     [Fact]
@@ -546,11 +546,11 @@ public sealed partial class PivotTableRefreshServiceTests
         PivotTableRefreshService.Refresh(workbook, sheet, pivot);
 
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "E2"))!.StyleId)
-            .FillColor.Should().Be(new CellColor(126, 53, 14));
+            .FillColor.Should().Be(new CellColor(21, 96, 130));
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "E3"))!.StyleId)
-            .FillColor.Should().Be(new CellColor(247, 199, 172));
+            .FillColor.Should().BeNull();
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "E5"))!.StyleId)
-            .FillColor.Should().Be(new CellColor(126, 53, 14));
+            .FillColor.Should().BeNull();
     }
 
     [Fact]
@@ -592,7 +592,50 @@ public sealed partial class PivotTableRefreshServiceTests
     }
 
     [Fact]
-    public void ApplyLoadedPivotStyles_UsesFirstSharedCacheStyleForLoadedCache()
+    public void ApplyLoadedPivotStyles_PreservesExistingFontIdentityWhenApplyingVisualStyle()
+    {
+        var workbook = new Workbook("LoadedPivotFontIdentityStyleTest");
+        var sheet = workbook.AddSheet("Data");
+        var loadedThemeFontStyle = workbook.RegisterStyle(new CellStyle
+        {
+            FontName = "Calibri",
+            FontSize = 10,
+            FontScheme = CellFontScheme.Minor,
+            NumberFormat = "$#,##0.00"
+        });
+        sheet.SetCell(Addr(sheet, "E2"), new Cell { Value = new TextValue("Row Labels"), StyleId = loadedThemeFontStyle });
+        sheet.SetCell(Addr(sheet, "F2"), new Cell { Value = new TextValue("Sum of Sales"), StyleId = loadedThemeFontStyle });
+        sheet.SetCell(Addr(sheet, "E3"), new Cell { Value = new TextValue("Hardware"), StyleId = loadedThemeFontStyle });
+        sheet.SetCell(Addr(sheet, "F3"), new Cell { Value = new NumberValue(1250), StyleId = loadedThemeFontStyle });
+        sheet.SetCell(Addr(sheet, "E4"), new Cell { Value = new TextValue("Grand Total"), StyleId = loadedThemeFontStyle });
+        sheet.SetCell(Addr(sheet, "F4"), new Cell { Value = new NumberValue(1250), StyleId = loadedThemeFontStyle });
+        sheet.PivotTables.Add(new PivotTableModel
+        {
+            Name = "NativePivotThemeFont",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "B2"),
+            TargetRange = Range(sheet, "E2", "F4"),
+            LastRenderedRange = Range(sheet, "E2", "F4"),
+            StyleName = "PivotStyleMedium9",
+            ShowRowStripes = true
+        });
+
+        PivotTableRefreshService.ApplyLoadedPivotStyles(workbook);
+
+        var headerStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "E2"))!.StyleId);
+        headerStyle.Bold.Should().BeTrue();
+        headerStyle.FillColor.Should().Be(new CellColor(21, 96, 130));
+        headerStyle.FontColor.Should().Be(CellColor.White);
+        AssertLoadedPivotFontIdentity(headerStyle);
+
+        var valueStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "F3"))!.StyleId);
+        valueStyle.FillColor.Should().Be(new CellColor(232, 239, 242));
+        valueStyle.NumberFormat.Should().Be("$#,##0.00");
+        AssertLoadedPivotFontIdentity(valueStyle);
+    }
+
+    [Fact]
+    public void ApplyLoadedPivotStyles_UsesEachSharedCachePivotOwnStyle()
     {
         var workbook = new Workbook("LoadedPivotSharedCacheStyleTest");
         var sheet = workbook.AddSheet("Data");
@@ -645,11 +688,67 @@ public sealed partial class PivotTableRefreshServiceTests
 
         PivotTableRefreshService.ApplyLoadedPivotStyles(workbook);
 
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "A4"))!.StyleId)
+            .FillColor.Should().Be(new CellColor(21, 96, 130));
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "A5"))!.StyleId)
+            .FillColor.Should().BeNull();
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "E4"))!.StyleId)
             .FillColor.Should().Be(new CellColor(126, 53, 14));
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "E5"))!.StyleId)
             .FillColor.Should().Be(new CellColor(247, 199, 172));
-        workbook.GetStyle(sheet.GetCell(Addr(sheet, "E6"))!.StyleId).FontColor.Should().Be(CellColor.White);
+    }
+
+    private static void AssertLoadedPivotFontIdentity(CellStyle style)
+    {
+        style.FontName.Should().Be("Calibri");
+        style.FontSize.Should().Be(10);
+        style.FontScheme.Should().Be(CellFontScheme.Minor);
+    }
+
+    [Fact]
+    public void ApplyLoadedPivotStyles_ExcludesCompactGroupHeadersFromRowStripeBanding()
+    {
+        var workbook = new Workbook("LoadedPivotCompactGroupStripeTest");
+        var sheet = workbook.AddSheet("Pivot");
+        var parentStyle = workbook.RegisterStyle(new CellStyle());
+        var childStyle = workbook.RegisterStyle(new CellStyle { IndentLevel = 1 });
+        sheet.SetCell(Addr(sheet, "A3"), new TextValue("Row Labels"));
+        sheet.SetCell(Addr(sheet, "B3"), new TextValue("Sum of Sales"));
+        sheet.SetCell(Addr(sheet, "A4"), new Cell { Value = new TextValue("2026"), StyleId = parentStyle });
+        sheet.SetCell(Addr(sheet, "B4"), new NumberValue(28730));
+        sheet.SetCell(Addr(sheet, "A5"), new Cell { Value = new TextValue("Jan"), StyleId = childStyle });
+        sheet.SetCell(Addr(sheet, "B5"), new NumberValue(6550));
+        sheet.SetCell(Addr(sheet, "A6"), new Cell { Value = new TextValue("Feb"), StyleId = childStyle });
+        sheet.SetCell(Addr(sheet, "B6"), new NumberValue(7135));
+        sheet.SetCell(Addr(sheet, "A7"), new TextValue("Grand Total"));
+        sheet.SetCell(Addr(sheet, "B7"), new NumberValue(28730));
+
+        var pivot = new PivotTableModel
+        {
+            Name = "NativePivotDateGrouping",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "B2"),
+            TargetRange = Range(sheet, "A3", "B7"),
+            LastRenderedRange = Range(sheet, "A3", "B7"),
+            StyleName = "PivotStyleMedium9",
+            ReportLayout = PivotReportLayout.Compact,
+            FirstDataRow = 1,
+            FirstDataColumn = 1,
+            ShowRowStripes = true
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.RowFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Sales", "sum"));
+        sheet.PivotTables.Add(pivot);
+
+        PivotTableRefreshService.ApplyLoadedPivotStyles(workbook);
+
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "A4"))!.StyleId)
+            .FillColor.Should().Be(new CellColor(208, 223, 230));
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "A5"))!.StyleId)
+            .FillColor.Should().Be(new CellColor(232, 239, 242));
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "A6"))!.StyleId)
+            .FillColor.Should().BeNull();
     }
 
     [Fact]
@@ -732,6 +831,60 @@ public sealed partial class PivotTableRefreshServiceTests
             .FillColor.Should().BeNull();
     }
 
+    [Fact]
+    public void ApplyLoadedPivotStyles_UsesNativeLocationForPageFieldPivotHeaders()
+    {
+        var workbook = new Workbook("LoadedPivotNativePageFieldHeaderStyleTest");
+        var sheet = workbook.AddSheet("Pivot");
+        sheet.SetCell(Addr(sheet, "A2"), new TextValue("Channel"));
+        sheet.SetCell(Addr(sheet, "B2"), new TextValue("(Multiple Items)"));
+        sheet.SetCell(Addr(sheet, "E2"), new TextValue("Region"));
+        sheet.SetCell(Addr(sheet, "F2"), new TextValue("North"));
+        sheet.SetCell(Addr(sheet, "A4"), new TextValue("Sum of Sales"));
+        sheet.SetCell(Addr(sheet, "B4"), new TextValue("Column Labels"));
+        sheet.SetCell(Addr(sheet, "A5"), new TextValue("Row Labels"));
+        sheet.SetCell(Addr(sheet, "B5"), new TextValue("Jan-26"));
+        sheet.SetCell(Addr(sheet, "C5"), new TextValue("Apr-26"));
+        sheet.SetCell(Addr(sheet, "D5"), new TextValue("Grand Total"));
+        sheet.SetCell(Addr(sheet, "A6"), new TextValue("Hardware"));
+        sheet.SetCell(Addr(sheet, "B6"), new NumberValue(1250));
+        sheet.SetCell(Addr(sheet, "C6"), new NumberValue(1310));
+        sheet.SetCell(Addr(sheet, "D6"), new NumberValue(2560));
+        sheet.SetCell(Addr(sheet, "A8"), new TextValue("Grand Total"));
+        sheet.SetCell(Addr(sheet, "D8"), new NumberValue(4700));
+
+        var pivot = new PivotTableModel
+        {
+            Name = "NativePivotReportFilters",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "D2"),
+            TargetRange = Range(sheet, "A4", "D8"),
+            LastRenderedRange = Range(sheet, "A4", "D8"),
+            StyleName = "PivotStyleMedium9",
+            FirstDataRow = 2,
+            FirstDataColumn = 1,
+            PageOverThenDown = true,
+            PageWrap = 2,
+            ShowFieldHeaders = true,
+            ShowRowStripes = true
+        };
+        pivot.PageFields.Add(new PivotFieldModel(0));
+        pivot.PageFields.Add(new PivotFieldModel(1));
+        pivot.RowFields.Add(new PivotFieldModel(2));
+        pivot.ColumnFields.Add(new PivotFieldModel(3));
+        pivot.DataFields.Add(new PivotDataFieldModel(4, "Sum of Sales", "sum"));
+        sheet.PivotTables.Add(pivot);
+
+        PivotTableRefreshService.ApplyLoadedPivotStyles(workbook);
+
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "A4"))!.StyleId)
+            .FillColor.Should().Be(new CellColor(21, 96, 130));
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "A5"))!.StyleId)
+            .FillColor.Should().Be(new CellColor(21, 96, 130));
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "A6"))!.StyleId)
+            .FillColor.Should().NotBe(new CellColor(21, 96, 130));
+    }
+
     [Theory]
     [InlineData("PivotStyleMedium3", WorkbookThemeColorSlot.Accent3)]
     [InlineData("PivotStyleMedium11", WorkbookThemeColorSlot.Accent3)]
@@ -775,11 +928,12 @@ public sealed partial class PivotTableRefreshServiceTests
             .FillColor.Should().Be(expectedHeaderFill);
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "E3"))!.StyleId)
             .FillColor.Should().Be(theme.ResolveColor(expectedSlot, 0.9));
-        var expectedGrandTotalFill = styleName.Equals("PivotStyleMedium5", StringComparison.OrdinalIgnoreCase) ||
-                                     styleName.Equals("PivotStyleMedium6", StringComparison.OrdinalIgnoreCase) ||
-                                     styleName.Equals("PivotStyleMedium7", StringComparison.OrdinalIgnoreCase)
-            ? theme.ResolveColor(expectedSlot, 0.8)
-            : theme.ResolveColor(expectedSlot, 0.7);
+        CellColor? expectedGrandTotalFill = styleName.Equals("PivotStyleMedium5", StringComparison.OrdinalIgnoreCase) ||
+                                            styleName.Equals("PivotStyleMedium6", StringComparison.OrdinalIgnoreCase)
+            ? null
+            : styleName.Equals("PivotStyleMedium7", StringComparison.OrdinalIgnoreCase)
+                ? theme.ResolveColor(expectedSlot, 0.8)
+                : theme.ResolveColor(expectedSlot, 0.7);
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "F5"))!.StyleId)
             .FillColor.Should().Be(expectedGrandTotalFill);
     }

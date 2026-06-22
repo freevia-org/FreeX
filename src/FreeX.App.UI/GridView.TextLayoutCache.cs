@@ -133,12 +133,13 @@ public partial class GridView
 
     private static bool UsesDefaultTextLayoutStyleCore(CellStyle style, WorkbookTheme theme)
     {
-        var effectiveFontName = ResolveEffectiveCellFontName(style, theme);
+        var (effectiveFontName, fontStretch) = ResolveEffectiveCellFontForDisplay(style, theme);
         var usesDefaultFontName = string.Equals(effectiveFontName, "Calibri", StringComparison.OrdinalIgnoreCase);
         var usesDefaultFontSize = style.FontSize <= 0 ||
             Math.Abs(style.FontSize - DefaultCellFontSizePoints) < 0.001;
 
         return usesDefaultFontName &&
+            fontStretch == FontStretches.Normal &&
             usesDefaultFontSize &&
             !style.Bold &&
             !style.Italic &&
