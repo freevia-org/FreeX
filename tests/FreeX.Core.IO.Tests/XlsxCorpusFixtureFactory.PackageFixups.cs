@@ -887,7 +887,7 @@ internal static partial class XlsxCorpusFixtureFactory
                 workbookXml,
                 extensionNs,
                 extensionPrefix,
-                isSlicer ? "{BBE1A952-AA13-448E-AADC-164F8A28A991}" : "{D0CA8CA8-9F24-4464-BF8E-62219DCF47F9}",
+                isSlicer ? "{BBE1A952-AA13-448e-AADC-164F8A28A991}" : "{D0CA8CA8-9F24-4464-BF8E-62219DCF47F9}",
                 isSlicer ? "slicerCaches" : "timelineCacheRefs",
                 isSlicer ? "slicerCache" : "timelineCacheRef",
                 cacheRelationshipId,

@@ -119,11 +119,20 @@ internal static class Program
         IReadOnlyList<PivotVisualCase>? pivotVisualCases = options.PivotRangesOnly
             ? EnumeratePivotVisualRanges(workbook).ToArray()
             : null;
+        IReadOnlyList<SheetVisualCase>? pivotSheetVisualCases = options.PivotSheetRanges
+            ? EnumeratePivotSheetVisualRanges(workbook).ToArray()
+            : null;
 
         if (options.ExportExcelPngs)
         {
             Console.WriteLine("\n[2/4] Exporting Excel PNGs...");
-            pivotVisualCases = ExportExcelReferencePngs(xlsxPath, workbook, excelInputDir, options, pivotVisualCases);
+            (pivotVisualCases, pivotSheetVisualCases) = ExportExcelReferencePngs(
+                xlsxPath,
+                workbook,
+                excelInputDir,
+                options,
+                pivotVisualCases,
+                pivotSheetVisualCases);
         }
 
         var excelReferenceDimensions = Directory.Exists(excelInputDir)
@@ -165,6 +174,43 @@ internal static class Program
                         ? dimensions
                         : (PngDimensions?)null;
                     RenderSheetToGridViewPng(workbook, sheet, viewportService, outPath, range, targetDimensions);
+                    result.Rendered = true;
+                    Console.WriteLine($"-> {outFileName}");
+                }
+                catch (Exception ex)
+                {
+                    result.Error = $"{ex.GetType().Name}: {ex.Message}";
+                    Console.WriteLine($"ERROR: {result.Error}");
+                }
+
+                sheetResults.Add(result);
+                sheetIndex++;
+            }
+        }
+        else if (options.PivotSheetRanges)
+        {
+            foreach (var item in pivotSheetVisualCases ?? EnumeratePivotSheetVisualRanges(workbook).ToArray())
+            {
+                var safeName = SanitizeFileName(item.Name);
+                var outFileName = $"freex_{sheetIndex:D2}_{safeName}.png";
+                var outPath = Path.Combine(freexOutputDir, outFileName);
+
+                Console.Write($"  [{sheetIndex:D2}] {item.Sheet.Name}!{item.Range} ({item.RangeSource}) ... ");
+
+                var result = new SheetResult
+                {
+                    NN = sheetIndex,
+                    SheetName = $"{item.Sheet.Name} [{item.RangeSource}]",
+                    FreeXPngPath = outPath,
+                    FreeXPngFileName = outFileName,
+                };
+
+                try
+                {
+                    var targetDimensions = excelReferenceDimensions.TryGetValue(sheetIndex, out var dimensions)
+                        ? dimensions
+                        : (PngDimensions?)null;
+                    RenderSheetToGridViewPng(workbook, item.Sheet, viewportService, outPath, item.Range, targetDimensions);
                     result.Rendered = true;
                     Console.WriteLine($"-> {outFileName}");
                 }
@@ -653,6 +699,63 @@ internal static class Program
         }
     }
 
+    private static IEnumerable<SheetVisualCase> EnumeratePivotSheetVisualRanges(Workbook workbook)
+    {
+        foreach (var sheet in workbook.Sheets)
+        {
+            if (sheet.IsHidden || sheet.IsVeryHidden || sheet.PivotTables.Count == 0)
+                continue;
+
+            var range = ResolvePivotSheetVisualRange(workbook, sheet, out var rangeSource);
+            var pivotNames = string.Join("_", sheet.PivotTables.Select(pivot => pivot.Name));
+            yield return new SheetVisualCase(
+                sheet,
+                range,
+                $"{sheet.Name}_{pivotNames}",
+                rangeSource);
+        }
+    }
+
+    private static GridRange ResolvePivotSheetVisualRange(Workbook workbook, Sheet sheet, out string rangeSource)
+    {
+        var usedRange = sheet.GetUsedRange();
+        var start = usedRange?.Start ?? new CellAddress(sheet.Id, 1, 1);
+        uint endRow = usedRange?.End.Row ?? 1;
+        uint endCol = usedRange?.End.Col ?? 1;
+        var includedNativeFilters = false;
+
+        var nativeFilters = FreeX.App.Host.SlicerTimelinePlanner.GetNativeVisualFilters(workbook, sheet);
+        foreach (var slicer in nativeFilters.Slicers)
+            if (slicer.DrawingAnchor is { } anchor)
+                IncludeDrawingAnchorCells(sheet, anchor, ref endRow, ref endCol, ref includedNativeFilters);
+
+        foreach (var timeline in nativeFilters.Timelines)
+            if (timeline.DrawingAnchor is { } anchor)
+                IncludeDrawingAnchorCells(sheet, anchor, ref endRow, ref endCol, ref includedNativeFilters);
+
+        rangeSource = includedNativeFilters
+            ? "SheetUsedRangeWithNativeVisualFilters"
+            : "SheetUsedRange";
+        return new GridRange(start, new CellAddress(sheet.Id, Math.Max(start.Row, endRow), Math.Max(start.Col, endCol)));
+    }
+
+    private static void IncludeDrawingAnchorCells(
+        Sheet sheet,
+        DrawingAnchorRange anchor,
+        ref uint endRow,
+        ref uint endCol,
+        ref bool included)
+    {
+        if (anchor.To.Column == uint.MaxValue || anchor.To.Row == uint.MaxValue)
+            return;
+
+        var right = ColumnLeftPixels(sheet, anchor.To.Column + 1) + EmusToDip(anchor.To.ColumnOffsetEmu);
+        var bottom = RowTopPixels(sheet, anchor.To.Row + 1) + EmusToDip(anchor.To.RowOffsetEmu);
+        endCol = Math.Max(endCol, PixelLeftToCol(sheet, right));
+        endRow = Math.Max(endRow, PixelTopToRow(sheet, bottom));
+        included = true;
+    }
+
     private static GridRange ResolvePivotVisualRange(Sheet sheet, PivotTableModel pivot, GridRange range, out string rangeSource)
     {
         if (range.RowCount > 1 || range.ColCount > 1)
@@ -757,12 +860,13 @@ internal static class Program
             (cell.HasFormula || cell.Value is not BlankValue);
     }
 
-    private static IReadOnlyList<PivotVisualCase>? ExportExcelReferencePngs(
+    private static (IReadOnlyList<PivotVisualCase>? PivotCases, IReadOnlyList<SheetVisualCase>? SheetCases) ExportExcelReferencePngs(
         string workbookPath,
         Workbook workbook,
         string outputDirectory,
         GridImageCompareOptions options,
-        IReadOnlyList<PivotVisualCase>? pivotVisualCases)
+        IReadOnlyList<PivotVisualCase>? pivotVisualCases,
+        IReadOnlyList<SheetVisualCase>? pivotSheetVisualCases)
     {
         object? excel = null;
         object? workbooks = null;
@@ -795,7 +899,23 @@ internal static class Program
                 }
 
                 ((dynamic)workbookObject).Close(false);
-                return resolvedCases;
+                return (resolvedCases, pivotSheetVisualCases);
+            }
+
+            if (options.PivotSheetRanges)
+            {
+                var cases = pivotSheetVisualCases ?? EnumeratePivotSheetVisualRanges(workbook).ToArray();
+                foreach (var item in cases)
+                {
+                    var safeName = SanitizeFileName(item.Name);
+                    var outPath = Path.Combine(outputDirectory, $"excel_{ordinal:D2}_{safeName}.png");
+                    ExportExcelRangeToPng(workbookObject, item.Sheet.Name, item.Range, outPath);
+                    Console.WriteLine($"  [{ordinal:D2}] {item.Sheet.Name}!{item.Range} ({item.RangeSource}) -> {Path.GetFileName(outPath)}");
+                    ordinal++;
+                }
+
+                ((dynamic)workbookObject).Close(false);
+                return (pivotVisualCases, cases);
             }
 
             foreach (var sheet in workbook.Sheets.Where(sheet => !sheet.IsHidden && !sheet.IsVeryHidden))
@@ -812,7 +932,7 @@ internal static class Program
             }
 
             ((dynamic)workbookObject).Close(false);
-            return pivotVisualCases;
+            return (pivotVisualCases, pivotSheetVisualCases);
         }
         finally
         {
@@ -1522,6 +1642,7 @@ internal sealed record GridImageCompareOptions(
     string? OutputDirectory,
     bool ExportExcelPngs,
     bool PivotRangesOnly,
+    bool PivotSheetRanges,
     double ThresholdPercent,
     bool FailOnDimensionMismatch)
 {
@@ -1531,6 +1652,7 @@ internal sealed record GridImageCompareOptions(
         string? outputDirectory = null;
         var exportExcelPngs = false;
         var pivotRangesOnly = false;
+        var pivotSheetRanges = false;
         var thresholdPercent = 12.0;
         var failOnDimensionMismatch = false;
 
@@ -1547,6 +1669,9 @@ internal sealed record GridImageCompareOptions(
                 case "--pivot-ranges":
                     pivotRangesOnly = true;
                     break;
+                case "--pivot-sheet-ranges":
+                    pivotSheetRanges = true;
+                    break;
                 case "--fail-on-dimension-mismatch":
                     failOnDimensionMismatch = true;
                     break;
@@ -1562,7 +1687,10 @@ internal sealed record GridImageCompareOptions(
             }
         }
 
-        return new GridImageCompareOptions(workbookPath, outputDirectory, exportExcelPngs, pivotRangesOnly, thresholdPercent, failOnDimensionMismatch);
+        if (pivotSheetRanges)
+            pivotRangesOnly = false;
+
+        return new GridImageCompareOptions(workbookPath, outputDirectory, exportExcelPngs, pivotRangesOnly, pivotSheetRanges, thresholdPercent, failOnDimensionMismatch);
     }
 }
 
@@ -1570,6 +1698,12 @@ internal sealed record PivotVisualCase(
     Sheet Sheet,
     PivotTableModel Pivot,
     GridRange Range,
+    string RangeSource);
+
+internal sealed record SheetVisualCase(
+    Sheet Sheet,
+    GridRange Range,
+    string Name,
     string RangeSource);
 
 internal sealed record ExcelRangePngExportAttempt(

@@ -83,7 +83,12 @@ internal static class XlsxPivotXmlReferencePreserver
         if (sourcePivotCaches is null)
             return;
 
-        var targetRoot = context.TargetWorkbookXml.Root;
+        var targetWorkbookEntry = targetArchive.GetEntry("xl/workbook.xml");
+        if (targetWorkbookEntry is null)
+            return;
+
+        var targetWorkbookXml = XlsxPackageXmlEditor.LoadXml(targetWorkbookEntry);
+        var targetRoot = targetWorkbookXml.Root;
         if (targetRoot is null || targetRoot.Element(context.WorkbookNs + "pivotCaches") is not null)
             return;
 
@@ -99,7 +104,7 @@ internal static class XlsxPivotXmlReferencePreserver
         // Excel reject the workbook and drop every PivotTable.
         XlsxPivotTableWriter.InsertWorkbookPivotCaches(targetRoot, context.WorkbookNs, remappedPivotCaches);
 
-        XlsxPackageXmlEditor.ReplaceXml(targetArchive, "xl/workbook.xml", context.TargetWorkbookXml);
+        XlsxPackageXmlEditor.ReplaceXml(targetArchive, "xl/workbook.xml", targetWorkbookXml);
     }
 
     private static XElement RemapWorkbookPivotCaches(

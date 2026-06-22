@@ -21,6 +21,7 @@ internal static class ExcelSmokeFixtures
     private const int XlPercentOfGrandTotal = 8;
     private const int XlDescending = -4121;
     private const int XlOverThenDown = 2;
+    private const int XlTimeline = 2;
     private const int XlTabularRow = 1;
     private const int XlOutlineRow = 2;
     private const int XlRepeatLabels = 2;
@@ -94,6 +95,7 @@ internal static class ExcelSmokeFixtures
             Path.Combine(outputDirectory, "Excel_native_pivot_grouping_show_values_001.xlsx"),
             Path.Combine(outputDirectory, "Excel_native_pivot_multiple_pivots_one_cache_001.xlsx"),
             Path.Combine(outputDirectory, "Excel_native_pivot_report_filters_001.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_pivot_slicer_timeline_001.xlsx"),
             Path.Combine(outputDirectory, "Excel_native_pivot_filters_sorts_002.xlsx"),
             Path.Combine(outputDirectory, "Excel_native_pivot_layout_options_002.xlsx"),
             Path.Combine(outputDirectory, "Excel_native_pivot_date_grouping_003.xlsx"),
@@ -223,6 +225,8 @@ internal static class ExcelSmokeFixtures
                 AddNativePivotMultiplePivotsOneCache(workbook, dataSheet);
             else if (fileName.Contains("report_filters", StringComparison.OrdinalIgnoreCase))
                 AddNativePivotReportFilters(workbook, dataSheet);
+            else if (fileName.Contains("slicer_timeline", StringComparison.OrdinalIgnoreCase))
+                AddNativePivotSlicerTimeline(workbook, dataSheet);
             else if (fileName.Contains("filters_sorts", StringComparison.OrdinalIgnoreCase))
                 AddNativePivotFiltersSorts(workbook, dataSheet);
             else if (fileName.Contains("layout_options", StringComparison.OrdinalIgnoreCase))
@@ -1372,6 +1376,101 @@ internal static class ExcelSmokeFixtures
             ReleaseComObject(categoryField);
             ReleaseComObject(hiddenChannelItem);
             ReleaseComObject(channelField);
+            ReleaseComObject(regionField);
+            ReleaseComObject(pivot);
+            ReleaseComObject(cache);
+            ReleaseComObject(pivotSheet);
+        }
+    }
+
+    private static void AddNativePivotSlicerTimeline(object workbook, object sourceWorksheet)
+    {
+        object? pivotSheet = null;
+        object? cache = null;
+        object? pivot = null;
+        object? regionField = null;
+        object? monthField = null;
+        object? salesField = null;
+        object? dataField = null;
+        object? slicerCaches = null;
+        object? regionSlicerCache = null;
+        object? regionSlicerItems = null;
+        object? southSlicerItem = null;
+        object? regionSlicers = null;
+        object? regionSlicer = null;
+        object? timelineCache = null;
+        object? timelineState = null;
+        object? timelineSlicers = null;
+        object? timeline = null;
+        try
+        {
+            pivotSheet = AddWorksheetAfter(workbook, sourceWorksheet, "Pivot Slicer Timeline");
+            SetExcelCellValue(pivotSheet, 1, 1, "Native PivotTable slicer / timeline");
+            cache = CreateWorksheetRangePivotCache(workbook, "'SalesData'!R1C1:R13C7");
+            pivot = ((dynamic)cache).CreatePivotTable("'Pivot Slicer Timeline'!R3C1", "NativePivotSlicerTimeline");
+
+            regionField = ((dynamic)pivot).PivotFields("Region");
+            ((dynamic)regionField).Orientation = XlRowField;
+            monthField = ((dynamic)pivot).PivotFields("Month");
+            ((dynamic)monthField).Orientation = XlColumnField;
+            salesField = ((dynamic)pivot).PivotFields("Sales");
+            dataField = ((dynamic)pivot).AddDataField(salesField, "Sum of Sales", XlSum);
+            ((dynamic)dataField).NumberFormat = "$#,##0";
+            ((dynamic)pivot).TableStyle2 = "PivotStyleMedium4";
+            RefreshExcelPivotTable(pivot);
+
+            slicerCaches = ((dynamic)workbook).SlicerCaches;
+            regionSlicerCache = ((dynamic)slicerCaches).Add2(pivot, "Region", "NativePivotRegionSlicer");
+            ((dynamic)regionSlicerCache).CrossFilterType = 1;
+            regionSlicerItems = ((dynamic)regionSlicerCache).SlicerItems;
+            southSlicerItem = ((dynamic)regionSlicerItems).Item("South");
+            ((dynamic)southSlicerItem).Selected = false;
+            regionSlicers = ((dynamic)regionSlicerCache).Slicers;
+            regionSlicer = ((dynamic)regionSlicers).Add(
+                pivotSheet,
+                Missing.Value,
+                "NativePivotRegionSlicer",
+                "Region",
+                42,
+                360,
+                150,
+                150);
+            ((dynamic)regionSlicer).Style = "SlicerStyleLight2";
+            ((dynamic)regionSlicer).NumberOfColumns = 1;
+
+            timelineCache = ((dynamic)slicerCaches).Add2(pivot, "SaleDate", "NativePivotSaleDateTimeline", XlTimeline);
+            timelineState = ((dynamic)timelineCache).TimelineState;
+            ((dynamic)timelineState).SetFilterDateRange(new DateTime(2026, 2, 1), new DateTime(2026, 4, 30));
+            timelineSlicers = ((dynamic)timelineCache).Slicers;
+            timeline = ((dynamic)timelineSlicers).Add(
+                pivotSheet,
+                Missing.Value,
+                "NativePivotSaleDateTimeline",
+                "SaleDate",
+                42,
+                528,
+                260,
+                120);
+            ((dynamic)timeline).Style = "TimeSlicerStyleLight2";
+
+            RefreshExcelPivotTable(pivot);
+            AutoFitExcelColumns(pivotSheet, "A:L");
+        }
+        finally
+        {
+            ReleaseComObject(timeline);
+            ReleaseComObject(timelineSlicers);
+            ReleaseComObject(timelineState);
+            ReleaseComObject(timelineCache);
+            ReleaseComObject(regionSlicer);
+            ReleaseComObject(regionSlicers);
+            ReleaseComObject(southSlicerItem);
+            ReleaseComObject(regionSlicerItems);
+            ReleaseComObject(regionSlicerCache);
+            ReleaseComObject(slicerCaches);
+            ReleaseComObject(dataField);
+            ReleaseComObject(salesField);
+            ReleaseComObject(monthField);
             ReleaseComObject(regionField);
             ReleaseComObject(pivot);
             ReleaseComObject(cache);

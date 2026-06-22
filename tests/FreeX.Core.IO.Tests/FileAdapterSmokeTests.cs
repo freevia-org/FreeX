@@ -25311,7 +25311,7 @@ public partial class FileAdapterSmokeTests
                 worksheetNs,
                 slicerNs,
                 "x14",
-                "{BBE1A952-AA13-448E-AADC-164F8A28A991}",
+                "{BBE1A952-AA13-448e-AADC-164F8A28A991}",
                 "slicerCaches",
                 "slicerCache",
                 "rIdSlicerCache1",
