@@ -615,6 +615,17 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Apply a Design &gt; Document Formatting style set to the document style catalog and re-render so
+    /// existing styled paragraphs immediately pick up the coordinated typography.
+    /// </summary>
+    public void ApplyStyleSet(DocumentStyleSet styleSet)
+    {
+        CommitToModel();
+        DocumentStyleSet.Apply(_model, styleSet);
+        Render();
+    }
+
+    /// <summary>
     /// Re-render the surface after the document's <see cref="TextDocument.Styles"/> catalog has been
     /// mutated out-of-band (e.g. a style created/modified/deleted via <see cref="StyleManager"/>), so the
     /// new run/paragraph formatting resolves for any paragraph referencing the affected style. Commits the
@@ -645,6 +656,9 @@ public sealed class DocumentView : RichTextBox
 
     // Snapshot of the document's pre-theme look (Theme + DefaultRun + each affected style's Run) for theme preview.
     private (DocumentTheme Theme, RunFormatting DefaultRun, Dictionary<string, RunFormatting> Runs)? _themeSnapshot;
+
+    // Snapshot of each affected style's run/paragraph formatting for style-set preview.
+    private (RunFormatting DefaultRun, Dictionary<string, (RunFormatting Run, ParagraphFormatting Paragraph)> Styles)? _styleSetSnapshot;
 
     /// <summary>
     /// Preview a paragraph style on the current selection without committing: snapshot the selected
@@ -756,6 +770,56 @@ public sealed class DocumentView : RichTextBox
                 style.Run = run;
         }
         _themeSnapshot = null;
+    }
+
+    /// <summary>
+    /// Preview a document style set without committing: snapshot the default run and the style catalog
+    /// entries the set rewrites, apply the set, and re-render. The real apply happens on click.
+    /// </summary>
+    public void PreviewStyleSet(DocumentStyleSet styleSet)
+    {
+        ArgumentNullException.ThrowIfNull(styleSet);
+
+        if (_styleSetSnapshot is null)
+            CommitToModel();
+        else
+            RestoreStyleSetPreview();
+
+        var styles = new Dictionary<string, (RunFormatting Run, ParagraphFormatting Paragraph)>();
+        foreach (var id in new[] { "Normal", "Title", "Subtitle", "Heading1", "Heading2", "Heading3", "Quote" })
+        {
+            if (_model.Styles.TryGetValue(id, out var style))
+                styles[id] = (style.Run, style.Paragraph);
+        }
+
+        _styleSetSnapshot = (_model.DefaultRun, styles);
+        DocumentStyleSet.Apply(_model, styleSet);
+        Render();
+    }
+
+    /// <summary>Revert a style-set preview started by <see cref="PreviewStyleSet"/> and re-render.</summary>
+    public void EndStyleSetPreview()
+    {
+        if (_styleSetSnapshot is null)
+            return;
+        RestoreStyleSetPreview();
+        Render();
+    }
+
+    private void RestoreStyleSetPreview()
+    {
+        if (_styleSetSnapshot is not { } snapshot)
+            return;
+        _model.DefaultRun = snapshot.DefaultRun;
+        foreach (var (id, formatting) in snapshot.Styles)
+        {
+            if (_model.Styles.TryGetValue(id, out var style))
+            {
+                style.Run = formatting.Run;
+                style.Paragraph = formatting.Paragraph;
+            }
+        }
+        _styleSetSnapshot = null;
     }
 
     /// <summary>

@@ -133,4 +133,19 @@ public class StyleRoundTripTests
         element.Elements(W + "pPr").Should().HaveCount(1);
         element.Element(W + "pPr")!.Element(W + "jc")!.Attribute(W + "val")!.Value.Should().Be("center");
     }
+
+    [Fact]
+    public void DocumentStyleSetFormatting_RoundTripsThroughStylesXml()
+    {
+        var doc = TextDocument.CreateEmpty();
+        DocumentStyleSet.Apply(doc, DocumentStyleSet.FindByName("Elegant")!);
+
+        var result = RoundTrip(doc);
+
+        result.Styles["Title"].Run.FontFamily.Should().Be("Cambria");
+        result.Styles["Title"].Run.ColorHex.Should().Be("#5B3A29");
+        result.Styles["Heading1"].Run.ColorHex.Should().Be("#5B3A29");
+        result.Styles["Quote"].Paragraph.IndentLeftPt.Should().BeApproximately(36, 0.5);
+        result.Styles["Quote"].Paragraph.IndentRightPt.Should().BeApproximately(36, 0.5);
+    }
 }

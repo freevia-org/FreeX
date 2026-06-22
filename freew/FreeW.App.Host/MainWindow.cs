@@ -1857,10 +1857,9 @@ public sealed class MainWindow : Window
                 // New Style / Manage Styles buttons, prepending the live-preview gallery before them.
                 InjectGallery(content, "styles", StylesGallery.Build(_editor), removeKind: RemoveKind.Combos);
             if (tab.Id == "design")
-                // Replace the placeholder Themes combo with gallery previews, but keep the backed
-                // Colors dropdown beside them so the group matches Word's Document Formatting shape.
-                InjectGallery(content, "themes", ThemeGallery.BuildThemes(_editor), removeKind: RemoveKind.Combos,
-                    extra: ThemeGallery.BuildColours(_editor));
+                // Replace placeholder combos with live previews for Themes, Style Sets and Colors, matching
+                // Word's Document Formatting strip while keeping the implementation app-side and backed.
+                InjectGallery(content, "themes", ThemeGallery.BuildDocumentFormatting(_editor), removeKind: RemoveKind.Combos);
 
             }
         });

@@ -13,11 +13,14 @@ public sealed class ThemeGalleryTests
         var editor = new DocumentView();
 
         var themes = ThemeGallery.BuildThemes(editor);
+        var styleSets = ThemeGallery.BuildStyleSets(editor);
         var colors = ThemeGallery.BuildColours(editor);
 
         AutomationProperties.GetName(themes).Should().Be("Themes");
+        AutomationProperties.GetName(styleSets).Should().Be("Style Sets");
         AutomationProperties.GetName(colors).Should().Be("Colors");
         Captions(themes).Should().Equal("Themes", "Office", "Slate", "Berlin", "Ion");
+        Captions(styleSets).Where(c => c != "Aa").Should().Equal("Style Sets", "Office", "Simple", "Elegant", "Formal");
         Captions(colors).Should().Equal("Colors", "Office", "Slate", "Berlin", "Ion");
     }
 
