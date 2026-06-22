@@ -47,18 +47,10 @@ public sealed class OpenWorkbookLoader
     private static OpenProgressUpdate ToHostProgressUpdate(WorkbookOpenProgressUpdate update) =>
         new(
             OpenWorkbookProgressPlanner.ProgressTitle(),
-            OpenWorkbookProgressPlanner.FormatLoadingFileDetail(PhaseDetail(update.Phase), update.Elapsed),
+            OpenWorkbookProgressPlanner.FormatLoadingFileDetail(
+                WorkbookProgressPresentationPlanner.ToOpenProgressStep(update.Phase),
+                update.Elapsed),
             update.Percent);
-
-    private static string PhaseDetail(WorkbookOpenPhase phase) =>
-        phase switch
-        {
-            WorkbookOpenPhase.Reading => "reading",
-            WorkbookOpenPhase.Inspecting => "inspecting",
-            WorkbookOpenPhase.Parsing => "parsing",
-            WorkbookOpenPhase.Calculating => "calculating",
-            _ => phase.ToString().ToLowerInvariant()
-        };
 }
 
 public sealed record OpenProgressUpdate(string Title, string Detail, double? Percent);

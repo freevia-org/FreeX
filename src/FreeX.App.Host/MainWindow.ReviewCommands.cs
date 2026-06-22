@@ -735,7 +735,10 @@ public partial class MainWindow
             ["source"] = "help"
         });
 
-        var updates = App.Services.GetService<FreeX.App.Services.Updates.IUpdateService>();
+        if (!App.TryGetServices(out var services))
+            return;
+
+        var updates = services.GetService<FreeX.App.Services.Updates.IUpdateService>();
         if (updates is null) return;
 
         var result = await updates.CheckAndDownloadAsync();

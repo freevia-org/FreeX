@@ -983,8 +983,8 @@ public partial class MainWindow
             SetFileOperationInputEnabled(false);
             _operationProgressFileName = System.IO.Path.GetFileName(target.Path);
             ShowSaveProgress(
-                UiText.Get("Progress_SavingWorkbook"),
-                UiText.Get("Progress_SavingFilePreparing"),
+                SaveWorkbookWriter.ProgressTitle(),
+                SaveWorkbookWriter.FormatSavingFileDetail("preparing", TimeSpan.Zero),
                 1);
             var progress = new Progress<SaveProgressUpdate>(
                 update => ShowSaveProgress(update.Title, update.Detail, update.Percent));
