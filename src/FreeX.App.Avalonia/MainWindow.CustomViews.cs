@@ -44,26 +44,26 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get("CustomViews_Title"),
-            Width = 460,
+            Width = 640,
             Height = 360,
-            MinWidth = 380,
+            MinWidth = 460,
             MinHeight = 280,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
         AutomationProperties.SetAutomationId(dialog, "CustomViewsDialog");
 
-        var viewsList = new ListBox { MinHeight = 200, SelectionMode = SelectionMode.Single };
+        var viewsList = new ListBox { SelectionMode = SelectionMode.Single };
         AutomationProperties.SetAutomationId(viewsList, "CustomViewsList");
         AutomationProperties.SetName(viewsList, UiText.Get("CustomViews_ListLabel"));
 
-        var showButton = new Button { Content = UiText.Get("CustomViews_Show"), MinWidth = 84, IsEnabled = false };
+        var showButton = new Button { Content = UiText.Get("CustomViews_Show"), Width = 72, IsDefault = true, IsEnabled = false };
         AutomationProperties.SetAutomationId(showButton, "CustomViewsShowButton");
-        var addButton = new Button { Content = UiText.Get("CustomViews_Add"), MinWidth = 84 };
+        var addButton = new Button { Content = UiText.Get("CustomViews_Add"), Width = 72 };
         AutomationProperties.SetAutomationId(addButton, "CustomViewsAddButton");
-        var deleteButton = new Button { Content = UiText.Get("CustomViews_Delete"), MinWidth = 84, IsEnabled = false };
+        var deleteButton = new Button { Content = UiText.Get("CustomViews_Delete"), Width = 72, IsEnabled = false };
         AutomationProperties.SetAutomationId(deleteButton, "CustomViewsDeleteButton");
-        var closeButton = new Button { Content = UiText.Get("Common_Close"), IsCancel = true, MinWidth = 84 };
+        var closeButton = new Button { Content = UiText.Get("Common_Close"), IsCancel = true, Width = 72 };
         AutomationProperties.SetAutomationId(closeButton, "CustomViewsCloseButton");
 
         var warningText = new TextBlock
@@ -81,7 +81,7 @@ public sealed partial class MainWindow
             rows.Clear();
             rows.AddRange(CustomViewsPlanner.BuildRows(_session.Workbook));
             viewsList.ItemsSource = rows
-                .Select(r => UiText.Format("CustomViews_RowFormat", r.Name, r.SheetCount))
+                .Select(CreateCustomViewsRow)
                 .ToList();
 
             if (selectName is not null)
@@ -160,53 +160,108 @@ public sealed partial class MainWindow
 
         RefreshRows();
 
-        var hint = new TextBlock
+        var listFrame = new AvaloniaGrid
         {
-            Text = UiText.Get("CustomViews_Hint"),
-            Foreground = HeaderForeground,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 8),
+            RowDefinitions = new RowDefinitions("Auto,*"),
         };
-        DockPanel.SetDock(hint, Dock.Top);
+        var header = CreateCustomViewsHeader();
+        Grid.SetRow(header, 0);
+        listFrame.Children.Add(header);
+        Grid.SetRow(viewsList, 1);
+        listFrame.Children.Add(viewsList);
+
+        var viewsGroup = new GroupBox
+        {
+            Header = UiText.Get("CustomViews_ListLabel"),
+            Content = listFrame,
+        };
 
         var commandButtons = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             Spacing = 8,
-            Margin = new Thickness(0, 8, 0, 0),
-            Children = { showButton, addButton, deleteButton },
-        };
-        DockPanel.SetDock(commandButtons, Dock.Bottom);
-
-        var closeRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 8, 0, 0),
-            Children = { closeButton },
+            Children = { showButton, addButton, deleteButton, closeButton },
         };
-        DockPanel.SetDock(closeRow, Dock.Bottom);
 
-        DockPanel.SetDock(warningText, Dock.Bottom);
-        warningText.Margin = new Thickness(0, 8, 0, 0);
-
-        dialog.Content = new DockPanel
+        var root = new AvaloniaGrid
         {
-            Margin = new Thickness(16),
-            LastChildFill = true,
-            Children =
-            {
-                hint,
-                closeRow,
-                commandButtons,
-                warningText,
-                viewsList,
-            },
+            Margin = new Thickness(12),
+            RowDefinitions = new RowDefinitions("*,8,Auto"),
         };
+        Grid.SetRow(viewsGroup, 0);
+        root.Children.Add(viewsGroup);
+        Grid.SetRow(commandButtons, 2);
+        root.Children.Add(commandButtons);
+        Grid.SetRow(warningText, 2);
+        root.Children.Add(warningText);
+        dialog.Content = root;
 
         await dialog.ShowDialog(this);
     }
+
+    private static AvaloniaGrid CreateCustomViewsHeader()
+    {
+        var header = CreateCustomViewsColumnsGrid();
+        header.Height = 22;
+        header.Background = Brush(245, 245, 245);
+        AddCustomViewsHeaderCell(header, 0, UiText.Get("CustomViews_ColumnName"));
+        AddCustomViewsHeaderCell(header, 1, UiText.Get("CustomViews_Sheets"));
+        AddCustomViewsHeaderCell(header, 2, UiText.Get("CustomViews_IncludePrintSettings"));
+        AddCustomViewsHeaderCell(header, 3, UiText.Get("CustomViews_IncludeHiddenFilter"));
+        return header;
+    }
+
+    private static AvaloniaGrid CreateCustomViewsRow(CustomViewsPlanner.Row row)
+    {
+        var viewRow = CreateCustomViewsColumnsGrid();
+        viewRow.MinHeight = 24;
+        AddCustomViewsRowCell(viewRow, 0, row.Name);
+        AddCustomViewsRowCell(viewRow, 1, row.SheetCount.ToString(System.Globalization.CultureInfo.CurrentCulture));
+        AddCustomViewsRowCell(viewRow, 2, IncludedIndicator(row.IncludePrintSettings));
+        AddCustomViewsRowCell(viewRow, 3, IncludedIndicator(row.IncludeHiddenRowsColumnsAndFilterSettings));
+        return viewRow;
+    }
+
+    private static AvaloniaGrid CreateCustomViewsColumnsGrid() =>
+        new()
+        {
+            ColumnDefinitions = new ColumnDefinitions("200,70,110,210"),
+        };
+
+    private static void AddCustomViewsHeaderCell(AvaloniaGrid grid, int column, string text)
+    {
+        var border = new Border
+        {
+            BorderBrush = Brush(210, 210, 210),
+            BorderThickness = new Thickness(column == 0 ? 0 : 1, 0, 0, 1),
+            Child = new TextBlock
+            {
+                Text = text,
+                HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
+                VerticalAlignment = AvaloniaVerticalAlignment.Center,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+            },
+        };
+        Grid.SetColumn(border, column);
+        grid.Children.Add(border);
+    }
+
+    private static void AddCustomViewsRowCell(AvaloniaGrid grid, int column, string text)
+    {
+        var cell = new TextBlock
+        {
+            Text = text,
+            Margin = new Thickness(4, 2, 4, 2),
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        Grid.SetColumn(cell, column);
+        grid.Children.Add(cell);
+    }
+
+    private static string IncludedIndicator(bool included) =>
+        included ? UiText.Get("CustomViews_Included") : UiText.Get("CustomViews_NotIncluded");
 
     /// <summary>
     /// The Add View dialog: a name box (defaulted to the next "View N"), the two Excel-parity inclusion
