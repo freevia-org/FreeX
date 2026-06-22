@@ -319,6 +319,12 @@ internal static class FreeWRibbon
                         Icon = new RibbonCommandIcon(RibbonCommandIconKind.Theme, RibbonCommandIconAccent.Theme),
                         Width = 140
                     });
+                    g.ComboBox("freew.style-set", "Style Sets", c => c with
+                    {
+                        Items = DocumentStyleSet.Catalog.Select(s => s.Name).ToArray(),
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Font, RibbonCommandIconAccent.Theme),
+                        Width = 140
+                    });
                     g.Medium("freew.theme-colors", "Colors", RibbonCommandIconKind.Color, "C", menu: m => ThemeMenu("freew.theme-colors", m), accent: RibbonCommandIconAccent.Color);
                 });
                 // Design > Page Background: set the whole-page background colour (Word's Page Color). The

@@ -554,10 +554,10 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.new-style", new NewStyleCommand(editor));
         registry.Register("freew.manage-styles", new ManageStylesCommand(editor));
 
-        // Design > Document Formatting: Themes / Colors both resolve a catalog theme. FreeW stores the
-        // palette with the theme today, so Colors shares the same backed apply path rather than faking
-        // a separate unsupported colour-scheme model.
+        // Design > Document Formatting: Themes / Colors resolve a catalog theme; Style Sets rewrite the
+        // built-in styles catalog. All three are backed document-wide style changes.
         registry.Register("freew.theme", new ApplyThemeCommand(editor));
+        registry.Register("freew.style-set", new ApplyStyleSetCommand(editor));
         registry.Register("freew.theme-colors", new ApplyThemeCommand(editor));
 
         // Layout tab — page settings (applied to the model; honoured by docx save + print).
@@ -1066,6 +1066,30 @@ internal static class FreeWRibbonCommands
 
             editor.Focus();
             editor.ApplyTheme(theme);
+        }
+
+        private static string? LegacyValue(RibbonCommandContext context) =>
+            context.Parameters.TryGetValue("value", out var raw) ? raw as string : null;
+
+        private static string? MenuHeaderValue(RibbonCommandContext context) =>
+            context.Parameters.TryGetValue(Free.Shared.Ribbon.Wpf.RibbonWpfRenderer.SenderKey, out var sender)
+            && sender is System.Windows.Controls.MenuItem { Tag: string header }
+                ? header
+                : null;
+    }
+
+    private sealed class ApplyStyleSetCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            var value = context.SelectedValue ?? LegacyValue(context) ?? MenuHeaderValue(context);
+            if (string.IsNullOrWhiteSpace(value))
+                return;
+            if (DocumentStyleSet.FindByName(value) is not { } styleSet)
+                return;
+
+            editor.Focus();
+            editor.ApplyStyleSet(styleSet);
         }
 
         private static string? LegacyValue(RibbonCommandContext context) =>

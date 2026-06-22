@@ -1,0 +1,80 @@
+namespace FreeW.Core.Model;
+
+/// <summary>
+/// Word-style Design &gt; Document Formatting style sets. A style set rewrites the built-in paragraph
+/// styles' run and paragraph formatting as a coordinated catalog change; paragraphs keep their
+/// <see cref="Paragraph.StyleId"/> and pick up the new look through normal style resolution.
+/// </summary>
+public sealed record DocumentStyleSet(string Name, string BodyFont, string HeadingFont, string AccentColorHex)
+{
+    public static readonly IReadOnlyList<DocumentStyleSet> Catalog =
+    [
+        new("Office", "Calibri", "Calibri", "#2F5496"),
+        new("Simple", "Calibri", "Calibri Light", "#1F4E79"),
+        new("Elegant", "Georgia", "Cambria", "#5B3A29"),
+        new("Formal", "Times New Roman", "Cambria", "#365F91"),
+    ];
+
+    public static DocumentStyleSet Default => Catalog[0];
+
+    public static DocumentStyleSet? FindByName(string name) =>
+        Catalog.FirstOrDefault(s => string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase));
+
+    public static void Apply(TextDocument doc, DocumentStyleSet styleSet)
+    {
+        ArgumentNullException.ThrowIfNull(doc);
+        ArgumentNullException.ThrowIfNull(styleSet);
+
+        doc.DefaultRun = doc.DefaultRun with { FontFamily = styleSet.BodyFont, FontSizePt = 11 };
+
+        Set(doc, "Normal",
+            run => run with { FontFamily = styleSet.BodyFont, FontSizePt = 11, Bold = false, Italic = false, ColorHex = null },
+            para => para with { SpaceBeforePt = 0, SpaceAfterPt = 8, LineSpacing = 1.15 });
+
+        Set(doc, "Title",
+            run => run with { FontFamily = styleSet.HeadingFont, FontSizePt = 28, Bold = true, Italic = false, ColorHex = styleSet.AccentColorHex },
+            para => para with { SpaceBeforePt = 0, SpaceAfterPt = 8 });
+
+        Set(doc, "Subtitle",
+            run => run with { FontFamily = styleSet.BodyFont, FontSizePt = 15, Bold = false, Italic = true, ColorHex = "#5A5A5A" },
+            para => para with { SpaceBeforePt = 0, SpaceAfterPt = 8 });
+
+        Set(doc, "Heading1",
+            run => run with { FontFamily = styleSet.HeadingFont, FontSizePt = 16, Bold = true, Italic = false, ColorHex = styleSet.AccentColorHex },
+            para => para with { SpaceBeforePt = 12, SpaceAfterPt = 4 });
+
+        Set(doc, "Heading2",
+            run => run with { FontFamily = styleSet.HeadingFont, FontSizePt = 13, Bold = true, Italic = false, ColorHex = styleSet.AccentColorHex },
+            para => para with { SpaceBeforePt = 10, SpaceAfterPt = 4 });
+
+        Set(doc, "Heading3",
+            run => run with { FontFamily = styleSet.HeadingFont, FontSizePt = 12, Bold = true, Italic = false, ColorHex = DarkerAccent(styleSet.AccentColorHex) },
+            para => para with { SpaceBeforePt = 8, SpaceAfterPt = 4 });
+
+        Set(doc, "Quote",
+            run => run with { FontFamily = styleSet.BodyFont, FontSizePt = 11, Bold = false, Italic = true, ColorHex = "#404040" },
+            para => para with { SpaceBeforePt = 10, SpaceAfterPt = 10, IndentLeftPt = 36, IndentRightPt = 36 });
+    }
+
+    private static void Set(
+        TextDocument doc,
+        string styleId,
+        Func<RunFormatting, RunFormatting> run,
+        Func<ParagraphFormatting, ParagraphFormatting> paragraph)
+    {
+        if (!doc.Styles.TryGetValue(styleId, out var style))
+            return;
+
+        style.Run = run(style.Run);
+        style.Paragraph = paragraph(style.Paragraph);
+    }
+
+    private static string DarkerAccent(string hex) => hex.ToUpperInvariant() switch
+    {
+        "#2F5496" => "#1F3864",
+        "#1F4E79" => "#17365D",
+        "#5B3A29" => "#3F2A1F",
+        "#365F91" => "#244061",
+        _ => hex,
+    };
+}
