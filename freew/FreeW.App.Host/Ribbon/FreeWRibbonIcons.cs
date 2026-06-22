@@ -230,6 +230,7 @@ internal static class FreeWRibbonIcons
             ["freew.theme"] = RibbonCommandIconKind.Theme,
             ["freew.style-set"] = RibbonCommandIconKind.Font,
             ["freew.theme-fonts"] = RibbonCommandIconKind.Font,
+            ["freew.paragraph-spacing"] = RibbonCommandIconKind.LineSpacing,
             ["freew.page-color"] = RibbonCommandIconKind.Fill,
 
             // View

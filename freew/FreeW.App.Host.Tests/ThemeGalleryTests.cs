@@ -16,15 +16,18 @@ public sealed class ThemeGalleryTests
         var styleSets = ThemeGallery.BuildStyleSets(editor);
         var colors = ThemeGallery.BuildColours(editor);
         var fonts = ThemeGallery.BuildFonts(editor);
+        var paragraphSpacing = ThemeGallery.BuildParagraphSpacing(editor);
 
         AutomationProperties.GetName(themes).Should().Be("Themes");
         AutomationProperties.GetName(styleSets).Should().Be("Style Sets");
         AutomationProperties.GetName(colors).Should().Be("Colors");
         AutomationProperties.GetName(fonts).Should().Be("Fonts");
+        AutomationProperties.GetName(paragraphSpacing).Should().Be("Paragraph Spacing");
         Captions(themes).Should().Equal("Themes", "Office", "Slate", "Berlin", "Ion");
         Captions(styleSets).Where(c => c != "Aa").Should().Equal("Style Sets", "Office", "Simple", "Elegant", "Formal");
         Captions(colors).Should().Equal("Colors", "Office", "Slate", "Berlin", "Ion");
         Captions(fonts).Where(c => c is not "Heading" and not "Body").Should().Equal("Fonts", "Office", "Cambria", "Georgia", "Trebuchet");
+        Captions(paragraphSpacing).Should().Equal("Paragraph Spacing", "No Paragraph Space", "Compact", "Tight", "Open", "Relaxed", "Double");
     }
 
     private static IReadOnlyList<string> Captions(DependencyObject root)

@@ -561,6 +561,7 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.style-set", new ApplyStyleSetCommand(editor));
         registry.Register("freew.theme-colors", new ApplyThemeColorsCommand(editor));
         registry.Register("freew.theme-fonts", new ApplyFontSetCommand(editor));
+        registry.Register("freew.paragraph-spacing", new ApplyParagraphSpacingSetCommand(editor));
 
         // Layout tab — page settings (applied to the model; honoured by docx save + print).
         registry.Register("freew.orientation", new PageCommand(editor, page =>
@@ -1140,6 +1141,30 @@ internal static class FreeWRibbonCommands
 
             editor.Focus();
             editor.ApplyFontSet(fontSet);
+        }
+
+        private static string? LegacyValue(RibbonCommandContext context) =>
+            context.Parameters.TryGetValue("value", out var raw) ? raw as string : null;
+
+        private static string? MenuHeaderValue(RibbonCommandContext context) =>
+            context.Parameters.TryGetValue(Free.Shared.Ribbon.Wpf.RibbonWpfRenderer.SenderKey, out var sender)
+            && sender is System.Windows.Controls.MenuItem { Tag: string header }
+                ? header
+                : null;
+    }
+
+    private sealed class ApplyParagraphSpacingSetCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            var value = context.SelectedValue ?? LegacyValue(context) ?? MenuHeaderValue(context);
+            if (string.IsNullOrWhiteSpace(value))
+                return;
+            if (DocumentParagraphSpacingSet.FindByName(value) is not { } spacingSet)
+                return;
+
+            editor.Focus();
+            editor.ApplyParagraphSpacingSet(spacingSet);
         }
 
         private static string? LegacyValue(RibbonCommandContext context) =>

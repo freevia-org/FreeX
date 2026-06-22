@@ -148,4 +148,21 @@ public class StyleRoundTripTests
         result.Styles["Quote"].Paragraph.IndentLeftPt.Should().BeApproximately(36, 0.5);
         result.Styles["Quote"].Paragraph.IndentRightPt.Should().BeApproximately(36, 0.5);
     }
+
+    [Fact]
+    public void DocumentParagraphSpacingSet_RoundTripsThroughStylesXml()
+    {
+        var doc = TextDocument.CreateEmpty();
+        DocumentParagraphSpacingSet.Apply(doc, DocumentParagraphSpacingSet.FindByName("Double")!);
+
+        var result = RoundTrip(doc);
+        var normal = result.Styles["Normal"].Paragraph;
+        var heading = result.Styles["Heading1"].Paragraph;
+
+        normal.SpaceBeforePt.Should().BeApproximately(0, 0.5);
+        normal.SpaceAfterPt.Should().BeApproximately(8, 0.5);
+        normal.LineSpacing.Should().BeApproximately(2.0, 0.01);
+        heading.SpaceAfterPt.Should().BeApproximately(8, 0.5);
+        heading.LineSpacing.Should().BeApproximately(2.0, 0.01);
+    }
 }
