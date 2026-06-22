@@ -1,3 +1,5 @@
+using Free.Shared.IO;
+
 namespace Free.Shared.AppServices;
 
 /// <summary>
@@ -163,8 +165,7 @@ public sealed record FileFormatChoice(string Label, string Extension)
     private static string NormalizeExtension(string extension)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(extension);
-        var trimmed = extension.Trim();
-        return trimmed.StartsWith('.') ? trimmed : "." + trimmed;
+        return FileDialogFilterBuilder.NormalizeExtension(extension);
     }
 
     /// <summary>The wildcard pattern for this choice, e.g. <c>"*.docx"</c>.</summary>
@@ -187,20 +188,18 @@ public static class FileDialogFilter
     public static string Build(IReadOnlyList<FileFormatChoice> choices, bool includeAllFiles = true)
     {
         ArgumentNullException.ThrowIfNull(choices);
-        if (choices.Count == 0)
-            return includeAllFiles ? AllFilesSegment : "";
-
-        var segments = choices.Select(c => $"{c.Label} ({c.Pattern})|{c.Pattern}");
-        var filter = string.Join("|", segments);
-        return includeAllFiles ? $"{filter}|{AllFilesSegment}" : filter;
+        return FileDialogFilterBuilder.BuildPerFormatFilter(ToSharedDescriptors(choices), includeAllFiles);
     }
 
     /// <summary>The default extension to seed the dialog with — the first choice's extension, or "".</summary>
     public static string DefaultExtension(IReadOnlyList<FileFormatChoice> choices)
     {
         ArgumentNullException.ThrowIfNull(choices);
-        return choices.Count == 0 ? "" : choices[0].Extension;
+        return FileDialogFilterBuilder.GetDefaultExtension(ToSharedDescriptors(choices));
     }
+
+    private static IEnumerable<FileDialogFormatDescriptor> ToSharedDescriptors(IEnumerable<FileFormatChoice> choices) =>
+        choices.Select(choice => new FileDialogFormatDescriptor(choice.Extension, choice.Label));
 }
 
 /// <summary>

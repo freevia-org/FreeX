@@ -7,6 +7,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Free.Shared.IO\Free.Shared.IO.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Velopack powers the app-neutral self-update orchestration in Updates/. Referenced here so
          any shared-tier consumer (FreeX, FreeP, FreeW) gets self-update by supplying config only.
          Logging.Abstractions supplies the optional ILogger diagnostics sink for that orchestration. -->

@@ -10,6 +10,7 @@ param(
         "src\FreeX.App.Services",
         "shared\Free.Shared.Ribbon.Avalonia",
         "shared\Free.Shared.AppServices",
+        "shared\Free.Shared.IO",
         "shared\Free.Shared.Pdf",
         "shared\Free.Shared.Pdf.Skia",
         "shared\Free.Shared.Ribbon"
