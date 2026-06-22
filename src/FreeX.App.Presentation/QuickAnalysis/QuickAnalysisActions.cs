@@ -42,7 +42,18 @@ public enum QuickAnalysisFormatKind
     ColorScale,
     IconSet,
     GreaterThan,
-    Top10
+    LessThan,
+    Between,
+    EqualTo,
+    TextContains,
+    DateOccurring,
+    DuplicateValues,
+    Top10,
+    Top10Percent,
+    Bottom10,
+    Bottom10Percent,
+    AboveAverage,
+    BelowAverage
 }
 
 /// <summary>The aggregate a Totals suggestion inserts.</summary>
@@ -52,7 +63,9 @@ public enum QuickAnalysisTotalFunction
     Average,
     Count,
     PercentTotal,
-    RunningTotal
+    RunningTotal,
+    Max,
+    Min
 }
 
 /// <summary>Whether a Totals suggestion inserts a total row beneath the data or a total column beside it.</summary>

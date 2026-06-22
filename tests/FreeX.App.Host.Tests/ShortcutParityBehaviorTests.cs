@@ -368,10 +368,10 @@ public sealed class ShortcutParityBehaviorTests
     [Fact]
     public void QuickAnalysisMenu_CoversFormattingChartsAndTotalsGroups()
     {
-        var plannerSource = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisPlanner.cs");
+        var catalogSource = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisCatalog.cs");
         var shellSource = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisShellPlanner.cs");
 
-        plannerSource.Should().ContainAll(
+        catalogSource.Should().ContainAll(
             "QuickAnalysisGroup.Formatting",
             "QuickAnalysisGroup.Charts",
             "QuickAnalysisGroup.Totals");
