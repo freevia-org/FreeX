@@ -54,7 +54,9 @@ public static partial class PivotTableRefreshService
                 FillColor = palette.BodyFill
             });
 
-        var bodyStart = GetPivotBodyStart(pivotTable);
+        var bodyStart = HasLoadedNativePivotLocation(pivotTable)
+            ? pivotTable.TargetRange.Start
+            : GetPivotBodyStart(pivotTable);
         var pageFieldRows = GetPageFieldRowSpan(pivotTable);
         var pageFieldEndRow = pageFieldRows == 0 ? 0 : pivotTable.TargetRange.Start.Row + pageFieldRows - 1;
         var headerEndRow = GetStyledPivotHeaderEndRow(sheet, pivotTable, bodyStart);
@@ -136,12 +138,15 @@ public static partial class PivotTableRefreshService
                 continue;
             }
 
-            var bodyRowIndex = row - headerEndRow - 1;
             var bodyColIndex = col - firstDataColumn;
             if (bodyStyle is not null)
                 ApplyPivotVisualStyle(workbook, cell, bodyStyle.Value, preserveExistingVisualStyles);
-            if (pivotTable.ShowRowStripes && row >= firstDataRow && bodyRowIndex % 2 == 0)
+            if (pivotTable.ShowRowStripes &&
+                row >= firstDataRow &&
+                GetPivotBodyBandIndex(row, firstDataRow, compactGroupHeaderRows, subtotalRows, grandTotalRows) % 2 == 0)
+            {
                 ApplyPivotVisualStyle(workbook, cell, stripeStyle, preserveExistingVisualStyles);
+            }
             if (pivotTable.ShowColumnStripes && col >= firstDataColumn && IsPivotColumnStripeColumn(pivotTable, bodyColIndex))
                 ApplyPivotVisualStyle(workbook, cell, stripeStyle, preserveExistingVisualStyles);
         }
@@ -211,6 +216,29 @@ public static partial class PivotTableRefreshService
         return cell is null
             ? 0
             : Math.Clamp(workbook.GetStyle(cell.StyleId).IndentLevel, 0, 15);
+    }
+
+    private static uint GetPivotBodyBandIndex(
+        uint row,
+        uint firstDataRow,
+        IReadOnlySet<uint> compactGroupHeaderRows,
+        IReadOnlySet<uint> subtotalRows,
+        IReadOnlySet<uint> grandTotalRows)
+    {
+        var index = 0u;
+        for (var current = firstDataRow; current < row; current++)
+        {
+            if (compactGroupHeaderRows.Contains(current) ||
+                subtotalRows.Contains(current) ||
+                grandTotalRows.Contains(current))
+            {
+                continue;
+            }
+
+            index++;
+        }
+
+        return index;
     }
 
     private static void MaterializePivotTotalStyleFootprintCells(
@@ -303,24 +331,22 @@ public static partial class PivotTableRefreshService
         // header/total fills, bold font and borders. Excel applies it independently of the legacy
         // applyFontFormats / applyPatternFormats / applyBorderFormats autoformat flags, which real-world
         // files routinely persist as "0"; gating on those flags dropped ALL visible pivot styling for
-        // pivots loaded from such files (Issue 123). Apply the full visual style, preserving only the
-        // cell's existing number format so data values keep their formatting.
+        // pivots loaded from such files (Issue 123). Apply the full visual style while preserving
+        // cell-local content formatting that Excel keeps outside the PivotTable style layer.
         var existingStyle = workbook.GetStyle(cell.StyleId);
         if (preserveExistingVisualStyles && HasExistingVisualStyle(existingStyle))
             return;
 
-        var numberFormat = existingStyle.NumberFormat;
-        if (numberFormat == CellStyle.Default.NumberFormat)
-        {
-            cell.StyleId = visualStyleId;
-            return;
-        }
-
         var visualStyle = workbook.GetStyle(visualStyleId);
-        var style = CellStyle.Default.Clone();
-        style.NumberFormat = numberFormat;
+        var style = existingStyle.Clone();
+        var existingFontName = existingStyle.FontName;
+        var existingFontSize = existingStyle.FontSize;
+        var existingFontScheme = existingStyle.FontScheme;
 
         ApplyPivotFontStyle(style, visualStyle);
+        style.FontName = existingFontName;
+        style.FontSize = existingFontSize;
+        style.FontScheme = existingFontScheme;
         ApplyPivotPatternStyle(style, visualStyle);
         ApplyPivotBorderStyle(style, visualStyle);
 
@@ -386,9 +412,7 @@ public static partial class PivotTableRefreshService
         PivotTableModel pivotTable,
         CellAddress bodyStart)
     {
-        if (HasLoadedNativePivotLocation(pivotTable) &&
-            pivotTable.FirstDataRow > 0 &&
-            !HasLoadedNativePageFieldCaptionLayout(pivotTable))
+        if (ShouldUseLoadedNativeFirstDataRowForHeaders(pivotTable))
         {
             return bodyStart.Row + checked((uint)pivotTable.FirstDataRow) - 1;
         }
@@ -399,6 +423,13 @@ public static partial class PivotTableRefreshService
 
         return bodyStart.Row + (uint)headerRowCount - 1;
     }
+
+    private static bool ShouldUseLoadedNativeFirstDataRowForHeaders(PivotTableModel pivotTable) =>
+        HasLoadedNativePivotLocation(pivotTable) &&
+        pivotTable.FirstDataRow > 0 &&
+        (!HasLoadedNativePageFieldCaptionLayout(pivotTable) ||
+         pivotTable.PageFields.Count > 1 ||
+         pivotTable.PageWrap > 0);
 
     private static uint GetStyledPivotFirstDataRow(
         PivotTableModel pivotTable,

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.IO;
 using System.Windows;
 using System.Windows.Media;
 using FreeX.Core.Model;
@@ -7,11 +8,21 @@ namespace FreeX.App.UI;
 
 public partial class GridView
 {
-    private readonly record struct CellTypefaceKey(string FontName, bool Italic, bool Bold);
+    private readonly record struct CellTypefaceKey(string FontName, FontStretch Stretch, bool Italic, bool Bold);
     private static readonly Lazy<HashSet<string>> AvailableCellFontNames = new(() =>
-        Fonts.SystemFontFamilies
+    {
+        var names = Fonts.SystemFontFamilies
             .Select(font => font.Source)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase));
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        if (OperatingSystem.IsWindows() &&
+            File.Exists(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Fonts), "ARIALN.TTF")))
+        {
+            names.Add("Arial Narrow");
+        }
+
+        return names;
+    });
 
     private static void DrawBorderEdge(
         DrawingContext dc,
@@ -220,14 +231,14 @@ public partial class GridView
 
     private CellTypefaceKey CreateCellTypefaceKeyWithTheme(CellStyle? style)
     {
-        var effectiveName = ResolveEffectiveCellFontName(style, WorkbookTheme);
-        return new CellTypefaceKey(effectiveName, style?.Italic == true, style?.Bold == true);
+        var (fontName, stretch) = ResolveEffectiveCellFontForDisplay(style, WorkbookTheme);
+        return new CellTypefaceKey(fontName, stretch, style?.Italic == true, style?.Bold == true);
     }
 
     private static CellTypefaceKey CreateCellTypefaceKey(CellStyle? style)
     {
-        var fontName = ResolveCellFontNameForDisplay(style?.FontName);
-        return new CellTypefaceKey(fontName, style?.Italic == true, style?.Bold == true);
+        var (fontName, stretch) = ResolveCellFontForDisplay(style?.FontName);
+        return new CellTypefaceKey(fontName, stretch, style?.Italic == true, style?.Bold == true);
     }
 
     /// <summary>
@@ -236,27 +247,50 @@ public partial class GridView
     /// availability fallback for fonts not installed on the system.
     /// </summary>
     internal static string ResolveEffectiveCellFontName(CellStyle? style, WorkbookTheme theme)
+        => ResolveEffectiveCellFontForDisplay(style, theme).FontName;
+
+    private static (string FontName, FontStretch Stretch) ResolveEffectiveCellFontForDisplay(CellStyle? style, WorkbookTheme theme)
     {
         if (style is null)
-            return ResolveCellFontNameForDisplay(null);
+            return ResolveCellFontForDisplay(null);
 
         var rawName = theme.ResolveSchemeFontName(style.FontScheme) ?? style.FontName;
-        return ResolveCellFontNameForDisplay(rawName);
+        return ResolveCellFontForDisplay(rawName);
     }
 
     internal static string ResolveCellFontNameForDisplay(string? fontName) =>
         ResolveCellFontNameForDisplay(fontName, AvailableCellFontNames.Value.Contains);
 
     internal static string ResolveCellFontNameForDisplay(string? fontName, Func<string, bool> isAvailable)
+        => ResolveCellFontForDisplay(fontName, isAvailable).FontName;
+
+    internal static FontStretch ResolveCellFontStretchForDisplay(string? fontName, Func<string, bool> isAvailable)
+        => ResolveCellFontForDisplay(fontName, isAvailable).Stretch;
+
+    private static (string FontName, FontStretch Stretch) ResolveCellFontForDisplay(string? fontName) =>
+        ResolveCellFontForDisplay(fontName, AvailableCellFontNames.Value.Contains);
+
+    private static (string FontName, FontStretch Stretch) ResolveCellFontForDisplay(
+        string? fontName,
+        Func<string, bool> isAvailable)
     {
         var requested = string.IsNullOrWhiteSpace(fontName) ? "Calibri" : fontName.Trim();
         if (isAvailable(requested))
-            return requested;
+            return (requested, FontStretches.Normal);
 
-        return string.Equals(requested, "Aptos Narrow", StringComparison.OrdinalIgnoreCase) &&
-            isAvailable("Calibri")
-                ? "Calibri"
-                : requested;
+        if (!string.Equals(requested, "Aptos Narrow", StringComparison.OrdinalIgnoreCase))
+            return (requested, FontStretches.Normal);
+
+        foreach (var fallback in new[] { "Arial Narrow", "Liberation Sans Narrow", "Nimbus Sans Narrow" })
+        {
+            if (isAvailable(fallback))
+                return (fallback, FontStretches.Normal);
+        }
+
+        if (isAvailable("Calibri"))
+            return ("Calibri", FontStretches.Condensed);
+
+        return (requested, FontStretches.Normal);
     }
 
     private static Typeface CreateCellTypeface(CellTypefaceKey key)
@@ -264,6 +298,6 @@ public partial class GridView
         var fontStyle = key.Italic ? FontStyles.Italic : FontStyles.Normal;
         var fontWeight = key.Bold ? FontWeights.Bold : FontWeights.Normal;
 
-        return new Typeface(new FontFamily(key.FontName), fontStyle, fontWeight, FontStretches.Normal);
+        return new Typeface(new FontFamily(key.FontName), fontStyle, fontWeight, key.Stretch);
     }
 }
