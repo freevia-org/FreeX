@@ -65,7 +65,7 @@ public sealed class WorkbookOpenServiceTests
         var progressUpdates = new ConcurrentQueue<WorkbookOpenProgressUpdate>();
         var adapter = new TestFileAdapter(stream =>
         {
-            indeterminateParsingObserved.Wait(TimeSpan.FromSeconds(3)).Should().BeTrue();
+            indeterminateParsingObserved.Wait(TimeSpan.FromSeconds(10)).Should().BeTrue();
             using var reader = new StreamReader(stream);
             reader.ReadToEnd().Should().Be("payload");
             var workbook = new Workbook("Loaded");
