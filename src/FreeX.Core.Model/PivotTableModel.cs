@@ -59,7 +59,11 @@ public sealed record PivotCacheFieldModel(
     /// </summary>
     IReadOnlyList<char>? SharedItemKinds = null,
     string? Formula = null,
-    bool IsDatabaseField = true);
+    bool IsDatabaseField = true,
+    PivotFieldGrouping Grouping = PivotFieldGrouping.None,
+    double? GroupStart = null,
+    double? GroupEnd = null,
+    double? GroupInterval = null);
 
 public sealed class PivotTableModel
 {

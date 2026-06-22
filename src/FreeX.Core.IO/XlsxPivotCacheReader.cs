@@ -75,6 +75,7 @@ internal static class XlsxPivotCacheReader
                          .Elements(workbookNs + "cacheField") ?? [])
             {
                 var sharedItems = field.Element(workbookNs + "sharedItems");
+                var fieldGroup = ReadPivotCacheFieldGroup(field, workbookNs);
                 cache.Fields.Add(new PivotCacheFieldModel(
                     field.Attribute("name")?.Value ?? "",
                     XlsxXmlAttributeReader.ReadIntAttribute(field, "numFmtId"),
@@ -95,7 +96,11 @@ internal static class XlsxPivotCacheReader
                     sharedItems is null ? null : ReadSharedItemValues(sharedItems, workbookNs),
                     sharedItems is null ? null : ReadSharedItemKinds(sharedItems, workbookNs),
                     field.Attribute("formula")?.Value,
-                    XlsxXmlAttributeReader.ReadBoolAttribute(field, "databaseField", defaultValue: true)));
+                    XlsxXmlAttributeReader.ReadBoolAttribute(field, "databaseField", defaultValue: true),
+                    fieldGroup.Grouping,
+                    fieldGroup.GroupStart,
+                    fieldGroup.GroupEnd,
+                    fieldGroup.GroupInterval));
             }
 
             result.Add(cache);
@@ -141,6 +146,28 @@ internal static class XlsxPivotCacheReader
         // Only return the list when there are items so we can avoid null-check overhead for
         // fields with no shared items (e.g. calculated fields, external sources).
         return kinds.Count > 0 ? kinds : null;
+    }
+
+    private static PivotFieldModel ReadPivotCacheFieldGroup(XElement cacheField, XNamespace workbookNs)
+    {
+        var rangePr = cacheField
+            .Element(workbookNs + "fieldGroup")?
+            .Element(workbookNs + "rangePr");
+        if (rangePr is null)
+            return new PivotFieldModel(-1);
+
+        var grouping = XlsxPivotTableReader.ReadPivotFieldGrouping(rangePr.Attribute("groupBy")?.Value);
+        if (grouping == PivotFieldGrouping.None && rangePr.Attribute("groupInterval") is not null)
+            grouping = PivotFieldGrouping.NumberRange;
+        if (grouping == PivotFieldGrouping.None)
+            return new PivotFieldModel(-1);
+
+        return new PivotFieldModel(
+            -1,
+            Grouping: grouping,
+            GroupStart: XlsxXmlAttributeReader.ReadDoubleAttribute(rangePr, "startNum"),
+            GroupEnd: XlsxXmlAttributeReader.ReadDoubleAttribute(rangePr, "endNum"),
+            GroupInterval: XlsxXmlAttributeReader.ReadDoubleAttribute(rangePr, "groupInterval"));
     }
 
     private static PivotCacheSourceType GetSourceType(XElement? cacheSource, XElement? worksheetSource)

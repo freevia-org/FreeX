@@ -69,6 +69,58 @@ public sealed class XlsxPivotTableNativeIoSemanticTests
         loadedCache.SourceReference.Should().BeNull();
     }
 
+    [Fact]
+    public void Load_CacheLevelDateFieldGroup_MapsGroupingToPivotField()
+    {
+        using var package = CreatePivotWorkbookPackage(PivotCacheSourceType.WorksheetRange);
+        XlsxPackageTestHelper.PatchPackageXml(package, "xl/pivotTables/pivotTable1.xml", document =>
+        {
+            document.Root!.Element(WorkbookNs + "pageFields")?.Remove();
+            document.Root.Add(new XElement(
+                WorkbookNs + "rowFields",
+                new XAttribute("count", "1"),
+                new XElement(WorkbookNs + "field", new XAttribute("x", "0"))));
+        });
+        XlsxPackageTestHelper.PatchPackageXml(package, "xl/pivotCache/pivotCacheDefinition1.xml", document =>
+        {
+            var cacheField = document.Root!
+                .Element(WorkbookNs + "cacheFields")!
+                .Elements(WorkbookNs + "cacheField")
+                .First();
+            cacheField.SetAttributeValue("name", "OrderDate");
+
+            var sharedItems = cacheField.Element(WorkbookNs + "sharedItems")!;
+            sharedItems.RemoveNodes();
+            sharedItems.SetAttributeValue("containsString", null);
+            sharedItems.SetAttributeValue("containsDate", "1");
+            sharedItems.SetAttributeValue("minDate", "2025-01-01T00:00:00");
+            sharedItems.SetAttributeValue("maxDate", "2025-03-31T00:00:00");
+            sharedItems.Add(
+                new XElement(WorkbookNs + "d", new XAttribute("v", "2025-01-15T00:00:00")),
+                new XElement(WorkbookNs + "d", new XAttribute("v", "2025-02-15T00:00:00")));
+
+            cacheField.Add(new XElement(
+                WorkbookNs + "fieldGroup",
+                new XAttribute("base", "0"),
+                new XElement(
+                    WorkbookNs + "rangePr",
+                    new XAttribute("autoStart", "0"),
+                    new XAttribute("autoEnd", "0"),
+                    new XAttribute("groupBy", "months"),
+                    new XAttribute("startDate", "2025-01-01T00:00:00"),
+                    new XAttribute("endDate", "2025-03-31T00:00:00"),
+                    new XAttribute("groupInterval", "1"))));
+        });
+
+        var workbook = new XlsxFileAdapter().Load(package);
+
+        var rowField = workbook.GetSheetAt(0).PivotTables.Should().ContainSingle().Subject.RowFields
+            .Should().ContainSingle().Subject;
+        rowField.SourceFieldIndex.Should().Be(0);
+        rowField.Grouping.Should().Be(PivotFieldGrouping.Month);
+        rowField.GroupInterval.Should().Be(1);
+    }
+
     private static MemoryStream CreatePivotWorkbookPackage(PivotCacheSourceType sourceType) =>
         XlsxPackageTestHelper.SaveWorkbook(CreatePivotWorkbook(sourceType));
 
