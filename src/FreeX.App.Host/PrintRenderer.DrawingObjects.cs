@@ -1,6 +1,8 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
+using FreeX.App.Presentation.ConditionalFormatting;
+using FreeX.App.Presentation.PageLayout;
 using FreeX.App.UI;
 using FreeX.Core.Model;
 
@@ -252,48 +254,30 @@ public static partial class PrintRenderer
     private static void DrawPrintedTextBoxes(
         DrawingContext dc,
         ICollection<PdfTextOverlay> textOverlays,
-        IReadOnlyList<TextBoxModel> textBoxes,
-        WorkbookTheme workbookTheme,
-        IReadOnlyList<uint> pageRows,
-        IReadOnlyList<uint> pageColumns,
-        double gridLeft,
-        double gridTop,
-        double colWidth,
-        double rowHeight)
+        IReadOnlyList<PageTextBoxBlock> textBoxes)
     {
         if (textBoxes.Count == 0)
             return;
 
         foreach (var textBox in textBoxes)
         {
-            if (!textBox.IsVisible)
-                continue;
-
-            var rowIndex = IndexOf(pageRows, textBox.Anchor.Row);
-            var columnIndex = IndexOf(pageColumns, textBox.Anchor.Col);
-            if (rowIndex < 0 || columnIndex < 0)
-                continue;
-
-            var rect = new Rect(
-                gridLeft + columnIndex * colWidth,
-                gridTop + rowIndex * rowHeight,
-                Math.Max(24, textBox.Width),
-                Math.Max(18, textBox.Height));
-            var fill = textBox.GetEffectiveFillColor(workbookTheme, CellColor.White);
-            var outline = textBox.GetEffectiveOutlineColor(workbookTheme, new CellColor(89, 89, 89));
-            var fillBrush = textBox.HasFill ? CreateFrozenBrush(fill, 242) : null;
-            var outlinePen = new Pen(CreateFrozenBrush(outline), 1);
+            var rect = ToRect(textBox.Bounds);
+            var fillBrush = textBox.Fill is { } fill ? CreateFrozenBrush(fill, textBox.FillAlpha) : null;
+            var outlinePen = new Pen(CreateFrozenBrush(textBox.Outline), textBox.OutlineThickness);
             outlinePen.Freeze();
             dc.DrawRectangle(fillBrush, outlinePen, rect);
 
             if (string.IsNullOrEmpty(textBox.Text))
                 continue;
 
-            var textRect = new Rect(rect.Left + 4, rect.Top + 4, Math.Max(1, rect.Width - 8), Math.Max(1, rect.Height - 8));
+            var textRect = ToRect(textBox.TextBounds);
             DrawPrintedTextBoxText(dc, textBox.Text, textRect);
             AddPrintedTextBoxOverlays(textOverlays, textBox.Text, textRect);
         }
     }
+
+    private static Rect ToRect(FreeX.App.Presentation.Charts.LayoutRect rect) =>
+        new(rect.Left, rect.Top, rect.Width, rect.Height);
 
     private static void DrawPrintedTextBoxText(DrawingContext dc, string text, Rect textRect)
     {
@@ -436,18 +420,7 @@ public static partial class PrintRenderer
             Brushes.Black,
             1.0);
 
-    private static int IndexOf(IReadOnlyList<uint> values, uint value)
-    {
-        for (var index = 0; index < values.Count; index++)
-        {
-            if (values[index] == value)
-                return index;
-        }
-
-        return -1;
-    }
-
-    private static SolidColorBrush CreateFrozenBrush(CellColor color, byte alpha = 255)
+    private static SolidColorBrush CreateFrozenBrush(PresentationRgb color, byte alpha = 255)
     {
         var brush = new SolidColorBrush(Color.FromArgb(alpha, color.R, color.G, color.B));
         brush.Freeze();

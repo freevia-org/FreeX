@@ -95,10 +95,27 @@ public sealed record PageHeaderFooterRun(
     LayoutPoint TextOrigin);
 
 /// <summary>
+/// One printed worksheet text box resolved into page-space geometry: the outer rectangle, the inner
+/// text rectangle, resolved fill/outline colors, and the text/font the renderer can paint without
+/// consulting the workbook model.
+/// </summary>
+public sealed record PageTextBoxBlock(
+    Guid Id,
+    LayoutRect Bounds,
+    LayoutRect TextBounds,
+    string Text,
+    PresentationRgb? Fill,
+    byte FillAlpha,
+    PresentationRgb Outline,
+    double OutlineThickness,
+    PageTextFont Font);
+
+/// <summary>
 /// The complete, backend-agnostic content of one printed page: the page rectangle, the printable
 /// area inset by margins, and ordered render instructions a renderer paints in list order (fills,
-/// gridlines, the outer grid border, headings, cell text/borders, and the header/footer bands). All
-/// geometry is in device-independent units (96 dpi) with origin top-left, y growing downward.
+/// gridlines, the outer grid border, headings, cell text/borders, text boxes, and the header/footer
+/// bands). All geometry is in device-independent units (96 dpi) with origin top-left, y growing
+/// downward.
 /// </summary>
 public sealed record PageContentLayout(
     int PageNumber,
@@ -109,6 +126,7 @@ public sealed record PageContentLayout(
     IReadOnlyList<PageGridLine> GridLines,
     IReadOnlyList<PageHeadingCell> ColumnHeadings,
     IReadOnlyList<PageHeadingCell> RowHeadings,
+    IReadOnlyList<PageTextBoxBlock> TextBoxes,
     IReadOnlyList<PageHeaderFooterRun> HeaderRuns,
     IReadOnlyList<PageHeaderFooterRun> FooterRuns)
 {
