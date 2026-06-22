@@ -102,8 +102,8 @@ public sealed partial class MainWindowSourceHygieneTests
 
         backstageSource.Should().Contain("WorkbookFilePickerPlanner.BuildOpenDialogPlan(_fileAdapters)");
         backstageSource.Should().Contain("WorkbookFilePickerPlanner.BuildSaveDialogPlan(");
-        pickerPlannerSource.Should().Contain("FileDialogFilterBuilder.BuildOpenFilter(adapters)");
-        pickerPlannerSource.Should().Contain("FileDialogFilterBuilder.BuildSaveFilter(adapters)");
+        pickerPlannerSource.Should().Contain("FileDialogRequestPlanner.BuildOpenDialogPlan(");
+        pickerPlannerSource.Should().Contain("FileDialogRequestPlanner.BuildSaveDialogPlan(");
         backstageSource.Should().Contain("FileDialogFilterBuilder.FindOpenAdapter(_fileAdapters, ext, out var format)");
         backstageSource.Should().Contain("_currentFilePath = result.OpenedAsTemplate ? null : path;");
     }

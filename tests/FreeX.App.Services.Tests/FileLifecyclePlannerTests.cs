@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Free.Shared.IO;
 
 namespace FreeX.App.Services.Tests;
 

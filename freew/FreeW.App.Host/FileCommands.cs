@@ -17,8 +17,8 @@ namespace FreeW.App.Host;
 /// The file-lifecycle <em>ceremony</em> — the dirty-gate before destructive actions, the
 /// Save-vs-Save-As resolution, and recent-files registration — is decided by the shared, neutral
 /// <see cref="FileLifecyclePlanner"/> (P2). FreeW supplies only the thin host side: the native
-/// <see cref="OpenFileDialog"/>/<see cref="SaveFileDialog"/> for its single <c>.docx</c> format
-/// (via the shared <see cref="FileDialogFilter"/>), the actual docx read/write, and the message
+/// <see cref="OpenFileDialog"/>/<see cref="SaveFileDialog"/> for its catalog formats
+/// (via the shared dialog request planners), the actual document read/write, and the message
 /// prompts. The dirty/path state and lifecycle ceremony live in the shared
 /// <see cref="FileCommandWorkflow"/>.
 /// </para>
@@ -261,20 +261,20 @@ internal sealed class FileCommands
             : _workflow.CurrentPath is { } existing
             ? Path.GetExtension(existing)
             : DefaultSaveExtension;
-        var fileName = _workflow.CurrentPath is null
-            ? "Document" + currentExtension
-            : Path.GetFileName(_workflow.CurrentPath);
-        if (normalizedPreferred.Length > 0)
-            fileName = Path.ChangeExtension(fileName, normalizedPreferred);
+        var plan = DocumentFileDialogRequestPlanner.BuildSaveDialogPlanFromSourceName(
+            _adapters,
+            _workflow.CurrentPath is null ? null : Path.GetFileName(_workflow.CurrentPath),
+            "Document",
+            currentExtension);
 
         var dialog = new SaveFileDialog
         {
-            Filter = DocumentFileDialogFilterBuilder.BuildSaveFilter(_adapters),
-            FilterIndex = DocumentFileDialogFilterBuilder.FindSaveFilterIndex(_adapters, currentExtension),
-            DefaultExt = currentExtension,
+            Filter = plan.Filter,
+            FilterIndex = plan.FilterIndex,
+            DefaultExt = plan.DefaultExtensionWithDot,
             AddExtension = true,
             OverwritePrompt = true,
-            FileName = fileName,
+            FileName = plan.SuggestedFileName,
         };
         if (dialog.ShowDialog(_window) != true)
             return false;
@@ -296,7 +296,8 @@ internal sealed class FileCommands
 
     private string? PromptOpenPath()
     {
-        var dialog = new OpenFileDialog { Filter = DocumentFileDialogFilterBuilder.BuildOpenFilter(_adapters) };
+        var plan = DocumentFileDialogRequestPlanner.BuildOpenDialogPlan(_adapters);
+        var dialog = new OpenFileDialog { Filter = plan.Filter };
         return dialog.ShowDialog(_window) == true ? dialog.FileName : null;
     }
 

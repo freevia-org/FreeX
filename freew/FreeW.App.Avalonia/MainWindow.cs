@@ -19,6 +19,8 @@ namespace FreeW.App.Avalonia;
 
 public sealed class MainWindow : Window
 {
+    private const string DefaultSaveExtension = ".docx";
+
     private static readonly FilePickerFileType PdfFileType = new("PDF document")
     {
         Patterns = ["*.pdf"],
@@ -374,14 +376,20 @@ public sealed class MainWindow : Window
 
     private async Task<bool> SaveAsAsync()
     {
+        var defaultExtension = _fileWorkflow.CurrentPath is null
+            ? DefaultSaveExtension
+            : Path.GetExtension(_fileWorkflow.CurrentPath);
+        var savePlan = DocumentFileDialogRequestPlanner.BuildSavePickerPlan(
+            _adapters,
+            _fileWorkflow.CurrentPath is null ? null : Path.GetFileName(_fileWorkflow.CurrentPath),
+            "Document",
+            defaultExtension);
         var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
             Title = "Save document",
-            DefaultExtension = "docx",
-            SuggestedFileName = _fileWorkflow.CurrentPath is null
-                ? "Document.docx"
-                : Path.GetFileName(_fileWorkflow.CurrentPath),
-            FileTypeChoices = [.. DocumentFilePickerTypes.BuildSaveTypes(_adapters)],
+            DefaultExtension = savePlan.DefaultExtensionWithoutDot,
+            SuggestedFileName = savePlan.SuggestedFileName,
+            FileTypeChoices = [.. savePlan.FileTypes.Select(DocumentFilePickerTypes.ToFileType)],
         });
 
         var path = file?.TryGetLocalPath();

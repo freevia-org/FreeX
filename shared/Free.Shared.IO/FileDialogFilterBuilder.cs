@@ -2,7 +2,7 @@ namespace Free.Shared.IO;
 
 public static class FileDialogFilterBuilder
 {
-    private const string AllFilesFilterEntry = "All files (*.*)|*.*";
+    public const string AllFilesFilterEntry = "All files (*.*)|*.*";
 
     public static string BuildOpenFilter(
         IEnumerable<FileDialogFormatDescriptor> formats,

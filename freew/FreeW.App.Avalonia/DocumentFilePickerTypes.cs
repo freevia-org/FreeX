@@ -18,19 +18,21 @@ internal static class DocumentFilePickerTypes
     /// </summary>
     public static IReadOnlyList<FilePickerFileType> BuildOpenTypes(IEnumerable<IDocumentFileAdapter> adapters)
     {
-        return DocumentFileDialogFilterBuilder
-            .BuildOpenPickerTypes(adapters, "All supported documents")
+        return DocumentFileDialogRequestPlanner
+            .BuildOpenPickerPlan(adapters)
+            .FileTypes
             .Select(ToFileType)
             .ToList();
     }
 
     /// <summary>One <see cref="FilePickerFileType"/> per <see cref="FileFormatDescriptor.CanSave"/> format.</summary>
     public static IReadOnlyList<FilePickerFileType> BuildSaveTypes(IEnumerable<IDocumentFileAdapter> adapters) =>
-        DocumentFileDialogFilterBuilder
-            .BuildSavePickerTypes(adapters)
+        DocumentFileDialogRequestPlanner
+            .BuildSavePickerPlan(adapters, sourceName: null, fallbackDisplayName: "Document", defaultExtensionWithDot: ".docx")
+            .FileTypes
             .Select(ToFileType)
             .ToList();
 
-    private static FilePickerFileType ToFileType(FileDialogPickerTypeDescriptor descriptor) =>
+    internal static FilePickerFileType ToFileType(FileDialogPickerTypeDescriptor descriptor) =>
         new(descriptor.DisplayName) { Patterns = descriptor.Patterns };
 }

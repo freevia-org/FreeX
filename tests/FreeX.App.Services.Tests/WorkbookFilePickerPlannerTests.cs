@@ -110,6 +110,13 @@ public sealed class WorkbookFilePickerPlannerTests
                 defaultExtension: "fxl")
             .Should()
             .Be("Workbook.fxl");
+
+        WorkbookFilePickerPlanner.BuildSuggestedSaveAsFileName(
+                sourceName: "",
+                fallbackDisplayName: "Document",
+                defaultExtension: ".fxl")
+            .Should()
+            .Be("Document.fxl");
     }
 
     private static IReadOnlyList<FileFormatDescriptor> Formats(Func<FileFormatDescriptor, bool> predicate) =>
