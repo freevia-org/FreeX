@@ -3,9 +3,8 @@ using FreeX.Core.IO;
 namespace FreeX.App.Services;
 
 /// <summary>
-/// Shared workbook file-command choreography. Hosts still own prompts, dialogs, storage access,
-/// progress rendering, and UI refresh; this coordinator owns the repeated dirty-gate and
-/// save-vs-save-as dispatch used by the WPF and Avalonia shells.
+/// Workbook-specific adapter over the shared async file-command choreography. Hosts still own
+/// prompts, dialogs, storage access, progress rendering, and UI refresh.
 /// </summary>
 public static class WorkbookFileLifecycleCoordinator
 {
@@ -17,17 +16,16 @@ public static class WorkbookFileLifecycleCoordinator
         ArgumentNullException.ThrowIfNull(promptSaveChangesAsync);
         ArgumentNullException.ThrowIfNull(saveCurrentAsync);
 
-        if (FileLifecyclePlanner.PlanDirtyGate(isDirty) == DirtyGateIntent.ProceedWithoutPrompt)
-            return SaveChangesConfirmation.Continue;
+        var result = await AsyncFileLifecycleCoordinator.ConfirmBeforeDestructiveActionAsync(
+            isDirty,
+            promptSaveChangesAsync,
+            saveCurrentAsync);
 
-        var prompt = await promptSaveChangesAsync();
-        return FileLifecyclePlanner.ResolveDirtyGate(prompt) switch
+        return result switch
         {
-            DirtyGateAction.Cancel => SaveChangesConfirmation.Cancel,
-            DirtyGateAction.ProceedDiscardingChanges => SaveChangesConfirmation.DiscardWithoutSaving,
-            DirtyGateAction.SaveThenProceed => await saveCurrentAsync()
-                ? SaveChangesConfirmation.Continue
-                : SaveChangesConfirmation.Cancel,
+            DirtyGateResult.Cancel => SaveChangesConfirmation.Cancel,
+            DirtyGateResult.Proceed => SaveChangesConfirmation.Continue,
+            DirtyGateResult.ProceedDiscardingChanges => SaveChangesConfirmation.DiscardWithoutSaving,
             _ => SaveChangesConfirmation.Cancel
         };
     }
@@ -62,12 +60,11 @@ public static class WorkbookFileLifecycleCoordinator
         ArgumentNullException.ThrowIfNull(saveTargetAsync);
         ArgumentNullException.ThrowIfNull(saveAsAsync);
 
-        if (FileLifecyclePlanner.PlanSave(isDirty, currentFilePath) == FileSaveIntent.PromptSaveAs)
-            return await saveAsAsync();
-
-        var target = resolveCurrentTarget();
-        return target is null
-            ? await saveAsAsync()
-            : await saveTargetAsync(target);
+        return await AsyncFileLifecycleCoordinator.SaveResolvedAsync(
+            isDirty,
+            currentFilePath,
+            resolveCurrentTarget,
+            saveTargetAsync,
+            saveAsAsync);
     }
 }
