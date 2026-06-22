@@ -1,5 +1,9 @@
-namespace FreeX.App.Host;
+namespace Free.Shared.Ribbon;
 
+/// <summary>
+/// Pure width-based adaptive ribbon planning shared by renderers. App-specific tab policy can still
+/// layer overrides on top, but this first-pass fallback order is renderer-neutral.
+/// </summary>
 public static class RibbonAdaptiveLayoutPlanner
 {
     public static RibbonAdaptiveGroupState[] Plan(
@@ -59,12 +63,6 @@ public static class RibbonAdaptiveLayoutPlanner
         return false;
     }
 
-    public static IReadOnlyList<RibbonAdaptiveGroupState> ApplyBreakpointOverrides(
-        double availableWidth,
-        IReadOnlyList<string> groupNames,
-        IReadOnlyList<RibbonAdaptiveGroupState> plannedStates) =>
-        RibbonAdaptiveTabProfiles.ApplyBreakpointOverrides(availableWidth, groupNames, plannedStates);
-
     private static double WidthFor(RibbonAdaptiveGroup group, RibbonAdaptiveGroupState state) =>
         state switch
         {
@@ -74,5 +72,4 @@ public static class RibbonAdaptiveLayoutPlanner
             RibbonAdaptiveGroupState.Collapsed => group.CollapsedWidth,
             _ => group.FullWidth
         };
-
 }
