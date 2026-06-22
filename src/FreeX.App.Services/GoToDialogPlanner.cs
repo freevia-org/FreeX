@@ -154,6 +154,10 @@ public static class GoToSpecialDialogPlanner
             ? new GoToSpecialOptions(selectedValueTypes)
             : new GoToSpecialOptions();
 
-    private static string Normalize(string text) =>
-        string.Join(' ', text.Trim().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+    private static string Normalize(string text)
+    {
+        var withoutAccessKeys = text.Replace("_", "", StringComparison.Ordinal);
+        return string.Join(' ', withoutAccessKeys.Trim().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+            .ToLowerInvariant();
+    }
 }

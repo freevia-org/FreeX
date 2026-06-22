@@ -24,12 +24,12 @@ public sealed class HomeCellsCommandSourceTests
         source.Should().Contain("new DeleteRowsCommand(_currentSheetId, currentRange.Start.Row, currentRange.RowCount)");
         source.Should().Contain("new DeleteColumnsCommand(_currentSheetId, currentRange.Start.Col, currentRange.ColCount)");
         source.Should().Contain("new RemoveSheetCommand(_currentSheetId)");
-        source.Should().Contain("RowColumnDimensionPlanner.CreateRowHeightCommand(sheetId, currentRange, dialog.Result.Height)");
-        source.Should().Contain("RowColumnDimensionPlanner.CreateColumnWidthCommand(sheetId, currentRange, dialog.Result.Width)");
-        source.Should().Contain("RowColumnDimensionPlanner.CreateAutoFitRowHeightCommand(sheetId, plans)");
-        source.Should().Contain("RowColumnDimensionPlanner.CreateAutoFitColumnWidthCommand(sheetId, plans)");
-        source.Should().Contain("RowColumnDimensionPlanner.CreateRowsHiddenCommand(sheetId, currentRange, hidden)");
-        source.Should().Contain("RowColumnDimensionPlanner.CreateColumnsHiddenCommand(sheetId, currentRange, hidden)");
+        source.Should().Contain("RowColumnSizingPlanner.CreateRowHeightCommand(sheetId, currentRange, dialog.Result.Height)");
+        source.Should().Contain("RowColumnSizingPlanner.CreateColumnWidthCommand(sheetId, currentRange, dialog.Result.Width)");
+        source.Should().Contain("RowColumnSizingPlanner.CreateAutoFitRowHeightCommand(sheetId, plans)");
+        source.Should().Contain("RowColumnSizingPlanner.CreateAutoFitColumnWidthCommand(sheetId, plans)");
+        source.Should().Contain("RowColumnSizingPlanner.CreateRowsHiddenCommand(sheetId, currentRange, hidden)");
+        source.Should().Contain("RowColumnSizingPlanner.CreateColumnsHiddenCommand(sheetId, currentRange, hidden)");
         source.Should().Contain("private void FormatRenameSheetMenuItem_Click(object sender, RoutedEventArgs e) => RenameCurrentSheet();");
         source.Should().Contain("private void FormatTabColorMenuItem_Click(object sender, RoutedEventArgs e) => ColorCurrentSheetTab();");
         source.Should().Contain("private void FormatHideSheetMenuItem_Click(object sender, RoutedEventArgs e) => HideCurrentSheet();");

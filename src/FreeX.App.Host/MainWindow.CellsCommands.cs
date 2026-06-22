@@ -3,6 +3,7 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls.Primitives;
 using FreeX.App.Services;
+using FreeX.App.Services.Ribbon;
 using FreeX.Core.Calc;
 using FreeX.Core.Formula;
 using FreeX.Core.Commands;
@@ -135,7 +136,7 @@ public partial class MainWindow
     {
         if (SheetGrid.SelectedRange is not { } range) return;
         var sheet = _workbook.GetSheet(_currentSheetId);
-        var dialog = new RowHeightDialog(RowColumnDimensionPlanner.GetRowHeightDialogValue(sheet, range)) { Owner = this };
+        var dialog = new RowHeightDialog(RowColumnSizingPlanner.GetRowHeightDialogValue(sheet, range)) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
         if (!TryExecuteRepeatableGroupedSheetCommand(
@@ -143,7 +144,7 @@ public partial class MainWindow
                 sheetId =>
                 {
                     var currentRange = SheetGrid.SelectedRange ?? range;
-                    return RowColumnDimensionPlanner.CreateRowHeightCommand(sheetId, currentRange, dialog.Result.Height);
+                    return RowColumnSizingPlanner.CreateRowHeightCommand(sheetId, currentRange, dialog.Result.Height);
                 }))
             return;
         UpdateViewport();
@@ -160,7 +161,7 @@ public partial class MainWindow
     {
         if (SheetGrid.SelectedRange is not { } range) return;
         var sheet = _workbook.GetSheet(_currentSheetId);
-        var dialog = new ColumnWidthDialog(RowColumnDimensionPlanner.GetColumnWidthDialogValue(sheet, range)) { Owner = this };
+        var dialog = new ColumnWidthDialog(RowColumnSizingPlanner.GetColumnWidthDialogValue(sheet, range)) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
         if (!TryExecuteRepeatableGroupedSheetCommand(
@@ -168,7 +169,7 @@ public partial class MainWindow
                 sheetId =>
                 {
                     var currentRange = SheetGrid.SelectedRange ?? range;
-                    return RowColumnDimensionPlanner.CreateColumnWidthCommand(sheetId, currentRange, dialog.Result.Width);
+                    return RowColumnSizingPlanner.CreateColumnWidthCommand(sheetId, currentRange, dialog.Result.Width);
                 }))
             return;
         UpdateViewport();
@@ -188,13 +189,14 @@ public partial class MainWindow
         if (sheet is null)
             return new FailedWorkbookCommand(UiText.Get("MainWindowMessage_SheetNotFound"));
 
-        var plans = AutoFitPlanner.PlanRowHeights(
+        var plans = RowColumnSizingPlanner.PlanAutoFitRowHeights(
             range,
             sheet.GetUsedRange(),
             (row, col) => GetAutoFitDisplayText(sheet, row, col),
             sheet.DefaultRowHeight);
 
-        return RowColumnDimensionPlanner.CreateAutoFitRowHeightCommand(sheetId, plans);
+        return RowColumnSizingPlanner.CreateAutoFitRowHeightCommand(sheetId, plans)
+            ?? new CompositeWorkbookCommand("Auto Row Height", []);
     }
 
     private IWorkbookCommand CreateAutoFitColumnWidthCommand(SheetId sheetId, GridRange range)
@@ -203,13 +205,14 @@ public partial class MainWindow
         if (sheet is null)
             return new FailedWorkbookCommand(UiText.Get("MainWindowMessage_SheetNotFound"));
 
-        var plans = AutoFitPlanner.PlanColumnWidths(
+        var plans = RowColumnSizingPlanner.PlanAutoFitColumnWidths(
             range,
             sheet.GetUsedRange(),
             (row, col) => GetAutoFitDisplayText(sheet, row, col),
             sheet.DefaultColumnWidth);
 
-        return RowColumnDimensionPlanner.CreateAutoFitColumnWidthCommand(sheetId, plans);
+        return RowColumnSizingPlanner.CreateAutoFitColumnWidthCommand(sheetId, plans)
+            ?? new CompositeWorkbookCommand("Auto Column Width", []);
     }
 
     private string? GetAutoFitDisplayText(Sheet sheet, uint row, uint col)
@@ -554,7 +557,7 @@ public partial class MainWindow
                 sheetId =>
                 {
                     var currentRange = SheetGrid.SelectedRange ?? range;
-                    return RowColumnDimensionPlanner.CreateRowsHiddenCommand(sheetId, currentRange, hidden);
+                    return RowColumnSizingPlanner.CreateRowsHiddenCommand(sheetId, currentRange, hidden);
                 }))
             return;
 
@@ -569,7 +572,7 @@ public partial class MainWindow
                 sheetId =>
                 {
                     var currentRange = SheetGrid.SelectedRange ?? range;
-                    return RowColumnDimensionPlanner.CreateColumnsHiddenCommand(sheetId, currentRange, hidden);
+                    return RowColumnSizingPlanner.CreateColumnsHiddenCommand(sheetId, currentRange, hidden);
                 }))
             return;
 
