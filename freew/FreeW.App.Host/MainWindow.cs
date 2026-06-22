@@ -390,6 +390,7 @@ public sealed class MainWindow : Window
             OpenPath: path => _file.OpenPath(path),
             Save: () => _file.Save(),
             SaveAs: () => _file.SaveAs(),
+            SaveAsType: extension => _file.SaveAs(extension),
             SaveCopy: () => _file.SaveCopy(),
             Close: CloseDocument,
             Print: Print,

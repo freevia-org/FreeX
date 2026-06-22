@@ -151,6 +151,10 @@ internal sealed class BackstageView : UserControl
 
     private UIElement BuildSaveAsPane()
     {
+        var typeGroups = BackstageSaveAsFileTypePlanner.Build(
+            _file.SaveFormats,
+            extension => { Hide(); _actions.SaveAsType(extension); });
+
         return Panes.BuildActionPane(new BackstageActionPaneSpec(
             Heading: "Save As",
             Description: "Choose where to save this document and select an editable file type.",
@@ -161,10 +165,7 @@ internal sealed class BackstageView : UserControl
                     new("This PC", "Save to local folders and connected drives.", () => { Hide(); _actions.SaveAs(); }),
                     new("Browse", "Open the Windows save dialog.", () => { Hide(); _actions.SaveAs(); }),
                 ]),
-                new("File Types",
-                [
-                    new("Word Document (*.docx)", "Save in FreeW's editable Word document format.", () => { Hide(); _actions.SaveAs(); }),
-                ]),
+                ..typeGroups,
             ]));
     }
 
@@ -198,6 +199,7 @@ internal sealed record BackstageActions(
     Action<string> OpenPath,
     Action Save,
     Action SaveAs,
+    Action<string> SaveAsType,
     Action SaveCopy,
     Action Close,
     Action Print,
