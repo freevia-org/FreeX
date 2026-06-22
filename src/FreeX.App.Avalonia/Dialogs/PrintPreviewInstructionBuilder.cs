@@ -150,7 +150,7 @@ public static class PrintPreviewInstructionBuilder
     /// <summary>
     /// Flattens one page's <see cref="PageContentLayout"/> into an ordered list of paint primitives.
     /// Paint order mirrors the source print renderer: page background, heading band fills, cell fills,
-    /// gridlines, cell border edges, then all text (headings, cells, header/footer bands) on top.
+    /// gridlines, cell border edges, cell text, text boxes, then header/footer bands on top.
     /// </summary>
     public static PrintPreviewPagePainting Build(PageContentLayout layout)
     {
@@ -198,7 +198,28 @@ public static class PrintPreviewInstructionBuilder
                     cell.TextOrigin, cell.Bounds.Width, cell.Text, cell.Font, cell.Alignment));
         }
 
-        // 8. Header / footer bands.
+        // 8. Text boxes over the grid/cell text.
+        foreach (var textBox in layout.TextBoxes)
+        {
+            instructions.Add(PrintPreviewPaintInstruction.Rectangle(
+                textBox.Bounds,
+                textBox.Fill,
+                textBox.Outline,
+                textBox.OutlineThickness));
+        }
+
+        foreach (var textBox in layout.TextBoxes)
+        {
+            if (!string.IsNullOrEmpty(textBox.Text))
+                instructions.Add(PrintPreviewPaintInstruction.TextRun(
+                    new LayoutPoint(textBox.TextBounds.Left, textBox.TextBounds.Top),
+                    textBox.TextBounds.Width,
+                    textBox.Text,
+                    textBox.Font,
+                    PageTextAlignment.Left));
+        }
+
+        // 9. Header / footer bands.
         foreach (var run in layout.HeaderRuns)
             instructions.Add(PrintPreviewPaintInstruction.TextRun(
                 run.TextOrigin, run.Bounds.Width, run.Text, BandFont, run.Alignment));

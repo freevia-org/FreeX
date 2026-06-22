@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Media;
+using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -139,9 +140,7 @@ public static partial class PrintRenderer
                 rowHeight);
         }
 
-        DrawPrintedTextBoxes(
-            dc,
-            textOverlays,
+        var textBoxBlocks = PageTextBoxLayoutPlanner.Build(
             textBoxes,
             workbookTheme,
             pageRows,
@@ -150,6 +149,7 @@ public static partial class PrintRenderer
             gridTop,
             colWidth,
             rowHeight);
+        DrawPrintedTextBoxes(dc, textOverlays, textBoxBlocks);
 
         if (!draftQuality && printComments == WorksheetPrintComments.AsDisplayed)
         {

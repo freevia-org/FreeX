@@ -2220,6 +2220,32 @@ public sealed class AvaloniaShellSourceTests
     }
 
     [Fact]
+    public void MainWindow_RegistersExistingShellDialogsForParityCapture()
+    {
+        var parityCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+
+        parityCaptureSource.Should().Contain("(\"dialog.InsertHyperlink\", () => ShowInsertHyperlinkParityDialogAsync()),");
+        parityCaptureSource.Should().Contain("(\"dialog.EvaluateFormula\", () => ShowEvaluateFormulaParityDialogAsync()),");
+        parityCaptureSource.Should().Contain("(\"dialog.WatchWindow\", () => ShowWatchWindowParityDialogAsync()),");
+        parityCaptureSource.Should().Contain("(\"dialog.WorkbookStatistics\", () => ShowWorkbookStatisticsDialogAsync()),");
+        parityCaptureSource.Should().Contain("(\"dialog.RenameSheet\", () => ShowRenameSheetParityDialogAsync()),");
+        parityCaptureSource.Should().Contain("(\"dialog.UnhideSheet\", () => ShowUnhideSheetParityDialogAsync()),");
+        parityCaptureSource.Should().Contain("(\"dialog.About\", () => ShowAboutDialogAsync()),");
+        parityCaptureSource.Should().Contain("(\"dialog.LegalNotices\", () => ShowLegalNoticesDialogAsync()),");
+
+        parityCaptureSource.Should().Contain("private Task ShowInsertHyperlinkParityDialogAsync()");
+        parityCaptureSource.Should().Contain("async () => { await ShowInsertHyperlinkInputDialogAsync(); }");
+        parityCaptureSource.Should().Contain("private Task ShowEvaluateFormulaParityDialogAsync()");
+        parityCaptureSource.Should().Contain("ShowEvaluateFormulaDialogAsync");
+        parityCaptureSource.Should().Contain("private Task ShowWatchWindowParityDialogAsync()");
+        parityCaptureSource.Should().Contain("ShowWatchWindowDialogAsync");
+        parityCaptureSource.Should().Contain("private async Task ShowRenameSheetParityDialogAsync()");
+        parityCaptureSource.Should().Contain("await ShowRenameSheetDialogAsync(_session.ActiveSheet.Name);");
+        parityCaptureSource.Should().Contain("private async Task ShowUnhideSheetParityDialogAsync()");
+        parityCaptureSource.Should().Contain("await ShowUnhideSheetDialogAsync([new WorkbookHiddenSheet(_session.ActiveSheet.Id, \"Archive\")]);");
+    }
+
+    [Fact]
     public void MainWindow_WiresNativeDataTableThroughSharedPlannerSessionAndCompactDialog()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));

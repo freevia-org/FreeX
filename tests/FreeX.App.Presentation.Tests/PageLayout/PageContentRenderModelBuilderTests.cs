@@ -309,6 +309,31 @@ public sealed class PageContentRenderModelBuilderTests
     }
 
     [Fact]
+    public void Build_IncludesTextBoxBlocksFromSharedPlanner()
+    {
+        var (workbook, sheet) = CreateWorkbook();
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new TextValue("Anchor"));
+        sheet.TextBoxes.Add(new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 2, 2),
+            Text = "Printable note",
+            Width = 96,
+            Height = 42,
+            FillColor = new CellColor(200, 220, 240),
+            OutlineColor = new CellColor(20, 70, 120)
+        });
+
+        var layout = BuildFirstPage(workbook, sheet)!;
+
+        var block = layout.TextBoxes.Should().ContainSingle().Subject;
+        block.Text.Should().Be("Printable note");
+        block.Fill.Should().Be(new PresentationRgb(200, 220, 240));
+        block.Outline.Should().Be(new PresentationRgb(20, 70, 120));
+        block.TextBounds.Left.Should().BeApproximately(block.Bounds.Left + PageTextBoxLayoutPlanner.TextInset, 0.001);
+        block.TextBounds.Top.Should().BeApproximately(block.Bounds.Top + PageTextBoxLayoutPlanner.TextInset, 0.001);
+    }
+
+    [Fact]
     public void Build_OutOfRangePageReturnsNull()
     {
         var (workbook, sheet) = CreateWorkbook();

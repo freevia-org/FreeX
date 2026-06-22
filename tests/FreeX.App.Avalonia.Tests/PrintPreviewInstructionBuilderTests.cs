@@ -28,6 +28,7 @@ public sealed class PrintPreviewInstructionBuilderTests
             GridLines: [],
             ColumnHeadings: [],
             RowHeadings: [],
+            TextBoxes: [],
             HeaderRuns: [],
             FooterRuns: []);
 
@@ -237,6 +238,59 @@ public sealed class PrintPreviewInstructionBuilderTests
         var firstText = kinds.IndexOf(PrintPreviewPaintKind.Text);
         lastRect.Should().BeLessThan(firstLine);
         firstLine.Should().BeLessThan(firstText);
+    }
+
+    [Fact]
+    public void Build_TextBoxesEmitRectangleAndTextAfterCellTextBeforeHeaderFooter()
+    {
+        var cell = new PageCellBlock(
+            new LayoutRect(48, 48, 60, 20),
+            1, 1,
+            Fill: null,
+            Text: "Cell",
+            SampleFont,
+            PageTextAlignment.Left,
+            PageCellBorders.None,
+            new LayoutPoint(50, 53));
+        var textBoxFont = new PageTextFont("Segoe UI", 9, Bold: false, Italic: false, new PresentationRgb(0, 0, 0));
+        var textBox = new PageTextBoxBlock(
+            Guid.NewGuid(),
+            new LayoutRect(60, 70, 96, 42),
+            new LayoutRect(64, 74, 88, 34),
+            "Box",
+            Fill: new PresentationRgb(200, 220, 240),
+            FillAlpha: 242,
+            Outline: new PresentationRgb(20, 70, 120),
+            OutlineThickness: 1,
+            textBoxFont);
+        var header = new PageHeaderFooterRun(
+            new LayoutRect(48, 4, 240, 16),
+            "Header",
+            PageTextAlignment.Center,
+            new LayoutPoint(50, 6));
+        var layout = EmptyLayout() with
+        {
+            Cells = [cell],
+            TextBoxes = [textBox],
+            HeaderRuns = [header],
+        };
+
+        var painting = PrintPreviewInstructionBuilder.Build(layout);
+        var texts = painting.Instructions.Where(i => i.Kind == PrintPreviewPaintKind.Text).ToList();
+
+        texts.Select(i => i.Text).Should().ContainInOrder("Cell", "Box", "Header");
+        var boxRect = painting.Instructions.Single(i =>
+            i.Kind == PrintPreviewPaintKind.Rectangle &&
+            i.Left == 60 &&
+            i.Top == 70);
+        boxRect.Fill.Should().Be(new PresentationRgb(200, 220, 240));
+        boxRect.Stroke.Should().Be(new PresentationRgb(20, 70, 120));
+        boxRect.StrokeThickness.Should().Be(1);
+        var boxText = texts.Single(i => i.Text == "Box");
+        boxText.Left.Should().Be(64);
+        boxText.Top.Should().Be(74);
+        boxText.Width.Should().Be(88);
+        boxText.Font.Should().Be(textBoxFont);
     }
 
     [Fact]

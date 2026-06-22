@@ -20,8 +20,9 @@ namespace FreeX.App.Presentation.PageLayout;
 /// page when requested; and header/footer text is split into three bands with token substitution.
 ///
 /// Out of scope for this single-page content model (deferred to the renderers / later extraction):
-/// drawing objects, charts, text boxes, comments, hyperlinks, header/footer pictures, and text
-/// wrapping/trimming — only the cell grid, gridlines, headings, and header/footer text are produced.
+/// drawing objects, charts, comments, hyperlinks, header/footer pictures, and rich text
+/// wrapping/trimming — only the cell grid, gridlines, headings, text boxes, and header/footer text
+/// are produced.
 /// </summary>
 public static class PageContentRenderModelBuilder
 {
@@ -125,6 +126,16 @@ public static class PageContentRenderModelBuilder
             ? BuildHeadings(measurement, pageRows, pageColumns, contentLeft, contentTop, colWidth, rowHeight, textMeasurer)
             : ([], []);
 
+        var textBoxes = PageTextBoxLayoutPlanner.Build(
+            sheet.TextBoxes,
+            workbook.Theme,
+            pageRows,
+            pageColumns,
+            gridLeft,
+            gridTop,
+            colWidth,
+            rowHeight);
+
         var (header, footer) = ResolveHeaderFooterForPage(sheet, pageNumber);
         var resolvedNow = now ?? DateTime.Now;
         var (headerRuns, footerRuns) = BuildHeaderFooterRuns(
@@ -153,6 +164,7 @@ public static class PageContentRenderModelBuilder
             gridLines,
             columnHeadings,
             rowHeadings,
+            textBoxes,
             headerRuns,
             footerRuns);
     }

@@ -127,6 +127,14 @@ public sealed partial class MainWindow
         ("dialog.ScenarioManager", () => ShowScenarioManagerParityDialogAsync()),
         ("dialog.ForecastSheet", () => ShowForecastSheetParityDialogAsync()),
         ("dialog.Subtotal", () => ShowSubtotalParityDialogAsync()),
+        ("dialog.InsertHyperlink", () => ShowInsertHyperlinkParityDialogAsync()),
+        ("dialog.EvaluateFormula", () => ShowEvaluateFormulaParityDialogAsync()),
+        ("dialog.WatchWindow", () => ShowWatchWindowParityDialogAsync()),
+        ("dialog.WorkbookStatistics", () => ShowWorkbookStatisticsDialogAsync()),
+        ("dialog.RenameSheet", () => ShowRenameSheetParityDialogAsync()),
+        ("dialog.UnhideSheet", () => ShowUnhideSheetParityDialogAsync()),
+        ("dialog.About", () => ShowAboutDialogAsync()),
+        ("dialog.LegalNotices", () => ShowLegalNoticesDialogAsync()),
         ("dialog.DataValidation", () => ShowDataValidationDialogAsync()),
         ("dialog.ConditionalFormatNewRule", () => ShowConditionalFormatNewRuleDialogAsync()),
         ("dialog.ConditionalFormatManage", () => ShowManageConditionalFormatsDialogAsync()),
@@ -258,6 +266,30 @@ public sealed partial class MainWindow
             new CellAddress(_session.ActiveSheet.Id, 1, 1),
             new CellAddress(_session.ActiveSheet.Id, 4, 4),
             async () => { await ShowSubtotalInputDialogAsync(); });
+
+    private Task ShowInsertHyperlinkParityDialogAsync() =>
+        ShowWithParitySelectionAsync(
+            new CellAddress(_session.ActiveSheet.Id, 2, 2),
+            new CellAddress(_session.ActiveSheet.Id, 2, 2),
+            async () => { await ShowInsertHyperlinkInputDialogAsync(); });
+
+    private Task ShowEvaluateFormulaParityDialogAsync() =>
+        ShowWithParitySelectionAsync(
+            new CellAddress(_session.ActiveSheet.Id, 2, 3),
+            new CellAddress(_session.ActiveSheet.Id, 2, 3),
+            ShowEvaluateFormulaDialogAsync);
+
+    private Task ShowWatchWindowParityDialogAsync() =>
+        ShowWithParitySelectionAsync(
+            new CellAddress(_session.ActiveSheet.Id, 2, 2),
+            new CellAddress(_session.ActiveSheet.Id, 3, 3),
+            ShowWatchWindowDialogAsync);
+
+    private async Task ShowRenameSheetParityDialogAsync() =>
+        await ShowRenameSheetDialogAsync(_session.ActiveSheet.Name);
+
+    private async Task ShowUnhideSheetParityDialogAsync() =>
+        await ShowUnhideSheetDialogAsync([new WorkbookHiddenSheet(_session.ActiveSheet.Id, "Archive")]);
 
     private async Task ShowWithParitySelectionAsync(
         CellAddress start,
