@@ -377,6 +377,20 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         captureSource.Should().NotContain("isMiddle ? 2 : 1");
     }
 
+    [Fact]
+    public void LaunchSmokeStatusValue_AllowsSharedStatusBarReadouts()
+    {
+        var mainSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var statusBarSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.StatusBar.cs"));
+
+        mainSource.Should().Contain("HasStatusTextValue: HasStatusBarAccessibleValue()");
+        mainSource.Should().Contain("private bool HasStatusBarAccessibleValue() =>");
+        mainSource.Should().Contain("!string.IsNullOrWhiteSpace(_statusText.Text) ||");
+        mainSource.Should().Contain("!string.IsNullOrWhiteSpace(_selectionStatsText.Text);");
+        statusBarSource.Should().Contain("_statusText.IsVisible = visibility.ReadyTextVisible && plan.VisibleReadoutText.Length == 0;");
+        statusBarSource.Should().Contain("_selectionStatsText.Text = plan.VisibleReadoutText;");
+    }
+
     private static string RepoFile(params string[] parts)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

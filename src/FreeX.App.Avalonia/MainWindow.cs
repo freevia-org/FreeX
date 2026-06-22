@@ -16574,7 +16574,7 @@ public sealed partial class MainWindow : Window
             HasStatusTextAutomationName: string.Equals(AutomationProperties.GetName(_statusText), "Status", StringComparison.Ordinal),
             HasStatusTextAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_statusText), "Shows the current workbook status.", StringComparison.Ordinal),
             HasStatusTextAutomationId: string.Equals(AutomationProperties.GetAutomationId(_statusText), "StatusText", StringComparison.Ordinal),
-            HasStatusTextValue: !string.IsNullOrWhiteSpace(_statusText.Text),
+            HasStatusTextValue: HasStatusBarAccessibleValue(),
             HasCellAddressAutomationName: string.Equals(AutomationProperties.GetName(_cellAddressText), "Cell address", StringComparison.Ordinal),
             HasCellAddressAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_cellAddressText), "Shows the active cell address.", StringComparison.Ordinal),
             HasCellAddressAutomationId: string.Equals(AutomationProperties.GetAutomationId(_cellAddressText), "CellAddressText", StringComparison.Ordinal),
@@ -16754,6 +16754,10 @@ public sealed partial class MainWindow : Window
             HasNativeLegalNoticesMenuItem: HasNativeMenuItem(_legalNoticesMenuItem, "Legal Notices", requireGesture: false),
             HasNativeQuitMenuItem: HasNativeMenuItem(_quitMenuItem, "Quit FreeX"));
     }
+
+    private bool HasStatusBarAccessibleValue() =>
+        !string.IsNullOrWhiteSpace(_statusText.Text) ||
+        !string.IsNullOrWhiteSpace(_selectionStatsText.Text);
 
     private static bool HasToolbarMenuItem(MenuItem item, string expectedHeader) =>
         string.Equals(item.Header?.ToString(), expectedHeader, StringComparison.Ordinal);
