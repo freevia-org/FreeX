@@ -101,12 +101,103 @@ public sealed class PivotHeaderDropdownPlannerTests
         targets.Should().Contain(target =>
             target.Axis == PivotHeaderDropdownAxis.Page &&
             target.FieldCaption == "Quarter" &&
-            target.HeaderCell == new CellAddress(sheet.Id, 2, 5) &&
+            target.HeaderCell == new CellAddress(sheet.Id, 2, 6) &&
             target.IsActive);
         targets.Should().ContainSingle(target =>
             target.Axis == PivotHeaderDropdownAxis.Row &&
             target.FieldCaption == "Region" &&
             target.HeaderCell == new CellAddress(sheet.Id, 4, 5));
+    }
+
+    [Fact]
+    public void BuildTargets_UsesNativeMatrixHeaderOffsetsForLoadedExcelPivot()
+    {
+        var workbook = new Workbook("NativeMatrixPivotHeaderDropdownPlannerTest");
+        var source = workbook.AddSheet("Source");
+        SeedSalesData(source);
+        var pivotSheet = workbook.AddSheet("Pivot");
+        var pivot = new PivotTableModel
+        {
+            Name = "NativePivotBasic",
+            CacheId = 1,
+            SourceRange = Range(source, 1, 1, 5, 3),
+            TargetRange = Range(pivotSheet, 3, 1, 9, 5),
+            FirstHeaderRow = 1,
+            FirstDataRow = 2,
+            FirstDataColumn = 1
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.ColumnFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+        pivotSheet.PivotTables.Add(pivot);
+        pivotSheet.SetCell(new CellAddress(pivotSheet.Id, 3, 1), new TextValue("Sum of Amount"));
+        pivotSheet.SetCell(new CellAddress(pivotSheet.Id, 3, 2), new TextValue("Column Labels"));
+        pivotSheet.SetCell(new CellAddress(pivotSheet.Id, 4, 1), new TextValue("Row Labels"));
+
+        var targets = PivotHeaderDropdownPlanner.BuildTargets(workbook, pivotSheet);
+
+        targets.Should().HaveCount(2);
+        targets.Should().Contain(target =>
+            target.Axis == PivotHeaderDropdownAxis.Column &&
+            target.FieldCaption == "Quarter" &&
+            target.HeaderCell == new CellAddress(pivotSheet.Id, 3, 2));
+        targets.Should().Contain(target =>
+            target.Axis == PivotHeaderDropdownAxis.Row &&
+            target.FieldCaption == "Region" &&
+            target.HeaderCell == new CellAddress(pivotSheet.Id, 4, 1));
+    }
+
+    [Fact]
+    public void BuildTargets_UsesNativeReportFilterValueCellsAboveTargetRange()
+    {
+        var workbook = new Workbook("NativeReportFilterPivotHeaderDropdownPlannerTest");
+        var source = workbook.AddSheet("Source");
+        SeedSalesData(source);
+        var pivotSheet = workbook.AddSheet("Pivot");
+        var pivot = new PivotTableModel
+        {
+            Name = "NativePivotReportFilters",
+            CacheId = 1,
+            SourceRange = Range(source, 1, 1, 5, 3),
+            TargetRange = Range(pivotSheet, 4, 1, 8, 4),
+            FirstHeaderRow = 1,
+            FirstDataRow = 2,
+            FirstDataColumn = 1,
+            PageOverThenDown = true,
+            PageWrap = 2
+        };
+        pivot.PageFields.Add(new PivotFieldModel(1, SelectedItems: ["Q1", "Q2"]));
+        pivot.PageFields.Add(new PivotFieldModel(0, SelectedItem: "North"));
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.ColumnFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+        pivotSheet.PivotTables.Add(pivot);
+        pivotSheet.SetCell(new CellAddress(pivotSheet.Id, 2, 1), new TextValue("Quarter"));
+        pivotSheet.SetCell(new CellAddress(pivotSheet.Id, 2, 2), new TextValue("(Multiple Items)"));
+        pivotSheet.SetCell(new CellAddress(pivotSheet.Id, 2, 4), new TextValue("Region"));
+        pivotSheet.SetCell(new CellAddress(pivotSheet.Id, 2, 5), new TextValue("North"));
+        pivotSheet.SetCell(new CellAddress(pivotSheet.Id, 4, 1), new TextValue("Sum of Amount"));
+        pivotSheet.SetCell(new CellAddress(pivotSheet.Id, 4, 2), new TextValue("Column Labels"));
+        pivotSheet.SetCell(new CellAddress(pivotSheet.Id, 5, 1), new TextValue("Row Labels"));
+
+        var targets = PivotHeaderDropdownPlanner.BuildTargets(workbook, pivotSheet);
+
+        targets.Should().Contain(target =>
+            target.Axis == PivotHeaderDropdownAxis.Page &&
+            target.FieldCaption == "Quarter" &&
+            target.HeaderCell == new CellAddress(pivotSheet.Id, 2, 2) &&
+            target.IsActive);
+        targets.Should().Contain(target =>
+            target.Axis == PivotHeaderDropdownAxis.Page &&
+            target.FieldCaption == "Region" &&
+            target.HeaderCell == new CellAddress(pivotSheet.Id, 2, 5) &&
+            target.IsActive);
+        targets.Should().Contain(target =>
+            target.Axis == PivotHeaderDropdownAxis.Column &&
+            target.HeaderCell == new CellAddress(pivotSheet.Id, 4, 2));
+        targets.Should().Contain(target =>
+            target.Axis == PivotHeaderDropdownAxis.Row &&
+            target.HeaderCell == new CellAddress(pivotSheet.Id, 5, 1));
     }
 
     private static void SeedSalesData(Sheet sheet)

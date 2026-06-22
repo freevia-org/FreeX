@@ -44,22 +44,25 @@ public static class PivotHeaderDropdownPlanner
         if (headers.Count == 0)
             return;
 
-        AddPageTargets(sheet, pivotTable, headers, targets);
-        var bodyStart = GetPivotBodyStart(pivotTable);
-        AddRowTargets(sheet, pivotTable, headers, bodyStart, targets);
-        AddColumnTargets(sheet, pivotTable, headers, bodyStart, targets);
+        var pageStart = GetPageFieldStart(sheet, pivotTable, headers);
+        var bodyStart = GetPivotBodyStart(sheet, pivotTable, headers);
+        var rowHeaderStart = GetRowHeaderStart(bodyStart, pivotTable);
+        var columnHeaderStart = GetColumnHeaderStart(bodyStart, pivotTable);
+        AddPageTargets(sheet, pivotTable, headers, pageStart, targets);
+        AddRowTargets(sheet, pivotTable, headers, rowHeaderStart, targets);
+        AddColumnTargets(sheet, pivotTable, headers, columnHeaderStart, targets);
     }
 
     private static void AddPageTargets(
         Sheet sheet,
         PivotTableModel pivotTable,
         IReadOnlyList<string> headers,
+        CellAddress start,
         List<PivotHeaderDropdownTarget> targets)
     {
         if (pivotTable.PageFields.Count == 0)
             return;
 
-        var start = pivotTable.TargetRange.Start;
         var wrap = Math.Max(0, pivotTable.PageWrap);
         for (var index = 0; index < pivotTable.PageFields.Count; index++)
         {
@@ -68,9 +71,49 @@ public static class PivotHeaderDropdownPlanner
                 pivotTable.PageFields.Count,
                 wrap,
                 pivotTable.PageOverThenDown);
-            var address = new CellAddress(sheet.Id, start.Row + rowOffset, start.Col + colPairOffset);
-            AddTarget(sheet, pivotTable, headers, pivotTable.PageFields[index], PivotHeaderDropdownAxis.Page, address, targets);
+            var field = pivotTable.PageFields[index];
+            var captionAddress = ResolvePageFieldCaptionAddress(
+                sheet,
+                pivotTable,
+                headers,
+                field,
+                new CellAddress(sheet.Id, start.Row + rowOffset, start.Col + colPairOffset));
+            var address = new CellAddress(sheet.Id, captionAddress.Row, captionAddress.Col + 1);
+            AddTarget(sheet, pivotTable, headers, field, PivotHeaderDropdownAxis.Page, address, targets, allowNonTextValue: true);
         }
+    }
+
+    private static CellAddress ResolvePageFieldCaptionAddress(
+        Sheet sheet,
+        PivotTableModel pivotTable,
+        IReadOnlyList<string> headers,
+        PivotFieldModel field,
+        CellAddress expectedCaptionAddress)
+    {
+        var caption = field.SourceFieldIndex >= 0 && field.SourceFieldIndex < headers.Count
+            ? PivotUiPlanner.FieldCaption(headers, field.SourceFieldIndex)
+            : null;
+        if (string.IsNullOrWhiteSpace(caption) ||
+            CellTextEquals(sheet, expectedCaptionAddress, caption))
+        {
+            return expectedCaptionAddress;
+        }
+
+        var pageStart = GetPageFieldStart(sheet, pivotTable, headers);
+        var pageRows = Math.Max(1u, GetPageFieldRowSpan(pivotTable));
+        var maxCol = Math.Max(
+            pivotTable.TargetRange.End.Col + 1,
+            pageStart.Col + (uint)(pivotTable.PageFields.Count * 3));
+
+        for (var row = pageStart.Row; row < pageStart.Row + pageRows; row++)
+        for (var col = pageStart.Col; col <= maxCol; col++)
+        {
+            var address = new CellAddress(sheet.Id, row, col);
+            if (CellTextEquals(sheet, address, caption))
+                return address;
+        }
+
+        return expectedCaptionAddress;
     }
 
     private static void AddRowTargets(
@@ -121,12 +164,13 @@ public static class PivotHeaderDropdownPlanner
         PivotFieldModel field,
         PivotHeaderDropdownAxis axis,
         CellAddress address,
-        List<PivotHeaderDropdownTarget> targets)
+        List<PivotHeaderDropdownTarget> targets,
+        bool allowNonTextValue = false)
     {
         if (field.ShowDropDowns == false ||
             field.SourceFieldIndex < 0 ||
             field.SourceFieldIndex >= headers.Count ||
-            !IsRenderableHeaderCell(sheet, pivotTable, address))
+            !IsRenderableHeaderCell(sheet, pivotTable, address, allowNonTextValue))
         {
             return;
         }
@@ -140,12 +184,15 @@ public static class PivotHeaderDropdownPlanner
             IsFieldActive(pivotTable, field)));
     }
 
-    private static bool IsRenderableHeaderCell(Sheet sheet, PivotTableModel pivotTable, CellAddress address)
+    private static bool IsRenderableHeaderCell(Sheet sheet, PivotTableModel pivotTable, CellAddress address, bool allowNonTextValue)
     {
-        if (sheet.GetCell(address.Row, address.Col)?.Value is not TextValue text)
+        if (sheet.GetCell(address.Row, address.Col)?.Value is not { } value)
             return false;
 
-        return !IsGrandTotalCaption(pivotTable, text.Value);
+        if (value is TextValue text)
+            return !IsGrandTotalCaption(pivotTable, text.Value);
+
+        return allowNonTextValue;
     }
 
     private static bool IsFieldActive(PivotTableModel pivotTable, PivotFieldModel field) =>
@@ -202,14 +249,73 @@ public static class PivotHeaderDropdownPlanner
             ? 1
             : pivotTable.RowFields.Count;
 
-    private static CellAddress GetPivotBodyStart(PivotTableModel pivotTable)
+    private static CellAddress GetPageFieldStart(
+        Sheet sheet,
+        PivotTableModel pivotTable,
+        IReadOnlyList<string> headers)
+    {
+        var start = pivotTable.TargetRange.Start;
+        if (pivotTable.PageFields.Count == 0 ||
+            IsPageFieldCaption(sheet, start, pivotTable, headers))
+        {
+            return start;
+        }
+
+        var pageFieldRows = GetPageFieldRowSpan(pivotTable);
+        if (start.Row <= pageFieldRows + 1)
+            return start;
+
+        var nativePageStart = new CellAddress(start.Sheet, start.Row - pageFieldRows - 1, start.Col);
+        return IsPageFieldCaption(sheet, nativePageStart, pivotTable, headers)
+            ? nativePageStart
+            : start;
+    }
+
+    private static bool IsPageFieldCaption(
+        Sheet sheet,
+        CellAddress address,
+        PivotTableModel pivotTable,
+        IReadOnlyList<string> headers)
+    {
+        if (pivotTable.PageFields.Count == 0 ||
+            sheet.GetCell(address.Row, address.Col)?.Value is not TextValue text)
+        {
+            return false;
+        }
+
+        var firstPageField = pivotTable.PageFields[0];
+        return firstPageField.SourceFieldIndex >= 0 &&
+            firstPageField.SourceFieldIndex < headers.Count &&
+            string.Equals(text.Value, PivotUiPlanner.FieldCaption(headers, firstPageField.SourceFieldIndex), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool CellTextEquals(Sheet sheet, CellAddress address, string text) =>
+        sheet.GetCell(address.Row, address.Col)?.Value is TextValue cellText &&
+        string.Equals(cellText.Value, text, StringComparison.OrdinalIgnoreCase);
+
+    private static CellAddress GetPivotBodyStart(
+        Sheet sheet,
+        PivotTableModel pivotTable,
+        IReadOnlyList<string> headers)
     {
         var start = pivotTable.TargetRange.Start;
         var pageFieldRows = GetPageFieldRowSpan(pivotTable);
-        return pageFieldRows == 0
+        return pageFieldRows == 0 || !IsPageFieldCaption(sheet, start, pivotTable, headers)
             ? start
             : new CellAddress(start.Sheet, start.Row + pageFieldRows + 1, start.Col);
     }
+
+    private static CellAddress GetRowHeaderStart(CellAddress bodyStart, PivotTableModel pivotTable) =>
+        new(
+            bodyStart.Sheet,
+            bodyStart.Row + (uint)Math.Max(0, pivotTable.FirstDataRow - 1),
+            bodyStart.Col);
+
+    private static CellAddress GetColumnHeaderStart(CellAddress bodyStart, PivotTableModel pivotTable) =>
+        new(
+            bodyStart.Sheet,
+            bodyStart.Row + (uint)Math.Max(0, pivotTable.FirstHeaderRow - 1),
+            bodyStart.Col);
 
     private static uint GetPageFieldRowSpan(PivotTableModel pivotTable)
     {
