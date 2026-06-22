@@ -510,12 +510,14 @@ public static partial class PivotTableRefreshService
         IReadOnlyList<string> parentPrefix,
         PivotDataFieldModel dataField,
         PivotTableModel pivotTable,
-        IReadOnlyList<string> headers)
+        IReadOnlyList<string> headers,
+        IReadOnlyList<string>? suffix = null)
     {
+        suffix ??= [];
         return PivotCalculatedExpressionEvaluator.Evaluate(formula, name =>
         {
             var rows = keys
-                .Where(key => CalculatedItemKeyMatches(key, fieldPosition, parentPrefix, name))
+                .Where(key => CalculatedItemKeyMatches(key, fieldPosition, parentPrefix, name, suffix))
                 .SelectMany(rowsForKey);
             return AggregateDouble(rows, dataField, pivotTable, headers);
         });
@@ -525,9 +527,10 @@ public static partial class PivotTableRefreshService
         PivotKey key,
         int fieldPosition,
         IReadOnlyList<string> parentPrefix,
-        string itemName)
+        string itemName,
+        IReadOnlyList<string> suffix)
     {
-        if (key.Values.Count <= fieldPosition || parentPrefix.Count != fieldPosition)
+        if (key.Values.Count < fieldPosition + 1 + suffix.Count || parentPrefix.Count != fieldPosition)
             return false;
 
         for (var index = 0; index < parentPrefix.Count; index++)
@@ -536,7 +539,17 @@ public static partial class PivotTableRefreshService
                 return false;
         }
 
-        return string.Equals(key.Values[fieldPosition], itemName, StringComparison.CurrentCultureIgnoreCase);
+        if (!string.Equals(key.Values[fieldPosition], itemName, StringComparison.CurrentCultureIgnoreCase))
+            return false;
+
+        for (var index = 0; index < suffix.Count; index++)
+        {
+            var suffixIndex = fieldPosition + 1 + index;
+            if (!string.Equals(key.Values[suffixIndex], suffix[index], StringComparison.CurrentCultureIgnoreCase))
+                return false;
+        }
+
+        return true;
     }
 
     private static bool IsEndOfCalculatedItemParent(
