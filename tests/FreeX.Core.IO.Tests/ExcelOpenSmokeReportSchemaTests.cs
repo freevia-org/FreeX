@@ -40,6 +40,10 @@ public sealed class ExcelOpenSmokeReportSchemaTests
         source.Should().Contain("--pivot-ranges");
         source.Should().Contain("--export-excel-pngs");
         source.Should().Contain("EnumeratePivotVisualRanges");
+        source.Should().Contain("ResolvePivotVisualRange");
+        source.Should().Contain("InferPivotVisualRangeFromCells");
+        source.Should().Contain("ResolveExcelPivotVisualRanges");
+        source.Should().Contain("TableRange2");
         source.Should().Contain("ExportExcelReferencePngs");
         source.Should().Contain("CopyPicture");
     }

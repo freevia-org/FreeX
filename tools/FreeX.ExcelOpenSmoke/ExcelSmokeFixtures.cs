@@ -1149,6 +1149,7 @@ internal static class ExcelSmokeFixtures
             dataField = ((dynamic)pivot).AddDataField(salesField, "Sum of Sales", XlSum);
             ((dynamic)dataField).NumberFormat = "$#,##0";
             ((dynamic)pivot).TableStyle2 = "PivotStyleMedium9";
+            RefreshExcelPivotTable(pivot);
             AutoFitExcelColumns(pivotSheet, "A:F");
         }
         finally
@@ -1169,22 +1170,19 @@ internal static class ExcelSmokeFixtures
         object? table = null;
         object? cache = null;
         object? pivot = null;
-        object? channelField = null;
         object? regionField = null;
+        object? hiddenRegionItem = null;
         object? categoryField = null;
         object? salesField = null;
         object? dataField = null;
         try
         {
             pivotSheet = AddWorksheetAfter(workbook, sourceWorksheet, "Pivot Filters");
-            SetExcelCellValue(pivotSheet, 1, 1, "Native table-source PivotTable with report filter");
+            SetExcelCellValue(pivotSheet, 1, 1, "Native table-source PivotTable with row item filter");
             table = ((dynamic)sourceWorksheet).ListObjects["NativeSalesTable"];
             cache = ((dynamic)workbook).PivotCaches().Create(XlDatabase, ((dynamic)table).Range);
             pivot = ((dynamic)cache).CreatePivotTable("'Pivot Filters'!R3C1", "NativePivotTableSourceFilters");
 
-            channelField = ((dynamic)pivot).PivotFields("Channel");
-            ((dynamic)channelField).Orientation = XlPageField;
-            ((dynamic)channelField).CurrentPage = "Online";
             regionField = ((dynamic)pivot).PivotFields("Region");
             ((dynamic)regionField).Orientation = XlRowField;
             categoryField = ((dynamic)pivot).PivotFields("Category");
@@ -1192,7 +1190,11 @@ internal static class ExcelSmokeFixtures
             salesField = ((dynamic)pivot).PivotFields("Sales");
             dataField = ((dynamic)pivot).AddDataField(salesField, "Sum of Sales", XlSum);
             ((dynamic)dataField).NumberFormat = "$#,##0";
+            RefreshExcelPivotTable(pivot);
+            hiddenRegionItem = ((dynamic)regionField).PivotItems("West");
+            ((dynamic)hiddenRegionItem).Visible = false;
             ((dynamic)pivot).TableStyle2 = "PivotStyleMedium4";
+            RefreshExcelPivotTable(pivot);
             AutoFitExcelColumns(pivotSheet, "A:F");
         }
         finally
@@ -1200,8 +1202,8 @@ internal static class ExcelSmokeFixtures
             ReleaseComObject(dataField);
             ReleaseComObject(salesField);
             ReleaseComObject(categoryField);
+            ReleaseComObject(hiddenRegionItem);
             ReleaseComObject(regionField);
-            ReleaseComObject(channelField);
             ReleaseComObject(pivot);
             ReleaseComObject(cache);
             ReleaseComObject(table);
@@ -1234,6 +1236,7 @@ internal static class ExcelSmokeFixtures
             ((dynamic)dataField).NumberFormat = "0.0%";
             ((dynamic)dataField).Calculation = XlPercentOfGrandTotal;
             ((dynamic)pivot).TableStyle2 = "PivotStyleLight16";
+            RefreshExcelPivotTable(pivot);
             AutoFitExcelColumns(pivotSheet, "A:F");
         }
         finally
@@ -1280,6 +1283,8 @@ internal static class ExcelSmokeFixtures
             salesField2 = ((dynamic)pivot2).PivotFields("Sales");
             dataField2 = ((dynamic)pivot2).AddDataField(salesField2, "Count of Sales", XlCount);
             ((dynamic)pivot2).TableStyle2 = "PivotStyleDark3";
+            RefreshExcelPivotTable(pivot1);
+            RefreshExcelPivotTable(pivot2);
             AutoFitExcelColumns(pivotSheet, "A:K");
         }
         finally
@@ -1306,6 +1311,18 @@ internal static class ExcelSmokeFixtures
 
     private static object CreateWorksheetRangePivotCache(object workbook, string sourceData) =>
         ((dynamic)workbook).PivotCaches().Create(XlDatabase, sourceData);
+
+    private static void RefreshExcelPivotTable(object pivotTable)
+    {
+        try
+        {
+            ((dynamic)pivotTable).RefreshTable();
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException("Excel failed to refresh generated native PivotTable fixture.", ex);
+        }
+    }
 
     private static void AutoFitExcelColumns(object worksheet, string address)
     {

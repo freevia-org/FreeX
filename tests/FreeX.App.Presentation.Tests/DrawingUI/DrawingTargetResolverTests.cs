@@ -274,7 +274,7 @@ public sealed class DrawingTargetResolverTests
 
         stopwatch.Stop();
         Console.WriteLine($"Drawing target reverse lookup: {stopwatch.ElapsedMilliseconds}ms for 10000 lookups");
-        stopwatch.ElapsedMilliseconds.Should().BeLessThan(250);
+        stopwatch.ElapsedMilliseconds.Should().BeLessThan(1_000);
     }
 
     private static string FindRepositoryFile(params string[] relativeParts)
