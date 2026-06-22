@@ -125,6 +125,10 @@ internal static class Program
             pivotVisualCases = ExportExcelReferencePngs(xlsxPath, workbook, excelInputDir, options, pivotVisualCases);
         }
 
+        var excelReferenceDimensions = Directory.Exists(excelInputDir)
+            ? LoadExcelReferenceDimensions(excelInputDir)
+            : new Dictionary<int, PngDimensions>();
+
         // ------------------------------------------------------------------
         // 3. Render each visible sheet to PNG using GridView
         // ------------------------------------------------------------------
@@ -156,7 +160,8 @@ internal static class Program
 
                 try
                 {
-                    RenderSheetToGridViewPng(workbook, sheet, viewportService, outPath, range);
+                    excelReferenceDimensions.TryGetValue(sheetIndex, out var targetDimensions);
+                    RenderSheetToGridViewPng(workbook, sheet, viewportService, outPath, range, targetDimensions);
                     result.Rendered = true;
                     Console.WriteLine($"-> {outFileName}");
                 }
@@ -195,7 +200,8 @@ internal static class Program
 
             try
             {
-                RenderSheetToGridViewPng(workbook, sheet, viewportService, outPath, captureRange: null);
+                excelReferenceDimensions.TryGetValue(sheetIndex, out var targetDimensions);
+                RenderSheetToGridViewPng(workbook, sheet, viewportService, outPath, captureRange: null, targetDimensions);
                 result.Rendered = true;
                 Console.WriteLine($"-> {outFileName}");
             }
@@ -247,7 +253,8 @@ internal static class Program
         Sheet sheet,
         ViewportService viewportService,
         string outPath,
-        GridRange? captureRange)
+        GridRange? captureRange,
+        PngDimensions? targetPixelDimensions)
     {
         // Step 1: Determine viewport dimensions from the sheet's used range.
         // Row heights are already in WPF DIPs; column widths need the pixel mapper.
@@ -363,11 +370,17 @@ internal static class Program
         grid.Arrange(new Rect(0, 0, viewW, viewH));
         grid.UpdateLayout();
 
-        // Step 5: Rasterize to RenderTargetBitmap
-        int pixelW = Math.Max(1, (int)Math.Ceiling(viewW * RenderScale));
-        int pixelH = Math.Max(1, (int)Math.Ceiling(viewH * RenderScale));
+        // Step 5: Rasterize to RenderTargetBitmap. When an Excel reference PNG exists,
+        // render FreeX to the same pixel canvas so strict dimension checks validate the
+        // compared range instead of the two tools' different capture DPI conventions.
+        int pixelW = targetPixelDimensions?.Width ?? Math.Max(1, (int)Math.Ceiling(viewW * RenderScale));
+        int pixelH = targetPixelDimensions?.Height ?? Math.Max(1, (int)Math.Ceiling(viewH * RenderScale));
+        pixelW = Math.Max(1, pixelW);
+        pixelH = Math.Max(1, pixelH);
 
-        var rtb = new RenderTargetBitmap(pixelW, pixelH, RenderDpi, RenderDpi, PixelFormats.Pbgra32);
+        var scaleX = pixelW / viewW;
+        var scaleY = pixelH / viewH;
+        var rtb = new RenderTargetBitmap(pixelW, pixelH, 96.0 * scaleX, 96.0 * scaleY, PixelFormats.Pbgra32);
 
         // Apply DPI scale transform so logical DIPs map to the correct pixel count
         var dv = new System.Windows.Media.DrawingVisual();
@@ -379,7 +392,9 @@ internal static class Program
                 AlignmentX = AlignmentX.Left,
                 AlignmentY = AlignmentY.Top,
             };
-            ctx.DrawRectangle(vb, null, new Rect(0, 0, viewW * RenderScale, viewH * RenderScale));
+            ctx.PushTransform(new ScaleTransform(scaleX, scaleY));
+            ctx.DrawRectangle(vb, null, new Rect(0, 0, viewW, viewH));
+            ctx.Pop();
         }
         rtb.Render(dv);
 
@@ -806,6 +821,23 @@ internal static class Program
             GC.Collect();
             GC.WaitForPendingFinalizers();
         }
+    }
+
+    private static IReadOnlyDictionary<int, PngDimensions> LoadExcelReferenceDimensions(string excelInputDir)
+    {
+        var dimensions = new SortedDictionary<int, PngDimensions>();
+        foreach (var file in Directory.EnumerateFiles(excelInputDir, "excel_*.png"))
+        {
+            var stem = Path.GetFileNameWithoutExtension(file);
+            var parts = stem.Split('_');
+            if (parts.Length >= 3 && int.TryParse(parts[1], out var ordinal))
+                dimensions[ordinal] = GetPngDimensions(file);
+        }
+
+        if (dimensions.Count > 0)
+            Console.WriteLine($"  Excel reference dimensions loaded: {dimensions.Count}");
+
+        return dimensions;
     }
 
     private static IEnumerable<PivotVisualCase> ResolveExcelPivotVisualRanges(

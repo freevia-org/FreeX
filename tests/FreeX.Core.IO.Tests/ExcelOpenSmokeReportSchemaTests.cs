@@ -49,6 +49,9 @@ public sealed class ExcelOpenSmokeReportSchemaTests
         source.Should().Contain("ResolveExcelPivotVisualRanges");
         source.Should().Contain("TableRange2");
         source.Should().Contain("ExportExcelReferencePngs");
+        source.Should().Contain("LoadExcelReferenceDimensions");
+        source.Should().Contain("targetPixelDimensions");
+        source.Should().Contain("render FreeX to the same pixel canvas");
         source.Should().Contain("CopyPicture");
         source.Should().Contain("GetPngDimensions");
         source.Should().Contain("--fail-on-dimension-mismatch");
