@@ -1,22 +1,29 @@
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Presentation.TableUI;
 
-internal static class CreateTableSourceRangePlanner
+/// <summary>
+/// UI-free planning for creating structured tables. Shells own dialogs, prompts, and status text;
+/// this planner owns source-range expansion and command construction so insert-table and
+/// format-as-table behavior stays aligned across renderers.
+/// </summary>
+public static class TableCreationPlanner
 {
-    public static GridRange Create(Sheet sheet, GridRange selectedRange) =>
-        PlanSourceRange(sheet, selectedRange);
-
     public static GridRange PlanSourceRange(Sheet sheet, GridRange selectedRange)
     {
+        ArgumentNullException.ThrowIfNull(sheet);
+
         if (IsValidExplicitTableRange(selectedRange))
             return selectedRange;
 
         return ExpandToCurrentRegion(sheet, selectedRange);
     }
 
-    internal static GridRange ExpandToCurrentRegion(Sheet sheet, GridRange seedRange)
+    public static GridRange ExpandToCurrentRegion(Sheet sheet, GridRange seedRange)
     {
+        ArgumentNullException.ThrowIfNull(sheet);
+
         if (sheet.GetUsedRange() is not { } usedRange)
             return seedRange;
 
@@ -67,8 +74,10 @@ internal static class CreateTableSourceRangePlanner
             new CellAddress(seedRange.Start.Sheet, bottom, right));
     }
 
-    internal static bool HasCompleteHeaderRow(Sheet sheet, GridRange range)
+    public static bool HasCompleteHeaderRow(Sheet sheet, GridRange range)
     {
+        ArgumentNullException.ThrowIfNull(sheet);
+
         for (var col = range.Start.Col; col <= range.End.Col; col++)
         {
             if (IsBlank(sheet.GetValue(range.Start.Row, col)))
@@ -78,7 +87,26 @@ internal static class CreateTableSourceRangePlanner
         return true;
     }
 
-    internal static bool IsBlank(ScalarValue value) =>
+    public static CreateStructuredTableCommand BuildInsertCommand(
+        SheetId sheetId,
+        GridRange range,
+        bool firstRowHasHeaders) =>
+        new(sheetId, range, styleName: null, firstRowHasHeaders: firstRowHasHeaders);
+
+    public static CreateStyledStructuredTableCommand BuildStyledCommand(
+        SheetId sheetId,
+        GridRange range,
+        string? styleName,
+        bool firstRowHasHeaders,
+        StructuredTableStyleBanding banding) =>
+        new(
+            sheetId,
+            range,
+            styleName,
+            firstRowHasHeaders,
+            banding);
+
+    public static bool IsBlank(ScalarValue value) =>
         value is BlankValue;
 
     private static bool IsValidExplicitTableRange(GridRange range) =>

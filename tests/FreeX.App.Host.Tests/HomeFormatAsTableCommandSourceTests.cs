@@ -18,8 +18,10 @@ public sealed class HomeFormatAsTableCommandSourceTests
         source.Should().Contain("TableStyleGalleryPlanner.GetOption(variant, _workbook.Theme)");
         source.Should().Contain("new CreateTableDialog(");
         source.Should().Contain("request => ApplyCreateTableRangeSelection(dialog, request)");
-        source.Should().Contain("new CreateStyledStructuredTableCommand(");
+        source.Should().Contain("TableCreationPlanner.BuildStyledCommand(");
         source.Should().Contain("GroupedSheetRangePlanner.RemapRangeToSheet(dialog.Result.Range, sheetId)");
+        source.Should().Contain("dialog.Result.TableStyleName");
         source.Should().Contain("tableStyle.Banding");
+        source.Should().NotContain("new CreateStyledStructuredTableCommand(");
     }
 }

@@ -1240,10 +1240,12 @@ public sealed partial class MainWindowSourceHygieneTests
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
 
         source.Should().Contain("new CreateTableDialog");
-        source.Should().Contain("new CreateStyledStructuredTableCommand(");
+        source.Should().Contain("TableCreationPlanner.BuildStyledCommand(");
         source.Should().Contain("TableStyleGalleryPlanner.GetOption(variant, _workbook.Theme)");
         source.Should().NotContain("new CreateStructuredTableCommand(");
+        source.Should().NotContain("new CreateStyledStructuredTableCommand(");
         source.Should().Contain("GroupedSheetRangePlanner.RemapRangeToSheet(dialog.Result.Range, sheetId)");
+        source.Should().Contain("dialog.Result.TableStyleName");
         source.Should().Contain("tableStyle.Banding");
     }
 
