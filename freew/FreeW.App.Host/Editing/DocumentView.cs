@@ -615,6 +615,17 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Apply only a Design &gt; Document Formatting colour palette, preserving the current heading/body
+    /// fonts. This mirrors Word's separate Colors surface.
+    /// </summary>
+    public void ApplyThemeColors(DocumentTheme theme)
+    {
+        CommitToModel();
+        DocumentTheme.ApplyColors(_model, theme);
+        Render();
+    }
+
+    /// <summary>
     /// Apply a Design &gt; Document Formatting style set to the document style catalog and re-render so
     /// existing styled paragraphs immediately pick up the coordinated typography.
     /// </summary>
@@ -622,6 +633,16 @@ public sealed class DocumentView : RichTextBox
     {
         CommitToModel();
         DocumentStyleSet.Apply(_model, styleSet);
+        Render();
+    }
+
+    /// <summary>
+    /// Apply a Design &gt; Document Formatting font set to the document style catalog and re-render.
+    /// </summary>
+    public void ApplyFontSet(DocumentFontSet fontSet)
+    {
+        CommitToModel();
+        DocumentFontSet.Apply(_model, fontSet);
         Render();
     }
 
@@ -659,6 +680,9 @@ public sealed class DocumentView : RichTextBox
 
     // Snapshot of each affected style's run/paragraph formatting for style-set preview.
     private (RunFormatting DefaultRun, Dictionary<string, (RunFormatting Run, ParagraphFormatting Paragraph)> Styles)? _styleSetSnapshot;
+
+    // Snapshot of the document's pre-font-set look for font-set preview.
+    private (DocumentTheme Theme, RunFormatting DefaultRun, Dictionary<string, RunFormatting> Runs)? _fontSetSnapshot;
 
     /// <summary>
     /// Preview a paragraph style on the current selection without committing: snapshot the selected
@@ -748,6 +772,23 @@ public sealed class DocumentView : RichTextBox
         Render();
     }
 
+    /// <summary>
+    /// Preview a document colour palette without committing. Used by the Design Colors gallery.
+    /// </summary>
+    public void PreviewThemeColors(DocumentTheme theme)
+    {
+        ArgumentNullException.ThrowIfNull(theme);
+
+        if (_themeSnapshot is null)
+            CommitToModel();
+        else
+            RestoreThemePreview();
+
+        _themeSnapshot = CaptureRunPreview();
+        DocumentTheme.ApplyColors(_model, theme);
+        Render();
+    }
+
     /// <summary>Revert a theme preview started by <see cref="PreviewTheme"/> and re-render. No-op if none is active.</summary>
     public void EndThemePreview()
     {
@@ -770,6 +811,18 @@ public sealed class DocumentView : RichTextBox
                 style.Run = run;
         }
         _themeSnapshot = null;
+    }
+
+    private (DocumentTheme Theme, RunFormatting DefaultRun, Dictionary<string, RunFormatting> Runs) CaptureRunPreview()
+    {
+        var runs = new Dictionary<string, RunFormatting>();
+        foreach (var id in new[] { "Normal", "Title", "Subtitle", "Heading1", "Heading2", "Heading3", "Quote" })
+        {
+            if (_model.Styles.TryGetValue(id, out var style))
+                runs[id] = style.Run;
+        }
+
+        return (_model.Theme, _model.DefaultRun, runs);
     }
 
     /// <summary>
@@ -820,6 +873,46 @@ public sealed class DocumentView : RichTextBox
             }
         }
         _styleSetSnapshot = null;
+    }
+
+    /// <summary>
+    /// Preview a document font set without committing. Used by the Design Fonts gallery.
+    /// </summary>
+    public void PreviewFontSet(DocumentFontSet fontSet)
+    {
+        ArgumentNullException.ThrowIfNull(fontSet);
+
+        if (_fontSetSnapshot is null)
+            CommitToModel();
+        else
+            RestoreFontSetPreview();
+
+        _fontSetSnapshot = CaptureRunPreview();
+        DocumentFontSet.Apply(_model, fontSet);
+        Render();
+    }
+
+    /// <summary>Revert a font-set preview started by <see cref="PreviewFontSet"/> and re-render.</summary>
+    public void EndFontSetPreview()
+    {
+        if (_fontSetSnapshot is null)
+            return;
+        RestoreFontSetPreview();
+        Render();
+    }
+
+    private void RestoreFontSetPreview()
+    {
+        if (_fontSetSnapshot is not { } snapshot)
+            return;
+        _model.Theme = snapshot.Theme;
+        _model.DefaultRun = snapshot.DefaultRun;
+        foreach (var (id, run) in snapshot.Runs)
+        {
+            if (_model.Styles.TryGetValue(id, out var style))
+                style.Run = run;
+        }
+        _fontSetSnapshot = null;
     }
 
     /// <summary>

@@ -554,11 +554,13 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.new-style", new NewStyleCommand(editor));
         registry.Register("freew.manage-styles", new ManageStylesCommand(editor));
 
-        // Design > Document Formatting: Themes / Colors resolve a catalog theme; Style Sets rewrite the
-        // built-in styles catalog. All three are backed document-wide style changes.
+        // Design > Document Formatting: Themes apply a full preset, Colors preserve fonts while applying
+        // a palette, Style Sets rewrite built-in styles, and Fonts preserve colours while applying a
+        // heading/body font pair. All are backed document-wide style changes.
         registry.Register("freew.theme", new ApplyThemeCommand(editor));
         registry.Register("freew.style-set", new ApplyStyleSetCommand(editor));
-        registry.Register("freew.theme-colors", new ApplyThemeCommand(editor));
+        registry.Register("freew.theme-colors", new ApplyThemeColorsCommand(editor));
+        registry.Register("freew.theme-fonts", new ApplyFontSetCommand(editor));
 
         // Layout tab — page settings (applied to the model; honoured by docx save + print).
         registry.Register("freew.orientation", new PageCommand(editor, page =>
@@ -1090,6 +1092,54 @@ internal static class FreeWRibbonCommands
 
             editor.Focus();
             editor.ApplyStyleSet(styleSet);
+        }
+
+        private static string? LegacyValue(RibbonCommandContext context) =>
+            context.Parameters.TryGetValue("value", out var raw) ? raw as string : null;
+
+        private static string? MenuHeaderValue(RibbonCommandContext context) =>
+            context.Parameters.TryGetValue(Free.Shared.Ribbon.Wpf.RibbonWpfRenderer.SenderKey, out var sender)
+            && sender is System.Windows.Controls.MenuItem { Tag: string header }
+                ? header
+                : null;
+    }
+
+    private sealed class ApplyThemeColorsCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            var value = context.SelectedValue ?? LegacyValue(context) ?? MenuHeaderValue(context);
+            if (string.IsNullOrWhiteSpace(value))
+                return;
+            if (DocumentTheme.FindByName(value) is not { } theme)
+                return;
+
+            editor.Focus();
+            editor.ApplyThemeColors(theme);
+        }
+
+        private static string? LegacyValue(RibbonCommandContext context) =>
+            context.Parameters.TryGetValue("value", out var raw) ? raw as string : null;
+
+        private static string? MenuHeaderValue(RibbonCommandContext context) =>
+            context.Parameters.TryGetValue(Free.Shared.Ribbon.Wpf.RibbonWpfRenderer.SenderKey, out var sender)
+            && sender is System.Windows.Controls.MenuItem { Tag: string header }
+                ? header
+                : null;
+    }
+
+    private sealed class ApplyFontSetCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            var value = context.SelectedValue ?? LegacyValue(context) ?? MenuHeaderValue(context);
+            if (string.IsNullOrWhiteSpace(value))
+                return;
+            if (DocumentFontSet.FindByName(value) is not { } fontSet)
+                return;
+
+            editor.Focus();
+            editor.ApplyFontSet(fontSet);
         }
 
         private static string? LegacyValue(RibbonCommandContext context) =>

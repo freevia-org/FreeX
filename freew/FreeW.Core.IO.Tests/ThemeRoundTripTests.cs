@@ -122,7 +122,22 @@ public class ThemeRoundTripTests
     }
 
     [Fact]
-    public void ForeignTheme_FallsBackToOffice_OnRead()
+    public void FontSetThemeCombination_RoundTripsThroughThemeFontScheme()
+    {
+        var doc = DocumentWithTheme(DocumentTheme.FindByName("Berlin")!);
+        DocumentFontSet.Apply(doc, DocumentFontSet.FindByName("Georgia")!);
+
+        var reloaded = RoundTrip(doc);
+
+        reloaded.Theme.Name.Should().Be("Custom");
+        reloaded.Theme.PrimaryColorHex.Should().Be("#C00000");
+        reloaded.Theme.HeadingColorHex.Should().Be("#D2691E");
+        reloaded.Theme.HeadingFont.Should().Be("Georgia");
+        reloaded.Theme.BodyFont.Should().Be("Georgia");
+    }
+
+    [Fact]
+    public void ForeignTheme_PreservesReadableThemeDataAsCustom_OnRead()
     {
         // A document whose theme part FreeW did not write (unrecognised accents/fonts) reads back as the
         // default Office preset, while the rest of the document still round-trips.
@@ -153,6 +168,9 @@ public class ThemeRoundTripTests
         }
 
         stream.Position = 0;
-        DocxReader.Read(stream).Theme.Should().BeSameAs(DocumentTheme.Default);
+        var theme = DocxReader.Read(stream).Theme;
+        theme.Name.Should().Be("Custom");
+        theme.PrimaryColorHex.Should().Be("#ABCDEF");
+        theme.HeadingFont.Should().Be(DocumentTheme.FindByName("Ion")!.HeadingFont);
     }
 }

@@ -92,6 +92,25 @@ public class DocumentThemeTests
     }
 
     [Fact]
+    public void ApplyColors_RewritesPalette_AndPreservesFonts()
+    {
+        var doc = TextDocument.CreateEmpty();
+        DocumentFontSet.Apply(doc, DocumentFontSet.FindByName("Georgia")!);
+        var berlin = DocumentTheme.FindByName("Berlin")!;
+
+        DocumentTheme.ApplyColors(doc, berlin);
+
+        doc.Theme.HeadingFont.Should().Be("Georgia");
+        doc.Theme.BodyFont.Should().Be("Georgia");
+        doc.Theme.PrimaryColorHex.Should().Be(berlin.PrimaryColorHex);
+        doc.DefaultRun.FontFamily.Should().Be("Georgia");
+        doc.Styles["Normal"].Run.FontFamily.Should().Be("Georgia");
+        doc.Styles["Title"].Run.FontFamily.Should().Be("Georgia");
+        doc.Styles["Title"].Run.ColorHex.Should().Be(berlin.PrimaryColorHex);
+        doc.Styles["Heading1"].Run.ColorHex.Should().Be(berlin.HeadingColorHex);
+    }
+
+    [Fact]
     public void Apply_IsDeterministic_RepeatedApplicationsYieldTheSameCatalog()
     {
         var theme = DocumentTheme.FindByName("Ion")!;
@@ -181,6 +200,13 @@ public class DocumentThemeTests
             "123456", "234567", "345678", "456789", "56789A", "6789AB",
             "0563C1", "954F72");
 
-        DocumentTheme.InferPreset(foreign, "Arial", "Arial").Should().BeSameAs(DocumentTheme.Default);
+        var inferred = DocumentTheme.InferPreset(foreign, "Arial", "Arial");
+
+        inferred.Name.Should().Be("Custom");
+        inferred.HeadingFont.Should().Be("Arial");
+        inferred.BodyFont.Should().Be("Arial");
+        inferred.PrimaryColorHex.Should().Be("#123456");
+        inferred.HeadingColorHex.Should().Be("#234567");
+        inferred.HeadingAccentColorHex.Should().Be("#345678");
     }
 }
