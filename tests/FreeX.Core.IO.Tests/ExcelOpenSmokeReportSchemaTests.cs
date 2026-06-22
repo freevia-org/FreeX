@@ -50,6 +50,11 @@ public sealed class ExcelOpenSmokeReportSchemaTests
         source.Should().Contain("TableRange2");
         source.Should().Contain("ExportExcelReferencePngs");
         source.Should().Contain("CopyPicture");
+        source.Should().Contain("GetPngDimensions");
+        source.Should().Contain("Dimension gate: native Excel and FreeX PNG dimensions must match exactly.");
+        source.Should().Contain("Dimension mismatch: Excel");
+        source.Should().Contain("800x600 compatibility resize fallback");
+        source.Should().Contain("ComparisonFailed");
     }
 
     [Fact]

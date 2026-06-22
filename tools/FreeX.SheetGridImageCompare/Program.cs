@@ -234,7 +234,7 @@ internal static class Program
         Console.WriteLine($"Report   : {reportPath}");
         Console.WriteLine("\nDONE.");
         var diffFailures = hasDiffDir
-            ? sheetResults.Count(r => r.DiffPercent > options.ThresholdPercent)
+            ? sheetResults.Count(r => r.ComparisonFailed || r.DiffPercent > options.ThresholdPercent)
             : 0;
         return errors > 0 || diffFailures > 0 ? 2 : 0;
     }
@@ -978,6 +978,16 @@ internal static class Program
                 row.ExcelPng = excelPng;
                 try
                 {
+                    row.ExcelDimensions = GetPngDimensions(excelPng);
+                    row.FreeXDimensions = GetPngDimensions(r.FreeXPngPath!);
+                    row.DimensionMismatch = row.ExcelDimensions != row.FreeXDimensions;
+                    if (row.DimensionMismatch)
+                    {
+                        row.Status = "DIM_FAIL";
+                        row.Error = $"Dimension mismatch: Excel {row.ExcelDimensions}, FreeX {row.FreeXDimensions}. Mean pixel diff uses 800x600 compatibility resize fallback only.";
+                        r.ComparisonFailed = true;
+                    }
+
                     row.DiffPercent = ComputeMeanPixelDiff(excelPng, r.FreeXPngPath!);
                     r.DiffPercent = row.DiffPercent;
                 }
@@ -1024,16 +1034,20 @@ internal static class Program
         sb.AppendLine("FreeX vs Excel Sheet Fidelity Report (GridView renderer)");
         sb.AppendLine($"Generated: {DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss zzz}");
         sb.AppendLine($"Threshold: {thresholdPercent:F2}%");
+        sb.AppendLine("Dimension gate: native Excel and FreeX PNG dimensions must match exactly.");
+        sb.AppendLine("Mean pixel diff: 800x600 compatibility resize fallback.");
         sb.AppendLine();
         sb.AppendLine("=== RANKED BY DIFF% (worst first) ===");
-        sb.AppendLine($"{"NN",-4}  {"Diff%",7}  {"Status",-8}  Sheet");
-        sb.AppendLine(new string('-', 80));
+        sb.AppendLine($"{"NN",-4}  {"Diff%",7}  {"Status",-8}  {"PNG dimensions",-34}  Sheet");
+        sb.AppendLine(new string('-', 118));
 
         foreach (var r in rows.OrderByDescending(r => r.DiffPercent))
         {
             var diffStr = r.DiffPercent >= 0 ? $"{r.DiffPercent:F1}%" : "  N/A";
-            var status = r.DiffPercent > thresholdPercent ? "FAIL" : r.Status;
-            sb.AppendLine($"{r.NN.ToString("D2"),-4}  {diffStr,7}  {status,-8}  {r.SheetName}");
+            var status = r.DimensionMismatch
+                ? "DIM_FAIL"
+                : r.DiffPercent > thresholdPercent ? "FAIL" : r.Status;
+            sb.AppendLine($"{r.NN.ToString("D2"),-4}  {diffStr,7}  {status,-8}  {FormatDimensions(r),-34}  {r.SheetName}");
             if (r.Error != null)
                 sb.AppendLine($"       NOTE: {r.Error}");
         }
@@ -1054,6 +1068,14 @@ internal static class Program
         return source.Format == PixelFormats.Bgra32
             ? source
             : new FormatConvertedBitmap(source, PixelFormats.Bgra32, null, 0);
+    }
+
+    private static PngDimensions GetPngDimensions(string path)
+    {
+        using var stream = File.OpenRead(path);
+        var decoder = BitmapDecoder.Create(stream, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
+        var frame = decoder.Frames[0];
+        return new PngDimensions(frame.PixelWidth, frame.PixelHeight);
     }
 
     private static double ComputeMeanPixelDiff(string excelPath, string freexPath)
@@ -1149,8 +1171,9 @@ internal static class Program
             int xLeft  = Padding;
             int xRight = Padding * 2 + ThumbW;
 
-            ctx.DrawText(MakeText("Excel (ground truth)",          11, Brushes.DarkSlateGray, FontWeights.Normal), new Point(xLeft,  yImg + ThumbH + 4));
-            ctx.DrawText(MakeText($"FreeX GridView  diff={row.DiffPercent:F1}%", 11, Brushes.DarkSlateGray, FontWeights.Normal), new Point(xRight, yImg + ThumbH + 4));
+            ctx.DrawText(MakeText($"Excel (ground truth)  {row.ExcelDimensions}", 11, Brushes.DarkSlateGray, FontWeights.Normal), new Point(xLeft,  yImg + ThumbH + 4));
+            ctx.DrawText(MakeText($"FreeX GridView  {row.FreeXDimensions}", 11, Brushes.DarkSlateGray, FontWeights.Normal), new Point(xRight, yImg + ThumbH + 4));
+            ctx.DrawText(MakeText("Mean diff uses 800x600 compatibility resize fallback", 10, Brushes.DarkSlateGray, FontWeights.Normal), new Point(Padding, yImg + ThumbH + LabelH + 4));
 
             ctx.DrawImage(excelBmp, new Rect(xLeft,  yImg, ThumbW, ThumbH));
             ctx.DrawImage(freexBmp, new Rect(xRight, yImg, ThumbW, ThumbH));
@@ -1207,6 +1230,14 @@ internal static class Program
         return sb.Length > 0 ? sb.ToString() : "sheet";
     }
 
+    private static string FormatDimensions(DiffRow row)
+    {
+        if (row.ExcelDimensions is null && row.FreeXDimensions is null)
+            return "N/A";
+
+        return $"Excel {row.ExcelDimensions?.ToString() ?? "N/A"}; FreeX {row.FreeXDimensions?.ToString() ?? "N/A"}";
+    }
+
     private static string Trunc(string? s, int max)
     {
         s ??= "";
@@ -1228,6 +1259,7 @@ internal sealed class SheetResult
     public string? SkipReason      { get; set; }
     public string? Error           { get; set; }
     public double  DiffPercent     { get; set; } = -1;
+    public bool    ComparisonFailed { get; set; }
 }
 
 internal sealed class DiffRow
@@ -1239,6 +1271,14 @@ internal sealed class DiffRow
     public string  Status      { get; set; } = "";
     public string? Error       { get; set; }
     public double  DiffPercent { get; set; } = -1;
+    public PngDimensions? ExcelDimensions { get; set; }
+    public PngDimensions? FreeXDimensions { get; set; }
+    public bool    DimensionMismatch { get; set; }
+}
+
+internal readonly record struct PngDimensions(int Width, int Height)
+{
+    public override string ToString() => $"{Width}x{Height}";
 }
 
 internal sealed record GridImageCompareOptions(
