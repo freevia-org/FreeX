@@ -27,6 +27,8 @@ public sealed record SisterBackstageEntrySpec(
 
     public Func<UIElement>? BuildSaveAsPane { get; init; }
 
+    public Func<UIElement>? BuildPrintPane { get; init; }
+
     public Func<UIElement>? BuildExportPane { get; init; }
 
     public Func<UIElement>? BuildAccountPane { get; init; }
@@ -80,7 +82,9 @@ public static class SisterBackstageEntryBuilder
         if (spec.SaveCopy is not null)
             entries.Add(BackstageEntry.Command("Save a Copy", RibbonCommandIconKind.Save, spec.SaveCopy, iconName: "save-copy"));
 
-        if (spec.Print is not null)
+        if (spec.BuildPrintPane is not null)
+            entries.Add(BackstageEntry.Pane("Print", RibbonCommandIconKind.Print, spec.BuildPrintPane, iconName: "print"));
+        else if (spec.Print is not null)
             entries.Add(BackstageEntry.Command("Print", RibbonCommandIconKind.Print, spec.Print, iconName: "print"));
 
         if (spec.BuildExportPane is not null)

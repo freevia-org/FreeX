@@ -395,6 +395,7 @@ public sealed class MainWindow : Window
             RecoverUnsaved: () => _autosave.RecoverUnsavedDocuments(this),
             Close: CloseDocument,
             Print: Print,
+            PrintPreview: OpenPrintPreview,
             ExportPdf: ExportToPdf,
             ExportXps: ExportToXps,
             EditProperties: OpenProperties,

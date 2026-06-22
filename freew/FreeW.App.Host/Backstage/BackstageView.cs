@@ -64,6 +64,7 @@ internal sealed class BackstageView : UserControl
             UseNewPane = true,
             BuildOpenPane = BuildOpenPane,
             BuildSaveAsPane = BuildSaveAsPane,
+            BuildPrintPane = BuildPrintPane,
             BuildExportPane = BuildExportPane,
             BuildAccountPane = BuildAccountPane
         });
@@ -121,6 +122,35 @@ internal sealed class BackstageView : UserControl
                     new("Word Document (*.docx)", "Save an editable Word document using Save As.", () => { Hide(); _actions.SaveAs(); }),
                 ]),
             ]));
+    }
+
+    private UIElement BuildPrintPane()
+    {
+        _editor.CommitToModel();
+        var plan = BackstagePrintPanePlanner.Build(_file.DisplayName, _editor.Model.Page);
+
+        var panel = new StackPanel { MaxWidth = 720, HorizontalAlignment = HorizontalAlignment.Left };
+        panel.Children.Add(Kit.HeadingText("Print"));
+        panel.Children.Add(new TextBlock
+        {
+            Text = plan.Description,
+            Foreground = Kit.Muted,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 16)
+        });
+
+        panel.Children.Add(Kit.SubHeading("Document"));
+        foreach (var field in plan.Fields)
+            panel.Children.Add(Kit.Field(field.Label, field.Value));
+
+        foreach (var group in plan.Groups)
+        {
+            panel.Children.Add(Kit.SubHeading(group.Heading));
+            foreach (var action in group.Actions)
+                panel.Children.Add(PrintActionRow(action));
+        }
+
+        return Kit.Scroll(panel);
     }
 
     private UIElement BuildOpenPane()
@@ -248,6 +278,30 @@ internal sealed class BackstageView : UserControl
             BackstageInfoSafetyActionKind.CheckAccessibility => () => { Hide(); _actions.CheckAccessibility(); },
             _ => static () => { }
         };
+
+    private Action PrintAction(BackstagePrintActionKind kind) =>
+        kind switch
+        {
+            BackstagePrintActionKind.Print => () => { Hide(); _actions.Print(); },
+            BackstagePrintActionKind.PrintPreview => () => { Hide(); _actions.PrintPreview(); },
+            _ => static () => { }
+        };
+
+    private UIElement PrintActionRow(BackstagePrintActionRow action)
+    {
+        var stack = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
+        var button = Kit.LinkButton(action.Label, PrintAction(action.Kind));
+        stack.Children.Add(button);
+        stack.Children.Add(new TextBlock
+        {
+            Text = action.Description,
+            Foreground = Kit.Muted,
+            FontSize = 11,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 2, 0, 0)
+        });
+        return stack;
+    }
 }
 
 internal sealed record BackstageActions(
@@ -261,6 +315,7 @@ internal sealed record BackstageActions(
     Action RecoverUnsaved,
     Action Close,
     Action Print,
+    Action PrintPreview,
     Action ExportPdf,
     Action ExportXps,
     Action EditProperties,

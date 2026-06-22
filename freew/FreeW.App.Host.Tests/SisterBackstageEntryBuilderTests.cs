@@ -36,6 +36,7 @@ public sealed class SisterBackstageEntryBuilderTests
             UseNewPane = true,
             BuildOpenPane = Pane,
             BuildSaveAsPane = Pane,
+            BuildPrintPane = Pane,
             BuildExportPane = Pane,
             BuildAccountPane = Pane
         });
@@ -63,9 +64,10 @@ public sealed class SisterBackstageEntryBuilderTests
         entries.Single(entry => entry.Label == "New").Action.Should().BeNull();
         entries.Single(entry => entry.Label == "Open").ContentFactory.Should().NotBeNull();
         entries.Single(entry => entry.Label == "Save As").ContentFactory.Should().NotBeNull();
+        entries.Single(entry => entry.Label == "Print").ContentFactory.Should().NotBeNull();
+        entries.Single(entry => entry.Label == "Print").Action.Should().BeNull();
         entries.Single(entry => entry.Label == "Export").ContentFactory.Should().NotBeNull();
         entries.Single(entry => entry.Label == "Account").ContentFactory.Should().NotBeNull();
-        entries.Single(entry => entry.Label == "Print").Action.Should().NotBeNull();
         entries.Single(entry => entry.Label == "Save a Copy").Action.Should().NotBeNull();
         entries.Single(entry => entry.Label == "Close").Action.Should().NotBeNull();
     }
@@ -102,6 +104,20 @@ public sealed class SisterBackstageEntryBuilderTests
         entries.Single(entry => entry.Label == "Open").ContentFactory.Should().BeNull();
         entries.Single(entry => entry.Label == "Save As").Action.Should().NotBeNull();
         entries.Single(entry => entry.Label == "Save As").ContentFactory.Should().BeNull();
+    }
+
+    [Fact]
+    public void Build_WithPrintActionOnly_KeepsSiblingAppPrintCommand()
+    {
+        var entries = SisterBackstageEntryBuilder.Build(CreateSpec() with
+        {
+            Print = () => { },
+        });
+
+        var print = entries.Single(entry => entry.Label == "Print");
+
+        print.Action.Should().NotBeNull();
+        print.ContentFactory.Should().BeNull();
     }
 
     [Fact]
