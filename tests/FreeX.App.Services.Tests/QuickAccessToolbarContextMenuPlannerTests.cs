@@ -1,7 +1,7 @@
 using FluentAssertions;
 using FreeX.App.Services.Ribbon;
 
-namespace FreeX.App.Host.Tests;
+namespace FreeX.App.Services.Tests;
 
 public sealed class QuickAccessToolbarContextMenuPlannerTests
 {

@@ -1,6 +1,6 @@
-namespace FreeX.App.Host;
+namespace FreeX.App.Services.Ribbon;
 
-internal readonly record struct QuickAccessCommandState(
+public readonly record struct QuickAccessCommandState(
     bool CanUndo,
     bool CanRedo,
     bool HasActiveWorksheet,
@@ -10,7 +10,7 @@ internal readonly record struct QuickAccessCommandState(
         new(CanUndo, CanRedo, hasActiveWorksheet, hasSelection);
 }
 
-internal enum QuickAccessCommandAvailability
+public enum QuickAccessCommandAvailability
 {
     Never,
     Always,
@@ -20,7 +20,7 @@ internal enum QuickAccessCommandAvailability
     Selection
 }
 
-internal static class QuickAccessCommandStateResolver
+public static class QuickAccessCommandStateResolver
 {
     public static bool CanExecute(string commandId, QuickAccessCommandState state) =>
         CanExecute(GetAvailability(commandId), state);

@@ -1,6 +1,8 @@
-namespace FreeX.App.Host;
+using Free.Shared.Ribbon;
 
-internal static class QuickAccessToolbarCommandIds
+namespace FreeX.App.Services.Ribbon;
+
+public static class QuickAccessToolbarCommandIds
 {
     public const string Save = "Save";
     public const string Undo = "Undo";
@@ -41,7 +43,7 @@ internal static class QuickAccessToolbarCommandIds
     public const string SelectionPane = "SelectionPane";
 }
 
-internal sealed record QuickAccessToolbarCommandDefinition(
+public sealed record QuickAccessToolbarCommandDefinition(
     string Id,
     string CommandName,
     string TitleResourceKey,
@@ -49,7 +51,7 @@ internal sealed record QuickAccessToolbarCommandDefinition(
     RibbonCommandIconKind IconKind,
     string AutomationId);
 
-internal static class QuickAccessToolbarCatalog
+public static class QuickAccessToolbarCatalog
 {
     public static readonly IReadOnlyList<string> DefaultCommandIds =
     [
