@@ -93,7 +93,15 @@ internal sealed class BackstageView : UserControl
                 new("Paragraphs", stats.Paragraphs.ToString()),
             ],
             EditPropertiesText: "Edit document properties\u2026",
-            EditProperties: () => { Hide(); _actions.EditProperties(); }));
+            EditProperties: () => { Hide(); _actions.EditProperties(); },
+            ActionGroups: BackstageInfoSafetyPanePlanner.Build()
+                .Select(group => new BackstageActionGroup(
+                    group.Heading,
+                    group.Actions.Select(action => new BackstageActionRow(
+                        action.Label,
+                        action.Description,
+                        SafetyAction(action.Kind))).ToArray()))
+                .ToArray()));
     }
 
     private UIElement BuildExportPane()
@@ -230,6 +238,16 @@ internal sealed class BackstageView : UserControl
 
         return Kit.Scroll(panel);
     }
+
+    private Action SafetyAction(BackstageInfoSafetyActionKind kind) =>
+        kind switch
+        {
+            BackstageInfoSafetyActionKind.MarkAsFinal => () => { Hide(); _actions.MarkAsFinal(); },
+            BackstageInfoSafetyActionKind.RestrictEditing => () => { Hide(); _actions.RestrictEditing(); },
+            BackstageInfoSafetyActionKind.InspectDocument => () => { Hide(); _actions.InspectDocument(); },
+            BackstageInfoSafetyActionKind.CheckAccessibility => () => { Hide(); _actions.CheckAccessibility(); },
+            _ => static () => { }
+        };
 }
 
 internal sealed record BackstageActions(
@@ -246,6 +264,10 @@ internal sealed record BackstageActions(
     Action ExportPdf,
     Action ExportXps,
     Action EditProperties,
+    Action MarkAsFinal,
+    Action RestrictEditing,
+    Action InspectDocument,
+    Action CheckAccessibility,
     Action EditOptions,
     Func<FreeWOptions> CurrentOptions,
     Action OnClosed,

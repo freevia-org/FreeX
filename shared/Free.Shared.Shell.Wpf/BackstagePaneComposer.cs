@@ -53,6 +53,9 @@ public sealed class BackstagePaneComposer
             AddFields(panel, spec.Statistics);
         }
 
+        if (spec.ActionGroups is { Count: > 0 })
+            AddActionGroups(panel, spec.ActionGroups);
+
         return _kit.Scroll(panel);
     }
 
@@ -167,13 +170,24 @@ public sealed class BackstagePaneComposer
 
         foreach (var group in spec.Groups)
         {
-            panel.Children.Add(_kit.SubHeading(group.Heading));
-
-            foreach (var action in group.Actions)
-                panel.Children.Add(ActionRow(action));
+            AddActionGroup(panel, group);
         }
 
         return _kit.Scroll(panel);
+    }
+
+    private void AddActionGroups(Panel panel, IReadOnlyList<BackstageActionGroup> groups)
+    {
+        foreach (var group in groups)
+            AddActionGroup(panel, group);
+    }
+
+    private void AddActionGroup(Panel panel, BackstageActionGroup group)
+    {
+        panel.Children.Add(_kit.SubHeading(group.Heading));
+
+        foreach (var action in group.Actions)
+            panel.Children.Add(ActionRow(action));
     }
 
     private void AddFields(Panel panel, IReadOnlyList<BackstageFieldRow> fields)
@@ -231,7 +245,8 @@ public sealed record BackstageInfoPaneSpec(
     IReadOnlyList<BackstageFieldRow> Properties,
     IReadOnlyList<BackstageFieldRow> Statistics,
     string? EditPropertiesText = null,
-    Action? EditProperties = null);
+    Action? EditProperties = null,
+    IReadOnlyList<BackstageActionGroup>? ActionGroups = null);
 
 public sealed record BackstageRecentPaneSpec(
     IReadOnlyList<string> Paths,
