@@ -115,6 +115,7 @@ public sealed partial class MainWindow
         ("dialog.FindReplace", () => ShowFindDialogAsync()),
         ("dialog.GoTo", () => ShowGoToDialogAsync()),
         ("dialog.Sort", () => ShowSortDialogAsync()),
+        ("dialog.SortOptions", async () => { await ShowSortOptionsDialogAsync(new SortDialogOptions()); }),
         ("dialog.DataValidation", () => ShowDataValidationDialogAsync()),
         ("dialog.ConditionalFormatNewRule", () => ShowConditionalFormatNewRuleDialogAsync()),
         ("dialog.ConditionalFormatManage", () => ShowManageConditionalFormatsDialogAsync()),
