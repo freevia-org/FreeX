@@ -1130,6 +1130,14 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
+            Path = "src\FreeX.App.Avalonia\App.cs"
+            Markers = @(
+                "private const string ApplicationTitle = `"FreeX`";",
+                "Name = ApplicationTitle;"
+            )
+            OrderedPairs = @()
+        },
+        @{
             Path = "src\FreeX.App.Avalonia\MainWindow.cs"
             Markers = @(
                 "private const string NativeWorkbookExtension = `".fxl`";",
@@ -1149,6 +1157,10 @@ function Test-SourceWiring {
                 "_session.SetViewportOrigin(topRow, leftCol)",
                 "public async Task OpenActivatedFilesAsync(IReadOnlyList<IStorageItem> files)",
                 "WorkbookFileAccessServiceFactory.Create(App.Diagnostics)",
+                "private void InstallNativeMenu(NativeMenu menu)",
+                "NativeDock.SetMenu(app, menu);",
+                "NativeMenu.SetMenu(this, menu);",
+                "InstallNativeMenu(_nativeMenu);",
                 "CreateColorPaletteFlyout(ColorPaletteTarget.Fill, includeClearFill: true)",
                 "_formatPainterButton.Content = `"Format Painter`";",
                 "AutomationProperties.SetAutomationId(_formatPainterButton, `"HomeFormatPainterButton`");",

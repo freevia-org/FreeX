@@ -134,6 +134,45 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     }
 
     [Fact]
+    public void NativeFileMenu_InstallsForMacOsDockAndMirrorsBackstageCommandGroups()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var appSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "App.cs"));
+        var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        appSource.Should().Contain("private const string ApplicationTitle = \"FreeX\";");
+        appSource.Should().Contain("Name = ApplicationTitle;");
+        source.Should().Contain("private void InstallNativeMenu(NativeMenu menu)");
+        source.Should().Contain("NativeDock.SetMenu(app, menu);");
+        source.Should().Contain("NativeMenu.SetMenu(this, menu);");
+        source.Should().Contain("InstallNativeMenu(_nativeMenu);");
+
+        var fileMenuBlock = ExtractSourceBlock(
+            normalizedSource,
+            "var fileMenu = new NativeMenu();",
+            "fileMenu.Items.Add(_quitMenuItem);");
+        fileMenuBlock.Should().Contain("fileMenu.Items.Add(_openRecentMenuItem);");
+        fileMenuBlock.Should().Contain("fileMenu.Items.Add(_shareWorkbookMenuItem);");
+        fileMenuBlock.Should().Contain("fileMenu.Items.Add(_backstageInfoMenuItem);");
+        fileMenuBlock.Should().Contain("fileMenu.Items.Add(_printMenuItem);");
+        fileMenuBlock.Should().Contain("fileMenu.Items.Add(_printPreviewMenuItem);");
+        fileMenuBlock.Should().Contain("fileMenu.Items.Add(_backstageExportMenuItem);");
+        fileMenuBlock.Should().Contain("fileMenu.Items.Add(_exportPdfMenuItem);");
+        fileMenuBlock.Should().Contain("fileMenu.Items.Add(_backstageAccountMenuItem);");
+        fileMenuBlock.Should().Contain("fileMenu.Items.Add(_optionsMenuItem);");
+
+        AssertBefore(fileMenuBlock, "_openRecentMenuItem", "_shareWorkbookMenuItem");
+        AssertBefore(fileMenuBlock, "_shareWorkbookMenuItem", "_backstageInfoMenuItem");
+        AssertBefore(fileMenuBlock, "_backstageInfoMenuItem", "_saveMenuItem");
+        AssertBefore(fileMenuBlock, "_saveAsMenuItem", "_printMenuItem");
+        AssertBefore(fileMenuBlock, "_printPreviewMenuItem", "_backstageExportMenuItem");
+        AssertBefore(fileMenuBlock, "_backstageExportMenuItem", "_exportPdfMenuItem");
+        AssertBefore(fileMenuBlock, "_exportPdfMenuItem", "_workbookStatisticsMenuItem");
+        AssertBefore(fileMenuBlock, "_closeWorkbookMenuItem", "_backstageAccountMenuItem");
+        AssertBefore(fileMenuBlock, "_backstageAccountMenuItem", "_optionsMenuItem");
+    }
+
+    [Fact]
     public void InsertObjects_DelegatesDrawingInsertionToSharedPlanner()
     {
         var insertObjectsSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.InsertObjects.cs"));
@@ -245,5 +284,21 @@ public sealed class AvaloniaMainWindowChromeSourceTests
             throw new DirectoryNotFoundException("Could not find repository root containing FreeX.slnx.");
 
         return Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
+    }
+
+    private static string ExtractSourceBlock(string source, string start, string end)
+    {
+        var startIndex = source.IndexOf(start, StringComparison.Ordinal);
+        startIndex.Should().BeGreaterThanOrEqualTo(0, $"source should contain '{start}'");
+        var endIndex = source.IndexOf(end, startIndex, StringComparison.Ordinal);
+        endIndex.Should().BeGreaterThanOrEqualTo(0, $"source should contain '{end}' after '{start}'");
+        return source[startIndex..(endIndex + end.Length)];
+    }
+
+    private static void AssertBefore(string source, string first, string second)
+    {
+        source.IndexOf(first, StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(source.IndexOf(second, StringComparison.Ordinal), $"{first} should appear before {second}");
     }
 }

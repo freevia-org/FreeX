@@ -19,6 +19,8 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("Avalonia app RuntimeIdentifiers");
         script.Should().Contain("ApplicationTitle");
         script.Should().Contain("CFBundleName");
+        script.Should().Contain("Name = ApplicationTitle;");
+        script.Should().Contain("NativeDock.SetMenu(app, menu);");
         script.Should().Contain("CFBundleIconFile");
         script.Should().Contain("FreeX.icns");
         script.Should().Contain("Test-MacOsIcon");
@@ -1818,10 +1820,13 @@ public sealed class MacOsAppReadinessPreflightTests
 
             public sealed class App
             {
+                private const string ApplicationTitle = "FreeX";
+
                 internal static AvaloniaAppDiagnostics? Diagnostics { get; set; }
 
                 private static async Task ActivatedAsync(MainWindow mainWindow, ActivatedEventArgs args)
                 {
+                    Name = ApplicationTitle;
                     Diagnostics?.RecordEvent("app_ready");
                     this.TryGetFeature<IActivatableLifetime>() is { } activatableLifetime;
                     if (args is not FileActivatedEventArgs fileArgs || fileArgs.Kind != ActivationKind.File)
@@ -1977,6 +1982,10 @@ public sealed class MacOsAppReadinessPreflightTests
                 */
                 public async Task OpenActivatedFilesAsync(IReadOnlyList<IStorageItem> files) => await Task.CompletedTask;
                 private IWorkbookFileAccessService _fileAccess = WorkbookFileAccessServiceFactory.Create(App.Diagnostics);
+                private void InstallNativeMenu(NativeMenu menu)
+                NativeDock.SetMenu(app, menu);
+                NativeMenu.SetMenu(this, menu);
+                InstallNativeMenu(_nativeMenu);
                 private static void RenderCell(CellStyle? style)
                 {
                     CreateColorPaletteFlyout(ColorPaletteTarget.Fill, includeClearFill: true);
@@ -2423,6 +2432,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     private async Task ShowGoToDialogAsync()
                     private async Task ShowGoToSpecialDialogAsync()
                     private async Task<GoToSpecialDialogResult?> ShowGoToSpecialInputDialogAsync(Action<GoToSpecialDialogSmokeProbe>? launchSmokeProbe = null)
+                    private static AvaloniaGrid CreateGoToSpecialChoiceGrid(
                     private static GoToSpecialChoice[] CreateGoToSpecialChoices()
                     private bool SelectGoToSpecial(GoToSpecialKind kind, GoToSpecialOptions? options = null)
                     private async Task<string?> ShowSingleInputDialogAsync(

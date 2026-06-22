@@ -853,7 +853,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("Header = \"Edit\"");
         source.Should().Contain("Header = \"Format\"");
         source.Should().Contain("Header = \"Help\"");
-        source.Should().Contain("NativeMenu.SetMenu(this, _nativeMenu);");
+        source.Should().Contain("InstallNativeMenu(_nativeMenu);");
+        source.Should().Contain("NativeDock.SetMenu(app, menu);");
+        source.Should().Contain("NativeMenu.SetMenu(this, menu);");
         source.Should().Contain("_nativeMenu.NeedsUpdate += (_, _) => UpdateSaveButton();");
         source.Should().Contain("_newWorkbookMenuItem.IsEnabled = isIdle;");
         source.Should().Contain("_openMenuItem.IsEnabled = _openButton.IsEnabled;");
@@ -1032,6 +1034,8 @@ public sealed class AvaloniaShellSourceTests
         programSource.Should().Contain("App.LaunchSmokeOptions = launchSmokeOptions;");
         programSource.Should().Contain("App.Diagnostics = diagnostics;");
         programSource.Should().Contain("StartWithClassicDesktopLifetime(startupArguments)");
+        appSource.Should().Contain("private const string ApplicationTitle = \"FreeX\";");
+        appSource.Should().Contain("Name = ApplicationTitle;");
         appSource.Should().Contain("internal static MacOsLaunchSmokeOptions? LaunchSmokeOptions { get; set; }");
         appSource.Should().Contain("internal static AvaloniaAppDiagnostics? Diagnostics { get; set; }");
         appSource.Should().Contain("Diagnostics?.RecordEvent(\"app_ready\"");
@@ -1271,7 +1275,9 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("desktop.TryShutdown(exitCode);");
         windowSource.Should().Contain("private readonly NativeMenuItem _quitMenuItem = new();");
         windowSource.Should().Contain("private NativeMenu? _nativeMenu;");
-        windowSource.Should().Contain("NativeMenu.SetMenu(this, _nativeMenu);");
+        windowSource.Should().Contain("InstallNativeMenu(_nativeMenu);");
+        windowSource.Should().Contain("NativeDock.SetMenu(app, menu);");
+        windowSource.Should().Contain("NativeMenu.SetMenu(this, menu);");
         windowSource.Should().Contain("internal MacOsLaunchSmokeSnapshot CreateLaunchSmokeSnapshot()");
         windowSource.Should().Contain("internal MacOsLaunchSmokeLiveCommandKeySnapshot BeginLaunchSmokeLiveCommandKeyProbe()");
         windowSource.Should().Contain("FocusShellRegion(ShellFocusRegion.Worksheet);");

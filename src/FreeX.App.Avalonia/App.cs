@@ -9,6 +9,8 @@ namespace FreeX.App.Avalonia;
 
 public sealed class App : Application
 {
+    private const string ApplicationTitle = "FreeX";
+
     public static IReadOnlyList<string> StartupArguments { get; set; } = [];
 
     internal static MacOsLaunchSmokeOptions? LaunchSmokeOptions { get; set; }
@@ -19,6 +21,7 @@ public sealed class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
+        Name = ApplicationTitle;
         RequestedThemeVariant = ThemeVariant.Light;
         Styles.Add(new FluentTheme());
 
