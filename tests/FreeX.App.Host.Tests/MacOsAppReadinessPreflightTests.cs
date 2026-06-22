@@ -2855,6 +2855,9 @@ public sealed class MacOsAppReadinessPreflightTests
                     HasStatusTextAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_statusText), "Shows the current workbook status.", StringComparison.Ordinal)
                     HasStatusTextAutomationId: string.Equals(AutomationProperties.GetAutomationId(_statusText), "StatusText", StringComparison.Ordinal)
                     HasStatusTextValue: HasStatusBarAccessibleValue()
+                    private bool HasStatusBarAccessibleValue() =>
+                        !string.IsNullOrWhiteSpace(_statusText.Text) ||
+                        !string.IsNullOrWhiteSpace(_selectionStatsText.Text);
                     HasCellAddressAutomationName: string.Equals(AutomationProperties.GetName(_cellAddressText), "Cell address", StringComparison.Ordinal)
                     HasCellAddressAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_cellAddressText), "Shows the active cell address.", StringComparison.Ordinal)
                     HasCellAddressAutomationId: string.Equals(AutomationProperties.GetAutomationId(_cellAddressText), "CellAddressText", StringComparison.Ordinal)
@@ -3349,6 +3352,9 @@ public sealed class MacOsAppReadinessPreflightTests
                 private bool HasStatusTextAutomationHelp { get; }
                 private bool HasStatusTextAutomationId { get; }
                 private bool HasStatusTextValue { get; }
+                private bool HasStatusBarAccessibleValue() =>
+                    !string.IsNullOrWhiteSpace(_statusText.Text) ||
+                    !string.IsNullOrWhiteSpace(_selectionStatsText.Text);
                 private bool HasCellAddressAutomationName { get; }
                 private bool HasCellAddressAutomationHelp { get; }
                 private bool HasCellAddressAutomationId { get; }
@@ -4037,6 +4043,18 @@ public sealed class MacOsAppReadinessPreflightTests
                     char.IsAsciiLetter(candidate[0]);
 
                 private static bool IsUnixAbsolutePath(string path) => true;
+            }
+            """);
+
+        WriteFile(
+            root,
+            "shared/Free.Shared.IO/FileDialogFilterBuilder.cs",
+            """
+            namespace Free.Shared.IO;
+
+            public static class FileDialogFilterBuilder
+            {
+                public static string Create(string displayName, params string[] extensions) => displayName;
             }
             """);
 
