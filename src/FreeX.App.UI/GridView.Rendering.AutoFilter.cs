@@ -144,7 +144,7 @@ public partial class GridView
         {
             if (adornment.Cell.Row == row &&
                 adornment.Cell.Col == col &&
-                adornment.ShowExpandCollapseButton)
+                adornment.ReserveTextPadding)
             {
                 return PivotExpandCollapseButtonReserve;
             }

@@ -92,6 +92,12 @@ internal static class PivotStylePaletteResolver
                 palette = palette with { GrandTotalFill = null };
             }
 
+            if (string.Equals(styleName, "PivotStyleMedium6", StringComparison.OrdinalIgnoreCase) &&
+                IsModernOfficeTheme(theme))
+            {
+                palette = palette with { CompactGroupHeaderFill = new CellColor(216, 109, 205) };
+            }
+
             return true;
         }
 
@@ -262,4 +268,5 @@ internal sealed record PivotStylePalette(
     CellColor GrandTotalFont,
     CellColor StripeFill,
     CellColor Border,
-    CellColor? BodyFill);
+    CellColor? BodyFill,
+    CellColor? CompactGroupHeaderFill = null);

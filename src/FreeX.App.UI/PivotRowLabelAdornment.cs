@@ -6,4 +6,5 @@ public readonly record struct PivotRowLabelAdornment(
     CellAddress Cell,
     int IndentLevel,
     bool ShowExpandCollapseButton,
-    bool IsExpanded);
+    bool IsExpanded,
+    bool ReserveTextPadding = true);
