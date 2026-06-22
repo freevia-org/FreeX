@@ -32,6 +32,7 @@ public sealed class MainWindow : Window
     private DocumentView _editor = null!;
     private Ruler _hRuler = null!;
     private Ruler _vRuler = null!;
+    private bool _rulersVisible = true;
     private TextBlock _titleText = null!;
     private TextBlock _pageText = null!;
     private TextBlock _sectionText = null!;
@@ -133,8 +134,6 @@ public sealed class MainWindow : Window
     // the same save/restore shape as Read Mode. The model is never mutated by switching views.
     private OutlineView _outlineView = null!;
     private bool _outlineMode;
-    private Visibility _hRulerVisibilityBeforeOutline;
-    private Visibility _vRulerVisibilityBeforeOutline;
     private bool _navPaneVisibleBeforeReadMode;
     private bool _revealPaneVisibleBeforeReadMode;
     private Thickness _editorMarginBeforeReadMode;
@@ -218,7 +217,9 @@ public sealed class MainWindow : Window
             onRejectThisChange: RejectSelectedRevision,
             onPreviousChange: () => StepRevision(-1),
             onNextChange: () => StepRevision(+1),
-            onFindReplace: OpenFindReplace);
+            onFindReplace: OpenFindReplace,
+            onToggleRuler: ToggleRulers,
+            isRulerVisible: () => _rulersVisible);
         _file = new FileCommands(this, editor, UpdateTitle, _options);
         editor.TextChanged += (_, _) => { _file.MarkDirty(); UpdateCounts(); RefreshOutline(); RefreshContextualTabs(); RefreshReviewPane(); };
         // Live selection stats: when the caret/selection moves, refresh the status-bar counts so a
@@ -298,6 +299,7 @@ public sealed class MainWindow : Window
         Grid.SetRow(_vRuler, 1);
         Grid.SetColumn(_vRuler, 0);
         workspaceGrid.Children.Add(_vRuler);
+        ApplyRulerVisibility();
 
         Grid.SetRow(editor, 1);
         Grid.SetColumn(editor, 1);
@@ -381,6 +383,7 @@ public sealed class MainWindow : Window
         // Print Layout is the default view (the Word default), so seed the View > Views toggles (Print
         // Layout / Web Layout / Draft) to reflect the editor's initial view mode — exactly one is checked.
         RefreshViewModeChecks();
+        _stateStore.SetChecked("freew.ruler", _rulersVisible);
 
         // The Word-style Backstage (File screen) is a full-window overlay above the document. It is
         // hidden by default; the File button (title bar) shows it, a back arrow / Esc hides it. It reuses
@@ -884,6 +887,25 @@ public sealed class MainWindow : Window
             RefreshOutline();
     }
 
+    // View > Show > Ruler: Word exposes this as a simple visibility toggle. FreeW's ruler is currently
+    // backed by passive page/indent/tab-stop chrome, so this only shows or hides that existing surface.
+    private void ToggleRulers()
+    {
+        _rulersVisible = !_rulersVisible;
+        ApplyRulerVisibility();
+        _stateStore.SetChecked("freew.ruler", _rulersVisible);
+    }
+
+    private void ApplyRulerVisibility()
+    {
+        if (_hRuler is null || _vRuler is null)
+            return;
+
+        var visibility = _rulersVisible && !_outlineMode ? Visibility.Visible : Visibility.Collapsed;
+        _hRuler.Visibility = visibility;
+        _vRuler.Visibility = visibility;
+    }
+
     // The Reveal Formatting pane: a header plus a scrollable, read-only list of the FONT / PARAGRAPH /
     // SECTION formatting in effect at the caret. Collapsed by default; ToggleRevealFormatting shows/hides
     // it. The content is rebuilt on every selection change from the pure RevealFormatting describer (see
@@ -1283,9 +1305,6 @@ public sealed class MainWindow : Window
         _outlineMode = !_outlineMode;
         if (_outlineMode)
         {
-            _hRulerVisibilityBeforeOutline = _hRuler.Visibility;
-            _vRulerVisibilityBeforeOutline = _vRuler.Visibility;
-
             _workspace.Visibility = Visibility.Collapsed;
             _hRuler.Visibility = Visibility.Collapsed;
             _vRuler.Visibility = Visibility.Collapsed;
@@ -1297,8 +1316,7 @@ public sealed class MainWindow : Window
         {
             _outlineView.Visibility = Visibility.Collapsed;
             _workspace.Visibility = Visibility.Visible;
-            _hRuler.Visibility = _hRulerVisibilityBeforeOutline;
-            _vRuler.Visibility = _vRulerVisibilityBeforeOutline;
+            ApplyRulerVisibility();
         }
 
         _stateStore.SetChecked("freew.outline-view", _outlineMode);

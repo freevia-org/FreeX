@@ -232,6 +232,7 @@ internal static class FreeWRibbonIcons
 
             // View
             ["freew.print-layout"] = RibbonCommandIconKind.PrintLayout,
+            ["freew.ruler"] = RibbonCommandIconKind.Ruler,
             ["freew.nav-pane"] = RibbonCommandIconKind.NavigationPane,
             ["freew.formatting-marks"] = RibbonCommandIconKind.FormattingMarks,
             ["freew.reveal-formatting"] = RibbonCommandIconKind.Info,

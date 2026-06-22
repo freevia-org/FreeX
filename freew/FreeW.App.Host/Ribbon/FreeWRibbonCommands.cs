@@ -103,7 +103,9 @@ internal static class FreeWRibbonCommands
         Action? onRejectThisChange = null,
         Action? onPreviousChange = null,
         Action? onNextChange = null,
-        Action? onFindReplace = null)
+        Action? onFindReplace = null,
+        Action? onToggleRuler = null,
+        Func<bool>? isRulerVisible = null)
     {
         var registry = new RibbonCommandRegistry();
         var stateful = new List<(RibbonCommandId Id, IRibbonStatefulCommand Command)>();
@@ -621,6 +623,11 @@ internal static class FreeWRibbonCommands
         // button reflects whether the pane is currently shown.
         if (onToggleNavPane is not null && isNavPaneVisible is not null)
             registry.Register("freew.nav-pane", new ToggleActionCommand(onToggleNavPane, isNavPaneVisible));
+
+        // View tab — toggle the passive Word-style ruler chrome above/left of the page. The editor owns
+        // the geometry; the host owns visibility so the ribbon checkmark mirrors the live chrome state.
+        if (onToggleRuler is not null && isRulerVisible is not null)
+            registry.Register("freew.ruler", new ToggleActionCommand(onToggleRuler, isRulerVisible));
 
         // View tab — toggle read mode (distraction-free view). Stateful so the ribbon's toggle button
         // reflects whether the chrome-light reading column is currently active.
