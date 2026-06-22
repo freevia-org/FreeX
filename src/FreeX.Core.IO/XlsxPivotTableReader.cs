@@ -327,7 +327,7 @@ internal static partial class XlsxPivotTableReader
             root.Attribute("errorCaption")?.Value,
             ReadPivotFieldIndexes(root.Element(workbookNs + "rowFields"), workbookNs, nativeFieldSelections, nativeFieldGroups, nativeFieldMetadata),
             ReadPivotFieldIndexes(root.Element(workbookNs + "colFields"), workbookNs, nativeFieldSelections, nativeFieldGroups, nativeFieldMetadata),
-            ReadPivotPageFields(root.Element(workbookNs + "pageFields"), workbookNs, nativeFieldSelections, nativeFieldGroups, nativeFieldMetadata),
+            ReadPivotPageFields(root.Element(workbookNs + "pageFields"), pivotCache, workbookNs, nativeFieldSelections, nativeFieldGroups, nativeFieldMetadata),
             ReadPivotDataFields(root.Element(workbookNs + "dataFields"), workbookNs, calculatedFields, calculatedFieldNamesByIndex, numberFormatCatalog),
             calculatedFields,
             ReadPivotCalculatedItems(root.Element(workbookNs + "calculatedItems"), workbookNs),
