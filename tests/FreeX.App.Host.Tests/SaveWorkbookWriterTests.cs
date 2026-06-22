@@ -8,6 +8,24 @@ namespace FreeX.App.Host.Tests;
 public sealed class SaveWorkbookWriterTests
 {
     [Fact]
+    public void FormatSavingFileDetail_ChangesEveryThreeSeconds()
+    {
+        SaveWorkbookWriter.FormatSavingFileDetail("writing", TimeSpan.FromSeconds(0))
+            .Should().Be("Saving file (writing)");
+        SaveWorkbookWriter.FormatSavingFileDetail("writing", TimeSpan.FromSeconds(3))
+            .Should().Be("Saving file (writing bytes)");
+        SaveWorkbookWriter.FormatSavingFileDetail("writing", TimeSpan.FromSeconds(6))
+            .Should().Be("Saving file (flushing package)");
+    }
+
+    [Fact]
+    public void FormatSavingFileDetail_PreservesTrimmedCaseInsensitivePhaseMatching()
+    {
+        SaveWorkbookWriter.FormatSavingFileDetail(" Serializing ", TimeSpan.FromSeconds(6))
+            .Should().Be("Saving file (packaging sheets)");
+    }
+
+    [Fact]
     public async Task SaveAsync_WritesWorkbookAndReportsProgress()
     {
         using var temp = new TestTemporaryDirectory();

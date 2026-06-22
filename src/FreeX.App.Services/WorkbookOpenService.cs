@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using FreeX.Core.Commands;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
@@ -45,29 +44,30 @@ public sealed class WorkbookOpenService
         var inspectFeaturesDuringLoad = isOpenXmlExcelPackage && adapter is XlsxFileAdapter && !_hasCustomInspectXlsx;
         if (isOpenXmlExcelPackage && !inspectFeaturesDuringLoad)
         {
-            featureReport = await RunStageAsync(
+            featureReport = await WorkbookProgressStageRunner.RunStageAsync(
                 progress,
                 WorkbookOpenPhase.Inspecting,
                 8,
                 16,
-                EstimateStageDuration(fileBytes, secondsPerMegabyte: 0.5, floorSeconds: 0.4),
+                WorkbookProgressStageRunner.EstimateStageDuration(fileBytes, secondsPerMegabyte: 0.5, floorSeconds: 0.4),
                 cancellationToken,
                 () =>
                 {
                     cancellationToken.ThrowIfCancellationRequested();
                     using var fileStream = OpenFileStream(path);
                     return _inspectXlsx(fileStream);
-                }).ConfigureAwait(false);
+                },
+                CreateProgressUpdate).ConfigureAwait(false);
         }
 
         IReadOnlyList<string> loadWarnings = [];
         var parseStartPercent = inspectFeaturesDuringLoad ? 8 : 16;
-        var workbook = await RunStageAsync(
+        var workbook = await WorkbookProgressStageRunner.RunStageAsync(
             progress,
             WorkbookOpenPhase.Parsing,
             parseStartPercent,
             90,
-            EstimateStageDuration(fileBytes, secondsPerMegabyte: 1.4, floorSeconds: 0.5),
+            WorkbookProgressStageRunner.EstimateStageDuration(fileBytes, secondsPerMegabyte: 1.4, floorSeconds: 0.5),
             cancellationToken,
             () =>
             {
@@ -85,7 +85,8 @@ public sealed class WorkbookOpenService
                 var loadedWorkbook = adapter.Load(fileStream);
                 cancellationToken.ThrowIfCancellationRequested();
                 return loadedWorkbook;
-            }).ConfigureAwait(false);
+            },
+            CreateProgressUpdate).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
         WorkbookOpenNormalizer.ApplyTextWorkbookSheetName(workbook, extension, Path.GetFileNameWithoutExtension(path));
 
@@ -104,12 +105,12 @@ public sealed class WorkbookOpenService
         if (WorkbookFormulaScanner.HasFormulas(workbook) &&
             ShouldRecalculateLoadedFormulas(workbook, adapter, isOpenXmlExcelPackage))
         {
-            await RunStageAsync(
+            await WorkbookProgressStageRunner.RunStageAsync(
                 progress,
                 WorkbookOpenPhase.Calculating,
                 90,
                 98,
-                EstimateStageDuration(fileBytes, secondsPerMegabyte: 0.9, floorSeconds: 0.4),
+                WorkbookProgressStageRunner.EstimateStageDuration(fileBytes, secondsPerMegabyte: 0.9, floorSeconds: 0.4),
                 cancellationToken,
                 () =>
                 {
@@ -119,7 +120,8 @@ public sealed class WorkbookOpenService
                     if (adapter is XlsxFileAdapter xlsxAdapter)
                         xlsxAdapter.RebaseLoadedPackageSnapshot(workbook);
                     return true;
-                }).ConfigureAwait(false);
+                },
+                CreateProgressUpdate).ConfigureAwait(false);
         }
         else
         {
@@ -138,60 +140,6 @@ public sealed class WorkbookOpenService
             loadWarnings);
     }
 
-    private static async Task<T> RunStageAsync<T>(
-        IProgress<WorkbookOpenProgressUpdate>? progress,
-        WorkbookOpenPhase phase,
-        double startPercent,
-        double endPercent,
-        TimeSpan expectedDuration,
-        CancellationToken cancellationToken,
-        Func<T> work)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        ReportProgress(progress, phase, TimeSpan.Zero, startPercent);
-        if (progress is null)
-            return await Task.Run(work, cancellationToken).ConfigureAwait(false);
-
-        using var progressCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        var progressTask = ReportStageProgressAsync(
-            progress,
-            phase,
-            startPercent,
-            endPercent,
-            expectedDuration,
-            progressCancellation.Token);
-
-        try
-        {
-            return await Task.Run(work, cancellationToken).ConfigureAwait(false);
-        }
-        finally
-        {
-            progressCancellation.Cancel();
-            try { await progressTask.ConfigureAwait(false); }
-            catch (OperationCanceledException) { }
-            if (!cancellationToken.IsCancellationRequested)
-                ReportProgress(progress, phase, TimeSpan.Zero, endPercent);
-        }
-    }
-
-    private static async Task ReportStageProgressAsync(
-        IProgress<WorkbookOpenProgressUpdate> progress,
-        WorkbookOpenPhase phase,
-        double startPercent,
-        double endPercent,
-        TimeSpan expectedDuration,
-        CancellationToken cancellationToken)
-    {
-        var stopwatch = Stopwatch.StartNew();
-        using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(250));
-        while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
-        {
-            var percent = CalculateStageProgress(startPercent, endPercent, stopwatch.Elapsed, expectedDuration);
-            ReportProgress(progress, phase, stopwatch.Elapsed, percent);
-        }
-    }
-
     private static void ReportProgress(
         IProgress<WorkbookOpenProgressUpdate>? progress,
         WorkbookOpenPhase phase,
@@ -200,6 +148,12 @@ public sealed class WorkbookOpenService
     {
         progress?.Report(new WorkbookOpenProgressUpdate(phase, elapsed, percent));
     }
+
+    private static WorkbookOpenProgressUpdate CreateProgressUpdate(
+        WorkbookOpenPhase phase,
+        TimeSpan elapsed,
+        double? percent) =>
+        new(phase, elapsed, percent);
 
     private static FileStream OpenFileStream(string path)
     {
@@ -210,34 +164,6 @@ public sealed class WorkbookOpenService
             FileShare.Read,
             bufferSize: 1024 * 128,
             useAsync: true);
-    }
-
-    // Estimates how long a load stage should take for a file of this size so the progress bar can
-    // advance roughly linearly with real time instead of crawling against a fixed worst-case guess.
-    // Calibrated from large-file measurements (~1.4 s/MB for the ClosedXML-backed parse).  Estimates
-    // need only be in the right ballpark: the per-stage interpolation holds just short of the stage
-    // end until the work actually completes, so an under- or over-estimate self-corrects gracefully.
-    private static TimeSpan EstimateStageDuration(long fileBytes, double secondsPerMegabyte, double floorSeconds)
-    {
-        var megabytes = Math.Max(0, fileBytes) / (1024.0 * 1024.0);
-        return TimeSpan.FromSeconds(Math.Max(floorSeconds, megabytes * secondsPerMegabyte));
-    }
-
-    private static double? CalculateStageProgress(
-        double startPercent,
-        double endPercent,
-        TimeSpan elapsed,
-        TimeSpan expectedDuration)
-    {
-        if (expectedDuration <= TimeSpan.Zero)
-            return endPercent;
-
-        var ratio = elapsed.TotalMilliseconds / expectedDuration.TotalMilliseconds;
-        if (ratio >= 1)
-            return null;
-
-        ratio = Math.Clamp(ratio, 0, 0.92);
-        return startPercent + ((endPercent - startPercent) * ratio);
     }
 
     private static bool IsOpenXmlExcelPackageExtension(string extension) =>

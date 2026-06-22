@@ -29,47 +29,21 @@ public sealed class SaveWorkbookWriter
     private static SaveProgressUpdate ToHostProgressUpdate(WorkbookSaveProgressUpdate update) =>
         new(
             ProgressTitle(),
-            FormatSavingFileDetail(PhaseDetail(update.Phase), update.Elapsed),
+            FormatSavingFileDetail(
+                WorkbookProgressPresentationPlanner.ToSaveProgressStep(update.Phase),
+                update.Elapsed),
             update.Percent);
 
-    private static string PhaseDetail(WorkbookSavePhase phase) =>
-        phase switch
-        {
-            WorkbookSavePhase.Preparing => "serializing",
-            WorkbookSavePhase.Writing => "writing",
-            WorkbookSavePhase.Completed => "done",
-            _ => phase.ToString().ToLowerInvariant()
-        };
+    public static string ProgressTitle() =>
+        UiText.Get(WorkbookProgressPresentationPlanner.SaveTitleResourceKey);
 
-    private static string ProgressTitle() => UiText.Get("Progress_SavingWorkbook");
+    public static string FormatSavingFileDetail(string phase, TimeSpan elapsed) =>
+        FormatSavingFileDetail(
+            WorkbookProgressPresentationPlanner.ParseSaveProgressStep(phase),
+            elapsed);
 
-    private static string FormatSavingFileDetail(string phase, TimeSpan elapsed)
-    {
-        var normalizedPhase = string.IsNullOrWhiteSpace(phase)
-            ? string.Empty
-            : phase.Trim();
-        string[] messages = normalizedPhase.ToLowerInvariant() switch
-        {
-            "serializing" =>
-            [
-                UiText.Get("Progress_SavingFileSerializing"),
-                UiText.Get("Progress_SavingFileBuildingWorkbookParts"),
-                UiText.Get("Progress_SavingFilePackagingSheets")
-            ],
-            "writing" =>
-            [
-                UiText.Get("Progress_SavingFileWriting"),
-                UiText.Get("Progress_SavingFileWritingBytes"),
-                UiText.Get("Progress_SavingFileFlushingPackage")
-            ],
-            "preparing" => [UiText.Get("Progress_SavingFilePreparing")],
-            "done" => [UiText.Get("Progress_SavingFileDone")],
-            _ => [UiText.Get("Progress_SavingFileWorking")]
-        };
-
-        var index = (int)Math.Floor(Math.Max(0, elapsed.TotalSeconds) / 3.0) % messages.Length;
-        return messages[index];
-    }
+    public static string FormatSavingFileDetail(WorkbookSaveProgressStep step, TimeSpan elapsed) =>
+        UiText.Get(WorkbookProgressPresentationPlanner.SelectSaveDetailResourceKey(step, elapsed));
 }
 
 public sealed record SaveProgressUpdate(string Title, string Detail, double? Percent);

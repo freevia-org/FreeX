@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
 
@@ -38,12 +37,12 @@ public sealed class WorkbookSaveService
 
         try
         {
-            saveWarnings = await RunStageAsync(
+            saveWarnings = await WorkbookProgressStageRunner.RunStageAsync(
                 progress,
                 WorkbookSavePhase.Writing,
                 1,
                 99,
-                EstimateStageDuration(estimatedBytes, secondsPerMegabyte: 1.0, floorSeconds: 0.4),
+                WorkbookProgressStageRunner.EstimateStageDuration(estimatedBytes, secondsPerMegabyte: 1.0, floorSeconds: 0.4),
                 cancellationToken,
                 () =>
                 {
@@ -65,7 +64,8 @@ public sealed class WorkbookSaveService
                     adapter.Save(workbook, file);
                     cancellationToken.ThrowIfCancellationRequested();
                     return [];
-                }).ConfigureAwait(false);
+                },
+                CreateProgressUpdate).ConfigureAwait(false);
 
             cancellationToken.ThrowIfCancellationRequested();
             ReplaceTargetFile(tempPath, path);
@@ -164,60 +164,6 @@ public sealed class WorkbookSaveService
         return false;
     }
 
-    private static async Task<T> RunStageAsync<T>(
-        IProgress<WorkbookSaveProgressUpdate>? progress,
-        WorkbookSavePhase phase,
-        double startPercent,
-        double endPercent,
-        TimeSpan expectedDuration,
-        CancellationToken cancellationToken,
-        Func<T> work)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        ReportProgress(progress, phase, TimeSpan.Zero, startPercent);
-        if (progress is null)
-            return await Task.Run(work, cancellationToken).ConfigureAwait(false);
-
-        using var progressCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        var progressTask = ReportStageProgressAsync(
-            progress,
-            phase,
-            startPercent,
-            endPercent,
-            expectedDuration,
-            progressCancellation.Token);
-
-        try
-        {
-            return await Task.Run(work, cancellationToken).ConfigureAwait(false);
-        }
-        finally
-        {
-            progressCancellation.Cancel();
-            try { await progressTask.ConfigureAwait(false); }
-            catch (OperationCanceledException) { }
-            if (!cancellationToken.IsCancellationRequested)
-                ReportProgress(progress, phase, TimeSpan.Zero, endPercent);
-        }
-    }
-
-    private static async Task ReportStageProgressAsync(
-        IProgress<WorkbookSaveProgressUpdate> progress,
-        WorkbookSavePhase phase,
-        double startPercent,
-        double endPercent,
-        TimeSpan expectedDuration,
-        CancellationToken cancellationToken)
-    {
-        var stopwatch = Stopwatch.StartNew();
-        using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(250));
-        while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
-        {
-            var percent = CalculateStageProgress(startPercent, endPercent, stopwatch.Elapsed, expectedDuration);
-            ReportProgress(progress, phase, stopwatch.Elapsed, percent);
-        }
-    }
-
     private static void ReportProgress(
         IProgress<WorkbookSaveProgressUpdate>? progress,
         WorkbookSavePhase phase,
@@ -226,6 +172,12 @@ public sealed class WorkbookSaveService
     {
         progress?.Report(new WorkbookSaveProgressUpdate(phase, elapsed, percent));
     }
+
+    private static WorkbookSaveProgressUpdate CreateProgressUpdate(
+        WorkbookSavePhase phase,
+        TimeSpan elapsed,
+        double? percent) =>
+        new(phase, elapsed, percent);
 
     // Rough estimate of the serialized package size from the populated cell count (CellCount is O(1)
     // per sheet).  Used only to size the progress bar's expected duration; ~6 bytes/cell tracks the
@@ -236,33 +188,6 @@ public sealed class WorkbookSaveService
         foreach (var sheet in workbook.Sheets)
             cells += sheet.CellCount;
         return Math.Max(64L * 1024, cells * 6);
-    }
-
-    // Estimates how long the write stage should take for a workbook of this size so the progress bar
-    // advances roughly linearly with real time instead of crawling against a fixed worst-case guess.
-    // An under- or over-estimate self-corrects: the interpolation holds just short of the stage end
-    // until the write actually completes.
-    private static TimeSpan EstimateStageDuration(long sizeBytes, double secondsPerMegabyte, double floorSeconds)
-    {
-        var megabytes = Math.Max(0, sizeBytes) / (1024.0 * 1024.0);
-        return TimeSpan.FromSeconds(Math.Max(floorSeconds, megabytes * secondsPerMegabyte));
-    }
-
-    private static double? CalculateStageProgress(
-        double startPercent,
-        double endPercent,
-        TimeSpan elapsed,
-        TimeSpan expectedDuration)
-    {
-        if (expectedDuration <= TimeSpan.Zero)
-            return endPercent;
-
-        var ratio = elapsed.TotalMilliseconds / expectedDuration.TotalMilliseconds;
-        if (ratio >= 1)
-            return null;
-
-        ratio = Math.Clamp(ratio, 0, 0.92);
-        return startPercent + ((endPercent - startPercent) * ratio);
     }
 
     private sealed class DefaultWorkbookSaveFileOperations : IWorkbookSaveFileOperations

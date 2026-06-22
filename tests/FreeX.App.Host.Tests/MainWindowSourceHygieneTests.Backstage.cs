@@ -173,8 +173,8 @@ public sealed partial class MainWindowSourceHygieneTests
         saveTargetMethod.IndexOf("FileSavePlanner.CanSkipCleanSave", StringComparison.Ordinal)
             .Should()
             .BeLessThan(saveTargetMethod.IndexOf("ConfirmUnsupportedXlsxFeatureSave()", StringComparison.Ordinal));
-        saveTargetMethod.Should().Contain("UiText.Get(\"Progress_SavingWorkbook\")");
-        saveTargetMethod.Should().Contain("UiText.Get(\"Progress_SavingFilePreparing\")");
+        saveTargetMethod.Should().Contain("SaveWorkbookWriter.ProgressTitle()");
+        saveTargetMethod.Should().Contain("SaveWorkbookWriter.FormatSavingFileDetail(\"preparing\", TimeSpan.Zero)");
         saveTargetMethod.Should().Contain("using var operationCancellation = BeginFileOperationCancellation();");
         saveTargetMethod.Should().Contain("SetFileOperationInputEnabled(false);");
         saveTargetMethod.Should().Contain("operationCancellation.Token");
