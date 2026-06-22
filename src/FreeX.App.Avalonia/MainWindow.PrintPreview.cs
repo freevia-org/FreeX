@@ -40,9 +40,6 @@ public sealed partial class MainWindow
     private static readonly ITextMeasurer PrintPreviewTextMeasurer = new AvaloniaTextMeasurer();
     private static readonly IBrush PrintPreviewSurfaceBackground = Brush(82, 86, 92);
 
-    /// <summary>Shared text measurer used by the print-preview pagination context to center page text.</summary>
-    internal static ITextMeasurer PrintPreviewTextMeasurerInstance => PrintPreviewTextMeasurer;
-
     private async Task ShowPrintPreviewDialogAsync()
     {
         if (_isOpening || _isSaving)
@@ -54,7 +51,7 @@ public sealed partial class MainWindow
         ClearSelectedDrawingObject();
 
         var sheet = _session.ActiveSheet;
-        if (!PrintPreviewPaginationContext.TryCreate(_session.Workbook, sheet, out var context))
+        if (!PrintPreviewPaginationContext.TryCreate(_session.Workbook, sheet, PrintPreviewTextMeasurer, out var context))
         {
             ShowEditIssue(UiText.Get("ShellLoc_NothingToPreview"));
             return;
@@ -344,73 +341,4 @@ public sealed partial class MainWindow
 
     private static IBrush PreviewBrush(PresentationRgb color) =>
         new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B));
-}
-
-/// <summary>
-/// Bundles the inputs needed to lazily build any preview page for one sheet: the workbook (for styles/
-/// theme), the sheet, and the pagination plan. Page builds are deferred to <see cref="BuildPage"/> so
-/// the window only materializes the page currently on screen.
-/// </summary>
-internal sealed class PrintPreviewPaginationContext
-{
-    private readonly Workbook _workbook;
-    private readonly Sheet _sheet;
-    private readonly PagePaginationResult _plan;
-    private readonly ITextMeasurer _textMeasurer;
-
-    private PrintPreviewPaginationContext(
-        Workbook workbook,
-        Sheet sheet,
-        PagePaginationResult plan,
-        ITextMeasurer textMeasurer)
-    {
-        _workbook = workbook;
-        _sheet = sheet;
-        _plan = plan;
-        _textMeasurer = textMeasurer;
-    }
-
-    public int PageCount => _plan.PageCount;
-
-    /// <summary>
-    /// Resolves the print range (explicit print area, else used range), paginates it, and returns a
-    /// context when the sheet has at least one printable page. Returns false for an empty sheet.
-    /// </summary>
-    public static bool TryCreate(
-        Workbook workbook,
-        Sheet sheet,
-        out PrintPreviewPaginationContext context)
-    {
-        ArgumentNullException.ThrowIfNull(workbook);
-        ArgumentNullException.ThrowIfNull(sheet);
-
-        if (!PageBreakPreviewInstructionBuilder.TryResolvePrintRange(sheet, out var printRange))
-        {
-            context = null!;
-            return false;
-        }
-
-        var plan = PagePaginationPlanner.Paginate(
-            printRange,
-            sheet.ScaleToFit,
-            sheet.PrintTitleRows,
-            sheet.PrintTitleColumns,
-            sheet.PaperSize,
-            sheet.PageOrientation,
-            sheet.PageMargins,
-            sheet.RowPageBreaks,
-            sheet.ColumnPageBreaks);
-
-        if (plan.PageCount <= 0)
-        {
-            context = null!;
-            return false;
-        }
-
-        context = new PrintPreviewPaginationContext(workbook, sheet, plan, MainWindow.PrintPreviewTextMeasurerInstance);
-        return true;
-    }
-
-    public PageContentLayout? BuildPage(int pageIndex) =>
-        PageContentRenderModelBuilder.Build(_workbook, _sheet, _plan, pageIndex, _textMeasurer);
 }

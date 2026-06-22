@@ -357,6 +357,19 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     }
 
     [Fact]
+    public void PrintPreview_DelegatesPaginationContextToSharedPresentationModel()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PrintPreview.cs"));
+        var sharedSource = File.ReadAllText(RepoFile("src", "FreeX.App.Presentation", "PageLayout", "PrintPreviewPaginationContext.cs"));
+
+        source.Should().Contain("PrintPreviewPaginationContext.TryCreate(_session.Workbook, sheet, PrintPreviewTextMeasurer, out var context)");
+        source.Should().NotContain("internal sealed class PrintPreviewPaginationContext");
+        source.Should().NotContain("var plan = PagePaginationPlanner.Paginate(");
+        sharedSource.Should().Contain("PageBreakPreviewInstructionBuilder.TryResolvePrintRange(sheet, out var printRange)");
+        sharedSource.Should().Contain("PagePaginationPlanner.Paginate(");
+    }
+
+    [Fact]
     public void StatusBarZoomSlider_UsesIdenticalMinMiddleMaxMarks()
     {
         var mainSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
