@@ -141,7 +141,13 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get("ChartLoc_ChangeChartTypeTitle"),
-            SizeToContent = SizeToContent.WidthAndHeight,
+            Width = 340,
+            Height = 160,
+            MinWidth = 340,
+            MinHeight = 160,
+            MaxWidth = 340,
+            MaxHeight = 160,
+            Background = Brushes.White,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,

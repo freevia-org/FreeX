@@ -345,6 +345,112 @@ public sealed partial class MainWindow
     }
 
     // -------------------------------------------------------------------------------------------------------
+    // Shape Effects (preset picker backed by ShapeEffectsPlanner)
+    // -------------------------------------------------------------------------------------------------------
+
+    private async System.Threading.Tasks.Task OpenShapeEffectsDialogAsync()
+    {
+        if (_isOpening || _isSaving)
+            return;
+        if (ResolveSelectedShape() is not { } shape)
+            return;
+
+        var plan = ShapeEffectsPlanner.CreatePlan(shape.GetEffectiveEffectPreset());
+        var options = plan.Options
+            .Select(option => new ShapeEffectsChoice(
+                option.Preset,
+                UiText.Get(option.LabelKey),
+                UiText.Get(option.DescriptionKey)))
+            .ToArray();
+
+        var effectBox = new ComboBox
+        {
+            ItemsSource = options,
+            SelectedIndex = ShapeEffectsPlanner.FindOptionIndex(plan.Options, plan.SelectedPreset),
+            MinWidth = 260,
+        };
+        AutomationProperties.SetName(effectBox, UiText.Get("ShapeEffects_EffectAutomationName"));
+        AutomationProperties.SetAutomationId(effectBox, "ShapeEffectsPresetBox");
+        AutomationProperties.SetHelpText(effectBox, UiText.Get("ShapeEffects_EffectHelpText"));
+
+        var descriptionText = new TextBlock { TextWrapping = TextWrapping.Wrap };
+        AutomationProperties.SetName(descriptionText, UiText.Get("ShapeEffects_DescriptionAutomationName"));
+        AutomationProperties.SetAutomationId(descriptionText, "ShapeEffectsDescriptionText");
+
+        void UpdateDescription()
+        {
+            descriptionText.Text = effectBox.SelectedItem is ShapeEffectsChoice choice
+                ? choice.Description
+                : string.Empty;
+        }
+
+        effectBox.SelectionChanged += (_, _) => UpdateDescription();
+
+        var dialog = new Window
+        {
+            Title = UiText.Get("ShapeEffects_Title"),
+            Width = 380,
+            Height = 190,
+            Background = Brushes.White,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            CanResize = false,
+            ShowInTaskbar = false,
+        };
+        AutomationProperties.SetAutomationId(dialog, "ShapeEffectsDialog");
+
+        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 80 };
+        AutomationProperties.SetAutomationId(ok, "ShapeEffectsOkButton");
+        var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 80 };
+        AutomationProperties.SetAutomationId(cancel, "ShapeEffectsCancelButton");
+        cancel.Click += (_, _) => dialog.Close((DrawingShapeEffectPreset?)null);
+        ok.Click += (_, _) => dialog.Close(effectBox.SelectedItem is ShapeEffectsChoice choice ? (DrawingShapeEffectPreset?)choice.Preset : null);
+
+        dialog.Content = new StackPanel
+        {
+            Margin = new Thickness(16),
+            Spacing = 8,
+            Children =
+            {
+                new TextBlock { Text = UiText.Get("ShapeEffects_Label"), Foreground = HeaderForeground },
+                effectBox,
+                descriptionText,
+                new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+                    Spacing = 8,
+                    Margin = new Thickness(0, 4, 0, 0),
+                    Children = { ok, cancel },
+                },
+            },
+        };
+
+        UpdateDescription();
+
+        var chosen = await dialog.ShowDialog<DrawingShapeEffectPreset?>(this);
+        if (chosen is not { } preset)
+            return;
+        if (ResolveSelectedShape() is not { } current)
+            return;
+
+        var normalized = ShapeEffectsPlanner.NormalizePreset(preset);
+        RunDrawingObjectCommand(
+            new SetDrawingShapeEffectCommand(_session.ActiveSheet.Id, current.Id, normalized),
+            normalized == DrawingShapeEffectPreset.None
+                ? UiText.Get("ShapeEffects_Cleared")
+                : UiText.Format("ShapeEffects_Applied", ShapeEffectPresetLabel(normalized)),
+            UiText.Get("InsertLoc_ShapeEffectsLabel"));
+    }
+
+    private sealed record ShapeEffectsChoice(
+        DrawingShapeEffectPreset Preset,
+        string Label,
+        string Description)
+    {
+        public override string ToString() => Label;
+    }
+
+    // -------------------------------------------------------------------------------------------------------
     // Shape Gradient (start/end stop colors + direction with live preview)
     // -------------------------------------------------------------------------------------------------------
 
@@ -435,7 +541,12 @@ public sealed partial class MainWindow
         {
             Title = UiText.Get("ShapeGradient_Title"),
             Width = 360,
-            SizeToContent = SizeToContent.Height,
+            Height = 300,
+            MinWidth = 360,
+            MinHeight = 300,
+            MaxWidth = 360,
+            MaxHeight = 300,
+            Background = Brushes.White,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
             ShowInTaskbar = false,

@@ -323,6 +323,12 @@ public sealed partial class MainWindow
         };
 
         var dialog = NewChartDialog(UiText.Get("ChartArea_Title"), "FormatChartAreaDialog");
+        dialog.Width = 340;
+        dialog.Height = 330;
+        dialog.MinWidth = 340;
+        dialog.MinHeight = 330;
+        dialog.MaxWidth = 340;
+        dialog.MaxHeight = 330;
 
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("FormatChartArea");
         okButton.Click += (_, _) =>

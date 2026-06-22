@@ -2246,6 +2246,8 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_RegistersExistingShellDialogsForParityCapture()
     {
         var parityCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+        var drawingFormatSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.DrawingFormatDialogs.cs"));
+        var pictureShapeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.PictureShapeTabs.cs"));
 
         parityCaptureSource.Should().Contain("(\"dialog.InsertHyperlink\", () => ShowInsertHyperlinkParityDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.EvaluateFormula\", () => ShowEvaluateFormulaParityDialogAsync()),");
@@ -2256,6 +2258,10 @@ public sealed class AvaloniaShellSourceTests
         parityCaptureSource.Should().Contain("(\"dialog.About\", () => ShowAboutDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.LegalNotices\", () => ShowLegalNoticesDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.SelectDataSource\", () => ShowSelectDataSourceParityDialogAsync()),");
+        parityCaptureSource.Should().Contain("(\"dialog.ChangeChartType\", () => ShowChangeChartTypeParityDialogAsync()),");
+        parityCaptureSource.Should().Contain("(\"dialog.FormatChartArea\", () => ShowFormatChartAreaParityDialogAsync()),");
+        parityCaptureSource.Should().Contain("(\"dialog.ShapeEffects\", () => ShowShapeEffectsParityDialogAsync()),");
+        parityCaptureSource.Should().Contain("(\"dialog.ShapeGradient\", () => ShowShapeGradientParityDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.Zoom\", () => ShowZoomDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.CustomViews\", () => ShowCustomViewsParityDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.AllowEditRanges\", () => ShowAllowEditRangesParityDialogAsync()),");
@@ -2275,10 +2281,29 @@ public sealed class AvaloniaShellSourceTests
         parityCaptureSource.Should().Contain("await ShowUnhideSheetDialogAsync([new WorkbookHiddenSheet(_session.ActiveSheet.Id, \"Archive\")]);");
         parityCaptureSource.Should().Contain("private async Task ShowSelectDataSourceParityDialogAsync()");
         parityCaptureSource.Should().Contain("await ShowSelectDataDialogAsync(\"Sheet1!$A$1:$D$4\", firstColumnIsCategories: true);");
+        parityCaptureSource.Should().Contain("private async Task ShowChangeChartTypeParityDialogAsync()");
+        parityCaptureSource.Should().Contain("await ShowWithSelectedParityChartAsync(ShowChangeChartTypeDialog);");
+        parityCaptureSource.Should().Contain("private async Task ShowFormatChartAreaParityDialogAsync()");
+        parityCaptureSource.Should().Contain("await ShowWithSelectedParityChartAsync(ShowFormatChartAreaDialog);");
+        parityCaptureSource.Should().Contain("private async Task ShowShapeEffectsParityDialogAsync()");
+        parityCaptureSource.Should().Contain("await ShowWithSelectedParityShapeAsync(OpenShapeEffectsDialogAsync);");
+        parityCaptureSource.Should().Contain("private async Task ShowShapeGradientParityDialogAsync()");
+        parityCaptureSource.Should().Contain("await ShowWithSelectedParityShapeAsync(OpenShapeGradientDialogAsync);");
+        parityCaptureSource.Should().Contain("private ChartModel? EnsureParityChart()");
+        parityCaptureSource.Should().Contain("private DrawingShapeModel? EnsureParityShape()");
         parityCaptureSource.Should().Contain("private async Task ShowCustomViewsParityDialogAsync()");
         parityCaptureSource.Should().Contain("CustomViewsPlanner.BuildSaveCommand(");
         parityCaptureSource.Should().Contain("private async Task ShowAllowEditRangesParityDialogAsync()");
         parityCaptureSource.Should().Contain("new AllowEditRangeCommand(sheetId, range)");
+
+        pictureShapeSource.Should().Contain("[\"shapeFormat.shapeEffects\"] = () => RunGuarded(OpenShapeEffectsDialogAsync),");
+        drawingFormatSource.Should().Contain("private async System.Threading.Tasks.Task OpenShapeEffectsDialogAsync()");
+        drawingFormatSource.Should().Contain("ShapeEffectsPlanner.CreatePlan(shape.GetEffectiveEffectPreset())");
+        drawingFormatSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"ShapeEffectsDialog\");");
+        drawingFormatSource.Should().Contain("AutomationProperties.SetAutomationId(effectBox, \"ShapeEffectsPresetBox\");");
+        drawingFormatSource.Should().Contain("AutomationProperties.SetAutomationId(descriptionText, \"ShapeEffectsDescriptionText\");");
+        drawingFormatSource.Should().Contain("UiText.Get(\"ShapeEffects_Label\")");
+        drawingFormatSource.Should().Contain("new SetDrawingShapeEffectCommand(_session.ActiveSheet.Id, current.Id, normalized)");
     }
 
     [Fact]

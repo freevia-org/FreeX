@@ -69,7 +69,7 @@ public sealed partial class MainWindow
             // shapeEffectNone/shapeEffectShadow aliases are preserved for backward compatibility.
             ["shapeFormat.shapeEffectNone"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.None),
             ["shapeFormat.shapeEffectShadow"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.Shadow),
-            ["shapeFormat.shapeEffects"] = () => RefreshShell(UiText.Get("ShapeEffects_Title")),
+            ["shapeFormat.shapeEffects"] = () => RunGuarded(OpenShapeEffectsDialogAsync),
             ["No Effect"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.None),
             ["Shadow"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.Shadow),
             ["Inner Shadow"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.InnerShadow),

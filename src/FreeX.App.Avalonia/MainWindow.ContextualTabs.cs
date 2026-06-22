@@ -177,7 +177,7 @@ public sealed partial class MainWindow
             // Shape Effects is a dropdown: clicking the parent opens its menu (No Effect / Shadow, wired via
             // BuildPictureShapeTabCommands). Register the parent id too so the renderer keeps it enabled
             // rather than disabling it for an unregistered command.
-            ["shapeFormat.shapeEffects"] = () => RefreshShell(UiText.Get("InsertLoc_ChooseShapeEffect")),
+            ["shapeFormat.shapeEffects"] = () => RunGuarded(OpenShapeEffectsDialogAsync),
         };
 
         // Merge the Picture/Shape Format handlers (Arrange / Shape Styles / Accessibility), which also

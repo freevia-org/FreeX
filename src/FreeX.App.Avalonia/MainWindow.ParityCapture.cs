@@ -138,6 +138,10 @@ public sealed partial class MainWindow
         ("dialog.About", () => ShowAboutDialogAsync()),
         ("dialog.LegalNotices", () => ShowLegalNoticesDialogAsync()),
         ("dialog.SelectDataSource", () => ShowSelectDataSourceParityDialogAsync()),
+        ("dialog.ChangeChartType", () => ShowChangeChartTypeParityDialogAsync()),
+        ("dialog.FormatChartArea", () => ShowFormatChartAreaParityDialogAsync()),
+        ("dialog.ShapeEffects", () => ShowShapeEffectsParityDialogAsync()),
+        ("dialog.ShapeGradient", () => ShowShapeGradientParityDialogAsync()),
         ("dialog.Zoom", () => ShowZoomDialogAsync()),
         ("dialog.CustomViews", () => ShowCustomViewsParityDialogAsync()),
         ("dialog.AllowEditRanges", () => ShowAllowEditRangesParityDialogAsync()),
@@ -303,6 +307,18 @@ public sealed partial class MainWindow
     private async Task ShowSelectDataSourceParityDialogAsync() =>
         await ShowSelectDataDialogAsync("Sheet1!$A$1:$D$4", firstColumnIsCategories: true);
 
+    private async Task ShowChangeChartTypeParityDialogAsync() =>
+        await ShowWithSelectedParityChartAsync(ShowChangeChartTypeDialog);
+
+    private async Task ShowFormatChartAreaParityDialogAsync() =>
+        await ShowWithSelectedParityChartAsync(ShowFormatChartAreaDialog);
+
+    private async Task ShowShapeEffectsParityDialogAsync() =>
+        await ShowWithSelectedParityShapeAsync(OpenShapeEffectsDialogAsync);
+
+    private async Task ShowShapeGradientParityDialogAsync() =>
+        await ShowWithSelectedParityShapeAsync(OpenShapeGradientDialogAsync);
+
     private async Task ShowCustomViewsParityDialogAsync()
     {
         const string viewName = "Quarterly View";
@@ -343,6 +359,113 @@ public sealed partial class MainWindow
             _session.SelectRange(previousSelection);
             RefreshShell(_statusText.Text ?? "Ready");
         }
+    }
+
+    private async Task ShowWithSelectedParityChartAsync(Func<Task> showDialogAsync)
+    {
+        var previousKind = _selectedDrawingObjectKind;
+        var previousId = _selectedDrawingObjectId;
+        var chart = EnsureParityChart();
+        if (chart is null)
+            return;
+
+        _selectedDrawingObjectKind = SelectionPaneObjectKind.Chart;
+        _selectedDrawingObjectId = chart.Id;
+        _ribbonContextSource.OnDrawingObjectSelected(SelectionPaneObjectKind.Chart);
+        RefreshShell(_statusText.Text ?? "Ready");
+
+        try
+        {
+            await showDialogAsync();
+        }
+        finally
+        {
+            RestoreParityDrawingSelection(previousKind, previousId);
+        }
+    }
+
+    private async Task ShowWithSelectedParityShapeAsync(Func<Task> showDialogAsync)
+    {
+        var previousKind = _selectedDrawingObjectKind;
+        var previousId = _selectedDrawingObjectId;
+        var shape = EnsureParityShape();
+        if (shape is null)
+            return;
+
+        _selectedDrawingObjectKind = SelectionPaneObjectKind.Shape;
+        _selectedDrawingObjectId = shape.Id;
+        _ribbonContextSource.OnDrawingObjectSelected(SelectionPaneObjectKind.Shape);
+        RefreshShell(_statusText.Text ?? "Ready");
+
+        try
+        {
+            await showDialogAsync();
+        }
+        finally
+        {
+            RestoreParityDrawingSelection(previousKind, previousId);
+        }
+    }
+
+    private ChartModel? EnsureParityChart()
+    {
+        var sheet = _session.ActiveSheet;
+        if (sheet.Charts.FirstOrDefault(chart => chart.IsVisible) is { } existing)
+            return existing;
+
+        var dataRange = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 4, 4));
+        var command = new AddChartCommand(
+            sheet.Id,
+            dataRange,
+            ChartType.Column,
+            title: "Quarterly Sales",
+            left: 260,
+            top: 96,
+            width: 360,
+            height: 240);
+        var result = _session.ExecuteReviewCommand(command);
+        if (!result.Success)
+            return sheet.Charts.FirstOrDefault(chart => chart.IsVisible);
+
+        RefreshShell(_statusText.Text ?? "Ready");
+        return sheet.Charts.FirstOrDefault(chart => chart.Id == command.ChartId)
+            ?? sheet.Charts.FirstOrDefault(chart => chart.IsVisible);
+    }
+
+    private DrawingShapeModel? EnsureParityShape()
+    {
+        var sheet = _session.ActiveSheet;
+        if (sheet.DrawingShapes.FirstOrDefault(shape => shape.IsVisible) is { } existing)
+            return existing;
+
+        var command = new AddDrawingShapeCommand(
+            sheet.Id,
+            new CellAddress(sheet.Id, 6, 2),
+            DrawingShapeKind.Rectangle,
+            width: 150,
+            height: 90,
+            fillColor: new CellColor(91, 155, 213),
+            outlineColor: new CellColor(47, 84, 150));
+        var result = _session.ExecuteReviewCommand(command);
+        if (!result.Success)
+            return sheet.DrawingShapes.FirstOrDefault(shape => shape.IsVisible);
+
+        RefreshShell(_statusText.Text ?? "Ready");
+        return sheet.DrawingShapes.FirstOrDefault(shape => shape.Id == command.ShapeId)
+            ?? sheet.DrawingShapes.FirstOrDefault(shape => shape.IsVisible);
+    }
+
+    private void RestoreParityDrawingSelection(SelectionPaneObjectKind? previousKind, Guid? previousId)
+    {
+        _selectedDrawingObjectKind = previousKind;
+        _selectedDrawingObjectId = previousId;
+        if (previousKind is { } kind)
+            _ribbonContextSource.OnDrawingObjectSelected(kind);
+        else
+            _ribbonContextSource.OnSelectionCleared();
+        RefreshShell(_statusText.Text ?? "Ready");
     }
 
     private async Task ShowWithParitySelectionAsync(
