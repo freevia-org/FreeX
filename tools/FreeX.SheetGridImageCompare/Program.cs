@@ -219,7 +219,7 @@ internal static class Program
 
         string reportPath;
         if (hasDiffDir)
-            reportPath = RunDiffMode(workbook, sheetResults, freexOutputDir, excelInputDir, options.ThresholdPercent);
+            reportPath = RunDiffMode(workbook, sheetResults, freexOutputDir, excelInputDir, options.ThresholdPercent, options.FailOnDimensionMismatch);
         else
             reportPath = WriteSimpleIndex(sheetResults, freexOutputDir, xlsxPath);
 
@@ -933,7 +933,8 @@ internal static class Program
         IReadOnlyList<SheetResult> results,
         string freexOutputDir,
         string excelInputDir,
-        double thresholdPercent)
+        double thresholdPercent,
+        bool failOnDimensionMismatch)
     {
         Console.WriteLine($"  Diff mode: Excel PNGs found in {excelInputDir}");
 
@@ -983,9 +984,12 @@ internal static class Program
                     row.DimensionMismatch = row.ExcelDimensions != row.FreeXDimensions;
                     if (row.DimensionMismatch)
                     {
-                        row.Status = "DIM_FAIL";
-                        row.Error = $"Dimension mismatch: Excel {row.ExcelDimensions}, FreeX {row.FreeXDimensions}. Mean pixel diff uses 800x600 compatibility resize fallback only.";
-                        r.ComparisonFailed = true;
+                        row.Status = failOnDimensionMismatch ? "DIM_FAIL" : "DIM_WARN";
+                        row.Error = failOnDimensionMismatch
+                            ? $"Dimension mismatch: Excel {row.ExcelDimensions}, FreeX {row.FreeXDimensions}. Mean pixel diff uses 800x600 compatibility resize fallback only."
+                            : $"Dimension mismatch warning: Excel {row.ExcelDimensions}, FreeX {row.FreeXDimensions}. Mean pixel diff uses 800x600 compatibility resize fallback only.";
+                        if (failOnDimensionMismatch)
+                            r.ComparisonFailed = true;
                     }
 
                     row.DiffPercent = ComputeMeanPixelDiff(excelPng, r.FreeXPngPath!);
@@ -1034,7 +1038,9 @@ internal static class Program
         sb.AppendLine("FreeX vs Excel Sheet Fidelity Report (GridView renderer)");
         sb.AppendLine($"Generated: {DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss zzz}");
         sb.AppendLine($"Threshold: {thresholdPercent:F2}%");
-        sb.AppendLine("Dimension gate: native Excel and FreeX PNG dimensions must match exactly.");
+        sb.AppendLine(failOnDimensionMismatch
+            ? "Dimension gate: native Excel and FreeX PNG dimensions must match exactly."
+            : "Dimension check: native Excel and FreeX PNG dimensions are reported; pass --fail-on-dimension-mismatch to make mismatches fail.");
         sb.AppendLine("Mean pixel diff: 800x600 compatibility resize fallback.");
         sb.AppendLine();
         sb.AppendLine("=== RANKED BY DIFF% (worst first) ===");
@@ -1045,7 +1051,7 @@ internal static class Program
         {
             var diffStr = r.DiffPercent >= 0 ? $"{r.DiffPercent:F1}%" : "  N/A";
             var status = r.DimensionMismatch
-                ? "DIM_FAIL"
+                ? (failOnDimensionMismatch ? "DIM_FAIL" : "DIM_WARN")
                 : r.DiffPercent > thresholdPercent ? "FAIL" : r.Status;
             sb.AppendLine($"{r.NN.ToString("D2"),-4}  {diffStr,7}  {status,-8}  {FormatDimensions(r),-34}  {r.SheetName}");
             if (r.Error != null)
@@ -1286,7 +1292,8 @@ internal sealed record GridImageCompareOptions(
     string? OutputDirectory,
     bool ExportExcelPngs,
     bool PivotRangesOnly,
-    double ThresholdPercent)
+    double ThresholdPercent,
+    bool FailOnDimensionMismatch)
 {
     public static GridImageCompareOptions Parse(string[] args)
     {
@@ -1295,6 +1302,7 @@ internal sealed record GridImageCompareOptions(
         var exportExcelPngs = false;
         var pivotRangesOnly = false;
         var thresholdPercent = 12.0;
+        var failOnDimensionMismatch = false;
 
         for (var index = 0; index < args.Length; index++)
         {
@@ -1309,6 +1317,9 @@ internal sealed record GridImageCompareOptions(
                 case "--pivot-ranges":
                     pivotRangesOnly = true;
                     break;
+                case "--fail-on-dimension-mismatch":
+                    failOnDimensionMismatch = true;
+                    break;
                 case "--threshold":
                     if (index + 1 < args.Length &&
                         double.TryParse(args[++index], NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed))
@@ -1321,7 +1332,7 @@ internal sealed record GridImageCompareOptions(
             }
         }
 
-        return new GridImageCompareOptions(workbookPath, outputDirectory, exportExcelPngs, pivotRangesOnly, thresholdPercent);
+        return new GridImageCompareOptions(workbookPath, outputDirectory, exportExcelPngs, pivotRangesOnly, thresholdPercent, failOnDimensionMismatch);
     }
 }
 
