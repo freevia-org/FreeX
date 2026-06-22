@@ -107,6 +107,10 @@ internal sealed class BackstageView : UserControl
 
     private UIElement BuildExportPane()
     {
+        var changeFileType = BackstageExportFileTypePlanner.BuildChangeFileTypeGroup(
+            _file.SaveFormats,
+            extension => { Hide(); _actions.SaveAsType(extension); });
+
         return Panes.BuildActionPane(new BackstageActionPaneSpec(
             Heading: "Export",
             Description: "Create a fixed-layout copy or choose an editable document format.",
@@ -117,10 +121,7 @@ internal sealed class BackstageView : UserControl
                     new("Create PDF or XPS", "Publish a fixed-layout copy for sharing or printing.", () => { Hide(); _actions.ExportPdf(); }),
                     new("Export to XPS", "Publish an XPS document with selectable, searchable vector text.", () => { Hide(); _actions.ExportXps(); }),
                 ]),
-                new("Change File Type",
-                [
-                    new("Word Document (*.docx)", "Save an editable Word document using Save As.", () => { Hide(); _actions.SaveAs(); }),
-                ]),
+                changeFileType,
             ]));
     }
 
