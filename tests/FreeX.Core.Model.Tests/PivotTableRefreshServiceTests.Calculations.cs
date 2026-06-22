@@ -98,6 +98,175 @@ public sealed partial class PivotTableRefreshServiceTests
     }
 
     [Fact]
+    public void Refresh_EvaluatesCalculatedItemsForSingleColumnFieldMatrix()
+    {
+        var workbook = new Workbook("PivotRefreshTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "J8")
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.ColumnFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+        pivot.CalculatedItems.Add(new PivotCalculatedItemModel(1, "Q1 + Q2", "Q1+Q2"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "F2").Should().Be("Q1");
+        Text(sheet, "G2").Should().Be("Q2");
+        Text(sheet, "H2").Should().Be("Q1 + Q2");
+        Text(sheet, "I2").Should().Be("Grand Total");
+        Text(sheet, "E3").Should().Be("East");
+        Number(sheet, "F3").Should().Be(10);
+        Number(sheet, "G3").Should().Be(15);
+        Number(sheet, "H3").Should().Be(25);
+        Number(sheet, "I3").Should().Be(50);
+        Text(sheet, "E4").Should().Be("West");
+        Number(sheet, "F4").Should().Be(20);
+        Number(sheet, "G4").Should().Be(25);
+        Number(sheet, "H4").Should().Be(45);
+        Number(sheet, "I4").Should().Be(90);
+        Text(sheet, "E5").Should().Be("Grand Total");
+        Number(sheet, "F5").Should().Be(30);
+        Number(sheet, "G5").Should().Be(40);
+        Number(sheet, "H5").Should().Be(70);
+        Number(sheet, "I5").Should().Be(140);
+    }
+
+    [Fact]
+    public void Refresh_EvaluatesCalculatedItemsForNestedColumnFieldMatrix()
+    {
+        var workbook = new Workbook("PivotRefreshTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesChannelData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "D9"),
+            TargetRange = Range(sheet, "F2", "M8"),
+            ShowSubtotals = false
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.ColumnFields.Add(new PivotFieldModel(1));
+        pivot.ColumnFields.Add(new PivotFieldModel(2));
+        pivot.DataFields.Add(new PivotDataFieldModel(3, "Sum of Amount", "sum"));
+        pivot.CalculatedItems.Add(new PivotCalculatedItemModel(2, "Retail + Wholesale", "Retail+Wholesale"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "G2").Should().Be("Q1");
+        Text(sheet, "G3").Should().Be("Retail");
+        Text(sheet, "H2").Should().Be("Q1");
+        Text(sheet, "H3").Should().Be("Wholesale");
+        Text(sheet, "I2").Should().Be("Q1");
+        Text(sheet, "I3").Should().Be("Retail + Wholesale");
+        Text(sheet, "J2").Should().Be("Q2");
+        Text(sheet, "J3").Should().Be("Retail");
+        Text(sheet, "K2").Should().Be("Q2");
+        Text(sheet, "K3").Should().Be("Wholesale");
+        Text(sheet, "L2").Should().Be("Q2");
+        Text(sheet, "L3").Should().Be("Retail + Wholesale");
+        Text(sheet, "M2").Should().Be("Grand Total");
+
+        Text(sheet, "F4").Should().Be("East");
+        Number(sheet, "G4").Should().Be(10);
+        Number(sheet, "H4").Should().Be(15);
+        Number(sheet, "I4").Should().Be(25);
+        Number(sheet, "J4").Should().Be(20);
+        Number(sheet, "K4").Should().Be(25);
+        Number(sheet, "L4").Should().Be(45);
+        Number(sheet, "M4").Should().Be(140);
+
+        Text(sheet, "F5").Should().Be("West");
+        Number(sheet, "G5").Should().Be(30);
+        Number(sheet, "H5").Should().Be(35);
+        Number(sheet, "I5").Should().Be(65);
+        Number(sheet, "J5").Should().Be(40);
+        Number(sheet, "K5").Should().Be(45);
+        Number(sheet, "L5").Should().Be(85);
+        Number(sheet, "M5").Should().Be(300);
+
+        Text(sheet, "F6").Should().Be("Grand Total");
+        Number(sheet, "G6").Should().Be(40);
+        Number(sheet, "H6").Should().Be(50);
+        Number(sheet, "I6").Should().Be(90);
+        Number(sheet, "J6").Should().Be(60);
+        Number(sheet, "K6").Should().Be(70);
+        Number(sheet, "L6").Should().Be(130);
+        Number(sheet, "M6").Should().Be(440);
+    }
+
+    [Fact]
+    public void Refresh_EvaluatesCalculatedItemsForOuterNestedColumnFieldMatrix()
+    {
+        var workbook = new Workbook("PivotRefreshTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesChannelData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "D9"),
+            TargetRange = Range(sheet, "F2", "M8"),
+            ShowSubtotals = false
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.ColumnFields.Add(new PivotFieldModel(1));
+        pivot.ColumnFields.Add(new PivotFieldModel(2));
+        pivot.DataFields.Add(new PivotDataFieldModel(3, "Sum of Amount", "sum"));
+        pivot.CalculatedItems.Add(new PivotCalculatedItemModel(1, "Q1 + Q2", "Q1+Q2"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "G2").Should().Be("Q1");
+        Text(sheet, "G3").Should().Be("Retail");
+        Text(sheet, "H2").Should().Be("Q1");
+        Text(sheet, "H3").Should().Be("Wholesale");
+        Text(sheet, "I2").Should().Be("Q2");
+        Text(sheet, "I3").Should().Be("Retail");
+        Text(sheet, "J2").Should().Be("Q2");
+        Text(sheet, "J3").Should().Be("Wholesale");
+        Text(sheet, "K2").Should().Be("Q1 + Q2");
+        Text(sheet, "K3").Should().Be("Retail");
+        Text(sheet, "L2").Should().Be("Q1 + Q2");
+        Text(sheet, "L3").Should().Be("Wholesale");
+        Text(sheet, "M2").Should().Be("Grand Total");
+
+        Text(sheet, "F4").Should().Be("East");
+        Number(sheet, "G4").Should().Be(10);
+        Number(sheet, "H4").Should().Be(15);
+        Number(sheet, "I4").Should().Be(20);
+        Number(sheet, "J4").Should().Be(25);
+        Number(sheet, "K4").Should().Be(30);
+        Number(sheet, "L4").Should().Be(40);
+        Number(sheet, "M4").Should().Be(140);
+
+        Text(sheet, "F5").Should().Be("West");
+        Number(sheet, "G5").Should().Be(30);
+        Number(sheet, "H5").Should().Be(35);
+        Number(sheet, "I5").Should().Be(40);
+        Number(sheet, "J5").Should().Be(45);
+        Number(sheet, "K5").Should().Be(70);
+        Number(sheet, "L5").Should().Be(80);
+        Number(sheet, "M5").Should().Be(300);
+
+        Text(sheet, "F6").Should().Be("Grand Total");
+        Number(sheet, "G6").Should().Be(40);
+        Number(sheet, "H6").Should().Be(50);
+        Number(sheet, "I6").Should().Be(60);
+        Number(sheet, "J6").Should().Be(70);
+        Number(sheet, "K6").Should().Be(100);
+        Number(sheet, "L6").Should().Be(120);
+        Number(sheet, "M6").Should().Be(440);
+    }
+
+    [Fact]
     public void Refresh_EvaluatesCalculatedItemsForInnerRowField()
     {
         var workbook = new Workbook("PivotRefreshTest");
