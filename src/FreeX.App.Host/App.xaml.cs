@@ -26,6 +26,12 @@ public partial class App : Application
     public static ServiceProvider Services =>
         _services ?? throw new InvalidOperationException("Application services are not initialized.");
 
+    public static bool TryGetServices([System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out ServiceProvider? services)
+    {
+        services = _services;
+        return services is not null;
+    }
+
     private void App_OnStartup(object sender, StartupEventArgs e)
     {
         // Velopack is invoked earlier, from Program.Main, before the WPF Application is created,

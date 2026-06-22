@@ -9,9 +9,12 @@ public sealed class HelpCommandSourceTests
     public void HelpCommandHandlers_RouteThroughExpectedDiagnosticsAndExternalLinkServices()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
+        var appSource = DialogSourceTestSupport.ReadHostSources("App.xaml.cs");
 
         source.Should().Contain("OpenExternalHelpLink(AppInfo.HelpUrl, UiText.Get(\"MainWindowMessage_HelpOnlineTitle\"))");
+        source.Should().Contain("if (!App.TryGetServices(out var services))");
         source.Should().Contain("OpenExternalHelpLink(updates.ReleasesPageUrl, UiText.Get(\"MainWindowMessage_CheckForUpdatesTitle\"))");
+        appSource.Should().Contain("public static bool TryGetServices(");
         source.Should().Contain("OpenExternalHelpLink(AppIssueReporter.CreateIssueUrl(context), UiText.Get(\"MainWindowMessage_FeedbackTitle\"))");
         source.Should().Contain("var dialog = new AboutDialog();");
         source.Should().Contain("ShowOwnedDialog(dialog);");
