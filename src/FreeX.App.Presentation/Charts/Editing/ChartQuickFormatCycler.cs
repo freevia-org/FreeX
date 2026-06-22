@@ -6,9 +6,8 @@ namespace FreeX.App.Presentation.Charts.Editing;
 /// Portable (no UI) cycling math for the chart contextual-tab "quick" format buttons that step a single value
 /// per click rather than opening a dialog: the Text group's title/axis/legend/data-label color and font-size
 /// buttons, the Shape Styles group's series dash and marker size, and the Type group's combo-series toggle.
-/// Mirrors the WPF host's <c>ChartOptionCycler</c> step values exactly so repeated clicks walk the same
-/// sequence on both shells, but keeps the math in the shared presentation layer so the cross-platform shell
-/// can reuse it. Every value here feeds an existing field on <see cref="ChartModel"/> applied through the
+/// Keeps shared step values in the presentation layer so repeated clicks walk the same sequence on every
+/// shell. Every value here feeds an existing field on <see cref="ChartModel"/> applied through the
 /// Core <c>SetChartLayoutCommand</c>; no Core change is needed.
 /// </summary>
 public static class ChartQuickFormatCycler
@@ -55,7 +54,7 @@ public static class ChartQuickFormatCycler
 
     /// <summary>
     /// Reads the first data series' (index 0) current format, or a fresh empty format if none is stored.
-    /// The quick Shape-Styles buttons always edit series 0, matching the WPF host.
+    /// The quick Shape-Styles buttons always edit series 0.
     /// </summary>
     public static ChartSeriesFormat ReadFirstSeriesFormat(ChartModel chart)
     {
@@ -92,7 +91,7 @@ public static class ChartQuickFormatCycler
 
     /// <summary>
     /// The next combo-line series set when stepping the combo-series quick button: starts at {1}, advances the
-    /// single marked series by one each click, then clears (matches the WPF host's <c>GetNextComboLineSeries</c>).
+    /// single marked series by one each click, then clears.
     /// </summary>
     public static IReadOnlyList<int> NextComboLineSeries(ChartModel chart)
     {

@@ -82,19 +82,6 @@ public sealed class ChartOptionCyclerTests
         ChartOptionCycler.NextGridlineState(true, true).Should().Be((false, false));
     }
 
-    [Fact]
-    public void NextSeriesColor_CyclesThroughAccessiblePalette()
-    {
-        var blue = new CellColor(0, 114, 178);
-        var orange = new CellColor(213, 94, 0);
-        var green = new CellColor(0, 158, 115);
-
-        ChartOptionCycler.NextSeriesColor(null).Should().Be(blue);
-        ChartOptionCycler.NextSeriesColor(blue).Should().Be(orange);
-        ChartOptionCycler.NextSeriesColor(orange).Should().Be(green);
-        ChartOptionCycler.NextSeriesColor(green).Should().Be(blue);
-    }
-
     [Theory]
     [InlineData("3d line", ChartType.ThreeDLine)]
     [InlineData("3d area", ChartType.ThreeDArea)]
@@ -169,21 +156,6 @@ public sealed class ChartOptionCyclerTests
         var clearedAxis = ChartOptionCycler.GetNextSecondaryAxisSeries(chart, 3);
         clearedAxis.ShowSecondaryAxis.Should().BeFalse();
         clearedAxis.SeriesIndexes.Should().BeEmpty();
-    }
-
-    [Fact]
-    public void GetNextComboLineSeries_CyclesSeriesAndClearsAtTheEnd()
-    {
-        var chart = CreateChart(SheetId.New(), ChartType.Column, 1, 1, 5, 4);
-
-        ChartOptionCycler.GetNextComboLineSeries(chart, 3).Should().Equal(1);
-
-        chart.UseComboLineForSecondarySeries = true;
-        chart.ComboLineSeriesIndexes = [1];
-        ChartOptionCycler.GetNextComboLineSeries(chart, 3).Should().Equal(2);
-
-        chart.ComboLineSeriesIndexes = [2];
-        ChartOptionCycler.GetNextComboLineSeries(chart, 3).Should().BeEmpty();
     }
 
     private static ChartModel CreateChart(SheetId sheetId, ChartType type, uint startRow, uint startCol, uint endRow, uint endCol) =>

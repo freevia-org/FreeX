@@ -1,5 +1,6 @@
 using System;
 using System.Windows;
+using FreeX.App.Presentation.Charts.Editing;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -186,7 +187,7 @@ public partial class MainWindow
                 {
                     var currentColor = useXAxis ? chart.XAxisLabelTextColor : chart.YAxisLabelTextColor;
                     var currentSize = useXAxis ? chart.XAxisLabelFontSize : chart.YAxisLabelFontSize;
-                    var nextColor = ChartOptionCycler.NextSeriesColor(currentColor);
+                    var nextColor = ChartQuickFormatCycler.NextSeriesColor(currentColor);
                     var nextSize = currentSize >= 14 ? 9 : currentSize + 1;
                     return useXAxis
                         ? new ChartLayoutOptions(XAxisLabelTextColor: nextColor, XAxisLabelFontSize: nextSize)
@@ -275,8 +276,8 @@ public partial class MainWindow
                     var currentMajorColor = useXAxis ? chart.XAxisMajorGridlineColor : chart.YAxisMajorGridlineColor;
                     var currentMinorColor = useXAxis ? chart.XAxisMinorGridlineColor : chart.YAxisMinorGridlineColor;
                     var currentThickness = useXAxis ? chart.XAxisGridlineThickness : chart.YAxisGridlineThickness;
-                    var nextMajorColor = ChartOptionCycler.NextSeriesColor(currentMajorColor);
-                    var nextMinorColor = ChartOptionCycler.NextSeriesColor(currentMinorColor ?? currentMajorColor);
+                    var nextMajorColor = ChartQuickFormatCycler.NextSeriesColor(currentMajorColor);
+                    var nextMinorColor = ChartQuickFormatCycler.NextSeriesColor(currentMinorColor ?? currentMajorColor);
                     var nextThickness = currentThickness >= 3 ? 1 : currentThickness + 0.5;
                     return useXAxis
                         ? new ChartLayoutOptions(
