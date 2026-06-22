@@ -2175,22 +2175,23 @@ public sealed partial class MainWindow : Window
         fileMenu.Items.Add(_newWorkbookMenuItem);
         fileMenu.Items.Add(_openMenuItem);
         fileMenu.Items.Add(_openRecentMenuItem);
+        fileMenu.Items.Add(_shareWorkbookMenuItem);
+        fileMenu.Items.Add(new NativeMenuItemSeparator());
+        fileMenu.Items.Add(_backstageInfoMenuItem);
         fileMenu.Items.Add(_saveMenuItem);
         fileMenu.Items.Add(_saveAsMenuItem);
-        fileMenu.Items.Add(_exportPdfMenuItem);
+        fileMenu.Items.Add(new NativeMenuItemSeparator());
         fileMenu.Items.Add(_printMenuItem);
+        fileMenu.Items.Add(_printPreviewMenuItem);
         fileMenu.Items.Add(_backstageExportMenuItem);
-        fileMenu.Items.Add(_shareWorkbookMenuItem);
+        fileMenu.Items.Add(_exportPdfMenuItem);
         fileMenu.Items.Add(_workbookStatisticsMenuItem);
-        fileMenu.Items.Add(_backstageInfoMenuItem);
+        fileMenu.Items.Add(_pageSetupMenuItem);
+        fileMenu.Items.Add(new NativeMenuItemSeparator());
+        fileMenu.Items.Add(_closeWorkbookMenuItem);
         fileMenu.Items.Add(new NativeMenuItemSeparator());
         fileMenu.Items.Add(_backstageAccountMenuItem);
         fileMenu.Items.Add(_optionsMenuItem);
-        fileMenu.Items.Add(new NativeMenuItemSeparator());
-        fileMenu.Items.Add(_pageSetupMenuItem);
-        fileMenu.Items.Add(_printPreviewMenuItem);
-        fileMenu.Items.Add(new NativeMenuItemSeparator());
-        fileMenu.Items.Add(_closeWorkbookMenuItem);
         fileMenu.Items.Add(new NativeMenuItemSeparator());
         fileMenu.Items.Add(_quitMenuItem);
 
@@ -2421,7 +2422,15 @@ public sealed partial class MainWindow : Window
         });
         _nativeMenu.NeedsUpdate += (_, _) => UpdateSaveButton();
 
-        NativeMenu.SetMenu(this, _nativeMenu);
+        InstallNativeMenu(_nativeMenu);
+    }
+
+    private void InstallNativeMenu(NativeMenu menu)
+    {
+        if (Application.Current is { } app)
+            NativeDock.SetMenu(app, menu);
+
+        NativeMenu.SetMenu(this, menu);
     }
 
     private void ConfigureWorkbookDropTarget()
