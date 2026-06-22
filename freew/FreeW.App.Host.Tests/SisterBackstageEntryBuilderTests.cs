@@ -30,6 +30,7 @@ public sealed class SisterBackstageEntryBuilderTests
         var entries = SisterBackstageEntryBuilder.Build(CreateSpec() with
         {
             SaveCopy = () => { },
+            Close = () => { },
             Print = () => { },
             BuildHomePane = Pane,
             UseNewPane = true,
@@ -50,10 +51,10 @@ public sealed class SisterBackstageEntryBuilderTests
             "Print",
             "Export",
             "Recent",
-            "Options",
-            "Close");
+            "Close",
+            "Options");
         entries.Single(entry => entry.Label == "Options").DockBottom.Should().BeTrue();
-        entries.Single(entry => entry.Label == "Close").DockBottom.Should().BeTrue();
+        entries.Single(entry => entry.Label == "Close").DockBottom.Should().BeFalse();
         entries.Single(entry => entry.Label == "Home").ContentFactory.Should().NotBeNull();
         entries.Single(entry => entry.Label == "New").ContentFactory.Should().NotBeNull();
         entries.Single(entry => entry.Label == "New").Action.Should().BeNull();
@@ -62,6 +63,7 @@ public sealed class SisterBackstageEntryBuilderTests
         entries.Single(entry => entry.Label == "Export").ContentFactory.Should().NotBeNull();
         entries.Single(entry => entry.Label == "Print").Action.Should().NotBeNull();
         entries.Single(entry => entry.Label == "Save a Copy").Action.Should().NotBeNull();
+        entries.Single(entry => entry.Label == "Close").Action.Should().NotBeNull();
     }
 
     [Fact]
@@ -100,12 +102,19 @@ public sealed class SisterBackstageEntryBuilderTests
     [Fact]
     public void Build_InvokesSuppliedActions()
     {
-        var invoked = false;
-        var entries = SisterBackstageEntryBuilder.Build(CreateSpec() with { New = () => invoked = true });
+        var newInvoked = false;
+        var closeInvoked = false;
+        var entries = SisterBackstageEntryBuilder.Build(CreateSpec() with
+        {
+            New = () => newInvoked = true,
+            Close = () => closeInvoked = true,
+        });
 
         entries.Single(entry => entry.Label == "New").Action!();
+        entries.Single(entry => entry.Label == "Close").Action!();
 
-        invoked.Should().BeTrue();
+        newInvoked.Should().BeTrue();
+        closeInvoked.Should().BeTrue();
     }
 
     private static SisterBackstageEntrySpec CreateSpec() =>

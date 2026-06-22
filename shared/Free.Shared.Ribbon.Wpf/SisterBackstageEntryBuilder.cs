@@ -17,6 +17,8 @@ public sealed record SisterBackstageEntrySpec(
 
     public Action? SaveCopy { get; init; }
 
+    public Action? Close { get; init; }
+
     public Func<UIElement>? BuildHomePane { get; init; }
 
     public bool UseNewPane { get; init; }
@@ -85,8 +87,11 @@ public static class SisterBackstageEntryBuilder
         entries.Add(BackstageEntry.Pane("Recent", RibbonCommandIconKind.GetData, spec.BuildRecentPane, iconName: "recent"));
         if (!spec.UseNewPane)
             entries.Add(BackstageEntry.Pane("New from template", RibbonCommandIconKind.Grid, spec.BuildNewPane, iconName: "new"));
+        if (spec.Close is not null)
+            entries.Add(BackstageEntry.Command("Close", RibbonCommandIconKind.Previous, spec.Close, iconName: "close"));
         entries.Add(BackstageEntry.Pane("Options", RibbonCommandIconKind.View, spec.BuildOptionsPane, dockBottom: true, iconName: "options"));
-        entries.Add(BackstageEntry.Command("Close", RibbonCommandIconKind.Previous, static () => { }, dockBottom: true, iconName: "close"));
+        if (spec.Close is null)
+            entries.Add(BackstageEntry.Command("Close", RibbonCommandIconKind.Previous, static () => { }, dockBottom: true, iconName: "close"));
 
         return entries;
     }
