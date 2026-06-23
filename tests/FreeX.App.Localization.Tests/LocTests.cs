@@ -123,6 +123,9 @@ public sealed class LocTests
         keys.Should().Contain("PivotOptions_Title");
         keys.Should().Contain("ShapeGradient_GradientStopsGroup");
         keys.Should().Contain("CustomViews_Sheets");
+        keys.Should().Contain("SelectionPane_SearchLabel");
+        keys.Should().Contain("SelectionPane_FilterLabel");
+        keys.Should().Contain("SelectionPane_RenameButton");
     }
 
     [Fact]

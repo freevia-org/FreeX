@@ -13,6 +13,7 @@ using Free.Shared.Ribbon.Avalonia;
 using FreeX.App.Avalonia.Pivot;
 using FreeX.App.Avalonia.Ribbon;
 using FreeX.App.Presentation.Backstage;
+using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Presentation.PivotUI;
 using FreeX.App.Services;
 using FreeX.Core.Calc;
@@ -365,7 +366,40 @@ public sealed partial class MainWindow
 
     private async Task ShowSelectionPaneParityDialogAsync()
     {
-        _ = EnsureParityShape();
+        var chart = EnsureParityChart();
+        if (chart is not null)
+            chart.Name = "Revenue Chart";
+
+        var shape = EnsureParityShape();
+        if (shape is not null)
+            shape.Name = "Rectangle 1";
+
+        if (chart is not null && shape is not null)
+        {
+            var items = new[]
+            {
+                new SelectionPaneViewPlanner.Item(
+                    SelectionPaneObjectKind.Chart,
+                    chart.Id,
+                    chart.Name ?? "Revenue Chart",
+                    UiText.Get("SelectionPane_KindChart"),
+                    chart.IsVisible,
+                    CanMoveUp: false,
+                    CanMoveDown: false),
+                new SelectionPaneViewPlanner.Item(
+                    SelectionPaneObjectKind.Shape,
+                    shape.Id,
+                    shape.Name ?? "Rectangle 1",
+                    UiText.Get("SelectionPane_KindShape"),
+                    shape.IsVisible,
+                    CanMoveUp: false,
+                    CanMoveDown: false),
+            };
+
+            await OpenSelectionPaneDialogAsync(items);
+            return;
+        }
+
         await OpenSelectionPaneDialogAsync();
     }
 
