@@ -16,13 +16,6 @@ internal enum PrintPreviewPageRangeMode
     Pages
 }
 
-public enum PrintPreviewSidesMode
-{
-    OneSided,
-    TwoSidedLongEdge,
-    TwoSidedShortEdge
-}
-
 public sealed partial class PrintPreviewDialog
 {
     public static string CreateTitle(string workbookName) =>
@@ -82,7 +75,7 @@ public sealed partial class PrintPreviewDialog
         PrintPreviewToolbarPlanner.CreateNavigationState(currentPage, totalPages);
 
     private static PrintPreviewSidesMode ResolveSelectedSidesMode(ComboBox sidesBox) =>
-        PrintPreviewToolbarPlanner.ResolveSelectedSidesMode(sidesBox.SelectedIndex);
+        PrintPreviewToolbarStatePlanner.SidesIndexToMode(sidesBox.SelectedIndex);
 
     private void ShowInvalidPageRangeWarning(TextBox fromPageBox, TextBox toPageBox, string? error)
     {
@@ -152,7 +145,7 @@ public sealed partial class PrintPreviewDialog
             ? queue.FullName
             : null;
 
-        statusText.Text = PrintPreviewToolbarPlanner.CreateStatusText(printerName, validCopies ? copies : null, totalPages);
+        statusText.Text = PrintPreviewToolbarStatePlanner.CreateStatusText(printerName, validCopies ? copies : null, totalPages);
     }
 
     private void NavigateToPage(DocumentViewer viewer, TextBox pageNumberBox, TextBlock pageStatusText, int totalPages)

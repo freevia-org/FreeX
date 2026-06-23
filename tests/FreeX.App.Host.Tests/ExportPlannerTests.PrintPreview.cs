@@ -1,6 +1,7 @@
 using System.Printing;
 using System.Windows.Documents;
 using FluentAssertions;
+using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Calc;
 using FreeX.Core.Model;
 
@@ -76,7 +77,7 @@ public partial class ExportPlannerTests
     {
         var source = ReadPrintPreviewDialogSources();
 
-        source.Should().Contain("PrintPreviewNavigationState.Create(currentPage, totalPages)");
+        source.Should().Contain("PrintPreviewToolbarStatePlanner.CreateNavigationState(currentPage, totalPages)");
         source.Should().NotContain("Math.Clamp(currentPage");
         source.Should().NotContain("StatusText: $\"Page");
     }

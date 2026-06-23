@@ -1,3 +1,4 @@
+using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -74,21 +75,11 @@ public static class PrintSettingsPlanner
 
     /// <summary>Maps a sides combo-box index to a <see cref="PrintPreviewSidesMode"/>.</summary>
     public static PrintPreviewSidesMode SidesIndexToMode(int index) =>
-        index switch
-        {
-            1 => PrintPreviewSidesMode.TwoSidedLongEdge,
-            2 => PrintPreviewSidesMode.TwoSidedShortEdge,
-            _ => PrintPreviewSidesMode.OneSided
-        };
+        PrintPreviewToolbarStatePlanner.SidesIndexToMode(index);
 
     /// <summary>Maps a <see cref="PrintPreviewSidesMode"/> back to a sides combo-box index.</summary>
     public static int SidesModeToIndex(PrintPreviewSidesMode mode) =>
-        mode switch
-        {
-            PrintPreviewSidesMode.TwoSidedLongEdge => 1,
-            PrintPreviewSidesMode.TwoSidedShortEdge => 2,
-            _ => 0
-        };
+        PrintPreviewToolbarStatePlanner.SidesModeToIndex(mode);
 
     // ─── Copies clamping ────────────────────────────────────────────────────
 
