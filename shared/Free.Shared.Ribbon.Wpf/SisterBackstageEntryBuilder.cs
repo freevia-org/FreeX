@@ -34,6 +34,8 @@ public sealed record SisterBackstageEntrySpec(
     public Func<UIElement>? BuildExportPane { get; init; }
 
     public Func<UIElement>? BuildAccountPane { get; init; }
+
+    public bool HideRecentPane { get; init; }
 }
 
 /// <summary>
@@ -95,7 +97,8 @@ public static class SisterBackstageEntryBuilder
         if (spec.BuildExportPane is not null)
             entries.Add(BackstageEntry.Pane("Export", RibbonCommandIconKind.Share, spec.BuildExportPane, iconName: "export"));
 
-        entries.Add(BackstageEntry.Pane("Recent", RibbonCommandIconKind.GetData, spec.BuildRecentPane, iconName: "recent"));
+        if (!spec.HideRecentPane)
+            entries.Add(BackstageEntry.Pane("Recent", RibbonCommandIconKind.GetData, spec.BuildRecentPane, iconName: "recent"));
         if (!spec.UseNewPane)
             entries.Add(BackstageEntry.Pane("New from template", RibbonCommandIconKind.Grid, spec.BuildNewPane, iconName: "new"));
         if (spec.Close is not null)

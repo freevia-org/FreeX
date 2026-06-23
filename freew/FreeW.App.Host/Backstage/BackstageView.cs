@@ -70,7 +70,8 @@ internal sealed class BackstageView : UserControl
             BuildSaveAsPane = BuildSaveAsPane,
             BuildPrintPane = BuildPrintPane,
             BuildExportPane = BuildExportPane,
-            BuildAccountPane = BuildAccountPane
+            BuildAccountPane = BuildAccountPane,
+            HideRecentPane = true
         });
     }
 

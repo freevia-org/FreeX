@@ -39,7 +39,8 @@ public sealed class SisterBackstageEntryBuilderTests
             BuildSaveAsPane = Pane,
             BuildPrintPane = Pane,
             BuildExportPane = Pane,
-            BuildAccountPane = Pane
+            BuildAccountPane = Pane,
+            HideRecentPane = true
         });
 
         entries.Select(EntryLabel).Should().Equal(
@@ -54,7 +55,6 @@ public sealed class SisterBackstageEntryBuilderTests
             "Save a Copy",
             "Print",
             "Export",
-            "Recent",
             "Close",
             "Account",
             "Options");
@@ -73,6 +73,7 @@ public sealed class SisterBackstageEntryBuilderTests
         entries.Single(entry => entry.Label == "Account").ContentFactory.Should().NotBeNull();
         entries.Single(entry => entry.Label == "Save a Copy").Action.Should().NotBeNull();
         entries.Single(entry => entry.Label == "Close").Action.Should().NotBeNull();
+        entries.Should().NotContain(entry => entry.Label == "Recent");
     }
 
     [Fact]
@@ -96,6 +97,7 @@ public sealed class SisterBackstageEntryBuilderTests
         entries.Should().NotContain(entry => entry.Label == "Account");
         entries.Should().NotContain(entry => entry.Label == "Save a Copy");
         entries.Should().NotContain(entry => entry.Label == "Home");
+        entries.Single(entry => entry.Label == "Recent").ContentFactory.Should().NotBeNull();
     }
 
     [Fact]
