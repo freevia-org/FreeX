@@ -233,6 +233,12 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.image-align-left", new ImageAlignCommand(editor, FreeW.Core.Model.TextAlignment.Left));
         registry.Register("freew.image-align-center", new ImageAlignCommand(editor, FreeW.Core.Model.TextAlignment.Center));
         registry.Register("freew.image-align-right", new ImageAlignCommand(editor, FreeW.Core.Model.TextAlignment.Right));
+        registry.Register("freew.image-wrap-inline", new ImageWrapCommand(editor, ImageWrapping.Inline));
+        registry.Register("freew.image-wrap-square", new ImageWrapCommand(editor, ImageWrapping.Square));
+        registry.Register("freew.image-wrap-tight", new ImageWrapCommand(editor, ImageWrapping.Tight));
+        registry.Register("freew.image-wrap-top-bottom", new ImageWrapCommand(editor, ImageWrapping.TopAndBottom));
+        registry.Register("freew.image-wrap-behind", new ImageWrapCommand(editor, ImageWrapping.Behind));
+        registry.Register("freew.image-wrap-front", new ImageWrapCommand(editor, ImageWrapping.InFront));
         // Insert tab — Illustrations > Shapes: a small gallery of preset DrawingML shapes. Each menu item
         // inserts the matching Shape (preset geometry, or a text box carrying placeholder text) at the caret
         // via DocumentView.InsertShape. Round-trips through docx as an inline w:drawing/wps:wsp (see
@@ -1961,6 +1967,21 @@ internal static class FreeWRibbonCommands
                 return;
             }
             editor.SetSelectedImageAlignment(alignment);
+        }
+    }
+
+    private sealed class ImageWrapCommand(DocumentView editor, ImageWrapping wrapping) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            if (editor.SelectedImage() is null)
+            {
+                MessageBox.Show("Select a picture first.", "Wrap Text", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            editor.SetSelectedImageWrapping(wrapping);
         }
     }
 

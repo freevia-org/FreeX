@@ -1,4 +1,6 @@
 using System.Linq;
+using System.Windows.Documents;
+using Free.Shared.Ribbon;
 using FreeW.App.Host.Editing;
 using FreeW.Core.Model;
 using Xunit;
@@ -40,8 +42,29 @@ public sealed class InsertContextBehaviorTests
 
         // The inserted picture must survive the commit cycle as a model image run — otherwise it would be
         // silently dropped on the next edit/save (and Picture Format / image commands would have no target).
-        var hasImage = view.Model.Blocks.OfType<Paragraph>().SelectMany(p => p.Runs).Any(r => r.Image is not null);
+        var hasImage = view.Model.Blocks.OfType<FreeW.Core.Model.Paragraph>().SelectMany(p => p.Runs).Any(r => r.Image is not null);
         Assert.True(hasImage);
+    }
+
+    [StaFact]
+    public void ImageWrapCommand_ChangesSelectedImageWrapping()
+    {
+        var view = EmptyView();
+        var image = new InlineImage(OnePixelPng, 96, 96);
+        view.InsertImage(image);
+        var container = view.Document.Blocks
+            .OfType<System.Windows.Documents.Paragraph>()
+            .SelectMany(p => p.Inlines)
+            .OfType<InlineUIContainer>()
+            .Single();
+        view.Selection.Select(container.ElementStart, container.ElementEnd);
+        var registry = FreeWRibbonCommands.Build(view, new RibbonStateStore());
+
+        Assert.Same(image, view.SelectedImage());
+        Assert.True(registry.TryGet("freew.image-wrap-square", out var command));
+        command!.Execute(RibbonCommandContext.Empty);
+
+        Assert.Equal(ImageWrapping.Square, image.Wrapping);
     }
 
     // A minimal valid 1x1 transparent PNG (so InsertImage can decode it into a real BitmapImage).
