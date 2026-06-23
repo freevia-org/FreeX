@@ -668,11 +668,19 @@ public static class DocxWriter
         string prefix,
         string extension)
     {
+        // Word numbers media parts sequentially as <prefix>N regardless of extension (image1.png, image2.jpeg,
+        // image3.gif — not image1.png/image1.jpeg/image1.gif), so a number is reserved across ALL extensions.
+        // The extension-less stem sentinel claims a number; the full path keeps avoiding preserved-part clashes.
         for (var index = 1;; index++)
         {
+            var stem = NormalizePartName($"{folder}/{prefix}{index}");
             var fileName = $"{prefix}{index}.{extension}";
-            if (usedPartNames.Add(NormalizePartName($"{folder}/{fileName}")))
+            if (!usedPartNames.Contains(stem)
+                && usedPartNames.Add(NormalizePartName($"{folder}/{fileName}")))
+            {
+                usedPartNames.Add(stem);
                 return fileName;
+            }
         }
     }
 
