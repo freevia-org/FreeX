@@ -104,13 +104,21 @@ public sealed partial class OptionsDialogSourceTests
 
         source.Should().Contain("e.Handled = true;");
 
-        source.Should().Contain("QuickAccessToolbarCustomizationFile.TryLoad(dialog.FileName)");
+        source.Should().Contain("QuickAccessToolbarCustomizationFile.TryLoad(pickerResult.FileName!)");
 
         source.Should().Contain("QuickAccessToolbarCustomizationFile.TrySave(");
 
-        source.Should().Contain("new OpenFileDialog");
+        source.Should().Contain("WpfFileDialogService.ShowOpenDialog(");
 
-        source.Should().Contain("new SaveFileDialog");
+        source.Should().Contain("WpfFileDialogService.ShowSaveDialog(");
+
+        source.Should().Contain("QuickAccessToolbarCustomizationFile.DialogFilter");
+
+        source.Should().Contain("QuickAccessToolbarCustomizationFile.DefaultExtension");
+
+        source.Should().NotContain("new OpenFileDialog");
+
+        source.Should().NotContain("new SaveFileDialog");
 
         source.Should().Contain("QuickAccessToolbarImportCustomizationMenuItem");
 

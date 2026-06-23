@@ -153,7 +153,10 @@ public sealed class HeaderFooterDialogXamlTests
             .Any(element => element.Attributes().Any(a => a.Name.LocalName == "Name" && a.Value == "PictureTargetStatusText"))
             .Should().BeTrue();
 
-        source.Should().Contain("new OpenFileDialog");
+        source.Should().Contain("WpfFileDialogService.ShowOpenDialog(");
+        source.Should().Contain("UiText.Get(\"HeaderFooterPicture_InsertPictureTitle\")");
+        source.Should().Contain("UiText.Get(\"HeaderFooterPicture_OpenFileFilter\")");
+        source.Should().NotContain("new OpenFileDialog");
         source.Should().Contain("HeaderFooterPictureFormatDialog");
         source.Should().Contain("SetPictureForActiveBox");
         source.Should().Contain("UpdatePictureButtonState");

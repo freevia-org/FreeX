@@ -51,17 +51,19 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var drawingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Drawing.cs");
 
-        drawingSource.Should().Contain("Title = UiText.Get(\"MainWindowDialog_InsertPictureTitle\")");
-        drawingSource.Should().Contain("Filter = UiText.Get(\"MainWindowDialog_ImageFilesFilter\")");
-        drawingSource.Should().Contain("CheckFileExists = true");
-        drawingSource.Should().Contain("Multiselect = false");
-        drawingSource.Should().Contain("if (dialog.ShowDialog(this) != true) return;");
-        drawingSource.Should().Contain("System.IO.File.ReadAllBytesAsync(dialog.FileName)");
-        drawingSource.Should().Contain("DrawingInputParser.GetImageContentType(dialog.FileName)");
+        drawingSource.Should().Contain("WpfFileDialogService.ShowOpenDialog(");
+        drawingSource.Should().Contain("UiText.Get(\"MainWindowDialog_InsertPictureTitle\")");
+        drawingSource.Should().Contain("UiText.Get(\"MainWindowDialog_ImageFilesFilter\")");
+        drawingSource.Should().Contain("checkFileExists: true");
+        drawingSource.Should().Contain("multiselect: false");
+        drawingSource.Should().Contain("if (!result.Chosen) return;");
+        drawingSource.Should().Contain("System.IO.File.ReadAllBytesAsync(result.FileName!)");
+        drawingSource.Should().Contain("DrawingInputParser.GetImageContentType(result.FileName!)");
         drawingSource.Should().Contain("InsertObjectPlacementPlanner.CreateInsertPictureCommand(");
         drawingSource.Should().Contain("UiText.Format(\"MainWindowMessage_InsertPictureReadFailed\", ex.Message)");
         drawingSource.Should().Contain("SetActiveCell(range.Start);");
         drawingSource.Should().Contain("UpdateViewport();");
+        drawingSource.Should().NotContain("new Microsoft.Win32.OpenFileDialog");
     }
 
     [Fact]

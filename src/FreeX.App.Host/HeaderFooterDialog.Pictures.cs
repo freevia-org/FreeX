@@ -5,7 +5,6 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
 using FreeX.Core.Model;
-using Microsoft.Win32;
 
 namespace FreeX.App.Host;
 
@@ -15,20 +14,19 @@ public partial class HeaderFooterDialog
 
     private async void PictureButton_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new OpenFileDialog
-        {
-            Title = UiText.Get("HeaderFooterPicture_InsertPictureTitle"),
-            Filter = UiText.Get("HeaderFooterPicture_OpenFileFilter")
-        };
-        if (dialog.ShowDialog(this) != true)
+        var result = WpfFileDialogService.ShowOpenDialog(
+            this,
+            UiText.Get("HeaderFooterPicture_OpenFileFilter"),
+            title: UiText.Get("HeaderFooterPicture_InsertPictureTitle"));
+        if (!result.Chosen)
             return;
 
-        var bytes = await Task.Run(() => File.ReadAllBytes(dialog.FileName));
+        var bytes = await Task.Run(() => File.ReadAllBytes(result.FileName!));
         var (width, height) = GetImageSize(bytes);
         var picture = new WorksheetHeaderFooterPicture(
             bytes,
-            GetContentType(dialog.FileName),
-            Path.GetFileName(dialog.FileName),
+            GetContentType(result.FileName!),
+            Path.GetFileName(result.FileName!),
             width,
             height);
         SetPictureForActiveBox(picture);

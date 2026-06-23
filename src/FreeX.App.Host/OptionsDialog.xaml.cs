@@ -5,7 +5,6 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.IO;
 using FreeX.Core.Commands;
-using Microsoft.Win32;
 
 namespace FreeX.App.Host;
 
@@ -655,17 +654,16 @@ public partial class OptionsDialog : Window
 
     private void QuickAccessImportCustomizationMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new OpenFileDialog
-        {
-            Title = "Import Quick Access Toolbar customization",
-            Filter = QuickAccessToolbarCustomizationFile.DialogFilter,
-            DefaultExt = QuickAccessToolbarCustomizationFile.DefaultExtension,
-            CheckFileExists = true
-        };
-        if (dialog.ShowDialog(this) != true)
+        var pickerResult = WpfFileDialogService.ShowOpenDialog(
+            this,
+            QuickAccessToolbarCustomizationFile.DialogFilter,
+            QuickAccessToolbarCustomizationFile.DefaultExtension,
+            checkFileExists: true,
+            title: "Import Quick Access Toolbar customization");
+        if (!pickerResult.Chosen)
             return;
 
-        var result = QuickAccessToolbarCustomizationFile.TryLoad(dialog.FileName);
+        var result = QuickAccessToolbarCustomizationFile.TryLoad(pickerResult.FileName!);
         if (!result.Success || result.Customization is null)
         {
             DialogMessageHelper.ShowWarning(this, result.ErrorMessage, UiText.Get("Options_QuickAccessToolbar"));
@@ -678,26 +676,24 @@ public partial class OptionsDialog : Window
         RefreshQuickAccessToolbarCommandLists(selectedQatId: _quickAccessCommandIds[0]);
         DialogMessageHelper.ShowInfo(
             this,
-            $"Imported Quick Access Toolbar customization from '{dialog.FileName}'.",
+            $"Imported Quick Access Toolbar customization from '{pickerResult.FileName!}'.",
             UiText.Get("Options_QuickAccessToolbar"));
     }
 
     private void QuickAccessExportCustomizationMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new SaveFileDialog
-        {
-            Title = "Export Quick Access Toolbar customization",
-            Filter = QuickAccessToolbarCustomizationFile.DialogFilter,
-            DefaultExt = QuickAccessToolbarCustomizationFile.DefaultExtension,
-            FileName = QuickAccessToolbarCustomizationFile.DefaultFileName,
-            AddExtension = true,
-            OverwritePrompt = true
-        };
-        if (dialog.ShowDialog(this) != true)
+        var pickerResult = WpfFileDialogService.ShowSaveDialog(
+            this,
+            QuickAccessToolbarCustomizationFile.DialogFilter,
+            QuickAccessToolbarCustomizationFile.DefaultFileName,
+            QuickAccessToolbarCustomizationFile.DefaultExtension,
+            filterIndex: 1,
+            title: "Export Quick Access Toolbar customization");
+        if (!pickerResult.Chosen)
             return;
 
         if (!QuickAccessToolbarCustomizationFile.TrySave(
-                dialog.FileName,
+                pickerResult.FileName!,
                 _quickAccessCommandIds,
                 QuickAccessBelowRibbonCheckBox.IsChecked == true,
                 out var errorMessage))
@@ -708,7 +704,7 @@ public partial class OptionsDialog : Window
 
         DialogMessageHelper.ShowInfo(
             this,
-            $"Exported Quick Access Toolbar customization to '{dialog.FileName}'.",
+            $"Exported Quick Access Toolbar customization to '{pickerResult.FileName!}'.",
             UiText.Get("Options_QuickAccessToolbar"));
     }
 
