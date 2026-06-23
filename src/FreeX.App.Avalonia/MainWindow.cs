@@ -645,6 +645,15 @@ public sealed partial class MainWindow : Window
     private Control? _cellDragSelectionCapture;
     private IPointer? _cellDragSelectionPointer;
     private HeaderResizeDrag? _headerResizeDrag;
+    private CellAddress? _selectionExtensionAnchor;
+    private CellAddress? _selectionExtensionCursor;
+    private bool _autofillDragging;
+    private GridRange? _autofillSourceRange;
+    private CellAddress? _autofillTarget;
+    private bool _selectionMoveDragging;
+    private GridRange? _selectionMoveSourceRange;
+    private GridRange? _selectionMovePreviewRange;
+    private CellAddress _selectionMoveStartCell;
     private IReadOnlyDictionary<(uint Row, uint Col), (IReadOnlyList<double> Values, SparklineKind Kind)> _sparklinesByCell =
         new Dictionary<(uint Row, uint Col), (IReadOnlyList<double>, SparklineKind)>();
     private string? _formulaBoxEditOriginalText;
@@ -4858,7 +4867,10 @@ public sealed partial class MainWindow : Window
     }
 
     private static bool IsContextClick(PointerPoint point, PointerEventArgs args) =>
+        point.Properties.PointerUpdateKind == PointerUpdateKind.RightButtonPressed ||
         point.Properties.IsRightButtonPressed ||
+        (point.Properties.PointerUpdateKind == PointerUpdateKind.LeftButtonPressed &&
+            args.KeyModifiers.HasFlag(KeyModifiers.Control)) ||
         (point.Properties.IsLeftButtonPressed && args.KeyModifiers.HasFlag(KeyModifiers.Control));
 
     private void BeginCellSelectionDrag(PointerPressedEventArgs args, Control capture, CellAddress address)
@@ -4879,20 +4891,58 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        if (address == _session.SelectedRange.End)
+        var target = TryResolveCellPointerAddress(args, out var pointerAddress)
+            ? pointerAddress
+            : address;
+
+        if (_selectionMoveDragging)
+        {
+            ContinueSelectionMoveDrag(args, target);
+            return;
+        }
+
+        if (_autofillDragging)
+        {
+            ContinueAutofillDrag(args, target);
+            return;
+        }
+
+        if (target == _selectionExtensionCursor)
             return;
 
-        SelectRangeFromAnchor(anchor, address);
+        _selectionExtensionAnchor = anchor;
+        _selectionExtensionCursor = target;
+        SelectRangeFromAnchor(anchor, target);
         args.Handled = true;
     }
 
     private void EndCellSelectionDrag(PointerReleasedEventArgs args)
     {
+        if (_autofillDragging)
+            CommitAutofillDrag();
+        else if (_selectionMoveDragging)
+            CommitSelectionMoveDrag();
+
         _cellDragSelectionPointer?.Capture(null);
         _cellDragSelectionAnchor = null;
         _cellDragSelectionCapture = null;
         _cellDragSelectionPointer = null;
+        _selectionExtensionAnchor = null;
+        _selectionExtensionCursor = null;
+        _autofillDragging = false;
+        _autofillSourceRange = null;
+        _autofillTarget = null;
+        _selectionMoveDragging = false;
+        _selectionMoveSourceRange = null;
+        _selectionMovePreviewRange = null;
         args.Handled = true;
+    }
+
+    private bool TryResolveCellPointerAddress(PointerEventArgs args, out CellAddress address)
+    {
+        address = default;
+        var pos = args.GetPosition(_sheetGridHost);
+        return TryResolveCellAddressFromSheetGridPosition(pos, out address);
     }
 
     private void BeginHeaderSelectionDrag(PointerPressedEventArgs args, Control capture, HeaderResizeKind kind, uint index)
@@ -4984,6 +5034,55 @@ public sealed partial class MainWindow : Window
         return false;
     }
 
+    private bool TryResolveCellAddressFromSheetGridPosition(Point pos, out CellAddress address)
+    {
+        address = default;
+        var sheet = _session.ActiveSheet;
+        var zoomFactor = GetActiveZoomFactor();
+        var left = sheet.ShowHeadings ? HeaderColumnWidth * zoomFactor : 0;
+        var top = sheet.ShowHeadings ? HeaderRowHeight * zoomFactor : 0;
+
+        if (pos.X < left || pos.Y < top)
+            return false;
+
+        uint? col = null;
+        var currentLeft = left;
+        foreach (var metric in _session.Viewport.ColMetrics)
+        {
+            var right = currentLeft + GetDisplayedColumnWidth(metric, zoomFactor);
+            if (pos.X >= currentLeft && pos.X <= right)
+            {
+                col = metric.Col;
+                break;
+            }
+
+            currentLeft = right;
+        }
+
+        if (!col.HasValue)
+            return false;
+
+        uint? row = null;
+        var currentTop = top;
+        foreach (var metric in _session.Viewport.RowMetrics)
+        {
+            var bottom = currentTop + GetDisplayedRowHeight(metric, zoomFactor);
+            if (pos.Y >= currentTop && pos.Y <= bottom)
+            {
+                row = metric.Row;
+                break;
+            }
+
+            currentTop = bottom;
+        }
+
+        if (!row.HasValue)
+            return false;
+
+        address = new CellAddress(sheet.Id, row.Value, col.Value);
+        return true;
+    }
+
     private void EndHeaderSelectionDrag(PointerReleasedEventArgs args)
     {
         if (_cellDragSelectionCapture is not null)
@@ -5014,6 +5113,11 @@ public sealed partial class MainWindow : Window
         handle.PointerPressed += (_, args) => BeginHeaderResize(args, handle, HeaderResizeKind.Column, col, GetDisplayedColumnWidth(metric, zoomFactor));
         handle.PointerMoved += (_, args) => ContinueHeaderResize(args);
         handle.PointerReleased += (_, args) => CommitHeaderResize(args);
+        handle.DoubleTapped += (_, args) =>
+        {
+            AutoFitColumnFromHeader(col);
+            args.Handled = true;
+        };
         return CreateHeaderWithResizeHandle(header, handle);
     }
 
@@ -5023,6 +5127,11 @@ public sealed partial class MainWindow : Window
         handle.PointerPressed += (_, args) => BeginHeaderResize(args, handle, HeaderResizeKind.Row, row, GetDisplayedRowHeight(metric, zoomFactor));
         handle.PointerMoved += (_, args) => ContinueHeaderResize(args);
         handle.PointerReleased += (_, args) => CommitHeaderResize(args);
+        handle.DoubleTapped += (_, args) =>
+        {
+            AutoFitRowFromHeader(row);
+            args.Handled = true;
+        };
         return CreateHeaderWithResizeHandle(header, handle);
     }
 
@@ -5056,10 +5165,18 @@ public sealed partial class MainWindow : Window
         var pointer = kind == HeaderResizeKind.Column
             ? args.GetPosition(this).X
             : args.GetPosition(this).Y;
-        _headerResizeDrag = new HeaderResizeDrag(kind, index, capture, args.Pointer, pointer, displayedSize, hadOriginalSize, originalSize);
-        args.Pointer.Capture(capture);
+        _headerResizeDrag = new HeaderResizeDrag(kind, index, _sheetGridHost, args.Pointer, pointer, displayedSize, hadOriginalSize, originalSize);
+        _sheetGridHost.PointerMoved += HeaderResizeCapturePointerMoved;
+        _sheetGridHost.PointerReleased += HeaderResizeCapturePointerReleased;
+        args.Pointer.Capture(_sheetGridHost);
         args.Handled = true;
     }
+
+    private void HeaderResizeCapturePointerMoved(object? sender, PointerEventArgs args) =>
+        ContinueHeaderResize(args);
+
+    private void HeaderResizeCapturePointerReleased(object? sender, PointerReleasedEventArgs args) =>
+        CommitHeaderResize(args);
 
     private void ContinueHeaderResize(PointerEventArgs args)
     {
@@ -5100,6 +5217,7 @@ public sealed partial class MainWindow : Window
         RestoreHeaderResizeOriginal(drag);
         drag.Pointer.Capture(null);
         _headerResizeDrag = null;
+        DetachHeaderResizeCaptureHandlers();
 
         if (drag.Kind == HeaderResizeKind.Column)
         {
@@ -5139,7 +5257,14 @@ public sealed partial class MainWindow : Window
         RestoreHeaderResizeOriginal(drag);
         drag.Pointer.Capture(null);
         _headerResizeDrag = null;
+        DetachHeaderResizeCaptureHandlers();
         RefreshShell(UiText.Format("MainLoc_SelectedX", FormatRangeReference(_session.SelectedRange)));
+    }
+
+    private void DetachHeaderResizeCaptureHandlers()
+    {
+        _sheetGridHost.PointerMoved -= HeaderResizeCapturePointerMoved;
+        _sheetGridHost.PointerReleased -= HeaderResizeCapturePointerReleased;
     }
 
     private void RestoreHeaderResizeOriginal(HeaderResizeDrag drag)
@@ -5158,6 +5283,144 @@ public sealed partial class MainWindow : Window
             else
                 _session.ActiveSheet.RowHeights.Remove(drag.Index);
         }
+    }
+
+    private void AutoFitColumnFromHeader(uint col)
+    {
+        SelectEntireColumn(col);
+        AutoFitSelectedColumnWidth();
+    }
+
+    private void AutoFitRowFromHeader(uint row)
+    {
+        SelectEntireRow(row);
+        AutoFitSelectedRowHeight();
+    }
+
+    private bool TryBeginAutofillDrag(PointerPressedEventArgs args, Control capture, CellAddress address)
+    {
+        if (!args.GetCurrentPoint(capture).Properties.IsLeftButtonPressed ||
+            !_session.SelectedRange.Contains(address) ||
+            !IsPointerOnAutofillHandle(args))
+        {
+            return false;
+        }
+
+        _autofillDragging = true;
+        _autofillSourceRange = _session.SelectedRange;
+        _autofillTarget = _session.SelectedRange.End;
+        BeginCellSelectionDrag(args, capture, _session.SelectedRange.Start);
+        return true;
+    }
+
+    private bool IsPointerOnAutofillHandle(PointerEventArgs args)
+    {
+        var pos = args.GetPosition(_sheetGridHost);
+        return GridAutofillPlanner.IsOnHandle(
+            _session.Viewport,
+            _session.SelectedRange,
+            new GridPoint(pos.X, pos.Y),
+            _session.ActiveSheet.ShowHeadings ? HeaderColumnWidth * GetActiveZoomFactor() : 0,
+            _session.ActiveSheet.ShowHeadings ? HeaderRowHeight * GetActiveZoomFactor() : 0);
+    }
+
+    private void ContinueAutofillDrag(PointerEventArgs args, CellAddress target)
+    {
+        if (_autofillSourceRange is not { } source)
+            return;
+
+        _autofillTarget = GridAutofillPlanner.ConstrainTarget(source, target);
+        args.Handled = true;
+    }
+
+    private void CommitAutofillDrag()
+    {
+        if (_autofillSourceRange is not { } source ||
+            _autofillTarget is not { } target ||
+            GridAutofillPlanner.CalculateFillRange(source, target) is not { } fillRange)
+        {
+            return;
+        }
+
+        var completedSelection = GridAutofillPlanner.CalculateCompletedSelectionRange(source, fillRange);
+        var direction = ResolveAutofillDirection(source, fillRange);
+        ClearSelectedDrawingObject();
+        _session.SelectRange(completedSelection);
+        var result = _session.FillSelectedRange(direction);
+        RefreshShell(result.Success
+            ? $"{FormatFillCellsAction(direction)} in {FormatRangeReference(completedSelection)}"
+            : result.ErrorMessage ?? $"{FormatFillCellsAction(direction)} failed.");
+    }
+
+    private static FillCellsDirection ResolveAutofillDirection(GridRange source, GridRange fillRange)
+    {
+        if (fillRange.Start.Row > source.End.Row)
+            return FillCellsDirection.Down;
+        if (fillRange.End.Row < source.Start.Row)
+            return FillCellsDirection.Up;
+        if (fillRange.Start.Col > source.End.Col)
+            return FillCellsDirection.Right;
+        return FillCellsDirection.Left;
+    }
+
+    private bool TryBeginSelectionMoveDrag(PointerPressedEventArgs args, Control capture, CellAddress address)
+    {
+        if (!args.GetCurrentPoint(capture).Properties.IsLeftButtonPressed ||
+            args.KeyModifiers != KeyModifiers.None ||
+            !IsPointerOnSelectionMoveBorder(args) ||
+            _session.SelectedRanges.Count > 1)
+        {
+            return false;
+        }
+
+        var source = _session.SelectedRange;
+        _selectionMoveDragging = true;
+        _selectionMoveSourceRange = source;
+        _selectionMoveStartCell = GridSelectionMovePlanner.ClampDragStartCell(source, address);
+        _selectionMovePreviewRange = source;
+        BeginCellSelectionDrag(args, capture, source.Start);
+        return true;
+    }
+
+    private bool IsPointerOnSelectionMoveBorder(PointerEventArgs args)
+    {
+        var pos = args.GetPosition(_sheetGridHost);
+        var zoomFactor = GetActiveZoomFactor();
+        return GridSelectionMovePlanner.IsOnMoveBorder(
+            _session.Viewport,
+            _session.SelectedRange,
+            _session.SelectedRanges.Count > 1 ? _session.SelectedRanges : null,
+            new GridPoint(pos.X, pos.Y),
+            _session.ActiveSheet.ShowHeadings ? HeaderColumnWidth * zoomFactor : 0,
+            _session.ActiveSheet.ShowHeadings ? HeaderRowHeight * zoomFactor : 0);
+    }
+
+    private void ContinueSelectionMoveDrag(PointerEventArgs args, CellAddress target)
+    {
+        if (_selectionMoveSourceRange is not { } source ||
+            GridSelectionMovePlanner.CalculateTargetRange(source, _selectionMoveStartCell, target) is not { } targetRange)
+        {
+            return;
+        }
+
+        _selectionMovePreviewRange = targetRange;
+        args.Handled = true;
+    }
+
+    private void CommitSelectionMoveDrag()
+    {
+        if (_selectionMoveSourceRange is not { } source ||
+            _selectionMovePreviewRange is not { } target ||
+            source == target)
+        {
+            return;
+        }
+
+        ClearSelectedDrawingObject();
+        var result = _session.MoveSelectedRangeTo(source, target);
+        RefreshShell(result.Success
+            ? UiText.Format("MainLoc_SelectedX", FormatRangeReference(target))
+            : result.ErrorMessage ?? "Move Cells failed.");
     }
 
     /// <summary>
@@ -5319,6 +5582,9 @@ public sealed partial class MainWindow : Window
             conditionalDataBar,
             conditionalIcon,
             sparklineLayer);
+        if (address == _session.SelectedRange.End)
+            AddAutofillHandleAdorner(border, zoomFactor);
+
         border.Cursor = new Cursor(StandardCursorType.Hand);
         border.PointerPressed += (_, args) =>
         {
@@ -5329,6 +5595,13 @@ public sealed partial class MainWindow : Window
                 // opens the worksheet cell context menu, built from the shared neutral plan.
                 SelectCell(address);
                 OpenWorksheetCellContextMenu(border);
+                args.Handled = true;
+                return;
+            }
+
+            if (TryBeginAutofillDrag(args, border, address) ||
+                TryBeginSelectionMoveDrag(args, border, address))
+            {
                 args.Handled = true;
                 return;
             }
@@ -5355,6 +5628,31 @@ public sealed partial class MainWindow : Window
             args.Handled = true;
         };
         return DecorateAutoFilterHeaderCell(border, address);
+    }
+
+    private static void AddAutofillHandleAdorner(Border border, double zoomFactor)
+    {
+        var existing = border.Child;
+        var handleSize = Math.Max(4, 6 * zoomFactor);
+        var layer = new AvaloniaGrid
+        {
+            Children =
+            {
+                existing!,
+                new AvaloniaRectangle
+                {
+                    Width = handleSize,
+                    Height = handleSize,
+                    Fill = SelectionBorder,
+                    HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+                    VerticalAlignment = AvaloniaVerticalAlignment.Bottom,
+                    IsHitTestVisible = false,
+                    Margin = new Thickness(0, 0, -1, -1),
+                }
+            }
+        };
+
+        border.Child = layer;
     }
 
     private bool TryInsertFormulaPointReference(CellAddress address)
@@ -6439,6 +6737,7 @@ public sealed partial class MainWindow : Window
         if (!TryCommitPendingFormulaEdit())
             return;
 
+        ClearSelectionExtensionState();
         ClearSelectedDrawingObject();
         _session.SelectCell(address);
         RefreshTableContextualTab();
@@ -6450,10 +6749,18 @@ public sealed partial class MainWindow : Window
         if (!TryCommitPendingFormulaEdit())
             return;
 
+        _selectionExtensionAnchor = _session.ActiveCell;
+        _selectionExtensionCursor = address;
         ClearSelectedDrawingObject();
         _session.SelectRange(new GridRange(_session.ActiveCell, address));
         RefreshTableContextualTab();
         ApplyFormatPainterAfterTargetSelection();
+    }
+
+    private void ClearSelectionExtensionState()
+    {
+        _selectionExtensionAnchor = null;
+        _selectionExtensionCursor = null;
     }
 
     private void SelectSheet(SheetId sheetId)
@@ -17713,16 +18020,19 @@ public sealed partial class MainWindow : Window
     {
         if (!extendSelection)
         {
+            ClearSelectionExtensionState();
             _session.MoveActiveCell(rowDelta, colDelta);
             return;
         }
 
-        var anchor = _session.SelectedRange.Start;
-        var cursor = _session.SelectedRange.End;
+        var anchor = _selectionExtensionAnchor ?? _session.ActiveCell;
+        var cursor = _selectionExtensionCursor ?? _session.ActiveCell;
         var target = new CellAddress(
             _session.ActiveSheet.Id,
             OffsetCellIndex(cursor.Row, rowDelta, CellAddress.MaxRow),
             OffsetCellIndex(cursor.Col, colDelta, CellAddress.MaxCol));
+        _selectionExtensionAnchor = anchor;
+        _selectionExtensionCursor = target;
         _session.SelectRange(new GridRange(anchor, target));
     }
 
