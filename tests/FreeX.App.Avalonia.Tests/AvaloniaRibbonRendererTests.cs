@@ -221,8 +221,8 @@ public sealed class AvaloniaRibbonRendererTests
         Assert.Contains(tabControl.Styles, style => style is Style concrete && HasSetter(concrete, Border.BorderThicknessProperty, new Thickness(0)));
         Assert.DoesNotContain(tabControl.Styles, style => style is Style concrete && HasSetter(concrete, TemplatedControl.BorderThicknessProperty, new Thickness(0, 0, 0, 3)));
         Assert.Contains(tabControl.Styles, style => style is Style concrete && HasSetter(concrete, Layoutable.MaxHeightProperty, 26d));
-        Assert.Contains(tabControl.Styles, style => style is Style concrete && HasSetter(concrete, Layoutable.HeightProperty, 18d));
-        Assert.Contains(tabControl.Styles, style => style is Style concrete && HasSetter(concrete, Layoutable.MaxHeightProperty, 18d));
+        Assert.Contains(tabControl.Styles, style => style is Style concrete && HasSetter(concrete, Layoutable.HeightProperty, 16d));
+        Assert.Contains(tabControl.Styles, style => style is Style concrete && HasSetter(concrete, Layoutable.MaxHeightProperty, 16d));
         Assert.Contains(tabControl.Styles, style => style is Style concrete && HasSetter(concrete, TemplatedControl.TemplateProperty));
     });
 
@@ -281,9 +281,9 @@ public sealed class AvaloniaRibbonRendererTests
 
         var checkBox = content.GetLogicalDescendants().OfType<CheckBox>().Single();
 
-        Assert.Equal(18, checkBox.Height);
-        Assert.Equal(18, checkBox.MinHeight);
-        Assert.Equal(18, checkBox.MaxHeight);
+        Assert.Equal(16, checkBox.Height);
+        Assert.Equal(16, checkBox.MinHeight);
+        Assert.Equal(16, checkBox.MaxHeight);
         Assert.NotNull(checkBox.Template);
     });
 
