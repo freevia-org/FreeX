@@ -468,6 +468,10 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.display-for-review-all-markup", displayForReview);
         stateful.Add(("freew.display-for-review", displayForReview));
 
+        var displaySimpleMarkup = new DisplayForReviewSimpleMarkupCommand(editor);
+        registry.Register("freew.display-for-review-simple-markup", displaySimpleMarkup);
+        stateful.Add(("freew.display-for-review-simple-markup", displaySimpleMarkup));
+
         var displayNoMarkup = new DisplayForReviewNoMarkupCommand(editor);
         registry.Register("freew.display-for-review-no-markup", displayNoMarkup);
         stateful.Add(("freew.display-for-review-no-markup", displayNoMarkup));
@@ -2936,6 +2940,22 @@ internal static class FreeWRibbonCommands
         // The root button IsChecked is true when in All Markup (the default), matching Word's convention.
         public RibbonCommandState GetState() =>
             new(IsEnabled: true, IsChecked: editor.DisplayForReview == DocumentView.MarkupDisplayMode.AllMarkup);
+    }
+
+    // Review > Tracking > Display for Review > Simple Markup: inline rendering identical to No Markup
+    // (final form — insertions plain, deletions hidden) plus a left-margin change bar drawn by
+    // ChangeBarAdorner beside every paragraph that carries a tracked-change run. RevisionMarker is always
+    // written so text + revision kind/author/date survive CommitToModel unchanged (round-trip safe).
+    private sealed class DisplayForReviewSimpleMarkupCommand(DocumentView editor) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            editor.ApplyDisplayForReview(DocumentView.MarkupDisplayMode.SimpleMarkup);
+        }
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: true, IsChecked: editor.DisplayForReview == DocumentView.MarkupDisplayMode.SimpleMarkup);
     }
 
     // Review > Tracking > Display for Review > No Markup: insertions shown as plain text; deleted runs

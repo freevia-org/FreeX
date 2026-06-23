@@ -2557,6 +2557,7 @@ public sealed class DocumentView : RichTextBox
         SyncFormattingMarksAdorner();
         SyncPageBreakAdorner();
         SyncLineNumberAdorner();
+        SyncChangeBarAdorner();
     }
 
     /// <summary>
@@ -2872,6 +2873,49 @@ public sealed class DocumentView : RichTextBox
     {
         Loaded -= OnLoadedSyncLineNumbers;
         SyncLineNumberAdorner();
+    }
+
+    // The change-bar adorner is shown only in Simple Markup mode. Null when the adorner is not active.
+    private ChangeBarAdorner? _changeBarAdorner;
+
+    // Add, remove, or refresh the change-bar overlay to match the current DisplayForReview mode. Mirrors
+    // SyncFormattingMarksAdorner: the adorner layer only exists once the control is in a visual tree, so
+    // when it is not yet available we defer via a one-shot Loaded handler. Switching away from Simple
+    // Markup removes the overlay; switching in invalidates it so it repaints against the new Document.
+    private void SyncChangeBarAdorner()
+    {
+        var enabled = DisplayForReview == MarkupDisplayMode.SimpleMarkup;
+        var layer = AdornerLayer.GetAdornerLayer(this);
+        if (layer is null)
+        {
+            if (enabled)
+            {
+                Loaded -= OnLoadedSyncChangeBar;
+                Loaded += OnLoadedSyncChangeBar;
+            }
+            return;
+        }
+
+        if (enabled)
+        {
+            if (_changeBarAdorner is null)
+            {
+                _changeBarAdorner = new ChangeBarAdorner(this);
+                layer.Add(_changeBarAdorner);
+            }
+            _changeBarAdorner.InvalidateVisual();
+        }
+        else if (_changeBarAdorner is not null)
+        {
+            layer.Remove(_changeBarAdorner);
+            _changeBarAdorner = null;
+        }
+    }
+
+    private void OnLoadedSyncChangeBar(object sender, RoutedEventArgs e)
+    {
+        Loaded -= OnLoadedSyncChangeBar;
+        SyncChangeBarAdorner();
     }
 
     /// <summary>
@@ -4008,18 +4052,16 @@ public sealed class DocumentView : RichTextBox
         // round-trip the kind/author/date in every display mode. The visual chrome (colour, decoration,
         // visibility) depends on the current Display for Review mode:
         //
-        //   AllMarkup  — revision colour + underline (insertions) or strikethrough (deletions), but only
-        //                when Show Markup > Insertions and Deletions is also ON.
-        //   NoMarkup   — insertions rendered as plain text (no colour/decoration); deleted runs rendered
-        //                visually invisible: near-zero font size + transparent foreground so the run
-        //                occupies negligible space but its WpfRun.Text and RevisionMarker survive
-        //                CommitToModel unchanged (round-trip safe via technique (a)).
-        //   Original   — deleted runs rendered as plain text; inserted runs rendered invisible (same
-        //                technique).
-        //
-        // DEFERRED: Simple Markup (change-bar adorner in the margin) — requires a custom adorner layer
-        // that the FlowDocument/RichTextBox stack cannot host without significant scaffolding. Deferred
-        // until an adorner surface is available. Balloons are also deferred for the same reason.
+        //   AllMarkup    — revision colour + underline (insertions) or strikethrough (deletions), but only
+        //                  when Show Markup > Insertions and Deletions is also ON.
+        //   SimpleMarkup — inline rendering identical to No Markup (final form); a left-margin change bar
+        //                  is painted by ChangeBarAdorner for paragraphs that carry any revision run.
+        //   NoMarkup     — insertions rendered as plain text (no colour/decoration); deleted runs rendered
+        //                  visually invisible: near-zero font size + transparent foreground so the run
+        //                  occupies negligible space but its WpfRun.Text and RevisionMarker survive
+        //                  CommitToModel unchanged (round-trip safe via technique (a)).
+        //   Original     — deleted runs rendered as plain text; inserted runs rendered invisible (same
+        //                  technique).
         if (run.Revision != RevisionKind.None)
         {
             // RevisionMarker is ALWAYS written regardless of display mode.
@@ -4037,8 +4079,11 @@ public sealed class DocumentView : RichTextBox
                     }
                     break;
 
+                case MarkupDisplayMode.SimpleMarkup:
                 case MarkupDisplayMode.NoMarkup:
-                    // Insertions: plain text (no colour/decoration) — no further action needed.
+                    // SimpleMarkup reuses the No Markup inline path: insertions plain, deletions hidden.
+                    // The change bar (visible only in SimpleMarkup) is painted by ChangeBarAdorner; no
+                    // inline chrome is added here. Insertions: plain text — no further action needed.
                     // Deletions: visually hidden — transparent foreground, near-zero size so the glyph
                     // doesn't paint and takes up no space, but the run stays in the tree so CommitToModel
                     // recovers its text and RevisionMarker without any special handling.
@@ -6922,6 +6967,10 @@ public sealed class DocumentView : RichTextBox
     /// <list type="bullet">
     ///   <item><term>AllMarkup</term><description>Default. Insertions shown in revision colour with underline;
     ///   deletions in revision colour with strikethrough.</description></item>
+    ///   <item><term>SimpleMarkup</term><description>Inline rendering identical to No Markup (final form:
+    ///   insertions plain, deletions invisible) plus a thin vertical bar in the left margin beside every
+    ///   paragraph that contains at least one tracked-change run. The <see cref="RevisionMarker"/> tag is
+    ///   still written on every run so CommitToModel round-trips safely.</description></item>
     ///   <item><term>NoMarkup</term><description>Insertions shown as plain text (no colour/decoration);
     ///   deleted runs rendered invisible (zero-width transparent). The <see cref="RevisionMarker"/> tag is
     ///   still written on every run so CommitToModel can round-trip both the text and the revision kind safely.
@@ -6929,10 +6978,8 @@ public sealed class DocumentView : RichTextBox
     ///   <item><term>Original</term><description>Deleted runs shown as plain text; inserted runs rendered
     ///   invisible. Same round-trip guarantee via RevisionMarker.</description></item>
     /// </list>
-    /// DEFERRED: <em>Simple Markup</em> (needs a margin change-bar adorner that the FlowDocument stack
-    /// cannot host without a custom adorner layer — deferred until the adorner surface exists).
     /// </summary>
-    public enum MarkupDisplayMode { AllMarkup, NoMarkup, Original }
+    public enum MarkupDisplayMode { AllMarkup, SimpleMarkup, NoMarkup, Original }
 
     /// <summary>Current Display for Review setting. Defaults to All Markup (today's behaviour).</summary>
     public MarkupDisplayMode DisplayForReview { get; set; } = MarkupDisplayMode.AllMarkup;
@@ -8437,5 +8484,182 @@ public sealed class DocumentView : RichTextBox
             var y = lineRect.Top + Math.Max(0, (lineRect.Height - formatted.Height) / 2);
             dc.DrawText(formatted, new Point(x, y));
         }
+    }
+
+    /// <summary>
+    /// Draws a thin vertical bar in the left margin beside every paragraph in the WPF tree that
+    /// contains at least one tracked-change run (insertion, deletion, or format revision). Used
+    /// exclusively in <see cref="MarkupDisplayMode.SimpleMarkup"/>, where the inline rendering
+    /// shows the final form (No Markup path) and this bar is the only visible cue that a change
+    /// exists. The overlay is hit-test transparent and repaints on layout/scroll, mirroring the
+    /// pattern of <see cref="FormattingMarksAdorner"/> and <see cref="LineNumberAdorner"/>.
+    ///
+    /// <para><b>Y-position strategy:</b> per-paragraph Y is obtained from
+    /// <c>WpfParagraph.ContentStart.GetCharacterRect()</c>, which is the same geometry the
+    /// formatting-marks adorner uses. The bar's height spans from the paragraph's first-line top
+    /// to its last-content bottom, both derived from the same API. This is accurate for single-
+    /// column continuous-flow documents. Print-Layout mode is also accurate (the adorner shares
+    /// the editor's coordinate space and is scaled by its LayoutTransform). The only known
+    /// approximation is that the bar's bottom uses <c>ContentEnd</c>'s rect, which, for very
+    /// large paragraphs or paragraphs whose content end falls mid-line, may clip the last line by
+    /// a few pixels — visually imperceptible for a margin indicator.</para>
+    ///
+    /// <para><b>Left-margin X position:</b> the bar is placed at a fixed small inset from the
+    /// left edge of the editor's coordinate space (x = 2 dip), which sits in the left-margin
+    /// padding added by <see cref="ApplyPageChrome"/> in Print Layout or at the edge of the
+    /// content area in continuous view. This matches the visual convention of Word's change bar,
+    /// which appears in the left gutter without encroaching on the text column.</para>
+    /// </summary>
+    internal sealed class ChangeBarAdorner : Adorner
+    {
+        // The bar colour matches Word's change-bar colour — a muted revision blue-grey.
+        private static readonly Pen BarPen = CreateBarPen();
+
+        // Width of the vertical bar in DIP (matching Word's ~3 pt bar width).
+        private const double BarWidth = 3.0;
+
+        // Horizontal inset from the left edge of the editor coordinate space (sits in the
+        // page's left-margin padding added by ApplyPageChrome / the FlowDocument padding).
+        private const double BarX = 2.0;
+
+        // Cap how many paragraphs we scan per paint so a pathological document cannot make the
+        // overlay expensive; far above any realistic single-screen paragraph count.
+        private const int MaxParagraphs = 5_000;
+
+        private readonly DocumentView _view;
+
+        public ChangeBarAdorner(DocumentView view) : base(view)
+        {
+            _view = view;
+            IsHitTestVisible = false;
+            // Repaint when the surface scrolls or relayouts so the bars stay aligned with the text.
+            _view.LayoutUpdated += (_, _) => InvalidateVisual();
+        }
+
+        private static Pen CreateBarPen()
+        {
+            // A muted indigo-grey that reads clearly against a white page without competing with text.
+            var pen = new Pen(new SolidColorBrush(Color.FromRgb(0x60, 0x60, 0xC0)), BarWidth);
+            pen.Freeze();
+            return pen;
+        }
+
+        protected override void OnRender(DrawingContext drawingContext)
+        {
+            base.OnRender(drawingContext);
+
+            if (_view.Document is not { } doc)
+                return;
+
+            var bounds = new Rect(_view.RenderSize);
+            drawingContext.PushClip(new RectangleGeometry(bounds));
+            try
+            {
+                var count = 0;
+                foreach (var block in doc.Blocks)
+                {
+                    DrawBlockBars(drawingContext, block, bounds, ref count);
+                    if (count >= MaxParagraphs)
+                        break;
+                }
+            }
+            finally
+            {
+                drawingContext.Pop();
+            }
+        }
+
+        // Walk a top-level block (paragraph, list, table) and draw bars for each changed paragraph.
+        private void DrawBlockBars(DrawingContext dc, System.Windows.Documents.Block block, Rect bounds, ref int count)
+        {
+            switch (block)
+            {
+                case WpfParagraph paragraph:
+                    if (count < MaxParagraphs)
+                    {
+                        DrawBarIfChanged(dc, paragraph, bounds);
+                        count++;
+                    }
+                    break;
+                case WpfList list:
+                    foreach (var item in list.ListItems)
+                        foreach (var inner in item.Blocks)
+                            DrawBlockBars(dc, inner, bounds, ref count);
+                    break;
+                case WpfTable table:
+                    foreach (var group in table.RowGroups)
+                        foreach (var row in group.Rows)
+                            foreach (var cell in row.Cells)
+                                foreach (var inner in cell.Blocks)
+                                    DrawBlockBars(dc, inner, bounds, ref count);
+                    break;
+            }
+        }
+
+        // Draw a vertical bar beside `paragraph` if it contains any tracked-change run.
+        // The bar spans the paragraph's first-line top to its content-end bottom, both obtained
+        // via GetCharacterRect (same geometry the FormattingMarksAdorner uses for glyphs).
+        private void DrawBarIfChanged(DrawingContext dc, WpfParagraph paragraph, Rect bounds)
+        {
+            if (!ParagraphHasRevision(paragraph))
+                return;
+
+            Rect topRect, bottomRect;
+            try
+            {
+                topRect = paragraph.ContentStart.GetCharacterRect(LogicalDirection.Forward);
+                bottomRect = paragraph.ContentEnd.GetCharacterRect(LogicalDirection.Backward);
+            }
+            catch (InvalidOperationException)
+            {
+                // Layout momentarily unavailable during a relayout; skip this paragraph.
+                return;
+            }
+
+            if (topRect.IsEmpty || bottomRect.IsEmpty)
+                return;
+
+            var barTop = topRect.Top;
+            var barBottom = bottomRect.Bottom;
+
+            // Cull bars that are entirely outside the visible viewport.
+            if (barBottom < bounds.Top || barTop > bounds.Bottom)
+                return;
+
+            // Clamp to visible surface so the bar doesn't bleed outside the clip region.
+            barTop = Math.Max(barTop, bounds.Top);
+            barBottom = Math.Min(barBottom, bounds.Bottom);
+
+            if (barBottom <= barTop)
+                return;
+
+            var midX = BarX + BarWidth / 2.0;
+            dc.DrawLine(BarPen, new Point(midX, barTop), new Point(midX, barBottom));
+        }
+
+        /// <summary>
+        /// Returns true when any inline in <paramref name="paragraph"/> carries a
+        /// <see cref="RevisionMarker"/> (tracked insertion or deletion) or a
+        /// <see cref="FormatRevisionMarker"/> (tracked formatting change). Used by
+        /// <see cref="DrawBarIfChanged"/> and independently testable without a display surface.
+        /// </summary>
+        internal static bool ParagraphHasRevision(WpfParagraph paragraph)
+        {
+            foreach (var inline in paragraph.Inlines)
+            {
+                if (InlineHasRevision(inline))
+                    return true;
+            }
+            return false;
+        }
+
+        // Recurse into Span/Hyperlink containers; check WpfRun tags directly.
+        private static bool InlineHasRevision(System.Windows.Documents.Inline inline) =>
+            inline switch
+            {
+                WpfRun run => run.Tag is RunMarkers { Revision: not null },
+                System.Windows.Documents.Span span => span.Inlines.Any(InlineHasRevision),
+                _ => false
+            };
     }
 }

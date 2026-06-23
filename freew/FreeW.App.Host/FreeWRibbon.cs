@@ -557,12 +557,13 @@ internal static class FreeWRibbon
                     g.MediumToggle("freew.track-changes", "Track Changes", RibbonCommandIconKind.History);
                     g.MediumToggle("freew.reviewing-pane", "Reviewing Pane", RibbonCommandIconKind.History);
                     g.RowBreak();
-                    // Display for Review: dropdown with All Markup (default), No Markup, and Original.
-                    // Simple Markup is DEFERRED — it requires a margin change-bar adorner that the
-                    // FlowDocument/RichTextBox stack cannot host without a custom adorner layer.
+                    // Display for Review: dropdown with All Markup (default), Simple Markup, No Markup,
+                    // and Original — Word's order. Simple Markup shows the final form (No Markup inline
+                    // path) plus a left-margin change bar beside each changed paragraph.
                     g.Medium("freew.display-for-review", "All Markup", RibbonCommandIconKind.History, "D", menu: m =>
                     {
                         m.Item("freew.display-for-review-all-markup", "All Markup", "A");
+                        m.Item("freew.display-for-review-simple-markup", "Simple Markup", "S");
                         m.Item("freew.display-for-review-no-markup", "No Markup", "N");
                         m.Item("freew.display-for-review-original", "Original", "O");
                     });

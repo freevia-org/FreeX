@@ -324,6 +324,163 @@ public sealed class TrackingDisplayControlTests
         run.FormatRevision!.Author.Should().Be("X");
     }
 
+    // ── Simple Markup — round-trip safety ─────────────────────────────────────────────────────
+
+    [StaFact]
+    public void DisplayForReview_SimpleMarkup_DeletedRunSurvivesCommitWithKindAndText()
+    {
+        // Arrange: a document with a deleted run.
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var para = new Paragraph();
+        para.Runs.Add(new Run("kept "));
+        para.Runs.Add(new Run("removed") { Revision = RevisionKind.Deleted, RevisionAuthor = "Bob", RevisionDateXml = "2026-06-23T00:00:00Z" });
+        doc.Blocks.Add(para);
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        // Act: switch to Simple Markup (deletions hidden, same as No Markup inline path) and commit.
+        view.ApplyDisplayForReview(DocumentView.MarkupDisplayMode.SimpleMarkup);
+        view.CommitToModel();
+
+        // Assert: the deleted run must still be in the model with kind/author/date/text intact.
+        var runs = ((Paragraph)view.Model.Blocks[0]).Runs;
+        var deleted = runs.FirstOrDefault(r => r.Revision == RevisionKind.Deleted);
+        deleted.Should().NotBeNull("deleted run must survive Simple Markup mode");
+        deleted!.Text.Should().Be("removed", "deleted run text must be preserved");
+        deleted.RevisionAuthor.Should().Be("Bob");
+        deleted.RevisionDateXml.Should().Be("2026-06-23T00:00:00Z");
+    }
+
+    [StaFact]
+    public void DisplayForReview_SimpleMarkup_InsertedRunSurvivesCommitWithKindAndText()
+    {
+        // Arrange: a document with an inserted run.
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var para = new Paragraph();
+        para.Runs.Add(new Run("base "));
+        para.Runs.Add(new Run("added") { Revision = RevisionKind.Inserted, RevisionAuthor = "Alice", RevisionDateXml = "2026-06-23T00:00:00Z" });
+        doc.Blocks.Add(para);
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        // Act: Simple Markup shows insertions as plain text (same as No Markup); round-trip must hold.
+        view.ApplyDisplayForReview(DocumentView.MarkupDisplayMode.SimpleMarkup);
+        view.CommitToModel();
+
+        // Assert: the inserted run is present with kind/author/date/text intact.
+        var runs = ((Paragraph)view.Model.Blocks[0]).Runs;
+        var inserted = runs.FirstOrDefault(r => r.Revision == RevisionKind.Inserted);
+        inserted.Should().NotBeNull("inserted run must survive Simple Markup mode");
+        inserted!.Text.Should().Be("added", "inserted run text must be preserved");
+        inserted.RevisionAuthor.Should().Be("Alice");
+        inserted.RevisionDateXml.Should().Be("2026-06-23T00:00:00Z");
+    }
+
+    // ── Simple Markup — ChangeBarAdorner.ParagraphHasRevision detection ───────────────────────
+    //
+    // The adorner's OnRender and the change-bar painting itself require an STA window with a live
+    // AdornerLayer and are not unit-testable in a headless runner. The detection predicate
+    // (ParagraphHasRevision) is internal and testable independently.
+
+    [StaFact]
+    public void ParagraphHasRevision_ReturnsFalse_ForParagraphWithNoRevisions()
+    {
+        // Arrange: load a plain document and grab the WPF paragraph.
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var para = new Paragraph();
+        para.Runs.Add(new Run("plain text"));
+        doc.Blocks.Add(para);
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var wpfDoc = view.Document!;
+        var wpfPara = wpfDoc.Blocks.OfType<System.Windows.Documents.Paragraph>().First();
+
+        // Act & Assert: no revision runs → predicate must be false.
+        DocumentView.ChangeBarAdorner.ParagraphHasRevision(wpfPara).Should().BeFalse(
+            "a paragraph with only plain runs should not receive a change bar");
+    }
+
+    [StaFact]
+    public void ParagraphHasRevision_ReturnsTrue_WhenParagraphContainsInsertedRun()
+    {
+        // Arrange: load a document whose paragraph contains an inserted run.
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var para = new Paragraph();
+        para.Runs.Add(new Run("base "));
+        para.Runs.Add(new Run("added") { Revision = RevisionKind.Inserted, RevisionAuthor = "A" });
+        doc.Blocks.Add(para);
+
+        var view = new DocumentView();
+        // Use Simple Markup so the inline path is exercised and RevisionMarker is in the WPF tree.
+        view.ApplyDisplayForReview(DocumentView.MarkupDisplayMode.SimpleMarkup);
+        view.LoadModel(doc);
+
+        var wpfDoc = view.Document!;
+        var wpfPara = wpfDoc.Blocks.OfType<System.Windows.Documents.Paragraph>().First();
+
+        // Act & Assert: paragraph has an inserted run → predicate must be true.
+        DocumentView.ChangeBarAdorner.ParagraphHasRevision(wpfPara).Should().BeTrue(
+            "a paragraph with an inserted run should receive a change bar in Simple Markup");
+    }
+
+    [StaFact]
+    public void ParagraphHasRevision_ReturnsTrue_WhenParagraphContainsDeletedRun()
+    {
+        // Arrange: load a document whose paragraph contains a deleted run.
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var para = new Paragraph();
+        para.Runs.Add(new Run("kept "));
+        para.Runs.Add(new Run("removed") { Revision = RevisionKind.Deleted, RevisionAuthor = "B" });
+        doc.Blocks.Add(para);
+
+        var view = new DocumentView();
+        view.ApplyDisplayForReview(DocumentView.MarkupDisplayMode.SimpleMarkup);
+        view.LoadModel(doc);
+
+        var wpfDoc = view.Document!;
+        var wpfPara = wpfDoc.Blocks.OfType<System.Windows.Documents.Paragraph>().First();
+
+        // Act & Assert: paragraph has a deleted run → predicate must be true.
+        DocumentView.ChangeBarAdorner.ParagraphHasRevision(wpfPara).Should().BeTrue(
+            "a paragraph with a deleted run should receive a change bar in Simple Markup");
+    }
+
+    [StaFact]
+    public void ParagraphHasRevision_ReturnsFalse_WhenAdjacentParagraphHasRevisionButThisOneDoesNot()
+    {
+        // Arrange: two paragraphs — one plain, one with a revision.
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var plain = new Paragraph();
+        plain.Runs.Add(new Run("plain"));
+        var changed = new Paragraph();
+        changed.Runs.Add(new Run("added") { Revision = RevisionKind.Inserted, RevisionAuthor = "A" });
+        doc.Blocks.Add(plain);
+        doc.Blocks.Add(changed);
+
+        var view = new DocumentView();
+        view.ApplyDisplayForReview(DocumentView.MarkupDisplayMode.SimpleMarkup);
+        view.LoadModel(doc);
+
+        var wpfDoc = view.Document!;
+        var paras = wpfDoc.Blocks.OfType<System.Windows.Documents.Paragraph>().ToList();
+
+        // Act & Assert: the plain paragraph must NOT get a bar, the changed one MUST.
+        DocumentView.ChangeBarAdorner.ParagraphHasRevision(paras[0]).Should().BeFalse(
+            "the plain paragraph should not receive a change bar");
+        DocumentView.ChangeBarAdorner.ParagraphHasRevision(paras[1]).Should().BeTrue(
+            "the paragraph with an insertion should receive a change bar");
+    }
+
     // ── Combined: all flags default to ON means existing tests still pass ─────────────────────
 
     [StaFact]

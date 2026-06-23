@@ -592,6 +592,7 @@ public sealed class FreeWRibbonParityTests
             .Should()
             .Equal(
                 "freew.display-for-review-all-markup",
+                "freew.display-for-review-simple-markup",
                 "freew.display-for-review-no-markup",
                 "freew.display-for-review-original",
                 "freew.show-markup-insertions-deletions",
