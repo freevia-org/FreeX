@@ -846,8 +846,10 @@ internal static class FreeWRibbonCommands
             editor.Focus();
             if (editor.Selection.IsEmpty)
             {
-                MessageBox.Show(Window.GetWindow(editor), "Select some text first, then choose Change Case.",
-                    "FreeW", MessageBoxButton.OK, MessageBoxImage.Information);
+                DialogMessageHelper.ShowInfo(
+                    Window.GetWindow(editor),
+                    "Select some text first, then choose Change Case.",
+                    "FreeW");
                 return;
             }
 
@@ -1772,8 +1774,7 @@ internal static class FreeWRibbonCommands
             }
             catch (Exception ex)
             {
-                MessageBox.Show(owner, $"Could not insert the file:\n{ex.Message}",
-                    "FreeW", MessageBoxButton.OK, MessageBoxImage.Error);
+                DialogMessageHelper.ShowError(owner, $"Could not insert the file:\n{ex.Message}", "FreeW");
             }
         }
     }
@@ -1802,8 +1803,7 @@ internal static class FreeWRibbonCommands
             }
             catch (Exception ex)
             {
-                MessageBox.Show(owner, $"Could not insert the image:\n{ex.Message}",
-                    "FreeW", MessageBoxButton.OK, MessageBoxImage.Error);
+                DialogMessageHelper.ShowError(owner, $"Could not insert the image:\n{ex.Message}", "FreeW");
             }
         }
 
@@ -1878,8 +1878,7 @@ internal static class FreeWRibbonCommands
             {
                 if (window is not null && window.WindowState == WindowState.Minimized)
                     window.WindowState = previousState;
-                MessageBox.Show(window, $"Could not capture the screen clip:\n{ex.Message}",
-                    "FreeW", MessageBoxButton.OK, MessageBoxImage.Error);
+                DialogMessageHelper.ShowError(window, $"Could not capture the screen clip:\n{ex.Message}", "FreeW");
             }
         }
     }
@@ -1893,8 +1892,10 @@ internal static class FreeWRibbonCommands
             var image = editor.SelectedImage();
             if (image is null)
             {
-                MessageBox.Show(Window.GetWindow(editor), "Select an image first, then choose Image Size.",
-                    "FreeW", MessageBoxButton.OK, MessageBoxImage.Information);
+                DialogMessageHelper.ShowInfo(
+                    Window.GetWindow(editor),
+                    "Select an image first, then choose Image Size.",
+                    "FreeW");
                 return;
             }
 
@@ -1914,8 +1915,10 @@ internal static class FreeWRibbonCommands
             var image = editor.SelectedImage();
             if (image is null)
             {
-                MessageBox.Show(Window.GetWindow(editor), "Select an image first, then choose Alt Text.",
-                    "FreeW", MessageBoxButton.OK, MessageBoxImage.Information);
+                DialogMessageHelper.ShowInfo(
+                    Window.GetWindow(editor),
+                    "Select an image first, then choose Alt Text.",
+                    "FreeW");
                 return;
             }
 
@@ -1936,8 +1939,10 @@ internal static class FreeWRibbonCommands
             editor.Focus();
             if (editor.SelectedImage() is null)
             {
-                MessageBox.Show(Window.GetWindow(editor), "Select an image first, then choose an image alignment.",
-                    "FreeW", MessageBoxButton.OK, MessageBoxImage.Information);
+                DialogMessageHelper.ShowInfo(
+                    Window.GetWindow(editor),
+                    "Select an image first, then choose an image alignment.",
+                    "FreeW");
                 return;
             }
             editor.SetSelectedImageAlignment(alignment);
@@ -2372,9 +2377,10 @@ internal static class FreeWRibbonCommands
             var word = editor.MisspelledWordAtCaret();
             if (string.IsNullOrEmpty(word))
             {
-                MessageBox.Show(Window.GetWindow(editor),
+                DialogMessageHelper.ShowInfo(
+                    Window.GetWindow(editor),
                     "Click into a misspelled (red-underlined) word first, then choose Add to Dictionary.",
-                    "FreeW", MessageBoxButton.OK, MessageBoxImage.Information);
+                    "FreeW");
                 return;
             }
 
@@ -2547,8 +2553,7 @@ internal static class FreeWRibbonCommands
             }
             catch (Exception ex)
             {
-                MessageBox.Show(owner, $"Could not compare the documents:\n{ex.Message}",
-                    "FreeW", MessageBoxButton.OK, MessageBoxImage.Error);
+                DialogMessageHelper.ShowError(owner, $"Could not compare the documents:\n{ex.Message}", "FreeW");
             }
         }
     }
@@ -2599,8 +2604,7 @@ internal static class FreeWRibbonCommands
             }
             catch (Exception ex)
             {
-                MessageBox.Show(owner, $"Could not combine the documents:\n{ex.Message}",
-                    "FreeW", MessageBoxButton.OK, MessageBoxImage.Error);
+                DialogMessageHelper.ShowError(owner, $"Could not combine the documents:\n{ex.Message}", "FreeW");
             }
         }
     }
@@ -2647,9 +2651,10 @@ internal static class FreeWRibbonCommands
             var bookmarks = editor.BookmarkNames();
             if (bookmarks.Count == 0)
             {
-                MessageBox.Show(Window.GetWindow(editor),
+                DialogMessageHelper.ShowInfo(
+                    Window.GetWindow(editor),
                     "No bookmarks exist yet. Add a bookmark first (Insert › Bookmark), then link to it.",
-                    "FreeW", MessageBoxButton.OK, MessageBoxImage.Information);
+                    "FreeW");
                 return;
             }
 
@@ -2851,9 +2856,10 @@ internal static class FreeWRibbonCommands
             var text = editor.Selection.Text;
             if (string.IsNullOrEmpty(text))
             {
-                MessageBox.Show(Window.GetWindow(editor),
+                DialogMessageHelper.ShowInfo(
+                    Window.GetWindow(editor),
                     "Select some text first, then choose Save Selection to Quick Parts.",
-                    "FreeW", MessageBoxButton.OK, MessageBoxImage.Information);
+                    "FreeW");
                 return;
             }
 
@@ -2876,9 +2882,10 @@ internal static class FreeWRibbonCommands
             editor.Focus();
             if (library.IsEmpty)
             {
-                MessageBox.Show(Window.GetWindow(editor),
+                DialogMessageHelper.ShowInfo(
+                    Window.GetWindow(editor),
                     "No Quick Parts saved yet. Select some text and choose Save Selection to Quick Parts first.",
-                    "FreeW", MessageBoxButton.OK, MessageBoxImage.Information);
+                    "FreeW");
                 return;
             }
 
@@ -3187,9 +3194,10 @@ internal static class FreeWRibbonCommands
             session.Template = null; // any in-progress preview is invalidated by new data
             session.CurrentIndex = 0;
 
-            MessageBox.Show(Window.GetWindow(editor),
+            DialogMessageHelper.ShowInfo(
+                Window.GetWindow(editor),
                 $"Loaded {parsed.Count} record(s) with {parsed.Header.Count} field(s).",
-                "Mail Merge", MessageBoxButton.OK, MessageBoxImage.Information);
+                "Mail Merge");
             editor.Focus();
         }
 
@@ -3222,9 +3230,10 @@ internal static class FreeWRibbonCommands
         {
             if (session.Data is not { Count: > 0 } data)
             {
-                MessageBox.Show(Window.GetWindow(editor),
+                DialogMessageHelper.ShowInfo(
+                    Window.GetWindow(editor),
                     "Select recipients first (Mailings > Select Recipients), then preview a record.",
-                    "Mail Merge", MessageBoxButton.OK, MessageBoxImage.Information);
+                    "Mail Merge");
                 return;
             }
 
@@ -3273,9 +3282,10 @@ internal static class FreeWRibbonCommands
         {
             if (session.Data is not { Count: > 0 } data)
             {
-                MessageBox.Show(Window.GetWindow(editor),
+                DialogMessageHelper.ShowInfo(
+                    Window.GetWindow(editor),
                     "Select recipients first (Mailings > Select Recipients), then Finish & Merge.",
-                    "Mail Merge", MessageBoxButton.OK, MessageBoxImage.Information);
+                    "Mail Merge");
                 return;
             }
 
@@ -3298,9 +3308,10 @@ internal static class FreeWRibbonCommands
             session.Template = null;
             session.CurrentIndex = 0;
 
-            MessageBox.Show(Window.GetWindow(editor),
+            DialogMessageHelper.ShowInfo(
+                Window.GetWindow(editor),
                 $"Merged {merged.Count} record(s) into a single document.",
-                "Mail Merge", MessageBoxButton.OK, MessageBoxImage.Information);
+                "Mail Merge");
             editor.Focus();
         }
 
