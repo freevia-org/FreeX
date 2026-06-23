@@ -36,10 +36,10 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get("TableLoc_ConsolidateDialogTitle"),
-            Width = 460,
-            Height = 520,
-            MinWidth = 420,
-            MinHeight = 460,
+            Width = 420,
+            Height = 480,
+            MinWidth = 400,
+            MinHeight = 440,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -51,17 +51,21 @@ public sealed partial class MainWindow
             SelectedIndex = 0,
             MinWidth = 160,
         };
+        ApplyDataOpsComboBoxChrome(functionBox);
         AutomationProperties.SetAutomationId(functionBox, "ConsolidateFunctionBox");
 
         var referenceBox = new TextBox { PlaceholderText = UiText.Get("TableLoc_ConsolidateReferencePlaceholder"), MinWidth = 220 };
+        ApplyDataOpsTextBoxChrome(referenceBox);
         AutomationProperties.SetAutomationId(referenceBox, "ConsolidateReferenceBox");
 
         var referencesList = new ListBox { MinHeight = 96 };
         AutomationProperties.SetAutomationId(referencesList, "ConsolidateAllReferencesList");
 
         var addButton = new Button { Content = UiText.Get("TableLoc_Add"), MinWidth = 76 };
+        ApplyDataOpsButtonChrome(addButton);
         AutomationProperties.SetAutomationId(addButton, "ConsolidateAddReferenceButton");
         var removeButton = new Button { Content = UiText.Get("TableLoc_Remove"), MinWidth = 76, IsEnabled = false };
+        ApplyDataOpsButtonChrome(removeButton);
         AutomationProperties.SetAutomationId(removeButton, "ConsolidateRemoveReferenceButton");
 
         var destinationBox = new TextBox
@@ -69,11 +73,14 @@ public sealed partial class MainWindow
             Text = FormatRangeReference(_session.SelectedRange),
             MinWidth = 220,
         };
+        ApplyDataOpsTextBoxChrome(destinationBox);
         AutomationProperties.SetAutomationId(destinationBox, "ConsolidateDestinationCellBox");
 
         var topRowBox = new CheckBox { Content = UiText.Get("TableLoc_ConsolidateTopRow") };
+        ApplyDataOpsCheckBoxChrome(topRowBox);
         AutomationProperties.SetAutomationId(topRowBox, "ConsolidateTopRowLabelsBox");
         var leftColumnBox = new CheckBox { Content = UiText.Get("TableLoc_ConsolidateLeftColumn") };
+        ApplyDataOpsCheckBoxChrome(leftColumnBox);
         AutomationProperties.SetAutomationId(leftColumnBox, "ConsolidateLeftColumnLabelsBox");
 
         var warningText = new TextBlock
@@ -81,6 +88,8 @@ public sealed partial class MainWindow
             Foreground = Brush(180, 30, 30),
             TextWrapping = TextWrapping.Wrap,
             IsVisible = false,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
         };
         AutomationProperties.SetAutomationId(warningText, "ConsolidateWarningText");
 
@@ -129,8 +138,10 @@ public sealed partial class MainWindow
         };
 
         var applyButton = new Button { Content = UiText.Get("TableLoc_Apply"), IsDefault = true, MinWidth = 84 };
+        ApplyDataOpsButtonChrome(applyButton, isDefault: true);
         AutomationProperties.SetAutomationId(applyButton, "ConsolidateApplyButton");
         var cancelButton = new Button { Content = UiText.Get("TableLoc_Cancel"), IsCancel = true, MinWidth = 84 };
+        ApplyDataOpsButtonChrome(cancelButton);
         AutomationProperties.SetAutomationId(cancelButton, "ConsolidateCancelButton");
 
         applyButton.Click += (_, _) =>
@@ -225,7 +236,7 @@ public sealed partial class MainWindow
             Spacing = 16,
             Children =
             {
-                new TextBlock { Text = UiText.Get("TableLoc_ConsolidateUseLabelsIn"), VerticalAlignment = AvaloniaVerticalAlignment.Center },
+                new TextBlock { Text = UiText.Get("TableLoc_ConsolidateUseLabelsIn"), VerticalAlignment = AvaloniaVerticalAlignment.Center, FontSize = 12, FontFamily = FormulaBarFontFamily },
                 topRowBox,
                 leftColumnBox,
             },
@@ -254,13 +265,13 @@ public sealed partial class MainWindow
                         Spacing = 8,
                         Children =
                         {
-                            new TextBlock { Text = UiText.Get("TableLoc_ConsolidateFunctionLabel"), FontWeight = FontWeight.SemiBold },
+                            new TextBlock { Text = UiText.Get("TableLoc_ConsolidateFunctionLabel"), FontWeight = FontWeight.SemiBold, FontSize = 12, FontFamily = FormulaBarFontFamily },
                             functionBox,
-                            new TextBlock { Text = UiText.Get("TableLoc_ConsolidateReferenceLabel"), FontWeight = FontWeight.SemiBold },
+                            new TextBlock { Text = UiText.Get("TableLoc_ConsolidateReferenceLabel"), FontWeight = FontWeight.SemiBold, FontSize = 12, FontFamily = FormulaBarFontFamily },
                             referenceRow,
-                            new TextBlock { Text = UiText.Get("TableLoc_ConsolidateAllReferencesLabel"), Foreground = HeaderForeground },
+                            new TextBlock { Text = UiText.Get("TableLoc_ConsolidateAllReferencesLabel"), Foreground = HeaderForeground, FontSize = 12, FontFamily = FormulaBarFontFamily },
                             referencesList,
-                            new TextBlock { Text = UiText.Get("TableLoc_ConsolidateDestinationLabel"), FontWeight = FontWeight.SemiBold },
+                            new TextBlock { Text = UiText.Get("TableLoc_ConsolidateDestinationLabel"), FontWeight = FontWeight.SemiBold, FontSize = 12, FontFamily = FormulaBarFontFamily },
                             destinationBox,
                             labelRow,
                             warningText,
@@ -302,5 +313,88 @@ public sealed partial class MainWindow
 
         RefreshShell(UiText.Format("TableLoc_ConsolidatedInto", FormatCellReference(destination)));
         return true;
+    }
+
+    // ── Shared data-operations dialog chrome helpers ───────────────────────────
+    // These mirror the SelectionPane helpers (MainWindow.SelectionPane.cs) and apply the
+    // Windows WPF visual spec to all data-operation dialogs: Consolidate, AllowEditRange,
+    // FillSeries, and PasteSpecial.
+
+    /// <summary>
+    /// Applies standard button chrome: Height=24, Padding=(4,1), white background,
+    /// Brush(112,112,112) border (or Brush(0,120,215) for default buttons), FontSize=12,
+    /// FontFamily=FormulaBarFontFamily.
+    /// </summary>
+    private static void ApplyDataOpsButtonChrome(Button button, bool isDefault = false)
+    {
+        button.Height = 24;
+        button.MinHeight = 24;
+        button.MaxHeight = 24;
+        button.Padding = new Thickness(4, 1);
+        button.Background = Brushes.White;
+        button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);
+        button.BorderThickness = new Thickness(1);
+        button.FontSize = 12;
+        button.FontFamily = FormulaBarFontFamily;
+        button.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
+        button.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+    }
+
+    /// <summary>
+    /// Applies standard text box chrome: Height=24, Padding=(4,1), FontSize=12,
+    /// Brush(130,130,130) border, BorderThickness=1.
+    /// </summary>
+    private static void ApplyDataOpsTextBoxChrome(TextBox textBox)
+    {
+        textBox.Height = 24;
+        textBox.MinHeight = 24;
+        textBox.MaxHeight = 24;
+        textBox.Padding = new Thickness(4, 1);
+        textBox.FontSize = 12;
+        textBox.FontFamily = FormulaBarFontFamily;
+        textBox.BorderBrush = Brush(130, 130, 130);
+        textBox.BorderThickness = new Thickness(1);
+        textBox.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+    }
+
+    /// <summary>
+    /// Applies standard combo box chrome: Height=24, Padding=(5,0,4,0), FontSize=12,
+    /// Brush(130,130,130) border, BorderThickness=1.
+    /// </summary>
+    private static void ApplyDataOpsComboBoxChrome(ComboBox comboBox)
+    {
+        comboBox.Height = 24;
+        comboBox.MinHeight = 24;
+        comboBox.MaxHeight = 24;
+        comboBox.Padding = new Thickness(5, 0, 4, 0);
+        comboBox.FontSize = 12;
+        comboBox.FontFamily = FormulaBarFontFamily;
+        comboBox.BorderBrush = Brush(130, 130, 130);
+        comboBox.BorderThickness = new Thickness(1);
+        comboBox.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+    }
+
+    /// <summary>
+    /// Applies standard check box chrome: MinHeight=20, MaxHeight=20, FontSize=12,
+    /// FontFamily=FormulaBarFontFamily.
+    /// </summary>
+    private static void ApplyDataOpsCheckBoxChrome(CheckBox checkBox)
+    {
+        checkBox.MinHeight = 20;
+        checkBox.MaxHeight = 20;
+        checkBox.FontSize = 12;
+        checkBox.FontFamily = FormulaBarFontFamily;
+    }
+
+    /// <summary>
+    /// Applies standard radio button chrome: MinHeight=20, MaxHeight=20, FontSize=12,
+    /// FontFamily=FormulaBarFontFamily.
+    /// </summary>
+    private static void ApplyDataOpsRadioButtonChrome(RadioButton radioButton)
+    {
+        radioButton.MinHeight = 20;
+        radioButton.MaxHeight = 20;
+        radioButton.FontSize = 12;
+        radioButton.FontFamily = FormulaBarFontFamily;
     }
 }
