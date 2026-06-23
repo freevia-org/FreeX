@@ -465,6 +465,9 @@ internal static class ParityCapture
                 navigateTo: _ => { },
                 removeWatch: _ => { }));
 
+        CaptureDialog(results, "dialog.AddWatch", outDir, () =>
+            new AddWatchDialog("Sheet1!$B$2"));
+
         CaptureDialog(results, "dialog.WorkbookStatistics", outDir, () =>
             new WorkbookStatisticsDialog(WorkbookStatisticsService.GetStatistics(workbook)));
 

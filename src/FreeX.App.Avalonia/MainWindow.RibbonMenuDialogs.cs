@@ -118,10 +118,13 @@ public sealed partial class MainWindow
 
         var addButton = new Button { Content = UiText.Get("RibbonWire_WatchWindowAdd"), MinWidth = 110 };
         AutomationProperties.SetAutomationId(addButton, "WatchWindowAddButton");
-        addButton.Click += (_, _) =>
+        addButton.Click += async (_, _) =>
         {
-            WatchWindowService.AddWatches(_session.Workbook, _session.SelectedRange);
-            RefreshList();
+            if (await ShowAddWatchDialogAsync(FormatRangeReference(_session.SelectedRange)))
+            {
+                WatchWindowService.AddWatches(_session.Workbook, _session.SelectedRange);
+                RefreshList();
+            }
         };
 
         var deleteButton = new Button { Content = UiText.Get("RibbonWire_WatchWindowDelete"), MinWidth = 110 };
@@ -165,5 +168,100 @@ public sealed partial class MainWindow
         };
 
         await dialog.ShowDialog(this);
+    }
+
+    private async Task<bool> ShowAddWatchDialogAsync(string selectedRangeText)
+    {
+        var dialog = new Window
+        {
+            Title = UiText.Get(AddWatchDialogPlanner.TitleKey),
+            Width = AddWatchDialogPlanner.Width,
+            Height = AddWatchDialogPlanner.Height,
+            CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+        AutomationProperties.SetAutomationId(dialog, AddWatchDialogPlanner.DialogAutomationId);
+
+        var rangeBox = new TextBox
+        {
+            Text = selectedRangeText,
+            IsReadOnly = true,
+            Margin = new Thickness(0, 0, 0, 8),
+        };
+        AutomationProperties.SetName(rangeBox, UiText.Get(AddWatchDialogPlanner.SelectedRangeAutomationNameKey));
+        AutomationProperties.SetAutomationId(rangeBox, AddWatchDialogPlanner.SelectedRangeAutomationId);
+        AutomationProperties.SetHelpText(rangeBox, UiText.Get(AddWatchDialogPlanner.SelectedRangeHelpTextKey));
+
+        var addButton = new Button
+        {
+            Content = UiText.Get(AddWatchDialogPlanner.AddButtonKey),
+            Width = AddWatchDialogPlanner.ButtonWidth,
+            IsDefault = true,
+            Margin = new Thickness(0, 0, 8, 0),
+        };
+        AutomationProperties.SetName(addButton, UiText.Get(AddWatchDialogPlanner.AddAutomationNameKey));
+        AutomationProperties.SetAutomationId(addButton, AddWatchDialogPlanner.AddButtonAutomationId);
+        AutomationProperties.SetHelpText(addButton, UiText.Get(AddWatchDialogPlanner.AddHelpTextKey));
+
+        var cancelButton = new Button
+        {
+            Content = UiText.Get("Common_Cancel"),
+            Width = AddWatchDialogPlanner.ButtonWidth,
+            IsCancel = true,
+        };
+        AutomationProperties.SetName(cancelButton, UiText.Get(AddWatchDialogPlanner.CancelAutomationNameKey));
+        AutomationProperties.SetAutomationId(cancelButton, AddWatchDialogPlanner.CancelButtonAutomationId);
+        AutomationProperties.SetHelpText(cancelButton, UiText.Get(AddWatchDialogPlanner.CancelHelpTextKey));
+
+        var result = false;
+        addButton.Click += (_, _) =>
+        {
+            result = true;
+            dialog.Close();
+        };
+        cancelButton.Click += (_, _) => dialog.Close();
+
+        var buttons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Margin = new Thickness(0, 12, 0, 0),
+            Children = { addButton, cancelButton },
+        };
+
+        var body = new StackPanel
+        {
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = UiText.Get(AddWatchDialogPlanner.SelectedRangeLabelKey),
+                    FontWeight = FontWeight.SemiBold,
+                    Margin = new Thickness(0, 0, 0, 4),
+                },
+                rangeBox,
+                new TextBlock
+                {
+                    Text = UiText.Get(AddWatchDialogPlanner.BodyTextKey),
+                    TextWrapping = TextWrapping.Wrap,
+                    Foreground = Brushes.Gray,
+                },
+            },
+        };
+
+        var root = new DockPanel { Margin = new Thickness(12) };
+        DockPanel.SetDock(buttons, Dock.Bottom);
+        root.Children.Add(buttons);
+        root.Children.Add(body);
+        dialog.Content = root;
+        dialog.Opened += (_, _) =>
+        {
+            rangeBox.Focus();
+            rangeBox.SelectAll();
+        };
+
+        await dialog.ShowDialog(this);
+        return result;
     }
 }
