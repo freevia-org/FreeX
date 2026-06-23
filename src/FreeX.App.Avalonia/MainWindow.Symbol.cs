@@ -1,70 +1,419 @@
-using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Input;
 using Avalonia.Layout;
+using Avalonia.Media;
 using FreeX.App.Services;
 
 namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
-    // Insert ▸ Symbol (parity gap: the button was a no-op). A picker of common symbols; choosing one
-    // appends it to the active cell's text via WorkbookSession.CommitCellText (undo/redo).
-
-    private static readonly string[] CommonSymbols =
+    private static readonly string[] SymbolPickerFontChoices =
     [
-        "€", "£", "¥", "¢", "$", "©", "®", "™", "°", "±", "×", "÷", "µ", "½", "¼", "¾",
-        "≈", "≠", "≤", "≥", "→", "←", "↑", "↓", "•", "…", "—", "§", "¶", "√", "∞", "π",
-        "α", "β", "γ", "δ", "θ", "λ", "Σ", "Ω", "Δ", "✓", "✗", "★", "☆", "→",
+        "Segoe UI Symbol",
+        "Segoe UI Emoji",
+        "Segoe UI",
+        "Calibri",
+        "Arial",
+        "Times New Roman",
+        "Cambria Math",
     ];
+
+    private static readonly string[] SymbolPickerRecentSymbols =
+    [
+        "\u20ac", "\u00a3", "\u00a5", "\u00a9", "\u00ae", "\u2122",
+        "\u00b0", "\u00b1", "\u2192", "\u03c0", "\u221e", "\u2713",
+    ];
+
+    private static readonly IReadOnlyDictionary<string, string> SymbolPickerNames = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["\u00a1"] = "Inverted Exclamation Mark",
+        ["\u00a2"] = "Cent Sign",
+        ["\u00a3"] = "Pound Sign",
+        ["\u00a4"] = "Currency Sign",
+        ["\u00a5"] = "Yen Sign",
+        ["\u00a7"] = "Section Sign",
+        ["\u00a9"] = "Copyright Sign",
+        ["\u00ae"] = "Registered Sign",
+        ["\u00b0"] = "Degree Sign",
+        ["\u00b1"] = "Plus-Minus Sign",
+        ["\u00b5"] = "Micro Sign",
+        ["\u00b6"] = "Pilcrow Sign",
+        ["\u00d7"] = "Multiplication Sign",
+        ["\u00f7"] = "Division Sign",
+    };
 
     private async Task ShowSymbolPickerAsync()
     {
-        string? picked = null;
-        var grid = new WrapPanel { Orientation = Orientation.Horizontal, MaxWidth = 360 };
+        var symbols = CreateLatinSupplementSymbols();
+        var selectedSymbol = symbols[0];
+        var selectedName = new TextBlock
+        {
+            FontWeight = FontWeight.SemiBold,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 10, 0, 0),
+        };
+        var selectedSubset = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0) };
+        var selectedCode = new TextBox { Width = 120 };
+        var preview = new TextBlock
+        {
+            FontSize = 44,
+            Width = 116,
+            Height = 94,
+            TextAlignment = TextAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
 
         var dialog = new Window
         {
             Title = "Symbol",
-            Width = 400,
-            Height = 320,
+            Width = 840,
+            Height = 620,
+            MinWidth = 760,
+            MinHeight = 540,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
-
-        foreach (var symbol in CommonSymbols)
+        var accepted = false;
+        void AcceptAndClose()
         {
-            var local = symbol;
-            var button = new Button
-            {
-                Content = symbol,
-                Width = 40,
-                Height = 36,
-                FontSize = 16,
-                Margin = new Thickness(2),
-            };
-            button.Click += (_, _) => { picked = local; dialog.Close(); };
-            grid.Children.Add(button);
+            accepted = true;
+            dialog.Close();
         }
 
-        dialog.Content = new ScrollViewer
+        void ApplySelection(string symbol)
         {
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            Padding = new Thickness(10),
-            Content = grid,
+            selectedSymbol = symbol;
+            var selection = SymbolPickerSelectionPlanner.CreateSelection(symbol);
+            preview.Text = symbol;
+            selectedCode.Text = selection.CodeText;
+            selectedName.Text = SymbolPickerNames.TryGetValue(symbol, out var name)
+                ? name
+                : $"Unicode U+{selection.CodeText}";
+            selectedSubset.Text = "Latin-1 Supplement";
+        }
+
+        var fontBox = new ComboBox
+        {
+            ItemsSource = SymbolPickerFontChoices,
+            SelectedIndex = 0,
+            MinWidth = 150,
+        };
+        var subsetBox = new ComboBox
+        {
+            ItemsSource = new[] { "Latin-1 Supplement" },
+            SelectedIndex = 0,
+            MinWidth = 160,
+        };
+        var searchBox = new TextBox { MinWidth = 150 };
+        var resultCount = new TextBlock
+        {
+            Text = $"Symbols shown: {symbols.Count}",
+            Foreground = Brush(96, 96, 96),
+            Margin = new Thickness(0, 4, 0, 6),
+        };
+
+        var symbolGrid = new WrapPanel
+        {
+            Orientation = Orientation.Horizontal,
+            ItemWidth = 31,
+            ItemHeight = 31,
+            Margin = new Thickness(3),
+        };
+        foreach (var symbol in symbols)
+            symbolGrid.Children.Add(CreateSymbolCell(symbol, ApplySelection, AcceptAndClose));
+
+        var symbolListHost = new Border
+        {
+            BorderBrush = Brush(205, 205, 205),
+            BorderThickness = new Thickness(1),
+            Background = Brushes.White,
+            Child = new ScrollViewer
+            {
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                Content = symbolGrid,
+            },
+        };
+
+        var recentPanel = new DockPanel { Margin = new Thickness(0, 8, 0, 0), LastChildFill = true };
+        var recentLabel = new TextBlock
+        {
+            Text = "Recently used symbols",
+            VerticalAlignment = VerticalAlignment.Center,
+            Width = 150,
+        };
+        var recentGrid = new WrapPanel
+        {
+            Orientation = Orientation.Horizontal,
+            ItemWidth = 32,
+            ItemHeight = 30,
+            Margin = new Thickness(4, 0),
+        };
+        foreach (var symbol in SymbolPickerRecentSymbols)
+            recentGrid.Children.Add(CreateSymbolCell(symbol, ApplySelection, AcceptAndClose, compact: true));
+        DockPanel.SetDock(recentLabel, Dock.Left);
+        recentPanel.Children.Add(recentLabel);
+        recentPanel.Children.Add(new Border
+        {
+            BorderBrush = Brush(205, 205, 205),
+            BorderThickness = new Thickness(1),
+            Background = Brushes.White,
+            Child = recentGrid,
+        });
+
+        var chooser = CreateSymbolChooserGrid(fontBox, subsetBox, searchBox);
+        var symbolsPanel = new DockPanel();
+        DockPanel.SetDock(chooser, Dock.Top);
+        DockPanel.SetDock(resultCount, Dock.Top);
+        DockPanel.SetDock(recentPanel, Dock.Bottom);
+        symbolsPanel.Children.Add(chooser);
+        symbolsPanel.Children.Add(resultCount);
+        symbolsPanel.Children.Add(recentPanel);
+        symbolsPanel.Children.Add(symbolListHost);
+
+        var specialPanel = CreateSpecialCharactersPanel(ApplySelection, AcceptAndClose);
+        var tabs = new TabControl
+        {
+            Items =
+            {
+                new TabItem { Header = "Symbols", Content = symbolsPanel },
+                new TabItem { Header = "Special Characters", Content = specialPanel },
+            },
+        };
+
+        var details = CreateSymbolDetailsPanel(preview, selectedName, selectedSubset, selectedCode, ApplySelection);
+        var contentGrid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,170"),
+        };
+        Grid.SetColumn(details, 1);
+        contentGrid.Children.Add(tabs);
+        contentGrid.Children.Add(details);
+
+        var insert = new Button
+        {
+            Content = "Insert",
+            MinWidth = 84,
+            IsDefault = true,
+        };
+        var cancel = new Button
+        {
+            Content = "Cancel",
+            MinWidth = 84,
+            IsCancel = true,
+            Margin = new Thickness(8, 0, 0, 0),
+        };
+        var buttons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = new Thickness(0, 12, 0, 0),
+            Children = { insert, cancel },
+        };
+
+        insert.Click += (_, _) =>
+        {
+            AcceptAndClose();
+        };
+        cancel.Click += (_, _) => dialog.Close();
+
+        var root = new DockPanel { Margin = new Thickness(12) };
+        DockPanel.SetDock(buttons, Dock.Bottom);
+        root.Children.Add(buttons);
+        root.Children.Add(contentGrid);
+        dialog.Content = root;
+        dialog.Opened += (_, _) =>
+        {
+            ApplySelection(selectedSymbol);
+            symbolGrid.Focus();
         };
 
         await dialog.ShowDialog(this);
-        if (picked is null)
+        if (!accepted || string.IsNullOrEmpty(selectedSymbol))
             return;
 
-        var selection = SymbolPickerSelectionPlanner.CreateSelection(picked);
+        var selection = SymbolPickerSelectionPlanner.CreateSelection(selectedSymbol);
         var current = FormatEditText(_session.ActiveSheet.GetCell(_session.ActiveCell), _session.ActiveCell);
         var result = _session.CommitCellText(current + selection.Symbol);
         RefreshShell(result.Success
             ? $"Inserted {selection.Symbol} into {FormatCellReference(_session.ActiveCell)}"
             : result.ErrorMessage ?? "Could not insert the symbol.");
+    }
+
+    private static IReadOnlyList<string> CreateLatinSupplementSymbols() =>
+        Enumerable
+            .Range(0x00A1, 0x00FF - 0x00A1 + 1)
+            .Where(static codePoint => codePoint != 0x00AD)
+            .Select(static codePoint => char.ConvertFromUtf32(codePoint))
+            .ToArray();
+
+    private static Grid CreateSymbolChooserGrid(ComboBox fontBox, ComboBox subsetBox, TextBox searchBox)
+    {
+        var grid = new Grid
+        {
+            Margin = new Thickness(0, 0, 0, 8),
+            ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,*,Auto,*"),
+        };
+        AddSymbolChooserField(grid, 0, "Font:", fontBox);
+        AddSymbolChooserField(grid, 2, "Subset:", subsetBox);
+        AddSymbolChooserField(grid, 4, "Search:", searchBox);
+        return grid;
+    }
+
+    private static void AddSymbolChooserField(Grid grid, int column, string label, Control control)
+    {
+        var labelControl = new TextBlock
+        {
+            Text = label,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(column == 0 ? 0 : 10, 0, 6, 0),
+        };
+        Grid.SetColumn(labelControl, column);
+        Grid.SetColumn(control, column + 1);
+        grid.Children.Add(labelControl);
+        grid.Children.Add(control);
+    }
+
+    private static Button CreateSymbolCell(
+        string symbol,
+        Action<string> select,
+        Action close,
+        bool compact = false)
+    {
+        var button = new Button
+        {
+            Content = symbol,
+            Width = compact ? 30 : 31,
+            Height = compact ? 28 : 30,
+            Padding = new Thickness(0),
+            Margin = new Thickness(0),
+            FontSize = compact ? 16 : 18,
+            FontFamily = new FontFamily("Segoe UI Symbol"),
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center,
+        };
+        button.Click += (_, _) => select(symbol);
+        button.DoubleTapped += (_, _) =>
+        {
+            select(symbol);
+            close();
+        };
+        return button;
+    }
+
+    private static Border CreateSymbolDetailsPanel(
+        TextBlock preview,
+        TextBlock selectedName,
+        TextBlock selectedSubset,
+        TextBox selectedCode,
+        Action<string> select)
+    {
+        var codeRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Margin = new Thickness(0, 12, 0, 0),
+            Children =
+            {
+                new TextBlock { Text = "Character code:", VerticalAlignment = VerticalAlignment.Center },
+            },
+        };
+        var goButton = new Button
+        {
+            Content = "Go",
+            MinWidth = 64,
+            Margin = new Thickness(0, 6, 0, 0),
+        };
+        goButton.Click += (_, _) =>
+        {
+            if (TryParseSymbolCode(selectedCode.Text, out var symbol))
+                select(symbol);
+        };
+
+        var panel = new StackPanel
+        {
+            Margin = new Thickness(12, 0, 0, 0),
+            Children =
+            {
+                new Border
+                {
+                    BorderBrush = Brush(205, 205, 205),
+                    BorderThickness = new Thickness(1),
+                    Background = Brushes.White,
+                    Width = 116,
+                    Height = 94,
+                    HorizontalAlignment = HorizontalAlignment.Left,
+                    Child = preview,
+                },
+                selectedName,
+                new TextBlock { Text = "Subset:", Foreground = Brush(96, 96, 96), Margin = new Thickness(0, 14, 0, 0) },
+                selectedSubset,
+                codeRow,
+                selectedCode,
+                new TextBlock { Text = "from: Unicode (hex)", Foreground = Brush(96, 96, 96), Margin = new Thickness(0, 6, 0, 0) },
+                goButton,
+            },
+        };
+
+        return new Border { Child = panel };
+    }
+
+    private static Border CreateSpecialCharactersPanel(Action<string> select, Action close)
+    {
+        var list = new StackPanel { Spacing = 4, Margin = new Thickness(8) };
+        foreach (var (name, symbol) in new[]
+                 {
+                     ("Em Dash", "\u2014"),
+                     ("Nonbreaking Space", "\u00a0"),
+                     ("Copyright", "\u00a9"),
+                     ("Registered", "\u00ae"),
+                     ("Trademark", "\u2122"),
+                     ("Section", "\u00a7"),
+                     ("Paragraph", "\u00b6"),
+                     ("Ellipsis", "\u2026"),
+                     ("Degree", "\u00b0"),
+                     ("Check Mark", "\u2713"),
+                 })
+        {
+            var button = new Button
+            {
+                Content = $"{name}    {SymbolPickerSelectionPlanner.CreateSelection(symbol).CodeText}",
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                HorizontalContentAlignment = HorizontalAlignment.Left,
+            };
+            button.Click += (_, _) => select(symbol);
+            button.DoubleTapped += (_, _) =>
+            {
+                select(symbol);
+                close();
+            };
+            list.Children.Add(button);
+        }
+
+        return new Border
+        {
+            BorderBrush = Brush(205, 205, 205),
+            BorderThickness = new Thickness(1),
+            Background = Brushes.White,
+            Child = list,
+        };
+    }
+
+    private static bool TryParseSymbolCode(string? text, out string symbol)
+    {
+        symbol = "";
+        var normalized = text?.Trim() ?? "";
+        if (normalized.StartsWith("U+", StringComparison.OrdinalIgnoreCase))
+            normalized = normalized[2..];
+
+        if (!int.TryParse(normalized, System.Globalization.NumberStyles.HexNumber, null, out var codePoint))
+            return false;
+        if (codePoint < 0 || codePoint > 0x10FFFF || codePoint is >= 0xD800 and <= 0xDFFF)
+            return false;
+
+        symbol = char.ConvertFromUtf32(codePoint);
+        return true;
     }
 }
