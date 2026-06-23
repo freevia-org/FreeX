@@ -86,7 +86,11 @@ internal static class FreeWRibbon
                     // Row 1: list + indent + spacing. Row 2: alignment + shading/borders. Compact icon-only, Word-style.
                     g.Icon("freew.bullets", "Bullets", RibbonCommandIconKind.Bullets, dropdown: true);
                     g.Icon("freew.numbering", "Numbering", RibbonCommandIconKind.NumberedList, dropdown: true);
-                    g.Icon("freew.multilevel-list", "Multilevel List", RibbonCommandIconKind.MultilevelList, dropdown: true);
+                    g.Icon("freew.multilevel-list", "Multilevel List", RibbonCommandIconKind.MultilevelList, dropdown: true, menu: m =>
+                    {
+                        m.Item("freew.multilevel-promote", "Decrease List Level", "P");
+                        m.Item("freew.multilevel-demote", "Increase List Level", "D");
+                    });
                     g.Icon("freew.indent-decrease", "Decrease Indent", RibbonCommandIconKind.IndentDecrease);
                     g.Icon("freew.indent-increase", "Increase Indent", RibbonCommandIconKind.IndentIncrease);
                     g.RowBreak();

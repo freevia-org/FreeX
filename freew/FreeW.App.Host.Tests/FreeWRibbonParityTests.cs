@@ -270,6 +270,30 @@ public sealed class FreeWRibbonParityTests
     }
 
     [StaFact]
+    public void HomeParagraph_MultilevelListDropdownExposesBackedLevelCommands()
+    {
+        var definition = FreeWRibbon.Build();
+        var paragraph = definition.FindTab("home")!.FindGroup("paragraph");
+        var multilevel = paragraph!.Controls
+            .OfType<RibbonDropdown>()
+            .Single(control => control.CommandId.Value == "freew.multilevel-list");
+        var editor = new DocumentView();
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        multilevel.Menu.Items
+            .Where(item => item.Kind == RibbonMenuItemKind.Command)
+            .Select(item => (item.CommandId!.Value, item.Header))
+            .Should()
+            .Equal(
+                ("freew.multilevel-promote", "Decrease List Level"),
+                ("freew.multilevel-demote", "Increase List Level"));
+
+        registry.TryGet("freew.multilevel-list", out _).Should().BeTrue("the top-level Multilevel List command applies backed outline numbering");
+        registry.TryGet("freew.multilevel-promote", out _).Should().BeTrue("Word exposes list-level decrease from the Multilevel List menu");
+        registry.TryGet("freew.multilevel-demote", out _).Should().BeTrue("Word exposes list-level increase from the Multilevel List menu");
+    }
+
+    [StaFact]
     public void ReviewComments_ExposesAndRegistersWordStyleThreadActions()
     {
         var definition = FreeWRibbon.Build();
