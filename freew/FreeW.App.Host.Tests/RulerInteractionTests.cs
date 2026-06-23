@@ -139,4 +139,126 @@ public sealed class RulerInteractionTests
         Ruler.IndentsForDrag(start, Ruler.DragKind.RightIndent, 30).Should().Be(
             start with { IndentRightPt = 30 });
     }
+
+    // ── Vertical ruler metrics ────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void TryVerticalMetrics_ComputesBoundaryYsFromRenderVerticalAnchor()
+    {
+        // RenderVertical anchors pageY = 0; top-margin boundary is at topDip, bottom boundary is
+        // at pageHeightDip - bottomDip. PointsToDip = pt * (96/72).
+        var page = new PageSettings
+        {
+            HeightPt    = 792,   // 11 inches
+            MarginTopPt = 72,    // 1 inch  →  96 DIP at zoom 1
+            MarginBottomPt = 72  // 1 inch  →  96 DIP
+        };
+
+        var vm = Ruler.TryVerticalMetrics(page, zoom: 1)!;
+
+        const double dipPerPt = 96.0 / 72.0;
+        var expectedTop    = 72  * dipPerPt;           // 96
+        var expectedBottom = 792 * dipPerPt - expectedTop;  // 1056 - 96 = 960
+
+        vm.TopBoundaryY.Should().BeApproximately(expectedTop, 0.001);
+        vm.BottomBoundaryY.Should().BeApproximately(expectedBottom, 0.001);
+        vm.PageHeightPt.Should().Be(792);
+    }
+
+    [Fact]
+    public void TryVerticalMetrics_ScalesBoundariesByZoom()
+    {
+        var page = new PageSettings { HeightPt = 792, MarginTopPt = 72, MarginBottomPt = 72 };
+
+        var vm = Ruler.TryVerticalMetrics(page, zoom: 1.5)!;
+
+        const double dipPerPt = 96.0 / 72.0;
+        var expectedTop = 72 * dipPerPt * 1.5;
+        vm.TopBoundaryY.Should().BeApproximately(expectedTop, 0.001);
+        vm.BottomBoundaryY.Should().BeApproximately(792 * dipPerPt * 1.5 - expectedTop, 0.001);
+    }
+
+    [Fact]
+    public void TryVerticalMetrics_ReturnsNull_ForZeroZoom()
+    {
+        var page = new PageSettings { HeightPt = 792, MarginTopPt = 72, MarginBottomPt = 72 };
+        Ruler.TryVerticalMetrics(page, zoom: 0).Should().BeNull();
+        Ruler.TryVerticalMetrics(page, zoom: -1).Should().BeNull();
+    }
+
+    [Fact]
+    public void DipDeltaToPointsDelta_IsExactInverseOfRenderConversion()
+    {
+        var page = new PageSettings { HeightPt = 792, MarginTopPt = 72, MarginBottomPt = 72 };
+        var vm = Ruler.TryVerticalMetrics(page, zoom: 1.25)!;
+
+        // A 40-pt change should round-trip through DIP and back to exactly 40 pt.
+        const double dipPerPt = 96.0 / 72.0;
+        var dipDelta = 40.0 * dipPerPt * 1.25;  // what a 40-pt drag looks like in DIP at zoom 1.25
+        vm.DipDeltaToPointsDelta(dipDelta).Should().BeApproximately(40.0, 0.0001);
+    }
+
+    // ── Vertical hit-test ─────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void VerticalHitTest_ReturnsTopMargin_WhenWithinHitRadius()
+    {
+        var vm = new Ruler.VerticalMetrics(TopBoundaryY: 96, BottomBoundaryY: 960, PageHeightPt: 792, Zoom: 1);
+
+        Ruler.VerticalHitTest(96, vm).Should().Be(Ruler.DragKind.TopMargin);
+        Ruler.VerticalHitTest(96 + 7, vm).Should().Be(Ruler.DragKind.TopMargin);   // edge of radius
+        Ruler.VerticalHitTest(96 - 7, vm).Should().Be(Ruler.DragKind.TopMargin);
+        Ruler.VerticalHitTest(96 + 7.1, vm).Should().Be(Ruler.DragKind.None);       // just outside
+    }
+
+    [Fact]
+    public void VerticalHitTest_ReturnsBottomMargin_WhenWithinHitRadius()
+    {
+        var vm = new Ruler.VerticalMetrics(TopBoundaryY: 96, BottomBoundaryY: 960, PageHeightPt: 792, Zoom: 1);
+
+        Ruler.VerticalHitTest(960, vm).Should().Be(Ruler.DragKind.BottomMargin);
+        Ruler.VerticalHitTest(960 + 7, vm).Should().Be(Ruler.DragKind.BottomMargin);
+        Ruler.VerticalHitTest(960 - 7, vm).Should().Be(Ruler.DragKind.BottomMargin);
+        Ruler.VerticalHitTest(960 - 7.1, vm).Should().Be(Ruler.DragKind.None);
+    }
+
+    [Fact]
+    public void VerticalHitTest_ReturnsNone_WhenFarFromBothBoundaries()
+    {
+        var vm = new Ruler.VerticalMetrics(TopBoundaryY: 96, BottomBoundaryY: 960, PageHeightPt: 792, Zoom: 1);
+
+        Ruler.VerticalHitTest(500, vm).Should().Be(Ruler.DragKind.None);
+        Ruler.VerticalHitTest(0, vm).Should().Be(Ruler.DragKind.None);
+    }
+
+    // ── Vertical margin clamping ──────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void ClampVerticalMargin_ClampsToNonNegative()
+    {
+        // Dragging a margin below 0 should snap to 0.
+        Ruler.ClampVerticalMargin(-10, otherMarginPt: 72, pageHeightPt: 792).Should().Be(0);
+        Ruler.ClampVerticalMargin(0, otherMarginPt: 72, pageHeightPt: 792).Should().Be(0);
+    }
+
+    [Fact]
+    public void ClampVerticalMargin_KeepsAtLeastOnePointOfContent()
+    {
+        // top=750, bottom=72 → top + bottom = 822 > 792. Should clamp top to 792 - 72 - 1 = 719.
+        Ruler.ClampVerticalMargin(750, otherMarginPt: 72, pageHeightPt: 792).Should().BeApproximately(719, 0.001);
+    }
+
+    [Fact]
+    public void ClampVerticalMargin_AllowsNormalMargin()
+    {
+        // 108 pt top, 72 pt bottom on a 792 pt page: well within limits.
+        Ruler.ClampVerticalMargin(108, otherMarginPt: 72, pageHeightPt: 792).Should().BeApproximately(108, 0.001);
+    }
+
+    [Fact]
+    public void ClampVerticalMargin_BothMarginsZeroIsValid()
+    {
+        // 0 + 0 = 0, leaving the full page as content.
+        Ruler.ClampVerticalMargin(0, otherMarginPt: 0, pageHeightPt: 792).Should().Be(0);
+    }
 }
