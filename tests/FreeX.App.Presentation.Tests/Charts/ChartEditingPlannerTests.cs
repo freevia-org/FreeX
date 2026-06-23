@@ -849,9 +849,22 @@ public sealed class ChartEditingPlannerTests
     [Fact]
     public void QuickCycler_SeriesColor_WalksPalette()
     {
+        ChartQuickFormatCycler.DefaultSeriesColor.Should().Be(new CellColor(0, 114, 178));
         var first = ChartQuickFormatCycler.NextSeriesColor(null);
-        first.Should().Be(new CellColor(0, 114, 178));
+        first.Should().Be(ChartQuickFormatCycler.DefaultSeriesColor);
         ChartQuickFormatCycler.NextSeriesColor(first).Should().Be(new CellColor(213, 94, 0));
+    }
+
+    [Theory]
+    [InlineData(ChartDataLabelPosition.BestFit, ChartDataLabelPosition.OutsideEnd)]
+    [InlineData(ChartDataLabelPosition.OutsideEnd, ChartDataLabelPosition.InsideEnd)]
+    [InlineData(ChartDataLabelPosition.InsideEnd, ChartDataLabelPosition.Center)]
+    [InlineData(ChartDataLabelPosition.Center, ChartDataLabelPosition.BestFit)]
+    public void QuickCycler_DataLabelPosition_CyclesExcelLikePositions(
+        ChartDataLabelPosition current,
+        ChartDataLabelPosition expected)
+    {
+        ChartQuickFormatCycler.NextDataLabelPosition(current).Should().Be(expected);
     }
 
     [Fact]
@@ -863,6 +876,14 @@ public sealed class ChartEditingPlannerTests
         ChartQuickFormatCycler.NextLegendFontSize(16).Should().Be(9);
         ChartQuickFormatCycler.NextDataLabelBorderThickness(0.75).Should().Be(1.5);
         ChartQuickFormatCycler.NextDataLabelBorderThickness(3).Should().Be(0.75);
+    }
+
+    [Fact]
+    public void QuickCycler_GridlineState_CyclesOffMajorMajorMinor()
+    {
+        ChartQuickFormatCycler.NextGridlineState(false, false).Should().Be((true, false));
+        ChartQuickFormatCycler.NextGridlineState(true, false).Should().Be((true, true));
+        ChartQuickFormatCycler.NextGridlineState(true, true).Should().Be((false, false));
     }
 
     [Fact]

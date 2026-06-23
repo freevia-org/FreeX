@@ -36,6 +36,29 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     }
 
     [Fact]
+    public void ChartContextualTabs_UseSharedQuickFormatCycler()
+    {
+        var chartTabsSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartTabs.cs"));
+        var chartDialogSources = string.Join(
+            Environment.NewLine,
+            File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartFormatDialogs.cs")),
+            File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartRemainingDialogs.cs")),
+            File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartTypeFormatDialogs.cs")));
+
+        chartTabsSource.Should().Contain("ChartQuickFormatCycler.NextDataLabelPosition(");
+        chartTabsSource.Should().Contain("ChartQuickFormatCycler.NextGridlineState(");
+        chartTabsSource.Should().Contain("ChartQuickFormatCycler.ReadFirstSeriesFormat(chart).FillColor");
+        chartTabsSource.Should().Contain("ChartQuickFormatCycler.DefaultSeriesColor");
+        chartDialogSources.Should().Contain("ChartQuickFormatCycler.DefaultSeriesColor");
+
+        var combined = chartTabsSource + Environment.NewLine + chartDialogSources;
+        combined.Should().NotContain("ChartCycleBlue");
+        combined.Should().NotContain("ResolveFirstSeriesFillColor");
+        combined.Should().NotContain("private static ChartDataLabelPosition NextDataLabelPosition");
+        combined.Should().NotContain("private static (bool ShowMajor, bool ShowMinor) NextGridlineState");
+    }
+
+    [Fact]
     public void WorksheetChrome_UsesCompactGridMetricsAndExcelSheetTabOrder()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));

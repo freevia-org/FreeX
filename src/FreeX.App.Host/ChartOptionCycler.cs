@@ -4,15 +4,6 @@ namespace FreeX.App.Host;
 
 public static class ChartOptionCycler
 {
-    public static ChartDataLabelPosition NextDataLabelPosition(ChartDataLabelPosition current) =>
-        current switch
-        {
-            ChartDataLabelPosition.BestFit => ChartDataLabelPosition.OutsideEnd,
-            ChartDataLabelPosition.OutsideEnd => ChartDataLabelPosition.InsideEnd,
-            ChartDataLabelPosition.InsideEnd => ChartDataLabelPosition.Center,
-            _ => ChartDataLabelPosition.BestFit
-        };
-
     public static ChartDataLabelNumberFormat NextDataLabelNumberFormat(ChartDataLabelNumberFormat current) =>
         current switch
         {
@@ -86,15 +77,6 @@ public static class ChartOptionCycler
         if (currentThickness < 3.5)
             return (new CellColor(213, 94, 0), 3.5);
         return (new CellColor(89, 89, 89), 1);
-    }
-
-    public static (bool ShowMajor, bool ShowMinor) NextGridlineState(bool currentMajor, bool currentMinor)
-    {
-        if (!currentMajor)
-            return (true, false);
-        if (!currentMinor)
-            return (true, true);
-        return (false, false);
     }
 
     public static ChartType ParseChartType(string type)

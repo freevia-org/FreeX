@@ -80,7 +80,10 @@ public sealed class ChartCommandSourceTests
         chartSource.Should().NotContain("IndexOfSeriesFormat");
 
         axisSource.Should().Contain("ChartQuickFormatCycler.NextSeriesColor(");
+        axisSource.Should().Contain("ChartQuickFormatCycler.NextGridlineState(");
         cyclerSource.Should().NotContain("public static CellColor NextSeriesColor(");
+        cyclerSource.Should().NotContain("NextDataLabelPosition(");
+        cyclerSource.Should().NotContain("NextGridlineState(");
         cyclerSource.Should().NotContain("GetNextComboLineSeries(");
     }
 

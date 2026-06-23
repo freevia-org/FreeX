@@ -12,6 +12,8 @@ namespace FreeX.App.Presentation.Charts.Editing;
 /// </summary>
 public static class ChartQuickFormatCycler
 {
+    public static CellColor DefaultSeriesColor => new(0, 114, 178);
+
     /// <summary>
     /// The next color in the cohesive Okabe-Ito-style palette the WPF host uses (blue → orange → green →
     /// blue). A null current color starts at blue.
@@ -19,13 +21,22 @@ public static class ChartQuickFormatCycler
     public static CellColor NextSeriesColor(CellColor? current)
     {
         if (current is null)
-            return new CellColor(0, 114, 178);
+            return DefaultSeriesColor;
         if (current.Value.R == 0 && current.Value.G == 114 && current.Value.B == 178)
             return new CellColor(213, 94, 0);
         if (current.Value.R == 213 && current.Value.G == 94 && current.Value.B == 0)
             return new CellColor(0, 158, 115);
-        return new CellColor(0, 114, 178);
+        return DefaultSeriesColor;
     }
+
+    public static ChartDataLabelPosition NextDataLabelPosition(ChartDataLabelPosition current) =>
+        current switch
+        {
+            ChartDataLabelPosition.BestFit => ChartDataLabelPosition.OutsideEnd,
+            ChartDataLabelPosition.OutsideEnd => ChartDataLabelPosition.InsideEnd,
+            ChartDataLabelPosition.InsideEnd => ChartDataLabelPosition.Center,
+            _ => ChartDataLabelPosition.BestFit
+        };
 
     /// <summary>Chart-title font-size step: +2pt up to 24, then wrap back to 12 (matches WPF).</summary>
     public static double NextChartTitleFontSize(double current) => current >= 24 ? 12 : current + 2;
@@ -38,6 +49,15 @@ public static class ChartQuickFormatCycler
 
     /// <summary>Data-label border thickness step: +0.75pt up to 3, then wrap back to 0.75 (matches WPF).</summary>
     public static double NextDataLabelBorderThickness(double current) => current >= 3 ? 0.75 : current + 0.75;
+
+    public static (bool ShowMajor, bool ShowMinor) NextGridlineState(bool currentMajor, bool currentMinor)
+    {
+        if (!currentMajor)
+            return (true, false);
+        if (!currentMinor)
+            return (true, true);
+        return (false, false);
+    }
 
     /// <summary>Series dash-style cycle: none → dash → dot → solid → none (matches WPF).</summary>
     public static ChartLineDashStyle? NextSeriesDash(ChartLineDashStyle? current) =>

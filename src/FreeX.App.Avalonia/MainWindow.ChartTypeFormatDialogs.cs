@@ -352,27 +352,37 @@ public sealed partial class MainWindow
 
         upFillButton.Click += async (_, _) =>
         {
-            var chosen = await ShowMoreColorsDialogAsync(UiText.Get("ChartFmt_StockUpBarFill"), state.UpBarFillColor ?? ChartCycleBlue);
+            var chosen = await ShowMoreColorsDialogAsync(
+                UiText.Get("ChartFmt_StockUpBarFill"),
+                state.UpBarFillColor ?? ChartQuickFormatCycler.DefaultSeriesColor);
             if (chosen is { } color) { state = state with { UpBarFillColor = color }; upFillButton.Content = DescribeColor(UiText.Get("ChartFmt_StockUpBarFill"), color); }
         };
         upBorderButton.Click += async (_, _) =>
         {
-            var chosen = await ShowMoreColorsDialogAsync(UiText.Get("ChartFmt_StockUpBarBorder"), state.UpBarBorderColor ?? ChartCycleBlue);
+            var chosen = await ShowMoreColorsDialogAsync(
+                UiText.Get("ChartFmt_StockUpBarBorder"),
+                state.UpBarBorderColor ?? ChartQuickFormatCycler.DefaultSeriesColor);
             if (chosen is { } color) { state = state with { UpBarBorderColor = color }; upBorderButton.Content = DescribeColor(UiText.Get("ChartFmt_StockUpBarBorder"), color); }
         };
         downFillButton.Click += async (_, _) =>
         {
-            var chosen = await ShowMoreColorsDialogAsync(UiText.Get("ChartFmt_StockDownBarFill"), state.DownBarFillColor ?? ChartCycleBlue);
+            var chosen = await ShowMoreColorsDialogAsync(
+                UiText.Get("ChartFmt_StockDownBarFill"),
+                state.DownBarFillColor ?? ChartQuickFormatCycler.DefaultSeriesColor);
             if (chosen is { } color) { state = state with { DownBarFillColor = color }; downFillButton.Content = DescribeColor(UiText.Get("ChartFmt_StockDownBarFill"), color); }
         };
         downBorderButton.Click += async (_, _) =>
         {
-            var chosen = await ShowMoreColorsDialogAsync(UiText.Get("ChartFmt_StockDownBarBorder"), state.DownBarBorderColor ?? ChartCycleBlue);
+            var chosen = await ShowMoreColorsDialogAsync(
+                UiText.Get("ChartFmt_StockDownBarBorder"),
+                state.DownBarBorderColor ?? ChartQuickFormatCycler.DefaultSeriesColor);
             if (chosen is { } color) { state = state with { DownBarBorderColor = color }; downBorderButton.Content = DescribeColor(UiText.Get("ChartFmt_StockDownBarBorder"), color); }
         };
         highLowButton.Click += async (_, _) =>
         {
-            var chosen = await ShowMoreColorsDialogAsync(UiText.Get("ChartFmt_StockHighLowLineColor"), state.HighLowLineColor ?? ChartCycleBlue);
+            var chosen = await ShowMoreColorsDialogAsync(
+                UiText.Get("ChartFmt_StockHighLowLineColor"),
+                state.HighLowLineColor ?? ChartQuickFormatCycler.DefaultSeriesColor);
             if (chosen is { } color) { state = state with { HighLowLineColor = color }; highLowButton.Content = DescribeColor(UiText.Get("ChartFmt_StockHighLowLineColor"), color); }
         };
 
