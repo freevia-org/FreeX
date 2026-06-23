@@ -203,6 +203,8 @@ public sealed class FreeWRibbonParityTests
                 "freew.toc-refresh",
                 "freew.footnote",
                 "freew.endnote",
+                "freew.next-footnote",
+                "freew.show-notes",
                 "freew.footnote-endnote-options",
                 "freew.citation",
                 "freew.manage-sources",
@@ -301,6 +303,61 @@ public sealed class FreeWRibbonParityTests
         editor.Model.Sources.Should().ContainSingle().Which.Tag.Should().Be("New");
         editor.Commands.Undo().Should().BeTrue();
         editor.Model.Sources.Should().ContainSingle().Which.Tag.Should().Be("Old");
+    }
+
+    [StaFact]
+    public void ReferencesFootnotes_ExposesBackedWordStyleNavigationAndShowNotes()
+    {
+        var definition = FreeWRibbon.Build();
+        var footnotes = definition.FindTab("references")!.FindGroup("footnotes");
+        var next = footnotes!.Controls
+            .OfType<RibbonDropdown>()
+            .Single(control => control.CommandId.Value == "freew.next-footnote");
+        var editor = new DocumentView();
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        CommandIds(footnotes)
+            .Should()
+            .Equal(
+                "freew.footnote",
+                "freew.endnote",
+                "freew.next-footnote",
+                "freew.show-notes",
+                "freew.footnote-endnote-options");
+        Labels(footnotes)
+            .Should()
+            .Equal("Insert Footnote", "Insert Endnote", "Next Footnote", "Show Notes", "Footnote/Endnote Options…");
+        next.Menu.Items
+            .Where(item => item.Kind == RibbonMenuItemKind.Command)
+            .Select(item => (item.CommandId!.Value, item.Header))
+            .Should()
+            .Equal(
+                ("freew.next-footnote", "Next Footnote"),
+                ("freew.previous-footnote", "Previous Footnote"),
+                ("freew.next-endnote", "Next Endnote"),
+                ("freew.previous-endnote", "Previous Endnote"));
+
+        foreach (var commandId in CommandIds(footnotes).Concat(MenuCommandIds(next)))
+        {
+            registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must execute from References > Footnotes");
+        }
+
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var paragraph = new Paragraph("Body ");
+        paragraph.Runs.Add(Run.FootnoteReference(1));
+        paragraph.Runs.Add(new Run(" more "));
+        paragraph.Runs.Add(Run.EndnoteReference(1));
+        document.Blocks.Add(paragraph);
+        document.Footnotes[1] = new Footnote(1, "Footnote text");
+        document.Endnotes[1] = new Endnote(1, "Endnote text");
+        editor.LoadModel(document);
+
+        editor.MoveToNextFootnote().Should().BeTrue();
+        editor.MoveToPreviousFootnote().Should().BeTrue();
+        editor.MoveToNextEndnote().Should().BeTrue();
+        editor.MoveToPreviousEndnote().Should().BeTrue();
+        new DocumentView().MoveToNextFootnote().Should().BeFalse();
     }
 
     [StaFact]

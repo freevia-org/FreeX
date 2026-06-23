@@ -255,6 +255,15 @@ internal static class FreeWRibbon
                 {
                     g.Medium("freew.footnote", "Insert Footnote", RibbonCommandIconKind.Footnote);
                     g.Medium("freew.endnote", "Insert Endnote", RibbonCommandIconKind.Endnote);
+                    g.Medium("freew.next-footnote", "Next Footnote", RibbonCommandIconKind.Footnote, dropdown: true, menu: m =>
+                    {
+                        m.Item("freew.next-footnote", "Next Footnote", "N");
+                        m.Item("freew.previous-footnote", "Previous Footnote", "P");
+                        m.Separator();
+                        m.Item("freew.next-endnote", "Next Endnote", "E");
+                        m.Item("freew.previous-endnote", "Previous Endnote", "V");
+                    });
+                    g.Medium("freew.show-notes", "Show Notes", RibbonCommandIconKind.Footnote);
                     g.Medium("freew.footnote-endnote-options", "Footnote/Endnote Options…", RibbonCommandIconKind.Footnote);
                 });
                 tab.Group("citations", "Citations & Bibliography", "C", 84, g =>

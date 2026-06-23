@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Next Footnote">
+  <rect width="32" height="32" fill="none"/>
+  <path d="M8 4.5h16v23H8z" fill="#ffffff" stroke="#242424" stroke-width="1.4"/>
+  <path d="M11 10h9M11 14h7M11 20h9" fill="none" stroke="#8a8a8a" stroke-width="1.1" stroke-linecap="round"/>
+  <text x="21.5" y="10" text-anchor="middle" font-size="6" fill="#4472c4" font-family="Segoe UI,Arial,sans-serif" font-weight="700">1</text>
+  <path d="M11 18h10" fill="none" stroke="#242424" stroke-width="1.1" stroke-linecap="round"/>
+  <path d="M16 22.5h6.5m0 0-2.5-2.5m2.5 2.5L20 25" fill="none" stroke="#107c41" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

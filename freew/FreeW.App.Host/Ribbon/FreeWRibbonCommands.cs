@@ -340,6 +340,11 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.footnote", new InsertFootnoteCommand(editor));
         // Insert tab — References: prompt for endnote text and insert an endnote reference at the caret.
         registry.Register("freew.endnote", new InsertEndnoteCommand(editor));
+        registry.Register("freew.next-footnote", new NavigateNoteCommand(editor, footnote: true, previous: false));
+        registry.Register("freew.previous-footnote", new NavigateNoteCommand(editor, footnote: true, previous: true));
+        registry.Register("freew.next-endnote", new NavigateNoteCommand(editor, footnote: false, previous: false));
+        registry.Register("freew.previous-endnote", new NavigateNoteCommand(editor, footnote: false, previous: true));
+        registry.Register("freew.show-notes", new ShowNotesCommand(editor));
         // Insert tab — References: open the Footnote and Endnote numbering options dialog (number format,
         // start-at, restart mode). Applies to w:footnotePr / w:endnotePr in settings.xml.
         registry.Register("freew.footnote-endnote-options", new FootnoteEndnoteOptionsCommand(editor));
@@ -2180,6 +2185,116 @@ internal static class FreeWRibbonCommands
                 return; // cancelled or empty — nothing to anchor an endnote to
             editor.Focus();
             editor.InsertEndnote(text.Trim());
+        }
+    }
+
+    // References > Footnotes > Next Footnote: move among rendered note reference markers, wrapping like
+    // Word. The dropdown exposes previous footnote and endnote variants because FreeW already has both
+    // backed note stores and rendered markers.
+    private sealed class NavigateNoteCommand(DocumentView editor, bool footnote, bool previous) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var moved = (footnote, previous) switch
+            {
+                (true, true) => editor.MoveToPreviousFootnote(),
+                (true, false) => editor.MoveToNextFootnote(),
+                (false, true) => editor.MoveToPreviousEndnote(),
+                _ => editor.MoveToNextEndnote()
+            };
+
+            if (!moved)
+                DialogMessageHelper.ShowInfo(
+                    Window.GetWindow(editor),
+                    footnote
+                        ? "This document does not contain any footnotes."
+                        : "This document does not contain any endnotes.",
+                    footnote ? "Footnotes" : "Endnotes");
+        }
+    }
+
+    // References > Footnotes > Show Notes: show the document-local footnote/endnote stores in a read-only
+    // list. Word opens a notes pane; FreeW does not yet have editable note-pane chrome, so this exposes
+    // the backed note content without inventing a false editing surface.
+    private sealed class ShowNotesCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.CommitToModel();
+            var items = NoteListItem.Build(editor.Model);
+            if (items.Count == 0)
+            {
+                DialogMessageHelper.ShowInfo(
+                    Window.GetWindow(editor),
+                    "This document does not contain any footnotes or endnotes.",
+                    "Show Notes");
+                return;
+            }
+
+            NotesListDialog.Show(Window.GetWindow(editor), items);
+        }
+    }
+
+    private sealed record NoteListItem(string Kind, int Id, string Text)
+    {
+        public static IReadOnlyList<NoteListItem> Build(TextDocument document)
+        {
+            var items = new List<NoteListItem>();
+            items.AddRange(document.Footnotes.Values
+                .OrderBy(note => note.Id)
+                .Select(note => new NoteListItem("Footnote", note.Id, note.PlainText)));
+            items.AddRange(document.Endnotes.Values
+                .OrderBy(note => note.Id)
+                .Select(note => new NoteListItem("Endnote", note.Id, note.PlainText)));
+            return items;
+        }
+    }
+
+    private static class NotesListDialog
+    {
+        public static void Show(Window? owner, IReadOnlyList<NoteListItem> items)
+        {
+            var list = new System.Windows.Controls.ListBox
+            {
+                MinWidth = 440,
+                MinHeight = 220,
+                Margin = new Thickness(0, 0, 0, 12)
+            };
+
+            foreach (var item in items)
+                list.Items.Add($"{item.Kind} {item.Id}: {item.Text}");
+
+            var dialog = new Window
+            {
+                Title = "Show Notes",
+                SizeToContent = SizeToContent.WidthAndHeight,
+                ResizeMode = ResizeMode.CanResize,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ShowInTaskbar = false
+            };
+
+            var close = new System.Windows.Controls.Button
+            {
+                Content = "Close",
+                IsCancel = true,
+                MinWidth = 72,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+
+            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
+            panel.Children.Add(new System.Windows.Controls.TextBlock
+            {
+                Text = $"{items.Count} note{(items.Count == 1 ? string.Empty : "s")}",
+                FontWeight = FontWeights.SemiBold,
+                Margin = new Thickness(0, 0, 0, 8)
+            });
+            panel.Children.Add(list);
+            panel.Children.Add(close);
+            dialog.Content = panel;
+
+            dialog.ShowDialog();
         }
     }
 

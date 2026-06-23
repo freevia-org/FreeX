@@ -5765,6 +5765,96 @@ public sealed class DocumentView : RichTextBox
         Render();
     }
 
+    /// <summary>Moves the caret to the next footnote reference marker in visible document order.</summary>
+    public bool MoveToNextFootnote() => MoveToAdjacentNote(footnote: true, previous: false);
+
+    /// <summary>Moves the caret to the previous footnote reference marker in visible document order.</summary>
+    public bool MoveToPreviousFootnote() => MoveToAdjacentNote(footnote: true, previous: true);
+
+    /// <summary>Moves the caret to the next endnote reference marker in visible document order.</summary>
+    public bool MoveToNextEndnote() => MoveToAdjacentNote(footnote: false, previous: false);
+
+    /// <summary>Moves the caret to the previous endnote reference marker in visible document order.</summary>
+    public bool MoveToPreviousEndnote() => MoveToAdjacentNote(footnote: false, previous: true);
+
+    private bool MoveToAdjacentNote(bool footnote, bool previous)
+    {
+        Focus();
+        var markers = NoteMarkers(footnote).ToArray();
+        if (markers.Length == 0)
+            return false;
+
+        var caret = CaretPosition ?? Document.ContentStart;
+        WpfRun target;
+        if (previous)
+        {
+            target = markers.LastOrDefault(marker => marker.ContentStart.CompareTo(caret) < 0) ?? markers[^1];
+        }
+        else
+        {
+            target = markers.FirstOrDefault(marker => marker.ContentStart.CompareTo(caret) > 0) ?? markers[0];
+        }
+
+        CaretPosition = target.ContentStart.GetInsertionPosition(LogicalDirection.Forward) ?? target.ContentStart;
+        target.ContentStart.Paragraph?.BringIntoView();
+        Focus();
+        return true;
+    }
+
+    private IEnumerable<WpfRun> NoteMarkers(bool footnote)
+    {
+        foreach (var block in Document.Blocks)
+        {
+            foreach (var marker in NoteMarkers(block, footnote))
+                yield return marker;
+        }
+    }
+
+    private static IEnumerable<WpfRun> NoteMarkers(System.Windows.Documents.Block block, bool footnote)
+    {
+        switch (block)
+        {
+            case WpfParagraph paragraph:
+                foreach (var marker in NoteMarkers(paragraph.Inlines, footnote))
+                    yield return marker;
+                break;
+            case WpfList list:
+                foreach (var item in list.ListItems)
+                    foreach (var itemBlock in item.Blocks)
+                        foreach (var marker in NoteMarkers(itemBlock, footnote))
+                            yield return marker;
+                break;
+            case WpfTable table:
+                foreach (var rowGroup in table.RowGroups)
+                    foreach (var row in rowGroup.Rows)
+                        foreach (var cell in row.Cells)
+                            foreach (var cellBlock in cell.Blocks)
+                                foreach (var marker in NoteMarkers(cellBlock, footnote))
+                                    yield return marker;
+                break;
+        }
+    }
+
+    private static IEnumerable<WpfRun> NoteMarkers(InlineCollection inlines, bool footnote)
+    {
+        foreach (var inline in inlines)
+        {
+            if (inline is WpfRun run
+                && (footnote
+                    ? run.Tag is FootnoteMarker
+                    : run.Tag is EndnoteMarker))
+            {
+                yield return run;
+            }
+
+            if (inline is Span span)
+            {
+                foreach (var marker in NoteMarkers(span.Inlines, footnote))
+                    yield return marker;
+            }
+        }
+    }
+
     /// <summary>
     /// Inserts a plain-text content control (w:sdt) at the caret. When the selection is non-empty its
     /// text becomes the control's content; otherwise a placeholder ("Click to enter text") is used. The

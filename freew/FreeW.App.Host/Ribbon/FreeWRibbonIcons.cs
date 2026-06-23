@@ -170,6 +170,11 @@ internal static class FreeWRibbonIcons
             // Insert: references
             ["freew.footnote"] = RibbonCommandIconKind.Footnote,
             ["freew.endnote"] = RibbonCommandIconKind.Endnote,
+            ["freew.next-footnote"] = RibbonCommandIconKind.Footnote,
+            ["freew.previous-footnote"] = RibbonCommandIconKind.Footnote,
+            ["freew.next-endnote"] = RibbonCommandIconKind.Endnote,
+            ["freew.previous-endnote"] = RibbonCommandIconKind.Endnote,
+            ["freew.show-notes"] = RibbonCommandIconKind.Footnote,
             ["freew.footnote-endnote-options"] = RibbonCommandIconKind.Footnote,
             ["freew.toc"] = RibbonCommandIconKind.TableOfContents,
             ["freew.toc-refresh"] = RibbonCommandIconKind.Refresh,
