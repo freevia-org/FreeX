@@ -12,6 +12,7 @@ using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
+using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
 
 namespace FreeX.App.Avalonia;
 
@@ -53,6 +54,8 @@ public sealed partial class MainWindow
                 Height = 26,
                 Margin = new Thickness(2),
                 Background = Brush(color),
+                BorderBrush = Brush(112, 112, 112),
+                BorderThickness = new Thickness(1),
             };
             AutomationProperties.SetName(button, swatch.Hex);
             button.Click += (_, _) => { picked = color; dialog.Close(); };
@@ -64,6 +67,17 @@ public sealed partial class MainWindow
             Content = UiText.Get("RibbonWire_TabColorNone"),
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
             Margin = new Thickness(12, 0, 12, 12),
+            Height = 24,
+            MinHeight = 24,
+            MaxHeight = 24,
+            Padding = new Thickness(4, 1),
+            Background = Brushes.White,
+            BorderBrush = Brush(112, 112, 112),
+            BorderThickness = new Thickness(1),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
         };
         AutomationProperties.SetAutomationId(noColorButton, "SheetTabColorNoColorButton");
         noColorButton.Click += (_, _) => { cleared = true; dialog.Close(); };
@@ -103,7 +117,7 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(dialog, "WatchWindowDialog");
 
-        var list = new ListBox { MinHeight = 200 };
+        var list = new ListBox { MinHeight = 200, FontSize = 12, FontFamily = FormulaBarFontFamily };
         AutomationProperties.SetAutomationId(list, "WatchWindowList");
 
         void RefreshList()
@@ -116,7 +130,22 @@ public sealed partial class MainWindow
 
         RefreshList();
 
-        var addButton = new Button { Content = UiText.Get("RibbonWire_WatchWindowAdd"), MinWidth = 110 };
+        var addButton = new Button
+        {
+            Content = UiText.Get("RibbonWire_WatchWindowAdd"),
+            MinWidth = 110,
+            Height = 24,
+            MinHeight = 24,
+            MaxHeight = 24,
+            Padding = new Thickness(4, 1),
+            Background = Brushes.White,
+            BorderBrush = Brush(112, 112, 112),
+            BorderThickness = new Thickness(1),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
+        };
         AutomationProperties.SetAutomationId(addButton, "WatchWindowAddButton");
         addButton.Click += async (_, _) =>
         {
@@ -127,7 +156,22 @@ public sealed partial class MainWindow
             }
         };
 
-        var deleteButton = new Button { Content = UiText.Get("RibbonWire_WatchWindowDelete"), MinWidth = 110 };
+        var deleteButton = new Button
+        {
+            Content = UiText.Get("RibbonWire_WatchWindowDelete"),
+            MinWidth = 110,
+            Height = 24,
+            MinHeight = 24,
+            MaxHeight = 24,
+            Padding = new Thickness(4, 1),
+            Background = Brushes.White,
+            BorderBrush = Brush(112, 112, 112),
+            BorderThickness = new Thickness(1),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
+        };
         AutomationProperties.SetAutomationId(deleteButton, "WatchWindowDeleteButton");
         deleteButton.Click += (_, _) =>
         {
@@ -135,11 +179,42 @@ public sealed partial class MainWindow
             RefreshList();
         };
 
-        var refreshButton = new Button { Content = UiText.Get("RibbonWire_WatchWindowRefresh"), MinWidth = 110 };
+        var refreshButton = new Button
+        {
+            Content = UiText.Get("RibbonWire_WatchWindowRefresh"),
+            MinWidth = 110,
+            Height = 24,
+            MinHeight = 24,
+            MaxHeight = 24,
+            Padding = new Thickness(4, 1),
+            Background = Brushes.White,
+            BorderBrush = Brush(112, 112, 112),
+            BorderThickness = new Thickness(1),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
+        };
         AutomationProperties.SetAutomationId(refreshButton, "WatchWindowRefreshButton");
         refreshButton.Click += (_, _) => RefreshList();
 
-        var closeButton = new Button { Content = UiText.Get("Common_Close"), MinWidth = 84, IsCancel = true };
+        var closeButton = new Button
+        {
+            Content = UiText.Get("Common_Close"),
+            MinWidth = 84,
+            IsCancel = true,
+            Height = 24,
+            MinHeight = 24,
+            MaxHeight = 24,
+            Padding = new Thickness(4, 1),
+            Background = Brushes.White,
+            BorderBrush = Brush(112, 112, 112),
+            BorderThickness = new Thickness(1),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
+        };
         AutomationProperties.SetAutomationId(closeButton, "WatchWindowCloseButton");
         closeButton.Click += (_, _) => dialog.Close();
 
@@ -161,6 +236,8 @@ public sealed partial class MainWindow
                 {
                     Text = UiText.Get("RibbonWire_WatchWindowHint"),
                     TextWrapping = TextWrapping.Wrap,
+                    FontSize = 12,
+                    FontFamily = FormulaBarFontFamily,
                 },
                 list,
                 buttonRow,
@@ -187,6 +264,15 @@ public sealed partial class MainWindow
         {
             Text = selectedRangeText,
             IsReadOnly = true,
+            Height = 24,
+            MinHeight = 24,
+            MaxHeight = 24,
+            Padding = new Thickness(4, 1),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            BorderBrush = Brush(130, 130, 130),
+            BorderThickness = new Thickness(1),
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
             Margin = new Thickness(0, 0, 0, 8),
         };
         AutomationProperties.SetName(rangeBox, UiText.Get(AddWatchDialogPlanner.SelectedRangeAutomationNameKey));
@@ -198,6 +284,17 @@ public sealed partial class MainWindow
             Content = UiText.Get(AddWatchDialogPlanner.AddButtonKey),
             Width = AddWatchDialogPlanner.ButtonWidth,
             IsDefault = true,
+            Height = 24,
+            MinHeight = 24,
+            MaxHeight = 24,
+            Padding = new Thickness(4, 1),
+            Background = Brushes.White,
+            BorderBrush = Brush(0, 120, 215),
+            BorderThickness = new Thickness(1),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
             Margin = new Thickness(0, 0, 8, 0),
         };
         AutomationProperties.SetName(addButton, UiText.Get(AddWatchDialogPlanner.AddAutomationNameKey));
@@ -209,6 +306,17 @@ public sealed partial class MainWindow
             Content = UiText.Get("Common_Cancel"),
             Width = AddWatchDialogPlanner.ButtonWidth,
             IsCancel = true,
+            Height = 24,
+            MinHeight = 24,
+            MaxHeight = 24,
+            Padding = new Thickness(4, 1),
+            Background = Brushes.White,
+            BorderBrush = Brush(112, 112, 112),
+            BorderThickness = new Thickness(1),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
         };
         AutomationProperties.SetName(cancelButton, UiText.Get(AddWatchDialogPlanner.CancelAutomationNameKey));
         AutomationProperties.SetAutomationId(cancelButton, AddWatchDialogPlanner.CancelButtonAutomationId);
@@ -238,6 +346,8 @@ public sealed partial class MainWindow
                 {
                     Text = UiText.Get(AddWatchDialogPlanner.SelectedRangeLabelKey),
                     FontWeight = FontWeight.SemiBold,
+                    FontSize = 12,
+                    FontFamily = FormulaBarFontFamily,
                     Margin = new Thickness(0, 0, 0, 4),
                 },
                 rangeBox,
@@ -245,6 +355,8 @@ public sealed partial class MainWindow
                 {
                     Text = UiText.Get(AddWatchDialogPlanner.BodyTextKey),
                     TextWrapping = TextWrapping.Wrap,
+                    FontSize = 12,
+                    FontFamily = FormulaBarFontFamily,
                     Foreground = Brushes.Gray,
                 },
             },

@@ -111,7 +111,13 @@ public sealed partial class MainWindow
                     }, item.IsEnabled));
                     break;
                 case AutoFilterMenuItemKind.SelectAll:
-                    var selectAll = new CheckBox { Content = item.Label, IsChecked = true };
+                    var selectAll = new CheckBox
+                    {
+                        Content = item.Label,
+                        IsChecked = true,
+                        FontSize = 12,
+                        FontFamily = FormulaBarFontFamily,
+                    };
                     selectAll.IsCheckedChanged += (_, _) =>
                     {
                         foreach (var cb in checkBoxes)
@@ -120,7 +126,14 @@ public sealed partial class MainWindow
                     panel.Children.Add(selectAll);
                     break;
                 case AutoFilterMenuItemKind.ChecklistItem:
-                    var box = new CheckBox { Content = item.Label, IsChecked = true, Tag = item.Value };
+                    var box = new CheckBox
+                    {
+                        Content = item.Label,
+                        IsChecked = true,
+                        Tag = item.Value,
+                        FontSize = 12,
+                        FontFamily = FormulaBarFontFamily,
+                    };
                     checkBoxes.Add(box);
                     break;
                 case AutoFilterMenuItemKind.Separator:
@@ -139,7 +152,23 @@ public sealed partial class MainWindow
             checklistPanel.Children.Add(box);
         panel.Children.Add(new ScrollViewer { Content = checklistPanel, MaxHeight = 220 });
 
-        var okButton = new Button { Content = "OK", IsDefault = true, MinWidth = 72 };
+        var okButton = new Button
+        {
+            Content = "OK",
+            IsDefault = true,
+            MinWidth = 72,
+            Height = 24,
+            MinHeight = 24,
+            MaxHeight = 24,
+            Padding = new Thickness(4, 1),
+            Background = Brushes.White,
+            BorderBrush = Brush(0, 120, 215),
+            BorderThickness = new Thickness(1),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
+        };
         okButton.Click += (_, _) =>
         {
             flyout.Hide();
