@@ -213,10 +213,47 @@ public sealed class FreeWRibbonParityTests
                 "freew.cross-reference",
                 "freew.index-mark",
                 "freew.index-insert",
+                "freew.index-refresh",
                 "freew.mark-citation",
                 "freew.table-of-authorities",
                 "freew.table-of-authorities-refresh"
             });
+    }
+
+    [StaFact]
+    public void ReferencesIndex_ExposesBackedWordStyleUpdateIndex()
+    {
+        var definition = FreeWRibbon.Build();
+        var index = definition.FindTab("references")!.FindGroup("index");
+        var editor = new DocumentView();
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        CommandIds(index!)
+            .Should()
+            .Equal("freew.index-mark", "freew.index-insert", "freew.index-refresh");
+        Labels(index!)
+            .Should()
+            .Equal("Mark Entry", "Insert Index", "Update Index");
+        registry.TryGet("freew.index-refresh", out var refresh).Should().BeTrue("Word exposes Update Index from References > Index");
+
+        editor.Model.Blocks.Clear();
+        editor.Model.Blocks.Add(new Paragraph("Body"));
+        editor.Model.IndexEntries.Add(new IndexEntry("Beta"));
+        editor.Model.IndexEntries.Add(new IndexEntry("Alpha"));
+        editor.InsertIndex();
+
+        editor.Model.IndexEntries.Add(new IndexEntry("Gamma"));
+        refresh!.Execute(RibbonCommandContext.Empty);
+
+        editor.Model.Blocks.OfType<Paragraph>()
+            .Where(DocumentIndex.IsIndexParagraph)
+            .Select(paragraph => paragraph.PlainText)
+            .Should()
+            .Equal("Index", "Alpha", "Beta", "Gamma");
+        editor.Model.Blocks.OfType<Paragraph>()
+            .Count(paragraph => paragraph.StyleId == DocumentIndex.HeadingStyleId)
+            .Should()
+            .Be(1);
     }
 
     [StaFact]

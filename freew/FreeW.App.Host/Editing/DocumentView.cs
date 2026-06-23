@@ -6391,6 +6391,36 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Rebuild the generated document index in place. Existing index paragraphs are recognised by the
+    /// dedicated styles from <see cref="DocumentIndex"/>; the refreshed index is inserted at the first
+    /// previous index paragraph, or at the document end when there is not yet an index.
+    /// </summary>
+    public void RefreshIndex()
+    {
+        CommitToModel();
+        DocumentIndex.EnsureStyles(_model);
+
+        var firstIndex = -1;
+        var indexParagraphs = new List<int>();
+        for (var i = 0; i < _model.Blocks.Count; i++)
+        {
+            if (!DocumentIndex.IsIndexParagraph(_model.Blocks[i]))
+                continue;
+            firstIndex = firstIndex < 0 ? i : firstIndex;
+            indexParagraphs.Add(i);
+        }
+
+        var insertAt = firstIndex >= 0 ? firstIndex : _model.Blocks.Count;
+        for (var i = indexParagraphs.Count - 1; i >= 0; i--)
+            _commands.Execute(new DeleteParagraphCommand(indexParagraphs[i]));
+
+        var entries = DocumentIndex.Build(_model);
+        var index = Math.Clamp(insertAt, 0, _model.Blocks.Count);
+        foreach (var paragraph in entries)
+            _commands.Execute(new InsertParagraphCommand(index++, paragraph));
+    }
+
+    /// <summary>
     /// Marks the selected text (or a supplied citation) as a legal citation for a Table of Authorities
     /// (Word's References &gt; Mark Citation): drops a hidden <c>TA</c> field mark at the caret recording the
     /// long/short forms and category. The mark is textless (no visible glyph) and round-trips through docx;

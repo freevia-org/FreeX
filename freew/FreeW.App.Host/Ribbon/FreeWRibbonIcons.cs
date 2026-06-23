@@ -180,6 +180,7 @@ internal static class FreeWRibbonIcons
             ["freew.cross-reference"] = RibbonCommandIconKind.CrossReference,
             ["freew.index-mark"] = RibbonCommandIconKind.Index,
             ["freew.index-insert"] = RibbonCommandIconKind.Index,
+            ["freew.index-refresh"] = RibbonCommandIconKind.Refresh,
             ["freew.tof"] = RibbonCommandIconKind.TableOfContents,
             ["freew.tof-refresh"] = RibbonCommandIconKind.Refresh,
             ["freew.mark-citation"] = RibbonCommandIconKind.Citation,

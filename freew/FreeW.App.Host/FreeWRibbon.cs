@@ -279,6 +279,7 @@ internal static class FreeWRibbon
                 {
                     g.Medium("freew.index-mark", "Mark Entry", RibbonCommandIconKind.Index);
                     g.Medium("freew.index-insert", "Insert Index", RibbonCommandIconKind.Index);
+                    g.Medium("freew.index-refresh", "Update Index", RibbonCommandIconKind.Refresh);
                 });
                 tab.Group("authorities", "Table of Authorities", "A", 66, g =>
                 {
