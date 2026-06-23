@@ -119,18 +119,17 @@ public partial class MainWindow
     private async void BackgroundChooseMenuItem_Click(object sender, RoutedEventArgs e)
     {
         var openPlan = SheetBackgroundPickerPlanner.BuildOpenDialogPlan();
-        var dialog = new Microsoft.Win32.OpenFileDialog
-        {
-            Title = UiText.Get("MainWindowDialog_SheetBackgroundTitle"),
-            Filter = UiText.Get("MainWindowDialog_ImageFilesFilter"),
-            CheckFileExists = openPlan.CheckFileExists,
-            Multiselect = openPlan.Multiselect
-        };
+        var result = WpfFileDialogService.ShowOpenDialog(
+            this,
+            UiText.Get("MainWindowDialog_ImageFilesFilter"),
+            checkFileExists: openPlan.CheckFileExists,
+            multiselect: openPlan.Multiselect,
+            title: UiText.Get("MainWindowDialog_SheetBackgroundTitle"));
 
-        if (dialog.ShowDialog(this) != true)
+        if (!result.Chosen)
             return;
 
-        if (!SheetBackgroundPickerPlanner.IsSupportedImagePath(dialog.FileName))
+        if (!SheetBackgroundPickerPlanner.IsSupportedImagePath(result.FileName!))
         {
             ShowOwnedMessage(
                 UiText.Get("MainWindowMessage_SheetBackgroundUnsupportedImageType"),
@@ -143,7 +142,7 @@ public partial class MainWindow
         byte[] bytes;
         try
         {
-            bytes = await File.ReadAllBytesAsync(dialog.FileName);
+            bytes = await File.ReadAllBytesAsync(result.FileName!);
         }
         catch (IOException ex)
         {
@@ -164,7 +163,7 @@ public partial class MainWindow
             return;
         }
 
-        if (!SheetBackgroundPickerPlanner.TryBuildBackgroundImage(bytes, dialog.FileName, out var background)
+        if (!SheetBackgroundPickerPlanner.TryBuildBackgroundImage(bytes, result.FileName!, out var background)
             || background is null)
         {
             ShowOwnedMessage(

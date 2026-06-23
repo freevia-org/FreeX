@@ -30,13 +30,32 @@ public static class WpfFileDialogService
         bool multiselect = false,
         string? title = null)
     {
-        ArgumentNullException.ThrowIfNull(owner);
         ArgumentNullException.ThrowIfNull(plan);
+
+        return ShowOpenDialog(
+            owner,
+            plan.Filter,
+            plan.DefaultExtensionWithDot,
+            checkFileExists,
+            multiselect,
+            title);
+    }
+
+    public static WpfOpenFileDialogResult ShowOpenDialog(
+        Window owner,
+        string filter,
+        string defaultExtensionWithDot = "",
+        bool checkFileExists = true,
+        bool multiselect = false,
+        string? title = null)
+    {
+        ArgumentNullException.ThrowIfNull(owner);
+        ArgumentNullException.ThrowIfNull(filter);
 
         var dialog = new OpenFileDialog
         {
-            Filter = plan.Filter,
-            DefaultExt = plan.DefaultExtensionWithDot,
+            Filter = filter,
+            DefaultExt = defaultExtensionWithDot,
             CheckFileExists = checkFileExists,
             Multiselect = multiselect
         };
@@ -59,17 +78,38 @@ public static class WpfFileDialogService
         FileSaveDialogPlan plan,
         string? title = null)
     {
-        ArgumentNullException.ThrowIfNull(owner);
         ArgumentNullException.ThrowIfNull(plan);
+
+        return ShowSaveDialog(
+            owner,
+            plan.Filter,
+            plan.SuggestedFileName,
+            plan.DefaultExtensionWithDot,
+            plan.FilterIndex,
+            title);
+    }
+
+    public static WpfSaveFileDialogResult ShowSaveDialog(
+        Window owner,
+        string filter,
+        string suggestedFileName,
+        string defaultExtensionWithDot,
+        int filterIndex,
+        string? title = null)
+    {
+        ArgumentNullException.ThrowIfNull(owner);
+        ArgumentNullException.ThrowIfNull(filter);
+        ArgumentNullException.ThrowIfNull(suggestedFileName);
+        ArgumentNullException.ThrowIfNull(defaultExtensionWithDot);
 
         var dialog = new SaveFileDialog
         {
-            Filter = plan.Filter,
-            FilterIndex = plan.FilterIndex,
-            DefaultExt = plan.DefaultExtensionWithDot,
+            Filter = filter,
+            FilterIndex = filterIndex,
+            DefaultExt = defaultExtensionWithDot,
             AddExtension = true,
             OverwritePrompt = true,
-            FileName = plan.SuggestedFileName
+            FileName = suggestedFileName
         };
         if (!string.IsNullOrWhiteSpace(title))
             dialog.Title = title;

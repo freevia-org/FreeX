@@ -892,15 +892,15 @@ public partial class MainWindow
     private async void OpenButton_Click(object sender, RoutedEventArgs e)
     {
         var plan = WorkbookFilePickerPlanner.BuildOpenDialogPlan(_fileAdapters);
-        var dialog = new Microsoft.Win32.OpenFileDialog
-        {
-            Filter = plan.Filter,
-            CheckFileExists = true,
-            Multiselect = false
-        };
+        var result = WpfFileDialogService.ShowOpenDialog(
+            this,
+            plan.Filter,
+            plan.DefaultExtensionWithDot,
+            checkFileExists: true,
+            multiselect: false);
 
-        if (dialog.ShowDialog() == true)
-            await OpenFileAsync(dialog.FileName);
+        if (result.Chosen)
+            await OpenFileAsync(result.FileName!);
     }
 
     private async void SaveButton_Click(object sender, RoutedEventArgs e)
@@ -926,19 +926,16 @@ public partial class MainWindow
             _fileAdapters,
             _workbook.Name,
             _options.DefaultFormat);
-        var dialog = new Microsoft.Win32.SaveFileDialog
-        {
-            Filter = plan.Filter,
-            FileName = plan.SuggestedFileName,
-            DefaultExt = plan.DefaultExtensionWithDot,
-            FilterIndex = plan.FilterIndex,
-            AddExtension = true,
-            OverwritePrompt = true
-        };
+        var result = WpfFileDialogService.ShowSaveDialog(
+            this,
+            plan.Filter,
+            plan.SuggestedFileName,
+            plan.DefaultExtensionWithDot,
+            plan.FilterIndex);
 
-        if (dialog.ShowDialog() == true)
+        if (result.Chosen)
         {
-            if (!WorkbookFilePickerPlanner.TryResolveSaveDialogTarget(_fileAdapters, dialog.FileName, out var target) ||
+            if (!WorkbookFilePickerPlanner.TryResolveSaveDialogTarget(_fileAdapters, result.FileName!, out var target) ||
                 target is null)
             {
                 return false;
