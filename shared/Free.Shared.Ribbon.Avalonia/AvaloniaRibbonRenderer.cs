@@ -31,7 +31,7 @@ public static class AvaloniaRibbonRenderer
     private const string SelectedTabUnderlineTag = "FreeX.SelectedTabUnderline";
     private const double SmallRowHeight = 26;
     private const double TabHeaderHeight = 28;
-    private const double RibbonCheckBoxHeight = 18;
+    private const double RibbonCheckBoxHeight = 16;
     private const double RibbonCheckGlyphSize = 11;
     private const double LargeIconSize = 32;
     private const double MediumIconSize = 22;
