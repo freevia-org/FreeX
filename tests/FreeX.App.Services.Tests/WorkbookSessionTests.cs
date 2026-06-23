@@ -7206,6 +7206,54 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void SetWorksheetViewMode_PreservesSelectionAndUndo()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var selectedCell = new CellAddress(sheet.Id, 3, 4);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(selectedCell);
+
+        var result = session.SetWorksheetViewMode(WorksheetViewMode.PageLayout);
+
+        result.Success.Should().BeTrue();
+        sheet.ViewMode.Should().Be(WorksheetViewMode.PageLayout);
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+        session.ActiveCell.Should().Be(selectedCell);
+        session.SelectedRange.Should().Be(new GridRange(selectedCell, selectedCell));
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        sheet.ViewMode.Should().Be(WorksheetViewMode.Normal);
+        session.ActiveCell.Should().Be(selectedCell);
+        session.CanRedo.Should().BeTrue();
+    }
+
+    [Fact]
+    public void SetWorksheetViewMode_NoOpsSameStateWithoutMarkingDirty()
+    {
+        var workbook = CreateWorkbook();
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        var result = session.SetWorksheetViewMode(WorksheetViewMode.Normal);
+
+        result.Success.Should().BeTrue();
+        session.ActiveSheet.ViewMode.Should().Be(WorksheetViewMode.Normal);
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
     public void SetZoomPercent_ClampsPreservesSelectionAndUndo()
     {
         var workbook = CreateWorkbook();

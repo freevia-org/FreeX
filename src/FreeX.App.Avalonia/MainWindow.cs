@@ -3350,9 +3350,10 @@ public sealed partial class MainWindow : Window
 
     private void UpdateStatusBarViewButtons()
     {
-        ApplyStatusBarViewButtonState(_statusNormalViewButton, !_isPageBreakPreviewActive);
-        ApplyStatusBarViewButtonState(_statusPageLayoutViewButton, _isPageBreakPreviewActive);
-        ApplyStatusBarViewButtonState(_statusPageBreakPreviewButton, _isPageBreakPreviewActive);
+        var state = WorksheetViewModeUiStatePlanner.Build(_session.ActiveSheet.ViewMode);
+        ApplyStatusBarViewButtonState(_statusNormalViewButton, state.NormalChecked);
+        ApplyStatusBarViewButtonState(_statusPageLayoutViewButton, state.PageLayoutChecked);
+        ApplyStatusBarViewButtonState(_statusPageBreakPreviewButton, state.PageBreakPreviewChecked);
     }
 
     private static void ApplyStatusBarViewButtonState(ToggleButton button, bool isChecked)
@@ -3747,7 +3748,7 @@ public sealed partial class MainWindow : Window
         _pageSetupMenuItem.IsEnabled = isIdle;
         _printPreviewMenuItem.IsEnabled = isIdle;
         _pageBreakPreviewMenuItem.IsEnabled = isIdle;
-        _pageBreakPreviewMenuItem.IsChecked = _isPageBreakPreviewActive;
+        _pageBreakPreviewMenuItem.IsChecked = WorksheetViewModeUiStatePlanner.Build(_session.ActiveSheet.ViewMode).PageBreakPreviewChecked;
     }
 
     private int FindActiveSheetTabIndex()
@@ -4011,7 +4012,7 @@ public sealed partial class MainWindow : Window
         var overlay = BuildDrawingObjectOverlay(viewport);
         AddDataValidationDropdownOverlay(overlay, viewport, showHeadings, zoomFactor);
 
-        var pageBreakOverlay = _isPageBreakPreviewActive
+        var pageBreakOverlay = WorksheetViewModeUiStatePlanner.Build(_session.ActiveSheet.ViewMode).UsesPageBreakPreviewOverlay
             ? BuildPageBreakPreviewOverlay(viewport, showHeadings, zoomFactor)
             : null;
 

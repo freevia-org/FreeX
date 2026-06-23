@@ -5,6 +5,7 @@ using System.Windows.Automation.Peers;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
+using FreeX.App.Services;
 
 namespace FreeX.App.Host;
 
@@ -33,6 +34,7 @@ public partial class MainWindow
 
     private void RefreshStatusBar()
     {
+        var viewMode = GetCurrentStatusBarViewMode();
         if (IsFileOperationProgressVisible())
         {
             SetVisibilityIfChanged(StatusReadyText, Visibility.Collapsed);
@@ -43,7 +45,7 @@ public partial class MainWindow
         if (SheetGrid.SelectedRange is not { } range)
         {
             ApplyStatusBarDisplayState(_statusBarDisplayStateCache.GetReady(
-                StatusBarViewMode.Normal,
+                viewMode,
                 zoomPercent: 0,
                 UiText.Get("MainWindow_Text_Ready")));
             return;
@@ -51,22 +53,31 @@ public partial class MainWindow
 
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
+        viewMode = WorksheetViewModeUiStatePlanner.ToStatusBarViewMode(sheet.ViewMode);
 
         var stats = _statusBarStatsCache.GetOrCalculate(sheet, range, _navigationCacheRevision);
 
         if (stats.Count == 0)
         {
             ApplyStatusBarDisplayState(_statusBarDisplayStateCache.GetReady(
-                StatusBarViewMode.Normal,
+                viewMode,
                 zoomPercent: 0,
                 StatusBarCalculator.GetReadyStatusText(sheet, range.Start)));
             return;
         }
 
         ApplyStatusBarDisplayState(_statusBarDisplayStateCache.GetStats(
-            StatusBarViewMode.Normal,
+            viewMode,
             zoomPercent: 0,
             StatusBarCalculator.ToShared(stats)));
+    }
+
+    private StatusBarViewMode GetCurrentStatusBarViewMode()
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        return sheet is null
+            ? StatusBarViewMode.Normal
+            : WorksheetViewModeUiStatePlanner.ToStatusBarViewMode(sheet.ViewMode);
     }
 
     private bool IsFileOperationProgressVisible() =>
@@ -141,7 +152,7 @@ public partial class MainWindow
     {
         var state = _lastStatusBarDisplayState ??
             _statusBarDisplayStateCache.GetReady(
-                StatusBarViewMode.Normal,
+                GetCurrentStatusBarViewMode(),
                 zoomPercent: 0,
                 UiText.Get("MainWindow_Text_Ready"));
         ApplyStatusBarInteractiveDisplayState(BuildStatusBarPresentationPlan(state).Visibility);

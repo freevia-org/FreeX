@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 using Free.Shared.AppServices;
+using FreeX.App.Services;
+using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia;
 
@@ -24,17 +26,23 @@ internal static class AvaloniaStatusBarSource
 
     /// <summary>
     /// Builds the neutral <see cref="StatusBarViewModel"/> for the given selection stats and zoom using
-    /// the shared <see cref="StatusBarDisplayModelBuilder"/> and resource-key text provider. The Avalonia
-    /// session has no page-layout / page-break view yet, so the view mode is <see cref="StatusBarViewMode.Normal"/>.
+    /// the shared <see cref="StatusBarDisplayModelBuilder"/> and resource-key text provider.
     /// </summary>
-    public static StatusBarViewModel BuildModel(WorkbookSelectionStats stats, int zoomPercent, string readyText) =>
-        stats.IsEmpty
-            ? StatusBarDisplayModelBuilder.Ready(StatusBarViewMode.Normal, zoomPercent, readyText)
+    public static StatusBarViewModel BuildModel(
+        WorkbookSelectionStats stats,
+        int zoomPercent,
+        string readyText,
+        WorksheetViewMode viewMode = WorksheetViewMode.Normal)
+    {
+        var statusBarViewMode = WorksheetViewModeUiStatePlanner.ToStatusBarViewMode(viewMode);
+        return stats.IsEmpty
+            ? StatusBarDisplayModelBuilder.Ready(statusBarViewMode, zoomPercent, readyText)
             : StatusBarDisplayModelBuilder.Stats(
-                StatusBarViewMode.Normal,
+                statusBarViewMode,
                 zoomPercent,
                 stats,
                 TextProvider);
+    }
 
     /// <summary>
     /// Joins the model's visible aggregate readouts (filtered by <paramref name="optionVisibility"/>)

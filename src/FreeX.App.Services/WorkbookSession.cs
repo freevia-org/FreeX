@@ -1445,6 +1445,27 @@ public sealed class WorkbookSession
             showRulers);
     }
 
+    public WorkbookCellEditResult SetWorksheetViewMode(WorksheetViewMode viewMode)
+    {
+        if (ActiveSheet.ViewMode == viewMode)
+        {
+            return new WorkbookCellEditResult(
+                true,
+                null,
+                [],
+                RecalcReport: null);
+        }
+
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new SetWorksheetViewModeCommand(ActiveSheet.Id, viewMode));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulWorkbookMetadataResult(ActiveSheet.Id);
+        return result;
+    }
+
     public WorkbookCellEditResult SetZoomPercent(int zoomPercent)
     {
         zoomPercent = Math.Clamp(

@@ -7,6 +7,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
+using FreeX.App.Services;
 
 namespace FreeX.App.Host;
 
@@ -119,21 +120,22 @@ public partial class MainWindow
 
     private void SyncWorkbookViewModeToggleState(WorksheetViewMode viewMode)
     {
-        _ribbonState.SetChecked("Normal", viewMode == WorksheetViewMode.Normal);
-        _ribbonState.SetChecked("Page Layout", viewMode == WorksheetViewMode.PageLayout);
-        _ribbonState.SetChecked("Page Break Preview", viewMode == WorksheetViewMode.PageBreakPreview);
+        var state = WorksheetViewModeUiStatePlanner.Build(viewMode);
+        _ribbonState.SetChecked("Normal", state.NormalChecked);
+        _ribbonState.SetChecked("Page Layout", state.PageLayoutChecked);
+        _ribbonState.SetChecked("Page Break Preview", state.PageBreakPreviewChecked);
 
-        SyncStatusViewShortcutState(viewMode);
+        SyncStatusViewShortcutState(state);
     }
 
-    private void SyncStatusViewShortcutState(WorksheetViewMode viewMode)
+    private void SyncStatusViewShortcutState(WorksheetViewModeUiState state)
     {
         if (StatusNormalViewButton is not null)
-            StatusNormalViewButton.IsChecked = viewMode == WorksheetViewMode.Normal;
+            StatusNormalViewButton.IsChecked = state.NormalChecked;
         if (StatusPageLayoutViewButton is not null)
-            StatusPageLayoutViewButton.IsChecked = viewMode == WorksheetViewMode.PageLayout;
+            StatusPageLayoutViewButton.IsChecked = state.PageLayoutChecked;
         if (StatusPageBreakPreviewButton is not null)
-            StatusPageBreakPreviewButton.IsChecked = viewMode == WorksheetViewMode.PageBreakPreview;
+            StatusPageBreakPreviewButton.IsChecked = state.PageBreakPreviewChecked;
     }
 
     private void CustomViewsBtn_Click(object sender, RoutedEventArgs e)

@@ -3,6 +3,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Free.Shared.AppServices;
+using FreeX.App.Services;
 
 namespace FreeX.App.Avalonia;
 
@@ -34,7 +35,8 @@ public sealed partial class MainWindow
         AvaloniaStatusBarSource.BuildModel(
             _session.SelectionStats,
             ClampZoomPercent(_session.ZoomPercent),
-            NormalizeStatusBarReadyText(readyText));
+            NormalizeStatusBarReadyText(readyText),
+            _session.ActiveSheet.ViewMode);
 
     /// <summary>
     /// Renders the footer readout (<see cref="_selectionStatsText"/>) and ready text
@@ -71,6 +73,7 @@ public sealed partial class MainWindow
         _statusNormalViewButton.IsVisible = visibility.ViewShortcutsVisible;
         _statusPageLayoutViewButton.IsVisible = visibility.ViewShortcutsVisible;
         _statusPageBreakPreviewButton.IsVisible = visibility.ViewShortcutsVisible;
+        UpdateStatusBarViewButtons();
 
         _statusZoomSliderHost.IsVisible = visibility.ZoomSliderVisible;
         _statusZoomSlider.IsVisible = visibility.ZoomSliderVisible;

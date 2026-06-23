@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows;
+using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
@@ -280,7 +281,7 @@ public partial class MainWindow
         _currentSheetId = sheet.Id;
         SyncZoomFromSheet(sheet.ZoomPercent);
         SyncViewPanesZoomTourWorkbookViewButtons();
-        SyncStatusViewShortcutState(sheet.ViewMode);
+        SyncStatusViewShortcutState(WorksheetViewModeUiStatePlanner.Build(sheet.ViewMode));
         _suppressViewOptionSync = true;
         try
         {

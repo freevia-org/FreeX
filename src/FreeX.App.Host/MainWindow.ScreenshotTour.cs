@@ -6206,9 +6206,10 @@ public partial class MainWindow
     private void SyncViewPanesZoomTourWorkbookViewButtons()
     {
         var viewMode = _workbook.GetSheet(_currentSheetId)?.ViewMode ?? WorksheetViewMode.Normal;
-        _ribbonState.SetChecked("Normal", viewMode == WorksheetViewMode.Normal);
-        _ribbonState.SetChecked("Page Layout", viewMode == WorksheetViewMode.PageLayout);
-        _ribbonState.SetChecked("Page Break Preview", viewMode == WorksheetViewMode.PageBreakPreview);
+        var state = WorksheetViewModeUiStatePlanner.Build(viewMode);
+        _ribbonState.SetChecked("Normal", state.NormalChecked);
+        _ribbonState.SetChecked("Page Layout", state.PageLayoutChecked);
+        _ribbonState.SetChecked("Page Break Preview", state.PageBreakPreviewChecked);
     }
 
     private ViewPanesZoomTourManifestCapture CreateViewPanesZoomTourCapture(

@@ -6,6 +6,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 
 using FreeX.App.Presentation.PageLayout;
+using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -38,8 +39,6 @@ public sealed partial class MainWindow
     private static readonly IBrush PageBreakBorderBrush = Brush(11, 112, 116);
     private static readonly IBrush PageBreakLineBrush = Brush(11, 112, 116);
     private static readonly IBrush PageBreakWatermarkBrush = Brush(60, 11, 112, 116);
-
-    private bool _isPageBreakPreviewActive;
 
     private async Task ShowPageSetupDialogAsync()
     {
@@ -117,8 +116,19 @@ public sealed partial class MainWindow
             return;
 
         ClearSelectedDrawingObject();
-        _isPageBreakPreviewActive = !_isPageBreakPreviewActive;
-        RefreshShell(_isPageBreakPreviewActive ? UiText.Get("ShellLoc_PageBreakPreviewOn") : UiText.Get("ShellLoc_PageBreakPreviewOff"));
+        var viewMode = _session.ActiveSheet.ViewMode == WorksheetViewMode.PageBreakPreview
+            ? WorksheetViewMode.Normal
+            : WorksheetViewMode.PageBreakPreview;
+        var result = _session.SetWorksheetViewMode(viewMode);
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("ShellLoc_PageBreakPreviewOff"));
+            return;
+        }
+
+        RefreshShell(viewMode == WorksheetViewMode.PageBreakPreview
+            ? UiText.Get("ShellLoc_PageBreakPreviewOn")
+            : UiText.Get("ShellLoc_PageBreakPreviewOff"));
     }
 
     private Canvas? BuildPageBreakPreviewOverlay(ViewportModel viewport, bool showHeadings, double zoomFactor)
