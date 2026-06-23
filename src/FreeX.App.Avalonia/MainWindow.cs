@@ -10913,6 +10913,8 @@ public sealed partial class MainWindow : Window
             Content = "My data has headers",
             IsChecked = true,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            FontSize = 12,
+            MinHeight = 18,
         };
         AutomationProperties.SetAutomationId(headersCheck, "SortHeadersCheckBox");
 
@@ -10935,42 +10937,48 @@ public sealed partial class MainWindow : Window
         var addLevelButton = new Button
         {
             Content = "Add Level",
-            MinWidth = 94,
-            Padding = new Thickness(10, 4),
+            MinWidth = 98,
         };
+        ApplySortDialogButtonChrome(addLevelButton);
         AutomationProperties.SetAutomationId(addLevelButton, "SortAddLevelButton");
 
-        var deleteLevelButton = new Button { Content = "Delete Level", MinWidth = 104, Padding = new Thickness(10, 4) };
+        var deleteLevelButton = new Button { Content = "Delete Level", MinWidth = 104 };
+        ApplySortDialogButtonChrome(deleteLevelButton);
         AutomationProperties.SetAutomationId(deleteLevelButton, "SortDeleteLevelButton");
-        var copyLevelButton = new Button { Content = "Copy Level", MinWidth = 98, Padding = new Thickness(10, 4) };
+        var copyLevelButton = new Button { Content = "Copy Level", MinWidth = 98 };
+        ApplySortDialogButtonChrome(copyLevelButton);
         AutomationProperties.SetAutomationId(copyLevelButton, "SortCopyLevelButton");
-        var moveUpButton = new Button { Content = "Move Up", MinWidth = 86, Padding = new Thickness(10, 4) };
+        var moveUpButton = new Button { Content = "Move Up", MinWidth = 86 };
+        ApplySortDialogButtonChrome(moveUpButton);
         AutomationProperties.SetAutomationId(moveUpButton, "SortMoveUpButton");
-        var moveDownButton = new Button { Content = "Move Down", MinWidth = 92, Padding = new Thickness(10, 4) };
+        var moveDownButton = new Button { Content = "Move Down", MinWidth = 92 };
+        ApplySortDialogButtonChrome(moveDownButton);
         AutomationProperties.SetAutomationId(moveDownButton, "SortMoveDownButton");
         var optionsButton = new Button
         {
             Content = "Options...",
             MinWidth = 92,
-            Padding = new Thickness(10, 4),
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
         };
+        ApplySortDialogButtonChrome(optionsButton);
         AutomationProperties.SetAutomationId(optionsButton, "SortOptionsButton");
 
         var okButton = new Button
         {
             Content = "OK",
+            IsDefault = true,
             MinWidth = 76,
-            Padding = new Thickness(10, 4),
         };
+        ApplySortDialogButtonChrome(okButton, isDefault: true);
         AutomationProperties.SetAutomationId(okButton, "SortOkButton");
 
         var cancelButton = new Button
         {
             Content = "Cancel",
+            IsCancel = true,
             MinWidth = 76,
-            Padding = new Thickness(10, 4),
         };
+        ApplySortDialogButtonChrome(cancelButton);
         AutomationProperties.SetAutomationId(cancelButton, "SortCancelButton");
 
         ComboBox? firstSortOnBox = null;
@@ -11086,9 +11094,9 @@ public sealed partial class MainWindow : Window
             {
                 Child = child,
                 Background = selected ? Brush(0, 120, 215) : Brushes.White,
-                BorderBrush = Brush(90, 90, 90),
+                BorderBrush = Brush(190, 190, 190),
                 BorderThickness = new Thickness(0, 0, 1, 1),
-                Padding = new Thickness(4, 2),
+                Padding = new Thickness(3, 1),
             };
             AvaloniaGrid.SetRow(border, row);
             AvaloniaGrid.SetColumn(border, column);
@@ -11102,13 +11110,13 @@ public sealed partial class MainWindow : Window
                 Child = new TextBlock
                 {
                     Text = text,
-                    FontSize = 15,
+                    FontSize = 12,
                     VerticalAlignment = AvaloniaVerticalAlignment.Center,
                 },
                 Background = Brush(244, 244, 244),
-                BorderBrush = Brush(170, 170, 170),
+                BorderBrush = Brush(190, 190, 190),
                 BorderThickness = new Thickness(0, 0, 1, 1),
-                Padding = new Thickness(6, 4),
+                Padding = new Thickness(5, 3),
             };
             AvaloniaGrid.SetRow(border, 0);
             AvaloniaGrid.SetColumn(border, column);
@@ -11120,9 +11128,19 @@ public sealed partial class MainWindow : Window
             {
                 Text = text,
                 Foreground = selected ? Brushes.White : Brushes.Black,
-                FontSize = 14,
+                FontSize = 12,
                 VerticalAlignment = AvaloniaVerticalAlignment.Center,
             };
+
+        static void ApplySortComboChrome(ComboBox comboBox)
+        {
+            comboBox.Height = 28;
+            comboBox.MinHeight = 28;
+            comboBox.MaxHeight = 28;
+            comboBox.Padding = new Thickness(6, 0, 4, 0);
+            comboBox.FontSize = 12;
+            comboBox.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+        }
 
         void UpdateToolbarButtonStates()
         {
@@ -11140,8 +11158,8 @@ public sealed partial class MainWindow : Window
             levelsGrid.Children.Clear();
             levelsGrid.RowDefinitions.Clear();
             levelsGrid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
-            for (var i = 0; i < Math.Max(6, levels.Count); i++)
-                levelsGrid.RowDefinitions.Add(new RowDefinition(new GridLength(38)));
+            for (var i = 0; i < levels.Count; i++)
+                levelsGrid.RowDefinitions.Add(new RowDefinition(new GridLength(28)));
 
             levelsGrid.Children.Add(CreateHeaderCell(optionsState.LeftToRight ? "Sort by row" : "Sort by", 0));
             levelsGrid.Children.Add(CreateHeaderCell("Sort On", 1));
@@ -11167,6 +11185,7 @@ public sealed partial class MainWindow : Window
                     MinWidth = 170,
                     IsVisible = selected,
                 };
+                ApplySortComboChrome(columnBox);
                 AutomationProperties.SetName(columnBox, "Sort by");
                 AutomationProperties.SetAutomationId(columnBox, $"SortLevel{levelIndex + 1}ColumnBox");
                 SelectColumn(columnBox, columnChoices, level);
@@ -11182,6 +11201,7 @@ public sealed partial class MainWindow : Window
                     MinWidth = 120,
                     IsVisible = selected,
                 };
+                ApplySortComboChrome(sortOnBox);
                 AutomationProperties.SetName(sortOnBox, "Sort On");
                 AutomationProperties.SetAutomationId(sortOnBox, $"SortLevel{levelIndex + 1}SortOnBox");
                 SelectSortOn(sortOnBox, sortOnItems, level);
@@ -11192,6 +11212,7 @@ public sealed partial class MainWindow : Window
                     MinWidth = 130,
                     IsVisible = selected,
                 };
+                ApplySortComboChrome(orderBox);
                 AutomationProperties.SetName(orderBox, "Order");
                 AutomationProperties.SetAutomationId(orderBox, $"SortLevel{levelIndex + 1}OrderBox");
                 SelectOrder(orderBox, directionChoices, level);
@@ -11203,6 +11224,7 @@ public sealed partial class MainWindow : Window
                     IsEnabled = IsColorSort(level),
                     IsVisible = selected,
                 };
+                ApplySortComboChrome(colorBox);
                 AutomationProperties.SetName(colorBox, "Color");
                 AutomationProperties.SetAutomationId(colorBox, $"SortLevel{levelIndex + 1}ColorBox");
                 SelectColor(colorBox, colorChoices, level);
@@ -11268,13 +11290,6 @@ public sealed partial class MainWindow : Window
                     };
                     levelsGrid.Children.Add(cell);
                 }
-            }
-
-            for (var blankIndex = levels.Count; blankIndex < 6; blankIndex++)
-            {
-                var gridRow = blankIndex + 1;
-                for (var column = 0; column < 4; column++)
-                    levelsGrid.Children.Add(CreateSortCell(new TextBlock(), gridRow, column));
             }
 
             UpdateToolbarButtonStates();
@@ -11445,6 +11460,20 @@ public sealed partial class MainWindow : Window
 
         await dialog.ShowDialog(this);
         return result;
+    }
+
+    private static void ApplySortDialogButtonChrome(Button button, bool isDefault = false)
+    {
+        button.Height = 24;
+        button.MinHeight = 24;
+        button.MaxHeight = 24;
+        button.Padding = new Thickness(8, 1);
+        button.Background = Brushes.White;
+        button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);
+        button.BorderThickness = new Thickness(1);
+        button.FontSize = 12;
+        button.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
+        button.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
     }
 
     private async Task<SortDialogOptions?> ShowSortOptionsDialogAsync(SortDialogOptions current)
