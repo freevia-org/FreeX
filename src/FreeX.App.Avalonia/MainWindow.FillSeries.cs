@@ -33,41 +33,53 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get("FillSeries_Title"),
-            Width = 400,
-            Height = 340,
+            Width = 380,
+            Height = 356,
             MinWidth = 360,
-            MinHeight = 300,
+            MinHeight = 320,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
         AutomationProperties.SetAutomationId(dialog, "FillSeriesDialog");
 
         var rowsButton = new RadioButton { Content = UiText.Get("FillSeries_Rows"), GroupName = "FillSeriesIn" };
+        ApplyDataOpsRadioButtonChrome(rowsButton);
         AutomationProperties.SetAutomationId(rowsButton, "FillSeriesRowsButton");
         var columnsButton = new RadioButton { Content = UiText.Get("FillSeries_Columns"), GroupName = "FillSeriesIn", IsChecked = true };
+        ApplyDataOpsRadioButtonChrome(columnsButton);
         AutomationProperties.SetAutomationId(columnsButton, "FillSeriesColumnsButton");
 
         var linearButton = new RadioButton { Content = UiText.Get("FillSeries_Linear"), GroupName = "FillSeriesType", IsChecked = true };
+        ApplyDataOpsRadioButtonChrome(linearButton);
         AutomationProperties.SetAutomationId(linearButton, "FillSeriesLinearButton");
         var growthButton = new RadioButton { Content = UiText.Get("FillSeries_Growth"), GroupName = "FillSeriesType" };
+        ApplyDataOpsRadioButtonChrome(growthButton);
         AutomationProperties.SetAutomationId(growthButton, "FillSeriesGrowthButton");
         var dateButton = new RadioButton { Content = UiText.Get("FillSeries_Date"), GroupName = "FillSeriesType" };
+        ApplyDataOpsRadioButtonChrome(dateButton);
         AutomationProperties.SetAutomationId(dateButton, "FillSeriesDateButton");
         var autoFillButton = new RadioButton { Content = UiText.Get("FillSeries_AutoFill"), GroupName = "FillSeriesType" };
+        ApplyDataOpsRadioButtonChrome(autoFillButton);
         AutomationProperties.SetAutomationId(autoFillButton, "FillSeriesAutoFillButton");
 
         var dayButton = new RadioButton { Content = UiText.Get("FillSeries_Day"), GroupName = "FillSeriesDateUnit", IsChecked = true };
+        ApplyDataOpsRadioButtonChrome(dayButton);
         AutomationProperties.SetAutomationId(dayButton, "FillSeriesDayButton");
         var weekdayButton = new RadioButton { Content = UiText.Get("FillSeries_Weekday"), GroupName = "FillSeriesDateUnit" };
+        ApplyDataOpsRadioButtonChrome(weekdayButton);
         AutomationProperties.SetAutomationId(weekdayButton, "FillSeriesWeekdayButton");
         var monthButton = new RadioButton { Content = UiText.Get("FillSeries_Month"), GroupName = "FillSeriesDateUnit" };
+        ApplyDataOpsRadioButtonChrome(monthButton);
         AutomationProperties.SetAutomationId(monthButton, "FillSeriesMonthButton");
         var yearButton = new RadioButton { Content = UiText.Get("FillSeries_Year"), GroupName = "FillSeriesDateUnit" };
+        ApplyDataOpsRadioButtonChrome(yearButton);
         AutomationProperties.SetAutomationId(yearButton, "FillSeriesYearButton");
 
-        var stepBox = new TextBox { Text = "1", MinWidth = 100 };
+        var stepBox = new TextBox { Text = "1", MinWidth = 110 };
+        ApplyDataOpsTextBoxChrome(stepBox);
         AutomationProperties.SetAutomationId(stepBox, "FillSeriesStepValueBox");
-        var stopBox = new TextBox { Text = string.Empty, MinWidth = 100 };
+        var stopBox = new TextBox { Text = string.Empty, MinWidth = 110 };
+        ApplyDataOpsTextBoxChrome(stopBox);
         AutomationProperties.SetAutomationId(stopBox, "FillSeriesStopValueBox");
 
         var warningText = new TextBlock
@@ -75,6 +87,8 @@ public sealed partial class MainWindow
             Foreground = Brush(180, 30, 30),
             TextWrapping = TextWrapping.Wrap,
             IsVisible = false,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
         };
         AutomationProperties.SetAutomationId(warningText, "FillSeriesWarningText");
 
@@ -93,9 +107,11 @@ public sealed partial class MainWindow
         autoFillButton.IsCheckedChanged += (_, _) => UpdateDateUnitAvailability();
         UpdateDateUnitAvailability();
 
-        var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 84 };
+        var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 72 };
+        ApplyDataOpsButtonChrome(okButton, isDefault: true);
         AutomationProperties.SetAutomationId(okButton, "FillSeriesOkButton");
-        var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 84 };
+        var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 72 };
+        ApplyDataOpsButtonChrome(cancelButton);
         AutomationProperties.SetAutomationId(cancelButton, "FillSeriesCancelButton");
 
         void ShowWarning(string message)
@@ -163,7 +179,7 @@ public sealed partial class MainWindow
             Orientation = Orientation.Horizontal,
             Spacing = 8,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 10, 0, 0),
+            Margin = new Thickness(0, 16, 0, 0),
             Children = { cancelButton, okButton },
         };
         DockPanel.SetDock(buttonRow, Dock.Bottom);
@@ -181,11 +197,11 @@ public sealed partial class MainWindow
                         Spacing = 8,
                         Children =
                         {
-                            new TextBlock { Text = UiText.Get("FillSeries_SeriesInHeader"), FontWeight = FontWeight.SemiBold },
+                            new TextBlock { Text = UiText.Get("FillSeries_SeriesInHeader"), FontWeight = FontWeight.SemiBold, FontSize = 12, FontFamily = FormulaBarFontFamily },
                             FillSeriesRow(rowsButton, columnsButton),
-                            new TextBlock { Text = UiText.Get("FillSeries_TypeHeader"), FontWeight = FontWeight.SemiBold },
+                            new TextBlock { Text = UiText.Get("FillSeries_TypeHeader"), FontWeight = FontWeight.SemiBold, FontSize = 12, FontFamily = FormulaBarFontFamily },
                             FillSeriesRow(linearButton, growthButton, dateButton, autoFillButton),
-                            new TextBlock { Text = UiText.Get("FillSeries_DateUnitHeader"), FontWeight = FontWeight.SemiBold },
+                            new TextBlock { Text = UiText.Get("FillSeries_DateUnitHeader"), FontWeight = FontWeight.SemiBold, FontSize = 12, FontFamily = FormulaBarFontFamily },
                             FillSeriesRow(dayButton, weekdayButton, monthButton, yearButton),
                             FillSeriesLabeledBox(UiText.Get("FillSeries_StepValueLabel"), stepBox),
                             FillSeriesLabeledBox(UiText.Get("FillSeries_StopValueLabel"), stopBox),
@@ -207,15 +223,22 @@ public sealed partial class MainWindow
         return row;
     }
 
-    private static StackPanel FillSeriesLabeledBox(string label, Control field) =>
-        new()
+    private static Grid FillSeriesLabeledBox(string label, Control field)
+    {
+        var grid = new Grid { Margin = new Thickness(0, 4, 0, 0) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(100) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
+        var labelBlock = new TextBlock
         {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            Children =
-            {
-                new TextBlock { Text = label, VerticalAlignment = AvaloniaVerticalAlignment.Center, MinWidth = 96 },
-                field,
-            },
+            Text = label,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
         };
+        Grid.SetColumn(labelBlock, 0);
+        grid.Children.Add(labelBlock);
+        Grid.SetColumn(field, 1);
+        grid.Children.Add(field);
+        return grid;
+    }
 }

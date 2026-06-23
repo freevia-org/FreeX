@@ -215,22 +215,24 @@ public sealed partial class MainWindow
         {
             Title = UiText.Get("TableLoc_PasteSpecialTitle"),
             Width = 320,
-            Height = 280,
+            Height = 260,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            CanResize = false
+            CanResize = false,
         };
         AutomationProperties.SetAutomationId(dialog, "PasteSpecialDialog");
 
         var root = new StackPanel
         {
-            Margin = new Thickness(18),
-            Spacing = 12
+            Margin = new Thickness(16),
+            Spacing = 8,
         };
 
         root.Children.Add(new TextBlock
         {
             Text = UiText.Get("TableLoc_PasteSpecialPasteLabel"),
-            FontWeight = FontWeight.SemiBold
+            FontWeight = FontWeight.SemiBold,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
         });
 
         var options = new (PasteCellsMode Mode, string Label, string AutomationId)[]
@@ -238,7 +240,7 @@ public sealed partial class MainWindow
             (PasteCellsMode.All, UiText.Get("TableLoc_PasteSpecialAll"), "PasteSpecialAllRadio"),
             (PasteCellsMode.Values, UiText.Get("TableLoc_PasteSpecialValues"), "PasteSpecialValuesRadio"),
             (PasteCellsMode.Formulas, UiText.Get("TableLoc_PasteSpecialFormulas"), "PasteSpecialFormulasRadio"),
-            (PasteCellsMode.Formats, UiText.Get("TableLoc_PasteSpecialFormats"), "PasteSpecialFormatsRadio")
+            (PasteCellsMode.Formats, UiText.Get("TableLoc_PasteSpecialFormats"), "PasteSpecialFormatsRadio"),
         };
 
         var radios = new List<RadioButton>();
@@ -250,8 +252,9 @@ public sealed partial class MainWindow
                 Content = option.Label,
                 GroupName = "PasteSpecialMode",
                 IsChecked = option.Mode == PasteCellsMode.All,
-                Tag = option.Mode
+                Tag = option.Mode,
             };
+            ApplyDataOpsRadioButtonChrome(radio);
             AutomationProperties.SetAutomationId(radio, option.AutomationId);
             radios.Add(radio);
             optionsPanel.Children.Add(radio);
@@ -259,20 +262,13 @@ public sealed partial class MainWindow
 
         root.Children.Add(optionsPanel);
 
-        var buttonRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Spacing = 8,
-            Margin = new Thickness(0, 8, 0, 0)
-        };
-
         var okButton = new Button
         {
             Content = UiText.Get("TableLoc_OK"),
             MinWidth = 82,
-            IsDefault = true
+            IsDefault = true,
         };
+        ApplyDataOpsButtonChrome(okButton, isDefault: true);
         AutomationProperties.SetAutomationId(okButton, "PasteSpecialOkButton");
         okButton.Click += (_, _) =>
         {
@@ -290,8 +286,9 @@ public sealed partial class MainWindow
         {
             Content = UiText.Get("TableLoc_Cancel"),
             MinWidth = 82,
-            IsCancel = true
+            IsCancel = true,
         };
+        ApplyDataOpsButtonChrome(cancelButton);
         AutomationProperties.SetAutomationId(cancelButton, "PasteSpecialCancelButton");
         cancelButton.Click += (_, _) =>
         {
@@ -299,6 +296,13 @@ public sealed partial class MainWindow
             dialog.Close();
         };
 
+        var buttonRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Spacing = 8,
+            Margin = new Thickness(0, 8, 0, 0),
+        };
         buttonRow.Children.Add(okButton);
         buttonRow.Children.Add(cancelButton);
         root.Children.Add(buttonRow);

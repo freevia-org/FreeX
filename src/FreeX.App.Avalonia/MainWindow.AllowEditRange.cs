@@ -35,16 +35,16 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get("AllowEditRange_Title"),
-            Width = 420,
-            Height = 380,
-            MinWidth = 360,
+            Width = 430,
+            Height = 360,
+            MinWidth = 390,
             MinHeight = 320,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
         AutomationProperties.SetAutomationId(dialog, "AllowEditRangeDialog");
 
-        var rangesList = new ListBox { MinHeight = 120 };
+        var rangesList = new ListBox { MinHeight = 80 };
         AutomationProperties.SetAutomationId(rangesList, "AllowEditRangeExistingRangesList");
 
         var rangeBox = new TextBox
@@ -52,13 +52,17 @@ public sealed partial class MainWindow
             Text = FormatRangeReference(_session.SelectedRange),
             MinWidth = 220,
         };
+        ApplyDataOpsTextBoxChrome(rangeBox);
         AutomationProperties.SetAutomationId(rangeBox, "AllowEditRangeBox");
 
-        var newButton = new Button { Content = UiText.Get("AllowEditRange_NewButton"), MinWidth = 84 };
+        var newButton = new Button { Content = UiText.Get("AllowEditRange_NewButton"), MinWidth = 82 };
+        ApplyDataOpsButtonChrome(newButton);
         AutomationProperties.SetAutomationId(newButton, "AllowEditRangeNewButton");
-        var modifyButton = new Button { Content = UiText.Get("AllowEditRange_ModifyButton"), MinWidth = 84, IsEnabled = false };
+        var modifyButton = new Button { Content = UiText.Get("AllowEditRange_ModifyButton"), MinWidth = 82, IsEnabled = false };
+        ApplyDataOpsButtonChrome(modifyButton);
         AutomationProperties.SetAutomationId(modifyButton, "AllowEditRangeModifyButton");
-        var deleteButton = new Button { Content = UiText.Get("AllowEditRange_DeleteButton"), MinWidth = 84, IsEnabled = false };
+        var deleteButton = new Button { Content = UiText.Get("AllowEditRange_DeleteButton"), MinWidth = 82, IsEnabled = false };
+        ApplyDataOpsButtonChrome(deleteButton);
         AutomationProperties.SetAutomationId(deleteButton, "AllowEditRangeDeleteButton");
 
         var warningText = new TextBlock
@@ -66,6 +70,8 @@ public sealed partial class MainWindow
             Foreground = Brush(180, 30, 30),
             TextWrapping = TextWrapping.Wrap,
             IsVisible = false,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
         };
         AutomationProperties.SetAutomationId(warningText, "AllowEditRangeWarningText");
 
@@ -185,6 +191,7 @@ public sealed partial class MainWindow
         };
 
         var closeButton = new Button { Content = UiText.Get("Common_Close"), IsCancel = true, MinWidth = 84 };
+        ApplyDataOpsButtonChrome(closeButton);
         AutomationProperties.SetAutomationId(closeButton, "AllowEditRangeCloseButton");
         closeButton.Click += (_, _) => dialog.Close();
 
@@ -218,13 +225,13 @@ public sealed partial class MainWindow
                     Spacing = 8,
                     Children =
                     {
-                        new TextBlock { Text = UiText.Get("AllowEditRange_Intro"), Foreground = HeaderForeground, TextWrapping = TextWrapping.Wrap },
-                        new TextBlock { Text = UiText.Get("AllowEditRange_ExistingRangesLabel"), Foreground = HeaderForeground },
+                        new TextBlock { Text = UiText.Get("AllowEditRange_Intro"), Foreground = HeaderForeground, TextWrapping = TextWrapping.Wrap, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                        new TextBlock { Text = UiText.Get("AllowEditRange_ExistingRangesLabel"), Foreground = HeaderForeground, FontSize = 12, FontFamily = FormulaBarFontFamily },
                         rangesList,
                         rangeButtons,
-                        new TextBlock { Text = UiText.Get("AllowEditRange_RangeLabel"), Foreground = HeaderForeground },
+                        new TextBlock { Text = UiText.Get("AllowEditRange_RangeLabel"), Foreground = HeaderForeground, FontSize = 12, FontFamily = FormulaBarFontFamily },
                         rangeBox,
-                        new TextBlock { Text = UiText.Get("AllowEditRange_Example"), Foreground = SecondaryInk, TextWrapping = TextWrapping.Wrap },
+                        new TextBlock { Text = UiText.Get("AllowEditRange_Example"), Foreground = SecondaryInk, TextWrapping = TextWrapping.Wrap, FontSize = 12, FontFamily = FormulaBarFontFamily },
                         warningText,
                     },
                 },
