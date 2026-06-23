@@ -1553,6 +1553,12 @@
   <data name="CreateTable_InvalidRangeMessage" xml:space="preserve"><value>Enter a valid table range.</value></data>
   <data name="CreateTable_MinimumRowsMessage" xml:space="preserve"><value>Table range must include at least two rows.</value></data>
   <data name="CreateTable_MissingRangeMessage" xml:space="preserve"><value>Enter a table range.</value></data>
+  <data name="MainWindow_Header_RecommendedPivotTables" xml:space="preserve"><value>Recommended PivotTables</value></data>
+  <data name="RecommendedPivotTables_BlankPivotTable" xml:space="preserve"><value>Blank PivotTable...</value></data>
+  <data name="RecommendedPivotTables_BlankPivotTableAutomationHelpText" xml:space="preserve"><value>Open the standard Create PivotTable dialog.</value></data>
+  <data name="RecommendedPivotTables_BlankPivotTableAutomationName" xml:space="preserve"><value>Blank PivotTable</value></data>
+  <data name="RecommendedPivotTables_NoRecommendationsBody" xml:space="preserve"><value>FreeX can still create a blank PivotTable from the selected data.</value></data>
+  <data name="RecommendedPivotTables_NoRecommendationsHeading" xml:space="preserve"><value>No recommended PivotTables are available</value></data>
   <data name="AvaloniaNativeMenu_NewWorkbook" xml:space="preserve"><value>New Workbook</value></data>
   <data name="AvaloniaNativeMenu_Open" xml:space="preserve"><value>Open...</value></data>
   <data name="AvaloniaNativeMenu_OpenRecent" xml:space="preserve"><value>Open Recent</value></data>

@@ -242,6 +242,7 @@ $routes = @(
     @{
         RouteId = "dialog.RecommendedPivotTables"; DisplayName = "Recommended PivotTables"
         Wpf = @("screenshots\insert-tables-charts-tour\freex_insert_tables_charts_recommended_pivottables_dialog.png")
+        Shared = @("src\FreeX.App.Services\RecommendedPivotTablesDialogPlanner.cs")
     },
     @{
         RouteId = "dialog.Sparkline"; DisplayName = "Sparkline"

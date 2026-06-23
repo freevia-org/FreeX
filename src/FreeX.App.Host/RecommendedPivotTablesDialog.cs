@@ -3,15 +3,9 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using FreeX.App.Services;
 
 namespace FreeX.App.Host;
-
-public enum RecommendedPivotTablesDialogResult
-{
-    None,
-    BlankPivotTable
-}
-
 public sealed class RecommendedPivotTablesDialog : Window
 {
     private readonly Button _blankPivotTableButton = new();
@@ -21,11 +15,15 @@ public sealed class RecommendedPivotTablesDialog : Window
     public RecommendedPivotTablesDialog()
     {
         Result = RecommendedPivotTablesDialogResult.None;
-        Title = UiText.Get("MainWindow_Header_RecommendedPivotTables");
-        DialogSizing.ApplyContentHeight(this, width: 560, minHeight: 340);
+        Title = UiText.Get(RecommendedPivotTablesDialogPlanner.TitleKey);
+        DialogSizing.ApplyContentHeight(
+            this,
+            width: RecommendedPivotTablesDialogPlanner.Width,
+            minHeight: RecommendedPivotTablesDialogPlanner.MinHeight);
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
+        AutomationProperties.SetAutomationId(this, RecommendedPivotTablesDialogPlanner.DialogAutomationId);
 
         var root = new Grid { Margin = new Thickness(16) };
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -34,7 +32,7 @@ public sealed class RecommendedPivotTablesDialog : Window
 
         var title = new TextBlock
         {
-            Text = UiText.Get("MainWindow_Header_RecommendedPivotTables"),
+            Text = UiText.Get(RecommendedPivotTablesDialogPlanner.TitleKey),
             FontSize = 18,
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 0, 0, 12)
@@ -63,7 +61,7 @@ public sealed class RecommendedPivotTablesDialog : Window
 
         stack.Children.Add(new TextBlock
         {
-            Text = UiText.Get("RecommendedPivotTables_NoRecommendationsHeading"),
+            Text = UiText.Get(RecommendedPivotTablesDialogPlanner.NoRecommendationsHeadingKey),
             FontWeight = FontWeights.SemiBold,
             FontSize = 14,
             TextAlignment = TextAlignment.Center,
@@ -72,7 +70,7 @@ public sealed class RecommendedPivotTablesDialog : Window
 
         stack.Children.Add(new TextBlock
         {
-            Text = UiText.Get("RecommendedPivotTables_NoRecommendationsBody"),
+            Text = UiText.Get(RecommendedPivotTablesDialogPlanner.NoRecommendationsBodyKey),
             TextWrapping = TextWrapping.Wrap,
             TextAlignment = TextAlignment.Center
         });
@@ -95,16 +93,19 @@ public sealed class RecommendedPivotTablesDialog : Window
             Margin = new Thickness(0, 12, 0, 0)
         };
 
-        _blankPivotTableButton.Content = UiText.Get("RecommendedPivotTables_BlankPivotTable");
-        _blankPivotTableButton.Width = 132;
+        _blankPivotTableButton.Content = UiText.Get(RecommendedPivotTablesDialogPlanner.BlankPivotTableKey);
+        _blankPivotTableButton.Width = RecommendedPivotTablesDialogPlanner.BlankPivotTableButtonWidth;
         _blankPivotTableButton.Margin = new Thickness(0, 0, 8, 0);
         _blankPivotTableButton.IsDefault = true;
+        AutomationProperties.SetAutomationId(
+            _blankPivotTableButton,
+            RecommendedPivotTablesDialogPlanner.BlankPivotTableAutomationId);
         AutomationProperties.SetName(
             _blankPivotTableButton,
-            UiText.Get("RecommendedPivotTables_BlankPivotTableAutomationName"));
+            UiText.Get(RecommendedPivotTablesDialogPlanner.BlankPivotTableAutomationNameKey));
         AutomationProperties.SetHelpText(
             _blankPivotTableButton,
-            UiText.Get("RecommendedPivotTables_BlankPivotTableAutomationHelpText"));
+            UiText.Get(RecommendedPivotTablesDialogPlanner.BlankPivotTableAutomationHelpTextKey));
         _blankPivotTableButton.Click += (_, _) =>
         {
             Result = RecommendedPivotTablesDialogResult.BlankPivotTable;
@@ -114,7 +115,7 @@ public sealed class RecommendedPivotTablesDialog : Window
         var cancel = new Button
         {
             Content = UiText.Cancel,
-            Width = 80,
+            Width = RecommendedPivotTablesDialogPlanner.CancelButtonWidth,
             IsCancel = true
         };
 

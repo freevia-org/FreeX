@@ -91,7 +91,8 @@ public sealed class DialogSizingTests
         sources.Should().Contain("DialogSizing.ApplyContentHeight(this, width: 360, minHeight: 150);");
         sources.Should().Contain("DialogSizing.ApplyContentHeight(this, width: 420, minHeight: 160);");
         sources.Should().Contain("DialogSizing.ApplyContentHeight(this, width: 520, minHeight: 500);");
-        sources.Should().Contain("DialogSizing.ApplyContentHeight(this, width: 560, minHeight: 340);");
+        sources.Should().Contain("width: RecommendedPivotTablesDialogPlanner.Width");
+        sources.Should().Contain("minHeight: RecommendedPivotTablesDialogPlanner.MinHeight");
         sources.Should().NotContain("Height = 320;");
         sources.Should().NotContain("Height = 160;");
         sources.Should().NotContain("Height = 150;");
