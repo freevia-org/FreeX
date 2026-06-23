@@ -15,6 +15,34 @@ namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
+    // -------------------------------------------------------------------------------------------------------
+    // Outline dialog chrome helpers
+    // -------------------------------------------------------------------------------------------------------
+
+    private static void ApplyOutlineButtonChrome(Button button, double minWidth = 84, bool isDefault = false)
+    {
+        button.MinWidth = minWidth;
+        button.Height = 24;
+        button.MinHeight = 24;
+        button.MaxHeight = 24;
+        button.Padding = new Thickness(4, 1);
+        button.Background = Brushes.White;
+        button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);
+        button.BorderThickness = new Thickness(1);
+        button.FontSize = 12;
+        button.FontFamily = FormulaBarFontFamily;
+        button.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
+        button.VerticalContentAlignment = VerticalAlignment.Center;
+    }
+
+    private static void ApplyOutlineCheckBoxChrome(CheckBox cb)
+    {
+        cb.MinHeight = 20;
+        cb.MaxHeight = 20;
+        cb.FontSize = 12;
+        cb.FontFamily = FormulaBarFontFamily;
+    }
+
     // Data ▸ Outline ▸ Group / Ungroup (parity gap: the ribbon buttons were no-ops). Groups the
     // selected rows at outline level 1; Ungroup clears the worksheet outline. Routed through the
     // generic review-command executor so both get undo/redo. Kept in the Avalonia shell (no
@@ -65,6 +93,7 @@ public sealed partial class MainWindow
             Content = UiText.Get("OutlineSettings_SummaryRowsBelow"),
             IsChecked = current.SummaryBelow,
         };
+        ApplyOutlineCheckBoxChrome(summaryBelowBox);
         AutomationProperties.SetAutomationId(summaryBelowBox, "OutlineSettingsSummaryBelowCheckBox");
 
         var summaryRightBox = new CheckBox
@@ -72,6 +101,7 @@ public sealed partial class MainWindow
             Content = UiText.Get("OutlineSettings_SummaryColumnsRight"),
             IsChecked = current.SummaryRight,
         };
+        ApplyOutlineCheckBoxChrome(summaryRightBox);
         AutomationProperties.SetAutomationId(summaryRightBox, "OutlineSettingsSummaryRightCheckBox");
 
         var autoStylesBox = new CheckBox
@@ -79,6 +109,7 @@ public sealed partial class MainWindow
             Content = UiText.Get("OutlineSettings_AutomaticStyles"),
             IsChecked = current.ApplyStyles,
         };
+        ApplyOutlineCheckBoxChrome(autoStylesBox);
         AutomationProperties.SetAutomationId(autoStylesBox, "OutlineSettingsAutomaticStylesCheckBox");
 
         var okButton = new Button
@@ -87,6 +118,7 @@ public sealed partial class MainWindow
             IsDefault = true,
             MinWidth = 84,
         };
+        ApplyOutlineButtonChrome(okButton, minWidth: 84, isDefault: true);
         AutomationProperties.SetAutomationId(okButton, "OutlineSettingsOkButton");
         var cancelButton = new Button
         {
@@ -95,6 +127,7 @@ public sealed partial class MainWindow
             MinWidth = 84,
             Margin = new Thickness(8, 0, 0, 0),
         };
+        ApplyOutlineButtonChrome(cancelButton, minWidth: 84);
         AutomationProperties.SetAutomationId(cancelButton, "OutlineSettingsCancelButton");
 
         var dialog = new Window
@@ -122,7 +155,7 @@ public sealed partial class MainWindow
             Spacing = 8,
             Children =
             {
-                new TextBlock { Text = UiText.Get("OutlineSettings_Direction"), FontWeight = FontWeight.SemiBold },
+                new TextBlock { Text = UiText.Get("OutlineSettings_Direction"), FontWeight = FontWeight.SemiBold, FontSize = 12, FontFamily = FormulaBarFontFamily },
                 summaryBelowBox,
                 summaryRightBox,
                 autoStylesBox,

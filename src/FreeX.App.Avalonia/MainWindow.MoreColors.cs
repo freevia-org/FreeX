@@ -78,6 +78,15 @@ public sealed partial class MainWindow
         {
             Text = FormatHex(initial),
             Width = 120,
+            Height = 24,
+            MinHeight = 24,
+            MaxHeight = 24,
+            Padding = new Thickness(4, 1),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            BorderBrush = Brush(130, 130, 130),
+            BorderThickness = new Thickness(1),
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
         };
         AutomationProperties.SetName(hexBox, "Hex color");
@@ -135,6 +144,17 @@ public sealed partial class MainWindow
             Content = "OK",
             Width = 80,
             IsDefault = true,
+            Height = 24,
+            MinHeight = 24,
+            MaxHeight = 24,
+            Padding = new Thickness(4, 1),
+            Background = Brushes.White,
+            BorderBrush = Brush(0, 120, 215),
+            BorderThickness = new Thickness(1),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
         };
         AutomationProperties.SetAutomationId(okButton, "MoreColorsOkButton");
         okButton.Click += (_, _) =>
@@ -149,6 +169,17 @@ public sealed partial class MainWindow
             Content = "Cancel",
             Width = 80,
             IsCancel = true,
+            Height = 24,
+            MinHeight = 24,
+            MaxHeight = 24,
+            Padding = new Thickness(4, 1),
+            Background = Brushes.White,
+            BorderBrush = Brush(112, 112, 112),
+            BorderThickness = new Thickness(1),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
         };
         AutomationProperties.SetAutomationId(cancelButton, "MoreColorsCancelButton");
         cancelButton.Click += (_, _) => dialog.Close((CellColor?)null);
@@ -168,7 +199,7 @@ public sealed partial class MainWindow
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
             Children =
             {
-                new TextBlock { Text = "Hex:", VerticalAlignment = AvaloniaVerticalAlignment.Center },
+                new TextBlock { Text = "Hex:", VerticalAlignment = AvaloniaVerticalAlignment.Center, FontSize = 12, FontFamily = FormulaBarFontFamily },
                 hexBox,
             },
         };
@@ -180,10 +211,10 @@ public sealed partial class MainWindow
             MinWidth = 252,
             Children =
             {
-                new TextBlock { Text = "Standard Colors" },
+                new TextBlock { Text = "Standard Colors", FontSize = 12, FontFamily = FormulaBarFontFamily },
                 swatchPanel,
                 hexRow,
-                new TextBlock { Text = "Preview" },
+                new TextBlock { Text = "Preview", FontSize = 12, FontFamily = FormulaBarFontFamily },
                 preview,
                 buttons,
             },

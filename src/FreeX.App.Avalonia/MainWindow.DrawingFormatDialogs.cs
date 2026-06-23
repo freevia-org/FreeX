@@ -25,6 +25,59 @@ namespace FreeX.App.Avalonia;
 public sealed partial class MainWindow
 {
     // -------------------------------------------------------------------------------------------------------
+    // Drawing dialog chrome helpers
+    // -------------------------------------------------------------------------------------------------------
+
+    private static void ApplyDrawingButtonChrome(Button button, double width = 0, bool isDefault = false)
+    {
+        if (width > 0) { button.Width = width; button.MinWidth = width; }
+        button.Height = 24;
+        button.MinHeight = 24;
+        button.MaxHeight = 24;
+        button.Padding = new Thickness(4, 1);
+        button.Background = Brushes.White;
+        button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);
+        button.BorderThickness = new Thickness(1);
+        button.FontSize = 12;
+        button.FontFamily = FormulaBarFontFamily;
+        button.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
+        button.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+    }
+
+    private static void ApplyDrawingTextBoxChrome(TextBox tb)
+    {
+        tb.Height = 24;
+        tb.MinHeight = 24;
+        tb.MaxHeight = 24;
+        tb.Padding = new Thickness(4, 1);
+        tb.FontSize = 12;
+        tb.FontFamily = FormulaBarFontFamily;
+        tb.BorderBrush = Brush(130, 130, 130);
+        tb.BorderThickness = new Thickness(1);
+        tb.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+    }
+
+    private static void ApplyDrawingComboBoxChrome(ComboBox cb)
+    {
+        cb.Height = 24;
+        cb.MinHeight = 24;
+        cb.MaxHeight = 24;
+        cb.Padding = new Thickness(5, 0, 4, 0);
+        cb.FontSize = 12;
+        cb.FontFamily = FormulaBarFontFamily;
+        cb.BorderBrush = Brush(130, 130, 130);
+        cb.BorderThickness = new Thickness(1);
+    }
+
+    private static void ApplyDrawingCheckBoxChrome(CheckBox cb)
+    {
+        cb.MinHeight = 20;
+        cb.MaxHeight = 20;
+        cb.FontSize = 12;
+        cb.FontFamily = FormulaBarFontFamily;
+    }
+
+    // -------------------------------------------------------------------------------------------------------
     // Format Picture / Format Shape (size + rotation + alt text)
     // -------------------------------------------------------------------------------------------------------
 
@@ -54,14 +107,17 @@ public sealed partial class MainWindow
         var suppressSync = false;
 
         var widthBox = new TextBox { Text = FormatPicturePlanner.FormatSize(values.Width), Width = 140 };
+        ApplyDrawingTextBoxChrome(widthBox);
         AutomationProperties.SetAutomationId(widthBox, "FormatObjectWidthBox");
         AutomationProperties.SetName(widthBox, UiText.Get("FormatPicture_WidthLabel"));
 
         var heightBox = new TextBox { Text = FormatPicturePlanner.FormatSize(values.Height), Width = 140 };
+        ApplyDrawingTextBoxChrome(heightBox);
         AutomationProperties.SetAutomationId(heightBox, "FormatObjectHeightBox");
         AutomationProperties.SetName(heightBox, UiText.Get("FormatPicture_HeightLabel"));
 
         var rotationBox = new TextBox { Text = FormatPicturePlanner.FormatRotation(values.RotationDegrees), Width = 140 };
+        ApplyDrawingTextBoxChrome(rotationBox);
         AutomationProperties.SetAutomationId(rotationBox, "FormatObjectRotationBox");
         AutomationProperties.SetName(rotationBox, UiText.Get("FormatPicture_RotationLabel"));
 
@@ -71,6 +127,7 @@ public sealed partial class MainWindow
             IsChecked = values.LockAspectRatio,
             IsVisible = values.LockAspectRatioSupported,
         };
+        ApplyDrawingCheckBoxChrome(lockAspectBox);
         AutomationProperties.SetAutomationId(lockAspectBox, "FormatObjectLockAspectBox");
 
         var altTextBox = new TextBox
@@ -79,6 +136,11 @@ public sealed partial class MainWindow
             AcceptsReturn = true,
             TextWrapping = TextWrapping.Wrap,
             MinHeight = 64,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            BorderBrush = Brush(130, 130, 130),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(4, 1),
         };
         AutomationProperties.SetAutomationId(altTextBox, "FormatObjectAltTextBox");
         AutomationProperties.SetName(altTextBox, UiText.Get("FormatPicture_AltTextLabel"));
@@ -122,8 +184,10 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(dialog, "FormatObjectDialog");
 
         var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 80 };
+        ApplyDrawingButtonChrome(ok, width: 80, isDefault: true);
         AutomationProperties.SetAutomationId(ok, "FormatObjectOkButton");
         var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 80 };
+        ApplyDrawingButtonChrome(cancel, width: 80);
         AutomationProperties.SetAutomationId(cancel, "FormatObjectCancelButton");
         cancel.Click += (_, _) => dialog.Close(false);
         ok.Click += (_, _) =>
@@ -259,6 +323,7 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(dialog, "PictureCropDialog");
 
         var resetButton = new Button { Content = UiText.Get("PictureCrop_Reset"), MinWidth = 80 };
+        ApplyDrawingButtonChrome(resetButton, width: 80);
         AutomationProperties.SetAutomationId(resetButton, "PictureCropResetButton");
         resetButton.Click += (_, _) =>
         {
@@ -269,8 +334,10 @@ public sealed partial class MainWindow
         };
 
         var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 80 };
+        ApplyDrawingButtonChrome(ok, width: 80, isDefault: true);
         AutomationProperties.SetAutomationId(ok, "PictureCropOkButton");
         var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 80 };
+        ApplyDrawingButtonChrome(cancel, width: 80);
         AutomationProperties.SetAutomationId(cancel, "PictureCropCancelButton");
         cancel.Click += (_, _) => dialog.Close(false);
         ok.Click += (_, _) =>
@@ -340,6 +407,7 @@ public sealed partial class MainWindow
     private static TextBox CropBox(string automationId, string text)
     {
         var box = new TextBox { Text = text, Width = 120, HorizontalAlignment = AvaloniaHorizontalAlignment.Left };
+        ApplyDrawingTextBoxChrome(box);
         AutomationProperties.SetAutomationId(box, automationId);
         return box;
     }
@@ -369,6 +437,7 @@ public sealed partial class MainWindow
             SelectedIndex = ShapeEffectsPlanner.FindOptionIndex(plan.Options, plan.SelectedPreset),
             MinWidth = 260,
         };
+        ApplyDrawingComboBoxChrome(effectBox);
         AutomationProperties.SetName(effectBox, UiText.Get("ShapeEffects_EffectAutomationName"));
         AutomationProperties.SetAutomationId(effectBox, "ShapeEffectsPresetBox");
         AutomationProperties.SetHelpText(effectBox, UiText.Get("ShapeEffects_EffectHelpText"));
@@ -399,8 +468,10 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(dialog, "ShapeEffectsDialog");
 
         var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 80 };
+        ApplyDrawingButtonChrome(ok, width: 80, isDefault: true);
         AutomationProperties.SetAutomationId(ok, "ShapeEffectsOkButton");
         var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 80 };
+        ApplyDrawingButtonChrome(cancel, width: 80);
         AutomationProperties.SetAutomationId(cancel, "ShapeEffectsCancelButton");
         cancel.Click += (_, _) => dialog.Close((DrawingShapeEffectPreset?)null);
         ok.Click += (_, _) => dialog.Close(effectBox.SelectedItem is ShapeEffectsChoice choice ? (DrawingShapeEffectPreset?)choice.Preset : null);
@@ -411,7 +482,7 @@ public sealed partial class MainWindow
             Spacing = 8,
             Children =
             {
-                new TextBlock { Text = UiText.Get("ShapeEffects_Label"), Foreground = HeaderForeground },
+                new TextBlock { Text = UiText.Get("ShapeEffects_Label"), Foreground = HeaderForeground, FontSize = 12, FontFamily = FormulaBarFontFamily },
                 effectBox,
                 descriptionText,
                 new StackPanel
@@ -485,13 +556,9 @@ public sealed partial class MainWindow
         var directionBox = new ComboBox
         {
             Width = 292,
-            Height = 24,
-            MinHeight = 24,
-            MaxHeight = 24,
-            Padding = new Thickness(6, 0, 4, 0),
-            FontSize = 12,
             VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
         };
+        ApplyDrawingComboBoxChrome(directionBox);
         foreach (var option in directionOptions)
             directionBox.Items.Add(UiText.Get(option.LabelKey));
         directionBox.SelectedIndex = ShapeGradientPlanner.FindDirectionIndex(directionOptions, values.Direction);
@@ -704,6 +771,9 @@ public sealed partial class MainWindow
         MaxHeight = 24,
         Padding = new Thickness(4, 1, 4, 1),
         FontSize = 12,
+        FontFamily = FormulaBarFontFamily,
+        BorderBrush = Brush(130, 130, 130),
+        BorderThickness = new Thickness(1),
         VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
     };
 
@@ -723,6 +793,7 @@ public sealed partial class MainWindow
             BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112),
             BorderThickness = new Thickness(1),
             FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
             HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
             VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
         };
@@ -760,7 +831,7 @@ public sealed partial class MainWindow
         VerticalAlignment = AvaloniaVerticalAlignment.Center,
         Children =
         {
-            new TextBlock { Text = label, Width = 96, VerticalAlignment = AvaloniaVerticalAlignment.Center, Foreground = HeaderForeground },
+            new TextBlock { Text = label, Width = 96, VerticalAlignment = AvaloniaVerticalAlignment.Center, Foreground = HeaderForeground, FontSize = 12, FontFamily = FormulaBarFontFamily },
             control,
         },
     };
