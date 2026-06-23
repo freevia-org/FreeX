@@ -110,6 +110,71 @@ public static class DrawingTargetResolver
         return fallback;
     }
 
+    public static DrawingObjectAltTextTarget? GetTargetAltTextObject(
+        Sheet? sheet,
+        CellAddress? selectedAnchor,
+        DrawingObjectTargetKind? preferredKind = null)
+    {
+        if (sheet is null || selectedAnchor is not { } selected)
+            return null;
+
+        if (ShouldSearch(preferredKind, DrawingObjectTargetKind.Picture))
+        {
+            for (var index = sheet.Pictures.Count - 1; index >= 0; index--)
+            {
+                var picture = sheet.Pictures[index];
+                if (IsAnchoredAt(picture.Anchor, selected))
+                {
+                    return new DrawingObjectAltTextTarget(
+                        DrawingObjectTargetKind.Picture,
+                        picture.Id,
+                        picture.Anchor,
+                        picture.AltText);
+                }
+            }
+        }
+
+        if (ShouldSearch(preferredKind, DrawingObjectTargetKind.Shape))
+        {
+            for (var index = sheet.DrawingShapes.Count - 1; index >= 0; index--)
+            {
+                var shape = sheet.DrawingShapes[index];
+                if (IsAnchoredAt(shape.Anchor, selected))
+                {
+                    return new DrawingObjectAltTextTarget(
+                        DrawingObjectTargetKind.Shape,
+                        shape.Id,
+                        shape.Anchor,
+                        shape.AltText);
+                }
+            }
+        }
+
+        if (ShouldSearch(preferredKind, DrawingObjectTargetKind.TextBox))
+        {
+            for (var index = sheet.TextBoxes.Count - 1; index >= 0; index--)
+            {
+                var textBox = sheet.TextBoxes[index];
+                if (IsAnchoredAt(textBox.Anchor, selected))
+                {
+                    return new DrawingObjectAltTextTarget(
+                        DrawingObjectTargetKind.TextBox,
+                        textBox.Id,
+                        textBox.Anchor,
+                        textBox.AltText);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static bool ShouldSearch(DrawingObjectTargetKind? preferredKind, DrawingObjectTargetKind kind) =>
+        preferredKind is null || preferredKind == kind;
+
+    private static bool IsAnchoredAt(CellAddress anchor, CellAddress selectedAnchor) =>
+        anchor.Row == selectedAnchor.Row && anchor.Col == selectedAnchor.Col;
+
     private static DrawingObjectTarget? GetTargetById(
         Sheet sheet,
         DrawingObjectTargetKind kind,
@@ -317,3 +382,9 @@ public sealed record DrawingObjectZOrderTarget(
     SelectionPaneObjectKind Kind,
     Guid Id,
     CellAddress Anchor);
+
+public sealed record DrawingObjectAltTextTarget(
+    DrawingObjectTargetKind Kind,
+    Guid Id,
+    CellAddress Anchor,
+    string? AltText);

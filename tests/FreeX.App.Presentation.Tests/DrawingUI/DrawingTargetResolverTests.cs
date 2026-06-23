@@ -246,6 +246,61 @@ public sealed class DrawingTargetResolverTests
     }
 
     [Fact]
+    public void GetTargetAltTextObject_ReturnsObjectAnchoredAtSelectedCell()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var anchor = new CellAddress(sheet.Id, 2, 3);
+        var picture = new PictureModel
+        {
+            Anchor = anchor,
+            AltText = "Existing"
+        };
+        sheet.Pictures.Add(picture);
+
+        var target = DrawingTargetResolver.GetTargetAltTextObject(sheet, anchor);
+
+        target.Should().NotBeNull();
+        target!.Kind.Should().Be(DrawingObjectTargetKind.Picture);
+        target.Id.Should().Be(picture.Id);
+        target.AltText.Should().Be("Existing");
+    }
+
+    [Fact]
+    public void GetTargetAltTextObject_ReturnsNullWhenSelectionHasNoAnchoredObject()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        sheet.Pictures.Add(new PictureModel
+        {
+            Anchor = new CellAddress(sheet.Id, 2, 3)
+        });
+
+        var target = DrawingTargetResolver.GetTargetAltTextObject(sheet, new CellAddress(sheet.Id, 5, 5));
+
+        target.Should().BeNull("Alt Text should not silently edit the last object on the sheet");
+    }
+
+    [Fact]
+    public void GetTargetAltTextObject_HonorsPreferredKindForGroupedSheetTargets()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var anchor = new CellAddress(sheet.Id, 2, 3);
+        sheet.Pictures.Add(new PictureModel { Anchor = anchor });
+        var textBox = new TextBoxModel
+        {
+            Anchor = anchor,
+            Text = "Callout",
+            AltText = "Text box alt"
+        };
+        sheet.TextBoxes.Add(textBox);
+
+        var target = DrawingTargetResolver.GetTargetAltTextObject(sheet, anchor, DrawingObjectTargetKind.TextBox);
+
+        target.Should().NotBeNull();
+        target!.Kind.Should().Be(DrawingObjectTargetKind.TextBox);
+        target.Id.Should().Be(textBox.Id);
+    }
+
+    [Fact]
     public void ResolverScansVisibleItemsWithoutAllocatingFilteredLists()
     {
         var source = File.ReadAllText(FindRepositoryFile("src", "FreeX.App.Presentation", "DrawingUI", "DrawingTargetResolver.cs"));

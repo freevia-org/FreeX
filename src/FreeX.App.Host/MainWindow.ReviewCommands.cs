@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
 using Free.Shared.AppServices;
+using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.UI;
 using FreeX.Core.Commands;
 using FreeX.Core.IO;
@@ -145,12 +146,11 @@ public partial class MainWindow
                 sheetId =>
                 {
                     var groupedTarget = GetTargetAltTextObject(sheetId, target.Kind);
-                    return target.Kind switch
-                    {
-                        AltTextObjectKind.Picture => new SetPictureAltTextCommand(sheetId, groupedTarget?.Id ?? Guid.Empty, dialog.Result.Text),
-                        AltTextObjectKind.Shape => new SetDrawingShapeAltTextCommand(sheetId, groupedTarget?.Id ?? Guid.Empty, dialog.Result.Text),
-                        _ => new SetTextBoxAltTextCommand(sheetId, groupedTarget?.Id ?? Guid.Empty, dialog.Result.Text)
-                    };
+                    return DrawingObjectCommandPlanner.BuildAltTextCommand(
+                        sheetId,
+                        target.Kind,
+                        groupedTarget?.Id ?? Guid.Empty,
+                        dialog.Result.Text);
                 }))
         {
             return;
@@ -162,13 +162,15 @@ public partial class MainWindow
         RefreshStatusBar();
     }
 
-    private AltTextObjectTarget? GetTargetAltTextObject(SheetId sheetId, AltTextObjectKind? preferredKind = null)
+    private DrawingObjectAltTextTarget? GetTargetAltTextObject(
+        SheetId sheetId,
+        DrawingObjectTargetKind? preferredKind = null)
     {
         var sheet = _workbook.GetSheet(sheetId);
         if (sheet is null)
             return null;
 
-        return AltTextTargetResolver.Resolve(sheet, SheetGrid.SelectedRange?.Start, preferredKind);
+        return DrawingTargetResolver.GetTargetAltTextObject(sheet, SheetGrid.SelectedRange?.Start, preferredKind);
     }
 
     private void ReviewNewCommentBtn_Click(object sender, RoutedEventArgs e)
