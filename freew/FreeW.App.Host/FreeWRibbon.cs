@@ -520,6 +520,20 @@ internal static class FreeWRibbon
                     // list. Accept/Reject live in Changes, mirroring Word's group geography.
                     g.MediumToggle("freew.track-changes", "Track Changes", RibbonCommandIconKind.History);
                     g.MediumToggle("freew.reviewing-pane", "Reviewing Pane", RibbonCommandIconKind.History);
+                    g.RowBreak();
+                    // Display for Review: dropdown with All Markup (default). No Markup is intentionally
+                    // absent — see DocumentView.MarkupDisplayMode for the data-loss reasoning.
+                    g.Medium("freew.display-for-review", "All Markup", RibbonCommandIconKind.History, "D", menu: m =>
+                    {
+                        m.Item("freew.display-for-review-all-markup", "All Markup", "A");
+                    });
+                    // Show Markup: per-category visibility toggles. Formatting and Balloons are deferred
+                    // (FormatRevision is not rendered today; no balloon affordance in the FlowDocument stack).
+                    g.Medium("freew.show-markup", "Show Markup", RibbonCommandIconKind.History, "M", menu: m =>
+                    {
+                        m.Item("freew.show-markup-insertions-deletions", "Insertions and Deletions", "I");
+                        m.Item("freew.show-markup-comments", "Comments", "C");
+                    });
                 });
                 // Changes group: Accept/Reject expose the current-change action plus the all-changes
                 // variants through Word-style dropdowns, followed by Previous/Next navigation.

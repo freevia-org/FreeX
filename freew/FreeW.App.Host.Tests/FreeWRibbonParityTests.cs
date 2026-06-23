@@ -587,7 +587,10 @@ public sealed class FreeWRibbonParityTests
             .Equal("freew.check-accessibility");
         CommandIds(review.FindGroup("tracking")!)
             .Should()
-            .Equal("freew.track-changes", "freew.reviewing-pane");
+            .Equal("freew.track-changes", "freew.reviewing-pane", "freew.display-for-review", "freew.show-markup");
+        MenuCommandIds(review.FindGroup("tracking")!)
+            .Should()
+            .Equal("freew.display-for-review-all-markup", "freew.show-markup-insertions-deletions", "freew.show-markup-comments");
         CommandIds(review.FindGroup("changes")!)
             .Should()
             .Equal("freew.accept-this", "freew.reject-this", "freew.previous-change", "freew.next-change");
