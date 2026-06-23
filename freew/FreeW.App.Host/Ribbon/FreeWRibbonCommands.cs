@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -596,9 +597,15 @@ internal static class FreeWRibbonCommands
             var isLetter = Math.Abs(page.WidthPt - 612) < 1 && Math.Abs(page.HeightPt - 792) < 1;
             (page.WidthPt, page.HeightPt) = isLetter ? (595.0, 842.0) : (612.0, 792.0); // toggle Letter <-> A4
         }));
-        // Columns: open the Columns dialog (One/Two/Three/Left/Right + spacing/line-between/More), applying
-        // the chosen column layout to PageSettings and re-rendering so the flow shows at once.
+        // Columns: open the Columns dialog or apply Word's backed preset menu choices directly, mutating
+        // PageSettings and re-rendering so the live document flow changes immediately.
         registry.Register("freew.columns", new ColumnsCommand(editor));
+        registry.Register("freew.columns-one", new ColumnsPresetCommand(editor, ColumnsPreset.One));
+        registry.Register("freew.columns-two", new ColumnsPresetCommand(editor, ColumnsPreset.Two));
+        registry.Register("freew.columns-three", new ColumnsPresetCommand(editor, ColumnsPreset.Three));
+        registry.Register("freew.columns-left", new ColumnsPresetCommand(editor, ColumnsPreset.Left));
+        registry.Register("freew.columns-right", new ColumnsPresetCommand(editor, ColumnsPreset.Right));
+        registry.Register("freew.columns-more", new ColumnsCommand(editor));
         // Page Setup: the unified Margins / Paper / Layout dialog (Word's Layout > Page Setup launcher). The
         // "Custom Margins…" / "More Paper Sizes…" entry points open the same dialog on the Margins / Paper tab.
         registry.Register("freew.page-setup", new PageSetupCommand(editor, PageSetupDialog.Tab.Margins));
@@ -1606,6 +1613,57 @@ internal static class FreeWRibbonCommands
                 page.ColumnsLineBetween = result.LineBetween;
                 page.ColumnWidthsPt = result.WidthsPt;
             });
+        }
+    }
+
+    private enum ColumnsPreset
+    {
+        One,
+        Two,
+        Three,
+        Left,
+        Right
+    }
+
+    // Word's Layout > Columns dropdown applies common presets immediately. Equal presets clear explicit
+    // widths; Left/Right set the classic narrow/wide two-column split using the current page content width.
+    private sealed class ColumnsPresetCommand(DocumentView editor, ColumnsPreset preset) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context) =>
+            editor.ApplyPageSettings(page =>
+            {
+                var spacing = page.ColumnSpacingPt;
+                page.ColumnsLineBetween = false;
+                page.ColumnWidthsPt = null;
+
+                switch (preset)
+                {
+                    case ColumnsPreset.One:
+                        page.ColumnCount = 1;
+                        break;
+                    case ColumnsPreset.Two:
+                        page.ColumnCount = 2;
+                        break;
+                    case ColumnsPreset.Three:
+                        page.ColumnCount = 3;
+                        break;
+                    case ColumnsPreset.Left:
+                        page.ColumnCount = 2;
+                        page.ColumnWidthsPt = UnequalWidths(page, narrowFirst: true, spacing);
+                        break;
+                    case ColumnsPreset.Right:
+                        page.ColumnCount = 2;
+                        page.ColumnWidthsPt = UnequalWidths(page, narrowFirst: false, spacing);
+                        break;
+                }
+            });
+
+        private static IReadOnlyList<double> UnequalWidths(PageSettings page, bool narrowFirst, double spacing)
+        {
+            var contentWidthPt = Math.Max(72, page.WidthPt - page.MarginLeftPt - page.MarginRightPt);
+            const double narrowPt = 108; // 1.5 inch, matching the Columns dialog's Left/Right presets.
+            var widePt = Math.Max(36, contentWidthPt - spacing - narrowPt);
+            return narrowFirst ? [narrowPt, widePt] : [widePt, narrowPt];
         }
     }
 

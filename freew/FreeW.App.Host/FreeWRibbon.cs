@@ -296,7 +296,15 @@ internal static class FreeWRibbon
                         m.Item("freew.size", "Letter / A4 (toggle)", "L");
                         m.Item("freew.more-paper-sizes", "More Paper Sizes…", "M");
                     });
-                    g.Medium("freew.columns", "Columns", RibbonCommandIconKind.TextColumns, dropdown: true);
+                    g.Medium("freew.columns", "Columns", RibbonCommandIconKind.TextColumns, menu: m =>
+                    {
+                        m.Item("freew.columns-one", "One", "O");
+                        m.Item("freew.columns-two", "Two", "T");
+                        m.Item("freew.columns-three", "Three", "H");
+                        m.Item("freew.columns-left", "Left", "L");
+                        m.Item("freew.columns-right", "Right", "R");
+                        m.Item("freew.columns-more", "More Columns...", "M");
+                    });
                     g.RowBreak();
                     // Page Setup launcher: the unified Margins / Paper / Layout dialog (Word's group launcher).
                     g.Icon("freew.page-setup", "Page Setup", RibbonCommandIconKind.Margins, "G");

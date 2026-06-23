@@ -485,6 +485,58 @@ public sealed class FreeWRibbonParityTests
     }
 
     [StaFact]
+    public void LayoutPageSetup_ColumnsDropdownExposesBackedWordPresetCommands()
+    {
+        var definition = FreeWRibbon.Build();
+        var pageSetup = definition.FindTab("layout")!.FindGroup("page-setup");
+        var columns = pageSetup!.Controls
+            .OfType<RibbonDropdown>()
+            .Single(control => control.CommandId.Value == "freew.columns");
+        var editor = new DocumentView();
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        columns.Menu.Items
+            .Where(item => item.Kind == RibbonMenuItemKind.Command)
+            .Select(item => (item.CommandId!.Value, item.Header))
+            .Should()
+            .Equal(
+                ("freew.columns-one", "One"),
+                ("freew.columns-two", "Two"),
+                ("freew.columns-three", "Three"),
+                ("freew.columns-left", "Left"),
+                ("freew.columns-right", "Right"),
+                ("freew.columns-more", "More Columns..."));
+
+        foreach (var commandId in columns.Menu.Items
+                     .Where(item => item.Kind == RibbonMenuItemKind.Command)
+                     .Select(item => item.CommandId!.Value)
+                     .Append("freew.columns"))
+            registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must execute from Layout > Columns");
+
+        registry.TryGet("freew.columns-three", out var three).Should().BeTrue();
+        three!.Execute(RibbonCommandContext.Empty);
+        editor.Model.Page.ColumnCount.Should().Be(3);
+        editor.Model.Page.ColumnWidthsPt.Should().BeNull("equal-width presets clear explicit Left/Right widths");
+
+        registry.TryGet("freew.columns-left", out var left).Should().BeTrue();
+        left!.Execute(RibbonCommandContext.Empty);
+        editor.Model.Page.ColumnCount.Should().Be(2);
+        editor.Model.Page.ColumnWidthsPt.Should().NotBeNull();
+        editor.Model.Page.ColumnWidthsPt![0].Should().BeLessThan(editor.Model.Page.ColumnWidthsPt[1]);
+
+        registry.TryGet("freew.columns-right", out var right).Should().BeTrue();
+        right!.Execute(RibbonCommandContext.Empty);
+        editor.Model.Page.ColumnCount.Should().Be(2);
+        editor.Model.Page.ColumnWidthsPt.Should().NotBeNull();
+        editor.Model.Page.ColumnWidthsPt![0].Should().BeGreaterThan(editor.Model.Page.ColumnWidthsPt[1]);
+
+        registry.TryGet("freew.columns-one", out var one).Should().BeTrue();
+        one!.Execute(RibbonCommandContext.Empty);
+        editor.Model.Page.ColumnCount.Should().Be(1);
+        editor.Model.Page.ColumnWidthsPt.Should().BeNull();
+    }
+
+    [StaFact]
     public void MailingsTab_UsesWordStyleMergeCommandLabels()
     {
         var definition = FreeWRibbon.Build();
