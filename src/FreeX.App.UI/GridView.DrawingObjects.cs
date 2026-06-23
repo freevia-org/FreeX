@@ -1,6 +1,8 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
+using FreeX.App.Presentation.Charts;
+using FreeX.App.Presentation.SlicerTimeline;
 using FreeX.Core.Model;
 
 namespace FreeX.App.UI;
@@ -696,18 +698,23 @@ public partial class GridView
 
     private void DrawNativeTimelineControl(DrawingContext dc, Rect rect, TimelineModel timeline, double pixelsPerDip)
     {
-        DrawNativeControlFrame(dc, rect, GetNativeControlCaption(timeline.Caption, timeline.Name, timeline.DrawingShapeName), pixelsPerDip);
+        var layout = TimelineLayoutBuilder.Build(
+            timeline,
+            new LayoutRect(rect.Left, rect.Top, rect.Width, rect.Height),
+            ResolveTimelineGranularity(timeline));
 
-        var label = FormatTimelineRange(timeline);
-        var barRect = new Rect(rect.Left + 8, rect.Top + 34, Math.Max(1, rect.Width - 16), Math.Max(6, Math.Min(14, rect.Height - 42)));
-        dc.DrawRoundedRectangle(NativeControlTileBrush, null, barRect, 3, 3);
-        var selectedRect = new Rect(
-            barRect.Left + barRect.Width * 0.18,
-            barRect.Top,
-            Math.Max(6, barRect.Width * 0.56),
-            barRect.Height);
-        dc.DrawRoundedRectangle(NativeControlSelectedTileBrush, null, selectedRect, 3, 3);
-        DrawClippedText(dc, label, new Rect(rect.Left + 6, rect.Top + 22, Math.Max(1, rect.Width - 12), 12), NativeControlMutedTextBrush, 9, verticalPadding: 0, pixelsPerDip);
+        DrawNativeControlFrame(dc, rect, layout.Caption, pixelsPerDip);
+        DrawClippedText(dc, layout.DateLabel, ToRect(layout.DateLabelRect), NativeControlMutedTextBrush, 9, verticalPadding: 0, pixelsPerDip);
+        dc.DrawRoundedRectangle(NativeControlTileBrush, null, ToRect(layout.TrackRect), 3, 3);
+        dc.DrawRoundedRectangle(NativeControlSelectedTileBrush, null, ToRect(layout.SelectionRect), 3, 3);
+        DrawTimelineHandle(dc, layout.StartHandle);
+        DrawTimelineHandle(dc, layout.EndHandle);
+    }
+
+    private void DrawTimelineHandle(DrawingContext dc, TimelineHandleLayout handle)
+    {
+        var rect = ToRect(handle.Rect);
+        dc.DrawRoundedRectangle(Brushes.White, NativeControlBorderPen, rect, 1, 1);
     }
 
     // Timeline path: default-themed frame, always with a caption band.
@@ -761,6 +768,33 @@ public partial class GridView
 
     private static string GetNativeControlCaption(string? caption, string name, string? shapeName)
         => GridDrawingObjectPlanner.GetNativeControlCaption(caption, name, shapeName);
+
+    private static TimelineGranularity ResolveTimelineGranularity(TimelineModel timeline)
+    {
+        if (!TryParseTimelineDate(timeline.StartDate, out var start) ||
+            !TryParseTimelineDate(timeline.EndDate, out var end))
+        {
+            return TimelineGranularity.Month;
+        }
+
+        var days = Math.Abs(end.DayNumber - start.DayNumber);
+        return days switch
+        {
+            <= 62 => TimelineGranularity.Day,
+            <= 366 => TimelineGranularity.Month,
+            <= 366 * 4 => TimelineGranularity.Quarter,
+            _ => TimelineGranularity.Year,
+        };
+    }
+
+    private static bool TryParseTimelineDate(string? value, out DateOnly date)
+    {
+        date = default;
+        return !string.IsNullOrWhiteSpace(value) &&
+            DateOnly.TryParseExact(value.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out date);
+    }
+
+    private static Rect ToRect(LayoutRect rect) => new(rect.X, rect.Y, rect.Width, rect.Height);
 
     private static string FormatTimelineRange(TimelineModel timeline)
         => GridDrawingObjectPlanner.FormatTimelineRange(timeline);

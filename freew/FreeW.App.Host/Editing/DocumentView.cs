@@ -6082,6 +6082,7 @@ public sealed class DocumentView : RichTextBox
         var reply = comment.AddReply(_model.NextCommentId(), text.Trim(), author, initials);
         reply.DateXml = DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture);
         Render();
+        MoveCaretToComment(id);
         return true;
     }
 
@@ -6097,6 +6098,7 @@ public sealed class DocumentView : RichTextBox
             return null;
         comment.Resolved = !comment.Resolved;
         Render();
+        MoveCaretToComment(id);
         return comment.Resolved;
     }
 
@@ -6153,8 +6155,77 @@ public sealed class DocumentView : RichTextBox
             ? (direction > 0 ? 0 : targets.Length - 1)
             : (currentIndex + direction + targets.Length) % targets.Length;
 
-        BringBlockIntoView(targets[targetIndex].BlockIndex);
+        var target = targets[targetIndex];
+        BringBlockIntoView(target.BlockIndex);
+        MoveCaretToComment(target.CommentId);
         return true;
+    }
+
+    private bool MoveCaretToComment(int commentId)
+    {
+        foreach (var block in Document.Blocks)
+        {
+            if (MoveCaretToComment(block, commentId))
+                return true;
+        }
+
+        return false;
+    }
+
+    private bool MoveCaretToComment(System.Windows.Documents.Block block, int commentId)
+    {
+        switch (block)
+        {
+            case WpfParagraph paragraph:
+                return MoveCaretToComment(paragraph.Inlines, commentId);
+            case WpfList list:
+                foreach (var item in list.ListItems)
+                {
+                    foreach (var itemBlock in item.Blocks)
+                    {
+                        if (MoveCaretToComment(itemBlock, commentId))
+                            return true;
+                    }
+                }
+                break;
+            case WpfTable table:
+                foreach (var rowGroup in table.RowGroups)
+                {
+                    foreach (var row in rowGroup.Rows)
+                    {
+                        foreach (var cell in row.Cells)
+                        {
+                            foreach (var cellBlock in cell.Blocks)
+                            {
+                                if (MoveCaretToComment(cellBlock, commentId))
+                                    return true;
+                            }
+                        }
+                    }
+                }
+                break;
+        }
+
+        return false;
+    }
+
+    private bool MoveCaretToComment(InlineCollection inlines, int commentId)
+    {
+        foreach (var inline in inlines)
+        {
+            if (inline is WpfRun { Tag: RunMarkers { Comment: { } marker } } run
+                && TopLevelCommentId(marker.CommentId) == commentId)
+            {
+                CaretPosition = run.ContentStart.GetInsertionPosition(LogicalDirection.Forward) ?? run.ContentStart;
+                Focus();
+                return true;
+            }
+
+            if (inline is Span span && MoveCaretToComment(span.Inlines, commentId))
+                return true;
+        }
+
+        return false;
     }
 
     /// <summary>

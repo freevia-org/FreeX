@@ -166,8 +166,13 @@ public sealed partial class GridViewRenderPerformanceTests
         drawNativeSlicer.Should().Contain("GetNativeControlCaption(slicer.Caption, slicer.Name, slicer.DrawingShapeName),");
         drawNativeSlicer.Should().Contain("hasHeader);");
         drawNativeSlicer.Should().Contain("DrawClippedText(dc, caption, tileRect, itemTextBrush, 10, verticalPadding: 1, pixelsPerDip);");
-        drawNativeTimeline.Should().Contain("DrawNativeControlFrame(dc, rect, GetNativeControlCaption(timeline.Caption, timeline.Name, timeline.DrawingShapeName), pixelsPerDip);");
-        drawNativeTimeline.Should().Contain("DrawClippedText(dc, label, new Rect");
+        drawNativeTimeline.Should().Contain("TimelineLayoutBuilder.Build(");
+        drawNativeTimeline.Should().Contain("ResolveTimelineGranularity(timeline)");
+        drawNativeTimeline.Should().Contain("DrawNativeControlFrame(dc, rect, layout.Caption, pixelsPerDip);");
+        drawNativeTimeline.Should().Contain("DrawClippedText(dc, layout.DateLabel, ToRect(layout.DateLabelRect)");
+        drawNativeTimeline.Should().Contain("ToRect(layout.SelectionRect)");
+        drawNativeTimeline.Should().Contain("DrawTimelineHandle(dc, layout.StartHandle);");
+        drawNativeTimeline.Should().Contain("DrawTimelineHandle(dc, layout.EndHandle);");
         drawNativeTimeline.Should().Contain("pixelsPerDip);");
         drawNativeFrame.Should().Contain("DrawClippedText(dc, caption, new Rect");
         drawNativeFrame.Should().Contain("pixelsPerDip);");
