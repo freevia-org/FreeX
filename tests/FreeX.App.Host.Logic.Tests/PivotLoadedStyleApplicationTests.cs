@@ -97,7 +97,7 @@ public sealed class PivotLoadedStyleApplicationTests
         parentStyle.FontColor.Should().Be(CellColor.White);
         workbook.GetStyle(sheet.GetCell(4, 2)!.StyleId).FillColor.Should().Be(new CellColor(216, 109, 205));
         workbook.GetStyle(sheet.GetCell(5, 1)!.StyleId).IndentLevel.Should().Be(1);
-        workbook.GetStyle(sheet.GetCell(5, 1)!.StyleId).FillColor.Should().BeNull();
+        workbook.GetStyle(sheet.GetCell(5, 1)!.StyleId).FillColor.Should().Be(CellColor.White);
     }
 
     private static bool AnyBoldInRange(Workbook workbook, Sheet sheet, GridRange range)

@@ -47,12 +47,16 @@ public static partial class PivotTableRefreshService
         {
             FillColor = palette.StripeFill
         });
-        StyleId? bodyStyle = palette.BodyFill is null
-            ? null
-            : workbook.RegisterStyle(new CellStyle
+        var materializeLoadedBodySurface =
+            preserveExistingVisualStyles &&
+            HasLoadedNativePivotLocation(pivotTable) &&
+            palette.BodyFill is null;
+        StyleId? bodyStyle = palette.BodyFill is not null || materializeLoadedBodySurface
+            ? workbook.RegisterStyle(new CellStyle
             {
-                FillColor = palette.BodyFill
-            });
+                FillColor = palette.BodyFill ?? CellColor.White
+            })
+            : null;
 
         var bodyStart = HasLoadedNativePivotLocation(pivotTable)
             ? pivotTable.TargetRange.Start
@@ -94,7 +98,8 @@ public static partial class PivotTableRefreshService
             pivotTable,
             materialized,
             bodyStart,
-            headerEndRow);
+            headerEndRow,
+            materializeLoadedBodySurface);
 
         var firstDataRow = GetStyledPivotFirstDataRow(pivotTable, bodyStart, headerEndRow);
         var firstDataColumn = GetStyledPivotFirstDataColumn(pivotTable, materialized);
@@ -266,7 +271,8 @@ public static partial class PivotTableRefreshService
         PivotTableModel pivotTable,
         GridRange materialized,
         CellAddress bodyStart,
-        uint headerEndRow)
+        uint headerEndRow,
+        bool materializeLoadedBodySurface)
     {
         if (!HasLoadedNativePivotLocation(pivotTable))
             return;
@@ -274,7 +280,7 @@ public static partial class PivotTableRefreshService
         for (var row = bodyStart.Row; row <= headerEndRow; row++)
             MaterializePivotBlankRowCells(sheet, pivotTable, row, materialized.Start.Col, materialized.End.Col);
 
-        if (!pivotTable.ShowRowStripes && !pivotTable.ShowColumnStripes)
+        if (!pivotTable.ShowRowStripes && !pivotTable.ShowColumnStripes && !materializeLoadedBodySurface)
             return;
 
         var firstDataRow = GetStyledPivotFirstDataRow(pivotTable, bodyStart, headerEndRow);
@@ -282,7 +288,8 @@ public static partial class PivotTableRefreshService
         for (var row = firstDataRow; row <= materialized.End.Row; row++)
         for (var col = materialized.Start.Col; col <= materialized.End.Col; col++)
         {
-            if (pivotTable.ShowColumnStripes && col >= firstDataColumn ||
+            if (materializeLoadedBodySurface ||
+                pivotTable.ShowColumnStripes && col >= firstDataColumn ||
                 pivotTable.ShowRowStripes)
             {
                 MaterializePivotBlankCell(sheet, pivotTable, row, col);
