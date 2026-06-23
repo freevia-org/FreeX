@@ -1624,21 +1624,17 @@ public sealed class MainWindow : Window
             var bytes = PdfExport.RenderToBytes(paginator, _file.DisplayName);
             Free.Shared.Shell.ExportAtomicWriter.WriteAllBytes(path, bytes);
 
-            MessageBox.Show(
+            DialogMessageHelper.ShowInfo(
                 this,
                 $"Exported to PDF:\n{path}",
-                "Export to PDF",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+                "Export to PDF");
         }
         catch (Exception ex)
         {
-            MessageBox.Show(
+            DialogMessageHelper.ShowError(
                 this,
                 "The document could not be exported to PDF.\n\n" + ex.Message,
-                "Export to PDF",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
+                "Export to PDF");
         }
     }
 
@@ -1669,21 +1665,17 @@ public sealed class MainWindow : Window
             var bytes = XpsExport.RenderToBytes(paginator);
             Free.Shared.Shell.ExportAtomicWriter.WriteAllBytes(path, bytes);
 
-            MessageBox.Show(
+            DialogMessageHelper.ShowInfo(
                 this,
                 $"Exported to XPS:\n{path}",
-                "Export to XPS",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+                "Export to XPS");
         }
         catch (Exception ex)
         {
-            MessageBox.Show(
+            DialogMessageHelper.ShowError(
                 this,
                 "The document could not be exported to XPS.\n\n" + ex.Message,
-                "Export to XPS",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
+                "Export to XPS");
         }
     }
 

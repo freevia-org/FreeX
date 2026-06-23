@@ -67,6 +67,21 @@ public sealed class DialogSharedHelperDedupTests
     }
 
     [Fact]
+    public void MainWindowExportMessages_RouteThroughDialogMessageHelper()
+    {
+        var source = ReadDialogSource("MainWindow.cs");
+        var exportBlock = ExtractBlock(source, "private void ExportToPdf()", "private void OpenFindReplace()");
+
+        exportBlock.Should().Contain("DialogMessageHelper.ShowInfo(");
+        exportBlock.Should().Contain("DialogMessageHelper.ShowError(");
+        exportBlock.Should().Contain("\"Export to PDF\"");
+        exportBlock.Should().Contain("\"Export to XPS\"");
+        exportBlock.Should().NotContain("MessageBox.Show(");
+        exportBlock.Should().NotContain("MessageBoxButton.");
+        exportBlock.Should().NotContain("MessageBoxImage.");
+    }
+
+    [Fact]
     public void ImageSizeDialog_UsesSharedFocusHelper()
     {
         var source = ReadDialogSource("ImageSizeDialog.cs");
@@ -79,6 +94,15 @@ public sealed class DialogSharedHelperDedupTests
     {
         var path = Path.Combine(FindRepositoryRoot(), "freew", "FreeW.App.Host", fileName);
         return File.ReadAllText(path);
+    }
+
+    private static string ExtractBlock(string source, string start, string end)
+    {
+        var startIndex = source.IndexOf(start, StringComparison.Ordinal);
+        startIndex.Should().BeGreaterThanOrEqualTo(0);
+        var endIndex = source.IndexOf(end, startIndex, StringComparison.Ordinal);
+        endIndex.Should().BeGreaterThan(startIndex);
+        return source[startIndex..endIndex];
     }
 
     private static string FindRepositoryRoot()
