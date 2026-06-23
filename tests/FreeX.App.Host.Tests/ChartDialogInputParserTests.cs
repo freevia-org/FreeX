@@ -8,50 +8,28 @@ namespace FreeX.App.Host.Tests;
 
 public sealed class ChartDialogInputParserTests
 {
-    [Theory]
-    [InlineData("", null)]
-    [InlineData("auto", null)]
-    [InlineData(" Auto ", null)]
-    [InlineData("12.5", 12.5)]
-    public void TryReadNullableDouble_AcceptsBlankAutoAndFiniteNumbers(string text, double? expected) =>
+    [Fact]
+    public void TryReadNullableDouble_DelegatesTextBoxTextToSharedParser() =>
         StaTestRunner.Run(() =>
         {
-            ChartDialogInputParser.TryReadNullableDouble(Box(text), out var value).Should().BeTrue();
+            ChartDialogInputParser.TryReadNullableDouble(Box("12.5"), out var value).Should().BeTrue();
 
-            value.Should().Be(expected);
+            value.Should().Be(12.5);
         });
 
-    [Theory]
-    [InlineData("NaN")]
-    [InlineData("Infinity")]
-    [InlineData("abc")]
-    public void TryReadNullableDouble_RejectsNonFiniteOrInvalidNumbers(string text) =>
-        StaTestRunner.Run(() =>
-            ChartDialogInputParser.TryReadNullableDouble(Box(text), out _).Should().BeFalse());
-
-    [Theory]
-    [InlineData("", true, null)]
-    [InlineData("auto", true, null)]
-    [InlineData("1", true, 1.0)]
-    [InlineData("0", false, null)]
-    [InlineData("-1", false, null)]
-    public void TryReadNullablePositiveDouble_RequiresPositiveValuesWhenPresent(string text, bool expectedResult, double? expectedValue) =>
+    [Fact]
+    public void TryReadNullablePositiveDouble_DelegatesTextBoxTextToSharedParser() =>
         StaTestRunner.Run(() =>
         {
-            ChartDialogInputParser.TryReadNullablePositiveDouble(Box(text), out var value).Should().Be(expectedResult);
+            ChartDialogInputParser.TryReadNullablePositiveDouble(Box("0"), out var value).Should().BeFalse();
 
-            if (expectedResult)
-                value.Should().Be(expectedValue);
+            value.Should().Be(0);
         });
 
-    [Theory]
-    [InlineData("0.5", 0.5, 10, true)]
-    [InlineData("10", 0.5, 10, true)]
-    [InlineData("0.49", 0.5, 10, false)]
-    [InlineData("10.01", 0.5, 10, false)]
-    public void TryReadClampedDouble_RequiresFiniteValueInsideRange(string text, double min, double max, bool expected) =>
+    [Fact]
+    public void TryReadClampedDouble_DelegatesTextBoxTextToSharedParser() =>
         StaTestRunner.Run(() =>
-            ChartDialogInputParser.TryReadClampedDouble(Box(text), min, max, out _).Should().Be(expected));
+            ChartDialogInputParser.TryReadClampedDouble(Box("10.01"), min: 0.5, max: 10, out _).Should().BeFalse());
 
     [Fact]
     public void TryReadOptionalColor_UsesSharedHexColorRules() =>
