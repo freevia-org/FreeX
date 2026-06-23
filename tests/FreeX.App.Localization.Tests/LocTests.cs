@@ -138,6 +138,9 @@ public sealed class LocTests
         keys.Should().Contain("EvaluateFormula_Title");
         keys.Should().Contain("EvaluateFormula_EvaluateButton");
         keys.Should().Contain("EvaluateFormula_SelectFormulaMessage");
+        keys.Should().Contain("AddWatch_Title");
+        keys.Should().Contain("AddWatch_AddButton");
+        keys.Should().Contain("AddWatch_SelectedRangeLabel");
     }
 
     [Fact]
