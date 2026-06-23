@@ -2471,8 +2471,12 @@ public sealed class DocumentView : RichTextBox
 
     private void Render()
     {
-        // Expose the current file name to the static run builders for this render pass (FILENAME fields).
+        // Expose the current file name and Show Markup flags to the static run builders for this
+        // render pass. Same [ThreadStatic] pattern as _renderFileName: set here, read in BuildRun,
+        // never persisted beyond the Render() call.
         _renderFileName = CurrentFileName;
+        _renderShowInsertionsAndDeletions = ShowMarkupInsertionsAndDeletions;
+        _renderShowComments = ShowMarkupComments;
         var flow = new FlowDocument { PagePadding = new Thickness(0) };
         flow.FontFamily = new FontFamily(_model.DefaultRun.FontFamily ?? "Calibri");
         flow.FontSize = (_model.DefaultRun.FontSizePt ?? 11) * PxPerPoint;
@@ -3994,12 +3998,17 @@ public sealed class DocumentView : RichTextBox
         // A tracked-change run is coloured in the revision colour and decorated: insertions get an
         // underline, deletions get a strikethrough. A RevisionMarker tag carries the kind/author/date
         // so the mark round-trips on commit (see ReadInline). The mark wins over the run's own colour.
+        // The decoration is suppressed when Show Markup > Insertions and Deletions is OFF, but the
+        // RevisionMarker is ALWAYS set so CommitToModel can round-trip the revision safely.
         if (run.Revision != RevisionKind.None)
         {
-            wpf.Foreground = new SolidColorBrush(RevisionColor);
-            decorations.Add(run.Revision == RevisionKind.Deleted
-                ? TextDecorations.Strikethrough[0]
-                : TextDecorations.Underline[0]);
+            if (_renderShowInsertionsAndDeletions)
+            {
+                wpf.Foreground = new SolidColorBrush(RevisionColor);
+                decorations.Add(run.Revision == RevisionKind.Deleted
+                    ? TextDecorations.Strikethrough[0]
+                    : TextDecorations.Underline[0]);
+            }
             AddMarker(wpf, m => m with { Revision = new RevisionMarker(run.Revision, run.RevisionAuthor, run.RevisionDateXml) });
         }
 
@@ -4086,13 +4095,18 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     private static void ApplyCommentMarker(WpfRun wpf, int commentId, TextDocument document)
     {
+        // The CommentMarker tag is ALWAYS set so CommitToModel can round-trip the comment id safely.
+        // The background highlight and tooltip are suppressed when Show Markup > Comments is OFF.
         AddMarker(wpf, m => m with { Comment = new CommentMarker(commentId, IsReference: false) });
-        document.Comments.TryGetValue(commentId, out var comment);
-        // Resolved comments render with a muted grey highlight; open comments keep the review yellow.
-        if (wpf.Background is null)
-            wpf.Background = new SolidColorBrush(comment?.Resolved == true ? ResolvedCommentHighlight : CommentHighlight);
-        if (comment is not null)
-            wpf.ToolTip = BuildCommentTooltip(comment);
+        if (_renderShowComments)
+        {
+            document.Comments.TryGetValue(commentId, out var comment);
+            // Resolved comments render with a muted grey highlight; open comments keep the review yellow.
+            if (wpf.Background is null)
+                wpf.Background = new SolidColorBrush(comment?.Resolved == true ? ResolvedCommentHighlight : CommentHighlight);
+            if (comment is not null)
+                wpf.ToolTip = BuildCommentTooltip(comment);
+        }
     }
 
     /// <summary>
@@ -6814,6 +6828,67 @@ public sealed class DocumentView : RichTextBox
     /// deletion). Accept-All / Reject-All operate regardless of this flag.
     /// </summary>
     public bool TrackChangesEnabled { get; set; }
+
+    // ── Review > Tracking display controls ────────────────────────────────────────────────────────
+    // These are view-only flags: they affect how the document renders but never touch the model.
+    // Revision and comment markers are ALWAYS written to WPF runs regardless of these flags so that
+    // CommitToModel can round-trip them safely. Default state (all ON) reproduces today's behaviour.
+
+    /// <summary>
+    /// Display for Review mode. Only <see cref="MarkupDisplayMode.AllMarkup"/> is implemented
+    /// (the default). "No Markup" is intentionally deferred: CommitToModel re-derives the model from
+    /// the WPF visual tree, so hiding deleted runs at render time would DROP them from the model on
+    /// the next commit/save — a data-loss risk that cannot be fixed without a retained-model
+    /// commit path.
+    /// </summary>
+    public enum MarkupDisplayMode { AllMarkup }
+
+    /// <summary>Current Display for Review setting. Defaults to All Markup (today's behaviour).</summary>
+    public MarkupDisplayMode DisplayForReview { get; set; } = MarkupDisplayMode.AllMarkup;
+
+    /// <summary>
+    /// When false, revision colour and strikethrough/underline decoration are suppressed in the
+    /// rendered view. The <see cref="RevisionMarker"/> tag is still applied so the revision
+    /// round-trips on commit. Default is true (current unconditional behaviour).
+    /// </summary>
+    public bool ShowMarkupInsertionsAndDeletions { get; set; } = true;
+
+    /// <summary>
+    /// When false, comment background highlight is suppressed in the rendered view. The
+    /// <see cref="CommentMarker"/> tag is still applied so the comment id round-trips on commit.
+    /// Default is true (current unconditional behaviour).
+    /// </summary>
+    public bool ShowMarkupComments { get; set; } = true;
+
+    // [ThreadStatic] field used by the static BuildRun family to read the above flags during a render
+    // pass — same pattern as _renderFileName (set in Render(), read in static helpers, never escapes
+    // the render call).
+    [ThreadStatic]
+    private static bool _renderShowInsertionsAndDeletions;
+    [ThreadStatic]
+    private static bool _renderShowComments;
+
+    /// <summary>
+    /// Apply a change to the Show Markup Insertions/Deletions flag and re-render so the updated
+    /// decoration (or lack of it) becomes visible immediately. Pending edits are committed first.
+    /// </summary>
+    public void ApplyShowMarkupInsertionsAndDeletions(bool show)
+    {
+        CommitToModel();
+        ShowMarkupInsertionsAndDeletions = show;
+        Render();
+    }
+
+    /// <summary>
+    /// Apply a change to the Show Markup Comments flag and re-render so the updated
+    /// highlight (or lack of it) becomes visible immediately. Pending edits are committed first.
+    /// </summary>
+    public void ApplyShowMarkupComments(bool show)
+    {
+        CommitToModel();
+        ShowMarkupComments = show;
+        Render();
+    }
 
     /// <summary>True when the committed model carries any tracked change.</summary>
     public bool HasRevisions()

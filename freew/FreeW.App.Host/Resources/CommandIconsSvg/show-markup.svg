@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Eye shape: show/visibility -->
+  <path d="M3 16c0 0 4.5-8 13-8s13 8 13 8-4.5 8-13 8S3 16 3 16Z" fill="#e3f2fd" stroke="#1565c0" stroke-width="1.8" stroke-linejoin="round"/>
+  <circle cx="16" cy="16" r="4" fill="#1565c0"/>
+  <circle cx="16" cy="16" r="1.8" fill="#ffffff"/>
+  <!-- Markup underline accent below -->
+  <path d="M8 27h5" stroke="#2e7d32" stroke-width="2" stroke-linecap="round"/>
+  <path d="M15 27h5" stroke="#c62828" stroke-width="2" stroke-linecap="round"/>
+</svg>
