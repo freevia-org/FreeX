@@ -66,15 +66,17 @@ public sealed partial class MainWindow
 
         var dialog = new Window
         {
-            Title = UiText.Get("ShellLoc_PrintPreviewTitle"),
-            Width = 760,
-            Height = 720,
-            MinWidth = 520,
-            MinHeight = 480,
+            Title = UiText.Format(
+                PrintPreviewDialogPlanner.TitleFormatResourceKey,
+                PrintPreviewDialogPlanner.NormalizeWorkbookName(_session.DisplayName)),
+            Width = PrintPreviewDialogPlanner.WindowWidth,
+            Height = PrintPreviewDialogPlanner.WindowHeight,
+            MinWidth = PrintPreviewDialogPlanner.MinWindowWidth,
+            MinHeight = PrintPreviewDialogPlanner.MinWindowHeight,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
-        AutomationProperties.SetAutomationId(dialog, "PrintPreviewWindow");
+        AutomationProperties.SetAutomationId(dialog, PrintPreviewDialogPlanner.DialogAutomationId);
 
         var pageHost = new Border
         {
@@ -82,7 +84,7 @@ public sealed partial class MainWindow
             Padding = new Thickness(16),
             ClipToBounds = true,
         };
-        AutomationProperties.SetAutomationId(pageHost, "PrintPreviewPageHost");
+        AutomationProperties.SetAutomationId(pageHost, PrintPreviewDialogPlanner.PageHostAutomationId);
 
         var pageLabel = new TextBlock
         {
@@ -91,19 +93,19 @@ public sealed partial class MainWindow
             MinWidth = 120,
             TextAlignment = TextAlignment.Center,
         };
-        AutomationProperties.SetAutomationId(pageLabel, "PrintPreviewPageLabel");
+        AutomationProperties.SetAutomationId(pageLabel, PrintPreviewDialogPlanner.PageLabelAutomationId);
 
         var prevButton = new Button { Content = UiText.Get("ShellLoc_PrintPreviewPrev"), MinWidth = 84, Padding = new Thickness(10, 4) };
         var nextButton = new Button { Content = UiText.Get("ShellLoc_PrintPreviewNext"), MinWidth = 84, Padding = new Thickness(10, 4) };
-        AutomationProperties.SetAutomationId(prevButton, "PrintPreviewPrevButton");
-        AutomationProperties.SetAutomationId(nextButton, "PrintPreviewNextButton");
+        AutomationProperties.SetAutomationId(prevButton, PrintPreviewDialogPlanner.PreviousButtonAutomationId);
+        AutomationProperties.SetAutomationId(nextButton, PrintPreviewDialogPlanner.NextButtonAutomationId);
 
         var exportButton = new Button { Content = UiText.Get("ShellLoc_PrintPreviewExportPdf"), MinWidth = 120, Padding = new Thickness(10, 4) };
-        AutomationProperties.SetAutomationId(exportButton, "PrintPreviewExportPdfButton");
+        AutomationProperties.SetAutomationId(exportButton, PrintPreviewDialogPlanner.ExportPdfButtonAutomationId);
         exportButton.IsEnabled = StorageProvider.CanSave;
 
         var closeButton = new Button { Content = UiText.Get("Common_Close"), MinWidth = 84, Padding = new Thickness(10, 4) };
-        AutomationProperties.SetAutomationId(closeButton, "PrintPreviewCloseButton");
+        AutomationProperties.SetAutomationId(closeButton, PrintPreviewDialogPlanner.CloseButtonAutomationId);
 
         void Render()
         {
@@ -217,7 +219,7 @@ public sealed partial class MainWindow
             Background = Brushes.White,
             ClipToBounds = true,
         };
-        AutomationProperties.SetAutomationId(canvas, "PrintPreviewPageCanvas");
+        AutomationProperties.SetAutomationId(canvas, PrintPreviewDialogPlanner.PageCanvasAutomationId);
 
         RenderPreviewInstructions(canvas, painting.Instructions);
 

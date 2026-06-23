@@ -15,6 +15,22 @@ public partial class ExportPlannerTests
     }
 
     [Fact]
+    public void PrintPreviewDialog_DelegatesShellConstantsAndParsingToSharedPlanner()
+    {
+        var source = ReadPrintPreviewDialogSources();
+        var parityCaptureSource = DialogSourceTestSupport.ReadHostSources("ParityCapture.cs");
+
+        source.Should().Contain("PrintPreviewDialogPlanner.TitleFormatResourceKey");
+        source.Should().Contain("PrintPreviewDialogPlanner.NormalizeWorkbookName(workbookName)");
+        source.Should().Contain("PrintPreviewDialogPlanner.TryParseCopyCount(text, out copies)");
+        source.Should().Contain("PrintPreviewDialogPlanner.TryParsePageNumber(text, totalPages, out pageNumber)");
+        source.Should().Contain("PrintPreviewDialogPlanner.WindowWidth");
+        source.Should().Contain("PrintPreviewDialogPlanner.DialogAutomationId");
+        parityCaptureSource.Should().Contain("CaptureDialog(results, \"dialog.PrintPreview\", outDir");
+        parityCaptureSource.Should().Contain("CreatePrintPreviewDocument()");
+    }
+
+    [Fact]
     public void PrintPreviewDialog_ContainsNativePrintCommandButton()
     {
         var source = ReadPrintPreviewDialogSources();
@@ -202,7 +218,7 @@ public partial class ExportPlannerTests
         source.Should().Contain("SetToolbarAutomation(nextButton, \"PrintPreviewNextPageButton\", UiText.Get(\"PrintPreview_NextPageAutomationName\")");
         source.Should().Contain("SetToolbarAutomation(lastButton, \"PrintPreviewLastPageButton\", UiText.Get(\"PrintPreview_LastPageAutomationName\")");
         source.Should().Contain("AutomationProperties.SetAutomationId(printButton, \"PrintPreviewPrintButton\")");
-        source.Should().Contain("SetToolbarAutomation(closeButton, \"PrintPreviewCloseButton\", UiText.Get(\"PrintPreview_CloseAutomationName\")");
+        source.Should().Contain("SetToolbarAutomation(closeButton, PrintPreviewDialogPlanner.CloseButtonAutomationId, UiText.Get(\"PrintPreview_CloseAutomationName\")");
         source.Should().Contain("AutomationProperties.SetAutomationId(pageNumberBox, \"PrintPreviewPageNumberBox\")");
         source.Should().Contain("AutomationProperties.SetAutomationId(pageStatusText, \"PrintPreviewPageStatusText\")");
         source.Should().Contain("AutomationProperties.SetAutomationId(zoomBox, \"PrintPreviewZoomBox\")");
@@ -325,7 +341,9 @@ public partial class ExportPlannerTests
             "PrintPreviewDialog.Helpers.cs",
             "NativePrintDialogService.cs",
             "PrintPreviewSettingsPanelFactory.cs",
-            "PrintPreviewToolbarPlanner.cs");
+            "PrintPreviewToolbarPlanner.cs")
+        + Environment.NewLine
+        + DialogSourceTestSupport.ReadPresentationSources("PageLayout", "PrintPreviewDialogPlanner.cs");
 
     private static char ExtractAccessKey(string label)
     {

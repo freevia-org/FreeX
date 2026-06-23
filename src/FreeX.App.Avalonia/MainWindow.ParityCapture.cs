@@ -157,6 +157,7 @@ public sealed partial class MainWindow
         ("dialog.ShapeGradient", () => ShowShapeGradientParityDialogAsync()),
         ("dialog.Zoom", () => ShowZoomDialogAsync()),
         ("dialog.CustomViews", () => ShowCustomViewsParityDialogAsync()),
+        ("dialog.PrintPreview", () => ShowPrintPreviewParityDialogAsync()),
         ("dialog.SelectionPane", () => ShowSelectionPaneParityDialogAsync()),
         ("dialog.PivotTableOptions", () => ShowPivotTableOptionsParityDialogAsync()),
         ("dialog.PivotFieldFilter", () => ShowPivotFieldFilterParityDialogAsync()),
@@ -173,6 +174,9 @@ public sealed partial class MainWindow
         ("dialog.PageSetup", () => ShowPageSetupDialogAsync()),
         ("dialog.Options", () => ShowOptionsDialogAsync()),
     ];
+
+    private Task ShowPrintPreviewParityDialogAsync() =>
+        ShowPrintPreviewDialogAsync();
 
     private Task ShowTextToColumnsParityDialogAsync()
     {

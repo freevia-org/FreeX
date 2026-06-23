@@ -41,7 +41,9 @@ public sealed partial class RemainingDialogTests
             "PrintPreviewDialog.Layout.cs",
             "PrintPreviewDialog.Helpers.cs",
             "PrintPreviewSettingsPanelFactory.cs",
-            "PrintPreviewToolbarPlanner.cs");
+            "PrintPreviewToolbarPlanner.cs")
+        + Environment.NewLine
+        + DialogSourceTestSupport.ReadPresentationSources("PageLayout", "PrintPreviewDialogPlanner.cs");
 
     private static string ReadClassSource(string fileName, string startMarker, string endMarker)
         => DialogSourceTestSupport.ReadClassSource(fileName, startMarker, endMarker);

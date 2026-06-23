@@ -3,8 +3,11 @@ using System.Text;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
+using System.Windows.Markup;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Services;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
@@ -516,6 +519,12 @@ internal static class ParityCapture
         CaptureDialog(results, "dialog.CustomViews", outDir, () =>
             new CustomViewsDialog(workbook, new CommandBus(_ => new WorkbookCommandContext(workbook))));
 
+        CaptureDialog(results, "dialog.PrintPreview", outDir, () =>
+            new PrintPreviewDialog(
+                workbook.Name,
+                CreatePrintPreviewDocument(),
+                new PrintSettingsPlan([UiText.Get("PrintPreview_DefaultScopeActiveSheet")])));
+
         CaptureDialog(results, "dialog.SelectionPane", outDir, () =>
             new SelectionPaneDialog(CreateSelectionPaneItems()));
 
@@ -567,6 +576,76 @@ internal static class ParityCapture
 
     private static Func<string, SheetId?> ResolveSheetId(Workbook workbook) =>
         name => workbook.Sheets.FirstOrDefault(sheet => string.Equals(sheet.Name, name, StringComparison.OrdinalIgnoreCase))?.Id;
+
+    private static FixedDocument CreatePrintPreviewDocument()
+    {
+        var document = new FixedDocument();
+        document.DocumentPaginator.PageSize = new Size(PrintPreviewDialogPlanner.WindowWidth * 0.62, PrintPreviewDialogPlanner.WindowHeight * 1.1);
+        document.Pages.Add(CreatePrintPreviewPage("Parity Demo", "Revenue by region", 1));
+        document.Pages.Add(CreatePrintPreviewPage("Parity Demo", "Pipeline by product", 2));
+        return document;
+    }
+
+    private static PageContent CreatePrintPreviewPage(string title, string subtitle, int pageNumber)
+    {
+        var page = new FixedPage
+        {
+            Width = 696,
+            Height = 768,
+            Background = Brushes.White,
+        };
+
+        AddFixedText(page, title, 48, 44, 22, FontWeights.SemiBold, Brushes.Black);
+        AddFixedText(page, subtitle, 48, 78, 14, FontWeights.Normal, Brushes.DimGray);
+
+        var headers = new[] { "Region", "Product", "Units", "Revenue" };
+        var rows = new[]
+        {
+            new[] { "North", "Widget", "120", "$12,480" },
+            new[] { "South", "Gadget", "85", "$8,925" },
+            new[] { "East", "Sprocket", "200", "$21,700" },
+            new[] { "West", "Gizmo", "64", "$6,080" },
+        };
+
+        var y = 132d;
+        for (var column = 0; column < headers.Length; column++)
+            AddFixedText(page, headers[column], 48 + column * 132, y, 12, FontWeights.SemiBold, Brushes.Black);
+
+        y += 28;
+        foreach (var row in rows)
+        {
+            for (var column = 0; column < row.Length; column++)
+                AddFixedText(page, row[column], 48 + column * 132, y, 12, FontWeights.Normal, Brushes.Black);
+            y += 24;
+        }
+
+        AddFixedText(page, $"Page {pageNumber}", 48, 704, 11, FontWeights.Normal, Brushes.DimGray);
+
+        var pageContent = new PageContent();
+        ((IAddChild)pageContent).AddChild(page);
+        return pageContent;
+    }
+
+    private static void AddFixedText(
+        FixedPage page,
+        string text,
+        double left,
+        double top,
+        double fontSize,
+        FontWeight fontWeight,
+        Brush foreground)
+    {
+        var block = new TextBlock
+        {
+            Text = text,
+            FontSize = fontSize,
+            FontWeight = fontWeight,
+            Foreground = foreground,
+        };
+        FixedPage.SetLeft(block, left);
+        FixedPage.SetTop(block, top);
+        page.Children.Add(block);
+    }
 
     private static IReadOnlyList<RemoveDuplicateColumnChoice> CreateColumnChoices(params string[] headers) =>
         headers.Select((header, index) => new RemoveDuplicateColumnChoice((uint)index, header, true)).ToArray();
