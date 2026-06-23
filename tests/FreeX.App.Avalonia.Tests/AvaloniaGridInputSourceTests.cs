@@ -37,6 +37,26 @@ public sealed class AvaloniaGridInputSourceTests
     }
 
     [Fact]
+    public void FormulaEditing_RendersReferenceTextColorsAndGridAdornersWithoutOwningGestures()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("private static readonly IReadOnlyList<IBrush> FormulaReferenceBrushes");
+        source.Should().Contain("private readonly TextBlock _formulaReferenceTextOverlay = new();");
+        source.Should().Contain("_formulaBox.TextChanged += FormulaBox_TextChanged;");
+        source.Should().Contain("FormulaReferenceHighlightPlanner.GetHighlights(");
+        source.Should().Contain("ResolveStructuredFormulaReference");
+        source.Should().Contain("StructuredReferenceResolver.ResolveCurrentRowColumn");
+        source.Should().Contain("StructuredReferenceResolver.Resolve(");
+        source.Should().Contain("AddFormulaReferenceHighlightOverlay(overlay, viewport, showHeadings, zoomFactor);");
+        source.Should().Contain("TryGetDisplayedRangeBounds(");
+        source.Should().Contain("IsHitTestVisible = false");
+        source.Should().Contain("_formulaBox.Foreground = Brushes.Transparent;");
+        source.Should().Contain("new Run(text) { Foreground = brush }");
+        source.Should().Contain("RefreshShell(\"Ready\");");
+    }
+
+    [Fact]
     public void WorksheetHeaders_ResolvePointerDragAcrossVisibleHeaderMetrics()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));

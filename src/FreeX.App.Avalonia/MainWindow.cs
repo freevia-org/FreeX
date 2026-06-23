@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
@@ -15,6 +16,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using System.Globalization;
+using FreeX.App.Presentation;
 using FreeX.App.Presentation.GridInteraction;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Services;
@@ -25,6 +27,7 @@ using Free.Shared.Ribbon.Avalonia;
 using Free.Shared.Ribbon;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
+using FreeX.Core.Formula;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
 
@@ -370,6 +373,15 @@ public sealed partial class MainWindow : Window
     private static readonly IBrush DrawingObjectBoundsFill = Brush(42, 11, 112, 116);
     private static readonly IBrush DrawingObjectBoundsBorder = Brush(11, 112, 116);
     private static readonly IBrush DrawingObjectBoundsForeground = Brush(5, 67, 69);
+    private static readonly IReadOnlyList<IBrush> FormulaReferenceBrushes =
+    [
+        Brush(0, 102, 204),
+        Brush(192, 0, 0),
+        Brush(112, 48, 160),
+        Brush(0, 128, 0),
+        Brush(204, 102, 0),
+        Brush(0, 128, 128),
+    ];
 
     private readonly WorkbookSessionFactory _sessionFactory = new();
     private readonly WorkbookOpenService _openService = new();
@@ -400,6 +412,7 @@ public sealed partial class MainWindow : Window
     private readonly Slider _statusZoomSlider = new();
     private readonly TextBlock _cellAddressText = new();
     private readonly TextBox _formulaBox = new();
+    private readonly TextBlock _formulaReferenceTextOverlay = new();
     private readonly Border _formulaBarHost = new();
     private readonly Button _formulaExpandButton = new();
     private readonly Button _openButton = new();
@@ -648,6 +661,7 @@ public sealed partial class MainWindow : Window
     private IReadOnlyDictionary<(uint Row, uint Col), (IReadOnlyList<double> Values, SparklineKind Kind)> _sparklinesByCell =
         new Dictionary<(uint Row, uint Col), (IReadOnlyList<double>, SparklineKind)>();
     private string? _formulaBoxEditOriginalText;
+    private bool _isApplyingFormulaBoxText;
     private bool _isOpening;
     private bool _isSaving;
     private bool _allowCloseWithoutDirtyPrompt;
@@ -2943,6 +2957,7 @@ public sealed partial class MainWindow : Window
         _formulaBox.BorderThickness = new Thickness(1);
         _formulaBox.GotFocus += FormulaBox_GotFocus;
         _formulaBox.KeyDown += FormulaBox_KeyDown;
+        _formulaBox.TextChanged += FormulaBox_TextChanged;
         AutomationProperties.SetAutomationId(_formulaBox, "FormulaBox");
         AutomationProperties.SetName(_formulaBox, "Formula bar");
         AutomationProperties.SetHelpText(_formulaBox, "Edit the active cell value or formula.");
@@ -2993,10 +3008,28 @@ public sealed partial class MainWindow : Window
         ConfigureFormulaExpandButton();
         DockPanel.SetDock(_formulaExpandButton, Dock.Right);
 
+        _formulaReferenceTextOverlay.FontFamily = FormulaBarFontFamily;
+        _formulaReferenceTextOverlay.FontSize = 15;
+        _formulaReferenceTextOverlay.Foreground = PrimaryInk;
+        _formulaReferenceTextOverlay.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _formulaReferenceTextOverlay.TextWrapping = TextWrapping.NoWrap;
+        _formulaReferenceTextOverlay.ClipToBounds = true;
+        _formulaReferenceTextOverlay.IsHitTestVisible = false;
+        _formulaReferenceTextOverlay.IsVisible = false;
+
+        var formulaOverlayHost = new AvaloniaGrid();
+        formulaOverlayHost.Children.Add(new Border
+        {
+            Padding = new Thickness(7, 4, 7, 2),
+            IsHitTestVisible = false,
+            Child = _formulaReferenceTextOverlay,
+        });
+        formulaOverlayHost.Children.Add(_formulaBox);
+
         var formulaFill = new Border
         {
             Padding = new Thickness(3, 0, 2, 0),
-            Child = _formulaBox,
+            Child = formulaOverlayHost,
         };
 
         var formulaDock = new DockPanel { LastChildFill = true };
@@ -3448,9 +3481,17 @@ public sealed partial class MainWindow : Window
         _sheetTabsHost.Content = BuildSheetTabs();
         UpdateSheetTabNavigationVisibility();
         _cellAddressText.Text = FormatCellReference(_session.ActiveCell);
-        _formulaBox.Text = preserveFormulaEdit
-            ? formulaText
-            : FormatEditText(_session.ActiveSheet.GetCell(_session.ActiveCell), _session.ActiveCell);
+        _isApplyingFormulaBoxText = true;
+        try
+        {
+            _formulaBox.Text = preserveFormulaEdit
+                ? formulaText
+                : FormatEditText(_session.ActiveSheet.GetCell(_session.ActiveCell), _session.ActiveCell);
+        }
+        finally
+        {
+            _isApplyingFormulaBoxText = false;
+        }
         _boldButton.IsChecked = _session.IsSelectedRangeStartBold;
         _italicButton.IsChecked = _session.IsSelectedRangeStartItalic;
         _underlineButton.IsChecked = _session.IsSelectedRangeStartUnderline;
@@ -3469,6 +3510,7 @@ public sealed partial class MainWindow : Window
             _formulaBox.SelectionStart = Math.Min(formulaSelectionStart, _formulaBox.Text?.Length ?? 0);
             _formulaBox.SelectionEnd = Math.Min(formulaSelectionEnd, _formulaBox.Text?.Length ?? 0);
         }
+        RefreshFormulaReferenceHighlights();
 
         // Render the footer from the shared neutral StatusBarViewModel (see ApplyStatusBarModel). These
         // direct assignments are the unfiltered baseline drawn from the same WorkbookSession data the
@@ -4046,6 +4088,7 @@ public sealed partial class MainWindow : Window
 
         // Charts live on the sheet (not projected into viewport.DrawingObjects), so paint them first —
         // before the drawing-object early-out — so a chart renders even when no other objects exist.
+        AddFormulaReferenceHighlightOverlay(overlay, viewport, showHeadings, zoomFactor);
         AddChartOverlays(overlay, viewport);
 
         // Slicers and timelines are positioned drawing objects connected at the workbook level
@@ -4684,6 +4727,47 @@ public sealed partial class MainWindow : Window
         width = GetDisplayedColumnWidth(columnMetric, zoomFactor);
         height = GetDisplayedRowHeight(rowMetric, zoomFactor);
         return true;
+    }
+
+    private static bool TryGetDisplayedRangeBounds(
+        ViewportModel viewport,
+        GridRange range,
+        bool showHeadings,
+        double zoomFactor,
+        out double left,
+        out double top,
+        out double width,
+        out double height)
+    {
+        left = 0;
+        top = 0;
+        width = 0;
+        height = 0;
+
+        var startCol = Math.Min(range.Start.Col, range.End.Col);
+        var endCol = Math.Max(range.Start.Col, range.End.Col);
+        var startRow = Math.Min(range.Start.Row, range.End.Row);
+        var endRow = Math.Max(range.Start.Row, range.End.Row);
+        var visibleColumns = viewport.ColMetrics
+            .Where(metric => startCol <= metric.Col && metric.Col <= endCol)
+            .ToList();
+        var visibleRows = viewport.RowMetrics
+            .Where(metric => startRow <= metric.Row && metric.Row <= endRow)
+            .ToList();
+        if (visibleColumns.Count == 0 || visibleRows.Count == 0)
+            return false;
+
+        if (!TryGetDisplayedColumnLeft(viewport.ColMetrics, visibleColumns[0].Col, zoomFactor, out var columnLeft) ||
+            !TryGetDisplayedRowTop(viewport.RowMetrics, visibleRows[0].Row, zoomFactor, out var rowTop))
+        {
+            return false;
+        }
+
+        left = (showHeadings ? HeaderColumnWidth * zoomFactor : 0) + columnLeft;
+        top = (showHeadings ? HeaderRowHeight * zoomFactor : 0) + rowTop;
+        width = visibleColumns.Sum(metric => GetDisplayedColumnWidth(metric, zoomFactor));
+        height = visibleRows.Sum(metric => GetDisplayedRowHeight(metric, zoomFactor));
+        return width > 0 && height > 0;
     }
 
     private static bool TryGetDisplayedColumnLeft(
@@ -5369,21 +5453,182 @@ public sealed partial class MainWindow : Window
         var text = _formulaBox.Text ?? "";
         var selectionStart = Math.Clamp(Math.Min(_formulaBox.SelectionStart, _formulaBox.SelectionEnd), 0, text.Length);
         var selectionEnd = Math.Clamp(Math.Max(_formulaBox.SelectionStart, _formulaBox.SelectionEnd), 0, text.Length);
-        _formulaBox.Text = string.Concat(
-            text.AsSpan(0, selectionStart),
-            reference,
-            text.AsSpan(selectionEnd));
+        _isApplyingFormulaBoxText = true;
+        try
+        {
+            _formulaBox.Text = string.Concat(
+                text.AsSpan(0, selectionStart),
+                reference,
+                text.AsSpan(selectionEnd));
+        }
+        finally
+        {
+            _isApplyingFormulaBoxText = false;
+        }
+
         var caret = selectionStart + reference.Length;
         _formulaBox.CaretIndex = caret;
         _formulaBox.SelectionStart = caret;
         _formulaBox.SelectionEnd = caret;
         _formulaBox.Focus();
+        RefreshShell("Ready");
         return true;
     }
 
     private static bool IsFormulaPointModeText(string? text) =>
         !string.IsNullOrEmpty(text) &&
         text[0] == '=';
+
+    private void FormulaBox_TextChanged(object? sender, TextChangedEventArgs e)
+    {
+        if (_isApplyingFormulaBoxText)
+            return;
+
+        if (_session.FormulaEditAddress is null)
+        {
+            ClearFormulaReferenceTextOverlay();
+            return;
+        }
+
+        RefreshShell("Ready");
+    }
+
+    private IReadOnlyList<FormulaReferenceHighlight> GetFormulaReferenceHighlights(string text) =>
+        FormulaReferenceHighlightPlanner.GetHighlights(
+            text,
+            _session.ActiveSheet.Id,
+            sheetName => _session.Workbook.GetSheet(sheetName)?.Id,
+            ResolveStructuredFormulaReference);
+
+    private GridRange? ResolveStructuredFormulaReference(string tableName, string selector)
+    {
+        var currentSheet = _session.ActiveSheet;
+        var currentAddress = _session.FormulaEditAddress ?? _session.ActiveCell;
+        var trimmedSelector = selector.Trim();
+
+        if (trimmedSelector.StartsWith('@') && trimmedSelector.Length > 1)
+        {
+            var address = StructuredReferenceResolver.ResolveCurrentRowColumn(
+                _session.Workbook,
+                currentSheet,
+                currentAddress,
+                string.IsNullOrWhiteSpace(tableName) ? null : tableName,
+                trimmedSelector[1..].Trim());
+
+            return address is null ? null : new GridRange(address.Value, address.Value);
+        }
+
+        return StructuredReferenceResolver.Resolve(
+            _session.Workbook,
+            currentSheet,
+            tableName,
+            trimmedSelector,
+            currentAddress);
+    }
+
+    private bool IsFormulaReferenceHighlightActive() =>
+        _session.FormulaEditAddress is not null &&
+        IsFormulaPointModeText(_formulaBox.Text);
+
+    private void RefreshFormulaReferenceHighlights()
+    {
+        if (!IsFormulaReferenceHighlightActive())
+        {
+            ClearFormulaReferenceTextOverlay();
+            return;
+        }
+
+        ApplyFormulaReferenceTextOverlay(_formulaBox.Text ?? "", GetFormulaReferenceHighlights(_formulaBox.Text ?? ""));
+    }
+
+    private void AddFormulaReferenceHighlightOverlay(
+        Canvas overlay,
+        ViewportModel viewport,
+        bool showHeadings,
+        double zoomFactor)
+    {
+        if (!IsFormulaReferenceHighlightActive())
+            return;
+
+        foreach (var highlight in GetFormulaReferenceHighlights(_formulaBox.Text ?? ""))
+        {
+            if (highlight.Range is not { } range || range.Start.Sheet != _session.ActiveSheet.Id)
+                continue;
+
+            if (!TryGetDisplayedRangeBounds(viewport, range, showHeadings, zoomFactor, out var left, out var top, out var width, out var height))
+                continue;
+
+            var brush = FormulaReferenceBrushes[highlight.PaletteIndex % FormulaReferenceBrushes.Count];
+            var border = new Border
+            {
+                Width = width,
+                Height = height,
+                BorderBrush = brush,
+                BorderThickness = new Thickness(2),
+                Background = CreateFormulaReferenceFill(brush),
+                IsHitTestVisible = false,
+            };
+            Canvas.SetLeft(border, left);
+            Canvas.SetTop(border, top);
+            overlay.Children.Add(border);
+        }
+    }
+
+    private void ApplyFormulaReferenceTextOverlay(
+        string text,
+        IReadOnlyList<FormulaReferenceHighlight> highlights)
+    {
+        _formulaReferenceTextOverlay.Inlines?.Clear();
+        if (!text.StartsWith("=", StringComparison.Ordinal) || highlights.Count == 0)
+        {
+            ClearFormulaReferenceTextOverlay();
+            return;
+        }
+
+        var index = 0;
+        foreach (var highlight in highlights.OrderBy(h => h.TextStart))
+        {
+            if (highlight.TextStart < index ||
+                highlight.TextStart >= text.Length ||
+                highlight.TextLength <= 0)
+            {
+                continue;
+            }
+
+            var highlightEnd = Math.Min(text.Length, highlight.TextStart + highlight.TextLength);
+            if (highlight.TextStart > index)
+                AddFormulaReferenceRun(text[index..highlight.TextStart], PrimaryInk);
+
+            AddFormulaReferenceRun(
+                text[highlight.TextStart..highlightEnd],
+                FormulaReferenceBrushes[highlight.PaletteIndex % FormulaReferenceBrushes.Count]);
+            index = highlightEnd;
+        }
+
+        if (index < text.Length)
+            AddFormulaReferenceRun(text[index..], PrimaryInk);
+
+        _formulaReferenceTextOverlay.IsVisible = true;
+        _formulaBox.Foreground = Brushes.Transparent;
+    }
+
+    private void AddFormulaReferenceRun(string text, IBrush brush) =>
+        _formulaReferenceTextOverlay.Inlines?.Add(new Run(text) { Foreground = brush });
+
+    private void ClearFormulaReferenceTextOverlay()
+    {
+        _formulaReferenceTextOverlay.Inlines?.Clear();
+        _formulaReferenceTextOverlay.IsVisible = false;
+        _formulaBox.Foreground = PrimaryInk;
+    }
+
+    private static IBrush CreateFormulaReferenceFill(IBrush brush)
+    {
+        if (brush is ISolidColorBrush solid)
+            return new SolidColorBrush(Color.FromArgb(24, solid.Color.R, solid.Color.G, solid.Color.B));
+
+        return Brushes.Transparent;
+    }
 
     /// <summary>
     /// Builds and opens the worksheet cell context menu for <paramref name="anchor"/>. The menu is
