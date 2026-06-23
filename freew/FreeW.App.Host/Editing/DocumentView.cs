@@ -1161,6 +1161,21 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Insert a full blank page after the block the caret sits in. FreeW represents this with two
+    /// page-break-before paragraphs so following content moves after the inserted blank page.
+    /// </summary>
+    public void InsertBlankPage()
+    {
+        CommitToModel();
+        var index = CaretBlockIndex() + 1;
+        if (index < 0 || index > _model.Blocks.Count)
+            index = _model.Blocks.Count;
+
+        foreach (var block in DocumentOps.BuildBlankPage())
+            _commands.Execute(new InsertBlockCommand(index++, block));
+    }
+
+    /// <summary>
     /// Insert a horizontal rule (an empty paragraph with a bottom-only border) after the block the caret
     /// sits in, routing through the undo/redo bus. Re-renders the surface.
     /// </summary>
@@ -6302,6 +6317,17 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Replace the document's bibliographic source list through the undo bus. Used by References &gt;
+    /// Manage Sources, where source edits may not insert visible text but still need to persist.
+    /// </summary>
+    public void ReplaceSources(IReadOnlyList<Source> sources)
+    {
+        ArgumentNullException.ThrowIfNull(sources);
+        CommitToModel();
+        _commands.Execute(new ReplaceSourcesCommand(sources));
+    }
+
+    /// <summary>
     /// Inserts the in-text citation for <paramref name="source"/> (e.g. <c>(Author, Year)</c>, formatted
     /// by <see cref="Citations.FormatInText(Source)"/>) as ordinary text at the caret, flowing through the
     /// RichTextBox's own edit path so it joins the surrounding run and is captured by the undo stack.
@@ -6371,6 +6397,36 @@ public sealed class DocumentView : RichTextBox
             index = _model.Blocks.Count;
 
         var entries = DocumentIndex.Build(_model);
+        foreach (var paragraph in entries)
+            _commands.Execute(new InsertParagraphCommand(index++, paragraph));
+    }
+
+    /// <summary>
+    /// Rebuild the generated document index in place. Existing index paragraphs are recognised by the
+    /// dedicated styles from <see cref="DocumentIndex"/>; the refreshed index is inserted at the first
+    /// previous index paragraph, or at the document end when there is not yet an index.
+    /// </summary>
+    public void RefreshIndex()
+    {
+        CommitToModel();
+        DocumentIndex.EnsureStyles(_model);
+
+        var firstIndex = -1;
+        var indexParagraphs = new List<int>();
+        for (var i = 0; i < _model.Blocks.Count; i++)
+        {
+            if (!DocumentIndex.IsIndexParagraph(_model.Blocks[i]))
+                continue;
+            firstIndex = firstIndex < 0 ? i : firstIndex;
+            indexParagraphs.Add(i);
+        }
+
+        var insertAt = firstIndex >= 0 ? firstIndex : _model.Blocks.Count;
+        for (var i = indexParagraphs.Count - 1; i >= 0; i--)
+            _commands.Execute(new DeleteParagraphCommand(indexParagraphs[i]));
+
+        var entries = DocumentIndex.Build(_model);
+        var index = Math.Clamp(insertAt, 0, _model.Blocks.Count);
         foreach (var paragraph in entries)
             _commands.Execute(new InsertParagraphCommand(index++, paragraph));
     }

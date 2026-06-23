@@ -184,6 +184,7 @@ internal static class FreeWRibbon
                 {
                     g.Icon("freew.hyperlink", "Link", RibbonCommandIconKind.Link);
                     g.Icon("freew.bookmark", "Bookmark", RibbonCommandIconKind.Bookmark);
+                    g.Icon("freew.cross-reference", "Cross-reference", RibbonCommandIconKind.CrossReference);
                     g.Icon("freew.edit-hyperlink", "Edit Hyperlink", RibbonCommandIconKind.Link);
                     g.RowBreak();
                     g.Icon("freew.remove-hyperlink", "Remove Hyperlink", RibbonCommandIconKind.Link);
@@ -240,6 +241,14 @@ internal static class FreeWRibbon
                 tab.Group("table-of-contents", "Table of Contents", "T", 100, g =>
                 {
                     g.Medium("freew.toc", "Table of Contents", RibbonCommandIconKind.TableOfContents);
+                    g.Medium("freew.toc-add-text", "Add Text", RibbonCommandIconKind.TableOfContents, dropdown: true, menu: m =>
+                    {
+                        m.Item("freew.toc-addtext-none", "Do Not Show in Table of Contents", "N");
+                        m.Separator();
+                        m.Item("freew.toc-addtext-level1", "Level 1", "1");
+                        m.Item("freew.toc-addtext-level2", "Level 2", "2");
+                        m.Item("freew.toc-addtext-level3", "Level 3", "3");
+                    });
                     g.Medium("freew.toc-refresh", "Update Table", RibbonCommandIconKind.Refresh);
                 });
                 tab.Group("footnotes", "Footnotes", "F", 92, g =>
@@ -251,6 +260,7 @@ internal static class FreeWRibbon
                 tab.Group("citations", "Citations & Bibliography", "C", 84, g =>
                 {
                     g.Medium("freew.citation", "Insert Citation", RibbonCommandIconKind.Citation);
+                    g.Medium("freew.manage-sources", "Manage Sources", RibbonCommandIconKind.Citation);
                     g.ComboBox("freew.citation-style", "Style", c => c with
                     {
                         Items = new[] { "APA", "MLA", "Chicago", "IEEE" },
@@ -270,6 +280,7 @@ internal static class FreeWRibbon
                 {
                     g.Medium("freew.index-mark", "Mark Entry", RibbonCommandIconKind.Index);
                     g.Medium("freew.index-insert", "Insert Index", RibbonCommandIconKind.Index);
+                    g.Medium("freew.index-refresh", "Update Index", RibbonCommandIconKind.Refresh);
                 });
                 tab.Group("authorities", "Table of Authorities", "A", 66, g =>
                 {
@@ -296,7 +307,15 @@ internal static class FreeWRibbon
                         m.Item("freew.size", "Letter / A4 (toggle)", "L");
                         m.Item("freew.more-paper-sizes", "More Paper Sizes…", "M");
                     });
-                    g.Medium("freew.columns", "Columns", RibbonCommandIconKind.TextColumns, dropdown: true);
+                    g.Medium("freew.columns", "Columns", RibbonCommandIconKind.TextColumns, menu: m =>
+                    {
+                        m.Item("freew.columns-one", "One", "O");
+                        m.Item("freew.columns-two", "Two", "T");
+                        m.Item("freew.columns-three", "Three", "H");
+                        m.Item("freew.columns-left", "Left", "L");
+                        m.Item("freew.columns-right", "Right", "R");
+                        m.Item("freew.columns-more", "More Columns...", "M");
+                    });
                     g.RowBreak();
                     // Page Setup launcher: the unified Margins / Paper / Layout dialog (Word's group launcher).
                     g.Icon("freew.page-setup", "Page Setup", RibbonCommandIconKind.Margins, "G");
@@ -321,6 +340,24 @@ internal static class FreeWRibbon
                     g.Icon("freew.different-first-page", "Different First Page", RibbonCommandIconKind.CoverPage);
                 });
                 // Single-command group → Large.
+                tab.Group("paragraph", "Paragraph", "A", 76, g =>
+                {
+                    // Word also exposes paragraph indentation and spacing from Layout. Reuse the backed
+                    // Home paragraph commands here rather than adding placeholder numeric controls.
+                    g.Icon("freew.indent-decrease", "Decrease Indent", RibbonCommandIconKind.IndentDecrease);
+                    g.Icon("freew.indent-increase", "Increase Indent", RibbonCommandIconKind.IndentIncrease);
+                    g.ComboBox("freew.line-spacing", "Line and Paragraph Spacing", c => c with
+                    {
+                        Items = new[] { "1.0", "1.15", "1.5", "2.0" },
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.LineSpacing),
+                        Width = 52
+                    });
+                    g.RowBreak();
+                    g.Icon("freew.space-before-toggle", "Add Space Before Paragraph", RibbonCommandIconKind.SpaceBefore);
+                    g.Icon("freew.space-after-toggle", "Add Space After Paragraph", RibbonCommandIconKind.SpaceAfter);
+                    g.Icon("freew.paragraph-dialog", "Paragraph Settings", RibbonCommandIconKind.TextFunction);
+                    g.Icon("freew.tabs-dialog", "Tabs", RibbonCommandIconKind.Ruler);
+                });
                 tab.Group("preview", "Preview", "V", 90, g =>
                 {
                     g.Large("freew.print-preview", "Print Preview", RibbonCommandIconKind.Print);
@@ -381,7 +418,13 @@ internal static class FreeWRibbon
                     g.MediumToggle("freew.nav-pane", "Navigation Pane", RibbonCommandIconKind.NavigationPane);
                 });
                 // Zoom group → Word's View > Zoom hero, opening the Zoom dialog (presets / page fits / custom %).
-                tab.Group("zoom", "Zoom", "Z", 80, g => g.Large("freew.zoom-dialog", "Zoom", RibbonCommandIconKind.Zoom));
+                tab.Group("zoom", "Zoom", "Z", 80, g =>
+                {
+                    g.Large("freew.zoom-dialog", "Zoom", RibbonCommandIconKind.Zoom);
+                    g.Medium("freew.zoom-100", "100%", RibbonCommandIconKind.Zoom);
+                    g.Medium("freew.zoom-one-page", "One Page", RibbonCommandIconKind.OnePage);
+                    g.Medium("freew.zoom-page-width", "Page Width", RibbonCommandIconKind.Scale);
+                });
             })
             .Tab("help", "Help", "Y", tab =>
             {

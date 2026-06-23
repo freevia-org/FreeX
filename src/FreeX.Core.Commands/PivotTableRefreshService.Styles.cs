@@ -39,7 +39,7 @@ public static partial class PivotTableRefreshService
         {
             Bold = true,
             FontColor = CellColor.Black,
-            FillColor = palette.SubtotalFill,
+            FillColor = palette.CompactGroupHeaderFill ?? palette.SubtotalFill,
             BorderTop = new CellBorder(BorderStyle.Thin, palette.Border),
             BorderBottom = new CellBorder(BorderStyle.Thin, palette.Border)
         });
@@ -53,16 +53,33 @@ public static partial class PivotTableRefreshService
         });
         var stripeStyle = workbook.RegisterStyle(new CellStyle
         {
-            FillColor = palette.StripeFill
+            FillColor = palette.StripeFill,
+            BorderTop = CreatePivotBodyBorder(palette),
+            BorderRight = CreatePivotBodyBorder(palette),
+            BorderBottom = CreatePivotBodyBorder(palette),
+            BorderLeft = CreatePivotBodyBorder(palette)
+        });
+        var loadedTabularOuterRowLabelStyle = workbook.RegisterStyle(new CellStyle
+        {
+            Bold = true,
+            FillColor = palette.StripeFill,
+            BorderTop = CreatePivotBodyBorder(palette),
+            BorderRight = CreatePivotBodyBorder(palette),
+            BorderBottom = CreatePivotBodyBorder(palette),
+            BorderLeft = CreatePivotBodyBorder(palette)
         });
         var materializeLoadedBodySurface =
             preserveExistingVisualStyles &&
             HasLoadedNativePivotLocation(pivotTable) &&
             palette.BodyFill is null;
-        StyleId? bodyStyle = palette.BodyFill is not null || materializeLoadedBodySurface
+        StyleId? bodyStyle = palette.BodyFill is not null || palette.BodyBorder is not null || materializeLoadedBodySurface
             ? workbook.RegisterStyle(new CellStyle
             {
-                FillColor = palette.BodyFill ?? CellColor.White
+                FillColor = palette.BodyFill ?? CellColor.White,
+                BorderTop = CreatePivotBodyBorder(palette),
+                BorderRight = CreatePivotBodyBorder(palette),
+                BorderBottom = CreatePivotBodyBorder(palette),
+                BorderLeft = CreatePivotBodyBorder(palette)
             })
             : null;
 
@@ -160,6 +177,12 @@ public static partial class PivotTableRefreshService
                 continue;
             }
 
+            if (ShouldApplyLoadedTabularOuterRowLabelStyle(sheet, pivotTable, materialized, firstDataRow, row, col))
+            {
+                ApplyPivotVisualStyle(workbook, cell, loadedTabularOuterRowLabelStyle, preserveExistingVisualStyles);
+                continue;
+            }
+
             var bodyColIndex = col - firstDataColumn;
             var isRowStripe =
                 pivotTable.ShowRowStripes &&
@@ -177,6 +200,34 @@ public static partial class PivotTableRefreshService
         }
 
         ApplyCompactRowLabelIndent(workbook, sheet, pivotTable, materialized, headerEndRow, subtotalRows, grandTotalRows);
+    }
+
+    private static CellBorder CreatePivotBodyBorder(PivotStylePalette palette) =>
+        palette.BodyBorder is { } color
+            ? new CellBorder(BorderStyle.Thin, color)
+            : default;
+
+    private static bool ShouldApplyLoadedTabularOuterRowLabelStyle(
+        Sheet sheet,
+        PivotTableModel pivotTable,
+        GridRange materialized,
+        uint firstDataRow,
+        uint row,
+        uint col)
+    {
+        if (!HasLoadedNativePivotLocation(pivotTable) ||
+            pivotTable.ReportLayout != PivotReportLayout.Tabular ||
+            pivotTable.RowFields.Count <= 1 ||
+            col != materialized.Start.Col ||
+            row < firstDataRow)
+        {
+            return false;
+        }
+
+        return sheet.GetCell(row, col)?.Value is TextValue text &&
+               !string.IsNullOrWhiteSpace(text.Value) &&
+               !IsPivotGrandTotalCaption(pivotTable, text.Value) &&
+               !IsPivotSubtotalCaption(text.Value);
     }
 
     private static IReadOnlySet<uint> FindCompactGroupHeaderRows(

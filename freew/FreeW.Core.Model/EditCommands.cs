@@ -623,3 +623,31 @@ public sealed class FormatParagraphRunsCommand(int paragraphIndex, Func<RunForma
             runs[i].Formatting = _previous[i];
     }
 }
+
+/// <summary>
+/// Replace the document's bibliography source list, snapshotting the previous list for undo.
+/// </summary>
+public sealed class ReplaceSourcesCommand(IReadOnlyList<Source> sources) : IDocumentCommand
+{
+    private Source[]? _previous;
+    private readonly Source[] _replacement = sources.ToArray();
+
+    public string Label => "Manage Sources";
+
+    public int EstimatedBytes => 256 + (_replacement.Length * 256);
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        _previous = context.Document.Sources.ToArray();
+        context.Document.Sources.Clear();
+        context.Document.Sources.AddRange(_replacement);
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (_previous is null)
+            return;
+        context.Document.Sources.Clear();
+        context.Document.Sources.AddRange(_previous);
+    }
+}

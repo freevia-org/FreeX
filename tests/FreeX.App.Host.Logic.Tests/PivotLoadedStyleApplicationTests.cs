@@ -100,6 +100,61 @@ public sealed class PivotLoadedStyleApplicationTests
         workbook.GetStyle(sheet.GetCell(5, 1)!.StyleId).FillColor.Should().Be(CellColor.White);
     }
 
+    [Fact]
+    public void ApplyLoadedPivotStyles_StylesMedium13TabularOuterRowLabelsAndBodyGrid()
+    {
+        var workbook = new Workbook("PivotLoadedMedium13TabularStyle");
+        var source = workbook.AddSheet("SalesData");
+        var sheet = workbook.AddSheet("Pivot");
+        var pivot = new PivotTableModel
+        {
+            Name = "NativePivotLayoutOptions",
+            CacheId = 1,
+            SourceRange = Range(source, 1, 1, 13, 7),
+            TargetRange = Range(sheet, 3, 1, 13, 6),
+            LastRenderedRange = Range(sheet, 3, 1, 13, 6),
+            ReportLayout = PivotReportLayout.Tabular,
+            FirstDataRow = 2,
+            FirstDataColumn = 2,
+            ShowRowStripes = true,
+            ShowColumnStripes = true,
+            StyleName = "PivotStyleMedium13"
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.RowFields.Add(new PivotFieldModel(2));
+        pivot.ColumnFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(6, "Sum of Sales", "sum"));
+        sheet.PivotTables.Add(pivot);
+        SetText(sheet, 3, 1, "Sum of Sales");
+        SetText(sheet, 4, 3, "Hardware");
+        SetText(sheet, 5, 1, "East");
+        SetText(sheet, 5, 2, "Direct");
+        SetNumber(sheet, 5, 3, 2360);
+        SetNumber(sheet, 5, 4, 980);
+        SetNumber(sheet, 5, 6, 2360);
+        SetText(sheet, 6, 1, "East");
+        SetText(sheet, 6, 2, "Partner");
+        SetNumber(sheet, 6, 4, 980);
+
+        PivotTableRefreshService.ApplyLoadedPivotStyles(workbook).Should().BeTrue();
+
+        var rowLabelStyle = workbook.GetStyle(sheet.GetCell(5, 1)!.StyleId);
+        rowLabelStyle.Bold.Should().BeTrue();
+        rowLabelStyle.FillColor.Should().Be(workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Accent5, 0.9));
+        rowLabelStyle.BorderTop.Color.Should().Be(workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Accent5, 0.5));
+        rowLabelStyle.BorderBottom.Color.Should().Be(workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Accent5, 0.5));
+
+        var stripedDataStyle = workbook.GetStyle(sheet.GetCell(5, 3)!.StyleId);
+        stripedDataStyle.FillColor.Should().Be(workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Accent5, 0.9));
+        stripedDataStyle.BorderTop.Color.Should().Be(workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Accent5, 0.5));
+        stripedDataStyle.BorderBottom.Color.Should().Be(workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Accent5, 0.5));
+
+        var dataStyle = workbook.GetStyle(sheet.GetCell(6, 4)!.StyleId);
+        dataStyle.FillColor.Should().Be(workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Accent5, 0.95));
+        dataStyle.BorderTop.Color.Should().Be(workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Accent5, 0.5));
+        dataStyle.BorderBottom.Color.Should().Be(workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Accent5, 0.5));
+    }
+
     private static bool AnyBoldInRange(Workbook workbook, Sheet sheet, GridRange range)
     {
         for (var row = range.Start.Row; row <= range.End.Row; row++)

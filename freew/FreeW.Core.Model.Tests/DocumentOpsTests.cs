@@ -47,6 +47,16 @@ public class DocumentOpsTests
     }
 
     [Fact]
+    public void BuildBlankPage_CreatesTwoPageBreakParagraphs()
+    {
+        var blocks = DocumentOps.BuildBlankPage().OfType<Paragraph>().ToList();
+
+        blocks.Should().HaveCount(2);
+        blocks.Should().OnlyContain(p => p.Formatting.PageBreakBefore);
+        blocks.Should().OnlyContain(p => p.PlainText.Length == 0);
+    }
+
+    [Fact]
     public void CreateHorizontalRule_SetsBottomOnlyBorder()
     {
         var paragraph = DocumentOps.CreateHorizontalRule();

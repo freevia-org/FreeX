@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -90,6 +91,9 @@ internal static class FreeWRibbonCommands
         Action? onToggleOutlineView,
         Func<bool>? isOutlineViewActive,
         Action? onZoomDialog,
+        Action? onZoom100 = null,
+        Action? onZoomOnePage = null,
+        Action? onZoomPageWidth = null,
         Action? onWebLayout = null,
         Func<bool>? isWebLayoutActive = null,
         Action? onDraftView = null,
@@ -189,9 +193,10 @@ internal static class FreeWRibbonCommands
                 selection.ApplyPropertyValue(TextElement.FontSizeProperty, points * 96.0 / 72.0);
         }));
 
-        // Insert tab — Pages: prepend a cover page, or drop a horizontal rule / page break at the caret.
+        // Insert tab — Pages: prepend a cover page, insert a blank page, or drop a horizontal rule / page break at the caret.
         // Each mutates the model through the view's undo/redo bus and re-renders.
         registry.Register("freew.cover-page", new ActionCommand(() => { editor.Focus(); editor.InsertCoverPage(); }));
+        registry.Register("freew.blank-page", new ActionCommand(() => { editor.Focus(); editor.InsertBlankPage(); }));
         registry.Register("freew.horizontal-rule", new ActionCommand(() => { editor.Focus(); editor.InsertHorizontalRule(); }));
         registry.Register("freew.page-break", new ActionCommand(() => { editor.Focus(); editor.InsertPageBreak(); }));
 
@@ -342,9 +347,15 @@ internal static class FreeWRibbonCommands
         // and rebuild it in place (remove the prior TOC region + re-insert). Both route through the bus.
         registry.Register("freew.toc", new ActionCommand(() => { editor.Focus(); editor.InsertTableOfContents(); }));
         registry.Register("freew.toc-refresh", new ActionCommand(() => { editor.Focus(); editor.RefreshTableOfContents(); }));
+        registry.Register("freew.toc-add-text", new ApplyTocStyleCommand(editor, "Heading1"));
+        registry.Register("freew.toc-addtext-none", new ApplyTocStyleCommand(editor, "Normal"));
+        registry.Register("freew.toc-addtext-level1", new ApplyTocStyleCommand(editor, "Heading1"));
+        registry.Register("freew.toc-addtext-level2", new ApplyTocStyleCommand(editor, "Heading2"));
+        registry.Register("freew.toc-addtext-level3", new ApplyTocStyleCommand(editor, "Heading3"));
         // Insert tab — References: insert an in-text citation (pick an existing source or add a new one),
         // and insert a bibliography built from the document's sources at the caret (reversible).
         registry.Register("freew.citation", new InsertCitationCommand(editor));
+        registry.Register("freew.manage-sources", new ManageSourcesCommand(editor));
         registry.Register("freew.bibliography", new ActionCommand(() => { editor.Focus(); editor.InsertBibliography(); }));
         // Insert tab — References: select the active citation/bibliography style (APA / MLA / Chicago) used
         // by the citation + bibliography commands. The combo box delivers its label via the "value" param.
@@ -357,6 +368,7 @@ internal static class FreeWRibbonCommands
         // insert an alphabetical index built from the marked terms at the caret (reversibly via the bus).
         registry.Register("freew.index-mark", new MarkIndexEntryCommand(editor));
         registry.Register("freew.index-insert", new ActionCommand(() => { editor.Focus(); editor.InsertIndex(); }));
+        registry.Register("freew.index-refresh", new ActionCommand(() => { editor.Focus(); editor.RefreshIndex(); }));
         // Insert tab — References: generate a Table of Figures from the document's figure captions at the
         // caret, and rebuild it in place (remove the prior region + re-insert). Both route through the bus.
         registry.Register("freew.tof", new ActionCommand(() => { editor.Focus(); editor.InsertTableOfFigures(); }));
@@ -593,9 +605,15 @@ internal static class FreeWRibbonCommands
             var isLetter = Math.Abs(page.WidthPt - 612) < 1 && Math.Abs(page.HeightPt - 792) < 1;
             (page.WidthPt, page.HeightPt) = isLetter ? (595.0, 842.0) : (612.0, 792.0); // toggle Letter <-> A4
         }));
-        // Columns: open the Columns dialog (One/Two/Three/Left/Right + spacing/line-between/More), applying
-        // the chosen column layout to PageSettings and re-rendering so the flow shows at once.
+        // Columns: open the Columns dialog or apply Word's backed preset menu choices directly, mutating
+        // PageSettings and re-rendering so the live document flow changes immediately.
         registry.Register("freew.columns", new ColumnsCommand(editor));
+        registry.Register("freew.columns-one", new ColumnsPresetCommand(editor, ColumnsPreset.One));
+        registry.Register("freew.columns-two", new ColumnsPresetCommand(editor, ColumnsPreset.Two));
+        registry.Register("freew.columns-three", new ColumnsPresetCommand(editor, ColumnsPreset.Three));
+        registry.Register("freew.columns-left", new ColumnsPresetCommand(editor, ColumnsPreset.Left));
+        registry.Register("freew.columns-right", new ColumnsPresetCommand(editor, ColumnsPreset.Right));
+        registry.Register("freew.columns-more", new ColumnsCommand(editor));
         // Page Setup: the unified Margins / Paper / Layout dialog (Word's Layout > Page Setup launcher). The
         // "Custom Margins…" / "More Paper Sizes…" entry points open the same dialog on the Margins / Paper tab.
         registry.Register("freew.page-setup", new PageSetupCommand(editor, PageSetupDialog.Tab.Margins));
@@ -687,6 +705,12 @@ internal static class FreeWRibbonCommands
         // page-relative fit factors from the live viewport and applies the chosen factor to the editor.
         if (onZoomDialog is not null)
             registry.Register("freew.zoom-dialog", new ActionCommand(onZoomDialog));
+        if (onZoom100 is not null)
+            registry.Register("freew.zoom-100", new ActionCommand(onZoom100));
+        if (onZoomOnePage is not null)
+            registry.Register("freew.zoom-one-page", new ActionCommand(onZoomOnePage));
+        if (onZoomPageWidth is not null)
+            registry.Register("freew.zoom-page-width", new ActionCommand(onZoomPageWidth));
 
         // Home > Paragraph — Show Formatting Marks: a stateful toggle over the editor's display-only pilcrow /
         // space-dot / tab-arrow overlay. The marks are drawn as a non-editable adorner computed from the
@@ -1022,6 +1046,17 @@ internal static class FreeWRibbonCommands
         }
 
         private static string Compact(string value) => value.Replace(" ", string.Empty);
+    }
+
+    // References > Table of Contents > Add Text: Word exposes TOC inclusion as level choices. FreeW's
+    // TOC is built from paragraph styles, so each choice reuses the same reversible StyleId path as Home > Styles.
+    private sealed class ApplyTocStyleCommand(DocumentView editor, string styleId) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            editor.SetParagraphStyle(styleId);
+        }
     }
 
     // Home > Styles: New Style. Opens a dialog capturing a name + a few formatting options + a based-on
@@ -1600,6 +1635,57 @@ internal static class FreeWRibbonCommands
         }
     }
 
+    private enum ColumnsPreset
+    {
+        One,
+        Two,
+        Three,
+        Left,
+        Right
+    }
+
+    // Word's Layout > Columns dropdown applies common presets immediately. Equal presets clear explicit
+    // widths; Left/Right set the classic narrow/wide two-column split using the current page content width.
+    private sealed class ColumnsPresetCommand(DocumentView editor, ColumnsPreset preset) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context) =>
+            editor.ApplyPageSettings(page =>
+            {
+                var spacing = page.ColumnSpacingPt;
+                page.ColumnsLineBetween = false;
+                page.ColumnWidthsPt = null;
+
+                switch (preset)
+                {
+                    case ColumnsPreset.One:
+                        page.ColumnCount = 1;
+                        break;
+                    case ColumnsPreset.Two:
+                        page.ColumnCount = 2;
+                        break;
+                    case ColumnsPreset.Three:
+                        page.ColumnCount = 3;
+                        break;
+                    case ColumnsPreset.Left:
+                        page.ColumnCount = 2;
+                        page.ColumnWidthsPt = UnequalWidths(page, narrowFirst: true, spacing);
+                        break;
+                    case ColumnsPreset.Right:
+                        page.ColumnCount = 2;
+                        page.ColumnWidthsPt = UnequalWidths(page, narrowFirst: false, spacing);
+                        break;
+                }
+            });
+
+        private static IReadOnlyList<double> UnequalWidths(PageSettings page, bool narrowFirst, double spacing)
+        {
+            var contentWidthPt = Math.Max(72, page.WidthPt - page.MarginLeftPt - page.MarginRightPt);
+            const double narrowPt = 108; // 1.5 inch, matching the Columns dialog's Left/Right presets.
+            var widePt = Math.Max(36, contentWidthPt - spacing - narrowPt);
+            return narrowFirst ? [narrowPt, widePt] : [widePt, narrowPt];
+        }
+    }
+
     // Opens the unified Page Setup dialog (Margins / Paper / Layout tabs) and applies the chosen geometry,
     // orientation, gutter, mirror-margins, paper size, header/footer distance, vertical alignment and the
     // different-first-page / odd-even toggles to PageSettings via ApplyPageSettings — the same single
@@ -2166,6 +2252,23 @@ internal static class FreeWRibbonCommands
             if (entry.Author.Length == 0 && entry.Title.Length == 0 && entry.Year.Length == 0)
                 return null;
             return editor.AddSource(entry.Tag, entry.Author, entry.Title, entry.Year, entry.Publisher);
+        }
+    }
+
+    // References > Citations & Bibliography > Manage Sources: edit the document-local source list.
+    // Word also has a master source list; FreeW currently backs the document source store only, so the
+    // dialog labels that scope directly instead of exposing a fake global library.
+    private sealed class ManageSourcesCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var sources = ManageSourcesDialog.Ask(Window.GetWindow(editor), editor.Sources);
+            if (sources is null)
+                return;
+
+            editor.Focus();
+            editor.ReplaceSources(sources);
         }
     }
 
@@ -3158,22 +3261,23 @@ internal static class FreeWRibbonCommands
     // The fields captured by the NewSourceDialog (all trimmed; publisher may be empty).
     private sealed record SourceEntry(string Tag, string Author, string Title, string Year, string Publisher);
 
-    // A small modal form capturing a new source's tag/author/title/year/publisher. Returns the entry, or
-    // null if cancelled.
+    // A small modal form capturing a source's tag/author/title/year/publisher. Returns the entry, or
+    // null if cancelled. When editing an existing source, type-specific fields not shown here are
+    // preserved by the caller.
     private static class NewSourceDialog
     {
-        public static SourceEntry? Ask(Window? owner)
+        public static SourceEntry? Ask(Window? owner, Source? source = null)
         {
-            var tag = NewField();
-            var author = NewField();
-            var title = NewField();
-            var year = NewField();
-            var publisher = NewField();
+            var tag = NewField(source?.Tag);
+            var author = NewField(source?.Author);
+            var title = NewField(source?.Title);
+            var year = NewField(source?.Year);
+            var publisher = NewField(source?.Publisher);
 
             SourceEntry? result = null;
             var dialog = new Window
             {
-                Title = "Add New Source",
+                Title = source is null ? "Add New Source" : "Edit Source",
                 SizeToContent = SizeToContent.WidthAndHeight,
                 ResizeMode = ResizeMode.NoResize,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -3212,13 +3316,180 @@ internal static class FreeWRibbonCommands
             return dialog.ShowDialog() == true ? result : null;
         }
 
-        private static System.Windows.Controls.TextBox NewField() =>
-            new() { MinWidth = 320, Margin = new Thickness(0, 0, 0, 10) };
+        private static System.Windows.Controls.TextBox NewField(string? value = null) =>
+            new() { Text = value ?? string.Empty, MinWidth = 320, Margin = new Thickness(0, 0, 0, 10) };
 
         private static void AddRow(System.Windows.Controls.Panel panel, string label, System.Windows.Controls.TextBox box)
         {
             panel.Children.Add(new System.Windows.Controls.TextBlock { Text = label, Margin = new Thickness(0, 0, 0, 4) });
             panel.Children.Add(box);
+        }
+    }
+
+    private static class ManageSourcesDialog
+    {
+        public static IReadOnlyList<Source>? Ask(Window? owner, IReadOnlyList<Source> sources)
+        {
+            var working = sources.Select(CloneSource).ToList();
+            var list = new System.Windows.Controls.ListBox
+            {
+                MinWidth = 440,
+                MinHeight = 180,
+                Margin = new Thickness(0, 0, 0, 12)
+            };
+
+            IReadOnlyList<Source>? result = null;
+            var dialog = new Window
+            {
+                Title = "Manage Sources",
+                SizeToContent = SizeToContent.WidthAndHeight,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ShowInTaskbar = false
+            };
+
+            void RefreshList()
+            {
+                var selected = list.SelectedIndex;
+                list.Items.Clear();
+                foreach (var source in working)
+                    list.Items.Add(DescribeSource(source));
+                if (working.Count > 0)
+                    list.SelectedIndex = Math.Clamp(selected, 0, working.Count - 1);
+            }
+
+            void AddSource()
+            {
+                var entry = NewSourceDialog.Ask(dialog);
+                if (entry is null || !HasSourceData(entry))
+                    return;
+                working.Add(BuildSource(entry));
+                RefreshList();
+                list.SelectedIndex = working.Count - 1;
+            }
+
+            void EditSource()
+            {
+                var index = list.SelectedIndex;
+                if (index < 0 || index >= working.Count)
+                    return;
+                var entry = NewSourceDialog.Ask(dialog, working[index]);
+                if (entry is null || !HasSourceData(entry))
+                    return;
+                working[index] = BuildSource(entry, working[index]);
+                RefreshList();
+                list.SelectedIndex = index;
+            }
+
+            void DeleteSource()
+            {
+                var index = list.SelectedIndex;
+                if (index < 0 || index >= working.Count)
+                    return;
+                working.RemoveAt(index);
+                RefreshList();
+            }
+
+            var add = new System.Windows.Controls.Button { Content = "Add...", MinWidth = 80, Margin = new Thickness(0, 0, 8, 0) };
+            var edit = new System.Windows.Controls.Button { Content = "Edit...", MinWidth = 80, Margin = new Thickness(0, 0, 8, 0) };
+            var delete = new System.Windows.Controls.Button { Content = "Delete", MinWidth = 80, Margin = new Thickness(0, 0, 8, 0) };
+            var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+
+            add.Click += (_, _) => AddSource();
+            edit.Click += (_, _) => EditSource();
+            delete.Click += (_, _) => DeleteSource();
+            list.MouseDoubleClick += (_, _) => EditSource();
+            ok.Click += (_, _) =>
+            {
+                result = working.ToArray();
+                dialog.DialogResult = true;
+            };
+
+            var editButtons = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                Margin = new Thickness(0, 0, 0, 12)
+            };
+            editButtons.Children.Add(add);
+            editButtons.Children.Add(edit);
+            editButtons.Children.Add(delete);
+
+            var closeButtons = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            closeButtons.Children.Add(ok);
+            closeButtons.Children.Add(cancel);
+
+            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Current document sources:", Margin = new Thickness(0, 0, 0, 4) });
+            panel.Children.Add(list);
+            panel.Children.Add(editButtons);
+            panel.Children.Add(closeButtons);
+            dialog.Content = panel;
+
+            RefreshList();
+            return dialog.ShowDialog() == true ? result : null;
+        }
+
+        private static bool HasSourceData(SourceEntry entry) =>
+            entry.Tag.Length > 0
+            || entry.Author.Length > 0
+            || entry.Title.Length > 0
+            || entry.Year.Length > 0
+            || entry.Publisher.Length > 0;
+
+        private static Source BuildSource(SourceEntry entry, Source? existing = null) =>
+            new()
+            {
+                Tag = entry.Tag,
+                Type = existing?.Type ?? SourceType.Book,
+                Author = entry.Author,
+                Title = entry.Title,
+                Year = entry.Year,
+                Publisher = string.IsNullOrWhiteSpace(entry.Publisher) ? null : entry.Publisher,
+                Journal = existing?.Journal,
+                Volume = existing?.Volume,
+                Issue = existing?.Issue,
+                Pages = existing?.Pages,
+                Url = existing?.Url,
+                Accessed = existing?.Accessed
+            };
+
+        private static Source CloneSource(Source source) =>
+            new()
+            {
+                Tag = source.Tag,
+                Type = source.Type,
+                Author = source.Author,
+                Title = source.Title,
+                Year = source.Year,
+                Publisher = source.Publisher,
+                Journal = source.Journal,
+                Volume = source.Volume,
+                Issue = source.Issue,
+                Pages = source.Pages,
+                Url = source.Url,
+                Accessed = source.Accessed
+            };
+
+        private static string DescribeSource(Source source)
+        {
+            var parts = new List<string>(3);
+            if (!string.IsNullOrWhiteSpace(source.Author))
+                parts.Add(source.Author.Trim());
+            if (!string.IsNullOrWhiteSpace(source.Year))
+                parts.Add($"({source.Year.Trim()})");
+            var head = string.Join(" ", parts);
+            if (!string.IsNullOrWhiteSpace(source.Title))
+                head = head.Length > 0 ? $"{head} - {source.Title.Trim()}" : source.Title.Trim();
+            if (head.Length == 0)
+                head = string.IsNullOrWhiteSpace(source.Tag) ? "(untitled source)" : source.Tag.Trim();
+            return head;
         }
     }
 

@@ -25,6 +25,8 @@ public sealed class GridViewPivotHeaderDropdownSourceTests
         renderDispatch.Should().Contain("RenderPivotRowLabelAdornments(dc);");
         rendering.Should().Contain("private void RenderPivotHeaderDropdownButtons(DrawingContext dc)");
         rendering.Should().Contain("DrawPivotHeaderDropdownGlyph(dc, rect, button.IsActive)");
+        rendering.Should().Contain("private const double PivotExpandCollapseButtonSize = 8;");
+        rendering.Should().Contain("private const double PivotExpandCollapseButtonReserve = 15;");
         rendering.Should().Contain("private void RenderPivotRowLabelAdornments(DrawingContext dc)");
         rendering.Should().Contain("DrawPivotExpandCollapseButton(dc, rect, adornment.IsExpanded);");
         rendering.Should().Contain("private bool TryHitTestPivotHeaderDropdownButton(Point pos, out CellAddress headerCell)");

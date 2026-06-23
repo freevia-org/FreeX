@@ -98,6 +98,13 @@ public sealed class FreeWRibbonParityTests
             .Should()
             .Equal("Pictures", "Shapes", "SmartArt", "Chart", "Screenshot");
 
+        CommandIds(insert.FindGroup("links")!)
+            .Should()
+            .ContainInOrder("freew.hyperlink", "freew.bookmark", "freew.cross-reference");
+        registry.TryGet("freew.cross-reference", out _)
+            .Should()
+            .BeTrue("Word exposes Cross-reference from Insert > Links and FreeW already backs the command");
+
         CommandIds(insert.FindGroup("text")!)
             .Should()
             .Equal(
@@ -146,12 +153,36 @@ public sealed class FreeWRibbonParityTests
             "freew.object",
             "freew.save-quickpart",
             "freew.building-blocks-organizer",
+            "freew.cross-reference",
             "freew.equation",
             "freew.symbol"
         };
 
         foreach (var commandId in backedParityCommandIds)
             registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must execute from the Insert tab");
+    }
+
+    [StaFact]
+    public void InsertPages_ExposesBackedWordStyleBlankPage()
+    {
+        var definition = FreeWRibbon.Build();
+        var pages = definition.FindTab("insert")!.FindGroup("pages");
+        var editor = new DocumentView();
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        CommandIds(pages!)
+            .Should()
+            .ContainInOrder("freew.cover-page", "freew.blank-page", "freew.page-break");
+        registry.TryGet("freew.blank-page", out var command).Should().BeTrue("Insert > Pages > Blank Page is visible");
+
+        editor.Model.Blocks.Clear();
+        editor.Model.Blocks.Add(new Paragraph("Before"));
+        command!.Execute(RibbonCommandContext.Empty);
+
+        editor.Model.Blocks.Should().HaveCount(3);
+        editor.Model.Blocks.Skip(1).OfType<Paragraph>()
+            .Should()
+            .OnlyContain(paragraph => paragraph.Formatting.PageBreakBefore && paragraph.PlainText.Length == 0);
     }
 
     [Fact]
@@ -174,6 +205,7 @@ public sealed class FreeWRibbonParityTests
                 "freew.endnote",
                 "freew.footnote-endnote-options",
                 "freew.citation",
+                "freew.manage-sources",
                 "freew.citation-style",
                 "freew.bibliography",
                 "freew.caption",
@@ -182,10 +214,136 @@ public sealed class FreeWRibbonParityTests
                 "freew.cross-reference",
                 "freew.index-mark",
                 "freew.index-insert",
+                "freew.index-refresh",
                 "freew.mark-citation",
                 "freew.table-of-authorities",
                 "freew.table-of-authorities-refresh"
             });
+    }
+
+    [StaFact]
+    public void ReferencesIndex_ExposesBackedWordStyleUpdateIndex()
+    {
+        var definition = FreeWRibbon.Build();
+        var index = definition.FindTab("references")!.FindGroup("index");
+        var editor = new DocumentView();
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        CommandIds(index!)
+            .Should()
+            .Equal("freew.index-mark", "freew.index-insert", "freew.index-refresh");
+        Labels(index!)
+            .Should()
+            .Equal("Mark Entry", "Insert Index", "Update Index");
+        registry.TryGet("freew.index-refresh", out var refresh).Should().BeTrue("Word exposes Update Index from References > Index");
+
+        editor.Model.Blocks.Clear();
+        editor.Model.Blocks.Add(new Paragraph("Body"));
+        editor.Model.IndexEntries.Add(new IndexEntry("Beta"));
+        editor.Model.IndexEntries.Add(new IndexEntry("Alpha"));
+        editor.InsertIndex();
+
+        editor.Model.IndexEntries.Add(new IndexEntry("Gamma"));
+        refresh!.Execute(RibbonCommandContext.Empty);
+
+        editor.Model.Blocks.OfType<Paragraph>()
+            .Where(DocumentIndex.IsIndexParagraph)
+            .Select(paragraph => paragraph.PlainText)
+            .Should()
+            .Equal("Index", "Alpha", "Beta", "Gamma");
+        editor.Model.Blocks.OfType<Paragraph>()
+            .Count(paragraph => paragraph.StyleId == DocumentIndex.HeadingStyleId)
+            .Should()
+            .Be(1);
+    }
+
+    [StaFact]
+    public void ReferencesCitations_ExposesBackedWordStyleManageSources()
+    {
+        var definition = FreeWRibbon.Build();
+        var citations = definition.FindTab("references")!.FindGroup("citations");
+        var editor = new DocumentView();
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        CommandIds(citations!)
+            .Should()
+            .Equal("freew.citation", "freew.manage-sources", "freew.citation-style", "freew.bibliography");
+        Labels(citations!)
+            .Should()
+            .Equal("Insert Citation", "Manage Sources", "Style", "Bibliography");
+        registry.TryGet("freew.manage-sources", out _)
+            .Should()
+            .BeTrue("Word exposes Manage Sources in References > Citations & Bibliography");
+
+        editor.Model.Sources.Add(new Source
+        {
+            Tag = "Old",
+            Author = "Old Author",
+            Title = "Old Title",
+            Year = "1999",
+            Publisher = "Old Publisher"
+        });
+
+        var replacement = new[]
+        {
+            new Source
+            {
+                Tag = "New",
+                Author = "New Author",
+                Title = "New Title",
+                Year = "2026",
+                Publisher = "New Publisher"
+            }
+        };
+
+        editor.ReplaceSources(replacement);
+
+        editor.Model.Sources.Should().ContainSingle().Which.Tag.Should().Be("New");
+        editor.Commands.Undo().Should().BeTrue();
+        editor.Model.Sources.Should().ContainSingle().Which.Tag.Should().Be("Old");
+    }
+
+    [StaFact]
+    public void ReferencesTableOfContents_AddTextExposesBackedHeadingLevelCommands()
+    {
+        var definition = FreeWRibbon.Build();
+        var tocGroup = definition.FindTab("references")!.FindGroup("table-of-contents");
+        var addText = tocGroup!.Controls
+            .OfType<RibbonDropdown>()
+            .Single(control => control.CommandId.Value == "freew.toc-add-text");
+        var editor = new DocumentView();
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        CommandIds(tocGroup)
+            .Should()
+            .ContainInOrder("freew.toc", "freew.toc-add-text", "freew.toc-refresh");
+        addText.Menu.Items
+            .Where(item => item.Kind == RibbonMenuItemKind.Command)
+            .Select(item => (item.CommandId!.Value, item.Header))
+            .Should()
+            .Equal(
+                ("freew.toc-addtext-none", "Do Not Show in Table of Contents"),
+                ("freew.toc-addtext-level1", "Level 1"),
+                ("freew.toc-addtext-level2", "Level 2"),
+                ("freew.toc-addtext-level3", "Level 3"));
+
+        foreach (var commandId in addText.Menu.Items
+            .Where(item => item.Kind == RibbonMenuItemKind.Command)
+            .Select(item => item.CommandId!.Value)
+            .Append(addText.CommandId.Value))
+        {
+            registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must execute from References > Table of Contents > Add Text");
+        }
+
+        editor.Model.Blocks.Clear();
+        editor.Model.Blocks.Add(new Paragraph("Candidate") { StyleId = "Normal" });
+        registry.TryGet("freew.toc-addtext-level2", out var level2).Should().BeTrue();
+        level2!.Execute(RibbonCommandContext.Empty);
+        ((Paragraph)editor.Model.Blocks[0]).StyleId.Should().Be("Heading2");
+
+        registry.TryGet("freew.toc-addtext-none", out var none).Should().BeTrue();
+        none!.Execute(RibbonCommandContext.Empty);
+        ((Paragraph)editor.Model.Blocks[0]).StyleId.Should().Be("Normal");
     }
 
     [StaFact]
@@ -450,6 +608,43 @@ public sealed class FreeWRibbonParityTests
     }
 
     [StaFact]
+    public void LayoutParagraph_ExposesBackedWordStyleParagraphCommands()
+    {
+        var definition = FreeWRibbon.Build();
+        var layout = definition.FindTab("layout");
+        var paragraph = layout!.FindGroup("paragraph");
+        var editor = new DocumentView();
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        layout.Groups.Select(group => group.Id)
+            .Should()
+            .ContainInOrder("page-setup", "paragraph", "preview");
+        CommandIds(paragraph!)
+            .Should()
+            .Equal(
+                "freew.indent-decrease",
+                "freew.indent-increase",
+                "freew.line-spacing",
+                "freew.space-before-toggle",
+                "freew.space-after-toggle",
+                "freew.paragraph-dialog",
+                "freew.tabs-dialog");
+        Labels(paragraph!)
+            .Should()
+            .Equal(
+                "Decrease Indent",
+                "Increase Indent",
+                "Line and Paragraph Spacing",
+                "Add Space Before Paragraph",
+                "Add Space After Paragraph",
+                "Paragraph Settings",
+                "Tabs");
+
+        foreach (var commandId in CommandIds(paragraph!))
+            registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must execute from Layout > Paragraph");
+    }
+
+    [StaFact]
     public void LayoutPageSetup_LineNumbersDropdownExposesBackedWordModeCommands()
     {
         var definition = FreeWRibbon.Build();
@@ -482,6 +677,58 @@ public sealed class FreeWRibbonParityTests
         editor.Model.Page.LineNumberMode.Should().Be(LineNumberMode.RestartEachPage);
         none!.Execute(RibbonCommandContext.Empty);
         editor.Model.Page.LineNumberMode.Should().Be(LineNumberMode.None);
+    }
+
+    [StaFact]
+    public void LayoutPageSetup_ColumnsDropdownExposesBackedWordPresetCommands()
+    {
+        var definition = FreeWRibbon.Build();
+        var pageSetup = definition.FindTab("layout")!.FindGroup("page-setup");
+        var columns = pageSetup!.Controls
+            .OfType<RibbonDropdown>()
+            .Single(control => control.CommandId.Value == "freew.columns");
+        var editor = new DocumentView();
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        columns.Menu.Items
+            .Where(item => item.Kind == RibbonMenuItemKind.Command)
+            .Select(item => (item.CommandId!.Value, item.Header))
+            .Should()
+            .Equal(
+                ("freew.columns-one", "One"),
+                ("freew.columns-two", "Two"),
+                ("freew.columns-three", "Three"),
+                ("freew.columns-left", "Left"),
+                ("freew.columns-right", "Right"),
+                ("freew.columns-more", "More Columns..."));
+
+        foreach (var commandId in columns.Menu.Items
+                     .Where(item => item.Kind == RibbonMenuItemKind.Command)
+                     .Select(item => item.CommandId!.Value)
+                     .Append("freew.columns"))
+            registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must execute from Layout > Columns");
+
+        registry.TryGet("freew.columns-three", out var three).Should().BeTrue();
+        three!.Execute(RibbonCommandContext.Empty);
+        editor.Model.Page.ColumnCount.Should().Be(3);
+        editor.Model.Page.ColumnWidthsPt.Should().BeNull("equal-width presets clear explicit Left/Right widths");
+
+        registry.TryGet("freew.columns-left", out var left).Should().BeTrue();
+        left!.Execute(RibbonCommandContext.Empty);
+        editor.Model.Page.ColumnCount.Should().Be(2);
+        editor.Model.Page.ColumnWidthsPt.Should().NotBeNull();
+        editor.Model.Page.ColumnWidthsPt![0].Should().BeLessThan(editor.Model.Page.ColumnWidthsPt[1]);
+
+        registry.TryGet("freew.columns-right", out var right).Should().BeTrue();
+        right!.Execute(RibbonCommandContext.Empty);
+        editor.Model.Page.ColumnCount.Should().Be(2);
+        editor.Model.Page.ColumnWidthsPt.Should().NotBeNull();
+        editor.Model.Page.ColumnWidthsPt![0].Should().BeGreaterThan(editor.Model.Page.ColumnWidthsPt[1]);
+
+        registry.TryGet("freew.columns-one", out var one).Should().BeTrue();
+        one!.Execute(RibbonCommandContext.Empty);
+        editor.Model.Page.ColumnCount.Should().Be(1);
+        editor.Model.Page.ColumnWidthsPt.Should().BeNull();
     }
 
     [StaFact]
@@ -577,6 +824,41 @@ public sealed class FreeWRibbonParityTests
 
         registry.TryGet("freew.ruler", out var command).Should().BeTrue("Word exposes View > Show > Ruler");
         command.Should().BeAssignableTo<IRibbonStatefulCommand>();
+    }
+
+    [StaFact]
+    public void ViewZoom_ExposesBackedWordStyleQuickControls()
+    {
+        var definition = FreeWRibbon.Build();
+        var zoom = definition.FindTab("view")!.FindGroup("zoom");
+        var editor = new DocumentView();
+        var registry = FreeWRibbonCommands.Build(
+            editor,
+            new RibbonStateStore(),
+            onPrintPreview: null,
+            onToggleNavPane: null,
+            isNavPaneVisible: null,
+            onToggleReadMode: null,
+            isReadModeActive: null,
+            onTogglePrintLayout: null,
+            isPrintLayoutActive: null,
+            onToggleOutlineView: null,
+            isOutlineViewActive: null,
+            onZoomDialog: () => { },
+            onZoom100: () => { },
+            onZoomOnePage: () => { },
+            onZoomPageWidth: () => { });
+
+        zoom.Should().NotBeNull();
+        CommandIds(zoom!)
+            .Should()
+            .Equal("freew.zoom-dialog", "freew.zoom-100", "freew.zoom-one-page", "freew.zoom-page-width");
+        Labels(zoom!)
+            .Should()
+            .Equal("Zoom", "100%", "One Page", "Page Width");
+
+        foreach (var commandId in CommandIds(zoom!))
+            registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must execute from View > Zoom");
     }
 
     [StaFact]

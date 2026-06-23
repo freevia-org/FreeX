@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -1411,9 +1412,7 @@ internal static class Program
         foreach (var r in rows.OrderByDescending(r => r.DiffPercent))
         {
             var diffStr = r.DiffPercent >= 0 ? $"{r.DiffPercent:F1}%" : "  N/A";
-            var status = r.DimensionMismatch
-                ? (options.FailOnDimensionMismatch ? "DIM_FAIL" : "DIM_WARN")
-                : r.Status == "OK" && r.DiffPercent > options.ThresholdPercent ? "FAIL" : r.Status;
+            var status = EffectiveStatus(r, options);
             sb.AppendLine($"{r.NN.ToString("D2"),-4}  {diffStr,7}  {status,-8}  {FormatDimensions(r),-34}  {r.SheetName}");
             if (r.ExactPixelMetrics is { } metrics)
                 sb.AppendLine($"       Exact pixels: mean={metrics.MeanDiffPercent:F3}% changed>{metrics.PixelTolerance}={metrics.ChangedPixelPercent:F2}% maxDelta={metrics.MaxChannelDelta}");
@@ -1427,7 +1426,83 @@ internal static class Program
 
         var reportPath = Path.Combine(freexOutputDir, "REPORT.txt");
         File.WriteAllText(reportPath, sb.ToString(), Encoding.UTF8);
+        var metricsPath = WriteMetricsJson(rows, results, freexOutputDir, options);
+        Console.WriteLine($"  Metrics JSON: {Path.GetFileName(metricsPath)}");
         return reportPath;
+    }
+
+    private static string WriteMetricsJson(
+        IReadOnlyList<DiffRow> rows,
+        IReadOnlyList<SheetResult> results,
+        string freexOutputDir,
+        GridImageCompareOptions options)
+    {
+        var resultByOrdinal = results.ToDictionary(r => r.NN);
+        var rowsWithDiff = rows.Where(r => r.DiffPercent >= 0 && r.ExcelPng is not null).ToArray();
+        var path = Path.Combine(freexOutputDir, "metrics.json");
+
+        using var stream = File.Create(path);
+        using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true });
+
+        writer.WriteStartObject();
+        writer.WriteNumber("schemaVersion", 1);
+        writer.WriteString("generatedAt", DateTimeOffset.Now.ToString("O", CultureInfo.InvariantCulture));
+
+        writer.WriteStartObject("options");
+        writer.WriteNumber("thresholdPercent", options.ThresholdPercent);
+        writer.WriteBoolean("failOnDimensionMismatch", options.FailOnDimensionMismatch);
+        writer.WriteNumber("pixelTolerance", options.PixelTolerance);
+        WriteNullableNumber(writer, "strictPixelThresholdPercent", options.StrictPixelThresholdPercent);
+        writer.WriteEndObject();
+
+        writer.WriteStartObject("summary");
+        writer.WriteNumber("rows", rows.Count);
+        writer.WriteNumber("comparedRows", rowsWithDiff.Length);
+        writer.WriteNumber("failedRows", rows.Count(r => IsEffectiveFailure(r, options)));
+        writer.WriteNumber("dimensionMismatches", rows.Count(r => r.DimensionMismatch));
+        WriteNullableNumber(writer, "maxMeanDiffPercent", rowsWithDiff.Length == 0 ? null : rowsWithDiff.Max(r => r.DiffPercent));
+        WriteNullableNumber(writer, "maxExactMeanDiffPercent", rowsWithDiff.Select(r => r.ExactPixelMetrics?.MeanDiffPercent).Where(v => v.HasValue).DefaultIfEmpty().Max());
+        WriteNullableNumber(writer, "maxChangedPixelPercent", rowsWithDiff.Select(r => r.ExactPixelMetrics?.ChangedPixelPercent).Where(v => v.HasValue).DefaultIfEmpty().Max());
+        writer.WriteEndObject();
+
+        writer.WriteStartArray("rows");
+        foreach (var row in rows.OrderBy(r => r.NN))
+        {
+            resultByOrdinal.TryGetValue(row.NN, out var source);
+
+            writer.WriteStartObject();
+            writer.WriteNumber("nn", row.NN);
+            writer.WriteString("sheetName", row.SheetName);
+            writer.WriteString("status", row.Status);
+            writer.WriteString("effectiveStatus", EffectiveStatus(row, options));
+            WriteNullableNumber(writer, "meanDiffPercent", row.DiffPercent >= 0 ? row.DiffPercent : null);
+            writer.WriteString("excelPng", row.ExcelPng is null ? null : Path.GetFileName(row.ExcelPng));
+            writer.WriteString("freeXPng", row.FreeXPng is null ? null : Path.GetFileName(row.FreeXPng));
+            WriteDimensions(writer, "excelDimensions", row.ExcelDimensions);
+            WriteDimensions(writer, "freeXDimensions", row.FreeXDimensions);
+            writer.WriteBoolean("dimensionMismatch", row.DimensionMismatch);
+            if (row.ExactPixelMetrics is { } metrics)
+            {
+                writer.WriteStartObject("exactPixelMetrics");
+                writer.WriteNumber("meanDiffPercent", metrics.MeanDiffPercent);
+                writer.WriteNumber("changedPixelPercent", metrics.ChangedPixelPercent);
+                writer.WriteNumber("maxChannelDelta", metrics.MaxChannelDelta);
+                writer.WriteNumber("pixelTolerance", metrics.PixelTolerance);
+                writer.WriteEndObject();
+            }
+            else
+            {
+                writer.WriteNull("exactPixelMetrics");
+            }
+
+            writer.WriteString("error", row.Error);
+            writer.WriteString("pivotDropdowns", source?.PivotDropdownSummary);
+            writer.WriteEndObject();
+        }
+        writer.WriteEndArray();
+
+        writer.WriteEndObject();
+        return path;
     }
 
     // -----------------------------------------------------------------------
@@ -1671,6 +1746,42 @@ internal static class Program
             return "N/A";
 
         return $"Excel {row.ExcelDimensions?.ToString() ?? "N/A"}; FreeX {row.FreeXDimensions?.ToString() ?? "N/A"}";
+    }
+
+    private static string EffectiveStatus(DiffRow row, GridImageCompareOptions options)
+    {
+        if (row.DimensionMismatch)
+            return options.FailOnDimensionMismatch ? "DIM_FAIL" : "DIM_WARN";
+
+        return row.Status == "OK" && row.DiffPercent > options.ThresholdPercent
+            ? "FAIL"
+            : row.Status;
+    }
+
+    private static bool IsEffectiveFailure(DiffRow row, GridImageCompareOptions options) =>
+        EffectiveStatus(row, options) is "FAIL" or "DIM_FAIL" or "PIX_FAIL" or "ERROR";
+
+    private static void WriteNullableNumber(Utf8JsonWriter writer, string propertyName, double? value)
+    {
+        if (value.HasValue)
+            writer.WriteNumber(propertyName, value.Value);
+        else
+            writer.WriteNull(propertyName);
+    }
+
+    private static void WriteDimensions(Utf8JsonWriter writer, string propertyName, PngDimensions? dimensions)
+    {
+        if (dimensions is not { } value)
+        {
+            writer.WriteNull(propertyName);
+            return;
+        }
+
+        writer.WriteStartObject(propertyName);
+        writer.WriteNumber("width", value.Width);
+        writer.WriteNumber("height", value.Height);
+        writer.WriteString("text", value.ToString());
+        writer.WriteEndObject();
     }
 
     private static string DescribePivotDropdownTargets(Workbook workbook, Sheet sheet)

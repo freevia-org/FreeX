@@ -2,7 +2,7 @@ namespace FreeW.Core.Model;
 
 /// <summary>
 /// Pure, view-independent document operations for the Insert &gt; Pages group: building a simple cover
-/// page, a horizontal rule paragraph, and a page-break paragraph. Each returns plain model blocks so
+/// page, a blank page, a horizontal rule paragraph, and a page-break paragraph. Each returns plain model blocks so
 /// the operations are testable without WPF; the editor wires them to the undo/redo bus and re-renders.
 /// </summary>
 public static class DocumentOps
@@ -55,6 +55,17 @@ public static class DocumentOps
         for (var i = 0; i < blocks.Count; i++)
             document.Blocks.Insert(i, blocks[i]);
     }
+
+    /// <summary>
+    /// Builds the paragraphs needed to insert a whole blank page at the caret. The first paragraph starts
+    /// the blank page; the second starts the following page, so existing downstream content is pushed after
+    /// the inserted blank page.
+    /// </summary>
+    public static IReadOnlyList<Block> BuildBlankPage() =>
+    [
+        CreatePageBreak(),
+        CreatePageBreak()
+    ];
 
     /// <summary>
     /// Builds a horizontal-rule paragraph: an empty paragraph whose formatting carries a bottom-only
