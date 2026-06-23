@@ -635,6 +635,52 @@ public sealed partial class PivotTableRefreshServiceTests
     }
 
     [Fact]
+    public void ApplyLoadedPivotStyles_AppliesPivotFontLayerOverExistingLoadedFills()
+    {
+        var workbook = new Workbook("LoadedPivotFontLayerStyleTest");
+        var sheet = workbook.AddSheet("Data");
+        var loadedHeaderFillStyle = workbook.RegisterStyle(new CellStyle
+        {
+            FontName = "Calibri",
+            FontSize = 10,
+            FontScheme = CellFontScheme.Minor,
+            FontThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Dark1),
+            FillColor = new CellColor(21, 96, 130)
+        });
+        sheet.SetCell(Addr(sheet, "E2"), new Cell { Value = new TextValue("Row Labels"), StyleId = loadedHeaderFillStyle });
+        sheet.SetCell(Addr(sheet, "F2"), new Cell { Value = new TextValue("Sum of Sales"), StyleId = loadedHeaderFillStyle });
+        sheet.SetCell(Addr(sheet, "E3"), new TextValue("Hardware"));
+        sheet.SetCell(Addr(sheet, "F3"), new NumberValue(1250));
+        sheet.SetCell(Addr(sheet, "E4"), new TextValue("Grand Total"));
+        sheet.SetCell(Addr(sheet, "F4"), new NumberValue(1250));
+        sheet.PivotTables.Add(new PivotTableModel
+        {
+            Name = "NativePivotLoadedHeaderFill",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "B2"),
+            TargetRange = Range(sheet, "E2", "F4"),
+            LastRenderedRange = Range(sheet, "E2", "F4"),
+            StyleName = "PivotStyleMedium9"
+        });
+
+        PivotTableRefreshService.ApplyLoadedPivotStyles(workbook);
+
+        var rowHeaderStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "E2"))!.StyleId);
+        rowHeaderStyle.FillColor.Should().Be(new CellColor(21, 96, 130));
+        rowHeaderStyle.Bold.Should().BeTrue();
+        rowHeaderStyle.FontColor.Should().Be(CellColor.White);
+        rowHeaderStyle.FontThemeColor.Should().BeNull();
+        AssertLoadedPivotFontIdentity(rowHeaderStyle);
+
+        var columnHeaderStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "F2"))!.StyleId);
+        columnHeaderStyle.FillColor.Should().Be(new CellColor(21, 96, 130));
+        columnHeaderStyle.Bold.Should().BeTrue();
+        columnHeaderStyle.FontColor.Should().Be(CellColor.White);
+        columnHeaderStyle.FontThemeColor.Should().BeNull();
+        AssertLoadedPivotFontIdentity(columnHeaderStyle);
+    }
+
+    [Fact]
     public void ApplyLoadedPivotStyles_UsesEachSharedCachePivotOwnStyle()
     {
         var workbook = new Workbook("LoadedPivotSharedCacheStyleTest");

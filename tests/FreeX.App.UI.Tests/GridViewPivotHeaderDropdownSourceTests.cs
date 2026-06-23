@@ -1,5 +1,8 @@
 using System.IO;
+using System.Windows;
 using FluentAssertions;
+using FreeX.App.UI;
+using FreeX.Core.Model;
 
 namespace FreeX.App.UI.Tests;
 
@@ -21,10 +24,25 @@ public sealed class GridViewPivotHeaderDropdownSourceTests
         renderDispatch.Should().Contain("RenderPivotHeaderDropdownButtons(dc);");
         renderDispatch.Should().Contain("RenderPivotRowLabelAdornments(dc);");
         rendering.Should().Contain("private void RenderPivotHeaderDropdownButtons(DrawingContext dc)");
-        rendering.Should().Contain("DrawAutoFilterGlyph(dc, rect, button.IsActive)");
+        rendering.Should().Contain("DrawPivotHeaderDropdownGlyph(dc, rect, button.IsActive)");
         rendering.Should().Contain("private void RenderPivotRowLabelAdornments(DrawingContext dc)");
         rendering.Should().Contain("DrawPivotExpandCollapseButton(dc, rect, adornment.IsExpanded);");
         rendering.Should().Contain("private bool TryHitTestPivotHeaderDropdownButton(Point pos, out CellAddress headerCell)");
+    }
+
+    [Fact]
+    public void PivotHeaderDropdownButtonRect_UsesExcelSizedPivotChromeWithoutChangingAutoFilterChrome()
+    {
+        var row = new RowMetric(4, Height: 20, TopOffset: 60);
+        var col = new ColMetric(2, Width: 72, LeftOffset: 96);
+
+        var rect = GridView.GetPivotHeaderDropdownButtonRect(
+            row,
+            col,
+            rowHeaderWidth: 40,
+            columnHeaderHeight: 24);
+
+        rect.Should().Be(new Rect(190, 85.5, 17, 17));
     }
 
     [Fact]
