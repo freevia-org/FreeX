@@ -95,6 +95,9 @@ public sealed partial class MainWindow
                 Content = member,
                 Tag = member,
                 IsChecked = currentSet is null || currentSet.Contains(member),
+                FontSize = 12,
+                FontFamily = FormulaBarFontFamily,
+                MinHeight = 24,
             };
             checkBoxes.Add(box);
             listPanel.Children.Add(box);
@@ -104,6 +107,9 @@ public sealed partial class MainWindow
         {
             Content = UiText.Get("PivotLoc_SelectAll"),
             IsChecked = checkBoxes.All(box => box.IsChecked == true),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            MinHeight = 24,
         };
         selectAll.IsCheckedChanged += (_, _) =>
         {
@@ -116,6 +122,8 @@ public sealed partial class MainWindow
         content.Children.Add(new TextBlock
         {
             Text = UiText.Format("PivotFilter_ItemsHeading", caption),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
             FontWeight = FontWeight.SemiBold,
             Foreground = HeaderForeground,
         });
@@ -130,11 +138,11 @@ public sealed partial class MainWindow
         {
             Title = UiText.Get("PivotFilter_ItemsTitle"),
             Width = 300,
-            Height = 250,
+            Height = 350,
             MinWidth = 300,
             MinHeight = 250,
             MaxWidth = 300,
-            MaxHeight = 250,
+            MaxHeight = 350,
             Background = Brushes.White,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
@@ -142,8 +150,10 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(dialog, "PivotItemFilterDialog");
 
         var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 80 };
+        ApplyPivotButtonChrome(ok, 80, isDefault: true);
         AutomationProperties.SetAutomationId(ok, "PivotItemFilterOkButton");
         var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 80 };
+        ApplyPivotButtonChrome(cancel, 80);
         AutomationProperties.SetAutomationId(cancel, "PivotItemFilterCancelButton");
         cancel.Click += (_, _) => dialog.Close(false);
         ok.Click += (_, _) => dialog.Close(true);
@@ -234,13 +244,16 @@ public sealed partial class MainWindow
         foreach (var (label, _) in PivotFieldFilterPlanner.LabelFilterKinds)
             kindBox.Items.Add(label);
         kindBox.SelectedIndex = PivotFieldFilterPlanner.FindLabelKindIndex(existing?.Kind ?? PivotLabelFilterKind.Equals);
+        ApplyPivotComboBoxChrome(kindBox);
         AutomationProperties.SetAutomationId(kindBox, "PivotLabelFilterKindBox");
         AutomationProperties.SetName(kindBox, "Label filter kind");
 
         var value1 = new TextBox { MinWidth = 200, Text = existing?.Value ?? string.Empty, PlaceholderText = UiText.Get("PivotLoc_ValuePlaceholder") };
+        ApplyPivotTextBoxChrome(value1);
         AutomationProperties.SetAutomationId(value1, "PivotLabelFilterValueBox");
         AutomationProperties.SetName(value1, "Value");
         var value2 = new TextBox { MinWidth = 200, Text = existing?.Value2 ?? string.Empty, PlaceholderText = UiText.Get("PivotLoc_SecondValuePlaceholder") };
+        ApplyPivotTextBoxChrome(value2);
         AutomationProperties.SetAutomationId(value2, "PivotLabelFilterValue2Box");
         AutomationProperties.SetName(value2, "Second value");
 
@@ -256,18 +269,23 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Format("PivotFilter_LabelTitle", target.FieldCaption),
-            Width = 320,
-            SizeToContent = SizeToContent.Height,
+            Width = 380,
+            Height = 260,
+            MinWidth = 380,
+            MinHeight = 260,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
         };
         AutomationProperties.SetAutomationId(dialog, "PivotLabelFilterDialog");
 
         var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 80 };
+        ApplyPivotButtonChrome(ok, 80, isDefault: true);
         AutomationProperties.SetAutomationId(ok, "PivotLabelFilterOkButton");
         var clear = new Button { Content = UiText.Get("Common_Clear"), MinWidth = 80, IsEnabled = existing is not null };
+        ApplyPivotButtonChrome(clear, 80);
         AutomationProperties.SetAutomationId(clear, "PivotLabelFilterClearButton");
         var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 80 };
+        ApplyPivotButtonChrome(cancel, 80);
         AutomationProperties.SetAutomationId(cancel, "PivotLabelFilterCancelButton");
         cancel.Click += (_, _) => dialog.Close(0);
         ok.Click += (_, _) =>
@@ -288,6 +306,8 @@ public sealed partial class MainWindow
         content.Children.Add(new TextBlock
         {
             Text = UiText.Get("PivotFilter_LabelHeading"),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
             Foreground = HeaderForeground,
         });
         content.Children.Add(kindBox);
@@ -349,6 +369,7 @@ public sealed partial class MainWindow
         foreach (var (label, _) in PivotFieldFilterPlanner.ValueFilterKinds)
             kindBox.Items.Add(label);
         kindBox.SelectedIndex = PivotFieldFilterPlanner.FindValueKindIndex(existing?.Kind ?? PivotValueFilterKind.GreaterThan);
+        ApplyPivotComboBoxChrome(kindBox);
         AutomationProperties.SetAutomationId(kindBox, "PivotValueFilterKindBox");
         AutomationProperties.SetName(kindBox, "Value filter kind");
 
@@ -356,6 +377,7 @@ public sealed partial class MainWindow
         for (var index = 0; index < pivot.DataFields.Count; index++)
             dataFieldBox.Items.Add(pivot.DataFields[index].Name);
         dataFieldBox.SelectedIndex = PivotFieldFilterPlanner.InitialDataFieldIndex(existing, pivot.DataFields.Count);
+        ApplyPivotComboBoxChrome(dataFieldBox);
         AutomationProperties.SetAutomationId(dataFieldBox, "PivotValueFilterDataFieldBox");
         AutomationProperties.SetName(dataFieldBox, "Summarize by");
 
@@ -365,6 +387,7 @@ public sealed partial class MainWindow
             PlaceholderText = UiText.Get("PivotLoc_CountOrValuePlaceholder"),
             Text = PivotFieldFilterPlanner.PrimaryInputText(existing),
         };
+        ApplyPivotTextBoxChrome(primary);
         AutomationProperties.SetAutomationId(primary, "PivotValueFilterPrimaryBox");
         AutomationProperties.SetName(primary, "Count or value");
         var secondary = new TextBox
@@ -373,6 +396,7 @@ public sealed partial class MainWindow
             PlaceholderText = UiText.Get("PivotLoc_SecondValuePlaceholder"),
             Text = PivotFieldFilterPlanner.SecondaryInputText(existing),
         };
+        ApplyPivotTextBoxChrome(secondary);
         AutomationProperties.SetAutomationId(secondary, "PivotValueFilterSecondaryBox");
         AutomationProperties.SetName(secondary, "Second value");
 
@@ -389,18 +413,23 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Format("PivotFilter_ValueTitle", target.FieldCaption),
-            Width = 320,
-            SizeToContent = SizeToContent.Height,
+            Width = 380,
+            Height = 260,
+            MinWidth = 380,
+            MinHeight = 260,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
         };
         AutomationProperties.SetAutomationId(dialog, "PivotValueFilterDialog");
 
         var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 80 };
+        ApplyPivotButtonChrome(ok, 80, isDefault: true);
         AutomationProperties.SetAutomationId(ok, "PivotValueFilterOkButton");
         var clear = new Button { Content = UiText.Get("Common_Clear"), MinWidth = 80, IsEnabled = existing is not null };
+        ApplyPivotButtonChrome(clear, 80);
         AutomationProperties.SetAutomationId(clear, "PivotValueFilterClearButton");
         var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 80 };
+        ApplyPivotButtonChrome(cancel, 80);
         AutomationProperties.SetAutomationId(cancel, "PivotValueFilterCancelButton");
         cancel.Click += (_, _) => dialog.Close(0);
         ok.Click += (_, _) =>
@@ -424,9 +453,9 @@ public sealed partial class MainWindow
         clear.Click += (_, _) => dialog.Close(2);
 
         var content = new StackPanel { Spacing = 8, Margin = new Thickness(12) };
-        content.Children.Add(new TextBlock { Text = UiText.Get("PivotFilter_SummarizeBy"), Foreground = HeaderForeground });
+        content.Children.Add(new TextBlock { Text = UiText.Get("PivotFilter_SummarizeBy"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
         content.Children.Add(dataFieldBox);
-        content.Children.Add(new TextBlock { Text = UiText.Get("PivotFilter_WhereValueIs"), Foreground = HeaderForeground });
+        content.Children.Add(new TextBlock { Text = UiText.Get("PivotFilter_WhereValueIs"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
         content.Children.Add(kindBox);
         content.Children.Add(primary);
         content.Children.Add(secondary);

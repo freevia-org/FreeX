@@ -69,6 +69,7 @@ public sealed partial class MainWindow
         var field = pivot.DataFields[dataFieldIndex.Value];
 
         var nameBox = new TextBox { MinWidth = 240, Text = field.Name };
+        ApplyPivotTextBoxChrome(nameBox);
         AutomationProperties.SetAutomationId(nameBox, "PivotValueFieldSettingsNameBox");
         AutomationProperties.SetName(nameBox, "Custom name");
 
@@ -76,6 +77,7 @@ public sealed partial class MainWindow
         foreach (var (label, _) in PivotValueFieldPlanner.SummaryFunctions)
             summaryBox.Items.Add(label);
         summaryBox.SelectedIndex = PivotValueFieldPlanner.FindSummaryFunctionIndex(field.SummaryFunction);
+        ApplyPivotComboBoxChrome(summaryBox);
         AutomationProperties.SetAutomationId(summaryBox, "PivotValueFieldSettingsSummaryBox");
         AutomationProperties.SetName(summaryBox, "Summarize by");
 
@@ -83,6 +85,7 @@ public sealed partial class MainWindow
         foreach (var (label, _) in PivotValueFieldPlanner.ShowValuesAsOptions)
             showValuesAsBox.Items.Add(label);
         showValuesAsBox.SelectedIndex = PivotValueFieldPlanner.FindShowValuesAsIndex(field.ShowValuesAs);
+        ApplyPivotComboBoxChrome(showValuesAsBox);
         AutomationProperties.SetAutomationId(showValuesAsBox, "PivotValueFieldSettingsShowValuesAsBox");
         AutomationProperties.SetName(showValuesAsBox, "Show values as");
 
@@ -91,17 +94,19 @@ public sealed partial class MainWindow
         foreach (var header in headers)
             baseFieldBox.Items.Add(header);
         baseFieldBox.SelectedIndex = PivotValueFieldPlanner.FindBaseFieldIndex(field.BaseFieldIndex, headers.Count);
+        ApplyPivotComboBoxChrome(baseFieldBox);
         AutomationProperties.SetAutomationId(baseFieldBox, "PivotValueFieldSettingsBaseFieldBox");
         AutomationProperties.SetName(baseFieldBox, "Base field");
 
         var baseItemBox = new TextBox { MinWidth = 240, Text = field.BaseItem ?? string.Empty, PlaceholderText = UiText.Get("PivotLoc_BaseItemPlaceholder") };
+        ApplyPivotTextBoxChrome(baseItemBox);
         AutomationProperties.SetAutomationId(baseItemBox, "PivotValueFieldSettingsBaseItemBox");
         AutomationProperties.SetName(baseItemBox, "Base item");
 
         var basePanel = new StackPanel { Spacing = 8 };
-        basePanel.Children.Add(new TextBlock { Text = UiText.Get("PivotValueField_BaseField"), Foreground = HeaderForeground });
+        basePanel.Children.Add(new TextBlock { Text = UiText.Get("PivotValueField_BaseField"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
         basePanel.Children.Add(baseFieldBox);
-        basePanel.Children.Add(new TextBlock { Text = UiText.Get("PivotValueField_BaseItem"), Foreground = HeaderForeground });
+        basePanel.Children.Add(new TextBlock { Text = UiText.Get("PivotValueField_BaseItem"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
         basePanel.Children.Add(baseItemBox);
 
         void SyncBaseFieldState()
@@ -116,12 +121,12 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Format("PivotValueField_Title", target.FieldCaption),
-            Width = 340,
-            Height = 250,
-            MinWidth = 340,
-            MinHeight = 250,
-            MaxWidth = 340,
-            MaxHeight = 250,
+            Width = 430,
+            Height = 430,
+            MinWidth = 430,
+            MinHeight = 430,
+            MaxWidth = 430,
+            MaxHeight = 430,
             Background = Brushes.White,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
@@ -129,8 +134,10 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(dialog, "PivotValueFieldSettingsDialog");
 
         var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 80 };
+        ApplyPivotButtonChrome(ok, 80, isDefault: true);
         AutomationProperties.SetAutomationId(ok, "PivotValueFieldSettingsOkButton");
         var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 80 };
+        ApplyPivotButtonChrome(cancel, 80);
         AutomationProperties.SetAutomationId(cancel, "PivotValueFieldSettingsCancelButton");
         cancel.Click += (_, _) => dialog.Close(false);
         ok.Click += (_, _) =>
@@ -148,11 +155,11 @@ public sealed partial class MainWindow
         };
 
         var content = new StackPanel { Spacing = 8, Margin = new Thickness(12) };
-        content.Children.Add(new TextBlock { Text = UiText.Get("PivotValueField_CustomName"), Foreground = HeaderForeground });
+        content.Children.Add(new TextBlock { Text = UiText.Get("PivotValueField_CustomName"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
         content.Children.Add(nameBox);
-        content.Children.Add(new TextBlock { Text = UiText.Get("PivotValueField_SummarizeBy"), Foreground = HeaderForeground });
+        content.Children.Add(new TextBlock { Text = UiText.Get("PivotValueField_SummarizeBy"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
         content.Children.Add(summaryBox);
-        content.Children.Add(new TextBlock { Text = UiText.Get("PivotValueField_ShowValuesAs"), Foreground = HeaderForeground });
+        content.Children.Add(new TextBlock { Text = UiText.Get("PivotValueField_ShowValuesAs"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
         content.Children.Add(showValuesAsBox);
         content.Children.Add(basePanel);
         content.Children.Add(new StackPanel
@@ -203,10 +210,10 @@ public sealed partial class MainWindow
         var currentSort = pivot.Sorts.FirstOrDefault(sort => sort.FieldIndex == target.SourceFieldIndex);
         var dataFieldCount = pivot.DataFields.Count;
 
-        var labelAscending = new RadioButton { Content = UiText.Get("PivotSort_AscendingByLabels"), GroupName = "PivotSortOptions" };
-        var labelDescending = new RadioButton { Content = UiText.Get("PivotSort_DescendingByLabels"), GroupName = "PivotSortOptions" };
-        var valueAscending = new RadioButton { Content = UiText.Get("PivotSort_AscendingByValues"), GroupName = "PivotSortOptions" };
-        var valueDescending = new RadioButton { Content = UiText.Get("PivotSort_DescendingByValues"), GroupName = "PivotSortOptions" };
+        var labelAscending = new RadioButton { Content = UiText.Get("PivotSort_AscendingByLabels"), GroupName = "PivotSortOptions", FontSize = 12, FontFamily = FormulaBarFontFamily };
+        var labelDescending = new RadioButton { Content = UiText.Get("PivotSort_DescendingByLabels"), GroupName = "PivotSortOptions", FontSize = 12, FontFamily = FormulaBarFontFamily };
+        var valueAscending = new RadioButton { Content = UiText.Get("PivotSort_AscendingByValues"), GroupName = "PivotSortOptions", FontSize = 12, FontFamily = FormulaBarFontFamily };
+        var valueDescending = new RadioButton { Content = UiText.Get("PivotSort_DescendingByValues"), GroupName = "PivotSortOptions", FontSize = 12, FontFamily = FormulaBarFontFamily };
         AutomationProperties.SetAutomationId(labelAscending, "PivotSortOptionsLabelAscending");
         AutomationProperties.SetAutomationId(labelDescending, "PivotSortOptionsLabelDescending");
         AutomationProperties.SetAutomationId(valueAscending, "PivotSortOptionsValueAscending");
@@ -215,6 +222,7 @@ public sealed partial class MainWindow
         var valueFieldBox = new ComboBox { MinWidth = 220 };
         foreach (var dataField in pivot.DataFields)
             valueFieldBox.Items.Add(dataField.Name);
+        ApplyPivotComboBoxChrome(valueFieldBox);
         AutomationProperties.SetAutomationId(valueFieldBox, "PivotSortOptionsValueFieldBox");
         AutomationProperties.SetName(valueFieldBox, "Value field");
 
@@ -253,16 +261,20 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Format("PivotSort_Title", caption),
-            Width = 340,
-            SizeToContent = SizeToContent.Height,
+            Width = 360,
+            Height = 300,
+            MinWidth = 360,
+            MinHeight = 300,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
         };
         AutomationProperties.SetAutomationId(dialog, "PivotSortOptionsDialog");
 
         var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 80 };
+        ApplyPivotButtonChrome(ok, 80, isDefault: true);
         AutomationProperties.SetAutomationId(ok, "PivotSortOptionsOkButton");
         var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 80 };
+        ApplyPivotButtonChrome(cancel, 80);
         AutomationProperties.SetAutomationId(cancel, "PivotSortOptionsCancelButton");
         cancel.Click += (_, _) => dialog.Close(false);
         ok.Click += (_, _) =>
@@ -280,6 +292,8 @@ public sealed partial class MainWindow
         content.Children.Add(new TextBlock
         {
             Text = UiText.Format("PivotSort_Heading", caption),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
             FontWeight = FontWeight.SemiBold,
             Foreground = HeaderForeground,
             Margin = new Thickness(0, 0, 0, 4),
@@ -288,7 +302,7 @@ public sealed partial class MainWindow
         content.Children.Add(labelDescending);
         content.Children.Add(valueAscending);
         content.Children.Add(valueDescending);
-        content.Children.Add(new TextBlock { Text = UiText.Get("PivotSort_ValueField"), Foreground = HeaderForeground, Margin = new Thickness(18, 4, 0, 0) });
+        content.Children.Add(new TextBlock { Text = UiText.Get("PivotSort_ValueField"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground, Margin = new Thickness(18, 4, 0, 0) });
         content.Children.Add(new StackPanel { Margin = new Thickness(18, 0, 0, 0), Children = { valueFieldBox } });
         content.Children.Add(new StackPanel
         {

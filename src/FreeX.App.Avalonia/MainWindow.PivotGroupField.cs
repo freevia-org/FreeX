@@ -74,31 +74,36 @@ public sealed partial class MainWindow
         foreach (var option in layoutFields)
             fieldBox.Items.Add(option.Caption);
         fieldBox.SelectedIndex = 0;
+        ApplyPivotComboBoxChrome(fieldBox);
         AutomationProperties.SetAutomationId(fieldBox, "PivotGroupFieldBox");
         AutomationProperties.SetName(fieldBox, UiText.Get("PivotGroup_FieldLabel"));
 
         var groupingBox = new ComboBox { MinWidth = 240 };
         foreach (var (label, _) in PivotGroupFieldPlanner.Groupings)
             groupingBox.Items.Add(label);
+        ApplyPivotComboBoxChrome(groupingBox);
         AutomationProperties.SetAutomationId(groupingBox, "PivotGroupByBox");
         AutomationProperties.SetName(groupingBox, UiText.Get("PivotGroup_GroupByLabel"));
 
         var startBox = new TextBox { MinWidth = 120 };
+        ApplyPivotTextBoxChrome(startBox);
         AutomationProperties.SetAutomationId(startBox, "PivotGroupStartBox");
         AutomationProperties.SetName(startBox, UiText.Get("PivotGroup_StartingAtLabel"));
         var endBox = new TextBox { MinWidth = 120 };
+        ApplyPivotTextBoxChrome(endBox);
         AutomationProperties.SetAutomationId(endBox, "PivotGroupEndBox");
         AutomationProperties.SetName(endBox, UiText.Get("PivotGroup_EndingAtLabel"));
         var intervalBox = new TextBox { MinWidth = 120 };
+        ApplyPivotTextBoxChrome(intervalBox);
         AutomationProperties.SetAutomationId(intervalBox, "PivotGroupByValueBox");
         AutomationProperties.SetName(intervalBox, UiText.Get("PivotGroup_ByLabel"));
 
         var rangePanel = new StackPanel { Spacing = 6 };
-        rangePanel.Children.Add(new TextBlock { Text = UiText.Get("PivotGroup_StartingAtLabel"), Foreground = HeaderForeground });
+        rangePanel.Children.Add(new TextBlock { Text = UiText.Get("PivotGroup_StartingAtLabel"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
         rangePanel.Children.Add(startBox);
-        rangePanel.Children.Add(new TextBlock { Text = UiText.Get("PivotGroup_EndingAtLabel"), Foreground = HeaderForeground });
+        rangePanel.Children.Add(new TextBlock { Text = UiText.Get("PivotGroup_EndingAtLabel"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
         rangePanel.Children.Add(endBox);
-        rangePanel.Children.Add(new TextBlock { Text = UiText.Get("PivotGroup_ByLabel"), Foreground = HeaderForeground });
+        rangePanel.Children.Add(new TextBlock { Text = UiText.Get("PivotGroup_ByLabel"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
         rangePanel.Children.Add(intervalBox);
 
         void LoadFromField(PivotGroupFieldOption option)
@@ -128,8 +133,10 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Format("PivotGroup_Title", pivot.Name),
-            Width = 360,
-            SizeToContent = SizeToContent.Height,
+            Width = 420,
+            Height = 430,
+            MinWidth = 420,
+            MinHeight = 430,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
             ShowInTaskbar = false,
@@ -137,8 +144,10 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(dialog, "PivotGroupFieldDialog");
 
         var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 80 };
+        ApplyPivotButtonChrome(ok, 80, isDefault: true);
         AutomationProperties.SetAutomationId(ok, "PivotGroupFieldOkButton");
         var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 80 };
+        ApplyPivotButtonChrome(cancel, 80);
         AutomationProperties.SetAutomationId(cancel, "PivotGroupFieldCancelButton");
         cancel.Click += (_, _) => dialog.Close(false);
         ok.Click += (_, _) =>
@@ -156,9 +165,9 @@ public sealed partial class MainWindow
         };
 
         var content = new StackPanel { Spacing = 8, Margin = new Thickness(12) };
-        content.Children.Add(new TextBlock { Text = UiText.Get("PivotGroup_FieldLabel"), Foreground = HeaderForeground });
+        content.Children.Add(new TextBlock { Text = UiText.Get("PivotGroup_FieldLabel"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
         content.Children.Add(fieldBox);
-        content.Children.Add(new TextBlock { Text = UiText.Get("PivotGroup_GroupByLabel"), Foreground = HeaderForeground });
+        content.Children.Add(new TextBlock { Text = UiText.Get("PivotGroup_GroupByLabel"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
         content.Children.Add(groupingBox);
         content.Children.Add(rangePanel);
         content.Children.Add(new StackPanel
