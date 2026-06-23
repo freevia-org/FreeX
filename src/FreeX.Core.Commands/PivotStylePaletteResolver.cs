@@ -111,7 +111,8 @@ internal static class PivotStylePaletteResolver
         {
             palette = ThemedMediumPalette(theme, WorkbookThemeColorSlot.Accent5) with
             {
-                BodyFill = theme.ResolveColor(WorkbookThemeColorSlot.Accent5, 0.95)
+                BodyFill = theme.ResolveColor(WorkbookThemeColorSlot.Accent5, 0.95),
+                BodyBorder = theme.ResolveColor(WorkbookThemeColorSlot.Accent5, 0.5)
             };
             return true;
         }
@@ -278,4 +279,5 @@ internal sealed record PivotStylePalette(
     CellColor StripeFill,
     CellColor Border,
     CellColor? BodyFill,
-    CellColor? CompactGroupHeaderFill = null);
+    CellColor? CompactGroupHeaderFill = null,
+    CellColor? BodyBorder = null);
