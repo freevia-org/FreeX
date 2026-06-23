@@ -355,6 +355,7 @@ internal static class FreeWRibbonCommands
         // Insert tab — References: insert an in-text citation (pick an existing source or add a new one),
         // and insert a bibliography built from the document's sources at the caret (reversible).
         registry.Register("freew.citation", new InsertCitationCommand(editor));
+        registry.Register("freew.manage-sources", new ManageSourcesCommand(editor));
         registry.Register("freew.bibliography", new ActionCommand(() => { editor.Focus(); editor.InsertBibliography(); }));
         // Insert tab — References: select the active citation/bibliography style (APA / MLA / Chicago) used
         // by the citation + bibliography commands. The combo box delivers its label via the "value" param.
@@ -2254,6 +2255,23 @@ internal static class FreeWRibbonCommands
         }
     }
 
+    // References > Citations & Bibliography > Manage Sources: edit the document-local source list.
+    // Word also has a master source list; FreeW currently backs the document source store only, so the
+    // dialog labels that scope directly instead of exposing a fake global library.
+    private sealed class ManageSourcesCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var sources = ManageSourcesDialog.Ask(Window.GetWindow(editor), editor.Sources);
+            if (sources is null)
+                return;
+
+            editor.Focus();
+            editor.ReplaceSources(sources);
+        }
+    }
+
     // Insert > References > Caption: pick a label (Figure/Table — defaulting to Table when the caret is
     // in a table, else Figure), prompt for the caption text, then insert a numbered caption under the
     // caret's block. The view computes the next ordinal by counting existing captions of that label.
@@ -3243,22 +3261,23 @@ internal static class FreeWRibbonCommands
     // The fields captured by the NewSourceDialog (all trimmed; publisher may be empty).
     private sealed record SourceEntry(string Tag, string Author, string Title, string Year, string Publisher);
 
-    // A small modal form capturing a new source's tag/author/title/year/publisher. Returns the entry, or
-    // null if cancelled.
+    // A small modal form capturing a source's tag/author/title/year/publisher. Returns the entry, or
+    // null if cancelled. When editing an existing source, type-specific fields not shown here are
+    // preserved by the caller.
     private static class NewSourceDialog
     {
-        public static SourceEntry? Ask(Window? owner)
+        public static SourceEntry? Ask(Window? owner, Source? source = null)
         {
-            var tag = NewField();
-            var author = NewField();
-            var title = NewField();
-            var year = NewField();
-            var publisher = NewField();
+            var tag = NewField(source?.Tag);
+            var author = NewField(source?.Author);
+            var title = NewField(source?.Title);
+            var year = NewField(source?.Year);
+            var publisher = NewField(source?.Publisher);
 
             SourceEntry? result = null;
             var dialog = new Window
             {
-                Title = "Add New Source",
+                Title = source is null ? "Add New Source" : "Edit Source",
                 SizeToContent = SizeToContent.WidthAndHeight,
                 ResizeMode = ResizeMode.NoResize,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -3297,13 +3316,180 @@ internal static class FreeWRibbonCommands
             return dialog.ShowDialog() == true ? result : null;
         }
 
-        private static System.Windows.Controls.TextBox NewField() =>
-            new() { MinWidth = 320, Margin = new Thickness(0, 0, 0, 10) };
+        private static System.Windows.Controls.TextBox NewField(string? value = null) =>
+            new() { Text = value ?? string.Empty, MinWidth = 320, Margin = new Thickness(0, 0, 0, 10) };
 
         private static void AddRow(System.Windows.Controls.Panel panel, string label, System.Windows.Controls.TextBox box)
         {
             panel.Children.Add(new System.Windows.Controls.TextBlock { Text = label, Margin = new Thickness(0, 0, 0, 4) });
             panel.Children.Add(box);
+        }
+    }
+
+    private static class ManageSourcesDialog
+    {
+        public static IReadOnlyList<Source>? Ask(Window? owner, IReadOnlyList<Source> sources)
+        {
+            var working = sources.Select(CloneSource).ToList();
+            var list = new System.Windows.Controls.ListBox
+            {
+                MinWidth = 440,
+                MinHeight = 180,
+                Margin = new Thickness(0, 0, 0, 12)
+            };
+
+            IReadOnlyList<Source>? result = null;
+            var dialog = new Window
+            {
+                Title = "Manage Sources",
+                SizeToContent = SizeToContent.WidthAndHeight,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ShowInTaskbar = false
+            };
+
+            void RefreshList()
+            {
+                var selected = list.SelectedIndex;
+                list.Items.Clear();
+                foreach (var source in working)
+                    list.Items.Add(DescribeSource(source));
+                if (working.Count > 0)
+                    list.SelectedIndex = Math.Clamp(selected, 0, working.Count - 1);
+            }
+
+            void AddSource()
+            {
+                var entry = NewSourceDialog.Ask(dialog);
+                if (entry is null || !HasSourceData(entry))
+                    return;
+                working.Add(BuildSource(entry));
+                RefreshList();
+                list.SelectedIndex = working.Count - 1;
+            }
+
+            void EditSource()
+            {
+                var index = list.SelectedIndex;
+                if (index < 0 || index >= working.Count)
+                    return;
+                var entry = NewSourceDialog.Ask(dialog, working[index]);
+                if (entry is null || !HasSourceData(entry))
+                    return;
+                working[index] = BuildSource(entry, working[index]);
+                RefreshList();
+                list.SelectedIndex = index;
+            }
+
+            void DeleteSource()
+            {
+                var index = list.SelectedIndex;
+                if (index < 0 || index >= working.Count)
+                    return;
+                working.RemoveAt(index);
+                RefreshList();
+            }
+
+            var add = new System.Windows.Controls.Button { Content = "Add...", MinWidth = 80, Margin = new Thickness(0, 0, 8, 0) };
+            var edit = new System.Windows.Controls.Button { Content = "Edit...", MinWidth = 80, Margin = new Thickness(0, 0, 8, 0) };
+            var delete = new System.Windows.Controls.Button { Content = "Delete", MinWidth = 80, Margin = new Thickness(0, 0, 8, 0) };
+            var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+
+            add.Click += (_, _) => AddSource();
+            edit.Click += (_, _) => EditSource();
+            delete.Click += (_, _) => DeleteSource();
+            list.MouseDoubleClick += (_, _) => EditSource();
+            ok.Click += (_, _) =>
+            {
+                result = working.ToArray();
+                dialog.DialogResult = true;
+            };
+
+            var editButtons = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                Margin = new Thickness(0, 0, 0, 12)
+            };
+            editButtons.Children.Add(add);
+            editButtons.Children.Add(edit);
+            editButtons.Children.Add(delete);
+
+            var closeButtons = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            closeButtons.Children.Add(ok);
+            closeButtons.Children.Add(cancel);
+
+            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Current document sources:", Margin = new Thickness(0, 0, 0, 4) });
+            panel.Children.Add(list);
+            panel.Children.Add(editButtons);
+            panel.Children.Add(closeButtons);
+            dialog.Content = panel;
+
+            RefreshList();
+            return dialog.ShowDialog() == true ? result : null;
+        }
+
+        private static bool HasSourceData(SourceEntry entry) =>
+            entry.Tag.Length > 0
+            || entry.Author.Length > 0
+            || entry.Title.Length > 0
+            || entry.Year.Length > 0
+            || entry.Publisher.Length > 0;
+
+        private static Source BuildSource(SourceEntry entry, Source? existing = null) =>
+            new()
+            {
+                Tag = entry.Tag,
+                Type = existing?.Type ?? SourceType.Book,
+                Author = entry.Author,
+                Title = entry.Title,
+                Year = entry.Year,
+                Publisher = string.IsNullOrWhiteSpace(entry.Publisher) ? null : entry.Publisher,
+                Journal = existing?.Journal,
+                Volume = existing?.Volume,
+                Issue = existing?.Issue,
+                Pages = existing?.Pages,
+                Url = existing?.Url,
+                Accessed = existing?.Accessed
+            };
+
+        private static Source CloneSource(Source source) =>
+            new()
+            {
+                Tag = source.Tag,
+                Type = source.Type,
+                Author = source.Author,
+                Title = source.Title,
+                Year = source.Year,
+                Publisher = source.Publisher,
+                Journal = source.Journal,
+                Volume = source.Volume,
+                Issue = source.Issue,
+                Pages = source.Pages,
+                Url = source.Url,
+                Accessed = source.Accessed
+            };
+
+        private static string DescribeSource(Source source)
+        {
+            var parts = new List<string>(3);
+            if (!string.IsNullOrWhiteSpace(source.Author))
+                parts.Add(source.Author.Trim());
+            if (!string.IsNullOrWhiteSpace(source.Year))
+                parts.Add($"({source.Year.Trim()})");
+            var head = string.Join(" ", parts);
+            if (!string.IsNullOrWhiteSpace(source.Title))
+                head = head.Length > 0 ? $"{head} - {source.Title.Trim()}" : source.Title.Trim();
+            if (head.Length == 0)
+                head = string.IsNullOrWhiteSpace(source.Tag) ? "(untitled source)" : source.Tag.Trim();
+            return head;
         }
     }
 

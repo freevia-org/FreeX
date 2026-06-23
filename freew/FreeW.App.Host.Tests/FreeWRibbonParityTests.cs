@@ -205,6 +205,7 @@ public sealed class FreeWRibbonParityTests
                 "freew.endnote",
                 "freew.footnote-endnote-options",
                 "freew.citation",
+                "freew.manage-sources",
                 "freew.citation-style",
                 "freew.bibliography",
                 "freew.caption",
@@ -254,6 +255,52 @@ public sealed class FreeWRibbonParityTests
             .Count(paragraph => paragraph.StyleId == DocumentIndex.HeadingStyleId)
             .Should()
             .Be(1);
+    }
+
+    [StaFact]
+    public void ReferencesCitations_ExposesBackedWordStyleManageSources()
+    {
+        var definition = FreeWRibbon.Build();
+        var citations = definition.FindTab("references")!.FindGroup("citations");
+        var editor = new DocumentView();
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        CommandIds(citations!)
+            .Should()
+            .Equal("freew.citation", "freew.manage-sources", "freew.citation-style", "freew.bibliography");
+        Labels(citations!)
+            .Should()
+            .Equal("Insert Citation", "Manage Sources", "Style", "Bibliography");
+        registry.TryGet("freew.manage-sources", out _)
+            .Should()
+            .BeTrue("Word exposes Manage Sources in References > Citations & Bibliography");
+
+        editor.Model.Sources.Add(new Source
+        {
+            Tag = "Old",
+            Author = "Old Author",
+            Title = "Old Title",
+            Year = "1999",
+            Publisher = "Old Publisher"
+        });
+
+        var replacement = new[]
+        {
+            new Source
+            {
+                Tag = "New",
+                Author = "New Author",
+                Title = "New Title",
+                Year = "2026",
+                Publisher = "New Publisher"
+            }
+        };
+
+        editor.ReplaceSources(replacement);
+
+        editor.Model.Sources.Should().ContainSingle().Which.Tag.Should().Be("New");
+        editor.Commands.Undo().Should().BeTrue();
+        editor.Model.Sources.Should().ContainSingle().Which.Tag.Should().Be("Old");
     }
 
     [StaFact]

@@ -6317,6 +6317,17 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Replace the document's bibliographic source list through the undo bus. Used by References &gt;
+    /// Manage Sources, where source edits may not insert visible text but still need to persist.
+    /// </summary>
+    public void ReplaceSources(IReadOnlyList<Source> sources)
+    {
+        ArgumentNullException.ThrowIfNull(sources);
+        CommitToModel();
+        _commands.Execute(new ReplaceSourcesCommand(sources));
+    }
+
+    /// <summary>
     /// Inserts the in-text citation for <paramref name="source"/> (e.g. <c>(Author, Year)</c>, formatted
     /// by <see cref="Citations.FormatInText(Source)"/>) as ordinary text at the caret, flowing through the
     /// RichTextBox's own edit path so it joins the surrounding run and is captured by the undo stack.

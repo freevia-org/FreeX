@@ -174,6 +174,7 @@ internal static class FreeWRibbonIcons
             ["freew.toc"] = RibbonCommandIconKind.TableOfContents,
             ["freew.toc-refresh"] = RibbonCommandIconKind.Refresh,
             ["freew.citation"] = RibbonCommandIconKind.Citation,
+            ["freew.manage-sources"] = RibbonCommandIconKind.Citation,
             ["freew.citation-style"] = RibbonCommandIconKind.Citation,
             ["freew.bibliography"] = RibbonCommandIconKind.Bibliography,
             ["freew.caption"] = RibbonCommandIconKind.Caption,

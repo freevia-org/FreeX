@@ -260,6 +260,7 @@ internal static class FreeWRibbon
                 tab.Group("citations", "Citations & Bibliography", "C", 84, g =>
                 {
                     g.Medium("freew.citation", "Insert Citation", RibbonCommandIconKind.Citation);
+                    g.Medium("freew.manage-sources", "Manage Sources", RibbonCommandIconKind.Citation);
                     g.ComboBox("freew.citation-style", "Style", c => c with
                     {
                         Items = new[] { "APA", "MLA", "Chicago", "IEEE" },
