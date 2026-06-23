@@ -35,6 +35,14 @@ public static partial class PivotTableRefreshService
             BorderTop = new CellBorder(BorderStyle.Thin, palette.Border),
             BorderBottom = new CellBorder(BorderStyle.Thin, palette.Border)
         });
+        var outlineGroupHeaderStyle = workbook.RegisterStyle(new CellStyle
+        {
+            Bold = true,
+            FontColor = CellColor.Black,
+            FillColor = palette.SubtotalFill,
+            BorderTop = new CellBorder(BorderStyle.Thin, palette.Border),
+            BorderBottom = new CellBorder(BorderStyle.Thin, palette.Border)
+        });
         var grandTotalStyle = workbook.RegisterStyle(new CellStyle
         {
             Bold = true,
@@ -68,6 +76,8 @@ public static partial class PivotTableRefreshService
         var grandTotalRows = new HashSet<uint>();
         var grandTotalColumns = new HashSet<uint>();
         var compactGroupHeaderRows = FindCompactGroupHeaderRows(workbook, sheet, pivotTable, materialized, headerEndRow);
+        var outlineGroupHeaderRows = FindOutlineGroupHeaderRows(sheet, pivotTable, materialized, headerEndRow);
+        var groupHeaderRows = compactGroupHeaderRows.Concat(outlineGroupHeaderRows).ToHashSet();
         for (var row = materialized.Start.Row; row <= materialized.End.Row; row++)
         for (var col = materialized.Start.Col; col <= materialized.End.Col; col++)
         {
@@ -92,7 +102,8 @@ public static partial class PivotTableRefreshService
             headerEndRow,
             subtotalRows,
             grandTotalRows,
-            grandTotalColumns);
+            grandTotalColumns,
+            groupHeaderRows);
         MaterializePivotBandStyleFootprintCells(
             sheet,
             pivotTable,
@@ -137,6 +148,12 @@ public static partial class PivotTableRefreshService
                 continue;
             }
 
+            if (outlineGroupHeaderRows.Contains(row))
+            {
+                ApplyPivotVisualStyle(workbook, cell, outlineGroupHeaderStyle, preserveExistingVisualStyles);
+                continue;
+            }
+
             if (subtotalRows.Contains(row))
             {
                 ApplyPivotVisualStyle(workbook, cell, subtotalStyle, preserveExistingVisualStyles);
@@ -147,7 +164,7 @@ public static partial class PivotTableRefreshService
             var isRowStripe =
                 pivotTable.ShowRowStripes &&
                 row >= firstDataRow &&
-                GetPivotBodyBandIndex(row, firstDataRow, compactGroupHeaderRows, subtotalRows, grandTotalRows) % 2 == 0;
+                GetPivotBodyBandIndex(row, firstDataRow, groupHeaderRows, subtotalRows, grandTotalRows) % 2 == 0;
             var isColumnStripe =
                 pivotTable.ShowColumnStripes &&
                 col >= firstDataColumn &&
@@ -193,6 +210,71 @@ public static partial class PivotTableRefreshService
         }
 
         return rows;
+    }
+
+    private static IReadOnlySet<uint> FindOutlineGroupHeaderRows(
+        Sheet sheet,
+        PivotTableModel pivotTable,
+        GridRange materialized,
+        uint headerEndRow)
+    {
+        if (pivotTable.ReportLayout != PivotReportLayout.Outline ||
+            pivotTable.RowFields.Count <= 1)
+        {
+            return new HashSet<uint>();
+        }
+
+        var rows = new HashSet<uint>();
+        var labelCol = materialized.Start.Col;
+        var lastRowFieldCol = Math.Min(
+            materialized.End.Col,
+            labelCol + checked((uint)pivotTable.RowFields.Count) - 1);
+        for (var row = headerEndRow + 1; row < materialized.End.Row; row++)
+        {
+            if (sheet.GetCell(row, labelCol)?.Value is not TextValue currentText ||
+                string.IsNullOrWhiteSpace(currentText.Value) ||
+                IsPivotGrandTotalCaption(pivotTable, currentText.Value) ||
+                IsPivotSubtotalCaption(currentText.Value))
+            {
+                continue;
+            }
+
+            if (HasOutlineContinuationChild(sheet, pivotTable, materialized, row + 1, labelCol, lastRowFieldCol))
+                rows.Add(row);
+        }
+
+        return rows;
+    }
+
+    private static bool HasOutlineContinuationChild(
+        Sheet sheet,
+        PivotTableModel pivotTable,
+        GridRange materialized,
+        uint startRow,
+        uint labelCol,
+        uint lastRowFieldCol)
+    {
+        for (var row = startRow; row <= materialized.End.Row; row++)
+        {
+            if (sheet.GetCell(row, labelCol)?.Value is TextValue firstFieldText &&
+                !string.IsNullOrWhiteSpace(firstFieldText.Value))
+            {
+                return false;
+            }
+
+            for (var col = labelCol + 1; col <= lastRowFieldCol; col++)
+            {
+                if (sheet.GetCell(row, col)?.Value is TextValue childText &&
+                    !string.IsNullOrWhiteSpace(childText.Value) &&
+                    !IsPivotGrandTotalCaption(pivotTable, childText.Value) &&
+                    !IsPivotSubtotalCaption(childText.Value))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private static int FindNextLoadedRowLabelIndent(
@@ -257,8 +339,12 @@ public static partial class PivotTableRefreshService
         uint headerEndRow,
         IReadOnlySet<uint> subtotalRows,
         IReadOnlySet<uint> grandTotalRows,
-        IReadOnlySet<uint> grandTotalColumns)
+        IReadOnlySet<uint> grandTotalColumns,
+        IReadOnlySet<uint> groupHeaderRows)
     {
+        foreach (var row in groupHeaderRows)
+            MaterializePivotBlankRowCells(sheet, pivotTable, row, materialized.Start.Col, materialized.End.Col);
+
         foreach (var row in subtotalRows.Concat(grandTotalRows))
             MaterializePivotBlankRowCells(sheet, pivotTable, row, materialized.Start.Col, materialized.End.Col);
 
