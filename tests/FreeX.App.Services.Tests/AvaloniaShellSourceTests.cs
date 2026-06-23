@@ -2257,8 +2257,10 @@ public sealed class AvaloniaShellSourceTests
         var selectionPaneSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.SelectionPane.cs"));
         var evaluateFormulaSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.EvaluateFormula.cs"));
         var ribbonMenuDialogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.RibbonMenuDialogs.cs"));
+        var insertObjectsSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.InsertObjects.cs"));
 
         parityCaptureSource.Should().Contain("(\"dialog.TextToColumns\", () => ShowTextToColumnsParityDialogAsync()),");
+        parityCaptureSource.Should().Contain("(\"dialog.CreateTable\", () => ShowCreateTableParityDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.Consolidate\", () => ShowConsolidateDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.Sparkline\", () => ShowSparklineParityDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.InsertHyperlink\", () => ShowInsertHyperlinkParityDialogAsync()),");
@@ -2314,6 +2316,15 @@ public sealed class AvaloniaShellSourceTests
         ribbonMenuDialogSource.Should().Contain("Height = AddWatchDialogPlanner.Height");
         ribbonMenuDialogSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, AddWatchDialogPlanner.DialogAutomationId)");
         ribbonMenuDialogSource.Should().Contain("AutomationProperties.SetAutomationId(rangeBox, AddWatchDialogPlanner.SelectedRangeAutomationId)");
+        parityCaptureSource.Should().Contain("private Task ShowCreateTableParityDialogAsync()");
+        parityCaptureSource.Should().Contain("ShowCreateTableDialogAsync(\"Sheet1!$A$1:$D$5\", \"TableStyleMedium2\")");
+        insertObjectsSource.Should().Contain("private async Task InsertTableFromSelectionAsync()");
+        insertObjectsSource.Should().Contain("TableCreationPlanner.PlanSourceRange(_session.ActiveSheet, _session.SelectedRange)");
+        insertObjectsSource.Should().Contain("await ShowCreateTableDialogAsync(defaultRangeText, tableStyleName: string.Empty)");
+        insertObjectsSource.Should().Contain("CreateTableDialogPlanner.TryParse(");
+        insertObjectsSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, CreateTableDialogPlanner.DialogAutomationId)");
+        insertObjectsSource.Should().Contain("AutomationProperties.SetAutomationId(rangeBox, CreateTableDialogPlanner.RangeBoxAutomationId)");
+        insertObjectsSource.Should().Contain("AutomationProperties.SetAutomationId(headersBox, CreateTableDialogPlanner.HeadersBoxAutomationId)");
         parityCaptureSource.Should().Contain("private async Task ShowRenameSheetParityDialogAsync()");
         parityCaptureSource.Should().Contain("await ShowRenameSheetDialogAsync(_session.ActiveSheet.Name);");
         parityCaptureSource.Should().Contain("private async Task ShowUnhideSheetParityDialogAsync()");
@@ -2399,6 +2410,7 @@ public sealed class AvaloniaShellSourceTests
             "dialog.FindReplace",
             "dialog.GoTo",
             "dialog.GoToSpecial",
+            "dialog.CreateTable",
             "dialog.Sort",
             "dialog.SortOptions",
             "dialog.TextToColumns",

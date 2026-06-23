@@ -736,7 +736,7 @@ public sealed partial class MainWindow : Window
             {
                 OpenTextToColumns = TextToColumns,
                 OpenConsolidate = Consolidate,
-                InsertTable = InsertTableFromSelection,
+                InsertTable = () => _ = InsertTableFromSelectionAsync(),
                 ConditionalFormatting = () => _ = ShowConditionalFormatNewRuleDialogAsync(),
                 QuickAnalysis = () => _ = ShowQuickAnalysisDialogAsync(),
                 InsertPivotTable = () => _ = ShowInsertPivotTableDialogAsync(),
@@ -1821,7 +1821,7 @@ public sealed partial class MainWindow : Window
         _insertScatterChartMenuItem.Click += (_, _) => InsertChartFromSelection(ChartType.Scatter);
 
         _insertTableMenuItem.Header = "Table...";
-        _insertTableMenuItem.Click += (_, _) => InsertTableFromSelection();
+        _insertTableMenuItem.Click += (_, _) => _ = InsertTableFromSelectionAsync();
 
         _insertPivotTableMenuItem.Header = "PivotTable...";
         _insertPivotTableMenuItem.Click += async (_, _) => await ShowInsertPivotTableDialogAsync();
@@ -5529,7 +5529,7 @@ public sealed partial class MainWindow : Window
                 break;
             case WorksheetContextMenuAction.CreateTable:
             case WorksheetContextMenuAction.FormatAsTable:
-                InsertTableFromSelection();
+                _ = InsertTableFromSelectionAsync();
                 break;
             case WorksheetContextMenuAction.TextToColumns:
                 TextToColumns();

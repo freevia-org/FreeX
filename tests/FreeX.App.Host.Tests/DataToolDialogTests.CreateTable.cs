@@ -3,6 +3,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using FluentAssertions;
+using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -16,13 +17,13 @@ public sealed partial class DataToolDialogTests
         var source = DialogSourceTestSupport.ReadHostSources("CreateTableDialog.cs");
 
         source.Should().Contain("_headersBox");
-        source.Should().Contain("Content = UiText.Get(\"CreateTable_HeadersCheckBox\")");
-        source.Should().Contain("new Label { Content = UiText.Get(\"CreateTable_RangeLabel\"), Target = _rangeBox");
+        source.Should().Contain("Content = UiText.Get(CreateTableDialogPlanner.HeadersCheckBoxKey)");
+        source.Should().Contain("new Label { Content = UiText.Get(CreateTableDialogPlanner.RangeLabelKey), Target = _rangeBox");
         source.Should().Contain("CreateReferenceEditor(_rangeBox");
         source.Should().Contain("DialogReferencePicker.CreateEditor");
         source.Should().Contain("RequestRangeSelection");
         source.Should().Contain("_requestRangeSelection?.Invoke(RangeSelectionRequest)");
-        source.Should().Contain("UiText.Get(\"CreateTable_RangePickerAutomationName\")");
+        source.Should().Contain("UiText.Get(CreateTableDialogPlanner.RangePickerAutomationNameKey)");
         UiText.Get("CreateTable_HeadersCheckBox").Should().Be("_My table has headers");
     }
 
@@ -39,13 +40,13 @@ public sealed partial class DataToolDialogTests
             {
                 var rangeBox = WpfTestTree.FindVisualDescendants<TextBox>(dialog).Single();
                 AutomationProperties.GetName(rangeBox).Should().Be(UiText.Get("CreateTable_RangeAutomationName"));
-                AutomationProperties.GetAutomationId(rangeBox).Should().Be("CreateTableRangeBox");
+                AutomationProperties.GetAutomationId(rangeBox).Should().Be(CreateTableDialogPlanner.RangeBoxAutomationId);
                 AutomationProperties.GetHelpText(rangeBox).Should().Be(UiText.Get("CreateTable_RangeAutomationHelpText"));
 
                 var headersBox = WpfTestTree.FindVisualDescendants<CheckBox>(dialog)
                     .Single(box => Equals(box.Content, UiText.Get("CreateTable_HeadersCheckBox")));
                 AutomationProperties.GetName(headersBox).Should().Be(UiText.Get("CreateTable_HeadersAutomationName"));
-                AutomationProperties.GetAutomationId(headersBox).Should().Be("CreateTableHeadersBox");
+                AutomationProperties.GetAutomationId(headersBox).Should().Be(CreateTableDialogPlanner.HeadersBoxAutomationId);
                 AutomationProperties.GetHelpText(headersBox).Should().Be(UiText.Get("CreateTable_HeadersAutomationHelpText"));
             }
             finally
@@ -54,10 +55,11 @@ public sealed partial class DataToolDialogTests
             }
         });
 
-        source.Should().Contain("AutomationProperties.SetName(_rangeBox, UiText.Get(\"CreateTable_RangeAutomationName\"));");
-        source.Should().Contain("AutomationProperties.SetHelpText(_rangeBox, UiText.Get(\"CreateTable_RangeAutomationHelpText\"));");
-        source.Should().Contain("AutomationProperties.SetName(_headersBox, UiText.Get(\"CreateTable_HeadersAutomationName\"));");
-        source.Should().Contain("AutomationProperties.SetHelpText(_headersBox, UiText.Get(\"CreateTable_HeadersAutomationHelpText\"));");
+        source.Should().Contain("AutomationProperties.SetAutomationId(this, CreateTableDialogPlanner.DialogAutomationId);");
+        source.Should().Contain("AutomationProperties.SetName(_rangeBox, UiText.Get(CreateTableDialogPlanner.RangeAutomationNameKey));");
+        source.Should().Contain("AutomationProperties.SetHelpText(_rangeBox, UiText.Get(CreateTableDialogPlanner.RangeAutomationHelpTextKey));");
+        source.Should().Contain("AutomationProperties.SetName(_headersBox, UiText.Get(CreateTableDialogPlanner.HeadersAutomationNameKey));");
+        source.Should().Contain("AutomationProperties.SetHelpText(_headersBox, UiText.Get(CreateTableDialogPlanner.HeadersAutomationHelpTextKey));");
     }
 
     [Fact]

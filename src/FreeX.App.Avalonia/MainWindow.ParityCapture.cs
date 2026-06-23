@@ -124,6 +124,7 @@ public sealed partial class MainWindow
         ("dialog.FindReplace", () => ShowFindDialogAsync()),
         ("dialog.GoTo", () => ShowGoToDialogAsync()),
         ("dialog.GoToSpecial", () => ShowGoToSpecialDialogAsync()),
+        ("dialog.CreateTable", () => ShowCreateTableParityDialogAsync()),
         ("dialog.Sort", () => ShowSortDialogAsync()),
         ("dialog.SortOptions", async () => { await ShowSortOptionsDialogAsync(new SortDialogOptions()); }),
         ("dialog.TextToColumns", () => ShowTextToColumnsParityDialogAsync()),
@@ -188,6 +189,9 @@ public sealed partial class MainWindow
             new CellAddress(sheet.Id, 5, 6),
             ShowTextToColumnsDialogAsync);
     }
+
+    private Task ShowCreateTableParityDialogAsync() =>
+        ShowCreateTableDialogAsync("Sheet1!$A$1:$D$5", "TableStyleMedium2");
 
     private async Task ShowAdvancedFilterParityDialogAsync()
     {
