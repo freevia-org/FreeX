@@ -481,6 +481,43 @@ public sealed class FreeWRibbonParityTests
     }
 
     [StaFact]
+    public void LayoutParagraph_ExposesBackedWordStyleParagraphCommands()
+    {
+        var definition = FreeWRibbon.Build();
+        var layout = definition.FindTab("layout");
+        var paragraph = layout!.FindGroup("paragraph");
+        var editor = new DocumentView();
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        layout.Groups.Select(group => group.Id)
+            .Should()
+            .ContainInOrder("page-setup", "paragraph", "preview");
+        CommandIds(paragraph!)
+            .Should()
+            .Equal(
+                "freew.indent-decrease",
+                "freew.indent-increase",
+                "freew.line-spacing",
+                "freew.space-before-toggle",
+                "freew.space-after-toggle",
+                "freew.paragraph-dialog",
+                "freew.tabs-dialog");
+        Labels(paragraph!)
+            .Should()
+            .Equal(
+                "Decrease Indent",
+                "Increase Indent",
+                "Line and Paragraph Spacing",
+                "Add Space Before Paragraph",
+                "Add Space After Paragraph",
+                "Paragraph Settings",
+                "Tabs");
+
+        foreach (var commandId in CommandIds(paragraph!))
+            registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must execute from Layout > Paragraph");
+    }
+
+    [StaFact]
     public void LayoutPageSetup_LineNumbersDropdownExposesBackedWordModeCommands()
     {
         var definition = FreeWRibbon.Build();

@@ -330,6 +330,24 @@ internal static class FreeWRibbon
                     g.Icon("freew.different-first-page", "Different First Page", RibbonCommandIconKind.CoverPage);
                 });
                 // Single-command group → Large.
+                tab.Group("paragraph", "Paragraph", "A", 76, g =>
+                {
+                    // Word also exposes paragraph indentation and spacing from Layout. Reuse the backed
+                    // Home paragraph commands here rather than adding placeholder numeric controls.
+                    g.Icon("freew.indent-decrease", "Decrease Indent", RibbonCommandIconKind.IndentDecrease);
+                    g.Icon("freew.indent-increase", "Increase Indent", RibbonCommandIconKind.IndentIncrease);
+                    g.ComboBox("freew.line-spacing", "Line and Paragraph Spacing", c => c with
+                    {
+                        Items = new[] { "1.0", "1.15", "1.5", "2.0" },
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.LineSpacing),
+                        Width = 52
+                    });
+                    g.RowBreak();
+                    g.Icon("freew.space-before-toggle", "Add Space Before Paragraph", RibbonCommandIconKind.SpaceBefore);
+                    g.Icon("freew.space-after-toggle", "Add Space After Paragraph", RibbonCommandIconKind.SpaceAfter);
+                    g.Icon("freew.paragraph-dialog", "Paragraph Settings", RibbonCommandIconKind.TextFunction);
+                    g.Icon("freew.tabs-dialog", "Tabs", RibbonCommandIconKind.Ruler);
+                });
                 tab.Group("preview", "Preview", "V", 90, g =>
                 {
                     g.Large("freew.print-preview", "Print Preview", RibbonCommandIconKind.Print);
