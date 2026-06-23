@@ -17728,12 +17728,14 @@ public sealed partial class MainWindow : Window
         UpdateSaveButton();
         try
         {
-            _statusText.Text = "Opening...";
+            _statusText.Text = WorkbookProgressTextFormatter
+                .FormatOpen("preparing", TimeSpan.Zero, percent: null, UiText.Get)
+                .Detail;
             _statusText.Foreground = Brush(67, 113, 83);
             var progress = new Progress<WorkbookOpenProgressUpdate>(
                 update =>
                 {
-                    _statusText.Text = FormatOpenStatus(update);
+                    _statusText.Text = WorkbookProgressTextFormatter.FormatOpen(update, UiText.Get).Detail;
                     _statusText.Foreground = Brush(67, 113, 83);
                 });
 
@@ -18476,12 +18478,14 @@ public sealed partial class MainWindow : Window
         UpdateSaveButton();
         try
         {
-            _statusText.Text = "Saving...";
+            _statusText.Text = WorkbookProgressTextFormatter
+                .FormatSave("preparing", TimeSpan.Zero, percent: null, UiText.Get)
+                .Detail;
             _statusText.Foreground = Brush(67, 113, 83);
             var progress = new Progress<WorkbookSaveProgressUpdate>(
                 update =>
                 {
-                    _statusText.Text = FormatSaveStatus(update);
+                    _statusText.Text = WorkbookProgressTextFormatter.FormatSave(update, UiText.Get).Detail;
                     _statusText.Foreground = Brush(67, 113, 83);
                 });
 
@@ -18940,25 +18944,6 @@ public sealed partial class MainWindow : Window
         _session.IsFallback ||
         status.Contains("Unsupported XLSX", StringComparison.Ordinal) ||
         status.Contains("load warning", StringComparison.OrdinalIgnoreCase);
-
-    private static string FormatSaveStatus(WorkbookSaveProgressUpdate update) =>
-        update.Phase switch
-        {
-            WorkbookSavePhase.Preparing => "Preparing save...",
-            WorkbookSavePhase.Writing => "Writing file...",
-            WorkbookSavePhase.Completed => "Saved",
-            _ => "Saving..."
-        };
-
-    private static string FormatOpenStatus(WorkbookOpenProgressUpdate update) =>
-        update.Phase switch
-        {
-            WorkbookOpenPhase.Reading => "Reading file...",
-            WorkbookOpenPhase.Inspecting => "Inspecting workbook...",
-            WorkbookOpenPhase.Parsing => "Opening workbook...",
-            WorkbookOpenPhase.Calculating => "Calculating workbook...",
-            _ => "Opening..."
-        };
 
     private static string FormatCellReference(CellAddress address) =>
         CellAddress.NumberToColumnName(address.Col) + address.Row.ToString(System.Globalization.CultureInfo.InvariantCulture);

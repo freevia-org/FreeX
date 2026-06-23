@@ -27,23 +27,10 @@ public sealed class SaveWorkbookWriter
     }
 
     private static SaveProgressUpdate ToHostProgressUpdate(WorkbookSaveProgressUpdate update) =>
-        new(
-            ProgressTitle(),
-            FormatSavingFileDetail(
-                WorkbookProgressPresentationPlanner.ToSaveProgressStep(update.Phase),
-                update.Elapsed),
-            update.Percent);
+        FromSharedText(WorkbookProgressTextFormatter.FormatSave(update, UiText.Get));
 
-    public static string ProgressTitle() =>
-        UiText.Get(WorkbookProgressPresentationPlanner.SaveTitleResourceKey);
-
-    public static string FormatSavingFileDetail(string phase, TimeSpan elapsed) =>
-        FormatSavingFileDetail(
-            WorkbookProgressPresentationPlanner.ParseSaveProgressStep(phase),
-            elapsed);
-
-    public static string FormatSavingFileDetail(WorkbookSaveProgressStep step, TimeSpan elapsed) =>
-        UiText.Get(WorkbookProgressPresentationPlanner.SelectSaveDetailResourceKey(step, elapsed));
+    private static SaveProgressUpdate FromSharedText(WorkbookProgressText text) =>
+        new(text.Title, text.Detail, text.Percent);
 }
 
 public sealed record SaveProgressUpdate(string Title, string Detail, double? Percent);

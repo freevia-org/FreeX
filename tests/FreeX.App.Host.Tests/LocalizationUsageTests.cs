@@ -107,7 +107,7 @@ public sealed class LocalizationUsageTests
             .EnumerateFiles(sourceRoot, "*.cs", SearchOption.TopDirectoryOnly)
             .Where(path =>
                 Path.GetFileName(path).StartsWith("MainWindow", StringComparison.Ordinal) ||
-                Path.GetFileName(path) is "OpenWorkbookLoader.cs" or "OpenWorkbookProgressPlanner.cs" or "SaveWorkbookWriter.cs")
+                Path.GetFileName(path) is "OpenWorkbookLoader.cs" or "SaveWorkbookWriter.cs")
             .Order(StringComparer.Ordinal)
             .ToArray();
 

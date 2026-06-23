@@ -370,6 +370,25 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     }
 
     [Fact]
+    public void WorkbookProgressStatus_DelegatesOpenAndSaveTextToSharedFormatter()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("WorkbookProgressTextFormatter");
+        source.Should().Contain(".FormatOpen(\"preparing\", TimeSpan.Zero, percent: null, UiText.Get)");
+        source.Should().Contain("WorkbookProgressTextFormatter.FormatOpen(update, UiText.Get).Detail");
+        source.Should().Contain(".FormatSave(\"preparing\", TimeSpan.Zero, percent: null, UiText.Get)");
+        source.Should().Contain("WorkbookProgressTextFormatter.FormatSave(update, UiText.Get).Detail");
+
+        source.Should().NotContain("private static string FormatOpenStatus(");
+        source.Should().NotContain("private static string FormatSaveStatus(");
+        source.Should().NotContain("\"Opening...\"");
+        source.Should().NotContain("\"Saving...\"");
+        source.Should().NotContain("\"Preparing save...\"");
+        source.Should().NotContain("\"Writing file...\"");
+    }
+
+    [Fact]
     public void StatusBarZoomSlider_UsesIdenticalMinMiddleMaxMarks()
     {
         var mainSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));

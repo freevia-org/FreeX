@@ -89,6 +89,62 @@ public sealed class WorkbookProgressPresentationPlannerTests
     }
 
     [Fact]
+    public void FormatOpen_MapsServiceProgressToLocalizedPresentationText()
+    {
+        var text = WorkbookProgressTextFormatter.FormatOpen(
+            new WorkbookOpenProgressUpdate(WorkbookOpenPhase.Parsing, TimeSpan.FromSeconds(3), 42),
+            FakeText);
+
+        text.Should().Be(new WorkbookProgressText(
+            "text:Progress_OpeningWorkbook",
+            "text:Progress_LoadingFileReadingWorksheets",
+            42));
+    }
+
+    [Fact]
+    public void FormatOpen_MapsAdHocHostPhasesToLocalizedPresentationText()
+    {
+        var text = WorkbookProgressTextFormatter.FormatOpen(
+            " preparing view ",
+            TimeSpan.FromSeconds(6),
+            percent: null,
+            FakeText);
+
+        text.Should().Be(new WorkbookProgressText(
+            "text:Progress_OpeningWorkbook",
+            "text:Progress_LoadingFileRestoringSelection",
+            null));
+    }
+
+    [Fact]
+    public void FormatSave_MapsServiceProgressToLocalizedPresentationText()
+    {
+        var text = WorkbookProgressTextFormatter.FormatSave(
+            new WorkbookSaveProgressUpdate(WorkbookSavePhase.Writing, TimeSpan.FromSeconds(6), 87),
+            FakeText);
+
+        text.Should().Be(new WorkbookProgressText(
+            "text:Progress_SavingWorkbook",
+            "text:Progress_SavingFileFlushingPackage",
+            87));
+    }
+
+    [Fact]
+    public void FormatSave_MapsAdHocHostPhasesToLocalizedPresentationText()
+    {
+        var text = WorkbookProgressTextFormatter.FormatSave(
+            " preparing ",
+            TimeSpan.FromSeconds(9),
+            percent: 1,
+            FakeText);
+
+        text.Should().Be(new WorkbookProgressText(
+            "text:Progress_SavingWorkbook",
+            "text:Progress_SavingFilePreparing",
+            1));
+    }
+
+    [Fact]
     public void PhaseMappings_PreserveHostPresentationSemantics()
     {
         WorkbookProgressPresentationPlanner.ToOpenProgressStep(WorkbookOpenPhase.Parsing)
@@ -122,4 +178,6 @@ public sealed class WorkbookProgressPresentationPlannerTests
             source.Should().NotContain("private static TimeSpan EstimateStageDuration");
         }
     }
+
+    private static string FakeText(string key) => $"text:{key}";
 }

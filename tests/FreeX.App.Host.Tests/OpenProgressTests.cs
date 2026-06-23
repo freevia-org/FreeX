@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Free.Shared.AppServices;
 using System.Diagnostics;
 
 namespace FreeX.App.Host.Tests;
@@ -8,40 +9,42 @@ public sealed class OpenProgressTests
     [Fact]
     public void CalculateOpenStageProgress_AdvancesLinearlyWithinStage()
     {
-        OpenWorkbookProgressPlanner.CalculateStageProgress(
-                stageStartPercent: 16,
-                stageEndPercent: 90,
+        WorkbookProgressPresentationPlanner.CalculateRunningStagePercent(
+                startPercent: 16,
+                endPercent: 90,
                 elapsed: TimeSpan.FromSeconds(5),
-                expectedDuration: TimeSpan.FromSeconds(10))
+                expectedDuration: TimeSpan.FromSeconds(10),
+                holdbackPercent: 0.5)
             .Should().Be(53);
     }
 
     [Fact]
     public void CalculateOpenStageProgress_StaysBelowStageEndUntilWorkCompletes()
     {
-        OpenWorkbookProgressPlanner.CalculateStageProgress(
-                stageStartPercent: 16,
-                stageEndPercent: 90,
+        WorkbookProgressPresentationPlanner.CalculateRunningStagePercent(
+                startPercent: 16,
+                endPercent: 90,
                 elapsed: TimeSpan.FromSeconds(30),
-                expectedDuration: TimeSpan.FromSeconds(10))
+                expectedDuration: TimeSpan.FromSeconds(10),
+                holdbackPercent: 0.5)
             .Should().Be(89.5);
     }
 
     [Fact]
     public void FormatLoadingFileDetail_ChangesEveryThreeSeconds()
     {
-        OpenWorkbookProgressPlanner.FormatLoadingFileDetail("parsing", TimeSpan.FromSeconds(0))
+        FormatLoadingFileDetail("parsing", TimeSpan.FromSeconds(0))
             .Should().Be("Loading file (parsing)");
-        OpenWorkbookProgressPlanner.FormatLoadingFileDetail("parsing", TimeSpan.FromSeconds(3))
+        FormatLoadingFileDetail("parsing", TimeSpan.FromSeconds(3))
             .Should().Be("Loading file (reading worksheets)");
-        OpenWorkbookProgressPlanner.FormatLoadingFileDetail("parsing", TimeSpan.FromSeconds(6))
+        FormatLoadingFileDetail("parsing", TimeSpan.FromSeconds(6))
             .Should().Be("Loading file (building workbook)");
     }
 
     [Fact]
     public void FormatLoadingFileDetail_PreservesTrimmedCaseInsensitivePhaseMatching()
     {
-        OpenWorkbookProgressPlanner.FormatLoadingFileDetail(" Parsing ", TimeSpan.FromSeconds(9))
+        FormatLoadingFileDetail(" Parsing ", TimeSpan.FromSeconds(9))
             .Should().Be("Loading file (loading styles)");
     }
 
@@ -50,7 +53,7 @@ public sealed class OpenProgressTests
     {
         const int iterations = 200_000;
 
-        OpenWorkbookProgressPlanner.FormatLoadingFileDetail("parsing", TimeSpan.Zero).Should().NotBeEmpty();
+        FormatLoadingFileDetail("parsing", TimeSpan.Zero).Should().NotBeEmpty();
 
         GC.Collect();
         GC.WaitForPendingFinalizers();
@@ -60,7 +63,7 @@ public sealed class OpenProgressTests
         var stopwatch = Stopwatch.StartNew();
         for (var i = 0; i < iterations; i++)
         {
-            if (!OpenWorkbookProgressPlanner.FormatLoadingFileDetail("parsing", TimeSpan.FromSeconds(i % 12))
+            if (!FormatLoadingFileDetail("parsing", TimeSpan.FromSeconds(i % 12))
                     .StartsWith("Loading file", StringComparison.Ordinal))
             {
                 throw new InvalidOperationException("The progress detail should remain localized.");
@@ -77,4 +80,7 @@ public sealed class OpenProgressTests
 
         allocatedBytes.Should().BeLessThan(50_000);
     }
+
+    private static string FormatLoadingFileDetail(string phase, TimeSpan elapsed) =>
+        WorkbookProgressTextFormatter.FormatOpen(phase, elapsed, percent: null, UiText.Get).Detail;
 }
