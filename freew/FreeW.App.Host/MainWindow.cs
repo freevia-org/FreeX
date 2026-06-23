@@ -31,6 +31,7 @@ public sealed class MainWindow : Window
     private DocumentView _editor = null!;
     private Ruler _hRuler = null!;
     private Ruler _vRuler = null!;
+    private Button _rulerTabSelector = null!;
     private bool _rulersVisible = true;
     private TextBlock _titleText = null!;
     private TextBlock _pageText = null!;
@@ -272,18 +273,22 @@ public sealed class MainWindow : Window
         // desk. The editor sizes/centres itself to the page width in Print-Layout mode (see
         // DocumentView.ApplyPageChrome); the grey shows on either side. In plain/continuous mode the editor
         // stretches to fill, so the grey is fully covered and the look is unchanged. Purely host chrome.
-        // Word-style rulers (Print-Layout only): a horizontal tick scale above the page and a thinner
-        // vertical scale down its left edge. Both are passive, read-only chrome (see Ruler) that mirror the
-        // page geometry; the corner cell where they meet stays blank. The editor sits in the bottom-right
-        // cell so the page floats on the grey workspace exactly as before.
+        // Word-style rulers (Print-Layout only): a horizontal tick scale above the page, a thinner
+        // vertical scale down its left edge, and the tab-stop selector where they meet. The editor sits
+        // in the bottom-right cell so the page floats on the grey workspace exactly as before.
         _hRuler = new Ruler(editor, Ruler.Orientation.Horizontal);
         _vRuler = new Ruler(editor, Ruler.Orientation.Vertical);
+        _rulerTabSelector = BuildRulerTabSelector();
 
         var workspaceGrid = new Grid();
         workspaceGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         workspaceGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         workspaceGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         workspaceGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
+        Grid.SetRow(_rulerTabSelector, 0);
+        Grid.SetColumn(_rulerTabSelector, 0);
+        workspaceGrid.Children.Add(_rulerTabSelector);
 
         Grid.SetRow(_hRuler, 0);
         Grid.SetColumn(_hRuler, 1);
@@ -913,6 +918,58 @@ public sealed class MainWindow : Window
         var visibility = _rulersVisible && !_outlineMode ? Visibility.Visible : Visibility.Collapsed;
         _hRuler.Visibility = visibility;
         _vRuler.Visibility = visibility;
+        _rulerTabSelector.Visibility = visibility;
+    }
+
+    private Button BuildRulerTabSelector()
+    {
+        var button = new Button
+        {
+            Width = 16,
+            Height = 16,
+            Padding = new Thickness(0),
+            Margin = new Thickness(0),
+            BorderThickness = new Thickness(0, 0, 1, 1),
+            Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xA0, 0xA0, 0xA0)),
+            FontFamily = new FontFamily("Segoe UI"),
+            FontSize = 9,
+            Focusable = true
+        };
+        AutomationProperties.SetName(button, "Tab stop selector");
+
+        void Refresh()
+        {
+            button.Content = _hRuler.SelectedTabStopAlignment switch
+            {
+                TabStopAlignment.Center => "C",
+                TabStopAlignment.Right => "R",
+                TabStopAlignment.Decimal => ".",
+                _ => "L"
+            };
+            button.ToolTip = _hRuler.SelectedTabStopAlignment switch
+            {
+                TabStopAlignment.Center => "Center tab",
+                TabStopAlignment.Right => "Right tab",
+                TabStopAlignment.Decimal => "Decimal tab",
+                _ => "Left tab"
+            };
+        }
+
+        button.Click += (_, _) =>
+        {
+            _hRuler.SelectedTabStopAlignment = _hRuler.SelectedTabStopAlignment switch
+            {
+                TabStopAlignment.Left => TabStopAlignment.Center,
+                TabStopAlignment.Center => TabStopAlignment.Right,
+                TabStopAlignment.Right => TabStopAlignment.Decimal,
+                _ => TabStopAlignment.Left
+            };
+            Refresh();
+        };
+
+        Refresh();
+        return button;
     }
 
     // The Reveal Formatting pane: a header plus a scrollable, read-only list of the FONT / PARAGRAPH /

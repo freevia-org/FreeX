@@ -39,6 +39,20 @@ public sealed class RulerInteractionTests
     }
 
     [Fact]
+    public void MoveOrAddTabStop_AddsSelectedAlignment_ForNewStop()
+    {
+        var stops = Ruler.MoveOrAddTabStop(
+            [new TabStop(144, TabStopAlignment.Right, TabLeader.Dots)],
+            index: -1,
+            positionPt: 109,
+            TabStopAlignment.Center);
+
+        stops.Should().Equal(
+            new TabStop(108, TabStopAlignment.Center),
+            new TabStop(144, TabStopAlignment.Right, TabLeader.Dots));
+    }
+
+    [Fact]
     public void MoveOrAddLeftTabStop_MovesExistingStop_AndPreservesAlignmentLeader()
     {
         var stops = Ruler.MoveOrAddLeftTabStop(
@@ -49,6 +63,20 @@ public sealed class RulerInteractionTests
         stops.Should().Equal(
             new TabStop(72),
             new TabStop(216, TabStopAlignment.Decimal, TabLeader.Underline));
+    }
+
+    [Fact]
+    public void MoveOrAddTabStop_MovesExistingStop_AndIgnoresSelectedAlignment()
+    {
+        var stops = Ruler.MoveOrAddTabStop(
+            [new TabStop(72), new TabStop(144, TabStopAlignment.Right, TabLeader.Dashes)],
+            index: 1,
+            positionPt: 181,
+            TabStopAlignment.Decimal);
+
+        stops.Should().Equal(
+            new TabStop(72),
+            new TabStop(180, TabStopAlignment.Right, TabLeader.Dashes));
     }
 
     [Fact]

@@ -23,9 +23,9 @@ namespace FreeW.App.Host.Editing;
 /// with the text column underneath.
 ///
 /// The horizontal ruler also exposes the backed Word-style editing affordances FreeW can faithfully
-/// support today: click the text ruler to add a left tab stop, drag an existing tab mark to move or remove
-/// it, or drag the indent markers to update the selected paragraph indents through the editor's undoable
-/// model commands.
+/// support today: choose a tab-stop type from the selector, click the text ruler to add that tab stop,
+/// drag an existing tab mark to move or remove it, or drag the indent markers to update the selected
+/// paragraph indents through the editor's undoable model commands.
 /// </summary>
 public sealed class Ruler : FrameworkElement
 {
@@ -50,6 +50,7 @@ public sealed class Ruler : FrameworkElement
     private readonly DocumentView _editor;
     private readonly Orientation _orientation;
     private DragOperation? _drag;
+    private TabStopAlignment _selectedTabStopAlignment = TabStopAlignment.Left;
 
     public Ruler(DocumentView editor, Orientation orientation)
     {
@@ -79,6 +80,19 @@ public sealed class Ruler : FrameworkElement
 
     public enum Orientation { Horizontal, Vertical }
 
+    public TabStopAlignment SelectedTabStopAlignment
+    {
+        get => _selectedTabStopAlignment;
+        set
+        {
+            if (_selectedTabStopAlignment == value)
+                return;
+
+            _selectedTabStopAlignment = value;
+            Refresh();
+        }
+    }
+
     internal enum DragKind { None, LeftIndent, FirstLineIndent, RightIndent, TabStop, NewTabStop }
 
     private sealed record DragOperation(DragKind Kind, int TabIndex, ParagraphFormatting StartFormatting, Point Start);
@@ -94,11 +108,18 @@ public sealed class Ruler : FrameworkElement
     internal static IReadOnlyList<TabStop> MoveOrAddLeftTabStop(
         IReadOnlyList<TabStop> stops,
         int index,
-        double positionPt)
+        double positionPt) =>
+        MoveOrAddTabStop(stops, index, positionPt, TabStopAlignment.Left);
+
+    internal static IReadOnlyList<TabStop> MoveOrAddTabStop(
+        IReadOnlyList<TabStop> stops,
+        int index,
+        double positionPt,
+        TabStopAlignment alignment)
     {
         var snapped = SnapPoint(positionPt);
         var result = stops.ToList();
-        var replacement = new TabStop(snapped, TabStopAlignment.Left);
+        var replacement = new TabStop(snapped, alignment);
         if (index >= 0 && index < result.Count)
         {
             var current = result[index];
@@ -248,7 +269,7 @@ public sealed class Ruler : FrameworkElement
             {
                 var stops = IsTabStopRemovalDrop(releasePoint, RenderSize)
                     ? RemoveTabStop(drag.StartFormatting.TabStops, drag.TabIndex)
-                    : MoveOrAddLeftTabStop(drag.StartFormatting.TabStops, drag.TabIndex, pointPt);
+                    : MoveOrAddTabStop(drag.StartFormatting.TabStops, drag.TabIndex, pointPt, SelectedTabStopAlignment);
                 _editor.SetParagraphTabStops(stops);
                 break;
             }
@@ -256,7 +277,7 @@ public sealed class Ruler : FrameworkElement
             {
                 if (IsTabStopRemovalDrop(releasePoint, RenderSize))
                     break;
-                var stops = MoveOrAddLeftTabStop(drag.StartFormatting.TabStops, drag.TabIndex, pointPt);
+                var stops = MoveOrAddTabStop(drag.StartFormatting.TabStops, drag.TabIndex, pointPt, SelectedTabStopAlignment);
                 _editor.SetParagraphTabStops(stops);
                 break;
             }
@@ -391,7 +412,29 @@ public sealed class Ruler : FrameworkElement
             var x = contentStart + PageLayout.PointsToDip(tab.PositionPt) * zoom;
             if (x < contentStart - 0.5 || x > contentEnd + 0.5)
                 continue;
-            dc.DrawLine(TabPen, new Point(x, bottom * 0.45), new Point(x, bottom));
+            DrawTabStopMarker(dc, tab.Alignment, x, bottom);
+        }
+    }
+
+    private static void DrawTabStopMarker(DrawingContext dc, TabStopAlignment alignment, double x, double bottom)
+    {
+        var top = bottom * 0.45;
+        dc.DrawLine(TabPen, new Point(x, top), new Point(x, bottom));
+        switch (alignment)
+        {
+            case TabStopAlignment.Center:
+                dc.DrawLine(TabPen, new Point(x - 4, top), new Point(x + 4, top));
+                break;
+            case TabStopAlignment.Right:
+                dc.DrawLine(TabPen, new Point(x - 8, top), new Point(x, top));
+                break;
+            case TabStopAlignment.Decimal:
+                dc.DrawLine(TabPen, new Point(x, top), new Point(x + 7, top));
+                dc.DrawEllipse(null, TabPen, new Point(x + 5, bottom - 3), 1.2, 1.2);
+                break;
+            default:
+                dc.DrawLine(TabPen, new Point(x, top), new Point(x + 8, top));
+                break;
         }
     }
 
