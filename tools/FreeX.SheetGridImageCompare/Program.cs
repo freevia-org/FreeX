@@ -352,15 +352,16 @@ internal static class Program
         // (e.g. a chart below a tall table) would be clipped again here even though the region above
         // already accounted for it. ExpandRegionForDrawingObjects bounds totalColWidth/totalRowHeight
         // to MaxDrawingContentWidth/Height, so these effective caps stay bounded.
-        double maxViewW = Math.Max(MaxViewportWidth,  MaxDrawingContentWidth  + rowHeaderWidth  + 20);
-        double maxViewH = Math.Max(MaxViewportHeight, MaxDrawingContentHeight + colHeaderHeight + 20);
+        var safetyPadding = captureRange is null ? 20.0 : 0.0;
+        double maxViewW = Math.Max(MaxViewportWidth,  MaxDrawingContentWidth  + rowHeaderWidth  + safetyPadding);
+        double maxViewH = Math.Max(MaxViewportHeight, MaxDrawingContentHeight + colHeaderHeight + safetyPadding);
 
-        double viewW = Math.Min(maxViewW, totalColWidth  + rowHeaderWidth  + 20);
-        double viewH = Math.Min(maxViewH, totalRowHeight + colHeaderHeight + 20);
+        double viewW = Math.Min(maxViewW, totalColWidth  + rowHeaderWidth  + safetyPadding);
+        double viewH = Math.Min(maxViewH, totalRowHeight + colHeaderHeight + safetyPadding);
 
         // Ensure minimum size
-        viewW = Math.Max(viewW, 200);
-        viewH = Math.Max(viewH, 100);
+        viewW = Math.Max(viewW, captureRange is null ? 200 : 1);
+        viewH = Math.Max(viewH, captureRange is null ? 100 : 1);
 
         // Step 2: Build viewport — available area excludes headers
         var availableW = viewW - rowHeaderWidth;
