@@ -174,6 +174,18 @@ internal static class PivotStylePaletteResolver
 
     private static bool TryResolveLightThemeSlot(string styleName, out WorkbookThemeColorSlot slot)
     {
+        if (string.Equals(styleName, "PivotStyleLight9", StringComparison.OrdinalIgnoreCase))
+        {
+            slot = WorkbookThemeColorSlot.Accent1;
+            return true;
+        }
+
+        if (string.Equals(styleName, "PivotStyleLight14", StringComparison.OrdinalIgnoreCase))
+        {
+            slot = WorkbookThemeColorSlot.Accent6;
+            return true;
+        }
+
         if (string.Equals(styleName, "PivotStyleLight16", StringComparison.OrdinalIgnoreCase))
         {
             slot = WorkbookThemeColorSlot.Accent4;

@@ -430,6 +430,8 @@ public sealed partial class PivotTableRefreshServiceTests
     [InlineData("PivotStyleMedium10", 233, 113, 50, 253, 241, 234)]
     [InlineData("PivotStyleMedium17", 112, 48, 160, 243, 235, 250)]
     [InlineData("PivotStyleDark7", 31, 78, 121, 232, 240, 248)]
+    [InlineData("PivotStyleLight9", 208, 223, 230, 243, 247, 249)]
+    [InlineData("PivotStyleLight14", 220, 237, 213, 246, 251, 245)]
     public void Refresh_MapsAdditionalBuiltInPivotStyleFamilies(string styleName, byte headerR, byte headerG, byte headerB, byte stripeR, byte stripeG, byte stripeB)
     {
         var workbook = new Workbook("PivotStyleFamilyExpansionTest");
