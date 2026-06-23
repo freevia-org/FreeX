@@ -232,23 +232,15 @@ internal sealed class BackstageView : UserControl
 
     private UIElement BuildHomePane()
     {
-        var newPaneSpec = PaneSpecs.BuildNewPaneSpec(() => { Hide(); _actions.New(); });
-
         return Panes.BuildActionPane(new BackstageActionPaneSpec(
             Heading: "Home",
-            Description: "Start a document or open one stored on this PC.",
-            Groups:
-            [
-                new("New",
-                [
-                    new(newPaneSpec.TileCaption, "Create a new document.", newPaneSpec.Create),
-                ]),
-                new("Open",
-                [
-                    new("Browse", "Open the Windows file picker.", () => { Hide(); _actions.Open(); }),
-                    new("Recent", "Show recent documents in the File rail.", () => _shell.Show("Recent")),
-                ]),
-            ]));
+            Description: "Start a document, reopen a recent local file, or browse for one stored on this PC.",
+            Groups: BackstageHomePanePlanner.Build(
+                _file.RecentEntries,
+                () => { Hide(); _actions.New(); },
+                path => { Hide(); _actions.OpenPath(path); },
+                () => { Hide(); _actions.Open(); },
+                () => _shell.Show("Open"))));
     }
 
     private UIElement BuildSaveAsPane()
