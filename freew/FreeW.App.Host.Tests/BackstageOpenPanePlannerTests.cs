@@ -93,4 +93,63 @@ public sealed class BackstageOpenPanePlannerTests
                 "File7.docx",
                 "File8.docx");
     }
+
+    [Fact]
+    public void BuildPlan_FiltersRecentDocumentsAndFolders()
+    {
+        var opened = "";
+        var openedFolder = "";
+
+        var plan = BackstageOpenPanePlanner.BuildPlan(
+            [
+                new RecentFileEntry { Path = @"C:\Docs\Budget.docx" },
+                new RecentFileEntry { Path = @"C:\Docs\Notes.rtf" },
+                new RecentFileEntry { Path = @"C:\Reports\Budget Review.docx" },
+            ],
+            "budget",
+            path => opened = path,
+            folder => openedFolder = folder,
+            static () => { },
+            static () => { });
+
+        plan.DocumentRows.Select(row => row.Label).Should().Equal("Budget.docx", "Budget Review.docx");
+        plan.FolderRows.Select(row => row.Label).Should().Equal("Docs", "Reports");
+        plan.PlaceRows.Select(row => row.Label).Should().Equal("This PC", "Browse");
+        plan.RecoveryRows.Single().Label.Should().Be("Recover Unsaved Documents");
+
+        plan.DocumentRows[1].Invoke();
+        plan.FolderRows[0].Invoke();
+
+        opened.Should().Be(@"C:\Reports\Budget Review.docx");
+        openedFolder.Should().Be(@"C:\Docs");
+    }
+
+    [Fact]
+    public void BuildPlan_DeduplicatesFoldersAndLimitsTheList()
+    {
+        var plan = BackstageOpenPanePlanner.BuildPlan(
+            Enumerable.Range(1, 12).Select(index => new RecentFileEntry
+            {
+                Path = $@"C:\Projects\Folder{index}\Doc{index}.docx"
+            }).Concat(
+            [
+                new RecentFileEntry { Path = @"C:\Projects\Folder1\Second.docx" },
+            ]),
+            filter: null,
+            static _ => { },
+            static _ => { },
+            static () => { },
+            static () => { });
+
+        plan.FolderRows.Select(row => row.Label)
+            .Should().Equal(
+                "Folder1",
+                "Folder2",
+                "Folder3",
+                "Folder4",
+                "Folder5",
+                "Folder6",
+                "Folder7",
+                "Folder8");
+    }
 }

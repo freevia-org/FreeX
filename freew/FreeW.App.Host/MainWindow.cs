@@ -384,7 +384,8 @@ public sealed class MainWindow : Window
         _backstage = new BackstageView(_editor, _file, new BackstageActions(
             New: () => _file.New(),
             Open: () => _file.Open(),
-            OpenPath: path => _file.OpenPath(path),
+            OpenPath: path => _file.OpenRecentPath(path),
+            OpenFolder: folder => _file.OpenFromFolder(folder),
             Save: () => _file.Save(),
             SaveAs: () => _file.SaveAs(),
             SaveAsType: extension => _file.SaveAs(extension),

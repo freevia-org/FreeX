@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using Free.Shared.IO;
 using Microsoft.Win32;
@@ -28,7 +29,8 @@ public static class WpfFileDialogService
         FileOpenDialogPlan plan,
         bool checkFileExists = true,
         bool multiselect = false,
-        string? title = null)
+        string? title = null,
+        string? initialDirectory = null)
     {
         ArgumentNullException.ThrowIfNull(plan);
 
@@ -38,7 +40,8 @@ public static class WpfFileDialogService
             plan.DefaultExtensionWithDot,
             checkFileExists,
             multiselect,
-            title);
+            title,
+            initialDirectory);
     }
 
     public static WpfOpenFileDialogResult ShowOpenDialog(
@@ -47,7 +50,8 @@ public static class WpfFileDialogService
         string defaultExtensionWithDot = "",
         bool checkFileExists = true,
         bool multiselect = false,
-        string? title = null)
+        string? title = null,
+        string? initialDirectory = null)
     {
         ArgumentNullException.ThrowIfNull(filter);
 
@@ -60,6 +64,8 @@ public static class WpfFileDialogService
         };
         if (!string.IsNullOrWhiteSpace(title))
             dialog.Title = title;
+        if (!string.IsNullOrWhiteSpace(initialDirectory) && Directory.Exists(initialDirectory))
+            dialog.InitialDirectory = initialDirectory;
 
         if (dialog.ShowDialog(owner) != true)
             return WpfOpenFileDialogResult.Cancelled;

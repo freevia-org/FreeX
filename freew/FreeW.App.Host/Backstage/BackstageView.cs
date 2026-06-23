@@ -160,14 +160,60 @@ internal sealed class BackstageView : UserControl
 
     private UIElement BuildOpenPane()
     {
-        return Panes.BuildActionPane(new BackstageActionPaneSpec(
-            Heading: "Open",
-            Description: "Open a recent document or browse for one stored on this PC.",
-            Groups: BackstageOpenPanePlanner.Build(
+        var panel = new StackPanel { MaxWidth = 720, HorizontalAlignment = HorizontalAlignment.Left };
+        panel.Children.Add(Kit.HeadingText("Open"));
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Open a recent document, search recent local files, or browse for one stored on this PC.",
+            Foreground = Kit.Muted,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 16)
+        });
+
+        var searchBox = new TextBox
+        {
+            MinWidth = 360,
+            MaxWidth = 520,
+            Height = 30,
+            Margin = new Thickness(0, 0, 0, 12),
+            Padding = new Thickness(8, 3, 8, 3),
+            VerticalContentAlignment = VerticalAlignment.Center
+        };
+        searchBox.SetCurrentValue(System.Windows.Automation.AutomationProperties.NameProperty, "Search recent documents");
+        panel.Children.Add(searchBox);
+
+        var documentsPanel = new StackPanel();
+        var foldersPanel = new StackPanel();
+        var tabs = new TabControl { Margin = new Thickness(0, 0, 0, 14), Width = 640 };
+        tabs.Items.Add(new TabItem { Header = "Documents", Content = documentsPanel });
+        tabs.Items.Add(new TabItem { Header = "Folders", Content = foldersPanel });
+        panel.Children.Add(tabs);
+
+        var placesPanel = new StackPanel();
+        var recoveryPanel = new StackPanel();
+        panel.Children.Add(placesPanel);
+        panel.Children.Add(recoveryPanel);
+
+        void Refresh(string? filter)
+        {
+            var plan = BackstageOpenPanePlanner.BuildPlan(
                 _file.RecentEntries,
+                filter,
                 path => { Hide(); _actions.OpenPath(path); },
+                folder => { Hide(); _actions.OpenFolder(folder); },
                 () => { Hide(); _actions.Open(); },
-                () => { Hide(); _actions.RecoverUnsaved(); })));
+                () => { Hide(); _actions.RecoverUnsaved(); });
+
+            PopulateOpenRows(documentsPanel, plan.DocumentRows, "No recent documents match this search.");
+            PopulateOpenRows(foldersPanel, plan.FolderRows, "No recent folders match this search.");
+            PopulateOpenGroup(placesPanel, "Places", plan.PlaceRows);
+            PopulateOpenGroup(recoveryPanel, "Recovery", plan.RecoveryRows);
+        }
+
+        searchBox.TextChanged += (_, _) => Refresh(searchBox.Text);
+        Refresh(filter: null);
+
+        return Kit.Scroll(panel);
     }
 
     private UIElement BuildSharePane()
@@ -406,6 +452,49 @@ internal sealed class BackstageView : UserControl
         return stack;
     }
 
+    private void PopulateOpenGroup(Panel panel, string heading, IReadOnlyList<BackstageActionRow> rows)
+    {
+        panel.Children.Clear();
+        panel.Children.Add(Kit.SubHeading(heading));
+        foreach (var row in rows)
+            panel.Children.Add(OpenActionRow(row));
+    }
+
+    private void PopulateOpenRows(Panel panel, IReadOnlyList<BackstageActionRow> rows, string emptyText)
+    {
+        panel.Children.Clear();
+        if (rows.Count == 0)
+        {
+            panel.Children.Add(new TextBlock
+            {
+                Text = emptyText,
+                Foreground = Kit.Muted,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 8, 0, 12)
+            });
+            return;
+        }
+
+        foreach (var row in rows)
+            panel.Children.Add(OpenActionRow(row));
+    }
+
+    private UIElement OpenActionRow(BackstageActionRow action)
+    {
+        var stack = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
+        var button = Kit.LinkButton(action.Label, action.Invoke);
+        stack.Children.Add(button);
+        stack.Children.Add(new TextBlock
+        {
+            Text = action.Description,
+            Foreground = Kit.Muted,
+            FontSize = 11,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 2, 0, 0)
+        });
+        return stack;
+    }
+
     private static string ReplaceFileNameExtension(string fileName, string extension)
     {
         var normalized = DocumentFileFormatResolver.NormalizeExtension(extension);
@@ -420,6 +509,7 @@ internal sealed record BackstageActions(
     Action New,
     Action Open,
     Action<string> OpenPath,
+    Action<string> OpenFolder,
     Action Save,
     Action SaveAs,
     Action<string> SaveAsType,
