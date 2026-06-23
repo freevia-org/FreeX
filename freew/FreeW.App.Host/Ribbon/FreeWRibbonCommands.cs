@@ -90,6 +90,9 @@ internal static class FreeWRibbonCommands
         Action? onToggleOutlineView,
         Func<bool>? isOutlineViewActive,
         Action? onZoomDialog,
+        Action? onZoom100 = null,
+        Action? onZoomOnePage = null,
+        Action? onZoomPageWidth = null,
         Action? onWebLayout = null,
         Func<bool>? isWebLayoutActive = null,
         Action? onDraftView = null,
@@ -687,6 +690,12 @@ internal static class FreeWRibbonCommands
         // page-relative fit factors from the live viewport and applies the chosen factor to the editor.
         if (onZoomDialog is not null)
             registry.Register("freew.zoom-dialog", new ActionCommand(onZoomDialog));
+        if (onZoom100 is not null)
+            registry.Register("freew.zoom-100", new ActionCommand(onZoom100));
+        if (onZoomOnePage is not null)
+            registry.Register("freew.zoom-one-page", new ActionCommand(onZoomOnePage));
+        if (onZoomPageWidth is not null)
+            registry.Register("freew.zoom-page-width", new ActionCommand(onZoomPageWidth));
 
         // Home > Paragraph — Show Formatting Marks: a stateful toggle over the editor's display-only pilcrow /
         // space-dot / tab-arrow overlay. The marks are drawn as a non-editable adorner computed from the

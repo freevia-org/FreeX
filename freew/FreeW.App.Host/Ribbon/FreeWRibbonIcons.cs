@@ -251,6 +251,9 @@ internal static class FreeWRibbonIcons
             ["freew.draft-view"] = RibbonCommandIconKind.Draft,
             ["freew.outline-view"] = RibbonCommandIconKind.MultilevelList,
             ["freew.zoom-dialog"] = RibbonCommandIconKind.Zoom,
+            ["freew.zoom-100"] = RibbonCommandIconKind.Zoom,
+            ["freew.zoom-one-page"] = RibbonCommandIconKind.OnePage,
+            ["freew.zoom-page-width"] = RibbonCommandIconKind.Scale,
 
             // Mailings
             ["freew.start-mail-merge"] = RibbonCommandIconKind.Envelope,

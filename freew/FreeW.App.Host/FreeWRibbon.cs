@@ -381,7 +381,13 @@ internal static class FreeWRibbon
                     g.MediumToggle("freew.nav-pane", "Navigation Pane", RibbonCommandIconKind.NavigationPane);
                 });
                 // Zoom group → Word's View > Zoom hero, opening the Zoom dialog (presets / page fits / custom %).
-                tab.Group("zoom", "Zoom", "Z", 80, g => g.Large("freew.zoom-dialog", "Zoom", RibbonCommandIconKind.Zoom));
+                tab.Group("zoom", "Zoom", "Z", 80, g =>
+                {
+                    g.Large("freew.zoom-dialog", "Zoom", RibbonCommandIconKind.Zoom);
+                    g.Medium("freew.zoom-100", "100%", RibbonCommandIconKind.Zoom);
+                    g.Medium("freew.zoom-one-page", "One Page", RibbonCommandIconKind.OnePage);
+                    g.Medium("freew.zoom-page-width", "Page Width", RibbonCommandIconKind.Scale);
+                });
             })
             .Tab("help", "Help", "Y", tab =>
             {

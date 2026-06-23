@@ -580,6 +580,41 @@ public sealed class FreeWRibbonParityTests
     }
 
     [StaFact]
+    public void ViewZoom_ExposesBackedWordStyleQuickControls()
+    {
+        var definition = FreeWRibbon.Build();
+        var zoom = definition.FindTab("view")!.FindGroup("zoom");
+        var editor = new DocumentView();
+        var registry = FreeWRibbonCommands.Build(
+            editor,
+            new RibbonStateStore(),
+            onPrintPreview: null,
+            onToggleNavPane: null,
+            isNavPaneVisible: null,
+            onToggleReadMode: null,
+            isReadModeActive: null,
+            onTogglePrintLayout: null,
+            isPrintLayoutActive: null,
+            onToggleOutlineView: null,
+            isOutlineViewActive: null,
+            onZoomDialog: () => { },
+            onZoom100: () => { },
+            onZoomOnePage: () => { },
+            onZoomPageWidth: () => { });
+
+        zoom.Should().NotBeNull();
+        CommandIds(zoom!)
+            .Should()
+            .Equal("freew.zoom-dialog", "freew.zoom-100", "freew.zoom-one-page", "freew.zoom-page-width");
+        Labels(zoom!)
+            .Should()
+            .Equal("Zoom", "100%", "One Page", "Page Width");
+
+        foreach (var commandId in CommandIds(zoom!))
+            registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must execute from View > Zoom");
+    }
+
+    [StaFact]
     public void DeveloperControls_ExposesAndRegistersImplementedContentControlCommands()
     {
         var definition = FreeWRibbon.Build();

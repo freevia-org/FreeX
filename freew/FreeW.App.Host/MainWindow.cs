@@ -193,6 +193,9 @@ public sealed class MainWindow : Window
             editor, stateStore, OpenPrintPreview, ToggleNavPane, () => _navPaneVisible, ToggleReadMode, () => _readMode,
             () => SetViewMode(DocumentViewMode.PrintLayout), () => _editor.ViewMode == DocumentViewMode.PrintLayout,
             ToggleOutlineView, () => _outlineMode, OpenZoomDialog,
+            onZoom100: () => _editor.ZoomLevel = ZoomLevels.Default,
+            onZoomOnePage: ZoomToOnePage,
+            onZoomPageWidth: ZoomToPageWidth,
             onWebLayout: () => SetViewMode(DocumentViewMode.WebLayout),
             isWebLayoutActive: () => !_outlineMode && _editor.ViewMode == DocumentViewMode.WebLayout,
             onDraftView: () => SetViewMode(DocumentViewMode.Draft),
@@ -1609,6 +1612,27 @@ public sealed class MainWindow : Window
     // size + margins. The chosen factor drives DocumentView.ZoomLevel (clamped, shared with the slider).
     private void OpenZoomDialog()
     {
+        var (pageWidthFactor, textWidthFactor, wholePageFactor) = ComputeZoomFitFactors();
+
+        var chosen = ZoomDialog.Prompt(this, _editor.ZoomLevel, pageWidthFactor, textWidthFactor, wholePageFactor);
+        if (chosen is { } factor)
+            _editor.ZoomLevel = factor;
+    }
+
+    private void ZoomToOnePage()
+    {
+        var (_, _, wholePageFactor) = ComputeZoomFitFactors();
+        _editor.ZoomLevel = wholePageFactor;
+    }
+
+    private void ZoomToPageWidth()
+    {
+        var (pageWidthFactor, _, _) = ComputeZoomFitFactors();
+        _editor.ZoomLevel = pageWidthFactor;
+    }
+
+    private (double PageWidthFactor, double TextWidthFactor, double WholePageFactor) ComputeZoomFitFactors()
+    {
         _editor.CommitToModel();
         var page = _editor.Model.Page;
         var (pageWidthDip, pageHeightDip) = PageLayout.PageSizeDip(page);
@@ -1619,13 +1643,10 @@ public sealed class MainWindow : Window
         var viewportWidth = Math.Max(0, _workspace.ActualWidth - margin.Left - margin.Right);
         var viewportHeight = Math.Max(0, _workspace.ActualHeight - margin.Top - margin.Bottom);
 
-        var pageWidthFactor = ZoomFit.PageWidth(pageWidthDip, viewportWidth);
-        var textWidthFactor = ZoomFit.TextWidth(contentWidthDip, viewportWidth);
-        var wholePageFactor = ZoomFit.WholePage(pageWidthDip, pageHeightDip, viewportWidth, viewportHeight);
-
-        var chosen = ZoomDialog.Prompt(this, _editor.ZoomLevel, pageWidthFactor, textWidthFactor, wholePageFactor);
-        if (chosen is { } factor)
-            _editor.ZoomLevel = factor;
+        return (
+            ZoomFit.PageWidth(pageWidthDip, viewportWidth),
+            ZoomFit.TextWidth(contentWidthDip, viewportWidth),
+            ZoomFit.WholePage(pageWidthDip, pageHeightDip, viewportWidth, viewportHeight));
     }
 
     // QAT Undo / Redo: focus the editing surface and run its built-in (RichTextBox) undo/redo, which is
