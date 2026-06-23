@@ -486,8 +486,11 @@
   <data name="SelectionPane_Title" xml:space="preserve"><value>Volet Sélection</value></data>
   <data name="SelectionPane_Hint" xml:space="preserve"><value>Sélectionnez un objet pour le renommer, afficher/masquer ou modifier son ordre de superposition.</value></data>
   <data name="SelectionPane_ObjectListLabel" xml:space="preserve"><value>Objets de cette feuille</value></data>
-  <data name="SelectionPane_NameLabel" xml:space="preserve"><value>Nom de l'objet</value></data>
+  <data name="SelectionPane_SearchLabel" xml:space="preserve"><value>Rechercher :</value></data>
+  <data name="SelectionPane_FilterLabel" xml:space="preserve"><value>Filtrer :</value></data>
+  <data name="SelectionPane_NameLabel" xml:space="preserve"><value>Nom :</value></data>
   <data name="SelectionPane_VisibilityToggle" xml:space="preserve"><value>Afficher ou masquer cet objet</value></data>
+  <data name="SelectionPane_RenameButton" xml:space="preserve"><value>Renommer</value></data>
   <data name="SelectionPane_BringForward" xml:space="preserve"><value>Avancer</value></data>
   <data name="SelectionPane_SendBackward" xml:space="preserve"><value>Reculer</value></data>
   <data name="SelectionPane_ShowAll" xml:space="preserve"><value>Tout afficher</value></data>

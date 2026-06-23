@@ -504,8 +504,11 @@
   <data name="SelectionPane_Title" xml:space="preserve"><value>Selection Pane</value></data>
   <data name="SelectionPane_Hint" xml:space="preserve"><value>Select an object to rename it, toggle its visibility, or change its z-order.</value></data>
   <data name="SelectionPane_ObjectListLabel" xml:space="preserve"><value>Objects on this sheet</value></data>
-  <data name="SelectionPane_NameLabel" xml:space="preserve"><value>Object name</value></data>
+  <data name="SelectionPane_SearchLabel" xml:space="preserve"><value>Search:</value></data>
+  <data name="SelectionPane_FilterLabel" xml:space="preserve"><value>Filter:</value></data>
+  <data name="SelectionPane_NameLabel" xml:space="preserve"><value>Name:</value></data>
   <data name="SelectionPane_VisibilityToggle" xml:space="preserve"><value>Show or hide this object</value></data>
+  <data name="SelectionPane_RenameButton" xml:space="preserve"><value>Rename</value></data>
   <data name="SelectionPane_BringForward" xml:space="preserve"><value>Bring Forward</value></data>
   <data name="SelectionPane_SendBackward" xml:space="preserve"><value>Send Backward</value></data>
   <data name="SelectionPane_ShowAll" xml:space="preserve"><value>Show All</value></data>

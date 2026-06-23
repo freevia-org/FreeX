@@ -2254,6 +2254,7 @@ public sealed class AvaloniaShellSourceTests
         var parityCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
         var drawingFormatSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.DrawingFormatDialogs.cs"));
         var pictureShapeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.PictureShapeTabs.cs"));
+        var selectionPaneSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.SelectionPane.cs"));
 
         parityCaptureSource.Should().Contain("(\"dialog.TextToColumns\", () => ShowTextToColumnsParityDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.Consolidate\", () => ShowConsolidateDialogAsync()),");
@@ -2307,6 +2308,10 @@ public sealed class AvaloniaShellSourceTests
         parityCaptureSource.Should().Contain("private Task ShowTextToColumnsParityDialogAsync()");
         parityCaptureSource.Should().Contain("private Task ShowSparklineParityDialogAsync()");
         parityCaptureSource.Should().Contain("private async Task ShowSelectionPaneParityDialogAsync()");
+        parityCaptureSource.Should().Contain("chart.Name = \"Revenue Chart\";");
+        parityCaptureSource.Should().Contain("shape.Name = \"Rectangle 1\";");
+        parityCaptureSource.Should().Contain("new SelectionPaneViewPlanner.Item(");
+        parityCaptureSource.Should().Contain("await OpenSelectionPaneDialogAsync(items);");
         parityCaptureSource.Should().Contain("await OpenSelectionPaneDialogAsync();");
         parityCaptureSource.Should().Contain("private async Task ShowWithParityPivotAsync(Func<Task> showDialogAsync)");
         parityCaptureSource.Should().Contain("private async Task ShowPivotTableOptionsParityDialogAsync()");
@@ -2344,6 +2349,20 @@ public sealed class AvaloniaShellSourceTests
         drawingFormatSource.Should().Contain("Grid.SetColumn(directionBox, 1);");
         drawingFormatSource.Should().Contain("Grid.SetColumnSpan(directionBox, 3);");
         drawingFormatSource.Should().Contain("Content = UiText.Get(\"Common_Ok\"), IsDefault = true, MinWidth = 76, Width = 76");
+
+        selectionPaneSource.Should().Contain("Width = 520");
+        selectionPaneSource.Should().Contain("Height = 440");
+        selectionPaneSource.Should().Contain("var searchBox = new TextBox { MinWidth = 160");
+        selectionPaneSource.Should().Contain("AutomationProperties.SetAutomationId(searchBox, \"SelectionPaneSearchBox\")");
+        selectionPaneSource.Should().Contain("AutomationProperties.SetAutomationId(filterBox, \"SelectionPaneFilterBox\")");
+        selectionPaneSource.Should().Contain("AutomationProperties.SetAutomationId(renameBox, \"SelectionPaneRenameBox\")");
+        selectionPaneSource.Should().Contain("AutomationProperties.SetAutomationId(toggleVisibilityButton, \"SelectionPaneToggleVisibilityButton\")");
+        selectionPaneSource.Should().Contain("ApplySelectionPaneListStyle(listBox)");
+        selectionPaneSource.Should().Contain("x.OfType<ListBoxItem>().Class(\":selected\")");
+        selectionPaneSource.Should().Contain("Children = { showAllButton, hideAllButton, moveUpButton, moveDownButton }");
+        selectionPaneSource.Should().Contain("Children = { ok, cancel }");
+        selectionPaneSource.Should().Contain("CreateSelectionPaneEyeIcon()");
+        selectionPaneSource.Should().NotContain("SelectionPane_Hint");
     }
 
     [Fact]
