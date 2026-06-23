@@ -3876,11 +3876,11 @@ public sealed partial class MainWindow : Window
                     : isGroupedTab
                         ? Brush(236, 246, 255)
                         : Brushes.Transparent,
-                BorderBrush = tab.IsActive ? Brushes.Transparent : Brush(213, 217, 223),
-                BorderThickness = tab.IsActive ? new Thickness(0) : new Thickness(0, 0, 1, 0),
+                BorderBrush = Brush(213, 217, 223),
+                BorderThickness = tab.IsActive ? new Thickness(1, 1, 1, 0) : new Thickness(0, 0, 1, 0),
                 Content = content,
                 Tag = tab.Id,
-                Margin = new Thickness(0),
+                Margin = tab.IsActive ? new Thickness(0, -1, 0, 0) : new Thickness(0),
             };
             button.ContextMenu = CreateSheetTabContextMenu(tab);
             button.PointerPressed += (_, args) => SelectSheetFromPointer(tab.Id, args);
