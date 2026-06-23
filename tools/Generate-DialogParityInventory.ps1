@@ -187,7 +187,7 @@ $routes = @(
     @{
         RouteId = "dialog.TextToColumns"; DisplayName = "Text to Columns"
         Wpf = @("screenshots\data-tools-dialogs-tour\freex_data_tools_text_to_columns_*.png")
-        Shared = @("src\FreeX.App.Presentation\TextToColumns\*.cs")
+        Shared = @("src\FreeX.App.Presentation\CellReferenceInputParser.cs", "src\FreeX.App.Presentation\TextToColumns\*.cs")
     },
     @{
         RouteId = "dialog.AdvancedFilter"; DisplayName = "Advanced Filter"

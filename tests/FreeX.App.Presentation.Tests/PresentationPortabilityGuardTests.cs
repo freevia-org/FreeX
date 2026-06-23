@@ -56,6 +56,24 @@ public sealed class PresentationPortabilityGuardTests
             + "Windows-only APIs, and host-project dependencies");
     }
 
+    [Fact]
+    public void CellReferenceInputParser_IsSingleSharedPresentationImplementation()
+    {
+        var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
+        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
+            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+
+        File.Exists(Path.Combine(presentationRoot, "CellReferenceInputParser.cs"))
+            .Should()
+            .BeTrue("cell reference parsing is shared by Host dialogs and portable Text to Columns planning");
+        File.Exists(Path.Combine(presentationRoot, "TextToColumns", "CellReferenceInputParser.cs"))
+            .Should()
+            .BeFalse("Text to Columns should use the shared presentation parser instead of carrying a local copy");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "CellReferenceInputParser.cs"))
+            .Should()
+            .BeFalse("WPF host should use the shared presentation parser instead of carrying a renderer-local copy");
+    }
+
     private static bool IsPortableSourceFile(string path)
     {
         if (!SourceExtensions.Contains(Path.GetExtension(path)))
