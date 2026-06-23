@@ -51,6 +51,7 @@ public sealed partial class MainWindow
         var references = PivotCalculatedItemPlanner.AvailableFieldReferences(headers);
 
         var fieldBox = new ComboBox { MinWidth = 260 };
+        ApplyPivotComboBoxChrome(fieldBox);
         foreach (var field in fields)
             fieldBox.Items.Add(field.Caption);
         fieldBox.SelectedIndex = 0;
@@ -58,6 +59,7 @@ public sealed partial class MainWindow
         AutomationProperties.SetName(fieldBox, UiText.Get("PivotCalcItem_FieldLabel"));
 
         var nameBox = new TextBox { MinWidth = 260 };
+        ApplyPivotTextBoxChrome(nameBox);
         AutomationProperties.SetAutomationId(nameBox, "PivotCalcItemNameBox");
         AutomationProperties.SetName(nameBox, UiText.Get("PivotCalcItem_NameLabel"));
 
@@ -66,13 +68,20 @@ public sealed partial class MainWindow
             MinWidth = 260,
             AcceptsReturn = true,
             MinHeight = 56,
+            MaxHeight = double.PositiveInfinity,
             TextWrapping = global::Avalonia.Media.TextWrapping.Wrap,
             Text = "= ",
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            BorderBrush = Brush(130, 130, 130),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(4, 1),
         };
         AutomationProperties.SetAutomationId(formulaBox, "PivotCalcItemFormulaBox");
         AutomationProperties.SetName(formulaBox, UiText.Get("PivotCalcItem_FormulaLabel"));
 
         var existingBox = new ComboBox { MinWidth = 260 };
+        ApplyPivotComboBoxChrome(existingBox);
         AutomationProperties.SetAutomationId(existingBox, "PivotCalcItemExistingBox");
         AutomationProperties.SetName(existingBox, UiText.Get("PivotCalcItem_ExistingLabel"));
 
@@ -115,7 +124,7 @@ public sealed partial class MainWindow
             }
         };
 
-        var fieldsList = new ListBox { Height = 96 };
+        var fieldsList = new ListBox { Height = 96, FontSize = 12, FontFamily = FormulaBarFontFamily };
         foreach (var reference in references)
             fieldsList.Items.Add(reference);
         if (references.Count > 0)
@@ -123,7 +132,8 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(fieldsList, "PivotCalcItemReferenceList");
         AutomationProperties.SetName(fieldsList, UiText.Get("PivotCalcItem_FieldsAutomation"));
 
-        var insertButton = new Button { Content = UiText.Get("PivotCalcItem_InsertField"), MinWidth = 110 };
+        var insertButton = new Button { Content = UiText.Get("PivotCalcItem_InsertField") };
+        ApplyPivotButtonChrome(insertButton, 110);
         AutomationProperties.SetAutomationId(insertButton, "PivotCalcItemInsertButton");
         void InsertSelectedReference()
         {
@@ -144,19 +154,22 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get("PivotCalcItem_Title"),
-            Width = 420,
-            SizeToContent = SizeToContent.Height,
+            Width = 500,
+            Height = 560,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
             ShowInTaskbar = false,
         };
         AutomationProperties.SetAutomationId(dialog, "PivotCalculatedItemDialog");
 
-        var save = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 80 };
+        var save = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true };
+        ApplyPivotButtonChrome(save, 80, isDefault: true);
         AutomationProperties.SetAutomationId(save, "PivotCalcItemSaveButton");
-        var delete = new Button { Content = UiText.Get("PivotCalcItem_Delete"), MinWidth = 80 };
+        var delete = new Button { Content = UiText.Get("PivotCalcItem_Delete") };
+        ApplyPivotButtonChrome(delete, 80);
         AutomationProperties.SetAutomationId(delete, "PivotCalcItemDeleteButton");
-        var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 80 };
+        var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true };
+        ApplyPivotButtonChrome(cancel, 80);
         AutomationProperties.SetAutomationId(cancel, "PivotCalcItemCancelButton");
 
         // Outcome carried out of the dialog: Save (upsert) or Delete; null means cancel.
@@ -189,15 +202,15 @@ public sealed partial class MainWindow
         };
 
         var content = new StackPanel { Spacing = 8, Margin = new Thickness(12) };
-        content.Children.Add(new TextBlock { Text = UiText.Get("PivotCalcItem_FieldLabel"), Foreground = HeaderForeground });
+        content.Children.Add(new TextBlock { Text = UiText.Get("PivotCalcItem_FieldLabel"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
         content.Children.Add(fieldBox);
-        content.Children.Add(new TextBlock { Text = UiText.Get("PivotCalcItem_ExistingLabel"), Foreground = HeaderForeground });
+        content.Children.Add(new TextBlock { Text = UiText.Get("PivotCalcItem_ExistingLabel"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
         content.Children.Add(existingBox);
-        content.Children.Add(new TextBlock { Text = UiText.Get("PivotCalcItem_NameLabel"), Foreground = HeaderForeground });
+        content.Children.Add(new TextBlock { Text = UiText.Get("PivotCalcItem_NameLabel"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
         content.Children.Add(nameBox);
-        content.Children.Add(new TextBlock { Text = UiText.Get("PivotCalcItem_FormulaLabel"), Foreground = HeaderForeground });
+        content.Children.Add(new TextBlock { Text = UiText.Get("PivotCalcItem_FormulaLabel"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
         content.Children.Add(formulaBox);
-        content.Children.Add(new TextBlock { Text = UiText.Get("PivotCalcItem_FieldsLabel"), Foreground = HeaderForeground });
+        content.Children.Add(new TextBlock { Text = UiText.Get("PivotCalcItem_FieldsLabel"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
         content.Children.Add(fieldsList);
         content.Children.Add(new StackPanel
         {

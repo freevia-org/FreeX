@@ -7,12 +7,14 @@ using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
+using Avalonia.Media;
 
 using FreeX.App.Presentation.Charts.Editing;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
+using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
 
 namespace FreeX.App.Avalonia;
 
@@ -71,6 +73,10 @@ public sealed partial class MainWindow
                 Content = UiText.Get("ChartCombo_AsLine"),
                 IsChecked = series.AsLine,
                 IsEnabled = !isBase,
+                MinHeight = 20,
+                MaxHeight = 20,
+                FontSize = 12,
+                FontFamily = FormulaBarFontFamily,
             };
             AutomationProperties.SetAutomationId(lineCheck, $"ChartComboLineCheck{series.SeriesIndex}");
             lineChecks.Add(lineCheck);
@@ -80,6 +86,10 @@ public sealed partial class MainWindow
                 Content = UiText.Get("ChartCombo_SecondaryAxis"),
                 IsChecked = series.OnSecondaryAxis,
                 IsEnabled = !isBase,
+                MinHeight = 20,
+                MaxHeight = 20,
+                FontSize = 12,
+                FontFamily = FormulaBarFontFamily,
             };
             AutomationProperties.SetAutomationId(secondaryCheck, $"ChartComboSecondaryCheck{series.SeriesIndex}");
             secondaryChecks.Add(secondaryCheck);
@@ -94,7 +104,9 @@ public sealed partial class MainWindow
                     {
                         Text = string.Format(CultureInfo.CurrentCulture, UiText.Get("ChartCombo_SeriesRow"), series.SeriesIndex + 1),
                         Width = 90,
-                        VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center,
+                        FontSize = 12,
+                        FontFamily = FormulaBarFontFamily,
+                        VerticalAlignment = AvaloniaVerticalAlignment.Center,
                     },
                     lineCheck,
                     secondaryCheck,
@@ -127,7 +139,7 @@ public sealed partial class MainWindow
             MinWidth = 320,
             Children =
             {
-                new TextBlock { Text = UiText.Get("ChartCombo_Instruction") },
+                new TextBlock { Text = UiText.Get("ChartCombo_Instruction"), FontSize = 12, FontFamily = FormulaBarFontFamily },
                 rows,
                 buttonRow,
             },
@@ -204,6 +216,10 @@ public sealed partial class MainWindow
             Content = UiText.Get("MoveChart_ObjectInSheet"),
             GroupName = "MoveChartTarget",
             IsChecked = current.TargetKind == ChartMoveTargetKind.ObjectInSheet,
+            MinHeight = 20,
+            MaxHeight = 20,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
         };
         AutomationProperties.SetAutomationId(objectRadio, "MoveChartObjectRadio");
 
@@ -212,10 +228,27 @@ public sealed partial class MainWindow
             Content = UiText.Get("MoveChart_NewChartSheet"),
             GroupName = "MoveChartTarget",
             IsChecked = current.TargetKind == ChartMoveTargetKind.NewSheet,
+            MinHeight = 20,
+            MaxHeight = 20,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
         };
         AutomationProperties.SetAutomationId(newSheetRadio, "MoveChartNewSheetRadio");
 
-        var targetBox = new TextBox { Text = current.TargetName, Width = 260 };
+        var targetBox = new TextBox
+        {
+            Text = current.TargetName,
+            Width = 260,
+            Height = 24,
+            MinHeight = 24,
+            MaxHeight = 24,
+            Padding = new Thickness(4, 1),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            BorderBrush = Brush(130, 130, 130),
+            BorderThickness = new Thickness(1),
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
+        };
         AutomationProperties.SetName(targetBox, "Move chart target sheet");
         AutomationProperties.SetAutomationId(targetBox, "MoveChartTargetBox");
 
@@ -238,7 +271,7 @@ public sealed partial class MainWindow
             {
                 objectRadio,
                 newSheetRadio,
-                new TextBlock { Text = UiText.Get("MoveChart_TargetNameLabel"), Margin = new Thickness(0, 6, 0, 0) },
+                new TextBlock { Text = UiText.Get("MoveChart_TargetNameLabel"), FontSize = 12, FontFamily = FormulaBarFontFamily, Margin = new Thickness(0, 6, 0, 0) },
                 targetBox,
                 buttonRow,
             },
@@ -280,16 +313,28 @@ public sealed partial class MainWindow
         var state = current;
 
         var chartAreaButton = new Button { Content = DescribeColor(UiText.Get("ChartArea_ChartAreaFill"), current.ChartAreaFillColor), Width = 260 };
+        ApplyChartButtonChrome(chartAreaButton, 260);
         AutomationProperties.SetAutomationId(chartAreaButton, "ChartAreaFillButton");
         var plotAreaButton = new Button { Content = DescribeColor(UiText.Get("ChartArea_PlotAreaFill"), current.PlotAreaFillColor), Width = 260 };
+        ApplyChartButtonChrome(plotAreaButton, 260);
         AutomationProperties.SetAutomationId(plotAreaButton, "ChartAreaPlotFillButton");
         var plotBorderButton = new Button { Content = DescribeColor(UiText.Get("ChartArea_PlotAreaBorder"), current.PlotAreaBorderColor), Width = 260 };
+        ApplyChartButtonChrome(plotBorderButton, 260);
         AutomationProperties.SetAutomationId(plotBorderButton, "ChartAreaPlotBorderButton");
 
         var borderWidthBox = new TextBox
         {
             Text = current.PlotAreaBorderThickness.ToString(CultureInfo.InvariantCulture),
             Width = 260,
+            Height = 24,
+            MinHeight = 24,
+            MaxHeight = 24,
+            Padding = new Thickness(4, 1),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            BorderBrush = Brush(130, 130, 130),
+            BorderThickness = new Thickness(1),
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
         };
         AutomationProperties.SetName(borderWidthBox, "Plot area border width");
         AutomationProperties.SetAutomationId(borderWidthBox, "ChartAreaPlotBorderWidthBox");
@@ -361,12 +406,12 @@ public sealed partial class MainWindow
             MinWidth = 300,
             Children =
             {
-                new TextBlock { Text = UiText.Get("ChartArea_FillLabel") },
+                new TextBlock { Text = UiText.Get("ChartArea_FillLabel"), FontSize = 12, FontFamily = FormulaBarFontFamily },
                 chartAreaButton,
                 plotAreaButton,
-                new TextBlock { Text = UiText.Get("ChartArea_BorderLabel"), Margin = new Thickness(0, 6, 0, 0) },
+                new TextBlock { Text = UiText.Get("ChartArea_BorderLabel"), FontSize = 12, FontFamily = FormulaBarFontFamily, Margin = new Thickness(0, 6, 0, 0) },
                 plotBorderButton,
-                new TextBlock { Text = UiText.Get("ChartArea_BorderWidthLabel") },
+                new TextBlock { Text = UiText.Get("ChartArea_BorderWidthLabel"), FontSize = 12, FontFamily = FormulaBarFontFamily },
                 borderWidthBox,
                 buttonRow,
             },

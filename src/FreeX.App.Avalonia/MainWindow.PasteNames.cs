@@ -34,8 +34,8 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get("PasteNames_Title"),
-            Width = 400,
-            Height = 320,
+            Width = 380,
+            Height = 300,
             MinWidth = 340,
             MinHeight = 260,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -43,7 +43,8 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(dialog, "PasteNamesDialog");
 
-        var namesList = new ListBox { MinHeight = 160 };
+        var namesList = new ListBox { MinHeight = 150 };
+        ApplyNamesListBoxStyle(namesList);
         AutomationProperties.SetAutomationId(namesList, "PasteNamesList");
         namesList.ItemsSource = items.Select(FormatPasteNamesRow).ToList();
         if (items.Count > 0)
@@ -51,17 +52,21 @@ public sealed partial class MainWindow
 
         var warningText = new TextBlock
         {
+            FontSize = 12,
             Foreground = Brush(180, 30, 30),
             TextWrapping = TextWrapping.Wrap,
             IsVisible = false,
         };
         AutomationProperties.SetAutomationId(warningText, "PasteNamesWarningText");
 
-        var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 84 };
+        var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 72 };
+        ApplyNamesButtonChrome(okButton, minWidth: 72, isDefault: true);
         AutomationProperties.SetAutomationId(okButton, "PasteNamesOkButton");
-        var pasteListButton = new Button { Content = UiText.Get("PasteNames_PasteList"), MinWidth = 96 };
+        var pasteListButton = new Button { Content = UiText.Get("PasteNames_PasteList"), MinWidth = 92 };
+        ApplyNamesButtonChrome(pasteListButton, minWidth: 92);
         AutomationProperties.SetAutomationId(pasteListButton, "PasteNamesPasteListButton");
-        var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 84 };
+        var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 72 };
+        ApplyNamesButtonChrome(cancelButton, minWidth: 72);
         AutomationProperties.SetAutomationId(cancelButton, "PasteNamesCancelButton");
 
         void SyncButtonState()
@@ -135,7 +140,7 @@ public sealed partial class MainWindow
                     Children =
                     {
                         WithDock(
-                            new TextBlock { Text = UiText.Get("PasteNames_NamesLabel"), Foreground = HeaderForeground },
+                            new TextBlock { Text = UiText.Get("PasteNames_NamesLabel"), FontSize = 12, Foreground = HeaderForeground },
                             Dock.Top,
                             new Thickness(0, 0, 0, 8)),
                         WithDock(warningText, Dock.Bottom, new Thickness(0, 8, 0, 0)),

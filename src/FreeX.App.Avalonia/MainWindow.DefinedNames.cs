@@ -1,8 +1,10 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Styling;
 
 using FreeX.App.Avalonia.Dialogs;
 using FreeX.App.Presentation.DefinedNames;
@@ -62,20 +64,26 @@ public sealed partial class MainWindow
             SelectedIndex = 0,
             MinWidth = 160,
         };
+        ApplyNamesComboBoxChrome(filterBox);
         AutomationProperties.SetAutomationId(filterBox, "NameManagerFilterBox");
 
         var namesList = new ListBox { MinHeight = 220 };
+        ApplyNamesListBoxStyle(namesList);
         AutomationProperties.SetAutomationId(namesList, "NameManagerNamesList");
 
         var newButton = new Button { Content = UiText.Get("InsertLoc_NewButton"), MinWidth = 84 };
+        ApplyNamesButtonChrome(newButton, minWidth: 84);
         AutomationProperties.SetAutomationId(newButton, "NameManagerNewButton");
         var editButton = new Button { Content = UiText.Get("InsertLoc_EditButton"), MinWidth = 84, IsEnabled = false };
+        ApplyNamesButtonChrome(editButton, minWidth: 84);
         AutomationProperties.SetAutomationId(editButton, "NameManagerEditButton");
         var deleteButton = new Button { Content = UiText.Get("InsertLoc_DeleteButton"), MinWidth = 84, IsEnabled = false };
+        ApplyNamesButtonChrome(deleteButton, minWidth: 84);
         AutomationProperties.SetAutomationId(deleteButton, "NameManagerDeleteButton");
 
         var warningText = new TextBlock
         {
+            FontSize = 12,
             Foreground = Brush(180, 30, 30),
             TextWrapping = TextWrapping.Wrap,
             IsVisible = false,
@@ -141,6 +149,7 @@ public sealed partial class MainWindow
         };
 
         var closeButton = new Button { Content = UiText.Get("InsertLoc_CloseButton"), IsCancel = true, MinWidth = 84 };
+        ApplyNamesButtonChrome(closeButton, minWidth: 84);
         AutomationProperties.SetAutomationId(closeButton, "NameManagerCloseButton");
         closeButton.Click += (_, _) => dialog.Close();
 
@@ -169,7 +178,7 @@ public sealed partial class MainWindow
             Spacing = 8,
             Children =
             {
-                new TextBlock { Text = UiText.Get("InsertLoc_FilterLabel"), VerticalAlignment = AvaloniaVerticalAlignment.Center },
+                new TextBlock { Text = UiText.Get("InsertLoc_FilterLabel"), FontSize = 12, VerticalAlignment = AvaloniaVerticalAlignment.Center },
                 filterBox,
             },
         };
@@ -213,7 +222,7 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = isEdit ? UiText.Get("InsertLoc_EditNameTitle") : UiText.Get("InsertLoc_NewNameTitle"),
-            Width = 440,
+            Width = 460,
             Height = 300,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
@@ -223,6 +232,7 @@ public sealed partial class MainWindow
         var scopeChoices = DefinedNamesShellGlue.BuildScopeChoices(_session.Workbook);
 
         var nameBox = new TextBox { Text = seed?.Name ?? string.Empty, MinWidth = 240 };
+        ApplyNamesTextBoxChrome(nameBox);
         AutomationProperties.SetAutomationId(nameBox, "DefineNameNameBox");
 
         var scopeBox = new ComboBox
@@ -231,6 +241,7 @@ public sealed partial class MainWindow
             SelectedIndex = FindScopeIndex(scopeChoices, seed?.ScopeLabel),
             MinWidth = 200,
         };
+        ApplyNamesComboBoxChrome(scopeBox);
         AutomationProperties.SetAutomationId(scopeBox, "DefineNameScopeBox");
 
         var refersToBox = new TextBox
@@ -238,6 +249,7 @@ public sealed partial class MainWindow
             Text = seed?.RefersTo ?? FormatRangeReferenceQualified(_session.SelectedRange),
             MinWidth = 240,
         };
+        ApplyNamesTextBoxChrome(refersToBox);
         AutomationProperties.SetAutomationId(refersToBox, "DefineNameRefersToBox");
 
         var commentBox = new TextBox
@@ -248,10 +260,12 @@ public sealed partial class MainWindow
             MinHeight = 48,
             TextWrapping = TextWrapping.Wrap,
         };
+        ApplyNamesTextBoxChrome(commentBox, fixedHeight: false);
         AutomationProperties.SetAutomationId(commentBox, "DefineNameCommentBox");
 
         var warningText = new TextBlock
         {
+            FontSize = 12,
             Foreground = Brush(180, 30, 30),
             TextWrapping = TextWrapping.Wrap,
             IsVisible = false,
@@ -259,8 +273,10 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(warningText, "DefineNameWarningText");
 
         var okButton = new Button { Content = UiText.Get("InsertLoc_OkButton"), IsDefault = true, MinWidth = 84 };
+        ApplyNamesButtonChrome(okButton, minWidth: 84, isDefault: true);
         AutomationProperties.SetAutomationId(okButton, "DefineNameOkButton");
         var cancelButton = new Button { Content = UiText.Get("InsertLoc_CancelButton"), IsCancel = true, MinWidth = 84 };
+        ApplyNamesButtonChrome(cancelButton, minWidth: 84);
         AutomationProperties.SetAutomationId(cancelButton, "DefineNameCancelButton");
 
         void ShowWarning(string message)
@@ -398,8 +414,8 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get("InsertLoc_CreateNamesTitle"),
-            Width = 360,
-            Height = 240,
+            Width = 280,
+            Height = 230,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -416,15 +432,18 @@ public sealed partial class MainWindow
 
         var warningText = new TextBlock
         {
+            FontSize = 12,
             Foreground = Brush(180, 30, 30),
             TextWrapping = TextWrapping.Wrap,
             IsVisible = false,
         };
         AutomationProperties.SetAutomationId(warningText, "CreateNamesWarningText");
 
-        var okButton = new Button { Content = UiText.Get("InsertLoc_OkButton"), IsDefault = true, MinWidth = 84 };
+        var okButton = new Button { Content = UiText.Get("InsertLoc_OkButton"), IsDefault = true, MinWidth = 76 };
+        ApplyNamesButtonChrome(okButton, minWidth: 76, isDefault: true);
         AutomationProperties.SetAutomationId(okButton, "CreateNamesOkButton");
-        var cancelButton = new Button { Content = UiText.Get("InsertLoc_CancelButton"), IsCancel = true, MinWidth = 84 };
+        var cancelButton = new Button { Content = UiText.Get("InsertLoc_CancelButton"), IsCancel = true, MinWidth = 76 };
+        ApplyNamesButtonChrome(cancelButton, minWidth: 76);
         AutomationProperties.SetAutomationId(cancelButton, "CreateNamesCancelButton");
 
         okButton.Click += (_, _) =>
@@ -501,6 +520,7 @@ public sealed partial class MainWindow
                         new TextBlock
                         {
                             Text = UiText.Get("InsertLoc_CreateNamesFromValuesIn"),
+                            FontSize = 12,
                             Foreground = HeaderForeground,
                         },
                         topRowBox,
@@ -603,6 +623,7 @@ public sealed partial class MainWindow
         var labelBlock = new TextBlock
         {
             Text = label,
+            FontSize = 12,
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
             Margin = new Thickness(0, 0, 8, 8),
         };
@@ -631,5 +652,81 @@ public sealed partial class MainWindow
         public void OnError(Exception error) { }
 
         public void OnNext(T value) => onNext(value);
+    }
+
+    // ── Visual chrome helpers (Names/DefinedNames dialogs) ───────────────────
+
+    /// <summary>
+    /// Applies standard Names-dialog button chrome (Height=24, FontSize=12, white background, grey/blue border).
+    /// <paramref name="minWidth"/> sets MinWidth; <paramref name="isDefault"/> uses blue border for the
+    /// default/OK button.
+    /// </summary>
+    private static void ApplyNamesButtonChrome(Button button, double minWidth = 84, bool isDefault = false)
+    {
+        button.MinWidth = minWidth;
+        button.Height = 24;
+        button.MinHeight = 24;
+        button.MaxHeight = 24;
+        button.Padding = new Thickness(4, 1);
+        button.Background = Brushes.White;
+        button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);
+        button.BorderThickness = new Thickness(1);
+        button.FontSize = 12;
+        button.FontFamily = FormulaBarFontFamily;
+        button.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
+        button.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+    }
+
+    /// <summary>
+    /// Applies standard Names-dialog text-box chrome (Height=24, Padding=(4,1), FontSize=12, grey border).
+    /// Pass <paramref name="fixedHeight"/>=false for multi-line boxes (e.g. Comment) that must grow.
+    /// </summary>
+    private static void ApplyNamesTextBoxChrome(TextBox textBox, bool fixedHeight = true)
+    {
+        if (fixedHeight)
+        {
+            textBox.Height = 24;
+            textBox.MinHeight = 24;
+            textBox.MaxHeight = 24;
+        }
+        textBox.Padding = new Thickness(4, 1);
+        textBox.FontSize = 12;
+        textBox.FontFamily = FormulaBarFontFamily;
+        textBox.BorderBrush = Brush(130, 130, 130);
+        textBox.BorderThickness = new Thickness(1);
+        textBox.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+    }
+
+    /// <summary>
+    /// Applies standard Names-dialog combo-box chrome (Height=24, Padding=(5,0,4,0), FontSize=12, grey border).
+    /// </summary>
+    private static void ApplyNamesComboBoxChrome(ComboBox comboBox)
+    {
+        comboBox.Height = 24;
+        comboBox.MinHeight = 24;
+        comboBox.MaxHeight = 24;
+        comboBox.Padding = new Thickness(5, 0, 4, 0);
+        comboBox.FontSize = 12;
+        comboBox.FontFamily = FormulaBarFontFamily;
+        comboBox.BorderBrush = Brush(130, 130, 130);
+        comboBox.BorderThickness = new Thickness(1);
+        comboBox.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+    }
+
+    /// <summary>
+    /// Applies standard Names-dialog list-box row chrome (MinHeight=24 per row, FontSize=12).
+    /// </summary>
+    private static void ApplyNamesListBoxStyle(ListBox listBox)
+    {
+        listBox.FontSize = 12;
+        listBox.Styles.Add(new Style(x => x.OfType<ListBoxItem>())
+        {
+            Setters =
+            {
+                new Setter(TemplatedControl.PaddingProperty, new Thickness(4, 1)),
+                new Setter(Layoutable.MinHeightProperty, 24.0),
+                new Setter(TemplatedControl.FontSizeProperty, 12.0),
+            },
+        });
     }
 }

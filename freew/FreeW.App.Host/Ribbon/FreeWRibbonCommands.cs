@@ -8,6 +8,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Free.Shared.Ribbon;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
 

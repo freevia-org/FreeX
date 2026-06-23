@@ -34,6 +34,67 @@ namespace FreeX.App.Avalonia;
 /// </summary>
 public sealed partial class MainWindow
 {
+    // -------------------------------------------------------------------------------------------------------
+    // Print dialog chrome helpers
+    // -------------------------------------------------------------------------------------------------------
+
+    private static void ApplyPrintButtonChrome(Button button, double minWidth = 80, bool isDefault = false)
+    {
+        button.MinWidth = minWidth;
+        button.Height = 24;
+        button.MinHeight = 24;
+        button.MaxHeight = 24;
+        button.Padding = new Thickness(4, 1);
+        button.Background = Brushes.White;
+        button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);
+        button.BorderThickness = new Thickness(1);
+        button.FontSize = 12;
+        button.FontFamily = FormulaBarFontFamily;
+        button.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
+        button.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+    }
+
+    private static void ApplyPrintTextBoxChrome(TextBox tb)
+    {
+        tb.Height = 24;
+        tb.MinHeight = 24;
+        tb.MaxHeight = 24;
+        tb.Padding = new Thickness(4, 1);
+        tb.FontSize = 12;
+        tb.FontFamily = FormulaBarFontFamily;
+        tb.BorderBrush = Brush(130, 130, 130);
+        tb.BorderThickness = new Thickness(1);
+        tb.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+    }
+
+    private static void ApplyPrintComboBoxChrome(ComboBox cb)
+    {
+        cb.Height = 24;
+        cb.MinHeight = 24;
+        cb.MaxHeight = 24;
+        cb.Padding = new Thickness(5, 0, 4, 0);
+        cb.FontSize = 12;
+        cb.FontFamily = FormulaBarFontFamily;
+        cb.BorderBrush = Brush(130, 130, 130);
+        cb.BorderThickness = new Thickness(1);
+    }
+
+    private static void ApplyPrintRadioButtonChrome(RadioButton rb)
+    {
+        rb.MinHeight = 20;
+        rb.MaxHeight = 20;
+        rb.FontSize = 12;
+        rb.FontFamily = FormulaBarFontFamily;
+    }
+
+    private static void ApplyPrintCheckBoxChrome(CheckBox cb)
+    {
+        cb.MinHeight = 20;
+        cb.MaxHeight = 20;
+        cb.FontSize = 12;
+        cb.FontFamily = FormulaBarFontFamily;
+    }
+
     private async Task ShowPrintDialogAsync()
     {
         if (_isOpening || _isSaving)
@@ -90,6 +151,7 @@ public sealed partial class MainWindow
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
             IsEnabled = canSpool,
         };
+        ApplyPrintComboBoxChrome(printerCombo);
         AutomationProperties.SetAutomationId(printerCombo, "PrintPrinterComboBox");
         foreach (var printer in printers)
             printerCombo.Items.Add(printer.DisplayName);
@@ -133,6 +195,7 @@ public sealed partial class MainWindow
                 IsChecked = option.IsDefault,
                 Margin = new Thickness(0, 2),
             };
+            ApplyPrintRadioButtonChrome(radio);
             AutomationProperties.SetAutomationId(radio, "PrintScope_" + option.Scope);
             var capturedScope = option.Scope;
             radio.IsCheckedChanged += (_, _) =>
@@ -154,6 +217,7 @@ public sealed partial class MainWindow
             IsChecked = true,
             Margin = new Thickness(0, 2),
         };
+        ApplyPrintRadioButtonChrome(allPagesRadio);
         AutomationProperties.SetAutomationId(allPagesRadio, "PrintPagesAll");
 
         var rangeRadio = new RadioButton
@@ -162,12 +226,15 @@ public sealed partial class MainWindow
             Content = UiText.Get("Print_PagesRange"),
             Margin = new Thickness(0, 2),
         };
+        ApplyPrintRadioButtonChrome(rangeRadio);
         AutomationProperties.SetAutomationId(rangeRadio, "PrintPagesRange");
 
         var fromBox = new TextBox { Text = "1", Width = 64 };
+        ApplyPrintTextBoxChrome(fromBox);
         AutomationProperties.SetAutomationId(fromBox, "PrintPagesFrom");
         AutomationProperties.SetName(fromBox, UiText.Get("Print_PagesFrom"));
         var toBox = new TextBox { Text = "1", Width = 64 };
+        ApplyPrintTextBoxChrome(toBox);
         AutomationProperties.SetAutomationId(toBox, "PrintPagesTo");
         AutomationProperties.SetName(toBox, UiText.Get("Print_PagesTo"));
         fromBox.IsEnabled = false;
@@ -201,9 +268,9 @@ public sealed partial class MainWindow
             Margin = new Thickness(22, 0, 0, 0),
             Children =
             {
-                new TextBlock { Text = UiText.Get("Print_PagesFrom"), VerticalAlignment = AvaloniaVerticalAlignment.Center },
+                new TextBlock { Text = UiText.Get("Print_PagesFrom"), VerticalAlignment = AvaloniaVerticalAlignment.Center, FontSize = 12, FontFamily = FormulaBarFontFamily },
                 fromBox,
-                new TextBlock { Text = UiText.Get("Print_PagesTo"), VerticalAlignment = AvaloniaVerticalAlignment.Center },
+                new TextBlock { Text = UiText.Get("Print_PagesTo"), VerticalAlignment = AvaloniaVerticalAlignment.Center, FontSize = 12, FontFamily = FormulaBarFontFamily },
                 toBox,
             },
         });
@@ -211,6 +278,7 @@ public sealed partial class MainWindow
         // ── Copies + collate ───────────────────────────────────────────────────
         content.Children.Add(CreatePrintSectionHeader(UiText.Get("Print_CopiesHeader")));
         var copiesBox = new TextBox { Text = "1", Width = 72 };
+        ApplyPrintTextBoxChrome(copiesBox);
         AutomationProperties.SetAutomationId(copiesBox, "PrintCopies");
         AutomationProperties.SetName(copiesBox, UiText.Get("Print_CopiesHeader"));
 
@@ -220,6 +288,7 @@ public sealed partial class MainWindow
             IsChecked = true,
             Margin = new Thickness(0, 2),
         };
+        ApplyPrintCheckBoxChrome(collateCheck);
         AutomationProperties.SetAutomationId(collateCheck, "PrintCollate");
 
         content.Children.Add(new StackPanel
@@ -228,7 +297,7 @@ public sealed partial class MainWindow
             Spacing = 8,
             Children =
             {
-                new TextBlock { Text = UiText.Get("Print_CopiesLabel"), VerticalAlignment = AvaloniaVerticalAlignment.Center },
+                new TextBlock { Text = UiText.Get("Print_CopiesLabel"), VerticalAlignment = AvaloniaVerticalAlignment.Center, FontSize = 12, FontFamily = FormulaBarFontFamily },
                 copiesBox,
             },
         });
@@ -239,17 +308,17 @@ public sealed partial class MainWindow
         {
             Content = canSpool ? UiText.Get("Print_PrintButton") : UiText.Get("Print_SaveAsPdfButton"),
             MinWidth = 96,
-            Padding = new Thickness(10, 4),
         };
+        ApplyPrintButtonChrome(printButton, minWidth: 96, isDefault: true);
         AutomationProperties.SetAutomationId(printButton, "PrintConfirmButton");
 
         var cancelButton = new Button
         {
             Content = UiText.Get("Print_CancelButton"),
             MinWidth = 96,
-            Padding = new Thickness(10, 4),
             IsCancel = true,
         };
+        ApplyPrintButtonChrome(cancelButton, minWidth: 96);
         AutomationProperties.SetAutomationId(cancelButton, "PrintCancelButton");
         cancelButton.Click += (_, _) => dialog.Close();
 
@@ -496,6 +565,8 @@ public sealed partial class MainWindow
         {
             Text = text,
             FontWeight = FontWeight.SemiBold,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
             Foreground = HeaderForeground,
             Margin = new Thickness(0, 6, 0, 0),
         };

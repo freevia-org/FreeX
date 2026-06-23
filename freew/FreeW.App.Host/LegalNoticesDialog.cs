@@ -51,25 +51,10 @@ public sealed partial class LegalNoticesDialog : Window
         DockPanel.SetDock(intro, Dock.Top);
         root.Children.Add(intro);
 
-        var close = new Button
-        {
-            Content = "Close",
-            MinWidth = 84,
-            IsDefault = true,
-            IsCancel = true,
-            HorizontalAlignment = HorizontalAlignment.Right
-        };
-        close.Click += (_, _) => Close();
+        var buttonRow = DialogButtonRowFactory.CreateOkOnly(Close, buttonWidth: 84, rowMargin: new Thickness(0, 12, 0, 0), acceptContent: "Close");
+        var close = (Button)buttonRow.Children[0];
         AutomationProperties.SetAutomationId(close, "LegalNoticesCloseButton");
         AutomationProperties.SetHelpText(close, "Close the Legal Notices dialog.");
-
-        var buttonRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 12, 0, 0)
-        };
-        buttonRow.Children.Add(close);
         DockPanel.SetDock(buttonRow, Dock.Bottom);
         root.Children.Add(buttonRow);
 

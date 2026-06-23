@@ -13,6 +13,7 @@ using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
+using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
 
 namespace FreeX.App.Avalonia;
 
@@ -63,6 +64,7 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetName(positionCombo, "Data label position");
         AutomationProperties.SetAutomationId(positionCombo, "ChartDataLabelsPositionCombo");
+        ApplyChartComboBoxChrome(positionCombo);
         positionCombo.SelectedItem =
             positionChoices.FirstOrDefault(c => c.Position == current.Position)
             ?? (positionChoices.Count > 0 ? positionChoices[0] : null);
@@ -105,9 +107,9 @@ public sealed partial class MainWindow
             Children =
             {
                 showCheck,
-                new TextBlock { Text = UiText.Get("ChartDataLabels_PositionLabel") },
+                new TextBlock { Text = UiText.Get("ChartDataLabels_PositionLabel"), FontSize = 12 },
                 positionCombo,
-                new TextBlock { Text = UiText.Get("ChartDataLabels_ContainsLabel"), Margin = new Thickness(0, 6, 0, 0) },
+                new TextBlock { Text = UiText.Get("ChartDataLabels_ContainsLabel"), FontSize = 12, Margin = new Thickness(0, 6, 0, 0) },
                 valueCheck,
                 categoryCheck,
                 seriesCheck,
@@ -162,12 +164,15 @@ public sealed partial class MainWindow
         var minimumBox = new TextBox { Text = FormatNullableDouble(current.Minimum), Width = 260, PlaceholderText = UiText.Get("ChartLoc_AutoPlaceholder") };
         AutomationProperties.SetName(minimumBox, "Axis minimum");
         AutomationProperties.SetAutomationId(minimumBox, "ChartAxisMinimumBox");
+        ApplyChartTextBoxChrome(minimumBox);
         var maximumBox = new TextBox { Text = FormatNullableDouble(current.Maximum), Width = 260, PlaceholderText = UiText.Get("ChartLoc_AutoPlaceholder") };
         AutomationProperties.SetName(maximumBox, "Axis maximum");
         AutomationProperties.SetAutomationId(maximumBox, "ChartAxisMaximumBox");
+        ApplyChartTextBoxChrome(maximumBox);
         var majorUnitBox = new TextBox { Text = FormatNullableDouble(current.MajorUnit), Width = 260, PlaceholderText = UiText.Get("ChartLoc_AutoPlaceholder") };
         AutomationProperties.SetName(majorUnitBox, "Axis major unit");
         AutomationProperties.SetAutomationId(majorUnitBox, "ChartAxisMajorUnitBox");
+        ApplyChartTextBoxChrome(majorUnitBox);
 
         var logCheck = new CheckBox { Content = UiText.Get("ChartAxis_LogScale"), IsChecked = current.LogScale };
         AutomationProperties.SetAutomationId(logCheck, "ChartAxisLogScaleCheck");
@@ -181,6 +186,7 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetName(numberFormatCombo, "Axis number format");
         AutomationProperties.SetAutomationId(numberFormatCombo, "ChartAxisNumberFormatCombo");
+        ApplyChartComboBoxChrome(numberFormatCombo);
         numberFormatCombo.SelectedItem =
             numberFormatChoices.FirstOrDefault(c => c.NumberFormat == current.NumberFormat)
             ?? (numberFormatChoices.Count > 0 ? numberFormatChoices[0] : null);
@@ -225,14 +231,14 @@ public sealed partial class MainWindow
             MinWidth = 300,
             Children =
             {
-                new TextBlock { Text = UiText.Get("ChartAxis_MinimumLabel") },
+                new TextBlock { Text = UiText.Get("ChartAxis_MinimumLabel"), FontSize = 12 },
                 minimumBox,
-                new TextBlock { Text = UiText.Get("ChartAxis_MaximumLabel") },
+                new TextBlock { Text = UiText.Get("ChartAxis_MaximumLabel"), FontSize = 12 },
                 maximumBox,
-                new TextBlock { Text = UiText.Get("ChartAxis_MajorUnitLabel") },
+                new TextBlock { Text = UiText.Get("ChartAxis_MajorUnitLabel"), FontSize = 12 },
                 majorUnitBox,
                 logCheck,
-                new TextBlock { Text = UiText.Get("ChartAxis_NumberFormatLabel"), Margin = new Thickness(0, 6, 0, 0) },
+                new TextBlock { Text = UiText.Get("ChartAxis_NumberFormatLabel"), FontSize = 12, Margin = new Thickness(0, 6, 0, 0) },
                 numberFormatCombo,
                 majorGridCheck,
                 minorGridCheck,
@@ -286,6 +292,7 @@ public sealed partial class MainWindow
         var seriesCombo = new ComboBox { Width = 260, ItemsSource = seriesNames };
         AutomationProperties.SetName(seriesCombo, "Series");
         AutomationProperties.SetAutomationId(seriesCombo, "ChartSeriesFormatSeriesCombo");
+        ApplyChartComboBoxChrome(seriesCombo);
         seriesCombo.SelectedIndex = Math.Clamp(current.SeriesIndex, 0, seriesCount - 1);
 
         // Per-series edit state, re-read from the chart whenever the chosen series changes so the dialog
@@ -294,22 +301,27 @@ public sealed partial class MainWindow
 
         var fillButton = new Button { Content = DescribeColor(UiText.Get("ChartSeries_FillColor"),current.FillColor), Width = 260 };
         AutomationProperties.SetAutomationId(fillButton, "ChartSeriesFormatFillButton");
+        ApplyChartButtonChrome(fillButton, 260);
         var strokeButton = new Button { Content = DescribeColor(UiText.Get("ChartSeries_LineColor"),current.StrokeColor), Width = 260 };
         AutomationProperties.SetAutomationId(strokeButton, "ChartSeriesFormatLineButton");
+        ApplyChartButtonChrome(strokeButton, 260);
 
         var strokeThicknessBox = new TextBox { Text = FormatNullableDouble(current.StrokeThickness), Width = 260, PlaceholderText = UiText.Get("ChartLoc_AutoPlaceholder") };
         AutomationProperties.SetName(strokeThicknessBox, "Line width");
         AutomationProperties.SetAutomationId(strokeThicknessBox, "ChartSeriesFormatLineWidthBox");
+        ApplyChartTextBoxChrome(strokeThicknessBox);
 
         var markerChoices = new List<string> { "(None)" };
         markerChoices.AddRange(Enum.GetNames<ChartMarkerStyle>());
         var markerCombo = new ComboBox { Width = 260, ItemsSource = markerChoices };
         AutomationProperties.SetName(markerCombo, "Marker style");
         AutomationProperties.SetAutomationId(markerCombo, "ChartSeriesFormatMarkerCombo");
+        ApplyChartComboBoxChrome(markerCombo);
 
         var markerSizeBox = new TextBox { Text = FormatNullableDouble(current.MarkerSize), Width = 260, PlaceholderText = UiText.Get("ChartLoc_AutoPlaceholder") };
         AutomationProperties.SetName(markerSizeBox, "Marker size");
         AutomationProperties.SetAutomationId(markerSizeBox, "ChartSeriesFormatMarkerSizeBox");
+        ApplyChartTextBoxChrome(markerSizeBox);
 
         void LoadState(ChartSeriesFormatInput value)
         {
@@ -385,16 +397,16 @@ public sealed partial class MainWindow
             MinWidth = 300,
             Children =
             {
-                new TextBlock { Text = UiText.Get("ChartSeries_SeriesLabel") },
+                new TextBlock { Text = UiText.Get("ChartSeries_SeriesLabel"), FontSize = 12 },
                 seriesCombo,
-                new TextBlock { Text = UiText.Get("ChartSeries_FillAndLineLabel"), Margin = new Thickness(0, 6, 0, 0) },
+                new TextBlock { Text = UiText.Get("ChartSeries_FillAndLineLabel"), FontSize = 12, Margin = new Thickness(0, 6, 0, 0) },
                 fillButton,
                 strokeButton,
-                new TextBlock { Text = UiText.Get("ChartSeries_LineWidthLabel") },
+                new TextBlock { Text = UiText.Get("ChartSeries_LineWidthLabel"), FontSize = 12 },
                 strokeThicknessBox,
-                new TextBlock { Text = UiText.Get("ChartSeries_MarkerLabel") },
+                new TextBlock { Text = UiText.Get("ChartSeries_MarkerLabel"), FontSize = 12 },
                 markerCombo,
-                new TextBlock { Text = UiText.Get("ChartSeries_MarkerSizeLabel") },
+                new TextBlock { Text = UiText.Get("ChartSeries_MarkerSizeLabel"), FontSize = 12 },
                 markerSizeBox,
                 buttonRow,
             },
@@ -443,6 +455,7 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetName(typeCombo, "Trendline type");
         AutomationProperties.SetAutomationId(typeCombo, "ChartTrendlineTypeCombo");
+        ApplyChartComboBoxChrome(typeCombo);
         typeCombo.SelectedItem =
             typeChoices.FirstOrDefault(c => c.Type == current.Type)
             ?? (typeChoices.Count > 0 ? typeChoices[0] : null);
@@ -450,9 +463,11 @@ public sealed partial class MainWindow
         var periodBox = new TextBox { Text = current.Period.ToString(CultureInfo.InvariantCulture), Width = 260 };
         AutomationProperties.SetName(periodBox, "Moving average period");
         AutomationProperties.SetAutomationId(periodBox, "ChartTrendlinePeriodBox");
+        ApplyChartTextBoxChrome(periodBox);
         var orderBox = new TextBox { Text = current.Order.ToString(CultureInfo.InvariantCulture), Width = 260 };
         AutomationProperties.SetName(orderBox, "Polynomial order");
         AutomationProperties.SetAutomationId(orderBox, "ChartTrendlineOrderBox");
+        ApplyChartTextBoxChrome(orderBox);
 
         var equationCheck = new CheckBox { Content = UiText.Get("ChartTrendline_ShowEquation"), IsChecked = current.ShowEquation };
         AutomationProperties.SetAutomationId(equationCheck, "ChartTrendlineEquationCheck");
@@ -495,11 +510,11 @@ public sealed partial class MainWindow
             Children =
             {
                 showCheck,
-                new TextBlock { Text = UiText.Get("ChartTrendline_TypeLabel") },
+                new TextBlock { Text = UiText.Get("ChartTrendline_TypeLabel"), FontSize = 12 },
                 typeCombo,
-                new TextBlock { Text = UiText.Get("ChartTrendline_PeriodLabel") },
+                new TextBlock { Text = UiText.Get("ChartTrendline_PeriodLabel"), FontSize = 12 },
                 periodBox,
-                new TextBlock { Text = UiText.Get("ChartTrendline_OrderLabel") },
+                new TextBlock { Text = UiText.Get("ChartTrendline_OrderLabel"), FontSize = 12 },
                 orderBox,
                 equationCheck,
                 rSquaredCheck,
@@ -550,6 +565,7 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetName(kindCombo, "Error amount");
         AutomationProperties.SetAutomationId(kindCombo, "ChartErrorBarsKindCombo");
+        ApplyChartComboBoxChrome(kindCombo);
         kindCombo.SelectedItem =
             kindChoices.FirstOrDefault(c => c.Kind == current.Kind)
             ?? (kindChoices.Count > 0 ? kindChoices[0] : null);
@@ -563,6 +579,7 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetName(directionCombo, "Error bar direction");
         AutomationProperties.SetAutomationId(directionCombo, "ChartErrorBarsDirectionCombo");
+        ApplyChartComboBoxChrome(directionCombo);
         directionCombo.SelectedItem =
             directionChoices.FirstOrDefault(c => c.Direction == current.Direction)
             ?? (directionChoices.Count > 0 ? directionChoices[0] : null);
@@ -570,6 +587,7 @@ public sealed partial class MainWindow
         var valueBox = new TextBox { Text = current.Value.ToString(CultureInfo.InvariantCulture), Width = 260 };
         AutomationProperties.SetName(valueBox, "Error bar amount");
         AutomationProperties.SetAutomationId(valueBox, "ChartErrorBarsValueBox");
+        ApplyChartTextBoxChrome(valueBox);
 
         var endCapsCheck = new CheckBox { Content = UiText.Get("ChartErrorBars_EndCaps"), IsChecked = current.EndCaps };
         AutomationProperties.SetAutomationId(endCapsCheck, "ChartErrorBarsEndCapsCheck");
@@ -605,11 +623,11 @@ public sealed partial class MainWindow
             Children =
             {
                 showCheck,
-                new TextBlock { Text = UiText.Get("ChartErrorBars_KindLabel") },
+                new TextBlock { Text = UiText.Get("ChartErrorBars_KindLabel"), FontSize = 12 },
                 kindCombo,
-                new TextBlock { Text = UiText.Get("ChartErrorBars_DirectionLabel") },
+                new TextBlock { Text = UiText.Get("ChartErrorBars_DirectionLabel"), FontSize = 12 },
                 directionCombo,
-                new TextBlock { Text = UiText.Get("ChartErrorBars_ValueLabel") },
+                new TextBlock { Text = UiText.Get("ChartErrorBars_ValueLabel"), FontSize = 12 },
                 valueBox,
                 endCapsCheck,
                 buttonRow,
@@ -620,6 +638,49 @@ public sealed partial class MainWindow
     }
 
     // ---- Shared dialog plumbing -----------------------------------------------------------------------
+
+    private static void ApplyChartButtonChrome(Button button, double width, bool isDefault = false)
+    {
+        button.Width = width;
+        button.MinWidth = width;
+        button.Height = 24;
+        button.MinHeight = 24;
+        button.MaxHeight = 24;
+        button.Padding = new Thickness(4, 1);
+        button.Background = Brushes.White;
+        button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);
+        button.BorderThickness = new Thickness(1);
+        button.FontSize = 12;
+        button.FontFamily = FormulaBarFontFamily;
+        button.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
+        button.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+    }
+
+    private static void ApplyChartTextBoxChrome(TextBox tb)
+    {
+        tb.Height = 24;
+        tb.MinHeight = 24;
+        tb.MaxHeight = 24;
+        tb.Padding = new Thickness(4, 1);
+        tb.FontSize = 12;
+        tb.FontFamily = FormulaBarFontFamily;
+        tb.BorderBrush = Brush(130, 130, 130);
+        tb.BorderThickness = new Thickness(1);
+        tb.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+    }
+
+    private static void ApplyChartComboBoxChrome(ComboBox cb)
+    {
+        cb.Height = 24;
+        cb.MinHeight = 24;
+        cb.MaxHeight = 24;
+        cb.Padding = new Thickness(5, 0, 4, 0);
+        cb.FontSize = 12;
+        cb.FontFamily = FormulaBarFontFamily;
+        cb.BorderBrush = Brush(130, 130, 130);
+        cb.BorderThickness = new Thickness(1);
+        cb.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+    }
 
     private static Window NewChartDialog(string title, string automationId)
     {
@@ -640,8 +701,10 @@ public sealed partial class MainWindow
     {
         var okButton = new Button { Content = UiText.Get("Common_Ok"), Width = 80, IsDefault = true };
         AutomationProperties.SetAutomationId(okButton, $"{idPrefix}OkButton");
+        ApplyChartButtonChrome(okButton, 80, isDefault: true);
         var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), Width = 80, IsCancel = true };
         AutomationProperties.SetAutomationId(cancelButton, $"{idPrefix}CancelButton");
+        ApplyChartButtonChrome(cancelButton, 80);
         var row = new StackPanel
         {
             Orientation = Orientation.Horizontal,

@@ -47,25 +47,10 @@ public sealed class AboutDialog : Window
     {
         var root = new DockPanel { Margin = new Thickness(16) };
 
-        var ok = new Button
-        {
-            Content = "OK",
-            MinWidth = 84,
-            IsDefault = true,
-            IsCancel = true,
-            HorizontalAlignment = HorizontalAlignment.Right
-        };
-        ok.Click += (_, _) => Close();
+        var buttonRow = DialogButtonRowFactory.CreateOkOnly(Close, buttonWidth: 84, rowMargin: new Thickness(0, 12, 0, 0));
+        var ok = (Button)buttonRow.Children[0];
         AutomationProperties.SetAutomationId(ok, "AboutFreeWOkButton");
         AutomationProperties.SetHelpText(ok, "Close the About FreeW dialog.");
-
-        var buttonRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 12, 0, 0)
-        };
-        buttonRow.Children.Add(ok);
         DockPanel.SetDock(buttonRow, Dock.Bottom);
         root.Children.Add(buttonRow);
         root.Children.Add(_aboutTextBox);

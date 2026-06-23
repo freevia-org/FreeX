@@ -51,7 +51,12 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(dialog, ErrorCheckingDialogPlanner.DialogAutomationId);
 
-        var header = new TextBlock { Margin = new Thickness(0, 0, 0, 8) };
+        var header = new TextBlock
+        {
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            Margin = new Thickness(0, 0, 0, 8),
+        };
         var rowsPanel = new StackPanel();
         AutomationProperties.SetAutomationId(rowsPanel, ErrorCheckingDialogPlanner.IssuesAutomationId);
         AutomationProperties.SetName(rowsPanel, UiText.Get(ErrorCheckingDialogPlanner.IssuesAutomationNameKey));
@@ -89,6 +94,8 @@ public sealed partial class MainWindow
                 {
                     Text = UiText.Get(ErrorCheckingDialogPlanner.ActionIntroTextKey),
                     TextWrapping = TextWrapping.Wrap,
+                    FontSize = 12,
+                    FontFamily = FormulaBarFontFamily,
                     Margin = new Thickness(0, 0, 0, 8),
                 },
                 helpButton,
@@ -178,6 +185,8 @@ public sealed partial class MainWindow
                 Content = UiText.Get(ErrorCheckingDialogPlanner.IssuesLabelKey),
                 Padding = new Thickness(0),
                 Margin = new Thickness(0, 0, 0, 4),
+                FontSize = 12,
+                FontFamily = FormulaBarFontFamily,
             };
             DockPanel.SetDock(label, Dock.Top);
             return label;
@@ -367,6 +376,8 @@ public sealed partial class MainWindow
         {
             Text = text,
             FontWeight = bold ? FontWeight.SemiBold : FontWeight.Normal,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis,
             Margin = new Thickness(4, 2),
@@ -375,14 +386,33 @@ public sealed partial class MainWindow
         grid.Children.Add(cell);
     }
 
-    private static Button CreateErrorCheckingButton(string contentKey, double? width = null) =>
-        new()
+    /// <summary>
+    /// Creates a chrome-styled Error Checking dialog button: Height=24, Padding=(4,1), white background,
+    /// Brush(112,112,112) border, FontSize=12, FontFamily=FormulaBarFontFamily. Side-panel buttons
+    /// (no explicit width) stretch full-width with bottom margin; bottom-bar buttons use the provided
+    /// width with a left margin.
+    /// </summary>
+    private static Button CreateErrorCheckingButton(string contentKey, double? width = null)
+    {
+        var button = new Button
         {
             Content = UiText.Get(contentKey),
             Width = width ?? double.NaN,
-            Height = ErrorCheckingDialogPlanner.ButtonHeight,
+            Height = 24,
+            MinHeight = 24,
+            MaxHeight = 24,
+            Padding = new Thickness(4, 1),
+            Background = Brushes.White,
+            BorderBrush = Brush(112, 112, 112),
+            BorderThickness = new Thickness(1),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
             Margin = new Thickness(width is null ? 0 : 4, 0, 0, width is null ? 6 : 0),
         };
+        return button;
+    }
 
     private static IReadOnlyList<FormulaErrorIssue> CreateErrorCheckingParityIssues(SheetId sheetId) =>
     [

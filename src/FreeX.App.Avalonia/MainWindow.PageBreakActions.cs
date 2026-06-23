@@ -15,6 +15,26 @@ namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
+    // -------------------------------------------------------------------------------------------------------
+    // Page break menu dialog chrome helpers
+    // -------------------------------------------------------------------------------------------------------
+
+    private static void ApplyPageBreakButtonChrome(Button button, double minWidth = 84, bool isDefault = false)
+    {
+        button.MinWidth = minWidth;
+        button.Height = 24;
+        button.MinHeight = 24;
+        button.MaxHeight = 24;
+        button.Padding = new Thickness(4, 1);
+        button.Background = Brushes.White;
+        button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);
+        button.BorderThickness = new Thickness(1);
+        button.FontSize = 12;
+        button.FontFamily = FormulaBarFontFamily;
+        button.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
+        button.VerticalContentAlignment = VerticalAlignment.Center;
+    }
+
     // Page Layout ▸ Breaks (parity gap: the ribbon button previously opened Page Setup as a stub).
     // Excel exposes a small dropdown with Insert Page Break / Remove Page Break / Reset All Page
     // Breaks. We surface the same three actions in a compact popup. The break math lives in the
@@ -37,6 +57,7 @@ public sealed partial class MainWindow
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
             HorizontalContentAlignment = AvaloniaHorizontalAlignment.Left,
         };
+        ApplyPageBreakButtonChrome(insertButton);
         AutomationProperties.SetAutomationId(insertButton, "PageBreakInsertButton");
 
         var removeButton = new Button
@@ -45,6 +66,7 @@ public sealed partial class MainWindow
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
             HorizontalContentAlignment = AvaloniaHorizontalAlignment.Left,
         };
+        ApplyPageBreakButtonChrome(removeButton);
         AutomationProperties.SetAutomationId(removeButton, "PageBreakRemoveButton");
 
         var resetButton = new Button
@@ -53,6 +75,7 @@ public sealed partial class MainWindow
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
             HorizontalContentAlignment = AvaloniaHorizontalAlignment.Left,
         };
+        ApplyPageBreakButtonChrome(resetButton);
         AutomationProperties.SetAutomationId(resetButton, "PageBreakResetAllButton");
 
         var cancelButton = new Button
@@ -63,6 +86,7 @@ public sealed partial class MainWindow
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
             Margin = new Thickness(0, 8, 0, 0),
         };
+        ApplyPageBreakButtonChrome(cancelButton, minWidth: 84);
         AutomationProperties.SetAutomationId(cancelButton, "PageBreakCancelButton");
 
         var dialog = new Window
@@ -99,7 +123,7 @@ public sealed partial class MainWindow
             Spacing = 8,
             Children =
             {
-                new TextBlock { Text = UiText.Get("PageBreak_Menu"), FontWeight = FontWeight.SemiBold },
+                new TextBlock { Text = UiText.Get("PageBreak_Menu"), FontWeight = FontWeight.SemiBold, FontSize = 12, FontFamily = FormulaBarFontFamily },
                 insertButton,
                 removeButton,
                 resetButton,

@@ -49,6 +49,8 @@ public sealed partial class MainWindow
             MinHeight = 280,
             ItemsSource = styleNames,
             SelectedIndex = PivotStyleGalleryPlanner.FindStyleIndex(styleNames, values.StyleName),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
         };
         AutomationProperties.SetAutomationId(gallery, "PivotStyleGalleryList");
         AutomationProperties.SetName(gallery, UiText.Get("PivotStyleGallery_GalleryName"));
@@ -57,16 +59,18 @@ public sealed partial class MainWindow
         {
             Title = UiText.Get("PivotStyleGallery_Title"),
             Width = 360,
-            Height = 440,
+            Height = 430,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
             ShowInTaskbar = false,
         };
         AutomationProperties.SetAutomationId(dialog, "PivotStyleGalleryDialog");
 
-        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 80 };
+        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true };
+        ApplyPivotButtonChrome(ok, 80, isDefault: true);
         AutomationProperties.SetAutomationId(ok, "PivotStyleGalleryOkButton");
-        var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 80 };
+        var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true };
+        ApplyPivotButtonChrome(cancel, 80);
         AutomationProperties.SetAutomationId(cancel, "PivotStyleGalleryCancelButton");
         cancel.Click += (_, _) => dialog.Close(false);
         ok.Click += (_, _) => dialog.Close(true);
@@ -76,6 +80,8 @@ public sealed partial class MainWindow
         var label = new TextBlock
         {
             Text = UiText.Get("PivotStyleGallery_StyleLabel"),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
             Foreground = HeaderForeground,
             Margin = new Thickness(0, 0, 0, 6),
         };

@@ -2,12 +2,14 @@ using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
+using Avalonia.Media;
 
 using FreeX.App.Presentation.TableUI;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
+using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
 
 namespace FreeX.App.Avalonia;
 
@@ -49,6 +51,7 @@ public sealed partial class MainWindow
             Text = TableNamePlanner.Capture(table),
             MinWidth = 280,
         };
+        ApplyTableNameTextBoxChrome(nameBox);
         AutomationProperties.SetAutomationId(nameBox, "TableNameBox");
         AutomationProperties.SetName(nameBox, UiText.Get("TableName_BoxName"));
 
@@ -64,8 +67,10 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(dialog, "TableNameDialog");
 
         var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 80 };
+        ApplyTableNameButtonChrome(ok, 80, isDefault: true);
         AutomationProperties.SetAutomationId(ok, "TableNameOkButton");
         var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 80 };
+        ApplyTableNameButtonChrome(cancel, 80);
         AutomationProperties.SetAutomationId(cancel, "TableNameCancelButton");
         cancel.Click += (_, _) => dialog.Close(false);
         ok.Click += (_, _) =>
@@ -85,6 +90,8 @@ public sealed partial class MainWindow
         {
             Text = UiText.Get("TableName_Label"),
             Foreground = HeaderForeground,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
         });
         content.Children.Add(nameBox);
         content.Children.Add(new StackPanel
@@ -121,5 +128,42 @@ public sealed partial class MainWindow
         {
             ShowEditIssue(result.ErrorMessage ?? UiText.Get("TableName_Failed"));
         }
+    }
+
+    // ── Visual chrome helpers (TableName dialog) ─────────────────────────────
+
+    /// <summary>
+    /// Applies standard TableName-dialog button chrome (Height=24, FontSize=12, white background, grey/blue border).
+    /// </summary>
+    private static void ApplyTableNameButtonChrome(Button button, double minWidth, bool isDefault = false)
+    {
+        button.MinWidth = minWidth;
+        button.Height = 24;
+        button.MinHeight = 24;
+        button.MaxHeight = 24;
+        button.Padding = new Thickness(4, 1);
+        button.Background = Brushes.White;
+        button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);
+        button.BorderThickness = new Thickness(1);
+        button.FontSize = 12;
+        button.FontFamily = FormulaBarFontFamily;
+        button.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
+        button.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+    }
+
+    /// <summary>
+    /// Applies standard TableName-dialog text-box chrome (Height=24, Padding=(4,1), FontSize=12, grey border).
+    /// </summary>
+    private static void ApplyTableNameTextBoxChrome(TextBox textBox)
+    {
+        textBox.Height = 24;
+        textBox.MinHeight = 24;
+        textBox.MaxHeight = 24;
+        textBox.Padding = new Thickness(4, 1);
+        textBox.FontSize = 12;
+        textBox.FontFamily = FormulaBarFontFamily;
+        textBox.BorderBrush = Brush(130, 130, 130);
+        textBox.BorderThickness = new Thickness(1);
+        textBox.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
     }
 }

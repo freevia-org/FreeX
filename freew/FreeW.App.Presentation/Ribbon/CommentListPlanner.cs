@@ -1,8 +1,8 @@
 using FreeW.Core.Model;
 
-namespace FreeW.App.Host;
+namespace FreeW.App.Presentation.Ribbon;
 
-internal sealed record CommentListItem(
+public sealed record CommentListItem(
     int Id,
     int BlockIndex,
     string Author,
@@ -10,7 +10,7 @@ internal sealed record CommentListItem(
     int ReplyCount,
     bool Resolved);
 
-internal static class CommentListPlanner
+public static class CommentListPlanner
 {
     public static IReadOnlyList<CommentListItem> Build(TextDocument document)
     {

@@ -20,6 +20,67 @@ namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
+    // -------------------------------------------------------------------------------------------------------
+    // GetData dialog chrome helpers
+    // -------------------------------------------------------------------------------------------------------
+
+    private static void ApplyGetDataButtonChrome(Button button, double minWidth = 80, bool isDefault = false)
+    {
+        button.MinWidth = minWidth;
+        button.Height = 24;
+        button.MinHeight = 24;
+        button.MaxHeight = 24;
+        button.Padding = new Thickness(4, 1);
+        button.Background = Brushes.White;
+        button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);
+        button.BorderThickness = new Thickness(1);
+        button.FontSize = 12;
+        button.FontFamily = FormulaBarFontFamily;
+        button.HorizontalContentAlignment = HorizontalAlignment.Center;
+        button.VerticalContentAlignment = VerticalAlignment.Center;
+    }
+
+    private static void ApplyGetDataTextBoxChrome(TextBox tb)
+    {
+        tb.Height = 24;
+        tb.MinHeight = 24;
+        tb.MaxHeight = 24;
+        tb.Padding = new Thickness(4, 1);
+        tb.FontSize = 12;
+        tb.FontFamily = FormulaBarFontFamily;
+        tb.BorderBrush = Brush(130, 130, 130);
+        tb.BorderThickness = new Thickness(1);
+        tb.VerticalContentAlignment = VerticalAlignment.Center;
+    }
+
+    private static void ApplyGetDataComboBoxChrome(ComboBox cb)
+    {
+        cb.Height = 24;
+        cb.MinHeight = 24;
+        cb.MaxHeight = 24;
+        cb.Padding = new Thickness(5, 0, 4, 0);
+        cb.FontSize = 12;
+        cb.FontFamily = FormulaBarFontFamily;
+        cb.BorderBrush = Brush(130, 130, 130);
+        cb.BorderThickness = new Thickness(1);
+    }
+
+    private static void ApplyGetDataCheckBoxChrome(CheckBox cb)
+    {
+        cb.MinHeight = 20;
+        cb.MaxHeight = 20;
+        cb.FontSize = 12;
+        cb.FontFamily = FormulaBarFontFamily;
+    }
+
+    private static void ApplyGetDataRadioButtonChrome(RadioButton rb)
+    {
+        rb.MinHeight = 20;
+        rb.MaxHeight = 20;
+        rb.FontSize = 12;
+        rb.FontFamily = FormulaBarFontFamily;
+    }
+
     // The most recent file-backed import, remembered so Data ▸ Refresh All can re-run it without prompting.
     private ImportDataSource? _lastImportSource;
 
@@ -80,10 +141,12 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(dialog, "GetDataDialog");
 
-        var fileLabel = new TextBlock { Text = UiText.Get("GetData_FileLabel"), VerticalAlignment = VerticalAlignment.Center };
+        var fileLabel = new TextBlock { Text = UiText.Get("GetData_FileLabel"), VerticalAlignment = VerticalAlignment.Center, FontSize = 12, FontFamily = FormulaBarFontFamily };
         var fileBox = new TextBox { IsReadOnly = true, MinWidth = 320 };
+        ApplyGetDataTextBoxChrome(fileBox);
         AutomationProperties.SetAutomationId(fileBox, "GetDataFileBox");
         var browseButton = new Button { Content = UiText.Get("GetData_BrowseButton"), MinWidth = 90 };
+        ApplyGetDataButtonChrome(browseButton, minWidth: 90);
         AutomationProperties.SetAutomationId(browseButton, "GetDataBrowseButton");
 
         var fileRow = new DockPanel { LastChildFill = true, Margin = new Thickness(0, 0, 0, 8) };
@@ -101,9 +164,11 @@ public sealed partial class MainWindow
             SelectedIndex = 0,
             MinWidth = 220,
         };
+        ApplyGetDataComboBoxChrome(delimiterBox);
         AutomationProperties.SetAutomationId(delimiterBox, "GetDataDelimiterBox");
 
         var customDelimiterBox = new TextBox { MaxLength = 1, Width = 48, IsVisible = false };
+        ApplyGetDataTextBoxChrome(customDelimiterBox);
         AutomationProperties.SetAutomationId(customDelimiterBox, "GetDataCustomDelimiterBox");
 
         var encodingBox = new ComboBox
@@ -112,9 +177,11 @@ public sealed partial class MainWindow
             SelectedIndex = 0,
             MinWidth = 220,
         };
+        ApplyGetDataComboBoxChrome(encodingBox);
         AutomationProperties.SetAutomationId(encodingBox, "GetDataEncodingBox");
 
         var treatConsecutiveBox = new CheckBox { Content = UiText.Get("GetData_TreatConsecutive") };
+        ApplyGetDataCheckBoxChrome(treatConsecutiveBox);
         AutomationProperties.SetAutomationId(treatConsecutiveBox, "GetDataTreatConsecutiveBox");
 
         var currentSheetButton = new RadioButton
@@ -123,12 +190,14 @@ public sealed partial class MainWindow
             GroupName = "GetDataDestination",
             IsChecked = true,
         };
+        ApplyGetDataRadioButtonChrome(currentSheetButton);
         AutomationProperties.SetAutomationId(currentSheetButton, "GetDataCurrentSheetButton");
         var newSheetButton = new RadioButton
         {
             Content = UiText.Get("GetData_DestinationNewSheet"),
             GroupName = "GetDataDestination",
         };
+        ApplyGetDataRadioButtonChrome(newSheetButton);
         AutomationProperties.SetAutomationId(newSheetButton, "GetDataNewSheetButton");
 
         var previewSummary = new TextBlock
@@ -136,6 +205,8 @@ public sealed partial class MainWindow
             Text = UiText.Get("GetData_PreviewEmpty"),
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 4, 0, 4),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
         };
         AutomationProperties.SetAutomationId(previewSummary, "GetDataPreviewSummary");
 
@@ -289,8 +360,10 @@ public sealed partial class MainWindow
         encodingBox.SelectionChanged += (_, _) => _ = ReDecodeAsync();
 
         var loadButton = new Button { Content = UiText.Get("GetData_LoadButton"), IsDefault = true, MinWidth = 90 };
+        ApplyGetDataButtonChrome(loadButton, minWidth: 90, isDefault: true);
         AutomationProperties.SetAutomationId(loadButton, "GetDataLoadButton");
         var cancelButton = new Button { Content = UiText.Get("GetData_CancelButton"), IsCancel = true, MinWidth = 90 };
+        ApplyGetDataButtonChrome(cancelButton, minWidth: 90);
         AutomationProperties.SetAutomationId(cancelButton, "GetDataCancelButton");
 
         loadButton.Click += (_, _) =>
@@ -327,6 +400,8 @@ public sealed partial class MainWindow
                 Text = UiText.Get(headerKey),
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(0, 4, 12, 4),
+                FontSize = 12,
+                FontFamily = FormulaBarFontFamily,
             };
             AvaloniaGrid.SetRow(header, row);
             AvaloniaGrid.SetColumn(header, 0);

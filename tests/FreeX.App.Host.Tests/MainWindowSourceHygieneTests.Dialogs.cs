@@ -16,7 +16,7 @@ public sealed partial class MainWindowSourceHygieneTests
         method.Should().Contain("var zoomPercent = ZoomSelectionPlanner.CalculateDialogZoomPercent(");
         method.Should().Contain("dialog.Result,");
         method.Should().Contain("SheetGrid.SelectedRange?.ColCount ?? 1,");
-        method.Should().Contain("ZoomSlider.Value = FreeX.App.UI.ZoomLevelMapper.ZoomPercentToSlider(zoomPercent);");
+        method.Should().Contain("ZoomSlider.Value = FreeX.App.Services.ZoomLevelMapper.ZoomPercentToSlider(zoomPercent);");
         method.Should().Contain("finally");
         method.Should().Contain("FocusSheetGridIfNeeded();");
     }

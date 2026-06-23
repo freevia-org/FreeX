@@ -62,6 +62,10 @@ public sealed partial class MainWindow
         {
             Content = UiText.Get("PivotChartOptions_ShowFieldButtons"),
             IsChecked = chart!.ShowPivotChartFieldButtons,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            MinHeight = 20,
+            MaxHeight = 20,
         };
         AutomationProperties.SetAutomationId(showFieldButtons, "PivotChartOptionsShowFieldButtons");
 
@@ -70,6 +74,10 @@ public sealed partial class MainWindow
             Content = UiText.Get("PivotChartOptions_ShowReportFilterButtons"),
             IsChecked = chart.ShowPivotChartReportFilterButtons,
             Margin = new Thickness(18, 0, 0, 0),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            MinHeight = 20,
+            MaxHeight = 20,
         };
         AutomationProperties.SetAutomationId(reportFilterButtons, "PivotChartOptionsReportFilterButtons");
 
@@ -78,6 +86,10 @@ public sealed partial class MainWindow
             Content = UiText.Get("PivotChartOptions_ShowAxisFieldButtons"),
             IsChecked = chart.ShowPivotChartAxisFieldButtons,
             Margin = new Thickness(18, 0, 0, 0),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            MinHeight = 20,
+            MaxHeight = 20,
         };
         AutomationProperties.SetAutomationId(axisFieldButtons, "PivotChartOptionsAxisFieldButtons");
 
@@ -86,6 +98,10 @@ public sealed partial class MainWindow
             Content = UiText.Get("PivotChartOptions_ShowValueFieldButtons"),
             IsChecked = chart.ShowPivotChartValueFieldButtons,
             Margin = new Thickness(18, 0, 0, 0),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            MinHeight = 20,
+            MaxHeight = 20,
         };
         AutomationProperties.SetAutomationId(valueFieldButtons, "PivotChartOptionsValueFieldButtons");
 
@@ -93,6 +109,10 @@ public sealed partial class MainWindow
         {
             Content = UiText.Get("PivotChartOptions_ShowDataTable"),
             IsChecked = chart.DataTable is not null,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            MinHeight = 20,
+            MaxHeight = 20,
         };
         AutomationProperties.SetAutomationId(showDataTable, "PivotChartOptionsShowDataTable");
 
@@ -101,6 +121,10 @@ public sealed partial class MainWindow
             Content = UiText.Get("PivotChartOptions_ShowDataTableLegendKeys"),
             IsChecked = chart.DataTable?.ShowLegendKeys ?? false,
             Margin = new Thickness(18, 0, 0, 0),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            MinHeight = 20,
+            MaxHeight = 20,
         };
         AutomationProperties.SetAutomationId(dataTableLegendKeys, "PivotChartOptionsDataTableLegendKeys");
 
@@ -108,6 +132,10 @@ public sealed partial class MainWindow
         {
             Content = UiText.Get("PivotChartOptions_RoundedCorners"),
             IsChecked = chart.RoundedCorners,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            MinHeight = 20,
+            MaxHeight = 20,
         };
         AutomationProperties.SetAutomationId(roundedCorners, "PivotChartOptionsRoundedCorners");
 
@@ -127,17 +155,19 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get("PivotChartOptions_Title"),
-            Width = 360,
-            SizeToContent = SizeToContent.Height,
+            Width = 420,
+            Height = 430,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
             ShowInTaskbar = false,
         };
         AutomationProperties.SetAutomationId(dialog, "PivotChartOptionsDialog");
 
-        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 80 };
+        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true };
+        ApplyPivotButtonChrome(ok, 80, isDefault: true);
         AutomationProperties.SetAutomationId(ok, "PivotChartOptionsOkButton");
-        var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 80 };
+        var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true };
+        ApplyPivotButtonChrome(cancel, 80);
         AutomationProperties.SetAutomationId(cancel, "PivotChartOptionsCancelButton");
         cancel.Click += (_, _) => dialog.Close(false);
         ok.Click += (_, _) => dialog.Close(true);

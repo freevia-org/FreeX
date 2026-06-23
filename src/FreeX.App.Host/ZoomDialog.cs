@@ -64,7 +64,7 @@ public sealed class ZoomDialog : Window
     {
         result = new ZoomDialogResult(100);
         error = null;
-        if (!FreeX.App.UI.ZoomLevelMapper.TryParseZoomPercent(input, out var zoomPercent))
+        if (!FreeX.App.Services.ZoomLevelMapper.TryParseZoomPercent(input, out var zoomPercent))
         {
             error = UiText.Get("Zoom_MustBeBetween10And400");
             return false;

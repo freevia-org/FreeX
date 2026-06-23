@@ -40,13 +40,14 @@ public sealed partial class MainWindow
             Text = FormatCellReference(pivot.TargetRange.Start),
             MinWidth = 280,
         };
+        ApplyPivotTextBoxChrome(destinationBox);
         AutomationProperties.SetAutomationId(destinationBox, "MovePivotDestinationBox");
         AutomationProperties.SetName(destinationBox, UiText.Get("MovePivot_RangeName"));
 
         var dialog = new Window
         {
             Title = UiText.Get("MovePivot_Title"),
-            Width = 380,
+            Width = 420,
             SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
@@ -54,9 +55,11 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(dialog, "MovePivotDialog");
 
-        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 80 };
+        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true };
+        ApplyPivotButtonChrome(ok, 80, isDefault: true);
         AutomationProperties.SetAutomationId(ok, "MovePivotOkButton");
-        var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 80 };
+        var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true };
+        ApplyPivotButtonChrome(cancel, 80);
         AutomationProperties.SetAutomationId(cancel, "MovePivotCancelButton");
         cancel.Click += (_, _) => dialog.Close(false);
         ok.Click += (_, _) =>
@@ -71,7 +74,7 @@ public sealed partial class MainWindow
         };
 
         var content = new StackPanel { Spacing = 6, Margin = new Thickness(16) };
-        content.Children.Add(new TextBlock { Text = UiText.Get("MovePivot_Label"), Foreground = HeaderForeground });
+        content.Children.Add(new TextBlock { Text = UiText.Get("MovePivot_Label"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
         content.Children.Add(destinationBox);
         content.Children.Add(new StackPanel
         {
