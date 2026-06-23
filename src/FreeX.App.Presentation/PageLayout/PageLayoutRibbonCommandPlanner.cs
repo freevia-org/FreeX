@@ -26,6 +26,14 @@ public static class PageLayoutRibbonCommandPlanner
     public static IWorkbookCommand BuildClearPrintAreaCommand(SheetId sheetId) =>
         PageSetupCommandFactory.BuildPrintAreaCommand(sheetId, null);
 
+    public static IWorkbookCommand BuildSetBackgroundCommand(
+        SheetId sheetId,
+        WorksheetBackgroundImage background) =>
+        new SetWorksheetBackgroundCommand(sheetId, background);
+
+    public static IWorkbookCommand BuildClearBackgroundCommand(SheetId sheetId) =>
+        new ClearWorksheetBackgroundCommand(sheetId);
+
     public static IWorkbookCommand BuildScaleToFitCommand(SheetId sheetId, WorksheetScaleToFit scaleToFit) =>
         new SetScaleToFitCommand(sheetId, scaleToFit);
 

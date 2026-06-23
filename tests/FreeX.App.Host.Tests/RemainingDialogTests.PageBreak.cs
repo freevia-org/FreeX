@@ -8,40 +8,6 @@ namespace FreeX.App.Host.Tests;
 public sealed partial class RemainingDialogTests
 {
     [Fact]
-    public void PageBreakDialog_CreateClearResult_RepresentsClearAll()
-    {
-        PageBreakDialog.CreateClearResult().Should().Be(new PageBreakDialogResult(PageBreakDialogAction.Clear, null, null));
-    }
-
-    [Fact]
-    public void PageBreakDialog_TryCreateResult_ParsesRowAndColumnBreaks()
-    {
-        PageBreakDialog.TryCreateResult(" row 12 ", out var rowResult).Should().BeTrue();
-        PageBreakDialog.TryCreateResult(" column 5 ", out var columnResult).Should().BeTrue();
-        PageBreakDialog.TryCreateResult(" column C ", out var letterColumnResult).Should().BeTrue();
-
-        rowResult.Should().Be(new PageBreakDialogResult(PageBreakDialogAction.AddRow, 12, null));
-        columnResult.Should().Be(new PageBreakDialogResult(PageBreakDialogAction.AddColumn, null, 5));
-        letterColumnResult.Should().Be(new PageBreakDialogResult(PageBreakDialogAction.AddColumn, null, 3));
-    }
-
-    [Theory]
-    [InlineData("row 0")]
-    [InlineData("row 1")]
-    [InlineData("row 1048577")]
-    [InlineData("col 0")]
-    [InlineData("col 1")]
-    [InlineData("col A")]
-    [InlineData("col 16385")]
-    [InlineData("column 0")]
-    [InlineData("column A")]
-    [InlineData("column XFE")]
-    public void PageBreakDialog_TryCreateResult_RejectsInvalidBreakEntries(string input)
-    {
-        PageBreakDialog.TryCreateResult(input, out _).Should().BeFalse();
-    }
-
-    [Fact]
     public void PageBreakDialog_ExposesExplicitExcelStyleActionsInsteadOfCommandText()
     {
         var source = ReadRemainingDialogSources();
@@ -52,6 +18,8 @@ public sealed partial class RemainingDialogTests
         pageBreakSource.Should().Contain("UiText.Get(\"PageBreak_ResetAllPageBreaks\")");
         pageBreakSource.Should().Contain("_rowBreakBox");
         pageBreakSource.Should().Contain("_columnBreakBox");
+        pageBreakSource.Should().Contain("PageBreakDialogPlanner.CreateClearResult()");
+        pageBreakSource.Should().Contain("PageBreakDialogPlanner.TryCreateResult(defaultValue, out var result)");
         pageBreakSource.Should().NotContain("ObjectSizeDialog.CreateSingleInputContent(\"Page break:\"");
     }
 
@@ -88,11 +56,13 @@ public sealed partial class RemainingDialogTests
         source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
         source.Should().Contain("UiText.Get(\"PageBreak_EnterARowNumberWithinTheWorksheetForThePageBreak\")");
         source.Should().Contain("UiText.Get(\"PageBreak_EnterAColumnNumberOrLetterWithinTheWorksheetForThePageBreak\")");
-        source.Should().Contain("PageLayoutInputParser.IsValidRowBreak(rowBreak)");
+        source.Should().Contain("PageBreakDialogPlanner.TryCreateResult(action, _rowBreakBox.Text, _columnBreakBox.Text, out var result)");
         source.Should().Contain("FocusInvalidBreakInput(_rowBreakBox);");
         source.Should().Contain("FocusInvalidBreakInput(_columnBreakBox);");
         source.Should().Contain("private static void FocusInvalidBreakInput(TextBox textBox)");
         source.Should().Contain("DialogFocus.FocusAndSelect(textBox);");
+        source.Should().NotContain("uint.TryParse(_rowBreakBox.Text");
+        source.Should().NotContain("PageLayoutInputParser.TryParseColumnBreakValue");
     }
 
     [Fact]

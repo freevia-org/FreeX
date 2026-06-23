@@ -26,6 +26,8 @@ public sealed class PageLayoutCommandSourceTests
         source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildMarginsCommand(sheetId, WorksheetPageMargins.Normal)");
         source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildOrientationCommand(sheetId, WorksheetPageOrientation.Portrait)");
         source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildPaperSizeCommand(sheetId, WorksheetPaperSize.Letter)");
+        source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildSetBackgroundCommand(sheetId, background)");
+        source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildClearBackgroundCommand(sheetId)");
         SourceMethodExtractor.ExtractMethodSource(source, "private void PageSetupDialogBtn_Click(")
             .Should().Contain("ShowPageSetupDialog(PageSetupInitialFocusTarget.PageOrientation);");
         SourceMethodExtractor.ExtractMethodSource(source, "private void PrintAreaBtn_Click(")
@@ -43,7 +45,9 @@ public sealed class PageLayoutCommandSourceTests
         source.Should().Contain("PageLayoutRibbonCommandPlanner.ResolveScaleToFitFromPageDimensions(current, wide, current.FitToPagesTall)");
         source.Should().Contain("PageLayoutRibbonCommandPlanner.PlanInsertPageBreaks(");
         source.Should().Contain("PageLayoutRibbonCommandPlanner.PlanRemovePageBreaks(");
-        source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildPageBreaksCommand(sheetId, rowBreaks, columnBreaks)");
+        source.Should().Contain("PageBreakDialogPlanner.BuildDefaultInput(SheetGrid.SelectedRange)");
+        source.Should().Contain("PageBreakDialogPlanner.PlanPageBreaks(");
+        source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildPageBreaksCommand(sheetId, plan)");
         source.Should().Contain("PageSetupSubmissionPlanner.TryBuild(sheet, fields, dialog.RequestedAction)");
         source.Should().Contain("TryBuildCompositeCommandForTarget(sheet, sheetId)");
         source.Should().Contain("TryExecuteCommand(command, \"Page Setup\")");

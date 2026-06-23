@@ -331,7 +331,7 @@ public sealed partial class MainWindow
         }
 
         var result = _session.ExecuteReviewCommand(
-            new SetWorksheetBackgroundCommand(_session.ActiveSheet.Id, background));
+            PageLayoutRibbonCommandPlanner.BuildSetBackgroundCommand(_session.ActiveSheet.Id, background));
         RefreshShell(result.Success
             ? UiText.Get("RibbonWire_BackgroundSet")
             : result.ErrorMessage ?? UiText.Get("RibbonWire_BackgroundSet"));
@@ -339,7 +339,8 @@ public sealed partial class MainWindow
 
     private void DeleteSheetBackground()
     {
-        var result = _session.ExecuteReviewCommand(new ClearWorksheetBackgroundCommand(_session.ActiveSheet.Id));
+        var result = _session.ExecuteReviewCommand(
+            PageLayoutRibbonCommandPlanner.BuildClearBackgroundCommand(_session.ActiveSheet.Id));
         RefreshShell(result.Success
             ? UiText.Get("RibbonWire_BackgroundDeleted")
             : result.ErrorMessage ?? UiText.Get("RibbonWire_BackgroundDeleted"));
