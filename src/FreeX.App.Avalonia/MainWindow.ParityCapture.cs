@@ -159,6 +159,8 @@ public sealed partial class MainWindow
         ("dialog.Zoom", () => ShowZoomDialogAsync()),
         ("dialog.CustomViews", () => ShowCustomViewsParityDialogAsync()),
         ("dialog.PrintPreview", () => ShowPrintPreviewParityDialogAsync()),
+        ("dialog.OpenWorkbook", () => ShowWorkbookFileDialogParitySurfaceAsync(CreateOpenWorkbookDialogSurfacePlan())),
+        ("dialog.SaveAsWorkbook", () => ShowWorkbookFileDialogParitySurfaceAsync(CreateSaveAsWorkbookDialogSurfacePlan())),
         ("dialog.ExportOptions", () => ShowExportOptionsParityDialogAsync()),
         ("dialog.SelectionPane", () => ShowSelectionPaneParityDialogAsync()),
         ("dialog.PivotTableOptions", () => ShowPivotTableOptionsParityDialogAsync()),
@@ -179,6 +181,123 @@ public sealed partial class MainWindow
 
     private Task ShowPrintPreviewParityDialogAsync() =>
         ShowPrintPreviewDialogAsync();
+
+    private WorkbookFileDialogSurfacePlan CreateOpenWorkbookDialogSurfacePlan() =>
+        WorkbookFileDialogSurfacePlanner.CreateOpenPlan(
+            WorkbookFilePickerPlanner.BuildOpenPickerPlan(_session.OpenFormats));
+
+    private WorkbookFileDialogSurfacePlan CreateSaveAsWorkbookDialogSurfacePlan() =>
+        WorkbookFileDialogSurfacePlanner.CreateSaveAsPlan(
+            WorkbookFilePickerPlanner.BuildSavePickerPlan(
+                _session.SaveFormats,
+                _session.Workbook.Name,
+                _session.DisplayName,
+                NativeWorkbookExtension));
+
+    private async Task ShowWorkbookFileDialogParitySurfaceAsync(WorkbookFileDialogSurfacePlan plan)
+    {
+        var dialog = new Window
+        {
+            Title = plan.Title,
+            Width = WorkbookFileDialogSurfacePlanner.Width,
+            Height = WorkbookFileDialogSurfacePlanner.Height,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+        AutomationProperties.SetAutomationId(dialog, plan.DialogAutomationId);
+
+        var places = new StackPanel
+        {
+            Width = 128,
+            Margin = new Thickness(0, 0, 12, 0),
+            Background = Brush(0xF3, 0xF5, 0xF8),
+        };
+        foreach (var place in new[] { "Recent", "Desktop", "Documents", "This PC" })
+            places.Children.Add(new TextBlock { Text = place, Margin = new Thickness(12, 10, 8, 2) });
+
+        var fileList = new ListBox
+        {
+            MinHeight = 220,
+            ItemsSource = new[]
+            {
+                "Budget.xlsx",
+                "Quarterly Report.fxl",
+                "Sales.csv",
+                "Forecast.xlsx",
+            },
+        };
+
+        var fileNameBox = new TextBox
+        {
+            Text = plan.FileName,
+            Width = 300,
+        };
+        AutomationProperties.SetAutomationId(fileNameBox, WorkbookFileDialogSurfacePlanner.FileNameBoxAutomationId);
+
+        var fileTypeBox = new ComboBox
+        {
+            Width = 300,
+            ItemsSource = plan.FileTypes.Select(type => $"{type.DisplayName} ({string.Join("; ", type.Patterns)})").ToArray(),
+            SelectedIndex = 0,
+        };
+        AutomationProperties.SetAutomationId(fileTypeBox, WorkbookFileDialogSurfacePlanner.FileTypeBoxAutomationId);
+
+        var form = new AvaloniaGrid
+        {
+            Margin = new Thickness(0, 10, 0, 0),
+            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
+            RowDefinitions = new RowDefinitions("Auto,Auto"),
+        };
+        AddWorkbookFileDialogField(form, 0, plan.FileNameLabel, fileNameBox);
+        AddWorkbookFileDialogField(form, 1, plan.FileTypeLabel, fileTypeBox);
+
+        var buttons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Margin = new Thickness(0, 14, 0, 0),
+            Spacing = 8,
+            Children =
+            {
+                new Button { Content = plan.PrimaryCommandText, MinWidth = 82, IsDefault = true },
+                new Button { Content = UiText.Get("InsertLoc_CancelButton"), MinWidth = 82, IsCancel = true },
+            },
+        };
+
+        var right = new DockPanel();
+        DockPanel.SetDock(form, Dock.Bottom);
+        DockPanel.SetDock(buttons, Dock.Bottom);
+        right.Children.Add(buttons);
+        right.Children.Add(form);
+        right.Children.Add(fileList);
+
+        var root = new DockPanel { Margin = new Thickness(14) };
+        DockPanel.SetDock(places, Dock.Left);
+        root.Children.Add(places);
+        root.Children.Add(right);
+
+        dialog.Content = root;
+        dialog.Opened += (_, _) => fileNameBox.Focus();
+        await dialog.ShowDialog(this);
+    }
+
+    private static void AddWorkbookFileDialogField(AvaloniaGrid form, int row, string label, Control control)
+    {
+        var labelControl = new Label
+        {
+            Content = label,
+            Target = control,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 4),
+        };
+        AvaloniaGrid.SetRow(labelControl, row);
+        AvaloniaGrid.SetColumn(labelControl, 0);
+        AvaloniaGrid.SetRow(control, row);
+        AvaloniaGrid.SetColumn(control, 1);
+        control.Margin = new Thickness(0, 0, 0, 4);
+        form.Children.Add(labelControl);
+        form.Children.Add(control);
+    }
 
     private async Task ShowExportOptionsParityDialogAsync()
     {

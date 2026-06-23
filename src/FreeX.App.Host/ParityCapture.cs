@@ -2,6 +2,7 @@ using System.IO;
 using System.Text;
 using System.Text.Json;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Markup;
@@ -11,6 +12,7 @@ using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Services;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
+using FreeX.Core.IO;
 using FreeX.Core.Model;
 using FreeX.Ribbon.Definitions;
 using SharedRibbon = Free.Shared.Ribbon;
@@ -525,6 +527,12 @@ internal static class ParityCapture
                 CreatePrintPreviewDocument(),
                 new PrintSettingsPlan([UiText.Get("PrintPreview_DefaultScopeActiveSheet")])));
 
+        CaptureDialog(results, "dialog.OpenWorkbook", outDir, () =>
+            CreateWorkbookFileDialogSurface(CreateOpenWorkbookDialogSurfacePlan()));
+
+        CaptureDialog(results, "dialog.SaveAsWorkbook", outDir, () =>
+            CreateWorkbookFileDialogSurface(CreateSaveAsWorkbookDialogSurfacePlan(workbook.Name)));
+
         CaptureDialog(results, "dialog.ExportOptions", outDir, () =>
             new ExportOptionsDialog(hasSelection: true, initialPdfLanguage: ExportPlanner.DefaultPdfLanguage, ExportFormat.Pdf));
 
@@ -579,6 +587,128 @@ internal static class ParityCapture
 
     private static Func<string, SheetId?> ResolveSheetId(Workbook workbook) =>
         name => workbook.Sheets.FirstOrDefault(sheet => string.Equals(sheet.Name, name, StringComparison.OrdinalIgnoreCase))?.Id;
+
+    private static WorkbookFileDialogSurfacePlan CreateOpenWorkbookDialogSurfacePlan()
+    {
+        var formats = WorkbookFileAdapterCatalog.CreateDefaultAdapters()
+            .SelectMany(adapter => adapter.Formats)
+            .Where(format => format.CanOpen)
+            .ToArray();
+        return WorkbookFileDialogSurfacePlanner.CreateOpenPlan(WorkbookFilePickerPlanner.BuildOpenPickerPlan(formats));
+    }
+
+    private static WorkbookFileDialogSurfacePlan CreateSaveAsWorkbookDialogSurfacePlan(string workbookName)
+    {
+        var formats = WorkbookFileAdapterCatalog.CreateDefaultAdapters()
+            .SelectMany(adapter => adapter.Formats)
+            .Where(format => format.CanSave)
+            .ToArray();
+        var pickerPlan = WorkbookFilePickerPlanner.BuildSavePickerPlan(
+            formats,
+            workbookName,
+            fallbackDisplayName: "Book1",
+            preferredExtension: AppOptions.FreeXWorkbookDefaultFormat);
+        return WorkbookFileDialogSurfacePlanner.CreateSaveAsPlan(pickerPlan);
+    }
+
+    private static Window CreateWorkbookFileDialogSurface(WorkbookFileDialogSurfacePlan plan)
+    {
+        var dialog = new Window
+        {
+            Title = plan.Title,
+            Width = WorkbookFileDialogSurfacePlanner.Width,
+            Height = WorkbookFileDialogSurfacePlanner.Height,
+            ResizeMode = ResizeMode.NoResize,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+        };
+        AutomationProperties.SetAutomationId(dialog, plan.DialogAutomationId);
+
+        var places = new StackPanel
+        {
+            Width = 128,
+            Margin = new Thickness(0, 0, 12, 0),
+            Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF5, 0xF8)),
+        };
+        foreach (var place in new[] { "Recent", "Desktop", "Documents", "This PC" })
+            places.Children.Add(new TextBlock { Text = place, Margin = new Thickness(12, 10, 8, 2) });
+
+        var fileList = new ListBox
+        {
+            MinHeight = 220,
+            ItemsSource = new[]
+            {
+                "Budget.xlsx",
+                "Quarterly Report.fxl",
+                "Sales.csv",
+                "Forecast.xlsx"
+            },
+        };
+
+        var fileNameBox = new TextBox
+        {
+            Text = plan.FileName,
+            Width = 300,
+        };
+        AutomationProperties.SetAutomationId(fileNameBox, WorkbookFileDialogSurfacePlanner.FileNameBoxAutomationId);
+
+        var fileTypeBox = new ComboBox
+        {
+            Width = 300,
+            ItemsSource = plan.FileTypes.Select(type => $"{type.DisplayName} ({string.Join("; ", type.Patterns)})").ToArray(),
+            SelectedIndex = 0,
+        };
+        AutomationProperties.SetAutomationId(fileTypeBox, WorkbookFileDialogSurfacePlanner.FileTypeBoxAutomationId);
+
+        var form = new Grid { Margin = new Thickness(0, 10, 0, 0) };
+        form.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        form.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        form.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        form.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        AddWorkbookFileDialogField(form, 0, plan.FileNameLabel, fileNameBox);
+        AddWorkbookFileDialogField(form, 1, plan.FileTypeLabel, fileTypeBox);
+
+        var buttons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
+            Margin = new Thickness(0, 14, 0, 0),
+        };
+        buttons.Children.Add(new Button { Content = plan.PrimaryCommandText, Width = 82, IsDefault = true, Margin = new Thickness(0, 0, 8, 0) });
+        buttons.Children.Add(new Button { Content = UiText.Cancel, Width = 82, IsCancel = true });
+
+        var right = new DockPanel();
+        DockPanel.SetDock(form, Dock.Bottom);
+        DockPanel.SetDock(buttons, Dock.Bottom);
+        right.Children.Add(buttons);
+        right.Children.Add(form);
+        right.Children.Add(fileList);
+
+        var root = new DockPanel { Margin = new Thickness(14) };
+        DockPanel.SetDock(places, Dock.Left);
+        root.Children.Add(places);
+        root.Children.Add(right);
+
+        dialog.Content = root;
+        return dialog;
+    }
+
+    private static void AddWorkbookFileDialogField(Grid form, int row, string label, Control control)
+    {
+        var labelControl = new Label
+        {
+            Content = label,
+            Target = control,
+            VerticalAlignment = System.Windows.VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 4),
+        };
+        Grid.SetRow(labelControl, row);
+        Grid.SetColumn(labelControl, 0);
+        Grid.SetRow(control, row);
+        Grid.SetColumn(control, 1);
+        control.Margin = new Thickness(0, 0, 0, 4);
+        form.Children.Add(labelControl);
+        form.Children.Add(control);
+    }
 
     private static FixedDocument CreatePrintPreviewDocument()
     {
